@@ -7,26 +7,26 @@
 
 #import <CoreMedia/CoreMedia.h>
 #import <Foundation/Foundation.h>
+#import <KeyframelessKit/KKBoxOSC.h>
 
 @class FxImageTile;
-@class KKOSCLabel;
-@class KKPointOSC;
-@class KKRectBorderOSC;
 @protocol PROAPIAccessing;
 
 NS_ASSUME_NONNULL_BEGIN
 
+// A box-crop control - the shared KKBoxOSC (border + 8 handles + readout) plus
+// the crop value semantics (each handle moves an independent edge of a real
+// rect; the readout is in source pixels). KKCropPart* / KKCropPointCount are
+// kept as aliases of the KKBoxPart* / KKBoxHandleCount values for callers.
 enum {
-  KKCropPartNone = 0,
-  KKCropPartRect = 1,
-  KKCropPartPointBase = 2, // + index 0..7
+  KKCropPartNone = KKBoxPartNone,
+  KKCropPartRect = KKBoxPartRect,
+  KKCropPartPointBase = KKBoxPartHandleBase, // + index 0..7
 };
 
-#define KKCropPointCount 8
+#define KKCropPointCount KKBoxHandleCount
 
-@interface KKCropOSC : NSObject
-
-@property(nonatomic, weak) id<PROAPIAccessing> apiManager;
+@interface KKCropOSC : KKBoxOSC
 
 /// Returns the current crop as `[w, h, x, y]` (KKCropModel semantics) at
 /// the given clip time. May return nil → treated as full image. Plugins
@@ -39,15 +39,6 @@ enum {
 /// wrapping in an action scope and any undo-coalescing.
 @property(nonatomic, copy, nullable) void (^valuesWriter)
     (NSArray<NSNumber *> *values, CMTime time);
-
-@property(nonatomic, strong, readonly) NSArray<KKPointOSC *> *pointOSCs;
-@property(nonatomic, strong, readonly) KKRectBorderOSC *borderOSC;
-@property(nonatomic, strong, readonly) KKOSCLabel *sizeLabel;
-
-@property(nonatomic) NSInteger hoveredIndex;
-@property(nonatomic) NSInteger draggingIndex;
-
-- (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager;
 
 /// Returns the crop corner points in canvas space. Pass NULL for values
 /// you don't need.

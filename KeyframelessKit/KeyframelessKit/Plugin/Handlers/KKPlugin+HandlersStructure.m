@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../KKPluginInstanceState.h"
-#import "../KKPlugin_Private.h"
+#import "KKPluginInstanceState.h"
+#import "KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKTimingStage.h>
 

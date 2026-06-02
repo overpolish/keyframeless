@@ -3,15 +3,16 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../KKLog.h"
-#import "../Views/KKAlertView.h"
-#import "../Views/KKCustomGroupHeaderView.h"
-#import "../Views/KKLogoBannerView.h"
-#import "../Views/KKRemoteWindowKeyHandlerView.h"
-#import "../Views/KKSeparatorView.h"
+#import "KKAlertView.h"
+#import "KKCustomGroupHeaderView.h"
 #import "KKDataBlob.h"
+#import "KKLog.h"
+#import "KKLogoBannerView.h"
 #import "KKPlugin+Color.h"
 #import "KKPlugin_Private.h"
+#import "KKRemoteWindowKeyHandlerView.h"
+#import "KKSeparatorView.h"
+#import "NSColor+KKColors.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKConstants.h>
 
@@ -326,6 +327,9 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
                          [[KKRemoteWindowKeyHandlerView alloc] init];
                      keyHandler.identifier = KKRemoteWindowContentID;
                      keyHandler.translatesAutoresizingMaskIntoConstraints = NO;
+                     keyHandler.wantsLayer = YES;
+                     keyHandler.layer.backgroundColor =
+                         [NSColor remoteWindowBackground].CGColor;
                      void (^perform)(FxCommand) = ^(FxCommand command) {
                        __strong typeof(weakSelf) s = weakSelf;
                        if (!s)

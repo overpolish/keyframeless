@@ -4,8 +4,8 @@
  */
 
 #import "KKRingOSC.h"
-#import "../../Style/NSColor+KKColors.h"
-#import "../Base/KKOSCShaderTypes.h"
+#import "KKOSCShaderTypes.h"
+#import "NSColor+KKColors.h"
 #import <AppKit/NSCursor.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>

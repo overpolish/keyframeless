@@ -4,9 +4,9 @@
  */
 
 #import "KKPointOSC.h"
-#import "../../Style/KKTokens.h"
-#import "../../Style/NSColor+KKColors.h"
-#import "../Base/KKOSCShaderTypes.h"
+#import "KKOSCShaderTypes.h"
+#import "KKTokens.h"
+#import "NSColor+KKColors.h"
 #include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
@@ -33,6 +33,7 @@ static NSColor *pointStrokeColor(void) {
   if (self) {
     _oscRadius = KKRadiusMD;
     _outlineWidth = KKBorderWidthXS;
+    _ghostAlpha = 1.0f;
   }
   return self;
 }
@@ -64,9 +65,13 @@ static NSColor *pointStrokeColor(void) {
   float outerRadiusPixels = _oscRadius + _outlineWidth;
 
   NSColor *fill = _fillColorOverride ? _fillColorOverride : pointFillColor();
+  simd_float4 fillC = [fill simdFloat4];
+  simd_float4 strokeC = [pointStrokeColor() simdFloat4];
+  fillC.w *= _ghostAlpha;
+  strokeC.w *= _ghostAlpha;
   KKPointOSCParams params = {.outlineWidth = _outlineWidth / outerRadiusPixels,
-                             .fillColor = [fill simdFloat4],
-                             .strokeColor = [pointStrokeColor() simdFloat4]};
+                             .fillColor = fillC,
+                             .strokeColor = strokeC};
 
   [self drawQuadForDestinationImage:destinationImage
                      canvasPosition:canvasPosition

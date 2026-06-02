@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../../KKLog.h"
-#import "../../Views/KKHelpSection.h"
-#import "../../Views/KKHelpView+Guides.h"
-#import "../../Views/KKHelpView.h"
-#import "../../Views/KKMarkup.h"
-#import "../KKDataBlob.h"
-#import "../KKPlugin_Private.h"
+#import "KKDataBlob.h"
+#import "KKHelpSection.h"
+#import "KKHelpView+Guides.h"
+#import "KKHelpView.h"
+#import "KKLog.h"
+#import "KKMarkup.h"
+#import "KKPlugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"

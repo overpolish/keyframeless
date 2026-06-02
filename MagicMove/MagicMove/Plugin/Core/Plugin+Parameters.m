@@ -1,0 +1,90 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#import "Constants.h"
+#import "Plugin_Private.h"
+#import <KeyframelessKit/KeyframelessKit.h>
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
+@implementation MagicMovePlugin (Parameters)
+
+- (BOOL)addParametersWithError:(NSError **)error {
+  id<FxParameterCreationAPI_v5> paramAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterCreationAPI_v5)];
+  if (paramAPI == nil) {
+    if (error != NULL) {
+      *error = [NSError errorWithDomain:FxPlugErrorDomain
+                                   code:kFxError_APIUnavailable
+                               userInfo:@{
+                                 NSLocalizedDescriptionKey :
+                                     @"Unable to obtain an FxPlug API Object"
+                               }];
+    }
+    return NO;
+  }
+
+  if (![self addLogoBannerParameterWithAPI:paramAPI error:error])
+    return NO;
+
+  FxParameterFlags inspectorFlags =
+      kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
+      kFxParameterFlag_USE_FULL_VIEW_WIDTH | kFxParameterFlag_DISABLED;
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kParamInspectorUI
+                               defaultValue:@(kParamInspectorUI)
+                             parameterFlags:inspectorFlags]) {
+    return NO;
+  }
+
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kParamUIState
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN]) {
+    return NO;
+  }
+
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kKKParamTimelineData
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN]) {
+    return NO;
+  }
+
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kParamRenderNudge
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
+    return NO;
+  }
+
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kKKParamMotionBlurData
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
+    return NO;
+  }
+
+  // Native string identity key for per-instance state. The OSC is a separate
+  // FxOnScreenControl principal with its own apiManager, and custom-blob reads
+  // from that scope return nil; native string reads work. Both the effect and
+  // the OSC read this UUID to resolve the same KKPluginInstanceState (which
+  // carries the OSC-visibility tick), so two instances on one clip don't share
+  // it. UUIDs are per-instance identity, never user-edited - no undo needed.
+  if (![paramAPI addStringParameterWithName:@""
+                                parameterID:kKKParamInstanceID
+                               defaultValue:@""
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
+    return NO;
+  }
+
+  return YES;
+}
+
+@end
+#pragma clang diagnostic pop

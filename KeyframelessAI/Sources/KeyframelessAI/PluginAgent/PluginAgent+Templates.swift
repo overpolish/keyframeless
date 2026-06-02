@@ -71,7 +71,7 @@ extension AIPluginAgent {
 	}
 
 	/// Heuristic: pull anything between straight quotes on lines that look
-	/// like a lane heading. Good enough — the classifier rejects ambiguous
+	/// like a lane heading. Good enough - the classifier rejects ambiguous
 	/// matches downstream.
 	private static func parseLabelsFromSchemaText(_ schemaText: String) -> [String] {
 		var seen = Set<String>()

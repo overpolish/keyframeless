@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AA0000000000000000000001 /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000002 /* KeyframelessAI */; };
 		F21396022F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F21396032F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
@@ -94,16 +95,15 @@
 			membershipExceptions = (
 				"/Localized: Plugin/InfoPlist.strings",
 				"/Localized: Plugin/Localizable.strings",
+				Plugin/Core/main.m,
+				Plugin/Core/Plugin.m,
+				"Plugin/Core/Plugin+CustomUI.m",
+				"Plugin/Core/Plugin+Parameters.m",
 				Plugin/Info.plist,
-				Plugin/MagicMove.metal,
-				Plugin/main.m,
-				Plugin/OSC.m,
-				Plugin/Plugin.m,
-				"Plugin/Plugin+Animation.m",
-				"Plugin/Plugin+CustomUI.m",
-				"Plugin/Plugin+Parameters.m",
-				"Plugin/Plugin+Render.m",
-				"Plugin/Plugin+Visibility.m",
+				Plugin/OSC/OSC.m,
+				Plugin/Render/MagicMove.metal,
+				Plugin/Render/MagicMoveMiniCanvasRenderer.m,
+				"Plugin/Render/Plugin+Render.m",
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;
@@ -149,6 +149,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				AA0000000000000000000001 /* KeyframelessAI in Frameworks */,
 				F2E2ED892F4CA530008620D9 /* Accelerate.framework in Frameworks */,
 				F2E2ED8B2F4CA530008620D9 /* PluginManager.framework in Frameworks */,
 				F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */,
@@ -243,6 +244,7 @@
 			);
 			name = "XPC Service";
 			packageProductDependencies = (
+				AA0000000000000000000002 /* KeyframelessAI */,
 			);
 			productName = "XPC Service";
 			productReference = F2E2ED802F4CA530008620D9 /* MagicMove XPC Service.pluginkit */;
@@ -486,7 +488,7 @@
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
@@ -556,7 +558,7 @@
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
@@ -640,6 +642,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		AA0000000000000000000002 /* KeyframelessAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KeyframelessAI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F2E2ED6D2F4CA530008620D9 /* Project object */;
 }

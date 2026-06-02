@@ -14,6 +14,7 @@
 
 + (NSColor *)inspectorLabel;
 + (NSColor *)inspectorBackground;
++ (NSColor *)remoteWindowBackground;
 
 #pragma mark Workflow Extension
 

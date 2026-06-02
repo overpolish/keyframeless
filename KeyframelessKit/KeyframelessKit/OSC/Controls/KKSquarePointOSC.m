@@ -4,9 +4,9 @@
  */
 
 #import "KKSquarePointOSC.h"
-#import "../../Style/KKTokens.h"
-#import "../../Style/NSColor+KKColors.h"
-#import "../Base/KKOSCShaderTypes.h"
+#import "KKOSCShaderTypes.h"
+#import "KKTokens.h"
+#import "NSColor+KKColors.h"
 #include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
@@ -38,6 +38,7 @@ static NSColor *squarePointShadowColor(void) {
     _oscSize = 6.0f;
     _cornerRadius = KKRadiusSM;
     _outlineWidth = KKBorderWidthXS + 0.5f;
+    _ghostAlpha = 1.0f;
   }
   return self;
 }
@@ -68,14 +69,21 @@ static NSColor *squarePointShadowColor(void) {
 
   float outerRadiusPixels = _oscSize + _outlineWidth + 3.0f;
 
+  float g = _ghostAlpha;
+  simd_float4 fill = [squarePointFillColor() simdFloat4];
+  simd_float4 stroke = [squarePointStrokeColor() simdFloat4];
+  simd_float4 shadow = [squarePointShadowColor() simdFloat4];
+  fill.w *= g;
+  stroke.w *= g;
+  shadow.w *= g;
   KKSquarePointOSCParams params = {
       .cornerRadius = _cornerRadius / outerRadiusPixels,
       .outlineWidth = _outlineWidth / outerRadiusPixels,
       .shadowOffset = 1.5f / outerRadiusPixels,
       .shadowRadius = 2.5f / outerRadiusPixels,
-      .fillColor = [squarePointFillColor() simdFloat4],
-      .strokeColor = [squarePointStrokeColor() simdFloat4],
-      .shadowColor = [squarePointShadowColor() simdFloat4],
+      .fillColor = fill,
+      .strokeColor = stroke,
+      .shadowColor = shadow,
   };
 
   [self drawQuadForDestinationImage:destinationImage

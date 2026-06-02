@@ -13,6 +13,7 @@
   if (self) {
     _borderColor = (simd_float4){1.0f, 1.0f, 1.0f, 0.6f};
     _lineHalfWidth = 2.0f;
+    _ghostAlpha = 1.0f;
   }
   return self;
 }
@@ -22,25 +23,27 @@
         destinationImage:(FxImageTile *)destinationImage {
   CGPoint topLeft = {bottomLeft.x, topRight.y};
   CGPoint bottomRight = {topRight.x, bottomLeft.y};
+  simd_float4 c = _borderColor;
+  c.w *= _ghostAlpha;
 
   [self drawLineFrom:topLeft
                     to:topRight
-                 color:_borderColor
+                 color:c
              halfWidth:_lineHalfWidth
       destinationImage:destinationImage];
   [self drawLineFrom:topRight
                     to:bottomRight
-                 color:_borderColor
+                 color:c
              halfWidth:_lineHalfWidth
       destinationImage:destinationImage];
   [self drawLineFrom:bottomRight
                     to:bottomLeft
-                 color:_borderColor
+                 color:c
              halfWidth:_lineHalfWidth
       destinationImage:destinationImage];
   [self drawLineFrom:bottomLeft
                     to:topLeft
-                 color:_borderColor
+                 color:c
              halfWidth:_lineHalfWidth
       destinationImage:destinationImage];
 }

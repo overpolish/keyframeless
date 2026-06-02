@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../Math/KKGradientSampling.h"
+#import "KKGradientSampling.h"
 #import "KKPlugin+Color.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"

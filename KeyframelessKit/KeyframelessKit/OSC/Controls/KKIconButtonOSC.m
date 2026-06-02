@@ -4,7 +4,7 @@
  */
 
 #import "KKIconButtonOSC.h"
-#import "../Base/KKOSCShaderTypes.h"
+#import "KKOSCShaderTypes.h"
 #include <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
