@@ -19,3 +19,5 @@ The canvas also has two additional render modes, toggled from the header pill:
 - Onion skin overlays the surrounding keypose frames on top of the current one with red and blue tinting (previous in red, next in blue) so you can see how the motion progresses.
 
 The OSC handles also work inside the main FCP viewer, not just the mini-canvas, so once you're comfortable you can drag the same controls on the full-size canvas.
+
+The preview renders in the clip's own image space - it shows the effect applied to the clip's media, but not the clip's own Video-inspector Transform/Crop/Distort or the project-canvas letterbox, since Final Cut applies those after the effect. See the clip-space-and-wrapping topic for why, and when to wrap in a compound or adjustment clip so the preview matches the viewer.
