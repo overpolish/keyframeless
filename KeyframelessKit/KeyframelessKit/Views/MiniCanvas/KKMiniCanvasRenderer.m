@@ -521,6 +521,10 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return 1.0; // no scale box by default; MagicMove overrides
 }
 
+- (CGFloat)anchorSquareGhostAlpha {
+  return 1.0; // no anchor square by default; MagicMove overrides
+}
+
 - (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
     extraHandleCentersForContentRect:(CGRect)cr {
   if (![self _cropActiveForContentRect:cr])

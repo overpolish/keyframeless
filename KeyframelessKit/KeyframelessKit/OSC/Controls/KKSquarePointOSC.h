@@ -20,6 +20,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Outline width in canvas pixels. Default 1.5.
 @property(nonatomic) float outlineWidth;
 
+/// Multiplies all (fill / stroke / shadow) alphas, for drawing a dimmed
+/// opt-reveal ghost of a hidden control. Default 1.0 (fully opaque).
+@property(nonatomic) float ghostAlpha;
+
 @end
 
 NS_ASSUME_NONNULL_END

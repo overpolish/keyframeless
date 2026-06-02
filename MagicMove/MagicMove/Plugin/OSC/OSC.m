@@ -14,6 +14,7 @@ static NSInteger const kOSCPositionPart = 1;
 static NSInteger const kOSCRotationPart = 2;
 static NSInteger const kOSCPathHandlePart = 3;
 static NSInteger const kOSCScalePart = 4;
+static NSInteger const kOSCAnchorPart = 5;
 
 // Scale box handle indices: 0-3 corners (BL, BR, TR, TL), 4-7 edge midpoints
 // (bottom, right, top, left). Corners drive both axes; bottom/top drive Y,
@@ -38,6 +39,7 @@ static KKLane *_laneNamed(NSString *label) {
 static KKLane *_positionLane(void) { return _laneNamed(@"Position"); }
 static KKLane *_rotationLane(void) { return _laneNamed(@"Rotation"); }
 static KKLane *_scaleLane(void) { return _laneNamed(@"Scale"); }
+static KKLane *_anchorLane(void) { return _laneNamed(@"Anchor"); }
 
 // Scale gizmo half-extent as a fraction of the clip's on-screen frame, so the
 // box tracks the clip (scales with viewer zoom) instead of being a fixed screen
@@ -64,6 +66,20 @@ static BOOL _rotationVisibleAtFraction(double frac) {
 static BOOL _scaleVisibleAtFraction(double frac) {
   return KKLaneVisibleAtFraction(_scaleLane(), frac,
                                  KKProcessFrameDurationSeconds());
+}
+static BOOL _anchorVisibleAtFraction(double frac) {
+  return KKLaneVisibleAtFraction(_anchorLane(), frac,
+                                 KKProcessFrameDurationSeconds());
+}
+
+// (anchorX, anchorY) in normalized object space (0.5,0.5 = clip center),
+// defaulting to centre when the lane is absent.
+static NSArray<NSNumber *> *_anchorValuesAtFraction(double frac) {
+  KKLane *lane = _anchorLane();
+  if (!lane)
+    return @[ @0.5, @0.5 ];
+  NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+  return v.count >= 2 ? v : @[ @0.5, @0.5 ];
 }
 
 static NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
@@ -137,6 +153,16 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
 /// handles + a "X% x Y%" readout). Sized via KKScaleGizmo from the Scale lane,
 /// centred on Position, drawn outside the rotation rings.
 @property(nonatomic, retain) KKBoxOSC *scaleBox;
+/// Anchor-point pivot: a draggable square at the clip's rotation/scale pivot
+/// (Position + Anchor offset). Snaps to the clip's center / corners / edges /
+/// thirds unless Cmd is held. anchorGrabVal + anchorPressObject give it the
+/// same delta-based drag as Position.
+@property(nonatomic, retain) KKSquarePointOSC *anchorPointOSC;
+@property(nonatomic, retain) KKSnapEngine *anchorSnap;
+@property(nonatomic) BOOL anchorHovered;
+@property(nonatomic) double anchorGrabValX;
+@property(nonatomic) double anchorGrabValY;
+@property(nonatomic) simd_float2 anchorPressObject;
 /// Which scale handle (0-7) the hit-test last landed on, and the one currently
 /// grabbed for a drag. -1 = none.
 @property(nonatomic) NSInteger scaleHitHandle;
@@ -219,6 +245,9 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
     _scaleBox = [[KKBoxOSC alloc] initWithAPIManager:apiManager];
     // Extra grab slack so the compact gizmo's handles stay easy to hit.
     _scaleBox.hitPadding = 6.0;
+    _anchorPointOSC = [[KKSquarePointOSC alloc] initWithAPIManager:apiManager];
+    _anchorPointOSC.clearsOnDraw = NO;
+    _anchorSnap = [[KKSnapEngine alloc] init];
     _scaleHitHandle = -1;
     _scaleGrabHandle = -1;
     _dragAnchorFrac = NAN;
@@ -405,6 +434,8 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
                     atTime:(CMTime)time {
   [self kkResetOptHideArming];
   [self.snapEngine reset];
+  [self.anchorSnap reset];
+  self.anchorHovered = NO;
   self.dragAnchorFrac = NAN;
   self.dragHandleFrac = NAN;
   [super mouseUpAtPositionX:positionX
@@ -477,6 +508,17 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
                             toX:&c.x
                             toY:&c.y];
   return c;
+}
+
+// Canvas point of the anchor pivot at a fraction: the clip centre (Position)
+// shifted by the Anchor offset, in object space, mapped to canvas. The pivot
+// travels with the clip, so it tracks Position as the playhead moves.
+- (CGPoint)_anchorCanvasAtFraction:(double)frac {
+  NSArray<NSNumber *> *pv = _positionValuesAtFraction(frac);
+  NSArray<NSNumber *> *av = _anchorValuesAtFraction(frac);
+  double objX = pv[0].doubleValue + av[0].doubleValue - 0.5;
+  double objY = pv[1].doubleValue + av[1].doubleValue - 0.5;
+  return [self _canvasFromObjX:objX y:objY];
 }
 
 // Tangent handles for every smooth keypose: a thin connector from the anchor to
@@ -848,15 +890,10 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
                                 ghostAlpha:pg];
   }
 
+  // Layering (bottom -> top): path, rotation, scale, position, anchor. `pos` is
+  // needed by rotation/scale below, but the Position arc itself is drawn after
+  // them so the arc sits on top of the rings/box and stays easy to see + grab.
   CGPoint pos = [self oscPositionAtTime:time];
-  if (posVisible || posGhost) {
-    self.fillAlpha = posGhost ? 0.3f : 1.0f;
-    [self drawAtCanvasPosition:pos
-                     isHovered:handleTargeted
-                      isActive:draggingHandle
-              destinationImage:destinationImage
-                        atTime:time];
-  }
 
   // Rotation sphere is centred on the same canvas point as Position (the
   // image rotates around its centre, which is where Position translates it).
@@ -893,6 +930,39 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
                destinationImage:destinationImage];
   }
 
+  // Position arc handle, drawn above rotation + scale so it stays on top.
+  if (posVisible || posGhost) {
+    self.fillAlpha = posGhost ? 0.3f : 1.0f;
+    [self drawAtCanvasPosition:pos
+                     isHovered:handleTargeted
+                      isActive:draggingHandle
+              destinationImage:destinationImage
+                        atTime:time];
+  }
+
+  // Anchor-point pivot square, at the clip's pivot (Position + Anchor offset).
+  // Shown where the Anchor lane is visible (keypose times / constant), same as
+  // Scale/Position; opt-hold reveals a hidden one as a dimmed ghost.
+  BOOL anchorShownHere = _anchorVisibleAtFraction(frac);
+  BOOL anchorEnabled = [self kkOSCElementVisible:@"Anchor"];
+  BOOL anchorDragging = self.isDragging && activePart == kOSCAnchorPart;
+  BOOL anchorVisible = anchorDragging || (anchorEnabled && anchorShownHere);
+  BOOL anchorGhost = !anchorVisible && self.optRevealActive && !anchorEnabled &&
+                     anchorShownHere;
+  if (anchorVisible || anchorGhost) {
+    self.anchorPointOSC.ghostAlpha = anchorGhost ? 0.3f : 1.0f;
+    CGPoint ac = [self _anchorCanvasAtFraction:frac];
+    [self.anchorPointOSC drawAtCanvasPosition:ac
+                                    isHovered:self.anchorHovered
+                                     isActive:anchorDragging
+                             destinationImage:destinationImage
+                                       atTime:time];
+  }
+
+  [self.anchorSnap drawSnapGuidesWithOSC:self
+                           isObjectSpace:YES
+                        destinationImage:destinationImage];
+
   if (self.isDragging && activePart == kOSCPositionPart && self.cmdSnapActive) {
     simd_float4 yellow = {1, 1, 0, 1};
     NSColor *accentNS = [[NSColor accentMatchingHost]
@@ -914,8 +984,22 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
                             atTime:(CMTime)time {
   *activePart = 0;
   self.hoverTargetIsAnchor = NO;
+  self.anchorHovered = NO;
   self.scaleHitHandle = -1;
   double frac = [self _fractionAtTime:time];
+  // Anchor pivot square is the topmost control: checked first so it is always
+  // grabbable / opt-hideable. It is small, so the larger Position arc ring
+  // around it stays clickable - the two coincide at the clip centre by default.
+  if (([self kkOSCElementVisible:@"Anchor"] || self.optRevealActive) &&
+      _anchorVisibleAtFraction(frac)) {
+    CGPoint ac = [self _anchorCanvasAtFraction:frac];
+    if (fmax(fabs(positionX - ac.x), fabs(positionY - ac.y)) <
+        [self.anchorPointOSC hitRadius]) {
+      self.anchorHovered = YES;
+      *activePart = kOSCAnchorPart;
+      return;
+    }
+  }
   // Tangent handles sit on top of the path - grab them before the arc/anchors.
   if (([self kkOSCElementVisible:@"Path"] || self.optRevealActive) &&
       [self _handleHitAtCanvasX:positionX
@@ -1006,6 +1090,8 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
     return @"Path";
   if (activePart == kOSCScalePart)
     return @"Scale";
+  if (activePart == kOSCAnchorPart)
+    return @"Anchor";
   if (activePart == kOSCPositionPart)
     return self.hoverTargetIsAnchor ? @"Path" : @"Position";
   if (activePart == kOSCRotationPart) {
@@ -1059,6 +1145,27 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
             ? hp[self.scaleGrabHandle]
             : CGPointMake(positionX, positionY);
     self.scaleLastCursor = CGPointMake(positionX, positionY);
+    return;
+  }
+  if (activePart == kOSCAnchorPart) {
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    if (oscAPI) {
+      double objX = 0.0, objY = 0.0;
+      [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                              fromX:positionX
+                              fromY:positionY
+                            toSpace:kFxDrawingCoordinates_OBJECT
+                                toX:&objX
+                                toY:&objY];
+      self.anchorPressObject = (simd_float2){(float)objX, (float)objY};
+    }
+    // Capture the grabbed keypose's anchor value for delta-based dragging.
+    double frac = [self _fractionAtTime:time];
+    NSArray<NSNumber *> *av = _anchorValuesAtFraction(frac);
+    self.anchorGrabValX = av[0].doubleValue;
+    self.anchorGrabValY = av[1].doubleValue;
+    self.anchorHovered = YES;
     return;
   }
   if (activePart == kOSCPositionPart) {
@@ -1215,6 +1322,14 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
                       modifiers:modifiers
                     forceUpdate:forceUpdate
                          atTime:time];
+    return;
+  }
+  if (activePart == kOSCAnchorPart) {
+    [self _dragAnchorToPositionX:positionX
+                       positionY:positionY
+                       modifiers:modifiers
+                     forceUpdate:forceUpdate
+                          atTime:time];
     return;
   }
   if (activePart != kOSCPositionPart)
@@ -1611,6 +1726,148 @@ static void KKScaleHandlePositions(CGPoint center, double sclX, double sclY,
       scaleLane.keyposes = out;
     }
     lanes[laneIdx] = scaleLane;
+  }
+  tl.lanes = lanes;
+
+  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                           kKKParamTimelineData);
+  [actionAPI endAction:self];
+  if (forceUpdate)
+    *forceUpdate = YES;
+}
+
+- (void)_dragAnchorToPositionX:(double)positionX
+                     positionY:(double)positionY
+                     modifiers:(NSUInteger)modifiers
+                   forceUpdate:(BOOL *)forceUpdate
+                        atTime:(CMTime)time {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return;
+  double curX = 0.0, curY = 0.0;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                          fromX:positionX
+                          fromY:positionY
+                        toSpace:kFxDrawingCoordinates_OBJECT
+                            toX:&curX
+                            toY:&curY];
+  // Delta drag: the anchor value moves by the cursor's object-space offset from
+  // the grab point (1 object unit == 1 anchor unit), so grabbing off-centre
+  // doesn't jump the pivot to the cursor.
+  double newX = self.anchorGrabValX + (curX - (double)self.anchorPressObject.x);
+  double newY = self.anchorGrabValY + (curY - (double)self.anchorPressObject.y);
+
+  double frac = [self _fractionAtTime:time];
+  NSArray<NSNumber *> *pv = _positionValuesAtFraction(frac);
+  double posX = pv[0].doubleValue, posY = pv[1].doubleValue;
+
+  // Snap is OFF by default (free, pixel-precise) and engaged by holding Cmd -
+  // same as the Position / Rotation OSCs. Snap targets are the clip's own
+  // centre / corners / edge-midpoints / thirds. Snap in the pivot's object
+  // space so the guides land on the clip's real features, then convert the
+  // snapped pivot back to the anchor value.
+  BOOL snapActive = (modifiers & kFxModifierKey_COMMAND) != 0;
+  if (snapActive) {
+    static const float tg[] = {0.0f, 1.0f / 3.0f, 0.5f, 2.0f / 3.0f, 1.0f};
+    simd_float2 targets[25];
+    NSUInteger n = 0;
+    for (int i = 0; i < 5; i++)
+      for (int j = 0; j < 5; j++)
+        targets[n++] = (simd_float2){(float)(posX + tg[i] - 0.5),
+                                     (float)(posY + tg[j] - 0.5)};
+    CGPoint c0 = [self _canvasFromObjX:0 y:0];
+    CGPoint c1 = [self _canvasFromObjX:1 y:0];
+    float ppu = (float)fabs(c1.x - c0.x);
+    simd_float2 pivot = {(float)(posX + newX - 0.5),
+                         (float)(posY + newY - 0.5)};
+    simd_float2 snapped = [self.anchorSnap snapObjectPoint:pivot
+                                                 toTargets:targets
+                                                     count:n
+                                             pixelsPerUnit:ppu];
+    newX = snapped.x - posX + 0.5;
+    newY = snapped.y - posY + 0.5;
+  } else {
+    [self.anchorSnap reset];
+  }
+
+  [self _writeAnchorValues:@[ @(newX), @(newY) ]
+                    atTime:time
+               forceUpdate:forceUpdate];
+}
+
+- (void)_writeAnchorValues:(NSArray<NSNumber *> *)newValues
+                    atTime:(CMTime)time
+               forceUpdate:(BOOL *)forceUpdate {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!setAPI) {
+    [actionAPI endAction:self];
+    return;
+  }
+
+  KKTimeline *snap = KKProcessTimelineSnapshot();
+  KKTimeline *tl = snap ? [snap copy] : [KKTimeline timeline];
+  NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+  NSInteger laneIdx = NSNotFound;
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    if ([((KKLane *)lanes[i]).label isEqualToString:@"Anchor"]) {
+      laneIdx = i;
+      break;
+    }
+  }
+  double frac = [self _fractionAtTime:time];
+  if (laneIdx == NSNotFound) {
+    KKLane *anchorLane = [KKLane laneWithLabel:@"Anchor"];
+    anchorLane.valueType = KKLaneValueTypeGeneric;
+    anchorLane.componentMin = @[];
+    anchorLane.componentMax = @[];
+    anchorLane.componentUnits = @[ @"px", @"px" ];
+    anchorLane.componentLabels = @[ @"X", @"Y" ];
+    anchorLane.enabled = NO;
+    anchorLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
+    [lanes addObject:anchorLane];
+  } else {
+    KKLane *anchorLane = [lanes[laneIdx] copy];
+    NSArray<KKKeyPose *> *kps = anchorLane.keyposes;
+    if (kps.count == 0) {
+      anchorLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
+    } else {
+      NSInteger best = 0;
+      double bd = 1e9;
+      for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
+        double d = fabs(kps[k].time - frac);
+        if (d < bd) {
+          bd = d;
+          best = k;
+        }
+      }
+      NSMutableArray<KKKeyPose *> *out = [NSMutableArray arrayWithArray:kps];
+      KKKeyPose *nk = [KKKeyPose keyposeAtTime:out[best].time values:newValues];
+      nk.outgoing = out[best].outgoing;
+      out[best] = nk;
+      if (best + 1 < (NSInteger)out.count && nk.outgoing.endpointsLinked) {
+        KKKeyPose *partner = out[best + 1];
+        KKKeyPose *np = [KKKeyPose keyposeAtTime:partner.time values:newValues];
+        np.outgoing = partner.outgoing;
+        out[best + 1] = np;
+      }
+      if (best > 0) {
+        KKKeyPose *prev = out[best - 1];
+        if (prev.outgoing.endpointsLinked) {
+          KKKeyPose *np = [KKKeyPose keyposeAtTime:prev.time values:newValues];
+          np.outgoing = prev.outgoing;
+          out[best - 1] = np;
+        }
+      }
+      anchorLane.keyposes = out;
+    }
+    lanes[laneIdx] = anchorLane;
   }
   tl.lanes = lanes;
 

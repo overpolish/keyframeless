@@ -54,6 +54,12 @@ static const double kMiniScaleFineFactor = 0.2;
   double _scalePressSclY;
   CGPoint _scaleEffCursor; // effective cursor (starts at the grabbed handle)
   CGPoint _scaleLastCursor;
+  // Anchor-square drag: delta-based like Position (snap off unless Cmd).
+  BOOL _anchorGrabbed;
+  double _anchorGrabValX;
+  double _anchorGrabValY;
+  double _anchorPressNX;
+  double _anchorPressNY;
 }
 @end
 
@@ -131,6 +137,7 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   NSArray<NSNumber *> *rotationVals = [renderer valuesForLabel:@"Rotation"];
   NSArray<NSNumber *> *scaleVals = [renderer valuesForLabel:@"Scale"];
   NSArray<NSNumber *> *opacityVals = [renderer valuesForLabel:@"Opacity"];
+  NSArray<NSNumber *> *anchorVals = [renderer valuesForLabel:@"Anchor"];
   double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
   double posY = positionVals.count > 1 ? positionVals[1].doubleValue : 0.5;
   double rotXdeg = rotationVals.count > 0 ? rotationVals[0].doubleValue : 0.0;
@@ -144,7 +151,10 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
 
   outParams->translate =
       (simd_float2){(float)(posX - 0.5), (float)(posY - 0.5)};
-  outParams->anchorOffset = (simd_float2){0.0f, 0.0f};
+  double anchorX = anchorVals.count > 0 ? anchorVals[0].doubleValue : 0.5;
+  double anchorY = anchorVals.count > 1 ? anchorVals[1].doubleValue : 0.5;
+  outParams->anchorOffset =
+      (simd_float2){(float)(anchorX - 0.5), (float)(anchorY - 0.5)};
   outParams->rotation = (float)(rotZdeg * kDegToRad);
   outParams->rotationX = (float)(rotXdeg * kDegToRad);
   outParams->rotationY = (float)(rotYdeg * kDegToRad);
@@ -597,6 +607,10 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
     dragHandleToPoint:(CGPoint)p
           contentRect:(CGRect)cr
             modifiers:(NSEventModifierFlags)modifiers {
+  if (_anchorGrabbed) {
+    [self _applyAnchorDragToPoint:p contentRect:cr modifiers:modifiers];
+    return;
+  }
   if (_pathGrabbed) {
     [self _applyPathDragToPoint:p contentRect:cr modifiers:modifiers];
     return;
@@ -795,7 +809,11 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
          contentRect:(CGRect)cr {
   NSInteger idx;
   BOOL isOut;
-  // The active keypose's position handle is topmost: when it coincides with a
+  // Anchor pivot square is topmost (mirrors the viewer) so it is always
+  // grabbable; the larger Position arc ring around it stays clickable.
+  if ([self _anchorSquareHitAtPoint:p contentRect:cr])
+    return YES;
+  // The active keypose's position handle is next: when it coincides with a
   // path anchor or tangent handle, the handle wins. Handles are offset from the
   // anchor centre, so they stay grabbable away from it.
   if ([self pointHandleHitAtPoint:p contentRect:cr])
@@ -816,9 +834,23 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
     beginHandleDragAtPoint:(CGPoint)p
                contentRect:(CGRect)cr {
   _pathGrabbed = NO;
+  _anchorGrabbed = NO;
   NSInteger idx;
   BOOL isOut;
-  // Active keypose's position handle takes the grab first (matches the hit-test
+  // Anchor square grabs first (topmost, matches the hit-test priority).
+  if ([self _anchorSquareHitAtPoint:p contentRect:cr]) {
+    self.canvas = canvas;
+    _anchorGrabbed = YES;
+    NSArray<NSNumber *> *av = [self valuesForLabel:@"Anchor"];
+    _anchorGrabValX = av.count > 0 ? av[0].doubleValue : 0.5;
+    _anchorGrabValY = av.count > 1 ? av[1].doubleValue : 0.5;
+    if (cr.size.width > 0 && cr.size.height > 0) {
+      _anchorPressNX = (p.x - CGRectGetMinX(cr)) / cr.size.width;
+      _anchorPressNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+    }
+    return;
+  }
+  // Active keypose's position handle takes the grab next (matches the hit-test
   // priority), so a coincident path anchor/handle doesn't steal it.
   if ([self pointHandleHitAtPoint:p contentRect:cr]) {
     [super miniCanvas:canvas beginHandleDragAtPoint:p contentRect:cr];
@@ -921,7 +953,15 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
 - (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
     optClickHandleAtPoint:(CGPoint)p
               contentRect:(CGRect)cr {
-  // Built-in handles (Position arc, rotation, crop) claim the opt-click first,
+  // Anchor square is topmost, so it claims the opt-click first.
+  if (self.onHandleVisibilityToggled && [self _anchorSquareHitAtPoint:p
+                                                          contentRect:cr]) {
+    self.onHandleVisibilityToggled(@"Anchor");
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return YES;
+  }
+  // Built-in handles (Position arc, rotation, crop) claim the opt-click next,
   // so at the active keypose the Position handle wins over the path anchor that
   // shares its spot when Position is revealed - matching the viewer. The path
   // then catches its own anchors/handles.
@@ -1036,8 +1076,101 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   *fromKeyposeY = _snapEngine.snapYFromObject;
 }
 
+// Overlay-point centre of the anchor pivot: the clip centre (Position) shifted
+// by the Anchor offset, in the same normalized clip space as the path anchors.
+- (CGPoint)_anchorPointForContentRect:(CGRect)cr {
+  NSArray<NSNumber *> *pos = [self valuesForLabel:@"Position"];
+  NSArray<NSNumber *> *anc = [self valuesForLabel:@"Anchor"];
+  double px = pos.count > 0 ? pos[0].doubleValue : 0.5;
+  double py = pos.count > 1 ? pos[1].doubleValue : 0.5;
+  double ax = anc.count > 0 ? anc[0].doubleValue : 0.5;
+  double ay = anc.count > 1 ? anc[1].doubleValue : 0.5;
+  return
+      [self _handlePointForContentRect:cr
+                              position:@[ @(px + ax - 0.5), @(py + ay - 0.5) ]];
+}
+
+// The anchor square shows when the Anchor lane is constant (a single fixed
+// pivot) and not hidden - same convention as the other single-handle OSCs in
+// the mini-canvas (animated lanes draw keypose dots instead).
+- (BOOL)_anchorActiveForContentRect:(CGRect)cr {
+  return !CGRectIsEmpty(cr) && [self isConstantLabel:@"Anchor"] &&
+         [self labelVisibleOrRevealing:@"Anchor"];
+}
+
+- (BOOL)_anchorSquareHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
+  if (![self _anchorActiveForContentRect:cr])
+    return NO;
+  CGPoint c = [self _anchorPointForContentRect:cr];
+  return fmax(fabs(p.x - c.x), fabs(p.y - c.y)) < 9.0;
+}
+
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    anchorSquareCenter:(out CGPoint *)outCenter
+           contentRect:(CGRect)cr {
+  if (![self _anchorActiveForContentRect:cr])
+    return NO;
+  if (outCenter)
+    *outCenter = [self _anchorPointForContentRect:cr];
+  return YES;
+}
+
+- (CGFloat)anchorSquareGhostAlpha {
+  return [self ghostAlphaForLabel:@"Anchor"];
+}
+
+// Delta drag like Position: the anchor value moves by the cursor's normalized
+// offset from the grab point. Cmd snaps the PIVOT (Position + Anchor offset) to
+// the clip's centre / corners / edge-midpoints / thirds, routed through the
+// shared snap engine so the canvas strokes the yellow guide lines.
+- (void)_applyAnchorDragToPoint:(CGPoint)p
+                    contentRect:(CGRect)cr
+                      modifiers:(NSEventModifierFlags)modifiers {
+  if (cr.size.width <= 0 || cr.size.height <= 0)
+    return;
+  double nx = (p.x - CGRectGetMinX(cr)) / cr.size.width;
+  double ny = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+  double newX = _anchorGrabValX + (nx - _anchorPressNX);
+  double newY = _anchorGrabValY + (ny - _anchorPressNY);
+  if (modifiers & NSEventModifierFlagCommand) {
+    NSArray<NSNumber *> *pos = [self valuesForLabel:@"Position"];
+    double posX = pos.count > 0 ? pos[0].doubleValue : 0.5;
+    double posY = pos.count > 1 ? pos[1].doubleValue : 0.5;
+    // Clip features in pivot-normalized content space (0/⅓/½/⅔/1 of the clip
+    // offset from its centre by Position). Snapping the pivot here makes the
+    // guide land on the clip's real edges/centre, not on a fixed value.
+    static const double frac[] = {0.0, 1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0};
+    float ax[5], ay[5];
+    for (int i = 0; i < 5; i++) {
+      ax[i] = (float)(posX + frac[i] - 0.5);
+      ay[i] = (float)(posY + frac[i] - 0.5);
+    }
+    float thrX = cr.size.width > 0 ? 6.0f / (float)cr.size.width : 0.02f;
+    float thrY = cr.size.height > 0 ? 6.0f / (float)cr.size.height : 0.02f;
+    simd_float2 pivot = {(float)(posX + newX - 0.5),
+                         (float)(posY + newY - 0.5)};
+    simd_float2 sn = [_snapEngine snapPoint:pivot
+                             canvasAnchorsX:ax
+                                     countX:5
+                             canvasAnchorsY:ay
+                                     countY:5
+                              objectTargets:NULL
+                                      count:0
+                                 thresholdX:thrX
+                                 thresholdY:thrY];
+    newX = sn.x - posX + 0.5;
+    newY = sn.y - posY + 0.5;
+  } else {
+    [_snapEngine reset];
+  }
+  [self commitValues:@[ @(newX), @(newY) ]
+            forLabel:@"Anchor"
+              canvas:self.canvas];
+}
+
 - (void)miniCanvasEndHandleDrag:(KKMiniCanvasView *)canvas {
   [_snapEngine reset];
+  _anchorGrabbed = NO;
   _scaleGrabbed = NO;
   if (_pathGrabbed) {
     _pathGrabbed = NO;

@@ -91,7 +91,18 @@
   opacity.integerValued = YES; // whole percentages only
   [opacity insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @100.0 ]]];
 
-  return @[ position, scale, rotation, opacity ];
+  KKLane *anchor = [KKLane laneWithLabel:@"Anchor"];
+  anchor.valueType = KKLaneValueTypeGeneric;
+  // The pivot rotation and scale swing around, in the same normalized object
+  // space as Position (0.5,0.5 = clip center). No min/max - the anchor can sit
+  // off the clip just like Position can go off-canvas.
+  anchor.componentMin = @[];
+  anchor.componentMax = @[];
+  anchor.componentUnits = @[ @"px", @"px" ];
+  anchor.componentLabels = @[ @"X", @"Y" ];
+  [anchor insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
+
+  return @[ position, scale, rotation, opacity, anchor ];
 }
 
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {
@@ -100,6 +111,7 @@
     @[ @"Path" ],
     @[ @"Scale" ],
     @[ @"Rotation", @"Rotation.X", @"Rotation.Y", @"Rotation.Z" ],
+    @[ @"Anchor" ],
   ];
 }
 

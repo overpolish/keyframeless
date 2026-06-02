@@ -94,14 +94,14 @@
 			membershipExceptions = (
 				"/Localized: Plugin/InfoPlist.strings",
 				"/Localized: Plugin/Localizable.strings",
-				Plugin/Info.plist,
-				Plugin/Render/MagicMove.metal,
-				Plugin/Render/MagicMoveMiniCanvasRenderer.m,
 				Plugin/Core/main.m,
-				Plugin/OSC/OSC.m,
 				Plugin/Core/Plugin.m,
 				"Plugin/Core/Plugin+CustomUI.m",
 				"Plugin/Core/Plugin+Parameters.m",
+				Plugin/Info.plist,
+				Plugin/OSC/OSC.m,
+				Plugin/Render/MagicMove.metal,
+				Plugin/Render/MagicMoveMiniCanvasRenderer.m,
 				"Plugin/Render/Plugin+Render.m",
 				"Wrapper Application/Info.plist",
 			);

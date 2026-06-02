@@ -80,6 +80,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
     doubleClickAtPoint:(CGPoint)point
            contentRect:(CGRect)contentRect;
+/// Anchor-point pivot square (Magic Move). Centre in overlay points (y-up),
+/// drawn with the shared `KKSquarePointOSC` glyph so it matches the viewer.
+/// Return NO for none. Dimming for a revealed ghost comes from the renderer's
+/// `anchorSquareGhostAlpha`.
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    anchorSquareCenter:(out CGPoint *)outCenter
+           contentRect:(CGRect)contentRect;
 /// All rectangular box OSCs to draw - crop, scale, and any future box gizmo -
 /// as `KKMiniBox` descriptors (outline + 8 handles + optional readout). The
 /// canvas renders each uniformly, so a new box OSC needs no new draw path.

@@ -5,10 +5,10 @@
 
 #import "KKMiniCanvasView.h"
 
+#import "KKMiniCanvasRenderer.h"
 #import "KKOSCShaderTypes.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
-#import "KKMiniCanvasRenderer.h"
 #import <IOSurface/IOSurface.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
@@ -340,6 +340,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   NSMutableArray<_KKMiniFilmSlot *> *_filmstripSlots;
   NSTimer *_pollTimer;
   id<MTLRenderPipelineState> _pointPipeline;
+  id<MTLRenderPipelineState> _squarePipeline;
   id<MTLRenderPipelineState> _arcPipeline;
   id<MTLRenderPipelineState> _rotationPipeline;
   id<MTLRenderPipelineState> _linePipeline;
@@ -473,6 +474,25 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   _pointPipeline = [device newRenderPipelineStateWithDescriptor:pp error:&err];
   if (!_pointPipeline)
     KKLogError(@"KKMiniCanvasView: point pipeline failed: %@", err);
+
+  // Shared KKSquarePointOSC glyph (Magic Move anchor pivot). Same blend mode
+  // as the point pipeline, different fragment.
+  MTLRenderPipelineDescriptor *sq = [[MTLRenderPipelineDescriptor alloc] init];
+  sq.vertexFunction = [lib newFunctionWithName:@"KKVertexShader"];
+  sq.fragmentFunction = [lib newFunctionWithName:@"KKSquarePointOSCFragment"];
+  sq.colorAttachments[0].pixelFormat = self.colorPixelFormat;
+  sq.colorAttachments[0].blendingEnabled = YES;
+  sq.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
+  sq.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
+  sq.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+  sq.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorSourceAlpha;
+  sq.colorAttachments[0].destinationRGBBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  sq.colorAttachments[0].destinationAlphaBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  _squarePipeline = [device newRenderPipelineStateWithDescriptor:sq error:&err];
+  if (!_squarePipeline)
+    KKLogError(@"KKMiniCanvasView: square pipeline failed: %@", err);
 
   // Arc glyph pipeline - opt-in via the renderer's pointHandleStyle. Same
   // blend mode as the point pipeline, different fragment.
@@ -1021,6 +1041,64 @@ static const NSUInteger kFilmstripGridCols = 5;
   [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
 }
 
+// Encodes one shared KKSquarePointOSC glyph centered at `centerPts` (overlay
+// points, y-up). `ghostAlpha` multiplies every (fill / stroke / shadow) alpha
+// so a hidden, opt-revealed anchor draws dimmed. Sized to match the point
+// handle glyph so the controls read as a family.
+- (void)_encodeSquareGlyphAt:(CGPoint)centerPts
+                  ghostAlpha:(CGFloat)ghostAlpha
+                   sizeScale:(CGFloat)sizeScale
+                     encoder:(id<MTLRenderCommandEncoder>)enc {
+  if (!_squarePipeline)
+    return;
+  CGSize d = self.drawableSize;
+  CGFloat s = self.window.backingScaleFactor;
+  if (s <= 0)
+    s = 2.0;
+  CGPoint centered = CGPointMake(centerPts.x * s - d.width / 2.0,
+                                 centerPts.y * s - d.height / 2.0);
+  // Match the handle dots' visible size. A point dot fills its whole quad, but
+  // the square only fills halfSize = 1 - outline/outer ~= 0.857 of its quad, so
+  // scale the quad up by 1/0.857 to land on the same visible extent.
+  // `sizeScale` is the same handle multiplier applied to the dots (e.g.
+  // MagicMove's 0.6), so the square tracks them at every popover size
+  // (canvasScale = H/230).
+  static const float kSquareFillFrac = 0.857f;
+  float sizePx = (float)(kKKMiniHandleOuterPt * sizeScale / kSquareFillFrac *
+                         [self _canvasScale] * s);
+  KKVertex2D quad[6];
+  [KKRenderPrimitives generateQuadVertices:quad center:centered size:sizePx];
+  simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
+  float g = (float)ghostAlpha;
+  // Match KKSquarePointOSC's proportions exactly: its params are normalized by
+  // outerRadiusPixels = oscSize(6) + outline(1.5) + 3 = 10.5, NOT by the quad's
+  // pixel size. Reusing the viewer fractions keeps the outline thin and the
+  // square filling ~86% of the quad (normalizing by the small handle radius
+  // gave a 33%-thick outline on a 67% shape).
+  float vOutline = (float)(KKBorderWidthXS + 0.5);
+  float outer = 6.0f + vOutline + 3.0f;
+  KKSquarePointOSCParams params = {
+      .cornerRadius = (float)(KKRadiusSM / outer),
+      .outlineWidth = vOutline / outer,
+      .shadowOffset = 1.5f / outer,
+      .shadowRadius = 2.5f / outer,
+      .fillColor = {1.0f, 1.0f, 1.0f, 1.0f * g},
+      .strokeColor = {0.0f, 0.0f, 0.0f, 0.75f * g},
+      .shadowColor = {0.0f, 0.0f, 0.0f, 0.5f * g},
+  };
+  [enc setRenderPipelineState:_squarePipeline];
+  [enc setVertexBytes:quad
+               length:sizeof(quad)
+              atIndex:KKVertexInputIndex_Vertices];
+  [enc setVertexBytes:&vp
+               length:sizeof(vp)
+              atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setFragmentBytes:&params
+                 length:sizeof(params)
+                atIndex:KKOSCFragmentIndex_DrawColor];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+}
+
 // Encodes a connected polyline (overlay points, y-up) as oriented thin quads
 // via the shared solid-colour line pipeline. `enc` must be a valid encoder.
 - (void)_encodeMotionLineStrip:(NSArray<NSValue *> *)pointsPts
@@ -1316,36 +1394,8 @@ static const NSUInteger kFilmstripGridCols = 5;
             ? [(KKMiniCanvasRenderer *)del pointHandleSizeScale]
             : 1.0;
 
-    CGPoint handleCenterPts;
-    if ([del respondsToSelector:
-                 @selector(miniCanvas:pointHandleCenter:contentRect:)] &&
-        [del miniCanvas:self
-            pointHandleCenter:&handleCenterPts
-                  contentRect:cr]) {
-      KKMiniHandleStyle style = KKMiniHandleStylePoint;
-      BOOL isActive = NO;
-      CGFloat ghostAlpha = 1.0;
-      if ([del isKindOfClass:[KKMiniCanvasRenderer class]]) {
-        style = [(KKMiniCanvasRenderer *)del pointHandleStyle];
-        isActive = [(KKMiniCanvasRenderer *)del pointHandleIsActive];
-        ghostAlpha = [(KKMiniCanvasRenderer *)del pointHandleGhostAlpha];
-      }
-      if (style == KKMiniHandleStyleArc) {
-        [self _encodeArcHandleGlyphAt:handleCenterPts
-                             isActive:isActive
-                           ghostAlpha:ghostAlpha
-                              encoder:enc];
-      } else {
-        // Point-style handles dim via the fill alpha (no ghostAlpha param).
-        simd_float4 f = accentFill;
-        f.w *= (float)ghostAlpha;
-        [self _encodeHandleGlyphAt:handleCenterPts
-                         fillColor:f
-                         sizeScale:pointSizeScale
-                           encoder:enc];
-      }
-    }
-
+    // Layering matches the viewer (bottom -> top): boxes/rotation, then the
+    // Position handle on top of the rings, then the anchor square topmost.
     // Box OSC handles (crop corners/edges, scale corners/edges, ...): white,
     // dimmed by each box's ghost alpha. One path for every box.
     if ([del respondsToSelector:@selector(miniCanvas:boxesForContentRect:)]) {
@@ -1376,6 +1426,56 @@ static const NSUInteger kFilmstripGridCols = 5;
                             params:rotParams
                            encoder:enc];
       }
+    }
+
+    // Position handle, drawn above the rotation rings + scale box so it stays
+    // on top (matches the viewer's layering).
+    CGPoint handleCenterPts;
+    if ([del respondsToSelector:
+                 @selector(miniCanvas:pointHandleCenter:contentRect:)] &&
+        [del miniCanvas:self
+            pointHandleCenter:&handleCenterPts
+                  contentRect:cr]) {
+      KKMiniHandleStyle style = KKMiniHandleStylePoint;
+      BOOL isActive = NO;
+      CGFloat ghostAlpha = 1.0;
+      if ([del isKindOfClass:[KKMiniCanvasRenderer class]]) {
+        style = [(KKMiniCanvasRenderer *)del pointHandleStyle];
+        isActive = [(KKMiniCanvasRenderer *)del pointHandleIsActive];
+        ghostAlpha = [(KKMiniCanvasRenderer *)del pointHandleGhostAlpha];
+      }
+      if (style == KKMiniHandleStyleArc) {
+        [self _encodeArcHandleGlyphAt:handleCenterPts
+                             isActive:isActive
+                           ghostAlpha:ghostAlpha
+                              encoder:enc];
+      } else {
+        // Point-style handles dim via the fill alpha (no ghostAlpha param).
+        simd_float4 f = accentFill;
+        f.w *= (float)ghostAlpha;
+        [self _encodeHandleGlyphAt:handleCenterPts
+                         fillColor:f
+                         sizeScale:pointSizeScale
+                           encoder:enc];
+      }
+    }
+
+    // Anchor pivot square - topmost, mirroring the viewer's layering.
+    CGPoint anchorCenterPts;
+    if (_squarePipeline &&
+        [del respondsToSelector:
+                 @selector(miniCanvas:anchorSquareCenter:contentRect:)] &&
+        [del miniCanvas:self
+            anchorSquareCenter:&anchorCenterPts
+                   contentRect:cr]) {
+      CGFloat ghostAlpha =
+          [del isKindOfClass:[KKMiniCanvasRenderer class]]
+              ? [(KKMiniCanvasRenderer *)del anchorSquareGhostAlpha]
+              : 1.0;
+      [self _encodeSquareGlyphAt:anchorCenterPts
+                      ghostAlpha:ghostAlpha
+                       sizeScale:pointSizeScale
+                         encoder:enc];
     }
   }
 

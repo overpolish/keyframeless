@@ -68,6 +68,7 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
   NSArray<NSNumber *> *rotationVals = nil;
   NSArray<NSNumber *> *scaleVals = nil;
   NSArray<NSNumber *> *opacityVals = nil;
+  NSArray<NSNumber *> *anchorVals = nil;
   for (KKLane *lane in timeline.lanes) {
     if ([lane.label isEqualToString:@"Position"]) {
       positionLane = lane;
@@ -78,6 +79,8 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
       scaleVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
     } else if ([lane.label isEqualToString:@"Opacity"]) {
       opacityVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+    } else if ([lane.label isEqualToString:@"Anchor"]) {
+      anchorVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
     }
   }
   double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
@@ -92,7 +95,12 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
 
   outParams->translate =
       (simd_float2){(float)(posX - 0.5), (float)(posY - 0.5)};
-  outParams->anchorOffset = (simd_float2){0.0f, 0.0f};
+  // Anchor is the pivot rotation/scale swing around: an offset from the clip
+  // center in the same normalized object space as Position (0.5,0.5 = center).
+  double anchorX = anchorVals.count > 0 ? anchorVals[0].doubleValue : 0.5;
+  double anchorY = anchorVals.count > 1 ? anchorVals[1].doubleValue : 0.5;
+  outParams->anchorOffset =
+      (simd_float2){(float)(anchorX - 0.5), (float)(anchorY - 0.5)};
   outParams->rotation = (float)(rotZdeg * kDegToRad);
   outParams->rotationX = (float)(rotXdeg * kDegToRad);
   outParams->rotationY = (float)(rotYdeg * kDegToRad);
