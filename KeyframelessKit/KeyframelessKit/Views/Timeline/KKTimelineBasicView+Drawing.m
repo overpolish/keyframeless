@@ -61,6 +61,12 @@
   // Interior pill colour follows EITHER adjacent interval, like Advanced.
   NSColor *holdStartC = (inTrans || drift) ? warn : hold;
   NSColor *holdEndC = (outTrans || drift) ? warn : hold;
+  // Clip the curve to the graph's X bounds so the 2px round line cap can't
+  // leak ~1px past the first/last keypose. Y is left unclipped so easing
+  // overshoot (Elastic/Bounce) still shows.
+  [NSGraphicsContext saveGraphicsState];
+  NSRectClip(NSMakeRect(NSMinX(g), NSMinY(self.bounds), NSWidth(g),
+                        NSHeight(self.bounds)));
   [self _strokeCurveFrom:0.0
                       to:p.inEndFrac
                     proj:p
@@ -88,6 +94,16 @@
                       hi:hi
                   dashed:NO
                    color:outTrans ? warn : hold];
+  [NSGraphicsContext restoreGraphicsState];
+
+  // Pills + tie bar clip to the visible container (the full-width background,
+  // i.e. the graph rect outset back by half a pill). The frac 0/1 pills sit at
+  // the inset edges and reach the container edge, so they still show whole;
+  // pills panned/zoomed past the container are clipped instead of overflowing.
+  [NSGraphicsContext saveGraphicsState];
+  NSRect bg = NSInsetRect(g, -kPillW / 2.0, 0.0);
+  NSRectClip(NSMakeRect(NSMinX(bg), NSMinY(self.bounds), NSWidth(bg),
+                        NSHeight(self.bounds)));
 
   // Boundary pills - vertical capsules spanning the track height. Hold pair
   // always shows when any lane is animatable; In-start / Out-end only when
@@ -132,6 +148,7 @@
     [[hold colorWithAlphaComponent:0.7] setStroke];
     [tie stroke];
   }
+  [NSGraphicsContext restoreGraphicsState];
 
   [self _drawRulerInRect:g proj:p xproj:xp];
 

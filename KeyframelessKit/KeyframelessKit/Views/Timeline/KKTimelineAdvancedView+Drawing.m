@@ -363,9 +363,17 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   // because the extra 2pt was just AA padding for pills; curves shouldn't
   // escape into it.
   CGFloat innerEdgePad = kPillW * 0.5;
+  // Clip to the boundary pills' pixel-aligned outer edges so the curve's round
+  // cap can't poke past them (the pill snaps its x to round(x)+0.5 - see
+  // _drawPillForKPInLane - but the curve uses the raw track edge). Clamp to the
+  // container (track +/- half a pill, which is the rounded background's edge)
+  // so the snap only ever pulls the clip inward, never past the container.
+  CGFloat clipL = MAX(NSMinX(tracks) - innerEdgePad,
+                      round(NSMinX(tracks)) - innerEdgePad + 0.5);
+  CGFloat clipR = MIN(NSMaxX(tracks) + innerEdgePad,
+                      round(NSMaxX(tracks)) + innerEdgePad + 0.5);
   [NSGraphicsContext saveGraphicsState];
-  NSRectClip(NSMakeRect(NSMinX(tracks) - innerEdgePad, NSMinY(row),
-                        NSWidth(tracks) + innerEdgePad * 2.0, NSHeight(row)));
+  NSRectClip(NSMakeRect(clipL, NSMinY(row), clipR - clipL, NSHeight(row)));
 
   // Leading + trailing flat fill: the value before the first keypose (and
   // after the last) is constant at that endpoint's value, but the per-gap
