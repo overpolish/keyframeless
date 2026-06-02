@@ -1344,13 +1344,25 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
 #pragma mark - Tab + live push
 
 - (void)_selectTab:(KKTimelineTab)tab {
-  // Advanced → Basic with incompatible structure: show the overlay and
-  // keep the tab on Advanced until the user confirms or cancels. The
-  // tab-bar state was already flipped by the user's click so revert it.
+  // While the compat banner is up the tab bar tentatively shows Basic, but the
+  // real mode is still Advanced. Clicking Advanced cancels (same as the
+  // banner's Cancel button); re-clicking Basic just keeps it tentatively
+  // selected.
+  if (!_compatBanner.hidden) {
+    if (tab == KKTimelineTabAdvanced)
+      [self _dismissCompatBanner];
+    else
+      [_tabBar setState:YES atIndex:KKTimelineTabBasic];
+    return;
+  }
+  // Advanced → Basic with incompatible structure: tentatively SELECT Basic and
+  // show the overlay; the real switch waits for "Switch anyway". Selecting
+  // Basic (not reverting to Advanced) is what lets a click on Advanced read as
+  // a tab change and cancel the pending switch.
   if (tab == KKTimelineTabBasic && _selectedTab != KKTimelineTabBasic &&
       !KKTimelineIsBasicCompatible(_basicView.currentTimeline)) {
-    [_tabBar setState:NO atIndex:KKTimelineTabBasic];
-    [_tabBar setState:YES atIndex:KKTimelineTabAdvanced];
+    [_tabBar setState:YES atIndex:KKTimelineTabBasic];
+    [_tabBar setState:NO atIndex:KKTimelineTabAdvanced];
     _compatBanner.hidden = NO;
     [_basicView setOverlayBlockingInteractions:YES];
     return;
@@ -1369,6 +1381,12 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
 - (void)_dismissCompatBanner {
   _compatBanner.hidden = YES;
   [_basicView setOverlayBlockingInteractions:NO];
+  // The banner tentatively showed Basic; restore the tab bar to the real mode
+  // (Advanced) now that the pending switch is cancelled.
+  [_tabBar setState:(_selectedTab == KKTimelineTabBasic)
+            atIndex:KKTimelineTabBasic];
+  [_tabBar setState:(_selectedTab == KKTimelineTabAdvanced)
+            atIndex:KKTimelineTabAdvanced];
 }
 
 - (void)_confirmCompatSwitch {
