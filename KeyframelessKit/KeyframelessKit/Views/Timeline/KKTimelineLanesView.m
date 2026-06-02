@@ -642,24 +642,34 @@
 // The constants editor shows every non-animatable property's lane (with its
 // current value, so the editor reflects/edits the real constant).
 - (NSArray<KKLane *> *)_unoptedLanes {
+  // Template lookup for the metadata re-injection below.
+  NSMutableDictionary<NSString *, KKLane *> *tmplByLabel =
+      [NSMutableDictionary dictionaryWithCapacity:_availableLanes.count];
+  for (KKLane *tmpl in _availableLanes)
+    tmplByLabel[tmpl.label] = tmpl;
+  // Iterate _timeline.lanes, NOT _availableLanes: _timeline.lanes is already in
+  // display order (sorted by paramOrder in _timelineSeededFrom:) and post-seed
+  // contains every available property, so the constants popover inherits the
+  // same parameter ordering as the timeline and reorder list.
   NSMutableArray<KKLane *> *result = [NSMutableArray array];
-  for (KKLane *tmpl in _availableLanes) {
-    KKLane *lane = [self _laneForLabel:tmpl.label];
-    if (lane && !lane.enabled) {
-      // aspectLinkable is template metadata (an older persisted blob may lack
-      // it), so source it from the template like the keypose popover does -
-      // otherwise the constants popover hides the link glyph. aspectLinked is
-      // user state and stays the lane's own. Copy so the shared persisted lane
-      // isn't mutated.
-      if ((tmpl.aspectLinkable && !lane.aspectLinkable) ||
-          (tmpl.integerValued && !lane.integerValued)) {
-        KKLane *l = [lane copy];
-        l.aspectLinkable = tmpl.aspectLinkable;
-        l.integerValued = tmpl.integerValued;
-        lane = l;
-      }
-      [result addObject:lane];
+  for (KKLane *tlLane in _timeline.lanes) {
+    KKLane *tmpl = tmplByLabel[tlLane.label];
+    if (!tmpl || tlLane.enabled)
+      continue; // only available, non-animatable (constant) properties
+    KKLane *lane = tlLane;
+    // aspectLinkable is template metadata (an older persisted blob may lack
+    // it), so source it from the template like the keypose popover does -
+    // otherwise the constants popover hides the link glyph. aspectLinked is
+    // user state and stays the lane's own. Copy so the shared persisted lane
+    // isn't mutated.
+    if ((tmpl.aspectLinkable && !lane.aspectLinkable) ||
+        (tmpl.integerValued && !lane.integerValued)) {
+      KKLane *l = [lane copy];
+      l.aspectLinkable = tmpl.aspectLinkable;
+      l.integerValued = tmpl.integerValued;
+      lane = l;
     }
+    [result addObject:lane];
   }
   return result;
 }
