@@ -405,9 +405,21 @@ double KKBasicMotionYSmoothed(double t, KKBasicProj p) {
   // consumer (curve, pills, ruler, scrub, hit-test) reads this rect; only the
   // rounded background fill is drawn outset back to the full width.
   CGFloat pad = kPillW / 2.0;
+  // 2px extra on the right nudges the content off the container's right edge;
+  // the rounded background is drawn at full width (see -_containerRect) so the
+  // container itself keeps its size.
   return NSMakeRect(kGraphPadX + pad, bottom,
-                    NSWidth(self.bounds) - 2 * kGraphPadX - 2 * pad,
+                    NSWidth(self.bounds) - 2 * kGraphPadX - 2 * pad - 2.0,
                     NSHeight(self.bounds) - bottom - top);
+}
+
+// The rounded background box. Spans the full track width (independent of
+// -_graphRect's 2px right content padding) so the container keeps its size
+// while the content sits inset from the right edge.
+- (NSRect)_containerRect {
+  NSRect g = [self _graphRect];
+  return NSMakeRect(kGraphPadX, NSMinY(g),
+                    NSWidth(self.bounds) - 2 * kGraphPadX, NSHeight(g));
 }
 
 // Maps (frac, value) into the track. `lo`/`hi` is the curve's actual value

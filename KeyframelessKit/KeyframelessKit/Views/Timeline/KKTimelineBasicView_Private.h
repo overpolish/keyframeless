@@ -208,6 +208,7 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
 - (double)_clipDuration;
 - (KKBasicProj)_projection;
 - (NSRect)_graphRect;
+- (NSRect)_containerRect;
 
 - (void)_strokeCurveFrom:(double)t0
                       to:(double)t1

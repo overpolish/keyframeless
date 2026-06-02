@@ -66,7 +66,11 @@
   // frac<->x consumer (pills, curve, ruler, playhead, scrub, zoom/pan) reads
   // this rect, so they all stay aligned.
   CGFloat pad = kPillW / 2.0;
-  return NSMakeRect(x + pad, NSMinY(g), MAX(0.0, NSMaxX(g) - x - 2.0 * pad),
+  // Extra padding on the right so the content (pills, ruler, curve) is pushed
+  // off the container's right edge slightly; the container background (g) keeps
+  // its full width.
+  return NSMakeRect(x + pad, NSMinY(g),
+                    MAX(0.0, NSMaxX(g) - x - 2.0 * pad - KKPaddingMD),
                     NSHeight(g));
 }
 

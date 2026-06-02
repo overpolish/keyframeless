@@ -59,11 +59,11 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
         [[NSColor inspectorLabel] colorWithAlphaComponent:0.75],
   };
 
-  // Rows (labels + curves) clip to the graph rect's vertical band so scrolled
-  // rows never bleed into the pinned ruler above or past the graph below.
+  // Rows (labels, curves, pills, hover) clip to the container's rounded-rect
+  // shape so scrolled content can't bleed into the pinned ruler above, past the
+  // graph below, or out of the rounded corners.
   [NSGraphicsContext saveGraphicsState];
-  NSRectClip(NSMakeRect(NSMinX(self.bounds), NSMinY(g), NSWidth(self.bounds),
-                        NSHeight(g)));
+  [track addClip];
 
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
@@ -657,6 +657,16 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   px = round(px) + 0.5;
   CGFloat top = NSMaxY(g) + kRulerGap + kRulerH;
   NSColor *phc = [NSColor inspectorLabel];
+  // Contain the scrubber horizontally to the tracks area (not the full
+  // container) so a zoomed/panned playhead can't draw over the label gutter -
+  // same reason the ruler maps into `tracks`. Expanded by the knob half-width
+  // so the frac 0/1 endpoint knobs still show whole. Vertical is left free so
+  // the knob sits up in the ruler.
+  CGFloat knobHalf = 7.0 / 2.0;
+  [NSGraphicsContext saveGraphicsState];
+  NSRectClip(NSMakeRect(NSMinX(tracks) - knobHalf, NSMinY(g),
+                        NSWidth(tracks) + 2.0 * knobHalf,
+                        NSMaxY(self.bounds) - NSMinY(g)));
   NSBezierPath *line = [NSBezierPath bezierPath];
   [line moveToPoint:NSMakePoint(px, NSMinY(g))];
   [line lineToPoint:NSMakePoint(px, top)];
@@ -673,6 +683,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   [knob closePath];
   [phc setFill];
   [knob fill];
+  [NSGraphicsContext restoreGraphicsState];
 }
 
 @end

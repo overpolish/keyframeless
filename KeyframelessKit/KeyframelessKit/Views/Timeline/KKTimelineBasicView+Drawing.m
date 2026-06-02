@@ -24,10 +24,11 @@
   if (NSWidth(g) <= 0 || NSHeight(g) <= 0)
     return;
 
-  // The graph rect is inset by half a pill for content; the background fills
-  // the full track width, so outset it back.
+  // The container background fills the full track width (independent of the
+  // graph rect's half-pill content inset + 1px right padding) so the box keeps
+  // its size while content sits inset from the right edge.
   NSBezierPath *track =
-      [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(g, -kPillW / 2.0, 0.0)
+      [NSBezierPath bezierPathWithRoundedRect:[self _containerRect]
                                       xRadius:KKRadiusMD
                                       yRadius:KKRadiusMD];
   [[[NSColor inspectorLabel] colorWithAlphaComponent:0.06] setFill];
@@ -96,12 +97,13 @@
                    color:outTrans ? warn : hold];
   [NSGraphicsContext restoreGraphicsState];
 
-  // Pills + tie bar clip to the visible container (the full-width background,
-  // i.e. the graph rect outset back by half a pill). The frac 0/1 pills sit at
-  // the inset edges and reach the container edge, so they still show whole;
-  // pills panned/zoomed past the container are clipped instead of overflowing.
+  // Pills + tie bar clip to the visible container (the full-width background).
+  // The frac 0/1 pills sit at the inset content edges; clipping to the full
+  // container (not the right-padded content rect) leaves room for the frac 1
+  // pill to show whole instead of being cut flush at the content edge. Pills
+  // panned/zoomed past the container are clipped instead of overflowing.
   [NSGraphicsContext saveGraphicsState];
-  NSRect bg = NSInsetRect(g, -kPillW / 2.0, 0.0);
+  NSRect bg = [self _containerRect];
   NSRectClip(NSMakeRect(NSMinX(bg), NSMinY(self.bounds), NSWidth(bg),
                         NSHeight(self.bounds)));
 
@@ -159,6 +161,12 @@
     px = round(px) + 0.5; // crisp 1px line
     CGFloat top = NSMaxY(g) + kRulerGap + kRulerH;
     NSColor *phc = [NSColor inspectorLabel];
+    // Contain the scrubber horizontally to the visible container; vertical is
+    // left free so the knob still sits up in the ruler.
+    NSRect cont = [self _containerRect];
+    [NSGraphicsContext saveGraphicsState];
+    NSRectClip(NSMakeRect(NSMinX(cont), NSMinY(g), NSWidth(cont),
+                          NSMaxY(self.bounds) - NSMinY(g)));
     NSBezierPath *line = [NSBezierPath bezierPath];
     [line moveToPoint:NSMakePoint(px, NSMinY(g))];
     [line lineToPoint:NSMakePoint(px, top)];
@@ -175,6 +183,7 @@
     [knob closePath];
     [phc setFill];
     [knob fill];
+    [NSGraphicsContext restoreGraphicsState];
   }
 }
 
