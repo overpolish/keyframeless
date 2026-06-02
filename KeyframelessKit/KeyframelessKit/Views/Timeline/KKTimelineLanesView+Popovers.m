@@ -3,13 +3,13 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKTokens.h"
 #import "KKLocalized.h"
 #import "KKMiniCanvasRenderer.h"
 #import "KKMiniCanvasView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
+#import "KKTokens.h"
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKSegmentEditView.h>
@@ -226,6 +226,8 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   __block id magnifyGlobalMon = nil;
   __block id mouseLocalMon = nil;
   __block id mouseGlobalMon = nil;
+  __block id keyMon = nil;
+  __weak typeof(self) navWeakSelf = self;
 
   void (^removeMonitors)(void) = ^{
     if (localMon) {
@@ -251,6 +253,10 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
     if (mouseGlobalMon) {
       [NSEvent removeMonitor:mouseGlobalMon];
       mouseGlobalMon = nil;
+    }
+    if (keyMon) {
+      [NSEvent removeMonitor:keyMon];
+      keyMon = nil;
     }
   };
 
@@ -338,6 +344,38 @@ static KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
                                              handler:^(NSEvent *e) {
                                                closeIfOutsidePopover();
                                              }];
+
+  // Left/right arrows step to the prev/next keypose while the boundary popover
+  // is focused - but only when no value field is being edited (the field editor
+  // is first responder), so arrows still move the text cursor inside a field.
+  keyMon = [NSEvent
+      addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
+                                   handler:^NSEvent *(NSEvent *e) {
+                                     __strong typeof(navWeakSelf) s =
+                                         navWeakSelf;
+                                     if (!s)
+                                       return e;
+                                     if (!(s->_openContentPopover.isShown &&
+                                           s->_openStaticIsBoundary))
+                                       return e;
+                                     unsigned short kc = e.keyCode;
+                                     if (kc != 123 && kc != 124)
+                                       return e; // 123 = left, 124 = right
+                                     // ViewBridge routes the popover's key
+                                     // events through the host window, so
+                                     // e.window never equals the popover window
+                                     // - gate on the popover window's first
+                                     // responder instead. An NSText (the field
+                                     // editor) means a value field is being
+                                     // edited: let the arrows move the text
+                                     // cursor rather than navigating.
+                                     if ([popoverWindow.firstResponder
+                                             isKindOfClass:[NSText class]])
+                                       return e;
+                                     [s _navigateBoundaryPopoverDirection:
+                                             (kc == 123 ? -1 : 1)];
+                                     return nil; // consume
+                                   }];
 
   _openContentPopover = popover;
   return popover;

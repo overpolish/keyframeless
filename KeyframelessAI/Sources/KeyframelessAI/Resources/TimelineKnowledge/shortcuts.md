@@ -40,5 +40,7 @@ Playback while editing:
 Inside popovers:
 
 - Return commits the number field you're typing in.
+- Tab moves to the next number field (Shift-Tab to the previous one), like a web form.
 - Esc cancels the in-progress edit and closes the popover.
+- Left and Right arrows step to the previous/next keypose when a keypose popover is open, so you can walk the animation without reaching for the mouse. This only applies when you're not editing a number field - inside a field the arrows move the text cursor as usual.
 - Double-click the mini-canvas to reset zoom and pan.
