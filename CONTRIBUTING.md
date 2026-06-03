@@ -6,6 +6,28 @@
 
 ...
 
+## Plugin structure
+
+Every FxPlug plugin (Rounded, MagicMove, and the canonical `Template/`) follows the same `Plugin/` layout. Starting a new plugin is "copy `Template/`, rename, fill the hooks", so keep new plugins on this shape:
+
+```
+Plugin/
+  Core/       Plugin{.h,.m,_Private.h}, Plugin+CustomUI.m, Plugin+Parameters.m,
+              Constants.h, <Name>Localized.{h,m}, main.m
+  OSC/        OSC.{h,m}, OSC_Internal.h, <Name>OSC+<Category>.m, <Name>OSCMath.{h,m}
+  Render/     Plugin+Render.m, <Name>MiniCanvasRenderer.{h,m}, ShaderTypes.h, <Name>.metal
+  Inspector/  (optional) <Name>InspectorView*.{h,m} - only if the plugin has a custom
+              inspector subclass (Rounded does; MagicMove does not)
+  Assets/     (optional) cursors / images
+  Info.plist, en.lproj/   (stay at the Plugin/ root, not inside Core/)
+```
+
+Notes:
+
+- The Xcode project uses synchronized folder groups, so new `.m` files auto-compile. A new plugin `.m` must still be listed in the Wrapper Application target's `membershipExceptions` in the `.pbxproj`, or the Wrapper link fails.
+- Imports are bare quoted basenames (`#import "Constants.h"`) even across `Core`/`OSC`/`Render`; the build's header map resolves them, so no relative `../` paths.
+- Shared logic lives in `KeyframelessKit`, not per-plugin. Reuse the kit base helpers (`KKPlugin`, `KKPointOSC`/OSC bases, `KKMiniCanvasRenderer`, `KKPlugin+OSCVisibility`, the timeline-write and inspector-callback helpers) rather than re-deriving them.
+
 ## Troubleshooting
 
 > [!IMPORTANT]

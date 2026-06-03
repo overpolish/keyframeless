@@ -13,6 +13,8 @@
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKHelpSection.h>
 #import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
+#import <KeyframelessKit/KKTimelineAIMerge.h>
 #import <KeyframelessKit/KKTimingCompat.h>
 #import <KeyframelessKit/KKTimingStage.h>
 @import KeyframelessAI;
@@ -56,184 +58,6 @@ static NSString *_RoundedAILaneSchemaText(void) {
   return s;
 }
 
-/// Returns a JSON timeline string for the current effect: the saved one, or
-/// a fresh template built from the plugin's availableLanes when nothing is
-/// saved. The LLM always needs to see real lane labels so it can target them.
-static NSString *
-_RoundedAICurrentTimelineJSON(id<FxParameterRetrievalAPI_v6> getAPI) {
-  NSString *saved = KKReadCustomParamString(getAPI, kKKParamTimelineData);
-  if (saved.length && [saved containsString:@"\"label\""])
-    return saved;
-  KKTimeline *fresh = [KKTimeline timeline];
-  fresh.lanes = [RoundedPlugin availableLanes];
-  NSString *json = [KKTimeline jsonFromTimeline:fresh];
-  return json ?: @"{\"lanes\":[]}";
-}
-
-/// For any new hold interval (endpoints_linked:true) that has no modulation,
-/// scan the old lane's intervals for any hold interval with modulation whose
-/// time range overlaps the new interval's time range, and copy its modulation
-/// fields onto the new one. The LLM is told to preserve modulation across
-/// unchanged regions but routinely forgets; this is the deterministic
-/// backstop.
-static NSArray *_RoundedAIPreserveModulation(NSArray *newKps, NSArray *oldKps) {
-  if (![newKps isKindOfClass:[NSArray class]] || newKps.count < 2)
-    return newKps;
-  if (![oldKps isKindOfClass:[NSArray class]] || oldKps.count < 2)
-    return newKps;
-
-  NSMutableArray *out = [NSMutableArray arrayWithCapacity:newKps.count];
-  for (NSUInteger i = 0; i < newKps.count; i++) {
-    id raw = newKps[i];
-    if (![raw isKindOfClass:[NSDictionary class]]) {
-      [out addObject:raw];
-      continue;
-    }
-    NSMutableDictionary *kp = [raw mutableCopy];
-    NSDictionary *outgoing = kp[@"outgoing"];
-    if (![outgoing isKindOfClass:[NSDictionary class]] ||
-        i + 1 >= newKps.count) {
-      [out addObject:kp];
-      continue;
-    }
-    BOOL linked = [outgoing[@"endpoints_linked"] boolValue];
-    NSInteger newMod = [outgoing[@"modulation"] integerValue];
-    if (!linked || newMod != 0) {
-      [out addObject:kp];
-      continue;
-    }
-    // This is a hold with no modulation. Look for a matching old hold
-    // interval whose time range overlaps AND whose value matches this
-    // keypose's value (so we only preserve modulation on "the same hold
-    // resegmented", not on a new differently-valued hold the user just
-    // introduced inside the old region).
-    double newStart = [kp[@"time"] doubleValue];
-    double newEnd = [((NSDictionary *)newKps[i + 1])[@"time"] doubleValue];
-    NSArray *newVals = kp[@"values"];
-    for (NSUInteger j = 0; j + 1 < oldKps.count; j++) {
-      NSDictionary *oldKp = oldKps[j];
-      if (![oldKp isKindOfClass:[NSDictionary class]])
-        continue;
-      NSDictionary *oldOut = oldKp[@"outgoing"];
-      if (![oldOut isKindOfClass:[NSDictionary class]])
-        continue;
-      BOOL oldLinked = [oldOut[@"endpoints_linked"] boolValue];
-      NSInteger oldMod = [oldOut[@"modulation"] integerValue];
-      if (!oldLinked || oldMod == 0)
-        continue;
-      double oldStart = [oldKp[@"time"] doubleValue];
-      double oldEnd = [((NSDictionary *)oldKps[j + 1])[@"time"] doubleValue];
-      // Time overlap AND matching held value. The value check is what
-      // separates "outer wiggle-hold resegmented around a new bump" from
-      // "a new quiet middle hold sitting inside the old wiggle region".
-      BOOL overlaps = (newStart < oldEnd) && (newEnd > oldStart);
-      if (!overlaps)
-        continue;
-      NSArray *oldVals = oldKp[@"values"];
-      if (![newVals isKindOfClass:[NSArray class]] ||
-          ![oldVals isKindOfClass:[NSArray class]] ||
-          newVals.count != oldVals.count)
-        continue;
-      BOOL sameValues = YES;
-      for (NSUInteger k = 0; k < newVals.count; k++) {
-        if (fabs([newVals[k] doubleValue] - [oldVals[k] doubleValue]) > 1e-6) {
-          sameValues = NO;
-          break;
-        }
-      }
-      if (!sameValues)
-        continue;
-      NSMutableDictionary *mergedOut = [outgoing mutableCopy];
-      mergedOut[@"modulation"] = @(oldMod);
-      if (oldOut[@"modulation_intensity"])
-        mergedOut[@"modulation_intensity"] = oldOut[@"modulation_intensity"];
-      if (oldOut[@"modulation_frequency"])
-        mergedOut[@"modulation_frequency"] = oldOut[@"modulation_frequency"];
-      if (oldOut[@"modulation_seed"])
-        mergedOut[@"modulation_seed"] = oldOut[@"modulation_seed"];
-      if (oldOut[@"modulation_linked"] != nil)
-        mergedOut[@"modulation_linked"] = oldOut[@"modulation_linked"];
-      kp[@"outgoing"] = mergedOut;
-      break;
-    }
-    [out addObject:kp];
-  }
-  return out;
-}
-
-/// Merge the AI agent's compiled mutation JSON of shape
-/// `{"operations":[{"lane":"<label>","keyposes":[...]}]}` into the current
-/// full timeline JSON. The merge preserves each lane's stable fields
-/// (id, value_type, component_min/max/units) and only replaces keyposes.
-/// Lanes not mentioned in operations are left untouched. Unknown lane
-/// labels are dropped silently.
-static NSString *_RoundedAIMergedTimelineJSON(NSString *currentTimelineJSON,
-                                              NSString *mutationJSON) {
-  NSData *curD = [currentTimelineJSON dataUsingEncoding:NSUTF8StringEncoding];
-  NSError *err = nil;
-  NSMutableDictionary *current =
-      [NSJSONSerialization JSONObjectWithData:curD
-                                      options:NSJSONReadingMutableContainers
-                                        error:&err];
-  if (![current isKindOfClass:[NSMutableDictionary class]])
-    return nil;
-  NSData *mutD = [mutationJSON dataUsingEncoding:NSUTF8StringEncoding];
-  NSDictionary *mut = [NSJSONSerialization JSONObjectWithData:mutD
-                                                      options:0
-                                                        error:&err];
-  if (![mut isKindOfClass:[NSDictionary class]])
-    return nil;
-  NSArray *ops = mut[@"operations"];
-  NSMutableArray *curLanes = current[@"lanes"];
-  if (![ops isKindOfClass:[NSArray class]] ||
-      ![curLanes isKindOfClass:[NSMutableArray class]])
-    return nil;
-
-  NSMutableDictionary *byLabel = [NSMutableDictionary dictionary];
-  for (NSUInteger i = 0; i < curLanes.count; i++) {
-    NSDictionary *L = curLanes[i];
-    if (![L isKindOfClass:[NSDictionary class]])
-      continue;
-    NSString *label = L[@"label"];
-    if ([label isKindOfClass:[NSString class]])
-      byLabel[label] = @(i);
-  }
-
-  for (id op in ops) {
-    if (![op isKindOfClass:[NSDictionary class]])
-      continue;
-    NSString *label = op[@"lane"];
-    if (![label isKindOfClass:[NSString class]])
-      continue;
-    NSNumber *idxN = byLabel[label];
-    if (!idxN) {
-      KKLogWarn(@"AI tried to write unknown lane label: %@", label);
-      continue;
-    }
-    NSMutableDictionary *target =
-        [curLanes[idxN.unsignedIntegerValue] mutableCopy];
-    if (op[@"keyposes"]) {
-      // Crop schema exposed to the LLM as screen-space (Y-down). The data
-      // model is also Y-down empirically (manually editing y=+0.5 in the
-      // inspector moves the crop center DOWN), regardless of what comments
-      // elsewhere claim. So LLM output flows straight through.
-      NSArray *newKps = op[@"keyposes"];
-      NSArray *oldKps = curLanes[idxN.unsignedIntegerValue][@"keyposes"];
-      target[@"keyposes"] = _RoundedAIPreserveModulation(newKps, oldKps);
-    }
-    if (op[@"hold_shape"])
-      target[@"hold_shape"] = op[@"hold_shape"];
-    target[@"enabled"] = @YES;
-    curLanes[idxN.unsignedIntegerValue] = target;
-  }
-
-  current[@"lanes"] = curLanes;
-  NSData *outD = [NSJSONSerialization dataWithJSONObject:current
-                                                 options:0
-                                                   error:&err];
-  return [[NSString alloc] initWithData:outD encoding:NSUTF8StringEncoding];
-}
-
 @implementation RoundedPlugin (CustomUI)
 
 - (BOOL)usesMotionBlur {
@@ -270,55 +94,19 @@ static NSString *_RoundedAIMergedTimelineJSON(NSString *currentTimelineJSON,
     id<FxParameterRetrievalAPI_v6> getAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
 
-    NSString *uiJson = KKReadCustomParamString(getAPI, kParamUIState);
-    NSDictionary *uiState =
-        uiJson.length
-            ? [NSJSONSerialization
-                  JSONObjectWithData:[uiJson
-                                         dataUsingEncoding:NSUTF8StringEncoding]
-                             options:0
-                               error:nil]
-                  ?: @{}
-            : @{};
-    BOOL loopEnabled = [uiState[@"loopEnabled"] boolValue];
-    NSInteger activeTab = [uiState[@"activeTab"] integerValue];
-    BOOL oscMasterVisible = uiState[@"oscMasterVisible"]
-                                ? [uiState[@"oscMasterVisible"] boolValue]
-                                : YES;
-    // Migration: legacy onionSkinEnabled BOOL → new renderMode enum
-    // (0=Off, 1=Filmstrip, 2=Onion). Old true maps to Filmstrip.
-    KKMiniCanvasRenderMode renderMode = KKMiniCanvasRenderModeOff;
-    if (uiState[@"renderMode"]) {
-      renderMode =
-          (KKMiniCanvasRenderMode)[uiState[@"renderMode"] integerValue];
-    } else if ([uiState[@"onionSkinEnabled"] boolValue]) {
-      renderMode = KKMiniCanvasRenderModeFilmstrip;
-    }
-
-    NSString *mbJson = KKReadCustomParamString(getAPI, kKKParamMotionBlurData);
-    NSDictionary *mbState =
-        (mbJson.length ? [NSJSONSerialization
-                             JSONObjectWithData:
-                                 [mbJson dataUsingEncoding:NSUTF8StringEncoding]
-                                        options:0
-                                          error:nil]
-                       : nil)
-            ?: @{};
-    BOOL motionBlurEnabled = [mbState[@"enabled"] boolValue];
-    double motionBlurShutterAngle = mbState[@"shutterAngle"]
-                                        ? [mbState[@"shutterAngle"] doubleValue]
-                                        : 180.0;
-    NSInteger motionBlurSamples =
-        mbState[@"samples"] ? [mbState[@"samples"] integerValue] : 16;
-    NSInteger motionBlurMode =
-        mbState[@"mode"] ? [mbState[@"mode"] integerValue] : 0;
-
-    NSString *timelineJson =
-        KKReadCustomParamString(getAPI, kKKParamTimelineData);
-    KKTimeline *timeline =
-        (timelineJson.length ? [KKTimeline timelineFromJSON:timelineJson] : nil)
-            ?: [KKTimeline timeline];
-    timeline = [self timelineStampedWithClipDuration:timeline];
+    KKInspectorPersistedState *st =
+        [self kkReadInspectorPersistedStateWithGetAPI:getAPI
+                                       uiStateParamID:kParamUIState];
+    BOOL loopEnabled = st.loopEnabled;
+    NSInteger activeTab = st.activeTab;
+    BOOL oscMasterVisible = st.oscMasterVisible;
+    KKMiniCanvasRenderMode renderMode = (KKMiniCanvasRenderMode)st.renderMode;
+    BOOL motionBlurEnabled = st.motionBlurEnabled;
+    double motionBlurShutterAngle = st.motionBlurShutterAngle;
+    NSInteger motionBlurSamples = st.motionBlurSamples;
+    NSInteger motionBlurMode = st.motionBlurMode;
+    NSDictionary *uiState = st.uiState;
+    KKTimeline *timeline = [self timelineStampedWithClipDuration:st.timeline];
 
     // Cold-boot seed for the OSC. Without this, the first drawOSC tick after
     // FCP relaunch sees an empty snapshot → falls through to "no lane =
@@ -392,202 +180,20 @@ static NSString *_RoundedAIMergedTimelineJSON(NSString *currentTimelineJSON,
                            compounds:oscCompounds
                              paramID:kParamUIState];
     [view setOSCVisible:oscMasterVisible];
-
-    __weak typeof(self) weak = self;
-
-    view.onLoopToggled = ^(BOOL enabled) {
-      __strong typeof(weak) strong = weak;
-      if (!strong)
-        return;
-      [strong patchUIStateKey:@"loopEnabled"
-                        value:@(enabled)
-                      paramID:kParamUIState];
-    };
-    view.onTabChanged = ^(NSInteger tab) {
-      __strong typeof(weak) strong = weak;
-      if (!strong)
-        return;
-      [strong patchUIStateKey:@"activeTab" value:@(tab) paramID:kParamUIState];
-    };
-    view.onMotionBlurChanged = ^(BOOL enabled, double shutterAngle,
-                                 NSInteger samples, KKMotionBlurMode mode) {
-      __strong typeof(weak) strong = weak;
-      if (!strong)
-        return;
-      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      if (!act)
-        return;
-      [act startAction:strong];
-      id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
-          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      NSDictionary *mb = @{
-        @"enabled" : @(enabled),
-        @"shutterAngle" : @(shutterAngle),
-        @"samples" : @(samples),
-        @"mode" : @((NSInteger)mode)
-      };
-      NSData *data = [NSJSONSerialization dataWithJSONObject:mb
-                                                     options:0
-                                                       error:nil];
-      NSString *json = [[NSString alloc] initWithData:data
-                                             encoding:NSUTF8StringEncoding];
-      if (json)
-        KKWriteCustomParamString(setAPI, json, kKKParamMotionBlurData);
-      [act endAction:strong];
-    };
     [view setRenderMode:renderMode];
-    view.onRenderModeChanged = ^(KKMiniCanvasRenderMode mode) {
-      __strong typeof(weak) strong = weak;
-      if (!strong)
-        return;
-      [strong patchUIStateKey:@"renderMode"
-                        value:@((NSInteger)mode)
-                      paramID:kParamUIState];
-    };
-    view.onTimelineMutated = ^(KKTimeline *updated) {
-      __strong typeof(weak) strong = weak;
-      if (!strong)
-        return;
-      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      if (!act)
-        return;
-      [act startAction:strong];
-      id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
-          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      NSString *json = [KKTimeline jsonFromTimeline:updated];
-      if (json)
-        KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
-      [act endAction:strong];
-    };
 
-    // Coalesce a continuous mini-canvas handle drag into one undo entry: the
-    // per-tick onTimelineMutated writes nest inside this outer group.
-    // FxUndoAPI resolves to nil outside an action scope, so the begin/end
-    // of the coalescing group must run inside one (the per-tick mutate
-    // writes then land in the still-open host undo group).
-    view.onDragBegin = ^{
-      __strong typeof(weak) strong = weak;
-      if (!strong)
-        return;
-      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      if (!act)
-        return;
-      [act startAction:strong];
-      strong.miniDragUndoStarted =
-          KKBeginUndoGroup(strong.apiManager, @"Adjust Radius");
-      [act endAction:strong];
-    };
-    view.onDragEnd = ^{
-      __strong typeof(weak) strong = weak;
-      if (!strong)
-        return;
-      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      if (act)
-        [act startAction:strong];
-      KKEndUndoGroup(strong.apiManager, strong.miniDragUndoStarted);
-      if (act)
-        [act endAction:strong];
-      strong.miniDragUndoStarted = NO;
-    };
+    [self kkWireStandardInspectorCallbacksForView:view
+                                   uiStateParamID:kParamUIState
+                               renderNudgeParamID:kParamRenderNudge
+                                    dragUndoLabel:@"Adjust Radius"
+                               detachedWindowSize:CGSizeMake(720.0, 460.0)];
 
-    // Boundary popover just opened and wrote its request file. FCP only
-    // re-runs -scheduleInputs: on a render, and it serves a cached frame
-    // for a static playhead (no scheduleInputs at all). Writing a fresh
-    // random value to a hidden scratch param makes FCP treat it as a real
-    // parameter change → it re-renders the current frame → scheduleInputs
-    // runs and picks up the request file. Random (not incremented) so it
-    // never collides with a previously cached value after undo/redo.
-    view.onBoundaryPreviewNeedsRender = ^{
-      __strong typeof(weak) strong = weak;
-      if (!strong)
-        return;
-      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      if (!act)
-        return;
-      [act startAction:strong];
-      id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
-          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      NSString *nonce = [[NSUUID UUID] UUIDString];
-      KKWriteCustomParamString(setAPI, nonce, kParamRenderNudge);
-      [act endAction:strong];
-    };
-
-    // Scrub: drag the Basic playhead → move the host playhead. FxTimingAPI
-    // resolves inside this action scope (it's nil in the render tick).
-    // movePlayheadToTime: is timeline-time in FCP, effect-time in Motion.
-    view.onScrub = ^(double frac) {
-      __strong typeof(weak) strong = weak;
-      if (!strong)
-        return;
-      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      if (!act)
-        return;
-      [act startAction:strong];
-      id<FxTimingAPI_v4> timing =
-          [strong.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-      id<FxCommandAPI_v2> cmd =
-          [strong.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
-      CMTime es = kCMTimeZero, ed = kCMTimeZero;
-      [timing startTimeForEffect:&es];
-      [timing durationTimeForEffect:&ed];
-      double dsec = CMTimeGetSeconds(ed);
-      double base;
-      if ([KKHostInfo isRunningInFinalCut]) {
-        CMTime src = kCMTimeZero, tl = kCMTimeZero;
-        [timing startTimeOfInputToFilter:&src];
-        [timing timelineTime:&tl fromInputTime:src];
-        base = CMTimeGetSeconds(tl);
-      } else {
-        base = CMTimeGetSeconds(es);
-      }
-      if (dsec > 0.0)
-        [cmd movePlayheadToTime:CMTimeMakeWithSeconds(base + frac * dsec, 600)
-                          error:nil];
-      [act endAction:strong];
-    };
-
-    // Spacebar in the inspector → play/pause (FCP eats it otherwise).
-    view.onTogglePlayback = ^{
-      __strong typeof(weak) strong = weak;
-      if (!strong)
-        return;
-      id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      if (!act)
-        return;
-      [act startAction:strong];
-      id<FxCommandAPI_v2> cmd =
-          [strong.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
-      [cmd performCommand:kFxCommand_TogglePlayback error:nil];
-      [act endAction:strong];
-    };
-
+    // Rounded-only: the inspector needs the host effect-header rect (for the
+    // OSC-guide overlay positioning).
+    __weak typeof(self) weak = self;
     view.effectHeaderRectProvider = ^NSRect {
       __strong typeof(weak) strong = weak;
       return strong ? [strong effectHeaderScreenRect] : NSZeroRect;
-    };
-
-    view.onToggleDetached = ^{
-      __strong typeof(weak) strong = weak;
-      if (!strong)
-        return;
-      RoundedInspectorView *insp = strong.inspectorView;
-      if (!insp)
-        return;
-      if (insp.hasDetachedWindow) {
-        [strong closeRemoteWindowIfSupported];
-        return;
-      }
-      [strong presentRemoteWindowOfSize:CGSizeMake(720.0, 460.0)
-                        contentProvider:^NSView * {
-                          return [insp beginDetachedCopy];
-                        }];
     };
 
     self.inspectorView = view;
@@ -861,7 +467,8 @@ static NSString *_RoundedAIMergedTimelineJSON(NSString *currentTimelineJSON,
   [readAct startAction:self];
   id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  NSString *currentJSON = _RoundedAICurrentTimelineJSON(getAPI);
+  NSString *currentJSON =
+      KKTimelineAICurrentJSON(getAPI, [RoundedPlugin availableLanes]);
   NSString *uiJson = KKReadCustomParamString(getAPI, kParamUIState);
   NSDictionary *uiState =
       (uiJson.length
@@ -914,7 +521,7 @@ static NSString *_RoundedAIMergedTimelineJSON(NSString *currentTimelineJSON,
                       [KKAIDraft setAnswer:result.answer];
                       return;
                     }
-                    NSString *merged = _RoundedAIMergedTimelineJSON(
+                    NSString *merged = KKTimelineAIMergeMutationJSON(
                         currentJSON, result.mutationJSON);
                     if (!merged) {
                       KKLogError(@"AI[err] merge returned nil");

@@ -28,8 +28,6 @@ static const CGFloat kHandleHitTolPt = 12.0;
   MTLPixelFormat _pipelineFormat;
 }
 
-#pragma mark - Vocabulary
-
 - (NSString *)cropLabel {
   return @"Crop";
 }
@@ -52,8 +50,6 @@ static const CGFloat kHandleHitTolPt = 12.0;
     return @[ @20.0 ];
   return [super defaultValuesForLabel:label];
 }
-
-#pragma mark - Effect render
 
 - (BOOL)_ensurePipelineForDevice:(id<MTLDevice>)device
                      pixelFormat:(MTLPixelFormat)format {
@@ -143,8 +139,6 @@ static const CGFloat kHandleHitTolPt = 12.0;
   [e endEncoding];
   return YES;
 }
-
-#pragma mark - Radius point handle
 
 - (double)_currentRadius {
   return [[self valuesForLabel:@"Radius"] firstObject].doubleValue;

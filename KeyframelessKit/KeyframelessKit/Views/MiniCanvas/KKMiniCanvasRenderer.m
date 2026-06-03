@@ -109,6 +109,21 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
                   contentRect:(CGRect)contentRect
                        canvas:(KKMiniCanvasView *)canvas {
 }
+- (NSInteger)nearestHandleIndexToPoint:(CGPoint)p
+                               centers:(const CGPoint *)centers
+                                 count:(NSInteger)count
+                             tolerance:(CGFloat)tolerance {
+  NSInteger best = NSNotFound;
+  double bestD = tolerance;
+  for (NSInteger i = 0; i < count; i++) {
+    double d = hypot(p.x - centers[i].x, p.y - centers[i].y);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
 - (BOOL)rotationIsActive {
   return _rotationGrabbed;
 }

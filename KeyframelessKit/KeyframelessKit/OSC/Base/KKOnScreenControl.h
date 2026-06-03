@@ -159,8 +159,6 @@ NS_ASSUME_NONNULL_BEGIN
                                            CGPoint metalPosition,
                                            simd_uint2 viewportSize))commands;
 
-#pragma mark - On-screen-control visibility (opt-hide / opt-reveal)
-
 /// YES while the user holds Option over the viewer. Hidden elements should then
 /// be drawn as dimmed ghosts and made hit-testable so an opt-click re-shows
 /// them. Maintained by -kkUpdateOptRevealWithModifiers:forceUpdate:; read it

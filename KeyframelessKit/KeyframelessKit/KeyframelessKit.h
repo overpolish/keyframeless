@@ -69,6 +69,8 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPlayheadPoller.h>
 #import <KeyframelessKit/KKPlugin+Color.h>
 #import <KeyframelessKit/KKPlugin+Crop.h>
+#import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
+#import <KeyframelessKit/KKPlugin+MiniCanvasFeed.h>
 #import <KeyframelessKit/KKPlugin+OSCVisibility.h>
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKPluginHost.h>
@@ -95,6 +97,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKSpatialCurve.h>
 #import <KeyframelessKit/KKSquarePointOSC.h>
+#import <KeyframelessKit/KKTimelineAIMerge.h>
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <KeyframelessKit/KKTimelineBasicView+Guide.h>
 #import <KeyframelessKit/KKTimelineBasicView.h>

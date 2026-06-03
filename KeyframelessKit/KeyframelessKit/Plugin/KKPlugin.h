@@ -13,6 +13,7 @@
 #import <Metal/Metal.h>
 
 @class FxImageTile;
+@class KKMiniCanvasFeed;
 @class KKCustomGroupHeaderView;
 @class KKHelpSection;
 @class KKHelpGuide;
@@ -41,6 +42,17 @@ NS_ASSUME_NONNULL_BEGIN
 @interface KKPlugin : NSObject
 
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
+
+/// Set while a continuous mini-canvas / inspector handle drag is coalescing its
+/// per-tick timeline writes into one undo group. Toggled by the standard
+/// inspector onDragBegin/onDragEnd callbacks (see KKPlugin+InspectorCallbacks).
+@property(nonatomic) BOOL miniDragUndoStarted;
+
+/// The mini-canvas source feed published from renderDestinationImage: and the
+/// descriptor path it was created with. Managed by the shared feed-publish
+/// helper (see KKPlugin+MiniCanvasFeed); recreated when the path changes.
+@property(nonatomic, strong, nullable) KKMiniCanvasFeed *miniCanvasFeed;
+@property(nonatomic, copy, nullable) NSString *miniCanvasFeedPath;
 
 /// Extra parameter IDs to show/hide alongside the timing group's children.
 /// Set before the first render pass (e.g. in addParametersWithError:).

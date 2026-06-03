@@ -228,108 +228,21 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
   [pluginState getBytes:&mbState length:sizeof(mbState)];
 
   // Mini-canvas feed: publish raw source per slot (single-slot = playhead,
-  // multi-slot = boundary preview / filmstrip / onion fractions). The mini
-  // canvas renderer runs in this same plugin XPC process - it has the plugin
-  // bundle's metallib loaded - and applies the real shader source → dest
-  // locally using its own timeline at the slot's editFraction. This lets KK
-  // push live timeline updates per drag tick without any FxPlug param writes,
-  // avoiding the Flexo write-lock deadlock that per-tick commits triggered.
-  if (sourceImages.count > 0 && destinationImage.ioSurface) {
-    // Per-instance publish path (keyed by the instance UUID) so two stacked
-    // MagicMove clips don't write the same /tmp file. Recreate the feed if the
-    // path changed (e.g. the UUID resolved after a first feed was made with the
-    // no-UUID fallback).
-    NSString *descPath = MagicMoveMiniCanvasDescriptorPathForUUID(
-        KKInstanceUUIDForAPI(self.apiManager));
-    if (!self.miniCanvasFeed ||
-        ![self.miniCanvasFeedPath isEqualToString:descPath]) {
-      self.miniCanvasFeed =
-          [[KKMiniCanvasFeed alloc] initWithDescriptorPath:descPath];
-      self.miniCanvasFeedPath = descPath;
-    }
-    NSArray<NSNumber *> *reqSecs = self.renderCache.boundaryReqSecs;
-    NSArray<NSNumber *> *reqFracs = self.renderCache.boundaryReqFracs;
-    NSMutableArray *pairs = [NSMutableArray array];
-    if (reqSecs.count > 0) {
-      // Match each requested time to its closest delivered tile by mediaTime.
-      static const double kMaxDt = 0.5;
-      NSMutableArray<NSNumber *> *availTileIdx = [NSMutableArray array];
-      for (NSUInteger i = 0; i < sourceImages.count; i++)
-        if (sourceImages[i].ioSurface)
-          [availTileIdx addObject:@(i)];
-      if (self.miniCanvasFeed.slotCount != reqSecs.count) {
-        self.miniCanvasFeed.slotCount = reqSecs.count;
-        [self.miniCanvasFeed publishDescriptor];
-      }
-      for (NSUInteger slot = 0; slot < reqSecs.count; slot++) {
-        double want = reqSecs[slot].doubleValue;
-        NSInteger bestPos = -1;
-        double bestDt = kMaxDt;
-        for (NSUInteger p = 0; p < availTileIdx.count; p++) {
-          NSUInteger ti = availTileIdx[p].unsignedIntegerValue;
-          double mt = CMTimeGetSeconds(sourceImages[ti].mediaTime);
-          double dt = fabs(mt - want);
-          if (dt < bestDt) {
-            bestDt = dt;
-            bestPos = (NSInteger)p;
-          }
-        }
-        if (bestPos >= 0) {
-          NSUInteger ti = availTileIdx[bestPos].unsignedIntegerValue;
-          [pairs addObject:@[ @(slot), sourceImages[ti] ]];
-          [availTileIdx removeObjectAtIndex:bestPos];
-        }
-      }
-    } else {
-      if (self.miniCanvasFeed.slotCount != 1)
-        self.miniCanvasFeed.slotCount = 1;
-      [pairs addObject:@[ @0, sourceImages[0] ]];
-    }
-    // Publish raw source per slot. The mini canvas renderer (in this same
-    // plugin XPC process - it has the metallib in its bundle) runs the real
-    // shader source→dest locally using its own timeline. That lets KK push
-    // live timeline updates per drag tick without any FxPlug param writes -
-    // no Flexo write-lock contention, no deadlock surface area.
-    for (NSArray *pair in pairs) {
-      NSUInteger slotIdx = [pair[0] unsignedIntegerValue];
-      FxImageTile *feedTile = pair[1];
-      FxRect sTile = feedTile.tilePixelBounds;
-      FxRect sImg = feedTile.imagePixelBounds;
-      BOOL fullFrame = (sTile.left == sImg.left && sTile.right == sImg.right &&
-                        sTile.top == sImg.top && sTile.bottom == sImg.bottom);
-      if (!fullFrame)
-        continue;
-      FxRect dImg = destinationImage.imagePixelBounds;
-      int sW = sImg.right - sImg.left, sH = sImg.top - sImg.bottom;
-      int dW = dImg.right - dImg.left, dH = dImg.top - dImg.bottom;
-      double sAsp = (sH > 0) ? fabs((double)sW / (double)sH) : 0;
-      double dAsp = (dH > 0) ? fabs((double)dW / (double)dH) : 0;
-      if (sAsp > 0 && dAsp > 0 && fabs(sAsp - dAsp) > 0.05)
-        continue;
-      KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
-      MTLPixelFormat pf =
-          [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
-      uint64_t rid = destinationImage.deviceRegistryID;
-      id<MTLCommandQueue> q = [cache commandQueueWithRegistryID:rid
-                                                    pixelFormat:pf];
-      id<MTLDevice> dev = [cache deviceWithRegistryID:rid];
-      if (!q || !dev)
-        continue;
-      id<MTLTexture> srcTex = [feedTile metalTextureForDevice:dev];
-      if (!srcTex) {
-        [cache returnCommandQueueToCache:q];
-        continue;
-      }
-      double tag = (slotIdx < reqFracs.count) ? reqFracs[slotIdx].doubleValue
-                                              : CMTimeGetSeconds(renderTime);
-      [self.miniCanvasFeed updateSlot:slotIdx
-                    withSourceTexture:srcTex
-                                  tag:tag
-                               device:dev
-                         commandQueue:q];
-      [cache returnCommandQueueToCache:q];
-    }
-  }
+  // multi-slot = boundary preview / filmstrip / onion). The mini-canvas
+  // renderer (same plugin XPC, metallib loaded) applies the real shader
+  // source→dest locally per slot, so KK pushes live timeline updates per drag
+  // tick without any FxPlug param write (no Flexo write-lock deadlock). Shared
+  // glue in KKPlugin (MiniCanvasFeed); per-instance descriptor path keyed by
+  // the instance UUID so stacked MagicMove clips don't share a /tmp file.
+  [self kkPublishMiniCanvasFeedForDestination:destinationImage
+                                 sourceImages:sourceImages
+                               descriptorPath:
+                                   MagicMoveMiniCanvasDescriptorPathForUUID(
+                                       KKInstanceUUIDForAPI(self.apiManager))
+                              boundaryReqSecs:self.renderCache.boundaryReqSecs
+                             boundaryReqFracs:self.renderCache.boundaryReqFracs
+                              multiSlotActive:YES
+                                   defaultTag:CMTimeGetSeconds(renderTime)];
 
   simd_float2 tileOffsetPx = {
       (float)(destinationImage.tilePixelBounds.left -
