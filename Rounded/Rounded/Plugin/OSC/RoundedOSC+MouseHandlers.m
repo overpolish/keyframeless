@@ -175,82 +175,24 @@ static NSInteger _kkCropPartForRoundedActive(NSInteger activePart) {
   // mouse-drag action scope (verified via logs: jsonLen=0 even with getAPI
   // resolved). The parameterChanged-driven snapshot is canonical anyway -
   // start from it so the radius edit doesn't wipe In/Hold/Out structure.
+  // Set the Radius keypose nearest the playhead, preserving In/Hold/Out
+  // structure + hold-links (see KKTimelineSettingValuesNearestFraction).
+  NSArray<NSNumber *> *newValues = @[ @(newRadius) ];
   KKTimeline *snap = RoundedTimelineSnapshot();
-  KKTimeline *tl = snap ? [snap copy] : [KKTimeline timeline];
-
-  NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-  NSInteger laneIdx = NSNotFound;
-  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if ([((KKLane *)lanes[i]).label isEqualToString:@"Radius"]) {
-      laneIdx = i;
-      break;
-    }
-  }
-
-  KKLane *radiusLane;
-  if (laneIdx == NSNotFound) {
-    // No lane: this is a fresh constant. Seed with one keypose at t=0.
-    // (Visibility rule means the OSC was reachable because !lane → constant.)
-    radiusLane = [KKLane laneWithLabel:@"Radius"];
+  KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
+                              snap, @"Radius", frac, newValues)
+                        : nil;
+  if (!tl) {
+    // No snapshot, or no Radius lane yet (a fresh constant - the OSC was
+    // reachable precisely because there was no lane). Seed one keypose at t=0.
+    tl = snap ? [snap copy] : [KKTimeline timeline];
+    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+    KKLane *radiusLane = [KKLane laneWithLabel:@"Radius"];
     radiusLane.enabled = NO;
-    radiusLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
-                                               values:@[ @(newRadius) ]] ];
+    radiusLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
     [lanes addObject:radiusLane];
-  } else {
-    // Existing lane: replace the keypose value nearest the current playhead
-    // fraction, preserving every other keypose's time/interval (so the In/
-    // Hold/Out structure isn't wiped). Mirrors KKMiniCanvasRenderer's
-    // `_timelineBySettingValues:forLabel:` boundary-edit path.
-    radiusLane = [lanes[laneIdx] copy];
-    NSArray<KKKeyPose *> *kps = radiusLane.keyposes;
-    if (kps.count == 0) {
-      radiusLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
-                                                 values:@[ @(newRadius) ]] ];
-    } else {
-      NSInteger best = 0;
-      double bd = 1e9;
-      for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
-        double d = fabs(kps[k].time - frac);
-        if (d < bd) {
-          bd = d;
-          best = k;
-        }
-      }
-      NSMutableArray<KKKeyPose *> *out = [NSMutableArray arrayWithArray:kps];
-      // MRR: cache old's fields BEFORE `out[best] = nk`. The replacement
-      // releases the array's hold on `old`; if no other retainer exists it
-      // dangles and subsequent property reads (incl. KKLog) crash. See
-      // project_mrr_array_dangling.md - exact same pattern.
-      NSArray<NSNumber *> *newValues = @[ @(newRadius) ];
-      double oldTime = out[best].time;
-      KKInterval *oldOutgoing = out[best].outgoing;
-      KKKeyPose *nk = [KKKeyPose keyposeAtTime:oldTime values:newValues];
-      nk.outgoing = oldOutgoing; // preserve easing/modulation
-      out[best] = nk;
-      // Propagate through hold-link bonds - a linked endpoint shares the
-      // same value as its partner, so an OSC edit to one side must mirror
-      // to the other or the hold becomes a drift with the bond still set
-      // (mismatched semantic). See project_canvas_undo_aware_selection /
-      // KKPathToParams for the equivalent pattern on Canvas.
-      if (best + 1 < (NSInteger)out.count && nk.outgoing.endpointsLinked) {
-        KKKeyPose *partner = out[best + 1];
-        KKKeyPose *np = [KKKeyPose keyposeAtTime:partner.time values:newValues];
-        np.outgoing = partner.outgoing;
-        out[best + 1] = np;
-      }
-      if (best > 0) {
-        KKKeyPose *prev = out[best - 1];
-        if (prev.outgoing.endpointsLinked) {
-          KKKeyPose *np = [KKKeyPose keyposeAtTime:prev.time values:newValues];
-          np.outgoing = prev.outgoing;
-          out[best - 1] = np;
-        }
-      }
-      radiusLane.keyposes = out;
-    }
-    lanes[laneIdx] = radiusLane;
+    tl.lanes = lanes;
   }
-  tl.lanes = lanes;
 
   KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
                            kKKParamTimelineData);

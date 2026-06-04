@@ -220,106 +220,17 @@
   KKMotionBlurState mbState;
   [pluginState getBytes:&mbState length:sizeof(mbState)];
 
-  // Mini-canvas source feed (7a): only on full-frame ticks - a sub-tile
-  // (parent Scale > 100%) would publish a squashed sub-region. Runs before
-  // the MB/normal branches so it captures every full render regardless of
-  // path; the feed self-throttles so this is cheap during playback.
-  // While a boundary popover is open, publish ONLY the tile whose mediaTime
-  // matches the requested boundary time. FCP does NOT honor request order and
-  // serves stale boundary tiles while it re-schedules (proven via mediaTime
-  // logs - sourceImages[1] was often the *previous* diamond's frame), so
-  // index-based selection flickers between hold frames. If no delivered tile
-  // matches this tick, skip the publish and keep the last good frame.
-  // Build the list of (slot index, tile) pairs to publish this tick. The
-  // boundary channel can request multiple times (onion-skin) - we match
-  // each requested time to whichever delivered tile's mediaTime is closest
-  // (within ~1 frame). Tiles that don't match anything are skipped (FCP
-  // serves stale boundary tiles while it re-schedules - same caveat as the
-  // single-time path).
-  NSArray<NSNumber *> *reqSecs = self.renderCache.boundaryReqSecs;
-  NSMutableArray *pairs = [NSMutableArray array]; // @[ @(slotIdx), tile ]
-  if (self.renderCache.boundaryFeedActive && reqSecs.count > 0) {
-    if (self.miniCanvasFeed.slotCount != reqSecs.count) {
-      self.miniCanvasFeed.slotCount = reqSecs.count;
-      [self.miniCanvasFeed publishDescriptor];
-    }
-    // Greedy assignment: each REQUESTED time claims its closest unclaimed
-    // delivered tile. Walking the requests (not the delivered list) avoids
-    // the playhead-tile (always sourceImages[0]) poaching a middle slot
-    // before the actual mid-clip tile gets a chance to match.
-    const double kMaxDt = 0.5;
-    NSMutableArray<NSNumber *> *availTileIdx = [NSMutableArray array];
-    for (NSUInteger i = 0; i < sourceImages.count; i++)
-      [availTileIdx addObject:@(i)];
-    for (NSUInteger slot = 0; slot < reqSecs.count; slot++) {
-      double want = reqSecs[slot].doubleValue;
-      NSInteger bestPos = -1;
-      double bestDt = kMaxDt;
-      for (NSUInteger p = 0; p < availTileIdx.count; p++) {
-        NSUInteger ti = availTileIdx[p].unsignedIntegerValue;
-        double mt = CMTimeGetSeconds(sourceImages[ti].mediaTime);
-        double dt = fabs(mt - want);
-        if (dt < bestDt) {
-          bestDt = dt;
-          bestPos = (NSInteger)p;
-        }
-      }
-      if (bestPos >= 0) {
-        NSUInteger ti = availTileIdx[bestPos].unsignedIntegerValue;
-        [pairs addObject:@[ @(slot), sourceImages[ti] ]];
-        [availTileIdx removeObjectAtIndex:bestPos];
-      }
-    }
-  } else {
-    if (self.miniCanvasFeed.slotCount != 1)
-      self.miniCanvasFeed.slotCount = 1;
-    [pairs addObject:@[ @0, sourceImages[0] ]];
-  }
-  for (NSArray *pair in pairs) {
-    NSUInteger slotIdx = [pair[0] unsignedIntegerValue];
-    FxImageTile *feedTile = pair[1];
-    FxRect sTile = feedTile.tilePixelBounds;
-    FxRect sImg = feedTile.imagePixelBounds;
-    BOOL fullFrame = (sTile.left == sImg.left && sTile.right == sImg.right &&
-                      sTile.top == sImg.top && sTile.bottom == sImg.bottom);
-    if (!fullFrame)
-      continue;
-    // FCP's project-library preview re-runs the effect into a 1920×1080
-    // browser thumb destination while passing the same source. Both
-    // contexts write into the same per-instance feed slot 0 → aspect
-    // ping-pongs. Gate on dest *aspect* matching the source within a
-    // generous tolerance (FCP often delivers off-by-one bounds for the
-    // canonical render).
-    FxRect dImg = destinationImage.imagePixelBounds;
-    int sW = sImg.right - sImg.left, sH = sImg.top - sImg.bottom;
-    int dW = dImg.right - dImg.left, dH = dImg.top - dImg.bottom;
-    double sAsp = (sH > 0) ? fabs((double)sW / (double)sH) : 0;
-    double dAsp = (dH > 0) ? fabs((double)dW / (double)dH) : 0;
-    if (sAsp > 0 && dAsp > 0 && fabs(sAsp - dAsp) > 0.05)
-      continue;
-    KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
-    MTLPixelFormat pf =
-        [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
-    uint64_t rid = destinationImage.deviceRegistryID;
-    id<MTLCommandQueue> q = [cache commandQueueWithRegistryID:rid
-                                                  pixelFormat:pf];
-    id<MTLDevice> dev = [cache deviceWithRegistryID:rid];
-    if (!q || !dev)
-      continue;
-    id<MTLTexture> srcTex = [feedTile metalTextureForDevice:dev];
-    if (!self.miniCanvasFeed) {
-      self.miniCanvasFeed = [[KKMiniCanvasFeed alloc]
-          initWithDescriptorPath:RoundedMiniCanvasDescriptorPath];
-    }
-    NSArray<NSNumber *> *fracs = self.renderCache.boundaryReqFracs;
-    double tag = (slotIdx < fracs.count) ? fracs[slotIdx].doubleValue : 0.0;
-    [self.miniCanvasFeed updateSlot:slotIdx
-                  withSourceTexture:srcTex
-                                tag:tag
-                             device:dev
-                       commandQueue:q];
-    [cache returnCommandQueueToCache:q];
-  }
+  // Mini-canvas source feed: publish the raw source per slot (single-slot =
+  // playhead, multi-slot = boundary preview / filmstrip / onion). Shared glue
+  // in KKPlugin (MiniCanvasFeed); the renderer applies the shader locally.
+  [self
+      kkPublishMiniCanvasFeedForDestination:destinationImage
+                               sourceImages:sourceImages
+                             descriptorPath:RoundedMiniCanvasDescriptorPath
+                            boundaryReqSecs:self.renderCache.boundaryReqSecs
+                           boundaryReqFracs:self.renderCache.boundaryReqFracs
+                            multiSlotActive:self.renderCache.boundaryFeedActive
+                                 defaultTag:0.0];
 
   id<MTLRenderPipelineState> pipelineState =
       [self pipelineStateForPluginID:kPluginID

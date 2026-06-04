@@ -267,6 +267,30 @@ FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingSpatialSmooth(
 FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingAspectLinked(
     KKTimeline *timeline, NSString *label, BOOL on);
 
+/// Index of the keypose whose time is nearest `frac`, or NSNotFound when the
+/// lane has no keyposes. The shared "which keypose does this interaction edit"
+/// helper - a drag edits the keypose nearest the playhead (or the grabbed one).
+FOUNDATION_EXPORT NSInteger KKLaneNearestKeyposeIndex(KKLane *lane,
+                                                      double frac);
+
+/// Returns a copy of `lane` with the keypose nearest `frac` set to `values`,
+/// copy-preserving spatialSmooth / in-out handles / outgoing interval, and
+/// propagating the new value to hold-linked neighbours. An empty lane gets a
+/// single keypose at time 0. Input lane is not mutated.
+FOUNDATION_EXPORT KKLane *
+KKLaneBySettingValuesNearestFraction(KKLane *lane, double frac,
+                                     NSArray<NSNumber *> *values);
+
+/// Returns a copy of `timeline` with lane `label`'s keypose nearest `frac` set
+/// to `values` (via KKLaneBySettingValuesNearestFraction). Returns nil when no
+/// lane named `label` exists - the caller owns absent-lane creation, which is
+/// lane-type specific (units / labels / value type). Unlike the Setting*
+/// helpers above it never returns nil for "unchanged": a drag write always
+/// commits.
+FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingValuesNearestFraction(
+    KKTimeline *timeline, NSString *label, double frac,
+    NSArray<NSNumber *> *values);
+
 @interface KKTimeline (Serialization)
 
 + (nullable NSString *)jsonFromTimeline:(KKTimeline *)timeline;

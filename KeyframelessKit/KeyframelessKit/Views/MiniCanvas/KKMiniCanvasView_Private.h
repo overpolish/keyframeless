@@ -1,0 +1,136 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#pragma once
+
+#import "KKMiniCanvasView.h"
+#import <IOSurface/IOSurface.h>
+#import <MetalKit/MetalKit.h>
+#import <simd/simd.h>
+
+// Outer radius (points) of the shared KKPointOSC handle glyph. Smaller than
+// the viewer OSC's oscSize - the mini canvas is a compact preview. Must stay
+// in sync with RoundedMiniCanvasRenderer's MiniOscSize() (placement/hit).
+// Shared by the main file's interaction code and the +Rendering encoders.
+static const CGFloat kKKMiniHandleOuterPt = 4.5;
+
+// Initial / double-click-reset zoom. Slightly < 1 (aspect-fit) so there's a
+// margin around the image and the corner handles are clear of the view edge
+// (and the rounded-corner mask) and easy to grab from the start. Used by init
+// (main) and resetView (+Interaction).
+static const CGFloat kKKMiniInitialZoom = 0.85;
+
+NS_ASSUME_NONNULL_BEGIN
+
+/// Transparent AppKit layer over the Metal content. Draws plugin handles and
+/// owns handle hit-testing/dragging; passes non-handle clicks through to the
+/// canvas (so pan/zoom/double-click-reset still work).
+@interface _KKMiniCanvasOverlay : NSView
+@property(nonatomic, weak) KKMiniCanvasView *canvas;
+@end
+
+// One filmstrip slot: a resolved IOSurface from the feed's `slots[]` array,
+// wrapped as the source texture and a per-slot persistent processed texture.
+// Slot 0 is the single-slot fast path; the multi-slot ivars below alias it.
+@interface _KKMiniFilmSlot : NSObject
+@property(nonatomic) uint32_t sid;
+@property(nonatomic) uint64_t generation;
+@property(nonatomic) IOSurfaceRef surface;
+@property(nonatomic, strong) id<MTLTexture> sourceTexture;
+@property(nonatomic, strong) id<MTLTexture> processedTexture;
+@property(nonatomic) double tag; // the slot's clip fraction
+@end
+
+@interface KKMiniCanvasView () <MTKViewDelegate> {
+@package
+  id<MTLRenderPipelineState> _pipeline;
+  id<MTLRenderPipelineState> _onionPipeline;
+  id<MTLCommandQueue> _queue;
+  // Slot 0 aliases - keep the existing names so the handle/border/OSC code
+  // paths (which always target the editable slot) don't need to change.
+  // The aliases point at `_filmstripSlots.firstObject`'s textures/surface.
+  id<MTLTexture> _sourceTexture;
+  id<MTLTexture> _processedTexture;
+  IOSurfaceRef _sourceSurface;
+  uint32_t _resolvedSurfaceID;
+  uint64_t _resolvedGeneration;
+  // Multi-slot bookkeeping. Always has at least 1 entry (slot 0); onion-skin
+  // grows it to N when the descriptor's `slots[]` is published with N>1.
+  NSMutableArray<_KKMiniFilmSlot *> *_filmstripSlots;
+  NSTimer *_pollTimer;
+  _KKMiniCanvasOverlay *_overlay;
+  CGFloat _zoom;           // 1 == aspect-fit
+  CGPoint _panPixels;      // drawable-space pan offset
+  CGSize _sourceMediaSize; // original media px (from descriptor srcW/H)
+  // OSC-glyph render pipelines: built in _buildPipeline (+Rendering category),
+  // consumed by the +Rendering encoders.
+  id<MTLRenderPipelineState> _pointPipeline;
+  id<MTLRenderPipelineState> _squarePipeline;
+  id<MTLRenderPipelineState> _arcPipeline;
+  id<MTLRenderPipelineState> _rotationPipeline;
+  id<MTLRenderPipelineState> _linePipeline;
+  id<MTLRenderPipelineState> _aaLinePipeline;
+}
+- (CGRect)contentRectInViewPoints;
+- (CGSize)sourceMediaSize;
+
+// Pipeline construction. Implemented in KKMiniCanvasView+Rendering.m.
+- (void)_buildPipeline;
+
+// Slot/texture resolution + filmstrip geometry (main file); called by the
+// +Draw category's drawInMTKView.
+- (BOOL)_resolveSlot:(_KKMiniFilmSlot *)slot
+                 sid:(uint32_t)sid
+                 gen:(uint64_t)gen
+                 tag:(double)tag;
+- (NSUInteger)_activeSlotIndex;
+- (void)_syncSlot0Aliases;
+- (CGRect)_contentRectInDrawable;
+- (CGRect)_filmstripCellRectInDrawable:(NSUInteger)i ofTotal:(NSUInteger)n;
+- (void)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot;
+- (void)_ensureProcessedTexture;
+
+// View transform / hit geometry. Implemented in KKMiniCanvasView+Interaction.m.
+- (CGFloat)_backingScale;
+- (void)_zoomTo:(CGFloat)newZoom aboutViewPoint:(NSPoint)viewPt;
+- (void)_didChangeViewTransform;
+- (NSPoint)_viewPointForScreenPoint:(NSPoint)screenPoint;
+- (NSRect)_screenRectForHandleCenter:(CGPoint)ctr;
+- (NSRect)_screenRectForHandleCenters:(NSArray<NSValue *> *)centers
+                              atIndex:(NSInteger)index;
+- (BOOL)_pointFromGlobalEvent:(NSPoint *)outViewPt;
+
+// Metal glyph/line encoders. Implemented in KKMiniCanvasView+Rendering.m;
+// called by drawInMTKView in the +Draw category.
+- (CGFloat)_canvasScale;
+- (void)_encodeArcHandleGlyphAt:(CGPoint)centerPts
+                       isActive:(BOOL)isActive
+                     ghostAlpha:(CGFloat)ghostAlpha
+                        encoder:(id<MTLRenderCommandEncoder>)enc;
+- (void)_encodeRotationOSCAt:(CGPoint)centerPts
+                    radiusPx:(CGFloat)radiusPx
+                      params:(KKRotationOSCParams)params
+                     encoder:(id<MTLRenderCommandEncoder>)enc;
+- (void)_encodeRectBorder:(CGRect)br
+                lineColor:(simd_float4)lineColor
+                  encoder:(id<MTLRenderCommandEncoder>)enc;
+- (void)_encodeHandleGlyphAt:(CGPoint)centerPts
+                   fillColor:(simd_float4)fillColor
+                     encoder:(id<MTLRenderCommandEncoder>)enc;
+- (void)_encodeHandleGlyphAt:(CGPoint)centerPts
+                   fillColor:(simd_float4)fillColor
+                   sizeScale:(CGFloat)sizeScale
+                     encoder:(id<MTLRenderCommandEncoder>)enc;
+- (void)_encodeSquareGlyphAt:(CGPoint)centerPts
+                  ghostAlpha:(CGFloat)ghostAlpha
+                   sizeScale:(CGFloat)sizeScale
+                     encoder:(id<MTLRenderCommandEncoder>)enc;
+- (void)_encodeMotionLineStrip:(NSArray<NSValue *> *)pointsPts
+                         color:(simd_float4)color
+                   halfWidthPt:(CGFloat)halfWidthPt
+                       encoder:(id<MTLRenderCommandEncoder>)enc;
+@end
+
+NS_ASSUME_NONNULL_END

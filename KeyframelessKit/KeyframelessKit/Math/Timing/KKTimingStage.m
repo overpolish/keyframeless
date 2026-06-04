@@ -413,6 +413,69 @@ KKTimeline *KKTimelineSettingAspectLinked(KKTimeline *timeline, NSString *label,
   return nil;
 }
 
+NSInteger KKLaneNearestKeyposeIndex(KKLane *lane, double frac) {
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  if (kps.count == 0)
+    return NSNotFound;
+  NSInteger best = 0;
+  double bestDt = fabs(kps[0].time - frac);
+  for (NSInteger j = 1; j < (NSInteger)kps.count; j++) {
+    double dt = fabs(kps[j].time - frac);
+    if (dt < bestDt) {
+      bestDt = dt;
+      best = j;
+    }
+  }
+  return best;
+}
+
+KKLane *KKLaneBySettingValuesNearestFraction(KKLane *lane, double frac,
+                                             NSArray<NSNumber *> *values) {
+  KKLane *nl = [lane copy];
+  NSArray<KKKeyPose *> *kps = nl.keyposes;
+  if (kps.count == 0) {
+    nl.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
+    return nl;
+  }
+  NSInteger best = KKLaneNearestKeyposeIndex(nl, frac);
+  NSMutableArray<KKKeyPose *> *mkps = [kps mutableCopy];
+  // Copy-preserve (not rebuild) so spatialSmooth + in/out handles + outgoing
+  // survive a value edit - the "edit resets the path to linear" class of bug.
+  KKKeyPose *nk = [mkps[best] copy];
+  nk.values = values;
+  mkps[best] = nk;
+  // Hold-link propagation: a hold whose endpoints are linked shares one value,
+  // so the linked neighbour on either side has to track the edit too.
+  if (best + 1 < (NSInteger)mkps.count && nk.outgoing.endpointsLinked) {
+    KKKeyPose *np = [mkps[best + 1] copy];
+    np.values = values;
+    mkps[best + 1] = np;
+  }
+  if (best > 0 && mkps[best - 1].outgoing.endpointsLinked) {
+    KKKeyPose *np = [mkps[best - 1] copy];
+    np.values = values;
+    mkps[best - 1] = np;
+  }
+  nl.keyposes = mkps;
+  return nl;
+}
+
+KKTimeline *
+KKTimelineSettingValuesNearestFraction(KKTimeline *timeline, NSString *label,
+                                       double frac,
+                                       NSArray<NSNumber *> *values) {
+  KKTimeline *t = [timeline copy];
+  NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    if (![lanes[i].label isEqualToString:label])
+      continue;
+    lanes[i] = KKLaneBySettingValuesNearestFraction(lanes[i], frac, values);
+    t.lanes = lanes;
+    return t;
+  }
+  return nil;
+}
+
 // ---------------------------------------------------------------------------
 // KKLaneGroup
 // ---------------------------------------------------------------------------

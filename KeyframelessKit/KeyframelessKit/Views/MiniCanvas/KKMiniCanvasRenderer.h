@@ -182,6 +182,15 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
                   contentRect:(CGRect)contentRect
                        canvas:(KKMiniCanvasView *)canvas;
 
+/// Index of the handle center nearest to `p` that lies within `tolerance`
+/// (point units), or NSNotFound if none. Shared hit-test for square/point
+/// drag handles - pass a single center (count 1) for a yes/no test. Strictly
+/// nearer-than-tolerance, first-wins on ties.
+- (NSInteger)nearestHandleIndexToPoint:(CGPoint)p
+                               centers:(const CGPoint *)centers
+                                 count:(NSInteger)count
+                             tolerance:(CGFloat)tolerance;
+
 /// === 3-ring rotation gizmo ===
 /// To opt in: override `rotationLabel`. The base provides the full state
 /// machine (hit-test, press snapshot, tangent capture, compose × axis(dAngle)

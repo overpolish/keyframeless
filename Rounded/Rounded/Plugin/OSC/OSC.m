@@ -268,66 +268,19 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
 
   double frac = [self fractionAtTime:time];
   KKTimeline *snap = RoundedTimelineSnapshot();
-  KKTimeline *tl = snap ? [snap copy] : [KKTimeline timeline];
-
-  NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-  NSInteger laneIdx = NSNotFound;
-  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if ([((KKLane *)lanes[i]).label isEqualToString:@"Crop"]) {
-      laneIdx = i;
-      break;
-    }
-  }
-
-  KKLane *cropLane;
-  if (laneIdx == NSNotFound) {
-    // Fresh constant - seed one keypose at t=0 with the new values.
-    cropLane = [KKLane laneWithLabel:@"Crop"];
+  KKTimeline *tl =
+      snap ? KKTimelineSettingValuesNearestFraction(snap, @"Crop", frac, values)
+           : nil;
+  if (!tl) {
+    // No snapshot, or no Crop lane yet (fresh constant): seed one keypose at 0.
+    tl = snap ? [snap copy] : [KKTimeline timeline];
+    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+    KKLane *cropLane = [KKLane laneWithLabel:@"Crop"];
     cropLane.enabled = NO;
     cropLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
     [lanes addObject:cropLane];
-  } else {
-    cropLane = [lanes[laneIdx] copy];
-    NSArray<KKKeyPose *> *kps = cropLane.keyposes;
-    if (kps.count == 0) {
-      cropLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
-    } else {
-      NSInteger best = 0;
-      double bd = 1e9;
-      for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
-        double d = fabs(kps[k].time - frac);
-        if (d < bd) {
-          bd = d;
-          best = k;
-        }
-      }
-      NSMutableArray<KKKeyPose *> *out = [NSMutableArray arrayWithArray:kps];
-      // MRR dangling-pointer guard (see project_mrr_array_dangling.md).
-      double oldTime = out[best].time;
-      KKInterval *oldOutgoing = out[best].outgoing;
-      KKKeyPose *nk = [KKKeyPose keyposeAtTime:oldTime values:values];
-      nk.outgoing = oldOutgoing;
-      out[best] = nk;
-      // Hold-link propagation (see RoundedOSC+MouseHandlers radius write).
-      if (best + 1 < (NSInteger)out.count && nk.outgoing.endpointsLinked) {
-        KKKeyPose *partner = out[best + 1];
-        KKKeyPose *np = [KKKeyPose keyposeAtTime:partner.time values:values];
-        np.outgoing = partner.outgoing;
-        out[best + 1] = np;
-      }
-      if (best > 0) {
-        KKKeyPose *prev = out[best - 1];
-        if (prev.outgoing.endpointsLinked) {
-          KKKeyPose *np = [KKKeyPose keyposeAtTime:prev.time values:values];
-          np.outgoing = prev.outgoing;
-          out[best - 1] = np;
-        }
-      }
-      cropLane.keyposes = out;
-    }
-    lanes[laneIdx] = cropLane;
+    tl.lanes = lanes;
   }
-  tl.lanes = lanes;
 
   KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
                            kKKParamTimelineData);
