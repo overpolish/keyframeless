@@ -104,14 +104,27 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 
 - (void)dealloc {
   [_pollTimer invalidate];
+  [self _teardownKeyMonitors];
   if (_sourceSurface)
     CFRelease(_sourceSurface);
+}
+
+- (void)_teardownKeyMonitors {
+  if (_keyMon) {
+    [NSEvent removeMonitor:_keyMon];
+    _keyMon = nil;
+  }
+  if (_keyGlobalMon) {
+    [NSEvent removeMonitor:_keyGlobalMon];
+    _keyGlobalMon = nil;
+  }
 }
 
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   [_pollTimer invalidate];
   _pollTimer = nil;
+  [self _teardownKeyMonitors];
   if (self.window) {
     _pollTimer = [NSTimer scheduledTimerWithTimeInterval:kPollInterval
                                                   target:self
@@ -119,7 +132,56 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
                                                 userInfo:nil
                                                  repeats:YES];
     [self _poll];
+    [self _installKeyMonitor];
   }
+}
+
+// Cmd-0 snaps zoom/pan back to fit, matching double-click and the inspector's
+// Reset Zoom button. Inside FCP's ViewBridge XPC, a command key-equivalent
+// (Cmd-0) NEVER crosses into the plugin process: the host resolves key
+// equivalents via performKeyEquivalent:/menu in its own process, and (verified)
+// does not forward performKeyEquivalent: across the ViewBridge boundary, nor
+// does the event reach a local keyDown monitor. The only thing that sees it is
+// an observe-only GLOBAL monitor (same routing as the scroll/magnify quirk -
+// see [[project_viewbridge_global_sendEvent]] /
+// [[project_viewbridge_cmdkey_global]]). That means we can fire the reset but
+// cannot SWALLOW the event - FCP still sees the Cmd-0 (harmless: it has no
+// default Cmd-0 binding). The local monitor is kept for real-window contexts
+// (e.g. a popped-out inspector NSWindow) where the event does arrive locally
+// and `return nil` consumes it. Gate on the window being the visible key window
+// so a stale/hidden instance or a Cmd-0 with focus elsewhere doesn't reset;
+// skip while a value field (NSText) is editing.
+- (BOOL)_handleResetKeyEvent:(NSEvent *)e {
+  if (!self.window.isVisible || !self.window.isKeyWindow)
+    return NO;
+  NSEventModifierFlags m =
+      e.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
+  BOOL cmdOnly = (m & NSEventModifierFlagCommand) &&
+                 !(m & (NSEventModifierFlagShift | NSEventModifierFlagOption |
+                        NSEventModifierFlagControl));
+  if (!cmdOnly || ![e.charactersIgnoringModifiers isEqualToString:@"0"])
+    return NO;
+  if ([self.window.firstResponder isKindOfClass:[NSText class]])
+    return NO;
+  [self resetView];
+  return YES;
+}
+
+- (void)_installKeyMonitor {
+  __weak typeof(self) weak = self;
+  _keyMon = [NSEvent
+      addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
+                                   handler:^NSEvent *(NSEvent *e) {
+                                     __strong typeof(self) s = weak;
+                                     return [s _handleResetKeyEvent:e] ? nil
+                                                                       : e;
+                                   }];
+  _keyGlobalMon =
+      [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskKeyDown
+                                             handler:^(NSEvent *e) {
+                                               __strong typeof(self) s = weak;
+                                               [s _handleResetKeyEvent:e];
+                                             }];
 }
 
 - (BOOL)_resolveSlot:(_KKMiniFilmSlot *)slot

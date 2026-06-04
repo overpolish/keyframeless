@@ -9,7 +9,7 @@ Interactions:
 
 - Scroll-wheel/pinch to zoom in and out, anywhere over the canvas.
 - Two-finger drag to pan around the zoomed view.
-- Double-click the canvas, or click the Reset Zoom button in the inspector header, to snap zoom and pan back to aspect-fit.
+- Double-click the canvas, press Cmd-0 while the mini-canvas is open, or click the Reset Zoom button in the inspector header, to snap zoom and pan back to aspect-fit. (Cmd-0 also passes through to Final Cut Pro, so if you have assigned Cmd-0 to a custom command in Final Cut it will trigger that too; there is no default Final Cut Cmd-0, so normally nothing clashes.)
 - Click and drag any on-screen handle (radius dot, crop edges, stop markers, etc.) to set the value visually instead of typing or sliding.
 - Option-click a handle to hide that on-screen control (plugins that support per-control visibility, like Magic Move). Hold Option to reveal hidden controls as dimmed ghosts, and Option-click a ghost to bring it back. The reveal follows mouse movement, so hold Option and nudge the mouse to see the ghosts; holding the key dead-still won't show them until you move.
 

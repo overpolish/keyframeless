@@ -60,6 +60,9 @@ NS_ASSUME_NONNULL_BEGIN
   // grows it to N when the descriptor's `slots[]` is published with N>1.
   NSMutableArray<_KKMiniFilmSlot *> *_filmstripSlots;
   NSTimer *_pollTimer;
+  id _keyMon;       // Cmd-0 reset-zoom local keyDown monitor
+  id _keyGlobalMon; // Cmd-0 reset-zoom global keyDown monitor (XPC: events
+                    // arrive global, like scroll/magnify)
   _KKMiniCanvasOverlay *_overlay;
   CGFloat _zoom;           // 1 == aspect-fit
   CGPoint _panPixels;      // drawable-space pan offset
@@ -88,6 +91,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (CGRect)_filmstripCellRectInDrawable:(NSUInteger)i ofTotal:(NSUInteger)n;
 - (void)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot;
 - (void)_ensureProcessedTexture;
+- (void)_installKeyMonitor;
 
 @end
 
