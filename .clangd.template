@@ -30,6 +30,13 @@ CompileFlags:
 Diagnostics:
   Suppress: "*"
 
-# Setup:
-# 1. Copy this file to .clangd
-# 2. Replace <PATH_TO_REPO> with the absolute path to your local clone, e.g. /Users/you/coding/keyframeless
+# Setup: run ./scripts/gen-clangd.sh
+#
+# That generates a complete .clangd for your clone: every header directory (the
+# kit now lives in many subfolders), the kit VFS overlay (so <KeyframelessKit/X.h>
+# and the quoted "X.h" resolve to the SAME source file instead of redefining), and
+# a per-plugin scope block (so the 4 copies of Plugin.h / Constants.h across plugins
+# don't collide). Hand-maintaining the -I list below is no longer practical, which
+# is why this template drifted out of date. Re-run the script after moving files.
+#
+# (This template is kept only as a reference for the flag shape.)

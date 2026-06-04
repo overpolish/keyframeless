@@ -210,28 +210,18 @@ The form's CSS/icons are copied from `docs/assets` by `npm run sync-assets` (run
 
 Screenshot uploads go to R2. Under local `wrangler dev` they land in a local R2 simulation, so the embedded image URLs (which point at the public `r2.dev` base) won't resolve - use `wrangler dev --remote` to exercise real uploads, or just verify image handling in production.
 
-## VSCode
+## Editor setup (VSCode)
 
-If you're using VSCode with clangd, run the following after building the project to generate the language server config:
+The codebase uses **two** language servers and each has its own config that goes stale when files move:
 
-```sh
-# List available schemes
-xcodebuild -workspace Keyframeless.xcworkspace -list
-```
+| Language                   | Server                         | Config                              | Regenerate with                    | Reload command                    |
+| -------------------------- | ------------------------------ | ----------------------------------- | ---------------------------------- | --------------------------------- |
+| ObjC / C / C++ (`.m` `.h`) | clangd (`vscode-clangd`)       | `.clangd`                           | `./scripts/gen-clangd.sh`          | "clangd: Restart language server" |
+| Swift (`.swift`)           | SourceKit-LSP (`swift-vscode`) | `.compile` (via `buildServer.json`) | `./scripts/refresh-swift-index.sh` | "Swift: Restart LSP Server"       |
 
-```sh
-# Build `Keyframeless X FCP` scheme
-xcode-build-server config -workspace Keyframeless.xcworkspace -scheme "Keyframeless X FCP"
-```
+Run the matching script after a **structural** change - moving/adding files into folders, new subfolders, new modules. Not after ordinary edits, which both servers pick up live. Then reload that server. Both config files are gitignored (absolute, per-machine paths); the scripts are checked in.
 
-Re-run with a different scheme if you're editing files in that target. Then restart the language server.
+Caveats:
 
-### "Module map file not found" error
-
-If clangd reports `Module map file '…/DerivedData/…/module.modulemap' not found`, the `.clangd` config has drifted to reference DerivedData-generated paths that don't exist yet. The fix is to keep a static `module.modulemap` in the source tree and point `.clangd` at that instead.
-
-`KeyframelessKit/KeyframelessKit/module.modulemap` already exists for this purpose. If `.clangd` ever regresses to a DerivedData path, update the `-fmodule-map-file` flag back to:
-
-```
--fmodule-map-file=/path/to/repo/KeyframelessKit/KeyframelessKit/module.modulemap
-```
+- `gen-clangd.sh` reads the kit's VFS overlay out of DerivedData; it doesn't build. After a full DerivedData wipe, build the kit once (`xcodebuild -workspace Keyframeless.xcworkspace -scheme KeyframelessKit build`, or just build in Xcode) before running it - otherwise it warns "kit VFS: MISSING" and `redefinition` errors come back. `refresh-swift-index.sh` builds the schemes itself, so it's self-sufficient.
+- `Package.swift` shows `No such module 'PackageDescription'` - benign and expected. The SPM manifest is compiled by SwiftPM against a toolchain-only module the build never sees, so SourceKit-LSP can't resolve it. It affects only the manifest, never real source.

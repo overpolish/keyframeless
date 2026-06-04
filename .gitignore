@@ -19,3 +19,4 @@ Distribution/scripts/uninstall-*
 .claude
 CLAUDE.md
 .compile
+.cache
