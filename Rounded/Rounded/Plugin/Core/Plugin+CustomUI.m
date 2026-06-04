@@ -558,8 +558,14 @@ static NSString *_RoundedAILaneSchemaText(void) {
                     // of the new animation.
                     KKTimeline *resultTimeline =
                         [KKTimeline timelineFromJSON:merged];
-                    if (resultTimeline &&
-                        !KKTimelineIsBasicCompatible(resultTimeline)) {
+                    double mergeFrameDur = KKProcessFrameDurationSeconds();
+                    double aiEndFrac =
+                        (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
+                         mergeFrameDur < clipDurSec)
+                            ? (clipDurSec - mergeFrameDur) / clipDurSec
+                            : 1.0;
+                    if (resultTimeline && !KKTimelineIsBasicCompatible(
+                                              resultTimeline, aiEndFrac)) {
                       [strong patchUIStateKey:@"activeTab"
                                         value:@(1)
                                       paramID:kParamUIState];

@@ -564,11 +564,18 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                                              kKKParamTimelineData);
                     // If the result isn't Basic-representable, force the
                     // inspector to Advanced so the user sees the real structure
-                    // instead of the compatibility banner.
+                    // instead of the compatibility banner. The merge snaps the
+                    // final keypose to outEndFrac, so pass that same end here.
                     KKTimeline *resultTimeline =
                         [KKTimeline timelineFromJSON:merged];
-                    if (resultTimeline &&
-                        !KKTimelineIsBasicCompatible(resultTimeline)) {
+                    double mergeFrameDur = KKProcessFrameDurationSeconds();
+                    double aiEndFrac =
+                        (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
+                         mergeFrameDur < clipDurSec)
+                            ? (clipDurSec - mergeFrameDur) / clipDurSec
+                            : 1.0;
+                    if (resultTimeline && !KKTimelineIsBasicCompatible(
+                                              resultTimeline, aiEndFrac)) {
                       [strong patchUIStateKey:@"activeTab"
                                         value:@(1)
                                       paramID:kParamUIState];
