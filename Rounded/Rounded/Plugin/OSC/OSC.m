@@ -369,10 +369,10 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
   BOOL cropShownHere = RoundedLaneVisibleAtFraction(@"Crop", frac);
   BOOL cropEnabled = [self kkOSCElementVisible:@"Crop"];
   BOOL cropVisible = cropDragging || (cropEnabled && cropShownHere);
-  BOOL cropGhost =
-      !cropVisible && self.optRevealActive && cropShownHere && !cropEnabled;
+  BOOL cropGhost = !cropVisible && self.optRevealActive && cropShownHere &&
+                   [self kkOSCRevealEligible:@"Crop"];
   if (cropVisible || cropGhost) {
-    _cropOSC.ghostAlpha = cropGhost ? 0.3f : 1.0f;
+    _cropOSC.ghostAlpha = cropGhost ? [self kkRevealGhostAlpha] : 1.0f;
     _cropOSC.hoveredIndex = (activePart >= kOSCCropPointBase &&
                              activePart < kOSCCropPointBase + KKCropPointCount)
                                 ? (activePart - kOSCCropPointBase)
@@ -385,11 +385,11 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
   BOOL radiusEnabled = [self kkOSCElementVisible:@"Radius"];
   BOOL radiusVisible = radiusShownHere && radiusEnabled;
   BOOL radiusGhost = !radiusVisible && self.optRevealActive &&
-                     radiusShownHere && !radiusEnabled;
+                     radiusShownHere && [self kkOSCRevealEligible:@"Radius"];
   if (!radiusVisible && !radiusGhost)
     return;
 
-  self.ghostAlpha = radiusGhost ? 0.3f : 1.0f;
+  self.ghostAlpha = radiusGhost ? [self kkRevealGhostAlpha] : 1.0f;
   [self drawAtCanvasPosition:radiusPos
                    isHovered:(activePart == kOSCRadiusPart)
                     isActive:self.isDragging && (activePart == kOSCRadiusPart)
@@ -406,13 +406,15 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
   double frac = [self fractionAtTime:time];
   // Opt-reveal makes a hidden control hit-testable so an opt-click re-shows it.
   BOOL radiusInteractive =
-      ([self kkOSCElementVisible:@"Radius"] || self.optRevealActive) &&
+      ([self kkOSCElementVisible:@"Radius"] ||
+       (self.optRevealActive && [self kkOSCRevealEligible:@"Radius"])) &&
       (inGuide || RoundedLaneVisibleAtFraction(@"Radius", frac));
   if (radiusInteractive && [self hitTestAtMousePositionX:positionX
                                                positionY:positionY
                                                   atTime:time]) {
     *activePart = kOSCRadiusPart;
-  } else if (([self kkOSCElementVisible:@"Crop"] || self.optRevealActive) &&
+  } else if (([self kkOSCElementVisible:@"Crop"] ||
+              (self.optRevealActive && [self kkOSCRevealEligible:@"Crop"])) &&
              RoundedLaneVisibleAtFraction(@"Crop", frac)) {
     // Radius didn't catch it → try crop handles / rect.
     NSInteger cropPart = [_cropOSC hitTestAtMousePositionX:positionX

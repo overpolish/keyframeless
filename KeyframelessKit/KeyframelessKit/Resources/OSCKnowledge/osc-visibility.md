@@ -17,6 +17,16 @@ Every plugin that draws on-screen controls lets you hide the ones you aren't usi
 
 Hold **Option** over the viewer or the mini-canvas and any hidden controls reappear as dimmed "ghosts" wherever they would normally sit. Option-click a ghost to bring it back at full strength. Release Option and the ghosts fade away again, leaving the hidden ones hidden.
 
+## Option-hold to "peek and use" when everything is off
+
+When the **master tick is off** (all controls hidden for the clip), Option-hold behaves differently: it is a transient "peek and use" mode rather than the dim-ghost reveal above.
+
+- Hold Option and the controls reappear at **full strength** (not dimmed) and are **fully interactive** - you can grab and drag a handle, a rotation ring, a crop or scale box, exactly as if the controls were on.
+- It **respects your per-control choices**: only the controls left enabled by their pills come back. Any control you individually turned off (or a rotation ring whose ring/group pill is off) stays hidden even while peeking. Peeking is like flipping the master tick back on for a moment, so it shows the same set you would see then.
+- **Release Option and everything hides again.** The master tick stays off - it is a non-destructive "mute" that remembers your per-control setup. Any edit you made while peeking is kept; only the visibility returns to off.
+
+So with everything hidden you can still reach in and tweak a control for a second without permanently turning the controls back on. To bring controls back for good, use the master tick or the per-control pills (Option-click toggling is the master-on behaviour and does not apply while the master is off).
+
 ## Nuance: the reveal follows the pointer
 
 The ghost reveal tracks mouse movement, so there is one quirk worth knowing:

@@ -99,7 +99,8 @@
   // Anchor pivot square is the topmost control: checked first so it is always
   // grabbable / opt-hideable. It is small, so the larger Position arc ring
   // around it stays clickable - the two coincide at the clip centre by default.
-  if (([self kkOSCElementVisible:@"Anchor"] || self.optRevealActive) &&
+  if (([self kkOSCElementVisible:@"Anchor"] ||
+       (self.optRevealActive && [self kkOSCRevealEligible:@"Anchor"])) &&
       _anchorVisibleAtFraction(frac)) {
     CGPoint ac = [self _anchorCanvasAtFraction:frac];
     if (fmax(fabs(positionX - ac.x), fabs(positionY - ac.y)) <
@@ -110,7 +111,8 @@
     }
   }
   // Tangent handles sit on top of the path - grab them before the arc/anchors.
-  if (([self kkOSCElementVisible:@"Path"] || self.optRevealActive) &&
+  if (([self kkOSCElementVisible:@"Path"] ||
+       (self.optRevealActive && [self kkOSCRevealEligible:@"Path"])) &&
       [self _handleHitAtCanvasX:positionX
                               y:positionY
                         outFrac:NULL
@@ -120,7 +122,8 @@
   }
   // Opt-reveal makes a hidden handle hit-testable so an opt-click re-shows it.
   BOOL posReachable =
-      ([self kkOSCElementVisible:@"Position"] || self.optRevealActive) &&
+      ([self kkOSCElementVisible:@"Position"] ||
+       (self.optRevealActive && [self kkOSCRevealEligible:@"Position"])) &&
       _positionVisibleAtFraction(frac);
   if (posReachable && [self hitTestAtMousePositionX:positionX
                                           positionY:positionY
@@ -130,7 +133,8 @@
   }
   // Any keypose anchor dot is grabbable, independent of the playhead - so a
   // keypose's position can be dragged without first scrubbing onto it.
-  if (([self kkOSCElementVisible:@"Path"] || self.optRevealActive) &&
+  if (([self kkOSCElementVisible:@"Path"] ||
+       (self.optRevealActive && [self kkOSCRevealEligible:@"Path"])) &&
       !isnan([self _anchorFracNearCanvasX:positionX y:positionY])) {
     self.hoverTargetIsAnchor = YES;
     *activePart = kOSCPositionPart;
@@ -140,7 +144,8 @@
   // rotation so an edge handle near the ring radius wins over the ring. Only
   // reachable where the box is shown (or opt-reveal exposes a hidden one).
   BOOL scaleReachable =
-      ([self kkOSCElementVisible:@"Scale"] || self.optRevealActive) &&
+      ([self kkOSCElementVisible:@"Scale"] ||
+       (self.optRevealActive && [self kkOSCRevealEligible:@"Scale"])) &&
       _scaleVisibleAtFraction(frac);
   if (scaleReachable) {
     NSInteger sh = [self _scaleHandleHitAtCanvasX:positionX

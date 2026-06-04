@@ -65,16 +65,23 @@ static const double kScaleGizmoSpanFrac = 0.057;
   BOOL xEn = master && [self kkOSCElementVisible:@"Rotation.X"];
   BOOL yEn = master && [self kkOSCElementVisible:@"Rotation.Y"];
   BOOL zEn = master && [self kkOSCElementVisible:@"Rotation.Z"];
+  // Per-ring reveal: master-off peek shows only the rings left enabled (a ring
+  // whose own pill or the Rotation compound is off stays off), while master-on
+  // reveal still ghosts the hidden rings for re-showing.
   BOOL reveal = self.optRevealActive && shownHere;
-  BOOL xShow = (xEn && activeHere) || reveal;
-  BOOL yShow = (yEn && activeHere) || reveal;
-  BOOL zShow = (zEn && activeHere) || reveal;
+  BOOL xShow = (xEn && activeHere) ||
+               (reveal && [self kkOSCRevealEligible:@"Rotation.X"]);
+  BOOL yShow = (yEn && activeHere) ||
+               (reveal && [self kkOSCRevealEligible:@"Rotation.Y"]);
+  BOOL zShow = (zEn && activeHere) ||
+               (reveal && [self kkOSCRevealEligible:@"Rotation.Z"]);
   self.rotationOSC.showX = xShow;
   self.rotationOSC.showY = yShow;
   self.rotationOSC.showZ = zShow;
-  self.rotationOSC.ringAlphaX = xEn ? 1.0f : 0.3f;
-  self.rotationOSC.ringAlphaY = yEn ? 1.0f : 0.3f;
-  self.rotationOSC.ringAlphaZ = zEn ? 1.0f : 0.3f;
+  float ghost = [self kkRevealGhostAlpha];
+  self.rotationOSC.ringAlphaX = xEn ? 1.0f : ghost;
+  self.rotationOSC.ringAlphaY = yEn ? 1.0f : ghost;
+  self.rotationOSC.ringAlphaZ = zEn ? 1.0f : ghost;
   return dragging || xShow || yShow || zShow;
 }
 

@@ -112,6 +112,30 @@ NS_ASSUME_NONNULL_BEGIN
 /// hitTest to gate each control.
 - (BOOL)kkOSCElementVisible:(NSString *)label;
 
+/// YES when the master "all OSCs off" tick is off. In that state Option-hold is
+/// a transient "peek and use" mode (every control reveals + is interactive)
+/// rather than the per-element hide/show toggle, so callers gate on this.
+- (BOOL)kkOSCMasterOff;
+
+/// Whether `label` is hidden by its own pill (or an ancestor's, via the dotted
+/// "Rotation"->"Rotation.X" hierarchy), independent of the master tick.
+- (BOOL)kkOSCElementIndividuallyHidden:(NSString *)label;
+
+/// Whether Option-hold should REVEAL `label` this frame. Master on: the
+/// elements you individually hid (so an Opt-click re-shows them). Master off:
+/// the elements left enabled (the "peek and use" set) - the ones you turned off
+/// stay off. Use this in place of a bare `!kkOSCElementVisible:` /
+/// `optRevealActive` reveal term so peek mirrors a flip back to master-on
+/// rather than flashing everything.
+- (BOOL)kkOSCRevealEligible:(NSString *)label;
+
+/// Draw alpha for a revealed ghost. 0.3 (dimmed) in the normal case - a single
+/// element you individually hid, previewed so you can opt-click it back. But
+/// 1.0 (full) when the master is off: there the whole OSC is hidden and Opt is
+/// the "peek and use" modifier, so the revealed controls read as fully usable,
+/// not as dimmed re-show targets. Use in place of a literal 0.3 ghost alpha.
+- (float)kkRevealGhostAlpha;
+
 /// Call at the top of mouseMoved:. Tracks the Option-reveal state (updates
 /// optRevealActive and requests a redraw on change) and resets the per-press
 /// opt-hide arming so the next press is judged fresh.

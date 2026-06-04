@@ -202,6 +202,38 @@
   return !(st.hiddenOSCElements && [st.hiddenOSCElements containsObject:label]);
 }
 
+- (BOOL)kkOSCMasterOff {
+  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
+  return st && !st.oscMasterVisible;
+}
+
+- (float)kkRevealGhostAlpha {
+  return [self kkOSCMasterOff] ? 1.0f : 0.3f;
+}
+
+- (BOOL)kkOSCElementIndividuallyHidden:(NSString *)label {
+  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
+  NSSet<NSString *> *hidden = st.hiddenOSCElements;
+  if (!hidden || !label)
+    return NO;
+  if ([hidden containsObject:label])
+    return YES;
+  // An ancestor being hidden hides its children too, via the dot hierarchy
+  // ("Rotation" hides "Rotation.X"). Mirrors the inspector compound pills.
+  NSRange dot = [label rangeOfString:@"." options:NSBackwardsSearch];
+  return dot.location != NSNotFound &&
+         [hidden containsObject:[label substringToIndex:dot.location]];
+}
+
+- (BOOL)kkOSCRevealEligible:(NSString *)label {
+  BOOL hidden = [self kkOSCElementIndividuallyHidden:label];
+  // master on  -> Opt-hold reveals the elements you HID (dim re-show ghosts).
+  // master off -> Opt-hold "peek" reveals the elements left ENABLED; the ones
+  //               you turned off stay off (peek = a transient flip to
+  //               master-on).
+  return [self kkOSCMasterOff] ? !hidden : hidden;
+}
+
 - (void)kkUpdateOptRevealWithModifiers:(NSUInteger)modifiers
                            forceUpdate:(BOOL *)forceUpdate {
   // Hover is the gap between interactions: reset the per-press arming so the
@@ -230,7 +262,12 @@
     return _kkInteractionIsOptHide;
   _kkInteractionArmed = YES;
   _kkInteractionIsOptHide = NO;
-  if ((modifiers & kFxModifierKey_OPTION) && activePart != 0) {
+  // When the master is off, Opt is the transient "peek and use" modifier, not
+  // the hide toggle: leave the interaction un-armed so the normal drag proceeds
+  // and manipulates the revealed control. (Toggling an element's own hidden bit
+  // under the master gate would have no visible effect anyway.)
+  if ((modifiers & kFxModifierKey_OPTION) && activePart != 0 &&
+      ![self kkOSCMasterOff]) {
     NSString *key = [self oscElementKeyForActivePart:activePart];
     if (key) {
       [self kkToggleOSCElementHidden:key];
