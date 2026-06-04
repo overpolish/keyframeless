@@ -91,13 +91,17 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Total custom-UI height including the motion-blur section when shown.
 - (CGFloat)_totalHeight;
-/// Parameter rows below the inspector box (called from init when shown);
-/// implemented in the +ParameterRows category.
+
+@end
+
+/// Private +ParameterRows helpers (called from init when shown). Declared in a
+/// named category so the primary @implementation isn't expected to provide
+/// them; implemented in KKTimelineInspectorView+ParameterRows.m.
+@interface KKTimelineInspectorView (ParameterRowsInternal)
 - (void)_buildMotionBlurRow;
 - (void)_buildOSCVisibilityRow;
 - (void)_buildParamOrderRow;
 - (void)_installConstraints:(NSView *)box headerRow:(NSView *)headerRow;
-
 @end
 
 // Layout constants shared between the main .m and the +ParameterRows category.

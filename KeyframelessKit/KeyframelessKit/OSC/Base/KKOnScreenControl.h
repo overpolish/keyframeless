@@ -33,11 +33,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// Override to provide the fragment shader function name.
 - (NSString *)fragmentFunctionName;
 
-/// Loads or retrieves cached pipeline state matching the destination image's
-/// pixel format.
-- (nullable id<MTLRenderPipelineState>)pipelineStateForDestinationImage:
-    (FxImageTile *)destinationImage;
-
 /// The radius used for hit testing. Override in subclass.
 - (float)hitRadius;
 
@@ -92,6 +87,57 @@ NS_ASSUME_NONNULL_BEGIN
                forceUpdate:(BOOL *)forceUpdate
                  didHandle:(BOOL *)didHandle
                     atTime:(CMTime)time;
+
+/// YES while the user holds Option over the viewer. Hidden elements should then
+/// be drawn as dimmed ghosts and made hit-testable so an opt-click re-shows
+/// them. Maintained by -kkUpdateOptRevealWithModifiers:forceUpdate:; read it
+/// from your drawOSC / hitTest to decide ghost rendering and hit gating.
+@property(nonatomic) BOOL optRevealActive;
+
+/// The element keys this control can hide (e.g. @"Position", @"Rotation.X",
+/// @"Crop"). Override to opt into the visibility feature; the default @[]
+/// leaves it inert. Keys must match the inspector pills + mini-canvas labels.
+- (NSArray<NSString *> *)oscElementKeys;
+
+/// The element key under `activePart` (granular - e.g. a specific rotation
+/// ring). Override; return nil for parts that can't be hidden. Default nil.
+- (nullable NSString *)oscElementKeyForActivePart:(NSInteger)activePart;
+
+/// Param ID of the UI-state blob whose `oscElements` map is rewritten on
+/// toggle. Default 201 (the established kParamUIState). Override if different.
+- (UInt32)oscVisibilityParamID;
+
+/// Whether an element is currently visible: master tick on AND not individually
+/// hidden. Reads this instance's KKPluginInstanceState. Call from drawOSC /
+/// hitTest to gate each control.
+- (BOOL)kkOSCElementVisible:(NSString *)label;
+
+/// Call at the top of mouseMoved:. Tracks the Option-reveal state (updates
+/// optRevealActive and requests a redraw on change) and resets the per-press
+/// opt-hide arming so the next press is judged fresh.
+- (void)kkUpdateOptRevealWithModifiers:(NSUInteger)modifiers
+                           forceUpdate:(BOOL *)forceUpdate;
+
+/// Call at the top of mouseDown: and mouseDragged:. Latches the interaction's
+/// nature on its first event: if Option is held over a hideable part, toggles
+/// that element off (or back on, for a ghost) and returns YES - you should set
+/// *forceUpdate = YES and return without dragging. Returns NO for a normal
+/// drag.
+- (BOOL)kkArmOptHideForActivePart:(NSInteger)activePart
+                        modifiers:(NSUInteger)modifiers;
+
+/// Call from mouseUp: to clear the per-interaction opt-hide arming.
+- (void)kkResetOptHideArming;
+
+@end
+
+/// Metal draw helpers. Implemented in KKOnScreenControl+Drawing.m.
+@interface KKOnScreenControl (Drawing)
+
+/// Loads or retrieves cached pipeline state matching the destination image's
+/// pixel format.
+- (nullable id<MTLRenderPipelineState>)pipelineStateForDestinationImage:
+    (FxImageTile *)destinationImage;
 
 /// Draws a quad with the given fragment data. Handles pipeline, vertices,
 /// viewport, and cleanup. Clears the destination by default.
@@ -158,47 +204,6 @@ NS_ASSUME_NONNULL_BEGIN
                                            id<MTLRenderCommandEncoder> encoder,
                                            CGPoint metalPosition,
                                            simd_uint2 viewportSize))commands;
-
-/// YES while the user holds Option over the viewer. Hidden elements should then
-/// be drawn as dimmed ghosts and made hit-testable so an opt-click re-shows
-/// them. Maintained by -kkUpdateOptRevealWithModifiers:forceUpdate:; read it
-/// from your drawOSC / hitTest to decide ghost rendering and hit gating.
-@property(nonatomic) BOOL optRevealActive;
-
-/// The element keys this control can hide (e.g. @"Position", @"Rotation.X",
-/// @"Crop"). Override to opt into the visibility feature; the default @[]
-/// leaves it inert. Keys must match the inspector pills + mini-canvas labels.
-- (NSArray<NSString *> *)oscElementKeys;
-
-/// The element key under `activePart` (granular - e.g. a specific rotation
-/// ring). Override; return nil for parts that can't be hidden. Default nil.
-- (nullable NSString *)oscElementKeyForActivePart:(NSInteger)activePart;
-
-/// Param ID of the UI-state blob whose `oscElements` map is rewritten on
-/// toggle. Default 201 (the established kParamUIState). Override if different.
-- (UInt32)oscVisibilityParamID;
-
-/// Whether an element is currently visible: master tick on AND not individually
-/// hidden. Reads this instance's KKPluginInstanceState. Call from drawOSC /
-/// hitTest to gate each control.
-- (BOOL)kkOSCElementVisible:(NSString *)label;
-
-/// Call at the top of mouseMoved:. Tracks the Option-reveal state (updates
-/// optRevealActive and requests a redraw on change) and resets the per-press
-/// opt-hide arming so the next press is judged fresh.
-- (void)kkUpdateOptRevealWithModifiers:(NSUInteger)modifiers
-                           forceUpdate:(BOOL *)forceUpdate;
-
-/// Call at the top of mouseDown: and mouseDragged:. Latches the interaction's
-/// nature on its first event: if Option is held over a hideable part, toggles
-/// that element off (or back on, for a ghost) and returns YES - you should set
-/// *forceUpdate = YES and return without dragging. Returns NO for a normal
-/// drag.
-- (BOOL)kkArmOptHideForActivePart:(NSInteger)activePart
-                        modifiers:(NSUInteger)modifiers;
-
-/// Call from mouseUp: to clear the per-interaction opt-hide arming.
-- (void)kkResetOptHideArming;
 
 @end
 

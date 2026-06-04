@@ -106,12 +106,18 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable KKLane *)_laneForLabel:(NSString *)label;
 - (NSSet<NSString *> *)_optedInLabelsSet;
 - (NSArray<KKLane *> *)_unoptedLanes;
-- (NSArray<NSNumber *> *)_defaultValuesForLabel:(NSString *)label;
 - (nullable KKLane *)_templateForLabel:(NSString *)label;
 - (BOOL)_isAnimatableLabel:(NSString *)label;
+- (void)_refresh;
+@end
+
+/// Lane add/remove/animatable mutations. Declared in a named category so the
+/// primary @implementation isn't expected to provide them; implemented in
+/// KKTimelineLanesView+LaneMutation.m.
+@interface KKTimelineLanesView (LaneMutation)
+- (NSArray<NSNumber *> *)_defaultValuesForLabel:(NSString *)label;
 - (void)_setLaneAnimatable:(BOOL)animatable forLabel:(NSString *)label;
 - (void)_setLaneValues:(NSArray<NSNumber *> *)values forLabel:(NSString *)label;
-- (void)_refresh;
 @end
 
 /// Internal popover plumbing - the manage-popover presenter and the generic
@@ -140,26 +146,19 @@ NS_ASSUME_NONNULL_BEGIN
                                onDragBegin:(void (^)(void))onDragBegin
                                  onDragEnd:(void (^)(void))onDragEnd;
 
-/// In-place re-bind for an already-open boundary popover. Used by the
-/// onion-skin filmstrip when the user clicks an inactive cell - the popover
-/// stays open (no close/reopen blink), the value rows re-display the new
-/// KP's values, and the boundary state (editing fraction, request file)
-/// re-publishes. The graph is responsible for updating any closure-captured
-/// state (e.g. a `_currentPopoverFrac` ivar) BEFORE calling this so the
-/// existing onValue/onAnimate closures write to the right KP. No-op if no
-/// boundary popover is open.
-- (void)_updateBoundaryPopoverInPlaceWithLanes:(NSArray<KKLane *> *)lanes
-                                      fraction:(double)fraction
-                                excludedLabels:
-                                    (NSArray<NSString *> *)excludedLabels;
-/// A structural edit (e.g. unlink) while a boundary popover is open changes the
-/// tied-hold-collapsed KP set the filmstrip / onion shows - re-publish so it
-/// updates live instead of waiting for a close/reopen or a nav. No-op when no
-/// boundary popover is open or render mode is Off.
-- (void)_republishBoundaryRequestIfOpen;
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
                                onClose:(void (^)(void))onClose;
+// Defined in +Popovers.m (PopoversInternal @implementation); called back from
+// the +BoundaryNav navigation methods.
+- (double)_kpDedupEps;
+- (NSString *)_timeStringForFraction:(double)frac;
+- (BOOL)_anyLinkedKeyposeAtFraction:(double)frac;
+@end
+
+/// Gap / Hold-modulation segment popovers. Implemented in
+/// KKTimelineLanesView+SegmentPopovers.m.
+@interface KKTimelineLanesView (SegmentPopovers)
 /// In/Out gap easing popover (Basic step 28a): hosts a KKSegmentEditView
 /// (Transition kind) seeded from the phase's shared curve/intensity/frequency.
 /// `animateOut` mirrors the pills for the Out phase. A curve pick commits at
@@ -233,8 +232,9 @@ FOUNDATION_EXPORT NSInteger KKModulationToPill(KKIntervalModulation m);
 @class KKMiniCanvasView;
 FOUNDATION_EXPORT void KKSetBoundaryEditing(id delegate, BOOL on,
                                             double fraction);
-FOUNDATION_EXPORT void KKSetSuppressedHandles(id delegate,
-                                              NSArray<NSString *> *labels);
+// `labels` nil clears all suppression (popover-close cleanup).
+FOUNDATION_EXPORT void
+KKSetSuppressedHandles(id delegate, NSArray<NSString *> *_Nullable labels);
 FOUNDATION_EXPORT void KKWriteBoundaryRequest(NSString *path, double frac,
                                               BOOL active);
 FOUNDATION_EXPORT void KKWriteBoundaryRequestMulti(NSString *path,
@@ -250,10 +250,23 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 - (void)_refreshBoundaryPopoverNavEnabled;
 - (void)_navigateBoundaryPopoverDirection:(NSInteger)direction;
 - (void)_renderModeDidChange:(KKMiniCanvasRenderMode)mode;
-// Defined in +Popovers.m; called back from the nav methods above.
-- (double)_kpDedupEps;
-- (NSString *)_timeStringForFraction:(double)frac;
-- (BOOL)_anyLinkedKeyposeAtFraction:(double)frac;
+/// In-place re-bind for an already-open boundary popover. Used by the
+/// onion-skin filmstrip when the user clicks an inactive cell - the popover
+/// stays open (no close/reopen blink), the value rows re-display the new
+/// KP's values, and the boundary state (editing fraction, request file)
+/// re-publishes. The graph is responsible for updating any closure-captured
+/// state (e.g. a `_currentPopoverFrac` ivar) BEFORE calling this so the
+/// existing onValue/onAnimate closures write to the right KP. No-op if no
+/// boundary popover is open.
+- (void)_updateBoundaryPopoverInPlaceWithLanes:(NSArray<KKLane *> *)lanes
+                                      fraction:(double)fraction
+                                excludedLabels:
+                                    (NSArray<NSString *> *)excludedLabels;
+/// A structural edit (e.g. unlink) while a boundary popover is open changes the
+/// tied-hold-collapsed KP set the filmstrip / onion shows - re-publish so it
+/// updates live instead of waiting for a close/reopen or a nav. No-op when no
+/// boundary popover is open or render mode is Off.
+- (void)_republishBoundaryRequestIfOpen;
 @end
 
 // Config + presenter for the unified static-values popover (the constants

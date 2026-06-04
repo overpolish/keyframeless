@@ -336,10 +336,22 @@ extension AIPluginAgent {
 			let ranges = rawRanges.sorted { $0.start < $1.start }
 			var kps: [TimingKeypose] = []
 			for (i, range) in ranges.enumerated() {
-				kps.append(
-					TimingKeypose(
+				// Share the boundary keypose with the previous phase when they're
+				// adjacent (prev.end == this.start). Emitting both produced two
+				// coincident keyposes at the same time, which the timeline reads as
+				// a redundant linked-hold pair - the boundary keypose should just
+				// take this phase's interval kind. A genuine gap (prev.end <
+				// this.start) keeps both: the previous "hold" keypose spans the gap.
+				if let last = kps.last, abs(last.time - range.start) < 1e-6 {
+					kps[kps.count - 1] = TimingKeypose(
 						time: range.start, intervalKind: range.kind,
-						isPreserved: false))
+						isPreserved: false)
+				} else {
+					kps.append(
+						TimingKeypose(
+							time: range.start, intervalKind: range.kind,
+							isPreserved: false))
+				}
 				let isLastRange = i == ranges.count - 1
 				let endKind = isLastRange ? "none" : "hold"
 				kps.append(

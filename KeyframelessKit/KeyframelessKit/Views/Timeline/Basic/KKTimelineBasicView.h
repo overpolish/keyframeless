@@ -142,11 +142,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-/// Implemented in KKTimelineBasicView+Popovers.m. Declared as a category so
-/// the primary @implementation isn't expected to provide it (silences
-/// -Wincomplete-implementation while keeping the method public).
-@interface KKTimelineBasicView (Popovers)
-
+/// Public popover entry points. Declared as a category so the primary
+/// @implementation isn't expected to provide them (silences
+/// -Wincomplete-implementation while keeping them public); implemented in
+/// KKTimelineBasicView+BoundaryPopover.m.
+@interface KKTimelineBasicView (BoundaryPopover)
 /// Programmatic re-open of the boundary value popover at the diamond
 /// closest to `fraction`. Used by the onion-skin filmstrip - clicking an
 /// inactive cell swaps the popover to the corresponding boundary diamond
@@ -160,7 +160,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// Flip the global aspect lock on the lane named `label`. Routed from the value
 /// popover's link toggle.
 - (void)writeAspectLinkedForLabel:(NSString *)label isOn:(BOOL)on;
-
 @end
 
 NS_ASSUME_NONNULL_END

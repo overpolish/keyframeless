@@ -29,7 +29,8 @@ void KKSetBoundaryEditing(id delegate, BOOL on, double fraction) {
 }
 
 // Hide the mini-canvas handle/box for properties excluded from this phase.
-void KKSetSuppressedHandles(id delegate, NSArray<NSString *> *labels) {
+void KKSetSuppressedHandles(id delegate,
+                            NSArray<NSString *> *_Nullable labels) {
   if ([delegate respondsToSelector:NSSelectorFromString(
                                        @"setSuppressedHandleLabels:")])
     [delegate setValue:labels forKey:@"suppressedHandleLabels"];

@@ -212,17 +212,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// Tell the overlay to redraw its handles (call after the value changes).
 - (void)setHandlesNeedDisplay;
 
-/// ViewBridge XPC delivers scroll/magnify only as *global* events (never
-/// through the responder chain inside a popover). The popover's event
-/// monitor calls these with the global event when the pointer is over the
-/// canvas: scroll → zoom (mouse) / pan (trackpad), magnify → zoom. Returns
-/// YES if the pointer was over the canvas and the event was consumed.
-- (BOOL)applyScrollEvent:(NSEvent *)event;
-- (BOOL)applyMagnifyEvent:(NSEvent *)event;
-/// Is the pointer (screen) currently over the canvas? Non-mutating - used by
-/// the popover's local monitor to swallow without double-applying.
-- (BOOL)pointerOverCanvas;
-
 /// Original media pixel size (from the feed descriptor's srcWidth/srcHeight),
 /// or zero until the source resolves. Used to show crop in pixel units.
 @property(nonatomic, readonly) CGSize sourceMediaSize;
@@ -252,6 +241,25 @@ NS_ASSUME_NONNULL_BEGIN
 /// the popover header pill sets; mapped 1:1 to KKMiniCanvasRenderMode by
 /// the popover so the canvas stays free of the lanes-view import cycle.
 @property(nonatomic) NSInteger renderMode;
+
+@end
+
+/// Pan/zoom + point/crop-handle screen geometry. Declared as a category so the
+/// primary @implementation isn't expected to provide them (silences
+/// -Wincomplete-implementation while keeping the methods public). Implemented
+/// in KKMiniCanvasView+Interaction.m.
+@interface KKMiniCanvasView (Interaction)
+
+/// ViewBridge XPC delivers scroll/magnify only as *global* events (never
+/// through the responder chain inside a popover). The popover's event
+/// monitor calls these with the global event when the pointer is over the
+/// canvas: scroll → zoom (mouse) / pan (trackpad), magnify → zoom. Returns
+/// YES if the pointer was over the canvas and the event was consumed.
+- (BOOL)applyScrollEvent:(NSEvent *)event;
+- (BOOL)applyMagnifyEvent:(NSEvent *)event;
+/// Is the pointer (screen) currently over the canvas? Non-mutating - used by
+/// the popover's local monitor to swallow without double-applying.
+- (BOOL)pointerOverCanvas;
 
 /// Reset zoom/pan to the initial aspect-fit framing - the same effect as a
 /// double-click on the canvas. Fires `onViewReset`.

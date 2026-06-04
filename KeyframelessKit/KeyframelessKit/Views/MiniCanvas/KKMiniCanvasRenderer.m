@@ -429,34 +429,21 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                                 forLabel:(NSString *)label {
   if (self.boundaryEditing) {
     // Replace the keypose nearest editFraction, preserving the lane's
-    // structure (times, intervals, enabled). Authoritative Hold-twin
-    // handling is the host's job; the preview only renders editFraction.
+    // structure (times, intervals, enabled).
+    // KKLaneBySettingValuesNearestFraction copy-preserves the keypose's
+    // per-keypose fields (spatialSmooth, in/out handles) AND propagates
+    // hold-links to the linked twin - matching the viewer's drag-write. Without
+    // the propagation a linked twin stayed at its old value mid-drag, so the
+    // motion-path overlay (which draws every keypose) showed a phantom segment
+    // that only collapsed on mouse-up when the host synced it.
     KKTimeline *updated = [self.timeline copy] ?: [KKTimeline timeline];
     NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
       if (![lanes[i].label isEqualToString:label])
         continue;
-      KKLane *nl = [lanes[i] copy];
-      NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
-      if (kps.count) {
-        NSInteger best = 0;
-        double bd = 1.0e9;
-        for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
-          double d = fabs(kps[k].time - self.editFraction);
-          if (d < bd) {
-            bd = d;
-            best = k;
-          }
-        }
-        // Copy-and-update so per-keypose fields beyond values (spatialSmooth,
-        // in/out handles) survive the live preview - else a curved keypose
-        // flattens while its own position handle is dragged.
-        KKKeyPose *nk = [kps[best] copy];
-        nk.values = values;
-        kps[best] = nk;
-        nl.keyposes = kps;
-      }
-      lanes[i] = nl;
+      if (lanes[i].keyposes.count)
+        lanes[i] = KKLaneBySettingValuesNearestFraction(
+            lanes[i], self.editFraction, values);
       break;
     }
     updated.lanes = lanes;
