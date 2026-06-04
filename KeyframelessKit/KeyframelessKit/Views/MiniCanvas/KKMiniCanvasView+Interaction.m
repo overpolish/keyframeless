@@ -81,6 +81,13 @@
   // Onion stacks every cell on the active rect - there's no spatial way to
   // pick a specific KP, so we suppress here and let the header's prev/next
   // buttons drive navigation instead.
+  //
+  // The swap is DEFERRED to mouseUp (recorded here as a pending tag) so a
+  // click-and-drag pan over the strip doesn't instantly jump to whatever cell
+  // the drag happened to start on. mouseDragged cancels the pending swap once
+  // the gesture moves past the click threshold.
+  _hasPendingFilmstripActivation = NO;
+  _filmstripDragDistance = 0.0;
   NSUInteger n = _filmstripSlots.count;
   if (n > 1 && self.onFilmstripCellActivated && self.renderMode != 2) {
     NSPoint vp = [self convertPoint:event.locationInWindow fromView:nil];
@@ -99,15 +106,25 @@
           CGRectMake(cellDrawable.origin.x / s, cellDrawable.origin.y / s,
                      cellDrawable.size.width / s, cellDrawable.size.height / s);
       if (CGRectContainsPoint(cell, vp)) {
-        // Reset pan so the newly-activated cell lands centred - otherwise
-        // the existing pan stays applied to the new layout and the strip
-        // visually jumps even further off-centre.
-        _panPixels = CGPointZero;
-        self.onFilmstripCellActivated(_filmstripSlots[i].tag);
+        _hasPendingFilmstripActivation = YES;
+        _pendingFilmstripTag = _filmstripSlots[i].tag;
         return;
       }
     }
   }
+}
+
+- (void)mouseUp:(NSEvent *)event {
+  if (!_hasPendingFilmstripActivation)
+    return;
+  _hasPendingFilmstripActivation = NO;
+  // Reset pan so the newly-activated cell lands centred - otherwise the
+  // existing pan stays applied to the new layout and the strip visually jumps
+  // even further off-centre. (Any sub-threshold pan from a near-still click is
+  // discarded here too.)
+  _panPixels = CGPointZero;
+  if (self.onFilmstripCellActivated)
+    self.onFilmstripCellActivated(_pendingFilmstripTag);
 }
 
 - (void)resetView {
@@ -241,6 +258,14 @@
   CGFloat s = [self _backingScale];
   _panPixels.x += event.deltaX * s;
   _panPixels.y -= event.deltaY * s; // deltaY is y-down
+  // Once the gesture clearly pans (moves past a small click threshold), it is
+  // no longer a cell-selecting click - drop any pending filmstrip swap so the
+  // active cell stays put while the user pans. deltaX/Y are in view points.
+  if (_hasPendingFilmstripActivation) {
+    _filmstripDragDistance += fabs(event.deltaX) + fabs(event.deltaY);
+    if (_filmstripDragDistance > kKKMiniFilmstripClickSlopPt)
+      _hasPendingFilmstripActivation = NO;
+  }
   [self setNeedsDisplay:YES];
   [self _didChangeViewTransform];
 }

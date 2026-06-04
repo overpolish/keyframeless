@@ -22,6 +22,11 @@ static const CGFloat kKKMiniHandleOuterPt = 4.5;
 // (main) and resetView (+Interaction).
 static const CGFloat kKKMiniInitialZoom = 0.85;
 
+// Click vs drag slop (view points): cumulative pointer travel below this on a
+// filmstrip cell counts as a click (swap the active cell on mouseUp); past it
+// the gesture is a pan and the pending swap is dropped.
+static const CGFloat kKKMiniFilmstripClickSlopPt = 3.0;
+
 NS_ASSUME_NONNULL_BEGIN
 
 /// Transparent AppKit layer over the Metal content. Draws plugin handles and
@@ -67,6 +72,12 @@ NS_ASSUME_NONNULL_BEGIN
   CGFloat _zoom;           // 1 == aspect-fit
   CGPoint _panPixels;      // drawable-space pan offset
   CGSize _sourceMediaSize; // original media px (from descriptor srcW/H)
+  // Deferred filmstrip cell activation: mouseDown records the candidate cell
+  // but waits for mouseUp so a click-drag pan doesn't swap the active cell.
+  // Cancelled in mouseDragged once the gesture moves past the click threshold.
+  BOOL _hasPendingFilmstripActivation;
+  double _pendingFilmstripTag;
+  CGFloat _filmstripDragDistance; // accumulated |delta| in view points
   // OSC-glyph render pipelines: built in _buildPipeline (+Rendering category),
   // consumed by the +Rendering encoders.
   id<MTLRenderPipelineState> _pointPipeline;
