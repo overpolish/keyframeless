@@ -145,20 +145,7 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 
 - (void)applyTimeline:(KKTimeline *)timeline;
 - (void)setLoopEnabled:(BOOL)enabled;
-/// Push the persisted motion-blur enable state from the host's MB blob.
-/// No-op when `showsMotionBlurRow` is NO.
-- (void)setMotionBlurEnabled:(BOOL)enabled;
-/// Push the persisted motion-blur Shutter angle (degrees) + Samples (count)
-/// from the host's MB blob. No-op when `showsMotionBlurRow` is NO.
-- (void)setMotionBlurShutterAngle:(double)shutterAngle
-                          samples:(NSInteger)samples;
-/// Push the persisted motion-blur fire mode from the host's MB blob. No-op
-/// when `showsMotionBlurRow` is NO.
-- (void)setMotionBlurMode:(KKMotionBlurMode)mode;
 - (void)setActiveTab:(NSInteger)tab;
-/// Push the persisted "On-Screen Controls" master visibility into the tick.
-/// No-op when `showsOSCVisibilityRow` is NO.
-- (void)setOSCVisible:(BOOL)visible;
 /// Push the persisted mini-canvas render mode from the host's UI-state
 /// blob. The 3-way pill lives in the keypose-value popover header (only
 /// while open); this just mirrors the persisted enum. Defaults to Off.
@@ -205,6 +192,26 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// during init.
 - (BOOL)showsOSCVisibilityRow;
 
+@end
+
+/// Parameter rows below the inspector box. Declared as a category so the
+/// primary @implementation isn't expected to provide them (silences
+/// -Wincomplete-implementation while keeping the methods public). Implemented
+/// in KKTimelineInspectorView+ParameterRows.m.
+@interface KKTimelineInspectorView (ParameterRows)
+/// Push the persisted motion-blur enable state from the host's MB blob.
+/// No-op when `showsMotionBlurRow` is NO.
+- (void)setMotionBlurEnabled:(BOOL)enabled;
+/// Push the persisted motion-blur Shutter angle (degrees) + Samples (count)
+/// from the host's MB blob. No-op when `showsMotionBlurRow` is NO.
+- (void)setMotionBlurShutterAngle:(double)shutterAngle
+                          samples:(NSInteger)samples;
+/// Push the persisted motion-blur fire mode from the host's MB blob. No-op
+/// when `showsMotionBlurRow` is NO.
+- (void)setMotionBlurMode:(KKMotionBlurMode)mode;
+/// Push the persisted "On-Screen Controls" master visibility into the tick.
+/// No-op when `showsOSCVisibilityRow` is NO.
+- (void)setOSCVisible:(BOOL)visible;
 @end
 
 NS_ASSUME_NONNULL_END

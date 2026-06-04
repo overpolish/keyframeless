@@ -521,8 +521,13 @@ static NSString *_RoundedAILaneSchemaText(void) {
                       [KKAIDraft setAnswer:result.answer];
                       return;
                     }
+                    // The merge also snaps final keyposes to the last
+                    // renderable frame (FCP's last frame is one frame before
+                    // the clip end, so a keypose at 1.0 is never reached) -
+                    // clipDur from the prompt, frameDur from the process cache.
                     NSString *merged = KKTimelineAIMergeMutationJSON(
-                        currentJSON, result.mutationJSON);
+                        currentJSON, result.mutationJSON, clipDurSec,
+                        KKProcessFrameDurationSeconds());
                     if (!merged) {
                       KKLogError(@"AI[err] merge returned nil");
                       [KKAIDraft
@@ -553,8 +558,14 @@ static NSString *_RoundedAILaneSchemaText(void) {
                     // of the new animation.
                     KKTimeline *resultTimeline =
                         [KKTimeline timelineFromJSON:merged];
-                    if (resultTimeline &&
-                        !KKTimelineIsBasicCompatible(resultTimeline)) {
+                    double mergeFrameDur = KKProcessFrameDurationSeconds();
+                    double aiEndFrac =
+                        (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
+                         mergeFrameDur < clipDurSec)
+                            ? (clipDurSec - mergeFrameDur) / clipDurSec
+                            : 1.0;
+                    if (resultTimeline && !KKTimelineIsBasicCompatible(
+                                              resultTimeline, aiEndFrac)) {
                       [strong patchUIStateKey:@"activeTab"
                                         value:@(1)
                                       paramID:kParamUIState];

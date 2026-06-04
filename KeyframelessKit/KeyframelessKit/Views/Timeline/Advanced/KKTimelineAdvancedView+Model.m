@@ -28,6 +28,21 @@
   return m;
 }
 
+// Fraction of the last RENDERABLE frame: FCP's last frame sits one frame before
+// the clip's out-point. The visible track maps data [0, lastFrameFrac] onto
+// [0, 1] of its width, so a final keypose (snapped to lastFrameFrac by the
+// apply-time rule) and the out-point playhead both park at the right edge -
+// matching Basic, which draws its out-end pill at the visual edge. Returns 1.0
+// (identity mapping) when durations are unknown or a frame spans the whole
+// clip.
+- (double)_lastFrameFrac {
+  double clipDur = [self _clipDuration];
+  if (clipDur <= 0.0 || _frameDurationSeconds <= 0.0 ||
+      _frameDurationSeconds >= clipDur)
+    return 1.0;
+  return (clipDur - _frameDurationSeconds) / clipDur;
+}
+
 - (NSRect)_graphRect {
   CGFloat top = kRulerH + kRulerGap + kGraphPadTop;
   CGFloat bottom = kGraphPadBottom;
@@ -77,7 +92,11 @@
 - (CGFloat)_xForFrac:(double)frac inTracks:(NSRect)t {
   double z = _zp ? _zp.zoom : 1.0;
   double pan = _zp ? _zp.panOffset : 0.0;
-  return NSMinX(t) + (frac - pan) * NSWidth(t) * z;
+  // Map data frac through [0, lastFrameFrac] -> [0, 1] (visual) so the last
+  // frame lands on the right edge - see _lastFrameFrac.
+  double lf = [self _lastFrameFrac];
+  double vf = lf < 1.0 ? frac / lf : frac;
+  return NSMinX(t) + (vf - pan) * NSWidth(t) * z;
 }
 
 - (double)_fracForX:(CGFloat)x inTracks:(NSRect)t {
@@ -85,7 +104,9 @@
     return 0.0;
   double z = _zp ? _zp.zoom : 1.0;
   double pan = _zp ? _zp.panOffset : 0.0;
-  double f = pan + (x - NSMinX(t)) / (NSWidth(t) * z);
+  double vf = pan + (x - NSMinX(t)) / (NSWidth(t) * z);
+  double lf = [self _lastFrameFrac];
+  double f = lf < 1.0 ? vf * lf : vf;
   return f < 0.0 ? 0.0 : (f > 1.0 ? 1.0 : f);
 }
 

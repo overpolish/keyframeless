@@ -22,6 +22,11 @@ static const CGFloat kKKMiniHandleOuterPt = 4.5;
 // (main) and resetView (+Interaction).
 static const CGFloat kKKMiniInitialZoom = 0.85;
 
+// Click vs drag slop (view points): cumulative pointer travel below this on a
+// filmstrip cell counts as a click (swap the active cell on mouseUp); past it
+// the gesture is a pan and the pending swap is dropped.
+static const CGFloat kKKMiniFilmstripClickSlopPt = 3.0;
+
 NS_ASSUME_NONNULL_BEGIN
 
 /// Transparent AppKit layer over the Metal content. Draws plugin handles and
@@ -39,11 +44,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) uint64_t generation;
 @property(nonatomic) IOSurfaceRef surface;
 @property(nonatomic, strong) id<MTLTexture> sourceTexture;
-@property(nonatomic, strong) id<MTLTexture> processedTexture;
+@property(nonatomic, strong, nullable) id<MTLTexture> processedTexture;
 @property(nonatomic) double tag; // the slot's clip fraction
 @end
 
-@interface KKMiniCanvasView () <MTKViewDelegate> {
+@interface KKMiniCanvasView () {
 @package
   id<MTLRenderPipelineState> _pipeline;
   id<MTLRenderPipelineState> _onionPipeline;
@@ -60,10 +65,19 @@ NS_ASSUME_NONNULL_BEGIN
   // grows it to N when the descriptor's `slots[]` is published with N>1.
   NSMutableArray<_KKMiniFilmSlot *> *_filmstripSlots;
   NSTimer *_pollTimer;
+  id _keyMon;       // Cmd-0 reset-zoom local keyDown monitor
+  id _keyGlobalMon; // Cmd-0 reset-zoom global keyDown monitor (XPC: events
+                    // arrive global, like scroll/magnify)
   _KKMiniCanvasOverlay *_overlay;
   CGFloat _zoom;           // 1 == aspect-fit
   CGPoint _panPixels;      // drawable-space pan offset
   CGSize _sourceMediaSize; // original media px (from descriptor srcW/H)
+  // Deferred filmstrip cell activation: mouseDown records the candidate cell
+  // but waits for mouseUp so a click-drag pan doesn't swap the active cell.
+  // Cancelled in mouseDragged once the gesture moves past the click threshold.
+  BOOL _hasPendingFilmstripActivation;
+  double _pendingFilmstripTag;
+  CGFloat _filmstripDragDistance; // accumulated |delta| in view points
   // OSC-glyph render pipelines: built in _buildPipeline (+Rendering category),
   // consumed by the +Rendering encoders.
   id<MTLRenderPipelineState> _pointPipeline;
@@ -75,9 +89,6 @@ NS_ASSUME_NONNULL_BEGIN
 }
 - (CGRect)contentRectInViewPoints;
 - (CGSize)sourceMediaSize;
-
-// Pipeline construction. Implemented in KKMiniCanvasView+Rendering.m.
-- (void)_buildPipeline;
 
 // Slot/texture resolution + filmstrip geometry (main file); called by the
 // +Draw category's drawInMTKView.
@@ -91,19 +102,20 @@ NS_ASSUME_NONNULL_BEGIN
 - (CGRect)_filmstripCellRectInDrawable:(NSUInteger)i ofTotal:(NSUInteger)n;
 - (void)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot;
 - (void)_ensureProcessedTexture;
+- (void)_installKeyMonitor;
 
-// View transform / hit geometry. Implemented in KKMiniCanvasView+Interaction.m.
-- (CGFloat)_backingScale;
-- (void)_zoomTo:(CGFloat)newZoom aboutViewPoint:(NSPoint)viewPt;
-- (void)_didChangeViewTransform;
-- (NSPoint)_viewPointForScreenPoint:(NSPoint)screenPoint;
-- (NSRect)_screenRectForHandleCenter:(CGPoint)ctr;
-- (NSRect)_screenRectForHandleCenters:(NSArray<NSValue *> *)centers
-                              atIndex:(NSInteger)index;
-- (BOOL)_pointFromGlobalEvent:(NSPoint *)outViewPt;
+@end
 
-// Metal glyph/line encoders. Implemented in KKMiniCanvasView+Rendering.m;
-// called by drawInMTKView in the +Draw category.
+// Drawing / MTKViewDelegate. The protocol is adopted on this category (not the
+// () extension) so the primary @implementation isn't expected to provide the
+// required delegate methods - they live in KKMiniCanvasView+Draw.m.
+@interface KKMiniCanvasView (Draw) <MTKViewDelegate>
+@end
+
+// Pipeline construction + Metal glyph/line encoders. Implemented in
+// KKMiniCanvasView+Rendering.m; called by drawInMTKView in the +Draw category.
+@interface KKMiniCanvasView (Rendering)
+- (void)_buildPipeline;
 - (CGFloat)_canvasScale;
 - (void)_encodeArcHandleGlyphAt:(CGPoint)centerPts
                        isActive:(BOOL)isActive
@@ -131,6 +143,19 @@ NS_ASSUME_NONNULL_BEGIN
                          color:(simd_float4)color
                    halfWidthPt:(CGFloat)halfWidthPt
                        encoder:(id<MTLRenderCommandEncoder>)enc;
+@end
+
+// View transform / hit geometry. Implemented in KKMiniCanvasView+Interaction.m
+// (the same @implementation that provides the public (Interaction) methods).
+@interface KKMiniCanvasView (InteractionInternal)
+- (CGFloat)_backingScale;
+- (void)_zoomTo:(CGFloat)newZoom aboutViewPoint:(NSPoint)viewPt;
+- (void)_didChangeViewTransform;
+- (NSPoint)_viewPointForScreenPoint:(NSPoint)screenPoint;
+- (NSRect)_screenRectForHandleCenter:(CGPoint)ctr;
+- (NSRect)_screenRectForHandleCenters:(NSArray<NSValue *> *)centers
+                              atIndex:(NSInteger)index;
+- (BOOL)_pointFromGlobalEvent:(NSPoint *)outViewPt;
 @end
 
 NS_ASSUME_NONNULL_END

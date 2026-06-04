@@ -1,2688 +1,2730 @@
 {
-  "sourceLanguage": "en",
-  "strings": {
-    "Add Keypose Here": {
-      "comment": "Context menu: add a keypose at this point.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Keypose hier hinzufügen"
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Add Keypose Here" : {
+      "comment" : "Context menu: add a keypose at this point.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keypose hier hinzufügen"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在此添加关键姿势"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir pose clave aquí"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter une pose clé ici"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter une pose clé ici"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ここにキーポーズを追加"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ここにキーポーズを追加"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "여기에 키포즈 추가"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "여기에 키포즈 추가"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Añadir pose clave aquí"
-          }
-        }
-      }
-    },
-    "Add properties…": {
-      "comment": "Button: add animatable properties.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eigenschaften hinzufügen…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "添加属性…"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter des propriétés…"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "プロパティを追加…"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "속성 추가…"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Añadir propiedades…"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在此添加关键姿势"
           }
         }
       }
     },
-    "Advanced": {
-      "comment": "Timeline mode tab: advanced.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erweitert"
+    "Add properties…" : {
+      "comment" : "Button: add animatable properties.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eigenschaften hinzufügen…"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "高级"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Añadir propiedades…"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Avancé"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajouter des propriétés…"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "詳細"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プロパティを追加…"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "고급"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "속성 추가…"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Avanzado"
-          }
-        }
-      }
-    },
-    "Always": {
-      "comment": "Motion blur mode option.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Immer"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "始终"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toujours"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "常に"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "항상"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Siempre"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加属性…"
           }
         }
       }
     },
-    "Animate": {
-      "comment": "Button: make a property animatable.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Animieren"
+    "Advanced" : {
+      "comment" : "Timeline mode tab: advanced.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erweitert"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "动画"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avanzado"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Animer"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Avancé"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アニメート"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "詳細"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "애니메이션"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "고급"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Animar"
-          }
-        }
-      }
-    },
-    "Animated": {
-      "comment": "Header: animated properties section.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Animiert"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已添加动画"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Animé"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アニメーション済み"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "애니메이션됨"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Animado"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高级"
           }
         }
       }
     },
-    "Applies to": {
-      "comment": "Label: which part of the timeline a setting applies to.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gilt für"
+    "Always" : {
+      "comment" : "Motion blur mode option.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Immer"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "应用于"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siempre"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "S’applique à"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toujours"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "適用対象"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "常に"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "적용 대상"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "항상"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Se aplica a"
-          }
-        }
-      }
-    },
-    "Basic": {
-      "comment": "Timeline mode tab: basic.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Einfach"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "基本"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Basique"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "基本"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "기본"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Básico"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "始终"
           }
         }
       }
     },
-    "Bulk Edit": {
-      "comment": "Toggle: edit multiple keyposes at once.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sammelbearbeitung"
+    "Animate" : {
+      "comment" : "Button: make a property animatable.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animieren"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "批量编辑"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animar"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modification groupée"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animer"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一括編集"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アニメート"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "일괄 편집"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "애니메이션"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edición por lotes"
-          }
-        }
-      }
-    },
-    "Bulk edit": {
-      "comment": "Toggle: edit multiple keyposes at once.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sammelbearbeitung"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "批量编辑"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modification groupée"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一括編集"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "일괄 편집"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edición por lotes"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "动画"
           }
         }
       }
     },
-    "Cancel": {
-      "comment": "Button: cancel.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abbrechen"
+    "Animated" : {
+      "comment" : "Header: animated properties section.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animiert"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animado"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Annuler"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Animé"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "キャンセル"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アニメーション済み"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "취소"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "애니메이션됨"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cancelar"
-          }
-        }
-      }
-    },
-    "Completed": {
-      "comment": "Help guide status: this guide has been completed.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abgeschlossen"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已完成"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Terminé"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "完了"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "완료됨"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Completado"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已添加动画"
           }
         }
       }
     },
-    "Constants": {
-      "comment": "Constants editor tab/section header.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Konstanten"
+    "Applies to" : {
+      "comment" : "Label: which part of the timeline a setting applies to.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gilt für"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "常量"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se aplica a"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Constantes"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "S’applique à"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "定数"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "適用対象"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "상수"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "적용 대상"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Constantes"
-          }
-        }
-      }
-    },
-    "Curve": {
-      "comment": "Label: easing curve.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kurve"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "曲线"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Courbe"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "カーブ"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "곡선"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Curva"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用于"
           }
         }
       }
     },
-    "Delete": {
-      "comment": "Button: delete the selected item.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Löschen"
+    "Basic" : {
+      "comment" : "Timeline mode tab: basic.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Einfach"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "删除"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Básico"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Basique"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "削除"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "基本"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "삭제"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기본"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eliminar"
-          }
-        }
-      }
-    },
-    "Distribute Evenly": {
-      "comment": "Context menu: space keyposes evenly.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gleichmäßig verteilen"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "均匀分布"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Répartir uniformément"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "均等に配分"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "균등하게 분배"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Distribuir uniformemente"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "基本"
           }
         }
       }
     },
-    "Done": {
-      "comment": "Joyride guide: final-step button that closes the walkthrough.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fertig"
+    "Bulk edit" : {
+      "comment" : "Toggle: edit multiple keyposes at once.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sammelbearbeitung"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "完成"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edición por lotes"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Terminé"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modification groupée"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "完了"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一括編集"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "완료"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "일괄 편집"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hecho"
-          }
-        }
-      }
-    },
-    "Drift": {
-      "comment": "Hold effect: endpoints differ (drift).",
-      "extractionState": "manual",
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "漂移"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dérive"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ドリフト"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "드리프트"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deriva"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "批量编辑"
           }
         }
       }
     },
-    "Excluded from this phase": {
-      "comment": "Keypose popover: this keypose is excluded from the phase.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aus dieser Phase ausgeschlossen"
+    "Bulk Edit" : {
+      "comment" : "Toggle: edit multiple keyposes at once.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sammelbearbeitung"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已从此阶段排除"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edición por lotes"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Exclu de cette phase"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modification groupée"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このフェーズから除外"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "一括編集"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "이 단계에서 제외됨"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "일괄 편집"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Excluido de esta fase"
-          }
-        }
-      }
-    },
-    "Help": {
-      "comment": "Help button accessibility label",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hilfe"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ayuda"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aide"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ヘルプ"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "도움말"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "帮助"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "批量编辑"
           }
         }
       }
     },
-    "Hold": {
-      "comment": "Timeline phase / hold effect name.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Halten"
+    "Cancel" : {
+      "comment" : "Button: cancel.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abbrechen"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保持"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelar"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Maintien"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Annuler"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ホールド"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キャンセル"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "유지"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "취소"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mantener"
-          }
-        }
-      }
-    },
-    "In": {
-      "comment": "Timeline phase: In (ease-in).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "进入"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Entrée"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "イン"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "인"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Entrada"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消"
           }
         }
       }
     },
-    "Interactive Guides": {
-      "comment": "Help section title: interactive walkthroughs.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Interaktive Anleitungen"
+    "Completed" : {
+      "comment" : "Help guide status: this guide has been completed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abgeschlossen"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "互动指南"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Completado"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Guides interactifs"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminé"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "インタラクティブガイド"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完了"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "대화형 가이드"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "완료됨"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Guías interactivas"
-          }
-        }
-      }
-    },
-    "Keypose": {
-      "comment": "Noun: a keypose (this app's term for a keyframe-like pose).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Keypose"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关键姿势"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pose clé"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "キーポーズ"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "키포즈"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pose clave"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已完成"
           }
         }
       }
     },
-    "Label": {
-      "comment": "Field label: the label/name of a property.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bezeichnung"
+    "Constants" : {
+      "comment" : "Constants editor tab/section header.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Konstanten"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "标签"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Constantes"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Libellé"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Constantes"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ラベル"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "定数"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "레이블"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "상수"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Etiqueta"
-          }
-        }
-      }
-    },
-    "Link Endpoints": {
-      "comment": "Context menu: link the start/end keyposes.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Endpunkte verknüpfen"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "链接端点"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lier les extrémités"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "端点をリンク"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "끝점 연결"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vincular extremos"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "常量"
           }
         }
       }
     },
-    "Linked": {
-      "comment": "Toggle label: components are linked together.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verknüpft"
+    "Curve" : {
+      "comment" : "Label: easing curve.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kurve"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已链接"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Curva"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lié"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Courbe"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "リンク済み"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "カーブ"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "연결됨"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "곡선"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vinculado"
-          }
-        }
-      }
-    },
-    "Maintain proportions across components (e.g. keep Radius X/Y aspect-locked through wobble)": {
-      "comment": "Tooltip for the Linked toggle.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Proportionen über Komponenten beibehalten (z. B. Radius X/Y während des Wackelns seitenverhältnistreu halten)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在各分量间保持比例（例如在抖动过程中锁定半径 X/Y 的纵横比）"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conserver les proportions entre les composantes (p. ex. verrouiller le rapport Rayon X/Y pendant l’oscillation)"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コンポーネント間で比率を維持（例：ウォブル中も半径 X/Y のアスペクト比を固定）"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "구성 요소 간 비율 유지(예: 흔들림 중에도 반경 X/Y 종횡비 고정)"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mantener las proporciones entre componentes (p. ej., bloquear la relación de aspecto del Radio X/Y durante la oscilación)"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "曲线"
           }
         }
       }
     },
-    "Modulation": {
-      "comment": "Section title: modulation (wobble/drift) settings.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modulation"
+    "Delete" : {
+      "comment" : "Button: delete the selected item.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Löschen"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "调制"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Eliminar"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modulation"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "モジュレーション"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "削除"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "모듈레이션"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "삭제"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modulación"
-          }
-        }
-      }
-    },
-    "Motion Blur": {
-      "comment": "Section title / toggle: motion blur.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bewegungsunschärfe"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "运动模糊"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Flou de mouvement"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "モーションブラー"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "모션 블러"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desenfoque de movimiento"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除"
           }
         }
       }
     },
-    "Motion Blur settings": {
-      "comment": "Accessibility/title: motion blur settings.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bewegungsunschärfe-Einstellungen"
+    "Distribute Evenly" : {
+      "comment" : "Context menu: space keyposes evenly.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gleichmäßig verteilen"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "运动模糊设置"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Distribuir uniformemente"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réglages du flou de mouvement"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Répartir uniformément"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "モーションブラー設定"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "均等に配分"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "모션 블러 설정"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "균등하게 분배"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajustes de desenfoque de movimiento"
-          }
-        }
-      }
-    },
-    "Next": {
-      "comment": "Joyride guide: button that advances to the next step.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Weiter"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下一步"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Suivant"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "次へ"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "다음"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Siguiente"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "均匀分布"
           }
         }
       }
     },
-    "No animated properties": {
-      "comment": "Empty state: no animated properties yet.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Keine animierten Eigenschaften"
+    "Done" : {
+      "comment" : "Joyride guide: final-step button that closes the walkthrough.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fertig"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无动画属性"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hecho"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune propriété animée"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Terminé"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アニメーションプロパティなし"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完了"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "애니메이션 속성 없음"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "완료"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sin propiedades animadas"
-          }
-        }
-      }
-    },
-    "No keypose here": {
-      "comment": "Keypose popover empty state.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hier keine Keypose"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此处无关键姿势"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aucune pose clé ici"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ここにキーポーズはありません"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "여기에 키포즈 없음"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No hay pose clave aquí"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完成"
           }
         }
       }
     },
-    "On this page": {
-      "comment": "Help sidebar heading.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auf dieser Seite"
+    "Drag to reorder" : {
+      "comment" : "Popover hint: drag rows to reorder parameters.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "zum Neuordnen ziehen"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本页内容"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "arrastra para reordenar"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sur cette page"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "glisser pour réordonner"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このページの内容"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ドラッグして並べ替え"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "이 페이지에서"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "드래그하여 순서 변경"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "En esta página"
-          }
-        }
-      }
-    },
-    "Open help": {
-      "comment": "Help button tooltip",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hilfe öffnen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abrir ayuda"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrir l'aide"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ヘルプを開く"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "도움말 열기"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打开帮助"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拖动以重新排序"
           }
         }
       }
     },
-    "Out": {
-      "comment": "Timeline phase: Out (ease-out).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aus"
+    "Drift" : {
+      "comment" : "Hold effect: endpoints differ (drift).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deriva"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "退出"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dérive"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sortie"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ドリフト"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アウト"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "드리프트"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "아웃"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Salida"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "漂移"
           }
         }
       }
     },
-    "Randomize": {
-      "comment": "Button: randomize the seed.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Zufällig"
+    "Excluded from this phase" : {
+      "comment" : "Keypose popover: this keypose is excluded from the phase.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus dieser Phase ausgeschlossen"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "随机"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Excluido de esta fase"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aléatoire"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exclu de cette phase"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ランダム"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このフェーズから除外"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "무작위"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 단계에서 제외됨"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aleatorizar"
-          }
-        }
-      }
-    },
-    "Remove Keypose": {
-      "comment": "Context menu: remove this keypose.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Keypose entfernen"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "移除关键姿势"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer la pose clé"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "キーポーズを削除"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "키포즈 제거"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quitar pose clave"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已从此阶段排除"
           }
         }
       }
     },
-    "Reset to default": {
-      "comment": "Tooltip: reset this control to its default value.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auf Standard zurücksetzen"
+    "Help" : {
+      "comment" : "Help button accessibility label",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hilfe"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "恢复默认值"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ayuda"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rétablir la valeur par défaut"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aide"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "デフォルトに戻す"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ヘルプ"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "기본값으로 재설정"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "도움말"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restablecer al valor predeterminado"
-          }
-        }
-      }
-    },
-    "Reverse": {
-      "comment": "Context menu: reverse the keyposes.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Umkehren"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "反转"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inverser"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "反転"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "반전"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Invertir"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "帮助"
           }
         }
       }
     },
-    "Samples": {
-      "comment": "Motion blur: number of samples label.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Samples"
+    "Hold" : {
+      "comment" : "Timeline phase / hold effect name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Halten"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "采样"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantener"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Échantillons"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Maintien"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "サンプル"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ホールド"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "샘플"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "유지"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Muestras"
-          }
-        }
-      }
-    },
-    "Search": {
-      "comment": "Placeholder: search field.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Suchen"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搜索"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rechercher"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "検索"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "검색"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Buscar"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保持"
           }
         }
       }
     },
-    "Seed": {
-      "comment": "Field label: random seed value.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Startwert"
+    "In" : {
+      "comment" : "Timeline phase: In (ease-in).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ein"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "种子"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entrada"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Valeur initiale"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entrée"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "シード"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "イン"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "시드"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "인"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Semilla"
-          }
-        }
-      }
-    },
-    "Send feedback": {
-      "comment": "Feedback button label / tooltip",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Feedback senden"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "发送反馈"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Envoyer un commentaire"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "フィードバックを送信"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "피드백 보내기"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enviar comentarios"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "进入"
           }
         }
       }
     },
-    "Shortcuts": {
-      "comment": "Help section title: keyboard shortcuts.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kurzbefehle"
+    "Interactive Guides" : {
+      "comment" : "Help section title: interactive walkthroughs.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interaktive Anleitungen"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "快捷键"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guías interactivas"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Raccourcis"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Guides interactifs"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ショートカット"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "インタラクティブガイド"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "단축키"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "대화형 가이드"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Atajos"
-          }
-        }
-      }
-    },
-    "Shutter": {
-      "comment": "Motion blur: shutter angle label.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verschluss"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "快门"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Obturateur"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "シャッター"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "셔터"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Obturador"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "互动指南"
           }
         }
       }
     },
-    "Skip": {
-      "comment": "Joyride guide: button that dismisses the walkthrough.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Überspringen"
+    "Keypose" : {
+      "comment" : "Noun: a keypose (this app's term for a keyframe-like pose).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keypose"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "跳过"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pose clave"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ignorer"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pose clé"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "スキップ"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キーポーズ"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "건너뛰기"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "키포즈"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Omitir"
-          }
-        }
-      }
-    },
-    "Switch anyway": {
-      "comment": "Alert button: switch despite the warning.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Trotzdem wechseln"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仍然切换"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Changer quand même"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "そのまま切り替える"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "그래도 전환"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cambiar de todos modos"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关键姿势"
           }
         }
       }
     },
-    "Switching will reset incompatible lanes.": {
-      "comment": "Alert detail when switching timeline to Basic mode.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beim Wechseln werden inkompatible Spuren zurückgesetzt."
+    "Label" : {
+      "comment" : "Field label: the label/name of a property.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bezeichnung"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "切换将重置不兼容的轨道。"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Etiqueta"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le changement réinitialisera les pistes incompatibles."
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Libellé"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "切り替えると互換性のないレーンがリセットされます。"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ラベル"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "전환하면 호환되지 않는 레인이 재설정됩니다."
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "레이블"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Al cambiar se restablecerán las pistas incompatibles."
-          }
-        }
-      }
-    },
-    "Transitions only": {
-      "comment": "Motion blur mode option.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nur Übergänge"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅过渡"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Transitions uniquement"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "トランジションのみ"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "전환만"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Solo transiciones"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标签"
           }
         }
       }
     },
-    "Unlink Endpoints": {
-      "comment": "Context menu: unlink the start/end keyposes.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Endpunkte trennen"
+    "Link Endpoints" : {
+      "comment" : "Context menu: link the start/end keyposes.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Endpunkte verknüpfen"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消链接端点"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vincular extremos"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dissocier les extrémités"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lier les extrémités"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "端点のリンクを解除"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "端点をリンク"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "끝점 연결 해제"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "끝점 연결"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desvincular extremos"
-          }
-        }
-      }
-    },
-    "Update available": {
-      "comment": "Update banner, no version known",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Update verfügbar"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Actualización disponible"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mise à jour disponible"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アップデートが利用可能"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "업데이트 사용 가능"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "有可用更新"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链接端点"
           }
         }
       }
     },
-    "Value changes": {
-      "comment": "Motion blur mode option.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wertänderungen"
+    "Link X and Y (lock aspect ratio)" : {
+      "comment" : "Tooltip: aspect-link toggle on the Scale row.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "X und Y verknüpfen (Seitenverhältnis sperren)"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "值变化"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vincular X e Y (bloquear la proporción)"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Changements de valeur"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lier X et Y (verrouiller les proportions)"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "値の変化"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "X と Y をリンク（縦横比を固定）"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "값 변경"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "X와 Y 연결(종횡비 고정)"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cambios de valor"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "链接 X 和 Y（锁定宽高比）"
           }
         }
       }
     },
-    "What's New": {
-      "comment": "Changelog button label / tooltip",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Neuigkeiten"
+    "Linked" : {
+      "comment" : "Toggle label: components are linked together.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verknüpft"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Novedades"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Vinculado"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nouveautés"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lié"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "新機能"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リンク済み"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "새로운 기능"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "연결됨"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "新功能"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已链接"
           }
         }
       }
     },
-    "When": {
-      "comment": "Label: when a setting applies.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wann"
+    "Maintain proportions across components (e.g. keep Radius X/Y aspect-locked through wobble)" : {
+      "comment" : "Tooltip for the Linked toggle.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Proportionen über Komponenten beibehalten (z. B. Radius X/Y während des Wackelns seitenverhältnistreu halten)"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "何时"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mantener las proporciones entre componentes (p. ej., bloquear la relación de aspecto del Radio X/Y durante la oscilación)"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quand"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Conserver les proportions entre les composantes (p. ex. verrouiller le rapport Rayon X/Y pendant l’oscillation)"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "タイミング"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コンポーネント間で比率を維持（例：ウォブル中も半径 X/Y のアスペクト比を固定）"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "시점"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "구성 요소 간 비율 유지(예: 흔들림 중에도 반경 X/Y 종횡비 고정)"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cuándo"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在各分量间保持比例（例如在抖动过程中锁定半径 X/Y 的纵横比）"
           }
         }
       }
     },
-    "You have %@": {
-      "comment": "Update banner tooltip: installed version",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Installiert: %@"
+    "Modulation" : {
+      "comment" : "Section title: modulation (wobble/drift) settings.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modulation"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Instalado: %@"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modulación"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Installé : %@"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modulation"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "インストール済み: %@"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "モジュレーション"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "설치됨: %@"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모듈레이션"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已安装: %@"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "调制"
           }
         }
       }
     },
-    "Your current sequence isn't compatible with Basic mode.": {
-      "comment": "Alert message when switching timeline to Basic mode.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine aktuelle Sequenz ist nicht mit dem einfachen Modus kompatibel."
+    "Motion Blur" : {
+      "comment" : "Section title / toggle: motion blur.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewegungsunschärfe"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "当前序列与基本模式不兼容。"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desenfoque de movimiento"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Votre séquence actuelle n’est pas compatible avec le mode Basique."
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Flou de mouvement"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "現在のシーケンスは基本モードと互換性がありません。"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "モーションブラー"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "현재 시퀀스는 기본 모드와 호환되지 않습니다."
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모션 블러"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tu secuencia actual no es compatible con el modo Básico."
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "运动模糊"
           }
         }
       }
     },
-    "v%@ available": {
-      "comment": "Update banner: version X available",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "v%@ verfügbar"
+    "Motion Blur settings" : {
+      "comment" : "Accessibility/title: motion blur settings.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bewegungsunschärfe-Einstellungen"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "v%@ disponible"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ajustes de desenfoque de movimiento"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "v%@ disponible"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réglages du flou de mouvement"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "v%@ が利用可能"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "モーションブラー設定"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "v%@ 사용 가능"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "모션 블러 설정"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "v%@ 可用"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "运动模糊设置"
           }
         }
       }
     },
-    "Smooth path through this keypose": {
-      "comment": "Tooltip: per-keypose curve toggle on the Position row.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pfad durch diese Keypose glätten"
+    "Next" : {
+      "comment" : "Joyride guide: button that advances to the next step.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weiter"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Suavizar la trayectoria en esta pose clave"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Siguiente"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lisser la trajectoire à cette pose clé"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suivant"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このキーポーズでパスをスムーズにする"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "次へ"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "이 키포즈에서 경로를 부드럽게"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "다음"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在此关键姿势处平滑路径"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一步"
           }
         }
       }
     },
-    "Link X and Y (lock aspect ratio)": {
-      "comment": "Tooltip: aspect-link toggle on the Scale row.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "X und Y verknüpfen (Seitenverhältnis sperren)"
+    "No animated properties" : {
+      "comment" : "Empty state: no animated properties yet.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine animierten Eigenschaften"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vincular X e Y (bloquear la proporción)"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin propiedades animadas"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lier X et Y (verrouiller les proportions)"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune propriété animée"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "X と Y をリンク（縦横比を固定）"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アニメーションプロパティなし"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "X와 Y 연결(종횡비 고정)"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "애니메이션 속성 없음"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "链接 X 和 Y（锁定宽高比）"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无动画属性"
           }
         }
       }
     },
-    "Parameter Order": {
-      "comment": "Section title: parameter display order in the timeline.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Parameterreihenfolge"
+    "No keypose here" : {
+      "comment" : "Keypose popover empty state.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hier keine Keypose"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "参数顺序"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No hay pose clave aquí"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ordre des paramètres"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune pose clé ici"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "パラメータの順序"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ここにキーポーズはありません"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "매개변수 순서"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "여기에 키포즈 없음"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Orden de parámetros"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此处无关键姿势"
           }
         }
       }
     },
-    "Reorder parameters": {
-      "comment": "Accessibility: drag-to-reorder the parameter list.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Parameter neu anordnen"
+    "On this page" : {
+      "comment" : "Help sidebar heading.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf dieser Seite"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重新排列参数"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "En esta página"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réorganiser les paramètres"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sur cette page"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "パラメータを並べ替え"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このページの内容"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "매개변수 순서 변경"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 페이지에서"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reordenar parámetros"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本页内容"
           }
         }
       }
     },
-    "Drag to reorder": {
-      "comment": "Popover hint: drag rows to reorder parameters.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "zum Neuordnen ziehen"
+    "Open help" : {
+      "comment" : "Help button tooltip",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hilfe öffnen"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "拖动以重新排序"
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Abrir ayuda"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "glisser pour réordonner"
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ouvrir l'aide"
           }
         },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ドラッグして並べ替え"
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ヘルプを開く"
           }
         },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "드래그하여 순서 변경"
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "도움말 열기"
           }
         },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "arrastra para reordenar"
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开帮助"
+          }
+        }
+      }
+    },
+    "Out" : {
+      "comment" : "Timeline phase: Out (ease-out).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aus"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Salida"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sortie"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アウト"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "아웃"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出"
+          }
+        }
+      }
+    },
+    "Parameter Order" : {
+      "comment" : "Section title: parameter display order in the timeline.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parameterreihenfolge"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Orden de parámetros"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ordre des paramètres"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パラメータの順序"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "매개변수 순서"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "参数顺序"
+          }
+        }
+      }
+    },
+    "Randomize" : {
+      "comment" : "Button: randomize the seed.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zufällig"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aleatorizar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aléatoire"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ランダム"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "무작위"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "随机"
+          }
+        }
+      }
+    },
+    "Remove Keypose" : {
+      "comment" : "Context menu: remove this keypose.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keypose entfernen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quitar pose clave"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Supprimer la pose clé"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "キーポーズを削除"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "키포즈 제거"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除关键姿势"
+          }
+        }
+      }
+    },
+    "Reorder parameters" : {
+      "comment" : "Accessibility: drag-to-reorder the parameter list.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parameter neu anordnen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reordenar parámetros"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Réorganiser les paramètres"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "パラメータを並べ替え"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "매개변수 순서 변경"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新排列参数"
+          }
+        }
+      }
+    },
+    "Reset to default" : {
+      "comment" : "Tooltip: reset this control to its default value.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Auf Standard zurücksetzen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restablecer al valor predeterminado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rétablir la valeur par défaut"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "デフォルトに戻す"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "기본값으로 재설정"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复默认值"
+          }
+        }
+      }
+    },
+    "Reverse" : {
+      "comment" : "Context menu: reverse the keyposes.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Umkehren"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invertir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inverser"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "反転"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "반전"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "反转"
+          }
+        }
+      }
+    },
+    "Samples" : {
+      "comment" : "Motion blur: number of samples label.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Samples"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Muestras"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Échantillons"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "サンプル"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "샘플"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "采样"
+          }
+        }
+      }
+    },
+    "Search" : {
+      "comment" : "Placeholder: search field.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suchen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Buscar"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rechercher"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "検索"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "검색"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索"
+          }
+        }
+      }
+    },
+    "Seed" : {
+      "comment" : "Field label: random seed value.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Startwert"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Semilla"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valeur initiale"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "シード"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시드"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "种子"
+          }
+        }
+      }
+    },
+    "Send feedback" : {
+      "comment" : "Feedback button label / tooltip",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Feedback senden"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enviar comentarios"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Envoyer un commentaire"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フィードバックを送信"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "피드백 보내기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送反馈"
+          }
+        }
+      }
+    },
+    "Shortcuts" : {
+      "comment" : "Help section title: keyboard shortcuts.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kurzbefehle"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Atajos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Raccourcis"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ショートカット"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "단축키"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "快捷键"
+          }
+        }
+      }
+    },
+    "Showing current frame" : {
+      "comment" : "Constants editor preview hint: the mini-canvas shows the frame at the playhead, not the first frame.",
+      "extractionState" : "stale",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Zeigt aktuelles Bild"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mostrando fotograma actual"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Affiche l’image actuelle"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在のフレームを表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "현재 프레임 표시"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示当前帧"
+          }
+        }
+      }
+    },
+    "Shutter" : {
+      "comment" : "Motion blur: shutter angle label.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verschluss"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obturador"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Obturateur"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "シャッター"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "셔터"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "快门"
+          }
+        }
+      }
+    },
+    "Skip" : {
+      "comment" : "Joyride guide: button that dismisses the walkthrough.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Überspringen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Omitir"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ignorer"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "スキップ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "건너뛰기"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跳过"
+          }
+        }
+      }
+    },
+    "Smooth path through this keypose" : {
+      "comment" : "Tooltip: per-keypose curve toggle on the Position row.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pfad durch diese Keypose glätten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suavizar la trayectoria en esta pose clave"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lisser la trajectoire à cette pose clé"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "このキーポーズでパスをスムーズにする"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이 키포즈에서 경로를 부드럽게"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在此关键姿势处平滑路径"
+          }
+        }
+      }
+    },
+    "Switch anyway" : {
+      "comment" : "Alert button: switch despite the warning.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trotzdem wechseln"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambiar de todos modos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changer quand même"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "そのまま切り替える"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "그래도 전환"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仍然切换"
+          }
+        }
+      }
+    },
+    "Switching will reset incompatible lanes." : {
+      "comment" : "Alert detail when switching timeline to Basic mode.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Beim Wechseln werden inkompatible Spuren zurückgesetzt."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Al cambiar se restablecerán las pistas incompatibles."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le changement réinitialisera les pistes incompatibles."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切り替えると互換性のないレーンがリセットされます。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "전환하면 호환되지 않는 레인이 재설정됩니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "切换将重置不兼容的轨道。"
+          }
+        }
+      }
+    },
+    "Transitions only" : {
+      "comment" : "Motion blur mode option.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nur Übergänge"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo transiciones"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transitions uniquement"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "トランジションのみ"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "전환만"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅过渡"
+          }
+        }
+      }
+    },
+    "Unlink Endpoints" : {
+      "comment" : "Context menu: unlink the start/end keyposes.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Endpunkte trennen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Desvincular extremos"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dissocier les extrémités"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "端点のリンクを解除"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "끝점 연결 해제"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取消链接端点"
+          }
+        }
+      }
+    },
+    "Update available" : {
+      "comment" : "Update banner, no version known",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Actualización disponible"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mise à jour disponible"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "アップデートが利用可能"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "업데이트 사용 가능"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有可用更新"
+          }
+        }
+      }
+    },
+    "v%@ available" : {
+      "comment" : "Update banner: version X available",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "v%@ verfügbar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "v%@ disponible"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "v%@ disponible"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "v%@ が利用可能"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "v%@ 사용 가능"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "v%@ 可用"
+          }
+        }
+      }
+    },
+    "Value changes" : {
+      "comment" : "Motion blur mode option.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wertänderungen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cambios de valor"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changements de valeur"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "値の変化"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "값 변경"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "值变化"
+          }
+        }
+      }
+    },
+    "What's New" : {
+      "comment" : "Changelog button label / tooltip",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Neuigkeiten"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Novedades"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nouveautés"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新機能"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "새로운 기능"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新功能"
+          }
+        }
+      }
+    },
+    "When" : {
+      "comment" : "Label: when a setting applies.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wann"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cuándo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quand"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "タイミング"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "시점"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "何时"
+          }
+        }
+      }
+    },
+    "You have %@" : {
+      "comment" : "Update banner tooltip: installed version",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installiert: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Instalado: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installé : %@"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "インストール済み: %@"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "설치됨: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已安装: %@"
+          }
+        }
+      }
+    },
+    "Your current sequence isn't compatible with Basic mode." : {
+      "comment" : "Alert message when switching timeline to Basic mode.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deine aktuelle Sequenz ist nicht mit dem einfachen Modus kompatibel."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tu secuencia actual no es compatible con el modo Básico."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Votre séquence actuelle n’est pas compatible avec le mode Basique."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "現在のシーケンスは基本モードと互換性がありません。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "현재 시퀀스는 기본 모드와 호환되지 않습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前序列与基本模式不兼容。"
           }
         }
       }
     }
   },
-  "version": "1.0"
+  "version" : "1.0"
 }

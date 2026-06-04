@@ -107,7 +107,8 @@ NSArray *KKTimelineAIPreserveModulation(NSArray *newKps, NSArray *oldKps) {
 }
 
 NSString *KKTimelineAIMergeMutationJSON(NSString *currentTimelineJSON,
-                                        NSString *mutationJSON) {
+                                        NSString *mutationJSON,
+                                        double clipDurSec, double frameDurSec) {
   NSData *curD = [currentTimelineJSON dataUsingEncoding:NSUTF8StringEncoding];
   NSError *err = nil;
   NSMutableDictionary *current =
@@ -160,6 +161,35 @@ NSString *KKTimelineAIMergeMutationJSON(NSString *currentTimelineJSON,
       target[@"hold_shape"] = op[@"hold_shape"];
     target[@"enabled"] = @YES;
     curLanes[idxN.unsignedIntegerValue] = target;
+  }
+
+  // Snap each lane's final keypose from the nominal clip end (the AI emits
+  // time ~1.0) back to the last renderable frame, so the animation reaches its
+  // end instead of stopping a frame short. Done here, on the raw dict (no
+  // KKTimeline round-trip that could drop unmodelled fields), so every plugin's
+  // AI path inherits it. Only the last keypose, only when it's past the last
+  // frame, and never before the previous keypose (degenerate short clips).
+  if (clipDurSec > 0.0 && frameDurSec > 0.0 && frameDurSec < clipDurSec) {
+    double lastFrameFrac = (clipDurSec - frameDurSec) / clipDurSec;
+    for (NSUInteger i = 0; i < curLanes.count; i++) {
+      NSArray *kps = curLanes[i][@"keyposes"];
+      if (![kps isKindOfClass:[NSArray class]] || kps.count == 0)
+        continue;
+      NSDictionary *last = kps.lastObject;
+      if (![last isKindOfClass:[NSDictionary class]] ||
+          [last[@"time"] doubleValue] <= lastFrameFrac + 1e-6)
+        continue;
+      if (kps.count >= 2 &&
+          [kps[kps.count - 2][@"time"] doubleValue] >= lastFrameFrac)
+        continue;
+      NSMutableArray *mkps = [kps mutableCopy];
+      NSMutableDictionary *nl = [last mutableCopy];
+      nl[@"time"] = @(lastFrameFrac);
+      mkps[mkps.count - 1] = nl;
+      NSMutableDictionary *lane = [curLanes[i] mutableCopy];
+      lane[@"keyposes"] = mkps;
+      curLanes[i] = lane;
+    }
   }
 
   current[@"lanes"] = curLanes;

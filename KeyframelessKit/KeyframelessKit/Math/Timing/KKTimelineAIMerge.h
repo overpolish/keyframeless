@@ -39,7 +39,18 @@ FOUNDATION_EXPORT NSArray *KKTimelineAIPreserveModulation(NSArray *newKeyposes,
 /// component_min/max/units) and only has its keyposes replaced (run through
 /// KKTimelineAIPreserveModulation) and `enabled` set YES. Lanes not mentioned
 /// are untouched; unknown labels are dropped. nil on malformed input.
+///
+/// Also snaps every lane's FINAL keypose from the nominal clip end (the AI
+/// emits time ~1.0) back to the last renderable frame, `(clipDurSec -
+/// frameDurSec) / clipDurSec` - Basic's `outEndFrac` rule. FCP's last frame
+/// sits one frame before the out-point, so a keypose at 1.0 is never reached
+/// and the animation lands a frame short (worst on ease-in / elastic / bounce).
+/// This lives in the shared merge so EVERY plugin's AI path gets it
+/// automatically - pass the clip duration (from the plugin's timing API) and
+/// frame duration
+/// (`KKProcessFrameDurationSeconds()`). Pass 0 for either to skip the snap.
 FOUNDATION_EXPORT NSString *_Nullable KKTimelineAIMergeMutationJSON(
-    NSString *currentTimelineJSON, NSString *mutationJSON);
+    NSString *currentTimelineJSON, NSString *mutationJSON, double clipDurSec,
+    double frameDurSec);
 
 NS_ASSUME_NONNULL_END

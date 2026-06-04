@@ -304,6 +304,15 @@
                           KKSetSuppressedHandles(s.miniCanvasDelegate, nil);
                           KKWriteBoundaryRequest(s.miniCanvasRequestPath, 0.0,
                                                  NO);
+                        } else {
+                          // Constants popover previewed at the live playhead
+                          // (set in -showStaticValuesPopoverFromView:); restore
+                          // the t=0 default so a later non-popover draw isn't
+                          // pinned to a stale playhead fraction.
+                          id del = s.miniCanvasDelegate;
+                          if ([del respondsToSelector:NSSelectorFromString(
+                                                          @"setEditFraction:")])
+                            [del setValue:@0 forKey:@"editFraction"];
                         }
                         if (s.onStaticValuesPopoverClosed)
                           s.onStaticValuesPopoverClosed();

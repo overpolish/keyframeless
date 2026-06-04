@@ -201,11 +201,40 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return _revealHidden && self.onHandleVisibilityToggled != nil;
 }
 
+// "Peek and use" mode: the master is off (handlesHidden) and Opt is held. Every
+// control reveals and is interactive, so its ghost draws at FULL alpha (it
+// reads as usable, not as a dimmed re-show target). Distinct from a single
+// element you individually hid while the master is on - that ghost stays dimmed
+// at 0.3.
+- (BOOL)_peekActive {
+  return _handlesHidden && [self _revealActive];
+}
+
 // A handle/element is "user-hidden" (master tick off or its own pill off) -
 // eligible to be revealed as a ghost. Boundary-phase suppression is separate.
 - (BOOL)_userHiddenLabel:(NSString *)label {
   return _handlesHidden ||
          (label && [_hiddenHandleLabels containsObject:label]);
+}
+
+// Hidden by its own pill, independent of the master tick.
+- (BOOL)_individuallyHiddenLabel:(NSString *)label {
+  return label && [_hiddenHandleLabels containsObject:label];
+}
+
+// Whether `label`'s handle should be drawn + hit-tested this frame.
+//   master on  : visible unless individually hidden; Opt-hold reveals a hidden
+//                one as a dim ghost (so an Opt-click can re-show it).
+//   master off : Opt-hold "peek" shows ONLY the controls left enabled - the
+//   ones
+//                you turned off stay off (peek mirrors a flip back to
+//                master-on, so it respects your per-element config rather than
+//                flashing everything).
+- (BOOL)_shownLabel:(NSString *)label {
+  BOOL hidden = [self _individuallyHiddenLabel:label];
+  if (_handlesHidden)
+    return [self _revealActive] && !hidden;
+  return !hidden || [self _revealActive];
 }
 
 // A specific rotation ring is user-hidden if the master tick is off, the whole
@@ -214,6 +243,12 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 - (BOOL)_ringUserHiddenAtAxis:(int)k {
   if (_handlesHidden)
     return YES;
+  return [self _ringIndividuallyHiddenAtAxis:k];
+}
+
+// As above but independent of the master tick: the ring's own pill, or its
+// parent Rotation compound, turned off.
+- (BOOL)_ringIndividuallyHiddenAtAxis:(int)k {
   if (self.rotationLabel &&
       [_hiddenHandleLabels containsObject:self.rotationLabel])
     return YES;
@@ -223,14 +258,19 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return [_hiddenHandleLabels containsObject:key];
 }
 
-// Ring is drawn / hit-tested this frame (at full alpha, or dimmed under
-// reveal).
+// Ring is drawn / hit-tested this frame. Mirrors -_shownLabel: : master-off
+// peek shows only the rings left enabled.
 - (BOOL)_ringShownAtAxis:(int)k {
-  return ![self _ringUserHiddenAtAxis:k] || [self _revealActive];
+  BOOL hidden = [self _ringIndividuallyHiddenAtAxis:k];
+  if (_handlesHidden)
+    return [self _revealActive] && !hidden;
+  return !hidden || [self _revealActive];
 }
 
-// Per-ring draw alpha: dim when it's a revealed ghost.
+// Per-ring draw alpha: dim when it's a revealed ghost, full in peek mode.
 - (float)_ringAlphaAtAxis:(int)k {
+  if ([self _peekActive])
+    return 1.0f;
   return [self _ringUserHiddenAtAxis:k] ? 0.3f : 1.0f;
 }
 
@@ -429,34 +469,21 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                                 forLabel:(NSString *)label {
   if (self.boundaryEditing) {
     // Replace the keypose nearest editFraction, preserving the lane's
-    // structure (times, intervals, enabled). Authoritative Hold-twin
-    // handling is the host's job; the preview only renders editFraction.
+    // structure (times, intervals, enabled).
+    // KKLaneBySettingValuesNearestFraction copy-preserves the keypose's
+    // per-keypose fields (spatialSmooth, in/out handles) AND propagates
+    // hold-links to the linked twin - matching the viewer's drag-write. Without
+    // the propagation a linked twin stayed at its old value mid-drag, so the
+    // motion-path overlay (which draws every keypose) showed a phantom segment
+    // that only collapsed on mouse-up when the host synced it.
     KKTimeline *updated = [self.timeline copy] ?: [KKTimeline timeline];
     NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
       if (![lanes[i].label isEqualToString:label])
         continue;
-      KKLane *nl = [lanes[i] copy];
-      NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
-      if (kps.count) {
-        NSInteger best = 0;
-        double bd = 1.0e9;
-        for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
-          double d = fabs(kps[k].time - self.editFraction);
-          if (d < bd) {
-            bd = d;
-            best = k;
-          }
-        }
-        // Copy-and-update so per-keypose fields beyond values (spatialSmooth,
-        // in/out handles) survive the live preview - else a curved keypose
-        // flattens while its own position handle is dragged.
-        KKKeyPose *nk = [kps[best] copy];
-        nk.values = values;
-        kps[best] = nk;
-        nl.keyposes = kps;
-      }
-      lanes[i] = nl;
+      if (lanes[i].keyposes.count)
+        lanes[i] = KKLaneBySettingValuesNearestFraction(
+            lanes[i], self.editFraction, values);
       break;
     }
     updated.lanes = lanes;
@@ -538,11 +565,14 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return !CGRectIsEmpty(cr) && self.cropLabel &&
          ![_suppressedHandleLabels containsObject:self.cropLabel] &&
          [self isConstantLabel:self.cropLabel] &&
-         (![self _userHiddenLabel:self.cropLabel] || [self _revealActive]);
+         [self _shownLabel:self.cropLabel];
 }
 
-// Crop draw alpha: dim when it's a revealed ghost (border + corner handles).
+// Crop draw alpha: dim when it's a revealed ghost (border + corner handles),
+// full in peek mode.
 - (CGFloat)cropGhostAlpha {
+  if ([self _peekActive])
+    return 1.0;
   return [self _userHiddenLabel:self.cropLabel] ? 0.3 : 1.0;
 }
 
@@ -598,25 +628,29 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return !CGRectIsEmpty(cr) && self.pointLabel &&
          ![_suppressedHandleLabels containsObject:self.pointLabel] &&
          [self isConstantLabel:self.pointLabel] &&
-         (![self _userHiddenLabel:self.pointLabel] || [self _revealActive]);
+         [self _shownLabel:self.pointLabel];
 }
 
 - (BOOL)_rotationActiveForContentRect:(CGRect)cr {
   return !CGRectIsEmpty(cr) && self.rotationLabel &&
          ![_suppressedHandleLabels containsObject:self.rotationLabel] &&
          [self isConstantLabel:self.rotationLabel] &&
-         (![self _userHiddenLabel:self.rotationLabel] || [self _revealActive]);
+         [self _shownLabel:self.rotationLabel];
 }
 
 - (CGFloat)pointHandleGhostAlpha {
+  if ([self _peekActive])
+    return 1.0;
   return [self _userHiddenLabel:self.pointLabel] ? 0.3 : 1.0;
 }
 
 - (BOOL)labelVisibleOrRevealing:(NSString *)label {
-  return ![self _userHiddenLabel:label] || [self _revealActive];
+  return [self _shownLabel:label];
 }
 
 - (CGFloat)ghostAlphaForLabel:(NSString *)label {
+  if ([self _peekActive])
+    return 1.0;
   return [self _userHiddenLabel:label] ? 0.3 : 1.0;
 }
 

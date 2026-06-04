@@ -1,6 +1,102 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Animate the clip sliding in from off the left edge to the centre over the first second." : {
+      "comment" : "AI example value: slide in from the left.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Animiere den Clip so, dass er in der ersten Sekunde vom linken Rand herein zur Mitte gleitet." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Anima el clip deslizándose desde fuera del borde izquierdo hasta el centro durante el primer segundo." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Animez le plan pour qu'il glisse depuis l'extérieur du bord gauche jusqu'au centre pendant la première seconde." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "最初の1秒間で、クリップが左端の外から中央へスライドして入ってくるようにアニメーションさせる。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "첫 1초 동안 클립이 왼쪽 가장자리 바깥에서 중앙으로 슬라이드해 들어오도록 애니메이션합니다." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "让片段在第一秒内从左边缘外滑入到中心。" } }
+      }
+    },
+    "Ask a question or describe an animation…" : {
+      "comment" : "AI prompt field placeholder for Magic Move.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Stelle eine Frage oder beschreibe eine Animation…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Haz una pregunta o describe una animación…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Posez une question ou décrivez une animation…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "質問するか、アニメーションを入力…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "질문하거나 애니메이션을 설명하세요…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "提问或描述一个动画…" } }
+      }
+    },
+    "Pop in with a bounce" : {
+      "comment" : "AI example chip: pop in with a bounce.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Mit Sprung erscheinen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Aparecer con un rebote" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Apparaître avec un rebond" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "バウンドして現れる" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "통통 튀며 나타나기" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "弹跳着出现" } }
+      }
+    },
+    "Scale the clip from 0% up to 100% with a bounce at the start." : {
+      "comment" : "AI example value: pop in with a bounce.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Skaliere den Clip von 0 % auf 100 % mit einem Sprung am Anfang." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Escala el clip de 0 % a 100 % con un rebote al principio." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Mettez le plan à l'échelle de 0 % à 100 % avec un rebond au début." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "クリップを最初にバウンドさせながら0%から100%まで拡大する。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "시작 부분에서 튀는 효과와 함께 클립을 0%에서 100%로 확대합니다." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "让片段从 0% 放大到 100%，并在开始处带有弹跳。" } }
+      }
+    },
+    "Slide in from the left" : {
+      "comment" : "AI example chip: slide in from the left.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Von links hereingleiten" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Deslizar desde la izquierda" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Glisser depuis la gauche" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "左からスライドイン" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "왼쪽에서 슬라이드 인" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "从左侧滑入" } }
+      }
+    },
+    "Spin once" : {
+      "comment" : "AI example chip: spin once.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Einmal drehen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Girar una vez" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tourner une fois" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "1回転" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "한 바퀴 회전" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "旋转一圈" } }
+      }
+    },
+    "Spin the clip one full turn over the whole duration." : {
+      "comment" : "AI example value: spin once.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Drehe den Clip über die gesamte Dauer um eine volle Umdrehung." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Gira el clip una vuelta completa durante toda la duración." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Faites tourner le plan d'un tour complet sur toute la durée." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "クリップを全体の長さで1回転させる。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "전체 길이 동안 클립을 한 바퀴 회전시킵니다." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "在整个时长内让片段旋转一整圈。" } }
+      }
+    },
+    "What does the anchor point do?" : {
+      "comment" : "AI example chip and value: anchor point question.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Was bewirkt der Ankerpunkt?" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "¿Qué hace el punto de anclaje?" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "À quoi sert le point d'ancrage ?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "アンカーポイントは何をしますか？" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "기준점은 무엇을 하나요?" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "锚点有什么作用？" } }
+      }
+    },
     "Rotate with motion" : {
       "comment" : "Gap-popover toggle: align rotation to the position-curve tangent during this gap.",
       "extractionState" : "manual",

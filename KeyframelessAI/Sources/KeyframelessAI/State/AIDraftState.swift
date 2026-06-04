@@ -22,6 +22,11 @@ public final class AIDraftState: ObservableObject {
 	/// ("Planning timing…", "Resolving values…"). Falls back to "Thinking…"
 	/// when nil.
 	@Published public var routingStatus: String?
+	/// True once a transform (mutation) has been applied, until the user next
+	/// interacts. Drives the green "done" sparkle so a fire-and-look-away run
+	/// still has a confirmation waiting when the user looks back. Answers and
+	/// errors do not set this - only an applied mutation does.
+	@Published public var didCompleteMutation: Bool = false
 
 	private init() {}
 
@@ -30,5 +35,6 @@ public final class AIDraftState: ObservableObject {
 		pendingAnswer = nil
 		routingError = nil
 		routingStatus = nil
+		didCompleteMutation = false
 	}
 }

@@ -203,15 +203,15 @@
   BOOL posVisible = draggingHandle || (posEnabled && posShownHere);
   // Opt-hold reveals a hidden Position handle as a dimmed ghost (clickable to
   // re-show); only when it would otherwise be on screen at this playhead.
-  BOOL posGhost =
-      !posVisible && self.optRevealActive && !posEnabled && posShownHere;
+  BOOL posGhost = !posVisible && self.optRevealActive &&
+                  [self kkOSCRevealEligible:@"Position"] && posShownHere;
 
   // The motion path (line + anchors + handles) is a SEPARATE hideable OSC from
   // the Position arc handle. Opt-hold reveals a hidden path as a dimmed ghost.
   BOOL pathEnabled = [self kkOSCElementVisible:@"Path"];
-  BOOL pathReveal = !pathEnabled && self.optRevealActive;
+  BOOL pathReveal = self.optRevealActive && [self kkOSCRevealEligible:@"Path"];
   if (pathEnabled || pathReveal) {
-    float pg = pathEnabled ? 1.0f : 0.3f;
+    float pg = pathEnabled ? 1.0f : [self kkRevealGhostAlpha];
     [self _drawPositionPathToDestination:destinationImage ghostAlpha:pg];
     [self _drawHandlesToDestination:destinationImage atTime:time ghostAlpha:pg];
     [self _drawKeyposeAnchorsToDestination:destinationImage
@@ -250,20 +250,20 @@
   BOOL scaleEnabled = [self kkOSCElementVisible:@"Scale"];
   BOOL scaleDragging = self.isDragging && activePart == kOSCScalePart;
   BOOL scaleVisible = scaleDragging || (scaleEnabled && scaleShownHere);
-  BOOL scaleGhost =
-      !scaleVisible && self.optRevealActive && !scaleEnabled && scaleShownHere;
+  BOOL scaleGhost = !scaleVisible && self.optRevealActive &&
+                    [self kkOSCRevealEligible:@"Scale"] && scaleShownHere;
   if (scaleVisible || scaleGhost) {
     NSInteger activeHandle = scaleDragging ? self.scaleGrabHandle : -1;
     [self _drawScaleBoxAtCenter:pos
                          atTime:time
-                     ghostAlpha:(scaleGhost ? 0.3f : 1.0f)activeHandle
-                               :activeHandle
+                     ghostAlpha:(scaleGhost ? [self kkRevealGhostAlpha]
+                                            : 1.0f)activeHandle:activeHandle
                destinationImage:destinationImage];
   }
 
   // Position arc handle, drawn above rotation + scale so it stays on top.
   if (posVisible || posGhost) {
-    self.fillAlpha = posGhost ? 0.3f : 1.0f;
+    self.fillAlpha = posGhost ? [self kkRevealGhostAlpha] : 1.0f;
     [self drawAtCanvasPosition:pos
                      isHovered:handleTargeted
                       isActive:draggingHandle
@@ -278,10 +278,11 @@
   BOOL anchorEnabled = [self kkOSCElementVisible:@"Anchor"];
   BOOL anchorDragging = self.isDragging && activePart == kOSCAnchorPart;
   BOOL anchorVisible = anchorDragging || (anchorEnabled && anchorShownHere);
-  BOOL anchorGhost = !anchorVisible && self.optRevealActive && !anchorEnabled &&
-                     anchorShownHere;
+  BOOL anchorGhost = !anchorVisible && self.optRevealActive &&
+                     [self kkOSCRevealEligible:@"Anchor"] && anchorShownHere;
   if (anchorVisible || anchorGhost) {
-    self.anchorPointOSC.ghostAlpha = anchorGhost ? 0.3f : 1.0f;
+    self.anchorPointOSC.ghostAlpha =
+        anchorGhost ? [self kkRevealGhostAlpha] : 1.0f;
     CGPoint ac = [self _anchorCanvasAtFraction:frac];
     [self.anchorPointOSC drawAtCanvasPosition:ac
                                     isHovered:self.anchorHovered

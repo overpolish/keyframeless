@@ -533,8 +533,13 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                       [KKAIDraft setAnswer:result.answer];
                       return;
                     }
+                    // The merge also snaps final keyposes to the last
+                    // renderable frame (FCP's last frame is one frame before
+                    // the clip end, so a keypose at 1.0 is never reached) -
+                    // clipDur from the prompt, frameDur from the process cache.
                     NSString *merged = KKTimelineAIMergeMutationJSON(
-                        currentJSON, result.mutationJSON);
+                        currentJSON, result.mutationJSON, clipDurSec,
+                        KKProcessFrameDurationSeconds());
                     if (!merged) {
                       KKLogError(@"AI[err] merge returned nil");
                       [KKAIDraft
@@ -559,11 +564,18 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                                              kKKParamTimelineData);
                     // If the result isn't Basic-representable, force the
                     // inspector to Advanced so the user sees the real structure
-                    // instead of the compatibility banner.
+                    // instead of the compatibility banner. The merge snaps the
+                    // final keypose to outEndFrac, so pass that same end here.
                     KKTimeline *resultTimeline =
                         [KKTimeline timelineFromJSON:merged];
-                    if (resultTimeline &&
-                        !KKTimelineIsBasicCompatible(resultTimeline)) {
+                    double mergeFrameDur = KKProcessFrameDurationSeconds();
+                    double aiEndFrac =
+                        (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
+                         mergeFrameDur < clipDurSec)
+                            ? (clipDurSec - mergeFrameDur) / clipDurSec
+                            : 1.0;
+                    if (resultTimeline && !KKTimelineIsBasicCompatible(
+                                              resultTimeline, aiEndFrac)) {
                       [strong patchUIStateKey:@"activeTab"
                                         value:@(1)
                                       paramID:kParamUIState];
@@ -571,6 +583,10 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                     [writeAct endAction:strong];
                     [KKAIDraft setAnswer:nil];
                     [KKAIDraft clearPrompt];
+                    // Light the green "done" sparkle so a fire-and-look-away
+                    // run still has a confirmation waiting on return. Cleared
+                    // when the user next opens the popover or types.
+                    [KKAIDraft setCompleted:YES];
                   });
                 }];
 }

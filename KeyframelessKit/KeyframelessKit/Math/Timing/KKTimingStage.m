@@ -444,17 +444,24 @@ KKLane *KKLaneBySettingValuesNearestFraction(KKLane *lane, double frac,
   KKKeyPose *nk = [mkps[best] copy];
   nk.values = values;
   mkps[best] = nk;
-  // Hold-link propagation: a hold whose endpoints are linked shares one value,
-  // so the linked neighbour on either side has to track the edit too.
-  if (best + 1 < (NSInteger)mkps.count && nk.outgoing.endpointsLinked) {
-    KKKeyPose *np = [mkps[best + 1] copy];
+  // Hold-link propagation: a linked interval's two endpoints share one value.
+  // Walk the WHOLE linked chain outward from `best` in both directions - not
+  // just the immediate neighbour. A multi-segment hold chains several keyposes
+  // (e.g. coincident boundary pairs kp1=kp2, kp3=kp4 joined by linked intervals
+  // kp1->kp2->kp3->kp4); stopping after one step left the far end stale
+  // mid-drag so the motion path drew a phantom segment until a mouse-up
+  // reconcile re-synced the chain. The chain stops at the first non-linked
+  // interval, so unlinked endpoints (In-start / Out-end) are never touched.
+  for (NSInteger i = best;
+       i + 1 < (NSInteger)mkps.count && mkps[i].outgoing.endpointsLinked; i++) {
+    KKKeyPose *np = [mkps[i + 1] copy];
     np.values = values;
-    mkps[best + 1] = np;
+    mkps[i + 1] = np;
   }
-  if (best > 0 && mkps[best - 1].outgoing.endpointsLinked) {
-    KKKeyPose *np = [mkps[best - 1] copy];
+  for (NSInteger i = best; i > 0 && mkps[i - 1].outgoing.endpointsLinked; i--) {
+    KKKeyPose *np = [mkps[i - 1] copy];
     np.values = values;
-    mkps[best - 1] = np;
+    mkps[i - 1] = np;
   }
   nl.keyposes = mkps;
   return nl;

@@ -367,7 +367,8 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   // Basic (not reverting to Advanced) is what lets a click on Advanced read as
   // a tab change and cancel the pending switch.
   if (tab == KKTimelineTabBasic && _selectedTab != KKTimelineTabBasic &&
-      !KKTimelineIsBasicCompatible(_basicView.currentTimeline)) {
+      !KKTimelineIsBasicCompatible(_basicView.currentTimeline,
+                                   [self _outEndFrac])) {
     [_tabBar setState:YES atIndex:KKTimelineTabBasic];
     [_tabBar setState:NO atIndex:KKTimelineTabAdvanced];
     _compatBanner.hidden = NO;
@@ -396,18 +397,21 @@ const CGFloat kMBCheckboxTrailing = 23.0;
             atIndex:KKTimelineTabAdvanced];
 }
 
-- (void)_confirmCompatSwitch {
-  // Basic stores the lane-end at `outEndFrac` (one frame before clip end),
-  // not at 1.0 - feeding the reseed that value keeps the produced lanes
-  // shaped exactly like Basic itself would emit, so switching the tab
-  // doesn't show a stray pill past Basic's end marker.
-  double endFrac = 1.0;
+// Basic parks the lane-end at `outEndFrac` (one frame before clip end), not at
+// 1.0. Both the compat check (is the final keypose there?) and the reseed
+// (place the produced end there) need this, so they share one source of truth.
+// Falls back to 1.0 until the clip/frame duration is known.
+- (double)_outEndFrac {
   if (_clipDurationSeconds > 0.0 && _frameDurationSeconds > 0.0 &&
       _frameDurationSeconds < _clipDurationSeconds)
-    endFrac =
-        (_clipDurationSeconds - _frameDurationSeconds) / _clipDurationSeconds;
+    return (_clipDurationSeconds - _frameDurationSeconds) /
+           _clipDurationSeconds;
+  return 1.0;
+}
+
+- (void)_confirmCompatSwitch {
   KKTimeline *reseeded =
-      KKTimelineReseedToBasic(_basicView.currentTimeline, endFrac);
+      KKTimelineReseedToBasic(_basicView.currentTimeline, [self _outEndFrac]);
   [_basicView applyTimeline:reseeded];
   [_detachedView applyTimeline:reseeded];
   if (_onTimelineMutated)

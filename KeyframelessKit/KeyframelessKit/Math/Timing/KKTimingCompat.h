@@ -13,12 +13,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// YES iff `timeline` can be losslessly represented in Basic mode - i.e.
 /// there exist consistent boundary times (t_inEnd, t_outStart) such that
 /// every animatable lane's keypose times are a subset of
-/// `{0, t_inEnd, t_outStart, 1}`, and the Hold interval (between t_inEnd
-/// and t_outStart, when both are present) has equal endpoint values.
-/// Lanes with only `{0}`, `{1}`, or `{0,1}` are trivially compatible.
-/// In/Out interval curves are unconstrained (any single curve is fine);
-/// modulation on any interval is allowed.
-FOUNDATION_EXPORT BOOL KKTimelineIsBasicCompatible(KKTimeline *timeline);
+/// `{0, t_inEnd, t_outStart, endFrac}`, every animatable lane spans the full
+/// `[0, endFrac]` (Basic always starts at the clip start and ends at its last
+/// frame), and the Hold interval (between t_inEnd and t_outStart, when both are
+/// present) has equal endpoint values. In/Out interval curves are unconstrained
+/// (any single curve is fine); modulation on any interval is allowed.
+///
+/// `endFrac` is the clip's last-frame fraction (`lastFrameFrac ==
+/// (clipDur-frameDur)/clipDur`, Basic's `outEndFrac`) - the time the final
+/// keypose parks at, which can be well below 1.0 for a short clip. A lane whose
+/// final keypose stops short of it is Advanced-only. Pass 1.0 (or <= 0) when
+/// the host doesn't know the clip duration; that falls back to requiring a
+/// near-1.0 end.
+FOUNDATION_EXPORT BOOL KKTimelineIsBasicCompatible(KKTimeline *timeline,
+                                                   double endFrac);
 
 /// Collapse any Basic-incompatible lane in `timeline` to a flat hold at the
 /// lane's evaluated value at t=0.5, placed at `[0, endFrac]`. `endFrac`

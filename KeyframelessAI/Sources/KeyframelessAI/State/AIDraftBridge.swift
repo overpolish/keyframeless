@@ -16,6 +16,14 @@ public final class AIDraftBridge: NSObject {
 		if !routing { AIDraftState.shared.routingStatus = nil }
 	}
 
+	/// Mark a transform as applied. Lights the green "done" sparkle until the
+	/// user next interacts. Call only on the mutation-applied path, not for
+	/// answers or errors.
+	@MainActor
+	@objc public static func setCompleted(_ completed: Bool) {
+		AIDraftState.shared.didCompleteMutation = completed
+	}
+
 	@MainActor
 	@objc public static func setRoutingStatus(_ status: String?) {
 		AIDraftState.shared.routingStatus = status

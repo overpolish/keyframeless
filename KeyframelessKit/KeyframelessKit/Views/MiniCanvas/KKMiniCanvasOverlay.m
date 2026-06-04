@@ -159,7 +159,17 @@
   [self.window makeFirstResponder:nil];
   // Opt-click toggles a handle's visibility (hide / re-show a ghost) instead of
   // dragging it - mirrors the viewer OSC.
-  if ((e.modifierFlags & NSEventModifierFlagOption) &&
+  //
+  // EXCEPTION: when the master "all OSCs off" is active (handlesHidden), Opt is
+  // a transient "peek and use" modifier instead. Opt-hold already reveals every
+  // OSC as a ghost (the `_revealActive` OR in the renderer's hit/draw gates),
+  // so here we let the Opt-press fall through to a normal drag - the ghost is
+  // manipulated live and releasing Opt returns to all-off. Toggling an
+  // element's own hidden bit while the master gate is off would have no visible
+  // effect anyway, so suppressing the toggle here costs nothing.
+  BOOL masterOff = [d isKindOfClass:[KKMiniCanvasRenderer class]] &&
+                   ((KKMiniCanvasRenderer *)d).handlesHidden;
+  if (!masterOff && (e.modifierFlags & NSEventModifierFlagOption) &&
       [d respondsToSelector:
               @selector(miniCanvas:optClickHandleAtPoint:contentRect:)] &&
       [d miniCanvas:c

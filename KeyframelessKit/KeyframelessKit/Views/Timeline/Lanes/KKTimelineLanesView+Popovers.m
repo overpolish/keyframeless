@@ -29,7 +29,8 @@ void KKSetBoundaryEditing(id delegate, BOOL on, double fraction) {
 }
 
 // Hide the mini-canvas handle/box for properties excluded from this phase.
-void KKSetSuppressedHandles(id delegate, NSArray<NSString *> *labels) {
+void KKSetSuppressedHandles(id delegate,
+                            NSArray<NSString *> *_Nullable labels) {
   if ([delegate respondsToSelector:NSSelectorFromString(
                                        @"setSuppressedHandleLabels:")])
     [delegate setValue:labels forKey:@"suppressedHandleLabels"];
@@ -499,6 +500,13 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   cfg.lanes = unopted;
   cfg.headerTitle =
       KKLoc(@"Constants", @"Constants editor tab/section header.");
+  // Dimmed subscript next to the title: the mini preview renders at the
+  // playhead, not frame 0, so a property that animates in from off-screen
+  // still shows here (see -showStaticValuesPopoverFromView: editFraction).
+  cfg.headerDetail =
+      KKLoc(@"Showing current frame",
+            @"Constants editor preview hint: the mini-canvas shows the frame "
+            @"at the playhead, not the first frame.");
   cfg.headerIcon =
       [KKPopoverHeaderView iconImageForSymbolName:@"slider.horizontal.3"];
   cfg.renderMode = KKMiniCanvasRenderModeOff;
@@ -524,6 +532,24 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     __strong typeof(weak) s = weak;
     [s _setLaneAnimatable:YES forLabel:label];
   };
+  // Preview at the live playhead, not t=0. A property animated to start
+  // off-canvas (e.g. flying in) would otherwise render its first-frame pose,
+  // pushing the object + its handles out of the mini-canvas. Evaluate
+  // animatable lanes at the current playhead fraction so the preview matches
+  // the viewer. Constant lanes are single-keypose so editFraction doesn't move
+  // them, and the constants WRITE path ignores editFraction too (it always
+  // replaces the t=0 keypose - see -_timelineBySettingValues:forLabel:).
+  // boundaryEditing stays NO, so handle gating / writes are unchanged. Reset
+  // to 0 on close (see -_presentStaticValuesPopoverFromAnchor: onClose).
+  id constantsDel = self.miniCanvasDelegate;
+  if ([constantsDel
+          respondsToSelector:NSSelectorFromString(@"setEditFraction:")]) {
+    double playFrac = [[(_activeTab == 1 ? (id)_advancedGraph : (id)_basicGraph)
+        valueForKey:@"playheadFraction"] doubleValue];
+    if (playFrac < 0.0)
+      playFrac = 0.0; // render tick hasn't pushed a playhead yet
+    [constantsDel setValue:@(playFrac) forKey:@"editFraction"];
+  }
   [self _presentStaticValuesPopoverFromAnchor:anchor config:cfg];
 }
 

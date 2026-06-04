@@ -11,8 +11,8 @@ public struct AISettingsPopover: View {
 		public var id: String { rawValue }
 		var label: String {
 			switch self {
-			case .action: return "Action"
-			case .config: return "Config"
+			case .action: return AILoc("Action")
+			case .config: return AILoc("Config")
 			}
 		}
 		var systemImage: String {
@@ -37,7 +37,7 @@ public struct AISettingsPopover: View {
 		selectedCount: Int,
 		productContext: String,
 		examples: [AIPromptExample] = AIPromptExample.stenoDefaults,
-		placeholder: String = "Describe what to do to the selected transcriptions…",
+		placeholder: String? = nil,
 		isPluginMode: Bool = false,
 		onRun: @escaping (String) -> Void,
 		onDismiss: @escaping () -> Void = {}
@@ -45,7 +45,8 @@ public struct AISettingsPopover: View {
 		self.selectedCount = selectedCount
 		self.productContext = productContext
 		self.examples = examples
-		self.placeholder = placeholder
+		self.placeholder =
+			placeholder ?? AILoc("Describe what to do to the selected transcriptions…")
 		self.isPluginMode = isPluginMode
 		self.onRun = onRun
 		self.onDismiss = onDismiss
@@ -162,7 +163,7 @@ struct SharedProviderPicker: View {
 							Text(p.displayName)
 								.font(.system(size: 12))
 							if !configured {
-								Text("no key")
+								Text(AILoc("no key"))
 									.font(.system(size: 9))
 									.foregroundStyle(.tertiary)
 									.padding(.horizontal, 5)
