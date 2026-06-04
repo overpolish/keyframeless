@@ -533,8 +533,13 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                       [KKAIDraft setAnswer:result.answer];
                       return;
                     }
+                    // The merge also snaps final keyposes to the last
+                    // renderable frame (FCP's last frame is one frame before
+                    // the clip end, so a keypose at 1.0 is never reached) -
+                    // clipDur from the prompt, frameDur from the process cache.
                     NSString *merged = KKTimelineAIMergeMutationJSON(
-                        currentJSON, result.mutationJSON);
+                        currentJSON, result.mutationJSON, clipDurSec,
+                        KKProcessFrameDurationSeconds());
                     if (!merged) {
                       KKLogError(@"AI[err] merge returned nil");
                       [KKAIDraft
