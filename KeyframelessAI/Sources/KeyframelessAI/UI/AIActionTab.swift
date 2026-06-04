@@ -41,6 +41,14 @@ struct AIActionTab: View {
 			footer
 		}
 		.animation(.easeInOut(duration: 0.18), value: draft.pendingAnswer != nil)
+		.onChange(of: draft.prompt) { _, newValue in
+			// Only a real edit (typing) clears the done state - not the
+			// programmatic clearPrompt() that fires when a mutation completes,
+			// which would otherwise wipe the green sparkle the instant it lit.
+			if !newValue.isEmpty && draft.didCompleteMutation {
+				draft.didCompleteMutation = false
+			}
+		}
 	}
 
 	@ViewBuilder
@@ -50,7 +58,7 @@ struct AIActionTab: View {
 				Image(systemName: "sparkles")
 					.font(.system(size: 10))
 					.foregroundStyle(Color.accentColor)
-				Text("Last answer")
+				Text(AILoc("Last answer"))
 					.font(.system(size: 10, weight: .semibold))
 					.foregroundStyle(.secondary)
 					.textCase(.uppercase)
@@ -63,7 +71,7 @@ struct AIActionTab: View {
 						.foregroundStyle(.secondary)
 				}
 				.buttonStyle(.plain)
-				.help("Dismiss answer")
+				.help(AILoc("Dismiss answer"))
 			}
 			ScrollView {
 				Text(answer)
@@ -92,8 +100,8 @@ struct AIActionTab: View {
 				.foregroundStyle(selectedCount > 0 ? Color.accentColor : .secondary)
 			Text(
 				selectedCount > 0
-					? "\(selectedCount) transcription\(selectedCount == 1 ? "" : "s") selected · transforms apply here"
-					: "No selection · transforms unavailable, questions still work"
+					? AILoc("\(selectedCount) selected · transforms apply here")
+					: AILoc("No selection · transforms unavailable, questions still work")
 			)
 			.font(.system(size: 11))
 			.foregroundStyle(.secondary)
@@ -115,7 +123,7 @@ struct AIActionTab: View {
 
 	private var examplesRow: some View {
 		VStack(alignment: .leading, spacing: 4) {
-			Text("Examples")
+			Text(AILoc("Examples"))
 				.font(.system(size: 10, weight: .semibold))
 				.foregroundStyle(.tertiary)
 				.textCase(.uppercase)
@@ -142,7 +150,7 @@ struct AIActionTab: View {
 
 	private var recentsRow: some View {
 		VStack(alignment: .leading, spacing: 4) {
-			Text("Recent")
+			Text(AILoc("Recent"))
 				.font(.system(size: 10, weight: .semibold))
 				.foregroundStyle(.tertiary)
 				.textCase(.uppercase)
@@ -171,10 +179,14 @@ struct AIActionTab: View {
 	}
 
 	private var footer: some View {
-		HStack(spacing: 8) {
+		// Done = a mutation landed and the user hasn't started a new prompt.
+		// In that state the button turns solid green (not the disabled-grey
+		// accent button with green text, which read as broken).
+		let isDone = draft.didCompleteMutation && !canRun && !draft.isRouting
+		return HStack(spacing: 8) {
 			if !keyState.activeIsConfigured {
 				Label(
-					"No key for \(keyState.activeProvider.displayName)",
+					AILoc("No key for \(keyState.activeProvider.displayName)"),
 					systemImage: "exclamationmark.triangle.fill"
 				)
 				.font(.system(size: 10))
@@ -187,14 +199,18 @@ struct AIActionTab: View {
 				if draft.isRouting {
 					HStack(spacing: 4) {
 						ProgressView().controlSize(.small)
-						Text(draft.routingStatus ?? "Thinking…")
+						Text(draft.routingStatus ?? AILoc("Thinking…"))
 					}
+				} else if isDone {
+					Label(AILoc("Done"), systemImage: "checkmark")
 				} else {
-					Text("Run")
+					Text(AILoc("Run"))
 				}
 			}
+			.buttonStyle(.borderedProminent)
+			.tint(isDone ? Color(red: 0.30, green: 0.85, blue: 0.45) : .accentColor)
 			.keyboardShortcut(.defaultAction)
-			.disabled(!canRun || !keyState.activeIsConfigured || draft.isRouting)
+			.disabled(draft.isRouting || (!isDone && (!canRun || !keyState.activeIsConfigured)))
 		}
 	}
 
@@ -202,6 +218,7 @@ struct AIActionTab: View {
 		let trimmed = draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
 		guard canRun, keyState.activeIsConfigured else { return }
 		draft.routingError = nil
+		draft.didCompleteMutation = false
 
 		if isPluginMode {
 			// Plugin host owns routing: it has live timeline state and a custom
@@ -220,13 +237,17 @@ struct AIActionTab: View {
 					selectedCount: captured.0,
 					productContext: captured.1
 				)
-				draft.isRouting = false
 				switch intent {
 				case .transform(let cleanInstruction):
 					recents.record(captured.2)
 					draft.prompt = ""
+					// Keep the icon animating right up until the host puts its
+					// transform preview popover on screen - onRun opens it, so
+					// only stop the spinner once it returns.
 					onRun(cleanInstruction)
+					draft.isRouting = false
 				case .answer(let reply):
+					draft.isRouting = false
 					draft.pendingAnswer = reply
 				}
 			} catch {

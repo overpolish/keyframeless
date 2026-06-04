@@ -1,0 +1,498 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "%lld selected · transforms apply here" : {
+      "comment" : "Steno selection line when one or more transcriptions are selected.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "%lld ausgewählt · Transformationen werden hier angewendet" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "%lld seleccionados · las transformaciones se aplican aquí" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "%lld sélectionné(s) · les transformations s'appliquent ici" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "%lld 件選択中 · 変換はここに適用されます" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "%lld개 선택됨 · 변환이 여기에 적용됩니다" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已选择 %lld 个 · 变换在此应用" } }
+      }
+    },
+    "AI" : {
+      "comment" : "Tooltip on the AI button when idle.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "KI" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "IA" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "IA" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "AI" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "AI" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "AI" } }
+      }
+    },
+    "Action" : {
+      "comment" : "Tab label: the run/action tab.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Aktion" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Acción" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Action" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "アクション" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "작업" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "操作" } }
+      }
+    },
+    "API Key" : {
+      "comment" : "Label for the API key entry field.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "API-Schlüssel" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Clave de API" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Clé d'API" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "APIキー" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "API 키" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "API 密钥" } }
+      }
+    },
+    "Config" : {
+      "comment" : "Tab label: the configuration/key tab.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Konfiguration" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Configuración" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Configuration" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "設定" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "설정" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "配置" } }
+      }
+    },
+    "Configure AI key" : {
+      "comment" : "Tooltip on the AI button when no key is configured.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "KI-Schlüssel konfigurieren" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Configurar clave de IA" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Configurer la clé d'IA" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "AIキーを設定" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "AI 키 설정" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "配置 AI 密钥" } }
+      }
+    },
+    "Couldn't figure out which lanes to change." : {
+      "comment" : "AI fallback answer when no editable lanes were resolved.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Konnte nicht ermitteln, welche Spuren geändert werden sollen." } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se pudo determinar qué pistas cambiar." } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Impossible de déterminer quelles pistes modifier." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "変更するレーンを特定できませんでした。" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "변경할 레인을 파악하지 못했습니다." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "无法确定要更改哪些轨道。" } }
+      }
+    },
+    "Couldn't delete: %@" : {
+      "comment" : "Error shown when deleting a saved key fails. %@ is the system error.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Löschen fehlgeschlagen: %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "No se pudo eliminar: %@" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Échec de la suppression : %@" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "削除できませんでした: %@" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "삭제할 수 없습니다: %@" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "无法删除：%@" } }
+      }
+    },
+    "Describe what to do to the selected transcriptions…" : {
+      "comment" : "Default prompt placeholder for the Steno AI field.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Beschreibe, was mit den ausgewählten Transkriptionen geschehen soll…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Describe qué hacer con las transcripciones seleccionadas…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Décrivez ce qu'il faut faire avec les transcriptions sélectionnées…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "選択した文字起こしに対する処理を入力…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "선택한 전사에 대해 수행할 작업을 설명하세요…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "描述要对所选转录执行的操作…" } }
+      }
+    },
+    "Delete" : {
+      "comment" : "Button: delete the saved API key.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Löschen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Eliminar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "削除" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "삭제" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "删除" } }
+      }
+    },
+    "Dismiss answer" : {
+      "comment" : "Tooltip on the button that clears the last AI answer.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Antwort schließen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Descartar respuesta" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Ignorer la réponse" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "回答を閉じる" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "답변 닫기" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "关闭回答" } }
+      }
+    },
+    "Done" : {
+      "comment" : "Run button label after a transform has been applied.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Fertig" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Listo" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Terminé" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "完了" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "완료" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "完成" } }
+      }
+    },
+    "Done - click to review" : {
+      "comment" : "Tooltip on the AI button after a transform completes.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Fertig - zum Überprüfen klicken" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Listo - haz clic para revisar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Terminé - cliquez pour vérifier" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "完了 - クリックして確認" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "완료 - 클릭하여 검토" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "完成 - 点击查看" } }
+      }
+    },
+    "Examples" : {
+      "comment" : "Section header above the example prompt chips.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Beispiele" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ejemplos" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Exemples" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "例" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "예시" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "示例" } }
+      }
+    },
+    "Expand all contractions (don't → do not)" : {
+      "comment" : "Example prompt value: expand contractions.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Alle Kurzformen auflösen (don't → do not)" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Expandir todas las contracciones (don't → do not)" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Développer toutes les contractions (don't → do not)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "すべての短縮形を展開する (don't → do not)" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "모든 축약형 풀어쓰기 (don't → do not)" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "展开所有缩写 (don't → do not)" } }
+      }
+    },
+    "Expand contractions" : {
+      "comment" : "Example prompt label: expand contractions.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Kurzformen auflösen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Expandir contracciones" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Développer les contractions" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "短縮形を展開" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "축약형 풀어쓰기" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "展开缩写" } }
+      }
+    },
+    "Fix capitalization" : {
+      "comment" : "Example prompt label: fix capitalization.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Großschreibung korrigieren" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Corregir mayúsculas" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Corriger la casse" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "大文字小文字を修正" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "대소문자 수정" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "修正大小写" } }
+      }
+    },
+    "Fix capitalization and punctuation" : {
+      "comment" : "Example prompt value: fix capitalization and punctuation.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Großschreibung und Zeichensetzung korrigieren" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Corregir mayúsculas y puntuación" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Corriger la casse et la ponctuation" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "大文字小文字と句読点を修正する" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "대소문자와 문장 부호 수정" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "修正大小写和标点符号" } }
+      }
+    },
+    "Get a key" : {
+      "comment" : "Link to the provider's API key console.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Schlüssel erhalten" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Obtener una clave" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Obtenir une clé" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "キーを取得" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "키 받기" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "获取密钥" } }
+      }
+    },
+    "Key works" : {
+      "comment" : "Status shown when an API key validates successfully.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Schlüssel funktioniert" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "La clave funciona" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "La clé fonctionne" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "キーは有効です" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "키가 작동합니다" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "密钥有效" } }
+      }
+    },
+    "Last answer" : {
+      "comment" : "Header above the last AI answer card.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Letzte Antwort" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Última respuesta" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Dernière réponse" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "前回の回答" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "마지막 답변" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "上一个回答" } }
+      }
+    },
+    "Make formal" : {
+      "comment" : "Example prompt label: make formal.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Formeller machen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Hacer formal" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Rendre formel" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "フォーマルにする" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "격식체로 변경" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "改为正式语气" } }
+      }
+    },
+    "No key for %@" : {
+      "comment" : "Footer warning when the active provider has no key. %@ is the provider name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Kein Schlüssel für %@" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sin clave para %@" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucune clé pour %@" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "%@ のキーがありません" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "%@에 대한 키가 없습니다" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "没有 %@ 的密钥" } }
+      }
+    },
+    "No selection · transforms unavailable, questions still work" : {
+      "comment" : "Steno selection line when nothing is selected.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Keine Auswahl · Transformationen nicht verfügbar, Fragen funktionieren weiterhin" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Sin selección · transformaciones no disponibles, las preguntas siguen funcionando" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Aucune sélection · transformations indisponibles, les questions fonctionnent toujours" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "選択なし · 変換は利用できません。質問は引き続き使えます" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "선택 없음 · 변환을 사용할 수 없지만 질문은 가능합니다" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "未选择 · 变换不可用，但仍可提问" } }
+      }
+    },
+    "Paste %@…" : {
+      "comment" : "API key field placeholder. %@ is a key-prefix hint like sk-ant.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ einfügen…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Pega %@…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Coller %@…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "%@ を貼り付け…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "%@ 붙여넣기…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "粘贴 %@…" } }
+      }
+    },
+    "Planning timing…" : {
+      "comment" : "AI routing status: planning the timing pass.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Timing wird geplant…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Planificando el tiempo…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Planification du timing…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "タイミングを計画中…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "타이밍 계획 중…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在规划计时…" } }
+      }
+    },
+    "Reading prompt…" : {
+      "comment" : "AI routing status: reading/classifying the prompt.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Eingabe wird gelesen…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Leyendo la indicación…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Lecture de la requête…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "プロンプトを読み取り中…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "프롬프트 읽는 중…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在读取提示…" } }
+      }
+    },
+    "Recent" : {
+      "comment" : "Section header above recent prompt chips.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Zuletzt verwendet" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Recientes" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Récents" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "最近" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "최근" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "最近" } }
+      }
+    },
+    "Remove filler words like uh, um, like, you know" : {
+      "comment" : "Example prompt value: strip filler words.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Füllwörter wie ähm, äh, also, weißt du entfernen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Eliminar muletillas como eh, em, o sea, ya sabes" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer les mots de remplissage comme euh, hum, genre, tu vois" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "「えー」「あの」「えっと」などのつなぎ言葉を削除する" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "음, 어, 그, 있잖아 같은 군더더기 표현 제거" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "去除「呃、嗯、就是、你知道」之类的填充词" } }
+      }
+    },
+    "Rewrite in a formal tone" : {
+      "comment" : "Example prompt value: make formal.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "In einem formellen Ton umschreiben" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Reescribir en un tono formal" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Réécrire sur un ton formel" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "フォーマルな口調に書き換える" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "격식 있는 어조로 다시 작성" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "用正式语气重写" } }
+      }
+    },
+    "Resolving %@…" : {
+      "comment" : "AI routing status while resolving a lane. %@ is the lane name (plus an optional progress suffix like \" (1/2)\").",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "%@ wird aufgelöst…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Resolviendo %@…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Résolution de %@…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "%@ を解決中…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "%@ 확인 중…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在解析 %@…" } }
+      }
+    },
+    "Run" : {
+      "comment" : "Run button: submit the prompt.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Ausführen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Ejecutar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Exécuter" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "実行" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "실행" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "运行" } }
+      }
+    },
+    "Save" : {
+      "comment" : "Button: save the API key.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Speichern" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Enregistrer" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "저장" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "保存" } }
+      }
+    },
+    "Saved - paste to replace" : {
+      "comment" : "API key field placeholder when a key is already stored.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Gespeichert - zum Ersetzen einfügen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Guardado - pega para reemplazar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Enregistré - collez pour remplacer" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存済み - 貼り付けて置き換え" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "저장됨 - 붙여넣어 교체" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已保存 - 粘贴以替换" } }
+      }
+    },
+    "Strip filler words" : {
+      "comment" : "Example prompt label: strip filler words.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Füllwörter entfernen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Quitar muletillas" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer les mots de remplissage" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "つなぎ言葉を削除" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "군더더기 표현 제거" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "去除填充词" } }
+      }
+    },
+    "Testing connection…" : {
+      "comment" : "Status shown while validating an API key.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Verbindung wird getestet…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Probando conexión…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Test de la connexion…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "接続をテスト中…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "연결 테스트 중…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "正在测试连接…" } }
+      }
+    },
+    "Thinking…" : {
+      "comment" : "Fallback status next to the Run spinner.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Denkt nach…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Pensando…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Réflexion…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "思考中…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "생각 중…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "思考中…" } }
+      }
+    },
+    "Translate into " : {
+      "comment" : "Example prompt value: translate into (trailing space, user completes the language).",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Übersetzen nach " } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Traducir a " } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Traduire en " } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "次の言語に翻訳: " } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "다음으로 번역: " } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "翻译为 " } }
+      }
+    },
+    "Translate to…" : {
+      "comment" : "Example prompt label: translate to.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Übersetzen nach…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Traducir a…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Traduire en…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "翻訳先…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "번역 대상…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "翻译为…" } }
+      }
+    },
+    "Working…" : {
+      "comment" : "Tooltip on the AI button while a request is in flight.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Arbeitet…" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Trabajando…" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "En cours…" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "処理中…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "작업 중…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "处理中…" } }
+      }
+    },
+    "no key" : {
+      "comment" : "Badge next to a provider in the picker that has no stored key.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "kein Schlüssel" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "sin clave" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "aucune clé" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "キーなし" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "키 없음" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "无密钥" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

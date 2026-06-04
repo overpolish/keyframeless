@@ -1,6 +1,114 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Animate radius 0→100% with bounce": {
+      "comment": "AI example chip: animate radius with bounce.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Radius 0→100 % mit Sprung animieren" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Animar radio 0→100 % con rebote" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Animer le rayon 0→100 % avec rebond" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "半径を0→100%でバウンドさせる" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "반경을 0→100%로 튀게 애니메이션" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "将半径从 0→100% 弹跳动画" } }
+      }
+    },
+    "Animate the crop in from the top right and back out at the end, while the radius rounds over the whole clip.": {
+      "comment": "AI example value: in/out crop animation.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Animiere den Zuschnitt von oben rechts herein und am Ende wieder hinaus, während der Radius über den gesamten Clip abrundet." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Anima el recorte entrando desde la esquina superior derecha y saliendo al final, mientras el radio se redondea durante todo el clip." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Animez le rognage en entrée depuis le coin supérieur droit puis en sortie à la fin, pendant que le rayon s'arrondit sur tout le plan." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "半径がクリップ全体で丸くなる間に、クロップを右上から入れ、最後に戻すようにアニメーションする。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "반경이 클립 전체에 걸쳐 둥글어지는 동안, 자르기를 오른쪽 위에서 들어왔다가 끝에서 다시 나가도록 애니메이션합니다." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "让裁剪从右上角进入并在结尾退出，同时半径在整个片段中变圆。" } }
+      }
+    },
+    "Animate the radius from 0% to 100% over 1 second with bounce.": {
+      "comment": "AI example value: animate radius with bounce.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Animiere den Radius über 1 Sekunde von 0 % auf 100 % mit einem Sprung." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Anima el radio de 0 % a 100 % durante 1 segundo con un rebote." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Animez le rayon de 0 % à 100 % sur 1 seconde avec un rebond." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "半径を1秒かけて0%から100%までバウンドさせながらアニメーションする。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "반경을 1초 동안 0%에서 100%로 튀는 효과와 함께 애니메이션합니다." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在 1 秒内让半径从 0% 弹跳动画到 100%。" } }
+      }
+    },
+    "Ask a question or describe an animation…": {
+      "comment": "AI prompt field placeholder for Rounded.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Stelle eine Frage oder beschreibe eine Animation…" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Haz una pregunta o describe una animación…" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Posez une question ou décrivez une animation…" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "質問するか、アニメーションを入力…" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "질문하거나 애니메이션을 설명하세요…" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "提问或描述一个动画…" } }
+      }
+    },
+    "Crop to the top right quadrant.": {
+      "comment": "AI example value: crop to top right.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Auf das obere rechte Viertel zuschneiden." } },
+        "es": { "stringUnit": { "state": "translated", "value": "Recorta al cuadrante superior derecho." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Rognez sur le quadrant supérieur droit." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "右上の四分の一にクロップする。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "오른쪽 위 사분면으로 자릅니다." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "裁剪到右上象限。" } }
+      }
+    },
+    "Crop to top right": {
+      "comment": "AI example chip: crop to top right.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Auf oben rechts zuschneiden" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Recortar a la esquina superior derecha" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Rogner en haut à droite" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "右上にクロップ" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "오른쪽 위로 자르기" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "裁剪到右上角" } }
+      }
+    },
+    "Reveal then hide": {
+      "comment": "AI example chip: in/out crop animation.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Einblenden, dann ausblenden" } },
+        "es": { "stringUnit": { "state": "translated", "value": "Mostrar y luego ocultar" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Révéler puis masquer" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "表示してから隠す" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "나타냈다가 숨기기" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "先显示再隐藏" } }
+      }
+    },
+    "What's Basic vs Advanced?": {
+      "comment": "AI example chip: Basic vs Advanced timing question.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Was ist Einfach vs. Erweitert?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Qué es Básico frente a Avanzado?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Quelle différence entre Basique et Avancé ?" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "「基本」と「詳細」の違いは？" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "기본과 고급의 차이는?" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "基本与高级有什么区别？" } }
+      }
+    },
+    "What's the difference between Basic and Advanced timing?": {
+      "comment": "AI example value: Basic vs Advanced timing question.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "Was ist der Unterschied zwischen einfachem und erweitertem Timing?" } },
+        "es": { "stringUnit": { "state": "translated", "value": "¿Cuál es la diferencia entre el tiempo Básico y Avanzado?" } },
+        "fr": { "stringUnit": { "state": "translated", "value": "Quelle est la différence entre le timing Basique et Avancé ?" } },
+        "ja": { "stringUnit": { "state": "translated", "value": "「基本」タイミングと「詳細」タイミングの違いは何ですか？" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "기본 타이밍과 고급 타이밍의 차이는 무엇인가요?" } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "基本计时和高级计时有什么区别？" } }
+      }
+    },
     "<accent>Box</accent> crops and positions the clip - animate it to reveal or hide content over time.": {
       "comment": "Help tip: what the Box/Crop property does.",
       "extractionState": "manual",

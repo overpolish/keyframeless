@@ -576,6 +576,10 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                     [writeAct endAction:strong];
                     [KKAIDraft setAnswer:nil];
                     [KKAIDraft clearPrompt];
+                    // Light the green "done" sparkle so a fire-and-look-away
+                    // run still has a confirmation waiting on return. Cleared
+                    // when the user next opens the popover or types.
+                    [KKAIDraft setCompleted:YES];
                   });
                 }];
 }

@@ -23,12 +23,13 @@ struct AIConfigTab: View {
 	var body: some View {
 		VStack(alignment: .leading, spacing: 12) {
 			HStack(spacing: 8) {
-				Text("API Key")
+				Text(AILoc("API Key"))
 					.font(.system(size: 12, weight: .medium))
 					.foregroundStyle(.secondary)
 				SecureField(
 					savedKeyExists
-						? "Saved - paste to replace" : "Paste \(provider.keyPrefixHint)…",
+						? AILoc("Saved - paste to replace")
+						: AILoc("Paste \(provider.keyPrefixHint)…"),
 					text: $keyInput
 				)
 				.textFieldStyle(.roundedBorder)
@@ -38,11 +39,11 @@ struct AIConfigTab: View {
 			statusLine
 
 			HStack {
-				Link("Get a key", destination: provider.keyConsoleURL)
+				Link(AILoc("Get a key"), destination: provider.keyConsoleURL)
 					.font(.caption)
 				Spacer()
 				if savedKeyExists {
-					Button("Delete", role: .destructive) { delete() }
+					Button(AILoc("Delete"), role: .destructive) { delete() }
 						.disabled(status == .validating)
 				}
 				Button {
@@ -51,7 +52,7 @@ struct AIConfigTab: View {
 					if status == .validating {
 						ProgressView().controlSize(.small)
 					} else {
-						Text("Save")
+						Text(AILoc("Save"))
 					}
 				}
 				.keyboardShortcut(.defaultAction)
@@ -68,11 +69,11 @@ struct AIConfigTab: View {
 		case .idle:
 			EmptyView()
 		case .validating:
-			Label("Testing connection…", systemImage: "ellipsis.circle")
+			Label(AILoc("Testing connection…"), systemImage: "ellipsis.circle")
 				.font(.caption)
 				.foregroundStyle(.secondary)
 		case .success:
-			Label("Key works", systemImage: "checkmark.circle.fill")
+			Label(AILoc("Key works"), systemImage: "checkmark.circle.fill")
 				.font(.caption)
 				.foregroundStyle(.green)
 		case .failure(let msg):
@@ -107,8 +108,7 @@ struct AIConfigTab: View {
 			savedKeyExists = false
 			status = .idle
 		} catch {
-			status = .failure("Couldn't delete: \(error.localizedDescription)")
+			status = .failure(AILoc("Couldn't delete: \(error.localizedDescription)"))
 		}
 	}
 }
-

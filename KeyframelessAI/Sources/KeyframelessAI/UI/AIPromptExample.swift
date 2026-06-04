@@ -15,12 +15,17 @@ public struct AIPromptExample: Sendable, Hashable {
 	}
 }
 
-public extension AIPromptExample {
-	static let stenoDefaults: [AIPromptExample] = [
-		.init(label: "Translate to…", value: "Translate to "),
-		.init(label: "Fix capitalization", value: "Fix capitalization and punctuation"),
-		.init(label: "Strip filler words", value: "Remove filler words like uh, um, like, you know"),
-		.init(label: "Make formal", value: "Rewrite in a formal tone"),
-		.init(label: "Expand contractions", value: "Expand all contractions (don't → do not)"),
+extension AIPromptExample {
+	public static let stenoDefaults: [AIPromptExample] = [
+		.init(label: AILoc("Translate to…"), value: AILoc("Translate into ")),
+		.init(
+			label: AILoc("Fix capitalization"), value: AILoc("Fix capitalization and punctuation")),
+		.init(
+			label: AILoc("Strip filler words"),
+			value: AILoc("Remove filler words like uh, um, like, you know")),
+		.init(label: AILoc("Make formal"), value: AILoc("Rewrite in a formal tone")),
+		.init(
+			label: AILoc("Expand contractions"),
+			value: AILoc("Expand all contractions (don't → do not)")),
 	]
 }
