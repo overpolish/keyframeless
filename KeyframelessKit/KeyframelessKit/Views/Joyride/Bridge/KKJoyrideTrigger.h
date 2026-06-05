@@ -58,6 +58,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Fires only when the user zooms the mini-canvas (wheel / pinch).
 + (instancetype)miniCanvasZoomed;
 + (instancetype)miniCanvasViewReset;
+/// Fires when a mini-canvas double-click is consumed by the delegate (e.g.
+/// Magic Move toggling a keypose corner/smooth) rather than resetting the view.
++ (instancetype)miniCanvasDoubleClickHandled;
 /// Fires when the boundary popover's render-mode pill changes the mode. `mode`
 /// is a KKMiniCanvasRenderMode (0 = Off, 1 = Filmstrip, 2 = Onion); < 0 = any.
 + (instancetype)renderModeChanged:(NSInteger)mode;

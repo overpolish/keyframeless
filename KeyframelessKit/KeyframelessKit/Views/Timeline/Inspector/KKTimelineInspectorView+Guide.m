@@ -364,6 +364,63 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
       }];
 }
 
+- (void)runCustomAdvancedGuideWithSeed:(KKTimeline * (^)(void))seedBlock
+                            buildSteps:(NSArray<KKJoyrideStep *> * (^)(
+                                           KKJoyrideController *,
+                                           KKJoyrideLanesBinder *))buildSteps
+                         oscKeepLabels:(NSArray<NSString *> *)oscKeepLabels {
+  if (!seedBlock || !buildSteps)
+    return;
+  NSInteger priorTab = self.activeTab;
+  KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
+  self.basicLanesView.renderMode = KKMiniCanvasRenderModeOff;
+  KKJoyrideGuideHost *host = [self timingGuideHost];
+  host.forwardsGestures = YES;
+  // Pin Advanced + own the tab: the seed gains a 3rd Position keypose mid-run,
+  // which is Basic-incompatible, so a stray parameterChanged tab-restore would
+  // bounce. Mirrors the mini-viewer guide.
+  [self setActiveTab:KKTimelineTabAdvanced];
+  self.guideOwnsTab = YES;
+  // The guide owns the play accent for its duration so FCP's bursty currentTime
+  // can't flicker it, and so a watch-back step's setPlayingAccent takes.
+  // Mirrors the Basic/Advanced timing runners. Restored on completion.
+  self.guideOwnsPlayState = YES;
+  if (self.onScrub)
+    self.onScrub(0.0);
+
+  self.guideOSCKeepLabels = oscKeepLabels;
+  __weak typeof(self) weak = self;
+  [host
+      runWithSeed:^KKTimeline * {
+        return seedBlock();
+      }
+      buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
+                                             KKJoyrideLanesBinder *binder) {
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return @[];
+        // Forward play-button taps to the binder so a watch-back step's
+        // binder.playToggleTapped machine fires (otherwise it never advances).
+        __weak KKJoyrideLanesBinder *wb = binder;
+        s.onPlaybackToggleTapped = ^{
+          [wb notifyPlaybackToggleTapped];
+        };
+        return buildSteps(guide, binder);
+      }
+      extraOnComplete:^{
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return;
+        s.onPlaybackToggleTapped = nil;
+        s.guideOwnsPlayState = NO;
+        [s.basicLanesView guideCloseContentPopover];
+        s.basicLanesView.renderMode = priorRenderMode;
+        s.guideOwnsTab = NO;
+        if (priorTab != s.activeTab)
+          [s setActiveTab:priorTab];
+      }];
+}
+
 - (void)runBasicTimingGuideWithConfig:(KKTimingGuideConfig *)cfg {
   // Force Basic tab - the guide assumes Basic-mode UI. Snapshot to restore.
   NSInteger priorTab = self.activeTab;

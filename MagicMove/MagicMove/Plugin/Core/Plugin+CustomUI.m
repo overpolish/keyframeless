@@ -58,7 +58,280 @@ static BOOL MagicMovePositionNearTarget(NSPoint p) {
 /// the kit base - this subclass only supplies the per-plugin config data.
 @interface MagicMoveInspectorView : KKTimelineInspectorView
 - (KKTimingGuideConfig *)_timingGuideConfig;
+/// MagicMove-only "Shaping a Move" walkthrough (curve a Position keypose +
+/// scale a Scale keypose, all in the mini viewer). Runs via the kit's
+/// custom-advanced guide runner using -_timingGuideConfig's Position+Scale
+/// seed.
+- (void)restartShapingGuide;
 @end
+
+// YES if any Scale keypose has reached `pct`% - the "Shaping a Move" guide's
+// scale-drag completion gate (the dragged end keypose will exceed it).
+static BOOL MagicMoveGuideScaleAtLeast(KKTimelineLanesView *lanes, double pct) {
+  for (KKLane *lane in lanes.currentTimeline.lanes) {
+    if (![lane.label isEqualToString:@"Scale"])
+      continue;
+    for (KKKeyPose *kp in lane.keyposes)
+      if (kp.values.count > 0 && kp.values[0].doubleValue >= pct)
+        return YES;
+  }
+  return NO;
+}
+
+// Seed for "Shaping a Move": Position travels left -> right (so the added
+// middle keypose, dragged up, makes a clear left-to-right arc); Scale flat at
+// 100% until the user grows the end keypose. Both lanes animatable; the lanes
+// view re-asserts canonical metadata (units/bounds) and appends the rest.
+static KKTimeline *MagicMoveShapingSeed(void) {
+  KKLane *pos = [KKLane laneWithLabel:@"Position"];
+  pos.enabled = YES;
+  pos.valueType = KKLaneValueTypeGeneric;
+  pos.keyposes = @[
+    [KKKeyPose keyposeAtTime:0.0 values:@[ @0.2, @0.5 ]], // left
+    [KKKeyPose keyposeAtTime:1.0 values:@[ @0.8, @0.5 ]], // right
+  ];
+  KKLane *scale = [KKLane laneWithLabel:@"Scale"];
+  scale.enabled = YES;
+  scale.valueType = KKLaneValueTypeFloat;
+  scale.keyposes = @[
+    [KKKeyPose keyposeAtTime:0.0 values:@[ @100.0, @100.0 ]],
+    [KKKeyPose keyposeAtTime:1.0 values:@[ @100.0, @100.0 ]],
+  ];
+  KKTimeline *tl = [KKTimeline timeline];
+  tl.lanes = @[ pos, scale ]; // alphabetical = display order
+  return tl;
+}
+
+// The "Shaping a Move" step array. Plugin-specific (Scale lane + the scale box
+// handle drag are Magic Move's), built from the shared kit step machinery +
+// guide hooks. Order: intro -> add mid Position keypose -> drag it up -> double
+// click to curve -> click end Scale keypose -> drag a corner to ~200% -> play.
+static NSArray<KKJoyrideStep *> *
+MagicMoveShapingGuideSteps(KKJoyrideController *guide,
+                           KKJoyrideLanesBinder *binder,
+                           KKTimingGuideConfig *cfg) {
+  KKTimelineLanesView *lanes = cfg.lanesView;
+  __weak KKTimelineLanesView *weakLanes = lanes;
+  __weak KKTimelineAdvancedView *weakAdv = lanes.advancedGraph;
+  __weak KKJoyrideLanesBinder *weakBinder = binder;
+  __weak KKJoyrideController *weakGuide = guide;
+
+  const NSInteger ixIntro = 0, ixAdd = 1, ixDragUp = 2, ixCurve = 3,
+                  ixScaleKP = 4, ixScaleDrag = 5, ixPlay = 6, ixDone = 7;
+  (void)ixIntro;
+  (void)ixDone;
+
+  const double kAddFrac = 0.5;
+  NSArray<NSNumber *> *kUpVals = @[ @0.5, @0.85 ]; // Position up (Y points up)
+  const NSInteger kScaleCorner = 2;                // top-right handle
+  NSArray<NSNumber *> *kScaleTargetVals = @[ @200.0, @200.0 ];
+  const double kScaleHitPct = 180.0;
+  __block BOOL watchScheduled = NO;
+
+  KKJoyrideStep *sIntro = [KKJoyrideStep
+      stepWithMessage:MMLoc(@"Two lanes here - <accent>Position</accent> and "
+                            @"<accent>Scale</accent> - each with a keypose at "
+                            @"the start and end.",
+                            @"Shaping guide: intro to the two lanes.")
+           targetView:^NSView * {
+             return weakAdv;
+           }];
+  sIntro.showsNext = YES;
+
+  KKJoyrideStep *sAdd = [KKJoyrideStep
+      stepWithMessage:MMLoc(@"<kbd>⌘ click</kbd> the <accent>Position</accent> "
+                            @"lane to add a keypose in the middle.",
+                            @"Shaping guide: add a middle Position keypose.")
+           targetView:nil];
+  sAdd.spotlightCircular = NO;
+  sAdd.targetScreenRect = ^NSRect {
+    __strong KKTimelineAdvancedView *a = weakAdv;
+    return a ? [a guideLaneRowScreenRectForLabel:@"Position"] : NSZeroRect;
+  };
+  sAdd.pillToScreenRect = ^NSRect {
+    __strong KKTimelineAdvancedView *a = weakAdv;
+    return a ? [a guideKeyposeScreenRectForLabel:@"Position"
+                                      atFraction:kAddFrac]
+             : NSZeroRect;
+  };
+
+  NSRect (^upTarget)(void) = ^NSRect {
+    __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+    return c ? [c pointHandleScreenRectForValues:kUpVals] : NSZeroRect;
+  };
+  KKJoyrideStep *sUp = [KKJoyrideDragStep stepForGuide:guide
+      atIndex:ixDragUp
+      isLast:NO
+      clickMessage:MMLoc(@"In the <accent>mini viewer</accent>, drag the "
+                         @"keypose <warn>up</warn>.",
+                         @"Shaping guide: drag the Position keypose up.")
+      dragMessage:nil
+      circular:YES
+      spotRect:^NSRect {
+        __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+        return c ? [c pointHandleScreenRect] : NSZeroRect;
+      }
+      targetRect:upTarget
+      begin:^(NSPoint p) {
+        __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+        NSRect spot = [c pointHandleScreenRect];
+        [c beginPointHandleDragAtScreenPoint:NSIsEmptyRect(spot)
+                                                 ? p
+                                                 : NSMakePoint(NSMidX(spot),
+                                                               NSMidY(spot))];
+      }
+      dragTo:^(NSPoint p) {
+        [weakBinder.latestMiniCanvas
+            dragPointHandleToScreenPoint:KKJoyrideSnapToTarget(p, upTarget(),
+                                                               9.0)];
+      }
+      end:^{
+        [weakBinder.latestMiniCanvas endPointHandleDrag];
+      }
+      hitOnRelease:^BOOL(NSPoint p) {
+        NSRect t = upTarget();
+        double dpx =
+            NSIsEmptyRect(t) ? 1e9 : hypot(p.x - NSMidX(t), p.y - NSMidY(t));
+        return dpx <= 16.0;
+      }];
+
+  KKJoyrideStep *sCurve = [KKJoyrideStep
+      stepWithMessage:MMLoc(@"<accent>Double-click</accent> the keypose to "
+                            @"<accent>curve</accent> the path.",
+                            @"Shaping guide: double-click to curve the path.")
+           targetView:nil];
+  sCurve.spotlightCircular = YES;
+  sCurve.targetScreenRect = ^NSRect {
+    __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+    return c ? [c pointHandleScreenRect] : NSZeroRect;
+  };
+
+  KKJoyrideStep *sScaleKP = [KKJoyrideStep
+      stepWithMessage:MMLoc(@"Now click the <accent>Scale</accent> keypose at "
+                            @"the end.",
+                            @"Shaping guide: click the end Scale keypose.")
+           targetView:nil];
+  sScaleKP.spotlightCircular = NO;
+  sScaleKP.onEnter = ^{
+    [weakLanes guideCloseContentPopover];
+  };
+  sScaleKP.targetScreenRect = ^NSRect {
+    __strong KKTimelineAdvancedView *a = weakAdv;
+    return a ? [a guideKeyposeScreenRectForLabel:@"Scale" atIndex:1]
+             : NSZeroRect;
+  };
+
+  NSRect (^scaleSpot)(void) = ^NSRect {
+    __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+    return c ? [c scaleHandleScreenRectAtIndex:kScaleCorner] : NSZeroRect;
+  };
+  NSRect (^scaleTarget)(void) = ^NSRect {
+    __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+    return c ? [c scaleHandleScreenRectAtIndex:kScaleCorner
+                                forScaleValues:kScaleTargetVals]
+             : NSZeroRect;
+  };
+  KKJoyrideStep *sScale = [KKJoyrideDragStep stepForGuide:guide
+      atIndex:ixScaleDrag
+      isLast:NO
+      clickMessage:MMLoc(@"Drag a <warn>corner</warn> out to about "
+                         @"<accent>200%</accent>.",
+                         @"Shaping guide: scale the keypose up to 200%.")
+      dragMessage:nil
+      circular:NO
+      spotRect:scaleSpot
+      targetRect:scaleTarget
+      begin:^(NSPoint p) {
+        __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+        NSRect spot = scaleSpot();
+        [c beginPointHandleDragAtScreenPoint:NSIsEmptyRect(spot)
+                                                 ? p
+                                                 : NSMakePoint(NSMidX(spot),
+                                                               NSMidY(spot))];
+      }
+      dragTo:^(NSPoint p) {
+        [weakBinder.latestMiniCanvas
+            dragPointHandleToScreenPoint:KKJoyrideSnapToTarget(p, scaleTarget(),
+                                                               12.0)];
+      }
+      end:^{
+        [weakBinder.latestMiniCanvas endPointHandleDrag];
+      }
+      hitOnRelease:^BOOL(NSPoint p) {
+        return MagicMoveGuideScaleAtLeast(weakLanes, kScaleHitPct);
+      }];
+
+  KKJoyrideStep *sPlay = [KKJoyrideStep
+      stepWithMessage:MMLoc(@"Press <symbol play.fill color=accent /> to watch "
+                            @"it back.",
+                            @"Shaping guide: play the animation back.")
+           targetView:nil];
+  sPlay.spotlightCircular = NO;
+  sPlay.targetScreenRect = ^NSRect {
+    NSRect play =
+        cfg.playButtonScreenRect ? cfg.playButtonScreenRect() : NSZeroRect;
+    NSRect viewer = cfg.viewerScreenRect ? cfg.viewerScreenRect() : NSZeroRect;
+    if (NSIsEmptyRect(viewer))
+      return play;
+    if (NSIsEmptyRect(play))
+      return viewer;
+    return NSUnionRect(play, viewer);
+  };
+  sPlay.onEnter = ^{
+    watchScheduled = NO;
+    [weakLanes guideCloseContentPopover];
+    if (cfg.scrubToFraction)
+      cfg.scrubToFraction(0.0);
+  };
+
+  KKJoyrideStep *sDone = [KKJoyrideStep
+      stepWithMessage:MMLoc(@"The <accent>mini viewer</accent> brings each "
+                            @"keypose's frame to you - shape any pose without "
+                            @"moving the playhead to find it.",
+                            @"Shaping guide: closing benefit step.")
+           targetView:^NSView * {
+             return weakAdv;
+           }];
+
+  [binder bindStep:sAdd
+           atIndex:ixAdd
+         advanceOn:[KKJoyrideTrigger staticValuesPopoverWillOpen]
+         dismissOn:nil];
+  [binder bindStep:sCurve
+           atIndex:ixCurve
+         advanceOn:[KKJoyrideTrigger miniCanvasDoubleClickHandled]
+         dismissOn:nil];
+  [binder bindStep:sScaleKP
+           atIndex:ixScaleKP
+         advanceOn:[KKJoyrideTrigger staticValuesPopoverWillOpen]
+         dismissOn:nil];
+
+  // Watch-back: the user's play tap schedules a single advance once the clip
+  // has played all the way through. Delay = clip duration (+ a small buffer for
+  // FCP's start latency) rather than a fixed beat, so the step moves on when
+  // the animation finishes. No togglePlayback: FCP stops at the clip's out
+  // point on its own, and toggling an already-stopped clip would restart it.
+  binder.playToggleTapped = ^{
+    __strong KKJoyrideController *g = weakGuide;
+    if (!g || g.currentStepIndex != ixPlay || watchScheduled)
+      return;
+    watchScheduled = YES;
+    __strong KKTimelineAdvancedView *a = weakAdv;
+    double dur = (a && a.clipDurationSeconds > 0) ? a.clipDurationSeconds : 2.0;
+    dispatch_after(
+        dispatch_time(DISPATCH_TIME_NOW, (int64_t)((dur + 0.4) * NSEC_PER_SEC)),
+        dispatch_get_main_queue(), ^{
+          __strong KKJoyrideController *g2 = weakGuide;
+          if (!g2 || g2.currentStepIndex != ixPlay)
+            return;
+          if (cfg.setPlayingAccent)
+            cfg.setPlayingAccent(NO);
+          [g2 advance];
+        });
+  };
+
+  return @[ sIntro, sAdd, sUp, sCurve, sScaleKP, sScale, sPlay, sDone ];
+}
 
 @implementation MagicMoveInspectorView
 - (BOOL)showsOSCVisibilityRow {
@@ -96,8 +369,8 @@ static BOOL MagicMovePositionNearTarget(NSPoint p) {
   cfg.primarySeedValues = @[ @0.5, @0.5 ];
   // Second lane in the Advanced seed (mirrors Rounded's Radius + Crop), so the
   // per-property timeline + marquee multi-select are taught across two rows.
-  // Scale is a non-featured lane (not in the Position-only keypose mini-canvas),
-  // so seeding it can't disturb the featured Position handles.
+  // Scale is a non-featured lane (not in the Position-only keypose
+  // mini-canvas), so seeding it can't disturb the featured Position handles.
   cfg.secondaryLabel = @"Scale";
   cfg.secondaryValueType = KKLaneValueTypeFloat;
   cfg.secondarySeedValues = @[ @100.0, @100.0 ];
@@ -164,6 +437,22 @@ static BOOL MagicMovePositionNearTarget(NSPoint p) {
     return s;
   };
   return cfg;
+}
+
+- (void)restartShapingGuide {
+  KKTimingGuideConfig *cfg = [self _timingGuideConfig];
+  // Keep ALL on-screen controls visible (oscKeepLabels nil): the double-click
+  // curve step needs the Position path visible, and the scale step needs the
+  // Scale box - so don't hide anything for this run.
+  [self
+      runCustomAdvancedGuideWithSeed:^KKTimeline * {
+        return MagicMoveShapingSeed();
+      }
+      buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
+                                             KKJoyrideLanesBinder *binder) {
+        return MagicMoveShapingGuideSteps(guide, binder, cfg);
+      }
+      oscKeepLabels:nil];
 }
 @end
 
@@ -493,14 +782,45 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   // viewer; the watch-back step needs it for the viewer cutout) and the live
   // inspector.
   __weak typeof(self) weak = self;
-  return [KKTimingGuide
-      standardHelpGuidesForInspectorProvider:^KKTimelineInspectorView * {
-        __strong typeof(weak) strong = weak;
-        return strong.inspectorView;
-      }
-      enabledProvider:^BOOL {
-        return MagicMoveSharedOSCGuideBridge().hasCanvasReference;
-      }];
+  KKTimelineInspectorView * (^ivProvider)(void) = ^KKTimelineInspectorView * {
+    __strong typeof(weak) strong = weak;
+    return strong.inspectorView;
+  };
+  BOOL (^enabled)(void) = ^BOOL {
+    return MagicMoveSharedOSCGuideBridge().hasCanvasReference;
+  };
+  NSMutableArray<KKHelpGuide *> *guides = [[KKTimingGuide
+      standardHelpGuidesForInspectorProvider:ivProvider
+                             enabledProvider:enabled] mutableCopy];
+
+  // MagicMove-only "Shaping a Move" walkthrough (curve a Position keypose +
+  // scale a Scale keypose in the mini viewer). Appended after the shared four.
+  __block __weak KKHelpGuide *weakShaping = nil;
+  KKHelpGuide *shaping = [KKHelpGuide
+      guideWithTitle:MMLoc(@"Shaping a Move",
+                           @"Help guide title: Magic Move shaping walkthrough.")
+            subtitle:MMLoc(@"Curve the path and scale a keypose",
+                           @"Help guide subtitle: Shaping a Move.")
+             onStart:^{
+               KKTimelineInspectorView *iv = ivProvider();
+               if (![iv isKindOfClass:[MagicMoveInspectorView class]])
+                 return;
+               KKHelpGuide *live = weakShaping;
+               iv.onGuideCompleted = ^{
+                 [live markCompleted];
+               };
+               [(MagicMoveInspectorView *)iv restartShapingGuide];
+             }];
+  weakShaping = shaping;
+  shaping.identifier = @"magicmove.shaping";
+  shaping.enabledProvider = enabled;
+  shaping.disabledSubtitle = MMLoc(
+      @"Guides are disabled. Click the effect's header on a clip to select it "
+      @"(it highlights yellow), then move your mouse over the viewer to enable "
+      @"them.",
+      @"Help guide disabled subtitle (no OSC canvas reference yet).");
+  [guides addObject:shaping];
+  return guides;
 }
 
 - (NSNotificationName)helpGuideRefreshNotificationName {

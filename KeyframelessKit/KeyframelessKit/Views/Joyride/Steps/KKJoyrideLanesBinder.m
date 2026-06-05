@@ -144,6 +144,7 @@
   if (cv) {
     cv.onViewTransformChanged = nil;
     cv.onViewReset = nil;
+    cv.onDelegateHandledDoubleClick = nil;
     cv.onOptHideHandle = nil;
   }
   _mcWiredCanvas = nil;
@@ -334,6 +335,7 @@
   if (prev && prev != cv) {
     prev.onViewTransformChanged = nil;
     prev.onViewReset = nil;
+    prev.onDelegateHandledDoubleClick = nil;
     prev.onOptHideHandle = nil;
   }
   _mcWiredCanvas = cv;
@@ -354,6 +356,15 @@
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypeMiniCanvasViewReset
+          intArg:0
+         intArg2:0
+           label:nil];
+  };
+  cv.onDelegateHandledDoubleClick = ^{
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    [s _fireType:KKJoyrideTriggerTypeMiniCanvasDoubleClickHandled
           intArg:0
          intArg2:0
            label:nil];

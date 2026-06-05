@@ -313,6 +313,34 @@
                                 atIndex:index];
 }
 
+- (NSRect)scaleHandleScreenRectAtIndex:(NSInteger)index {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (!self.window ||
+      ![d respondsToSelector:@selector(
+                                 miniCanvas:scaleHandleCentersForContentRect:)])
+    return NSZeroRect;
+  return [self
+      _screenRectForHandleCenters:
+          [d miniCanvas:self
+              scaleHandleCentersForContentRect:[self contentRectInViewPoints]]
+                          atIndex:index];
+}
+
+- (NSRect)scaleHandleScreenRectAtIndex:(NSInteger)index
+                        forScaleValues:(NSArray<NSNumber *> *)values {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (!self.window ||
+      ![d respondsToSelector:
+              @selector(miniCanvas:scaleHandleCentersForValues:contentRect:)])
+    return NSZeroRect;
+  return
+      [self _screenRectForHandleCenters:
+                [d miniCanvas:self
+                    scaleHandleCentersForValues:values
+                                    contentRect:[self contentRectInViewPoints]]
+                                atIndex:index];
+}
+
 - (void)mouseDragged:(NSEvent *)event {
   CGFloat s = [self _backingScale];
   _panPixels.x += event.deltaX * s;

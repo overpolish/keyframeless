@@ -9,6 +9,10 @@
 
 @class KKJoyrideGuideHost;
 @class KKTimingGuideConfig;
+@class KKJoyrideStep;
+@class KKJoyrideController;
+@class KKJoyrideLanesBinder;
+@class KKTimeline;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -151,6 +155,21 @@ NS_ASSUME_NONNULL_BEGIN
 /// the gear / pills / opt-click, hide-all, peek). Disables OSC forcing for its
 /// run so the user can toggle freely.
 - (void)restartOSCGuide;
+
+/// Runs a plugin-specific Advanced-mode walkthrough: forces the Advanced tab +
+/// owns it for the run (so a parameterChanged tab-restore can't fight a
+/// Basic-incompatible multi-keypose seed), drops the timeline render to Off,
+/// applies `seedBlock`, and runs `buildSteps`. Restores the prior tab + render
+/// mode and closes the popover on completion/skip. `oscKeepLabels` scopes which
+/// on-screen controls stay visible (nil = all). Lets a plugin author a bespoke
+/// guide from the shared step machinery without re-implementing the lifecycle.
+- (void)runCustomAdvancedGuideWithSeed:(KKTimeline * (^)(void))seedBlock
+                            buildSteps:
+                                (NSArray<KKJoyrideStep *> * (^)(
+                                    KKJoyrideController *guide,
+                                    KKJoyrideLanesBinder *binder))buildSteps
+                         oscKeepLabels:
+                             (nullable NSArray<NSString *> *)oscKeepLabels;
 
 /// First-appearance autostart of the Basic ("Introduction") guide: on the next
 /// runloop turn, if the host view is in a window, not a detached copy, no lanes

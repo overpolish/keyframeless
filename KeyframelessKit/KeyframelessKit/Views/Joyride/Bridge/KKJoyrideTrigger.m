@@ -108,6 +108,10 @@
   return [self _t:KKJoyrideTriggerTypeMiniCanvasViewReset];
 }
 
++ (instancetype)miniCanvasDoubleClickHandled {
+  return [self _t:KKJoyrideTriggerTypeMiniCanvasDoubleClickHandled];
+}
+
 + (instancetype)renderModeChanged:(NSInteger)mode {
   KKJoyrideTrigger *t = [self _t:KKJoyrideTriggerTypeRenderModeChanged];
   t->_intArg = mode;

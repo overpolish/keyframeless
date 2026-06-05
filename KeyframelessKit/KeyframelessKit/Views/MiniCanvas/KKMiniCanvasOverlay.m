@@ -145,6 +145,8 @@
             doubleClickAtPoint:[self convertPoint:e.locationInWindow
                                          fromView:nil]
                    contentRect:[c contentRectInViewPoints]]) {
+      if (c.onDelegateHandledDoubleClick)
+        c.onDelegateHandledDoubleClick();
       return;
     }
     [c resetView];
