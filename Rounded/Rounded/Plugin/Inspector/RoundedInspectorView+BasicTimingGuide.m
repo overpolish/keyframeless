@@ -34,6 +34,10 @@
   cfg.keyposeTargetValues = @[ @70.0 ];
   cfg.secondaryValueType = KKLaneValueTypeCrop;
   cfg.secondarySeedValues = @[ @1.0, @1.0, @0.0, @0.0 ];
+  // Mini-viewer guide: four visibly distinct radii (sharp -> fully rounded) so
+  // the filmstrip / onion-skin frames are clearly different.
+  cfg.miniViewerSeedValues =
+      @[ @[ @5.0 ], @[ @35.0 ], @[ @70.0 ], @[ @100.0 ] ];
   cfg.viewerScreenRect = ^NSRect {
     return RoundedSharedOSCGuideBridge().estimatedViewerScreenRect;
   };

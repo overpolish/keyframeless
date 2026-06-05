@@ -27,7 +27,7 @@
   if (r0.size.width <= 0 || r0.size.height <= 0 || _zoom <= 0) {
     _zoom = newZoom;
     [self setNeedsDisplay:YES];
-    [self _didChangeViewTransform];
+    [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindZoom];
     return;
   }
   CGFloat fx = (c.x - r0.origin.x) / r0.size.width;
@@ -41,7 +41,7 @@
   _panPixels.y = originY - d.height / 2.0 + newH / 2.0;
   _zoom = newZoom;
   [self setNeedsDisplay:YES];
-  [self _didChangeViewTransform];
+  [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindZoom];
 }
 
 // Exact mechanism copied from the old KKStageSequencerView+InteractionZoomPan
@@ -61,7 +61,7 @@
     _panPixels.x += event.scrollingDeltaX * s;
     _panPixels.y -= event.scrollingDeltaY * s; // drawable y is up; delta y-down
     [self setNeedsDisplay:YES];
-    [self _didChangeViewTransform];
+    [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindPan];
   } else {
     // Mouse wheel → zoom toward cursor.
     CGFloat factor = 1.0 - event.scrollingDeltaY * 0.05;
@@ -135,9 +135,9 @@
     self.onViewReset();
 }
 
-- (void)_didChangeViewTransform {
+- (void)_didChangeViewTransformOfKind:(KKMiniCanvasTransformKind)kind {
   if (self.onViewTransformChanged)
-    self.onViewTransformChanged();
+    self.onViewTransformChanged(kind);
 }
 
 - (NSPoint)_viewPointForScreenPoint:(NSPoint)screenPoint {
@@ -304,7 +304,7 @@
       _hasPendingFilmstripActivation = NO;
   }
   [self setNeedsDisplay:YES];
-  [self _didChangeViewTransform];
+  [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindPan];
 }
 
 - (BOOL)_pointFromGlobalEvent:(NSPoint *)outViewPt {
@@ -333,7 +333,7 @@
     _panPixels.x += event.scrollingDeltaX * s;
     _panPixels.y -= event.scrollingDeltaY * s;
     [self setNeedsDisplay:YES];
-    [self _didChangeViewTransform];
+    [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindPan];
   } else {
     [self _zoomTo:_zoom * (1.0 - event.scrollingDeltaY * 0.05)
         aboutViewPoint:p];

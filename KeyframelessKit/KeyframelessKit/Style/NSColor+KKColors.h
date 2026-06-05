@@ -31,6 +31,12 @@
 + (NSColor *)success;
 + (NSColor *)transparent;
 
+/// Onion-skin ghost tints, matched to the mini-canvas onion shader so the
+/// `<red>` / `<blue>` markup that explains them reads the same hue: earlier
+/// frames red, later frames blue.
++ (NSColor *)onionPrevTint;
++ (NSColor *)onionNextTint;
+
 - (NSColor *)shiftedHueBy:(CGFloat)amount;
 - (NSColor *)compound;
 

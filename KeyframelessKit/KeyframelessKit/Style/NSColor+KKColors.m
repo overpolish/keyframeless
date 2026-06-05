@@ -107,6 +107,16 @@
                          alpha:1.0];
 }
 
+// Matches the onion shader tints in KKMiniCanvasView+Draw.m (prev = red
+// {1.0, 0.2, 0.2}, next = blue {0.2, 0.4, 1.0}); kept opaque for legible text.
++ (NSColor *)onionPrevTint {
+  return [NSColor colorWithRed:1.00 green:0.20 blue:0.20 alpha:1.0];
+}
+
++ (NSColor *)onionNextTint {
+  return [NSColor colorWithRed:0.20 green:0.40 blue:1.00 alpha:1.0];
+}
+
 - (NSColor *)shiftedHueBy:(CGFloat)amount {
   NSColor *hsb = [self colorUsingColorSpace:NSColorSpace.deviceRGBColorSpace];
   if (!hsb)

@@ -43,6 +43,48 @@
       },
       "comment": "Advanced timing guide: add a keypose to a lane."
     },
+    "<red>Red</red> frames are before this keypose, <blue>blue</blue> frames after.": {
+      "extractionState": "manual",
+      "comment": "Mini-viewer guide: onion-skin red/blue meaning.",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<red>Rote</red> Bilder liegen vor dieser Keypose, <blue>blaue</blue> danach."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les images <red>rouges</red> sont avant cette pose clé, les <blue>bleues</blue> après."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los fotogramas <red>rojos</red> van antes de esta pose clave, los <blue>azules</blue> después."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<red>赤</red>のフレームはこのキーポーズより前、<blue>青</blue>のフレームは後です。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<red>빨간색</red> 프레임은 이 키포즈 이전, <blue>파란색</blue> 프레임은 이후입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<red>红色</red>帧在此关键姿势之前，<blue>蓝色</blue>帧在之后。"
+          }
+        }
+      }
+    },
     "Add <accent>%@</accent>.": {
       "extractionState": "manual",
       "localizations": {
@@ -673,6 +715,90 @@
         }
       }
     },
+    "Click a <accent>keypose</accent> to open the mini viewer.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicken Sie auf eine <accent>Keypose</accent>, um den Mini-Viewer zu öffnen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur une <accent>pose clé</accent> pour ouvrir la mini-visionneuse."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en una <accent>pose clave</accent> para abrir el mini-visor."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>キーポーズ</accent>をクリックして、ミニビューアを開きます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>키포즈</accent>를 클릭하여 미니 뷰어를 엽니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击一个<accent>关键姿势</accent>来打开迷你检视器。"
+          }
+        }
+      },
+      "comment": "Mini-viewer guide: open the boundary popover."
+    },
+    "Click a frame to <accent>jump</accent> to that keypose.": {
+      "extractionState": "manual",
+      "comment": "Mini-viewer guide: click a filmstrip frame.",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicken Sie auf ein Bild, um zu dieser <accent>Keypose zu springen</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur une image pour <accent>accéder</accent> à cette pose clé."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en un fotograma para <accent>saltar</accent> a esa pose clave."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フレームをクリックすると、そのキーポーズに<accent>移動</accent>します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프레임을 클릭하면 해당 키포즈로 <accent>이동</accent>합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击某一帧即可<accent>跳转</accent>到该关键姿势。"
+          }
+        }
+      }
+    },
     "Click the <warn>gap</warn> between keyposes to change its easing.": {
       "extractionState": "manual",
       "localizations": {
@@ -967,6 +1093,48 @@
         }
       }
     },
+    "Double-click to <accent>reset</accent> the view.": {
+      "extractionState": "manual",
+      "comment": "Mini-viewer guide: reset zoom/pan.",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doppelklicken Sie, um die Ansicht <accent>zurückzusetzen</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double-cliquez pour <accent>réinitialiser</accent> la vue."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz doble clic para <accent>restablecer</accent> la vista."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダブルクリックでビューを<accent>リセット</accent>します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "더블 클릭하여 보기를 <accent>재설정</accent>합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "双击以<accent>重置</accent>视图。"
+          }
+        }
+      }
+    },
     "Drag <accent>%@</accent> toward the <warn>target</warn>. It applies straight away.": {
       "extractionState": "manual",
       "localizations": {
@@ -1092,6 +1260,48 @@
         }
       },
       "comment": "Timing guide: drag the hold boundary to retime."
+    },
+    "Drag the preview to <accent>pan</accent> around.": {
+      "extractionState": "manual",
+      "comment": "Mini-viewer guide: pan the canvas by dragging.",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehen Sie die Vorschau, um zu <accent>schwenken</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser l'aperçu pour vous <accent>déplacer</accent>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra la previsualización para <accent>desplazarte</accent>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プレビューをドラッグして<accent>パン</accent>します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미리 보기를 드래그하여 <accent>이동</accent>합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动预览以<accent>平移</accent>。"
+          }
+        }
+      }
     },
     "Drag to reorder": {
       "comment": "Popover hint: drag rows to reorder parameters.",
@@ -1933,6 +2143,48 @@
         }
       }
     },
+    "Mini Viewer": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mini-Viewer"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mini-visionneuse"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mini-visor"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ミニビューア"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미니 뷰어"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "迷你检视器"
+          }
+        }
+      },
+      "comment": "Help guide title: mini-viewer walkthrough."
+    },
     "Modulation": {
       "comment": "Section title: modulation (wobble/drift) settings.",
       "extractionState": "manual",
@@ -2437,6 +2689,48 @@
       },
       "comment": "Timing guide: open the Animated dropdown."
     },
+    "Preview keyposes, with filmstrip and onion-skin": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyposes mit Filmstreifen und Zwiebelhaut in der Vorschau ansehen"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévisualisez les poses clés avec pellicule et pelure d'oignon"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previsualiza poses clave con tira de fotogramas y papel cebolla"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フィルムストリップとオニオンスキンでキーポーズをプレビュー"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "필름스트립과 어니언 스킨으로 키포즈 미리 보기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过胶片和洋葱皮预览关键姿势"
+          }
+        }
+      },
+      "comment": "Help guide subtitle: Mini Viewer."
+    },
     "Randomize": {
       "comment": "Button: randomize the seed.",
       "extractionState": "manual",
@@ -2685,6 +2979,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "采样"
+          }
+        }
+      }
+    },
+    "Scroll or pinch to <accent>zoom</accent> in and out.": {
+      "extractionState": "manual",
+      "comment": "Mini-viewer guide: zoom the canvas.",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrollen oder zwei Finger spreizen zum <accent>Zoomen</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites défiler ou pincez pour <accent>zoomer</accent>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desplázate o pellizca para <accent>hacer zoom</accent>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スクロールまたはピンチして<accent>ズーム</accent>します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스크롤하거나 핀치하여 <accent>확대/축소</accent>합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滚动或双指捏合以<accent>缩放</accent>。"
           }
         }
       }
@@ -3151,6 +3487,90 @@
       },
       "comment": "Advanced timing guide: open the Advanced editor."
     },
+    "Tap <accent>Filmstrip</accent> to lay out every keypose.": {
+      "extractionState": "manual",
+      "comment": "Mini-viewer guide: switch to filmstrip mode.",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippen Sie auf <accent>Filmstreifen</accent>, um alle Keyposes anzuordnen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez <accent>Pellicule</accent> pour disposer toutes les poses clés."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca <accent>Tira de fotogramas</accent> para distribuir todas las poses clave."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>フィルムストリップ</accent>をタップすると、すべてのキーポーズが並びます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>필름스트립</accent>을 탭하면 모든 키포즈가 배치됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "轻点<accent>胶片</accent>来排列所有关键姿势。"
+          }
+        }
+      }
+    },
+    "Tap <accent>Onion</accent> to stack the frames.": {
+      "extractionState": "manual",
+      "comment": "Mini-viewer guide: switch to onion-skin mode.",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippen Sie auf <accent>Zwiebelhaut</accent>, um die Bilder zu stapeln."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez <accent>Pelure d'oignon</accent> pour superposer les images."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca <accent>Papel cebolla</accent> para apilar los fotogramas."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>オニオンスキン</accent>をタップしてフレームを重ねます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>어니언 스킨</accent>을 탭하여 프레임을 겹칩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "轻点<accent>洋葱皮</accent>来叠加各帧。"
+          }
+        }
+      }
+    },
     "That's <accent>Advanced</accent> timing: add keyposes anywhere and shape each one independently.": {
       "extractionState": "manual",
       "localizations": {
@@ -3276,6 +3696,48 @@
         }
       },
       "comment": "Timing guide: the graph reflects the transition."
+    },
+    "The <accent>mini viewer</accent> previews your clip at this keypose.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der <accent>Mini-Viewer</accent> zeigt eine Vorschau Ihres Clips bei dieser Keypose."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La <accent>mini-visionneuse</accent> prévisualise votre plan à cette pose clé."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El <accent>mini-visor</accent> previsualiza tu clip en esta pose clave."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>ミニビューア</accent>は、このキーポーズでのクリップをプレビューします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>미니 뷰어</accent>는 이 키포즈에서의 클립을 미리 봅니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>迷你检视器</accent>会预览此关键姿势处的片段。"
+          }
+        }
+      },
+      "comment": "Mini-viewer guide: what the preview shows."
     },
     "The <accent>mini viewer</accent> shows the clip here. Drag the handle to the <warn>target</warn>.": {
       "extractionState": "manual",
@@ -3525,6 +3987,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "有可用更新"
+          }
+        }
+      }
+    },
+    "Use the <accent>mini viewer</accent> to edit a keypose at its point in time, without scrubbing the timeline there.": {
+      "extractionState": "manual",
+      "comment": "Mini-viewer guide: closing benefit step.",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit dem <accent>Mini-Viewer</accent> bearbeiten Sie eine Keypose zu ihrem Zeitpunkt, ohne in der Timeline dorthin zu scrubben."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilisez la <accent>mini-visionneuse</accent> pour modifier une pose clé à son instant précis, sans parcourir la timeline jusque-là."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usa el <accent>mini-visor</accent> para editar una pose clave en su momento exacto, sin desplazarte por la línea de tiempo hasta ahí."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>ミニビューア</accent>を使えば、タイムラインをスクラブせずに、キーポーズをその時点で編集できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>미니 뷰어</accent>를 사용하면 타임라인을 스크러빙하지 않고도 키포즈를 해당 시점에서 편집할 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用<accent>迷你检视器</accent>，无需在时间线上拖动到该处，即可在某个时间点编辑关键姿势。"
           }
         }
       }
@@ -3861,6 +4365,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "当前序列与基本模式不兼容。"
+          }
+        }
+      }
+    },
+    "Zoom out to see the <accent>other keyposes</accent>.": {
+      "extractionState": "manual",
+      "comment": "Mini-viewer guide: zoom out across the filmstrip.",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoomen Sie heraus, um die <accent>anderen Keyposes</accent> zu sehen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dézoomez pour voir les <accent>autres poses clés</accent>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aleja el zoom para ver las <accent>otras poses clave</accent>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ズームアウトして<accent>他のキーポーズ</accent>を表示します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "축소하여 <accent>다른 키포즈</accent>를 확인합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缩小以查看<accent>其他关键姿势</accent>。"
           }
         }
       }

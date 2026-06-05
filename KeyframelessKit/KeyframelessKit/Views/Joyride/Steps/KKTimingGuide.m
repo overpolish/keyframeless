@@ -86,19 +86,39 @@ static const CGFloat kDragSnapPx = 14.0;
   weakAdvanced = advanced;
   advanced.identifier = @"timing.advanced";
 
-  // The final Basic step's cutout unions the play button with the FCP viewer
-  // rect, which only resolves once the OSC bridge has a draw tick - so both
-  // guides gate on the same canvas reference the plugin supplies.
+  __block __weak KKHelpGuide *weakMiniViewer = nil;
+  KKHelpGuide *miniViewer = [KKHelpGuide
+      guideWithTitle:KKLoc(@"Mini Viewer",
+                           @"Help guide title: mini-viewer walkthrough.")
+            subtitle:KKLoc(@"Preview keyposes, with filmstrip and onion-skin",
+                           @"Help guide subtitle: Mini Viewer.")
+             onStart:^{
+               KKTimelineInspectorView *iv =
+                   inspectorProvider ? inspectorProvider() : nil;
+               if (!iv)
+                 return;
+               KKHelpGuide *live = weakMiniViewer;
+               iv.onGuideCompleted = ^{
+                 [live markCompleted];
+               };
+               [iv restartMiniViewerGuide];
+             }];
+  weakMiniViewer = miniViewer;
+  miniViewer.identifier = @"miniviewer";
+
+  // The guides cut out the FCP viewer / boundary popover, which only resolve
+  // once the OSC bridge has a draw tick - so they gate on the same canvas
+  // reference the plugin supplies.
   NSString *disabled =
       KKLoc(@"Guides are disabled. Click the effect's header on a clip to "
             @"select it (it highlights yellow), then move your mouse over the "
             @"viewer to enable them.",
             @"Help guide disabled subtitle (no OSC canvas reference yet).");
-  for (KKHelpGuide *g in @[ intro, advanced ]) {
+  for (KKHelpGuide *g in @[ intro, advanced, miniViewer ]) {
     g.enabledProvider = enabledProvider;
     g.disabledSubtitle = disabled;
   }
-  return @[ intro, advanced ];
+  return @[ intro, advanced, miniViewer ];
 }
 
 + (KKTimeline *)basicSeedTimelineForConfig:(KKTimingGuideConfig *)config {

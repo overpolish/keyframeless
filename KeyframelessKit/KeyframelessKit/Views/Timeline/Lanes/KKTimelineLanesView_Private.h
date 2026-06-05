@@ -160,6 +160,11 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// Show/hide a "link" chain glyph in the header to flag a linked keypose.
 - (void)setHeaderLinked:(BOOL)linked;
 
+/// Guide-only: screen rect of the render-mode pill's segment for `mode`
+/// (Off/Filmstrip/Onion), or NSZeroRect if the pill isn't shown. Used by the
+/// mini-viewer guide to spotlight the mode the user should tap.
+- (NSRect)guideRenderModePillScreenRectForMode:(KKMiniCanvasRenderMode)mode;
+
 /// Enable/disable the popover header's prev/next KP buttons (only meaningful
 /// when `onNavigate` was passed at init). The lanes view calls this on open
 /// and on every in-place rebind so the chevrons reflect the active KP's

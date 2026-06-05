@@ -150,7 +150,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface KKMiniCanvasView (InteractionInternal)
 - (CGFloat)_backingScale;
 - (void)_zoomTo:(CGFloat)newZoom aboutViewPoint:(NSPoint)viewPt;
-- (void)_didChangeViewTransform;
+- (void)_didChangeViewTransformOfKind:(KKMiniCanvasTransformKind)kind;
 - (NSPoint)_viewPointForScreenPoint:(NSPoint)screenPoint;
 - (NSRect)_screenRectForHandleCenter:(CGPoint)ctr;
 - (NSRect)_screenRectForHandleCenters:(NSArray<NSValue *> *)centers

@@ -51,8 +51,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - Mini-canvas (inside static-values popover)
 
+/// Fires on any zoom or pan of the mini-canvas.
 + (instancetype)miniCanvasViewTransformChanged;
+/// Fires only when the user pans the mini-canvas (drag / two-finger scroll).
++ (instancetype)miniCanvasPanned;
+/// Fires only when the user zooms the mini-canvas (wheel / pinch).
++ (instancetype)miniCanvasZoomed;
 + (instancetype)miniCanvasViewReset;
+/// Fires when the boundary popover's render-mode pill changes the mode. `mode`
+/// is a KKMiniCanvasRenderMode (0 = Off, 1 = Filmstrip, 2 = Onion); < 0 = any.
++ (instancetype)renderModeChanged:(NSInteger)mode;
+/// Fires when the user clicks an inactive filmstrip cell (navigates to that
+/// keypose). Filmstrip mode only.
++ (instancetype)filmstripCellActivated;
 
 #pragma mark - Inspector
 

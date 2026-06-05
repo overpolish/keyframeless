@@ -4,6 +4,7 @@
  */
 
 #import "KKJoyrideTrigger_Internal.h"
+#import <KeyframelessKit/KKMiniCanvasView.h>
 
 @implementation KKJoyrideTrigger
 
@@ -83,11 +84,38 @@
 }
 
 + (instancetype)miniCanvasViewTransformChanged {
-  return [self _t:KKJoyrideTriggerTypeMiniCanvasViewTransformChanged];
+  KKJoyrideTrigger *t =
+      [self _t:KKJoyrideTriggerTypeMiniCanvasViewTransformChanged];
+  t->_intArg = -1; // any kind
+  return t;
+}
+
++ (instancetype)miniCanvasPanned {
+  KKJoyrideTrigger *t =
+      [self _t:KKJoyrideTriggerTypeMiniCanvasViewTransformChanged];
+  t->_intArg = KKMiniCanvasTransformKindPan;
+  return t;
+}
+
++ (instancetype)miniCanvasZoomed {
+  KKJoyrideTrigger *t =
+      [self _t:KKJoyrideTriggerTypeMiniCanvasViewTransformChanged];
+  t->_intArg = KKMiniCanvasTransformKindZoom;
+  return t;
 }
 
 + (instancetype)miniCanvasViewReset {
   return [self _t:KKJoyrideTriggerTypeMiniCanvasViewReset];
+}
+
++ (instancetype)renderModeChanged:(NSInteger)mode {
+  KKJoyrideTrigger *t = [self _t:KKJoyrideTriggerTypeRenderModeChanged];
+  t->_intArg = mode;
+  return t;
+}
+
++ (instancetype)filmstripCellActivated {
+  return [self _t:KKJoyrideTriggerTypeFilmstripCellActivated];
 }
 
 + (instancetype)playToggleEdge {

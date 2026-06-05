@@ -123,6 +123,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *secondarySeedValues;
 @property(nonatomic) NSInteger secondaryValueType;
 
+/// The mini-viewer guide seeds the primary lane with one keypose per entry
+/// here (distinct values, so Filmstrip/Onion show visibly different frames).
+/// Each element is a value array matching `primaryComponentCount`. ~4 entries
+/// is ideal. Required for the mini-viewer guide; unused by the timing guides.
+@property(nonatomic, copy, nullable)
+    NSArray<NSArray<NSNumber *> *> *miniViewerSeedValues;
+
 /// Screen rect of the inspector play button. Required (Basic watch-back).
 @property(nonatomic, copy) NSRect (^playButtonScreenRect)(void);
 

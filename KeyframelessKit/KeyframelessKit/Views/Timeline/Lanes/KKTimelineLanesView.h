@@ -173,6 +173,16 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
 @property(nonatomic, copy, nullable) void (^onStaticValueDragEnded)
     (NSString *label, NSArray<NSNumber *> *values);
 
+/// Guide-only observation hooks, fired ALONGSIDE the functional callbacks (so
+/// they never clobber persistence / navigation). `renderModeChanged` fires when
+/// the boundary popover's render-mode pill switches mode;
+/// `filmstripCellActivated` fires when the user clicks an inactive filmstrip
+/// cell. The mini-viewer guide wires these via the lanes binder.
+@property(nonatomic, copy, nullable) void (^onGuideRenderModeChanged)
+    (KKMiniCanvasRenderMode mode);
+@property(nonatomic, copy, nullable) void (^onGuideFilmstripCellActivated)
+    (double fraction);
+
 /// Path to the mini-canvas source descriptor JSON the render side publishes.
 /// Threaded into the static-values popover so spatial lanes (Crop) can show a
 /// live preview. nil = no preview (label-only rows).

@@ -38,6 +38,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// open.
 - (void)guideCloseContentPopover;
 
+/// Screen rect of the render-mode pill's segment for `mode` (Off/Filmstrip/
+/// Onion) in the currently-open boundary value popover, or NSZeroRect if no
+/// such popover / pill is shown. The mini-viewer guide spotlights this so the
+/// user can tap the mode it's teaching.
+- (NSRect)guideRenderModePillScreenRectForMode:(KKMiniCanvasRenderMode)mode;
+
 /// Fired after a gap-easing popover opens (settle delay applied so the
 /// segment editor is in a window and laid out). The guide grabs the
 /// KKSegmentEditView reference to resolve curve-pill rects.

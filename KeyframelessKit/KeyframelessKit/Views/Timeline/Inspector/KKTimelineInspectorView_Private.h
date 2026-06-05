@@ -41,6 +41,12 @@ NS_ASSUME_NONNULL_BEGIN
   /// (which flickers under FCP's bursty currentTime) must not touch the
   /// button. The +Guide category sets this; the .m reads it.
   BOOL _guideOwnsPlayState;
+  /// Guide-only: when YES, external `setActiveTab:` calls that would change the
+  /// tab are ignored. A guide that pins a tab (e.g. the mini-viewer runs in
+  /// Advanced) sets this so the plugin's parameterChanged tab-restore can't
+  /// fight it into an infinite Basic<->Advanced loop. The +Guide category sets
+  /// it (after pinning its tab); the .m's setActiveTab reads it.
+  BOOL _guideOwnsTab;
   /// Guide-only: fired on every raw play-button tap (one per click,
   /// deterministic). The +Guide category stores/reads this.
   void (^_onPlaybackToggleTapped)(void);

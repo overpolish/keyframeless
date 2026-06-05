@@ -136,13 +136,26 @@
                                    view:(KKTimelineInspectorView *)view
                                renderer:(KKMiniCanvasRenderer *)renderer
                             elementKeys:(NSArray<NSString *> *)keys {
+  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
+  // Keep the cached blob current, but if a guide is transiently forcing OSC
+  // visibility, don't re-apply the saved (user) visibility - otherwise an async
+  // parameterChanged the guide itself triggered (e.g. its own activeTab write)
+  // toggles the forced OSC back off mid-guide.
+  st.lastUIState = state;
+  if (st.guideForcingOSC)
+    return;
   BOOL oscVisible =
       state[@"oscMasterVisible"] ? [state[@"oscMasterVisible"] boolValue] : YES;
-  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
   st.oscMasterVisible = oscVisible;
-  st.lastUIState = state;
   [self kkApplyOSCVisibilityFromState:state elementKeys:keys renderer:renderer];
+  __weak typeof(self) weakSelf = self;
   dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weakSelf) strong = weakSelf;
+    // Re-check at execution time: a guide may have started forcing OSC
+    // visibility AFTER this refresh was scheduled (its sync part ran before the
+    // force, but this async block lands after). Don't undo the force.
+    if (KKInstanceStateForAPI(strong.apiManager).guideForcingOSC)
+      return;
     [view setOSCVisible:oscVisible];
     renderer.handlesHidden = !oscVisible;
   });
@@ -170,6 +183,7 @@
   if (st) {
     st.oscMasterVisible = YES;
     st.hiddenOSCElements = forced;
+    st.guideForcingOSC = YES; // ignore saved-state OSC refreshes until restore
   }
   renderer.handlesHidden = NO;
   renderer.hiddenHandleLabels = forced;
@@ -188,6 +202,7 @@
     priorHidden = [NSSet set];
   KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
   if (st) {
+    st.guideForcingOSC = NO;
     st.oscMasterVisible = priorMaster;
     st.hiddenOSCElements = priorHidden;
   }

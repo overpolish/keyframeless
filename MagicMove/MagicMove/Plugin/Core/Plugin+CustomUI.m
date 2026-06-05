@@ -64,6 +64,10 @@ static NSString *const kMagicMoveIntroSeenKey = @"MagicMoveIntroSeen";
   cfg.primaryTargetValues = @[ @0.7, @0.35 ];
   // A different spot for the keypose-edit drag so the handle visibly moves.
   cfg.keyposeTargetValues = @[ @0.3, @0.62 ];
+  // Mini-viewer guide: four corner positions so the clip visibly moves around
+  // the frame across the filmstrip / onion-skin frames.
+  cfg.miniViewerSeedValues =
+      @[ @[ @0.3, @0.3 ], @[ @0.7, @0.3 ], @[ @0.7, @0.7 ], @[ @0.3, @0.7 ] ];
   cfg.viewerScreenRect = ^NSRect {
     return MagicMoveSharedOSCGuideBridge().estimatedViewerScreenRect;
   };

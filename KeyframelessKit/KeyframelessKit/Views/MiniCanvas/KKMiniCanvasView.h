@@ -228,9 +228,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// re-render any pixel-scaled UI that depends on it.
 @property(nonatomic, copy, nullable) void (^onSourceResolved)(void);
 
-/// Fired on any user zoom or pan (wheel/pinch zoom, trackpad pan, drag-pan).
-/// A guide uses this to advance a "try zooming or panning" step.
-@property(nonatomic, copy, nullable) void (^onViewTransformChanged)(void);
+/// Which kind of view-transform gesture the user performed - lets a guide
+/// teach pan and zoom as separate steps (the signal alone can't otherwise tell
+/// a drag-pan from a wheel-zoom).
+typedef NS_ENUM(NSInteger, KKMiniCanvasTransformKind) {
+  KKMiniCanvasTransformKindPan = 0,
+  KKMiniCanvasTransformKindZoom = 1,
+};
+
+/// Fired on any user zoom or pan (wheel/pinch zoom, trackpad pan, drag-pan),
+/// with the gesture kind. A guide uses this to advance a "try zooming" or
+/// "try panning" step.
+@property(nonatomic, copy, nullable) void (^onViewTransformChanged)
+    (KKMiniCanvasTransformKind kind);
 
 /// Fired when the view is reset to its initial aspect-fit framing (the
 /// double-click gesture). A guide uses this to advance a "double-click to

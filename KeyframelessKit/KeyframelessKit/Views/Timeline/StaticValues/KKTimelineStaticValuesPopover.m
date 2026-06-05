@@ -20,6 +20,7 @@
   NSMutableDictionary<NSString *, _KKStaticValueRow *> *_rowsByLabel;
   NSStackView *_stack;
   KKMiniCanvasView *_miniCanvas;
+  KKPillToggleRowView *_renderModePill; // guide anchor; nil when no pill shown
   NSString *_descriptorPath;
   CGFloat _clipAspect;
   void (^_onHandleValue)(NSString *, NSArray<NSNumber *> *);
@@ -75,6 +76,14 @@
 
 - (KKMiniCanvasView *)miniCanvas {
   return _miniCanvas;
+}
+
+- (NSRect)guideRenderModePillScreenRectForMode:(KKMiniCanvasRenderMode)mode {
+  // Pill segments are built Off/Filmstrip/Onion in order, so the segment index
+  // equals the render-mode raw value.
+  if (!_renderModePill)
+    return NSZeroRect;
+  return [_renderModePill guidePillScreenRectAtIndex:(NSInteger)mode];
 }
 
 - (void)setOnSmoothToggled:(void (^)(NSString *, BOOL))handler {
@@ -286,6 +295,7 @@
         };
     KKPillToggleRowView *pill = [self _makeRenderModePill:renderMode
                                             onModeChanged:wrappedModeChanged];
+    _renderModePill = pill;
     [self addSubview:pill];
     [NSLayoutConstraint activateConstraints:@[
       [pill.trailingAnchor constraintEqualToAnchor:self.trailingAnchor

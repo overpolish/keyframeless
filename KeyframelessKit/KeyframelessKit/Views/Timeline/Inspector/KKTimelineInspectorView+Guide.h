@@ -34,6 +34,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// completion.
 @property(nonatomic) BOOL guideOwnsPlayState;
 
+/// Guide-only: when YES, external `setActiveTab:` calls that would change the
+/// tab are ignored, so a guide that pins a tab (e.g. the mini-viewer, which
+/// runs in Advanced) can't be fought out of it by the plugin's parameterChanged
+/// tab-restore. Set YES after pinning the tab; restore NO before the guide's
+/// own tab-restore.
+@property(nonatomic) BOOL guideOwnsTab;
+
 /// Guide-only: fired on every raw play-button tap (one per click,
 /// deterministic). Use this to advance a step on the *click* rather than the
 /// poll-inferred play state. Drives nothing on its own.
@@ -94,6 +101,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// is visible, auto-advances step 1 when the user flips to Advanced, restores
 /// tab + render mode on end.
 - (void)restartAdvancedTimingGuide;
+
+/// Runs the shared mini-viewer walkthrough using `timingGuideConfigProvider`.
+/// Forces the Advanced tab + a multi-keypose seed so the boundary popover's
+/// filmstrip / onion modes have distinct frames; restores tab + render mode and
+/// closes the popover on completion/skip.
+- (void)restartMiniViewerGuide;
 
 /// First-appearance autostart of the Basic ("Introduction") guide: on the next
 /// runloop turn, if the host view is in a window, not a detached copy, no lanes

@@ -8,6 +8,8 @@
 #import "KKTimelineInspectorView+Guide.h"
 #import "KKTimelineInspectorView_Private.h"
 #import <KeyframelessKit/KKJoyrideGuideHost.h>
+#import <KeyframelessKit/KKMiniViewerGuide.h>
+#import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingGuide.h>
 
@@ -54,6 +56,14 @@
 
 - (void)setGuideOwnsPlayState:(BOOL)owns {
   _guideOwnsPlayState = owns;
+}
+
+- (BOOL)guideOwnsTab {
+  return _guideOwnsTab;
+}
+
+- (void)setGuideOwnsTab:(BOOL)owns {
+  _guideOwnsTab = owns;
 }
 
 - (void (^)(void))onPlaybackToggleTapped {
@@ -164,6 +174,52 @@
   if (!provider)
     return;
   [self runAdvancedTimingGuideWithConfig:provider()];
+}
+
+- (void)restartMiniViewerGuide {
+  KKTimingGuideConfig * (^provider)(void) = _timingGuideConfigProvider;
+  if (!provider)
+    return;
+  [self runMiniViewerGuideWithConfig:provider()];
+}
+
+- (void)runMiniViewerGuideWithConfig:(KKTimingGuideConfig *)cfg {
+  NSInteger priorTab = self.activeTab;
+  KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
+  // Start in Off so the first Filmstrip / Onion tap is a real mode change the
+  // renderModeChanged trigger can catch.
+  self.basicLanesView.renderMode = KKMiniCanvasRenderModeOff;
+  KKJoyrideGuideHost *host = [self timingGuideHost];
+  host.forwardsGestures = YES;
+  // The mini viewer (with all three modes) lives in the Advanced sequencer's
+  // boundary value popover. Pin the tab, then own it so the plugin's
+  // parameterChanged tab-restore can't fight it (the multi-keypose seed is
+  // Basic-incompatible, so a stray switch to Basic would bounce endlessly).
+  [self setActiveTab:KKTimelineTabAdvanced];
+  self.guideOwnsTab = YES;
+  if (self.onScrub)
+    self.onScrub(0.0);
+
+  self.guideOSCKeepLabels = cfg.oscKeepLabels;
+  __weak typeof(self) weak = self;
+  [host
+      runWithSeed:^KKTimeline * {
+        return [KKMiniViewerGuide seedTimelineForConfig:cfg];
+      }
+      buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
+                                             KKJoyrideLanesBinder *binder) {
+        return [KKMiniViewerGuide stepsForGuide:guide binder:binder config:cfg];
+      }
+      extraOnComplete:^{
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return;
+        [s.basicLanesView guideCloseContentPopover];
+        s.basicLanesView.renderMode = priorRenderMode;
+        s.guideOwnsTab = NO; // unlock before restoring the user's tab
+        if (priorTab != s.activeTab)
+          [s setActiveTab:priorTab];
+      }];
 }
 
 - (void)runBasicTimingGuideWithConfig:(KKTimingGuideConfig *)cfg {

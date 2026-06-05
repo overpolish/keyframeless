@@ -243,6 +243,8 @@
         [weakAdv requestValuePopoverAtFraction:newFrac];
       else
         [weakBasic requestValuePopoverAtFraction:newFrac];
+      if (s.onGuideFilmstripCellActivated)
+        s.onGuideFilmstripCellActivated(newFrac);
     };
   }
 

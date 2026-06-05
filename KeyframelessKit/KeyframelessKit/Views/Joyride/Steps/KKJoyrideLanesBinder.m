@@ -130,6 +130,8 @@
     lanes.onStaticValueDragEnded = nil;
     lanes.onGapPopoverWillOpen = nil;
     lanes.onGapPopoverCurveChanged = nil;
+    lanes.onGuideRenderModeChanged = nil;
+    lanes.onGuideFilmstripCellActivated = nil;
     KKTimelineBasicView *graph = lanes.basicGraph;
     graph.onPhaseToggled = nil;
     graph.onDiamondTapped = nil;
@@ -277,6 +279,26 @@
            label:nil];
   };
 
+  lanes.onGuideRenderModeChanged = ^(KKMiniCanvasRenderMode mode) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    [s _fireType:KKJoyrideTriggerTypeRenderModeChanged
+          intArg:(NSInteger)mode
+         intArg2:0
+           label:nil];
+  };
+
+  lanes.onGuideFilmstripCellActivated = ^(double fraction) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    [s _fireType:KKJoyrideTriggerTypeFilmstripCellActivated
+          intArg:0
+         intArg2:0
+           label:nil];
+  };
+
   KKTimelineBasicView *graph = lanes.basicGraph;
   graph.onPhaseToggled = ^(NSInteger phase, BOOL on) {
     __strong typeof(weak) s = weak;
@@ -316,12 +338,12 @@
   if (!cv)
     return;
   __weak typeof(self) weak = self;
-  cv.onViewTransformChanged = ^{
+  cv.onViewTransformChanged = ^(KKMiniCanvasTransformKind kind) {
     __strong typeof(weak) s = weak;
     if (!s)
       return;
     [s _fireType:KKJoyrideTriggerTypeMiniCanvasViewTransformChanged
-          intArg:0
+          intArg:(NSInteger)kind
          intArg2:0
            label:nil];
   };
@@ -517,6 +539,8 @@
   case KKJoyrideTriggerTypeGapPopoverCurveChanged:
   case KKJoyrideTriggerTypeDiamondTapped:
   case KKJoyrideTriggerTypeGapTapped:
+  case KKJoyrideTriggerTypeRenderModeChanged:
+  case KKJoyrideTriggerTypeMiniCanvasViewTransformChanged:
     if (t.intArg >= 0 && t.intArg != intArg)
       return NO;
     return YES;

@@ -54,6 +54,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKMiniCanvasGuideScroll.h>
 #import <KeyframelessKit/KKMiniCanvasRenderer.h>
 #import <KeyframelessKit/KKMiniCanvasView.h>
+#import <KeyframelessKit/KKMiniViewerGuide.h>
 #import <KeyframelessKit/KKMotionBlur.h>
 #import <KeyframelessKit/KKMotionLean.h>
 #import <KeyframelessKit/KKOSCGuideBridge.h>
