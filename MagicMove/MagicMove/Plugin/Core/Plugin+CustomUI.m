@@ -12,14 +12,62 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 @import KeyframelessAI;
 
+static NSString *const kMagicMoveIntroSeenKey = @"MagicMoveIntroSeen";
+
 /// MagicMove draws Position + Rotation on-screen controls, so it opts into the
 /// inspector's "On-Screen Controls" visibility row (other plugins default off).
+/// It also hosts the shared KKTimingGuide walkthroughs (Position lane).
+/// MagicMove draws Position + Rotation on-screen controls, so it opts into the
+/// inspector's "On-Screen Controls" visibility row. It also hosts the shared
+/// KKTimingGuide walkthroughs (Position lane); all the guide lifecycle lives in
+/// the kit base - this subclass only supplies the per-plugin config data.
 @interface MagicMoveInspectorView : KKTimelineInspectorView
+- (KKTimingGuideConfig *)_timingGuideConfig;
 @end
 
 @implementation MagicMoveInspectorView
 - (BOOL)showsOSCVisibilityRow {
   return YES;
+}
+
+// First-appearance autostart of the "Introduction" (basic timing) guide. The
+// config provider is installed here (lazily, once) so the kit's restart /
+// autostart machinery can pull a fresh config when a guide starts.
+- (void)viewDidMoveToWindow {
+  [super viewDidMoveToWindow];
+  if (self.isDetachedCopy)
+    return;
+  if (!self.timingGuideConfigProvider) {
+    __weak typeof(self) weak = self;
+    self.timingGuideConfigProvider = ^KKTimingGuideConfig * {
+      __strong typeof(weak) s = weak;
+      return s ? [s _timingGuideConfig] : nil;
+    };
+  }
+  [self autostartIntroGuideOnceWithSeenKey:kMagicMoveIntroSeenKey];
+}
+
+// MagicMove's timing-guide data: it teaches the Position lane. The inspector
+// bridges (play button, tabs, scrub, play-accent, preview) come pre-wired from
+// -makeTimingGuideConfig; only the plugin data + the viewer rect (from the OSC
+// bridge, unioned into the watch-back cutout) are filled here.
+- (KKTimingGuideConfig *)_timingGuideConfig {
+  KKTimingGuideConfig *cfg = [self makeTimingGuideConfig];
+  cfg.primaryLabel = @"Position";
+  // OSCs to keep visible while this guide runs (the rest are hidden).
+  cfg.oscKeepLabels = @[ @"Position" ];
+  cfg.primaryComponentCount = 2;
+  cfg.primaryValueType = KKLaneValueTypeGeneric;
+  cfg.primarySeedValues = @[ @0.5, @0.5 ];
+  // Destination the constants step drags Position to (off-centre from the
+  // seeded centre, normalized 0..1).
+  cfg.primaryTargetValues = @[ @0.7, @0.35 ];
+  // A different spot for the keypose-edit drag so the handle visibly moves.
+  cfg.keyposeTargetValues = @[ @0.3, @0.62 ];
+  cfg.viewerScreenRect = ^NSRect {
+    return MagicMoveSharedOSCGuideBridge().estimatedViewerScreenRect;
+  };
+  return cfg;
 }
 @end
 
@@ -245,6 +293,15 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                          compounds:[MagicMovePlugin oscCompounds]
                            paramID:kParamUIState];
   view.miniCanvasDelegate = self.miniCanvasRenderer;
+
+  // Force OSCs visible while a guide runs (so its mini-canvas + viewer handles
+  // are usable), then restore the user's OSC setting on guide end.
+  [self kkInstallGuideOSCForcingOnHost:[(MagicMoveInspectorView *)
+                                               view timingGuideHost]
+                                  view:view
+                           elementKeys:[KKPlugin
+                                           kkOSCElementKeysForCompounds:
+                                               [MagicMovePlugin oscCompounds]]];
   // Per-instance rendezvous paths (keyed by the instance UUID minted above) so
   // two stacked MagicMove clips read/write distinct /tmp files instead of the
   // top clip flickering the one below it.
@@ -330,6 +387,30 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   if (self.renderCache.effectDurSec > 0.0)
     [self.playheadPoller ensureRunning];
   return view;
+}
+
+- (NSArray<KKHelpGuide *> *)helpGuides {
+  // The Introduction + Advanced Timing entries (copy, gating, completion
+  // wiring) are identical across plugins, so the kit builds them. MagicMove
+  // only supplies the canvas-reference gate (set once the user hovers the
+  // viewer; the watch-back step needs it for the viewer cutout) and the live
+  // inspector.
+  __weak typeof(self) weak = self;
+  return [KKTimingGuide
+      standardHelpGuidesForInspectorProvider:^KKTimelineInspectorView * {
+        __strong typeof(weak) strong = weak;
+        return strong.inspectorView;
+      }
+      enabledProvider:^BOOL {
+        return MagicMoveSharedOSCGuideBridge().hasCanvasReference;
+      }];
+}
+
+- (NSNotificationName)helpGuideRefreshNotificationName {
+  // The OSC bridge posts this ~1/s while the OSC draws, so the help window
+  // re-evaluates the enabled gate once the user hovers the viewer and the
+  // canvas reference is established.
+  return MagicMoveSharedOSCGuideBridge().guidePositionNotificationName;
 }
 
 - (NSArray<KKHelpSection *> *)helpSections {

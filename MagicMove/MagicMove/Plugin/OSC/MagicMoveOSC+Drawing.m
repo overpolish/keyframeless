@@ -226,6 +226,10 @@
   // them so the arc sits on top of the rings/box and stays easy to see + grab.
   CGPoint pos = [self oscPositionAtTime:time];
 
+  // Feed the guide bridge this tick's canvas geometry so the timing guide's
+  // watch-back step can highlight the viewer.
+  [self _ingestGuideDrawTickWithPosition:pos];
+
   // Rotation sphere is centred on the same canvas point as Position (the
   // image rotates around its centre, which is where Position translates it).
   BOOL rotDragging = self.isDragging && activePart == kOSCRotationPart;

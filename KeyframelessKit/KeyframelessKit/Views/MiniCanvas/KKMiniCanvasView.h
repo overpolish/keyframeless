@@ -107,6 +107,14 @@ NS_ASSUME_NONNULL_BEGIN
     pointHandleCenter:(out CGPoint *)outCenter
              forValue:(double)value
           contentRect:(CGRect)contentRect;
+/// 2D sibling of the above: where the point handle's centre would be if its
+/// value were the multi-component `values` (e.g. Position `[x, y]`). Lets a
+/// guide place a "drag to here" target for a spatial point handle. NO if
+/// unsupported.
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    pointHandleCenter:(out CGPoint *)outCenter
+            forValues:(NSArray<NSNumber *> *)values
+          contentRect:(CGRect)contentRect;
 /// 3-ring rotation gizmo overlay (KKRotationOSC parity on the mini-canvas).
 /// The delegate fills in the centre (overlay points, y-up), pixel radius,
 /// and a `KKRotationOSCParams` struct holding the world matrix + ring
@@ -284,6 +292,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// guide's amber "drag to here" target. `NSZeroRect` if the delegate doesn't
 /// implement the value-parameterized hook or the view isn't in a window.
 - (NSRect)pointHandleScreenRectForValue:(double)value;
+
+/// 2D sibling: screen rect of where the point handle would sit at the
+/// multi-component `values` (e.g. Position `[x, y]`). `NSZeroRect` if the
+/// delegate doesn't implement the values hook or the view isn't in a window.
+- (NSRect)pointHandleScreenRectForValues:(NSArray<NSNumber *> *)values;
 
 /// Screen rect of crop handle `index` (order/count match
 /// -miniCanvas:extraHandleCentersForContentRect:; 0 = top-left) for the

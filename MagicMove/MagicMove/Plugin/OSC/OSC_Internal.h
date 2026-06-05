@@ -26,6 +26,20 @@ enum {
 @property(nonatomic, retain) KKRotationOSC *rotationOSC;
 @property(nonatomic, retain) KKPointOSC *anchorOSC;
 @property(nonatomic, retain) KKPointOSC *handleOSC;
+/// Feed one drawOSC tick to the shared guide bridge so it can compute the
+/// viewer screen rect (for the timing guide's watch-back cutout). `pos` is the
+/// current Position in canvas space. Cheap; called every drawOSC tick.
+- (void)_ingestGuideDrawTickWithPosition:(CGPoint)pos;
+
+/// Feed one hit-test sample (screen + canvas coords together) to the guide
+/// bridge. This is the ONLY place the screen<->canvas anchor + a valid canvas
+/// scale arrive, so it's what bootstraps `estimatedViewerScreenRect` (the draw
+/// tick alone can't). Called at the top of hitTestOSCAtMousePositionX.
+- (void)_ingestGuideHitTestAtCanvasX:(double)cx y:(double)cy;
+
+/// Canvas-space corners of the clip's frame (OBJECT (0,0)/(1,1) -> CANVAS),
+/// used by both guide-bridge feeds. NO if the OSC API is unavailable.
+- (BOOL)_guideCanvasTopRight:(CGPoint *)outTR bottomLeft:(CGPoint *)outBL;
 /// Scale transform-box gizmo: the shared KKBoxOSC (border + 8 corner/edge
 /// handles + a "X% x Y%" readout). Sized via KKScaleGizmo from the Scale lane,
 /// centred on Position, drawn outside the rotation rings.

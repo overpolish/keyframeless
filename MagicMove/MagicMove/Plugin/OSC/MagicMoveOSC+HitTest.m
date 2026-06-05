@@ -96,6 +96,10 @@
   self.anchorHovered = NO;
   self.scaleHitHandle = -1;
   double frac = [self _fractionAtTime:time];
+  // Bootstrap the guide bridge's screen<->canvas reference (the only place a
+  // valid canvas scale + screen point arrive together). Done before the early
+  // returns so every hover feeds it.
+  [self _ingestGuideHitTestAtCanvasX:positionX y:positionY];
   // Anchor pivot square is the topmost control: checked first so it is always
   // grabbable / opt-hideable. It is small, so the larger Position arc ring
   // around it stays clickable - the two coincide at the clip centre by default.

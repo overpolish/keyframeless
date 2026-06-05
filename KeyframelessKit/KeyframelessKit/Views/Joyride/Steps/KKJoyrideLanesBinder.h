@@ -104,6 +104,12 @@ typedef NS_ENUM(NSInteger, KKJoyrideCloseOnAdvance) {
 @property(nonatomic, copy, nullable) void (^staticValueDragDidEnd)
     (NSString *label, NSArray<NSNumber *> *values);
 
+/// Fired on every play-button tap forwarded via -notifyPlaybackToggleTapped,
+/// after the playToggleEdge bookkeeping. The shared timing guide uses it to
+/// run the watch-back auto-pause timer itself, so the plugin only has to
+/// forward taps (it doesn't own any watch-back logic).
+@property(nonatomic, copy, nullable) void (^playToggleTapped)(void);
+
 #pragma mark - Teardown
 
 /// Nils every callback property installed on the lanes view + basic graph +

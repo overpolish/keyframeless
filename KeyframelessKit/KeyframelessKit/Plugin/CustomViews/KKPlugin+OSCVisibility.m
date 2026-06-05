@@ -8,6 +8,8 @@
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
 #import "KKTimelineInspectorView.h"
+#import <KeyframelessKit/KKJoyrideGuideHost.h>
+#import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
 
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
@@ -144,6 +146,83 @@
     [view setOSCVisible:oscVisible];
     renderer.handlesHidden = !oscVisible;
   });
+}
+
+- (NSDictionary *)
+    kkForceOSCForGuideKeepingLabels:(NSArray<NSString *> *)keepLabels
+                        elementKeys:(NSArray<NSString *> *)keys
+                               view:(KKTimelineInspectorView *)view
+                           renderer:(KKMiniCanvasRenderer *)renderer {
+  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
+  BOOL priorMaster = st ? st.oscMasterVisible : YES;
+  NSSet<NSString *> *priorHidden =
+      st.hiddenOSCElements ? [st.hiddenOSCElements copy] : [NSSet set];
+  // Hide everything except the kept labels (nil/empty = show all). Transient
+  // only - no patchUIStateKey, so the user's saved OSC visibility is untouched.
+  NSSet<NSString *> *forced;
+  if (keepLabels.count) {
+    NSMutableSet<NSString *> *h = [NSMutableSet setWithArray:keys];
+    [h minusSet:[NSSet setWithArray:keepLabels]];
+    forced = h;
+  } else {
+    forced = [NSSet set];
+  }
+  if (st) {
+    st.oscMasterVisible = YES;
+    st.hiddenOSCElements = forced;
+  }
+  renderer.handlesHidden = NO;
+  renderer.hiddenHandleLabels = forced;
+  [view setOSCVisible:YES];
+  return @{@"master" : @(priorMaster), @"hidden" : priorHidden};
+}
+
+- (void)kkRestoreOSCForGuide:(NSDictionary *)snapshot
+                        view:(KKTimelineInspectorView *)view
+                    renderer:(KKMiniCanvasRenderer *)renderer {
+  if (!snapshot)
+    return;
+  BOOL priorMaster = [snapshot[@"master"] boolValue];
+  NSSet<NSString *> *priorHidden = snapshot[@"hidden"];
+  if (![priorHidden isKindOfClass:[NSSet class]])
+    priorHidden = [NSSet set];
+  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
+  if (st) {
+    st.oscMasterVisible = priorMaster;
+    st.hiddenOSCElements = priorHidden;
+  }
+  renderer.handlesHidden = !priorMaster;
+  renderer.hiddenHandleLabels = priorHidden;
+  [view setOSCVisible:priorMaster];
+}
+
+- (void)kkInstallGuideOSCForcingOnHost:(KKJoyrideGuideHost *)host
+                                  view:(KKTimelineInspectorView *)view
+                           elementKeys:(NSArray<NSString *> *)keys {
+  __weak typeof(self) weakPlugin = self;
+  __weak KKTimelineInspectorView *weakView = view;
+  __block NSDictionary *snapshot = nil;
+  host.onRunWillStart = ^{
+    __strong typeof(weakPlugin) p = weakPlugin;
+    __strong KKTimelineInspectorView *v = weakView;
+    if (!p || !v)
+      return;
+    // Keep-set + renderer resolve at fire time: the running guide's config has
+    // installed `guideOSCKeepLabels` by now, and the renderer may have changed.
+    KKMiniCanvasRenderer *r = (KKMiniCanvasRenderer *)v.miniCanvasDelegate;
+    snapshot = [p kkForceOSCForGuideKeepingLabels:v.guideOSCKeepLabels
+                                      elementKeys:keys
+                                             view:v
+                                         renderer:r];
+  };
+  host.onRunDidEnd = ^{
+    __strong typeof(weakPlugin) p = weakPlugin;
+    __strong KKTimelineInspectorView *v = weakView;
+    if (!p || !v)
+      return;
+    KKMiniCanvasRenderer *r = (KKMiniCanvasRenderer *)v.miniCanvasDelegate;
+    [p kkRestoreOSCForGuide:snapshot view:v renderer:r];
+  };
 }
 
 @end

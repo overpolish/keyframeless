@@ -21,6 +21,7 @@
 @class KKLane;
 @class _KKCompatBannerView;
 @class _KKMotionBlurSettingsView;
+@class KKJoyrideGuideHost;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -30,6 +31,10 @@ NS_ASSUME_NONNULL_BEGIN
   /// alongside (not replacing) the host's `onTabChanged`. The +Guide
   /// category stores/reads this.
   void (^_onGuideTabChanged)(NSInteger tab);
+  /// Guide-only: OSC element labels to keep visible during the current guide
+  /// run (the +Guide category stores/reads this; the plugin's OSC hook uses
+  /// it).
+  NSArray<NSString *> *_guideOSCKeepLabels;
   /// Guide-only: when YES the play button accent is driven deterministically
   /// by taps (each tap toggles it) and the poll-inferred `setPlaying:` is
   /// ignored. A guide owns the playhead scenario, so the inferred state
@@ -39,6 +44,18 @@ NS_ASSUME_NONNULL_BEGIN
   /// Guide-only: fired on every raw play-button tap (one per click,
   /// deterministic). The +Guide category stores/reads this.
   void (^_onPlaybackToggleTapped)(void);
+  /// Guide-only: fired by the shared guide host when a run reaches its final
+  /// step (completed, not skipped). The plugin's help guide sets this to mark
+  /// itself done. The +Guide category stores/reads this.
+  void (^_onGuideCompleted)(void);
+  /// Guide-only: the one shared KKJoyrideGuideHost serving the Basic + Advanced
+  /// timing guides. Lazily built by -timingGuideHost in the +Guide category.
+  KKJoyrideGuideHost *_timingGuideHost;
+  /// Guide-only: the plugin's config builder, set once in
+  /// createViewForParameterID. The kit's restart/autostart methods call it to
+  /// get a fresh KKTimingGuideConfig (plugin data + the inspector bridges from
+  /// -makeTimingGuideConfig). id-typed to avoid importing KKTimingGuide here.
+  id _timingGuideConfigProvider;
 
   // Main inspector state (migrated off the @implementation block so the
   // +ParameterRows / layout categories can reach it).

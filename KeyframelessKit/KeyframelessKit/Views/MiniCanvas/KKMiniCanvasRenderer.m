@@ -102,6 +102,11 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
            forContentRect:(CGRect)contentRect {
   return NO;
 }
+- (BOOL)pointHandleCenter:(out CGPoint *)outCenter
+                forValues:(NSArray<NSNumber *> *)values
+           forContentRect:(CGRect)contentRect {
+  return NO;
+}
 - (BOOL)pointHandleHitAtPoint:(CGPoint)p contentRect:(CGRect)contentRect {
   return NO;
 }
@@ -695,6 +700,15 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   if (![self _pointActiveForContentRect:cr])
     return NO;
   return [self pointHandleCenter:outCenter forValue:value forContentRect:cr];
+}
+
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    pointHandleCenter:(out CGPoint *)outCenter
+            forValues:(NSArray<NSNumber *> *)values
+          contentRect:(CGRect)cr {
+  if (![self _pointActiveForContentRect:cr])
+    return NO;
+  return [self pointHandleCenter:outCenter forValues:values forContentRect:cr];
 }
 
 - (BOOL)miniCanvas:(KKMiniCanvasView *)canvas

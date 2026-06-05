@@ -182,19 +182,19 @@ static NSString *_RoundedAILaneSchemaText(void) {
     [view setOSCVisible:oscMasterVisible];
     [view setRenderMode:renderMode];
 
+    // Force OSCs visible while a guide runs (so its mini-canvas + viewer
+    // handles are usable), then restore the user's OSC setting on guide end.
+    [self kkInstallGuideOSCForcingOnHost:[(RoundedInspectorView *)
+                                                 view timingGuideHost]
+                                    view:view
+                             elementKeys:[KKPlugin kkOSCElementKeysForCompounds:
+                                                       oscCompounds]];
+
     [self kkWireStandardInspectorCallbacksForView:view
                                    uiStateParamID:kParamUIState
                                renderNudgeParamID:kParamRenderNudge
                                     dragUndoLabel:@"Adjust Radius"
                                detachedWindowSize:CGSizeMake(720.0, 460.0)];
-
-    // Rounded-only: the inspector needs the host effect-header rect (for the
-    // OSC-guide overlay positioning).
-    __weak typeof(self) weak = self;
-    view.effectHeaderRectProvider = ^NSRect {
-      __strong typeof(weak) strong = weak;
-      return strong ? [strong effectHeaderScreenRect] : NSZeroRect;
-    };
 
     self.inspectorView = view;
     if (!self.playheadPoller) {
@@ -217,163 +217,19 @@ static NSString *_RoundedAILaneSchemaText(void) {
 }
 
 - (NSArray<KKHelpGuide *> *)helpGuides {
+  // The Introduction + Advanced Timing entries (copy, gating, completion
+  // wiring) are identical across plugins, so the kit builds them. Rounded only
+  // supplies the canvas-reference gate (the final Basic step's viewer cutout
+  // needs an OSC draw tick) and the live inspector.
   __weak typeof(self) weak = self;
-  __block __weak KKHelpGuide *weakIntro = nil;
-  KKHelpGuide *intro = [KKHelpGuide
-      guideWithTitle:RLoc(@"Introduction",
-                          @"Help guide title: re-run the basics walkthrough.")
-            subtitle:RLoc(@"Walk through the basics again",
-                          @"Help guide subtitle: Introduction.")
-             onStart:^{
-               __strong typeof(weak) strong = weak;
-               strong.inspectorView.onGuideCompleted = ^{
-                 [weakIntro markCompleted];
-               };
-               [strong.inspectorView restartIntroGuide];
-             }];
-  weakIntro = intro;
-  // Gate every guide on Rounded being the selected effect - consistent
-  // expectation across all guides (the per-guide reasons differ in detail
-  // but the user-facing requirement is the same). The section-level warning
-  // pulls the first non-empty disabledSubtitle, so set it on intro too.
-  intro.enabledProvider = ^BOOL {
-    return RoundedHasCanvasReference();
-  };
-  intro.disabledSubtitle =
-      RLoc(@"Guides are disabled. Please select a Rounded clip to enable them, "
-           @"if already selected move your mouse over the viewer.",
-           @"Intro guide disabled subtitle (no Rounded clip selected).");
-
-  __block __weak KKHelpGuide *weakOSC = nil;
-  KKHelpGuide *osc = [KKHelpGuide
-      guideWithTitle:RLoc(@"OSC Basics",
-                          @"Help guide title: on-screen control basics.")
-            subtitle:RLoc(@"Learn how the on-screen control works",
-                          @"Help guide subtitle: OSC Basics.")
-             onStart:^{
-               __strong typeof(weak) strong = weak;
-               // This guide teaches the drag - require actually
-               // reaching the target before it advances.
-               strong.inspectorView.oscGuideRequireTargetHit = YES;
-               strong.inspectorView.onGuideCompleted = ^{
-                 [weakOSC markCompleted];
-               };
-               [strong.inspectorView restartOSCGuide];
-             }];
-  weakOSC = osc;
-  osc.enabledProvider = ^BOOL {
-    return RoundedHasCanvasReference();
-  };
-  osc.disabledSubtitle =
-      RLoc(@"Guides are disabled - select a Rounded clip to enable them",
-           @"Help guide disabled subtitle (no Rounded clip selected).");
-  // OSC guide has a zoom-to-fit + settle warm-up; spin the play button until
-  // the overlay is actually on screen.
-  osc.activeProvider = ^BOOL {
-    __strong typeof(weak) strong = weak;
-    return strong.inspectorView.oscGuideActive;
-  };
-
-  __block __weak KKHelpGuide *weakFull = nil;
-  KKHelpGuide *full = [KKHelpGuide
-      guideWithTitle:RLoc(
-                         @"Full Walkthrough",
-                         @"Help guide title: full inspector + OSC walkthrough.")
-            subtitle:RLoc(@"Inspector and on-screen control, end to end",
-                          @"Help guide subtitle: Full Walkthrough.")
-             onStart:^{
-               __strong typeof(weak) strong = weak;
-               // Ends on the OSC drag - enforce landing on the
-               // target, same as the standalone OSC guide.
-               strong.inspectorView.oscGuideRequireTargetHit = YES;
-               strong.inspectorView.onGuideCompleted = ^{
-                 [weakFull markCompleted];
-               };
-               [strong.inspectorView restartFullWalkthroughGuide];
-             }];
-  weakFull = full;
-  // Starts on the inspector but ends in the viewer, so it needs the canvas
-  // reference just like the OSC guide. No activeProvider: the zoom-to-fit
-  // warm-up is mid-guide (entering the OSC portion), not at start, so there's
-  // nothing to spin the play button for.
-  full.enabledProvider = ^BOOL {
-    return RoundedHasCanvasReference();
-  };
-  full.disabledSubtitle =
-      RLoc(@"Guides are disabled - select a Rounded clip to enable them",
-           @"Help guide disabled subtitle (no Rounded clip selected).");
-
-  __block __weak KKHelpGuide *weakConstants = nil;
-  KKHelpGuide *constants = [KKHelpGuide
-      guideWithTitle:RLoc(@"Constants",
-                          @"Help guide title: editing non-animating values.")
-            subtitle:RLoc(@"Edit non-animating values in the mini-canvas",
-                          @"Help guide subtitle: Constants.")
-             onStart:^{
-               __strong typeof(weak) strong = weak;
-               strong.inspectorView.onGuideCompleted = ^{
-                 [weakConstants markCompleted];
-               };
-               [strong.inspectorView restartConstantsGuide];
-             }];
-  weakConstants = constants;
-  // Needs the live mini-canvas preview (radius handle + zoom/pan), so it
-  // requires a Rounded clip just like the OSC guide.
-  constants.enabledProvider = ^BOOL {
-    return RoundedHasCanvasReference();
-  };
-  constants.disabledSubtitle =
-      RLoc(@"Guides are disabled - select a Rounded clip to enable them",
-           @"Help guide disabled subtitle (no Rounded clip selected).");
-
-  __block __weak KKHelpGuide *weakBasicTiming = nil;
-  KKHelpGuide *basicTiming = [KKHelpGuide
-      guideWithTitle:RLoc(@"Timing Basics",
-                          @"Help guide title: basic timing walkthrough.")
-            subtitle:RLoc(@"Add animatable properties and turn on a transition",
-                          @"Help guide subtitle: Timing Basics.")
-             onStart:^{
-               __strong typeof(weak) strong = weak;
-               strong.inspectorView.onGuideCompleted = ^{
-                 [weakBasicTiming markCompleted];
-               };
-               [strong.inspectorView restartBasicTimingGuide];
-             }];
-  weakBasicTiming = basicTiming;
-  // The final step's cutout unions the play button with the FCP viewer
-  // rect, which only resolves once the OSC bridge has a draw tick. Same
-  // canvas-reference gate as the OSC + constants guides.
-  basicTiming.enabledProvider = ^BOOL {
-    return RoundedHasCanvasReference();
-  };
-  basicTiming.disabledSubtitle =
-      RLoc(@"Guides are disabled - select a Rounded clip to enable them",
-           @"Help guide disabled subtitle (no Rounded clip selected).");
-
-  __block __weak KKHelpGuide *weakAdvancedTiming = nil;
-  KKHelpGuide *advancedTiming = [KKHelpGuide
-      guideWithTitle:RLoc(@"Advanced Timing",
-                          @"Help guide title: advanced timing walkthrough.")
-            subtitle:
-                RLoc(
-                    @"Add keyposes anywhere and shape transitions per property",
-                    @"Help guide subtitle: Advanced Timing.")
-             onStart:^{
-               __strong typeof(weak) strong = weak;
-               strong.inspectorView.onGuideCompleted = ^{
-                 [weakAdvancedTiming markCompleted];
-               };
-               [strong.inspectorView restartAdvancedTimingGuide];
-             }];
-  weakAdvancedTiming = advancedTiming;
-  advancedTiming.enabledProvider = ^BOOL {
-    return RoundedHasCanvasReference();
-  };
-  advancedTiming.disabledSubtitle =
-      RLoc(@"Guides are disabled - select a Rounded clip to enable them",
-           @"Help guide disabled subtitle (no Rounded clip selected).");
-
-  return @[ intro, osc, full, constants, basicTiming, advancedTiming ];
+  return [KKTimingGuide
+      standardHelpGuidesForInspectorProvider:^KKTimelineInspectorView * {
+        __strong typeof(weak) strong = weak;
+        return strong.inspectorView;
+      }
+      enabledProvider:^BOOL {
+        return RoundedHasCanvasReference();
+      }];
 }
 
 - (NSNotificationName)helpGuideRefreshNotificationName {

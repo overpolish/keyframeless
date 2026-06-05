@@ -17,4 +17,10 @@ NS_ASSUME_NONNULL_BEGIN
 @interface MagicMoveOSC : KKArcOSC
 @end
 
+/// Shared per-process OSC guide bridge. The inspector's timing guide reads
+/// `estimatedViewerScreenRect` from it (for the watch-back viewer cutout); the
+/// OSC feeds it canvas geometry each drawOSC tick. Same instance across the
+/// XPC process (so the inspector and the OSC share it).
+KKOSCGuideBridge *MagicMoveSharedOSCGuideBridge(void);
+
 NS_ASSUME_NONNULL_END

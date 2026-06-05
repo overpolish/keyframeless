@@ -181,13 +181,32 @@
 
 // `ctr` is overlay points, y-up, in the canvas's own coordinate space (the
 // overlay fills the canvas bounds 1:1) → glyph rect in screen space.
-- (NSRect)_screenRectForHandleCenter:(CGPoint)ctr {
+// The point handle's visual radius in view points. Arc-style handles (e.g.
+// Magic Move's Position) draw a ring ~2x the point dot that scales with the
+// popover, so a guide spotlight must match it (mirrors +Rendering's arc glyph:
+// outer 9pt at the 230pt baseline canvas height).
+- (CGFloat)_pointHandleRadiusPt {
+  id del = self.canvasDelegate;
+  if ([del isKindOfClass:[KKMiniCanvasRenderer class]] &&
+      [(KKMiniCanvasRenderer *)del pointHandleStyle] == KKMiniHandleStyleArc) {
+    CGFloat canvasScale = self.bounds.size.height / 230.0;
+    if (canvasScale <= 0)
+      canvasScale = 1.0;
+    return 9.0 * canvasScale;
+  }
+  return kKKMiniHandleOuterPt;
+}
+
+- (NSRect)_screenRectForHandleCenter:(CGPoint)ctr radius:(CGFloat)r {
   NSWindow *w = self.window;
   if (!w)
     return NSZeroRect;
-  CGFloat r = kKKMiniHandleOuterPt;
   NSRect inView = NSMakeRect(ctr.x - r, ctr.y - r, 2 * r, 2 * r);
   return [w convertRectToScreen:[self convertRect:inView toView:nil]];
+}
+
+- (NSRect)_screenRectForHandleCenter:(CGPoint)ctr {
+  return [self _screenRectForHandleCenter:ctr radius:kKKMiniHandleOuterPt];
 }
 
 - (NSRect)pointHandleScreenRect {
@@ -201,7 +220,8 @@
           pointHandleCenter:&ctr
                 contentRect:[self contentRectInViewPoints]])
     return NSZeroRect;
-  return [self _screenRectForHandleCenter:ctr];
+  return [self _screenRectForHandleCenter:ctr
+                                   radius:[self _pointHandleRadiusPt]];
 }
 
 - (NSRect)pointHandleScreenRectForValue:(double)value {
@@ -216,7 +236,24 @@
                    forValue:value
                 contentRect:[self contentRectInViewPoints]])
     return NSZeroRect;
-  return [self _screenRectForHandleCenter:ctr];
+  return [self _screenRectForHandleCenter:ctr
+                                   radius:[self _pointHandleRadiusPt]];
+}
+
+- (NSRect)pointHandleScreenRectForValues:(NSArray<NSNumber *> *)values {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (!self.window ||
+      ![d respondsToSelector:
+              @selector(miniCanvas:pointHandleCenter:forValues:contentRect:)])
+    return NSZeroRect;
+  CGPoint ctr;
+  if (![d miniCanvas:self
+          pointHandleCenter:&ctr
+                  forValues:values
+                contentRect:[self contentRectInViewPoints]])
+    return NSZeroRect;
+  return [self _screenRectForHandleCenter:ctr
+                                   radius:[self _pointHandleRadiusPt]];
 }
 
 - (NSRect)_screenRectForHandleCenters:(NSArray<NSValue *> *)centers

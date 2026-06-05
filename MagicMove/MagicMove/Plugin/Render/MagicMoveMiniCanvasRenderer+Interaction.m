@@ -279,6 +279,19 @@ static const double kMiniScaleFineFactor = 0.2;
   return NO;
 }
 
+- (BOOL)pointHandleCenter:(out CGPoint *)outCenter
+                forValues:(NSArray<NSNumber *> *)values
+           forContentRect:(CGRect)cr {
+  // Position target: map the 2D [x, y] to the handle's screen-space centre,
+  // the same path the live handle uses - lets a guide place a "drag to here"
+  // destination point.
+  if (values.count < 2 || cr.size.width <= 0 || cr.size.height <= 0)
+    return NO;
+  if (outCenter)
+    *outCenter = [self _handlePointForContentRect:cr position:values];
+  return YES;
+}
+
 - (BOOL)pointHandleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
   CGPoint hp =
       [self _handlePointForContentRect:cr

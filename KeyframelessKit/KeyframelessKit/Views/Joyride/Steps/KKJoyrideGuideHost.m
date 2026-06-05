@@ -151,6 +151,9 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
   if (!hostView || !lanesView || !buildSteps)
     return;
 
+  if (self.onRunWillStart)
+    self.onRunWillStart();
+
   KKJoyrideController *guide =
       [[KKJoyrideController alloc] initWithHostView:hostView];
   guide.forwardsGestures = self.forwardsGestures;
@@ -175,6 +178,8 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
                  s.onGuideCompleted();
                if (extra)
                  extra();
+               if (s.onRunDidEnd)
+                 s.onRunDidEnd();
                [s _teardown];
              }];
 }

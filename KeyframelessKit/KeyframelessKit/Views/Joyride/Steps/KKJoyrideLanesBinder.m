@@ -109,6 +109,8 @@
            intArg:0
           intArg2:0
             label:nil];
+  if (self.playToggleTapped)
+    self.playToggleTapped();
 }
 
 #pragma mark - Teardown
@@ -142,6 +144,7 @@
     cv.onViewReset = nil;
   }
   _mcWiredCanvas = nil;
+  self.playToggleTapped = nil;
   KKJoyrideController *guide = _guide;
   if (guide)
     guide.additionalPassthroughWindow = nil;
