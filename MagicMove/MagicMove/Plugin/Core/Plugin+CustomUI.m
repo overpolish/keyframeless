@@ -94,6 +94,13 @@ static BOOL MagicMovePositionNearTarget(NSPoint p) {
   cfg.primaryComponentCount = 2;
   cfg.primaryValueType = KKLaneValueTypeGeneric;
   cfg.primarySeedValues = @[ @0.5, @0.5 ];
+  // Second lane in the Advanced seed (mirrors Rounded's Radius + Crop), so the
+  // per-property timeline + marquee multi-select are taught across two rows.
+  // Scale is a non-featured lane (not in the Position-only keypose mini-canvas),
+  // so seeding it can't disturb the featured Position handles.
+  cfg.secondaryLabel = @"Scale";
+  cfg.secondaryValueType = KKLaneValueTypeFloat;
+  cfg.secondarySeedValues = @[ @100.0, @100.0 ];
   // Destination the constants step drags Position to (off-centre from the
   // seeded centre, normalized 0..1).
   cfg.primaryTargetValues = @[ @0.7, @0.35 ];

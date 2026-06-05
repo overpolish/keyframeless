@@ -26,6 +26,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// When YES, clicks inside the spotlight pass through to the app below instead
 /// of being forwarded to the XPC inspector window. Use for OSC / viewer steps.
 @property(nonatomic) BOOL spotlightPassThrough;
+/// Set on a `spotlightPassThrough` step that drives an IN-PROCESS inspector
+/// view via the synthesize path (`spotlightMouseDown`/Dragged/Up), as opposed
+/// to a host/viewer step that wants raw events to reach FCP. The overlay panel
+/// must keep capturing raw mouse events for these (`ignoresMouseEvents = NO`),
+/// otherwise the press also lands on the real view beneath the panel and the
+/// drag fires twice - double `onDragBegin` leaks an undo group and the next
+/// drag's `startUndoGroup` aborts. Pass-through routing (spotFirst + synthesize)
+/// still applies; only the panel's event capture differs.
+@property(nonatomic) BOOL spotlightSynthesizesInProcess;
 /// When set, called on the main queue with the screen-space point of a
 /// mouseDown inside the spotlight (instead of letting it fall through to FCP).
 /// Use to drive plugin OSC methods directly without a Finder-activation trick.

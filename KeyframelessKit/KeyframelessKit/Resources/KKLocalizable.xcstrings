@@ -5208,6 +5208,132 @@
           }
         }
       }
+    },
+    "Drag any <accent>selected</accent> keypose - they all retime together.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehen Sie eine beliebige <accent>ausgewählte</accent> Keypose - alle werden gemeinsam neu getimt."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser n'importe quelle pose clé <accent>sélectionnée</accent> : toutes sont recalées dans le temps ensemble."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra cualquier pose clave <accent>seleccionada</accent>: todas se reajustan en el tiempo juntas."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>選択した</accent>キーポーズをドラッグすると、すべてが一緒にタイミング変更されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>선택한</accent> 키포즈를 드래그하면 모두 함께 타이밍이 조정됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动任意<accent>已选中</accent>的关键姿势，它们会一起重新设定时间。"
+          }
+        }
+      },
+      "comment": "Advanced timing guide: drag the multi-selection to retime."
+    },
+    "Start a drag in the <accent>highlighted region</accent> and move right to box-select several keyposes.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beginnen Sie einen Zug im <accent>markierten Bereich</accent> und ziehen Sie nach rechts, um mehrere Keyposes per Rahmen auszuwählen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commencez un glissement dans la <accent>zone en surbrillance</accent> et déplacez-vous vers la droite pour sélectionner plusieurs poses clés au cadre."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empieza a arrastrar en la <accent>región resaltada</accent> y muévete a la derecha para seleccionar varias poses clave con un recuadro."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>ハイライト表示された領域</accent>でドラッグを開始し、右に動かして複数のキーポーズを枠選択します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>강조 표시된 영역</accent>에서 드래그를 시작하고 오른쪽으로 이동하여 여러 키포즈를 상자로 선택하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在<accent>高亮区域</accent>中开始拖动并向右移动，框选多个关键姿势。"
+          }
+        }
+      },
+      "comment": "Advanced timing guide: start a marquee selection."
+    },
+    "Keep dragging right, past the keyposes, then release.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehen Sie weiter nach rechts, über die Keyposes hinaus, und lassen Sie dann los."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuez à glisser vers la droite, au-delà des poses clés, puis relâchez."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sigue arrastrando a la derecha, más allá de las poses clave, y luego suelta."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのまま右へ、キーポーズを越えてドラッグし、放します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "키포즈를 지나 오른쪽으로 계속 드래그한 다음 놓으세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续向右拖动，越过关键姿势，然后松开。"
+          }
+        }
+      },
+      "comment": "Advanced timing guide: finish the marquee drag."
     }
   },
   "version": "1.0"

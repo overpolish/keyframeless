@@ -592,7 +592,7 @@ static const CGFloat kDragSnapPx = 14.0;
   NSString *addLabel = config.secondaryLabel ?: config.primaryLabel;
 
   const NSInteger ixSwitch = 0, ixIntro = 1, ixCmdClick = 2, ixPopover = 3,
-                  ixDrag = 4, ixDone = 5;
+                  ixDrag = 4, ixMarquee = 5, ixGroupDrag = 6, ixDone = 7;
   (void)ixSwitch;
   (void)ixIntro;
   (void)ixDone;
@@ -701,6 +701,128 @@ static const CGFloat kDragSnapPx = 14.0;
     [weakLanes guideCloseContentPopover];
   };
 
+  // Marquee: sweep a box across the lanes to multi-select keyposes. The press
+  // lands anywhere in a big start zone left of the moved keyposes (frac
+  // 0.06 - 0.46, full row height); the box is pinned to span every row
+  // vertically, so the user only drags right to the end target (frac 1.0). That
+  // encloses the keyposes in the right of the timeline but not the t=0 start
+  // poses. The end target stays HIDDEN until the press (dragMessage != nil), so
+  // its amber glow can't pull the press to the wrong (right) end of the track.
+  const double kMarqueeZoneStartFrac = 0.06;
+  const double kMarqueeZoneEndFrac = 0.46;
+  const double kMarqueeEndFrac = 1.0;
+  NSRect (^marqueeSpot)(void) = ^NSRect {
+    __strong KKTimelineAdvancedView *a = weakAdv;
+    return a ? [a guideTracksRegionScreenRectFromFraction:kMarqueeZoneStartFrac
+                                              toFraction:kMarqueeZoneEndFrac]
+             : NSZeroRect;
+  };
+  NSRect (^marqueeTarget)(void) = ^NSRect {
+    __strong KKTimelineAdvancedView *a = weakAdv;
+    return a ? [a guideMarqueeTargetScreenRectAtFraction:kMarqueeEndFrac]
+             : NSZeroRect;
+  };
+  KKJoyrideStep *sMarquee = [KKJoyrideDragStep stepForGuide:guide
+      atIndex:ixMarquee
+      isLast:NO
+      clickMessage:KKLoc(@"Start a drag in the <accent>highlighted region</accent>"
+                         @" and move right to box-select several keyposes.",
+                         @"Advanced timing guide: start a marquee selection.")
+      dragMessage:KKLoc(@"Keep dragging right, past the keyposes, then release.",
+                        @"Advanced timing guide: finish the marquee drag.")
+      circular:NO
+      spotRect:marqueeSpot
+      targetRect:marqueeTarget
+      begin:^(NSPoint p) {
+        [weakAdv guideBeginMarqueeAtScreenPoint:p];
+      }
+      dragTo:^(NSPoint p) {
+        [weakAdv guideDragMarqueeToScreenPoint:KKJoyrideSnapToTarget(
+                                                   p, marqueeTarget(),
+                                                   kDragSnapPx)];
+      }
+      end:^{
+        [weakAdv guideEndMarquee];
+      }
+      hitOnRelease:^BOOL(NSPoint p) {
+        __strong KKTimelineAdvancedView *a = weakAdv;
+        return a.selectionCount >= 2;
+      }];
+
+  // Group retime: drag the whole selection. We grab the selected primary
+  // keypose nearest the moved (~0.55) pose the marquee enclosed - resolved by
+  // value, not a hardcoded index, so reordering the seed / earlier steps can't
+  // silently make this press the wrong keypose. The index is latched at press
+  // (`groupKPIdx`) so it stays stable while the keypose travels during the drag.
+  const double kGroupGrabFrac = 0.55;
+  const double kGroupTargetFrac = 0.35;
+  const double kGroupSnapFrac = 0.06;
+  __block NSInteger groupKPIdx = NSNotFound;
+  NSInteger (^groupKP)(void) = ^NSInteger {
+    if (groupKPIdx != NSNotFound)
+      return groupKPIdx;
+    __strong KKTimelineAdvancedView *a = weakAdv;
+    return a ? [a guideSelectedKeyposeIndexNearestFraction:kGroupGrabFrac
+                                                  forLabel:primary]
+             : NSNotFound;
+  };
+  NSRect (^groupSpot)(void) = ^NSRect {
+    __strong KKTimelineAdvancedView *a = weakAdv;
+    NSInteger idx = groupKP();
+    return (a && idx != NSNotFound)
+               ? [a guideKeyposeScreenRectForLabel:primary atIndex:idx]
+               : NSZeroRect;
+  };
+  NSRect (^groupTarget)(void) = ^NSRect {
+    __strong KKTimelineAdvancedView *a = weakAdv;
+    return a ? [a guideKeyposeScreenRectForLabel:primary
+                                      atFraction:kGroupTargetFrac]
+             : NSZeroRect;
+  };
+  KKJoyrideStep *sGroupDrag = [KKJoyrideDragStep stepForGuide:guide
+      atIndex:ixGroupDrag
+      isLast:NO
+      clickMessage:KKLoc(@"Drag any <accent>selected</accent> keypose - they all "
+                         @"retime together.",
+                         @"Advanced timing guide: drag the multi-selection to "
+                         @"retime.")
+      dragMessage:nil
+      circular:YES
+      spotRect:groupSpot
+      targetRect:groupTarget
+      begin:^(NSPoint p) {
+        groupKPIdx = groupKP(); // latch for the duration of this drag
+        if (groupKPIdx == NSNotFound)
+          return;
+        NSRect spot = groupSpot();
+        NSPoint press = NSIsEmptyRect(spot)
+                            ? p
+                            : NSMakePoint(NSMidX(spot), NSMidY(spot));
+        [weakAdv guideBeginSelectionDragForLabel:primary
+                                         atIndex:groupKPIdx
+                                   atScreenPoint:press];
+      }
+      dragTo:^(NSPoint p) {
+        [weakAdv guideDragSelectionToScreenPoint:KKJoyrideSnapToTarget(
+                                                     p, groupTarget(),
+                                                     kDragSnapPx)];
+      }
+      end:^{
+        [weakAdv guideEndSelectionDrag];
+        // Keep groupKPIdx latched: hitOnRelease runs after end(), and a retry
+        // should re-grab the same keypose (it has since moved off kGroupGrabFrac).
+      }
+      hitOnRelease:^BOOL(NSPoint p) {
+        __strong KKTimelineAdvancedView *a = weakAdv;
+        if (groupKPIdx == NSNotFound)
+          return NO;
+        double now = [a guideKeyposeFractionForLabel:primary
+                                             atIndex:groupKPIdx];
+        if (isnan(now))
+          return NO;
+        return fabs(now - kGroupTargetFrac) <= kGroupSnapFrac;
+      }];
+
   KKJoyrideStep *sDone = [KKJoyrideStep
       stepWithMessage:KKLoc(@"That's <accent>Advanced</accent> timing: add "
                             @"keyposes anywhere and shape each one "
@@ -716,7 +838,9 @@ static const CGFloat kDragSnapPx = 14.0;
          dismissOn:nil];
   [binder bindStep:sPopover atIndex:ixPopover advanceOn:nil dismissOn:nil];
 
-  return @[ sSwitch, sIntro, sCmdClick, sPopover, sDrag, sDone ];
+  return @[
+    sSwitch, sIntro, sCmdClick, sPopover, sDrag, sMarquee, sGroupDrag, sDone
+  ];
 }
 
 @end

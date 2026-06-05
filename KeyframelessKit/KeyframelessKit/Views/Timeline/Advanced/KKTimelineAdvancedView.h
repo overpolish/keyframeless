@@ -196,6 +196,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (double)guideKeyposeFractionForLabel:(NSString *)label
                                atIndex:(NSInteger)kpIdx;
 
+/// Index of the currently-selected keypose in `label`'s lane whose time is
+/// nearest `frac`, or `NSNotFound` if the lane has no selected keypose. Lets a
+/// guide grab "the moved keypose the marquee enclosed" by value instead of a
+/// hardcoded index that silently breaks if the seed / earlier steps change.
+- (NSInteger)guideSelectedKeyposeIndexNearestFraction:(double)frac
+                                             forLabel:(NSString *)label;
+
 /// Drive a keypose pill drag from a guide's spotlightMouseDown/Dragged/Up
 /// (the joyride panel intercepts the click, so the regular mouseDown:/
 /// Dragged:/Up: path never sees the press - these mirror Basic's
@@ -208,6 +215,40 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)guideDragPillToScreenPoint:(NSPoint)screenPoint;
 
 - (void)guideEndPillDrag;
+
+/// Screen rect of an empty grab point in the tracks at horizontal `frac`,
+/// pinned to the top (`top` = YES) or bottom of the lane rows. The marquee
+/// guide presses at the top-left and releases at the bottom-right so the box
+/// sweeps every row. `NSZeroRect` if not in a window / no tracks.
+/// Screen rect of the marquee guide's drag target at horizontal `frac`,
+/// vertically centred in the tracks so the start->target guide line is a
+/// straight horizontal sweep. `NSZeroRect` if no window/tracks.
+- (NSRect)guideMarqueeTargetScreenRectAtFraction:(double)frac;
+
+/// Screen rect covering the tracks from horizontal `fa` to `fb`, full row
+/// height. Used as the marquee guide's generous "start your box here" spotlight
+/// zone (a tiny point is too hard to press). `NSZeroRect` if no window/tracks.
+- (NSRect)guideTracksRegionScreenRectFromFraction:(double)fa
+                                       toFraction:(double)fb;
+
+/// Drive a marquee selection drag from a guide's spotlightMouseDown/Dragged/Up
+/// (the joyride panel intercepts the press, so the real mouseDown path never
+/// runs). `begin` clears the selection and starts the box, `drag` stretches it,
+/// `end` commits the enclosed pills to the selection (firing onSelectionChanged
+/// via the count-change emitter).
+- (void)guideBeginMarqueeAtScreenPoint:(NSPoint)screenPoint;
+- (void)guideDragMarqueeToScreenPoint:(NSPoint)screenPoint;
+- (void)guideEndMarquee;
+
+/// Drive a drag of the whole current selection (mirrors a press on an
+/// already-selected pill flowing into _moveSelectionByDelta:, so every selected
+/// keypose retimes by the same delta). Returns NO if (label, kpIdx) isn't part
+/// of the current selection.
+- (BOOL)guideBeginSelectionDragForLabel:(NSString *)label
+                                atIndex:(NSInteger)kpIdx
+                          atScreenPoint:(NSPoint)screenPoint;
+- (void)guideDragSelectionToScreenPoint:(NSPoint)screenPoint;
+- (void)guideEndSelectionDrag;
 
 @end
 
