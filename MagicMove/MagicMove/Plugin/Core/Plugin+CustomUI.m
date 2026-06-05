@@ -14,6 +14,41 @@
 
 static NSString *const kMagicMoveIntroSeenKey = @"MagicMoveIntroSeen";
 
+// Object-space distance within which the interactive Position drag snaps to /
+// counts as on the glowing target.
+static const double kMagicMoveGuideTargetSnap = 0.04;
+
+// Build a single-keypose Position timeline at object (objX, objY) - the live
+// value the interactive OSC drag applies (matches the Basic seed lane shape).
+static KKTimeline *MagicMoveGuidePositionTimeline(double objX, double objY) {
+  KKTimeline *tl = [KKTimeline timeline];
+  KKLane *lane = [KKLane laneWithLabel:@"Position"];
+  // Animatable so the Advanced graph shows a clickable keypose (the OSC guide's
+  // opt-hide / peek steps open its mini-canvas).
+  lane.enabled = YES;
+  lane.valueType = KKLaneValueTypeGeneric;
+  lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                       values:@[ @(objX), @(objY) ]] ];
+  tl.lanes = @[ lane ];
+  return tl;
+}
+
+static NSPoint MagicMoveGuideCurrentPosition(KKTimelineLanesView *lanes) {
+  for (KKLane *lane in lanes.currentTimeline.lanes) {
+    if ([lane.label isEqualToString:@"Position"] && lane.keyposes.count > 0) {
+      KKKeyPose *kp = lane.keyposes.firstObject;
+      if (kp.values.count >= 2)
+        return NSMakePoint(kp.values[0].doubleValue, kp.values[1].doubleValue);
+    }
+  }
+  return NSMakePoint(0.5, 0.5);
+}
+
+static BOOL MagicMovePositionNearTarget(NSPoint p) {
+  CGPoint t = MagicMoveGuideTargetObjectPosition();
+  return hypot(p.x - t.x, p.y - t.y) < kMagicMoveGuideTargetSnap;
+}
+
 /// MagicMove draws Position + Rotation on-screen controls, so it opts into the
 /// inspector's "On-Screen Controls" visibility row (other plugins default off).
 /// It also hosts the shared KKTimingGuide walkthroughs (Position lane).
@@ -70,6 +105,56 @@ static NSString *const kMagicMoveIntroSeenKey = @"MagicMoveIntroSeen";
       @[ @[ @0.3, @0.3 ], @[ @0.7, @0.3 ], @[ @0.7, @0.7 ], @[ @0.3, @0.7 ] ];
   cfg.viewerScreenRect = ^NSRect {
     return MagicMoveSharedOSCGuideBridge().estimatedViewerScreenRect;
+  };
+  cfg.oscGuideBridge = ^KKOSCGuideBridge * {
+    return MagicMoveSharedOSCGuideBridge();
+  };
+  // The pill step disables Scale (not Position), so the keypose mini-canvas
+  // (which shows only the featured Position lane) stays populated for the later
+  // steps.
+  cfg.oscDisableLabel = @"Scale";
+  // The OSC-shape strategy: how a viewer drag maps to the 2D Position value and
+  // back (pure math; the shared guide owns the copy). Position is a point, so
+  // values box as NSValue.
+  __weak KKTimelineLanesView *weakLanes = self.basicLanesView;
+  __weak typeof(self) weakSelf = self;
+  cfg.oscGuideStrategy = ^KKOSCGuideStrategy * {
+    KKOSCGuideStrategy *s = [[KKOSCGuideStrategy alloc] init];
+    s.currentValue = ^id {
+      return [NSValue valueWithPoint:MagicMoveGuideCurrentPosition(weakLanes)];
+    };
+    s.setLiveValue = ^(id v) {
+      NSPoint p = [v pointValue];
+      MagicMoveSetGuidePosition(p.x, p.y); // viewer handle tracks the drag
+    };
+    s.valueForScreenPoint = ^id(NSPoint pt) {
+      double x = 0.5, y = 0.5;
+      MagicMoveGuidePositionForScreenPoint(pt, &x, &y);
+      return [NSValue valueWithPoint:NSMakePoint(x, y)];
+    };
+    s.applyValue = ^(id v) {
+      NSPoint p = [v pointValue];
+      MagicMoveSetGuidePosition(p.x, p.y);
+      KKTimelineLanesView *lanes = weakLanes;
+      KKTimeline *tl = MagicMoveGuidePositionTimeline(p.x, p.y);
+      [lanes applyTimeline:tl];
+      __strong typeof(weakSelf) strong = weakSelf;
+      if (strong.onTimelineMutated)
+        strong.onTimelineMutated(tl);
+    };
+    s.valueOnTarget = ^BOOL(id v) {
+      return MagicMovePositionNearTarget([v pointValue]);
+    };
+    s.snapValue = ^id(id v) {
+      NSPoint p = [v pointValue];
+      if (MagicMovePositionNearTarget(p)) {
+        CGPoint t = MagicMoveGuideTargetObjectPosition();
+        return [NSValue valueWithPoint:NSMakePoint(t.x, t.y)];
+      }
+      return v;
+    };
+    s.requireTargetHit = YES;
+    return s;
   };
   return cfg;
 }
@@ -305,7 +390,8 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                                   view:view
                            elementKeys:[KKPlugin
                                            kkOSCElementKeysForCompounds:
-                                               [MagicMovePlugin oscCompounds]]];
+                                               [MagicMovePlugin oscCompounds]]
+                          nudgeParamID:kParamRenderNudge];
   // Per-instance rendezvous paths (keyed by the instance UUID minted above) so
   // two stacked MagicMove clips read/write distinct /tmp files instead of the
   // top clip flickering the one below it.

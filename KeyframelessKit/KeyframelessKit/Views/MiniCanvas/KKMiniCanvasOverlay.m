@@ -176,6 +176,8 @@
           optClickHandleAtPoint:[self convertPoint:e.locationInWindow
                                           fromView:nil]
                     contentRect:[c contentRectInViewPoints]]) {
+    if (c.onOptHideHandle)
+      c.onOptHideHandle(@"");
     return;
   }
   _dragging = YES;

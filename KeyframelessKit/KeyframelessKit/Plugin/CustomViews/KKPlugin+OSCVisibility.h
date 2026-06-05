@@ -88,9 +88,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// renderer is resolved from `view.miniCanvasDelegate` at fire time. Call once
 /// in createViewForParameterID after the view + host exist. Replaces the
 /// per-plugin onRunWillStart/onRunDidEnd boilerplate.
+///
+/// `nudgeParamID` is the plugin's hidden render-nudge scratch param. Forcing
+/// OSC visibility only mutates in-memory instance state, so the FCP viewer
+/// won't redraw its on-screen controls until something triggers a re-render.
+/// Guides that write params incidentally (seed / scrub) get this for free, but
+/// a pure-navigation guide (the OSC walkthrough) does not - so we write a nonce
+/// to this param on force and restore to force the viewer to redraw.
 - (void)kkInstallGuideOSCForcingOnHost:(KKJoyrideGuideHost *)host
                                   view:(KKTimelineInspectorView *)view
-                           elementKeys:(NSArray<NSString *> *)keys;
+                           elementKeys:(NSArray<NSString *> *)keys
+                          nudgeParamID:(UInt32)nudgeParamID;
 
 @end
 

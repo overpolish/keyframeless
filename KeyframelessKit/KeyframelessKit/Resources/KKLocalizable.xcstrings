@@ -1135,6 +1135,132 @@
         }
       }
     },
+    "Drag <accent>%@</accent> in the viewer to edit it directly.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehen Sie <accent>%@</accent> im Viewer, um es direkt zu bearbeiten."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser <accent>%@</accent> dans le visualiseur pour le modifier directement."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra <accent>%@</accent> en el visor para editarlo directamente."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ビューアで<accent>%@</accent>をドラッグして直接編集します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "뷰어에서 <accent>%@</accent>을(를) 드래그하여 직접 편집합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在检视器中拖动<accent>%@</accent>即可直接编辑。"
+          }
+        }
+      },
+      "comment": "OSC guide: edit via the viewer handle. %@ = property name."
+    },
+    "Drag <accent>%@</accent> in the viewer to the <warn>glowing target</warn>.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehen Sie <accent>%@</accent> im Viewer zum <warn>leuchtenden Ziel</warn>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser <accent>%@</accent> dans le visualiseur vers la <warn>cible lumineuse</warn>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra <accent>%@</accent> en el visor hacia el <warn>objetivo brillante</warn>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ビューアで<accent>%@</accent>を<warn>光るターゲット</warn>までドラッグします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "뷰어에서 <accent>%@</accent>을(를) <warn>빛나는 대상</warn>으로 드래그하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在检视器中将<accent>%@</accent>拖向<warn>发光的目标</warn>。"
+          }
+        }
+      },
+      "comment": "OSC guide: drag the handle to the target. %@ = property name."
+    },
+    "Keep dragging toward the <warn>glowing target</warn>.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehen Sie weiter zum <warn>leuchtenden Ziel</warn>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuez à faire glisser vers la <warn>cible lumineuse</warn>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sigue arrastrando hacia el <warn>objetivo brillante</warn>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>光るターゲット</warn>に向かってドラッグを続けます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>빛나는 대상</warn>으로 계속 드래그하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续拖向<warn>发光的目标</warn>。"
+          }
+        }
+      },
+      "comment": "OSC guide: drag-to-target hint."
+    },
     "Drag <accent>%@</accent> toward the <warn>target</warn>. It applies straight away.": {
       "extractionState": "manual",
       "localizations": {
@@ -1680,6 +1806,48 @@
           }
         }
       }
+    },
+    "Hide, reveal, and peek the viewer controls": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Viewer-Steuerelemente ausblenden, einblenden und kurz anzeigen"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masquer, afficher et apercevoir les commandes du visualiseur"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oculta, muestra y echa un vistazo a los controles del visor"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ビューアのコントロールを非表示・表示・一時表示する"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "뷰어 컨트롤 숨기기, 표시하기, 살짝 보기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏、显示并临时查看检视器控件"
+          }
+        }
+      },
+      "comment": "Help guide subtitle: On-Screen Controls."
     },
     "Hold": {
       "comment": "Timeline phase / hold effect name.",
@@ -2479,6 +2647,90 @@
         }
       }
     },
+    "On-Screen Controls": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-Screen-Steuerelemente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commandes à l'écran"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controles en pantalla"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オンスクリーンコントロール"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면 컨트롤"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕控件"
+          }
+        }
+      },
+      "comment": "Help guide title: on-screen-control walkthrough."
+    },
+    "Open <accent>settings</accent> to hide controls one at a time.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnen Sie die <accent>Einstellungen</accent>, um Steuerelemente einzeln auszublenden."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrez les <accent>réglages</accent> pour masquer les commandes une par une."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre los <accent>ajustes</accent> para ocultar los controles uno a uno."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>設定</accent>を開いて、コントロールを1つずつ非表示にします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>설정</accent>을 열어 컨트롤을 하나씩 숨깁니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开<accent>设置</accent>来逐个隐藏控件。"
+          }
+        }
+      },
+      "comment": "OSC guide: open the OSC settings gear."
+    },
     "Open help": {
       "comment": "Help button tooltip",
       "extractionState": "manual",
@@ -2520,6 +2772,48 @@
           }
         }
       }
+    },
+    "Or hold <kbd>⌥</kbd> and click a control in the viewer to hide it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oder halten Sie <kbd>⌥</kbd> gedrückt und klicken Sie im Viewer auf ein Steuerelement, um es auszublenden."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ou maintenez <kbd>⌥</kbd> et cliquez sur une commande dans le visualiseur pour la masquer."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "O mantén <kbd>⌥</kbd> y haz clic en un control del visor para ocultarlo."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "または<kbd>⌥</kbd>を押しながらビューアでコントロールをクリックすると非表示になります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "또는 <kbd>⌥</kbd>를 누른 채 뷰어에서 컨트롤을 클릭하면 숨겨집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "或按住<kbd>⌥</kbd>并点击检视器中的控件即可隐藏它。"
+          }
+        }
+      },
+      "comment": "OSC guide: opt-click to hide a control."
     },
     "Out": {
       "comment": "Timeline phase: Out (ease-out).",
@@ -3193,6 +3487,48 @@
         }
       }
     },
+    "Show only the on-screen controls you're working with.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigen Sie nur die On-Screen-Steuerelemente an, mit denen Sie gerade arbeiten."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "N'affichez que les commandes à l'écran que vous utilisez."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra solo los controles en pantalla con los que estás trabajando."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "作業中のオンスクリーンコントロールだけを表示できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "작업 중인 화면 컨트롤만 표시하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只显示你正在使用的屏幕控件。"
+          }
+        }
+      },
+      "comment": "OSC guide: closing benefit step."
+    },
     "Showing current frame": {
       "comment": "Constants editor preview hint: the mini-canvas shows the frame at the playhead, not the first frame.",
       "extractionState": "stale",
@@ -3360,6 +3696,384 @@
           }
         }
       }
+    },
+    "Switch a control <warn>off</warn> to hide just that one.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schalten Sie ein Steuerelement <warn>aus</warn>, um nur dieses auszublenden."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglez une commande sur <warn>arrêt</warn> pour ne masquer que celle-ci."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pon un control en <warn>apagado</warn> para ocultar solo ese."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロールを<warn>オフ</warn>にすると、そのコントロールだけ非表示になります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤을 <warn>끄면</warn> 해당 컨트롤만 숨겨집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将某个控件<warn>关闭</warn>，即可仅隐藏该控件。"
+          }
+        }
+      },
+      "comment": "OSC guide: toggle a per-element pill off."
+    },
+    "Hold <kbd>⌥</kbd> and click a control to hide it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halten Sie <kbd>⌥</kbd> gedrückt und klicken Sie auf ein Steuerelement, um es auszublenden."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez <kbd>⌥</kbd> et cliquez sur une commande pour la masquer."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén <kbd>⌥</kbd> y haz clic en un control para ocultarlo."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd>を押しながらコントロールをクリックすると非表示になります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd>를 누른 채 컨트롤을 클릭하면 숨겨집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住<kbd>⌥</kbd>并点击控件即可隐藏它。"
+          }
+        }
+      },
+      "comment": "OSC guide: opt-click a mini-canvas handle to hide."
+    },
+    "Hold <kbd>⌥</kbd> and move over the controls to <accent>peek</accent> at the hidden one.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halten Sie <kbd>⌥</kbd> gedrückt und bewegen Sie den Zeiger über die Steuerelemente, um das <accent>ausgeblendete</accent> kurz einzublenden."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez <kbd>⌥</kbd> et déplacez le curseur sur les commandes pour <accent>entrevoir</accent> celle qui est masquée."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén <kbd>⌥</kbd> y mueve el cursor sobre los controles para <accent>ver</accent> el oculto."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd>を押しながらコントロールの上で動かすと、<accent>非表示</accent>のコントロールを一時的に確認できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd>를 누른 채 컨트롤 위에서 움직이면 <accent>숨긴</accent> 컨트롤을 잠깐 볼 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住<kbd>⌥</kbd>并在控件上移动，即可<accent>预览</accent>隐藏的控件。"
+          }
+        }
+      },
+      "comment": "OSC guide: opt-peek a hidden control."
+    },
+    "Hold <kbd>⌥</kbd> and move to reveal the control you hid. <warn>Release ⌥</warn> to continue.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halten Sie <kbd>⌥</kbd> gedrückt und bewegen Sie den Zeiger, um das ausgeblendete Steuerelement einzublenden. <warn>⌥ loslassen</warn>, um fortzufahren."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez <kbd>⌥</kbd> et déplacez le curseur pour révéler la commande masquée. <warn>Relâchez ⌥</warn> pour continuer."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén <kbd>⌥</kbd> y mueve el cursor para revelar el control oculto. <warn>Suelta ⌥</warn> para continuar."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd>を押しながら動かして、非表示にしたコントロールを表示します。<warn>⌥を離す</warn>と続行します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd>를 누른 채 움직여 숨긴 컨트롤을 표시합니다. 계속하려면 <warn>⌥를 놓으세요</warn>."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住<kbd>⌥</kbd>并移动以显示你隐藏的控件。<warn>松开 ⌥</warn>以继续。"
+          }
+        }
+      },
+      "comment": "OSC guide: opt-peek a hidden control."
+    },
+    "With them all off, hold <kbd>⌥</kbd> and move to reveal them, still usable. <warn>Release ⌥</warn> to continue.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn alle aus sind, halten Sie <kbd>⌥</kbd> gedrückt und bewegen Sie den Zeiger, um sie einzublenden, weiterhin nutzbar. <warn>⌥ loslassen</warn>, um fortzufahren."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand elles sont toutes masquées, maintenez <kbd>⌥</kbd> et déplacez le curseur pour les révéler, toujours utilisables. <warn>Relâchez ⌥</warn> pour continuer."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Con todos desactivados, mantén <kbd>⌥</kbd> y mueve el cursor para revelarlos, siguen siendo usables. <warn>Suelta ⌥</warn> para continuar."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてオフのとき、<kbd>⌥</kbd>を押しながら動かすと表示され、そのまま使えます。<warn>⌥を離す</warn>と続行します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모두 끈 상태에서 <kbd>⌥</kbd>를 누른 채 움직이면 표시되며 그대로 사용할 수 있습니다. 계속하려면 <warn>⌥를 놓으세요</warn>."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部关闭后，按住<kbd>⌥</kbd>并移动即可显示它们，仍可使用。<warn>松开 ⌥</warn>以继续。"
+          }
+        }
+      },
+      "comment": "OSC guide: opt-peek when OSCs are off."
+    },
+    "Hold <kbd>⌥</kbd> and click the dimmed control to bring it back.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halten Sie <kbd>⌥</kbd> gedrückt und klicken Sie auf das abgeblendete Steuerelement, um es zurückzuholen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez <kbd>⌥</kbd> et cliquez sur la commande estompée pour la rétablir."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantén <kbd>⌥</kbd> y haz clic en el control atenuado para recuperarlo."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd>を押しながら、薄く表示されたコントロールをクリックすると元に戻せます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd>를 누른 채 흐리게 표시된 컨트롤을 클릭하면 다시 표시됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住<kbd>⌥</kbd>并点击变暗的控件即可恢复它。"
+          }
+        }
+      },
+      "comment": "OSC guide: opt-click a ghost to re-show it."
+    },
+    "Open the keypose again.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnen Sie die Keypose erneut."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rouvrez la pose clé."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vuelve a abrir la pose clave."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "もう一度キーポーズを開きます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "키포즈를 다시 엽니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再次打开关键姿势。"
+          }
+        }
+      },
+      "comment": "OSC guide: re-open the keypose mini viewer."
+    },
+    "On-screen controls show in the viewer only where the property is <accent>constant</accent> or on a <accent>keypose</accent>.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-Screen-Steuerelemente erscheinen im Viewer nur dort, wo die Eigenschaft <accent>konstant</accent> ist oder auf einer <accent>Keypose</accent> liegt."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les commandes à l'écran n'apparaissent dans le visualiseur que là où la propriété est <accent>constante</accent> ou sur une <accent>pose clé</accent>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los controles en pantalla solo aparecen en el visor donde la propiedad es <accent>constante</accent> o está en una <accent>pose clave</accent>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オンスクリーンコントロールは、プロパティが<accent>一定</accent>の場所か<accent>キーポーズ</accent>上でのみビューアに表示されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면 컨트롤은 속성이 <accent>일정한</accent> 곳이나 <accent>키포즈</accent>에서만 뷰어에 표시됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕控件仅在属性<accent>恒定</accent>或位于<accent>关键姿势</accent>处时才显示在检视器中。"
+          }
+        }
+      },
+      "comment": "OSC guide: closing note on viewer OSC visibility."
+    },
+    "The controls are on the <accent>mini viewer</accent> too. Click a keypose to open it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Steuerelemente sind auch im <accent>Mini-Viewer</accent>. Klicken Sie auf eine Keypose, um ihn zu öffnen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les commandes sont aussi dans la <accent>mini-visionneuse</accent>. Cliquez sur une pose clé pour l'ouvrir."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los controles también están en el <accent>mini-visor</accent>. Haz clic en una pose clave para abrirlo."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロールは<accent>ミニビューア</accent>にもあります。キーポーズをクリックして開きます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤은 <accent>미니 뷰어</accent>에도 있습니다. 키포즈를 클릭하여 엽니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件也在<accent>迷你检视器</accent>中。点击一个关键姿势来打开它。"
+          }
+        }
+      },
+      "comment": "OSC guide: open a keypose mini viewer."
     },
     "Switch anyway": {
       "comment": "Alert button: switch despite the warning.",
@@ -3907,6 +4621,48 @@
       },
       "comment": "Timing guide: enable the In transition."
     },
+    "Turn the <accent>checkbox</accent> off to hide them all.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schalten Sie das <accent>Kontrollkästchen</accent> aus, um alle auszublenden."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Décochez la <accent>case</accent> pour toutes les masquer."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactiva la <accent>casilla</accent> para ocultarlos todos."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>チェックボックス</accent>をオフにすると、すべて非表示になります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>체크박스</accent>를 끄면 모두 숨겨집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消勾选<accent>复选框</accent>即可全部隐藏。"
+          }
+        }
+      },
+      "comment": "OSC guide: master toggle off."
+    },
     "Unlink Endpoints": {
       "comment": "Context menu: unlink the start/end keyposes.",
       "extractionState": "manual",
@@ -4284,6 +5040,48 @@
           }
         }
       }
+    },
+    "With them off, hold <kbd>⌥</kbd> to peek and still use them.": {
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn sie aus sind, halten Sie <kbd>⌥</kbd> gedrückt, um sie kurz einzublenden und weiter zu verwenden."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand elles sont masquées, maintenez <kbd>⌥</kbd> pour les apercevoir et les utiliser quand même."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Con ellos ocultos, mantén <kbd>⌥</kbd> para verlos un momento y seguir usándolos."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非表示の状態でも、<kbd>⌥</kbd>を押している間は一時的に表示して操作できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "숨겨진 상태에서도 <kbd>⌥</kbd>를 누르고 있으면 잠깐 보면서 사용할 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏后，按住<kbd>⌥</kbd>即可临时显示并继续使用它们。"
+          }
+        }
+      },
+      "comment": "OSC guide: opt-peek when OSCs are off."
     },
     "You have %@": {
       "comment": "Update banner tooltip: installed version",

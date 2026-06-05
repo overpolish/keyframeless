@@ -108,6 +108,7 @@
 				Views/Joyride/Steps/KKJoyrideLanesBinder.h,
 				Views/Joyride/Steps/KKJoyrideOSCSegment.h,
 				Views/Joyride/Steps/KKMiniViewerGuide.h,
+				Views/Joyride/Steps/KKOSCGuide.h,
 				Views/Joyride/Steps/KKTimingGuide.h,
 				Views/MiniCanvas/KKMiniCanvasCropEditor.h,
 				Views/MiniCanvas/KKMiniCanvasFeed.h,

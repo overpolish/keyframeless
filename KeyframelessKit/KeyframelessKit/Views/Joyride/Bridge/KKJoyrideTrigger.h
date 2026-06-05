@@ -65,6 +65,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// keypose). Filmstrip mode only.
 + (instancetype)filmstripCellActivated;
 
+/// Fires when the user Option-clicks a handle in the mini-canvas to hide it
+/// (the in-canvas equivalent of the viewer opt-click-hide).
++ (instancetype)miniCanvasOptHide;
+
 #pragma mark - Inspector
 
 /// Play-button toggle, driven by raw taps (`-notifyPlaybackToggleTapped`), not

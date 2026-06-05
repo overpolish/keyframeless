@@ -118,6 +118,10 @@
   return [self _t:KKJoyrideTriggerTypeFilmstripCellActivated];
 }
 
++ (instancetype)miniCanvasOptHide {
+  return [self _t:KKJoyrideTriggerTypeMiniCanvasOptHide];
+}
+
 + (instancetype)playToggleEdge {
   return [self _t:KKJoyrideTriggerTypePlayToggleEdge];
 }

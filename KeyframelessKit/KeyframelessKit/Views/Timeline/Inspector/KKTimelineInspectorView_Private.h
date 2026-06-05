@@ -22,6 +22,7 @@
 @class _KKCompatBannerView;
 @class _KKMotionBlurSettingsView;
 @class KKJoyrideGuideHost;
+@class KKCompoundPillBar;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -62,6 +63,16 @@ NS_ASSUME_NONNULL_BEGIN
   /// get a fresh KKTimingGuideConfig (plugin data + the inspector bridges from
   /// -makeTimingGuideConfig). id-typed to avoid importing KKTimingGuide here.
   id _timingGuideConfigProvider;
+  /// Guide-only: OSC-visibility observation hooks, fired ALONGSIDE the plugin's
+  /// own OSC callbacks (so the OSC guide advances on real user actions without
+  /// clobbering persistence). Stored/read by the +Guide category; fired from
+  /// the +ParameterRows OSC-row code.
+  void (^_onGuideOSCMasterToggled)(BOOL visible);
+  void (^_onGuideOSCSettingsPopoverWillOpen)(NSView *content);
+  void (^_onGuideOSCElementToggled)(NSString *label, BOOL visible);
+  /// The live per-element OSC pill bar inside the open settings popover (weak;
+  /// nil when closed). Exposed for the OSC guide's pill spotlight.
+  __weak KKCompoundPillBar *_oscPillBar;
 
   // Main inspector state (migrated off the @implementation block so the
   // +ParameterRows / layout categories can reach it).

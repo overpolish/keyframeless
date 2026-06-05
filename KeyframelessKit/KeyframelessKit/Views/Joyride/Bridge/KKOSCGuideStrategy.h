@@ -13,8 +13,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// block-based inversion of control used for inspector guides).
 /// KKOSCGuideBridge handles the generic screen↔canvas affine; this maps a
 /// screen drag to a value and back for one particular control (radius circle,
-/// box, slider, …), so a new OSC shape is a new strategy, not new
-/// infrastructure.
+/// position handle, box, slider, …), so a new OSC shape is a new strategy, not
+/// new infrastructure.
+///
+/// The value is opaque (`id`): a scalar control boxes an NSNumber, a 2D control
+/// (a position handle) boxes an NSValue point. The strategy owns the
+/// dimension-specific comparisons (`valueOnTarget`, `snapValue`); the segment
+/// stays value-agnostic.
 @interface KKOSCGuideStrategy : NSObject
 
 /// Pair the press point with the handle's live canvas position so the drag
@@ -22,25 +27,30 @@ NS_ASSUME_NONNULL_BEGIN
 /// reanchorAtScreen:handleCanvasPos:] with the plugin's handle position).
 @property(nonatomic, copy) void (^captureAnchorAtScreen)(NSPoint screenPt);
 
-/// Map a screen point to the control's value using the control's own
+/// Map a screen point to the control's value (boxed) using the control's own
 /// geometry, so the drag tracks the cursor 1:1 like a native OSC drag.
-@property(nonatomic, copy) double (^valueForScreenPoint)(NSPoint screenPt);
+@property(nonatomic, copy) id (^valueForScreenPoint)(NSPoint screenPt);
 
-/// The control's current value (used to seed the drag start).
-@property(nonatomic, copy) double (^currentValue)(void);
+/// The control's current value, boxed (used to seed the drag start).
+@property(nonatomic, copy) id (^currentValue)(void);
 
 /// Push the value into the live OSC only (no timeline mutation). Called at
 /// press so the handle holds while the gesture begins.
-@property(nonatomic, copy) void (^setLiveValue)(double value);
+@property(nonatomic, copy) void (^setLiveValue)(id value);
 
 /// Commit the value: live OSC + timeline + host notification. Called on each
 /// drag move.
-@property(nonatomic, copy) void (^applyValue)(double value);
+@property(nonatomic, copy) void (^applyValue)(id value);
 
-/// The value the drag step nudges toward (the glowing target).
-@property(nonatomic) double targetValue;
-/// Snap/“landed on target” tolerance around targetValue.
-@property(nonatomic) double snapTolerance;
+/// YES if `value` is on the glowing target within the strategy's own
+/// tolerance. The segment uses this both to snap during the drag (via
+/// `snapValue`) and to gate the release.
+@property(nonatomic, copy) BOOL (^valueOnTarget)(id value);
+
+/// Return `value` snapped to the target when it is within tolerance, else
+/// `value` unchanged. Optional; nil = no snapping.
+@property(nonatomic, copy, nullable) id (^snapValue)(id value);
+
 /// When YES the drag step only advances once the value is on the target at
 /// release; when NO any release advances.
 @property(nonatomic) BOOL requireTargetHit;

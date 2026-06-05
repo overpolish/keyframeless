@@ -179,6 +179,28 @@
     self.onHandleDragEnd();
 }
 
+- (BOOL)optHideHandleAtScreenPoint:(NSPoint)screenPoint {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (!
+      [d respondsToSelector:@selector(
+                                miniCanvas:optClickHandleAtPoint:contentRect:)])
+    return NO;
+  BOOL hit = [d miniCanvas:self
+      optClickHandleAtPoint:[self _viewPointForScreenPoint:screenPoint]
+                contentRect:[self contentRectInViewPoints]];
+  if (hit && self.onOptHideHandle)
+    self.onOptHideHandle(@"");
+  return hit;
+}
+
+- (void)setGuidePeekActive:(BOOL)active {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if ([d isKindOfClass:[KKMiniCanvasRenderer class]]) {
+    ((KKMiniCanvasRenderer *)d).revealHidden = active;
+    [self setNeedsDisplay:YES];
+  }
+}
+
 // `ctr` is overlay points, y-up, in the canvas's own coordinate space (the
 // overlay fills the canvas bounds 1:1) → glyph rect in screen space.
 // The point handle's visual radius in view points. Arc-style handles (e.g.

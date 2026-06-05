@@ -253,6 +253,11 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasTransformKind) {
 @property(nonatomic, copy, nullable) void (^onFilmstripCellActivated)
     (double fraction);
 
+/// Fired when the user Option-clicks a handle in the canvas to hide it (the
+/// in-canvas equivalent of the viewer opt-click-hide). A guide uses this to
+/// advance a "hide a control" step. `label` is the toggled handle's label.
+@property(nonatomic, copy, nullable) void (^onOptHideHandle)(NSString *label);
+
 /// 0 = Off (single frame at the active KP), 1 = Filmstrip (each KP fans out
 /// side-by-side in the pannable canvas), 2 = Onion (all KP frames stacked
 /// on the active cell with prev=red / next=blue tinting). Mirrors the value
@@ -297,6 +302,18 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasTransformKind) {
 - (void)beginPointHandleDragAtScreenPoint:(NSPoint)screenPoint;
 - (void)dragPointHandleToScreenPoint:(NSPoint)screenPoint;
 - (void)endPointHandleDrag;
+
+/// Option-click-hide the handle at `screenPoint` (the in-canvas equivalent of
+/// the viewer opt-click-hide), driven from a screen point so a guide's
+/// pass-through spotlight handler can invoke it - the XPC overlay swallows the
+/// raw click, exactly as the drag methods above. Returns YES if a handle was
+/// hit (and toggled).
+- (BOOL)optHideHandleAtScreenPoint:(NSPoint)screenPoint;
+
+/// Set Option-peek reveal on/off directly (the same thing the overlay's
+/// opt-hover does), driven by a guide whose move events don't reach the overlay
+/// natively.
+- (void)setGuidePeekActive:(BOOL)active;
 
 /// Screen rect of where the point handle's glyph would sit at `value` - the
 /// guide's amber "drag to here" target. `NSZeroRect` if the delegate doesn't

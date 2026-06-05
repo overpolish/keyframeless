@@ -38,6 +38,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// Called on the main queue with the mouseUp point after spotlightMouseDown.
 @property(nonatomic, copy, nullable) void (^spotlightMouseUp)
     (NSPoint screenPoint);
+/// Called on the main queue with each mouse-MOVE point (no button down) while
+/// the cursor is inside the spotlight on a pass-through step.
+/// `ignoresMouseEvents` lets clicks fall through but NOT the move/tracking that
+/// drives an OSC's opt-reveal (peek), so a step that needs hover-with-Option
+/// installs this and drives its control directly (current modifiers via
+/// `[NSEvent modifierFlags]`).
+@property(nonatomic, copy, nullable) void (^spotlightMouseMoved)
+    (NSPoint screenPoint);
 /// Magnify (pinch) events are delivered to the frontmost window - the guide
 /// panel - and `ignoresMouseEvents` does NOT pass gestures through (unlike
 /// clicks/scroll), so they're dropped before reaching content below. When

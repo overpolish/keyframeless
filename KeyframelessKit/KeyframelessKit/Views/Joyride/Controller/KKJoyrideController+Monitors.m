@@ -186,6 +186,44 @@ static const NSEventModifierFlags kJoyrideModifierMask =
                                                 [s _handleLocalMouseDown:event];
                                               return event;
                                             }];
+
+  // Mouse-MOVE forwarding for steps that need hover (peek).
+  // `ignoresMouseEvents` passes clicks through but not the move/tracking an
+  // OSC's opt-reveal needs, so we observe moves ourselves and drive the step's
+  // control - the move equivalent of the click path above. Only installed when
+  // the step opts in.
+  if (currentStep.spotlightMouseMoved) {
+    _globalMoveMonitor =
+        [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskMouseMoved
+                                               handler:^(NSEvent *event) {
+                                                 __strong typeof(weak) s = weak;
+                                                 if (s && s->_active)
+                                                   [s _handleMouseMoved];
+                                               }];
+    _localMoveMonitor = [NSEvent
+        addLocalMonitorForEventsMatchingMask:NSEventMaskMouseMoved
+                                     handler:^NSEvent *(NSEvent *event) {
+                                       __strong typeof(weak) s = weak;
+                                       if (s && s->_active)
+                                         [s _handleMouseMoved];
+                                       return event;
+                                     }];
+  }
+}
+
+// A move landed somewhere; if the cursor is inside the spotlight and the step
+// wants moves, hand it the screen point so it can drive its control (e.g. the
+// mini-canvas opt-reveal). Mirrors _handleGlobalMouseDown's spotlight gate.
+- (void)_handleMouseMoved {
+  KKJoyrideStep *step = [self _currentStep];
+  void (^moved)(NSPoint) = step.spotlightMouseMoved;
+  if (!moved)
+    return;
+  NSPoint mouse = NSEvent.mouseLocation;
+  NSRect spot = [_overlay screenSpotRect];
+  if (NSIsEmptyRect(spot) || !NSPointInRect(mouse, spot))
+    return;
+  moved(mouse);
 }
 
 - (void)_removeGlobalMonitor {
@@ -212,6 +250,14 @@ static const NSEventModifierFlags kJoyrideModifierMask =
   if (_localDragMonitor) {
     [NSEvent removeMonitor:_localDragMonitor];
     _localDragMonitor = nil;
+  }
+  if (_globalMoveMonitor) {
+    [NSEvent removeMonitor:_globalMoveMonitor];
+    _globalMoveMonitor = nil;
+  }
+  if (_localMoveMonitor) {
+    [NSEvent removeMonitor:_localMoveMonitor];
+    _localMoveMonitor = nil;
   }
   _syntheticDragActive = NO;
 }

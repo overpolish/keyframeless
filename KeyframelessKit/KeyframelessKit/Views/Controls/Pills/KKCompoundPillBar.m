@@ -175,4 +175,14 @@ static const CGFloat kCompoundGap = 6.0;
     _rows[i].states = states[i];
 }
 
+- (NSRect)screenRectForCompoundIndex:(NSInteger)compoundIdx {
+  if (compoundIdx < 0 || compoundIdx >= (NSInteger)_rows.count)
+    return NSZeroRect;
+  KKPillToggleRowView *row = _rows[compoundIdx];
+  NSWindow *w = row.window;
+  if (!w)
+    return NSZeroRect;
+  return [w convertRectToScreen:[row convertRect:row.bounds toView:nil]];
+}
+
 @end

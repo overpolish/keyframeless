@@ -14,6 +14,8 @@
 @class KKTimelineInspectorView;
 @class KKTimingGuideConfig;
 @class KKHelpGuide;
+@class KKOSCGuideBridge;
+@class KKOSCGuideStrategy;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -85,6 +87,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// The lanes view the guide drives. Its basic/advanced graphs are read from
 /// here; all timeline anchors resolve through the kit `+Guide` categories.
 @property(nonatomic, weak) KKTimelineLanesView *lanesView;
+
+/// The inspector view that owns this guide run. Pre-set by
+/// -makeTimingGuideConfig. The OSC guide uses it to reach inspector-level OSC
+/// hooks + anchors (checkbox, gear, pills); the timing/mini-viewer guides don't
+/// need it.
+@property(nonatomic, weak) KKTimelineInspectorView *inspectorView;
 
 /// The property the guide teaches, e.g. @"Radius" / @"Position". Required.
 @property(nonatomic, copy) NSString *primaryLabel;
@@ -159,6 +167,26 @@ NS_ASSUME_NONNULL_BEGIN
 /// `viewerScreenRect` populates before the watch-back cutout is queried (the
 /// playhead is static at clip start on enter). No-op safe to omit.
 @property(nonatomic, copy, nullable) void (^requestPreviewRender)(void);
+
+/// The shared OSC-guide bridge for this plugin's viewer on-screen control (the
+/// same process-lifetime instance the plugin's OSC tick feeds geometry into).
+/// Required for the On-Screen Controls guide's interactive viewer-drag step;
+/// nil falls back to a narrated (non-interactive) viewer spotlight.
+@property(nonatomic, copy, nullable) KKOSCGuideBridge * (^oscGuideBridge)(void);
+
+/// Builds a fresh OSC-shape strategy mapping a viewer drag to this plugin's
+/// control value (radius, position, ...) and back. Paired with `oscGuideBridge`
+/// to drive the interactive drag-to-target step of the On-Screen Controls
+/// guide. nil = narrated fallback.
+@property(nonatomic, copy, nullable) KKOSCGuideStrategy * (^oscGuideStrategy)
+    (void);
+
+/// The control the OSC guide's inspector pill step has the user disable. Must
+/// be a NON-featured control (one NOT shown in the keypose mini-canvas, which
+/// only shows the featured lane), so disabling it can't empty the mini-canvas
+/// the later steps need. Matched by the compound's master label (e.g. @"Crop").
+/// nil = the pill step spotlights the whole bar (any control).
+@property(nonatomic, copy, nullable) NSString *oscDisableLabel;
 
 @end
 

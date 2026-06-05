@@ -188,7 +188,8 @@ static NSString *_RoundedAILaneSchemaText(void) {
                                                  view timingGuideHost]
                                     view:view
                              elementKeys:[KKPlugin kkOSCElementKeysForCompounds:
-                                                       oscCompounds]];
+                                                       oscCompounds]
+                            nudgeParamID:kParamRenderNudge];
 
     [self kkWireStandardInspectorCallbacksForView:view
                                    uiStateParamID:kParamUIState

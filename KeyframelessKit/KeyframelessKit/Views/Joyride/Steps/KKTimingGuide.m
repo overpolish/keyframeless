@@ -106,6 +106,26 @@ static const CGFloat kDragSnapPx = 14.0;
   weakMiniViewer = miniViewer;
   miniViewer.identifier = @"miniviewer";
 
+  __block __weak KKHelpGuide *weakOSC = nil;
+  KKHelpGuide *osc = [KKHelpGuide
+      guideWithTitle:KKLoc(@"On-Screen Controls",
+                           @"Help guide title: on-screen-control walkthrough.")
+            subtitle:KKLoc(@"Hide, reveal, and peek the viewer controls",
+                           @"Help guide subtitle: On-Screen Controls.")
+             onStart:^{
+               KKTimelineInspectorView *iv =
+                   inspectorProvider ? inspectorProvider() : nil;
+               if (!iv)
+                 return;
+               KKHelpGuide *live = weakOSC;
+               iv.onGuideCompleted = ^{
+                 [live markCompleted];
+               };
+               [iv restartOSCGuide];
+             }];
+  weakOSC = osc;
+  osc.identifier = @"osc";
+
   // The guides cut out the FCP viewer / boundary popover, which only resolve
   // once the OSC bridge has a draw tick - so they gate on the same canvas
   // reference the plugin supplies.
@@ -114,11 +134,11 @@ static const CGFloat kDragSnapPx = 14.0;
             @"select it (it highlights yellow), then move your mouse over the "
             @"viewer to enable them.",
             @"Help guide disabled subtitle (no OSC canvas reference yet).");
-  for (KKHelpGuide *g in @[ intro, advanced, miniViewer ]) {
+  for (KKHelpGuide *g in @[ intro, advanced, miniViewer, osc ]) {
     g.enabledProvider = enabledProvider;
     g.disabledSubtitle = disabled;
   }
-  return @[ intro, advanced, miniViewer ];
+  return @[ intro, advanced, miniViewer, osc ];
 }
 
 + (KKTimeline *)basicSeedTimelineForConfig:(KKTimingGuideConfig *)config {

@@ -144,6 +144,7 @@
   if (cv) {
     cv.onViewTransformChanged = nil;
     cv.onViewReset = nil;
+    cv.onOptHideHandle = nil;
   }
   _mcWiredCanvas = nil;
   self.playToggleTapped = nil;
@@ -333,6 +334,7 @@
   if (prev && prev != cv) {
     prev.onViewTransformChanged = nil;
     prev.onViewReset = nil;
+    prev.onOptHideHandle = nil;
   }
   _mcWiredCanvas = cv;
   if (!cv)
@@ -355,6 +357,15 @@
           intArg:0
          intArg2:0
            label:nil];
+  };
+  cv.onOptHideHandle = ^(NSString *label) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    [s _fireType:KKJoyrideTriggerTypeMiniCanvasOptHide
+          intArg:0
+         intArg2:0
+           label:label];
   };
 }
 

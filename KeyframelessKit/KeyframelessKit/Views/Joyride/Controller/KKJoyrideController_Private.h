@@ -25,6 +25,8 @@ NS_ASSUME_NONNULL_BEGIN
   id _dragMonitor;
   id _localDragMonitor;
   id _localMouseDownMonitor;
+  id _globalMoveMonitor;
+  id _localMoveMonitor;
   BOOL _active;
   BOOL _syntheticDragActive;
   NSMutableArray *_focusObservers;

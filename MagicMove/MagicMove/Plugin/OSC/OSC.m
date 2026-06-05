@@ -31,6 +31,43 @@ KKOSCGuideBridge *MagicMoveSharedOSCGuideBridge(void) {
   return MagicMoveGuideBridge();
 }
 
+// Guide-scoped Position (object [0,1] space). The OSC can't read the timeline
+// blob from the drawOSC tick (FxParameterRetrievalAPI is nil there), so during
+// the OSC guide the inspector drag pushes the live position here and the handle
+// tracks it - mirrors Rounded's sGuideRadius.
+static CGPoint sGuidePosition = {0.5, 0.5};
+
+// Object-space target the interactive drag nudges the Position handle toward
+// (upper-left of centre, clearly offset from the 0.5,0.5 seed).
+static const CGPoint kMagicMoveGuideTargetObject = {0.3, 0.7};
+
+void MagicMoveSetGuidePosition(double objX, double objY) {
+  sGuidePosition = CGPointMake(objX, objY);
+}
+
+CGPoint MagicMoveGuideTargetObjectPosition(void) {
+  return kMagicMoveGuideTargetObject;
+}
+
+// Inverse map: a screen point → object-space Position via the bridge's cached
+// viewer rect. Object [0,1]^2 maps to the viewer rect corners (both Y-up), so
+// the value is simply the normalized position within that rect - the canvas
+// terms cancel, same identity Rounded's radius map uses.
+BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
+                                          double *outY) {
+  KKOSCGuideBridge *b = MagicMoveGuideBridge();
+  NSRect vr = b.estimatedViewerScreenRect;
+  if (!b.geometryValid || NSIsEmptyRect(vr))
+    return NO;
+  double x = (screenPt.x - NSMinX(vr)) / NSWidth(vr);
+  double y = (screenPt.y - NSMinY(vr)) / NSHeight(vr);
+  if (outX)
+    *outX = MAX(0.0, MIN(1.0, x));
+  if (outY)
+    *outY = MAX(0.0, MIN(1.0, y));
+  return YES;
+}
+
 @implementation MagicMoveOSC
 
 // Feed the shared guide bridge canvas geometry each tick so the timing guide
@@ -75,12 +112,28 @@ KKOSCGuideBridge *MagicMoveSharedOSCGuideBridge(void) {
   double displayScale = [[NSScreen mainScreen] backingScaleFactor];
   double spC =
       (rawZoom > 0.0 && displayScale > 0.0) ? rawZoom / displayScale : 0.0;
+  // During the OSC guide, feed the drag target (object-space → canvas) so the
+  // bridge can spotlight the glowing destination; otherwise we only want the
+  // viewer rect for the timing guide's watch-back step.
+  BOOL inGuide = MagicMoveGuideBridge().guideStep > 0;
+  CGPoint targetCanvas = CGPointZero;
+  if (inGuide) {
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    CGPoint tgt = MagicMoveGuideTargetObjectPosition();
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                            fromX:tgt.x
+                            fromY:tgt.y
+                          toSpace:kFxDrawingCoordinates_CANVAS
+                              toX:&targetCanvas.x
+                              toY:&targetCanvas.y];
+  }
   [MagicMoveGuideBridge() ingestDrawTickWithCanvasTopRight:tr
                                                 bottomLeft:bl
                                                canvasScale:spC
                                            handleCanvasPos:pos
-                                           targetCanvasPos:CGPointZero
-                                                 hasTarget:NO];
+                                           targetCanvasPos:targetCanvas
+                                                 hasTarget:inGuide];
 }
 
 // hit-test context: screen + canvas coords arrive together AND canvasZoom is
@@ -202,10 +255,18 @@ KKOSCGuideBridge *MagicMoveSharedOSCGuideBridge(void) {
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   if (!oscAPI)
     return CGPointZero;
-  NSArray<NSNumber *> *vals =
-      _positionValuesAtFraction([self _fractionAtTime:time]);
-  double objX = vals[0].doubleValue;
-  double objY = vals[1].doubleValue;
+  double objX, objY;
+  if (MagicMoveGuideBridge().guideStep > 0) {
+    // During the guide the handle follows the guide-scoped position the drag
+    // pushes in (the blob is unreadable in this tick).
+    objX = sGuidePosition.x;
+    objY = sGuidePosition.y;
+  } else {
+    NSArray<NSNumber *> *vals =
+        _positionValuesAtFraction([self _fractionAtTime:time]);
+    objX = vals[0].doubleValue;
+    objY = vals[1].doubleValue;
+  }
   CGPoint canvas = CGPointZero;
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
                           fromX:objX

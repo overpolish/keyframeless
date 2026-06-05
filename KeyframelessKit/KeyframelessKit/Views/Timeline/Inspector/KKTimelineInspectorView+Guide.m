@@ -3,17 +3,35 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKCompoundPillBar.h"
 #import "KKPillToggleRowView.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineInspectorView+Guide.h"
 #import "KKTimelineInspectorView_Private.h"
 #import <KeyframelessKit/KKJoyrideGuideHost.h>
 #import <KeyframelessKit/KKMiniViewerGuide.h>
+#import <KeyframelessKit/KKOSCGuide.h>
+#import <KeyframelessKit/KKOSCGuideBridge.h>
 #import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingGuide.h>
 
 @implementation KKTimelineInspectorView (Guide)
+
+- (void)guideSetActiveTab:(NSInteger)tab {
+  // UI-only tab switch for a guide pin/restore: changes the visible tab WITHOUT
+  // persisting (no `onTabChanged`), so the saved `activeTab` in the UI-state
+  // blob never changes. Persisting it would make the plugin's parameterChanged
+  // re-apply the pinned tab, racing the end-of-guide restore into an infinite
+  // Basic<->Advanced loop. Bypasses the `_guideOwnsTab` guard (the guide owns
+  // this call).
+  _selectedTab = (KKTimelineTab)tab;
+  [_tabBar setState:(tab == KKTimelineTabBasic) atIndex:KKTimelineTabBasic];
+  [_tabBar setState:(tab == KKTimelineTabAdvanced)
+            atIndex:KKTimelineTabAdvanced];
+  [_basicView setActiveTab:tab];
+  [_detachedView setActiveTab:tab];
+}
 
 @dynamic onGuideTabChanged;
 
@@ -33,6 +51,71 @@
 
 - (void)setGuideOSCKeepLabels:(NSArray<NSString *> *)labels {
   _guideOSCKeepLabels = [labels copy];
+}
+
+static NSRect KKGuideScreenRectForView(NSView *v) {
+  NSWindow *w = v.window;
+  if (!v || !w)
+    return NSZeroRect;
+  return [w convertRectToScreen:[v convertRect:v.bounds toView:nil]];
+}
+
+@dynamic onGuideOSCMasterToggled;
+
+- (void (^)(BOOL))onGuideOSCMasterToggled {
+  return _onGuideOSCMasterToggled;
+}
+
+- (void)setOnGuideOSCMasterToggled:(void (^)(BOOL))block {
+  _onGuideOSCMasterToggled = [block copy];
+}
+
+@dynamic onGuideOSCSettingsPopoverWillOpen;
+
+- (void (^)(NSView *))onGuideOSCSettingsPopoverWillOpen {
+  return _onGuideOSCSettingsPopoverWillOpen;
+}
+
+- (void)setOnGuideOSCSettingsPopoverWillOpen:(void (^)(NSView *))block {
+  _onGuideOSCSettingsPopoverWillOpen = [block copy];
+}
+
+@dynamic onGuideOSCElementToggled;
+
+- (void (^)(NSString *, BOOL))onGuideOSCElementToggled {
+  return _onGuideOSCElementToggled;
+}
+
+- (void)setOnGuideOSCElementToggled:(void (^)(NSString *, BOOL))block {
+  _onGuideOSCElementToggled = [block copy];
+}
+
+- (NSRect)guideOSCCheckboxScreenRect {
+  return KKGuideScreenRectForView((NSView *)_oscCheckbox);
+}
+
+- (NSRect)guideOSCSettingsButtonScreenRect {
+  return KKGuideScreenRectForView((NSView *)_oscSettingsButton);
+}
+
+- (NSRect)guideOSCSettingsPillBarScreenRect {
+  return KKGuideScreenRectForView((NSView *)_oscPillBar);
+}
+
+- (NSRect)guideOSCSettingsPillScreenRectForLabel:(NSString *)label {
+  if (!_oscPillBar || !label)
+    return NSZeroRect;
+  NSArray<NSArray<NSString *> *> *compounds = self.oscVisibilityCompounds;
+  for (NSInteger ci = 0; ci < (NSInteger)compounds.count; ci++) {
+    if (compounds[ci].count &&
+        [compounds[ci].firstObject isEqualToString:label])
+      return [_oscPillBar screenRectForCompoundIndex:ci];
+  }
+  return NSZeroRect;
+}
+
+- (void)guideCloseOSCSettingsPopover {
+  [_oscPopover close];
 }
 
 - (NSRect)guidePlayButtonScreenRect {
@@ -118,6 +201,7 @@
   __weak typeof(self) weak = self;
   KKTimingGuideConfig *cfg = [[KKTimingGuideConfig alloc] init];
   cfg.lanesView = self.basicLanesView;
+  cfg.inspectorView = self;
   cfg.playButtonScreenRect = ^NSRect {
     __strong typeof(weak) s = weak;
     return s ? [s guidePlayButtonScreenRect] : NSZeroRect;
@@ -181,6 +265,64 @@
   if (!provider)
     return;
   [self runMiniViewerGuideWithConfig:provider()];
+}
+
+- (void)restartOSCGuide {
+  KKTimingGuideConfig * (^provider)(void) = _timingGuideConfigProvider;
+  if (!provider)
+    return;
+  [self runOSCGuideWithConfig:provider()];
+}
+
+- (void)runOSCGuideWithConfig:(KKTimingGuideConfig *)cfg {
+  NSInteger priorTab = self.activeTab;
+  KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
+  self.basicLanesView.renderMode = KKMiniCanvasRenderModeOff;
+  KKJoyrideGuideHost *host = [self timingGuideHost];
+  host.forwardsGestures =
+      YES; // inspector checkbox / gear / pills are clickable
+  // The mini-canvas OSC steps live in the Advanced sequencer's keypose popover,
+  // so pin Advanced (UI-only, so the saved activeTab stays put) + own the tab
+  // so the plugin's parameterChanged can't fight it. Restored on completion.
+  [self guideSetActiveTab:KKTimelineTabAdvanced];
+  self.guideOwnsTab = YES;
+  // Force ALL on-screen controls visible at start (nil keep-set) so the user
+  // has them to work with. Forcing doesn't block the user's own toggles during
+  // the run - the checkbox / pill handlers update OSC state directly; the force
+  // only stops an async refresh from reverting it. Restored on completion.
+  self.guideOSCKeepLabels = nil;
+  __weak typeof(self) weak = self;
+  [host
+      runWithSeed:^KKTimeline * {
+        // An enabled (animatable) keypose lane so the Advanced graph has a
+        // clickable keypose whose mini-canvas the opt-hide / peek steps use.
+        // The viewer-drag step overwrites it with its own single keypose (still
+        // enabled, still at index 0), and the host restores the user's timeline
+        // on end.
+        return [KKMiniViewerGuide seedTimelineForConfig:cfg];
+      }
+      buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
+                                             KKJoyrideLanesBinder *binder) {
+        return [KKOSCGuide stepsForGuide:guide binder:binder config:cfg];
+      }
+      extraOnComplete:^{
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return;
+        s.onGuideOSCMasterToggled = nil;
+        s.onGuideOSCSettingsPopoverWillOpen = nil;
+        s.onGuideOSCElementToggled = nil;
+        [s guideCloseOSCSettingsPopover];
+        [s.basicLanesView guideCloseContentPopover]; // the keypose mini-canvas
+        s.basicLanesView.renderMode = priorRenderMode;
+        s.guideOwnsTab = NO; // unlock before restoring the user's tab
+        if (priorTab != s.activeTab)
+          [s guideSetActiveTab:priorTab]; // UI-only, matches the pin
+        // Disarm the OSC's guide mode so the viewer handle returns to tracking
+        // the real value (not the guide-scoped one).
+        KKOSCGuideBridge *b = cfg.oscGuideBridge ? cfg.oscGuideBridge() : nil;
+        b.guideStep = 0;
+      }];
 }
 
 - (void)runMiniViewerGuideWithConfig:(KKTimingGuideConfig *)cfg {

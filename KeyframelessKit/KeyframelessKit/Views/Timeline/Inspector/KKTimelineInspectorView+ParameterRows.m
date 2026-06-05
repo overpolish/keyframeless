@@ -4,6 +4,7 @@
  */
 
 #import "KKLocalized.h"
+#import "KKTimelineInspectorView+Guide.h"
 #import "KKTimelineInspectorView.h"
 #import "KKTimelineInspectorView_Private.h"
 
@@ -26,6 +27,7 @@
 #import "KKTokens.h"
 #import "KKValueTextField.h"
 #import "NSColor+KKColors.h"
+#import <KeyframelessKit/KKJoyrideGuideHost.h>
 #import <KeyframelessKit/KKTimingCompat.h>
 
 @implementation KKTimelineInspectorView (ParameterRows)
@@ -166,6 +168,8 @@
     strong->_oscSettingsButton.enabled = isChecked;
     if (strong.onOSCVisibleToggled)
       strong.onOSCVisibleToggled(isChecked);
+    if (strong.onGuideOSCMasterToggled)
+      strong.onGuideOSCMasterToggled(isChecked);
   };
 
   [self addSubview:_oscRow];
@@ -276,6 +280,7 @@
 
   KKCompoundPillBar *bar = [[KKCompoundPillBar alloc] initWithCompounds:labels];
   bar.translatesAutoresizingMaskIntoConstraints = NO;
+  _oscPillBar = bar; // guide spotlight anchor (weak; lives in the popover)
   NSArray<NSArray<NSNumber *> *> *states =
       self.oscVisibilityElementStates ? self.oscVisibilityElementStates() : nil;
   if (states.count == compounds.count)
@@ -285,6 +290,16 @@
     KKTimelineInspectorView *strong = weak;
     if (strong.oscVisibilityElementToggled)
       strong.oscVisibilityElementToggled(compoundIdx, segIdx, isOn);
+    // Guide observation: report the raw element key (not the localized leaf).
+    if (strong.onGuideOSCElementToggled) {
+      NSArray<NSArray<NSString *> *> *cmp = strong.oscVisibilityCompounds;
+      NSString *key =
+          (compoundIdx >= 0 && compoundIdx < (NSInteger)cmp.count &&
+           segIdx >= 0 && segIdx < (NSInteger)cmp[compoundIdx].count)
+              ? cmp[compoundIdx][segIdx]
+              : nil;
+      strong.onGuideOSCElementToggled(key ?: @"", isOn);
+    }
   };
 
   // Wrap in the lanes-view popover content view so the macOS 26 liquid-glass
@@ -305,12 +320,33 @@
   NSViewController *vc = [[NSViewController alloc] init];
   vc.view = content;
   _oscPopover = [[NSPopover alloc] init];
-  _oscPopover.behavior = NSPopoverBehaviorTransient;
+  // While a guide is running, ViewBridge-routed clicks (the joyride overlay
+  // forwarding a pill click) target the inspector window, not the popover -
+  // Transient reads that as an outside click and dismisses before the pill
+  // toggles. ApplicationDefined keeps it open; the guide owns its lifecycle
+  // (it closes the popover on its opt-click step and on completion).
+  _oscPopover.behavior = _timingGuideHost.isActive
+                             ? NSPopoverBehaviorApplicationDefined
+                             : NSPopoverBehaviorTransient;
   _oscPopover.contentViewController = vc;
   _oscPopover.contentSize = content.fittingSize;
   [_oscPopover showRelativeToRect:_oscSettingsButton.bounds
                            ofView:_oscSettingsButton
                     preferredEdge:NSRectEdgeMinY];
+  // Guide observation: let the OSC guide grab the live popover (passthrough
+  // window + pill spotlight) once it has settled into a window and laid out.
+  if (self.onGuideOSCSettingsPopoverWillOpen) {
+    __weak typeof(self) weakSelf = self;
+    __weak NSView *weakContent = content;
+    dispatch_after(
+        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
+        dispatch_get_main_queue(), ^{
+          KKTimelineInspectorView *s = weakSelf;
+          NSView *c = weakContent;
+          if (s.onGuideOSCSettingsPopoverWillOpen && c)
+            s.onGuideOSCSettingsPopoverWillOpen(c);
+        });
+  }
 }
 
 - (void)setOSCVisible:(BOOL)visible {

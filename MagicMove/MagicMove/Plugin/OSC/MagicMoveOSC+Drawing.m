@@ -200,7 +200,12 @@
                         (self.isDragging ? isnan(self.dragAnchorFrac)
                                          : !self.hoverTargetIsAnchor);
   BOOL draggingHandle = self.isDragging && handleTargeted;
-  BOOL posVisible = draggingHandle || (posEnabled && posShownHere);
+  // During the OSC guide the handle ignores keypose/playhead gating (so the
+  // drag works without a keypose at the playhead) but still respects the
+  // master/element toggle - otherwise the "hide them all" step couldn't hide
+  // it.
+  BOOL inGuide = MagicMoveSharedOSCGuideBridge().guideStep > 0;
+  BOOL posVisible = draggingHandle || (posEnabled && (posShownHere || inGuide));
   // Opt-hold reveals a hidden Position handle as a dimmed ghost (clickable to
   // re-show); only when it would otherwise be on screen at this playhead.
   BOOL posGhost = !posVisible && self.optRevealActive &&

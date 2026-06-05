@@ -169,7 +169,14 @@
   // guide that forwards gestures must let the panel receive events; clicks
   // still pass via the global monitor + synthesize path (overlay hitTest is
   // nil, so it never absorbs a click).
-  panel.ignoresMouseEvents = !self.forwardsGestures;
+  //
+  // A pass-through step is the exception: it wants raw events to reach the host
+  // (FCP's viewer), so the panel must ignore the mouse even when the run
+  // forwards gestures for its non-pass-through (inspector) steps. Without this,
+  // the panel sits over the viewer and FCP never sees the hover/Option, so the
+  // OSC's opt-reveal (peek) and opt-click-hide never fire.
+  panel.ignoresMouseEvents =
+      step.spotlightPassThrough ? YES : !self.forwardsGestures;
   panel.alphaValue = 0.0;
 
   _KKJoyrideOverlayView *overlay =

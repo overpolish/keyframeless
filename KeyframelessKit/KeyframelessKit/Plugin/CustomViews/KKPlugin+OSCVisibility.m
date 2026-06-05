@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKDataBlob.h"
 #import "KKMiniCanvasRenderer.h"
 #import "KKPlugin+OSCVisibility.h"
 #import "KKPluginInstanceState.h"
@@ -208,12 +209,17 @@
   }
   renderer.handlesHidden = !priorMaster;
   renderer.hiddenHandleLabels = priorHidden;
+  // The OSC guide drives peek reveal directly (setGuidePeekActive); clear it so
+  // a run that ended mid-peek doesn't leave the mini-canvas stuck in peek mode
+  // (which the master toggle then can't hide).
+  renderer.revealHidden = NO;
   [view setOSCVisible:priorMaster];
 }
 
 - (void)kkInstallGuideOSCForcingOnHost:(KKJoyrideGuideHost *)host
                                   view:(KKTimelineInspectorView *)view
-                           elementKeys:(NSArray<NSString *> *)keys {
+                           elementKeys:(NSArray<NSString *> *)keys
+                          nudgeParamID:(UInt32)nudgeParamID {
   __weak typeof(self) weakPlugin = self;
   __weak KKTimelineInspectorView *weakView = view;
   __block NSDictionary *snapshot = nil;
@@ -229,6 +235,7 @@
                                       elementKeys:keys
                                              view:v
                                          renderer:r];
+    [p kkNudgeRenderWithParamID:nudgeParamID];
   };
   host.onRunDidEnd = ^{
     __strong typeof(weakPlugin) p = weakPlugin;
@@ -237,7 +244,26 @@
       return;
     KKMiniCanvasRenderer *r = (KKMiniCanvasRenderer *)v.miniCanvasDelegate;
     [p kkRestoreOSCForGuide:snapshot view:v renderer:r];
+    [p kkNudgeRenderWithParamID:nudgeParamID];
   };
+}
+
+// Force the FCP viewer to redraw its on-screen controls by writing a fresh
+// nonce to the hidden render-nudge scratch param inside an action scope. The
+// OSC visibility state lives in in-memory instance state that drawOSC reads,
+// but FCP only re-invokes drawOSC on a render - and a pure-navigation guide
+// triggers none. This nonce write is the same mechanism the boundary-preview
+// path uses; it doesn't touch any persisted UI state.
+- (void)kkNudgeRenderWithParamID:(UInt32)nudgeParamID {
+  id<FxCustomParameterActionAPI_v4> act =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!act)
+    return;
+  [act startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  KKWriteCustomParamString(setAPI, [[NSUUID UUID] UUIDString], nudgeParamID);
+  [act endAction:self];
 }
 
 @end
