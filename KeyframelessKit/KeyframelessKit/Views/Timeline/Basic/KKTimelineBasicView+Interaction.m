@@ -7,7 +7,7 @@
 #import "KKTimelineBasicView_Private.h"
 
 #import "KKKeyposeSymbol.h"
-#import "KKMiniCanvasView.h"
+#import "KKMiniViewerView.h"
 #import "KKSegmentEditView.h"
 #import "KKTimelineScale.h"
 #import "KKTimelineScrubMath.h"

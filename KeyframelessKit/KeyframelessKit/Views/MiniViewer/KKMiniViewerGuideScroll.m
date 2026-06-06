@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKMiniCanvasGuideScroll.h"
+#import "KKMiniViewerGuideScroll.h"
 
-#import "KKMiniCanvasView.h"
+#import "KKMiniViewerView.h"
 
-@implementation KKMiniCanvasGuideScroll {
-  __weak KKMiniCanvasView *_canvas;
+@implementation KKMiniViewerGuideScroll {
+  __weak KKMiniViewerView *_canvas;
   BOOL (^_activeWhen)(void);
   id _scrollLocalMon;
   id _scrollMon;
@@ -16,7 +16,7 @@
   id _magnifyMon;
 }
 
-- (instancetype)initWithCanvas:(KKMiniCanvasView *)canvas
+- (instancetype)initWithCanvas:(KKMiniViewerView *)canvas
                     activeWhen:(BOOL (^)(void))activeWhen {
   self = [super init];
   if (self) {
@@ -47,7 +47,7 @@
     __strong typeof(self) s = weak;
     if (!s || !s->_activeWhen())
       return;
-    KKMiniCanvasView *c = s->_canvas;
+    KKMiniViewerView *c = s->_canvas;
     if (!c || ![c pointerOverCanvas])
       return;
     if (pinch)

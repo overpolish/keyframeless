@@ -63,7 +63,7 @@ FOUNDATION_EXPORT NSButton *KKResetToDefaultButton(id target, SEL action);
 
 /// "Onion-skin" toggle (accent when `on`). Filmstrip icon - turns on the
 /// per-keypose filmstrip layout inside the keypose value popover's
-/// mini-canvas (host renders each KP's source frame side-by-side).
+/// mini-viewer (host renders each KP's source frame side-by-side).
 @interface KKOnionSkinButton : NSView
 @property(nonatomic) BOOL on;
 @property(nonatomic, copy, nullable) void (^onToggled)(BOOL isOn);

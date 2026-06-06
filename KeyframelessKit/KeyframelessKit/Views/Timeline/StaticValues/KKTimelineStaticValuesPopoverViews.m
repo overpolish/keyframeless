@@ -8,7 +8,7 @@
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 
-@implementation _KKMiniCanvasScrollView
+@implementation _KKMiniViewerScrollView
 - (NSResponder *)_recursiveResponderThatWantsForwardedScrollEventsForAxis:
                      (NSEventGestureAxis)axis
                                                          intendedForSwipe:

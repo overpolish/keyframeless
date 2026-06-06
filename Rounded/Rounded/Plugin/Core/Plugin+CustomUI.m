@@ -100,7 +100,7 @@ static NSString *_RoundedAILaneSchemaText(void) {
     BOOL loopEnabled = st.loopEnabled;
     NSInteger activeTab = st.activeTab;
     BOOL oscMasterVisible = st.oscMasterVisible;
-    KKMiniCanvasRenderMode renderMode = (KKMiniCanvasRenderMode)st.renderMode;
+    KKMiniViewerRenderMode renderMode = (KKMiniViewerRenderMode)st.renderMode;
     BOOL motionBlurEnabled = st.motionBlurEnabled;
     double motionBlurShutterAngle = st.motionBlurShutterAngle;
     NSInteger motionBlurSamples = st.motionBlurSamples;
@@ -165,9 +165,9 @@ static NSString *_RoundedAILaneSchemaText(void) {
 
     // On-screen-control visibility: master tick + per-element pills (Radius,
     // Crop) + opt-click-hide + opt-reveal. Shared glue in KKPlugin
-    // (OSCVisibility); the renderer is the view's mini-canvas delegate.
-    KKMiniCanvasRenderer *oscRenderer =
-        (KKMiniCanvasRenderer *)view.miniCanvasDelegate;
+    // (OSCVisibility); the renderer is the view's mini-viewer delegate.
+    KKMiniViewerRenderer *oscRenderer =
+        (KKMiniViewerRenderer *)view.miniViewerDelegate;
     NSArray<NSArray<NSString *> *> *oscCompounds =
         @[ @[ @"Radius" ], @[ @"Crop" ] ];
     oscRenderer.handlesHidden = !oscMasterVisible;
@@ -182,7 +182,7 @@ static NSString *_RoundedAILaneSchemaText(void) {
     [view setOSCVisible:oscMasterVisible];
     [view setRenderMode:renderMode];
 
-    // Force OSCs visible while a guide runs (so its mini-canvas + viewer
+    // Force OSCs visible while a guide runs (so its mini-viewer + viewer
     // handles are usable), then restore the user's OSC setting on guide end.
     [self kkInstallGuideOSCForcingOnHost:[(RoundedInspectorView *)
                                                  view timingGuideHost]

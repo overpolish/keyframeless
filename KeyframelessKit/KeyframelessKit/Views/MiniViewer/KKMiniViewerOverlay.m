@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKMiniCanvasRenderer.h"
-#import "KKMiniCanvasView_Private.h"
+#import "KKMiniViewerRenderer.h"
+#import "KKMiniViewerView_Private.h"
 #import "NSColor+KKColors.h"
 
-@implementation _KKMiniCanvasOverlay {
+@implementation _KKMiniViewerOverlay {
   BOOL _dragging;
   NSTrackingArea *_optTrackingArea;
   BOOL _optReveal;
@@ -49,13 +49,13 @@
 }
 
 - (NSView *)hitTest:(NSPoint)pt {
-  KKMiniCanvasView *c = self.canvas;
-  id<KKMiniCanvasDelegate> d = c.canvasDelegate;
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
   if (![d respondsToSelector:@selector(
-                                 miniCanvas:handleHitAtPoint:contentRect:)])
+                                 miniViewer:handleHitAtPoint:contentRect:)])
     return nil;
   NSPoint p = [self convertPoint:pt fromView:self.superview];
-  return [d miniCanvas:c
+  return [d miniViewer:c
              handleHitAtPoint:p
                   contentRect:[c contentRectInViewPoints]]
              ? self
@@ -66,15 +66,15 @@
 // The crop border is a thin stroke and is cheaper/sharper drawn here in
 // Core Graphics than via a Metal line pipeline.
 - (void)drawRect:(NSRect)dirtyRect {
-  KKMiniCanvasView *c = self.canvas;
-  id<KKMiniCanvasDelegate> d = c.canvasDelegate;
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
   CGRect cr = [c contentRectInViewPoints];
   if (_dragging &&
-      [d respondsToSelector:@selector(miniCanvas:snapGuideHasX:X:fromKeyposeX:
+      [d respondsToSelector:@selector(miniViewer:snapGuideHasX:X:fromKeyposeX:
                                       hasY:Y:fromKeyposeY:)]) {
     BOOL hasX = NO, hasY = NO, kpX = NO, kpY = NO;
     CGFloat gx = 0, gy = 0;
-    [d miniCanvas:c
+    [d miniViewer:c
         snapGuideHasX:&hasX
                     X:&gx
          fromKeyposeX:&kpX
@@ -112,19 +112,19 @@
   // proportional to the 9pt mini label, matching the viewer's 4pt-at-20pt gap.
   // Styling matches the viewer's KKOSCLabel: light-gray (0xC1) fill over a
   // black outline stroke, so the readout reads the same in both surfaces.
-  NSDictionary *attrs = [_KKMiniCanvasOverlay readoutAttributes];
+  NSDictionary *attrs = [_KKMiniViewerOverlay readoutAttributes];
   const CGFloat kLabelGap = 4.0 * 9.0 / 20.0;
 
   // Every box OSC (crop, scale, ...) draws its readout the same way: trailing-
   // aligned to the box's right edge, just below the bottom edge.
-  if ([d respondsToSelector:@selector(miniCanvas:boxesForContentRect:)]) {
-    for (KKMiniBox *box in [d miniCanvas:c boxesForContentRect:cr]) {
+  if ([d respondsToSelector:@selector(miniViewer:boxesForContentRect:)]) {
+    for (KKMiniBox *box in [d miniViewer:c boxesForContentRect:cr]) {
       if (!box.readout.length)
         continue;
       NSSize ts = [box.readout sizeWithAttributes:attrs];
       NSPoint at = NSMakePoint(CGRectGetMaxX(box.rect) - ts.width,
                                CGRectGetMinY(box.rect) - ts.height - kLabelGap);
-      [_KKMiniCanvasOverlay drawReadout:box.readout
+      [_KKMiniViewerOverlay drawReadout:box.readout
                                 atPoint:at
                          fillAttributes:attrs];
     }
@@ -132,16 +132,16 @@
 }
 
 - (void)mouseDown:(NSEvent *)e {
-  KKMiniCanvasView *c = self.canvas;
+  KKMiniViewerView *c = self.canvas;
   // A double-click is always "reset view", even when it lands on the crop
   // box / a handle (the overlay's hitTest swallows those clicks, so the
   // canvas's own -mouseDown: never sees them otherwise).
   if (e.clickCount == 2) {
     [self.window makeFirstResponder:nil];
-    id<KKMiniCanvasDelegate> dd = c.canvasDelegate;
+    id<KKMiniViewerDelegate> dd = c.canvasDelegate;
     if ([dd respondsToSelector:
-                @selector(miniCanvas:doubleClickAtPoint:contentRect:)] &&
-        [dd miniCanvas:c
+                @selector(miniViewer:doubleClickAtPoint:contentRect:)] &&
+        [dd miniViewer:c
             doubleClickAtPoint:[self convertPoint:e.locationInWindow
                                          fromView:nil]
                    contentRect:[c contentRectInViewPoints]]) {
@@ -152,9 +152,9 @@
     [c resetView];
     return;
   }
-  id<KKMiniCanvasDelegate> d = c.canvasDelegate;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
   if (![d respondsToSelector:
-              @selector(miniCanvas:beginHandleDragAtPoint:contentRect:)])
+              @selector(miniViewer:beginHandleDragAtPoint:contentRect:)])
     return;
   // Interacting with the canvas commits/ends any focused value field so its
   // stale text can't clobber the drag's value on focus loss.
@@ -169,12 +169,12 @@
   // manipulated live and releasing Opt returns to all-off. Toggling an
   // element's own hidden bit while the master gate is off would have no visible
   // effect anyway, so suppressing the toggle here costs nothing.
-  BOOL masterOff = [d isKindOfClass:[KKMiniCanvasRenderer class]] &&
-                   ((KKMiniCanvasRenderer *)d).handlesHidden;
+  BOOL masterOff = [d isKindOfClass:[KKMiniViewerRenderer class]] &&
+                   ((KKMiniViewerRenderer *)d).handlesHidden;
   if (!masterOff && (e.modifierFlags & NSEventModifierFlagOption) &&
       [d respondsToSelector:
-              @selector(miniCanvas:optClickHandleAtPoint:contentRect:)] &&
-      [d miniCanvas:c
+              @selector(miniViewer:optClickHandleAtPoint:contentRect:)] &&
+      [d miniViewer:c
           optClickHandleAtPoint:[self convertPoint:e.locationInWindow
                                           fromView:nil]
                     contentRect:[c contentRectInViewPoints]]) {
@@ -185,7 +185,7 @@
   _dragging = YES;
   if (c.onHandleDragBegin)
     c.onHandleDragBegin();
-  [d miniCanvas:c
+  [d miniViewer:c
       beginHandleDragAtPoint:[self convertPoint:e.locationInWindow fromView:nil]
                  contentRect:[c contentRectInViewPoints]];
 }
@@ -193,18 +193,18 @@
 - (void)mouseDragged:(NSEvent *)e {
   if (!_dragging)
     return;
-  KKMiniCanvasView *c = self.canvas;
-  id<KKMiniCanvasDelegate> d = c.canvasDelegate;
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
   CGPoint p = [self convertPoint:e.locationInWindow fromView:nil];
   CGRect cr = [c contentRectInViewPoints];
   if ([d respondsToSelector:
-              @selector(miniCanvas:dragHandleToPoint:contentRect:modifiers:)]) {
-    [d miniCanvas:c
+              @selector(miniViewer:dragHandleToPoint:contentRect:modifiers:)]) {
+    [d miniViewer:c
         dragHandleToPoint:p
               contentRect:cr
                 modifiers:e.modifierFlags];
   } else {
-    [d miniCanvas:c dragHandleToPoint:p contentRect:cr];
+    [d miniViewer:c dragHandleToPoint:p contentRect:cr];
   }
   [self setNeedsDisplay:YES];
 }
@@ -213,16 +213,16 @@
   if (!_dragging)
     return;
   _dragging = NO;
-  KKMiniCanvasView *c = self.canvas;
-  id<KKMiniCanvasDelegate> d = c.canvasDelegate;
-  if ([d respondsToSelector:@selector(miniCanvasEndHandleDrag:)])
-    [d miniCanvasEndHandleDrag:c];
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  if ([d respondsToSelector:@selector(miniViewerEndHandleDrag:)])
+    [d miniViewerEndHandleDrag:c];
   if (c.onHandleDragEnd)
     c.onHandleDragEnd();
   [self setNeedsDisplay:YES];
 }
 
-// Opt-hold over the mini-canvas reveals hidden handles/rings as ghosts. A
+// Opt-hold over the mini-viewer reveals hidden handles/rings as ghosts. A
 // tracking area feeds us mouseMoved/Exited regardless of which subview the
 // pointer is over; we mirror the Option state onto the renderer.
 - (void)updateTrackingAreas {
@@ -242,10 +242,10 @@
   if (reveal == _optReveal)
     return;
   _optReveal = reveal;
-  KKMiniCanvasView *c = self.canvas;
-  id<KKMiniCanvasDelegate> d = c.canvasDelegate;
-  if ([d isKindOfClass:[KKMiniCanvasRenderer class]]) {
-    ((KKMiniCanvasRenderer *)d).revealHidden = reveal;
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  if ([d isKindOfClass:[KKMiniViewerRenderer class]]) {
+    ((KKMiniViewerRenderer *)d).revealHidden = reveal;
     // Handles/rings are the Metal pass, so we must invalidate the MTKView
     // itself - setHandlesNeedDisplay only redraws the CG overlay.
     [c setNeedsDisplay:YES];

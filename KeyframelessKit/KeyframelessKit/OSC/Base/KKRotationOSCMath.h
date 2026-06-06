@@ -14,7 +14,7 @@ extern "C" {
 
 /// 3x3 rotation matrix stored as 3 float3 columns (matches the shader
 /// uniforms). Used by both the viewer-side `KKRotationOSC` and the
-/// mini-canvas renderer so the visual + hit-test geometry stay in sync.
+/// mini-viewer renderer so the visual + hit-test geometry stay in sync.
 typedef struct {
   simd_float3 col0;
   simd_float3 col1;
@@ -66,7 +66,7 @@ typedef struct {
 /// Find the angle t on ring k whose screen-projected polyline is closest to
 /// `p` (canvas pixels, relative to center). Camera at z = -camD; "front" =
 /// z <= 0. `samples` is the polyline resolution (192 is the viewer OSC
-/// default; the mini-canvas may use less).
+/// default; the mini-viewer may use less).
 static inline KKRingHit KKClosestAngleOnRing(KKRotMatrix3 m, int k,
                                              double radius, CGPoint p,
                                              int samples) {
@@ -240,7 +240,7 @@ static inline void KKDecomposeEulerNear(simd_double3x3 R, double pressRx,
 /// writes the new Euler back to the lastWritten anchor (so the next tick
 /// decomposes near it, not the original press) AND to out*. This is the
 /// shared press-matrix × axis(delta) → decompose-near → unwrap idiom every
-/// plugin's rotation drag uses (viewer OSC + mini-canvas renderer).
+/// plugin's rotation drag uses (viewer OSC + mini-viewer renderer).
 static inline void
 KKRotationComposeAxisDelta(int axis, double dAngle, double pressRx,
                            double pressRy, double pressRz, double *inOutLastRx,

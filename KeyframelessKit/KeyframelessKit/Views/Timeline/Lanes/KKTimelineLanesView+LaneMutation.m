@@ -191,7 +191,7 @@
   [self _replaceLane:lane forLabel:label];
 }
 
-// Value editor (mini canvas / fields): set the property's constant value
+// Value editor (mini viewer / fields): set the property's constant value
 // without changing its animatable status.
 - (void)_setLaneValues:(NSArray<NSNumber *> *)values
               forLabel:(NSString *)label {

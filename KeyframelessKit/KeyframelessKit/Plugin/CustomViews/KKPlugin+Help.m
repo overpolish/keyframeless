@@ -155,16 +155,16 @@
                                      @"Controls is switched off",
                                      @"Help shortcut.")],
     [KKHelpShortcut
-        shortcutWithKeysMarkup:KKLoc(@"Double-click the mini-canvas",
+        shortcutWithKeysMarkup:KKLoc(@"Double-click the mini-viewer",
                                      @"Shortcut keys.")
                     descMarkup:KKLoc(@"Reset its zoom and pan",
                                      @"Help shortcut.")],
     [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌘ 0</kbd>"
-                                descMarkup:KKLoc(@"Reset the mini-canvas zoom",
+                                descMarkup:KKLoc(@"Reset the mini-viewer zoom",
                                                  @"Help shortcut.")],
     [KKHelpShortcut
         shortcutWithKeysMarkup:KKLoc(@"Scroll / pinch", @"Shortcut keys.")
-                    descMarkup:KKLoc(@"Zoom the mini-canvas (two-finger drag "
+                    descMarkup:KKLoc(@"Zoom the mini-viewer (two-finger drag "
                                      @"pans)",
                                      @"Help shortcut.")],
   ];

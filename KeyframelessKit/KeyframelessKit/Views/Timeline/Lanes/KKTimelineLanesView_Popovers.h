@@ -51,12 +51,12 @@ NS_ASSUME_NONNULL_BEGIN
   // _clearSelectionButton is lazily created and only included in the
   // accessoryButtons list while the Advanced tab is active.
   KKClearSelectionButton *_clearSelectionButton;
-  // Mini-canvas render mode (Off/Filmstrip/Onion). Drives the boundary
+  // Mini-viewer render mode (Off/Filmstrip/Onion). Drives the boundary
   // value popover's preview shape. The 3-way pill lives in the popover
   // header (KKTimelineLanesView+Helpers.m); the lanes view just owns the
   // persisted bit + cached boundary-popover state so a mid-popover mode
   // toggle can re-publish the boundary request without reopening.
-  KKMiniCanvasRenderMode _renderMode;
+  KKMiniViewerRenderMode _renderMode;
   double _openStaticBoundaryFraction;
   NSArray<KKLane *> *_openStaticBoundaryLanes;
   NSArray<NSString *> *_openStaticBoundaryExcluded;
@@ -130,7 +130,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Boundary value popover (Basic step 27): reuses the static-values popover
 /// machinery but with caller-supplied display lanes (one synthetic
 /// single-keypose lane per animatable property = its value at the boundary),
-/// the mini canvas evaluated at `fraction`, edits routed back via `onValue`
+/// the mini viewer evaluated at `fraction`, edits routed back via `onValue`
 /// (coalesced through the drag blocks).
 - (void)
     _presentBoundaryValuePopoverFromAnchor:(NSView *)anchor
@@ -229,7 +229,7 @@ FOUNDATION_EXPORT NSInteger KKModulationToPill(KKIntervalModulation m);
 
 // Boundary-request statics (defined in +Popovers.m) + the per-frame boundary
 // navigation methods (defined in +BoundaryNav.m), shared across both.
-@class KKMiniCanvasView;
+@class KKMiniViewerView;
 FOUNDATION_EXPORT void KKSetBoundaryEditing(id delegate, BOOL on,
                                             double fraction);
 // `labels` nil clears all suppression (popover-close cleanup).
@@ -240,7 +240,7 @@ FOUNDATION_EXPORT void KKWriteBoundaryRequest(NSString *path, double frac,
 FOUNDATION_EXPORT void KKWriteBoundaryRequestMulti(NSString *path,
                                                    NSArray<NSNumber *> *fracs,
                                                    BOOL active);
-FOUNDATION_EXPORT KKMiniCanvasView *KKFindMiniCanvas(NSView *root);
+FOUNDATION_EXPORT KKMiniViewerView *KKFindMiniViewer(NSView *root);
 FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
                                               NSArray<NSNumber *> *b);
 
@@ -249,7 +249,7 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 - (NSArray<NSNumber *> *)_animatableKPFractions;
 - (void)_refreshBoundaryPopoverNavEnabled;
 - (void)_navigateBoundaryPopoverDirection:(NSInteger)direction;
-- (void)_renderModeDidChange:(KKMiniCanvasRenderMode)mode;
+- (void)_renderModeDidChange:(KKMiniViewerRenderMode)mode;
 /// In-place re-bind for an already-open boundary popover. Used by the
 /// onion-skin filmstrip when the user clicks an inactive cell - the popover
 /// stays open (no close/reopen blink), the value rows re-display the new
@@ -276,7 +276,7 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 @property(nonatomic, copy) NSString *headerTitle;
 @property(nonatomic, copy, nullable) NSString *headerDetail;
 @property(nonatomic, strong, nullable) NSImage *headerIcon;
-@property(nonatomic) KKMiniCanvasRenderMode renderMode;
+@property(nonatomic) KKMiniViewerRenderMode renderMode;
 @property(nonatomic) BOOL isBoundary;
 @property(nonatomic) double fraction;
 @property(nonatomic, copy, nullable) NSArray<NSString *> *excludedLabels;
@@ -289,7 +289,7 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 @property(nonatomic, copy, nullable) void (^onDragEnd)(void);
 @property(nonatomic, copy, nullable) void (^onNavigate)(NSInteger dir);
 @property(nonatomic, copy, nullable) void (^onModeChanged)
-    (KKMiniCanvasRenderMode mode);
+    (KKMiniViewerRenderMode mode);
 @end
 
 @interface KKTimelineLanesView (StaticValuesPresent)

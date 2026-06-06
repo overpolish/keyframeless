@@ -12,7 +12,7 @@
 #import <KeyframelessKit/KKTimingStage.h>
 
 @protocol PROAPIAccessing;
-@protocol KKMiniCanvasDelegate;
+@protocol KKMiniViewerDelegate;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -26,7 +26,7 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// Plugin-agnostic timeline inspector. Composes the play / loop / reset
 /// toolbar, the Basic↔Advanced tab bar, the detach + constants buttons and
 /// the timeline content area into one reusable shell. Plugins drop in their
-/// `KKMiniCanvasRenderer` subclass + a few config properties; everything
+/// `KKMiniViewerRenderer` subclass + a few config properties; everything
 /// else (layout, button wiring, live-push setters, detach-copy plumbing) is
 /// shared.
 ///
@@ -37,15 +37,15 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 
 #pragma mark - Configuration (plugin-specific, set after init)
 
-/// Cross-process tmp-file path the `KKMiniCanvasFeed` publishes to.
-@property(nonatomic, copy, nullable) NSString *miniCanvasDescriptorPath;
+/// Cross-process tmp-file path the `KKMiniViewerFeed` publishes to.
+@property(nonatomic, copy, nullable) NSString *miniViewerDescriptorPath;
 /// Reverse channel: the boundary-popover writes the requested clip
 /// fraction here; the render side reads it in `-scheduleInputs:`.
-@property(nonatomic, copy, nullable) NSString *miniCanvasRequestPath;
-/// Plugin's mini-canvas delegate (typically a `KKMiniCanvasRenderer`
+@property(nonatomic, copy, nullable) NSString *miniViewerRequestPath;
+/// Plugin's mini-viewer delegate (typically a `KKMiniViewerRenderer`
 /// subclass) - supplies the effect render + point-handle vocabulary.
-@property(nonatomic, strong, nullable) id<KKMiniCanvasDelegate>
-    miniCanvasDelegate;
+@property(nonatomic, strong, nullable) id<KKMiniViewerDelegate>
+    miniViewerDelegate;
 /// Lane label the "manage properties" popover highlights for the first-run
 /// spotlight (e.g. @"Radius"). nil = no spotlight.
 @property(nonatomic, copy, nullable) NSString *managePopoverSpotlightLabel;
@@ -85,14 +85,14 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// `KKMotionBlurMode`). The host writes the full
 /// `{enabled,shutterAngle,samples,mode}` blob. Only fired when
 /// `showsMotionBlurRow` is YES. Wrap continuous slider drags with
-/// `onDragBegin`/`onDragEnd` for undo coalescing (same chain the mini-canvas
+/// `onDragBegin`/`onDragEnd` for undo coalescing (same chain the mini-viewer
 /// handles use).
 @property(nonatomic, copy, nullable) void (^onMotionBlurChanged)
     (BOOL enabled, double shutterAngle, NSInteger samples,
      KKMotionBlurMode mode);
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
-/// Start / end of a continuous mini-canvas handle drag - host wraps the
+/// Start / end of a continuous mini-viewer handle drag - host wraps the
 /// burst of `onTimelineMutated` writes in one undo group.
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onDragEnd)(void);
@@ -146,15 +146,15 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 - (void)applyTimeline:(KKTimeline *)timeline;
 - (void)setLoopEnabled:(BOOL)enabled;
 - (void)setActiveTab:(NSInteger)tab;
-/// Push the persisted mini-canvas render mode from the host's UI-state
+/// Push the persisted mini-viewer render mode from the host's UI-state
 /// blob. The 3-way pill lives in the keypose-value popover header (only
 /// while open); this just mirrors the persisted enum. Defaults to Off.
-- (void)setRenderMode:(KKMiniCanvasRenderMode)mode;
-@property(nonatomic, readonly) KKMiniCanvasRenderMode renderMode;
+- (void)setRenderMode:(KKMiniViewerRenderMode)mode;
+@property(nonatomic, readonly) KKMiniViewerRenderMode renderMode;
 /// Fired when the user picks a different render mode. Host writes back to
 /// the UI-state blob via this callback.
 @property(nonatomic, copy, nullable) void (^onRenderModeChanged)
-    (KKMiniCanvasRenderMode mode);
+    (KKMiniViewerRenderMode mode);
 /// The currently selected tab. Lets guides snapshot the state at entry
 /// and restore it on completion.
 @property(nonatomic, readonly) NSInteger activeTab;

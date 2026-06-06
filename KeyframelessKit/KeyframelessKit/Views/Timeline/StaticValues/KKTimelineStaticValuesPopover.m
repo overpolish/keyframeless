@@ -4,7 +4,7 @@
  */
 
 #import "KKLocalized.h"
-#import "KKMiniCanvasView.h"
+#import "KKMiniViewerView.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKSliderView.h"
@@ -19,7 +19,7 @@
 @implementation _KKStaticValuesPopoverView {
   NSMutableDictionary<NSString *, _KKStaticValueRow *> *_rowsByLabel;
   NSStackView *_stack;
-  KKMiniCanvasView *_miniCanvas;
+  KKMiniViewerView *_miniViewer;
   KKPillToggleRowView *_renderModePill; // guide anchor; nil when no pill shown
   NSString *_descriptorPath;
   CGFloat _clipAspect;
@@ -74,11 +74,11 @@
   _navNextButton.enabled = next;
 }
 
-- (KKMiniCanvasView *)miniCanvas {
-  return _miniCanvas;
+- (KKMiniViewerView *)miniViewer {
+  return _miniViewer;
 }
 
-- (NSRect)guideRenderModePillScreenRectForMode:(KKMiniCanvasRenderMode)mode {
+- (NSRect)guideRenderModePillScreenRectForMode:(KKMiniViewerRenderMode)mode {
   // Pill segments are built Off/Filmstrip/Onion in order, so the segment index
   // equals the render-mode raw value.
   if (!_renderModePill)
@@ -167,9 +167,9 @@
     _onNavigate((NSInteger)sender.tag);
 }
 
-- (KKPillToggleRowView *)_makeRenderModePill:(KKMiniCanvasRenderMode)mode
+- (KKPillToggleRowView *)_makeRenderModePill:(KKMiniViewerRenderMode)mode
                                onModeChanged:
-                                   (void (^)(KKMiniCanvasRenderMode))cb {
+                                   (void (^)(KKMiniViewerRenderMode))cb {
   NSImage * (^sym)(NSString *) = ^NSImage *(NSString *name) {
     NSImage *img = [NSImage imageWithSystemSymbolName:name
                              accessibilityDescription:nil];
@@ -188,7 +188,7 @@
   pill.onToggled = ^(NSInteger index, BOOL isOn) {
     if (!isOn || !cb)
       return;
-    cb((KKMiniCanvasRenderMode)index);
+    cb((KKMiniViewerRenderMode)index);
   };
   return pill;
 }
@@ -199,9 +199,9 @@
                   headerTitle:(NSString *)headerTitle
                  headerDetail:(NSString *)headerDetail
                    headerIcon:(NSImage *)headerIcon
-               canvasDelegate:(id<KKMiniCanvasDelegate>)canvasDelegate
-                   renderMode:(KKMiniCanvasRenderMode)renderMode
-                onModeChanged:(void (^)(KKMiniCanvasRenderMode))onModeChanged
+               canvasDelegate:(id<KKMiniViewerDelegate>)canvasDelegate
+                   renderMode:(KKMiniViewerRenderMode)renderMode
+                onModeChanged:(void (^)(KKMiniViewerRenderMode))onModeChanged
                    onNavigate:(void (^)(NSInteger))onNavigate
                 onHandleValue:(void (^)(NSString *,
                                         NSArray<NSNumber *> *))onHandleValue
@@ -286,10 +286,10 @@
 
   if (showPill) {
     __weak typeof(self) weakSelfPill = self;
-    void (^wrappedModeChanged)(KKMiniCanvasRenderMode) =
-        ^(KKMiniCanvasRenderMode m) {
+    void (^wrappedModeChanged)(KKMiniViewerRenderMode) =
+        ^(KKMiniViewerRenderMode m) {
           __strong typeof(weakSelfPill) ss = weakSelfPill;
-          ss->_miniCanvas.renderMode = (NSInteger)m;
+          ss->_miniViewer.renderMode = (NSInteger)m;
           if (onModeChanged)
             onModeChanged(m);
         };
@@ -313,39 +313,39 @@
     stackTopInset = KKPaddingMD + bandH + KKPaddingMD;
   }
   if (descriptorPath.length > 0) {
-    _miniCanvas = [[KKMiniCanvasView alloc] initWithFrame:NSZeroRect];
-    _miniCanvas.sourceDescriptorPath = descriptorPath;
-    _miniCanvas.canvasDelegate = canvasDelegate;
-    _miniCanvas.renderMode = (NSInteger)renderMode;
+    _miniViewer = [[KKMiniViewerView alloc] initWithFrame:NSZeroRect];
+    _miniViewer.sourceDescriptorPath = descriptorPath;
+    _miniViewer.canvasDelegate = canvasDelegate;
+    _miniViewer.renderMode = (NSInteger)renderMode;
     __weak typeof(self) weakSelf = self;
-    _miniCanvas.onHandleValue =
+    _miniViewer.onHandleValue =
         ^(NSString *label, NSArray<NSNumber *> *values) {
           // Live UI every tick (cheap); persist stays coalesced downstream.
           [weakSelf liveUpdateValues:values forLabel:label];
           if (onHandleValue)
             onHandleValue(label, values);
         };
-    _miniCanvas.onHandleDragBegin = onDragBegin;
-    _miniCanvas.onHandleDragEnd = onDragEnd;
+    _miniViewer.onHandleDragBegin = onDragBegin;
+    _miniViewer.onHandleDragEnd = onDragEnd;
     __weak typeof(self) weakSelfRes = self;
-    _miniCanvas.onSourceResolved = ^{
+    _miniViewer.onSourceResolved = ^{
       __strong typeof(weakSelfRes) s = weakSelfRes;
       // Media size now known → re-render pixel-scaled (crop) fields.
       for (_KKStaticValueRow *row in s->_rowsByLabel.allValues)
         [row refreshDisplay];
     };
-    _miniCanvas.clipAspect = clipAspect > 0 ? clipAspect : (16.0 / 9.0);
-    _miniCanvas.translatesAutoresizingMaskIntoConstraints = NO;
-    _miniCanvas.wantsLayer = YES;
-    _miniCanvas.layer.cornerRadius = 4.0;
-    _miniCanvas.layer.masksToBounds = YES;
+    _miniViewer.clipAspect = clipAspect > 0 ? clipAspect : (16.0 / 9.0);
+    _miniViewer.translatesAutoresizingMaskIntoConstraints = NO;
+    _miniViewer.wantsLayer = YES;
+    _miniViewer.layer.cornerRadius = 4.0;
+    _miniViewer.layer.masksToBounds = YES;
 
     // Host the canvas as the documentView of an NSScrollView - this is the
     // exact arrangement the old (working) KKStageSequencerView used to get
     // magnify/scroll events. The subclass blocks at-boundary overscroll from
     // propagating to FCP's inspector root scroll view.
-    _KKMiniCanvasScrollView *sv =
-        [[_KKMiniCanvasScrollView alloc] initWithFrame:NSZeroRect];
+    _KKMiniViewerScrollView *sv =
+        [[_KKMiniViewerScrollView alloc] initWithFrame:NSZeroRect];
     sv.translatesAutoresizingMaskIntoConstraints = NO;
     sv.drawsBackground = NO;
     sv.hasVerticalScroller = NO;
@@ -355,7 +355,7 @@
     // overscroll. We still call super first for momentum/phase coherence.
     sv.horizontalScrollElasticity = NSScrollElasticityNone;
     sv.verticalScrollElasticity = NSScrollElasticityNone;
-    sv.documentView = _miniCanvas;
+    sv.documentView = _miniViewer;
     [self addSubview:sv];
     NSClipView *clip = sv.contentView;
     [NSLayoutConstraint activateConstraints:@[
@@ -369,14 +369,14 @@
           constraintEqualToConstant:[_KKStaticValuesPopoverView
                                         _canvasHeightForAspect:clipAspect
                                                          width:W]],
-      [_miniCanvas.leadingAnchor constraintEqualToAnchor:clip.leadingAnchor],
-      [_miniCanvas.trailingAnchor constraintEqualToAnchor:clip.trailingAnchor],
-      [_miniCanvas.topAnchor constraintEqualToAnchor:clip.topAnchor],
-      [_miniCanvas.bottomAnchor constraintEqualToAnchor:clip.bottomAnchor],
+      [_miniViewer.leadingAnchor constraintEqualToAnchor:clip.leadingAnchor],
+      [_miniViewer.trailingAnchor constraintEqualToAnchor:clip.trailingAnchor],
+      [_miniViewer.topAnchor constraintEqualToAnchor:clip.topAnchor],
+      [_miniViewer.bottomAnchor constraintEqualToAnchor:clip.bottomAnchor],
     ]];
 
     // The crop size readout is drawn inside the canvas at the crop's
-    // bottom-right corner (see _KKMiniCanvasOverlay), matching the OSC.
+    // bottom-right corner (see _KKMiniViewerOverlay), matching the OSC.
     stackTopAnchor = sv.bottomAnchor;
     stackTopInset = KKPaddingMD;
   }
@@ -443,7 +443,7 @@
       __strong typeof(weak) s = weak;
       if (i >= (NSInteger)units.count || ![units[i] isEqualToString:@"px"])
         return 1.0;
-      CGSize m = s ? s->_miniCanvas.sourceMediaSize : CGSizeZero;
+      CGSize m = s ? s->_miniViewer.sourceMediaSize : CGSizeZero;
       double scale = (i % 2 == 0) ? m.width : m.height;
       return scale;
     };
@@ -453,13 +453,13 @@
     __strong typeof(weak) s = weak;
     // Live preview: feed the edit into the renderer + redraw the canvas
     // (persist stays coalesced via _onHandleValue downstream).
-    id<KKMiniCanvasDelegate> del = s->_miniCanvas.canvasDelegate;
+    id<KKMiniViewerDelegate> del = s->_miniViewer.canvasDelegate;
     if ([del
             respondsToSelector:@selector(
-                                   miniCanvas:applyConstantValues:forLabel:)]) {
-      [del miniCanvas:s->_miniCanvas applyConstantValues:values forLabel:label];
-      [s->_miniCanvas setNeedsDisplay:YES];
-      [s->_miniCanvas setHandlesNeedDisplay];
+                                   miniViewer:applyConstantValues:forLabel:)]) {
+      [del miniViewer:s->_miniViewer applyConstantValues:values forLabel:label];
+      [s->_miniViewer setNeedsDisplay:YES];
+      [s->_miniViewer setHandlesNeedDisplay];
     }
     if (s->_onHandleValue)
       s->_onHandleValue(label, values);
@@ -535,7 +535,7 @@
   }
 }
 
-// Tear down the row stack only (mini-canvas + header are separate subviews,
+// Tear down the row stack only (mini-viewer + header are separate subviews,
 // left intact) and rebuild editable rows in lane order, re-apply reset
 // defaults, then swap the keypose-less lanes to Animate rows in place. Lets
 // the in-place update path (add / remove / navigate) re-render rows without
@@ -563,7 +563,7 @@
                   onAnimate:_onAnimate];
 }
 
-// Live (per-tick) UI update during a mini-canvas handle drag - refresh the
+// Live (per-tick) UI update during a mini-viewer handle drag - refresh the
 // matching row's fields/slider WITHOUT persisting (the heavy timeline/FCP
 // write stays coalesced to drag end). The crop size readout lives in the
 // canvas overlay and redraws itself.
@@ -585,12 +585,12 @@
                         forLabel:(NSString *)label {
   // Same body as _KKStaticValueRow.onValue: live preview into the renderer +
   // canvas redraw + move the row's knob/fields, persist coalesced downstream.
-  id<KKMiniCanvasDelegate> del = _miniCanvas.canvasDelegate;
+  id<KKMiniViewerDelegate> del = _miniViewer.canvasDelegate;
   if ([del respondsToSelector:@selector(
-                                  miniCanvas:applyConstantValues:forLabel:)]) {
-    [del miniCanvas:_miniCanvas applyConstantValues:values forLabel:label];
-    [_miniCanvas setNeedsDisplay:YES];
-    [_miniCanvas setHandlesNeedDisplay];
+                                  miniViewer:applyConstantValues:forLabel:)]) {
+    [del miniViewer:_miniViewer applyConstantValues:values forLabel:label];
+    [_miniViewer setNeedsDisplay:YES];
+    [_miniViewer setHandlesNeedDisplay];
   }
   [self liveUpdateValues:values forLabel:label];
   if (_onHandleValue)

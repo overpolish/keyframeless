@@ -11,7 +11,7 @@
 #import <KeyframelessKit/KKTimingStage.h>
 
 @class KKSegmentEditView;
-@protocol KKMiniCanvasDelegate;
+@protocol KKMiniViewerDelegate;
 
 static const CGFloat kRowHeight = 28.0;
 static const CGFloat kFooterH = 32.0;
@@ -19,7 +19,7 @@ static const CGFloat kCheckSize = 12.0;
 static const CGFloat kCheckRadius = 3.0;
 static const CGFloat kSearchH = 28.0;
 static const CGFloat kPopoverW = 180.0;
-// Wider variant for the static-values popover when it hosts the mini canvas,
+// Wider variant for the static-values popover when it hosts the mini viewer,
 // so the preview is legible before in-canvas zoom exists.
 static const CGFloat kCanvasPopoverW = 540.0;
 static const NSInteger kMaxSummaryLabels = 2;
@@ -63,7 +63,7 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 @property(nonatomic, copy, nullable) void (^onValue)
     (NSArray<NSNumber *> *values);
 /// Bracket a continuous slider drag so the host coalesces it to one undo /
-/// one persist (mirrors the mini canvas).
+/// one persist (mirrors the mini viewer).
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onDragEnd)(void);
 /// Per-component display scale (display = stored × scale). Used so crop
@@ -121,10 +121,10 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 
 @interface _KKStaticValuesPopoverView : NSView
 @property(nonatomic, weak, nullable) NSPopover *popover;
-/// The inner mini-canvas. Exposed so callers (e.g. the boundary popover
+/// The inner mini-viewer. Exposed so callers (e.g. the boundary popover
 /// path that wires onion-skin filmstrip clicks) can attach extra closures
 /// without threading another init parameter.
-@property(nonatomic, readonly, nullable) KKMiniCanvasView *miniCanvas;
+@property(nonatomic, readonly, nullable) KKMiniViewerView *miniViewer;
 - (instancetype)
      initWithLanes:(NSArray<KKLane *> *)lanes
     descriptorPath:(nullable NSString *)descriptorPath
@@ -132,9 +132,9 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
        headerTitle:(nullable NSString *)headerTitle
       headerDetail:(nullable NSString *)headerDetail
         headerIcon:(nullable NSImage *)headerIcon
-    canvasDelegate:(nullable id<KKMiniCanvasDelegate>)canvasDelegate
-        renderMode:(KKMiniCanvasRenderMode)renderMode
-     onModeChanged:(nullable void (^)(KKMiniCanvasRenderMode mode))onModeChanged
+    canvasDelegate:(nullable id<KKMiniViewerDelegate>)canvasDelegate
+        renderMode:(KKMiniViewerRenderMode)renderMode
+     onModeChanged:(nullable void (^)(KKMiniViewerRenderMode mode))onModeChanged
         onNavigate:(nullable void (^)(NSInteger direction))onNavigate
      onHandleValue:(nullable void (^)(NSString *label,
                                       NSArray<NSNumber *> *values))onHandleValue
@@ -163,7 +163,7 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// Guide-only: screen rect of the render-mode pill's segment for `mode`
 /// (Off/Filmstrip/Onion), or NSZeroRect if the pill isn't shown. Used by the
 /// mini-viewer guide to spotlight the mode the user should tap.
-- (NSRect)guideRenderModePillScreenRectForMode:(KKMiniCanvasRenderMode)mode;
+- (NSRect)guideRenderModePillScreenRectForMode:(KKMiniViewerRenderMode)mode;
 
 /// Enable/disable the popover header's prev/next KP buttons (only meaningful
 /// when `onNavigate` was passed at init). The lanes view calls this on open
@@ -189,7 +189,7 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 - (void)applyExcludedLabels:(NSArray<NSString *> *)labels
                     message:(NSString *)message
                   onAnimate:(void (^)(NSString *label))onAnimate;
-/// Rebuild the row stack in place (mini-canvas/header untouched) from a fresh
+/// Rebuild the row stack in place (mini-viewer/header untouched) from a fresh
 /// lane set + excluded labels, reusing the stored defaults provider / excluded
 /// message / onAnimate. Used by the in-place update path so add/remove/navigate
 /// re-render rows without reopening (which blinks the MTKView).
@@ -208,7 +208,7 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 - (nullable NSView *)rowViewForLabel:(NSString *)label;
 /// Guide-driven constant edit through the *same* coalesced channel a real
 /// slider/handle drag uses: begin → per-tick apply (live preview, knob +
-/// mini-canvas track, persist stashed) → end (one persist + undo entry).
+/// mini-viewer track, persist stashed) → end (one persist + undo entry).
 - (void)guideBeginConstantDrag;
 - (void)guideApplyConstantValues:(NSArray<NSNumber *> *)values
                         forLabel:(NSString *)label;
@@ -244,10 +244,10 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 
-/// Hosts the mini canvas as its documentView so magnify/scroll events flow.
+/// Hosts the mini viewer as its documentView so magnify/scroll events flow.
 /// Blocks at-boundary overscroll from reaching FCP's inspector root scroll
 /// view.
-@interface _KKMiniCanvasScrollView : NSScrollView
+@interface _KKMiniViewerScrollView : NSScrollView
 @end
 
 /// A non-editable row for a property excluded from the clicked boundary's

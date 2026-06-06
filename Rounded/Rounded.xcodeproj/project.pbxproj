@@ -108,7 +108,7 @@
 				Plugin/OSC/RoundedOSCRadiusMath.m,
 				"Plugin/Render/Plugin+Render.m",
 				Plugin/Render/Rounded.metal,
-				Plugin/Render/RoundedMiniCanvasRenderer.m,
+				Plugin/Render/RoundedMiniViewerRenderer.m,
 				Plugin/RoundedUI.xcstrings,
 				"Wrapper Application/Info.plist",
 			);

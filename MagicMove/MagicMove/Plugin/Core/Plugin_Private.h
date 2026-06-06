@@ -13,15 +13,15 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @class KKTimelineInspectorView;
-@class KKMiniCanvasFeed;
+@class KKMiniViewerFeed;
 @class KKPlayheadPoller;
-@class MagicMoveMiniCanvasRenderer;
+@class MagicMoveMiniViewerRenderer;
 
 @interface MagicMovePlugin ()
 @property(nonatomic, weak, nullable) KKTimelineInspectorView *inspectorView;
-// miniCanvasFeed + miniCanvasFeedPath now live on the KKPlugin base.
+// miniViewerFeed + miniViewerFeedPath now live on the KKPlugin base.
 @property(nonatomic, strong, nullable)
-    MagicMoveMiniCanvasRenderer *miniCanvasRenderer;
+    MagicMoveMiniViewerRenderer *miniViewerRenderer;
 // miniDragUndoStarted now lives on the KKPlugin base.
 @property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
 @property(nonatomic, strong, nullable) KKPlayheadPoller *playheadPoller;
@@ -44,7 +44,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSArray<NSString *> *)oscElementKeys;
 /// Read the per-element OSC visibility from the persisted UI-state blob and
 /// push the derived hidden-element set to this instance's per-instance state
-/// (read by the OSC) and the mini-canvas renderer.
+/// (read by the OSC) and the mini-viewer renderer.
 - (void)applyOSCElementsFromUIState:(NSDictionary *)uiState;
 @end
 

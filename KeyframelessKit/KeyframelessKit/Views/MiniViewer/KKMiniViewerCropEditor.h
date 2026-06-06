@@ -9,19 +9,19 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Plugin-agnostic crop-rectangle editor for a mini canvas.
+/// Plugin-agnostic crop-rectangle editor for a mini viewer.
 ///
 /// Owns the geometry + drag math for the standard 8-handle crop box driven
 /// by the `[w, h, x, y]` crop model (see `KKCropModel.h`): handle positions,
 /// hit-testing, and turning a corner/edge/body drag into new clamped model
 /// values (kept inside the image, with a minimum extent). It is stateless
 /// except for the in-flight drag, so a renderer can own one and forward the
-/// `KKMiniCanvasDelegate` handle callbacks to it.
+/// `KKMiniViewerDelegate` handle callbacks to it.
 ///
 /// All rects/points are in the canvas overlay's points (y-up). `contentRect`
 /// is the image rect in that space; the y term is flipped to match the
-/// mini-canvas's V-flipped display so a handle sits on the rendered crop.
-@interface KKMiniCanvasCropEditor : NSObject
+/// mini-viewer's V-flipped display so a handle sits on the rendered crop.
+@interface KKMiniViewerCropEditor : NSObject
 
 /// The crop box for `values` (`[w,h,x,y]`) within `contentRect`.
 - (CGRect)cropRectForValues:(NSArray<NSNumber *> *)values

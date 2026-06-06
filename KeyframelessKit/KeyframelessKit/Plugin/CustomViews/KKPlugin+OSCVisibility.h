@@ -7,7 +7,7 @@
 #import <KeyframelessKit/KKPlugin.h>
 
 @class KKTimelineInspectorView;
-@class KKMiniCanvasRenderer;
+@class KKMiniViewerRenderer;
 @class KKJoyrideGuideHost;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -15,7 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Reusable on-screen-control visibility wiring (master tick + per-element
 /// pills + opt-click-hide + opt-reveal). The viewer-OSC side lives on
 /// KKOnScreenControl; this category is the plugin-side glue that persists the
-/// state and keeps the inspector pills + mini-canvas + viewer in sync.
+/// state and keeps the inspector pills + mini-viewer + viewer in sync.
 ///
 /// A plugin opts in by: (1) returning YES from `showsOSCVisibilityRow` on its
 /// inspector view; (2) in createViewForParameterID, after the view + renderer
@@ -33,33 +33,33 @@ NS_ASSUME_NONNULL_BEGIN
     (NSArray<NSArray<NSString *> *> *)compounds;
 
 /// Derive the hidden set from a UI-state dict's `oscElements` map and push it
-/// to this instance's KKPluginInstanceState + the mini-canvas renderer.
+/// to this instance's KKPluginInstanceState + the mini-viewer renderer.
 - (void)kkApplyOSCVisibilityFromState:(NSDictionary *)uiState
                           elementKeys:(NSArray<NSString *> *)keys
-                             renderer:(nullable KKMiniCanvasRenderer *)renderer;
+                             renderer:(nullable KKMiniViewerRenderer *)renderer;
 
-/// Toggle one element's visibility (used by the pills and the mini-canvas
+/// Toggle one element's visibility (used by the pills and the mini-viewer
 /// opt-click) and persist the full `oscElements` map via patchUIStateKey.
 - (void)kkToggleOSCElement:(NSString *)label
                elementKeys:(NSArray<NSString *> *)keys
-                  renderer:(nullable KKMiniCanvasRenderer *)renderer
+                  renderer:(nullable KKMiniViewerRenderer *)renderer
                    paramID:(UInt32)paramID;
 
 /// Wire the inspector view's OSC-visibility callbacks (master tick + pills) and
-/// the mini-canvas opt-click. Call once in createViewForParameterID after the
+/// the mini-viewer opt-click. Call once in createViewForParameterID after the
 /// view + renderer exist and master state is seeded.
 - (void)kkWireOSCVisibilityForView:(KKTimelineInspectorView *)view
-                          renderer:(nullable KKMiniCanvasRenderer *)renderer
+                          renderer:(nullable KKMiniViewerRenderer *)renderer
                          compounds:(NSArray<NSArray<NSString *> *> *)compounds
                            paramID:(UInt32)paramID;
 
 /// Handle a UI-state-blob parameterChanged: refresh this instance's master +
-/// lastUIState + hidden set, then push to the inspector tick + mini-canvas on
+/// lastUIState + hidden set, then push to the inspector tick + mini-viewer on
 /// the main queue. Call from parameterChanged before any other UI-state sync.
 - (void)kkRefreshOSCVisibilityFromState:(NSDictionary *)state
                                    view:(nullable KKTimelineInspectorView *)view
                                renderer:
-                                   (nullable KKMiniCanvasRenderer *)renderer
+                                   (nullable KKMiniViewerRenderer *)renderer
                             elementKeys:(NSArray<NSString *> *)keys;
 
 /// Transiently force OSC visibility for a guide run, showing ONLY the elements
@@ -73,19 +73,19 @@ NS_ASSUME_NONNULL_BEGIN
     kkForceOSCForGuideKeepingLabels:(nullable NSArray<NSString *> *)keepLabels
                         elementKeys:(NSArray<NSString *> *)keys
                                view:(nullable KKTimelineInspectorView *)view
-                           renderer:(nullable KKMiniCanvasRenderer *)renderer;
+                           renderer:(nullable KKMiniViewerRenderer *)renderer;
 
 /// Restore the OSC visibility captured by -kkForceOSCForGuideKeepingOnly:...
 /// Call on guide end (complete or skip).
 - (void)kkRestoreOSCForGuide:(NSDictionary *)snapshot
                         view:(nullable KKTimelineInspectorView *)view
-                    renderer:(nullable KKMiniCanvasRenderer *)renderer;
+                    renderer:(nullable KKMiniViewerRenderer *)renderer;
 
 /// Wire the guide host's run start/end hooks to force-then-restore OSC
 /// visibility for the duration of every timing-guide run. On start, hides all
 /// OSCs except the inspector's `guideOSCKeepLabels` (the keep-set the running
 /// guide's config installed); on end, restores the user's prior visibility. The
-/// renderer is resolved from `view.miniCanvasDelegate` at fire time. Call once
+/// renderer is resolved from `view.miniViewerDelegate` at fire time. Call once
 /// in createViewForParameterID after the view + host exist. Replaces the
 /// per-plugin onRunWillStart/onRunDidEnd boilerplate.
 ///

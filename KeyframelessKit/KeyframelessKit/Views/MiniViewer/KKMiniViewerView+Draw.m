@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKMiniCanvasRenderer.h"
-#import "KKMiniCanvasView_Private.h"
+#import "KKMiniViewerRenderer.h"
+#import "KKMiniViewerView_Private.h"
 #import "KKOSCShaderTypes.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
@@ -16,7 +16,7 @@
 // The per-frame render path: composes the active slot (plus any onion-skin /
 // filmstrip slots) and draws the plugin handle overlay glyphs via the
 // +Rendering encoders. MTKViewDelegate lives here.
-@implementation KKMiniCanvasView (Draw)
+@implementation KKMiniViewerView (Draw)
 
 - (void)drawInMTKView:(MTKView *)view {
   id<CAMetalDrawable> drawable = self.currentDrawable;
@@ -31,10 +31,10 @@
   // around each slot's process call. KVC because the view only knows the
   // canvasDelegate via its protocol (the renderer's concrete class lives in
   // the same KK module, so this stays cheap).
-  id<KKMiniCanvasDelegate> del = self.canvasDelegate;
+  id<KKMiniViewerDelegate> del = self.canvasDelegate;
   NSUInteger n = _filmstripSlots.count;
   BOOL canProcess =
-      (del && [del respondsToSelector:@selector(miniCanvas:processSourceTexture:
+      (del && [del respondsToSelector:@selector(miniViewer:processSourceTexture:
                                                 intoTexture:commandBuffer:)]);
   NSNumber *savedFrac =
       canProcess && n > 1
@@ -63,7 +63,7 @@
         } @catch (...) {
         }
       }
-      [del miniCanvas:self
+      [del miniViewer:self
           processSourceTexture:slot.sourceTexture
                    intoTexture:slot.processedTexture
                  commandBuffer:cb];
@@ -170,9 +170,9 @@
   // handles sit on top of the line, not under it. Every box matches the in-
   // viewer KKRectBorderOSC default (white 0.6), dimmed by its ghost alpha.
   if (_linePipeline && del &&
-      [del respondsToSelector:@selector(miniCanvas:boxesForContentRect:)]) {
+      [del respondsToSelector:@selector(miniViewer:boxesForContentRect:)]) {
     CGRect cr = [self contentRectInViewPoints];
-    for (KKMiniBox *box in [del miniCanvas:self boxesForContentRect:cr]) {
+    for (KKMiniBox *box in [del miniViewer:self boxesForContentRect:cr]) {
       simd_float4 lineColor = {1.0f, 1.0f, 1.0f, 0.6f * (float)box.ghostAlpha};
       [self _encodeRectBorder:box.rect lineColor:lineColor encoder:enc];
     }
@@ -182,23 +182,23 @@
   // the dots, then anchor + handle dots. Drawn beneath the position handle.
   if (del &&
       [del respondsToSelector:
-               @selector(miniCanvas:motionPathPolylineForContentRect:)]) {
+               @selector(miniViewer:motionPathPolylineForContentRect:)]) {
     CGRect cr = [self contentRectInViewPoints];
-    NSArray<NSValue *> *poly = [del miniCanvas:self
+    NSArray<NSValue *> *poly = [del miniViewer:self
               motionPathPolylineForContentRect:cr];
     NSArray<NSValue *> *segs =
         [del respondsToSelector:
-                 @selector(miniCanvas:motionPathHandleSegmentsForContentRect:)]
-            ? [del miniCanvas:self motionPathHandleSegmentsForContentRect:cr]
+                 @selector(miniViewer:motionPathHandleSegmentsForContentRect:)]
+            ? [del miniViewer:self motionPathHandleSegmentsForContentRect:cr]
             : nil;
     NSArray<NSValue *> *anchors =
         [del
             respondsToSelector:@selector(
-                                   miniCanvas:motionPathAnchorsForContentRect:)]
-            ? [del miniCanvas:self motionPathAnchorsForContentRect:cr]
+                                   miniViewer:motionPathAnchorsForContentRect:)]
+            ? [del miniViewer:self motionPathAnchorsForContentRect:cr]
             : nil;
-    float pg = [del isKindOfClass:[KKMiniCanvasRenderer class]]
-                   ? (float)[(KKMiniCanvasRenderer *)del motionPathGhostAlpha]
+    float pg = [del isKindOfClass:[KKMiniViewerRenderer class]]
+                   ? (float)[(KKMiniViewerRenderer *)del motionPathGhostAlpha]
                    : 1.0f;
     if (_linePipeline && poly.count >= 2) {
       simd_float4 red = {1.0f, 0.25f, 0.25f, 0.9f * pg};
@@ -241,16 +241,16 @@
     // Point-glyph size multiplier (radius handle + crop corners), so a plugin
     // can match a specific reference dot. Default 1.0.
     CGFloat pointSizeScale =
-        [del isKindOfClass:[KKMiniCanvasRenderer class]]
-            ? [(KKMiniCanvasRenderer *)del pointHandleSizeScale]
+        [del isKindOfClass:[KKMiniViewerRenderer class]]
+            ? [(KKMiniViewerRenderer *)del pointHandleSizeScale]
             : 1.0;
 
     // Layering matches the viewer (bottom -> top): boxes/rotation, then the
     // Position handle on top of the rings, then the anchor square topmost.
     // Box OSC handles (crop corners/edges, scale corners/edges, ...): white,
     // dimmed by each box's ghost alpha. One path for every box.
-    if ([del respondsToSelector:@selector(miniCanvas:boxesForContentRect:)]) {
-      for (KKMiniBox *box in [del miniCanvas:self boxesForContentRect:cr]) {
+    if ([del respondsToSelector:@selector(miniViewer:boxesForContentRect:)]) {
+      for (KKMiniBox *box in [del miniViewer:self boxesForContentRect:cr]) {
         simd_float4 fill = whiteFill;
         fill.w *= (float)box.ghostAlpha;
         for (NSValue *v in box.handleCenters)
@@ -262,12 +262,12 @@
     }
 
     if (_rotationPipeline &&
-        [del respondsToSelector:@selector(miniCanvas:rotationOSCCenter:radiusPx:
+        [del respondsToSelector:@selector(miniViewer:rotationOSCCenter:radiusPx:
                                           params:contentRect:)]) {
       CGPoint rotCenter = CGPointZero;
       CGFloat rotRadius = 0;
       KKRotationOSCParams rotParams = {0};
-      if ([del miniCanvas:self
+      if ([del miniViewer:self
               rotationOSCCenter:&rotCenter
                        radiusPx:&rotRadius
                          params:&rotParams
@@ -283,17 +283,17 @@
     // on top (matches the viewer's layering).
     CGPoint handleCenterPts;
     if ([del respondsToSelector:
-                 @selector(miniCanvas:pointHandleCenter:contentRect:)] &&
-        [del miniCanvas:self
+                 @selector(miniViewer:pointHandleCenter:contentRect:)] &&
+        [del miniViewer:self
             pointHandleCenter:&handleCenterPts
                   contentRect:cr]) {
       KKMiniHandleStyle style = KKMiniHandleStylePoint;
       BOOL isActive = NO;
       CGFloat ghostAlpha = 1.0;
-      if ([del isKindOfClass:[KKMiniCanvasRenderer class]]) {
-        style = [(KKMiniCanvasRenderer *)del pointHandleStyle];
-        isActive = [(KKMiniCanvasRenderer *)del pointHandleIsActive];
-        ghostAlpha = [(KKMiniCanvasRenderer *)del pointHandleGhostAlpha];
+      if ([del isKindOfClass:[KKMiniViewerRenderer class]]) {
+        style = [(KKMiniViewerRenderer *)del pointHandleStyle];
+        isActive = [(KKMiniViewerRenderer *)del pointHandleIsActive];
+        ghostAlpha = [(KKMiniViewerRenderer *)del pointHandleGhostAlpha];
       }
       if (style == KKMiniHandleStyleArc) {
         [self _encodeArcHandleGlyphAt:handleCenterPts
@@ -315,13 +315,13 @@
     CGPoint anchorCenterPts;
     if (_squarePipeline &&
         [del respondsToSelector:
-                 @selector(miniCanvas:anchorSquareCenter:contentRect:)] &&
-        [del miniCanvas:self
+                 @selector(miniViewer:anchorSquareCenter:contentRect:)] &&
+        [del miniViewer:self
             anchorSquareCenter:&anchorCenterPts
                    contentRect:cr]) {
       CGFloat ghostAlpha =
-          [del isKindOfClass:[KKMiniCanvasRenderer class]]
-              ? [(KKMiniCanvasRenderer *)del anchorSquareGhostAlpha]
+          [del isKindOfClass:[KKMiniViewerRenderer class]]
+              ? [(KKMiniViewerRenderer *)del anchorSquareGhostAlpha]
               : 1.0;
       [self _encodeSquareGlyphAt:anchorCenterPts
                       ghostAlpha:ghostAlpha

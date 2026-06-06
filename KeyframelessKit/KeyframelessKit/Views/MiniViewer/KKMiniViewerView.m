@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKMiniCanvasView.h"
+#import "KKMiniViewerView.h"
 
-#import "KKMiniCanvasRenderer.h"
-#import "KKMiniCanvasView_Private.h"
+#import "KKMiniViewerRenderer.h"
+#import "KKMiniViewerView_Private.h"
 #import "KKOSCShaderTypes.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
@@ -39,7 +39,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 }
 @end
 
-@implementation KKMiniCanvasView
+@implementation KKMiniViewerView
 
 - (CGSize)sourceMediaSize {
   return _sourceMediaSize;
@@ -75,7 +75,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 
   _queue = [device newCommandQueue];
 
-  _overlay = [[_KKMiniCanvasOverlay alloc] initWithFrame:self.bounds];
+  _overlay = [[_KKMiniViewerOverlay alloc] initWithFrame:self.bounds];
   _overlay.canvas = self;
   _overlay.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
   [self addSubview:_overlay];
@@ -198,7 +198,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   if (sid != slot.sid || !slot.sourceTexture) {
     IOSurfaceRef surf = IOSurfaceLookup((IOSurfaceID)sid);
     if (!surf) {
-      KKLogWarn(@"KKMiniCanvasView: IOSurfaceLookup(%u) failed", sid);
+      KKLogWarn(@"KKMiniViewerView: IOSurfaceLookup(%u) failed", sid);
       return NO;
     }
     NSUInteger w = IOSurfaceGetWidth(surf);
@@ -214,7 +214,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
                                                      iosurface:surf
                                                          plane:0];
     if (!tex) {
-      KKLogWarn(@"KKMiniCanvasView: wrap IOSurface %u as texture failed", sid);
+      KKLogWarn(@"KKMiniViewerView: wrap IOSurface %u as texture failed", sid);
       CFRelease(surf);
       return NO;
     }
@@ -236,7 +236,7 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 - (NSUInteger)_activeSlotIndex {
   if (_filmstripSlots.count <= 1)
     return 0;
-  id<KKMiniCanvasDelegate> del = self.canvasDelegate;
+  id<KKMiniViewerDelegate> del = self.canvasDelegate;
   NSNumber *editFrac = nil;
   if (del) {
     @try {

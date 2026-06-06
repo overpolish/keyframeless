@@ -4,7 +4,7 @@
  */
 
 #import "Constants.h"
-#import "MagicMoveMiniCanvasRenderer.h"
+#import "MagicMoveMiniViewerRenderer.h"
 #import "MagicMoveParamsBuild.h"
 #import "OSC.h"
 #import "Plugin_Private.h"
@@ -27,7 +27,7 @@
   KKMotionBlurState mbState = {0};
   if (pluginState.length >= sizeof(KKMotionBlurState))
     [pluginState getBytes:&mbState length:sizeof(mbState)];
-  NSString *reqPath = MagicMoveMiniCanvasRequestPathForUUID(
+  NSString *reqPath = MagicMoveMiniViewerRequestPathForUUID(
       KKInstanceUUIDForAPI(self.apiManager));
   *inputImageRequests = KKBuildSourceRequests(
       renderTime, mbState, reqPath, self.renderCache, ^id(CMTime t) {
@@ -227,17 +227,17 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
   KKMotionBlurState mbState;
   [pluginState getBytes:&mbState length:sizeof(mbState)];
 
-  // Mini-canvas feed: publish raw source per slot (single-slot = playhead,
-  // multi-slot = boundary preview / filmstrip / onion). The mini-canvas
+  // Mini-viewer feed: publish raw source per slot (single-slot = playhead,
+  // multi-slot = boundary preview / filmstrip / onion). The mini-viewer
   // renderer (same plugin XPC, metallib loaded) applies the real shader
   // source→dest locally per slot, so KK pushes live timeline updates per drag
   // tick without any FxPlug param write (no Flexo write-lock deadlock). Shared
-  // glue in KKPlugin (MiniCanvasFeed); per-instance descriptor path keyed by
+  // glue in KKPlugin (MiniViewerFeed); per-instance descriptor path keyed by
   // the instance UUID so stacked MagicMove clips don't share a /tmp file.
-  [self kkPublishMiniCanvasFeedForDestination:destinationImage
+  [self kkPublishMiniViewerFeedForDestination:destinationImage
                                  sourceImages:sourceImages
                                descriptorPath:
-                                   MagicMoveMiniCanvasDescriptorPathForUUID(
+                                   MagicMoveMiniViewerDescriptorPathForUUID(
                                        KKInstanceUUIDForAPI(self.apiManager))
                               boundaryReqSecs:self.renderCache.boundaryReqSecs
                              boundaryReqFracs:self.renderCache.boundaryReqFracs

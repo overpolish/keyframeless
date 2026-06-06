@@ -5,7 +5,7 @@
 
 #import "KKPluginHost.h"
 #import "KKDataBlob.h"
-#import "KKMiniCanvasRenderer.h"
+#import "KKMiniViewerRenderer.h"
 #import "KKTimelineInspectorView.h"
 #import <FxPlug/FxPlugSDK.h>
 
@@ -59,7 +59,7 @@ void KKHandleTimelineParamChanged(id<PROAPIAccessing> apiManager,
                                   UInt32 timelineParamID,
                                   NSObject *actionTarget,
                                   KKTimeline * (^timelineStamper)(KKTimeline *),
-                                  KKMiniCanvasRenderer *miniCanvasRenderer,
+                                  KKMiniViewerRenderer *miniViewerRenderer,
                                   KKTimelineInspectorView *inspectorView) {
   id<FxCustomParameterActionAPI_v4> act =
       [apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
@@ -77,7 +77,7 @@ void KKHandleTimelineParamChanged(id<PROAPIAccessing> apiManager,
   KKSetProcessTimelineSnapshot(timeline);
   [act endAction:actionTarget];
 
-  miniCanvasRenderer.timeline = timeline;
+  miniViewerRenderer.timeline = timeline;
   if (inspectorView) {
     dispatch_async(dispatch_get_main_queue(), ^{
       [inspectorView applyTimeline:timeline];

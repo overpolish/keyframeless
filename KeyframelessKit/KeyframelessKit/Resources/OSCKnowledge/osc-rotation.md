@@ -25,6 +25,6 @@ Grab any ring with the mouse and drag. The plugin rotates the clip around that r
 
 Hold **Cmd** while dragging a ring to snap rotation to 15° increments. Releasing Cmd returns to free rotation.
 
-## Mini-canvas
+## Mini-viewer
 
-In keypose preview popovers (the "constants" or "boundary" popovers above each keypose pill), the same rotation rings appear inside the mini-canvas. Drag behaviour and Cmd snap work identically there - the gizmo is shared code between the FCP viewer and the mini-canvas. The ring sizes scale to fit whatever the popover height is.
+In keypose preview popovers (the "constants" or "boundary" popovers above each keypose pill), the same rotation rings appear inside the mini-viewer. Drag behaviour and Cmd snap work identically there - the gizmo is shared code between the FCP viewer and the mini-viewer. The ring sizes scale to fit whatever the popover height is.

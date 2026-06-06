@@ -49,28 +49,28 @@ NS_ASSUME_NONNULL_BEGIN
 /// `section` < 0 = any.
 + (instancetype)gapTapped:(NSInteger)section;
 
-#pragma mark - Mini-canvas (inside static-values popover)
+#pragma mark - Mini-viewer (inside static-values popover)
 
-/// Fires on any zoom or pan of the mini-canvas.
-+ (instancetype)miniCanvasViewTransformChanged;
-/// Fires only when the user pans the mini-canvas (drag / two-finger scroll).
-+ (instancetype)miniCanvasPanned;
-/// Fires only when the user zooms the mini-canvas (wheel / pinch).
-+ (instancetype)miniCanvasZoomed;
-+ (instancetype)miniCanvasViewReset;
-/// Fires when a mini-canvas double-click is consumed by the delegate (e.g.
+/// Fires on any zoom or pan of the mini-viewer.
++ (instancetype)miniViewerViewTransformChanged;
+/// Fires only when the user pans the mini-viewer (drag / two-finger scroll).
++ (instancetype)miniViewerPanned;
+/// Fires only when the user zooms the mini-viewer (wheel / pinch).
++ (instancetype)miniViewerZoomed;
++ (instancetype)miniViewerViewReset;
+/// Fires when a mini-viewer double-click is consumed by the delegate (e.g.
 /// Magic Move toggling a keypose corner/smooth) rather than resetting the view.
-+ (instancetype)miniCanvasDoubleClickHandled;
++ (instancetype)miniViewerDoubleClickHandled;
 /// Fires when the boundary popover's render-mode pill changes the mode. `mode`
-/// is a KKMiniCanvasRenderMode (0 = Off, 1 = Filmstrip, 2 = Onion); < 0 = any.
+/// is a KKMiniViewerRenderMode (0 = Off, 1 = Filmstrip, 2 = Onion); < 0 = any.
 + (instancetype)renderModeChanged:(NSInteger)mode;
 /// Fires when the user clicks an inactive filmstrip cell (navigates to that
 /// keypose). Filmstrip mode only.
 + (instancetype)filmstripCellActivated;
 
-/// Fires when the user Option-clicks a handle in the mini-canvas to hide it
+/// Fires when the user Option-clicks a handle in the mini-viewer to hide it
 /// (the in-canvas equivalent of the viewer opt-click-hide).
-+ (instancetype)miniCanvasOptHide;
++ (instancetype)miniViewerOptHide;
 
 #pragma mark - Inspector
 

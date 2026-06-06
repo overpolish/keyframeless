@@ -20,7 +20,7 @@ public final class AIKnowledgeBridge: NSObject {
 		"timeline-basics", "basic-vs-advanced", "easing", "modulation",
 		"animated-properties", "multi-component-properties", "value-editing",
 		"motion-blur", "snap-guides", "constants-panel", "inspector-controls",
-		"mini-canvas", "clip-space-and-wrapping", "guides", "shortcuts",
+		"mini-viewer", "clip-space-and-wrapping", "guides", "shortcuts",
 	]
 
 	@MainActor

@@ -116,7 +116,7 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
     // Match the shared box-OSC handle size so the radius point and the crop
     // box's corner/edge handles are one size.
     self.oscRadius = 6.0f;
-    // Blue, matching the mini canvas radius handle (accent color).
+    // Blue, matching the mini viewer radius handle (accent color).
     self.fillColorOverride = [NSColor accent];
 
     // Crop OSC: model-agnostic block-based I/O. Reads from / writes to the
@@ -191,7 +191,7 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
 // Compute the crop rect's top-right corner in canvas space (and the crop's
 // min dimension in canvas pixels) for the current playhead fraction. With
 // full crop (w=h=1, x=y=0) this collapses to the canvas top-right. Matches
-// the mini canvas's `_anchorRectForContentRect:` - the radius handle is
+// the mini viewer's `_anchorRectForContentRect:` - the radius handle is
 // pinned to the crop, not the canvas.
 - (BOOL)_cropAnchorCornerForFraction:(double)frac
                            outCorner:(CGPoint *)outCorner
@@ -356,7 +356,7 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
                        targetCanvasPos:[self _guideTargetCanvasPosition]
                              hasTarget:YES];
 
-  // Visibility rule (matches mini canvas): show when the lane is a constant
+  // Visibility rule (matches mini viewer): show when the lane is a constant
   // (always), or when animated and the playhead is on a keypose. Mid-drag
   // the active OSC always draws so the handle tracks the cursor.
   BOOL inGuide = (RoundedGuideBridge().guideStep > 0);

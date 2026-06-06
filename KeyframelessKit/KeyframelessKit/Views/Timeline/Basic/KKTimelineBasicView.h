@@ -65,10 +65,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// the host playhead to that clip fraction (host-aware time space).
 @property(nonatomic, copy, nullable) void (^onScrub)(double frac);
 
-/// Diamond click → request the mini-canvas value popover for that boundary.
+/// Diamond click → request the mini-viewer value popover for that boundary.
 /// The host (KKTimelineLanesView) builds the popover from `displayLanes`
 /// (one synthetic single-keypose lane per animatable property holding its
-/// value at the boundary), evaluates the mini canvas at `previewFraction`,
+/// value at the boundary), evaluates the mini viewer at `previewFraction`,
 /// and routes edits back through `onValue` (coalesced via the drag blocks).
 /// `excludedLabels` are animatable properties that do NOT participate in
 /// this boundary's phase (e.g. clicking In-start while a property has In

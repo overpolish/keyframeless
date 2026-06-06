@@ -13,7 +13,7 @@
 // Scale gizmo half-extent as a fraction of the clip's on-screen frame, so the
 // box tracks the clip (scales with viewer zoom) instead of being a fixed screen
 // size. e0 = 0% half-extent, span = the 0->100% growth; >100% sqrt-compresses
-// (see KKScaleGizmo). Same proportion as the mini-canvas box.
+// (see KKScaleGizmo). Same proportion as the mini-viewer box.
 static const double kScaleGizmoE0Frac = 0.12;
 static const double kScaleGizmoSpanFrac = 0.057;
 

@@ -5,7 +5,7 @@
 
 #import "Constants.h"
 #import "Plugin_Private.h"
-#import "RoundedMiniCanvasRenderer.h"
+#import "RoundedMiniViewerRenderer.h"
 #import "RoundedOSCRadiusMath.h"
 #import "ShaderTypes.h"
 #import <IOSurface/IOSurfaceObjC.h>
@@ -30,7 +30,7 @@
   if (pluginState.length >= sizeof(KKMotionBlurState))
     [pluginState getBytes:&mbState length:sizeof(mbState)];
   *inputImageRequests = KKBuildSourceRequests(
-      renderTime, mbState, RoundedMiniCanvasRequestPath, self.renderCache,
+      renderTime, mbState, RoundedMiniViewerRequestPath, self.renderCache,
       ^id(CMTime t) {
         return [[FxImageTileRequest alloc]
             initWithSource:kFxImageTileRequestSourceEffectClip
@@ -220,13 +220,13 @@
   KKMotionBlurState mbState;
   [pluginState getBytes:&mbState length:sizeof(mbState)];
 
-  // Mini-canvas source feed: publish the raw source per slot (single-slot =
+  // Mini-viewer source feed: publish the raw source per slot (single-slot =
   // playhead, multi-slot = boundary preview / filmstrip / onion). Shared glue
-  // in KKPlugin (MiniCanvasFeed); the renderer applies the shader locally.
+  // in KKPlugin (MiniViewerFeed); the renderer applies the shader locally.
   [self
-      kkPublishMiniCanvasFeedForDestination:destinationImage
+      kkPublishMiniViewerFeedForDestination:destinationImage
                                sourceImages:sourceImages
-                             descriptorPath:RoundedMiniCanvasDescriptorPath
+                             descriptorPath:RoundedMiniViewerDescriptorPath
                             boundaryReqSecs:self.renderCache.boundaryReqSecs
                            boundaryReqFracs:self.renderCache.boundaryReqFracs
                             multiSlotActive:self.renderCache.boundaryFeedActive

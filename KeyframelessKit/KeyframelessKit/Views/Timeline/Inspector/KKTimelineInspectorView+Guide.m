@@ -276,12 +276,12 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
 
 - (void)runOSCGuideWithConfig:(KKTimingGuideConfig *)cfg {
   NSInteger priorTab = self.activeTab;
-  KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
-  self.basicLanesView.renderMode = KKMiniCanvasRenderModeOff;
+  KKMiniViewerRenderMode priorRenderMode = self.basicLanesView.renderMode;
+  self.basicLanesView.renderMode = KKMiniViewerRenderModeOff;
   KKJoyrideGuideHost *host = [self timingGuideHost];
   host.forwardsGestures =
       YES; // inspector checkbox / gear / pills are clickable
-  // The mini-canvas OSC steps live in the Advanced sequencer's keypose popover,
+  // The mini-viewer OSC steps live in the Advanced sequencer's keypose popover,
   // so pin Advanced (UI-only, so the saved activeTab stays put) + own the tab
   // so the plugin's parameterChanged can't fight it. Restored on completion.
   [self guideSetActiveTab:KKTimelineTabAdvanced];
@@ -295,7 +295,7 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   [host
       runWithSeed:^KKTimeline * {
         // An enabled (animatable) keypose lane so the Advanced graph has a
-        // clickable keypose whose mini-canvas the opt-hide / peek steps use.
+        // clickable keypose whose mini-viewer the opt-hide / peek steps use.
         // The viewer-drag step overwrites it with its own single keypose (still
         // enabled, still at index 0), and the host restores the user's timeline
         // on end.
@@ -313,7 +313,7 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
         s.onGuideOSCSettingsPopoverWillOpen = nil;
         s.onGuideOSCElementToggled = nil;
         [s guideCloseOSCSettingsPopover];
-        [s.basicLanesView guideCloseContentPopover]; // the keypose mini-canvas
+        [s.basicLanesView guideCloseContentPopover]; // the keypose mini-viewer
         s.basicLanesView.renderMode = priorRenderMode;
         s.guideOwnsTab = NO; // unlock before restoring the user's tab
         if (priorTab != s.activeTab)
@@ -327,10 +327,10 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
 
 - (void)runMiniViewerGuideWithConfig:(KKTimingGuideConfig *)cfg {
   NSInteger priorTab = self.activeTab;
-  KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
+  KKMiniViewerRenderMode priorRenderMode = self.basicLanesView.renderMode;
   // Start in Off so the first Filmstrip / Onion tap is a real mode change the
   // renderModeChanged trigger can catch.
-  self.basicLanesView.renderMode = KKMiniCanvasRenderModeOff;
+  self.basicLanesView.renderMode = KKMiniViewerRenderModeOff;
   KKJoyrideGuideHost *host = [self timingGuideHost];
   host.forwardsGestures = YES;
   // The mini viewer (with all three modes) lives in the Advanced sequencer's
@@ -372,8 +372,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   if (!seedBlock || !buildSteps)
     return;
   NSInteger priorTab = self.activeTab;
-  KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
-  self.basicLanesView.renderMode = KKMiniCanvasRenderModeOff;
+  KKMiniViewerRenderMode priorRenderMode = self.basicLanesView.renderMode;
+  self.basicLanesView.renderMode = KKMiniViewerRenderModeOff;
   KKJoyrideGuideHost *host = [self timingGuideHost];
   host.forwardsGestures = YES;
   // Pin Advanced + own the tab: the seed gains a 3rd Position keypose mid-run,
@@ -427,11 +427,11 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   [self setActiveTab:KKTimelineTabBasic];
   // Single-frame mini-viewer during the guide; restore the user's choice on
   // completion (plain setter, no persistence).
-  KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
-  self.basicLanesView.renderMode = KKMiniCanvasRenderModeOff;
+  KKMiniViewerRenderMode priorRenderMode = self.basicLanesView.renderMode;
+  self.basicLanesView.renderMode = KKMiniViewerRenderModeOff;
   KKJoyrideGuideHost *host = [self timingGuideHost];
   // forwardsGestures: the panel captures clicks/drags and feeds them to the
-  // spotlight blocks (mini-canvas edit) instead of letting them reach FCP and
+  // spotlight blocks (mini-viewer edit) instead of letting them reach FCP and
   // the popover natively at the same time.
   host.forwardsGestures = YES;
   // The guide owns the play accent for its duration so FCP's bursty
@@ -475,8 +475,8 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
 
 - (void)runAdvancedTimingGuideWithConfig:(KKTimingGuideConfig *)cfg {
   NSInteger priorTab = self.activeTab;
-  KKMiniCanvasRenderMode priorRenderMode = self.basicLanesView.renderMode;
-  self.basicLanesView.renderMode = KKMiniCanvasRenderModeOff;
+  KKMiniViewerRenderMode priorRenderMode = self.basicLanesView.renderMode;
+  self.basicLanesView.renderMode = KKMiniViewerRenderModeOff;
   KKJoyrideGuideHost *host = [self timingGuideHost];
   host.forwardsGestures = YES; // cmd-click + drag must reach the lane view
 

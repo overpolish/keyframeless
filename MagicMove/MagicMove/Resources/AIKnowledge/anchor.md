@@ -19,14 +19,14 @@ Anchor Point is an animatable lane like the others. Leave it as a single constan
 
 ## On-screen control
 
-The anchor's on-screen control is a small **square** at the pivot, shared between the FCP viewer and the inspector mini-canvas with full editing parity. It is the topmost control, drawn over the rotation rings, scale box, and Position handle. Because the square is small, the larger Position arc ring around it stays clickable - so the move handle and the pivot can sit on the same spot (the default centre) and both remain grabbable.
+The anchor's on-screen control is a small **square** at the pivot, shared between the FCP viewer and the inspector mini-viewer with full editing parity. It is the topmost control, drawn over the rotation rings, scale box, and Position handle. Because the square is small, the larger Position arc ring around it stays clickable - so the move handle and the pivot can sit on the same spot (the default centre) and both remain grabbable.
 
 The square appears where the Anchor lane is visible: at the keypose times when the anchor is animated, or always when it is a single constant - the same rule the Position and Scale controls follow.
 
 Three ways to set the anchor:
 
 - Drag the square on the viewer OSC.
-- Drag the square on the inspector mini-canvas, which previews the keypose you're editing.
+- Drag the square on the inspector mini-viewer, which previews the keypose you're editing.
 - Type X and Y directly in the keypose value popover. Off-clip values are allowed.
 
 ## Modifier keys while dragging
@@ -37,7 +37,7 @@ Default is free drag with no snap, so you can place the pivot pixel-precisely; h
 
 ## Showing and hiding the square
 
-The anchor square is part of Magic Move's shared on-screen-control visibility: the inspector's "On-Screen Controls" tick toggles all controls, the settings cog has an "Anchor" pill, and you can Option-click the square on the viewer or mini-canvas to hide it (Option-hold reveals hidden controls as dimmed ghosts to click back). See the shared on-screen-control visibility docs for the full behaviour.
+The anchor square is part of Magic Move's shared on-screen-control visibility: the inspector's "On-Screen Controls" tick toggles all controls, the settings cog has an "Anchor" pill, and you can Option-click the square on the viewer or mini-viewer to hide it (Option-hold reveals hidden controls as dimmed ghosts to click back). See the shared on-screen-control visibility docs for the full behaviour.
 
 ## Wrapping requirement
 

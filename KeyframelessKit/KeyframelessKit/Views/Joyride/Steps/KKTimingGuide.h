@@ -182,8 +182,8 @@ NS_ASSUME_NONNULL_BEGIN
     (void);
 
 /// The control the OSC guide's inspector pill step has the user disable. Must
-/// be a NON-featured control (one NOT shown in the keypose mini-canvas, which
-/// only shows the featured lane), so disabling it can't empty the mini-canvas
+/// be a NON-featured control (one NOT shown in the keypose mini-viewer, which
+/// only shows the featured lane), so disabling it can't empty the mini-viewer
 /// the later steps need. Matched by the compound's master label (e.g. @"Crop").
 /// nil = the pill step spotlights the whole bar (any control).
 @property(nonatomic, copy, nullable) NSString *oscDisableLabel;

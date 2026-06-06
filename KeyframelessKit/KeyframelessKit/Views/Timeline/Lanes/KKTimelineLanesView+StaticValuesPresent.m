@@ -4,8 +4,8 @@
  */
 
 #import "KKLocalized.h"
-#import "KKMiniCanvasRenderer.h"
-#import "KKMiniCanvasView.h"
+#import "KKMiniViewerRenderer.h"
+#import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
@@ -20,7 +20,7 @@
                                        config:
                                            (_KKStaticValuesPopoverConfig *)cfg {
   // Boundary-only preamble: in-place rebind / defer-if-other-popover-open /
-  // mini-canvas state setup / boundary-request publish + render nudge.
+  // mini-viewer state setup / boundary-request publish + render nudge.
   if (cfg.isBoundary) {
     if (_openContentPopover.isShown && _openStaticIsBoundary &&
         _openStaticView) {
@@ -40,8 +40,8 @@
     }
     [_openContentPopover close];
 
-    KKSetBoundaryEditing(self.miniCanvasDelegate, YES, cfg.fraction);
-    KKSetSuppressedHandles(self.miniCanvasDelegate, cfg.excludedLabels);
+    KKSetBoundaryEditing(self.miniViewerDelegate, YES, cfg.fraction);
+    KKSetSuppressedHandles(self.miniViewerDelegate, cfg.excludedLabels);
     _openStaticBoundaryFraction = cfg.fraction;
     _openStaticBoundaryLanes = [cfg.lanes copy];
     _openStaticBoundaryExcluded = [cfg.excludedLabels copy];
@@ -76,7 +76,7 @@
           [s _setLaneValues:values forLabel:label];
       };
 
-  // During drag we push live values into the mini canvas renderer (which
+  // During drag we push live values into the mini viewer renderer (which
   // applies the real plugin shader in-process) bound to the popover's
   // edit fraction - in filmstrip/onion mode each cell encodes at its own
   // editFraction, so binding the override to cfg.fraction keeps the neighbour
@@ -108,7 +108,7 @@
           break;
       }
     }
-    id<KKMiniCanvasDelegate> del = s.miniCanvasDelegate;
+    id<KKMiniViewerDelegate> del = s.miniViewerDelegate;
     if ([(NSObject *)del
             respondsToSelector:@selector(setLiveValues:forLabel:atFraction:)]) {
       NSMethodSignature *sig = [(NSObject *)del
@@ -123,7 +123,7 @@
       [inv invoke];
     }
     __strong _KKStaticValuesPopoverView *sv = weakStaticContent;
-    [sv.miniCanvas setNeedsDisplay:YES];
+    [sv.miniViewer setNeedsDisplay:YES];
   };
 
   void (^onHandleValue)(NSString *, NSArray<NSNumber *> *) =
@@ -163,7 +163,7 @@
     // Drop the live overrides so the renderer reads from the just-committed
     // timeline on the next draw. Without this, stale live values would keep
     // winning over the freshly persisted blob.
-    id<KKMiniCanvasDelegate> del = s.miniCanvasDelegate;
+    id<KKMiniViewerDelegate> del = s.miniViewerDelegate;
     if ([(NSObject *)del respondsToSelector:@selector(clearLiveValues)])
       [(NSObject *)del performSelector:@selector(clearLiveValues)];
     dragging = NO;
@@ -175,12 +175,12 @@
 
   _KKStaticValuesPopoverView *staticView = [[_KKStaticValuesPopoverView alloc]
        initWithLanes:cfg.lanes
-      descriptorPath:self.miniCanvasDescriptorPath
-          clipAspect:self.miniCanvasClipAspect
+      descriptorPath:self.miniViewerDescriptorPath
+          clipAspect:self.miniViewerClipAspect
          headerTitle:cfg.headerTitle
         headerDetail:cfg.headerDetail
           headerIcon:cfg.headerIcon
-      canvasDelegate:self.miniCanvasDelegate
+      canvasDelegate:self.miniViewerDelegate
           renderMode:cfg.renderMode
        onModeChanged:cfg.onModeChanged
           onNavigate:cfg.onNavigate
@@ -235,7 +235,7 @@
     __weak KKTimelineAdvancedView *weakAdv = _advancedGraph;
     __weak KKTimelineBasicView *weakBasic = _basicGraph;
     __weak typeof(self) weakSelf = self;
-    staticView.miniCanvas.onFilmstripCellActivated = ^(double newFrac) {
+    staticView.miniViewer.onFilmstripCellActivated = ^(double newFrac) {
       __strong typeof(weakSelf) s = weakSelf;
       if (!s)
         return;
@@ -302,16 +302,16 @@
                         s->_openStaticView = nil;
                         if (isBoundary) {
                           s->_openStaticIsBoundary = NO;
-                          KKSetBoundaryEditing(s.miniCanvasDelegate, NO, 0.0);
-                          KKSetSuppressedHandles(s.miniCanvasDelegate, nil);
-                          KKWriteBoundaryRequest(s.miniCanvasRequestPath, 0.0,
+                          KKSetBoundaryEditing(s.miniViewerDelegate, NO, 0.0);
+                          KKSetSuppressedHandles(s.miniViewerDelegate, nil);
+                          KKWriteBoundaryRequest(s.miniViewerRequestPath, 0.0,
                                                  NO);
                         } else {
                           // Constants popover previewed at the live playhead
                           // (set in -showStaticValuesPopoverFromView:); restore
                           // the t=0 default so a later non-popover draw isn't
                           // pinned to a stale playhead fraction.
-                          id del = s.miniCanvasDelegate;
+                          id del = s.miniViewerDelegate;
                           if ([del respondsToSelector:NSSelectorFromString(
                                                           @"setEditFraction:")])
                             [del setValue:@0 forKey:@"editFraction"];
@@ -332,7 +332,7 @@
           __strong _KKStaticValuesPopoverView *sv = weakStatic;
           if (!strong || !sv || !strong.onStaticValuesPopoverWillOpen)
             return;
-          strong.onStaticValuesPopoverWillOpen(sv, KKFindMiniCanvas(sv));
+          strong.onStaticValuesPopoverWillOpen(sv, KKFindMiniViewer(sv));
         });
   }
 }

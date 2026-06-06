@@ -5,7 +5,7 @@
 
 #import "KKJoyrideLanesBinder.h"
 #import "KKJoyrideTrigger_Internal.h"
-#import <KeyframelessKit/KKMiniCanvasView.h>
+#import <KeyframelessKit/KKMiniViewerView.h>
 #import <KeyframelessKit/KKSegmentEditView.h>
 #import <KeyframelessKit/KKTimelineBasicView+Guide.h>
 #import <KeyframelessKit/KKTimelineBasicView.h>
@@ -39,7 +39,7 @@
   // Field handlers we've installed on the lanes view (per label), so we can
   // nil them out on teardown.
   NSMutableSet<NSString *> *_installedFieldHandlerLabels;
-  __weak KKMiniCanvasView *_mcWiredCanvas;
+  __weak KKMiniViewerView *_mcWiredCanvas;
   NSInteger _lastFiredFromStep;
   BOOL _installed;
 }
@@ -140,7 +140,7 @@
       [lanes setGuideConstantFieldEditHandlerForLabel:label handler:nil];
     [_installedFieldHandlerLabels removeAllObjects];
   }
-  KKMiniCanvasView *cv = _mcWiredCanvas;
+  KKMiniViewerView *cv = _mcWiredCanvas;
   if (cv) {
     cv.onViewTransformChanged = nil;
     cv.onViewReset = nil;
@@ -201,15 +201,15 @@
   };
 
   lanes.onStaticValuesPopoverWillOpen =
-      ^(NSView *content, KKMiniCanvasView *_Nullable cv) {
+      ^(NSView *content, KKMiniViewerView *_Nullable cv) {
         __strong typeof(weak) s = weak;
         if (!s)
           return;
         s->_latestStaticValuesPopoverContent = content;
-        s->_latestMiniCanvas = cv;
+        s->_latestMiniViewer = cv;
         KKJoyrideController *g = s->_guide;
         g.additionalPassthroughWindow = content.window;
-        [s _wireMiniCanvas:cv];
+        [s _wireMiniViewer:cv];
         [s _installFieldHandlersForOpenPopover];
         [s _fireType:KKJoyrideTriggerTypeStaticValuesPopoverWillOpen
               intArg:0
@@ -224,7 +224,7 @@
     if (!s)
       return;
     s->_latestStaticValuesPopoverContent = nil;
-    s->_latestMiniCanvas = nil;
+    s->_latestMiniViewer = nil;
     KKJoyrideController *g = s->_guide;
     g.additionalPassthroughWindow = nil;
     [s _fireType:KKJoyrideTriggerTypeStaticValuesPopoverClosed
@@ -281,7 +281,7 @@
            label:nil];
   };
 
-  lanes.onGuideRenderModeChanged = ^(KKMiniCanvasRenderMode mode) {
+  lanes.onGuideRenderModeChanged = ^(KKMiniViewerRenderMode mode) {
     __strong typeof(weak) s = weak;
     if (!s)
       return;
@@ -330,8 +330,8 @@
   };
 }
 
-- (void)_wireMiniCanvas:(KKMiniCanvasView *)cv {
-  KKMiniCanvasView *prev = _mcWiredCanvas;
+- (void)_wireMiniViewer:(KKMiniViewerView *)cv {
+  KKMiniViewerView *prev = _mcWiredCanvas;
   if (prev && prev != cv) {
     prev.onViewTransformChanged = nil;
     prev.onViewReset = nil;
@@ -342,11 +342,11 @@
   if (!cv)
     return;
   __weak typeof(self) weak = self;
-  cv.onViewTransformChanged = ^(KKMiniCanvasTransformKind kind) {
+  cv.onViewTransformChanged = ^(KKMiniViewerTransformKind kind) {
     __strong typeof(weak) s = weak;
     if (!s)
       return;
-    [s _fireType:KKJoyrideTriggerTypeMiniCanvasViewTransformChanged
+    [s _fireType:KKJoyrideTriggerTypeMiniViewerViewTransformChanged
           intArg:(NSInteger)kind
          intArg2:0
            label:nil];
@@ -355,7 +355,7 @@
     __strong typeof(weak) s = weak;
     if (!s)
       return;
-    [s _fireType:KKJoyrideTriggerTypeMiniCanvasViewReset
+    [s _fireType:KKJoyrideTriggerTypeMiniViewerViewReset
           intArg:0
          intArg2:0
            label:nil];
@@ -364,7 +364,7 @@
     __strong typeof(weak) s = weak;
     if (!s)
       return;
-    [s _fireType:KKJoyrideTriggerTypeMiniCanvasDoubleClickHandled
+    [s _fireType:KKJoyrideTriggerTypeMiniViewerDoubleClickHandled
           intArg:0
          intArg2:0
            label:nil];
@@ -373,7 +373,7 @@
     __strong typeof(weak) s = weak;
     if (!s)
       return;
-    [s _fireType:KKJoyrideTriggerTypeMiniCanvasOptHide
+    [s _fireType:KKJoyrideTriggerTypeMiniViewerOptHide
           intArg:0
          intArg2:0
            label:label];
@@ -562,7 +562,7 @@
   case KKJoyrideTriggerTypeDiamondTapped:
   case KKJoyrideTriggerTypeGapTapped:
   case KKJoyrideTriggerTypeRenderModeChanged:
-  case KKJoyrideTriggerTypeMiniCanvasViewTransformChanged:
+  case KKJoyrideTriggerTypeMiniViewerViewTransformChanged:
     if (t.intArg >= 0 && t.intArg != intArg)
       return NO;
     return YES;

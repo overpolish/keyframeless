@@ -10,20 +10,20 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Cross-process rendezvous path: the render side's `KKMiniCanvasFeed`
-/// publishes here and the inspector's `KKMiniCanvasView` consumes it.
-extern NSString *const RoundedMiniCanvasDescriptorPath;
+/// Cross-process rendezvous path: the render side's `KKMiniViewerFeed`
+/// publishes here and the inspector's `KKMiniViewerView` consumes it.
+extern NSString *const RoundedMiniViewerDescriptorPath;
 
 /// Reverse channel: the boundary-value popover (ViewBridge side) writes the
 /// requested clip fraction here; the render side reads it in
 /// `-scheduleInputs:` to also pull that frame for the preview.
-extern NSString *const RoundedMiniCanvasRequestPath;
+extern NSString *const RoundedMiniViewerRequestPath;
 
-/// Rounded's mini-canvas delegate: the generic crop/handle/timeline
-/// scaffolding lives in `KKMiniCanvasRenderer`; this subclass only supplies
+/// Rounded's mini-viewer delegate: the generic crop/handle/timeline
+/// scaffolding lives in `KKMiniViewerRenderer`; this subclass only supplies
 /// the Rounded shader render and the radius point-handle (its OSC math).
 /// MRR (non-ARC).
-@interface RoundedMiniCanvasRenderer : KKMiniCanvasRenderer
+@interface RoundedMiniViewerRenderer : KKMiniViewerRenderer
 @end
 
 NS_ASSUME_NONNULL_END

@@ -22,7 +22,7 @@ The link is one global toggle for the whole Scale lane, not per-keypose - flip i
 
 Scale's on-screen control is a **transform bounding box** - a box reads honestly when X and Y differ. It is screen-aligned (it does not rotate with the clip) and has eight handles: four corners and four edge midpoints.
 
-The box **tracks the clip**: it is sized relative to the clip's on-screen frame, so it grows and shrinks with the clip as you zoom the viewer or the inspector mini-canvas, staying glued to the content rather than floating at a fixed screen size.
+The box **tracks the clip**: it is sized relative to the clip's on-screen frame, so it grows and shrinks with the clip as you zoom the viewer or the inspector mini-viewer, staying glued to the content rather than floating at a fixed screen size.
 
 Because Scale has no real upper bound, the box can't map size to percent one-to-one or it would shoot off-screen. Instead:
 
@@ -30,7 +30,7 @@ Because Scale has no real upper bound, the box can't map size to percent one-to-
 - From **0% to 100%** the box grows roughly linearly.
 - **Above 100%** the box keeps growing but on a square-root curve, so very large scales stay on-screen and draggable. The curve is slope-matched at 100% so there is no kink as you cross it.
 
-A readout under the box's lower-right corner shows the live value as "X% x Y%". The whole control - box, handles, readout - is identical in the FCP viewer and the inspector mini-canvas, with full editing parity.
+A readout under the box's lower-right corner shows the live value as "X% x Y%". The whole control - box, handles, readout - is identical in the FCP viewer and the inspector mini-viewer, with full editing parity.
 
 ## Dragging the box
 
@@ -47,12 +47,12 @@ Every drag snaps to whole percentages and is floored at 0%.
 ## Setting Scale three ways
 
 - Drag a handle on the viewer transform box.
-- Drag a handle on the inspector mini-canvas box - it previews the keypose you're editing, same handles and modifiers.
+- Drag a handle on the inspector mini-viewer box - it previews the keypose you're editing, same handles and modifiers.
 - Type X and Y directly in the keypose value popover (whole percentages; the link glyph mirrors the other field when on).
 
 ## Showing and hiding the box
 
-Scale is part of Magic Move's shared on-screen-control visibility: the inspector's "On-Screen Controls" tick toggles all controls, the settings cog has a "Scale" pill, and you can Option-click the box on the viewer or mini-canvas to hide it (Option-hold reveals hidden controls as dimmed ghosts to click back). See the shared on-screen-control visibility docs for the full behaviour.
+Scale is part of Magic Move's shared on-screen-control visibility: the inspector's "On-Screen Controls" tick toggles all controls, the settings cog has a "Scale" pill, and you can Option-click the box on the viewer or mini-viewer to hide it (Option-hold reveals hidden controls as dimmed ghosts to click back). See the shared on-screen-control visibility docs for the full behaviour.
 
 ## Wrapping requirement
 

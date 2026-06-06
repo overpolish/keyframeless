@@ -3,7 +3,7 @@ id: snap-guides
 summary: Magnetic snapping and the yellow / accent guide lines
 ---
 
-When you drag a positional on-screen control (the viewer OSC or the mini-canvas handle), holding **Cmd** turns on a snap engine that catches values you probably meant to land on. Coloured guide lines appear while a snap is active so you can see which target you locked onto. Snap is off by default so free-form positioning stays quiet; engage Cmd when you want it.
+When you drag a positional on-screen control (the viewer OSC or the mini-viewer handle), holding **Cmd** turns on a snap engine that catches values you probably meant to land on. Coloured guide lines appear while a snap is active so you can see which target you locked onto. Snap is off by default so free-form positioning stays quiet; engage Cmd when you want it.
 
 Two kinds of snap:
 

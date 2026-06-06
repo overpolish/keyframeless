@@ -9,8 +9,8 @@
 #import <KeyframelessKit/KKJoyrideController.h>
 #import <KeyframelessKit/KKJoyrideLanesBinder.h>
 #import <KeyframelessKit/KKJoyrideTrigger.h>
-#import <KeyframelessKit/KKMiniCanvasGuideScroll.h>
-#import <KeyframelessKit/KKMiniCanvasView.h>
+#import <KeyframelessKit/KKMiniViewerGuideScroll.h>
+#import <KeyframelessKit/KKMiniViewerView.h>
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
@@ -21,7 +21,7 @@
 // opens with frames on both sides in the filmstrip).
 static const NSInteger kOpenKeyposeIndex = 1;
 
-static NSRect KKMiniViewerCanvasScreenRect(KKMiniCanvasView *c) {
+static NSRect KKMiniViewerCanvasScreenRect(KKMiniViewerView *c) {
   NSWindow *w = c.window;
   if (!c || !w)
     return NSZeroRect;
@@ -65,9 +65,9 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniCanvasView *c) {
   (void)ixDone;
 
   NSRect (^canvasRect)(void) = ^NSRect {
-    return KKMiniViewerCanvasScreenRect(weakBinder.latestMiniCanvas);
+    return KKMiniViewerCanvasScreenRect(weakBinder.latestMiniViewer);
   };
-  // Most steps spotlight the live mini-canvas rect (non-circular). Pass an
+  // Most steps spotlight the live mini-viewer rect (non-circular). Pass an
   // already-localized message so KKLoc stays at the call site for extraction.
   KKJoyrideStep * (^canvasStep)(NSString *) = ^(NSString *msg) {
     KKJoyrideStep *s = [KKJoyrideStep stepWithMessage:msg targetView:nil];
@@ -80,13 +80,13 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniCanvasView *c) {
   // over the popover, so route them through the canvas's public apply* methods
   // for the duration of the run. Rebuilt for each popover open (filmstrip cell
   // navigation re-opens); torn down with the binder when the guide ends.
-  __block KKMiniCanvasGuideScroll *scroll = nil;
+  __block KKMiniViewerGuideScroll *scroll = nil;
   binder.staticValuesPopoverDidOpen =
-      ^(NSView *content, KKMiniCanvasView *_Nullable canvas) {
+      ^(NSView *content, KKMiniViewerView *_Nullable canvas) {
         [scroll teardown];
         if (!canvas)
           return;
-        scroll = [[KKMiniCanvasGuideScroll alloc]
+        scroll = [[KKMiniViewerGuideScroll alloc]
             initWithCanvas:canvas
                 activeWhen:^BOOL {
                   __strong KKJoyrideController *g = weakGuide;
@@ -134,7 +134,7 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniCanvasView *c) {
   sFilmstrip.targetScreenRect = ^NSRect {
     __strong KKTimelineLanesView *l = weakLanes;
     return l ? [l guideRenderModePillScreenRectForMode:
-                       KKMiniCanvasRenderModeFilmstrip]
+                       KKMiniViewerRenderModeFilmstrip]
              : NSZeroRect;
   };
 
@@ -153,7 +153,7 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniCanvasView *c) {
   sOnion.targetScreenRect = ^NSRect {
     __strong KKTimelineLanesView *l = weakLanes;
     return l ? [l guideRenderModePillScreenRectForMode:
-                       KKMiniCanvasRenderModeOnion]
+                       KKMiniViewerRenderModeOnion]
              : NSZeroRect;
   };
 
@@ -175,24 +175,24 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniCanvasView *c) {
          dismissOn:nil];
   [binder bindStep:sDrag
            atIndex:ixDrag
-         advanceOn:[KKJoyrideTrigger miniCanvasPanned]
+         advanceOn:[KKJoyrideTrigger miniViewerPanned]
          dismissOn:nil];
   [binder bindStep:sZoom
            atIndex:ixZoom
-         advanceOn:[KKJoyrideTrigger miniCanvasZoomed]
+         advanceOn:[KKJoyrideTrigger miniViewerZoomed]
          dismissOn:nil];
   [binder bindStep:sReset
            atIndex:ixReset
-         advanceOn:[KKJoyrideTrigger miniCanvasViewReset]
+         advanceOn:[KKJoyrideTrigger miniViewerViewReset]
          dismissOn:nil];
   [binder bindStep:sFilmstrip
            atIndex:ixFilmstrip
          advanceOn:[KKJoyrideTrigger
-                       renderModeChanged:KKMiniCanvasRenderModeFilmstrip]
+                       renderModeChanged:KKMiniViewerRenderModeFilmstrip]
          dismissOn:nil];
   [binder bindStep:sFilmstripZoom
            atIndex:ixFilmstripZoom
-         advanceOn:[KKJoyrideTrigger miniCanvasZoomed]
+         advanceOn:[KKJoyrideTrigger miniViewerZoomed]
          dismissOn:nil];
   [binder bindStep:sNavigate
            atIndex:ixNavigate
@@ -201,7 +201,7 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniCanvasView *c) {
   [binder
        bindStep:sOnion
         atIndex:ixOnion
-      advanceOn:[KKJoyrideTrigger renderModeChanged:KKMiniCanvasRenderModeOnion]
+      advanceOn:[KKJoyrideTrigger renderModeChanged:KKMiniViewerRenderModeOnion]
       dismissOn:nil];
 
   return @[

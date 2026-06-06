@@ -25,7 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (double)fractionAtTime:(CMTime)time;
 // Crop-aware anchor for the radius handle: top-right corner of the crop
 // rect in canvas space + that crop's min dim (canvas pixels), matching the
-// mini canvas's `_anchorRectForContentRect:`. Falls back to the full canvas
+// mini viewer's `_anchorRectForContentRect:`. Falls back to the full canvas
 // for the default crop.
 - (BOOL)_cropAnchorCornerForFraction:(double)frac
                            outCorner:(CGPoint *)outCorner

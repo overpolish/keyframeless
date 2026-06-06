@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "RoundedMiniCanvasRenderer.h"
+#import "RoundedMiniViewerRenderer.h"
 
 #import "RoundedOSCRadiusMath.h"
 #import "ShaderTypes.h"
@@ -11,19 +11,19 @@
 #import <Metal/Metal.h>
 #import <simd/simd.h>
 
-NSString *const RoundedMiniCanvasDescriptorPath =
-    @"/tmp/rounded-minicanvas.json";
+NSString *const RoundedMiniViewerDescriptorPath =
+    @"/tmp/rounded-miniviewer.json";
 
-NSString *const RoundedMiniCanvasRequestPath =
-    @"/tmp/rounded-minicanvas-request.json";
+NSString *const RoundedMiniViewerRequestPath =
+    @"/tmp/rounded-miniviewer-request.json";
 
-// Mini-canvas analog of the viewer OSC's `oscSize` (KKPointOSC oscRadius +
-// outline). Kept in sync with KKMiniCanvasView's kKKMiniHandleOuterPt so
+// Mini-viewer analog of the viewer OSC's `oscSize` (KKPointOSC oscRadius +
+// outline). Kept in sync with KKMiniViewerView's kKKMiniHandleOuterPt so
 // placement, hit-test and the drawn glyph all agree.
 static inline CGFloat MiniOscSize(void) { return 4.5; }
 static const CGFloat kHandleHitTolPt = 12.0;
 
-@implementation RoundedMiniCanvasRenderer {
+@implementation RoundedMiniViewerRenderer {
   id<MTLRenderPipelineState> _pipeline;
   MTLPixelFormat _pipelineFormat;
 }
@@ -35,7 +35,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
   return @"Radius";
 }
 - (CGFloat)pointHandleSizeScale {
-  // Match Magic Move's path-anchor KKPointOSC dot in the mini-canvas (0.6),
+  // Match Magic Move's path-anchor KKPointOSC dot in the mini-viewer (0.6),
   // for both the radius handle and the crop corners.
   return 0.6;
 }
@@ -60,7 +60,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
       [device newDefaultLibraryWithBundle:[NSBundle bundleForClass:self.class]
                                     error:&err];
   if (!lib) {
-    KKLogError(@"RoundedMiniCanvasRenderer: no metal library: %@", err);
+    KKLogError(@"RoundedMiniViewerRenderer: no metal library: %@", err);
     return NO;
   }
   MTLRenderPipelineDescriptor *pd = [[MTLRenderPipelineDescriptor alloc] init];
@@ -70,7 +70,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
   id<MTLRenderPipelineState> ps =
       [device newRenderPipelineStateWithDescriptor:pd error:&err];
   if (!ps) {
-    KKLogError(@"RoundedMiniCanvasRenderer: pipeline failed: %@", err);
+    KKLogError(@"RoundedMiniViewerRenderer: pipeline failed: %@", err);
     return NO;
   }
   _pipeline = ps;
@@ -181,7 +181,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
 
 - (void)applyPointDragToPoint:(CGPoint)p
                   contentRect:(CGRect)cr
-                       canvas:(KKMiniCanvasView *)canvas {
+                       canvas:(KKMiniViewerView *)canvas {
   CGRect a = [self _anchorRectForContentRect:cr];
   float minDim = (float)MIN(a.size.width, a.size.height);
   if (minDim <= 0)

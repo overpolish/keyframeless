@@ -10,7 +10,7 @@
 #import <KeyframelessKit/KKJoyrideTrigger.h>
 
 @class KKTimelineLanesView;
-@class KKMiniCanvasView;
+@class KKMiniViewerView;
 @class KKSegmentEditView;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -30,12 +30,12 @@ typedef NS_ENUM(NSInteger, KKJoyrideCloseOnAdvance) {
 ///   - per-step `advanceOn:` / `dismissOn:` dispatch, guarded by step index,
 ///   - automatic `guide.additionalPassthroughWindow` lifecycle around the
 ///     manage, static-values, and gap popovers,
-///   - mini-canvas onViewTransformChanged / onViewReset hookup whenever the
+///   - mini-viewer onViewTransformChanged / onViewReset hookup whenever the
 ///     static-values popover opens with a canvas,
 ///   - per-label constant-field edit handlers installed on demand when a
 ///     binding uses `constantFieldEditedLabel:component:equals:tolerance:`,
 ///   - latest payloads (popover row, opted-in lane row, popover content,
-///     mini-canvas, gap segment editor, last static value per label) so a
+///     mini-viewer, gap segment editor, last static value per label) so a
 ///     step's targetView/targetScreenRect/hit-test block can resolve a
 ///     control without the plugin plumbing __block variables.
 ///
@@ -81,7 +81,7 @@ typedef NS_ENUM(NSInteger, KKJoyrideCloseOnAdvance) {
 @property(nonatomic, readonly, weak, nullable)
     NSView *latestStaticValuesPopoverContent;
 @property(nonatomic, readonly, weak, nullable)
-    KKMiniCanvasView *latestMiniCanvas;
+    KKMiniViewerView *latestMiniViewer;
 
 @property(nonatomic, readonly, weak, nullable) NSView *latestGapPopoverContent;
 @property(nonatomic, readonly, weak, nullable)
@@ -97,7 +97,7 @@ typedef NS_ENUM(NSInteger, KKJoyrideCloseOnAdvance) {
 /// Use for custom plugin work that needs the live content view / canvas
 /// (e.g. installing a scroll forwarder).
 @property(nonatomic, copy, nullable) void (^staticValuesPopoverDidOpen)
-    (NSView *content, KKMiniCanvasView *_Nullable canvas);
+    (NSView *content, KKMiniViewerView *_Nullable canvas);
 @property(nonatomic, copy, nullable) void (^staticValuesPopoverDidClose)(void);
 /// Fires after the binder records the value, for plugins that need to do
 /// custom per-drag work (e.g. multi-signal AND across labels).
@@ -113,7 +113,7 @@ typedef NS_ENUM(NSInteger, KKJoyrideCloseOnAdvance) {
 #pragma mark - Teardown
 
 /// Nils every callback property installed on the lanes view + basic graph +
-/// mini-canvas + constant-field handlers. Idempotent.
+/// mini-viewer + constant-field handlers. Idempotent.
 - (void)teardown;
 
 @end

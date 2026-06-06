@@ -44,11 +44,11 @@
                             : YES;
   // Migration: legacy onionSkinEnabled BOOL -> renderMode enum (0=Off,
   // 1=Filmstrip, 2=Onion). Old true maps to Filmstrip.
-  KKMiniCanvasRenderMode renderMode = KKMiniCanvasRenderModeOff;
+  KKMiniViewerRenderMode renderMode = KKMiniViewerRenderModeOff;
   if (uiState[@"renderMode"])
-    renderMode = (KKMiniCanvasRenderMode)[uiState[@"renderMode"] integerValue];
+    renderMode = (KKMiniViewerRenderMode)[uiState[@"renderMode"] integerValue];
   else if ([uiState[@"onionSkinEnabled"] boolValue])
-    renderMode = KKMiniCanvasRenderModeFilmstrip;
+    renderMode = KKMiniViewerRenderModeFilmstrip;
   st.renderMode = renderMode;
 
   NSString *mbJson = KKReadCustomParamString(getAPI, kKKParamMotionBlurData);
@@ -98,7 +98,7 @@
       return;
     [strong patchUIStateKey:@"activeTab" value:@(tab) paramID:uiStateParamID];
   };
-  view.onRenderModeChanged = ^(KKMiniCanvasRenderMode mode) {
+  view.onRenderModeChanged = ^(KKMiniViewerRenderMode mode) {
     __strong typeof(weak) strong = weak;
     if (!strong)
       return;
@@ -150,7 +150,7 @@
     [act endAction:strong];
   };
 
-  // Coalesce a continuous mini-canvas handle drag into one undo entry: the
+  // Coalesce a continuous mini-viewer handle drag into one undo entry: the
   // per-tick onTimelineMutated writes nest inside this outer group. FxUndoAPI
   // resolves to nil outside an action scope, so begin/end run inside one.
   view.onDragBegin = ^{

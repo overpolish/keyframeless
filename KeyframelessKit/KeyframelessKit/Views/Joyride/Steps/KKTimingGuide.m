@@ -12,7 +12,7 @@
 #import <KeyframelessKit/KKJoyrideDragStep.h>
 #import <KeyframelessKit/KKJoyrideLanesBinder.h>
 #import <KeyframelessKit/KKJoyrideTrigger.h>
-#import <KeyframelessKit/KKMiniCanvasView.h>
+#import <KeyframelessKit/KKMiniViewerView.h>
 #import <KeyframelessKit/KKSegmentEditView+Guide.h>
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <KeyframelessKit/KKTimelineBasicView+Guide.h>
@@ -235,7 +235,7 @@ static const CGFloat kDragSnapPx = 14.0;
   NSArray<NSNumber *> *targetVals = config.primaryTargetValues;
   NSInteger compCount = config.primaryComponentCount;
   NSRect (^editTargetRect)(void) = ^NSRect {
-    __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+    __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
     if (!c || targetVals.count == 0)
       return NSZeroRect;
     return compCount >= 2
@@ -258,7 +258,7 @@ static const CGFloat kDragSnapPx = 14.0;
                         @"Timing guide: drag-to-target hint.")
       circular:YES
       spotRect:^NSRect {
-        __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+        __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
         return c ? [c pointHandleScreenRect] : NSZeroRect;
       }
       targetRect:editTargetRect
@@ -266,7 +266,7 @@ static const CGFloat kDragSnapPx = 14.0;
         // Press at the handle's exact centre, not the captured click: the
         // arc ring is large, so an off-centre press would carry a grab offset
         // through the delta-based drag and land the handle off the target.
-        __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+        __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
         NSRect spot = [c pointHandleScreenRect];
         [c beginPointHandleDragAtScreenPoint:NSIsEmptyRect(spot)
                                                  ? p
@@ -274,12 +274,12 @@ static const CGFloat kDragSnapPx = 14.0;
                                                                NSMidY(spot))];
       }
       dragTo:^(NSPoint p) {
-        [weakBinder.latestMiniCanvas
+        [weakBinder.latestMiniViewer
             dragPointHandleToScreenPoint:KKJoyrideSnapToTarget(
                                              p, editTargetRect(), 9.0)];
       }
       end:^{
-        [weakBinder.latestMiniCanvas endPointHandleDrag];
+        [weakBinder.latestMiniViewer endPointHandleDrag];
       }
       hitOnRelease:^BOOL(NSPoint p) {
         NSRect t = editTargetRect();
@@ -359,7 +359,7 @@ static const CGFloat kDragSnapPx = 14.0;
                                           ? config.keyposeTargetValues
                                           : targetVals;
   NSRect (^kpTargetRect)(void) = ^NSRect {
-    __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+    __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
     if (!c || kpTargetVals.count == 0)
       return NSZeroRect;
     return compCount >= 2
@@ -377,7 +377,7 @@ static const CGFloat kDragSnapPx = 14.0;
                         @"Timing guide: drag-to-target hint.")
       circular:YES
       spotRect:^NSRect {
-        __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+        __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
         return c ? [c pointHandleScreenRect] : NSZeroRect;
       }
       targetRect:kpTargetRect
@@ -385,7 +385,7 @@ static const CGFloat kDragSnapPx = 14.0;
         // Press at the handle's exact centre, not the captured click: the
         // arc ring is large, so an off-centre press would carry a grab offset
         // through the delta-based drag and land the handle off the target.
-        __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+        __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
         NSRect spot = [c pointHandleScreenRect];
         [c beginPointHandleDragAtScreenPoint:NSIsEmptyRect(spot)
                                                  ? p
@@ -393,12 +393,12 @@ static const CGFloat kDragSnapPx = 14.0;
                                                                NSMidY(spot))];
       }
       dragTo:^(NSPoint p) {
-        [weakBinder.latestMiniCanvas
+        [weakBinder.latestMiniViewer
             dragPointHandleToScreenPoint:KKJoyrideSnapToTarget(
                                              p, kpTargetRect(), 9.0)];
       }
       end:^{
-        [weakBinder.latestMiniCanvas endPointHandleDrag];
+        [weakBinder.latestMiniViewer endPointHandleDrag];
       }
       hitOnRelease:^BOOL(NSPoint p) {
         NSRect t = kpTargetRect();
@@ -423,12 +423,12 @@ static const CGFloat kDragSnapPx = 14.0;
 
   KKJoyrideStep *sElastic = [KKJoyrideStep
       stepWithMessage:
-          [NSString stringWithFormat:
-                        KKLoc(@"Pick <accent>%@</accent> for a lively "
-                              @"overshoot.",
-                              @"Timing guide: choose the Elastic easing "
-                              @"curve. %@ is the localized curve name."),
-                        KKEasingCurveDisplayName(KKEasingCurveElastic)]
+          [NSString
+              stringWithFormat:KKLoc(@"Pick <accent>%@</accent> for a lively "
+                                     @"overshoot.",
+                                     @"Timing guide: choose the Elastic easing "
+                                     @"curve. %@ is the localized curve name."),
+                               KKEasingCurveDisplayName(KKEasingCurveElastic)]
            targetView:nil];
   sElastic.targetScreenRect = ^NSRect {
     __strong KKSegmentEditView *e = weakBinder.latestGapSegmentEditor;
@@ -719,7 +719,7 @@ static const CGFloat kDragSnapPx = 14.0;
   NSRect (^marqueeSpot)(void) = ^NSRect {
     __strong KKTimelineAdvancedView *a = weakAdv;
     return a ? [a guideTracksRegionScreenRectFromFraction:kMarqueeZoneStartFrac
-                                              toFraction:kMarqueeZoneEndFrac]
+                                               toFraction:kMarqueeZoneEndFrac]
              : NSZeroRect;
   };
   NSRect (^marqueeTarget)(void) = ^NSRect {
@@ -730,11 +730,13 @@ static const CGFloat kDragSnapPx = 14.0;
   KKJoyrideStep *sMarquee = [KKJoyrideDragStep stepForGuide:guide
       atIndex:ixMarquee
       isLast:NO
-      clickMessage:KKLoc(@"Start a drag in the <accent>highlighted region</accent>"
-                         @" and move right to box-select several keyposes.",
-                         @"Advanced timing guide: start a marquee selection.")
-      dragMessage:KKLoc(@"Keep dragging right, past the keyposes, then release.",
-                        @"Advanced timing guide: finish the marquee drag.")
+      clickMessage:
+          KKLoc(@"Start a drag in the <accent>highlighted region</accent>"
+                @" and move right to box-select several keyposes.",
+                @"Advanced timing guide: start a marquee selection.")
+      dragMessage:KKLoc(
+                      @"Keep dragging right, past the keyposes, then release.",
+                      @"Advanced timing guide: finish the marquee drag.")
       circular:NO
       spotRect:marqueeSpot
       targetRect:marqueeTarget
@@ -742,9 +744,9 @@ static const CGFloat kDragSnapPx = 14.0;
         [weakAdv guideBeginMarqueeAtScreenPoint:p];
       }
       dragTo:^(NSPoint p) {
-        [weakAdv guideDragMarqueeToScreenPoint:KKJoyrideSnapToTarget(
-                                                   p, marqueeTarget(),
-                                                   kDragSnapPx)];
+        [weakAdv
+            guideDragMarqueeToScreenPoint:KKJoyrideSnapToTarget(
+                                              p, marqueeTarget(), kDragSnapPx)];
       }
       end:^{
         [weakAdv guideEndMarquee];
@@ -758,7 +760,8 @@ static const CGFloat kDragSnapPx = 14.0;
   // keypose nearest the moved (~0.55) pose the marquee enclosed - resolved by
   // value, not a hardcoded index, so reordering the seed / earlier steps can't
   // silently make this press the wrong keypose. The index is latched at press
-  // (`groupKPIdx`) so it stays stable while the keypose travels during the drag.
+  // (`groupKPIdx`) so it stays stable while the keypose travels during the
+  // drag.
   const double kGroupGrabFrac = 0.55;
   const double kGroupTargetFrac = 0.35;
   const double kGroupSnapFrac = 0.06;
@@ -787,10 +790,11 @@ static const CGFloat kDragSnapPx = 14.0;
   KKJoyrideStep *sGroupDrag = [KKJoyrideDragStep stepForGuide:guide
       atIndex:ixGroupDrag
       isLast:NO
-      clickMessage:KKLoc(@"Drag any <accent>selected</accent> keypose - they all "
-                         @"retime together.",
-                         @"Advanced timing guide: drag the multi-selection to "
-                         @"retime.")
+      clickMessage:KKLoc(
+                       @"Drag any <accent>selected</accent> keypose - they all "
+                       @"retime together.",
+                       @"Advanced timing guide: drag the multi-selection to "
+                       @"retime.")
       dragMessage:nil
       circular:YES
       spotRect:groupSpot
@@ -800,22 +804,22 @@ static const CGFloat kDragSnapPx = 14.0;
         if (groupKPIdx == NSNotFound)
           return;
         NSRect spot = groupSpot();
-        NSPoint press = NSIsEmptyRect(spot)
-                            ? p
-                            : NSMakePoint(NSMidX(spot), NSMidY(spot));
+        NSPoint press =
+            NSIsEmptyRect(spot) ? p : NSMakePoint(NSMidX(spot), NSMidY(spot));
         [weakAdv guideBeginSelectionDragForLabel:primary
                                          atIndex:groupKPIdx
                                    atScreenPoint:press];
       }
       dragTo:^(NSPoint p) {
-        [weakAdv guideDragSelectionToScreenPoint:KKJoyrideSnapToTarget(
-                                                     p, groupTarget(),
-                                                     kDragSnapPx)];
+        [weakAdv
+            guideDragSelectionToScreenPoint:KKJoyrideSnapToTarget(
+                                                p, groupTarget(), kDragSnapPx)];
       }
       end:^{
         [weakAdv guideEndSelectionDrag];
         // Keep groupKPIdx latched: hitOnRelease runs after end(), and a retry
-        // should re-grab the same keypose (it has since moved off kGroupGrabFrac).
+        // should re-grab the same keypose (it has since moved off
+        // kGroupGrabFrac).
       }
       hitOnRelease:^BOOL(NSPoint p) {
         __strong KKTimelineAdvancedView *a = weakAdv;

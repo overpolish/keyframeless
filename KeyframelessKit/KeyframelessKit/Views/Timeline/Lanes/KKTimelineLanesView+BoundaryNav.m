@@ -4,8 +4,8 @@
  */
 
 #import "KKLocalized.h"
-#import "KKMiniCanvasRenderer.h"
-#import "KKMiniCanvasView.h"
+#import "KKMiniViewerRenderer.h"
+#import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
@@ -37,7 +37,7 @@
   // single-frame at the clicked fraction. KP-snap (within ~1 frame) so
   // Basic's OutEnd (frac=1.0 click vs endFrac<1.0 KP) doesn't produce a
   // phantom extra cell.
-  if (_renderMode != KKMiniCanvasRenderModeOff) {
+  if (_renderMode != KKMiniViewerRenderModeOff) {
     NSSet<NSString *> *scope = [self _scopedLaneLabelsForOpenPopover];
     NSMutableArray<NSNumber *> *kpTimes = [NSMutableArray array];
     for (KKLane *lane in _timeline.lanes) {
@@ -71,9 +71,9 @@
     }
     NSArray<NSNumber *> *collapsed = [self _collapseTiedHolds:ordered
                                                         scope:scope];
-    KKWriteBoundaryRequestMulti(self.miniCanvasRequestPath, collapsed, YES);
+    KKWriteBoundaryRequestMulti(self.miniViewerRequestPath, collapsed, YES);
   } else {
-    KKWriteBoundaryRequest(self.miniCanvasRequestPath, fraction, YES);
+    KKWriteBoundaryRequest(self.miniViewerRequestPath, fraction, YES);
   }
 }
 
@@ -209,7 +209,7 @@
   }
 }
 
-- (void)_renderModeDidChange:(KKMiniCanvasRenderMode)mode {
+- (void)_renderModeDidChange:(KKMiniViewerRenderMode)mode {
   _renderMode = mode;
   if (self.onRenderModeChanged)
     self.onRenderModeChanged(mode);
@@ -225,7 +225,7 @@
 }
 
 - (void)_republishBoundaryRequestIfOpen {
-  if (_renderMode == KKMiniCanvasRenderModeOff)
+  if (_renderMode == KKMiniViewerRenderModeOff)
     return;
   if (!(_openContentPopover.isShown && _openStaticIsBoundary &&
         _openStaticView))
@@ -244,8 +244,8 @@
         _openStaticView))
     return;
   BOOL fracChanged = fabs(fraction - _openStaticBoundaryFraction) > 1e-6;
-  KKSetBoundaryEditing(self.miniCanvasDelegate, YES, fraction);
-  KKSetSuppressedHandles(self.miniCanvasDelegate, excludedLabels);
+  KKSetBoundaryEditing(self.miniViewerDelegate, YES, fraction);
+  KKSetSuppressedHandles(self.miniViewerDelegate, excludedLabels);
   // Full row rebuild (not just value rebind): the editable↔Animate split can
   // change between fractions (navigate) or after add/remove, and the one-way
   // applyExcludedLabels: swap can't restore an editable row on its own.

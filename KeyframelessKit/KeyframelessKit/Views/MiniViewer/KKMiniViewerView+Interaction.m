@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKMiniCanvasRenderer.h"
-#import "KKMiniCanvasView_Private.h"
+#import "KKMiniViewerRenderer.h"
+#import "KKMiniViewerView_Private.h"
 #import "KKTokens.h"
 #import <KeyframelessKit/KKLog.h>
 
 // View transform (zoom / pan), pointer-handle dragging, and screen-rect
 // geometry. The canvas's interactive surface, kept apart from the render path.
-@implementation KKMiniCanvasView (Interaction)
+@implementation KKMiniViewerView (Interaction)
 
 - (CGFloat)_backingScale {
   CGFloat s = self.window.backingScaleFactor;
@@ -27,7 +27,7 @@
   if (r0.size.width <= 0 || r0.size.height <= 0 || _zoom <= 0) {
     _zoom = newZoom;
     [self setNeedsDisplay:YES];
-    [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindZoom];
+    [self _didChangeViewTransformOfKind:KKMiniViewerTransformKindZoom];
     return;
   }
   CGFloat fx = (c.x - r0.origin.x) / r0.size.width;
@@ -41,7 +41,7 @@
   _panPixels.y = originY - d.height / 2.0 + newH / 2.0;
   _zoom = newZoom;
   [self setNeedsDisplay:YES];
-  [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindZoom];
+  [self _didChangeViewTransformOfKind:KKMiniViewerTransformKindZoom];
 }
 
 // Exact mechanism copied from the old KKStageSequencerView+InteractionZoomPan
@@ -61,7 +61,7 @@
     _panPixels.x += event.scrollingDeltaX * s;
     _panPixels.y -= event.scrollingDeltaY * s; // drawable y is up; delta y-down
     [self setNeedsDisplay:YES];
-    [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindPan];
+    [self _didChangeViewTransformOfKind:KKMiniViewerTransformKindPan];
   } else {
     // Mouse wheel → zoom toward cursor.
     CGFloat factor = 1.0 - event.scrollingDeltaY * 0.05;
@@ -70,7 +70,7 @@
 }
 
 - (void)mouseDown:(NSEvent *)event {
-  // End any focused value field (see _KKMiniCanvasOverlay -mouseDown:).
+  // End any focused value field (see _KKMiniViewerOverlay -mouseDown:).
   [self.window makeFirstResponder:nil];
   if (event.clickCount == 2) {
     [self resetView];
@@ -135,7 +135,7 @@
     self.onViewReset();
 }
 
-- (void)_didChangeViewTransformOfKind:(KKMiniCanvasTransformKind)kind {
+- (void)_didChangeViewTransformOfKind:(KKMiniViewerTransformKind)kind {
   if (self.onViewTransformChanged)
     self.onViewTransformChanged(kind);
 }
@@ -149,43 +149,43 @@
 }
 
 - (void)beginPointHandleDragAtScreenPoint:(NSPoint)screenPoint {
-  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (![d respondsToSelector:
-              @selector(miniCanvas:beginHandleDragAtPoint:contentRect:)])
+              @selector(miniViewer:beginHandleDragAtPoint:contentRect:)])
     return;
   [self.window makeFirstResponder:nil];
   if (self.onHandleDragBegin)
     self.onHandleDragBegin();
-  [d miniCanvas:self
+  [d miniViewer:self
       beginHandleDragAtPoint:[self _viewPointForScreenPoint:screenPoint]
                  contentRect:[self contentRectInViewPoints]];
 }
 
 - (void)dragPointHandleToScreenPoint:(NSPoint)screenPoint {
-  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (![d respondsToSelector:@selector(
-                                 miniCanvas:dragHandleToPoint:contentRect:)])
+                                 miniViewer:dragHandleToPoint:contentRect:)])
     return;
-  [d miniCanvas:self
+  [d miniViewer:self
       dragHandleToPoint:[self _viewPointForScreenPoint:screenPoint]
             contentRect:[self contentRectInViewPoints]];
 }
 
 - (void)endPointHandleDrag {
-  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
-  if ([d respondsToSelector:@selector(miniCanvasEndHandleDrag:)])
-    [d miniCanvasEndHandleDrag:self];
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
+  if ([d respondsToSelector:@selector(miniViewerEndHandleDrag:)])
+    [d miniViewerEndHandleDrag:self];
   if (self.onHandleDragEnd)
     self.onHandleDragEnd();
 }
 
 - (BOOL)optHideHandleAtScreenPoint:(NSPoint)screenPoint {
-  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (!
       [d respondsToSelector:@selector(
-                                miniCanvas:optClickHandleAtPoint:contentRect:)])
+                                miniViewer:optClickHandleAtPoint:contentRect:)])
     return NO;
-  BOOL hit = [d miniCanvas:self
+  BOOL hit = [d miniViewer:self
       optClickHandleAtPoint:[self _viewPointForScreenPoint:screenPoint]
                 contentRect:[self contentRectInViewPoints]];
   if (hit && self.onOptHideHandle)
@@ -194,9 +194,9 @@
 }
 
 - (void)setGuidePeekActive:(BOOL)active {
-  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
-  if ([d isKindOfClass:[KKMiniCanvasRenderer class]]) {
-    ((KKMiniCanvasRenderer *)d).revealHidden = active;
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
+  if ([d isKindOfClass:[KKMiniViewerRenderer class]]) {
+    ((KKMiniViewerRenderer *)d).revealHidden = active;
     [self setNeedsDisplay:YES];
   }
 }
@@ -209,8 +209,8 @@
 // outer 9pt at the 230pt baseline canvas height).
 - (CGFloat)_pointHandleRadiusPt {
   id del = self.canvasDelegate;
-  if ([del isKindOfClass:[KKMiniCanvasRenderer class]] &&
-      [(KKMiniCanvasRenderer *)del pointHandleStyle] == KKMiniHandleStyleArc) {
+  if ([del isKindOfClass:[KKMiniViewerRenderer class]] &&
+      [(KKMiniViewerRenderer *)del pointHandleStyle] == KKMiniHandleStyleArc) {
     CGFloat canvasScale = self.bounds.size.height / 230.0;
     if (canvasScale <= 0)
       canvasScale = 1.0;
@@ -232,13 +232,13 @@
 }
 
 - (NSRect)pointHandleScreenRect {
-  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (!self.window ||
       ![d respondsToSelector:@selector(
-                                 miniCanvas:pointHandleCenter:contentRect:)])
+                                 miniViewer:pointHandleCenter:contentRect:)])
     return NSZeroRect;
   CGPoint ctr;
-  if (![d miniCanvas:self
+  if (![d miniViewer:self
           pointHandleCenter:&ctr
                 contentRect:[self contentRectInViewPoints]])
     return NSZeroRect;
@@ -247,13 +247,13 @@
 }
 
 - (NSRect)pointHandleScreenRectForValue:(double)value {
-  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (!self.window ||
       ![d respondsToSelector:
-              @selector(miniCanvas:pointHandleCenter:forValue:contentRect:)])
+              @selector(miniViewer:pointHandleCenter:forValue:contentRect:)])
     return NSZeroRect;
   CGPoint ctr;
-  if (![d miniCanvas:self
+  if (![d miniViewer:self
           pointHandleCenter:&ctr
                    forValue:value
                 contentRect:[self contentRectInViewPoints]])
@@ -263,13 +263,13 @@
 }
 
 - (NSRect)pointHandleScreenRectForValues:(NSArray<NSNumber *> *)values {
-  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (!self.window ||
       ![d respondsToSelector:
-              @selector(miniCanvas:pointHandleCenter:forValues:contentRect:)])
+              @selector(miniViewer:pointHandleCenter:forValues:contentRect:)])
     return NSZeroRect;
   CGPoint ctr;
-  if (![d miniCanvas:self
+  if (![d miniViewer:self
           pointHandleCenter:&ctr
                   forValues:values
                 contentRect:[self contentRectInViewPoints]])
@@ -286,56 +286,56 @@
 }
 
 - (NSRect)cropHandleScreenRectAtIndex:(NSInteger)index {
-  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (!self.window ||
       ![d respondsToSelector:@selector(
-                                 miniCanvas:extraHandleCentersForContentRect:)])
+                                 miniViewer:extraHandleCentersForContentRect:)])
     return NSZeroRect;
   return [self
       _screenRectForHandleCenters:
-          [d miniCanvas:self
+          [d miniViewer:self
               extraHandleCentersForContentRect:[self contentRectInViewPoints]]
                           atIndex:index];
 }
 
 - (NSRect)cropHandleScreenRectAtIndex:(NSInteger)index
                         forCropValues:(NSArray<NSNumber *> *)values {
-  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (!self.window ||
       ![d respondsToSelector:
-              @selector(miniCanvas:cropHandleCentersForValues:contentRect:)])
+              @selector(miniViewer:cropHandleCentersForValues:contentRect:)])
     return NSZeroRect;
   return
       [self _screenRectForHandleCenters:
-                [d miniCanvas:self
+                [d miniViewer:self
                     cropHandleCentersForValues:values
                                    contentRect:[self contentRectInViewPoints]]
                                 atIndex:index];
 }
 
 - (NSRect)scaleHandleScreenRectAtIndex:(NSInteger)index {
-  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (!self.window ||
       ![d respondsToSelector:@selector(
-                                 miniCanvas:scaleHandleCentersForContentRect:)])
+                                 miniViewer:scaleHandleCentersForContentRect:)])
     return NSZeroRect;
   return [self
       _screenRectForHandleCenters:
-          [d miniCanvas:self
+          [d miniViewer:self
               scaleHandleCentersForContentRect:[self contentRectInViewPoints]]
                           atIndex:index];
 }
 
 - (NSRect)scaleHandleScreenRectAtIndex:(NSInteger)index
                         forScaleValues:(NSArray<NSNumber *> *)values {
-  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (!self.window ||
       ![d respondsToSelector:
-              @selector(miniCanvas:scaleHandleCentersForValues:contentRect:)])
+              @selector(miniViewer:scaleHandleCentersForValues:contentRect:)])
     return NSZeroRect;
   return
       [self _screenRectForHandleCenters:
-                [d miniCanvas:self
+                [d miniViewer:self
                     scaleHandleCentersForValues:values
                                     contentRect:[self contentRectInViewPoints]]
                                 atIndex:index];
@@ -354,7 +354,7 @@
       _hasPendingFilmstripActivation = NO;
   }
   [self setNeedsDisplay:YES];
-  [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindPan];
+  [self _didChangeViewTransformOfKind:KKMiniViewerTransformKindPan];
 }
 
 - (BOOL)_pointFromGlobalEvent:(NSPoint *)outViewPt {
@@ -383,7 +383,7 @@
     _panPixels.x += event.scrollingDeltaX * s;
     _panPixels.y -= event.scrollingDeltaY * s;
     [self setNeedsDisplay:YES];
-    [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindPan];
+    [self _didChangeViewTransformOfKind:KKMiniViewerTransformKindPan];
   } else {
     [self _zoomTo:_zoom * (1.0 - event.scrollingDeltaY * 0.05)
         aboutViewPoint:p];

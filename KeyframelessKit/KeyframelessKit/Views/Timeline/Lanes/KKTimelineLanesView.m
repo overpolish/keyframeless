@@ -141,7 +141,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
           return [a.label localizedCaseInsensitiveCompare:b.label];
         }];
     _timeline = [self _timelineSeededFrom:timeline];
-    _miniCanvasClipAspect = 16.0 / 9.0;
+    _miniViewerClipAspect = 16.0 / 9.0;
     [self _buildUI];
     [self _refresh];
   }
@@ -759,7 +759,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   return @[ _clearSelectionButton ];
 }
 
-- (void)setRenderMode:(KKMiniCanvasRenderMode)mode {
+- (void)setRenderMode:(KKMiniViewerRenderMode)mode {
   _renderMode = mode;
 }
 

@@ -58,7 +58,7 @@ NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
   // Raw (un-rounded) value so the arc handle lands exactly on the keypose
   // anchors, which are drawn from raw kp.values. The Smoothed variant
   // corner-rounds at interior joins, which pulled the handle off the active
-  // anchor (the mini-canvas already uses the raw value, hence stays aligned).
+  // anchor (the mini-viewer already uses the raw value, hence stays aligned).
   NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
   return v.count >= 2 ? v : @[ @0.5, @0.5 ];
 }
