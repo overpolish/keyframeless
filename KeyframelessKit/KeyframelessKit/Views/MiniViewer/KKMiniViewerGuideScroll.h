@@ -9,9 +9,9 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class KKMiniCanvasView;
+@class KKMiniViewerView;
 
-/// Routes scroll + pinch to a mini-canvas while a guide is running.
+/// Routes scroll + pinch to a mini-viewer while a guide is running.
 ///
 /// During a guide the overlay panel sits over the popover, so the popover's
 /// own scroll/responder zoom-pan path doesn't fire. With the controller's
@@ -20,13 +20,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// for both and forwards them to the canvas's public
 /// `-applyScrollEvent:` / `-applyMagnifyEvent:` while `activeWhen` is YES and
 /// the pointer is over the canvas. Plugin-agnostic: any guide over a
-/// `KKMiniCanvasView` gets zoom/pan + pinch for free.
+/// `KKMiniViewerView` gets zoom/pan + pinch for free.
 ///
 /// Note: the magnify monitors are the actual pinch carrier - never drop them
 /// as "dead"; they only look dead before `forwardsGestures`.
-@interface KKMiniCanvasGuideScroll : NSObject
+@interface KKMiniViewerGuideScroll : NSObject
 
-- (instancetype)initWithCanvas:(KKMiniCanvasView *)canvas
+- (instancetype)initWithCanvas:(KKMiniViewerView *)canvas
                     activeWhen:(BOOL (^)(void))activeWhen
     NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;

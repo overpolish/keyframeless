@@ -49,12 +49,12 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMarkup.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
-#import <KeyframelessKit/KKMiniCanvasCropEditor.h>
-#import <KeyframelessKit/KKMiniCanvasFeed.h>
-#import <KeyframelessKit/KKMiniCanvasGuideScroll.h>
-#import <KeyframelessKit/KKMiniCanvasRenderer.h>
-#import <KeyframelessKit/KKMiniCanvasView.h>
+#import <KeyframelessKit/KKMiniViewerCropEditor.h>
+#import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKMiniViewerGuide.h>
+#import <KeyframelessKit/KKMiniViewerGuideScroll.h>
+#import <KeyframelessKit/KKMiniViewerRenderer.h>
+#import <KeyframelessKit/KKMiniViewerView.h>
 #import <KeyframelessKit/KKMotionBlur.h>
 #import <KeyframelessKit/KKMotionLean.h>
 #import <KeyframelessKit/KKOSCGuide.h>
@@ -72,7 +72,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPlugin+Color.h>
 #import <KeyframelessKit/KKPlugin+Crop.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
-#import <KeyframelessKit/KKPlugin+MiniCanvasFeed.h>
+#import <KeyframelessKit/KKPlugin+MiniViewerFeed.h>
 #import <KeyframelessKit/KKPlugin+OSCVisibility.h>
 #import <KeyframelessKit/KKPlugin.h>
 #import <KeyframelessKit/KKPluginHost.h>

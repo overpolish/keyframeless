@@ -7,19 +7,19 @@
 
 #import <CoreMedia/CoreMedia.h>
 #import <Foundation/Foundation.h>
-#import <KeyframelessKit/KKMiniCanvasFeed.h>
+#import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKMotionBlur.h>
 #import <KeyframelessKit/KKTimingLane.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
 @class KKTimelineInspectorView;
-@class KKMiniCanvasRenderer;
+@class KKMiniViewerRenderer;
 @protocol PROAPIAccessing;
 
 NS_ASSUME_NONNULL_BEGIN
 
 /// Reads the keypose-popover request JSON (written by the inspector's
-/// mini-canvas popover) and returns the requested clip-fractions list when
+/// mini-viewer popover) and returns the requested clip-fractions list when
 /// `active` is true. Returns nil otherwise. Falls back to single-element
 /// `[frac]` for legacy single-fraction payloads.
 NSArray<NSNumber *> *_Nullable KKReadBoundaryRequestFracs(NSString *path);
@@ -46,7 +46,7 @@ double KKProcessFrameDurationSeconds(void);
 @property(nonatomic) double frameDurSec;
 @property(nonatomic) double lastPushedClipDuration;
 @property(nonatomic) BOOL loopEnabled;
-/// Multi-slot mini-canvas feed bookkeeping populated by
+/// Multi-slot mini-viewer feed bookkeeping populated by
 /// KKBuildSourceRequests; read by the render-output side to pair
 /// delivered tiles to slots.
 @property(nonatomic) BOOL boundaryFeedActive;
@@ -63,7 +63,7 @@ void KKHandleTimelineParamChanged(
     id<PROAPIAccessing> apiManager, UInt32 timelineParamID,
     NSObject *actionTarget,
     KKTimeline *_Nullable (^_Nullable timelineStamper)(KKTimeline *_Nullable),
-    KKMiniCanvasRenderer *_Nullable miniCanvasRenderer,
+    KKMiniViewerRenderer *_Nullable miniViewerRenderer,
     KKTimelineInspectorView *_Nullable inspectorView);
 
 /// Builds the FxImageTileRequest list for one render: current frame +

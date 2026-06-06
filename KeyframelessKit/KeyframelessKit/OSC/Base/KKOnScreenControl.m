@@ -281,7 +281,7 @@
 // (immediate viewer redraw) and persist it into the UI-state blob's
 // `oscElements` map (stored as VISIBLE bools, matching the inspector pills).
 // The write echoes through the effect's parameterChanged, syncing the inspector
-// + mini-canvas. Rebuild the FULL map from the authoritative in-memory hidden
+// + mini-viewer. Rebuild the FULL map from the authoritative in-memory hidden
 // set and base it on the cached lastUIState (the OSC's own scope read lags its
 // writes - a stale base drops a sibling hidden a tick earlier, or a stale
 // activeTab/loopEnabled).

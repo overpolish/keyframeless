@@ -35,7 +35,7 @@
   [_openContentPopover close];
 }
 
-- (NSRect)guideRenderModePillScreenRectForMode:(KKMiniCanvasRenderMode)mode {
+- (NSRect)guideRenderModePillScreenRectForMode:(KKMiniViewerRenderMode)mode {
   _KKStaticValuesPopoverView *sv = _openStaticView;
   if (!sv || !_openStaticIsBoundary)
     return NSZeroRect;

@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKMiniCanvasRenderer.h"
-#import "KKMiniCanvasView_Private.h"
+#import "KKMiniViewerRenderer.h"
+#import "KKMiniViewerView_Private.h"
 #import "KKOSCShaderTypes.h"
 #import "KKTokens.h"
 #import <KeyframelessKit/KKLog.h>
@@ -18,7 +18,7 @@
 // at the top of the dot (the requested look). Flip if it ever inverts.
 static const BOOL kPointShadingLighterTop = YES;
 
-@implementation KKMiniCanvasView (Rendering)
+@implementation KKMiniViewerView (Rendering)
 
 - (void)_buildPipeline {
   id<MTLDevice> device = self.device;
@@ -27,7 +27,7 @@ static const BOOL kPointShadingLighterTop = YES;
       [device newDefaultLibraryWithBundle:[NSBundle bundleForClass:self.class]
                                     error:&err];
   if (!lib) {
-    KKLogError(@"KKMiniCanvasView: no default metal library: %@", err);
+    KKLogError(@"KKMiniViewerView: no default metal library: %@", err);
     return;
   }
   MTLRenderPipelineDescriptor *pd = [[MTLRenderPipelineDescriptor alloc] init];
@@ -37,7 +37,7 @@ static const BOOL kPointShadingLighterTop = YES;
   pd.colorAttachments[0].pixelFormat = self.colorPixelFormat;
   _pipeline = [device newRenderPipelineStateWithDescriptor:pd error:&err];
   if (!_pipeline)
-    KKLogError(@"KKMiniCanvasView: pipeline build failed: %@", err);
+    KKLogError(@"KKMiniViewerView: pipeline build failed: %@", err);
 
   // Onion-skin: tint+alpha texture pass, premultiplied alpha blending so
   // overlaid ghost frames composite over the active opaque base.
@@ -56,7 +56,7 @@ static const BOOL kPointShadingLighterTop = YES;
       MTLBlendFactorOneMinusSourceAlpha;
   _onionPipeline = [device newRenderPipelineStateWithDescriptor:op error:&err];
   if (!_onionPipeline)
-    KKLogError(@"KKMiniCanvasView: onion pipeline failed: %@", err);
+    KKLogError(@"KKMiniViewerView: onion pipeline failed: %@", err);
 
   // Shared KKPointOSC glyph, alpha-blended over the composited image.
   MTLRenderPipelineDescriptor *pp = [[MTLRenderPipelineDescriptor alloc] init];
@@ -74,7 +74,7 @@ static const BOOL kPointShadingLighterTop = YES;
       MTLBlendFactorOneMinusSourceAlpha;
   _pointPipeline = [device newRenderPipelineStateWithDescriptor:pp error:&err];
   if (!_pointPipeline)
-    KKLogError(@"KKMiniCanvasView: point pipeline failed: %@", err);
+    KKLogError(@"KKMiniViewerView: point pipeline failed: %@", err);
 
   // Shared KKSquarePointOSC glyph (Magic Move anchor pivot). Same blend mode
   // as the point pipeline, different fragment.
@@ -93,7 +93,7 @@ static const BOOL kPointShadingLighterTop = YES;
       MTLBlendFactorOneMinusSourceAlpha;
   _squarePipeline = [device newRenderPipelineStateWithDescriptor:sq error:&err];
   if (!_squarePipeline)
-    KKLogError(@"KKMiniCanvasView: square pipeline failed: %@", err);
+    KKLogError(@"KKMiniViewerView: square pipeline failed: %@", err);
 
   // Arc glyph pipeline - opt-in via the renderer's pointHandleStyle. Same
   // blend mode as the point pipeline, different fragment.
@@ -112,7 +112,7 @@ static const BOOL kPointShadingLighterTop = YES;
       MTLBlendFactorOneMinusSourceAlpha;
   _arcPipeline = [device newRenderPipelineStateWithDescriptor:ap error:&err];
   if (!_arcPipeline)
-    KKLogError(@"KKMiniCanvasView: arc pipeline failed: %@", err);
+    KKLogError(@"KKMiniViewerView: arc pipeline failed: %@", err);
 
   // Rotation gizmo: shared `KKRotationOSCFragment` shader. Same blend mode
   // as the other glyph pipelines so the rings composite straight over the
@@ -133,7 +133,7 @@ static const BOOL kPointShadingLighterTop = YES;
   _rotationPipeline = [device newRenderPipelineStateWithDescriptor:rp
                                                              error:&err];
   if (!_rotationPipeline)
-    KKLogError(@"KKMiniCanvasView: rotation pipeline failed: %@", err);
+    KKLogError(@"KKMiniViewerView: rotation pipeline failed: %@", err);
 
   // Flat-color pipeline for the crop border, drawn before the glyphs so the
   // handles sit on top of the line.
@@ -152,7 +152,7 @@ static const BOOL kPointShadingLighterTop = YES;
       MTLBlendFactorOneMinusSourceAlpha;
   _linePipeline = [device newRenderPipelineStateWithDescriptor:lp error:&err];
   if (!_linePipeline)
-    KKLogError(@"KKMiniCanvasView: line pipeline failed: %@", err);
+    KKLogError(@"KKMiniViewerView: line pipeline failed: %@", err);
 
   // Antialiased line pipeline (KKLineFragment uses textureCoordinate.y as the
   // signed cross-line distance) - same blend, used for the motion path so its
@@ -160,13 +160,13 @@ static const BOOL kPointShadingLighterTop = YES;
   lp.fragmentFunction = [lib newFunctionWithName:@"KKLineFragment"];
   _aaLinePipeline = [device newRenderPipelineStateWithDescriptor:lp error:&err];
   if (!_aaLinePipeline)
-    KKLogError(@"KKMiniCanvasView: aa line pipeline failed: %@", err);
+    KKLogError(@"KKMiniViewerView: aa line pipeline failed: %@", err);
 }
 
 // Encodes one shared KKArcOSC glyph centered at `centerPts`. Used by
-// renderers that opt into `KKMiniHandleStyleArc` so the mini-canvas handle
+// renderers that opt into `KKMiniHandleStyleArc` so the mini-viewer handle
 // matches the viewer-side ring. Matches KKArcOSC's defaults at a smaller
-// mini-canvas scale: 0xC1 gray fill, ring ratio 13/23 (inner = 0.43),
+// mini-viewer scale: 0xC1 gray fill, ring ratio 13/23 (inner = 0.43),
 // outline width derived from KKBorderWidthXS. When `isActive` is YES the
 // outer radius grows (mirroring KKArcOSC's 23→31 expansion) and a small
 // "plus" indicator is drawn in the centre.
@@ -207,7 +207,7 @@ static const BOOL kPointShadingLighterTop = YES;
   // arm length 7/outer, fill 1/outer, outline 2/outer. The previous values
   // normalized arm length to the viewer's canvas height instead of its
   // outer radius, producing a crosshair ~3x too short and ~7x too thin
-  // that was effectively invisible at mini-canvas scale.
+  // that was effectively invisible at mini-viewer scale.
   float plusHalf = isActive ? (7.0f / 31.75f) : 0.0f;
   float plusFill = isActive ? (1.0f / 31.75f) : 0.0f;
   float plusOutl = isActive ? (2.0f / 31.75f) : 0.0f;
@@ -238,7 +238,7 @@ static const BOOL kPointShadingLighterTop = YES;
 
 // Encodes the shared KKRotationOSC 3-ring gizmo centered at `centerPts`
 // (overlay points, y-up) at the given pixel radius. The fragment shader is
-// Y-DOWN-convention (matches the viewer OSC + hit-test); the mini-canvas
+// Y-DOWN-convention (matches the viewer OSC + hit-test); the mini-viewer
 // drawable is Y-UP, so we negate textureCoordinate.y on each vertex to keep
 // the rings visually consistent with the viewer.
 - (void)_encodeRotationOSCAt:(CGPoint)centerPts

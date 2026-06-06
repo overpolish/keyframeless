@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "MagicMoveMiniCanvasRenderer_Internal.h"
+#import "MagicMoveMiniViewerRenderer_Internal.h"
 #import "MagicMoveParamsBuild.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KeyframelessKit.h>
@@ -18,9 +18,9 @@ static const double kMiniScaleSpanFrac = 0.057;
 // Cmd-fine drag multiplier (matches the viewer).
 static const double kMiniScaleFineFactor = 0.2;
 
-@implementation MagicMoveMiniCanvasRenderer (Interaction)
+@implementation MagicMoveMiniViewerRenderer (Interaction)
 
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     motionPathPolylineForContentRect:(CGRect)cr {
   KKLane *lane = MMMiniLaneNamed(self.timeline, @"Position");
   if (!lane || lane.keyposes.count < 2 ||
@@ -39,7 +39,7 @@ static const double kMiniScaleFineFactor = 0.2;
   return out;
 }
 
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     motionPathAnchorsForContentRect:(CGRect)cr {
   KKLane *lane = MMMiniLaneNamed(self.timeline, @"Position");
   if (!lane || lane.keyposes.count < 2 ||
@@ -61,7 +61,7 @@ static const double kMiniScaleFineFactor = 0.2;
   return out;
 }
 
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     motionPathHandleSegmentsForContentRect:(CGRect)cr {
   KKLane *lane = MMMiniLaneNamed(self.timeline, @"Position");
   if (!lane || lane.keyposes.count < 2 ||
@@ -100,7 +100,7 @@ static const double kMiniScaleFineFactor = 0.2;
   return YES;
 }
 
-// Scale transform box (mini-canvas parity with the viewer). Concentric with the
+// Scale transform box (mini-viewer parity with the viewer). Concentric with the
 // rotation gizmo (content-rect centre); the half-extents map the Scale percents
 // through KKScaleGizmo, anchored to the mini rotation radius with the same
 // proportions as the viewer (e0/span = 105/90, 50/90 of the radius).
@@ -130,7 +130,7 @@ static const double kMiniScaleFineFactor = 0.2;
   return [NSString stringWithFormat:@"%.0f%% x %.0f%%", sclX, sclY];
 }
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
       scaleBoxRect:(out CGRect *)outRect
     forContentRect:(CGRect)cr {
   if (![self _scaleBoxShown] || cr.size.width <= 0 || cr.size.height <= 0)
@@ -156,7 +156,7 @@ static const double kMiniScaleFineFactor = 0.2;
 // shown.
 - (BOOL)_scaleHandlePositions:(CGPoint *)out forContentRect:(CGRect)cr {
   CGRect sb;
-  if (![self miniCanvas:self.canvas scaleBoxRect:&sb forContentRect:cr])
+  if (![self miniViewer:self.canvas scaleBoxRect:&sb forContentRect:cr])
     return NO;
   double l = CGRectGetMinX(sb), r = CGRectGetMaxX(sb);
   double b = CGRectGetMinY(sb), t = CGRectGetMaxY(sb);
@@ -172,7 +172,7 @@ static const double kMiniScaleFineFactor = 0.2;
   return YES;
 }
 
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     scaleHandleCentersForContentRect:(CGRect)cr {
   CGPoint h[8];
   if (![self _scaleHandlePositions:h forContentRect:cr])
@@ -186,7 +186,7 @@ static const double kMiniScaleFineFactor = 0.2;
 // Scale-box handle centres the box *would* have at explicit scale percents -
 // the guide's "drag the corner out to 200%" target. Mirrors the live geometry
 // in -_scaleHandlePositions:forContentRect: but off passed-in values.
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
        scaleHandleCentersForValues:(NSArray<NSNumber *> *)values
                        contentRect:(CGRect)cr {
   if (![self _scaleBoxShown] || cr.size.width <= 0 || cr.size.height <= 0)
@@ -211,17 +211,17 @@ static const double kMiniScaleFineFactor = 0.2;
 }
 
 // The Scale transform box, appended to the base's boxes (Magic Move has no
-// crop, so super returns none). The shared box path in KKMiniCanvasView draws
+// crop, so super returns none). The shared box path in KKMiniViewerView draws
 // the border + 8 handles + readout uniformly with the crop box.
-- (NSArray<KKMiniBox *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<KKMiniBox *> *)miniViewer:(KKMiniViewerView *)canvas
                  boxesForContentRect:(CGRect)cr {
-  NSMutableArray<KKMiniBox *> *boxes = [[super miniCanvas:canvas
+  NSMutableArray<KKMiniBox *> *boxes = [[super miniViewer:canvas
                                       boxesForContentRect:cr] mutableCopy];
   CGRect sb;
-  if ([self miniCanvas:canvas scaleBoxRect:&sb forContentRect:cr]) {
+  if ([self miniViewer:canvas scaleBoxRect:&sb forContentRect:cr]) {
     [boxes addObject:[KKMiniBox
                            boxWithRect:sb
-                         handleCenters:[self miniCanvas:canvas
+                         handleCenters:[self miniViewer:canvas
                                            scaleHandleCentersForContentRect:cr]
                                readout:[self scaleReadoutText]
                             ghostAlpha:[self scaleGhostAlpha]]];
@@ -328,7 +328,7 @@ static const double kMiniScaleFineFactor = 0.2;
 
 - (void)applyPointDragToPoint:(CGPoint)p
                   contentRect:(CGRect)cr
-                       canvas:(KKMiniCanvasView *)canvas {
+                       canvas:(KKMiniViewerView *)canvas {
   // No-modifier path is only called on begin (kit's beginHandleDragAtPoint);
   // capture the press normals + the grabbed value here so the drag moves by
   // delta (Shift axis-lock anchors here too).
@@ -347,7 +347,7 @@ static const double kMiniScaleFineFactor = 0.2;
 // press point). Same modifier convention as the viewer's position drag.
 - (void)applyPointDragToPoint:(CGPoint)p
                   contentRect:(CGRect)cr
-                       canvas:(KKMiniCanvasView *)canvas
+                       canvas:(KKMiniViewerView *)canvas
                     modifiers:(NSEventModifierFlags)modifiers {
   if (cr.size.width <= 0 || cr.size.height <= 0)
     return;
@@ -371,10 +371,10 @@ static const double kMiniScaleFineFactor = 0.2;
   [self commitValues:@[ @(newX), @(newY) ] forLabel:@"Position" canvas:canvas];
 }
 
-// Mini-canvas drag is also called via the delegate dispatcher in
-// KKMiniCanvasView so the modifier variant takes precedence over the plain
+// Mini-viewer drag is also called via the delegate dispatcher in
+// KKMiniViewerView so the modifier variant takes precedence over the plain
 // one.
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
     dragHandleToPoint:(CGPoint)p
           contentRect:(CGRect)cr
             modifiers:(NSEventModifierFlags)modifiers {
@@ -402,7 +402,7 @@ static const double kMiniScaleFineFactor = 0.2;
     return;
   }
   if (![self pointHandleIsActive]) {
-    [super miniCanvas:canvas
+    [super miniViewer:canvas
         dragHandleToPoint:p
               contentRect:cr
                 modifiers:modifiers];
@@ -568,7 +568,7 @@ static const double kMiniScaleFineFactor = 0.2;
   [self.canvas setHandlesNeedDisplay];
 }
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     handleHitAtPoint:(CGPoint)p
          contentRect:(CGRect)cr {
   NSInteger idx;
@@ -591,10 +591,10 @@ static const double kMiniScaleFineFactor = 0.2;
     return YES;
   if ([self _scaleHandleHitAtPoint:p contentRect:cr outIndex:&idx])
     return YES;
-  return [super miniCanvas:canvas handleHitAtPoint:p contentRect:cr];
+  return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
 }
 
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
     beginHandleDragAtPoint:(CGPoint)p
                contentRect:(CGRect)cr {
   _pathGrabbed = NO;
@@ -617,7 +617,7 @@ static const double kMiniScaleFineFactor = 0.2;
   // Active keypose's position handle takes the grab next (matches the hit-test
   // priority), so a coincident path anchor/handle doesn't steal it.
   if ([self pointHandleHitAtPoint:p contentRect:cr]) {
-    [super miniCanvas:canvas beginHandleDragAtPoint:p contentRect:cr];
+    [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
     return;
   }
   if ([self _pathHandleHitAtPoint:p
@@ -662,10 +662,10 @@ static const double kMiniScaleFineFactor = 0.2;
     _scaleLastCursor = p;
     return;
   }
-  [super miniCanvas:canvas beginHandleDragAtPoint:p contentRect:cr];
+  [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
 }
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     doubleClickAtPoint:(CGPoint)p
            contentRect:(CGRect)cr {
   KKLane *lane = MMMiniLaneNamed(self.timeline, @"Position");
@@ -708,7 +708,7 @@ static const double kMiniScaleFineFactor = 0.2;
   return [self ghostAlphaForLabel:@"Path"];
 }
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     optClickHandleAtPoint:(CGPoint)p
               contentRect:(CGRect)cr {
   // Anchor square is topmost, so it claims the opt-click first.
@@ -723,7 +723,7 @@ static const double kMiniScaleFineFactor = 0.2;
   // so at the active keypose the Position handle wins over the path anchor that
   // shares its spot when Position is revealed - matching the viewer. The path
   // then catches its own anchors/handles.
-  if ([super miniCanvas:canvas optClickHandleAtPoint:p contentRect:cr])
+  if ([super miniViewer:canvas optClickHandleAtPoint:p contentRect:cr])
     return YES;
   NSInteger idx;
   BOOL isOut;
@@ -768,7 +768,7 @@ static const double kMiniScaleFineFactor = 0.2;
            contentRect:(CGRect)cr
           excludeIndex:(NSInteger)excludeIndex {
   static const float anchors[] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
-  // Snap threshold in mini-canvas view points; convert to normalized units
+  // Snap threshold in mini-viewer view points; convert to normalized units
   // (per-axis since the mini may not be square).
   static const float kThreshPt = 6.0f;
   float thrX = cr.size.width > 0 ? kThreshPt / (float)cr.size.width : 0.01f;
@@ -813,7 +813,7 @@ static const double kMiniScaleFineFactor = 0.2;
   *ny = snapped.y;
 }
 
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
      snapGuideHasX:(out BOOL *)hasX
                  X:(out CGFloat *)outX
       fromKeyposeX:(out BOOL *)fromKeyposeX
@@ -844,7 +844,7 @@ static const double kMiniScaleFineFactor = 0.2;
 
 // The anchor square shows when the Anchor lane is constant (a single fixed
 // pivot) and not hidden - same convention as the other single-handle OSCs in
-// the mini-canvas (animated lanes draw keypose dots instead).
+// the mini-viewer (animated lanes draw keypose dots instead).
 - (BOOL)_anchorActiveForContentRect:(CGRect)cr {
   return !CGRectIsEmpty(cr) && [self isConstantLabel:@"Anchor"] &&
          [self labelVisibleOrRevealing:@"Anchor"];
@@ -865,7 +865,7 @@ static const double kMiniScaleFineFactor = 0.2;
   return fmax(fabs(p.x - c.x), fabs(p.y - c.y)) < r;
 }
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     anchorSquareCenter:(out CGPoint *)outCenter
            contentRect:(CGRect)cr {
   if (![self _anchorActiveForContentRect:cr])
@@ -928,7 +928,7 @@ static const double kMiniScaleFineFactor = 0.2;
               canvas:self.canvas];
 }
 
-- (void)miniCanvasEndHandleDrag:(KKMiniCanvasView *)canvas {
+- (void)miniViewerEndHandleDrag:(KKMiniViewerView *)canvas {
   [_snapEngine reset];
   _anchorGrabbed = NO;
   _scaleGrabbed = NO;
@@ -940,12 +940,12 @@ static const double kMiniScaleFineFactor = 0.2;
     [canvas setHandlesNeedDisplay];
     return;
   }
-  [super miniCanvasEndHandleDrag:canvas];
+  [super miniViewerEndHandleDrag:canvas];
 }
 
 // Opting in to the base's 3-ring gizmo. The drag state machine, hit-test,
 // compose × axis(dAngle) → decompose-near, and commit all live in the base
-// (`KKMiniCanvasRenderer`). The only thing MagicMove-specific is anchoring
+// (`KKMiniViewerRenderer`). The only thing MagicMove-specific is anchoring
 // the sphere to the Position handle so the rings move with the translated
 // image.
 

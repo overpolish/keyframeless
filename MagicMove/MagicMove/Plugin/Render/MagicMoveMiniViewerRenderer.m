@@ -3,34 +3,34 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "MagicMoveMiniCanvasRenderer.h"
-#import "MagicMoveMiniCanvasRenderer_Internal.h"
+#import "MagicMoveMiniViewerRenderer.h"
+#import "MagicMoveMiniViewerRenderer_Internal.h"
 #import "MagicMoveParamsBuild.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <Metal/Metal.h>
 
-NSString *const MagicMoveMiniCanvasDescriptorPath =
-    @"/tmp/magicmove-minicanvas.json";
-NSString *const MagicMoveMiniCanvasRequestPath =
-    @"/tmp/magicmove-minicanvas-request.json";
+NSString *const MagicMoveMiniViewerDescriptorPath =
+    @"/tmp/magicmove-miniviewer.json";
+NSString *const MagicMoveMiniViewerRequestPath =
+    @"/tmp/magicmove-miniviewer-request.json";
 
-NSString *MagicMoveMiniCanvasDescriptorPathForUUID(NSString *uuid) {
+NSString *MagicMoveMiniViewerDescriptorPathForUUID(NSString *uuid) {
   if (!uuid.length)
-    return MagicMoveMiniCanvasDescriptorPath;
-  return [NSString stringWithFormat:@"/tmp/magicmove-minicanvas-%@.json", uuid];
+    return MagicMoveMiniViewerDescriptorPath;
+  return [NSString stringWithFormat:@"/tmp/magicmove-miniviewer-%@.json", uuid];
 }
 
-NSString *MagicMoveMiniCanvasRequestPathForUUID(NSString *uuid) {
+NSString *MagicMoveMiniViewerRequestPathForUUID(NSString *uuid) {
   if (!uuid.length)
-    return MagicMoveMiniCanvasRequestPath;
+    return MagicMoveMiniViewerRequestPath;
   return [NSString
-      stringWithFormat:@"/tmp/magicmove-minicanvas-request-%@.json", uuid];
+      stringWithFormat:@"/tmp/magicmove-miniviewer-request-%@.json", uuid];
 }
-#import "MagicMoveMiniCanvasRenderer_Internal.h"
+#import "MagicMoveMiniViewerRenderer_Internal.h"
 
-@implementation MagicMoveMiniCanvasRenderer
+@implementation MagicMoveMiniViewerRenderer
 
 - (instancetype)init {
   if ((self = [super init])) {
@@ -51,13 +51,13 @@ NSString *MagicMoveMiniCanvasRequestPathForUUID(NSString *uuid) {
       [device newDefaultLibraryWithBundle:[NSBundle bundleForClass:[self class]]
                                     error:&err];
   if (!lib) {
-    KKLogError(@"MagicMoveMiniCanvasRenderer: no metallib: %@", err);
+    KKLogError(@"MagicMoveMiniViewerRenderer: no metallib: %@", err);
     return nil;
   }
   id<MTLFunction> vfn = [lib newFunctionWithName:@"vertexShader"];
   id<MTLFunction> ffn = [lib newFunctionWithName:@"fragmentShader"];
   if (!vfn || !ffn) {
-    KKLogError(@"MagicMoveMiniCanvasRenderer: missing shader functions");
+    KKLogError(@"MagicMoveMiniViewerRenderer: missing shader functions");
     return nil;
   }
   MTLRenderPipelineDescriptor *pd = [[MTLRenderPipelineDescriptor alloc] init];
@@ -76,7 +76,7 @@ NSString *MagicMoveMiniCanvasRequestPathForUUID(NSString *uuid) {
   id<MTLRenderPipelineState> ps =
       [device newRenderPipelineStateWithDescriptor:pd error:&err];
   if (!ps) {
-    KKLogError(@"MagicMoveMiniCanvasRenderer: pipeline build failed: %@", err);
+    KKLogError(@"MagicMoveMiniViewerRenderer: pipeline build failed: %@", err);
     return nil;
   }
   _pipeline = ps;
@@ -99,7 +99,7 @@ KKLane *MMMiniLaneNamed(KKTimeline *timeline, NSString *label) {
 // not the in-flight drag value). Mirrors the FCP render path's output so
 // the mini preview matches what FCP eventually bakes.
 static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
-                                   MagicMoveMiniCanvasRenderer *renderer) {
+                                   MagicMoveMiniViewerRenderer *renderer) {
   NSArray<NSNumber *> *positionVals = [renderer valuesForLabel:@"Position"];
   NSArray<NSNumber *> *rotationVals = [renderer valuesForLabel:@"Rotation"];
   NSArray<NSNumber *> *scaleVals = [renderer valuesForLabel:@"Scale"];
@@ -144,7 +144,7 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
 
 // MagicMove has no Crop lane - return nil so the base renderer doesn't try
 // to draw the default crop corner handles (which were showing as a stray
-// point in the bottom-left of the mini-canvas).
+// point in the bottom-left of the mini-viewer).
 - (NSString *)cropLabel {
   return nil;
 }

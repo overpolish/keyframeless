@@ -11,11 +11,11 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class KKMiniCanvasView;
+@class KKMiniViewerView;
 
-/// One rectangular box OSC for the mini-canvas to render: an outline, 8 grab
+/// One rectangular box OSC for the mini-viewer to render: an outline, 8 grab
 /// handles (4 corners + 4 edge midpoints), and an optional size readout. The
-/// mini-canvas equivalent of the viewer's KKBoxOSC - crop, scale, and any
+/// mini-viewer equivalent of the viewer's KKBoxOSC - crop, scale, and any
 /// future box gizmo are just descriptors, drawn through one shared path. All
 /// geometry is in overlay points (y-up).
 @interface KKMiniBox : NSObject
@@ -40,13 +40,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Plugin-supplied interaction delegate. Hooks are declared now and wired in
 /// later phases (handle drawing, hit-testing, drag deltas reported as value
 /// mutations). Points are clip-normalized: (0,0) top-left, (1,1) bottom-right.
-@protocol KKMiniCanvasDelegate <NSObject>
+@protocol KKMiniViewerDelegate <NSObject>
 @optional
 /// Run the plugin's effect on `source` into `dest` (same size as the source
 /// frame), encoding into `commandBuffer`. Return YES if a pass was encoded;
 /// NO (or unimplemented) → the canvas displays the raw source. The plugin
 /// owns its pipeline and uniforms (read from persisted state, no FCP I/O).
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     processSourceTexture:(id<MTLTexture>)source
              intoTexture:(id<MTLTexture>)dest
            commandBuffer:(id<MTLCommandBuffer>)commandBuffer;
@@ -54,61 +54,61 @@ NS_ASSUME_NONNULL_BEGIN
 /// `contentRect` (same space). Return NO for no handle. The canvas draws it
 /// with the shared `KKPointOSC` shader so it's pixel-identical to the viewer
 /// OSC handle - the plugin only decides where.
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     pointHandleCenter:(out CGPoint *)outCenter
           contentRect:(CGRect)contentRect;
 /// Extra point handles (e.g. crop corners/edges) beyond the single
 /// `pointHandleCenter`, in overlay points (y-up). Each is drawn with the same
 /// shared `KKPointOSC` glyph. Return nil/empty for none.
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     extraHandleCentersForContentRect:(CGRect)contentRect;
 /// Scale-box handle centres (overlay points, y-up): 0-3 corners BL/BR/TR/TL,
 /// 4-7 edges. Empty/nil if the delegate draws no scale box. Lets a guide
 /// spotlight a scale handle; the drag itself reuses the generic handle path.
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     scaleHandleCentersForContentRect:(CGRect)contentRect;
 /// Motion-path overlay (Magic Move). Polyline points (overlay points, y-up) for
 /// the red trajectory line through the Position keyposes. Empty for none.
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     motionPathPolylineForContentRect:(CGRect)contentRect;
 /// Anchor dot centres (overlay points, y-up), one per Position keypose.
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     motionPathAnchorsForContentRect:(CGRect)contentRect;
 /// Tangent-handle segments for smooth keyposes, flattened as
 /// [anchor0, handleEnd0, anchor1, handleEnd1, ...] (overlay points, y-up). Each
 /// pair draws a connector line + a dot at the handle end.
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     motionPathHandleSegmentsForContentRect:(CGRect)contentRect;
 /// A double-click landed at `point` (overlay points, y-up). Return YES if the
 /// delegate handled it (e.g. toggled a keypose smooth/corner); NO lets the
 /// canvas treat it as reset-view.
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     doubleClickAtPoint:(CGPoint)point
            contentRect:(CGRect)contentRect;
 /// Anchor-point pivot square (Magic Move). Centre in overlay points (y-up),
 /// drawn with the shared `KKSquarePointOSC` glyph so it matches the viewer.
 /// Return NO for none. Dimming for a revealed ghost comes from the renderer's
 /// `anchorSquareGhostAlpha`.
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     anchorSquareCenter:(out CGPoint *)outCenter
            contentRect:(CGRect)contentRect;
 /// All rectangular box OSCs to draw - crop, scale, and any future box gizmo -
 /// as `KKMiniBox` descriptors (outline + 8 handles + optional readout). The
 /// canvas renders each uniformly, so a new box OSC needs no new draw path.
 /// nil/empty for none.
-- (NSArray<KKMiniBox *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<KKMiniBox *> *)miniViewer:(KKMiniViewerView *)canvas
                  boxesForContentRect:(CGRect)contentRect;
 /// Push externally-edited constant values (slider/field) into the delegate
 /// so the preview updates live, without persisting (the host coalesces the
 /// real write). `values` is the lane's value array (Float: [v]; Crop:
 /// [w,h,x,y]).
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
     applyConstantValues:(NSArray<NSNumber *> *)values
                forLabel:(NSString *)label;
 /// Where the point handle's centre *would* be if its value were `value`
-/// (same space/contract as -miniCanvas:pointHandleCenter:contentRect:).
+/// (same space/contract as -miniViewer:pointHandleCenter:contentRect:).
 /// Lets a guide place a "drag to here" target marker. NO if unsupported.
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     pointHandleCenter:(out CGPoint *)outCenter
              forValue:(double)value
           contentRect:(CGRect)contentRect;
@@ -116,15 +116,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// value were the multi-component `values` (e.g. Position `[x, y]`). Lets a
 /// guide place a "drag to here" target for a spatial point handle. NO if
 /// unsupported.
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     pointHandleCenter:(out CGPoint *)outCenter
             forValues:(NSArray<NSNumber *> *)values
           contentRect:(CGRect)contentRect;
-/// 3-ring rotation gizmo overlay (KKRotationOSC parity on the mini-canvas).
+/// 3-ring rotation gizmo overlay (KKRotationOSC parity on the mini-viewer).
 /// The delegate fills in the centre (overlay points, y-up), pixel radius,
 /// and a `KKRotationOSCParams` struct holding the world matrix + ring
 /// colours. Returns NO to suppress (default - no rotation handle).
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     rotationOSCCenter:(out CGPoint *)outCenter
              radiusPx:(out CGFloat *)outRadiusPx
                params:(out KKRotationOSCParams *)outParams
@@ -133,52 +133,52 @@ NS_ASSUME_NONNULL_BEGIN
 /// delegate records the active ring + press tangent so a subsequent
 /// `-rotationDragToPoint:` produces a sensible angle. Returns NO if the
 /// point isn't on any ring.
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     rotationHitAtPoint:(CGPoint)point
            contentRect:(CGRect)contentRect;
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
     rotationBeginDragAtPoint:(CGPoint)point
                  contentRect:(CGRect)contentRect;
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
     rotationDragToPoint:(CGPoint)point
             contentRect:(CGRect)contentRect
               modifiers:(NSEventModifierFlags)modifiers;
-- (void)miniCanvasEndRotationDrag:(KKMiniCanvasView *)canvas;
+- (void)miniViewerEndRotationDrag:(KKMiniViewerView *)canvas;
 /// Crop handle centres (overlay points, y-up) the box *would* have if the
 /// crop were `values` (`[w,h,x,y]`) - same order/count as
-/// -miniCanvas:extraHandleCentersForContentRect: (0 = top-left). Lets a
+/// -miniViewer:extraHandleCentersForContentRect: (0 = top-left). Lets a
 /// guide target a specific crop handle. nil if unsupported.
-- (nullable NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (nullable NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
                  cropHandleCentersForValues:(NSArray<NSNumber *> *)values
                                 contentRect:(CGRect)contentRect;
 /// Scale-box handle centres the box *would* have at the scale percents `values`
-/// (`[x%, y%]`) - same order as -miniCanvas:scaleHandleCentersForContentRect:.
+/// (`[x%, y%]`) - same order as -miniViewer:scaleHandleCentersForContentRect:.
 /// Lets a guide target a scale handle (e.g. the corner at 200%). nil if
 /// unsupported.
-- (nullable NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (nullable NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
                 scaleHandleCentersForValues:(NSArray<NSNumber *> *)values
                                 contentRect:(CGRect)contentRect;
 /// YES if `point` (overlay points, y-up) grabs a handle.
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     handleHitAtPoint:(CGPoint)point
          contentRect:(CGRect)contentRect;
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
     beginHandleDragAtPoint:(CGPoint)point
                contentRect:(CGRect)contentRect;
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
     dragHandleToPoint:(CGPoint)point
           contentRect:(CGRect)contentRect;
 /// Modifiers-aware drag, called instead of the plain variant if implemented.
 /// Lets the delegate honour cmd-bypass for snap, shift-constrain, etc.
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
     dragHandleToPoint:(CGPoint)point
           contentRect:(CGRect)contentRect
             modifiers:(NSEventModifierFlags)modifiers;
-- (void)miniCanvasEndHandleDrag:(KKMiniCanvasView *)canvas;
+- (void)miniViewerEndHandleDrag:(KKMiniViewerView *)canvas;
 /// Option-click on a handle/ring: toggle that element's visibility instead of
 /// starting a drag. Return YES if a handle was hit and handled (the canvas then
 /// suppresses the drag). Mirrors the viewer OSC's opt-click-to-hide.
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     optClickHandleAtPoint:(CGPoint)point
               contentRect:(CGRect)contentRect;
 /// While dragging, return the active snap line(s) in normalized
@@ -186,7 +186,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// only consulted when the corresponding return-element is YES. The canvas
 /// overlay strokes a yellow guide through each active axis. Either or both
 /// axes may be active.
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
      snapGuideHasX:(out BOOL *)hasX
                  X:(out CGFloat *)outX
       fromKeyposeX:(out BOOL *)fromKeyposeX
@@ -201,7 +201,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// primitive is the `IOSurface` (looked up here by global ID). Shader
 /// compositing, handles and value editing arrive in later phases. See
 /// Rounded/PLAN.md "Cross-process transport".
-@interface KKMiniCanvasView : MTKView
+@interface KKMiniViewerView : MTKView
 
 /// Path to the JSON descriptor: `{ ioSurfaceID, width, height, generation }`.
 /// Polled for liveness; set by the host.
@@ -211,7 +211,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Defaults to 16:9.
 @property(nonatomic) CGFloat clipAspect;
 
-@property(nonatomic, weak, nullable) id<KKMiniCanvasDelegate> canvasDelegate;
+@property(nonatomic, weak, nullable) id<KKMiniViewerDelegate> canvasDelegate;
 
 /// Host sink for handle-driven value edits. The delegate computes the new
 /// lane values during a drag and calls `-reportHandleValueForLabel:values:`,
@@ -243,16 +243,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// Which kind of view-transform gesture the user performed - lets a guide
 /// teach pan and zoom as separate steps (the signal alone can't otherwise tell
 /// a drag-pan from a wheel-zoom).
-typedef NS_ENUM(NSInteger, KKMiniCanvasTransformKind) {
-  KKMiniCanvasTransformKindPan = 0,
-  KKMiniCanvasTransformKindZoom = 1,
+typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
+  KKMiniViewerTransformKindPan = 0,
+  KKMiniViewerTransformKindZoom = 1,
 };
 
 /// Fired on any user zoom or pan (wheel/pinch zoom, trackpad pan, drag-pan),
 /// with the gesture kind. A guide uses this to advance a "try zooming" or
 /// "try panning" step.
 @property(nonatomic, copy, nullable) void (^onViewTransformChanged)
-    (KKMiniCanvasTransformKind kind);
+    (KKMiniViewerTransformKind kind);
 
 /// Fired when the view is reset to its initial aspect-fit framing (the
 /// double-click gesture). A guide uses this to advance a "double-click to
@@ -260,7 +260,7 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasTransformKind) {
 @property(nonatomic, copy, nullable) void (^onViewReset)(void);
 
 /// Fired when a double-click was consumed by the delegate (i.e. it returned YES
-/// from -miniCanvas:doubleClickAtPoint:contentRect: - e.g. Magic Move toggling
+/// from -miniViewer:doubleClickAtPoint:contentRect: - e.g. Magic Move toggling
 /// a keypose's corner/smooth handling) instead of falling through to a view
 /// reset. A guide uses this to advance a "double-click to curve a keypose"
 /// step.
@@ -280,7 +280,7 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasTransformKind) {
 /// 0 = Off (single frame at the active KP), 1 = Filmstrip (each KP fans out
 /// side-by-side in the pannable canvas), 2 = Onion (all KP frames stacked
 /// on the active cell with prev=red / next=blue tinting). Mirrors the value
-/// the popover header pill sets; mapped 1:1 to KKMiniCanvasRenderMode by
+/// the popover header pill sets; mapped 1:1 to KKMiniViewerRenderMode by
 /// the popover so the canvas stays free of the lanes-view import cycle.
 @property(nonatomic) NSInteger renderMode;
 
@@ -289,8 +289,8 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasTransformKind) {
 /// Pan/zoom + point/crop-handle screen geometry. Declared as a category so the
 /// primary @implementation isn't expected to provide them (silences
 /// -Wincomplete-implementation while keeping the methods public). Implemented
-/// in KKMiniCanvasView+Interaction.m.
-@interface KKMiniCanvasView (Interaction)
+/// in KKMiniViewerView+Interaction.m.
+@interface KKMiniViewerView (Interaction)
 
 /// ViewBridge XPC delivers scroll/magnify only as *global* events (never
 /// through the responder chain inside a popover). The popover's event
@@ -309,7 +309,7 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasTransformKind) {
 
 /// Screen-space rect of the single point handle's glyph (e.g. the radius
 /// dot), or `NSZeroRect` if the delegate exposes no point handle or the view
-/// isn't in a window. Lets a guide spotlight the mini-canvas handle the same
+/// isn't in a window. Lets a guide spotlight the mini-viewer handle the same
 /// way the viewer OSC guide spotlights the in-viewer handle.
 - (NSRect)pointHandleScreenRect;
 
@@ -345,7 +345,7 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasTransformKind) {
 - (NSRect)pointHandleScreenRectForValues:(NSArray<NSNumber *> *)values;
 
 /// Screen rect of crop handle `index` (order/count match
-/// -miniCanvas:extraHandleCentersForContentRect:; 0 = top-left) for the
+/// -miniViewer:extraHandleCentersForContentRect:; 0 = top-left) for the
 /// current crop, or for a hypothetical crop `values` (the guide's "drag
 /// here" target). `NSZeroRect` if there's no crop / not in a window.
 - (NSRect)cropHandleScreenRectAtIndex:(NSInteger)index;

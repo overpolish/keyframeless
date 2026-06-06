@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKMiniCanvasRenderer.h"
+#import "KKMiniViewerRenderer.h"
 
-#import "KKMiniCanvasCropEditor.h"
+#import "KKMiniViewerCropEditor.h"
 #import <KeyframelessKit/KKRotationOSCMath.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
-// 28pt at the 230pt mini-canvas baseline (see project_minicanvas_osc_port).
+// 28pt at the 230pt mini-viewer baseline (see project_miniviewer_osc_port).
 // Matches the viewer arc:ring outer-extent ratio (~9:34 → 9pt mini arc →
 // 34pt rings, rounded to 28 as the inactive ring radius).
 static const CGFloat kKKRotationBaselineRadiusPt = 28.0;
@@ -22,8 +22,8 @@ static const int kKKRotationRingSamples = 192;
 // Cmd-snap step in radians (15°).
 static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 
-@implementation KKMiniCanvasRenderer {
-  KKMiniCanvasCropEditor *_cropEditor;
+@implementation KKMiniViewerRenderer {
+  KKMiniViewerCropEditor *_cropEditor;
   // Live-override store: per-label in-flight drag values. Populated by the
   // popover's onHandleValue during a drag, cleared on drag end. Bound to
   // `_liveFraction` so filmstrip/onion neighbour cells (which run the same
@@ -52,7 +52,7 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 - (instancetype)init {
   self = [super init];
   if (self) {
-    _cropEditor = [[KKMiniCanvasCropEditor alloc] init];
+    _cropEditor = [[KKMiniViewerCropEditor alloc] init];
     _currentSlotCount = 1;
     _rotActiveAxis = -1;
   }
@@ -112,7 +112,7 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 }
 - (void)applyPointDragToPoint:(CGPoint)p
                   contentRect:(CGRect)contentRect
-                       canvas:(KKMiniCanvasView *)canvas {
+                       canvas:(KKMiniViewerView *)canvas {
 }
 - (NSInteger)nearestHandleIndexToPoint:(CGPoint)p
                                centers:(const CGPoint *)centers
@@ -173,7 +173,7 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   return (simd_double3){+1.0, -1.0, +1.0};
 }
 
-- (CGFloat)rotationRadiusPxForCanvas:(KKMiniCanvasView *)canvas {
+- (CGFloat)rotationRadiusPxForCanvas:(KKMiniViewerView *)canvas {
   CGFloat h = canvas.bounds.size.height;
   CGFloat scale = (h > 0) ? (h / kKKRotationBaselineCanvasH) : 1.0;
   return kKKRotationBaselineRadiusPt * scale;
@@ -374,7 +374,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 
 - (void)applyRotationDragToPoint:(CGPoint)p
                      contentRect:(CGRect)cr
-                          canvas:(KKMiniCanvasView *)canvas
+                          canvas:(KKMiniViewerView *)canvas
                        modifiers:(NSEventModifierFlags)modifiers {
   if (_rotActiveAxis < 0)
     return;
@@ -409,7 +409,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 
 #pragma mark - Provided to subclasses
 
-// The mini canvas is the *constants* editor: a property's handle shows only
+// The mini viewer is the *constants* editor: a property's handle shows only
 // while it's a constant. Every property always has a lane; `enabled` means
 // animatable (dropdown-controlled). Constant == the lane is absent or not
 // enabled. Editing a value preserves `enabled`, so the handle stays put
@@ -525,16 +525,16 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 
 - (void)commitValues:(NSArray<NSNumber *> *)values
             forLabel:(NSString *)label
-              canvas:(KKMiniCanvasView *)canvas {
+              canvas:(KKMiniViewerView *)canvas {
   self.timeline = [self _timelineBySettingValues:values forLabel:label];
   [canvas reportHandleValueForLabel:label values:values];
   [canvas setNeedsDisplay:YES];
   [canvas setHandlesNeedDisplay];
 }
 
-#pragma mark - KKMiniCanvasDelegate
+#pragma mark - KKMiniViewerDelegate
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     processSourceTexture:(id<MTLTexture>)source
              intoTexture:(id<MTLTexture>)dest
            commandBuffer:(id<MTLCommandBuffer>)cb {
@@ -589,7 +589,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return 1.0; // no anchor square by default; MagicMove overrides
 }
 
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     extraHandleCentersForContentRect:(CGRect)cr {
   if (![self _cropActiveForContentRect:cr])
     return nil;
@@ -598,7 +598,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                               contentRect:cr];
 }
 
-- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
         cropHandleCentersForValues:(NSArray<NSNumber *> *)values
                        contentRect:(CGRect)cr {
   if (![self _cropActiveForContentRect:cr])
@@ -606,7 +606,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return [_cropEditor handleCentersForValues:values contentRect:cr];
 }
 
-- (NSArray<KKMiniBox *> *)miniCanvas:(KKMiniCanvasView *)canvas
+- (NSArray<KKMiniBox *> *)miniViewer:(KKMiniViewerView *)canvas
                  boxesForContentRect:(CGRect)cr {
   if (![self _cropActiveForContentRect:cr])
     return @[];
@@ -671,7 +671,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   [self.canvas setNeedsDisplay:YES];
 }
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     rotationOSCCenter:(out CGPoint *)outCenter
              radiusPx:(out CGFloat *)outRadiusPx
                params:(out KKRotationOSCParams *)outParams
@@ -685,7 +685,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                   forContentRect:cr];
 }
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     pointHandleCenter:(out CGPoint *)outCenter
           contentRect:(CGRect)cr {
   if (![self _pointActiveForContentRect:cr])
@@ -693,7 +693,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return [self pointHandleCenter:outCenter forContentRect:cr];
 }
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     pointHandleCenter:(out CGPoint *)outCenter
              forValue:(double)value
           contentRect:(CGRect)cr {
@@ -702,7 +702,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return [self pointHandleCenter:outCenter forValue:value forContentRect:cr];
 }
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     pointHandleCenter:(out CGPoint *)outCenter
             forValues:(NSArray<NSNumber *> *)values
           contentRect:(CGRect)cr {
@@ -711,7 +711,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return [self pointHandleCenter:outCenter forValues:values forContentRect:cr];
 }
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     handleHitAtPoint:(CGPoint)p
          contentRect:(CGRect)cr {
   self.canvas = canvas;
@@ -735,7 +735,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                       contentRect:cr] >= 0;
 }
 
-- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     optClickHandleAtPoint:(CGPoint)p
               contentRect:(CGRect)cr {
   if (!self.onHandleVisibilityToggled || CGRectIsEmpty(cr))
@@ -766,7 +766,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   // The hit-tests above leave transient active state (e.g. _rotActiveAxis), but
   // an opt-click never runs the begin/end-drag cycle that would clear it - so a
   // stale highlight would linger until the next click. Reset it here (mirrors
-  // -miniCanvasEndHandleDrag:) and force a repaint.
+  // -miniViewerEndHandleDrag:) and force a repaint.
   _pointGrabbed = NO;
   _rotationGrabbed = NO;
   _rotActiveAxis = -1;
@@ -778,7 +778,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return YES;
 }
 
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
     beginHandleDragAtPoint:(CGPoint)p
                contentRect:(CGRect)cr {
   self.canvas = canvas;
@@ -818,13 +818,13 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   }
 }
 
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
     dragHandleToPoint:(CGPoint)p
           contentRect:(CGRect)cr {
-  [self miniCanvas:canvas dragHandleToPoint:p contentRect:cr modifiers:0];
+  [self miniViewer:canvas dragHandleToPoint:p contentRect:cr modifiers:0];
 }
 
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
     dragHandleToPoint:(CGPoint)p
           contentRect:(CGRect)cr
             modifiers:(NSEventModifierFlags)modifiers {
@@ -843,7 +843,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   }
 }
 
-- (void)miniCanvasEndHandleDrag:(KKMiniCanvasView *)canvas {
+- (void)miniViewerEndHandleDrag:(KKMiniViewerView *)canvas {
   _pointGrabbed = NO;
   _rotationGrabbed = NO;
   _rotActiveAxis = -1;
@@ -858,9 +858,9 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 // Slider/field edits in the constants popover - mirror into the preview
-// timeline so the mini canvas tracks live (persist stays coalesced
+// timeline so the mini viewer tracks live (persist stays coalesced
 // upstream).
-- (void)miniCanvas:(KKMiniCanvasView *)canvas
+- (void)miniViewer:(KKMiniViewerView *)canvas
     applyConstantValues:(NSArray<NSNumber *> *)values
                forLabel:(NSString *)label {
   if (values.count)

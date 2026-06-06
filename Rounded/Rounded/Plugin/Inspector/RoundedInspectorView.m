@@ -7,7 +7,7 @@
 
 #import "RoundedInspectorView+Guides.h"
 #import "RoundedInspectorView_Private.h"
-#import "RoundedMiniCanvasRenderer.h"
+#import "RoundedMiniViewerRenderer.h"
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
 #import <KeyframelessKit/KKTimingGuide.h>
 
@@ -26,11 +26,11 @@ static NSString *const kRoundedIntroSeenKey = @"RoundedIntroSeen";
                     availableLanes:availableLanes
                           timeline:timeline];
   if (self) {
-    _miniCanvasRenderer = [[RoundedMiniCanvasRenderer alloc] init];
-    _miniCanvasRenderer.timeline = timeline;
-    self.miniCanvasDelegate = _miniCanvasRenderer;
-    self.miniCanvasDescriptorPath = RoundedMiniCanvasDescriptorPath;
-    self.miniCanvasRequestPath = RoundedMiniCanvasRequestPath;
+    _miniViewerRenderer = [[RoundedMiniViewerRenderer alloc] init];
+    _miniViewerRenderer.timeline = timeline;
+    self.miniViewerDelegate = _miniViewerRenderer;
+    self.miniViewerDescriptorPath = RoundedMiniViewerDescriptorPath;
+    self.miniViewerRequestPath = RoundedMiniViewerRequestPath;
     self.managePopoverSpotlightLabel = @"Radius";
     // The kit's restart/autostart machinery pulls a fresh config from here.
     __weak typeof(self) weak = self;
@@ -48,7 +48,7 @@ static NSString *const kRoundedIntroSeenKey = @"RoundedIntroSeen";
 
 - (void)applyTimeline:(KKTimeline *)timeline {
   [super applyTimeline:timeline];
-  _miniCanvasRenderer.timeline = timeline;
+  _miniViewerRenderer.timeline = timeline;
 }
 
 - (void)viewDidMoveToWindow {

@@ -29,7 +29,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// value, what "on target" means) lives entirely in the blocks; everything
 /// generic (press latch, pill gating, message swap, spotlight refresh,
 /// advance/dismiss gate keyed to `stepIndex`) lives here. Works for the
-/// in-viewer OSC handle, a mini-canvas point/crop handle, a popover slider,
+/// in-viewer OSC handle, a mini-viewer point/crop handle, a popover slider,
 /// etc.
 @interface KKJoyrideDragStep : NSObject
 

@@ -4,7 +4,7 @@
  */
 
 #import "Constants.h"
-#import "MagicMoveMiniCanvasRenderer.h"
+#import "MagicMoveMiniViewerRenderer.h"
 #import "OSC.h"
 #import "Plugin_Private.h"
 #import <KeyframelessKit/KeyframelessKit.h>
@@ -58,11 +58,11 @@
     BOOL enabled = [state[@"loopEnabled"] boolValue];
     NSInteger tab = [state[@"activeTab"] integerValue];
     // Shared glue: refresh OSC master + lastUIState + hidden set, and push the
-    // tick + mini-canvas on the main queue (undo/redo of the tick or a pill
+    // tick + mini-viewer on the main queue (undo/redo of the tick or a pill
     // repaints without a manual scrub).
     [self kkRefreshOSCVisibilityFromState:state
                                      view:self.inspectorView
-                                 renderer:self.miniCanvasRenderer
+                                 renderer:self.miniViewerRenderer
                               elementKeys:[MagicMovePlugin oscElementKeys]];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
@@ -77,7 +77,7 @@
         ^KKTimeline *(KKTimeline *t) {
           return [weakSelf timelineStampedWithClipDuration:t];
         },
-        self.miniCanvasRenderer, self.inspectorView);
+        self.miniViewerRenderer, self.inspectorView);
   }
 
   if (parameterID == kKKParamMotionBlurData) {

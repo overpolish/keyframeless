@@ -6,26 +6,26 @@
 #pragma once
 
 #import <Foundation/Foundation.h>
-#import <KeyframelessKit/KKMiniCanvasView.h>
+#import <KeyframelessKit/KKMiniViewerView.h>
 
 @class KKTimeline;
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Plugin-agnostic base for a mini-canvas delegate.
+/// Plugin-agnostic base for a mini-viewer delegate.
 ///
 /// Owns everything that isn't tied to a specific effect: the persisted
 /// `timeline`, the constant-vs-animatable gate, reading a lane's value (with
 /// a subclass default), the generic "set this constant lane, preserving
 /// animatable status + bounds" timeline builder, the whole crop handle/box
-/// interaction (via `KKMiniCanvasCropEditor`), and the `KKMiniCanvasDelegate`
+/// interaction (via `KKMiniViewerCropEditor`), and the `KKMiniViewerDelegate`
 /// dispatch that routes the canvas's handle callbacks to the crop editor or
 /// the subclass's point handle.
 ///
 /// A plugin subclass supplies only effect-specific pieces (see the hooks
 /// below): the actual effect render, the point-handle (e.g. radius)
 /// geometry, and the label/value-type/default vocabulary.
-@interface KKMiniCanvasRenderer : NSObject <KKMiniCanvasDelegate>
+@interface KKMiniViewerRenderer : NSObject <KKMiniViewerDelegate>
 
 /// The persisted timeline (constants live here as disabled single-keypose
 /// lanes). The host keeps this in sync.
@@ -34,7 +34,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// the base on every delegate call, so subclasses can read the canvas's
 /// frame size (e.g. to scale overlay glyphs with popover size) without
 /// threading `canvas` through every subclass hook.
-@property(nonatomic, weak, nullable) KKMiniCanvasView *canvas;
+@property(nonatomic, weak, nullable) KKMiniViewerView *canvas;
 
 /// Boundary-editing mode (Basic step 27): the popover edits an animatable
 /// lane's keypose at a specific clip time rather than a constant.
@@ -44,7 +44,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// `editFraction` (preserving structure) instead of a t=0 single keypose.
 @property(nonatomic) BOOL boundaryEditing;
 @property(nonatomic) double editFraction;
-/// Number of slots the canvas is currently iterating. KKMiniCanvasView
+/// Number of slots the canvas is currently iterating. KKMiniViewerView
 /// sets this before its per-slot processSourceTexture loop. Subclasses
 /// can use it to differentiate "single-slot, source is the pre-rendered
 /// dest texture published by the plugin → blit straight through" from
@@ -59,7 +59,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Master "hide all on-screen controls" gate, mirroring the viewer OSC's
 /// visibility tick. When YES, no point / rotation / crop handle is drawn or
-/// hit-tested in the mini-canvas, regardless of `suppressedHandleLabels`.
+/// hit-tested in the mini-viewer, regardless of `suppressedHandleLabels`.
 /// Set by the host when the user toggles the inspector's OSC visibility.
 @property(nonatomic) BOOL handlesHidden;
 
@@ -70,7 +70,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// neither set and `handlesHidden` is NO.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *hiddenHandleLabels;
 
-/// Opt-click on a mini-canvas handle/ring toggles that element's visibility
+/// Opt-click on a mini-viewer handle/ring toggles that element's visibility
 /// (mirrors the viewer OSC's opt-click-to-hide). The host wires this to the
 /// same persistence the inspector pills use; the label is a lane label or a
 /// rotation-ring key (@"Rotation.X"). nil = opt-click does nothing (default,
@@ -79,18 +79,18 @@ NS_ASSUME_NONNULL_BEGIN
     (NSString *label);
 
 /// Opt-hold "reveal" mode: user-hidden handles/rings draw as dimmed ghosts and
-/// become hit-testable so an opt-click re-shows them. Set by the mini-canvas
+/// become hit-testable so an opt-click re-shows them. Set by the mini-viewer
 /// view from the Option modifier. Only effective when
 /// `onHandleVisibilityToggled` is wired (so plugins that don't support
 /// hide-toggling are unaffected).
 @property(nonatomic) BOOL revealHidden;
 
 /// Alpha to draw the point handle at: 1.0 normal, 0.3 when it's a revealed
-/// ghost. Read by the mini-canvas view when encoding the arc glyph.
+/// ghost. Read by the mini-viewer view when encoding the arc glyph.
 - (CGFloat)pointHandleGhostAlpha;
 
 /// Alpha to draw the crop OSC at (border + corner handles): 1.0 normal, 0.3
-/// when it's a revealed ghost. Read by the mini-canvas view.
+/// when it's a revealed ghost. Read by the mini-viewer view.
 - (CGFloat)cropGhostAlpha;
 /// Alpha to draw the scale box at (border + handles): 1.0 normal, 0.3 when it's
 /// a revealed ghost. Default 1.0; a plugin with a scale box overrides it.
@@ -121,7 +121,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// subclass must also override the rotation hooks below.
 @property(nonatomic, readonly, nullable) NSString *rotationLabel;
 
-/// Persist a full mutated timeline. Mini-canvas motion-path edits (dragging an
+/// Persist a full mutated timeline. Mini-viewer motion-path edits (dragging an
 /// arbitrary keypose anchor or a tangent handle) rewrite the whole blob, unlike
 /// `commitValues:forLabel:` which writes a single label's value at
 /// `editFraction`. The host wires this to its timeline-blob writer.
@@ -135,7 +135,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label;
 
 /// Glyph style for the renderer's point handle (the one returned by
-/// `pointHandleCenter:forContentRect:`). Mini-canvas draws the same glyph
+/// `pointHandleCenter:forContentRect:`). Mini-viewer draws the same glyph
 /// the viewer-side OSC uses, so plugins backed by `KKArcOSC` (e.g. Magic
 /// Move's Position) can match it here.
 typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
@@ -150,7 +150,7 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 - (KKMiniHandleStyle)pointHandleStyle;
 
 /// Size multiplier for the point-style handle glyph (the main point handle and
-/// any crop-corner handles), relative to the standard mini-canvas dot. Default
+/// any crop-corner handles), relative to the standard mini-viewer dot. Default
 /// 1.0. Lets a plugin match a specific reference dot - e.g. Rounded sets this
 /// so its radius + crop handles are the same size as Magic Move's path-anchor
 /// dots.
@@ -186,7 +186,7 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 /// `-commitValues:forLabel:canvas:`. Default no-op.
 - (void)applyPointDragToPoint:(CGPoint)p
                   contentRect:(CGRect)contentRect
-                       canvas:(KKMiniCanvasView *)canvas;
+                       canvas:(KKMiniViewerView *)canvas;
 
 /// Index of the handle center nearest to `p` that lies within `tolerance`
 /// (point units), or NSNotFound if none. Shared hit-test for square/point
@@ -220,8 +220,8 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 /// tuned to feel natural with the viewer convention.
 - (simd_double3)rotationAxisSigns;
 /// On-screen ring radius in points. Default scales with the canvas's frame
-/// height (28pt at the 230pt baseline; see project_minicanvas_osc_port).
-- (CGFloat)rotationRadiusPxForCanvas:(nullable KKMiniCanvasView *)canvas;
+/// height (28pt at the 230pt baseline; see project_miniviewer_osc_port).
+- (CGFloat)rotationRadiusPxForCanvas:(nullable KKMiniViewerView *)canvas;
 
 /// 3-ring rotation gizmo (parallel to the point handle path). Default fills
 /// out a `KKRotationOSCParams` from the accessors above. Override only if
@@ -241,7 +241,7 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 /// full pipeline including Cmd-15° snap.
 - (void)applyRotationDragToPoint:(CGPoint)p
                      contentRect:(CGRect)contentRect
-                          canvas:(KKMiniCanvasView *)canvas
+                          canvas:(KKMiniViewerView *)canvas
                        modifiers:(NSEventModifierFlags)modifiers;
 /// YES while a rotation ring is currently being dragged. Default reflects
 /// the renderer's own `_rotationGrabbed` state.
@@ -273,7 +273,7 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 /// the crop editor path and subclass point drags.
 - (void)commitValues:(NSArray<NSNumber *> *)values
             forLabel:(NSString *)label
-              canvas:(KKMiniCanvasView *)canvas;
+              canvas:(KKMiniViewerView *)canvas;
 
 @end
 

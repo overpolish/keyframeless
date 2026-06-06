@@ -18,7 +18,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// be tiny at 0% reads as intentional.
 ///
 /// The curve is parametrised by two lengths (in the surface's own OSC units, so
-/// the viewer and mini-canvas share the shape at their own scales):
+/// the viewer and mini-viewer share the shape at their own scales):
 ///   * `e0` - half-extent at 0% (the minimum; just outside the rotation rings)
 ///   * `span` - growth from 0% to 100% (so 100% = `e0 + span`)
 /// Below 100% it is linear; above 100% it continues as a slope-matched sqrt so

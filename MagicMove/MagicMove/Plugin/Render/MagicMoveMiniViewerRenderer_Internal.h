@@ -5,7 +5,7 @@
 
 #pragma once
 
-#import "MagicMoveMiniCanvasRenderer.h"
+#import "MagicMoveMiniViewerRenderer.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <Metal/Metal.h>
 
@@ -14,7 +14,7 @@ NS_ASSUME_NONNULL_BEGIN
 // Shared lane lookup against a timeline (defined in the core .m).
 KKLane *_Nullable MMMiniLaneNamed(KKTimeline *timeline, NSString *label);
 
-@interface MagicMoveMiniCanvasRenderer () {
+@interface MagicMoveMiniViewerRenderer () {
   KKSnapEngine *_snapEngine;
   // Normalised press point captured at begin-drag; used as the Shift
   // axis-lock anchor so the locked axis stays pinned where it was, not
@@ -62,7 +62,7 @@ KKLane *_Nullable MMMiniLaneNamed(KKTimeline *timeline, NSString *label);
                              position:(NSArray<NSNumber *> *)pos;
 @end
 
-@interface MagicMoveMiniCanvasRenderer (Interaction)
+@interface MagicMoveMiniViewerRenderer (Interaction)
 @end
 
 NS_ASSUME_NONNULL_END

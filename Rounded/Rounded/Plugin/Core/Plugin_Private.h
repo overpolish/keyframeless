@@ -13,7 +13,7 @@
 
 @interface RoundedPlugin ()
 @property(nonatomic, weak, nullable) RoundedInspectorView *inspectorView;
-// miniCanvasFeed + miniDragUndoStarted now live on the KKPlugin base.
+// miniViewerFeed + miniDragUndoStarted now live on the KKPlugin base.
 @property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
 @property(nonatomic, strong, nullable) KKPlayheadPoller *playheadPoller;
 /// Returns a copy of `timeline` with every lane's lastKnownClipDuration set

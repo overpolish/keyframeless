@@ -422,7 +422,7 @@
       }
     },
     "<accent>Double-click</accent> the preview to reset the view": {
-      "comment": "Constants guide: reset the mini-canvas zoom/pan.",
+      "comment": "Constants guide: reset the mini-viewer zoom/pan.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -1303,44 +1303,44 @@
         }
       }
     },
-    "Edit non-animating values in the mini-canvas": {
+    "Edit non-animating values in the mini-viewer": {
       "comment": "Help guide subtitle: Constants.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bearbeite nicht animierte Werte im Mini-Canvas"
+            "value": "Bearbeite nicht animierte Werte im Mini-Viewer"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在迷你画布中编辑非动画值"
+            "value": "在迷你检视器中编辑非动画值"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Modifiez les valeurs non animées dans le mini-canevas"
+            "value": "Modifiez les valeurs non animées dans la mini-visualisation"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ミニキャンバスでアニメーションしない値を編集します"
+            "value": "ミニビューアでアニメーションしない値を編集します"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "미니 캔버스에서 애니메이션되지 않는 값을 편집하세요"
+            "value": "미니 뷰어에서 애니메이션되지 않는 값을 편집하세요"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Edita los valores no animados en el minilienzo"
+            "value": "Edita los valores no animados en el minivisor"
           }
         }
       }
@@ -1850,7 +1850,7 @@
       }
     },
     "Scroll to <accent>zoom</accent>, two-finger drag to <accent>pan</accent> the preview": {
-      "comment": "Constants guide: zoom/pan the mini-canvas preview.",
+      "comment": "Constants guide: zoom/pan the mini-viewer preview.",
       "extractionState": "manual",
       "localizations": {
         "de": {

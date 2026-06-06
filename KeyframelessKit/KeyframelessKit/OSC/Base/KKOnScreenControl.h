@@ -96,7 +96,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// The element keys this control can hide (e.g. @"Position", @"Rotation.X",
 /// @"Crop"). Override to opt into the visibility feature; the default @[]
-/// leaves it inert. Keys must match the inspector pills + mini-canvas labels.
+/// leaves it inert. Keys must match the inspector pills + mini-viewer labels.
 - (NSArray<NSString *> *)oscElementKeys;
 
 /// The element key under `activePart` (granular - e.g. a specific rotation

@@ -5,7 +5,7 @@
 
 #import "Constants.h"
 #import "MagicMoveLocalized.h"
-#import "MagicMoveMiniCanvasRenderer.h"
+#import "MagicMoveMiniViewerRenderer.h"
 #import "OSC.h"
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
@@ -24,7 +24,7 @@ static KKTimeline *MagicMoveGuidePositionTimeline(double objX, double objY) {
   KKTimeline *tl = [KKTimeline timeline];
   KKLane *lane = [KKLane laneWithLabel:@"Position"];
   // Animatable so the Advanced graph shows a clickable keypose (the OSC guide's
-  // opt-hide / peek steps open its mini-canvas).
+  // opt-hide / peek steps open its mini-viewer).
   lane.enabled = YES;
   lane.valueType = KKLaneValueTypeGeneric;
   lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
@@ -156,7 +156,7 @@ MagicMoveShapingGuideSteps(KKJoyrideController *guide,
   };
 
   NSRect (^upTarget)(void) = ^NSRect {
-    __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+    __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
     return c ? [c pointHandleScreenRectForValues:kUpVals] : NSZeroRect;
   };
   KKJoyrideStep *sUp = [KKJoyrideDragStep stepForGuide:guide
@@ -168,12 +168,12 @@ MagicMoveShapingGuideSteps(KKJoyrideController *guide,
       dragMessage:nil
       circular:YES
       spotRect:^NSRect {
-        __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+        __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
         return c ? [c pointHandleScreenRect] : NSZeroRect;
       }
       targetRect:upTarget
       begin:^(NSPoint p) {
-        __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+        __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
         NSRect spot = [c pointHandleScreenRect];
         [c beginPointHandleDragAtScreenPoint:NSIsEmptyRect(spot)
                                                  ? p
@@ -181,12 +181,12 @@ MagicMoveShapingGuideSteps(KKJoyrideController *guide,
                                                                NSMidY(spot))];
       }
       dragTo:^(NSPoint p) {
-        [weakBinder.latestMiniCanvas
+        [weakBinder.latestMiniViewer
             dragPointHandleToScreenPoint:KKJoyrideSnapToTarget(p, upTarget(),
                                                                9.0)];
       }
       end:^{
-        [weakBinder.latestMiniCanvas endPointHandleDrag];
+        [weakBinder.latestMiniViewer endPointHandleDrag];
       }
       hitOnRelease:^BOOL(NSPoint p) {
         NSRect t = upTarget();
@@ -202,7 +202,7 @@ MagicMoveShapingGuideSteps(KKJoyrideController *guide,
            targetView:nil];
   sCurve.spotlightCircular = YES;
   sCurve.targetScreenRect = ^NSRect {
-    __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+    __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
     return c ? [c pointHandleScreenRect] : NSZeroRect;
   };
 
@@ -222,11 +222,11 @@ MagicMoveShapingGuideSteps(KKJoyrideController *guide,
   };
 
   NSRect (^scaleSpot)(void) = ^NSRect {
-    __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+    __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
     return c ? [c scaleHandleScreenRectAtIndex:kScaleCorner] : NSZeroRect;
   };
   NSRect (^scaleTarget)(void) = ^NSRect {
-    __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+    __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
     return c ? [c scaleHandleScreenRectAtIndex:kScaleCorner
                                 forScaleValues:kScaleTargetVals]
              : NSZeroRect;
@@ -242,7 +242,7 @@ MagicMoveShapingGuideSteps(KKJoyrideController *guide,
       spotRect:scaleSpot
       targetRect:scaleTarget
       begin:^(NSPoint p) {
-        __strong KKMiniCanvasView *c = weakBinder.latestMiniCanvas;
+        __strong KKMiniViewerView *c = weakBinder.latestMiniViewer;
         NSRect spot = scaleSpot();
         [c beginPointHandleDragAtScreenPoint:NSIsEmptyRect(spot)
                                                  ? p
@@ -250,12 +250,12 @@ MagicMoveShapingGuideSteps(KKJoyrideController *guide,
                                                                NSMidY(spot))];
       }
       dragTo:^(NSPoint p) {
-        [weakBinder.latestMiniCanvas
+        [weakBinder.latestMiniViewer
             dragPointHandleToScreenPoint:KKJoyrideSnapToTarget(p, scaleTarget(),
                                                                12.0)];
       }
       end:^{
-        [weakBinder.latestMiniCanvas endPointHandleDrag];
+        [weakBinder.latestMiniViewer endPointHandleDrag];
       }
       hitOnRelease:^BOOL(NSPoint p) {
         return MagicMoveGuideScaleAtLeast(weakLanes, kScaleHitPct);
@@ -299,7 +299,7 @@ MagicMoveShapingGuideSteps(KKJoyrideController *guide,
          dismissOn:nil];
   [binder bindStep:sCurve
            atIndex:ixCurve
-         advanceOn:[KKJoyrideTrigger miniCanvasDoubleClickHandled]
+         advanceOn:[KKJoyrideTrigger miniViewerDoubleClickHandled]
          dismissOn:nil];
   [binder bindStep:sScaleKP
            atIndex:ixScaleKP
@@ -370,7 +370,7 @@ MagicMoveShapingGuideSteps(KKJoyrideController *guide,
   // Second lane in the Advanced seed (mirrors Rounded's Radius + Crop), so the
   // per-property timeline + marquee multi-select are taught across two rows.
   // Scale is a non-featured lane (not in the Position-only keypose
-  // mini-canvas), so seeding it can't disturb the featured Position handles.
+  // mini-viewer), so seeding it can't disturb the featured Position handles.
   cfg.secondaryLabel = @"Scale";
   cfg.secondaryValueType = KKLaneValueTypeFloat;
   cfg.secondarySeedValues = @[ @100.0, @100.0 ];
@@ -389,7 +389,7 @@ MagicMoveShapingGuideSteps(KKJoyrideController *guide,
   cfg.oscGuideBridge = ^KKOSCGuideBridge * {
     return MagicMoveSharedOSCGuideBridge();
   };
-  // The pill step disables Scale (not Position), so the keypose mini-canvas
+  // The pill step disables Scale (not Position), so the keypose mini-viewer
   // (which shows only the featured Position lane) stays populated for the later
   // steps.
   cfg.oscDisableLabel = @"Scale";
@@ -600,7 +600,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
 - (void)applyOSCElementsFromUIState:(NSDictionary *)uiState {
   [self kkApplyOSCVisibilityFromState:uiState
                           elementKeys:[MagicMovePlugin oscElementKeys]
-                             renderer:self.miniCanvasRenderer];
+                             renderer:self.miniViewerRenderer];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
@@ -622,7 +622,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   BOOL loopEnabled = st.loopEnabled;
   NSInteger activeTab = st.activeTab;
   BOOL oscMasterVisible = st.oscMasterVisible;
-  KKMiniCanvasRenderMode renderMode = (KKMiniCanvasRenderMode)st.renderMode;
+  KKMiniViewerRenderMode renderMode = (KKMiniViewerRenderMode)st.renderMode;
   BOOL motionBlurEnabled = st.motionBlurEnabled;
   double motionBlurShutterAngle = st.motionBlurShutterAngle;
   NSInteger motionBlurSamples = st.motionBlurSamples;
@@ -665,21 +665,21 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                                           availableLanes:available
                                                 timeline:timeline];
 
-  if (!self.miniCanvasRenderer) {
-    self.miniCanvasRenderer = [[MagicMoveMiniCanvasRenderer alloc] init];
+  if (!self.miniViewerRenderer) {
+    self.miniViewerRenderer = [[MagicMoveMiniViewerRenderer alloc] init];
   }
-  self.miniCanvasRenderer.timeline = timeline;
-  self.miniCanvasRenderer.handlesHidden = !oscMasterVisible;
+  self.miniViewerRenderer.timeline = timeline;
+  self.miniViewerRenderer.handlesHidden = !oscMasterVisible;
   [self applyOSCElementsFromUIState:uiState];
-  // Wire the master tick + per-element pills + mini-canvas opt-click in one
+  // Wire the master tick + per-element pills + mini-viewer opt-click in one
   // call (shared glue in KKPlugin (OSCVisibility)).
   [self kkWireOSCVisibilityForView:view
-                          renderer:self.miniCanvasRenderer
+                          renderer:self.miniViewerRenderer
                          compounds:[MagicMovePlugin oscCompounds]
                            paramID:kParamUIState];
-  view.miniCanvasDelegate = self.miniCanvasRenderer;
+  view.miniViewerDelegate = self.miniViewerRenderer;
 
-  // Force OSCs visible while a guide runs (so its mini-canvas + viewer handles
+  // Force OSCs visible while a guide runs (so its mini-viewer + viewer handles
   // are usable), then restore the user's OSC setting on guide end.
   [self kkInstallGuideOSCForcingOnHost:[(MagicMoveInspectorView *)
                                                view timingGuideHost]
@@ -692,9 +692,9 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   // two stacked MagicMove clips read/write distinct /tmp files instead of the
   // top clip flickering the one below it.
   NSString *instUUID = KKInstanceUUIDForAPI(self.apiManager);
-  view.miniCanvasDescriptorPath =
-      MagicMoveMiniCanvasDescriptorPathForUUID(instUUID);
-  view.miniCanvasRequestPath = MagicMoveMiniCanvasRequestPathForUUID(instUUID);
+  view.miniViewerDescriptorPath =
+      MagicMoveMiniViewerDescriptorPathForUUID(instUUID);
+  view.miniViewerRequestPath = MagicMoveMiniViewerRequestPathForUUID(instUUID);
   if (seedClipDurSec > 0)
     [view setClipDurationSeconds:seedClipDurSec];
   if (seedFrameDurSec > 0)
@@ -711,9 +711,9 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                              renderNudgeParamID:kParamRenderNudge
                                   dragUndoLabel:@"Adjust Magic Move"
                              detachedWindowSize:CGSizeMake(720.0, 460.0)];
-  // Mini-canvas motion-path edits (anchor / handle drag) persist the whole
+  // Mini-viewer motion-path edits (anchor / handle drag) persist the whole
   // blob through the same writer as inspector timeline mutations.
-  self.miniCanvasRenderer.onTimelinePersist = view.onTimelineMutated;
+  self.miniViewerRenderer.onTimelinePersist = view.onTimelineMutated;
 
   // Rotate-with-motion: per-interval toggle on the Position lane's gap
   // popovers (curve + hold-modulation, Advanced + Basic). Persisted under

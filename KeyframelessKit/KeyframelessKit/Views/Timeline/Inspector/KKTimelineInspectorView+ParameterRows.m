@@ -12,7 +12,7 @@
 #import "KKCompoundPillBar.h"
 #import "KKConstants.h"
 #import "KKLabelView.h"
-#import "KKMiniCanvasView.h"
+#import "KKMiniViewerView.h"
 #import "KKParameterRowView.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"

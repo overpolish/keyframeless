@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKMiniCanvasCropEditor.h"
+#import "KKMiniViewerCropEditor.h"
 
 // Min crop extent as a fraction of the image, so handles stay grabbable.
 static const CGFloat kMinCropFrac = 0.05;
@@ -51,7 +51,7 @@ static inline CGFloat KKClampF(CGFloat v, CGFloat lo, CGFloat hi) {
   return v < lo ? lo : (v > hi ? hi : v);
 }
 
-@implementation KKMiniCanvasCropEditor {
+@implementation KKMiniViewerCropEditor {
   NSInteger _part;    // -1 none, 0 body, 1+idx handle
   CGRect _rectAtGrab; // overlay points, for rect-body translate
   CGPoint _grabPoint; // overlay points, for rect-body translate
@@ -68,7 +68,7 @@ static inline CGFloat KKClampF(CGFloat v, CGFloat lo, CGFloat hi) {
   return _part;
 }
 
-// Crop box in overlay points (y-up). Model +y is up, but the mini canvas
+// Crop box in overlay points (y-up). Model +y is up, but the mini viewer
 // displays the shader output V-flipped, so the rendered crop-box centre
 // lands at midY(cr) - y·height - match it so handles sit on the crop.
 - (CGRect)cropRectForValues:(NSArray<NSNumber *> *)v contentRect:(CGRect)cr {

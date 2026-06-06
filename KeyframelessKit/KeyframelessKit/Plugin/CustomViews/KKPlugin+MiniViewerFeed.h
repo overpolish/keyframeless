@@ -14,10 +14,10 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface KKPlugin (MiniCanvasFeed)
+@interface KKPlugin (MiniViewerFeed)
 
-/// Publish the raw source tile(s) into this instance's mini-canvas feed
-/// (`self.miniCanvasFeed`), recreating the feed when `descriptorPath` changes.
+/// Publish the raw source tile(s) into this instance's mini-viewer feed
+/// (`self.miniViewerFeed`), recreating the feed when `descriptorPath` changes.
 /// Single-slot (playhead) by default; when `multiSlotActive` AND
 /// `boundaryReqSecs` is non-empty, each requested time claims its closest
 /// delivered tile by mediaTime (boundary preview / filmstrip / onion). Skips
@@ -25,7 +25,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// library-preview render). `defaultTag` is the slot tag used when no
 /// `boundaryReqFracs` entry exists. Call from renderDestinationImage:.
 - (void)
-    kkPublishMiniCanvasFeedForDestination:(FxImageTile *)destinationImage
+    kkPublishMiniViewerFeedForDestination:(FxImageTile *)destinationImage
                              sourceImages:(NSArray<FxImageTile *> *)sourceImages
                            descriptorPath:(NSString *)descriptorPath
                           boundaryReqSecs:

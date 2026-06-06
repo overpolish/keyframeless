@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKMiniCanvasFeed.h"
+#import "KKMiniViewerFeed.h"
 
 #import "KKLog.h"
 #import <IOSurface/IOSurface.h>
@@ -15,12 +15,12 @@
 // throttled (≤10fps) MPS pass cheap.
 static const NSUInteger kTargetLongEdge = 2048;
 
-// Minimum wall-clock gap between surface updates per slot. The mini canvas
+// Minimum wall-clock gap between surface updates per slot. The mini viewer
 // only needs a recent frame, not every render tick - this keeps the render
 // path from paying an MPS pass on every frame during playback.
 // Cap to ~60 fps. Was 0.1s (10 fps) which felt laggy during interactive
 // editing - the last drag tick within the 100 ms window would get dropped
-// and the mini canvas would stay stale until the next render frame fired.
+// and the mini viewer would stay stale until the next render frame fired.
 static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
 
 // One IOSurface + texture + bookkeeping per filmstrip frame. Slot 0 is the
@@ -44,7 +44,7 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
 }
 @end
 
-@implementation KKMiniCanvasFeed {
+@implementation KKMiniViewerFeed {
   NSString *_descriptorPath;
   NSMutableArray<_KKMiniFeedSlot *> *_slots;
   MPSImageBilinearScale *_scaler;
@@ -118,14 +118,14 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
   };
   slot.surface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
   if (!slot.surface) {
-    KKLogError(@"KKMiniCanvasFeed: IOSurfaceCreate failed (%lux%lu)",
+    KKLogError(@"KKMiniViewerFeed: IOSurfaceCreate failed (%lux%lu)",
                (unsigned long)slot.dstW, (unsigned long)slot.dstH);
     return NO;
   }
 
   // FCP hands us a linear-light source. Writing through an _sRGB-typed
   // texture makes MPS gamma-encode on store, so the 8-bit surface holds
-  // display-encoded values - KKMiniCanvasView reads them as plain BGRA8 and
+  // display-encoded values - KKMiniViewerView reads them as plain BGRA8 and
   // shows them straight, matching the brightness FCP displays.
   MTLTextureDescriptor *td = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm_sRGB
@@ -139,7 +139,7 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
                                                iosurface:slot.surface
                                                    plane:0];
   if (!slot.surfaceTexture) {
-    KKLogError(@"KKMiniCanvasFeed: newTextureWithDescriptor:iosurface: "
+    KKLogError(@"KKMiniViewerFeed: newTextureWithDescriptor:iosurface: "
                @"returned nil");
     CFRelease(slot.surface);
     slot.surface = NULL;
@@ -185,7 +185,7 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
                                                  options:0
                                                    error:nil];
   if (![json writeToFile:_descriptorPath atomically:YES])
-    KKLogWarn(@"KKMiniCanvasFeed: failed to write %@", _descriptorPath);
+    KKLogWarn(@"KKMiniViewerFeed: failed to write %@", _descriptorPath);
 }
 
 - (void)publishDescriptor {
@@ -210,7 +210,7 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
     _scaler = [[MPSImageBilinearScale alloc] initWithDevice:device];
 
   id<MTLCommandBuffer> cb = [commandQueue commandBuffer];
-  cb.label = @"KKMiniCanvasFeed";
+  cb.label = @"KKMiniViewerFeed";
   [_scaler encodeToCommandBuffer:cb
                    sourceTexture:sourceTexture
               destinationTexture:slot.surfaceTexture];

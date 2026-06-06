@@ -32,8 +32,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// must keep capturing raw mouse events for these (`ignoresMouseEvents = NO`),
 /// otherwise the press also lands on the real view beneath the panel and the
 /// drag fires twice - double `onDragBegin` leaks an undo group and the next
-/// drag's `startUndoGroup` aborts. Pass-through routing (spotFirst + synthesize)
-/// still applies; only the panel's event capture differs.
+/// drag's `startUndoGroup` aborts. Pass-through routing (spotFirst +
+/// synthesize) still applies; only the panel's event capture differs.
 @property(nonatomic) BOOL spotlightSynthesizesInProcess;
 /// When set, called on the main queue with the screen-space point of a
 /// mouseDown inside the spotlight (instead of letting it fall through to FCP).
@@ -59,7 +59,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// panel - and `ignoresMouseEvents` does NOT pass gestures through (unlike
 /// clicks/scroll), so they're dropped before reaching content below. When
 /// set, the panel intercepts magnify events and hands them here so a step
-/// can forward the pinch to its control (e.g. a mini-canvas zoom).
+/// can forward the pinch to its control (e.g. a mini-viewer zoom).
 @property(nonatomic, copy, nullable) void (^spotlightMagnifyEvent)
     (NSEvent *event);
 /// When set alongside targetScreenRect, the spotlight is drawn as a capsule
@@ -149,7 +149,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// monitor + synthesize-into-target path doesn't depend on the panel
 /// ignoring events, and the overlay's hitTest returns nil). Default NO -
 /// only guides that need to forward gestures into scrollable content (e.g.
-/// a mini-canvas) should set it. Set before `startWithSteps:`.
+/// a mini-viewer) should set it. Set before `startWithSteps:`.
 @property(nonatomic) BOOL forwardsGestures;
 
 @end

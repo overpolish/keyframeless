@@ -4,8 +4,8 @@
  */
 
 #import "KKLocalized.h"
-#import "KKMiniCanvasRenderer.h"
-#import "KKMiniCanvasView.h"
+#import "KKMiniViewerRenderer.h"
+#import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
@@ -16,8 +16,8 @@
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <QuartzCore/QuartzCore.h>
 
-// The mini-canvas delegate is a KKMiniCanvasRenderer (or subclass) but its
-// header framework-imports KKMiniCanvasView.h, which collides with the quote
+// The mini-viewer delegate is a KKMiniViewerRenderer (or subclass) but its
+// header framework-imports KKMiniViewerView.h, which collides with the quote
 // import above (path-dedup). Toggle its boundary-editing mode via KVC to
 // avoid pulling that header in here.
 void KKSetBoundaryEditing(id delegate, BOOL on, double fraction) {
@@ -28,7 +28,7 @@ void KKSetBoundaryEditing(id delegate, BOOL on, double fraction) {
   }
 }
 
-// Hide the mini-canvas handle/box for properties excluded from this phase.
+// Hide the mini-viewer handle/box for properties excluded from this phase.
 void KKSetSuppressedHandles(id delegate,
                             NSArray<NSString *> *_Nullable labels) {
   if ([delegate respondsToSelector:NSSelectorFromString(
@@ -76,11 +76,11 @@ void KKWriteBoundaryRequestMulti(NSString *path, NSArray<NSNumber *> *fracs,
   [j writeToFile:path atomically:YES];
 }
 
-KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
-  if ([root isKindOfClass:[KKMiniCanvasView class]])
-    return (KKMiniCanvasView *)root;
+KKMiniViewerView *KKFindMiniViewer(NSView *root) {
+  if ([root isKindOfClass:[KKMiniViewerView class]])
+    return (KKMiniViewerView *)root;
   for (NSView *sub in root.subviews) {
-    KKMiniCanvasView *found = KKFindMiniCanvas(sub);
+    KKMiniViewerView *found = KKFindMiniViewer(sub);
     if (found)
       return found;
   }
@@ -187,7 +187,7 @@ KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
   NSWindow *popoverWindow = popover.contentViewController.view.window;
   CFTimeInterval shownAt = CACurrentMediaTime();
   __weak NSPopover *weakPopover = popover;
-  KKMiniCanvasView *canvas = KKFindMiniCanvas(content);
+  KKMiniViewerView *canvas = KKFindMiniViewer(content);
   __block id localMon = nil;
   __block id globalMon = nil;
   __block id magnifyLocalMon = nil;
@@ -239,11 +239,11 @@ KKMiniCanvasView *KKFindMiniCanvas(NSView *root) {
                 [NSNotificationCenter.defaultCenter removeObserver:closeObs];
               }];
 
-  // Scroll over the mini canvas = zoom/pan (events arrive global in
+  // Scroll over the mini viewer = zoom/pan (events arrive global in
   // ViewBridge XPC - see [[project_viewbridge_global_sendEvent]]); scroll
   // elsewhere keeps the old outside-dismiss behavior.
   // Scroll/magnify over the canvas is handled by the responder chain
-  // (KKMiniCanvasView inside an NSScrollView - the proven mechanism). These
+  // (KKMiniViewerView inside an NSScrollView - the proven mechanism). These
   // monitors only keep the outside-scroll-dismiss behavior, and must NOT
   // swallow or close when the pointer is over the canvas.
   localMon = [NSEvent
@@ -471,7 +471,7 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   cfg.onRemove = onRemove;
   cfg.onDragBegin = onDragBegin;
   cfg.onDragEnd = onDragEnd;
-  cfg.onModeChanged = ^(KKMiniCanvasRenderMode mode) {
+  cfg.onModeChanged = ^(KKMiniViewerRenderMode mode) {
     __strong typeof(weak) s = weak;
     [s _renderModeDidChange:mode];
   };
@@ -505,11 +505,11 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   // still shows here (see -showStaticValuesPopoverFromView: editFraction).
   cfg.headerDetail =
       KKLoc(@"Showing current frame",
-            @"Constants editor preview hint: the mini-canvas shows the frame "
+            @"Constants editor preview hint: the mini-viewer shows the frame "
             @"at the playhead, not the first frame.");
   cfg.headerIcon =
       [KKPopoverHeaderView iconImageForSymbolName:@"slider.horizontal.3"];
-  cfg.renderMode = KKMiniCanvasRenderModeOff;
+  cfg.renderMode = KKMiniViewerRenderModeOff;
   // Constants commits go through -_setLaneValues:forLabel: (cfg.onValue=nil).
   // Outer drag begin/end forward to the lanes view's properties so a guide
   // observer is informed (same hook the boundary popover's caller wires).
@@ -534,14 +534,14 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   };
   // Preview at the live playhead, not t=0. A property animated to start
   // off-canvas (e.g. flying in) would otherwise render its first-frame pose,
-  // pushing the object + its handles out of the mini-canvas. Evaluate
+  // pushing the object + its handles out of the mini-viewer. Evaluate
   // animatable lanes at the current playhead fraction so the preview matches
   // the viewer. Constant lanes are single-keypose so editFraction doesn't move
   // them, and the constants WRITE path ignores editFraction too (it always
   // replaces the t=0 keypose - see -_timelineBySettingValues:forLabel:).
   // boundaryEditing stays NO, so handle gating / writes are unchanged. Reset
   // to 0 on close (see -_presentStaticValuesPopoverFromAnchor: onClose).
-  id constantsDel = self.miniCanvasDelegate;
+  id constantsDel = self.miniViewerDelegate;
   if ([constantsDel
           respondsToSelector:NSSelectorFromString(@"setEditFraction:")]) {
     double playFrac = [[(_activeTab == 1 ? (id)_advancedGraph : (id)_basicGraph)

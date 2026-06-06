@@ -6,17 +6,17 @@
 #pragma once
 
 #import "RoundedInspectorView.h"
-#import "RoundedMiniCanvasRenderer.h"
+#import "RoundedMiniViewerRenderer.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 // Rounded-specific subclass storage. The generic toolbar / tab bar / basic
 // view / detached-copy ivars all live on the `KKTimelineInspectorView`
 // superclass (including the shared timing-guide host); only Rounded's
-// mini-canvas renderer belongs here.
+// mini-viewer renderer belongs here.
 @interface RoundedInspectorView () {
 @protected
-  RoundedMiniCanvasRenderer *_miniCanvasRenderer;
+  RoundedMiniViewerRenderer *_miniViewerRenderer;
 }
 @end
 

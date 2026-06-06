@@ -9,7 +9,7 @@
 #import <KeyframelessKit/KKJoyrideController.h>
 #import <KeyframelessKit/KKJoyrideOSCSegment.h>
 #import <KeyframelessKit/KKJoyrideTrigger.h>
-#import <KeyframelessKit/KKMiniCanvasView.h>
+#import <KeyframelessKit/KKMiniViewerView.h>
 #import <KeyframelessKit/KKOSCGuideBridge.h>
 #import <KeyframelessKit/KKOSCGuideStrategy.h>
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
@@ -23,7 +23,7 @@
 // selector, so a dedicated key avoids a clash).
 static const char kKKOSCGuideSegmentKey = 0;
 
-static NSRect KKOSCGuideCanvasScreenRect(KKMiniCanvasView *c) {
+static NSRect KKOSCGuideCanvasScreenRect(KKMiniViewerView *c) {
   NSWindow *w = c.window;
   if (!c || !w)
     return NSZeroRect;
@@ -54,7 +54,7 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniCanvasView *c) {
     return config.viewerScreenRect ? config.viewerScreenRect() : NSZeroRect;
   };
   NSRect (^canvasRect)(void) = ^NSRect {
-    return KKOSCGuideCanvasScreenRect(weakBinder.latestMiniCanvas);
+    return KKOSCGuideCanvasScreenRect(weakBinder.latestMiniViewer);
   };
 
   // drag(2 or 1) + gear, pill, open, opt-hide, peek, reshow, checkbox, re-open,
@@ -121,20 +121,20 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniCanvasView *c) {
     return s;
   };
 
-  // --- reusable mini-canvas step builders (the gestures repeat across steps)
+  // --- reusable mini-viewer step builders (the gestures repeat across steps)
   // --
 
-  // The XPC overlay swallows raw clicks/moves, so every mini-canvas gesture is
+  // The XPC overlay swallows raw clicks/moves, so every mini-viewer gesture is
   // driven from the spotlight handlers below (the move equivalent of the click
   // forwarding). Opt-gated click that hides / re-shows the handle under the
-  // cursor (firing the miniCanvasOptHide trigger); `ensureReveal` first turns
+  // cursor (firing the miniViewerOptHide trigger); `ensureReveal` first turns
   // reveal on so a hidden ghost is hit-testable.
   void (^optClickDrive)(NSPoint, BOOL) = ^(NSPoint p, BOOL ensureReveal) {
     if (!(NSEvent.modifierFlags & NSEventModifierFlagOption))
       return;
     if (ensureReveal)
-      [weakBinder.latestMiniCanvas setGuidePeekActive:YES];
-    [weakBinder.latestMiniCanvas optHideHandleAtScreenPoint:p];
+      [weakBinder.latestMiniViewer setGuidePeekActive:YES];
+    [weakBinder.latestMiniViewer optHideHandleAtScreenPoint:p];
   };
 
   // Peek step: hold Option (+ move) reveals the controls; advancing on RELEASE
@@ -150,7 +150,7 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniCanvasView *c) {
     __block BOOL revealed = NO;
     s.spotlightMouseMoved = ^(NSPoint p) {
       BOOL opt = (NSEvent.modifierFlags & NSEventModifierFlagOption) != 0;
-      [weakBinder.latestMiniCanvas setGuidePeekActive:opt];
+      [weakBinder.latestMiniViewer setGuidePeekActive:opt];
       if (opt) {
         revealed = YES;
       } else if (revealed) {
@@ -192,7 +192,7 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniCanvasView *c) {
 
   // Step: toggle one element's pill off (inspector popover). Spotlight ONLY the
   // safe (non-featured) control's pill so the user can't disable the featured
-  // one the mini-canvas needs (clicks outside the spotlight aren't forwarded).
+  // one the mini-viewer needs (clicks outside the spotlight aren't forwarded).
   NSString *disableLabel = config.oscDisableLabel;
   KKJoyrideStep *sPill = [KKJoyrideStep
       stepWithMessage:KKLoc(@"Switch a control <warn>off</warn> to hide just "
@@ -226,16 +226,16 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniCanvasView *c) {
   NSInteger ixOpen = (NSInteger)steps.count;
   numbered(sOpen);
 
-  // Step: opt-click a handle in the mini canvas to hide it (master still on).
+  // Step: opt-click a handle in the mini viewer to hide it (master still on).
   KKJoyrideStep *sOptHide = [KKJoyrideStep
       stepWithMessage:KKLoc(
                           @"Hold <kbd>⌥</kbd> and click a control to hide it.",
-                          @"OSC guide: opt-click a mini-canvas handle to hide.")
+                          @"OSC guide: opt-click a mini-viewer handle to hide.")
            targetView:nil];
   // Spotlight the handle itself (not the whole canvas) so it's clear what to
   // click; fall back to the canvas if the handle isn't located yet.
   sOptHide.targetScreenRect = ^NSRect {
-    NSRect h = [weakBinder.latestMiniCanvas pointHandleScreenRect];
+    NSRect h = [weakBinder.latestMiniViewer pointHandleScreenRect];
     return NSIsEmptyRect(h) ? canvasRect() : h;
   };
   sOptHide.spotlightCircular = YES;
@@ -246,7 +246,7 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniCanvasView *c) {
   NSInteger ixOptHide = (NSInteger)steps.count;
   numbered(sOptHide);
 
-  // Step: opt-peek in the mini canvas. Master is still on and one control is
+  // Step: opt-peek in the mini viewer. Master is still on and one control is
   // hidden (from the step above), so holding Option + moving reveals that
   // hidden control as a ghost.
   numbered(peekStep(
@@ -257,7 +257,7 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniCanvasView *c) {
   // Step: opt-click the revealed ghost to bring the hidden control back.
   // Holding Option reveals it (move monitor -> setGuidePeekActive), and the
   // opt-click toggles it visible again (optHide... toggles either way). Fires
-  // the miniCanvasOptHide trigger -> advance.
+  // the miniViewerOptHide trigger -> advance.
   KKJoyrideStep *sReshow = [KKJoyrideStep
       stepWithMessage:KKLoc(
                           @"Hold <kbd>⌥</kbd> and click the dimmed control to "
@@ -269,7 +269,7 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniCanvasView *c) {
   sReshow.spotlightPassThrough = YES;
   sReshow.spotlightMouseMoved = ^(NSPoint screenPt) {
     // Keep the ghost revealed so it's clickable.
-    [weakBinder.latestMiniCanvas
+    [weakBinder.latestMiniViewer
         setGuidePeekActive:(NSEvent.modifierFlags &
                             NSEventModifierFlagOption) != 0];
   };
@@ -292,7 +292,7 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniCanvasView *c) {
     // Clear any lingering peek reveal (the reshow step may have advanced with
     // Option still held), else the renderer stays in peek mode and the master
     // toggle can't hide it.
-    [weakBinder.latestMiniCanvas setGuidePeekActive:NO];
+    [weakBinder.latestMiniViewer setGuidePeekActive:NO];
     [weakLanes guideCloseContentPopover];
   };
   sHideAll.targetScreenRect = ^NSRect {
@@ -369,20 +369,20 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniCanvasView *c) {
       [g advance];
   };
 
-  // Advance the mini-canvas steps on the canvas's own events (via the binder).
+  // Advance the mini-viewer steps on the canvas's own events (via the binder).
   [binder bindStep:sOpen
            atIndex:ixOpen
          advanceOn:[KKJoyrideTrigger staticValuesPopoverWillOpen]
          dismissOn:nil];
   [binder bindStep:sOptHide
            atIndex:ixOptHide
-         advanceOn:[KKJoyrideTrigger miniCanvasOptHide]
+         advanceOn:[KKJoyrideTrigger miniViewerOptHide]
          dismissOn:nil];
   // sPeek / sPeekOff advance from their own move handler (on Option release),
   // not a trigger, so the reveal is read + turned off first.
   [binder bindStep:sReshow
            atIndex:ixReshow
-         advanceOn:[KKJoyrideTrigger miniCanvasOptHide]
+         advanceOn:[KKJoyrideTrigger miniViewerOptHide]
          dismissOn:nil];
   [binder bindStep:sOpen2
            atIndex:ixOpen2

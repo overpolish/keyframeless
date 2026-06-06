@@ -14,7 +14,7 @@
 /// Converts that to the shader's `cropCenter` / `cropSize` (pixels, in
 /// Y-down screen space where `boxCenter = imageCenter + cropCenter`), for an
 /// `imageSize` in pixels. Single source of truth shared by every render
-/// path (the per-frame effect render and the mini-canvas preview) so a crop
+/// path (the per-frame effect render and the mini-viewer preview) so a crop
 /// looks identical everywhere.
 static inline void KKCropModelToShader(double w, double h, double x, double y, simd_float2 imageSize,
                                        simd_float2 *outCenter, simd_float2 *outSize) {

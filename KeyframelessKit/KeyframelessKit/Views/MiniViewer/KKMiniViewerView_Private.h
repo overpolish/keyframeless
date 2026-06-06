@@ -5,14 +5,14 @@
 
 #pragma once
 
-#import "KKMiniCanvasView.h"
+#import "KKMiniViewerView.h"
 #import <IOSurface/IOSurface.h>
 #import <MetalKit/MetalKit.h>
 #import <simd/simd.h>
 
 // Outer radius (points) of the shared KKPointOSC handle glyph. Smaller than
-// the viewer OSC's oscSize - the mini canvas is a compact preview. Must stay
-// in sync with RoundedMiniCanvasRenderer's MiniOscSize() (placement/hit).
+// the viewer OSC's oscSize - the mini viewer is a compact preview. Must stay
+// in sync with RoundedMiniViewerRenderer's MiniOscSize() (placement/hit).
 // Shared by the main file's interaction code and the +Rendering encoders.
 static const CGFloat kKKMiniHandleOuterPt = 4.5;
 
@@ -32,8 +32,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// Transparent AppKit layer over the Metal content. Draws plugin handles and
 /// owns handle hit-testing/dragging; passes non-handle clicks through to the
 /// canvas (so pan/zoom/double-click-reset still work).
-@interface _KKMiniCanvasOverlay : NSView
-@property(nonatomic, weak) KKMiniCanvasView *canvas;
+@interface _KKMiniViewerOverlay : NSView
+@property(nonatomic, weak) KKMiniViewerView *canvas;
 @end
 
 // One filmstrip slot: a resolved IOSurface from the feed's `slots[]` array,
@@ -48,7 +48,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) double tag; // the slot's clip fraction
 @end
 
-@interface KKMiniCanvasView () {
+@interface KKMiniViewerView () {
 @package
   id<MTLRenderPipelineState> _pipeline;
   id<MTLRenderPipelineState> _onionPipeline;
@@ -68,7 +68,7 @@ NS_ASSUME_NONNULL_BEGIN
   id _keyMon;       // Cmd-0 reset-zoom local keyDown monitor
   id _keyGlobalMon; // Cmd-0 reset-zoom global keyDown monitor (XPC: events
                     // arrive global, like scroll/magnify)
-  _KKMiniCanvasOverlay *_overlay;
+  _KKMiniViewerOverlay *_overlay;
   CGFloat _zoom;           // 1 == aspect-fit
   CGPoint _panPixels;      // drawable-space pan offset
   CGSize _sourceMediaSize; // original media px (from descriptor srcW/H)
@@ -108,13 +108,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 // Drawing / MTKViewDelegate. The protocol is adopted on this category (not the
 // () extension) so the primary @implementation isn't expected to provide the
-// required delegate methods - they live in KKMiniCanvasView+Draw.m.
-@interface KKMiniCanvasView (Draw) <MTKViewDelegate>
+// required delegate methods - they live in KKMiniViewerView+Draw.m.
+@interface KKMiniViewerView (Draw) <MTKViewDelegate>
 @end
 
 // Pipeline construction + Metal glyph/line encoders. Implemented in
-// KKMiniCanvasView+Rendering.m; called by drawInMTKView in the +Draw category.
-@interface KKMiniCanvasView (Rendering)
+// KKMiniViewerView+Rendering.m; called by drawInMTKView in the +Draw category.
+@interface KKMiniViewerView (Rendering)
 - (void)_buildPipeline;
 - (CGFloat)_canvasScale;
 - (void)_encodeArcHandleGlyphAt:(CGPoint)centerPts
@@ -145,12 +145,12 @@ NS_ASSUME_NONNULL_BEGIN
                        encoder:(id<MTLRenderCommandEncoder>)enc;
 @end
 
-// View transform / hit geometry. Implemented in KKMiniCanvasView+Interaction.m
+// View transform / hit geometry. Implemented in KKMiniViewerView+Interaction.m
 // (the same @implementation that provides the public (Interaction) methods).
-@interface KKMiniCanvasView (InteractionInternal)
+@interface KKMiniViewerView (InteractionInternal)
 - (CGFloat)_backingScale;
 - (void)_zoomTo:(CGFloat)newZoom aboutViewPoint:(NSPoint)viewPt;
-- (void)_didChangeViewTransformOfKind:(KKMiniCanvasTransformKind)kind;
+- (void)_didChangeViewTransformOfKind:(KKMiniViewerTransformKind)kind;
 - (NSPoint)_viewPointForScreenPoint:(NSPoint)screenPoint;
 - (NSRect)_screenRectForHandleCenter:(CGPoint)ctr;
 - (NSRect)_screenRectForHandleCenters:(NSArray<NSValue *> *)centers

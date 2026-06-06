@@ -11,7 +11,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// Fills `outParams` from the persisted timeline at clip fraction `frac`.
-/// Used by the FCP render path (`Plugin+Render.m`); the mini-canvas takes
+/// Used by the FCP render path (`Plugin+Render.m`); the mini-viewer takes
 /// its own path so it can layer live drag values on top of the timeline.
 ///
 /// `effectDurSec` is the clip duration in seconds; pass 0 to disable the

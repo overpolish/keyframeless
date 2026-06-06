@@ -30,7 +30,7 @@ vertex KKRasterizerData KKVertexShader(uint vertexID [[vertex_id]],
     return out;
 }
 
-/// Samples the input texture straight through - used by KKMiniCanvasView to
+/// Samples the input texture straight through - used by KKMiniViewerView to
 /// blit a resolved source IOSurface before any plugin shader is applied.
 fragment float4 KKTexturePassthroughFragment(KKRasterizerData in [[stage_in]],
                                              texture2d<float> tex [[texture(KKTextureIndex_InputImage)]]) {
@@ -38,7 +38,7 @@ fragment float4 KKTexturePassthroughFragment(KKRasterizerData in [[stage_in]],
     return tex.sample(s, in.textureCoordinate);
 }
 
-/// Flat color fill - used for thin overlay strokes (e.g. the mini-canvas
+/// Flat color fill - used for thin overlay strokes (e.g. the mini-viewer
 /// crop border) drawn in the Metal pass so handle glyphs land on top.
 fragment float4 KKSolidColorFragment(KKRasterizerData in [[stage_in]], constant float4 *color [[buffer(0)]]) {
     return *color;
@@ -46,7 +46,7 @@ fragment float4 KKSolidColorFragment(KKRasterizerData in [[stage_in]], constant 
 
 /// Onion-skin tint+alpha: samples the input texture, lerps RGB toward
 /// `tintRGBA.rgb` by `tintRGBA.a`, then multiplies the whole output by
-/// `outAlpha` (premultiplied). Lets KKMiniCanvasView stack prev/next KP
+/// `outAlpha` (premultiplied). Lets KKMiniViewerView stack prev/next KP
 /// frames with a coloured wash and a global opacity on the active cell.
 fragment float4 KKTextureTintFragment(KKRasterizerData in [[stage_in]],
                                       texture2d<float> tex [[texture(KKTextureIndex_InputImage)]],

@@ -63,7 +63,7 @@
       NSMakeRect(x - kPillW * 0.5, pillBot, kPillW, pillTop - pillBot);
 
   // Display lanes: every animatable lane in the same group that has a KP at
-  // *exactly* this time goes into the active zone (editable + mini-canvas
+  // *exactly* this time goes into the active zone (editable + mini-viewer
   // handle visible). Same-group lanes without a co-time KP go into
   // excludedLabels - shown as the "available zone" row with an "Animate"
   // button.

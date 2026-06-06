@@ -22,12 +22,12 @@ typedef NS_ENUM(NSInteger, KKJoyrideTriggerType) {
   KKJoyrideTriggerTypePhaseToggled,
   KKJoyrideTriggerTypeDiamondTapped,
   KKJoyrideTriggerTypeGapTapped,
-  KKJoyrideTriggerTypeMiniCanvasViewTransformChanged,
-  KKJoyrideTriggerTypeMiniCanvasViewReset,
-  KKJoyrideTriggerTypeMiniCanvasDoubleClickHandled,
+  KKJoyrideTriggerTypeMiniViewerViewTransformChanged,
+  KKJoyrideTriggerTypeMiniViewerViewReset,
+  KKJoyrideTriggerTypeMiniViewerDoubleClickHandled,
   KKJoyrideTriggerTypeRenderModeChanged,
   KKJoyrideTriggerTypeFilmstripCellActivated,
-  KKJoyrideTriggerTypeMiniCanvasOptHide,
+  KKJoyrideTriggerTypeMiniViewerOptHide,
   KKJoyrideTriggerTypePlayToggleEdge,
 };
 

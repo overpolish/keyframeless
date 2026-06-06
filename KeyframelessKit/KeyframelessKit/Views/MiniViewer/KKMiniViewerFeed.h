@@ -10,20 +10,20 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Render-side source feed for a mini-canvas preview, reusable by any plugin.
+/// Render-side source feed for a mini-viewer preview, reusable by any plugin.
 ///
 /// Owns one persistent `IOSurface`-backed `MTLTexture` (long edge capped),
 /// MPS-downscales the effect's source frame into it on full-frame render
-/// ticks, and publishes a tiny JSON descriptor file so a `KKMiniCanvasView`
+/// ticks, and publishes a tiny JSON descriptor file so a `KKMiniViewerView`
 /// - which lives in the separate ViewBridge process and cannot see an
 /// `MTLTexture` from the render XPC - can `IOSurfaceLookup` the ID and
 /// composite it in its own process. The descriptor path is the cross-process
-/// rendezvous; the plugin picks it and points its `KKMiniCanvasView` at the
+/// rendezvous; the plugin picks it and points its `KKMiniViewerView` at the
 /// same path.
-@interface KKMiniCanvasFeed : NSObject
+@interface KKMiniViewerFeed : NSObject
 
 /// `descriptorPath`: the `/tmp` file this feed publishes and the matching
-/// `KKMiniCanvasView.sourceDescriptorPath` consumes. Single-instance
+/// `KKMiniViewerView.sourceDescriptorPath` consumes. Single-instance
 /// assumption - one path per plugin.
 - (instancetype)initWithDescriptorPath:(NSString *)descriptorPath;
 

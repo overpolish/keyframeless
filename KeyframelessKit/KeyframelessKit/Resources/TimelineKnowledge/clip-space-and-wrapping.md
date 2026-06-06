@@ -1,6 +1,6 @@
 ---
 id: clip-space-and-wrapping
-summary: Why effects and the mini-canvas work in the clip's own space, not the canvas, and when to wrap in a compound or adjustment clip
+summary: Why effects and the mini-viewer work in the clip's own space, not the canvas, and when to wrap in a compound or adjustment clip
 ---
 
 A Keyframeless effect runs inside Final Cut's clip render pipeline, which is ordered like this:
@@ -11,11 +11,11 @@ The effect only ever sees what is upstream of it. That has a few consequences wo
 
 ## The effect works in the clip's own image space
 
-The image the effect receives is the clip's media in its own frame, before the clip's Video-inspector Transform, Crop, and Distort are applied (those are the very last spatial stage, after every effect), and before the project-canvas conform (the letterbox/pillarbox you get when a clip's aspect differs from the timeline). The mini-canvas preview shows exactly this: the effect applied in clip space.
+The image the effect receives is the clip's media in its own frame, before the clip's Video-inspector Transform, Crop, and Distort are applied (those are the very last spatial stage, after every effect), and before the project-canvas conform (the letterbox/pillarbox you get when a clip's aspect differs from the timeline). The mini-viewer preview shows exactly this: the effect applied in clip space.
 
 So:
 
-- A Transform, Crop, or Distort set on the SAME clip in the Video inspector is applied AFTER the effect. It will not appear in the mini-canvas preview, and the effect cannot read those values - Final Cut does not expose a clip's own spatial adjustments to a plugin, only the plugin's own parameters.
+- A Transform, Crop, or Distort set on the SAME clip in the Video inspector is applied AFTER the effect. It will not appear in the mini-viewer preview, and the effect cannot read those values - Final Cut does not expose a clip's own spatial adjustments to a plugin, only the plugin's own parameters.
 - The project canvas is downstream too. A move/scale effect previews in the clip's space, not "the clip with black bars on the canvas". If the clip's aspect matches the timeline there's nothing to reconcile; if it doesn't, the bars are added after the effect.
 
 ## What the effect (and preview) DOES see

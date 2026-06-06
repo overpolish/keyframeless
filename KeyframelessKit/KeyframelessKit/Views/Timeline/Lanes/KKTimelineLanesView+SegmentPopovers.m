@@ -4,8 +4,8 @@
  */
 
 #import "KKLocalized.h"
-#import "KKMiniCanvasRenderer.h"
-#import "KKMiniCanvasView.h"
+#import "KKMiniViewerRenderer.h"
+#import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"

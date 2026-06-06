@@ -9,19 +9,19 @@
 #import <KeyframelessKit/KKGapPopoverTypes.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
-@protocol KKMiniCanvasDelegate;
-@class KKMiniCanvasView;
+@protocol KKMiniViewerDelegate;
+@class KKMiniViewerView;
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Mini-canvas render mode for keypose-value popovers. Off = single frame
+/// Mini-viewer render mode for keypose-value popovers. Off = single frame
 /// at the active KP; Filmstrip = one rendered frame per KP, side-by-side in
 /// the pannable canvas; Onion = all KP frames stacked on the active cell
 /// with prev/next tinting. Persisted in the host UI-state blob.
-typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
-  KKMiniCanvasRenderModeOff = 0,
-  KKMiniCanvasRenderModeFilmstrip = 1,
-  KKMiniCanvasRenderModeOnion = 2,
+typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
+  KKMiniViewerRenderModeOff = 0,
+  KKMiniViewerRenderModeFilmstrip = 1,
+  KKMiniViewerRenderModeOnion = 2,
 };
 
 /// Plugin-agnostic timeline lane editor. Plugin provides available lane
@@ -72,7 +72,7 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
 
-/// Fired once around a continuous mini-canvas handle drag (start / end), so
+/// Fired once around a continuous mini-viewer handle drag (start / end), so
 /// the host can wrap the burst of `onTimelineMutated` writes in a single
 /// undo group.
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
@@ -117,13 +117,13 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
 @property(nonatomic, readonly) NSArray<NSView *> *accessoryButtons;
 @property(nonatomic, copy, nullable) void (^onAccessoryButtonsChanged)(void);
 
-/// Mini-canvas render mode (see typedef above). The 3-way pill lives in the
+/// Mini-viewer render mode (see typedef above). The 3-way pill lives in the
 /// popover's header bar (only visible while a boundary popover is open).
 /// Setter is the host pushing the persisted value; `onRenderModeChanged`
 /// relays user picks back.
-@property(nonatomic) KKMiniCanvasRenderMode renderMode;
+@property(nonatomic) KKMiniViewerRenderMode renderMode;
 @property(nonatomic, copy, nullable) void (^onRenderModeChanged)
-    (KKMiniCanvasRenderMode mode);
+    (KKMiniViewerRenderMode mode);
 
 /// Mirror of `KKTimelineInspectorView.gapPopoverExtraRows`. Inspector view
 /// sets this on its lanes views; the popover-construction code (Advanced +
@@ -161,12 +161,12 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
 /// Guide hooks for the static-values (constants) popover, mirroring the
 /// manage-popover ones. `willOpen` fires after the popover appears (short
 /// delay for the entrance animation) with its content view and the live
-/// mini-canvas (or nil if this plugin has no preview) so a guide can
+/// mini-viewer (or nil if this plugin has no preview) so a guide can
 /// spotlight the handle and observe zoom/pan/reset. `changed` reports every
-/// constant edit (mini-canvas handle or slider); `dragEnded` fires once when
+/// constant edit (mini-viewer handle or slider); `dragEnded` fires once when
 /// a continuous edit finishes; `closed` fires on dismiss.
 @property(nonatomic, copy, nullable) void (^onStaticValuesPopoverWillOpen)
-    (NSView *contentView, KKMiniCanvasView *_Nullable canvas);
+    (NSView *contentView, KKMiniViewerView *_Nullable canvas);
 @property(nonatomic, copy, nullable) void (^onStaticValuesPopoverClosed)(void);
 @property(nonatomic, copy, nullable) void (^onStaticValueChanged)
     (NSString *label, NSArray<NSNumber *> *values);
@@ -179,19 +179,19 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
 /// `filmstripCellActivated` fires when the user clicks an inactive filmstrip
 /// cell. The mini-viewer guide wires these via the lanes binder.
 @property(nonatomic, copy, nullable) void (^onGuideRenderModeChanged)
-    (KKMiniCanvasRenderMode mode);
+    (KKMiniViewerRenderMode mode);
 @property(nonatomic, copy, nullable) void (^onGuideFilmstripCellActivated)
     (double fraction);
 
-/// Path to the mini-canvas source descriptor JSON the render side publishes.
+/// Path to the mini-viewer source descriptor JSON the render side publishes.
 /// Threaded into the static-values popover so spatial lanes (Crop) can show a
 /// live preview. nil = no preview (label-only rows).
-@property(nonatomic, copy, nullable) NSString *miniCanvasDescriptorPath;
+@property(nonatomic, copy, nullable) NSString *miniViewerDescriptorPath;
 
 /// Reverse channel: when a boundary-value popover opens, the requested clip
 /// fraction is written here so the render side can pull that frame for the
 /// preview. Cleared on close. nil = no source-at-time (current frame only).
-@property(nonatomic, copy, nullable) NSString *miniCanvasRequestPath;
+@property(nonatomic, copy, nullable) NSString *miniViewerRequestPath;
 
 /// Fired right after the boundary request file is written (popover open).
 /// FCP only re-runs -scheduleInputs: on a render, so with a static playhead
@@ -200,14 +200,14 @@ typedef NS_ENUM(NSInteger, KKMiniCanvasRenderMode) {
 /// boundary preview resolves without manual scrubbing.
 @property(nonatomic, copy, nullable) void (^onBoundaryPreviewNeedsRender)(void);
 
-/// Cold-start clip aspect (w/h) for the mini canvas before a source resolves.
+/// Cold-start clip aspect (w/h) for the mini viewer before a source resolves.
 /// Defaults to 16:9.
-@property(nonatomic) CGFloat miniCanvasClipAspect;
+@property(nonatomic) CGFloat miniViewerClipAspect;
 
-/// Plugin delegate that runs its effect on the mini canvas source. Threaded
+/// Plugin delegate that runs its effect on the mini viewer source. Threaded
 /// into the static-values popover's canvas.
-@property(nonatomic, weak, nullable) id<KKMiniCanvasDelegate>
-    miniCanvasDelegate;
+@property(nonatomic, weak, nullable) id<KKMiniViewerDelegate>
+    miniViewerDelegate;
 
 @end
 

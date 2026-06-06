@@ -4,7 +4,7 @@
  */
 
 #import "KKLocalized.h"
-#import "KKMiniCanvasView.h"
+#import "KKMiniViewerView.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKSliderView.h"

@@ -11,7 +11,7 @@
 #import "KKCompoundPillBar.h"
 #import "KKConstants.h"
 #import "KKLabelView.h"
-#import "KKMiniCanvasView.h"
+#import "KKMiniViewerView.h"
 #import "KKParameterRowView.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
@@ -275,7 +275,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   // by _basicView's lanes view); forward picks back to the inspector's own
   // onRenderModeChanged. _basicView.renderMode is pushed from the host via
   // -setRenderMode: below.
-  _basicView.onRenderModeChanged = ^(KKMiniCanvasRenderMode mode) {
+  _basicView.onRenderModeChanged = ^(KKMiniViewerRenderMode mode) {
     KKTimelineInspectorView *strong = weak;
     if (strong.onRenderModeChanged)
       strong.onRenderModeChanged(mode);
@@ -330,19 +330,19 @@ const CGFloat kMBCheckboxTrailing = 23.0;
 // can't drift; the caller wires the checkbox's `onToggle` (the gear's action is
 // passed in). The checkbox/gear are returned through the out-params.
 
-- (void)setMiniCanvasDescriptorPath:(NSString *)path {
-  _miniCanvasDescriptorPath = [path copy];
-  _basicView.miniCanvasDescriptorPath = path;
+- (void)setMiniViewerDescriptorPath:(NSString *)path {
+  _miniViewerDescriptorPath = [path copy];
+  _basicView.miniViewerDescriptorPath = path;
 }
 
-- (void)setMiniCanvasRequestPath:(NSString *)path {
-  _miniCanvasRequestPath = [path copy];
-  _basicView.miniCanvasRequestPath = path;
+- (void)setMiniViewerRequestPath:(NSString *)path {
+  _miniViewerRequestPath = [path copy];
+  _basicView.miniViewerRequestPath = path;
 }
 
-- (void)setMiniCanvasDelegate:(id<KKMiniCanvasDelegate>)delegate {
-  _miniCanvasDelegate = delegate;
-  _basicView.miniCanvasDelegate = delegate;
+- (void)setMiniViewerDelegate:(id<KKMiniViewerDelegate>)delegate {
+  _miniViewerDelegate = delegate;
+  _basicView.miniViewerDelegate = delegate;
 }
 
 - (void)setManagePopoverSpotlightLabel:(NSString *)label {
@@ -425,11 +425,11 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   return (NSInteger)_selectedTab;
 }
 
-- (void)setRenderMode:(KKMiniCanvasRenderMode)mode {
+- (void)setRenderMode:(KKMiniViewerRenderMode)mode {
   _basicView.renderMode = mode;
 }
 
-- (KKMiniCanvasRenderMode)renderMode {
+- (KKMiniViewerRenderMode)renderMode {
   return _basicView.renderMode;
 }
 
@@ -518,9 +518,9 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   copy->_detachedOwner = self;
   copy->_detachButton.hidden = YES;
   // Propagate plugin-supplied configuration so the copy matches the source.
-  copy.miniCanvasDescriptorPath = _miniCanvasDescriptorPath;
-  copy.miniCanvasRequestPath = _miniCanvasRequestPath;
-  copy.miniCanvasDelegate = _miniCanvasDelegate;
+  copy.miniViewerDescriptorPath = _miniViewerDescriptorPath;
+  copy.miniViewerRequestPath = _miniViewerRequestPath;
+  copy.miniViewerDelegate = _miniViewerDelegate;
   copy.managePopoverSpotlightLabel = _managePopoverSpotlightLabel;
   copy.constantsButtonTitle = _constantsButtonTitle;
   // Propagate standard callbacks (subclasses propagate any extras after

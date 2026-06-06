@@ -4,7 +4,7 @@
  */
 
 #import "KKJoyrideTrigger_Internal.h"
-#import <KeyframelessKit/KKMiniCanvasView.h>
+#import <KeyframelessKit/KKMiniViewerView.h>
 
 @implementation KKJoyrideTrigger
 
@@ -83,33 +83,33 @@
   return t;
 }
 
-+ (instancetype)miniCanvasViewTransformChanged {
++ (instancetype)miniViewerViewTransformChanged {
   KKJoyrideTrigger *t =
-      [self _t:KKJoyrideTriggerTypeMiniCanvasViewTransformChanged];
+      [self _t:KKJoyrideTriggerTypeMiniViewerViewTransformChanged];
   t->_intArg = -1; // any kind
   return t;
 }
 
-+ (instancetype)miniCanvasPanned {
++ (instancetype)miniViewerPanned {
   KKJoyrideTrigger *t =
-      [self _t:KKJoyrideTriggerTypeMiniCanvasViewTransformChanged];
-  t->_intArg = KKMiniCanvasTransformKindPan;
+      [self _t:KKJoyrideTriggerTypeMiniViewerViewTransformChanged];
+  t->_intArg = KKMiniViewerTransformKindPan;
   return t;
 }
 
-+ (instancetype)miniCanvasZoomed {
++ (instancetype)miniViewerZoomed {
   KKJoyrideTrigger *t =
-      [self _t:KKJoyrideTriggerTypeMiniCanvasViewTransformChanged];
-  t->_intArg = KKMiniCanvasTransformKindZoom;
+      [self _t:KKJoyrideTriggerTypeMiniViewerViewTransformChanged];
+  t->_intArg = KKMiniViewerTransformKindZoom;
   return t;
 }
 
-+ (instancetype)miniCanvasViewReset {
-  return [self _t:KKJoyrideTriggerTypeMiniCanvasViewReset];
++ (instancetype)miniViewerViewReset {
+  return [self _t:KKJoyrideTriggerTypeMiniViewerViewReset];
 }
 
-+ (instancetype)miniCanvasDoubleClickHandled {
-  return [self _t:KKJoyrideTriggerTypeMiniCanvasDoubleClickHandled];
++ (instancetype)miniViewerDoubleClickHandled {
+  return [self _t:KKJoyrideTriggerTypeMiniViewerDoubleClickHandled];
 }
 
 + (instancetype)renderModeChanged:(NSInteger)mode {
@@ -122,8 +122,8 @@
   return [self _t:KKJoyrideTriggerTypeFilmstripCellActivated];
 }
 
-+ (instancetype)miniCanvasOptHide {
-  return [self _t:KKJoyrideTriggerTypeMiniCanvasOptHide];
++ (instancetype)miniViewerOptHide {
+  return [self _t:KKJoyrideTriggerTypeMiniViewerOptHide];
 }
 
 + (instancetype)playToggleEdge {

@@ -87,10 +87,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// other lane's unrelated KPs leak into the filmstrip.
 @property(nonatomic, readonly, nullable, copy) NSString *primaryLaneLabel;
 
-/// Pill click → request the mini-canvas value popover for that keypose.
+/// Pill click → request the mini-viewer value popover for that keypose.
 /// `displayLanes` is one synthetic single-keypose lane carrying the click's
-/// value (so the popover renders the right editor / mini-canvas handles);
-/// `previewFraction` is the clicked KP's time (mini-canvas evaluates the
+/// value (so the popover renders the right editor / mini-viewer handles);
+/// `previewFraction` is the clicked KP's time (mini-viewer evaluates the
 /// frame there). The host wires this to KKTimelineLanesView's existing
 /// boundary-popover plumbing - same coalesced drag chain Basic uses.
 @property(nonatomic, copy, nullable) void (^onValuePopover)

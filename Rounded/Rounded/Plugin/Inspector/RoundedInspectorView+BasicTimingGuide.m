@@ -75,7 +75,7 @@ static double RoundedGuideCurrentRadius(KKTimelineLanesView *lanes) {
   cfg.oscGuideBridge = ^KKOSCGuideBridge * {
     return RoundedSharedOSCGuideBridge();
   };
-  // The pill step disables Crop (not Radius), so the keypose mini-canvas (which
+  // The pill step disables Crop (not Radius), so the keypose mini-viewer (which
   // shows only the featured Radius lane) stays populated for the later steps.
   cfg.oscDisableLabel = @"Crop";
   // The OSC-shape strategy: how a viewer drag maps to the Radius value and back

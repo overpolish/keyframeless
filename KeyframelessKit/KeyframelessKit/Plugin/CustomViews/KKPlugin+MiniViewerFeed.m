@@ -3,16 +3,16 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKPlugin+MiniCanvasFeed.h"
+#import "KKPlugin+MiniViewerFeed.h"
 
 #import "KKMetalDeviceCache.h"
-#import "KKMiniCanvasFeed.h"
+#import "KKMiniViewerFeed.h"
 #import <FxPlug/FxPlugSDK.h>
 
-@implementation KKPlugin (MiniCanvasFeed)
+@implementation KKPlugin (MiniViewerFeed)
 
 - (void)
-    kkPublishMiniCanvasFeedForDestination:(FxImageTile *)destinationImage
+    kkPublishMiniViewerFeedForDestination:(FxImageTile *)destinationImage
                              sourceImages:(NSArray<FxImageTile *> *)sourceImages
                            descriptorPath:(NSString *)descriptorPath
                           boundaryReqSecs:(NSArray<NSNumber *> *)boundaryReqSecs
@@ -26,11 +26,11 @@
   // (Re)create the feed when the descriptor path changes. A per-instance path
   // resolves its UUID late (recreates once it's known); a static path creates
   // the feed once and never recreates.
-  if (!self.miniCanvasFeed ||
-      ![self.miniCanvasFeedPath isEqualToString:descriptorPath]) {
-    self.miniCanvasFeed =
-        [[KKMiniCanvasFeed alloc] initWithDescriptorPath:descriptorPath];
-    self.miniCanvasFeedPath = descriptorPath;
+  if (!self.miniViewerFeed ||
+      ![self.miniViewerFeedPath isEqualToString:descriptorPath]) {
+    self.miniViewerFeed =
+        [[KKMiniViewerFeed alloc] initWithDescriptorPath:descriptorPath];
+    self.miniViewerFeedPath = descriptorPath;
   }
 
   // Build (slot index, tile) pairs to publish this tick.
@@ -44,9 +44,9 @@
     for (NSUInteger i = 0; i < sourceImages.count; i++)
       if (sourceImages[i].ioSurface)
         [availTileIdx addObject:@(i)];
-    if (self.miniCanvasFeed.slotCount != boundaryReqSecs.count) {
-      self.miniCanvasFeed.slotCount = boundaryReqSecs.count;
-      [self.miniCanvasFeed publishDescriptor];
+    if (self.miniViewerFeed.slotCount != boundaryReqSecs.count) {
+      self.miniViewerFeed.slotCount = boundaryReqSecs.count;
+      [self.miniViewerFeed publishDescriptor];
     }
     for (NSUInteger slot = 0; slot < boundaryReqSecs.count; slot++) {
       double want = boundaryReqSecs[slot].doubleValue;
@@ -68,8 +68,8 @@
       }
     }
   } else {
-    if (self.miniCanvasFeed.slotCount != 1)
-      self.miniCanvasFeed.slotCount = 1;
+    if (self.miniViewerFeed.slotCount != 1)
+      self.miniViewerFeed.slotCount = 1;
     [pairs addObject:@[ @0, sourceImages[0] ]];
   }
 
@@ -110,7 +110,7 @@
     double tag = (slotIdx < boundaryReqFracs.count)
                      ? boundaryReqFracs[slotIdx].doubleValue
                      : defaultTag;
-    [self.miniCanvasFeed updateSlot:slotIdx
+    [self.miniViewerFeed updateSlot:slotIdx
                   withSourceTexture:srcTex
                                 tag:tag
                              device:dev

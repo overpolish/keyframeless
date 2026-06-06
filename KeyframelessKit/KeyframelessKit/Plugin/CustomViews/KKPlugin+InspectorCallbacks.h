@@ -20,7 +20,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// The shared inspector state persisted across the custom params, parsed once
 /// at view-creation time. `timeline` is the raw saved timeline (NOT yet stamped
 /// with the clip duration - the caller does that with its own helper).
-/// `renderMode` is a `KKMiniCanvasRenderMode` carried as NSInteger.
+/// `renderMode` is a `KKMiniViewerRenderMode` carried as NSInteger.
 @interface KKInspectorPersistedState : NSObject
 @property(nonatomic) BOOL loopEnabled;
 @property(nonatomic) NSInteger activeTab;
@@ -51,7 +51,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// render-nudge / scrub / playback / detach - on `view`. These bodies are
 /// identical across plugins; only the UI-state + render-nudge param IDs, the
 /// drag undo-group label, and the detached-window size differ. Plugins keep
-/// their own view creation, OSC-visibility, mini-canvas, and gap-popover
+/// their own view creation, OSC-visibility, mini-viewer, and gap-popover
 /// wiring.
 - (void)kkWireStandardInspectorCallbacksForView:(KKTimelineInspectorView *)view
                                  uiStateParamID:(UInt32)uiStateParamID

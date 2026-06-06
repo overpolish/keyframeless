@@ -213,7 +213,7 @@ static const NSEventModifierFlags kJoyrideModifierMask =
 
 // A move landed somewhere; if the cursor is inside the spotlight and the step
 // wants moves, hand it the screen point so it can drive its control (e.g. the
-// mini-canvas opt-reveal). Mirrors _handleGlobalMouseDown's spotlight gate.
+// mini-viewer opt-reveal). Mirrors _handleGlobalMouseDown's spotlight gate.
 - (void)_handleMouseMoved {
   KKJoyrideStep *step = [self _currentStep];
   void (^moved)(NSPoint) = step.spotlightMouseMoved;

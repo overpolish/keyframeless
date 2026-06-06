@@ -3488,7 +3488,7 @@
       "comment": "OSC guide: closing benefit step."
     },
     "Showing current frame": {
-      "comment": "Constants editor preview hint: the mini-canvas shows the frame at the playhead, not the first frame.",
+      "comment": "Constants editor preview hint: the mini-viewer shows the frame at the playhead, not the first frame.",
       "extractionState": "stale",
       "localizations": {
         "de": {
@@ -3737,7 +3737,7 @@
           }
         }
       },
-      "comment": "OSC guide: opt-click a mini-canvas handle to hide."
+      "comment": "OSC guide: opt-click a mini-viewer handle to hide."
     },
     "Hold <kbd>⌥</kbd> and move over the controls to <accent>peek</accent> at the hidden one.": {
       "extractionState": "manual",
@@ -7015,86 +7015,86 @@
         }
       }
     },
-    "Reset the mini-canvas zoom": {
+    "Reset the mini-viewer zoom": {
       "comment": "Help text.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mini-Canvas-Zoom zurücksetzen"
+            "value": "Mini-Viewer-Zoom zurücksetzen"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Restablecer el zoom del minilienzo"
+            "value": "Restablecer el zoom del minivisor"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réinitialiser le zoom du mini-canevas"
+            "value": "Réinitialiser le zoom de la mini-visualisation"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ミニキャンバスのズームをリセット"
+            "value": "ミニビューアのズームをリセット"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "미니 캔버스 줌 재설정"
+            "value": "미니 뷰어 줌 재설정"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "重置迷你画布缩放"
+            "value": "重置迷你检视器缩放"
           }
         }
       }
     },
-    "Zoom the mini-canvas (two-finger drag pans)": {
+    "Zoom the mini-viewer (two-finger drag pans)": {
       "comment": "Help text.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mini-Canvas zoomen (Zwei-Finger-Ziehen schwenkt)"
+            "value": "Mini-Viewer zoomen (Zwei-Finger-Ziehen schwenkt)"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hacer zoom en el minilienzo (arrastrar con dos dedos encuadra)"
+            "value": "Hacer zoom en el minivisor (arrastrar con dos dedos encuadra)"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Zoomer le mini-canevas (glisser à deux doigts pour cadrer)"
+            "value": "Zoomer la mini-visualisation (glisser à deux doigts pour cadrer)"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ミニキャンバスをズーム(2本指ドラッグでパン)"
+            "value": "ミニビューアをズーム(2本指ドラッグでパン)"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "미니 캔버스 줌(두 손가락 드래그로 이동)"
+            "value": "미니 뷰어 줌(두 손가락 드래그로 이동)"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "缩放迷你画布(双指拖动平移)"
+            "value": "缩放迷你检视器(双指拖动平移)"
           }
         }
       }
@@ -8023,44 +8023,44 @@
         }
       }
     },
-    "Double-click the mini-canvas": {
+    "Double-click the mini-viewer": {
       "comment": "Shortcut keys.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doppelklick auf Mini-Canvas"
+            "value": "Doppelklick auf Mini-Viewer"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Doble clic en el minilienzo"
+            "value": "Doble clic en el minivisor"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Double-clic sur le mini-canevas"
+            "value": "Double-clic sur la mini-visualisation"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ミニキャンバスをダブルクリック"
+            "value": "ミニビューアをダブルクリック"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "미니 캔버스 더블 클릭"
+            "value": "미니 뷰어 더블 클릭"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "双击迷你画布"
+            "value": "双击迷你检视器"
           }
         }
       }

@@ -4,7 +4,7 @@
  */
 
 #import "KKDataBlob.h"
-#import "KKMiniCanvasRenderer.h"
+#import "KKMiniViewerRenderer.h"
 #import "KKPlugin+OSCVisibility.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
@@ -26,7 +26,7 @@
 
 - (void)kkApplyOSCVisibilityFromState:(NSDictionary *)uiState
                           elementKeys:(NSArray<NSString *> *)keys
-                             renderer:(KKMiniCanvasRenderer *)renderer {
+                             renderer:(KKMiniViewerRenderer *)renderer {
   NSDictionary *els = uiState[@"oscElements"];
   NSMutableSet<NSString *> *hidden = [NSMutableSet set];
   if ([els isKindOfClass:[NSDictionary class]])
@@ -42,7 +42,7 @@
 - (void)kkSetOSCElement:(NSString *)label
                  hidden:(BOOL)hidden
             elementKeys:(NSArray<NSString *> *)keys
-               renderer:(KKMiniCanvasRenderer *)renderer
+               renderer:(KKMiniViewerRenderer *)renderer
                 paramID:(UInt32)paramID {
   KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
   NSMutableSet<NSString *> *h =
@@ -62,7 +62,7 @@
 
 - (void)kkToggleOSCElement:(NSString *)label
                elementKeys:(NSArray<NSString *> *)keys
-                  renderer:(KKMiniCanvasRenderer *)renderer
+                  renderer:(KKMiniViewerRenderer *)renderer
                    paramID:(UInt32)paramID {
   BOOL currentlyHidden =
       [KKInstanceStateForAPI(self.apiManager).hiddenOSCElements
@@ -75,14 +75,14 @@
 }
 
 - (void)kkWireOSCVisibilityForView:(KKTimelineInspectorView *)view
-                          renderer:(KKMiniCanvasRenderer *)renderer
+                          renderer:(KKMiniViewerRenderer *)renderer
                          compounds:(NSArray<NSArray<NSString *> *> *)compounds
                            paramID:(UInt32)paramID {
   NSArray<NSString *> *keys = [KKPlugin kkOSCElementKeysForCompounds:compounds];
   __weak typeof(self) weak = self;
   // Renderer retains onHandleVisibilityToggled, so capture it weakly to avoid a
   // cycle; the inspector callbacks capture it weakly too for symmetry.
-  __weak KKMiniCanvasRenderer *weakRenderer = renderer;
+  __weak KKMiniViewerRenderer *weakRenderer = renderer;
 
   view.onOSCVisibleToggled = ^(BOOL visible) {
     __strong typeof(weak) strong = weak;
@@ -135,7 +135,7 @@
 
 - (void)kkRefreshOSCVisibilityFromState:(NSDictionary *)state
                                    view:(KKTimelineInspectorView *)view
-                               renderer:(KKMiniCanvasRenderer *)renderer
+                               renderer:(KKMiniViewerRenderer *)renderer
                             elementKeys:(NSArray<NSString *> *)keys {
   KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
   // Keep the cached blob current, but if a guide is transiently forcing OSC
@@ -166,7 +166,7 @@
     kkForceOSCForGuideKeepingLabels:(NSArray<NSString *> *)keepLabels
                         elementKeys:(NSArray<NSString *> *)keys
                                view:(KKTimelineInspectorView *)view
-                           renderer:(KKMiniCanvasRenderer *)renderer {
+                           renderer:(KKMiniViewerRenderer *)renderer {
   KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
   BOOL priorMaster = st ? st.oscMasterVisible : YES;
   NSSet<NSString *> *priorHidden =
@@ -194,7 +194,7 @@
 
 - (void)kkRestoreOSCForGuide:(NSDictionary *)snapshot
                         view:(KKTimelineInspectorView *)view
-                    renderer:(KKMiniCanvasRenderer *)renderer {
+                    renderer:(KKMiniViewerRenderer *)renderer {
   if (!snapshot)
     return;
   BOOL priorMaster = [snapshot[@"master"] boolValue];
@@ -210,7 +210,7 @@
   renderer.handlesHidden = !priorMaster;
   renderer.hiddenHandleLabels = priorHidden;
   // The OSC guide drives peek reveal directly (setGuidePeekActive); clear it so
-  // a run that ended mid-peek doesn't leave the mini-canvas stuck in peek mode
+  // a run that ended mid-peek doesn't leave the mini-viewer stuck in peek mode
   // (which the master toggle then can't hide).
   renderer.revealHidden = NO;
   [view setOSCVisible:priorMaster];
@@ -230,7 +230,7 @@
       return;
     // Keep-set + renderer resolve at fire time: the running guide's config has
     // installed `guideOSCKeepLabels` by now, and the renderer may have changed.
-    KKMiniCanvasRenderer *r = (KKMiniCanvasRenderer *)v.miniCanvasDelegate;
+    KKMiniViewerRenderer *r = (KKMiniViewerRenderer *)v.miniViewerDelegate;
     snapshot = [p kkForceOSCForGuideKeepingLabels:v.guideOSCKeepLabels
                                       elementKeys:keys
                                              view:v
@@ -242,7 +242,7 @@
     __strong KKTimelineInspectorView *v = weakView;
     if (!p || !v)
       return;
-    KKMiniCanvasRenderer *r = (KKMiniCanvasRenderer *)v.miniCanvasDelegate;
+    KKMiniViewerRenderer *r = (KKMiniViewerRenderer *)v.miniViewerDelegate;
     [p kkRestoreOSCForGuide:snapshot view:v renderer:r];
     [p kkNudgeRenderWithParamID:nudgeParamID];
   };
