@@ -27,8 +27,8 @@ FOUNDATION_EXTERN const CGFloat KKHelpKeyColumnMin;
   id _refreshObserver;
   NSTimer *_refreshTimer;
 }
-/// Muted section sub-label ("Shortcuts", "On this page", "Interactive
-/// Guides"). Shared by the content builders and the Guides category.
+/// Muted section sub-label ("Shortcuts", "Interactive Guides"). Shared by
+/// the content builders and the Guides category.
 - (NSView *)_subheading:(NSString *)text;
 @end
 

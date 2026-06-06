@@ -546,6 +546,17 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// help button visible. Default: empty array.
 - (NSArray<KKHelpSection *> *)helpSections;
 
+/// Override to give the help window a title bar at the very top: the plugin's
+/// name beside its icon, so it's clear which plugin the window belongs to. If
+/// a `helpSections` entry carries the same title, its inline heading is
+/// dropped (the title now lives in the header) and its body is promoted to an
+/// intro block above the contents table. Default: nil (no header bar).
+- (nullable NSString *)helpHeaderTitle;
+
+/// SF Symbol or image shown beside `helpHeaderTitle` in the help window's top
+/// title bar. Default: nil.
+- (nullable NSImage *)helpHeaderIcon;
+
 /// Build a help section whose tips are rendered from one of this plugin's
 /// bundled `AIKnowledge` markdown topics - the same `.md` the AI assistant
 /// reads - so the help window and the AI stay single-sourced. `topicID` is the
@@ -559,9 +570,8 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 - (KKHelpSection *)helpSectionFromKnowledgeTopic:(NSString *)topicID
                                            title:(NSString *)title
                                           symbol:(nullable NSString *)symbol
-                                       localizer:
-                                           (nullable NSString * (^)(
-                                               NSString *tip))localizer;
+                                       localizer:(nullable NSString * (^)(
+                                                     NSString *tip))localizer;
 
 /// The generic on-screen-control + mini-canvas shortcut rows that every plugin
 /// with on-screen controls shares (hide a control, reveal hidden ones, reset

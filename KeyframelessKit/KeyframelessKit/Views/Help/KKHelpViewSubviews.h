@@ -17,25 +17,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy) void (^actionBlock)(void);
 @end
 
-/// NSGridView that draws hairline separators between its rows.
-@interface KKHelpShortcutsGrid : NSGridView
-@end
-
 /// Non-flipped background that paints the inspector colour and tucks a
 /// faded rotated logo into the bottom-right corner.
 @interface KKHelpBackgroundView : NSView
-@end
-
-/// Borderless link button used in the help-page table of contents.
-/// Holds weak refs to its target section view and the scroll view, so a
-/// click can scroll that section's title to the top of the visible
-/// area. Confluence-style "On this page" jumplist.
-@interface KKHelpTOCLink : NSButton
-@property(weak) NSView *anchorView;
-/// Document view of the surrounding scroll view (the page stack). Used
-/// as the coordinate space for the scroll target and as the receiver of
-/// `scrollPoint:`, which walks up to the nearest clip view automatically.
-@property(weak) NSView *documentHost;
 @end
 
 /// Self-rounding capsule (cornerRadius tracks height) - matches the
@@ -55,6 +39,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak) NSView *badge;
 @property(nonatomic, strong, nullable) NSTimer *loaderTimer;
 @property(nonatomic) NSTimeInterval loaderStart;
+/// The text column's trailing edge stops before the badge when it's showing,
+/// and runs to the row edge when it's hidden. Toggled in -_applyStateToRefs.
+@property(nonatomic, strong, nullable)
+    NSLayoutConstraint *textTrailingWithBadge;
+@property(nonatomic, strong, nullable) NSLayoutConstraint *textTrailingNoBadge;
 @property(nonatomic) BOOL hasState;
 @property(nonatomic) BOOL lastEnabled;
 @property(nonatomic) BOOL lastViewed;

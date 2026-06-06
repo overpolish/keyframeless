@@ -55,20 +55,27 @@
   return @[];
 }
 
+- (nullable NSString *)helpHeaderTitle {
+  return nil;
+}
+
+- (nullable NSImage *)helpHeaderIcon {
+  return nil;
+}
+
 - (KKHelpSection *)helpSectionFromKnowledgeTopic:(NSString *)topicID
                                            title:(NSString *)title
                                           symbol:(NSString *)symbol
-                                       localizer:
-                                           (NSString * (^)(NSString *))localizer {
+                                       localizer:(NSString * (^)(NSString *))
+                                                     localizer {
   // self is the plugin subclass, so bundleForClass resolves to the plugin's
   // own bundle where its AIKnowledge docs live (kept in an AIKnowledge
   // subdirectory, unlike the kit framework which flattens).
-  NSArray<NSString *> *tips =
-      [KKHelpSection tipMarkupFromKnowledgeTopic:topicID
-                                        inBundle:[NSBundle bundleForClass:[self
-                                                                              class]]
-                                    subdirectory:@"AIKnowledge"
-                                       localizer:localizer];
+  NSArray<NSString *> *tips = [KKHelpSection
+      tipMarkupFromKnowledgeTopic:topicID
+                         inBundle:[NSBundle bundleForClass:[self class]]
+                     subdirectory:@"AIKnowledge"
+                        localizer:localizer];
   KKHelpSection *s = [KKHelpSection sectionWithTitle:title
                                            tipMarkup:tips
                                            shortcuts:nil];
@@ -152,10 +159,9 @@
                                      @"Shortcut keys.")
                     descMarkup:KKLoc(@"Reset its zoom and pan",
                                      @"Help shortcut.")],
-    [KKHelpShortcut
-        shortcutWithKeysMarkup:@"<kbd>⌘ 0</kbd>"
-                    descMarkup:KKLoc(@"Reset the mini-canvas zoom",
-                                     @"Help shortcut.")],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌘ 0</kbd>"
+                                descMarkup:KKLoc(@"Reset the mini-canvas zoom",
+                                                 @"Help shortcut.")],
     [KKHelpShortcut
         shortcutWithKeysMarkup:KKLoc(@"Scroll / pinch", @"Shortcut keys.")
                     descMarkup:KKLoc(@"Zoom the mini-canvas (two-finger drag "
@@ -177,17 +183,20 @@
                                                 @"Help shortcut.")],
                [KKHelpShortcut
                    shortcutWithKeysMarkup:KKLoc(@"<kbd>⇧</kbd> + click",
-                                               @"Shortcut keys.")
+                                                @"Shortcut keys.")
                                descMarkup:KKLoc(@"Add to or remove from the "
                                                 @"selection",
                                                 @"Help shortcut.")],
                [KKHelpShortcut
-                   shortcutWithKeysMarkup:KKLoc(@"<kbd>⌥</kbd> + click a keypose",
-                                               @"Shortcut keys.")
-                               descMarkup:KKLoc(@"Delete it", @"Help shortcut.")],
+                   shortcutWithKeysMarkup:KKLoc(
+                                              @"<kbd>⌥</kbd> + click a keypose",
+                                              @"Shortcut keys.")
+                               descMarkup:KKLoc(@"Delete it",
+                                                @"Help shortcut.")],
                [KKHelpShortcut
-                   shortcutWithKeysMarkup:KKLoc(@"<kbd>⌥</kbd> + drag a keypose",
-                                               @"Shortcut keys.")
+                   shortcutWithKeysMarkup:KKLoc(
+                                              @"<kbd>⌥</kbd> + drag a keypose",
+                                              @"Shortcut keys.")
                                descMarkup:KKLoc(@"Duplicate it",
                                                 @"Help shortcut.")],
                [KKHelpShortcut
@@ -196,32 +205,33 @@
                                                 @"nearby ones)",
                                                 @"Help shortcut.")],
                [KKHelpShortcut
-                   shortcutWithKeysMarkup:KKLoc(@"<kbd>⌘</kbd> + click an empty "
-                                               @"lane",
-                                               @"Shortcut keys.")
+                   shortcutWithKeysMarkup:KKLoc(
+                                              @"<kbd>⌘</kbd> + click an empty "
+                                              @"lane",
+                                              @"Shortcut keys.")
                                descMarkup:KKLoc(@"Add a keypose there",
                                                 @"Help shortcut.")],
                [KKHelpShortcut
                    shortcutWithKeysMarkup:KKLoc(@"Right-click an interval",
-                                               @"Shortcut keys.")
+                                                @"Shortcut keys.")
                                descMarkup:KKLoc(@"Link or unlink its endpoints "
                                                 @"(hold vs animate)",
                                                 @"Help shortcut.")],
                [KKHelpShortcut
                    shortcutWithKeysMarkup:KKLoc(@"Drag empty space",
-                                               @"Shortcut keys.")
+                                                @"Shortcut keys.")
                                descMarkup:KKLoc(@"Marquee-select keyposes",
                                                 @"Help shortcut.")],
-               [KKHelpShortcut
-                   shortcutWithKeysMarkup:KKLoc(@"<kbd>Space</kbd>",
-                                               @"Shortcut keys.")
-                               descMarkup:KKLoc(@"Play or pause",
-                                                @"Help shortcut.")],
+               [KKHelpShortcut shortcutWithKeysMarkup:KKLoc(@"<kbd>Space</kbd>",
+                                                            @"Shortcut keys.")
+                                           descMarkup:KKLoc(@"Play or pause",
+                                                            @"Help shortcut.")],
                [KKHelpShortcut
                    shortcutWithKeysMarkup:@"<kbd>⌘ Z</kbd> / <kbd>⌘ ⇧ Z</kbd>"
-                               descMarkup:KKLoc(@"Undo / redo, including inside "
-                                                @"popovers",
-                                                @"Help shortcut.")],
+                               descMarkup:KKLoc(
+                                              @"Undo / redo, including inside "
+                                              @"popovers",
+                                              @"Help shortcut.")],
              ]];
   s.icon = [NSImage imageWithSystemSymbolName:@"keyboard"
                      accessibilityDescription:nil];
@@ -256,10 +266,11 @@
   NSArray<NSString *> *tips =
       [KKHelpSection localizedTipMarkupFromKnowledgeTopic:@"motion-blur"];
 
-  KKHelpSection *mb = [KKHelpSection
-      sectionWithTitle:KKLoc(@"Motion Blur", @"Help section title: motion blur.")
-             tipMarkup:tips
-             shortcuts:nil];
+  KKHelpSection *mb =
+      [KKHelpSection sectionWithTitle:KKLoc(@"Motion Blur",
+                                            @"Help section title: motion blur.")
+                            tipMarkup:tips
+                            shortcuts:nil];
   mb.icon = [NSImage imageWithSystemSymbolName:@"figure.walk.motion"
                       accessibilityDescription:nil];
   return mb;
@@ -286,9 +297,9 @@
     [actionAPI startAction:self];
     id<FxParameterRetrievalAPI_v6> getAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    hasTimeline =
-        [self defaultLanesAtTime:[actionAPI currentTime] paramGetAPI:getAPI]
-            .count > 0;
+    hasTimeline = [self defaultLanesAtTime:[actionAPI currentTime]
+                               paramGetAPI:getAPI]
+                      .count > 0;
     [actionAPI endAction:self];
   }
   if (!hasTimeline && [self helpGuides].count > 0)
@@ -308,7 +319,9 @@
                     return nil;
                   KKHelpView *helpView =
                       [[KKHelpView alloc] initWithSections:finalSections
-                                                    guides:[s helpGuides]];
+                                                    guides:[s helpGuides]
+                                               headerTitle:[s helpHeaderTitle]
+                                                headerIcon:[s helpHeaderIcon]];
                   NSNotificationName refreshName =
                       [s helpGuideRefreshNotificationName];
                   if (refreshName)

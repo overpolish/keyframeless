@@ -437,6 +437,15 @@ static NSString *_RoundedAILaneSchemaText(void) {
                 }];
 }
 
+- (nullable NSString *)helpHeaderTitle {
+  return RLoc(@"Rounded", @"Help section title (plugin name).");
+}
+
+- (nullable NSImage *)helpHeaderIcon {
+  return [NSImage imageWithSystemSymbolName:@"square.dotted"
+                   accessibilityDescription:nil];
+}
+
 - (NSArray<KKHelpSection *> *)helpSections {
   // Quick reference: short overview + parameter list (single-sourced from
   // rounded.md), then an on-screen-control shortcuts table. The per-property
@@ -453,7 +462,8 @@ static NSString *_RoundedAILaneSchemaText(void) {
 
   NSMutableArray<KKHelpShortcut *> *rows = [@[
     [KKHelpShortcut
-        shortcutWithKeysMarkup:RLoc(@"Drag the Radius handle", @"Shortcut keys.")
+        shortcutWithKeysMarkup:RLoc(@"Drag the Radius handle",
+                                    @"Shortcut keys.")
                     descMarkup:RLoc(@"Set the corner rounding on the canvas",
                                     @"Help shortcut.")],
     [KKHelpShortcut
@@ -463,13 +473,13 @@ static NSString *_RoundedAILaneSchemaText(void) {
   ] mutableCopy];
   [rows addObjectsFromArray:[KKPlugin sharedOnScreenControlShortcuts]];
 
-  KKHelpSection *shortcuts = [KKHelpSection
-      sectionWithTitle:RLoc(@"On-screen control shortcuts",
-                            @"Help section title.")
-             tipMarkup:nil
-             shortcuts:rows];
+  KKHelpSection *shortcuts =
+      [KKHelpSection sectionWithTitle:RLoc(@"On-screen control shortcuts",
+                                           @"Help section title.")
+                            tipMarkup:nil
+                            shortcuts:rows];
   shortcuts.icon = [NSImage imageWithSystemSymbolName:@"hand.point.up.left"
-                            accessibilityDescription:nil];
+                             accessibilityDescription:nil];
 
   return @[ overview, shortcuts ];
 }

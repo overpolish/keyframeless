@@ -830,6 +830,15 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   return MagicMoveSharedOSCGuideBridge().guidePositionNotificationName;
 }
 
+- (nullable NSString *)helpHeaderTitle {
+  return MMLoc(@"Magic Move", @"Help section title (plugin name).");
+}
+
+- (nullable NSImage *)helpHeaderIcon {
+  return [NSImage imageWithSystemSymbolName:@"circle.dotted.and.circle"
+                   accessibilityDescription:nil];
+}
+
 - (NSArray<KKHelpSection *> *)helpSections {
   // Quick reference: a short overview + parameter list (single-sourced from
   // magicmove.md, the same doc the AI reads), then an on-screen-control
@@ -841,9 +850,8 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                                           @"Help section title (plugin name).")
                              symbol:@"circle.dotted.and.circle"
                           localizer:^NSString *(NSString *tip) {
-                            return MMLoc(tip,
-                                         @"Magic Move help tip (from "
-                                         @"AIKnowledge markdown).");
+                            return MMLoc(tip, @"Magic Move help tip (from "
+                                              @"AIKnowledge markdown).");
                           }];
 
   NSMutableArray<KKHelpShortcut *> *rows = [@[
@@ -879,13 +887,13 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   ] mutableCopy];
   [rows addObjectsFromArray:[KKPlugin sharedOnScreenControlShortcuts]];
 
-  KKHelpSection *shortcuts = [KKHelpSection
-      sectionWithTitle:MMLoc(@"On-screen control shortcuts",
-                             @"Help section title.")
-             tipMarkup:nil
-             shortcuts:rows];
+  KKHelpSection *shortcuts =
+      [KKHelpSection sectionWithTitle:MMLoc(@"On-screen control shortcuts",
+                                            @"Help section title.")
+                            tipMarkup:nil
+                            shortcuts:rows];
   shortcuts.icon = [NSImage imageWithSystemSymbolName:@"hand.point.up.left"
-                            accessibilityDescription:nil];
+                             accessibilityDescription:nil];
 
   return @[ overview, shortcuts ];
 }
