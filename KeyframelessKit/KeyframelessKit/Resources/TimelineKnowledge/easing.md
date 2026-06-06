@@ -3,8 +3,7 @@ id: easing
 summary: Easing curves on intervals (Linear, Ease, Elastic, Bounce)
 ---
 
-Each Advanced interval has an easing curve. Click the interval to pick it (Shift-click to select several first):
-
+- Each Advanced interval has an easing curve. Click the interval to pick it (Shift-click to select several first):
   - **Linear** - uniform motion.
   - **Ease In** - slow start, accelerates.
   - **Ease Out** - fast start, decelerates.

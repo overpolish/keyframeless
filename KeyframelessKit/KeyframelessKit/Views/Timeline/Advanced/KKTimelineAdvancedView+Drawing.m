@@ -82,12 +82,15 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   }
 
   // Curves and pills get clipped to the tracks rect so zoom/pan content
-  // doesn't bleed into the label gutter or beyond the track edges. Clip is
-  // expanded so t=0 / t=1 pills draw whole + ~2px for the selection halo.
+  // doesn't bleed into the label gutter or beyond the track edges. The left
+  // edge keeps a small pad so the t=0 pill + halo draw whole; the right edge
+  // runs out to the container edge so the last-frame pill and its selection
+  // halo overflow whole into the free right gutter, the same way the playhead
+  // knob overflows.
   CGFloat edgePad = kPillW * 0.5 + 2.0;
+  CGFloat clipL = NSMinX(tracks) - edgePad;
   [NSGraphicsContext saveGraphicsState];
-  NSRectClip(NSMakeRect(NSMinX(tracks) - edgePad, NSMinY(g),
-                        NSWidth(tracks) + edgePad * 2.0, NSHeight(g)));
+  NSRectClip(NSMakeRect(clipL, NSMinY(g), NSMaxX(g) - clipL, NSHeight(g)));
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
     NSRect row = [self _rowRectForIndex:i count:lanes.count];

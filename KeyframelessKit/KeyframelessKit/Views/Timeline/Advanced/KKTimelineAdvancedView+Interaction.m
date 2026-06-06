@@ -12,9 +12,13 @@
 @implementation KKTimelineAdvancedView (Interaction)
 
 - (BOOL)_isInScrubBand:(NSPoint)pt {
+  NSRect g = [self _graphRect];
   NSRect tracks = [self _tracksRect];
-  return KKTimelineScrubBandContainsPoint(pt, NSMinX(tracks), NSMaxX(tracks),
-                                          NSMaxY([self _graphRect]));
+  // Right edge runs out to the container edge, not NSMaxX(tracks), so the right
+  // gutter where the last-frame pill draws stays scrubbable like the rest of
+  // the ruler; _fracForX clamps those clicks to lastFrameFrac (the last pill).
+  return KKTimelineScrubBandContainsPoint(pt, NSMinX(tracks), NSMaxX(g),
+                                          NSMaxY(g));
 }
 
 // Drag snap: every animatable KP time (across all lanes) is a candidate,

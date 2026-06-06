@@ -37,7 +37,7 @@ public struct AIButton: View {
 	private var iconState: SparkleIcon.State {
 		if !keyState.hasAnyKey { return .unconfigured }
 		if draft.isRouting { return .running }
-		if draft.didCompleteMutation { return .done }
+		if draft.didCompleteMutation || draft.didAnswerQuestion { return .done }
 		return .idle
 	}
 
@@ -55,6 +55,7 @@ public struct AIButton: View {
 			// Opening (or otherwise tapping) the icon counts as the user
 			// coming back to review, so clear the lingering "done" state.
 			draft.didCompleteMutation = false
+			draft.didAnswerQuestion = false
 			showPopover.toggle()
 		} label: {
 			SparkleIcon(state: iconState)

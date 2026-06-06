@@ -255,6 +255,9 @@
                                topic:@"easing"
                               symbol:@"point.topleft.down.curvedto."
                                      @"point.bottomright.up"],
+    [self _knowledgeSectionWithTitle:KKLoc(@"Presets", @"Help section title.")
+                               topic:@"presets"
+                              symbol:@"bookmark"],
     [self _builtInTimingShortcutsSection],
   ];
 }

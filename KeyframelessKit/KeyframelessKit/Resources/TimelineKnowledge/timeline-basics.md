@@ -3,8 +3,7 @@ id: timeline-basics
 summary: How animation works (lanes, keyposes, intervals, linked endpoints)
 ---
 
-Animation is built from three things:
-
+- Animation is built from three things:
   - **Lanes** - one per animatable property (Position, Radius, Color...). Toggle a lane on to animate it, off to hold a constant. The lane list is on the left.
   - **Keyposes** - a value at a point in time, shown as a pill on the lane. Place them wherever the motion should pass through.
   - **Intervals** - the gap between two keyposes. Each carries its own easing curve and optional modulation. Link the endpoints to make the interval a flat hold.

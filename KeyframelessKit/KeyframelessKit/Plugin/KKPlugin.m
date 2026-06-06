@@ -60,6 +60,11 @@
   return self;
 }
 
+- (NSString *)presetPluginKey {
+  return [NSBundle bundleForClass:[self class]].bundleIdentifier
+             ?: NSStringFromClass([self class]);
+}
+
 - (void)setTimingGroupExtraParamIDs:(NSArray<NSNumber *> *)ids {
   objc_setAssociatedObject([self class], kKKTimingExtraIDs, [ids copy],
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);

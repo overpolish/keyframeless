@@ -54,6 +54,11 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// render tick. Forwarded to the Basic motion graph.
 - (void)setPlayheadFraction:(double)frac;
 
+/// Current playhead position as a clip fraction (0–1), or < 0 when hidden /
+/// unknown. Read from the Basic motion graph; used by "apply preset at
+/// playhead".
+@property(nonatomic, readonly) double playheadFraction;
+
 /// The current timeline state. KVO-unsafe; read only from the main queue.
 @property(nonatomic, readonly) KKTimeline *currentTimeline;
 

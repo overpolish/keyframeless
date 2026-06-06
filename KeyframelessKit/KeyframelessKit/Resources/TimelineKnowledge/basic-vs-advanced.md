@@ -3,8 +3,7 @@ id: basic-vs-advanced
 summary: Basic timing vs Advanced timing modes
 ---
 
-Every property has two timing modes, switched with the pill at the top of its row:
-
+- Every property has two timing modes, switched with the pill at the top of its row:
   - **Basic** - three checkboxed phases (**In**, **Hold**, **Out**) for a simple ease-in, hold, ease-out. Drag the hold boundary to move where In ends and Out begins.
   - **Advanced** - the full keyposes + intervals model: any number of keyposes, each interval with its own curve and modulation. Use it for multi-step motion or custom holds.
 

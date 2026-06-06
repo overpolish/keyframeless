@@ -62,6 +62,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager;
 
+/// Namespace under which this plugin's animation presets are stored and listed
+/// (see KKPresets / the inspector Presets row). Defaults to the plugin's bundle
+/// identifier - stable and unique per plugin. Override only to share a preset
+/// namespace between plugins.
+- (NSString *)presetPluginKey;
+
 /// Convenience wrapper around KKMetalDeviceCache buildAndRegisterPipelineState.
 /// Call from renderDestinationImage: to get or build the pipeline state for
 /// this plugin.

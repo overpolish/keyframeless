@@ -66,8 +66,33 @@
   _inMouseDown = NO;
 }
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
-  if (self.currentEditor) {
-    [self.currentEditor keyDown:event];
+  NSText *editor = self.currentEditor;
+  // In an FxPlug ViewBridge popover there's no Edit menu, so the standard
+  // Cmd-A / C / V / X key equivalents never route to the field editor. Dispatch
+  // them to it explicitly while we're being edited.
+  if (editor &&
+      (event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask) ==
+          NSEventModifierFlagCommand) {
+    NSString *key = event.charactersIgnoringModifiers.lowercaseString;
+    if ([key isEqualToString:@"a"]) {
+      [editor selectAll:nil];
+      return YES;
+    }
+    if ([key isEqualToString:@"c"]) {
+      [editor copy:nil];
+      return YES;
+    }
+    if ([key isEqualToString:@"v"]) {
+      [editor paste:nil];
+      return YES;
+    }
+    if ([key isEqualToString:@"x"]) {
+      [editor cut:nil];
+      return YES;
+    }
+  }
+  if (editor) {
+    [editor keyDown:event];
     return YES;
   }
   return [super performKeyEquivalent:event];

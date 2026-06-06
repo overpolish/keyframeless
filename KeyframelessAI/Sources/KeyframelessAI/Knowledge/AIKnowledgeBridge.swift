@@ -21,6 +21,7 @@ public final class AIKnowledgeBridge: NSObject {
 		"animated-properties", "multi-component-properties", "value-editing",
 		"motion-blur", "snap-guides", "constants-panel", "inspector-controls",
 		"mini-viewer", "clip-space-and-wrapping", "guides", "shortcuts",
+		"presets",
 	]
 
 	@MainActor

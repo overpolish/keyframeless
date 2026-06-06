@@ -51,6 +51,10 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 @property(nonatomic, copy, nullable) NSString *managePopoverSpotlightLabel;
 /// Title drawn on the Constants button. Default @"Constants".
 @property(nonatomic, copy) NSString *constantsButtonTitle;
+/// Namespace the Presets row reads/writes under (the plugin's bundle id). Set
+/// by the host during inspector wiring; nil disables built-ins lookup. Used
+/// only when `showsPresetsRow` is YES.
+@property(nonatomic, copy, nullable) NSString *presetPluginKey;
 
 #pragma mark - Callbacks (host wires playback / loop param / FxRemoteWindow)
 
@@ -191,6 +195,11 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// effect draws on-screen controls the user should be able to hide. Read once
 /// during init.
 - (BOOL)showsOSCVisibilityRow;
+
+/// Whether to build the "Presets" row below the box (and reserve height for
+/// it). Default YES - every timing plugin can save/load animation presets.
+/// Override to NO to opt out. Read once during init.
+- (BOOL)showsPresetsRow;
 
 @end
 

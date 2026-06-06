@@ -508,6 +508,10 @@
     [bottomRows addObject:_paramOrderRow];
     [bottomRowHeights addObject:@(kParamOrderRowHeight)];
   }
+  if (_showsPresetsRow && _presetsRow) {
+    [bottomRows addObject:_presetsRow];
+    [bottomRowHeights addObject:@(kPresetsRowHeight)];
+  }
 
   if (bottomRows.count == 0) {
     [box.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
@@ -523,7 +527,7 @@
         [row.heightAnchor
             constraintEqualToConstant:bottomRowHeights[i].doubleValue],
         [above.bottomAnchor constraintEqualToAnchor:row.topAnchor
-                                           constant:-KKPaddingMD],
+                                           constant:-KKPaddingXS],
       ]];
       above = row;
     }

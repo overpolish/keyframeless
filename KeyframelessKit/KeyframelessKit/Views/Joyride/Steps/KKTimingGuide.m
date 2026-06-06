@@ -7,6 +7,7 @@
 
 #import "KKEasing.h"
 #import "KKLocalized.h"
+#import "KKTimelineInspectorView+Presets.h"
 #import <KeyframelessKit/KKHelpSection.h>
 #import <KeyframelessKit/KKJoyrideController.h>
 #import <KeyframelessKit/KKJoyrideDragStep.h>
@@ -127,6 +128,26 @@ static const CGFloat kDragSnapPx = 14.0;
   weakOSC = osc;
   osc.identifier = @"osc";
 
+  __block __weak KKHelpGuide *weakPresets = nil;
+  KKHelpGuide *presets = [KKHelpGuide
+      guideWithTitle:KKLoc(@"Presets",
+                           @"Help guide title: presets walkthrough.")
+            subtitle:KKLoc(@"Apply, insert, and save animations",
+                           @"Help guide subtitle: Presets.")
+             onStart:^{
+               KKTimelineInspectorView *iv =
+                   inspectorProvider ? inspectorProvider() : nil;
+               if (!iv)
+                 return;
+               KKHelpGuide *live = weakPresets;
+               iv.onGuideCompleted = ^{
+                 [live markCompleted];
+               };
+               [iv runPresetsGuide];
+             }];
+  weakPresets = presets;
+  presets.identifier = @"presets";
+
   // The guides cut out the FCP viewer / boundary popover, which only resolve
   // once the OSC bridge has a draw tick - so they gate on the same canvas
   // reference the plugin supplies.
@@ -135,11 +156,11 @@ static const CGFloat kDragSnapPx = 14.0;
             @"select it (it highlights yellow), then move your mouse over the "
             @"viewer to enable them.",
             @"Help guide disabled subtitle (no OSC canvas reference yet).");
-  for (KKHelpGuide *g in @[ intro, advanced, miniViewer, osc ]) {
+  for (KKHelpGuide *g in @[ intro, advanced, miniViewer, osc, presets ]) {
     g.enabledProvider = enabledProvider;
     g.disabledSubtitle = disabled;
   }
-  return @[ intro, advanced, miniViewer, osc ];
+  return @[ intro, advanced, miniViewer, osc, presets ];
 }
 
 + (KKTimeline *)basicSeedTimelineForConfig:(KKTimingGuideConfig *)config {

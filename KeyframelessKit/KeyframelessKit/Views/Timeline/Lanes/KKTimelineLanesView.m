@@ -711,6 +711,10 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   [_advancedGraph setPlayheadFraction:frac];
 }
 
+- (double)playheadFraction {
+  return _basicGraph.playheadFraction;
+}
+
 - (void)resetZoom {
   // Both tabs share one toolbar button - reset whichever is active.
   if (_activeTab == 1)
