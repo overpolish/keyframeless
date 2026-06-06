@@ -103,6 +103,10 @@ NS_ASSUME_NONNULL_BEGIN
   NSButton *_paramOrderButton;
   NSPopover *_paramOrderPopover;
   BOOL _showsParamOrderRow;
+  KKParameterRowView *_presetsRow;
+  NSButton *_presetsButton;
+  id _presetsPopover;
+  BOOL _showsPresetsRow;
   double _mbShutterAngle;
   NSInteger _mbSamples;
   KKMotionBlurMode _mbMode;
@@ -135,7 +139,23 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_buildMotionBlurRow;
 - (void)_buildOSCVisibilityRow;
 - (void)_buildParamOrderRow;
+- (void)_buildPresetsRow;
 - (void)_installConstraints:(NSView *)box headerRow:(NSView *)headerRow;
+/// Shared builder for the optional rows below the box (a labeled left view + an
+/// 18pt settings gear, optionally a 12pt checkbox). Implemented in
+/// +ParameterRows; the +Presets category reuses it for the Presets row.
+- (KKParameterRowView *)
+    _buildTickGearRowWithParameterID:(UInt32)parameterID
+                          iconSymbol:(NSString *)iconSymbol
+                               title:(NSString *)title
+                   gearAccessibility:(NSString *)gearAccessibility
+                          gearAction:(SEL)gearAction
+                        showCheckbox:(BOOL)showCheckbox
+                            checkbox:
+                                (KKCheckboxView *__strong _Nullable *_Nullable)
+                                    outCheckbox
+                          gearButton:
+                              (NSButton *__strong _Nonnull *_Nonnull)outGear;
 @end
 
 // Layout constants shared between the main .m and the +ParameterRows category.
@@ -143,6 +163,7 @@ FOUNDATION_EXPORT const CGFloat kHeaderRowHeight;
 FOUNDATION_EXPORT const CGFloat kMotionBlurRowHeight;
 FOUNDATION_EXPORT const CGFloat kOSCVisibilityRowHeight;
 FOUNDATION_EXPORT const CGFloat kParamOrderRowHeight;
+FOUNDATION_EXPORT const CGFloat kPresetsRowHeight;
 FOUNDATION_EXPORT const CGFloat kMBCheckboxTrailing;
 
 NS_ASSUME_NONNULL_END

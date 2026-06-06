@@ -508,6 +508,10 @@
     [bottomRows addObject:_paramOrderRow];
     [bottomRowHeights addObject:@(kParamOrderRowHeight)];
   }
+  if (_showsPresetsRow && _presetsRow) {
+    [bottomRows addObject:_presetsRow];
+    [bottomRowHeights addObject:@(kPresetsRowHeight)];
+  }
 
   if (bottomRows.count == 0) {
     [box.bottomAnchor constraintEqualToAnchor:self.bottomAnchor

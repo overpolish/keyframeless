@@ -84,6 +84,10 @@
   __weak typeof(self) weak = self;
   __weak KKTimelineInspectorView *weakView = view;
 
+  // Namespace the Presets row to this plugin so its saved/built-in presets
+  // never bleed across plugins (their lane sets differ).
+  view.presetPluginKey = [self presetPluginKey];
+
   view.onLoopToggled = ^(BOOL enabled) {
     __strong typeof(weak) strong = weak;
     if (!strong)
