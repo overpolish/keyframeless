@@ -38,6 +38,11 @@ NSPoint KKJoyrideSnapToTarget(NSPoint p, NSRect targetRect, CGFloat tolerance) {
                                             targetView:nil];
   step.spotlightCircular = circular;
   step.spotlightPassThrough = YES;
+  // Drives an in-process inspector view via the synthesize path below, so the
+  // overlay panel must keep capturing raw mouse events - otherwise the press
+  // also reaches the real view and the drag fires twice (leaking an undo
+  // group). See -[KKJoyrideController _showStep:].
+  step.spotlightSynthesizesInProcess = YES;
   step.targetScreenRect = ^NSRect {
     return spotRect();
   };

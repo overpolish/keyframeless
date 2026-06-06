@@ -5,6 +5,10 @@ summary: The Position property in Magic Move and its on-screen controls
 
 Position translates the clip across the frame. It has two components, X and Y, expressed in pixels (the clip's own resolution). The default is the centre of the frame; positive X moves right, positive Y moves up.
 
+- The clip can move **off-canvas** and slide back in - drag the position handle, or type any X / Y in the keypose value popover.
+- With two or more keyposes the clip follows a **path**. Double-click a keypose anchor to switch it between a smooth curve and a sharp corner, and drag anchors or their handles to reshape it.
+- Hold **Shift** while dragging to lock to one axis; hold **Cmd** to snap to the centre, edges, thirds, or another keypose.
+
 ## On-screen controls
 
 Magic Move shares one on-screen control system between the FCP viewer and the per-keypose mini-canvas previews inside the inspector. The position handle is the arc/point that follows the clip's centre; if the keypose also has any rotation, three coloured rings appear around the same point (see the rotation OSC docs).

@@ -54,6 +54,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// the guide seen, advance an onboarding tally, etc.
 @property(nonatomic, copy, nullable) void (^onGuideCompleted)(void);
 
+/// Fired at the start of EVERY run (before the first step shows) and at the
+/// end of EVERY run (on completion OR skip). Use to force transient state for
+/// the guide's duration and restore it after - e.g. forcing on-screen controls
+/// visible so the guide's handles are usable, then restoring the user's prior
+/// OSC visibility.
+@property(nonatomic, copy, nullable) void (^onRunWillStart)(void);
+@property(nonatomic, copy, nullable) void (^onRunDidEnd)(void);
+
 #pragma mark - Per-run config
 
 /// Applied to the controller each `-runWithSeed:` call. Default NO.

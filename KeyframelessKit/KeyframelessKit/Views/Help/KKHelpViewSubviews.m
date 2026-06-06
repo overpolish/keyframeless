@@ -4,8 +4,8 @@
  */
 
 #import "KKHelpViewSubviews.h"
-#import "NSColor+KKColors.h"
 #import "KKHelpView_Private.h"
+#import "NSColor+KKColors.h"
 
 @implementation _KKGuideStartButton
 - (void)mouseDown:(NSEvent *)event {
@@ -15,34 +15,6 @@
 - (void)resetCursorRects {
   [self addCursorRect:self.bounds cursor:[NSCursor pointingHandCursor]];
 }
-@end
-
-@implementation KKHelpShortcutsGrid
-
-- (void)drawRect:(NSRect)dirtyRect {
-  [super drawRect:dirtyRect];
-  if (self.numberOfRows < 2)
-    return;
-
-  NSColor *line = [[NSColor inspectorLabel] colorWithAlphaComponent:0.10];
-  [line setStroke];
-  NSBezierPath *path = [NSBezierPath bezierPath];
-  path.lineWidth = 1.0;
-
-  for (NSInteger r = 0; r < self.numberOfRows - 1; r++) {
-    NSView *aCell = [self cellAtColumnIndex:0 rowIndex:r].contentView;
-    NSView *bCell = [self cellAtColumnIndex:0 rowIndex:r + 1].contentView;
-    if (!aCell || !bCell)
-      continue;
-    CGFloat yBottomA = NSMinY(aCell.frame);
-    CGFloat yTopB = NSMaxY(bCell.frame);
-    CGFloat y = (yBottomA + yTopB) * 0.5;
-    [path moveToPoint:NSMakePoint(0, y)];
-    [path lineToPoint:NSMakePoint(self.bounds.size.width, y)];
-  }
-  [path stroke];
-}
-
 @end
 
 @implementation KKHelpBackgroundView
@@ -82,33 +54,6 @@
   [gc restoreGraphicsState];
 }
 
-@end
-
-@implementation KKHelpTOCLink
-- (void)mouseDown:(NSEvent *)event {
-  NSView *doc = self.documentHost;
-  NSView *anchor = self.anchorView;
-  NSScrollView *sv = doc.enclosingScrollView;
-  NSClipView *clip = sv.contentView;
-  if (!doc || !anchor || !sv || !clip)
-    return;
-  // Compute the anchor's top edge in clip-view coordinates (the clip is
-  // flipped, so smaller y = visually higher), then translate to a new
-  // bounds origin. Doing it via the clip rather than `scrollPoint:`
-  // sidesteps the doc-flipped vs. clip-flipped mismatch (page stack is
-  // non-flipped, so NSMinY of a section frame in doc coords is the
-  // section's *bottom*, which is why scrollPoint was landing wrong).
-  NSRect inClip = [clip convertRect:anchor.bounds fromView:anchor];
-  CGFloat newY =
-      clip.bounds.origin.y + NSMinY(inClip) - KKHelpPagePadding * 0.5;
-  if (newY < 0)
-    newY = 0;
-  [clip setBoundsOrigin:NSMakePoint(clip.bounds.origin.x, newY)];
-  [sv reflectScrolledClipView:clip];
-}
-- (void)resetCursorRects {
-  [self addCursorRect:self.bounds cursor:[NSCursor pointingHandCursor]];
-}
 @end
 
 @implementation _KKCapsuleView

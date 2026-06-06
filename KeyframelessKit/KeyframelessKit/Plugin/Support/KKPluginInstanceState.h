@@ -162,6 +162,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// rail as `oscMasterVisible`.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *hiddenOSCElements;
 
+/// YES while a guide is transiently forcing OSC visibility (see
+/// `-kkForceOSCForGuideKeepingLabels:...`). The UI-state OSC refresh checks
+/// this and skips re-applying the saved visibility, so an async
+/// `parameterChanged` the guide itself triggered (e.g. an `activeTab` write
+/// when it switches tabs) can't clobber the forced state. Cleared by
+/// `-kkRestoreOSCForGuide:`.
+@property(nonatomic) BOOL guideForcingOSC;
+
 /// Last-known full UI-state dict (the parsed `kParamUIState` blob), refreshed
 /// in the effect's `parameterChanged` where the param reads fresh. The OSC
 /// rewrites this blob when it opt-hides an element; it must NOT clobber

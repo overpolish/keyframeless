@@ -8,6 +8,10 @@
 #import "RoundedInspectorView+Guides.h"
 #import "RoundedInspectorView_Private.h"
 #import "RoundedMiniCanvasRenderer.h"
+#import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
+#import <KeyframelessKit/KKTimingGuide.h>
+
+static NSString *const kRoundedIntroSeenKey = @"RoundedIntroSeen";
 
 @implementation RoundedInspectorView
 
@@ -28,6 +32,12 @@
     self.miniCanvasDescriptorPath = RoundedMiniCanvasDescriptorPath;
     self.miniCanvasRequestPath = RoundedMiniCanvasRequestPath;
     self.managePopoverSpotlightLabel = @"Radius";
+    // The kit's restart/autostart machinery pulls a fresh config from here.
+    __weak typeof(self) weak = self;
+    self.timingGuideConfigProvider = ^KKTimingGuideConfig * {
+      __strong typeof(weak) s = weak;
+      return s ? [s _timingGuideConfig] : nil;
+    };
   }
   return self;
 }
@@ -44,15 +54,11 @@
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   if (!self.isDetachedCopy)
-    [self _maybeAutostartIntroGuide];
+    [self autostartIntroGuideOnceWithSeenKey:kRoundedIntroSeenKey];
 }
 
 - (instancetype)beginDetachedCopy {
-  RoundedInspectorView *copy =
-      (RoundedInspectorView *)[super beginDetachedCopy];
-  if ([copy isKindOfClass:[RoundedInspectorView class]])
-    copy.effectHeaderRectProvider = self.effectHeaderRectProvider;
-  return copy;
+  return [super beginDetachedCopy];
 }
 
 @end

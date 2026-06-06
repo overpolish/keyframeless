@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKTokens.h"
-#import "NSColor+KKColors.h"
 #import "KKHelpSection.h"
 #import "KKHelpView+Guides.h"
 #import "KKHelpView_Private.h"
 #import "KKLocalized.h"
+#import "KKTokens.h"
+#import "NSColor+KKColors.h"
 
 @implementation KKHelpView (Guides)
 
@@ -32,6 +32,14 @@
   warn.textColor = [NSColor warning];
   warn.lineBreakMode = NSLineBreakByWordWrapping;
   warn.maximumNumberOfLines = 0;
+  // Without low horizontal compression resistance the field keeps its
+  // single-line intrinsic width and never wraps - same fix the bullet/body
+  // labels use.
+  [warn setContentHuggingPriority:NSLayoutPriorityDefaultLow
+                   forOrientation:NSLayoutConstraintOrientationHorizontal];
+  [warn setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
+                                 forOrientation:
+                                     NSLayoutConstraintOrientationHorizontal];
   warn.hidden = YES;
   warn.translatesAutoresizingMaskIntoConstraints = NO;
   [stack addArrangedSubview:warn];
@@ -152,6 +160,12 @@
   content.alignment = NSLayoutAttributeCenterY;
   content.spacing = 3.0;
   content.translatesAutoresizingMaskIntoConstraints = NO;
+  // The capsule (a plain view) has no intrinsic size, so it only hugs its
+  // label tightly if the content stack itself refuses to stretch. NSStackView
+  // honours -setHuggingPriority:, NOT the generic -setContentHuggingPriority:,
+  // so use that - otherwise the capsule balloons to fill its given width.
+  [content setHuggingPriority:NSLayoutPriorityRequired
+               forOrientation:NSLayoutConstraintOrientationHorizontal];
   [badge addSubview:content];
   [NSLayoutConstraint activateConstraints:@[
     [content.leadingAnchor constraintEqualToAnchor:badge.leadingAnchor
@@ -169,21 +183,23 @@
 - (NSView *)_rowForGuide:(KKHelpGuide *)guide {
   _KKGuideRowRefs *refs = [[_KKGuideRowRefs alloc] init];
 
-  NSStackView *row = [[NSStackView alloc] initWithFrame:NSZeroRect];
-  row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
-  row.alignment = NSLayoutAttributeCenterY;
-  row.spacing = 10.0;
+  // Manual constraints rather than a stack: the badge is pinned to the
+  // trailing edge at its intrinsic size so it can never stretch, and the text
+  // column fills the space up to it. Short text leaves the gap to the badge;
+  // long text wraps. A toggled constraint lets the text reclaim the full width
+  // when the badge is hidden (the common, not-yet-completed case).
+  NSView *row = [[NSView alloc] initWithFrame:NSZeroRect];
+  row.translatesAutoresizingMaskIntoConstraints = NO;
 
-  [row addArrangedSubview:[self _makeIconSlotSettingRefs:refs guide:guide]];
+  NSView *iconSlot = [self _makeIconSlotSettingRefs:refs guide:guide];
+  [row addSubview:iconSlot];
 
   NSStackView *textStack = [[NSStackView alloc] initWithFrame:NSZeroRect];
   textStack.orientation = NSUserInterfaceLayoutOrientationVertical;
   textStack.alignment = NSLayoutAttributeLeading;
   textStack.spacing = 2.0;
-  // Title hugs its content; a flexible spacer (added below) takes the slack
-  // so the badge sits at the far right: [play][title][gap][badge].
-  [textStack setContentHuggingPriority:NSLayoutPriorityDefaultHigh
-                        forOrientation:NSLayoutConstraintOrientationHorizontal];
+  textStack.translatesAutoresizingMaskIntoConstraints = NO;
+  [row addSubview:textStack];
 
   NSTextField *titleLabel = [NSTextField labelWithString:guide.title];
   titleLabel.font = [NSFont systemFontOfSize:13.0 weight:NSFontWeightMedium];
@@ -195,22 +211,53 @@
   if (guide.subtitle.length > 0 || guide.disabledSubtitle.length > 0) {
     subLabel = [NSTextField labelWithString:@""];
     subLabel.font = [NSFont systemFontOfSize:11.0 weight:NSFontWeightRegular];
+    subLabel.lineBreakMode = NSLineBreakByWordWrapping;
+    subLabel.maximumNumberOfLines = 0;
+    [subLabel
+        setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
+                                 forOrientation:
+                                     NSLayoutConstraintOrientationHorizontal];
     [textStack addArrangedSubview:subLabel];
+    // A vertical stack with leading alignment leaves its children at their
+    // intrinsic width, so pin the subtitle to the (bounded) column width -
+    // otherwise it keeps its single-line width and never wraps.
+    [subLabel.widthAnchor constraintEqualToAnchor:textStack.widthAnchor]
+        .active = YES;
   }
-  [row addArrangedSubview:textStack];
-
-  // Flexible spacer pushes the badge to the trailing edge.
-  NSView *spacer = [[NSView alloc] initWithFrame:NSZeroRect];
-  spacer.translatesAutoresizingMaskIntoConstraints = NO;
-  [spacer setContentHuggingPriority:1
-                     forOrientation:NSLayoutConstraintOrientationHorizontal];
-  [spacer setContentCompressionResistancePriority:1
-                                   forOrientation:
-                                       NSLayoutConstraintOrientationHorizontal];
-  [row addArrangedSubview:spacer];
 
   NSView *badge = [self _makeBadgeView];
-  [row addArrangedSubview:badge];
+  [row addSubview:badge];
+
+  // Pin the badge to its own fitting width so the row's edge constraints can
+  // never stretch the capsule past its label. (The capsule is a plain view
+  // with no intrinsic width, so hugging priority alone can't hold it.)
+  NSSize badgeFit = [badge fittingSize];
+  [badge.widthAnchor constraintEqualToConstant:badgeFit.width].active = YES;
+
+  refs.textTrailingWithBadge =
+      [textStack.trailingAnchor constraintEqualToAnchor:badge.leadingAnchor
+                                               constant:-10.0];
+  refs.textTrailingNoBadge =
+      [textStack.trailingAnchor constraintEqualToAnchor:row.trailingAnchor];
+
+  // Center every column vertically and bound it inside the row, so the row
+  // height resolves to the tallest column (icon, text, or badge) - matching
+  // the old CenterY stack, but without letting the badge stretch.
+  [NSLayoutConstraint activateConstraints:@[
+    [iconSlot.leadingAnchor constraintEqualToAnchor:row.leadingAnchor],
+    [iconSlot.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+    [iconSlot.topAnchor constraintGreaterThanOrEqualToAnchor:row.topAnchor],
+    [iconSlot.bottomAnchor constraintLessThanOrEqualToAnchor:row.bottomAnchor],
+    [textStack.leadingAnchor constraintEqualToAnchor:iconSlot.trailingAnchor
+                                            constant:10.0],
+    [textStack.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+    [textStack.topAnchor constraintGreaterThanOrEqualToAnchor:row.topAnchor],
+    [textStack.bottomAnchor constraintLessThanOrEqualToAnchor:row.bottomAnchor],
+    [badge.trailingAnchor constraintEqualToAnchor:row.trailingAnchor],
+    [badge.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+    [badge.topAnchor constraintGreaterThanOrEqualToAnchor:row.topAnchor],
+    [badge.bottomAnchor constraintLessThanOrEqualToAnchor:row.bottomAnchor],
+  ]];
 
   refs.guide = guide;
   refs.title = titleLabel;
@@ -296,6 +343,10 @@
   }
 
   r.badge.hidden = !viewed;
+  // Text column stops before the badge when it shows; runs to the edge
+  // otherwise, so non-completed rows use the full width.
+  r.textTrailingWithBadge.active = viewed;
+  r.textTrailingNoBadge.active = !viewed;
 }
 
 // Walks the row state and toggles the section warning. Text comes from the

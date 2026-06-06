@@ -183,6 +183,33 @@ static const double kMiniScaleFineFactor = 0.2;
   return out;
 }
 
+// Scale-box handle centres the box *would* have at explicit scale percents -
+// the guide's "drag the corner out to 200%" target. Mirrors the live geometry
+// in -_scaleHandlePositions:forContentRect: but off passed-in values.
+- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+       scaleHandleCentersForValues:(NSArray<NSNumber *> *)values
+                       contentRect:(CGRect)cr {
+  if (![self _scaleBoxShown] || cr.size.width <= 0 || cr.size.height <= 0)
+    return nil;
+  double sclX = values.count > 0 ? fmax(0.0, values[0].doubleValue) : 100.0;
+  double sclY = values.count > 1 ? fmax(0.0, values[1].doubleValue) : sclX;
+  CGPoint center = [self rotationCenterForContentRect:cr];
+  double crMin = MIN(cr.size.width, cr.size.height);
+  double e0 = crMin * kMiniScaleE0Frac, span = crMin * kMiniScaleSpanFrac;
+  double halfW = KKScaleGizmoExtentForPercent(sclX, e0, span);
+  double halfH = KKScaleGizmoExtentForPercent(sclY, e0, span);
+  double l = center.x - halfW, r = center.x + halfW;
+  double b = center.y - halfH, t = center.y + halfH;
+  double cx = center.x, cy = center.y;
+  CGPoint h[8] = {CGPointMake(l, b),  CGPointMake(r, b),  CGPointMake(r, t),
+                  CGPointMake(l, t),  CGPointMake(cx, b), CGPointMake(r, cy),
+                  CGPointMake(cx, t), CGPointMake(l, cy)};
+  NSMutableArray<NSValue *> *out = [NSMutableArray arrayWithCapacity:8];
+  for (int i = 0; i < 8; i++)
+    [out addObject:[NSValue valueWithPoint:NSPointFromCGPoint(h[i])]];
+  return out;
+}
+
 // The Scale transform box, appended to the base's boxes (Magic Move has no
 // crop, so super returns none). The shared box path in KKMiniCanvasView draws
 // the border + 8 handles + readout uniformly with the crop box.
@@ -277,6 +304,19 @@ static const double kMiniScaleFineFactor = 0.2;
            forContentRect:(CGRect)cr {
   // Position is 2D; no single-scalar guide target.
   return NO;
+}
+
+- (BOOL)pointHandleCenter:(out CGPoint *)outCenter
+                forValues:(NSArray<NSNumber *> *)values
+           forContentRect:(CGRect)cr {
+  // Position target: map the 2D [x, y] to the handle's screen-space centre,
+  // the same path the live handle uses - lets a guide place a "drag to here"
+  // destination point.
+  if (values.count < 2 || cr.size.width <= 0 || cr.size.height <= 0)
+    return NO;
+  if (outCenter)
+    *outCenter = [self _handlePointForContentRect:cr position:values];
+  return YES;
 }
 
 - (BOOL)pointHandleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {

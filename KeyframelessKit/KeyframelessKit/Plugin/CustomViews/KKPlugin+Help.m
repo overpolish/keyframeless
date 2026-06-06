@@ -4,9 +4,11 @@
  */
 
 #import "KKDataBlob.h"
+#import "KKHelpSection+Markdown.h"
 #import "KKHelpSection.h"
 #import "KKHelpView+Guides.h"
 #import "KKHelpView.h"
+#import "KKLocalized.h"
 #import "KKLog.h"
 #import "KKMarkup.h"
 #import "KKPlugin_Private.h"
@@ -53,6 +55,36 @@
   return @[];
 }
 
+- (nullable NSString *)helpHeaderTitle {
+  return nil;
+}
+
+- (nullable NSImage *)helpHeaderIcon {
+  return nil;
+}
+
+- (KKHelpSection *)helpSectionFromKnowledgeTopic:(NSString *)topicID
+                                           title:(NSString *)title
+                                          symbol:(NSString *)symbol
+                                       localizer:(NSString * (^)(NSString *))
+                                                     localizer {
+  // self is the plugin subclass, so bundleForClass resolves to the plugin's
+  // own bundle where its AIKnowledge docs live (kept in an AIKnowledge
+  // subdirectory, unlike the kit framework which flattens).
+  NSArray<NSString *> *tips = [KKHelpSection
+      tipMarkupFromKnowledgeTopic:topicID
+                         inBundle:[NSBundle bundleForClass:[self class]]
+                     subdirectory:@"AIKnowledge"
+                        localizer:localizer];
+  KKHelpSection *s = [KKHelpSection sectionWithTitle:title
+                                           tipMarkup:tips
+                                           shortcuts:nil];
+  if (symbol.length > 0)
+    s.icon = [NSImage imageWithSystemSymbolName:symbol
+                       accessibilityDescription:nil];
+  return s;
+}
+
 - (NSArray<KKHelpGuide *> *)helpGuides {
   return @[];
 }
@@ -72,11 +104,14 @@
 + (nullable NSString *)_clipWrappingTipForMode:(KKClipWrappingMode)mode {
   switch (mode) {
   case KKClipWrappingModeAdjustmentOrCompound:
-    return @"Apply on an Adjustment Clip <kbd>⌥ A</kbd> or a Compound Clip "
-           @"<kbd>⌥ G</kbd> to avoid unexpected behavior and clipping.";
+    return KKLoc(@"Apply on an Adjustment Clip <kbd>⌥ A</kbd> or a Compound "
+                 @"Clip <kbd>⌥ G</kbd> to avoid unexpected behavior and "
+                 @"clipping.",
+                 @"Help tip: wrap the clip.");
   case KKClipWrappingModeCompound:
-    return @"Wrap your clip in a Compound Clip <kbd>⌥ G</kbd> before applying "
-           @"to avoid the animation being clipped at the edges.";
+    return KKLoc(@"Wrap your clip in a Compound Clip <kbd>⌥ G</kbd> before "
+                 @"applying to avoid the animation being clipped at the edges.",
+                 @"Help tip: wrap the clip.");
   case KKClipWrappingModeNone:
     return nil;
   }
@@ -91,116 +126,151 @@
   section.tips = tips;
 }
 
-+ (KKHelpSection *)_builtInTimingHelpSection {
-  NSArray<NSString *> *tips = @[
-    (@"Think in <accent>sections</accent>, not keyframes - each lane is a "
-     @"chain of <accent>holds</accent> (locked values) and "
-     @"<warn>transitions</warn> (interpolations between adjacent holds)."),
-    (@"<symbol arcade.stick.console.fill /> on a lane label toggles that "
-     @"lane's on-screen control on the canvas."),
-    (@"Click <symbol macwindow.on.rectangle /> on the Timing header to pop "
-     @"the sequencer out into its own window for more room."),
-    (@"Drag the timeline ruler to scrub the playhead; press "
-     @"<kbd>Space</kbd> to play and pause. Toggle "
-     @"<symbol repeat color=accent /> on the ruler to loop playback."),
-    (@"A transition between two holds with the "
-     @"same value won't visibly animate - change one side first."),
-    (@"Hover a segment to reveal a <symbol graph.2d /> button. Click it "
-     @"to change the easing curve (or hold effect) - or "
-     @"<kbd>Shift</kbd> + click to apply the same curve to every selected "
-     @"segment in all lane."),
-    (@"On a multi-component hold (like Radius X/Y), the edit popover has "
-     @"a <accent>Linked</accent> toggle - keeps the components' "
-     @"proportions locked through the effect, so X/Y stay aspect-locked "
-     @"through a wobble."),
-    (@"The pill row above the sequencer filters which lanes are visible."),
-  ];
++ (KKHelpSection *)_knowledgeSectionWithTitle:(NSString *)title
+                                        topic:(NSString *)topicID
+                                       symbol:(NSString *)symbol {
+  // Prose is single-sourced from the shared knowledge markdown the AI reads,
+  // localized at display time. See KKHelpSection+Markdown.
+  KKHelpSection *s = [KKHelpSection
+      sectionWithTitle:title
+             tipMarkup:[KKHelpSection
+                           localizedTipMarkupFromKnowledgeTopic:topicID]
+             shortcuts:nil];
+  s.icon = [NSImage imageWithSystemSymbolName:symbol
+                     accessibilityDescription:nil];
+  return s;
+}
 
-  NSArray<KKHelpShortcut *> *shortcuts = @[
-    [KKHelpShortcut shortcutWithKeysMarkup:@"Click lane label"
-                                descMarkup:@"Disable / enable that lane's "
-                                           @"animation"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click pill"
-                                descMarkup:@"Solo a lane (or unsolo when "
-                                           @"already the only visible lane)"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"Click"
-                                descMarkup:@"Select a segment"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"Double-click"
-                                descMarkup:@"Split a segment at the cursor"],
++ (NSArray<KKHelpShortcut *> *)sharedOnScreenControlShortcuts {
+  return @[
     [KKHelpShortcut
-        shortcutWithKeysMarkup:@"Right-click"
-                    descMarkup:@"Convert between <accent>hold</accent> "
-                               @"and <warn>transition</warn>"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌘</kbd> + click"
-                                descMarkup:@"Delete the segment"],
+        shortcutWithKeysMarkup:KKLoc(@"<kbd>⌥</kbd> + click a control",
+                                     @"Shortcut keys.")
+                    descMarkup:KKLoc(@"Hide that on-screen control",
+                                     @"Help shortcut.")],
     [KKHelpShortcut
-        shortcutWithKeysMarkup:@"Drag edge"
-                    descMarkup:@"Resize a segment (snaps to other edges, "
-                               @"playhead, and ends)"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift</kbd> while dragging"
-                                descMarkup:@"Disable snapping"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + drag segment"
-                                descMarkup:@"Copy this segment's value onto "
-                                           @"another segment"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌃</kbd> + click"
-                                descMarkup:@"Lock / unlock the segment's "
-                                           @"duration"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌃</kbd> + drag"
-                                descMarkup:@"Slide the entire lane in time"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + click"
-                                descMarkup:@"Select segments in "
-                                           @"every lane"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + double-click"
-                                descMarkup:@"Split every lane at this point"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + right-click"
-                                descMarkup:@"Toggle hold/transition across "
-                                           @"every lane"],
+        shortcutWithKeysMarkup:KKLoc(@"<kbd>⌥</kbd> hold", @"Shortcut keys.")
+                    descMarkup:KKLoc(@"Reveal hidden controls as ghosts to "
+                                     @"interact with - also when On-Screen "
+                                     @"Controls is switched off",
+                                     @"Help shortcut.")],
     [KKHelpShortcut
-        shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + drag edge"
-                    descMarkup:@"Move the matching boundary in every lane"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Shift ⌘</kbd> + click"
-                                descMarkup:@"Delete the segment in every lane"],
+        shortcutWithKeysMarkup:KKLoc(@"Double-click the mini-canvas",
+                                     @"Shortcut keys.")
+                    descMarkup:KKLoc(@"Reset its zoom and pan",
+                                     @"Help shortcut.")],
+    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌘ 0</kbd>"
+                                descMarkup:KKLoc(@"Reset the mini-canvas zoom",
+                                                 @"Help shortcut.")],
     [KKHelpShortcut
-        shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + <symbol graph.2d />"
-                    descMarkup:@"Open curve editor for every lane at once"],
-    [KKHelpShortcut
-        shortcutWithKeysMarkup:@"<kbd>Shift ⌃</kbd> + click"
-                    descMarkup:@"Toggle duration lock across every lane"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"Pinch"
-                                descMarkup:@"Zoom the timeline horizontally"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"Two-finger scroll"
-                                descMarkup:@"Pan the timeline horizontally"],
-    [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>Space</kbd>"
-                                descMarkup:@"Play / pause (in the popped-out "
-                                           @"window)"],
+        shortcutWithKeysMarkup:KKLoc(@"Scroll / pinch", @"Shortcut keys.")
+                    descMarkup:KKLoc(@"Zoom the mini-canvas (two-finger drag "
+                                     @"pans)",
+                                     @"Help shortcut.")],
   ];
+}
 
-  KKHelpSection *timing = [KKHelpSection sectionWithTitle:@"Timing"
-                                                tipMarkup:tips
-                                                shortcuts:shortcuts];
-  timing.icon = [NSImage imageWithSystemSymbolName:@"timer"
-                          accessibilityDescription:nil];
-  return timing;
++ (KKHelpSection *)_builtInTimingShortcutsSection {
+  // A skimmable 2-column table, curated to match shortcuts.md (the AI doc).
+  KKHelpSection *s = [KKHelpSection
+      sectionWithTitle:KKLoc(@"Timing shortcuts", @"Help section title.")
+             tipMarkup:nil
+             shortcuts:@[
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:KKLoc(@"Click", @"Shortcut keys.")
+                               descMarkup:KKLoc(@"Select a keypose or interval "
+                                                @"and open its editor",
+                                                @"Help shortcut.")],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:KKLoc(@"<kbd>⇧</kbd> + click",
+                                                @"Shortcut keys.")
+                               descMarkup:KKLoc(@"Add to or remove from the "
+                                                @"selection",
+                                                @"Help shortcut.")],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:KKLoc(
+                                              @"<kbd>⌥</kbd> + click a keypose",
+                                              @"Shortcut keys.")
+                               descMarkup:KKLoc(@"Delete it",
+                                                @"Help shortcut.")],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:KKLoc(
+                                              @"<kbd>⌥</kbd> + drag a keypose",
+                                              @"Shortcut keys.")
+                               descMarkup:KKLoc(@"Duplicate it",
+                                                @"Help shortcut.")],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:KKLoc(@"Drag", @"Shortcut keys.")
+                               descMarkup:KKLoc(@"Move a keypose (snaps to "
+                                                @"nearby ones)",
+                                                @"Help shortcut.")],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:KKLoc(
+                                              @"<kbd>⌘</kbd> + click an empty "
+                                              @"lane",
+                                              @"Shortcut keys.")
+                               descMarkup:KKLoc(@"Add a keypose there",
+                                                @"Help shortcut.")],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:KKLoc(@"Right-click an interval",
+                                                @"Shortcut keys.")
+                               descMarkup:KKLoc(@"Link or unlink its endpoints "
+                                                @"(hold vs animate)",
+                                                @"Help shortcut.")],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:KKLoc(@"Drag empty space",
+                                                @"Shortcut keys.")
+                               descMarkup:KKLoc(@"Marquee-select keyposes",
+                                                @"Help shortcut.")],
+               [KKHelpShortcut shortcutWithKeysMarkup:KKLoc(@"<kbd>Space</kbd>",
+                                                            @"Shortcut keys.")
+                                           descMarkup:KKLoc(@"Play or pause",
+                                                            @"Help shortcut.")],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:@"<kbd>⌘ Z</kbd> / <kbd>⌘ ⇧ Z</kbd>"
+                               descMarkup:KKLoc(
+                                              @"Undo / redo, including inside "
+                                              @"popovers",
+                                              @"Help shortcut.")],
+             ]];
+  s.icon = [NSImage imageWithSystemSymbolName:@"keyboard"
+                     accessibilityDescription:nil];
+  return s;
+}
+
++ (NSArray<KKHelpSection *> *)_builtInTimingHelpSections {
+  // Concept prose is single-sourced from the AI markdown; the shortcuts are a
+  // skimmable table (above).
+  return @[
+    [self _knowledgeSectionWithTitle:KKLoc(@"How animation works",
+                                           @"Help section title.")
+                               topic:@"timeline-basics"
+                              symbol:@"point.3.connected.trianglepath.dotted"],
+    [self _knowledgeSectionWithTitle:KKLoc(@"Basic vs Advanced",
+                                           @"Help section title.")
+                               topic:@"basic-vs-advanced"
+                              symbol:@"switch.2"],
+    [self _knowledgeSectionWithTitle:KKLoc(@"Easing curves",
+                                           @"Help section title.")
+                               topic:@"easing"
+                              symbol:@"point.topleft.down.curvedto."
+                                     @"point.bottomright.up"],
+    [self _builtInTimingShortcutsSection],
+  ];
 }
 
 + (KKHelpSection *)_builtInMotionBlurHelpSection {
-  NSArray<NSString *> *tips = @[
-    (@"<accent>Length</accent> is the shutter angle: 0% freezes each "
-     @"frame, 50% (default) is a 180° shutter (half a frame of trail), "
-     @"100% smears across the full frame."),
-    (@"<accent>Quality</accent> controls the sample count - more samples "
-     @"means smoother blur but slower renders. Default ~16 samples; the "
-     @"slider scales exponentially up to 128."),
-    (@"<accent>Transitions only?</accent> skips the blur work on "
-     @"<accent>hold</accent> segments, where nothing is moving anyway. "
-     @"Big performance win on segments which don't need motion blur."),
-    (@"<warn>Tip:</warn> high Length with low Quality will band visibly. "
-     @"If you increase Length, its recommended to increase Quality too."),
-  ];
+  // Single-sourced from the shared knowledge doc the AI assistant also reads
+  // (motion-blur.md in the kit bundle), so the help window and the AI never
+  // disagree on the controls. Localized at display time via KKLocalizable.
+  NSArray<NSString *> *tips =
+      [KKHelpSection localizedTipMarkupFromKnowledgeTopic:@"motion-blur"];
 
-  KKHelpSection *mb = [KKHelpSection sectionWithTitle:@"Motion Blur"
-                                            tipMarkup:tips
-                                            shortcuts:nil];
+  KKHelpSection *mb =
+      [KKHelpSection sectionWithTitle:KKLoc(@"Motion Blur",
+                                            @"Help section title: motion blur.")
+                            tipMarkup:tips
+                            shortcuts:nil];
   mb.icon = [NSImage imageWithSystemSymbolName:@"figure.walk.motion"
                       accessibilityDescription:nil];
   return mb;
@@ -214,20 +284,28 @@
   if (wrapTip.length > 0 && sections.count > 0)
     [KKPlugin _prependClipWrappingTip:wrapTip toSection:sections.firstObject];
 
-  // defaultLanesAtTime needs currentTime + a resolved getAPI, so a short
-  // action scope is required just for the section assembly. The window
-  // presenter opens its own scope afterwards.
+  // Show the shared Timing docs when this plugin drives the timeline. Two
+  // mechanisms exist: Canvas/Glow declare their lanes via -defaultLanesAtTime
+  // (which needs currentTime + a resolved getAPI, hence a short action scope),
+  // while MagicMove/Rounded declare theirs through the shared inspector config
+  // and never override -defaultLanesAtTime - so a non-empty -helpGuides (their
+  // timing walkthroughs) counts as a timeline signal too.
+  BOOL hasTimeline = NO;
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (actionAPI) {
     [actionAPI startAction:self];
     id<FxParameterRetrievalAPI_v6> getAPI =
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    if ([self defaultLanesAtTime:[actionAPI currentTime] paramGetAPI:getAPI]
-            .count > 0)
-      [sections addObject:[KKPlugin _builtInTimingHelpSection]];
+    hasTimeline = [self defaultLanesAtTime:[actionAPI currentTime]
+                               paramGetAPI:getAPI]
+                      .count > 0;
     [actionAPI endAction:self];
   }
+  if (!hasTimeline && [self helpGuides].count > 0)
+    hasTimeline = YES;
+  if (hasTimeline)
+    [sections addObjectsFromArray:[KKPlugin _builtInTimingHelpSections]];
   if ([self usesMotionBlur])
     [sections addObject:[KKPlugin _builtInMotionBlurHelpSection]];
 
@@ -241,7 +319,9 @@
                     return nil;
                   KKHelpView *helpView =
                       [[KKHelpView alloc] initWithSections:finalSections
-                                                    guides:[s helpGuides]];
+                                                    guides:[s helpGuides]
+                                               headerTitle:[s helpHeaderTitle]
+                                                headerIcon:[s helpHeaderIcon]];
                   NSNotificationName refreshName =
                       [s helpGuideRefreshNotificationName];
                   if (refreshName)

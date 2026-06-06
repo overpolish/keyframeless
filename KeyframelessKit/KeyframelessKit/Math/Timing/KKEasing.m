@@ -4,7 +4,40 @@
  */
 
 #import "KKEasing.h"
+#import "KKLocalized.h"
 #import <math.h>
+
+NSString *KKEasingCurveDisplayName(KKEasingCurve curve) {
+  switch (curve) {
+  case KKEasingCurveLinear:
+    return KKLoc(@"Linear", @"Easing curve name.");
+  case KKEasingCurveEaseIn:
+    return KKLoc(@"Ease In", @"Easing curve name.");
+  case KKEasingCurveEaseOut:
+    return KKLoc(@"Ease Out", @"Easing curve name.");
+  case KKEasingCurveEaseInOut:
+    return KKLoc(@"Ease In/Out", @"Easing curve name.");
+  case KKEasingCurveElastic:
+    return KKLoc(@"Elastic", @"Easing curve name.");
+  case KKEasingCurveBounce:
+    return KKLoc(@"Bounce", @"Easing curve name.");
+  }
+  return @"";
+}
+
+NSString *KKHoldEffectDisplayName(KKHoldEffect effect) {
+  switch (effect) {
+  case KKHoldEffectNone:
+    return KKLoc(@"None", @"Hold modulation name (no modulation).");
+  case KKHoldEffectBounce:
+    return KKLoc(@"Oscillate", @"Hold modulation name (enum Bounce).");
+  case KKHoldEffectWiggle:
+    return KKLoc(@"Wiggle", @"Hold modulation name.");
+  case KKHoldEffectHandheld:
+    return KKLoc(@"Handheld", @"Hold modulation name.");
+  }
+  return @"";
+}
 
 static double KKEaseIn(double t, double intensity) {
   double exponent = 1.0 + intensity * 7.0;
@@ -52,7 +85,7 @@ static double KKEaseInOut(double t, double intensity) {
   return power * (1.0 - blend) + back * blend;
 }
 
-// Spring/elastic with a polynomial decay envelope: (1-t)^p kills both
+// Elastic with a polynomial decay envelope: (1-t)^p kills both
 // value and velocity at t=1 (for p>=2), so the curve naturally lands on
 // (1, 0) without needing a tail-damp blend.
 //

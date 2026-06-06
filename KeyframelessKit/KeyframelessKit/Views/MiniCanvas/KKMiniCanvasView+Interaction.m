@@ -27,7 +27,7 @@
   if (r0.size.width <= 0 || r0.size.height <= 0 || _zoom <= 0) {
     _zoom = newZoom;
     [self setNeedsDisplay:YES];
-    [self _didChangeViewTransform];
+    [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindZoom];
     return;
   }
   CGFloat fx = (c.x - r0.origin.x) / r0.size.width;
@@ -41,7 +41,7 @@
   _panPixels.y = originY - d.height / 2.0 + newH / 2.0;
   _zoom = newZoom;
   [self setNeedsDisplay:YES];
-  [self _didChangeViewTransform];
+  [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindZoom];
 }
 
 // Exact mechanism copied from the old KKStageSequencerView+InteractionZoomPan
@@ -61,7 +61,7 @@
     _panPixels.x += event.scrollingDeltaX * s;
     _panPixels.y -= event.scrollingDeltaY * s; // drawable y is up; delta y-down
     [self setNeedsDisplay:YES];
-    [self _didChangeViewTransform];
+    [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindPan];
   } else {
     // Mouse wheel → zoom toward cursor.
     CGFloat factor = 1.0 - event.scrollingDeltaY * 0.05;
@@ -135,9 +135,9 @@
     self.onViewReset();
 }
 
-- (void)_didChangeViewTransform {
+- (void)_didChangeViewTransformOfKind:(KKMiniCanvasTransformKind)kind {
   if (self.onViewTransformChanged)
-    self.onViewTransformChanged();
+    self.onViewTransformChanged(kind);
 }
 
 - (NSPoint)_viewPointForScreenPoint:(NSPoint)screenPoint {
@@ -179,15 +179,56 @@
     self.onHandleDragEnd();
 }
 
+- (BOOL)optHideHandleAtScreenPoint:(NSPoint)screenPoint {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (!
+      [d respondsToSelector:@selector(
+                                miniCanvas:optClickHandleAtPoint:contentRect:)])
+    return NO;
+  BOOL hit = [d miniCanvas:self
+      optClickHandleAtPoint:[self _viewPointForScreenPoint:screenPoint]
+                contentRect:[self contentRectInViewPoints]];
+  if (hit && self.onOptHideHandle)
+    self.onOptHideHandle(@"");
+  return hit;
+}
+
+- (void)setGuidePeekActive:(BOOL)active {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if ([d isKindOfClass:[KKMiniCanvasRenderer class]]) {
+    ((KKMiniCanvasRenderer *)d).revealHidden = active;
+    [self setNeedsDisplay:YES];
+  }
+}
+
 // `ctr` is overlay points, y-up, in the canvas's own coordinate space (the
 // overlay fills the canvas bounds 1:1) → glyph rect in screen space.
-- (NSRect)_screenRectForHandleCenter:(CGPoint)ctr {
+// The point handle's visual radius in view points. Arc-style handles (e.g.
+// Magic Move's Position) draw a ring ~2x the point dot that scales with the
+// popover, so a guide spotlight must match it (mirrors +Rendering's arc glyph:
+// outer 9pt at the 230pt baseline canvas height).
+- (CGFloat)_pointHandleRadiusPt {
+  id del = self.canvasDelegate;
+  if ([del isKindOfClass:[KKMiniCanvasRenderer class]] &&
+      [(KKMiniCanvasRenderer *)del pointHandleStyle] == KKMiniHandleStyleArc) {
+    CGFloat canvasScale = self.bounds.size.height / 230.0;
+    if (canvasScale <= 0)
+      canvasScale = 1.0;
+    return 9.0 * canvasScale;
+  }
+  return kKKMiniHandleOuterPt;
+}
+
+- (NSRect)_screenRectForHandleCenter:(CGPoint)ctr radius:(CGFloat)r {
   NSWindow *w = self.window;
   if (!w)
     return NSZeroRect;
-  CGFloat r = kKKMiniHandleOuterPt;
   NSRect inView = NSMakeRect(ctr.x - r, ctr.y - r, 2 * r, 2 * r);
   return [w convertRectToScreen:[self convertRect:inView toView:nil]];
+}
+
+- (NSRect)_screenRectForHandleCenter:(CGPoint)ctr {
+  return [self _screenRectForHandleCenter:ctr radius:kKKMiniHandleOuterPt];
 }
 
 - (NSRect)pointHandleScreenRect {
@@ -201,7 +242,8 @@
           pointHandleCenter:&ctr
                 contentRect:[self contentRectInViewPoints]])
     return NSZeroRect;
-  return [self _screenRectForHandleCenter:ctr];
+  return [self _screenRectForHandleCenter:ctr
+                                   radius:[self _pointHandleRadiusPt]];
 }
 
 - (NSRect)pointHandleScreenRectForValue:(double)value {
@@ -216,7 +258,24 @@
                    forValue:value
                 contentRect:[self contentRectInViewPoints]])
     return NSZeroRect;
-  return [self _screenRectForHandleCenter:ctr];
+  return [self _screenRectForHandleCenter:ctr
+                                   radius:[self _pointHandleRadiusPt]];
+}
+
+- (NSRect)pointHandleScreenRectForValues:(NSArray<NSNumber *> *)values {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (!self.window ||
+      ![d respondsToSelector:
+              @selector(miniCanvas:pointHandleCenter:forValues:contentRect:)])
+    return NSZeroRect;
+  CGPoint ctr;
+  if (![d miniCanvas:self
+          pointHandleCenter:&ctr
+                  forValues:values
+                contentRect:[self contentRectInViewPoints]])
+    return NSZeroRect;
+  return [self _screenRectForHandleCenter:ctr
+                                   radius:[self _pointHandleRadiusPt]];
 }
 
 - (NSRect)_screenRectForHandleCenters:(NSArray<NSValue *> *)centers
@@ -254,6 +313,34 @@
                                 atIndex:index];
 }
 
+- (NSRect)scaleHandleScreenRectAtIndex:(NSInteger)index {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (!self.window ||
+      ![d respondsToSelector:@selector(
+                                 miniCanvas:scaleHandleCentersForContentRect:)])
+    return NSZeroRect;
+  return [self
+      _screenRectForHandleCenters:
+          [d miniCanvas:self
+              scaleHandleCentersForContentRect:[self contentRectInViewPoints]]
+                          atIndex:index];
+}
+
+- (NSRect)scaleHandleScreenRectAtIndex:(NSInteger)index
+                        forScaleValues:(NSArray<NSNumber *> *)values {
+  id<KKMiniCanvasDelegate> d = self.canvasDelegate;
+  if (!self.window ||
+      ![d respondsToSelector:
+              @selector(miniCanvas:scaleHandleCentersForValues:contentRect:)])
+    return NSZeroRect;
+  return
+      [self _screenRectForHandleCenters:
+                [d miniCanvas:self
+                    scaleHandleCentersForValues:values
+                                    contentRect:[self contentRectInViewPoints]]
+                                atIndex:index];
+}
+
 - (void)mouseDragged:(NSEvent *)event {
   CGFloat s = [self _backingScale];
   _panPixels.x += event.deltaX * s;
@@ -267,7 +354,7 @@
       _hasPendingFilmstripActivation = NO;
   }
   [self setNeedsDisplay:YES];
-  [self _didChangeViewTransform];
+  [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindPan];
 }
 
 - (BOOL)_pointFromGlobalEvent:(NSPoint *)outViewPt {
@@ -296,7 +383,7 @@
     _panPixels.x += event.scrollingDeltaX * s;
     _panPixels.y -= event.scrollingDeltaY * s;
     [self setNeedsDisplay:YES];
-    [self _didChangeViewTransform];
+    [self _didChangeViewTransformOfKind:KKMiniCanvasTransformKindPan];
   } else {
     [self _zoomTo:_zoom * (1.0 - event.scrollingDeltaY * 0.05)
         aboutViewPoint:p];

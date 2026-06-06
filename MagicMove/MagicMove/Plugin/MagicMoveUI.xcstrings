@@ -1,144 +1,1854 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "Animate the clip sliding in from off the left edge to the centre over the first second." : {
-      "comment" : "AI example value: slide in from the left.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Animiere den Clip so, dass er in der ersten Sekunde vom linken Rand herein zur Mitte gleitet." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Anima el clip deslizándose desde fuera del borde izquierdo hasta el centro durante el primer segundo." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Animez le plan pour qu'il glisse depuis l'extérieur du bord gauche jusqu'au centre pendant la première seconde." } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "最初の1秒間で、クリップが左端の外から中央へスライドして入ってくるようにアニメーションさせる。" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "첫 1초 동안 클립이 왼쪽 가장자리 바깥에서 중앙으로 슬라이드해 들어오도록 애니메이션합니다." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "让片段在第一秒内从左边缘外滑入到中心。" } }
-      }
-    },
-    "Ask a question or describe an animation…" : {
-      "comment" : "AI prompt field placeholder for Magic Move.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Stelle eine Frage oder beschreibe eine Animation…" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Haz una pregunta o describe una animación…" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Posez une question ou décrivez une animation…" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "質問するか、アニメーションを入力…" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "질문하거나 애니메이션을 설명하세요…" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "提问或描述一个动画…" } }
-      }
-    },
-    "Pop in with a bounce" : {
-      "comment" : "AI example chip: pop in with a bounce.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Mit Sprung erscheinen" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Aparecer con un rebote" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Apparaître avec un rebond" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "バウンドして現れる" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "통통 튀며 나타나기" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "弹跳着出现" } }
-      }
-    },
-    "Scale the clip from 0% up to 100% with a bounce at the start." : {
-      "comment" : "AI example value: pop in with a bounce.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Skaliere den Clip von 0 % auf 100 % mit einem Sprung am Anfang." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Escala el clip de 0 % a 100 % con un rebote al principio." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Mettez le plan à l'échelle de 0 % à 100 % avec un rebond au début." } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "クリップを最初にバウンドさせながら0%から100%まで拡大する。" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "시작 부분에서 튀는 효과와 함께 클립을 0%에서 100%로 확대합니다." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "让片段从 0% 放大到 100%，并在开始处带有弹跳。" } }
-      }
-    },
-    "Slide in from the left" : {
-      "comment" : "AI example chip: slide in from the left.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Von links hereingleiten" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Deslizar desde la izquierda" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Glisser depuis la gauche" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "左からスライドイン" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "왼쪽에서 슬라이드 인" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "从左侧滑入" } }
-      }
-    },
-    "Spin once" : {
-      "comment" : "AI example chip: spin once.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Einmal drehen" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Girar una vez" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Tourner une fois" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "1回転" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "한 바퀴 회전" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "旋转一圈" } }
-      }
-    },
-    "Spin the clip one full turn over the whole duration." : {
-      "comment" : "AI example value: spin once.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Drehe den Clip über die gesamte Dauer um eine volle Umdrehung." } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "Gira el clip una vuelta completa durante toda la duración." } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Faites tourner le plan d'un tour complet sur toute la durée." } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "クリップを全体の長さで1回転させる。" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "전체 길이 동안 클립을 한 바퀴 회전시킵니다." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "在整个时长内让片段旋转一整圈。" } }
-      }
-    },
-    "What does the anchor point do?" : {
-      "comment" : "AI example chip and value: anchor point question.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : { "stringUnit" : { "state" : "translated", "value" : "Was bewirkt der Ankerpunkt?" } },
-        "es" : { "stringUnit" : { "state" : "translated", "value" : "¿Qué hace el punto de anclaje?" } },
-        "fr" : { "stringUnit" : { "state" : "translated", "value" : "À quoi sert le point d'ancrage ?" } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "アンカーポイントは何をしますか？" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "기준점은 무엇을 하나요?" } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "锚点有什么作用？" } }
-      }
-    },
-    "Rotate with motion" : {
-      "comment" : "Gap-popover toggle: align rotation to the position-curve tangent during this gap.",
-      "extractionState" : "manual",
-      "localizations" : {
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mit Bewegung drehen"
+  "sourceLanguage": "en",
+  "strings": {
+    "Animate the clip sliding in from off the left edge to the centre over the first second.": {
+      "comment": "AI example value: slide in from the left.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animiere den Clip so, dass er in der ersten Sekunde vom linken Rand herein zur Mitte gleitet."
           }
         },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Rotar con el movimiento"
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anima el clip deslizándose desde fuera del borde izquierdo hasta el centro durante el primer segundo."
           }
         },
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pivoter avec le mouvement"
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animez le plan pour qu'il glisse depuis l'extérieur du bord gauche jusqu'au centre pendant la première seconde."
           }
         },
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "動きに合わせて回転"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最初の1秒間で、クリップが左端の外から中央へスライドして入ってくるようにアニメーションさせる。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "움직임에 맞춰 회전"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "첫 1초 동안 클립이 왼쪽 가장자리 바깥에서 중앙으로 슬라이드해 들어오도록 애니메이션합니다."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "随运动旋转"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让片段在第一秒内从左边缘外滑入到中心。"
+          }
+        }
+      }
+    },
+    "Ask a question or describe an animation…": {
+      "comment": "AI prompt field placeholder for Magic Move.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stelle eine Frage oder beschreibe eine Animation…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz una pregunta o describe una animación…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posez une question ou décrivez une animation…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "質問するか、アニメーションを入力…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "질문하거나 애니메이션을 설명하세요…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提问或描述一个动画…"
+          }
+        }
+      }
+    },
+    "Pop in with a bounce": {
+      "comment": "AI example chip: pop in with a bounce.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit Sprung erscheinen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aparecer con un rebote"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apparaître avec un rebond"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バウンドして現れる"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "통통 튀며 나타나기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹跳着出现"
+          }
+        }
+      }
+    },
+    "Scale the clip from 0% up to 100% with a bounce at the start.": {
+      "comment": "AI example value: pop in with a bounce.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skaliere den Clip von 0 % auf 100 % mit einem Sprung am Anfang."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escala el clip de 0 % a 100 % con un rebote al principio."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mettez le plan à l'échelle de 0 % à 100 % avec un rebond au début."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリップを最初にバウンドさせながら0%から100%まで拡大する。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시작 부분에서 튀는 효과와 함께 클립을 0%에서 100%로 확대합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让片段从 0% 放大到 100%，并在开始处带有弹跳。"
+          }
+        }
+      }
+    },
+    "Slide in from the left": {
+      "comment": "AI example chip: slide in from the left.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von links hereingleiten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deslizar desde la izquierda"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glisser depuis la gauche"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左からスライドイン"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "왼쪽에서 슬라이드 인"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从左侧滑入"
+          }
+        }
+      }
+    },
+    "Spin once": {
+      "comment": "AI example chip: spin once.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einmal drehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Girar una vez"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tourner une fois"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1回転"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한 바퀴 회전"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旋转一圈"
+          }
+        }
+      }
+    },
+    "Spin the clip one full turn over the whole duration.": {
+      "comment": "AI example value: spin once.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drehe den Clip über die gesamte Dauer um eine volle Umdrehung."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gira el clip una vuelta completa durante toda la duración."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites tourner le plan d'un tour complet sur toute la durée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリップを全体の長さで1回転させる。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전체 길이 동안 클립을 한 바퀴 회전시킵니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在整个时长内让片段旋转一整圈。"
+          }
+        }
+      }
+    },
+    "What does the anchor point do?": {
+      "comment": "AI example chip and value: anchor point question.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was bewirkt der Ankerpunkt?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué hace el punto de anclaje?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À quoi sert le point d'ancrage ?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アンカーポイントは何をしますか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기준점은 무엇을 하나요?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锚点有什么作用？"
+          }
+        }
+      }
+    },
+    "Rotate with motion": {
+      "comment": "Gap-popover toggle: align rotation to the position-curve tangent during this gap.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit Bewegung drehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rotar con el movimiento"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pivoter avec le mouvement"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "動きに合わせて回転"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "움직임에 맞춰 회전"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "随运动旋转"
+          }
+        }
+      }
+    },
+    "Two lanes here - <accent>Position</accent> and <accent>Scale</accent> - each with a keypose at the start and end.": {
+      "comment": "Shaping guide: intro to the two lanes.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwei Spuren hier - <accent>Position</accent> und <accent>Skalieren</accent> - jede mit einer Keypose am Anfang und Ende."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deux pistes ici - <accent>Position</accent> et <accent>Échelle</accent> - chacune avec une pose clé au début et à la fin."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aquí hay dos pistas - <accent>Posición</accent> y <accent>Escala</accent> - cada una con una pose clave al inicio y al final."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ここには2つのレーン、<accent>位置</accent>と<accent>スケール</accent>があり、それぞれ開始と終了にキーポーズがあります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "여기 두 개의 레인, <accent>위치</accent>와 <accent>크기 조절</accent>이 있으며 각각 시작과 끝에 키포즈가 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这里有两条轨道--<accent>位置</accent>和<accent>缩放</accent>--每条在开始和结束处各有一个关键姿势。"
+          }
+        }
+      }
+    },
+    "<kbd>⌘ click</kbd> the <accent>Position</accent> lane to add a keypose in the middle.": {
+      "comment": "Shaping guide: add a middle Position keypose.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘ Klick</kbd> auf die <accent>Position</accent>-Spur, um in der Mitte eine Keypose hinzuzufügen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘ clic</kbd> sur la piste <accent>Position</accent> pour ajouter une pose clé au milieu."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘ clic</kbd> en la pista de <accent>Posición</accent> para añadir una pose clave en el medio."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>位置</accent>レーンを<kbd>⌘ クリック</kbd>して、中間にキーポーズを追加します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>위치</accent> 레인을 <kbd>⌘ 클릭</kbd>하여 가운데에 키포즈를 추가하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘ 点击</kbd><accent>位置</accent>轨道，在中间添加一个关键姿势。"
+          }
+        }
+      }
+    },
+    "In the <accent>mini viewer</accent>, drag the keypose <warn>up</warn>.": {
+      "comment": "Shaping guide: drag the Position keypose up.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehen Sie die Keypose im <accent>Mini-Viewer</accent> nach <warn>oben</warn>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dans la <accent>mini-visionneuse</accent>, faites glisser la pose clé vers le <warn>haut</warn>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "En el <accent>mini-visor</accent>, arrastra la pose clave hacia <warn>arriba</warn>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>ミニビューア</accent>で、キーポーズを<warn>上</warn>にドラッグします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>미니 뷰어</accent>에서 키포즈를 <warn>위로</warn> 드래그하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在<accent>迷你检视器</accent>中，将关键姿势向<warn>上</warn>拖动。"
+          }
+        }
+      }
+    },
+    "<accent>Double-click</accent> the keypose to <accent>curve</accent> the path.": {
+      "comment": "Shaping guide: double-click to curve the path.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Doppelklicken</accent> Sie auf die Keypose, um den Pfad <accent>kurvig</accent> zu machen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Double-cliquez</accent> sur la pose clé pour <accent>courber</accent> la trajectoire."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Haz doble clic</accent> en la pose clave para <accent>curvar</accent> la trayectoria."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キーポーズを<accent>ダブルクリック</accent>して、パスを<accent>カーブ</accent>させます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "키포즈를 <accent>더블 클릭</accent>하여 경로를 <accent>곡선</accent>으로 만드세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>双击</accent>关键姿势，将路径变为<accent>曲线</accent>。"
+          }
+        }
+      }
+    },
+    "Now click the <accent>Scale</accent> keypose at the end.": {
+      "comment": "Shaping guide: click the end Scale keypose.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicken Sie nun auf die <accent>Skalieren</accent>-Keypose am Ende."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez maintenant sur la pose clé d'<accent>Échelle</accent> à la fin."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahora haz clic en la pose clave de <accent>Escala</accent> del final."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "次に、最後の<accent>スケール</accent>キーポーズをクリックします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이제 끝에 있는 <accent>크기 조절</accent> 키포즈를 클릭하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现在点击末尾的<accent>缩放</accent>关键姿势。"
+          }
+        }
+      }
+    },
+    "Drag a <warn>corner</warn> out to about <accent>200%</accent>.": {
+      "comment": "Shaping guide: scale the keypose up to 200%.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehen Sie eine <warn>Ecke</warn> auf etwa <accent>200%</accent> heraus."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser un <warn>coin</warn> vers l'extérieur jusqu'à environ <accent>200%</accent>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra una <warn>esquina</warn> hacia afuera hasta aproximadamente <accent>200%</accent>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>角</warn>を外側へ、約<accent>200%</accent>までドラッグします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>모서리</warn>를 바깥으로 약 <accent>200%</accent>까지 드래그하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将一个<warn>角</warn>向外拖动到约<accent>200%</accent>。"
+          }
+        }
+      }
+    },
+    "Press <symbol play.fill color=accent /> to watch it back.": {
+      "comment": "Shaping guide: play the animation back.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drücken Sie <symbol play.fill color=accent />, um es abzuspielen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appuyez sur <symbol play.fill color=accent /> pour le visionner."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsa <symbol play.fill color=accent /> para verlo."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<symbol play.fill color=accent /> を押して再生します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<symbol play.fill color=accent />을 눌러 재생해 보세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按 <symbol play.fill color=accent /> 回放查看。"
+          }
+        }
+      }
+    },
+    "The <accent>mini viewer</accent> brings each keypose's frame to you - shape any pose without moving the playhead to find it.": {
+      "comment": "Shaping guide: closing benefit step.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der <accent>Mini-Viewer</accent> holt das Bild jeder Keypose zu Ihnen - gestalten Sie jede Pose, ohne die Abspielposition dorthin zu bewegen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La <accent>mini-visionneuse</accent> vous apporte l'image de chaque pose clé - façonnez n'importe quelle pose sans déplacer la tête de lecture pour la trouver."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El <accent>mini-visor</accent> te trae el fotograma de cada pose clave - da forma a cualquier pose sin mover el cabezal de reproducción para encontrarlo."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>ミニビューア</accent>が各キーポーズのフレームを表示してくれるので、再生ヘッドを動かして探すことなく、どのポーズも調整できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>미니 뷰어</accent>가 각 키포즈의 프레임을 보여주므로, 재생 헤드를 옮겨 찾지 않고도 어떤 포즈든 다듬을 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>迷你检视器</accent>会把每个关键姿势的画面带到你面前--无需移动播放头去寻找，即可调整任意姿势。"
+          }
+        }
+      }
+    },
+    "Shaping a Move": {
+      "comment": "Help guide title: Magic Move shaping walkthrough.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Bewegung formen"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Façonner un mouvement"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dar forma a un movimiento"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "動きを形づくる"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "움직임 다듬기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "塑造一个动作"
+          }
+        }
+      }
+    },
+    "Curve the path and scale a keypose": {
+      "comment": "Help guide subtitle: Shaping a Move.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den Pfad kurven und eine Keypose skalieren"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Courber la trajectoire et mettre une pose clé à l'échelle"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curva la trayectoria y escala una pose clave"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パスをカーブさせ、キーポーズをスケールする"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "경로를 곡선으로 만들고 키포즈 크기 조절하기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弯曲路径并缩放关键姿势"
+          }
+        }
+      }
+    },
+    "Guides are disabled. Click the effect's header on a clip to select it (it highlights yellow), then move your mouse over the viewer to enable them.": {
+      "comment": "Help guide disabled subtitle (no OSC canvas reference yet).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anleitungen sind deaktiviert. Klicken Sie auf die Kopfzeile des Effekts in einem Clip, um ihn auszuwählen (er wird gelb hervorgehoben), und bewegen Sie dann die Maus über den Viewer, um sie zu aktivieren."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les guides sont désactivés. Cliquez sur l'en-tête de l'effet sur un plan pour le sélectionner (il apparaît en jaune), puis placez le pointeur sur le visualiseur pour les activer."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las guías están desactivadas. Haz clic en el encabezado del efecto en un clip para seleccionarlo (se resalta en amarillo) y luego mueve el ratón sobre el visor para activarlas."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ガイドは無効です。クリップのエフェクトのヘッダをクリックして選択し（黄色でハイライトされます）、ビューアにマウスを移動すると有効になります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가이드가 비활성화되어 있습니다. 클립에서 이펙트 헤더를 클릭하여 선택하면(노란색으로 강조 표시됨) 뷰어 위로 마우스를 이동하면 활성화됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指南已停用。点击片段上效果的标题来选择它（会以黄色高亮显示），然后将鼠标移到检视器上即可启用。"
+          }
+        }
+      }
+    },
+    "Magic Move": {
+      "comment": "Help section title (plugin name).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Move"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Move"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Move"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Move"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Move"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Move"
+          }
+        }
+      }
+    },
+    "On-screen control shortcuts": {
+      "comment": "Help section title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kurzbefehle für Bildschirmsteuerung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atajos de controles en pantalla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raccourcis des contrôles à l'écran"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オンスクリーンコントロールのショートカット"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면 컨트롤 단축키"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕控件快捷键"
+          }
+        }
+      }
+    },
+    "Parameters:": {
+      "comment": "Help label.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parameter:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parámetros:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paramètres :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パラメータ:"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "매개변수:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参数："
+          }
+        }
+      }
+    },
+    "Magic Move animates a clip's position, scale, rotation, and opacity around an adjustable anchor point. Drop it on a clip from the Effects browser. It works best on a compound or adjustment clip wrapping your footage, so the move can extend past the clip's edges without being cropped.": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Move animiert Position, Skalierung, Rotation und Deckkraft eines Clips um einen einstellbaren Ankerpunkt. Ziehe es aus dem Effekte-Browser auf einen Clip. Am besten funktioniert es auf einem Compound- oder Anpassungsclip, der dein Material umschließt, damit die Bewegung über die Clip-Ränder hinausreichen kann, ohne beschnitten zu werden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Move anima la posición, la escala, la rotación y la opacidad de un clip alrededor de un punto de anclaje ajustable. Arrástralo a un clip desde el navegador de efectos. Funciona mejor en un clip compuesto o de ajuste que envuelva tu material, para que el movimiento pueda extenderse más allá de los bordes del clip sin recortarse."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Move anime la position, l'échelle, la rotation et l'opacité d'un plan autour d'un point d'ancrage ajustable. Déposez-le sur un plan depuis le navigateur d'effets. Il fonctionne mieux sur un plan composé ou d'ajustement qui enveloppe vos images, pour que le mouvement puisse dépasser les bords du plan sans être rogné."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Moveは、クリップの位置・スケール・回転・不透明度を、調整可能なアンカーポイントを中心にアニメートします。エフェクトブラウザからクリップにドロップします。素材を包むコンパウンドクリップまたは調整クリップで最も効果的で、動きがクリップの端を越えても切り取られません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Move는 클립의 위치, 크기, 회전, 불투명도를 조절 가능한 앵커 포인트를 중심으로 애니메이션합니다. 효과 브라우저에서 클립으로 드래그하세요. 푸티지를 감싸는 컴파운드 또는 조정 클립에서 가장 잘 작동하여 움직임이 클립 가장자리를 넘어도 잘리지 않습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Magic Move 围绕可调节的锚点为片段的位置、缩放、旋转和不透明度制作动画。从效果浏览器将其拖到片段上。在包裹素材的复合片段或调整片段上效果最佳，这样运动可以超出片段边缘而不被裁剪。"
+          }
+        }
+      }
+    },
+    "<accent>Position</accent> - where the clip sits. Add keyposes to move it; with two or more, the clip follows a path you can curve and reshape on the canvas. A per-interval Rotate with Motion toggle leans it into the movement.": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Position</accent> - wo der Clip sitzt. Füge Keyposes hinzu, um ihn zu bewegen; mit zwei oder mehr folgt der Clip einem Pfad, den du auf der Leinwand krümmen und umformen kannst. Ein Schalter zum Mitdrehen mit der Bewegung pro Intervall neigt ihn in die Bewegung."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Posición</accent> - dónde se sitúa el clip. Añade keyposes para moverlo; con dos o más, el clip sigue una trayectoria que puedes curvar y remodelar en el lienzo. Un interruptor de rotación con el movimiento por intervalo lo inclina hacia el movimiento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Position</accent> - où se trouve le plan. Ajoutez des keyposes pour le déplacer ; avec deux ou plus, le plan suit une trajectoire que vous pouvez courber et remodeler sur le canevas. Un bouton de rotation avec le mouvement par intervalle l'incline dans le mouvement."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>位置</accent> - クリップの位置。キーポーズを追加して動かします。2つ以上あると、キャンバス上で曲げたり形を変えたりできるパスをたどります。区間ごとの「動きに合わせて回転」トグルで動きに傾きます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>위치</accent> - 클립이 있는 위치. 키포즈를 추가해 이동합니다. 두 개 이상이면 캔버스에서 곡선으로 만들고 다시 형태를 잡을 수 있는 경로를 따릅니다. 구간별 움직임에 따라 회전 토글이 움직임 쪽으로 기울입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>位置</accent> - 片段所在的位置。添加关键姿势以移动它；有两个或更多时，片段会沿着一条可在画布上弯曲和重塑的路径运动。每个区间的随运动旋转开关让它向运动方向倾斜。"
+          }
+        }
+      }
+    },
+    "<accent>Scale</accent> - resize by percentage (X and Y, aspect-locked by default).": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Skalieren</accent> - Größe in Prozent ändern (X und Y, standardmäßig seitenverhältnisgesperrt)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Escala</accent> - cambia el tamaño por porcentaje (X e Y, con relación de aspecto bloqueada por defecto)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Échelle</accent> - redimensionner en pourcentage (X et Y, proportions verrouillées par défaut)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>スケール</accent> - パーセントでサイズ変更(XとY、デフォルトでアスペクト比ロック)。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>크기 조절</accent> - 백분율로 크기 조정(X와 Y, 기본적으로 종횡비 잠김)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>缩放</accent> - 按百分比调整大小(X 和 Y，默认锁定宽高比)。"
+          }
+        }
+      }
+    },
+    "<accent>Rotation</accent> - spin the clip around the anchor point.": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rotation</accent> - dreht den Clip um den Ankerpunkt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rotación</accent> - gira el clip alrededor del punto de anclaje."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rotation</accent> - fait pivoter le plan autour du point d'ancrage."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>回転</accent> - アンカーポイントを中心にクリップを回転。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>회전</accent> - 앵커 포인트를 중심으로 클립을 회전."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>旋转</accent> - 围绕锚点旋转片段。"
+          }
+        }
+      }
+    },
+    "The on-screen control rotates in <accent>object</accent> space - the clip turns with its own content.": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Bildschirm-Steuerelement dreht im <accent>Objekt</accent>-Raum - der Clip dreht sich mit seinem eigenen Inhalt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El control en pantalla rota en espacio de <accent>objeto</accent>: el clip gira con su propio contenido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le contrôle à l'écran pivote dans l'espace <accent>objet</accent> : le plan tourne avec son propre contenu."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オンスクリーンコントロールは<accent>オブジェクト</accent>空間で回転します。クリップは自身の内容ごと回ります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면 컨트롤은 <accent>오브젝트</accent> 공간에서 회전합니다. 클립이 자체 콘텐츠와 함께 돕니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕控件在<accent>对象</accent>空间中旋转 - 片段连同自身内容一起转动。"
+          }
+        }
+      }
+    },
+    "The knobs and value fields rotate in <accent>global</accent> space.": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Regler und Wertfelder drehen im <accent>globalen</accent> Raum."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los mandos y los campos de valor rotan en espacio <accent>global</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les boutons et les champs de valeur pivotent dans l'espace <accent>global</accent>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "つまみと値フィールドは<accent>グローバル</accent>空間で回転します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "노브와 값 필드는 <accent>글로벌</accent> 공간에서 회전합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旋钮和数值字段在<accent>全局</accent>空间中旋转。"
+          }
+        }
+      }
+    },
+    "<accent>Anchor</accent> - the pivot Rotation and Scale swing around (defaults to the clip centre).": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Anker</accent> - der Drehpunkt, um den Rotation und Skalierung schwingen (Standard: Clip-Mitte)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Anclaje</accent> - el pivote alrededor del cual giran la rotación y la escala (por defecto, el centro del clip)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Ancrage</accent> - le pivot autour duquel tournent la rotation et l'échelle (par défaut, le centre du plan)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>アンカー</accent> - 回転とスケールが回る支点(デフォルトはクリップ中央)。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>앵커</accent> - 회전과 크기 조절이 도는 중심점(기본값은 클립 중앙)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>锚点</accent> - 旋转和缩放围绕的支点(默认为片段中心)。"
+          }
+        }
+      }
+    },
+    "<accent>Opacity</accent> - fade the clip, from an inspector slider.": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Deckkraft</accent> - blende den Clip aus, über einen Regler im Informationsfenster."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Opacidad</accent> - atenúa el clip, desde un control deslizante del inspector."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Opacité</accent> - faites un fondu du plan, via un curseur de l'inspecteur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>不透明度</accent> - インスペクタのスライダーでクリップをフェード。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>불투명도</accent> - 인스펙터 슬라이더로 클립을 페이드."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>不透明度</accent> - 通过检查器滑块淡化片段。"
+          }
+        }
+      }
+    },
+    "Drive each parameter on the canvas with its on-screen control, or type exact values in the inspector. Stack Crop or similar spatial effects below Magic Move so they travel with the moved clip.": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuere jeden Parameter auf der Leinwand mit seinem Bildschirm-Steuerelement oder gib genaue Werte im Informationsfenster ein. Stapele Beschneiden oder ähnliche räumliche Effekte unter Magic Move, damit sie sich mit dem bewegten Clip mitbewegen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controla cada parámetro en el lienzo con su control en pantalla, o escribe valores exactos en el inspector. Coloca Recorte u otros efectos espaciales debajo de Magic Move para que acompañen al clip movido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pilotez chaque paramètre sur le canevas avec son contrôle à l'écran, ou saisissez des valeurs exactes dans l'inspecteur. Empilez Rognage ou des effets spatiaux similaires sous Magic Move pour qu'ils suivent le plan déplacé."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各パラメータはキャンバス上のオンスクリーンコントロールで操作するか、インスペクタで正確な値を入力します。トリミングなどの空間エフェクトはMagic Moveの下に重ねると、移動したクリップに追従します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 매개변수는 캔버스의 화면 컨트롤로 조작하거나 인스펙터에서 정확한 값을 입력하세요. 자르기 등 공간 효과는 Magic Move 아래에 쌓으면 이동한 클립을 따라갑니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在画布上用每个参数的屏幕控件来操控，或在检查器中输入精确数值。将裁剪或类似的空间效果叠放在 Magic Move 下方，使它们随移动的片段一起移动。"
+          }
+        }
+      }
+    },
+    "Lock the move to the X or Y axis": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Bewegung auf die X- oder Y-Achse beschränken"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloquear el movimiento al eje X o Y"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verrouiller le déplacement sur l'axe X ou Y"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移動をX軸またはY軸に固定"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이동을 X 또는 Y축으로 잠금"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将移动锁定到 X 或 Y 轴"
+          }
+        }
+      }
+    },
+    "Snap to the centre, edges, thirds, or another keypose": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An Mitte, Kanten, Drittel oder einen anderen Keypose einrasten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar al centro, los bordes, los tercios u otro keypose"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S'aligner sur le centre, les bords, les tiers ou un autre keypose"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中央・端・三分割・他のキーポーズにスナップ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "중앙, 가장자리, 삼등분, 또는 다른 키포즈에 스냅"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "吸附到中心、边缘、三分线或另一个关键姿势"
+          }
+        }
+      }
+    },
+    "Toggle a smooth curve or a sharp corner": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwischen weicher Kurve und scharfer Ecke umschalten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alternar entre curva suave y esquina marcada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Basculer entre courbe lisse et angle net"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滑らかなカーブと鋭い角を切り替え"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "부드러운 곡선과 뾰족한 모서리 전환"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在平滑曲线和尖角之间切换"
+          }
+        }
+      }
+    },
+    "Break the curve handle's symmetry": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Symmetrie des Kurvengriffs aufheben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Romper la simetría del tirador de la curva"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Briser la symétrie de la poignée de courbe"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カーブハンドルの対称性を解除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "곡선 핸들의 대칭 해제"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打破曲线手柄的对称"
+          }
+        }
+      }
+    },
+    "Break the aspect lock for that drag": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Seitenverhältnissperre für diesen Zug aufheben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Romper el bloqueo de aspecto para ese arrastre"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Briser le verrouillage des proportions pour ce glissement"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのドラッグの間だけアスペクト比ロックを解除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "해당 드래그 동안 종횡비 잠금 해제"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在该次拖动中解除宽高比锁定"
+          }
+        }
+      }
+    },
+    "Fine adjustment": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feinabstimmung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajuste fino"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglage fin"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "微調整"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미세 조정"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "精细调整"
+          }
+        }
+      }
+    },
+    "<kbd>⇧</kbd> + drag a Position handle": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + Positionsgriff ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + arrastrar un tirador de Posición"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + glisser une poignée de Position"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + 位置ハンドルをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + 위치 핸들 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + 拖动位置手柄"
+          }
+        }
+      }
+    },
+    "<kbd>⌘</kbd> + drag": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + arrastrar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + glisser"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + ドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + 拖动"
+          }
+        }
+      }
+    },
+    "Double-click a path anchor": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doppelklick auf einen Pfad-Anker"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doble clic en un ancla de trayectoria"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double-clic sur un point de trajectoire"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パスのアンカーをダブルクリック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "경로 앵커 더블 클릭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "双击路径锚点"
+          }
+        }
+      }
+    },
+    "<kbd>⇧</kbd> + drag a path handle": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + Pfadgriff ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + arrastrar un tirador de trayectoria"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + glisser une poignée de trajectoire"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + パスハンドルをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + 경로 핸들 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + 拖动路径手柄"
+          }
+        }
+      }
+    },
+    "<kbd>⇧</kbd> + drag a Scale handle": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + Skalierungsgriff ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + arrastrar un tirador de Escala"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + glisser une poignée d'Échelle"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + スケールハンドルをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + 크기 조절 핸들 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + 拖动缩放手柄"
+          }
+        }
+      }
+    },
+    "<kbd>⌘</kbd> + drag a Scale handle": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + Skalierungsgriff ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + arrastrar un tirador de Escala"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + glisser une poignée d'Échelle"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + スケールハンドルをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + 크기 조절 핸들 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + 拖动缩放手柄"
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

@@ -3,11 +3,14 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKDataBlob.h"
 #import "KKMiniCanvasRenderer.h"
 #import "KKPlugin+OSCVisibility.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
 #import "KKTimelineInspectorView.h"
+#import <KeyframelessKit/KKJoyrideGuideHost.h>
+#import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
 
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
@@ -134,16 +137,133 @@
                                    view:(KKTimelineInspectorView *)view
                                renderer:(KKMiniCanvasRenderer *)renderer
                             elementKeys:(NSArray<NSString *> *)keys {
+  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
+  // Keep the cached blob current, but if a guide is transiently forcing OSC
+  // visibility, don't re-apply the saved (user) visibility - otherwise an async
+  // parameterChanged the guide itself triggered (e.g. its own activeTab write)
+  // toggles the forced OSC back off mid-guide.
+  st.lastUIState = state;
+  if (st.guideForcingOSC)
+    return;
   BOOL oscVisible =
       state[@"oscMasterVisible"] ? [state[@"oscMasterVisible"] boolValue] : YES;
-  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
   st.oscMasterVisible = oscVisible;
-  st.lastUIState = state;
   [self kkApplyOSCVisibilityFromState:state elementKeys:keys renderer:renderer];
+  __weak typeof(self) weakSelf = self;
   dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weakSelf) strong = weakSelf;
+    // Re-check at execution time: a guide may have started forcing OSC
+    // visibility AFTER this refresh was scheduled (its sync part ran before the
+    // force, but this async block lands after). Don't undo the force.
+    if (KKInstanceStateForAPI(strong.apiManager).guideForcingOSC)
+      return;
     [view setOSCVisible:oscVisible];
     renderer.handlesHidden = !oscVisible;
   });
+}
+
+- (NSDictionary *)
+    kkForceOSCForGuideKeepingLabels:(NSArray<NSString *> *)keepLabels
+                        elementKeys:(NSArray<NSString *> *)keys
+                               view:(KKTimelineInspectorView *)view
+                           renderer:(KKMiniCanvasRenderer *)renderer {
+  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
+  BOOL priorMaster = st ? st.oscMasterVisible : YES;
+  NSSet<NSString *> *priorHidden =
+      st.hiddenOSCElements ? [st.hiddenOSCElements copy] : [NSSet set];
+  // Hide everything except the kept labels (nil/empty = show all). Transient
+  // only - no patchUIStateKey, so the user's saved OSC visibility is untouched.
+  NSSet<NSString *> *forced;
+  if (keepLabels.count) {
+    NSMutableSet<NSString *> *h = [NSMutableSet setWithArray:keys];
+    [h minusSet:[NSSet setWithArray:keepLabels]];
+    forced = h;
+  } else {
+    forced = [NSSet set];
+  }
+  if (st) {
+    st.oscMasterVisible = YES;
+    st.hiddenOSCElements = forced;
+    st.guideForcingOSC = YES; // ignore saved-state OSC refreshes until restore
+  }
+  renderer.handlesHidden = NO;
+  renderer.hiddenHandleLabels = forced;
+  [view setOSCVisible:YES];
+  return @{@"master" : @(priorMaster), @"hidden" : priorHidden};
+}
+
+- (void)kkRestoreOSCForGuide:(NSDictionary *)snapshot
+                        view:(KKTimelineInspectorView *)view
+                    renderer:(KKMiniCanvasRenderer *)renderer {
+  if (!snapshot)
+    return;
+  BOOL priorMaster = [snapshot[@"master"] boolValue];
+  NSSet<NSString *> *priorHidden = snapshot[@"hidden"];
+  if (![priorHidden isKindOfClass:[NSSet class]])
+    priorHidden = [NSSet set];
+  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
+  if (st) {
+    st.guideForcingOSC = NO;
+    st.oscMasterVisible = priorMaster;
+    st.hiddenOSCElements = priorHidden;
+  }
+  renderer.handlesHidden = !priorMaster;
+  renderer.hiddenHandleLabels = priorHidden;
+  // The OSC guide drives peek reveal directly (setGuidePeekActive); clear it so
+  // a run that ended mid-peek doesn't leave the mini-canvas stuck in peek mode
+  // (which the master toggle then can't hide).
+  renderer.revealHidden = NO;
+  [view setOSCVisible:priorMaster];
+}
+
+- (void)kkInstallGuideOSCForcingOnHost:(KKJoyrideGuideHost *)host
+                                  view:(KKTimelineInspectorView *)view
+                           elementKeys:(NSArray<NSString *> *)keys
+                          nudgeParamID:(UInt32)nudgeParamID {
+  __weak typeof(self) weakPlugin = self;
+  __weak KKTimelineInspectorView *weakView = view;
+  __block NSDictionary *snapshot = nil;
+  host.onRunWillStart = ^{
+    __strong typeof(weakPlugin) p = weakPlugin;
+    __strong KKTimelineInspectorView *v = weakView;
+    if (!p || !v)
+      return;
+    // Keep-set + renderer resolve at fire time: the running guide's config has
+    // installed `guideOSCKeepLabels` by now, and the renderer may have changed.
+    KKMiniCanvasRenderer *r = (KKMiniCanvasRenderer *)v.miniCanvasDelegate;
+    snapshot = [p kkForceOSCForGuideKeepingLabels:v.guideOSCKeepLabels
+                                      elementKeys:keys
+                                             view:v
+                                         renderer:r];
+    [p kkNudgeRenderWithParamID:nudgeParamID];
+  };
+  host.onRunDidEnd = ^{
+    __strong typeof(weakPlugin) p = weakPlugin;
+    __strong KKTimelineInspectorView *v = weakView;
+    if (!p || !v)
+      return;
+    KKMiniCanvasRenderer *r = (KKMiniCanvasRenderer *)v.miniCanvasDelegate;
+    [p kkRestoreOSCForGuide:snapshot view:v renderer:r];
+    [p kkNudgeRenderWithParamID:nudgeParamID];
+  };
+}
+
+// Force the FCP viewer to redraw its on-screen controls by writing a fresh
+// nonce to the hidden render-nudge scratch param inside an action scope. The
+// OSC visibility state lives in in-memory instance state that drawOSC reads,
+// but FCP only re-invokes drawOSC on a render - and a pure-navigation guide
+// triggers none. This nonce write is the same mechanism the boundary-preview
+// path uses; it doesn't touch any persisted UI state.
+- (void)kkNudgeRenderWithParamID:(UInt32)nudgeParamID {
+  id<FxCustomParameterActionAPI_v4> act =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!act)
+    return;
+  [act startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  KKWriteCustomParamString(setAPI, [[NSUUID UUID] UUIDString], nudgeParamID);
+  [act endAction:self];
 }
 
 @end

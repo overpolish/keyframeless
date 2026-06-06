@@ -213,6 +213,8 @@
   _renderMode = mode;
   if (self.onRenderModeChanged)
     self.onRenderModeChanged(mode);
+  if (self.onGuideRenderModeChanged)
+    self.onGuideRenderModeChanged(mode);
   // Pill toggle while a boundary popover is open → re-publish so the
   // render side switches single↔multi without close/reopen.
   if (_openContentPopover.isShown && _openStaticIsBoundary && _openStaticView) {

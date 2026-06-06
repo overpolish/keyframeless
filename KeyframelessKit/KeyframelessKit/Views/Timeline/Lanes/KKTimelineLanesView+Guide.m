@@ -35,6 +35,13 @@
   [_openContentPopover close];
 }
 
+- (NSRect)guideRenderModePillScreenRectForMode:(KKMiniCanvasRenderMode)mode {
+  _KKStaticValuesPopoverView *sv = _openStaticView;
+  if (!sv || !_openStaticIsBoundary)
+    return NSZeroRect;
+  return [sv guideRenderModePillScreenRectForMode:mode];
+}
+
 - (void (^)(NSView *, KKSegmentEditView *))onGapPopoverWillOpen {
   return _onGapPopoverWillOpen;
 }

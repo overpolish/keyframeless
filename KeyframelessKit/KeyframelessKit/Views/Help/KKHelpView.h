@@ -16,9 +16,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// documentation-style page. A faded rotated logo sits behind the content.
 @interface KKHelpView : NSView
 
+/// `headerTitle`/`headerIcon`, when given, render a title bar at the very top
+/// of the page (the plugin's name beside its icon). A section whose title
+/// matches `headerTitle` has its inline heading dropped - its title now lives
+/// in the header - and its body is promoted to an intro block, above the
+/// table of contents and excluded from it.
 - (instancetype)initWithSections:(NSArray<KKHelpSection *> *)sections
                           guides:(nullable NSArray<KKHelpGuide *> *)guides
+                     headerTitle:(nullable NSString *)headerTitle
+                      headerIcon:(nullable NSImage *)headerIcon
     NS_DESIGNATED_INITIALIZER;
+
+- (instancetype)initWithSections:(NSArray<KKHelpSection *> *)sections
+                          guides:(nullable NSArray<KKHelpGuide *> *)guides;
 
 - (instancetype)initWithSections:(NSArray<KKHelpSection *> *)sections;
 

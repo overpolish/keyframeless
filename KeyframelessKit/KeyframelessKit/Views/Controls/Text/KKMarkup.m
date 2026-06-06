@@ -31,22 +31,8 @@
       if (key) {
         [result appendAttributedString:[KKKbd attributedStringWithKey:key]];
       }
-    } else if ([scanner scanString:@"<accent>" intoString:nil]) {
-      NSString *body = nil;
-      [scanner scanUpToString:@"</accent>" intoString:&body];
-      [scanner scanString:@"</accent>" intoString:nil];
-      if (body) {
-        [result appendAttributedString:[self _coloredBold:body
-                                                    color:[NSColor accent]]];
-      }
-    } else if ([scanner scanString:@"<warn>" intoString:nil]) {
-      NSString *body = nil;
-      [scanner scanUpToString:@"</warn>" intoString:&body];
-      [scanner scanString:@"</warn>" intoString:nil];
-      if (body) {
-        [result appendAttributedString:[self _coloredBold:body
-                                                    color:[NSColor warning]]];
-      }
+    } else if ([self _scanColoredTagInto:result scanner:scanner]) {
+      // handled a <accent>/<warn>/<red>/<blue> text run
     } else if ([scanner scanString:@"<symbol " intoString:nil]) {
       NSString *content = nil;
       [scanner scanUpToString:@"/>" intoString:&content];
@@ -63,6 +49,51 @@
   }
 
   return result;
+}
+
+// Named colors shared by the colored text tags (`<accent>`, `<warn>`, `<red>`,
+// `<blue>`) and `<symbol color=…>`. nil for an unknown name so callers keep
+// their own default.
++ (nullable NSColor *)_colorNamed:(NSString *)name {
+  if ([name isEqualToString:@"accent"])
+    return [NSColor accent];
+  if ([name isEqualToString:@"warn"] || [name isEqualToString:@"warning"])
+    return [NSColor warning];
+  if ([name isEqualToString:@"red"])
+    return [NSColor onionPrevTint];
+  if ([name isEqualToString:@"blue"])
+    return [NSColor onionNextTint];
+  if ([name isEqualToString:@"white"])
+    return [NSColor whiteColor];
+  return nil;
+}
+
+// Tag names that wrap a bold colored text run (`<name>body</name>`). The tag
+// name is also the color name via `_colorNamed:`.
++ (NSArray<NSString *> *)_coloredTagNames {
+  return @[ @"accent", @"warn", @"red", @"blue" ];
+}
+
+// If the scanner is at a colored text tag, consume `<name>body</name>`, append
+// the colored run, and return YES. Otherwise leaves the scanner untouched and
+// returns NO.
++ (BOOL)_scanColoredTagInto:(NSMutableAttributedString *)result
+                    scanner:(NSScanner *)scanner {
+  for (NSString *name in [self _coloredTagNames]) {
+    NSString *open = [NSString stringWithFormat:@"<%@>", name];
+    if (![scanner scanString:open intoString:nil])
+      continue;
+    NSString *close = [NSString stringWithFormat:@"</%@>", name];
+    NSString *body = nil;
+    [scanner scanUpToString:close intoString:&body];
+    [scanner scanString:close intoString:nil];
+    if (body)
+      [result
+          appendAttributedString:[self _coloredBold:body
+                                              color:[self _colorNamed:name]]];
+    return YES;
+  }
+  return NO;
 }
 
 + (NSAttributedString *)_coloredBold:(NSString *)body color:(NSColor *)color {
@@ -86,14 +117,9 @@
 
   for (NSString *part in parts) {
     if ([part hasPrefix:@"color="]) {
-      NSString *colorName = [part substringFromIndex:6];
-      if ([colorName isEqualToString:@"white"]) {
-        color = [NSColor whiteColor];
-      } else if ([colorName isEqualToString:@"accent"]) {
-        color = [NSColor accent];
-      } else if ([colorName isEqualToString:@"warning"]) {
-        color = [NSColor warning];
-      }
+      NSColor *named = [self _colorNamed:[part substringFromIndex:6]];
+      if (named)
+        color = named;
     }
   }
 

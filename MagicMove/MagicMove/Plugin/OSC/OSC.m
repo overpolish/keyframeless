@@ -17,7 +17,145 @@
 static const double kScaleGizmoE0Frac = 0.12;
 static const double kScaleGizmoSpanFrac = 0.057;
 
+// Shared per-process OSC guide bridge. MRR-safe static singleton (no
+// dispatch_once / autoreleased static); lives for the process so the inspector
+// guide and the OSC share one instance.
+static KKOSCGuideBridge *MagicMoveGuideBridge(void) {
+  static KKOSCGuideBridge *sBridge = nil;
+  if (!sBridge)
+    sBridge = [[KKOSCGuideBridge alloc] init];
+  return sBridge;
+}
+
+KKOSCGuideBridge *MagicMoveSharedOSCGuideBridge(void) {
+  return MagicMoveGuideBridge();
+}
+
+// Guide-scoped Position (object [0,1] space). The OSC can't read the timeline
+// blob from the drawOSC tick (FxParameterRetrievalAPI is nil there), so during
+// the OSC guide the inspector drag pushes the live position here and the handle
+// tracks it - mirrors Rounded's sGuideRadius.
+static CGPoint sGuidePosition = {0.5, 0.5};
+
+// Object-space target the interactive drag nudges the Position handle toward
+// (upper-left of centre, clearly offset from the 0.5,0.5 seed).
+static const CGPoint kMagicMoveGuideTargetObject = {0.3, 0.7};
+
+void MagicMoveSetGuidePosition(double objX, double objY) {
+  sGuidePosition = CGPointMake(objX, objY);
+}
+
+CGPoint MagicMoveGuideTargetObjectPosition(void) {
+  return kMagicMoveGuideTargetObject;
+}
+
+// Inverse map: a screen point → object-space Position via the bridge's cached
+// viewer rect. Object [0,1]^2 maps to the viewer rect corners (both Y-up), so
+// the value is simply the normalized position within that rect - the canvas
+// terms cancel, same identity Rounded's radius map uses.
+BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
+                                          double *outY) {
+  KKOSCGuideBridge *b = MagicMoveGuideBridge();
+  NSRect vr = b.estimatedViewerScreenRect;
+  if (!b.geometryValid || NSIsEmptyRect(vr))
+    return NO;
+  double x = (screenPt.x - NSMinX(vr)) / NSWidth(vr);
+  double y = (screenPt.y - NSMinY(vr)) / NSHeight(vr);
+  if (outX)
+    *outX = MAX(0.0, MIN(1.0, x));
+  if (outY)
+    *outY = MAX(0.0, MIN(1.0, y));
+  return YES;
+}
+
 @implementation MagicMoveOSC
+
+// Feed the shared guide bridge canvas geometry each tick so the timing guide
+// can read the viewer screen rect (the watch-back cutout). Generic FxPlug
+// canvas conversion - nothing Magic Move specific. hasTarget:NO because we
+// only want the viewer rect, not the OSC drag handle/target.
+- (BOOL)_guideCanvasTopRight:(CGPoint *)outTR bottomLeft:(CGPoint *)outBL {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return NO;
+  CGPoint tr = {0, 0}, bl = {0, 0};
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:1.0
+                          fromY:1.0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&tr.x
+                            toY:&tr.y];
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0.0
+                          fromY:0.0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&bl.x
+                            toY:&bl.y];
+  if (outTR)
+    *outTR = tr;
+  if (outBL)
+    *outBL = bl;
+  return YES;
+}
+
+// drawOSC context: canvasZoom is often 0 here (no live canvas), so spC may be
+// 0 - the bridge keeps its last good scale. Keeps the viewer rect fresh once
+// the hit-test feed has bootstrapped the canvas reference.
+- (void)_ingestGuideDrawTickWithPosition:(CGPoint)pos {
+  CGPoint tr, bl;
+  if (![self _guideCanvasTopRight:&tr bottomLeft:&bl])
+    return;
+  id<FxOnScreenControlAPI_v2> oscAPI2 =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
+  double rawZoom = oscAPI2 ? ([oscAPI2 canvasZoom] / 100.0) : 0.0;
+  double displayScale = [[NSScreen mainScreen] backingScaleFactor];
+  double spC =
+      (rawZoom > 0.0 && displayScale > 0.0) ? rawZoom / displayScale : 0.0;
+  // During the OSC guide, feed the drag target (object-space → canvas) so the
+  // bridge can spotlight the glowing destination; otherwise we only want the
+  // viewer rect for the timing guide's watch-back step.
+  BOOL inGuide = MagicMoveGuideBridge().guideStep > 0;
+  CGPoint targetCanvas = CGPointZero;
+  if (inGuide) {
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    CGPoint tgt = MagicMoveGuideTargetObjectPosition();
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                            fromX:tgt.x
+                            fromY:tgt.y
+                          toSpace:kFxDrawingCoordinates_CANVAS
+                              toX:&targetCanvas.x
+                              toY:&targetCanvas.y];
+  }
+  [MagicMoveGuideBridge() ingestDrawTickWithCanvasTopRight:tr
+                                                bottomLeft:bl
+                                               canvasScale:spC
+                                           handleCanvasPos:pos
+                                           targetCanvasPos:targetCanvas
+                                                 hasTarget:inGuide];
+}
+
+// hit-test context: screen + canvas coords arrive together AND canvasZoom is
+// valid here, so this bootstraps the bridge's canvas reference - the draw tick
+// can't on its own. Mirrors Rounded's OSC hit-test feed.
+- (void)_ingestGuideHitTestAtCanvasX:(double)cx y:(double)cy {
+  CGPoint tr, bl;
+  if (![self _guideCanvasTopRight:&tr bottomLeft:&bl])
+    return;
+  id<FxOnScreenControlAPI_v2> oscAPI2 =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
+  double rawZoom = oscAPI2 ? ([oscAPI2 canvasZoom] / 100.0) : 1.0;
+  double displayScale = [[NSScreen mainScreen] backingScaleFactor];
+  double spC = (displayScale > 0.0) ? rawZoom / displayScale : rawZoom;
+  [MagicMoveGuideBridge() ingestHitTestAtScreen:NSEvent.mouseLocation
+                                      canvasPos:CGPointMake(cx, cy)
+                                    canvasScale:spC
+                                       topRight:tr
+                                     bottomLeft:bl
+                                       onHandle:NO
+                                handleCanvasPos:CGPointZero];
+}
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super initWithAPIManager:apiManager];
@@ -117,10 +255,18 @@ static const double kScaleGizmoSpanFrac = 0.057;
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   if (!oscAPI)
     return CGPointZero;
-  NSArray<NSNumber *> *vals =
-      _positionValuesAtFraction([self _fractionAtTime:time]);
-  double objX = vals[0].doubleValue;
-  double objY = vals[1].doubleValue;
+  double objX, objY;
+  if (MagicMoveGuideBridge().guideStep > 0) {
+    // During the guide the handle follows the guide-scoped position the drag
+    // pushes in (the blob is unreadable in this tick).
+    objX = sGuidePosition.x;
+    objY = sGuidePosition.y;
+  } else {
+    NSArray<NSNumber *> *vals =
+        _positionValuesAtFraction([self _fractionAtTime:time]);
+    objX = vals[0].doubleValue;
+    objY = vals[1].doubleValue;
+  }
   CGPoint canvas = CGPointZero;
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
                           fromX:objX

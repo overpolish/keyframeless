@@ -435,6 +435,12 @@ const CGFloat kMBCheckboxTrailing = 23.0;
 
 - (void)setActiveTab:(NSInteger)tab {
   BOOL changed = (_selectedTab != (KKTimelineTab)tab);
+  // A guide that pins the tab ignores external switches (e.g. the plugin's
+  // parameterChanged re-applying the saved tab), which would otherwise fight
+  // the guide into a Basic<->Advanced loop. The guide's own pin / restore set
+  // _guideOwnsTab around their setActiveTab calls.
+  if (changed && _guideOwnsTab)
+    return;
   _selectedTab = (KKTimelineTab)tab;
   [_tabBar setState:(tab == KKTimelineTabBasic) atIndex:KKTimelineTabBasic];
   [_tabBar setState:(tab == KKTimelineTabAdvanced)

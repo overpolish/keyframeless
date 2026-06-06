@@ -62,6 +62,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// shared `KKPointOSC` glyph. Return nil/empty for none.
 - (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
     extraHandleCentersForContentRect:(CGRect)contentRect;
+/// Scale-box handle centres (overlay points, y-up): 0-3 corners BL/BR/TR/TL,
+/// 4-7 edges. Empty/nil if the delegate draws no scale box. Lets a guide
+/// spotlight a scale handle; the drag itself reuses the generic handle path.
+- (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+    scaleHandleCentersForContentRect:(CGRect)contentRect;
 /// Motion-path overlay (Magic Move). Polyline points (overlay points, y-up) for
 /// the red trajectory line through the Position keyposes. Empty for none.
 - (NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
@@ -107,6 +112,14 @@ NS_ASSUME_NONNULL_BEGIN
     pointHandleCenter:(out CGPoint *)outCenter
              forValue:(double)value
           contentRect:(CGRect)contentRect;
+/// 2D sibling of the above: where the point handle's centre would be if its
+/// value were the multi-component `values` (e.g. Position `[x, y]`). Lets a
+/// guide place a "drag to here" target for a spatial point handle. NO if
+/// unsupported.
+- (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
+    pointHandleCenter:(out CGPoint *)outCenter
+            forValues:(NSArray<NSNumber *> *)values
+          contentRect:(CGRect)contentRect;
 /// 3-ring rotation gizmo overlay (KKRotationOSC parity on the mini-canvas).
 /// The delegate fills in the centre (overlay points, y-up), pixel radius,
 /// and a `KKRotationOSCParams` struct holding the world matrix + ring
@@ -137,6 +150,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// guide target a specific crop handle. nil if unsupported.
 - (nullable NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
                  cropHandleCentersForValues:(NSArray<NSNumber *> *)values
+                                contentRect:(CGRect)contentRect;
+/// Scale-box handle centres the box *would* have at the scale percents `values`
+/// (`[x%, y%]`) - same order as -miniCanvas:scaleHandleCentersForContentRect:.
+/// Lets a guide target a scale handle (e.g. the corner at 200%). nil if
+/// unsupported.
+- (nullable NSArray<NSValue *> *)miniCanvas:(KKMiniCanvasView *)canvas
+                scaleHandleCentersForValues:(NSArray<NSNumber *> *)values
                                 contentRect:(CGRect)contentRect;
 /// YES if `point` (overlay points, y-up) grabs a handle.
 - (BOOL)miniCanvas:(KKMiniCanvasView *)canvas
@@ -220,20 +240,42 @@ NS_ASSUME_NONNULL_BEGIN
 /// re-render any pixel-scaled UI that depends on it.
 @property(nonatomic, copy, nullable) void (^onSourceResolved)(void);
 
-/// Fired on any user zoom or pan (wheel/pinch zoom, trackpad pan, drag-pan).
-/// A guide uses this to advance a "try zooming or panning" step.
-@property(nonatomic, copy, nullable) void (^onViewTransformChanged)(void);
+/// Which kind of view-transform gesture the user performed - lets a guide
+/// teach pan and zoom as separate steps (the signal alone can't otherwise tell
+/// a drag-pan from a wheel-zoom).
+typedef NS_ENUM(NSInteger, KKMiniCanvasTransformKind) {
+  KKMiniCanvasTransformKindPan = 0,
+  KKMiniCanvasTransformKindZoom = 1,
+};
+
+/// Fired on any user zoom or pan (wheel/pinch zoom, trackpad pan, drag-pan),
+/// with the gesture kind. A guide uses this to advance a "try zooming" or
+/// "try panning" step.
+@property(nonatomic, copy, nullable) void (^onViewTransformChanged)
+    (KKMiniCanvasTransformKind kind);
 
 /// Fired when the view is reset to its initial aspect-fit framing (the
 /// double-click gesture). A guide uses this to advance a "double-click to
 /// reset" step.
 @property(nonatomic, copy, nullable) void (^onViewReset)(void);
 
+/// Fired when a double-click was consumed by the delegate (i.e. it returned YES
+/// from -miniCanvas:doubleClickAtPoint:contentRect: - e.g. Magic Move toggling
+/// a keypose's corner/smooth handling) instead of falling through to a view
+/// reset. A guide uses this to advance a "double-click to curve a keypose"
+/// step.
+@property(nonatomic, copy, nullable) void (^onDelegateHandledDoubleClick)(void);
+
 /// Fired when the user single-clicks an INACTIVE filmstrip cell (onion-skin
 /// only). The host swaps the popover to the KP at that fraction. Cells in
 /// single-slot mode never fire - there's nothing to switch to.
 @property(nonatomic, copy, nullable) void (^onFilmstripCellActivated)
     (double fraction);
+
+/// Fired when the user Option-clicks a handle in the canvas to hide it (the
+/// in-canvas equivalent of the viewer opt-click-hide). A guide uses this to
+/// advance a "hide a control" step. `label` is the toggled handle's label.
+@property(nonatomic, copy, nullable) void (^onOptHideHandle)(NSString *label);
 
 /// 0 = Off (single frame at the active KP), 1 = Filmstrip (each KP fans out
 /// side-by-side in the pannable canvas), 2 = Onion (all KP frames stacked
@@ -280,10 +322,27 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)dragPointHandleToScreenPoint:(NSPoint)screenPoint;
 - (void)endPointHandleDrag;
 
+/// Option-click-hide the handle at `screenPoint` (the in-canvas equivalent of
+/// the viewer opt-click-hide), driven from a screen point so a guide's
+/// pass-through spotlight handler can invoke it - the XPC overlay swallows the
+/// raw click, exactly as the drag methods above. Returns YES if a handle was
+/// hit (and toggled).
+- (BOOL)optHideHandleAtScreenPoint:(NSPoint)screenPoint;
+
+/// Set Option-peek reveal on/off directly (the same thing the overlay's
+/// opt-hover does), driven by a guide whose move events don't reach the overlay
+/// natively.
+- (void)setGuidePeekActive:(BOOL)active;
+
 /// Screen rect of where the point handle's glyph would sit at `value` - the
 /// guide's amber "drag to here" target. `NSZeroRect` if the delegate doesn't
 /// implement the value-parameterized hook or the view isn't in a window.
 - (NSRect)pointHandleScreenRectForValue:(double)value;
+
+/// 2D sibling: screen rect of where the point handle would sit at the
+/// multi-component `values` (e.g. Position `[x, y]`). `NSZeroRect` if the
+/// delegate doesn't implement the values hook or the view isn't in a window.
+- (NSRect)pointHandleScreenRectForValues:(NSArray<NSNumber *> *)values;
 
 /// Screen rect of crop handle `index` (order/count match
 /// -miniCanvas:extraHandleCentersForContentRect:; 0 = top-left) for the
@@ -292,6 +351,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSRect)cropHandleScreenRectAtIndex:(NSInteger)index;
 - (NSRect)cropHandleScreenRectAtIndex:(NSInteger)index
                         forCropValues:(NSArray<NSNumber *> *)values;
+
+/// Screen rect of scale-box handle `index` (0-3 corners BL/BR/TR/TL, 4-7 edges)
+/// for the current scale, or for a hypothetical scale `values` (`[x%, y%]`) -
+/// the guide's "drag here" target. `NSZeroRect` if there's no scale box / not
+/// in a window. The drag itself reuses the generic point-handle drive (it
+/// hit-tests whatever handle the press lands on).
+- (NSRect)scaleHandleScreenRectAtIndex:(NSInteger)index;
+- (NSRect)scaleHandleScreenRectAtIndex:(NSInteger)index
+                        forScaleValues:(NSArray<NSNumber *> *)values;
 
 @end
 

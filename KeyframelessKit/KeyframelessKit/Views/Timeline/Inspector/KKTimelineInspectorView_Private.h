@@ -21,6 +21,8 @@
 @class KKLane;
 @class _KKCompatBannerView;
 @class _KKMotionBlurSettingsView;
+@class KKJoyrideGuideHost;
+@class KKCompoundPillBar;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -30,15 +32,47 @@ NS_ASSUME_NONNULL_BEGIN
   /// alongside (not replacing) the host's `onTabChanged`. The +Guide
   /// category stores/reads this.
   void (^_onGuideTabChanged)(NSInteger tab);
+  /// Guide-only: OSC element labels to keep visible during the current guide
+  /// run (the +Guide category stores/reads this; the plugin's OSC hook uses
+  /// it).
+  NSArray<NSString *> *_guideOSCKeepLabels;
   /// Guide-only: when YES the play button accent is driven deterministically
   /// by taps (each tap toggles it) and the poll-inferred `setPlaying:` is
   /// ignored. A guide owns the playhead scenario, so the inferred state
   /// (which flickers under FCP's bursty currentTime) must not touch the
   /// button. The +Guide category sets this; the .m reads it.
   BOOL _guideOwnsPlayState;
+  /// Guide-only: when YES, external `setActiveTab:` calls that would change the
+  /// tab are ignored. A guide that pins a tab (e.g. the mini-viewer runs in
+  /// Advanced) sets this so the plugin's parameterChanged tab-restore can't
+  /// fight it into an infinite Basic<->Advanced loop. The +Guide category sets
+  /// it (after pinning its tab); the .m's setActiveTab reads it.
+  BOOL _guideOwnsTab;
   /// Guide-only: fired on every raw play-button tap (one per click,
   /// deterministic). The +Guide category stores/reads this.
   void (^_onPlaybackToggleTapped)(void);
+  /// Guide-only: fired by the shared guide host when a run reaches its final
+  /// step (completed, not skipped). The plugin's help guide sets this to mark
+  /// itself done. The +Guide category stores/reads this.
+  void (^_onGuideCompleted)(void);
+  /// Guide-only: the one shared KKJoyrideGuideHost serving the Basic + Advanced
+  /// timing guides. Lazily built by -timingGuideHost in the +Guide category.
+  KKJoyrideGuideHost *_timingGuideHost;
+  /// Guide-only: the plugin's config builder, set once in
+  /// createViewForParameterID. The kit's restart/autostart methods call it to
+  /// get a fresh KKTimingGuideConfig (plugin data + the inspector bridges from
+  /// -makeTimingGuideConfig). id-typed to avoid importing KKTimingGuide here.
+  id _timingGuideConfigProvider;
+  /// Guide-only: OSC-visibility observation hooks, fired ALONGSIDE the plugin's
+  /// own OSC callbacks (so the OSC guide advances on real user actions without
+  /// clobbering persistence). Stored/read by the +Guide category; fired from
+  /// the +ParameterRows OSC-row code.
+  void (^_onGuideOSCMasterToggled)(BOOL visible);
+  void (^_onGuideOSCSettingsPopoverWillOpen)(NSView *content);
+  void (^_onGuideOSCElementToggled)(NSString *label, BOOL visible);
+  /// The live per-element OSC pill bar inside the open settings popover (weak;
+  /// nil when closed). Exposed for the OSC guide's pill spotlight.
+  __weak KKCompoundPillBar *_oscPillBar;
 
   // Main inspector state (migrated off the @implementation block so the
   // +ParameterRows / layout categories can reach it).

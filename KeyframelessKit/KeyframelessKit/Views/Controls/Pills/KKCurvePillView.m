@@ -28,6 +28,33 @@ static const NSInteger kSegments = 60;
   return YES;
 }
 
+- (void)setPillCount:(NSInteger)pillCount {
+  _pillCount = pillCount;
+  [self _installTooltips];
+}
+
+- (void)setPillTooltips:(NSArray<NSString *> *)pillTooltips {
+  _pillTooltips = [pillTooltips copy];
+  [self _installTooltips];
+}
+
+- (void)setFrameSize:(NSSize)newSize {
+  [super setFrameSize:newSize];
+  [self _installTooltips];
+}
+
+- (void)_installTooltips {
+  [self removeAllToolTips];
+  for (NSInteger i = 0; i < _pillCount && i < (NSInteger)_pillTooltips.count;
+       i++) {
+    NSString *tip = _pillTooltips[i];
+    if (tip.length == 0)
+      continue;
+    // AppKit accepts an NSString as the owner and shows it as the tooltip.
+    [self addToolTipRect:[self pillRectForIndex:i] owner:tip userData:NULL];
+  }
+}
+
 - (NSRect)pillRectForIndex:(NSInteger)index {
   if (_pillCount <= 0)
     return NSZeroRect;

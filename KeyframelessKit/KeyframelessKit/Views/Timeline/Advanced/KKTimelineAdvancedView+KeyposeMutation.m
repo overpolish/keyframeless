@@ -61,6 +61,11 @@
     return;
   NSString *label = anim[laneIdx].label;
   [self _addKeyposeAtFrac:frac forLabel:label];
+  // _addKeyposeAtFrac: snaps the time to the nearest frame, so look up the
+  // keypose by the SNAPPED time - searching the raw frac misses it for any
+  // click between frames, and the value popover then silently never opens.
+  double snapped =
+      KKSnapFracToFrame(frac, [self _clipDuration], _frameDurationSeconds);
   NSArray<KKLane *> *after = [self _animatableLanes];
   NSInteger newLaneIdx = -1, newKPIdx = -1;
   for (NSInteger i = 0; i < (NSInteger)after.count; i++) {
@@ -68,7 +73,7 @@
       continue;
     newLaneIdx = i;
     for (NSInteger j = 0; j < (NSInteger)after[i].keyposes.count; j++)
-      if (fabs(after[i].keyposes[j].time - frac) < 1.0e-4) {
+      if (fabs(after[i].keyposes[j].time - snapped) < 1.0e-4) {
         newKPIdx = j;
         break;
       }

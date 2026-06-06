@@ -348,6 +348,17 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   _pills.translatesAutoresizingMaskIntoConstraints = NO;
   _pills.pillCount =
       (_kind == KKSegmentEditKindHold) ? KKHoldEffectCount : KKEasingCurveCount;
+  {
+    // Name the glyph-only pills on hover (localized).
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+    if (_kind == KKSegmentEditKindHold)
+      for (NSInteger i = 0; i < KKHoldEffectCount; i++)
+        [names addObject:KKHoldEffectDisplayName((KKHoldEffect)i)];
+    else
+      for (NSInteger i = 0; i < KKEasingCurveCount; i++)
+        [names addObject:KKEasingCurveDisplayName((KKEasingCurve)i)];
+    _pills.pillTooltips = names;
+  }
   // Transition pills (curve picker) read in the warn tint that matches the
   // transition curve drawn in the lane graph; Hold (modulation) keeps the
   // accent tint.

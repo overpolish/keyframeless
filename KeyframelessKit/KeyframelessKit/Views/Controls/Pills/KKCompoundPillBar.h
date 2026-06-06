@@ -35,6 +35,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onDragEnd)(void);
 
+/// Screen rect of one compound's pill (for a guide spotlight that targets a
+/// single control). NSZeroRect if the index is out of range or off-screen.
+- (NSRect)screenRectForCompoundIndex:(NSInteger)compoundIdx;
+
 @end
 
 NS_ASSUME_NONNULL_END

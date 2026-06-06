@@ -26,6 +26,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// When YES, clicks inside the spotlight pass through to the app below instead
 /// of being forwarded to the XPC inspector window. Use for OSC / viewer steps.
 @property(nonatomic) BOOL spotlightPassThrough;
+/// Set on a `spotlightPassThrough` step that drives an IN-PROCESS inspector
+/// view via the synthesize path (`spotlightMouseDown`/Dragged/Up), as opposed
+/// to a host/viewer step that wants raw events to reach FCP. The overlay panel
+/// must keep capturing raw mouse events for these (`ignoresMouseEvents = NO`),
+/// otherwise the press also lands on the real view beneath the panel and the
+/// drag fires twice - double `onDragBegin` leaks an undo group and the next
+/// drag's `startUndoGroup` aborts. Pass-through routing (spotFirst + synthesize)
+/// still applies; only the panel's event capture differs.
+@property(nonatomic) BOOL spotlightSynthesizesInProcess;
 /// When set, called on the main queue with the screen-space point of a
 /// mouseDown inside the spotlight (instead of letting it fall through to FCP).
 /// Use to drive plugin OSC methods directly without a Finder-activation trick.
@@ -37,6 +46,14 @@ NS_ASSUME_NONNULL_BEGIN
     (NSPoint screenPoint);
 /// Called on the main queue with the mouseUp point after spotlightMouseDown.
 @property(nonatomic, copy, nullable) void (^spotlightMouseUp)
+    (NSPoint screenPoint);
+/// Called on the main queue with each mouse-MOVE point (no button down) while
+/// the cursor is inside the spotlight on a pass-through step.
+/// `ignoresMouseEvents` lets clicks fall through but NOT the move/tracking that
+/// drives an OSC's opt-reveal (peek), so a step that needs hover-with-Option
+/// installs this and drives its control directly (current modifiers via
+/// `[NSEvent modifierFlags]`).
+@property(nonatomic, copy, nullable) void (^spotlightMouseMoved)
     (NSPoint screenPoint);
 /// Magnify (pinch) events are delivered to the frontmost window - the guide
 /// panel - and `ignoresMouseEvents` does NOT pass gestures through (unlike

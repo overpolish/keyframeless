@@ -174,6 +174,12 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 - (BOOL)pointHandleCenter:(out CGPoint *)outCenter
                  forValue:(double)value
            forContentRect:(CGRect)contentRect;
+/// 2D sibling: point handle centre if its value were the multi-component
+/// `values` (e.g. Position `[x, y]`), for a guide's "drag to here" target.
+/// Default NO.
+- (BOOL)pointHandleCenter:(out CGPoint *)outCenter
+                forValues:(NSArray<NSNumber *> *)values
+           forContentRect:(CGRect)contentRect;
 /// YES if `p` grabs the point handle. Default NO.
 - (BOOL)pointHandleHitAtPoint:(CGPoint)p contentRect:(CGRect)contentRect;
 /// Apply a point-handle drag: compute the new value, then call

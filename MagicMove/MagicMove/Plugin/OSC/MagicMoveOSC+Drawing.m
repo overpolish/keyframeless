@@ -200,7 +200,12 @@
                         (self.isDragging ? isnan(self.dragAnchorFrac)
                                          : !self.hoverTargetIsAnchor);
   BOOL draggingHandle = self.isDragging && handleTargeted;
-  BOOL posVisible = draggingHandle || (posEnabled && posShownHere);
+  // During the OSC guide the handle ignores keypose/playhead gating (so the
+  // drag works without a keypose at the playhead) but still respects the
+  // master/element toggle - otherwise the "hide them all" step couldn't hide
+  // it.
+  BOOL inGuide = MagicMoveSharedOSCGuideBridge().guideStep > 0;
+  BOOL posVisible = draggingHandle || (posEnabled && (posShownHere || inGuide));
   // Opt-hold reveals a hidden Position handle as a dimmed ghost (clickable to
   // re-show); only when it would otherwise be on screen at this playhead.
   BOOL posGhost = !posVisible && self.optRevealActive &&
@@ -225,6 +230,10 @@
   // needed by rotation/scale below, but the Position arc itself is drawn after
   // them so the arc sits on top of the rings/box and stays easy to see + grab.
   CGPoint pos = [self oscPositionAtTime:time];
+
+  // Feed the guide bridge this tick's canvas geometry so the timing guide's
+  // watch-back step can highlight the viewer.
+  [self _ingestGuideDrawTickWithPosition:pos];
 
   // Rotation sphere is centred on the same canvas point as Position (the
   // image rotates around its centre, which is where Position translates it).

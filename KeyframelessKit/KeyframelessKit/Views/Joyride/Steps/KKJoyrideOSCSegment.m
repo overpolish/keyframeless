@@ -68,17 +68,19 @@
     guide.hostPassthroughWindows = passthroughWins;
 
   // Last value the drag set; the mouseUp gate checks whether it is ON the
-  // target at *release* (not merely passed through it).
-  __block double lastValue = 0.0;
+  // target at *release* (not merely passed through it). Opaque (boxed) so the
+  // segment supports scalar (radius) and 2D (position) controls alike.
+  __block id lastValue = nil;
   NSInteger dragStepNumber = displayBase + 2;
   NSString *dragMessage = [strategy.dragMessage copy];
 
   s1.spotlightMouseDown = ^(NSPoint screenPt) {
     if (strategy.captureAnchorAtScreen)
       strategy.captureAnchorAtScreen(screenPt);
-    double v = strategy.currentValue ? strategy.currentValue() : 0.0;
-    if (strategy.setLiveValue)
+    id v = strategy.currentValue ? strategy.currentValue() : nil;
+    if (v && strategy.setLiveValue)
       strategy.setLiveValue(v);
+    lastValue = v;
     // Reveal the target now; the observer only advances on the final step so
     // this doesn't rebuild.
     bridge.guideStep = 2;
@@ -90,16 +92,16 @@
   s1.spotlightMouseDragged = ^(NSPoint screenPt) {
     if (!strategy.valueForScreenPoint)
       return;
-    double v = strategy.valueForScreenPoint(screenPt);
-    if (fabs(v - strategy.targetValue) < strategy.snapTolerance)
-      v = strategy.targetValue; // snap to the glowing target
+    id v = strategy.valueForScreenPoint(screenPt);
+    if (v && strategy.snapValue)
+      v = strategy.snapValue(v); // snap to the glowing target when close
     lastValue = v;
-    if (strategy.applyValue)
+    if (v && strategy.applyValue)
       strategy.applyValue(v);
   };
   s1.spotlightMouseUp = ^(NSPoint screenPt) {
-    BOOL onTarget =
-        fabs(lastValue - strategy.targetValue) < strategy.snapTolerance;
+    BOOL onTarget = lastValue && strategy.valueOnTarget &&
+                    strategy.valueOnTarget(lastValue);
     if (strategy.requireTargetHit && !onTarget) {
       return; // user can press+drag again to land on it
     }

@@ -7,6 +7,8 @@ Scale resizes the clip. It has two components, X and Y, each a percentage of the
 
 Scale values are whole percentages - there is no half a percent, so every field and drag snaps to an integer. They are floored at 0% and have no upper limit: you can scale a clip up as far as you like, but it never goes negative, so Scale never flips or mirrors the clip. (Use Rotation for flipping.) 0% collapses the clip to nothing; it stays a valid, recoverable value rather than something the controls can get stuck at.
 
+- A **link** toggle by the X / Y fields keeps the aspect ratio locked (on by default); turn it off to stretch or squash. Drag the on-screen **transform box** by a corner to scale both axes, or by an edge handle to scale one.
+
 ## Linking X and Y (aspect lock)
 
 A link glyph sits next to the X / Y fields in the keypose value popover. It locks the aspect ratio:

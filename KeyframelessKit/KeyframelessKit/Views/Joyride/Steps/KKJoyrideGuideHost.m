@@ -5,6 +5,8 @@
 
 #import "KKJoyrideGuideHost.h"
 #import <KeyframelessKit/KKHostInfo.h>
+#import <KeyframelessKit/KKTimelineAdvancedView.h>
+#import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
@@ -22,6 +24,11 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
   KKJoyrideController *_guide;
   KKJoyrideLanesBinder *_binder;
   KKTimeline *_savedTimeline;
+  // Advanced-graph selection at seed time, cleared for the guide's duration and
+  // restored on teardown so the guide's marquee / multi-select doesn't leak out.
+  NSSet<NSString *> *_savedPillKeys;
+  NSSet<NSString *> *_savedGapKeys;
+  BOOL _didSaveSelection;
   NSInteger _finalIndex;
 }
 
@@ -138,6 +145,15 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
     return;
   if (self.currentTimelineProvider)
     _savedTimeline = self.currentTimelineProvider();
+  // Stash + clear any advanced-graph selection so the guide starts clean and
+  // its marquee / multi-select is undone again on teardown.
+  KKTimelineAdvancedView *adv = _lanesView.advancedGraph;
+  if (adv) {
+    _savedPillKeys = adv.selectedPillKeys;
+    _savedGapKeys = adv.selectedGapKeys;
+    _didSaveSelection = YES;
+    [adv clearSelection];
+  }
   if (self.timelineApplier)
     self.timelineApplier(seed);
 }
@@ -150,6 +166,9 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
   KKTimelineLanesView *lanesView = _lanesView;
   if (!hostView || !lanesView || !buildSteps)
     return;
+
+  if (self.onRunWillStart)
+    self.onRunWillStart();
 
   KKJoyrideController *guide =
       [[KKJoyrideController alloc] initWithHostView:hostView];
@@ -175,6 +194,8 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
                  s.onGuideCompleted();
                if (extra)
                  extra();
+               if (s.onRunDidEnd)
+                 s.onRunDidEnd();
                [s _teardown];
              }];
 }
@@ -196,14 +217,29 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
 
   // Restore the saved timeline on the next tick, for the same reason -
   // the inspector callback chain that fires off applyTimeline: may still
-  // be unwinding on this call stack.
+  // be unwinding on this call stack. The pre-guide selection is reinstated
+  // right after, once its keyposes exist again in the restored timeline.
   KKTimeline *saved = _savedTimeline;
   _savedTimeline = nil;
+  NSSet<NSString *> *pills = _savedPillKeys;
+  NSSet<NSString *> *gaps = _savedGapKeys;
+  BOOL restoreSelection = _didSaveSelection;
+  _savedPillKeys = nil;
+  _savedGapKeys = nil;
+  _didSaveSelection = NO;
   void (^applier)(KKTimeline *) = self.timelineApplier;
+  __weak KKTimelineLanesView *lanesView = _lanesView;
+  void (^restoreSel)(void) = ^{
+    if (restoreSelection)
+      [lanesView.advancedGraph applySelectionPillKeys:pills gapKeys:gaps];
+  };
   if (saved && applier) {
     dispatch_async(dispatch_get_main_queue(), ^{
       applier(saved);
+      restoreSel();
     });
+  } else if (restoreSelection) {
+    dispatch_async(dispatch_get_main_queue(), restoreSel);
   }
 }
 

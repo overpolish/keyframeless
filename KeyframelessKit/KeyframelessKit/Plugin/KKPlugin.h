@@ -16,6 +16,7 @@
 @class KKMiniCanvasFeed;
 @class KKCustomGroupHeaderView;
 @class KKHelpSection;
+@class KKHelpShortcut;
 @class KKHelpGuide;
 @class KKTimingLane;
 @class KKTimingSegment;
@@ -544,6 +545,41 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// shortcuts table. Returning a non-empty array makes the logo-banner
 /// help button visible. Default: empty array.
 - (NSArray<KKHelpSection *> *)helpSections;
+
+/// Override to give the help window a title bar at the very top: the plugin's
+/// name beside its icon, so it's clear which plugin the window belongs to. If
+/// a `helpSections` entry carries the same title, its inline heading is
+/// dropped (the title now lives in the header) and its body is promoted to an
+/// intro block above the contents table. Default: nil (no header bar).
+- (nullable NSString *)helpHeaderTitle;
+
+/// SF Symbol or image shown beside `helpHeaderTitle` in the help window's top
+/// title bar. Default: nil.
+- (nullable NSImage *)helpHeaderIcon;
+
+/// Build a help section whose tips are rendered from one of this plugin's
+/// bundled `AIKnowledge` markdown topics - the same `.md` the AI assistant
+/// reads - so the help window and the AI stay single-sourced. `topicID` is the
+/// `.md` filename (no extension) in the plugin bundle's `AIKnowledge`
+/// subdirectory. Markdown `**bold**` renders as an accent run and `` `code` ``
+/// as a key badge. `localizer`, if non-nil, localizes each rendered tip - pass
+/// your plugin's Loc (e.g. `^(NSString *s){ return MMLoc(s, @"..."); }`) so the
+/// translations live in your plugin's own catalog. `symbol` is an optional SF
+/// Symbol name for the section icon. Tips are empty if the topic file is
+/// missing. Use this from `-helpSections`.
+- (KKHelpSection *)helpSectionFromKnowledgeTopic:(NSString *)topicID
+                                           title:(NSString *)title
+                                          symbol:(nullable NSString *)symbol
+                                       localizer:(nullable NSString * (^)(
+                                                     NSString *tip))localizer;
+
+/// The generic on-screen-control + mini-canvas shortcut rows that every plugin
+/// with on-screen controls shares (hide a control, reveal hidden ones, reset
+/// the mini-canvas zoom). Append your plugin-specific rows and pass the
+/// combined array as a help section's `shortcuts`, so each plugin's shortcuts
+/// table lists its own gestures plus the shared ones. Localized via the kit
+/// catalog.
++ (NSArray<KKHelpShortcut *> *)sharedOnScreenControlShortcuts;
 
 /// Override to provide interactive guide entries shown at the top of the
 /// help window. Each guide has a title, optional subtitle, and an onStart
