@@ -3,14 +3,14 @@ id: presets
 summary: Save an animation and re-apply it to any clip (built-in and custom presets)
 ---
 
-Save an animation you like and re-apply it to any clip from the **Presets** row:
-
-- **Default presets** - built-in starters like Pop In and Pop Out, marked with a Default badge. They are read-only.
-- **Apply** - click a preset to replace the current animation with it.
-- **Apply at playhead** - the insert button drops the preset's move in at the playhead and keeps your existing keyposes, so you can stack a Pop In early and a Pop Out later on the same clip.
-- **Save** - type a name in the field and press `+` to save the current animation as your own preset.
-- **Filter** - type in the same field to narrow the list.
-- **Manage** - rename, overwrite with the current animation, or delete your own presets (built-ins can't be changed).
+- Save an animation you like and re-apply it to any clip from the **Presets** row:
+  - **Default presets** - built-in starters like Pop In and Pop Out, marked with a Default badge. They are read-only.
+  - **Apply** - click a preset to replace the current animation with it.
+  - **Apply at playhead** - the insert button drops the preset's move in at the playhead and keeps your existing keyposes, so you can stack a Pop In early and a Pop Out later on the same clip.
+  - **Save** - type a name in the field and press `+` to save the current animation as your own preset.
+  - **Fixed transitions** - a preset saves its transitions (the moving parts) as fixed durations and its holds as flexible, so an applied preset feels the same whether the clip is short or long.
+  - **Filter** - type in the same field to narrow the list.
+  - **Manage** - rename, overwrite with the current animation, or delete your own presets (built-ins can't be changed).
 
 ## How preset timing adapts
 

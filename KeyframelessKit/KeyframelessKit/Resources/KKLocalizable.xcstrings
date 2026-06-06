@@ -9576,6 +9576,48 @@
           }
         }
       }
+    },
+    "<accent>Fixed transitions</accent> - a preset saves its transitions (the moving parts) as fixed durations and its holds as flexible, so an applied preset feels the same whether the clip is short or long.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Feste Übergänge</accent> - ein Preset sichert seine Übergänge (die bewegten Teile) mit fester Dauer und seine Haltephasen flexibel, sodass sich ein angewendetes Preset bei kurzen wie langen Clips gleich anfühlt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Transiciones fijas</accent> - un preajuste guarda sus transiciones (las partes en movimiento) con una duración fija y sus mantenimientos de forma flexible, de modo que un preajuste aplicado se siente igual tanto en un clip corto como en uno largo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Transitions fixes</accent> - un préréglage enregistre ses transitions (les parties en mouvement) avec une durée fixe et ses maintiens de façon flexible, afin qu'un préréglage appliqué donne le même ressenti que le plan soit court ou long."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>固定トランジション</accent> - プリセットはトランジション（動く部分）を固定の長さで、ホールドを可変で保存するため、適用したプリセットはクリップが短くても長くても同じ印象になります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>고정 트랜지션</accent> - 프리셋은 트랜지션(움직이는 부분)을 고정된 길이로, 홀드를 유연하게 저장하므로 적용한 프리셋은 클립이 짧든 길든 동일하게 느껴집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>固定过渡</accent> - 预设会将其过渡（运动部分）保存为固定时长，而将保持段保存为可变，因此应用的预设无论片段长短都能保持相同的感觉。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
