@@ -527,7 +527,7 @@
         [row.heightAnchor
             constraintEqualToConstant:bottomRowHeights[i].doubleValue],
         [above.bottomAnchor constraintEqualToAnchor:row.topAnchor
-                                           constant:-KKPaddingMD],
+                                           constant:-KKPaddingXS],
       ]];
       above = row;
     }

@@ -32,14 +32,14 @@ static const CGFloat kInspectorHeight = 220.0;
 const CGFloat kHeaderRowHeight = 28.0;
 // The motion-blur parameter row sits in its own section below the box. The
 // custom-UI height is fixed at init, so we reserve this once up front.
-const CGFloat kMotionBlurRowHeight = 28.0;
+const CGFloat kMotionBlurRowHeight = 24.0;
 // The on-screen-control visibility row mirrors the motion-blur row's section
 // below the box; same fixed height reserved up front.
-const CGFloat kOSCVisibilityRowHeight = 28.0;
+const CGFloat kOSCVisibilityRowHeight = 24.0;
 // The property-order row mirrors the same section; gear-only (no checkbox).
-const CGFloat kParamOrderRowHeight = 28.0;
+const CGFloat kParamOrderRowHeight = 24.0;
 // The presets row mirrors the same section; gear-only (no checkbox).
-const CGFloat kPresetsRowHeight = 28.0;
+const CGFloat kPresetsRowHeight = 24.0;
 // Trailing margin that lands the checkbox on the native control gutter, same
 // value KKCustomGroupHeaderView uses.
 const CGFloat kMBCheckboxTrailing = 23.0;
@@ -327,11 +327,11 @@ const CGFloat kMBCheckboxTrailing = 23.0;
 
 - (CGFloat)_totalHeight {
   return kInspectorHeight +
-         (_showsMotionBlurRow ? kMotionBlurRowHeight + KKPaddingMD : 0.0) +
-         (_showsOSCVisibilityRow ? kOSCVisibilityRowHeight + KKPaddingMD
+         (_showsMotionBlurRow ? kMotionBlurRowHeight + KKPaddingXS : 0.0) +
+         (_showsOSCVisibilityRow ? kOSCVisibilityRowHeight + KKPaddingXS
                                  : 0.0) +
-         (_showsParamOrderRow ? kParamOrderRowHeight + KKPaddingMD : 0.0) +
-         (_showsPresetsRow ? kPresetsRowHeight + KKPaddingMD : 0.0);
+         (_showsParamOrderRow ? kParamOrderRowHeight + KKPaddingXS : 0.0) +
+         (_showsPresetsRow ? kPresetsRowHeight + KKPaddingXS : 0.0);
 }
 
 // Builds one of the optional rows below the box - a labeled left view plus a
