@@ -36,6 +36,11 @@ typedef CGFloat (^KKCurvePillValueBlock)(NSInteger pillIndex, CGFloat t);
 /// the user will see drawn in the lane.
 @property(nonatomic, strong, nullable) NSColor *accentColor;
 
+/// One tooltip string per pill (index-aligned with `pillCount`). Lets the
+/// glyph-only pills name themselves on hover (e.g. localized easing-curve
+/// names). nil/short array = no tooltip for those pills.
+@property(nonatomic, copy, nullable) NSArray<NSString *> *pillTooltips;
+
 - (void)redraw;
 
 /// View-space rect of pill `index` (0..pillCount-1). NSZeroRect if pillCount

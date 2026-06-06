@@ -5,6 +5,7 @@
 
 #import "KKTimingGuide.h"
 
+#import "KKEasing.h"
 #import "KKLocalized.h"
 #import <KeyframelessKit/KKHelpSection.h>
 #import <KeyframelessKit/KKJoyrideController.h>
@@ -21,9 +22,9 @@
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
-// Spring == KKIntervalCurveElastic (Linear=0, EaseIn=1, EaseOut=2,
-// EaseInOut=3, Elastic=4, Bounce=5) - presented to users as "Spring".
-static const NSInteger kSpringCurveType = 4;
+// The Elastic curve (Linear=0, EaseIn=1, EaseOut=2, EaseInOut=3, Elastic=4,
+// Bounce=5). Its user-facing name comes from KKEasingCurveDisplayName.
+static const NSInteger kElasticCurveType = 4;
 // KKBasicSectionIn - the In phase gap section in the Basic graph.
 static const NSInteger kBasicSectionIn = 1;
 // Chronologically the second diamond once In is on (the hold-start / In-end
@@ -200,7 +201,7 @@ static const CGFloat kDragSnapPx = 14.0;
   const NSInteger ixIntro = 0, ixOpenConstants = 1, ixEditConstant = 2,
                   ixAdd = 3, ixAddPrimary = 4, ixPhases = 5, ixToggleIn = 6,
                   ixGraphNotice = 7, ixDiamondClick = 8, ixEdit = 9,
-                  ixGapClick = 10, ixSpringPick = 11, ixDragBoundary = 12,
+                  ixGapClick = 10, ixElasticPick = 11, ixDragBoundary = 12,
                   ixWatchBack = 13, ixDone = 14;
   (void)ixIntro;
   (void)ixPhases;
@@ -420,14 +421,18 @@ static const CGFloat kDragSnapPx = 14.0;
     [weakLanes guideCloseContentPopover];
   };
 
-  KKJoyrideStep *sSpring = [KKJoyrideStep
-      stepWithMessage:KKLoc(@"Pick <accent>Spring</accent> for a lively "
-                            @"overshoot.",
-                            @"Timing guide: choose the Spring easing curve.")
+  KKJoyrideStep *sElastic = [KKJoyrideStep
+      stepWithMessage:
+          [NSString stringWithFormat:
+                        KKLoc(@"Pick <accent>%@</accent> for a lively "
+                              @"overshoot.",
+                              @"Timing guide: choose the Elastic easing "
+                              @"curve. %@ is the localized curve name."),
+                        KKEasingCurveDisplayName(KKEasingCurveElastic)]
            targetView:nil];
-  sSpring.targetScreenRect = ^NSRect {
+  sElastic.targetScreenRect = ^NSRect {
     __strong KKSegmentEditView *e = weakBinder.latestGapSegmentEditor;
-    return e ? [e guideCurvePillScreenRectForCurve:kSpringCurveType]
+    return e ? [e guideCurvePillScreenRectForCurve:kElasticCurveType]
              : NSZeroRect;
   };
 
@@ -542,12 +547,12 @@ static const CGFloat kDragSnapPx = 14.0;
          advanceOn:[[KKJoyrideTrigger gapTapped:kBasicSectionIn]
                        thenWaitFor:[KKJoyrideTrigger gapPopoverWillOpen]]
          dismissOn:nil];
-  [binder bindStep:sSpring
-           atIndex:ixSpringPick
-         advanceOn:[KKJoyrideTrigger gapPopoverCurveChanged:kSpringCurveType]
+  [binder bindStep:sElastic
+           atIndex:ixElasticPick
+         advanceOn:[KKJoyrideTrigger gapPopoverCurveChanged:kElasticCurveType]
          dismissOn:nil];
   [binder setCloseOnAdvance:KKJoyrideCloseOnAdvanceContentPopover
-                    forStep:sSpring];
+                    forStep:sElastic];
 
   // Watch-back: the user's play tap (forwarded through the binder) schedules
   // a single auto-pause + advance after a beat. The plugin owns nothing here
@@ -573,7 +578,7 @@ static const CGFloat kDragSnapPx = 14.0;
 
   return @[
     sIntro, sOpenConstants, sEditConstant, sAdd, sAddPrimary, sPhases,
-    sToggleIn, sGraphNotice, sDiamond, sEdit, sGap, sSpring, sDrag, sWatchBack,
+    sToggleIn, sGraphNotice, sDiamond, sEdit, sGap, sElastic, sDrag, sWatchBack,
     sDone
   ];
 }

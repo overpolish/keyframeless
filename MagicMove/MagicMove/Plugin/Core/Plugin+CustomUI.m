@@ -831,69 +831,72 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
 }
 
 - (NSArray<KKHelpSection *> *)helpSections {
-  KKHelpSection *magicMove = [KKHelpSection
-      sectionWithTitle:@"Magic Move"
-             tipMarkup:@[
-               (@"<accent>Position</accent>, <accent>Scale</accent>, and "
-                @"<accent>Rotation</accent> all animate from the clip's "
-                @"natural state to the values set here - drive each one on "
-                @"canvas via the <symbol arcade.stick.console.fill /> "
-                @"on-screen control."),
-               (@"<accent>Opacity</accent> animates the same way, from a "
-                @"slider in the inspector."),
-               (@"<accent>Anchor Point</accent> sets the pivot rotations "
-                @"and scale swing around."),
-               (@"Toggle <accent>Rotate with Motion</accent> in the gap "
-                @"popover to align the clip's heading with its motion path."),
-               (@"When the Position lane has multiple keyposes a bezier "
-                @"<accent>path</accent> draws between them on canvas - "
-                @"reshape it by dragging anchors or their handles."),
-               (@"Stacking with <accent>Crop</accent> or similar spatial "
-                @"effects? Place them <accent>below</accent> Magic Move in "
-                @"the inspector so they apply to the clip first, then move "
-                @"with it - otherwise they anchor to the canvas and clip "
-                @"around the moved content."),
-             ]
-             shortcuts:@[
-               [KKHelpShortcut
-                   shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + drag"
-                               descMarkup:@"Constrain motion to X or Y axis"],
-               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌃</kbd> + drag"
-                                           descMarkup:@"Disable snapping"],
-               [KKHelpShortcut
-                   shortcutWithKeysMarkup:@"<kbd>⌥</kbd>"
-                               descMarkup:@"Reveal X and Y rotation rings"],
-               [KKHelpShortcut
-                   shortcutWithKeysMarkup:@"<kbd>Shift</kbd> + scale"
-                               descMarkup:@"Lock scale to X or Y axis"],
-               [KKHelpShortcut shortcutWithKeysMarkup:@"Double-click scale ring"
-                                           descMarkup:@"Reset to 1:1"],
-               [KKHelpShortcut
-                   shortcutWithKeysMarkup:@"Double-click path anchor"
-                               descMarkup:@"Toggle between smooth and corner"],
-               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click "
-                                                      @"path anchor"
-                                           descMarkup:@"Delete the anchor"],
-               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + click "
-                                                      @"path curve"
-                                           descMarkup:@"Insert a new anchor "
-                                                      @"at the nearest spot"],
-               [KKHelpShortcut shortcutWithKeysMarkup:@"<kbd>⌥</kbd> + drag "
-                                                      @"handle"
-                                           descMarkup:@"Break handle "
-                                                      @"symmetry (move "
-                                                      @"independently)"],
-             ]];
-  magicMove.icon =
-      [NSImage imageWithSystemSymbolName:@"circle.dotted.and.circle"
-                accessibilityDescription:nil];
-  return @[ magicMove ];
+  // Quick reference: a short overview + parameter list (single-sourced from
+  // magicmove.md, the same doc the AI reads), then an on-screen-control
+  // shortcuts table. The per-property deep docs (position/scale/anchor.md)
+  // stay AI-only.
+  KKHelpSection *overview = [self
+      helpSectionFromKnowledgeTopic:@"magicmove"
+                              title:MMLoc(@"Magic Move",
+                                          @"Help section title (plugin name).")
+                             symbol:@"circle.dotted.and.circle"
+                          localizer:^NSString *(NSString *tip) {
+                            return MMLoc(tip,
+                                         @"Magic Move help tip (from "
+                                         @"AIKnowledge markdown).");
+                          }];
+
+  NSMutableArray<KKHelpShortcut *> *rows = [@[
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:MMLoc(@"<kbd>⇧</kbd> + drag a Position handle",
+                                     @"Shortcut keys.")
+                    descMarkup:MMLoc(@"Lock the move to the X or Y axis",
+                                     @"Help shortcut.")],
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:MMLoc(@"<kbd>⌘</kbd> + drag", @"Shortcut keys.")
+                    descMarkup:MMLoc(@"Snap to the centre, edges, thirds, or "
+                                     @"another keypose",
+                                     @"Help shortcut.")],
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:MMLoc(@"Double-click a path anchor",
+                                     @"Shortcut keys.")
+                    descMarkup:MMLoc(@"Toggle a smooth curve or a sharp corner",
+                                     @"Help shortcut.")],
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:MMLoc(@"<kbd>⇧</kbd> + drag a path handle",
+                                     @"Shortcut keys.")
+                    descMarkup:MMLoc(@"Break the curve handle's symmetry",
+                                     @"Help shortcut.")],
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:MMLoc(@"<kbd>⇧</kbd> + drag a Scale handle",
+                                     @"Shortcut keys.")
+                    descMarkup:MMLoc(@"Break the aspect lock for that drag",
+                                     @"Help shortcut.")],
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:MMLoc(@"<kbd>⌘</kbd> + drag a Scale handle",
+                                     @"Shortcut keys.")
+                    descMarkup:MMLoc(@"Fine adjustment", @"Help shortcut.")],
+  ] mutableCopy];
+  [rows addObjectsFromArray:[KKPlugin sharedOnScreenControlShortcuts]];
+
+  KKHelpSection *shortcuts = [KKHelpSection
+      sectionWithTitle:MMLoc(@"On-screen control shortcuts",
+                             @"Help section title.")
+             tipMarkup:nil
+             shortcuts:rows];
+  shortcuts.icon = [NSImage imageWithSystemSymbolName:@"hand.point.up.left"
+                            accessibilityDescription:nil];
+
+  return @[ overview, shortcuts ];
 }
 
 - (nullable NSView *)aiAccessoryView {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
-    [KKAIKnowledge registerSharedTimelineDocs];
+    // Shared timeline docs now live in the kit framework bundle (so the kit
+    // help window can render the same source); register them from there.
+    [KKAIKnowledge registerSharedTimelineDocsWithBundle:
+                       [NSBundle bundleForClass:[KKOnScreenControl class]]];
     [KKAIKnowledge
         registerBundleDocsWithName:@"Magic Move"
                             bundle:[NSBundle

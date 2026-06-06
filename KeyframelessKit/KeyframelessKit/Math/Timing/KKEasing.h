@@ -18,6 +18,11 @@ typedef NS_ENUM(NSInteger, KKEasingCurve) {
 
 static const NSInteger KKEasingCurveCount __attribute__((unused)) = 6;
 
+/// Localized display name for an easing curve (e.g. "Linear", "Ease In/Out",
+/// "Elastic"). For render sites only - tooltips, accessibility, help. The enum
+/// value is the persisted identity; never derive it back from this string.
+FOUNDATION_EXPORT NSString *KKEasingCurveDisplayName(KKEasingCurve curve);
+
 typedef NS_ENUM(NSInteger, KKHoldEffect) {
   KKHoldEffectNone = 0,
   KKHoldEffectBounce = 1,
@@ -26,6 +31,11 @@ typedef NS_ENUM(NSInteger, KKHoldEffect) {
 };
 
 static const NSInteger KKHoldEffectCount __attribute__((unused)) = 4;
+
+/// Localized display name for a hold modulation: "None", "Oscillate", "Wiggle",
+/// "Handheld". NOTE: KKHoldEffectBounce is presented to users as "Oscillate".
+/// For render sites only (tooltips, accessibility, help).
+FOUNDATION_EXPORT NSString *KKHoldEffectDisplayName(KKHoldEffect effect);
 
 /// Apply the given curve to a raw 0→1 factor.
 /// intensity: 0.0 (gentle) to 1.0 (pronounced), 0.5 = default.

@@ -2899,48 +2899,6 @@
         }
       }
     },
-    "Pick <accent>Spring</accent> for a lively overshoot.": {
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wählen Sie <accent>Spring</accent> für ein lebhaftes Überschwingen."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisissez <accent>Spring</accent> pour un rebond dynamique."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elige <accent>Spring</accent> para un rebote enérgico."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Spring</accent>を選ぶと、軽快なオーバーシュートになります。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "활기찬 오버슈트를 위해 <accent>Spring</accent>을 선택하세요."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "选择 <accent>Spring</accent> 获得活泼的过冲效果。"
-          }
-        }
-      },
-      "comment": "Timing guide: choose the Spring easing curve."
-    },
     "Plugins don't animate by default. Tap <symbol plus.circle.fill color=accent /> to give a property a lane.": {
       "extractionState": "manual",
       "localizations": {
@@ -5334,6 +5292,2904 @@
         }
       },
       "comment": "Advanced timing guide: finish the marquee drag."
+    },
+    "How animation works": {
+      "comment": "Help section title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "So funktioniert die Animation"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cómo funciona la animación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment fonctionne l'animation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アニメーションの仕組み"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "애니메이션 작동 방식"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动画的工作原理"
+          }
+        }
+      }
+    },
+    "Basic vs Advanced": {
+      "comment": "Help section title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einfach vs. Erweitert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Básico vs. Avanzado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Basique vs Avancé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基本 vs 詳細"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본 vs 고급"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基本与高级"
+          }
+        }
+      }
+    },
+    "Easing curves": {
+      "comment": "Help section title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beschleunigungskurven"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curvas de aceleración"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Courbes d'accélération"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "イージングカーブ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이징 커브"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓动曲线"
+          }
+        }
+      }
+    },
+    "Timing shortcuts": {
+      "comment": "Help section title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timing-Kurzbefehle"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atajos de temporización"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raccourcis de minutage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タイミングのショートカット"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "타이밍 단축키"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "时间控制快捷键"
+          }
+        }
+      }
+    },
+    "Motion blur is available on every animatable property. Three controls:": {
+      "comment": "Help tip (motion blur).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bewegungsunschärfe ist für jede animierbare Eigenschaft verfügbar. Drei Steuerelemente:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El desenfoque de movimiento está disponible en todas las propiedades animables. Tres controles:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le flou de mouvement est disponible sur chaque propriété animable. Trois réglages :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モーションブラーはすべてのアニメーション可能なプロパティで利用できます。3つのコントロール:"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모션 블러는 모든 애니메이션 가능한 속성에 사용할 수 있습니다. 세 가지 컨트롤:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运动模糊可用于每个可动画属性。三个控件："
+          }
+        }
+      }
+    },
+    "<accent>Shutter</accent>: 0° to 360°, default 180°. 0° freezes each frame with no blur, 180° is a half-frame trail (the cinema-standard 180-degree shutter), 360° smears across a full frame interval.": {
+      "comment": "Help tip (motion blur).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Verschluss</accent>: 0° bis 360°, Standard 180°. 0° friert jedes Bild ohne Unschärfe ein, 180° erzeugt eine Halbbild-Spur (der kinotypische 180-Grad-Verschluss), 360° verschmiert über ein ganzes Bildintervall."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Obturador</accent>: de 0° a 360°, predeterminado 180°. 0° congela cada fotograma sin desenfoque, 180° deja una estela de medio fotograma (el obturador de 180 grados estándar del cine), 360° difumina a lo largo de un intervalo de fotograma completo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Obturateur</accent> : de 0° à 360°, par défaut 180°. 0° fige chaque image sans flou, 180° laisse une traînée d'une demi-image (l'obturateur à 180 degrés standard au cinéma), 360° étale sur un intervalle d'image complet."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>シャッター</accent>: 0°～360°、デフォルトは180°。0°はブラーなしで各フレームを静止させ、180°は半フレームの軌跡(映画標準の180度シャッター)、360°は1フレーム分の間隔全体に伸ばします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>셔터</accent>: 0°에서 360°까지, 기본값 180°. 0°는 블러 없이 각 프레임을 고정하고, 180°는 반 프레임 궤적(영화 표준 180도 셔터), 360°는 한 프레임 간격 전체에 번지게 합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>快门</accent>：0°至360°，默认180°。0°冻结每一帧且无模糊，180°是半帧拖尾(电影标准的180度快门)，360°在整帧间隔内拖出残影。"
+          }
+        }
+      }
+    },
+    "<accent>Samples</accent>: 2 to 128, default 16. Higher gives smoother blur at the cost of render time; the useful range is roughly 2 to 32.": {
+      "comment": "Help tip (motion blur).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Samples</accent>: 2 bis 128, Standard 16. Höhere Werte ergeben weichere Unschärfe auf Kosten der Renderzeit; der sinnvolle Bereich liegt etwa bei 2 bis 32."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Muestras</accent>: de 2 a 128, predeterminado 16. Más muestras dan un desenfoque más suave a costa del tiempo de render; el rango útil es aproximadamente de 2 a 32."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Échantillons</accent> : de 2 à 128, par défaut 16. Une valeur plus élevée donne un flou plus lisse au prix du temps de rendu ; la plage utile va environ de 2 à 32."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>サンプル</accent>: 2～128、デフォルトは16。値を上げるとブラーは滑らかになりますがレンダリング時間が増えます。実用的な範囲はおよそ2～32です。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>샘플</accent>: 2에서 128까지, 기본값 16. 값이 높을수록 블러가 부드러워지지만 렌더링 시간이 늘어납니다. 유용한 범위는 대략 2에서 32입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>采样</accent>：2至128，默认16。数值越高模糊越平滑，但渲染时间越长；实用范围大约为2至32。"
+          }
+        }
+      }
+    },
+    "Each control has a reset arrow that appears when the value differs from the default.": {
+      "comment": "Help tip (motion blur).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Steuerelement hat einen Zurücksetzen-Pfeil, der erscheint, wenn der Wert vom Standard abweicht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada control tiene una flecha de restablecimiento que aparece cuando el valor difiere del predeterminado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque réglage a une flèche de réinitialisation qui apparaît lorsque la valeur diffère de celle par défaut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各コントロールには、値がデフォルトと異なるときに表示されるリセット矢印があります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 컨트롤에는 값이 기본값과 다를 때 나타나는 재설정 화살표가 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个控件都有一个重置箭头，当数值与默认值不同时会出现。"
+          }
+        }
+      }
+    },
+    "Animation is built from three things:": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animation besteht aus drei Dingen:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La animación se compone de tres cosas:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'animation repose sur trois éléments :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アニメーションは3つの要素で構成されます:"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "애니메이션은 세 가지 요소로 구성됩니다:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动画由三个部分构成："
+          }
+        }
+      }
+    },
+    "<accent>Lanes</accent> - one per animatable property (Position, Radius, Color...). Toggle a lane on to animate it, off to hold a constant. The lane list is on the left.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Spuren</accent> - eine pro animierbarer Eigenschaft (Position, Radius, Farbe...). Schalte eine Spur ein, um sie zu animieren, aus, um einen konstanten Wert zu halten. Die Spurenliste ist links."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Carriles</accent> - uno por propiedad animable (Posición, Radio, Color...). Activa un carril para animarlo, desactívalo para mantener un valor constante. La lista de carriles está a la izquierda."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Pistes</accent> - une par propriété animable (Position, Rayon, Couleur...). Activez une piste pour l'animer, désactivez-la pour garder une valeur constante. La liste des pistes est à gauche."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>レーン</accent> - アニメーション可能なプロパティごとに1つ(位置、半径、カラーなど)。レーンをオンにするとアニメーション、オフにすると一定値を保持。レーンリストは左側にあります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>레인</accent> - 애니메이션 가능한 속성마다 하나씩(위치, 반지름, 색상 등). 레인을 켜면 애니메이션, 끄면 상수 값을 유지합니다. 레인 목록은 왼쪽에 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>轨道</accent> - 每个可动画属性一条(位置、半径、颜色等)。打开轨道即可制作动画，关闭则保持恒定值。轨道列表在左侧。"
+          }
+        }
+      }
+    },
+    "<accent>Keyposes</accent> - a value at a point in time, shown as a pill on the lane. Place them wherever the motion should pass through.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Keyposes</accent> - ein Wert zu einem Zeitpunkt, als Pille auf der Spur dargestellt. Platziere sie dort, wo die Bewegung hindurchlaufen soll."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Keyposes</accent> - un valor en un punto en el tiempo, mostrado como una píldora en el carril. Colócalos allí donde el movimiento deba pasar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Keyposes</accent> - une valeur à un instant donné, affichée comme une pastille sur la piste. Placez-les là où le mouvement doit passer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>キーポーズ</accent> - ある時点の値で、レーン上にピルとして表示されます。動きを通したい位置に配置します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>키포즈</accent> - 한 시점의 값으로, 레인에 알약 모양으로 표시됩니다. 움직임이 지나가야 할 위치에 배치합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>关键姿势</accent> - 某个时间点上的值，在轨道上显示为药丸。将其放在运动应当经过的位置。"
+          }
+        }
+      }
+    },
+    "<accent>Intervals</accent> - the gap between two keyposes. Each carries its own easing curve and optional modulation. Link the endpoints to make the interval a flat hold.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Intervalle</accent> - der Abstand zwischen zwei Keyposes. Jedes hat seine eigene Beschleunigungskurve und optionale Modulation. Verknüpfe die Endpunkte, um aus dem Intervall ein flaches Halten zu machen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Intervalos</accent> - el espacio entre dos keyposes. Cada uno tiene su propia curva de aceleración y modulación opcional. Vincula los extremos para convertir el intervalo en un mantenimiento plano."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Intervalles</accent> - l'espace entre deux keyposes. Chacun a sa propre courbe d'accélération et une modulation facultative. Liez les extrémités pour transformer l'intervalle en un maintien constant."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>区間</accent> - 2つのキーポーズの間。各区間は独自のイージングカーブと任意のモジュレーションを持ちます。端点をリンクすると区間は平坦な保持になります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>구간</accent> - 두 키포즈 사이의 간격. 각 구간은 고유한 이징 커브와 선택적 모듈레이션을 가집니다. 끝점을 연결하면 구간이 평평한 유지가 됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>区间</accent> - 两个关键姿势之间的间隔。每个区间都有自己的缓动曲线和可选调制。链接两端可使区间成为平直的保持。"
+          }
+        }
+      }
+    },
+    "To animate from A to B, drop a keypose at A and another at B; the interval does the rest. To hold still mid-animation, add two keyposes with linked endpoints across the still region.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um von A nach B zu animieren, setze einen Keypose bei A und einen weiteren bei B; das Intervall erledigt den Rest. Um mitten in der Animation still zu halten, füge zwei Keyposes mit verknüpften Endpunkten über den ruhigen Bereich hinzu."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para animar de A a B, coloca un keypose en A y otro en B; el intervalo hace el resto. Para mantener quieto a mitad de la animación, añade dos keyposes con extremos vinculados a lo largo de la región en reposo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pour animer de A à B, placez un keypose en A et un autre en B ; l'intervalle fait le reste. Pour rester immobile en cours d'animation, ajoutez deux keyposes aux extrémités liées sur la région immobile."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AからBへアニメートするには、Aとbにキーポーズを置けば、その間の区間が処理します。アニメーションの途中で静止させるには、静止区間にわたって端点をリンクした2つのキーポーズを追加します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A에서 B로 애니메이션하려면 A와 B에 키포즈를 두면 구간이 나머지를 처리합니다. 애니메이션 도중 정지시키려면 정지 구간에 걸쳐 끝점이 연결된 두 키포즈를 추가합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要从A动画到B，在A和B各放一个关键姿势，区间会完成其余工作。要在动画中途保持静止，可在静止区域两端添加两个端点已链接的关键姿势。"
+          }
+        }
+      }
+    },
+    "Every property has two timing modes, switched with the pill at the top of its row:": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Eigenschaft hat zwei Timing-Modi, umgeschaltet mit der Pille oben in ihrer Zeile:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada propiedad tiene dos modos de temporización, que se alternan con la píldora en la parte superior de su fila:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque propriété a deux modes de minutage, basculés avec la pilule en haut de sa ligne :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各プロパティには2つのタイミングモードがあり、行の上部のピルで切り替えます:"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 속성에는 두 가지 타이밍 모드가 있으며, 행 상단의 알약으로 전환합니다:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个属性都有两种时间控制模式，用其行顶部的胶囊开关切换："
+          }
+        }
+      }
+    },
+    "<accent>Basic</accent> - three checkboxed phases (<accent>In</accent>, <accent>Hold</accent>, <accent>Out</accent>) for a simple ease-in, hold, ease-out. Drag the hold boundary to move where In ends and Out begins.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Einfach</accent> - drei ankreuzbare Phasen (<accent>Ein</accent>, <accent>Halten</accent>, <accent>Aus</accent>) für ein einfaches Einblenden, Halten, Ausblenden. Ziehe die Haltegrenze, um zu verschieben, wo Ein endet und Aus beginnt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Básico</accent> - tres fases con casilla (<accent>Entrada</accent>, <accent>Mantener</accent>, <accent>Salida</accent>) para una entrada, mantenimiento y salida simples. Arrastra el límite del mantenimiento para mover dónde termina la Entrada y empieza la Salida."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Basique</accent> - trois phases à cocher (<accent>Entrée</accent>, <accent>Maintien</accent>, <accent>Sortie</accent>) pour une entrée, un maintien et une sortie simples. Glissez la limite du maintien pour déplacer où l'Entrée finit et la Sortie commence."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>基本</accent> - チェックボックス付きの3フェーズ(<accent>イン</accent>、<accent>ホールド</accent>、<accent>アウト</accent>)でシンプルなイーズイン・ホールド・イーズアウト。ホールド境界をドラッグすると、インの終わりとアウトの始まりを移動できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>기본</accent> - 체크박스가 있는 세 단계(<accent>인</accent>, <accent>유지</accent>, <accent>아웃</accent>)로 간단한 이즈 인, 유지, 이즈 아웃. 유지 경계를 드래그하면 인이 끝나고 아웃이 시작되는 위치를 옮깁니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>基本</accent> - 三个带复选框的阶段(<accent>进入</accent>、<accent>保持</accent>、<accent>退出</accent>)，用于简单的缓入、保持、缓出。拖动保持边界可移动进入结束和退出开始的位置。"
+          }
+        }
+      }
+    },
+    "<accent>Advanced</accent> - the full keyposes + intervals model: any number of keyposes, each interval with its own curve and modulation. Use it for multi-step motion or custom holds.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Erweitert</accent> - das vollständige Keyposes-und-Intervalle-Modell: beliebig viele Keyposes, jedes Intervall mit eigener Kurve und Modulation. Verwende es für mehrstufige Bewegung oder eigene Haltephasen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Avanzado</accent> - el modelo completo de keyposes e intervalos: cualquier número de keyposes, cada intervalo con su propia curva y modulación. Úsalo para movimiento de varios pasos o mantenimientos personalizados."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Avancé</accent> - le modèle complet keyposes + intervalles : autant de keyposes que voulu, chaque intervalle avec sa propre courbe et modulation. À utiliser pour un mouvement en plusieurs étapes ou des maintiens personnalisés."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>詳細</accent> - キーポーズと区間の完全なモデル。キーポーズはいくつでも、各区間が独自のカーブとモジュレーションを持ちます。多段階の動きやカスタムな保持に使います。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>고급</accent> - 키포즈와 구간의 완전한 모델: 키포즈는 원하는 만큼, 각 구간이 고유한 커브와 모듈레이션을 가집니다. 다단계 움직임이나 사용자 지정 유지에 사용합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>高级</accent> - 完整的关键姿势与区间模型：任意数量的关键姿势，每个区间都有自己的曲线和调制。用于多步运动或自定义保持。"
+          }
+        }
+      }
+    },
+    "Each Advanced interval has an easing curve. Click the interval to pick it (Shift-click to select several first):": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Erweitert-Intervall hat eine Beschleunigungskurve. Klicke das Intervall an, um sie zu wählen (Shift-Klick, um zuerst mehrere auszuwählen):"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada intervalo Avanzado tiene una curva de aceleración. Haz clic en el intervalo para elegirla (Shift-clic para seleccionar varios primero):"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque intervalle Avancé a une courbe d'accélération. Cliquez sur l'intervalle pour la choisir (Shift-clic pour en sélectionner plusieurs d'abord) :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細モードの各区間にはイージングカーブがあります。区間をクリックして選びます(先にShiftクリックで複数選択):"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 고급 구간에는 이징 커브가 있습니다. 구간을 클릭해 선택합니다(먼저 Shift 클릭으로 여러 개 선택):"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个高级区间都有一条缓动曲线。点击区间即可选择(先用Shift点击可多选)："
+          }
+        }
+      }
+    },
+    "<accent>Linear</accent> - uniform motion.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Linear</accent> - gleichmäßige Bewegung."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Lineal</accent> - movimiento uniforme."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Linéaire</accent> - mouvement uniforme."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>リニア</accent> - 一定の動き。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>선형</accent> - 균일한 움직임."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>线性</accent> - 匀速运动。"
+          }
+        }
+      }
+    },
+    "<accent>Ease In</accent> - slow start, accelerates.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Ease In</accent> - langsamer Start, beschleunigt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Entrada suave</accent> - inicio lento, acelera."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Accélération</accent> - départ lent, accélère."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>イーズイン</accent> - ゆっくり始まり加速。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>이즈 인</accent> - 느리게 시작해 가속."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>缓入</accent> - 缓慢开始，逐渐加速。"
+          }
+        }
+      }
+    },
+    "<accent>Ease Out</accent> - fast start, decelerates.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Ease Out</accent> - schneller Start, verlangsamt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Salida suave</accent> - inicio rápido, desacelera."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Décélération</accent> - départ rapide, décélère."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>イーズアウト</accent> - 速く始まり減速。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>이즈 아웃</accent> - 빠르게 시작해 감속."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>缓出</accent> - 快速开始，逐渐减速。"
+          }
+        }
+      }
+    },
+    "<accent>Ease In/Out</accent> - slow at both ends (the default).": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Ease In/Out</accent> - an beiden Enden langsam (Standard)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Entrada y salida suaves</accent> - lento en ambos extremos (predeterminado)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Accél./Décél.</accent> - lent aux deux extrémités (par défaut)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>イーズイン/アウト</accent> - 両端が遅い(デフォルト)。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>이즈 인/아웃</accent> - 양 끝이 느림(기본값)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>缓入缓出</accent> - 两端慢(默认)。"
+          }
+        }
+      }
+    },
+    "<accent>Elastic</accent> - overshoots and oscillates before settling.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Elastisch</accent> - schießt über und schwingt, bevor es sich einpendelt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Elástico</accent> - se pasa y oscila antes de estabilizarse."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Élastique</accent> - dépasse et oscille avant de se stabiliser."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>エラスティック</accent> - 行き過ぎて振動してから落ち着く。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>탄성</accent> - 지나쳤다가 진동한 뒤 안정됨."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>弹性</accent> - 先过冲并振荡，然后稳定。"
+          }
+        }
+      }
+    },
+    "<accent>Bounce</accent> - settles with a few decreasing bounces.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Abprall</accent> - pendelt sich mit einigen abnehmenden Sprüngen ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rebote</accent> - se estabiliza con unos rebotes decrecientes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rebond</accent> - se stabilise avec quelques rebonds décroissants."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>バウンス</accent> - 徐々に小さくなるバウンドで落ち着く。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>바운스</accent> - 점점 작아지는 바운스로 안정됨."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>弹跳</accent> - 以几次逐渐减小的弹跳稳定。"
+          }
+        }
+      }
+    },
+    "Elastic and Bounce have Intensity and Frequency knobs.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elastisch und Abprall haben Regler für Intensität und Frequenz."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elástico y Rebote tienen mandos de Intensidad y Frecuencia."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Élastique et Rebond ont des boutons Intensité et Fréquence."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エラスティックとバウンスには強さと周波数のつまみがあります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "탄성과 바운스에는 강도와 빈도 노브가 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹性和弹跳带有强度和频率旋钮。"
+          }
+        }
+      }
+    },
+    "<accent>When</accent>: a dropdown that controls when the blur is applied:": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Wann</accent>: ein Aufklappmenü, das steuert, wann die Unschärfe angewendet wird:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Cuándo</accent>: un menú desplegable que controla cuándo se aplica el desenfoque:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Quand</accent> : un menu déroulant qui contrôle quand le flou est appliqué :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>タイミング</accent>: ブラーを適用するタイミングを制御するドロップダウン:"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>시점</accent>: 블러를 적용할 시점을 제어하는 드롭다운:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>何时</accent>：一个控制何时应用模糊的下拉菜单："
+          }
+        }
+      }
+    },
+    "<accent>Transitions only</accent> (default): blur only when the keypose values differ, i.e. during actual motion.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Nur Übergänge</accent> (Standard): Unschärfe nur, wenn sich die Keypose-Werte unterscheiden, also während tatsächlicher Bewegung."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Solo transiciones</accent> (predeterminado): desenfoque solo cuando los valores de keypose difieren, es decir, durante el movimiento real."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Transitions uniquement</accent> (par défaut) : flou seulement lorsque les valeurs des keyposes diffèrent, c'est-à-dire pendant un mouvement réel."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>トランジションのみ</accent>(デフォルト): キーポーズの値が異なるとき、つまり実際の動きの間だけブラーをかけます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>전환만</accent>(기본값): 키포즈 값이 다를 때, 즉 실제 움직임이 있는 동안에만 블러를 적용합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>仅过渡</accent>(默认)：仅当关键姿势的值不同时(即实际运动期间)才模糊。"
+          }
+        }
+      }
+    },
+    "<accent>Value changes</accent>: blur whenever any value moves, including subtle modulation on held intervals.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Wertänderungen</accent>: Unschärfe, sobald sich ein Wert bewegt, einschließlich subtiler Modulation auf gehaltenen Intervallen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Cambios de valor</accent>: desenfoque siempre que un valor se mueva, incluida la modulación sutil en intervalos mantenidos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Changements de valeur</accent> : flou dès qu'une valeur bouge, y compris une modulation subtile sur les intervalles maintenus."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>値の変化</accent>: 保持された区間での微妙なモジュレーションを含め、いずれかの値が動くたびにブラーをかけます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>값 변경</accent>: 유지된 구간의 미묘한 모듈레이션을 포함해 값이 움직일 때마다 블러를 적용합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>值变化</accent>：只要任何值发生移动就模糊，包括保持区间上的细微调制。"
+          }
+        }
+      }
+    },
+    "<accent>Always</accent>: blur every frame regardless of motion.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Immer</accent>: Unschärfe in jedem Bild, unabhängig von Bewegung."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Siempre</accent>: desenfoque en cada fotograma sin importar el movimiento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Toujours</accent> : flou sur chaque image, quel que soit le mouvement."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>常に</accent>: 動きに関係なく毎フレームブラーをかけます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>항상</accent>: 움직임과 관계없이 매 프레임에 블러를 적용합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>始终</accent>：无论是否运动，每一帧都模糊。"
+          }
+        }
+      }
+    },
+    "Select a keypose or interval and open its editor": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Keypose oder ein Intervall auswählen und seinen Editor öffnen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar un keypose o intervalo y abrir su editor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sélectionner un keypose ou un intervalle et ouvrir son éditeur"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キーポーズまたは区間を選択してエディタを開く"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "키포즈나 구간을 선택하고 편집기 열기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择关键姿势或区间并打开其编辑器"
+          }
+        }
+      }
+    },
+    "Add to or remove from the selection": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zur Auswahl hinzufügen oder daraus entfernen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir a o quitar de la selección"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter à ou retirer de la sélection"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択に追加または選択から削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택에 추가하거나 선택에서 제거"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加到或从选择中移除"
+          }
+        }
+      }
+    },
+    "Delete it": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löschen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le supprimer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "삭제"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除"
+          }
+        }
+      }
+    },
+    "Duplicate it": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplizieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le dupliquer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複製"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "복제"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制"
+          }
+        }
+      }
+    },
+    "Move a keypose (snaps to nearby ones)": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Keypose verschieben (rastet an nahen ein)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover un keypose (se ajusta a los cercanos)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplacer un keypose (s'aligne sur les proches)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キーポーズを移動(近くのものにスナップ)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "키포즈 이동(가까운 것에 스냅)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移动关键姿势(吸附到附近的)"
+          }
+        }
+      }
+    },
+    "Add a keypose there": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dort einen Keypose hinzufügen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir un keypose ahí"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un keypose à cet endroit"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そこにキーポーズを追加"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "그곳에 키포즈 추가"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在该处添加关键姿势"
+          }
+        }
+      }
+    },
+    "Link or unlink its endpoints (hold vs animate)": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Endpunkte verknüpfen oder lösen (Halten vs. Animieren)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vincular o desvincular sus extremos (mantener vs animar)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lier ou délier ses extrémités (maintien ou animation)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端点をリンク/解除(保持かアニメーション)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "끝점 연결 또는 해제(유지 vs 애니메이션)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "链接或取消链接其端点(保持还是动画)"
+          }
+        }
+      }
+    },
+    "Marquee-select keyposes": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyposes per Auswahlrahmen auswählen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seleccionar keyposes con marco"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sélectionner des keyposes au lasso"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "範囲選択でキーポーズを選択"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마키로 키포즈 선택"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "框选关键姿势"
+          }
+        }
+      }
+    },
+    "Play or pause": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiedergabe oder Pause"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reproducir o pausar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lecture ou pause"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再生または一時停止"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "재생 또는 일시정지"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "播放或暂停"
+          }
+        }
+      }
+    },
+    "Undo / redo, including inside popovers": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rückgängig / Wiederholen, auch in Popovern"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deshacer / rehacer, incluso dentro de ventanas emergentes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuler / rétablir, y compris dans les popovers"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取り消し/やり直し(ポップオーバー内も含む)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실행 취소/다시 실행(팝오버 내부 포함)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销/重做，包括弹出框内"
+          }
+        }
+      }
+    },
+    "Hide that on-screen control": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Bildschirm-Steuerelement ausblenden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar ese control en pantalla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masquer ce contrôle à l'écran"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのオンスクリーンコントロールを非表示"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "해당 화면 컨트롤 숨기기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐藏该屏幕控件"
+          }
+        }
+      }
+    },
+    "Reveal hidden controls as ghosts to interact with - also when On-Screen Controls is switched off": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgeblendete Steuerelemente als Geister zum Bedienen einblenden - auch wenn Bildschirmsteuerung ausgeschaltet ist"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar los controles ocultos como fantasmas para usarlos, incluso cuando los controles en pantalla están desactivados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Révéler les contrôles masqués en fantômes pour les manipuler, même quand les contrôles à l'écran sont désactivés"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "非表示のコントロールをゴーストとして表示し操作可能に。オンスクリーンコントロールがオフのときも有効。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "숨긴 컨트롤을 고스트로 표시해 조작 가능하게 - 화면 컨트롤이 꺼져 있을 때도"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将隐藏的控件以虚影显示以便操作 - 即使屏幕控件已关闭"
+          }
+        }
+      }
+    },
+    "Reset its zoom and pan": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoom und Schwenk zurücksetzen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer su zoom y encuadre"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser son zoom et son cadrage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ズームとパンをリセット"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "줌과 이동을 재설정"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置其缩放和平移"
+          }
+        }
+      }
+    },
+    "Reset the mini-canvas zoom": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mini-Canvas-Zoom zurücksetzen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer el zoom del minilienzo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réinitialiser le zoom du mini-canevas"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ミニキャンバスのズームをリセット"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미니 캔버스 줌 재설정"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置迷你画布缩放"
+          }
+        }
+      }
+    },
+    "Zoom the mini-canvas (two-finger drag pans)": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mini-Canvas zoomen (Zwei-Finger-Ziehen schwenkt)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer zoom en el minilienzo (arrastrar con dos dedos encuadra)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zoomer le mini-canevas (glisser à deux doigts pour cadrer)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ミニキャンバスをズーム(2本指ドラッグでパン)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미니 캔버스 줌(두 손가락 드래그로 이동)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缩放迷你画布(双指拖动平移)"
+          }
+        }
+      }
+    },
+    "Linear": {
+      "comment": "Easing curve name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linear"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lineal"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linéaire"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リニア"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선형"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "线性"
+          }
+        }
+      }
+    },
+    "Ease In": {
+      "comment": "Easing curve name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ease In"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrada suave"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accélération"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "イーズイン"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이즈 인"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓入"
+          }
+        }
+      }
+    },
+    "Ease Out": {
+      "comment": "Easing curve name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ease Out"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salida suave"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Décélération"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "イーズアウト"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이즈 아웃"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓出"
+          }
+        }
+      }
+    },
+    "Ease In/Out": {
+      "comment": "Easing curve name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ease In/Out"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrada y salida suaves"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accél./Décél."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "イーズイン/アウト"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이즈 인/아웃"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓入缓出"
+          }
+        }
+      }
+    },
+    "Elastic": {
+      "comment": "Easing curve name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elastisch"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elástico"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Élastique"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エラスティック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "탄성"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹性"
+          }
+        }
+      }
+    },
+    "Bounce": {
+      "comment": "Easing curve name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abprall"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rebote"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rebond"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バウンス"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "바운스"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹跳"
+          }
+        }
+      }
+    },
+    "Pick <accent>%@</accent> for a lively overshoot.": {
+      "comment": "Timing guide: choose the Elastic easing curve. %@ is the localized curve name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wählen Sie <accent>%@</accent> für ein lebhaftes Überschwingen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez <accent>%@</accent> pour un rebond dynamique."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige <accent>%@</accent> para un rebote enérgico."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>%@</accent>を選ぶと、軽快なオーバーシュートになります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "활기찬 오버슈트를 위해 <accent>%@</accent>을 선택하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择 <accent>%@</accent> 获得活泼的过冲效果。"
+          }
+        }
+      }
+    },
+    "None": {
+      "comment": "Hold modulation name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ninguna"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "なし"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "없음"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无"
+          }
+        }
+      }
+    },
+    "Oscillate": {
+      "comment": "Hold modulation name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oszillieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oscilar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Osciller"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オシレート"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "진동"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "振荡"
+          }
+        }
+      }
+    },
+    "Wiggle": {
+      "comment": "Hold modulation name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wackeln"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bamboleo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frémissement"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ウィグル"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "흔들기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "抖动"
+          }
+        }
+      }
+    },
+    "Handheld": {
+      "comment": "Hold modulation name.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Handkamera"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cámara en mano"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Caméra à l'épaule"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手持ち"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "핸드헬드"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手持"
+          }
+        }
+      }
+    },
+    "Click": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicken"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clic"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clic"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "클릭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击"
+          }
+        }
+      }
+    },
+    "Drag": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastrar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glisser"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动"
+          }
+        }
+      }
+    },
+    "<kbd>⇧</kbd> + click": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + Klick"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + clic"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + clic"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + クリック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + 클릭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + 点击"
+          }
+        }
+      }
+    },
+    "<kbd>⌥</kbd> + click a keypose": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + Klick auf eine Keypose"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + clic en un keypose"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + clic sur un keypose"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + キーポーズをクリック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + 키포즈 클릭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + 点击关键姿势"
+          }
+        }
+      }
+    },
+    "<kbd>⌥</kbd> + drag a keypose": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + Keypose ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + arrastrar un keypose"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + glisser un keypose"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + キーポーズをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + 키포즈 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + 拖动关键姿势"
+          }
+        }
+      }
+    },
+    "<kbd>⌘</kbd> + click an empty lane": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + Klick auf leere Spur"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + clic en un carril vacío"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + clic sur une piste vide"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + 空のレーンをクリック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + 빈 레인 클릭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + 点击空轨道"
+          }
+        }
+      }
+    },
+    "Right-click an interval": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechtsklick auf ein Intervall"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clic derecho en un intervalo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clic droit sur un intervalle"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "区間を右クリック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "구간 마우스 오른쪽 클릭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右键点击区间"
+          }
+        }
+      }
+    },
+    "Drag empty space": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leere Stelle ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastrar en espacio vacío"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glisser dans une zone vide"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空白部分をドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "빈 공간 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动空白处"
+          }
+        }
+      }
+    },
+    "<kbd>Space</kbd>": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>Leertaste</kbd>"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>Espacio</kbd>"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>Espace</kbd>"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>スペース</kbd>"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>스페이스</kbd>"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>空格</kbd>"
+          }
+        }
+      }
+    },
+    "<kbd>⌥</kbd> + click a control": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + Klick auf ein Steuerelement"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + clic en un control"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + clic sur un contrôle"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + コントロールをクリック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + 컨트롤 클릭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + 点击控件"
+          }
+        }
+      }
+    },
+    "<kbd>⌥</kbd> hold": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> halten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener <kbd>⌥</kbd>"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenir <kbd>⌥</kbd>"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> を長押し"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> 누르고 있기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按住 <kbd>⌥</kbd>"
+          }
+        }
+      }
+    },
+    "Double-click the mini-canvas": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doppelklick auf Mini-Canvas"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doble clic en el minilienzo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double-clic sur le mini-canevas"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ミニキャンバスをダブルクリック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "미니 캔버스 더블 클릭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "双击迷你画布"
+          }
+        }
+      }
+    },
+    "Scroll / pinch": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scrollen / Pinch"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desplazar / pellizcar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Défiler / pincer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スクロール / ピンチ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스크롤 / 핀치"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滚动 / 捏合"
+          }
+        }
+      }
+    },
+    "Apply on an Adjustment Clip <kbd>⌥ A</kbd> or a Compound Clip <kbd>⌥ G</kbd> to avoid unexpected behavior and clipping.": {
+      "comment": "Help tip: wrap the clip.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wende den Effekt auf einen Anpassungsclip <kbd>⌥ A</kbd> oder einen Compound-Clip <kbd>⌥ G</kbd> an, um unerwartetes Verhalten und Beschneiden zu vermeiden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplícalo en un clip de ajuste <kbd>⌥ A</kbd> o en un clip compuesto <kbd>⌥ G</kbd> para evitar comportamientos inesperados y recortes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appliquez-le sur un plan d'ajustement <kbd>⌥ A</kbd> ou un plan composé <kbd>⌥ G</kbd> pour éviter les comportements inattendus et le rognage."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "予期しない動作やクリッピングを避けるため、調整クリップ <kbd>⌥ A</kbd> またはコンパウンドクリップ <kbd>⌥ G</kbd> に適用してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "예상치 못한 동작과 잘림을 피하려면 조정 클립 <kbd>⌥ A</kbd> 또는 컴파운드 클립 <kbd>⌥ G</kbd> 에 적용하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请应用在调整片段 <kbd>⌥ A</kbd> 或复合片段 <kbd>⌥ G</kbd> 上，以避免意外行为和裁剪。"
+          }
+        }
+      }
+    },
+    "Wrap your clip in a Compound Clip <kbd>⌥ G</kbd> before applying to avoid the animation being clipped at the edges.": {
+      "comment": "Help tip: wrap the clip.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verpacke deinen Clip in einen Compound-Clip <kbd>⌥ G</kbd>, bevor du den Effekt anwendest, damit die Animation an den Rändern nicht beschnitten wird."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Envuelve tu clip en un clip compuesto <kbd>⌥ G</kbd> antes de aplicarlo para evitar que la animación se recorte en los bordes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encapsulez votre plan dans un plan composé <kbd>⌥ G</kbd> avant de l'appliquer pour éviter que l'animation soit rognée sur les bords."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アニメーションが端で切り取られないように、適用する前にクリップをコンパウンドクリップ <kbd>⌥ G</kbd> にまとめてください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "애니메이션이 가장자리에서 잘리지 않도록 적용하기 전에 클립을 컴파운드 클립 <kbd>⌥ G</kbd> 으로 감싸세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用前请将片段封装到复合片段 <kbd>⌥ G</kbd> 中，以避免动画在边缘被裁剪。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

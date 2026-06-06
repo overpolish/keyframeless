@@ -240,7 +240,10 @@ static NSString *_RoundedAILaneSchemaText(void) {
 - (nullable NSView *)aiAccessoryView {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
-    [KKAIKnowledge registerSharedTimelineDocs];
+    // Shared timeline docs now live in the kit framework bundle (so the kit
+    // help window can render the same source); register them from there.
+    [KKAIKnowledge registerSharedTimelineDocsWithBundle:
+                       [NSBundle bundleForClass:[KKOnScreenControl class]]];
     [KKAIKnowledge
         registerBundleDocsWithName:@"Rounded"
                             bundle:[NSBundle
@@ -435,21 +438,40 @@ static NSString *_RoundedAILaneSchemaText(void) {
 }
 
 - (NSArray<KKHelpSection *> *)helpSections {
-  KKHelpSection *rounded = [KKHelpSection
-      sectionWithTitle:RLoc(@"Rounded",
-                            @"Help section title (the plugin name).")
-             tipMarkup:@[
-               RLoc(@"Round the corners of any clip with an animatable "
-                    @"<accent>Radius</accent>.",
-                    @"Help tip: what the Radius property does."),
-               RLoc(@"<accent>Box</accent> crops and positions the clip - "
-                    @"animate it to reveal or hide content over time.",
-                    @"Help tip: what the Box/Crop property does."),
-             ]
-             shortcuts:nil];
-  rounded.icon = [NSImage imageWithSystemSymbolName:@"square.dotted"
-                           accessibilityDescription:nil];
-  return @[ rounded ];
+  // Quick reference: short overview + parameter list (single-sourced from
+  // rounded.md), then an on-screen-control shortcuts table. The per-property
+  // deep docs (radius/box-crop.md) stay AI-only.
+  KKHelpSection *overview = [self
+      helpSectionFromKnowledgeTopic:@"rounded"
+                              title:RLoc(@"Rounded",
+                                         @"Help section title (plugin name).")
+                             symbol:@"square.dotted"
+                          localizer:^NSString *(NSString *tip) {
+                            return RLoc(tip, @"Rounded help tip (from "
+                                             @"AIKnowledge markdown).");
+                          }];
+
+  NSMutableArray<KKHelpShortcut *> *rows = [@[
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:RLoc(@"Drag the Radius handle", @"Shortcut keys.")
+                    descMarkup:RLoc(@"Set the corner rounding on the canvas",
+                                    @"Help shortcut.")],
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:RLoc(@"Drag a Crop edge or corner",
+                                    @"Shortcut keys.")
+                    descMarkup:RLoc(@"Crop from that side", @"Help shortcut.")],
+  ] mutableCopy];
+  [rows addObjectsFromArray:[KKPlugin sharedOnScreenControlShortcuts]];
+
+  KKHelpSection *shortcuts = [KKHelpSection
+      sectionWithTitle:RLoc(@"On-screen control shortcuts",
+                            @"Help section title.")
+             tipMarkup:nil
+             shortcuts:rows];
+  shortcuts.icon = [NSImage imageWithSystemSymbolName:@"hand.point.up.left"
+                            accessibilityDescription:nil];
+
+  return @[ overview, shortcuts ];
 }
 
 @end

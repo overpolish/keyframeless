@@ -3,9 +3,12 @@ id: rounded
 summary: What Rounded does
 ---
 
-Rounded is a Final Cut Pro plugin that rounds the corners of any clip and crops it with an animatable box. Drop it on a clip from the Effects browser. The plugin exposes two main animatable properties: Radius (corner rounding) and Box (crop region).
+Rounded rounds the corners of any clip and crops it with an animatable box. Drop it on a clip from the Effects browser. It animates with the shared timeline, so see the Timing sections for how Basic, Advanced, easing, and motion blur work.
 
-Like every Keyframeless plugin, Rounded animates with the shared timeline system. See the timeline docs for how Basic, Advanced, easing, and motion blur work.
+Parameters:
+
+  - **Radius** - rounds the corners, from 0% (square) to 100% (fully round; pill-shaped on a rectangular clip). Has X and Y components, aspect-lockable.
+  - **Crop** - crops the clip to a rectangle with four animatable edges. Animate it to reveal or hide content over time; combine with Radius for a rounded crop region.
 
 ## Showing and hiding on-screen controls
 

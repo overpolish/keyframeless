@@ -7,6 +7,7 @@
 #import "KKFonts.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
+#import "KKHelpSection+Markdown.h"
 #import "KKHelpSection.h"
 #import "KKHelpView+Guides.h"
 #import "KKHelpViewSubviews.h"
@@ -241,17 +242,32 @@ const CGFloat KKHelpKeyColumnMin = 170.0;
       [list addArrangedSubview:line];
       continue;
     }
+    // Leading indent markers encode nesting depth (a `  - ` sub-bullet in the
+    // markdown). Strip them and indent the row by one step per level.
+    NSUInteger depth = 0;
+    while (depth < tip.length &&
+           [tip.string characterAtIndex:depth] == 0x0002)
+      depth++;
+    NSAttributedString *bodyTip =
+        depth > 0 ? [tip attributedSubstringFromRange:NSMakeRange(
+                                                          depth,
+                                                          tip.length - depth)]
+                  : tip;
+
     NSStackView *row = [[NSStackView alloc] initWithFrame:NSZeroRect];
     row.orientation = NSUserInterfaceLayoutOrientationHorizontal;
     row.alignment = NSLayoutAttributeFirstBaseline;
     row.spacing = 8.0;
+    row.edgeInsets = NSEdgeInsetsMake(0, depth * 18.0, 0, 0);
 
-    NSTextField *bullet = [NSTextField labelWithString:@"•"];
+    NSTextField *bullet =
+        [NSTextField labelWithString:(depth > 0 ? @"◦" : @"•")];
     bullet.font = [NSFont systemFontOfSize:13.0];
-    bullet.textColor = [NSColor inspectorLabel];
+    bullet.textColor =
+        depth > 0 ? [NSColor secondaryLabelColor] : [NSColor inspectorLabel];
     [row addArrangedSubview:bullet];
 
-    NSTextField *body = [NSTextField labelWithAttributedString:tip];
+    NSTextField *body = [NSTextField labelWithAttributedString:bodyTip];
     body.lineBreakMode = NSLineBreakByWordWrapping;
     body.maximumNumberOfLines = 0;
     body.textColor = [NSColor inspectorLabel];

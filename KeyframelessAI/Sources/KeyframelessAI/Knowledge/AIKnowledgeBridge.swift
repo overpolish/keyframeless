@@ -11,13 +11,26 @@ import Foundation
 /// init to wire the shared timeline docs + their own per-plugin bundle.
 @objc(KKAIKnowledge)
 public final class AIKnowledgeBridge: NSObject {
+	/// Canonical ids of the shared timeline knowledge docs. They now live in the
+	/// KeyframelessKit framework bundle (flattened to its Resources root, like
+	/// the OSC docs) so the kit's own help window can render the same source.
+	/// The registering plugin passes that bundle and we filter to just these
+	/// topics, keeping the OSC docs + README out of this group.
+	private static let sharedTimelineTopicIDs: [String] = [
+		"timeline-basics", "basic-vs-advanced", "easing", "modulation",
+		"animated-properties", "multi-component-properties", "value-editing",
+		"motion-blur", "snap-guides", "constants-panel", "inspector-controls",
+		"mini-canvas", "clip-space-and-wrapping", "guides", "shortcuts",
+	]
+
 	@MainActor
-	@objc public static func registerSharedTimelineDocs() {
+	@objc public static func registerSharedTimelineDocs(bundle: Bundle) {
 		AIKnowledgeRegistry.shared.register(
 			BundleMarkdownKnowledgeProvider(
 				name: "Keyframeless Timeline",
-				bundle: .module,
-				subdirectory: "TimelineKnowledge"
+				bundle: bundle,
+				subdirectory: nil,
+				onlyTopicIDs: Set(sharedTimelineTopicIDs)
 			)
 		)
 	}

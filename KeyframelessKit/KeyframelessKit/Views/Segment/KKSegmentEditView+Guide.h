@@ -10,7 +10,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// Guide-only surface on the segment editor: screen rect of a specific
-/// curve pill, so a Joyride step can cutout (e.g.) the Spring pill.
+/// curve pill, so a Joyride step can cutout (e.g.) the Elastic pill.
 @interface KKSegmentEditView (Guide)
 
 /// Screen rect of the curve pill at `curveType` (matches the editor's
