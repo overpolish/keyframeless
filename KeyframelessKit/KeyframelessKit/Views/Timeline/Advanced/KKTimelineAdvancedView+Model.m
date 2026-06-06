@@ -107,7 +107,11 @@
   double vf = pan + (x - NSMinX(t)) / (NSWidth(t) * z);
   double lf = [self _lastFrameFrac];
   double f = lf < 1.0 ? vf * lf : vf;
-  return f < 0.0 ? 0.0 : (f > 1.0 ? 1.0 : f);
+  // Clamp to the last renderable frame (the visual right edge where the final
+  // pill parks), not 1.0 - otherwise scrub + snap run past the last pill into
+  // the one-frame out-point overshoot.
+  double hi = lf < 1.0 ? lf : 1.0;
+  return f < 0.0 ? 0.0 : (f > hi ? hi : f);
 }
 
 - (CGFloat)_rowHeightForCount:(NSInteger)n {

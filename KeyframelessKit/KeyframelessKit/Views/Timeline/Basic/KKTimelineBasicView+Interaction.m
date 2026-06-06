@@ -146,7 +146,12 @@ static const CGFloat kScrubSnapInPx = 4.0;
 }
 
 - (BOOL)_isInScrubBand:(NSPoint)pt rect:(NSRect)g {
-  return KKTimelineScrubBandContainsPoint(pt, NSMinX(g), NSMaxX(g), NSMaxY(g));
+  // Right edge runs out to the container edge, not NSMaxX(g), so the right
+  // gutter where the out-end pill draws stays scrubbable like the rest of the
+  // ruler; the frac mapping clamps u (and the delivered-frac clamp pins) those
+  // clicks to the last frame (the out-end pill).
+  return KKTimelineScrubBandContainsPoint(
+      pt, NSMinX(g), NSMaxX([self _containerRect]), NSMaxY(g));
 }
 
 - (void)mouseDown:(NSEvent *)event {
