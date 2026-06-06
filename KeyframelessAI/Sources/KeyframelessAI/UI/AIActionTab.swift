@@ -48,6 +48,9 @@ struct AIActionTab: View {
 			if !newValue.isEmpty && draft.didCompleteMutation {
 				draft.didCompleteMutation = false
 			}
+			if !newValue.isEmpty && draft.didAnswerQuestion {
+				draft.didAnswerQuestion = false
+			}
 		}
 	}
 
@@ -219,6 +222,7 @@ struct AIActionTab: View {
 		guard canRun, keyState.activeIsConfigured else { return }
 		draft.routingError = nil
 		draft.didCompleteMutation = false
+		draft.didAnswerQuestion = false
 
 		if isPluginMode {
 			// Plugin host owns routing: it has live timeline state and a custom
@@ -249,6 +253,7 @@ struct AIActionTab: View {
 				case .answer(let reply):
 					draft.isRouting = false
 					draft.pendingAnswer = reply
+					draft.didAnswerQuestion = true
 				}
 			} catch {
 				draft.isRouting = false

@@ -15,6 +15,10 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT const CGFloat KKPresetPopoverWidth;
 FOUNDATION_EXPORT const CGFloat KKPresetRowHeight;
 
+/// A view's bounds in screen space (empty if not in a window). For guide
+/// spotlight rects.
+FOUNDATION_EXPORT NSRect KKPresetScreenRectForView(NSView *_Nullable v);
+
 /// Top-down layout container so built-ins (added first) render at the top.
 @interface KKPresetsFlippedView : NSView
 @end
@@ -38,6 +42,8 @@ FOUNDATION_EXPORT const CGFloat KKPresetRowHeight;
 @property(nonatomic, copy, nullable) void (^onRename)
     (NSString *identifier, NSString *newName);
 - (instancetype)initWithPreset:(KKPreset *)preset;
+/// Screen rect of the apply-at-playhead (insert) button, for guide spotlights.
+- (NSRect)insertButtonScreenRect;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -29,9 +29,12 @@ public final class AIDraftBridge: NSObject {
 		AIDraftState.shared.routingStatus = status
 	}
 
+	/// Set the pending answer. A non-nil answer also lights the green "done"
+	/// sparkle (until the user next interacts), like an applied mutation does.
 	@MainActor
 	@objc public static func setAnswer(_ answer: String?) {
 		AIDraftState.shared.pendingAnswer = answer
+		AIDraftState.shared.didAnswerQuestion = (answer != nil)
 	}
 
 	@MainActor

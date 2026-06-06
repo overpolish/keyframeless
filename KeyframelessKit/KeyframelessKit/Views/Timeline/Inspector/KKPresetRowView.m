@@ -14,6 +14,13 @@
 const CGFloat KKPresetPopoverWidth = 280.0;
 const CGFloat KKPresetRowHeight = 28.0;
 
+NSRect KKPresetScreenRectForView(NSView *v) {
+  NSWindow *w = v.window;
+  if (!v || !w)
+    return NSZeroRect;
+  return [w convertRectToScreen:[v convertRect:v.bounds toView:nil]];
+}
+
 @implementation KKPresetsFlippedView
 - (BOOL)isFlipped {
   return YES;
@@ -309,6 +316,10 @@ const CGFloat KKPresetRowHeight = 28.0;
 
 - (void)cursorUpdate:(NSEvent *)event {
   [[NSCursor pointingHandCursor] set];
+}
+
+- (NSRect)insertButtonScreenRect {
+  return KKPresetScreenRectForView(_applyAtButton);
 }
 
 - (void)controlTextDidEndEditing:(NSNotification *)notification {

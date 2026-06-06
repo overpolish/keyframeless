@@ -15,6 +15,11 @@ NS_ASSUME_NONNULL_BEGIN
 @interface KKTimelineInspectorView (Presets)
 /// Last reachable clip fraction (the playhead stops one frame before clip end).
 - (double)_presetEndFraction;
+/// Runs the shared Presets walkthrough: opens the Presets popover and guides
+/// the user through applying a preset, the apply-at-playhead button, and saving
+/// one. The host snapshots + restores the pre-guide timeline; the practice
+/// preset the user saves is removed on completion.
+- (void)runPresetsGuide;
 @end
 
 NS_ASSUME_NONNULL_END

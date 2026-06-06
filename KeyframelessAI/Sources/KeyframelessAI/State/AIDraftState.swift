@@ -27,6 +27,11 @@ public final class AIDraftState: ObservableObject {
 	/// still has a confirmation waiting when the user looks back. Answers and
 	/// errors do not set this - only an applied mutation does.
 	@Published public var didCompleteMutation: Bool = false
+	/// True once a question has been answered, until the user next interacts.
+	/// Drives the same green "done" sparkle as `didCompleteMutation` so a
+	/// fire-and-look-away question also leaves a badge waiting (plugins + the
+	/// Steno workflow extension).
+	@Published public var didAnswerQuestion: Bool = false
 
 	private init() {}
 
@@ -36,5 +41,6 @@ public final class AIDraftState: ObservableObject {
 		routingError = nil
 		routingStatus = nil
 		didCompleteMutation = false
+		didAnswerQuestion = false
 	}
 }

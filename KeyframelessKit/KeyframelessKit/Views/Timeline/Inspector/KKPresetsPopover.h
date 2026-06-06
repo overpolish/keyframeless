@@ -32,6 +32,30 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (void)showRelativeToRect:(NSRect)rect ofView:(NSView *)view;
 
+#pragma mark - Guide support
+
+/// When YES the popover stays open (ApplicationDefined behavior) and applying a
+/// preset does NOT auto-close it, so a walkthrough can drive apply / insert /
+/// save in one open popover. The guide owns closing it.
+@property(nonatomic) BOOL guideMode;
+/// Fired right after the popover is shown (guide's open step advances on it).
+@property(nonatomic, copy, nullable) void (^onDidShow)(void);
+/// Fired after any preset is applied (guide advances on it).
+@property(nonatomic, copy, nullable) void (^onDidApplyPreset)(void);
+/// Fired after a preset is saved, with its new identifier (guide captures it
+/// to delete on completion, and advances).
+@property(nonatomic, copy, nullable) void (^onDidSavePreset)
+    (NSString *identifier);
+/// The popover's window, for the guide's `additionalPassthroughWindow`.
+@property(nonatomic, readonly, nullable) NSWindow *popoverWindow;
+- (NSRect)guidePopoverScreenRect; // the whole popover content
+- (NSRect)guideFirstRowScreenRect;
+- (NSRect)guideFirstRowInsertButtonScreenRect;
+- (NSRect)guideSaveAreaScreenRect; // field + save button unioned
+/// Pre-fill the name/filter field (so a guide's save step is a single click).
+- (void)guidePrefillName:(NSString *)name;
+- (void)closeForGuide;
+
 @end
 
 NS_ASSUME_NONNULL_END

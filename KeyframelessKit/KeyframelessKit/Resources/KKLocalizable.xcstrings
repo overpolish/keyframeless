@@ -9030,6 +9030,552 @@
           }
         }
       }
+    },
+    "Save an animation you like and re-apply it to any clip from the <accent>Presets</accent> row:": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sichern Sie eine Animation, die Ihnen gefällt, und wenden Sie sie über die Zeile <accent>Presets</accent> auf jeden Clip an:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guarda una animación que te guste y vuelve a aplicarla a cualquier clip desde la fila <accent>Preajustes</accent>:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrez une animation qui vous plaît et réappliquez-la à n'importe quel plan depuis la ligne <accent>Préréglages</accent> :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "気に入ったアニメーションを保存し、<accent>プリセット</accent>の行から任意のクリップに再適用できます:"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마음에 드는 애니메이션을 저장하고 <accent>프리셋</accent> 행에서 모든 클립에 다시 적용하세요:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存你喜欢的动画，并从<accent>预设</accent>行将其重新应用到任何片段："
+          }
+        }
+      }
+    },
+    "<accent>Default presets</accent> - built-in starters like Pop In and Pop Out, marked with a Default badge. They are read-only.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Standard-Presets</accent> - integrierte Vorlagen wie Pop In und Pop Out, mit einem Standard-Badge gekennzeichnet. Sie sind schreibgeschützt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Preajustes predeterminados</accent> - puntos de partida integrados como Aparición pop y Desaparición pop, marcados con la insignia Predeterminado. Son de solo lectura."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Préréglages par défaut</accent> - des points de départ intégrés comme Apparition pop et Disparition pop, marqués d'un badge Par défaut. Ils sont en lecture seule."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>デフォルトプリセット</accent> - ポップインやポップアウトなどの組み込みのひな型で、デフォルトのバッジが付いています。読み取り専用です。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>기본 프리셋</accent> - 팝 인, 팝 아웃 같은 기본 제공 시작점으로, 기본 배지가 표시됩니다. 읽기 전용입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>默认预设</accent> - 内置的起始动画，例如弹入和弹出，带有“默认”徽章。它们为只读。"
+          }
+        }
+      }
+    },
+    "<accent>Apply</accent> - click a preset to replace the current animation with it.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Anwenden</accent> - klicken Sie auf ein Preset, um die aktuelle Animation damit zu ersetzen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Aplicar</accent> - haz clic en un preajuste para reemplazar la animación actual."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Appliquer</accent> - cliquez sur un préréglage pour remplacer l'animation actuelle."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>適用</accent> - プリセットをクリックすると、現在のアニメーションが置き換わります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>적용</accent> - 프리셋을 클릭하면 현재 애니메이션이 대체됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>应用</accent> - 点击预设即可替换当前动画。"
+          }
+        }
+      }
+    },
+    "<accent>Apply at playhead</accent> - the insert button drops the preset's move in at the playhead and keeps your existing keyposes, so you can stack a Pop In early and a Pop Out later on the same clip.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>An Abspielposition anwenden</accent> - die Einfügen-Taste setzt die Bewegung des Presets an der Abspielposition ein und behält Ihre vorhandenen Keyposes, sodass Sie z. B. früh ein Pop In und später ein Pop Out im selben Clip kombinieren können."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Aplicar en la posición de reproducción</accent> - el botón de insertar coloca el movimiento del preajuste en la posición de reproducción y conserva tus poses clave existentes, así puedes combinar una Aparición pop al principio y una Desaparición pop más tarde en el mismo clip."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Appliquer à la tête de lecture</accent> - le bouton d'insertion place le mouvement du préréglage à la tête de lecture et conserve vos poses clés existantes, ce qui permet de combiner une Apparition pop au début et une Disparition pop plus tard sur le même plan."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>再生ヘッドに適用</accent> - 挿入ボタンはプリセットの動きを再生ヘッドの位置に挿入し、既存のキーポーズはそのまま残します。同じクリップで前半にポップイン、後半にポップアウトを重ねられます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>재생 헤드에 적용</accent> - 삽입 버튼은 프리셋의 움직임을 재생 헤드 위치에 넣고 기존 키포즈를 유지합니다. 그래서 같은 클립에서 앞쪽에 팝 인, 뒤쪽에 팝 아웃을 쌓을 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>在播放头处应用</accent> - 插入按钮会在播放头处放入预设的动作并保留你已有的关键姿势，因此你可以在同一片段上先弹入、稍后再弹出。"
+          }
+        }
+      }
+    },
+    "<accent>Save</accent> - type a name in the field and press <kbd>+</kbd> to save the current animation as your own preset.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Sichern</accent> - geben Sie einen Namen in das Feld ein und drücken Sie <kbd>+</kbd>, um die aktuelle Animation als eigenes Preset zu sichern."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Guardar</accent> - escribe un nombre en el campo y pulsa <kbd>+</kbd> para guardar la animación actual como tu propio preajuste."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Enregistrer</accent> - saisissez un nom dans le champ et appuyez sur <kbd>+</kbd> pour enregistrer l'animation actuelle comme votre propre préréglage."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>保存</accent> - フィールドに名前を入力し、<kbd>+</kbd> を押すと、現在のアニメーションを自分のプリセットとして保存できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>저장</accent> - 필드에 이름을 입력하고 <kbd>+</kbd>를 누르면 현재 애니메이션을 내 프리셋으로 저장합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>保存</accent> - 在字段中输入名称并按 <kbd>+</kbd>，即可将当前动画保存为你自己的预设。"
+          }
+        }
+      }
+    },
+    "<accent>Filter</accent> - type in the same field to narrow the list.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Filtern</accent> - tippen Sie in dasselbe Feld, um die Liste einzugrenzen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Filtrar</accent> - escribe en el mismo campo para acotar la lista."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Filtrer</accent> - saisissez du texte dans le même champ pour réduire la liste."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>絞り込み</accent> - 同じフィールドに入力するとリストを絞り込めます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>필터</accent> - 같은 필드에 입력하면 목록을 좁힐 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>筛选</accent> - 在同一字段中输入即可缩小列表范围。"
+          }
+        }
+      }
+    },
+    "<accent>Manage</accent> - rename, overwrite with the current animation, or delete your own presets (built-ins can't be changed).": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Verwalten</accent> - benennen Sie Ihre eigenen Presets um, überschreiben Sie sie mit der aktuellen Animation oder löschen Sie sie (integrierte lassen sich nicht ändern)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Gestionar</accent> - cambia el nombre de tus preajustes, sobrescríbelos con la animación actual o elimínalos (los integrados no se pueden cambiar)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Gérer</accent> - renommez vos préréglages, remplacez-les par l'animation actuelle ou supprimez-les (les intégrés ne sont pas modifiables)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>管理</accent> - 自分のプリセットの名前を変更したり、現在のアニメーションで上書きしたり、削除したりできます（組み込みは変更できません）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>관리</accent> - 내 프리셋의 이름을 변경하거나 현재 애니메이션으로 덮어쓰거나 삭제할 수 있습니다(기본 제공 항목은 변경할 수 없습니다)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>管理</accent> - 重命名、用当前动画覆盖或删除你自己的预设（内置预设无法更改）。"
+          }
+        }
+      }
+    },
+    "Apply, insert, and save animations": {
+      "comment": "Help guide subtitle: Presets.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animationen anwenden, einfügen und sichern"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aplica, inserta y guarda animaciones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appliquer, insérer et enregistrer des animations"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アニメーションの適用・挿入・保存"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "애니메이션 적용, 삽입, 저장"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用、插入和保存动画"
+          }
+        }
+      }
+    },
+    "Click a preset to apply it - it replaces the current animation.": {
+      "comment": "Presets guide step: apply.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicken Sie auf ein Preset, um es anzuwenden - es ersetzt die aktuelle Animation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en un preajuste para aplicarlo - reemplaza la animación actual."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur un préréglage pour l'appliquer - il remplace l'animation actuelle."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プリセットをクリックして適用します。現在のアニメーションが置き換わります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프리셋을 클릭하면 적용됩니다 - 현재 애니메이션을 대체합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击预设即可应用 - 它会替换当前动画。"
+          }
+        }
+      }
+    },
+    "This inserts the preset at the playhead instead, keeping your existing keyposes.": {
+      "comment": "Presets guide step: insert at playhead.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hiermit wird das Preset stattdessen an der Abspielposition eingefügt und Ihre vorhandenen Keyposes bleiben erhalten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esto inserta el preajuste en la posición de reproducción y conserva tus poses clave existentes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ceci insère plutôt le préréglage à la tête de lecture en conservant vos poses clés existantes."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "これはプリセットを再生ヘッドの位置に挿入し、既存のキーポーズを残します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 버튼은 프리셋을 재생 헤드 위치에 삽입하며 기존 키포즈를 유지합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此操作改为在播放头处插入预设，并保留你已有的关键姿势。"
+          }
+        }
+      }
+    },
+    "To save your own, type a name here and press +.": {
+      "comment": "Presets guide step: save.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um ein eigenes zu sichern, geben Sie hier einen Namen ein und drücken +."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para guardar el tuyo, escribe un nombre aquí y pulsa +."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pour enregistrer le vôtre, saisissez un nom ici et appuyez sur +."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自分のものを保存するには、ここに名前を入力して + を押します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "직접 저장하려면 여기에 이름을 입력하고 +를 누르세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要保存自己的预设，在此输入名称并按 +。"
+          }
+        }
+      }
+    },
+    "Presets let you reuse a move across clips and projects - build it once, apply it anywhere.": {
+      "comment": "Presets guide step: closing value statement.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit Presets verwenden Sie eine Bewegung über Clips und Projekte hinweg wieder - einmal erstellen, überall anwenden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los preajustes te permiten reutilizar un movimiento entre clips y proyectos - créalo una vez y aplícalo donde quieras."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les préréglages permettent de réutiliser un mouvement entre plans et projets - créez-le une fois, appliquez-le partout."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プリセットを使えば、クリップやプロジェクトをまたいで動きを再利用できます。一度作れば、どこでも適用できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프리셋을 사용하면 클립과 프로젝트 전반에서 동작을 재사용할 수 있습니다 - 한 번 만들어 어디서나 적용하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预设让你在不同片段和项目间重复使用同一动作 - 制作一次，随处应用。"
+          }
+        }
+      }
+    },
+    "Open your presets to get started.": {
+      "comment": "Presets guide step: open the popover.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnen Sie zuerst Ihre Presets."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre tus preajustes para empezar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrez vos préréglages pour commencer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "まずプリセットを開きます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시작하려면 프리셋을 여세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先打开你的预设。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

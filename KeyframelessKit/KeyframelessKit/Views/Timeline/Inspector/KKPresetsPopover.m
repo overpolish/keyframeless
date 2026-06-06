@@ -77,6 +77,7 @@ static void _clearPopoverBackground(NSView *view) {
   KKPresetsFlippedView *_listContainer;
   NSBox *_separator;
   NSView *_saveRow;
+  NSButton *_saveButton;
   NSTextField *_emptyLabel;
   KKPresetNameTextField *_filterField;
   __weak NSView *_anchorView;
@@ -99,10 +100,24 @@ static void _clearPopoverBackground(NSView *view) {
 
   _popover = [[NSPopover alloc] init];
   _popover.contentViewController = vc;
-  _popover.behavior = NSPopoverBehaviorTransient;
+  // ApplicationDefined during a guide so the overlay/host clicks don't dismiss
+  // it; Transient otherwise.
+  _popover.behavior = _guideMode ? NSPopoverBehaviorApplicationDefined
+                                 : NSPopoverBehaviorTransient;
   _popover.delegate = self;
   _popover.contentSize = _contentView.frame.size;
   [_popover showRelativeToRect:rect ofView:view preferredEdge:NSRectEdgeMinY];
+  // A guide drives the popover with narrated steps; the filter field auto-
+  // focuses on open, so clear it (next tick, after the popover sets its initial
+  // responder) to keep keystrokes out of it during the walkthrough.
+  if (_guideMode) {
+    __weak typeof(self) weak = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [weak.popoverWindow makeFirstResponder:nil];
+    });
+  }
+  if (self.onDidShow)
+    self.onDidShow();
 }
 
 // Persistent chrome built once: a scrollable list region, a separator, and the
@@ -181,6 +196,7 @@ static void _clearPopoverBackground(NSView *view) {
       KKLoc(@"Save preset", @"Accessibility: save the current animation as a "
                             @"preset.");
   saveBtn.translatesAutoresizingMaskIntoConstraints = NO;
+  _saveButton = saveBtn;
   [_saveRow addSubview:saveBtn];
 
   [NSLayoutConstraint activateConstraints:@[
@@ -239,6 +255,12 @@ static void _clearPopoverBackground(NSView *view) {
       // in an XPC view service crashes via ViewBridge re-entrancy.
       if (strongSelf.onApplyPreset && p.timelineJSON.length)
         strongSelf.onApplyPreset(p.timelineJSON, atPlayhead);
+      if (strongSelf.onDidApplyPreset)
+        strongSelf.onDidApplyPreset();
+      // A guide keeps the popover open to chain apply -> insert -> save; it
+      // closes it itself on completion.
+      if (strongSelf.guideMode)
+        return;
       dispatch_async(dispatch_get_main_queue(), ^{
         if (strongSelf->_popover)
           [strongSelf->_popover close];
@@ -336,14 +358,61 @@ static void _clearPopoverBackground(NSView *view) {
   NSString *json = _currentTimelineJSON ? _currentTimelineJSON() : nil;
   if (!json.length)
     return;
-  [[KKPresets shared] addPresetWithName:name
-                              pluginKey:(_pluginKey ?: @"")timelineJSON:json];
+  KKPreset *saved = [[KKPresets shared]
+      addPresetWithName:name
+              pluginKey:(_pluginKey ?: @"")timelineJSON:json];
   _filterField.stringValue = @"";
   [self _reloadList];
+  if (self.onDidSavePreset && saved.identifier)
+    self.onDidSavePreset(saved.identifier);
 }
 
 - (void)popoverDidClose:(NSNotification *)notification {
   _popover = nil;
+}
+
+#pragma mark - Guide support
+
+- (NSWindow *)popoverWindow {
+  return _contentView.window;
+}
+
+- (KKPresetRowView *)_firstRow {
+  for (NSView *v in _listContainer.subviews)
+    if ([v isKindOfClass:[KKPresetRowView class]])
+      return (KKPresetRowView *)v;
+  return nil;
+}
+
+- (NSRect)guidePopoverScreenRect {
+  return KKPresetScreenRectForView(_contentView);
+}
+
+- (NSRect)guideFirstRowScreenRect {
+  return KKPresetScreenRectForView([self _firstRow]);
+}
+
+- (NSRect)guideFirstRowInsertButtonScreenRect {
+  return [[self _firstRow] insertButtonScreenRect];
+}
+
+- (NSRect)guideSaveAreaScreenRect {
+  NSRect f = KKPresetScreenRectForView(_filterField);
+  NSRect b = KKPresetScreenRectForView(_saveButton);
+  if (NSIsEmptyRect(f))
+    return b;
+  if (NSIsEmptyRect(b))
+    return f;
+  return NSUnionRect(f, b);
+}
+
+- (void)guidePrefillName:(NSString *)name {
+  _filterField.stringValue = name ?: @"";
+  [self _reloadList];
+}
+
+- (void)closeForGuide {
+  [_popover close];
 }
 
 @end
