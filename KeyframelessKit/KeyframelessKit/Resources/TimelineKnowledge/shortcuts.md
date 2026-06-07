@@ -30,6 +30,12 @@ These mouse and keyboard shortcuts apply on the Advanced timeline canvas.
 - Distribute Evenly: space the selected keyposes equally.
 - Delete: remove them all. The Delete key does the same.
 
+### Copy and paste keypose values
+
+- Right-click a keypose and choose Copy Values to put its value (plus any spatial-curve smoothing) on the clipboard. Copy is only offered for a single keypose, not a multi-selection.
+- Right-click a keypose, or a multi-selection, and choose Paste Values to stamp the copied value onto it. With several keyposes selected, paste lands on each one whose lane matches the copied value and skips the rest.
+- Paste stays greyed out unless the clipboard holds a value for a matching lane: the property type and component count have to line up, so you cannot paste a Rotation value onto a Scale keypose. Because the clipboard is shared, you can also copy from one clip and paste into another.
+
 Snapping: a small guide line appears when a dragged keypose comes within a few pixels of another keypose, so getting motion aligned across lanes is straightforward.
 
 ### Playback while editing

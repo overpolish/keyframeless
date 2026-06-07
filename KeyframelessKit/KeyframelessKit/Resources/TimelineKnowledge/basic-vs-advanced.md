@@ -4,7 +4,7 @@ summary: Basic timing vs Advanced timing modes
 ---
 
 - Every property has two timing modes, switched with the pill at the top of its row:
-  - **Basic** - three checkboxed phases (**In**, **Hold**, **Out**) for a simple ease-in, hold, ease-out. Drag the hold boundary to move where In ends and Out begins.
+  - **Basic** - three checkboxed phases (**In**, **Hold**, **Out**) for a simple ease-in, hold, ease-out. Drag the hold boundary to move where In ends and Out begins. Right-click a boundary pill (the In start, either hold edge, or the Out end) for Copy Values / Paste Values: this copies that boundary's pose across every animated property at once, so you can, for example, copy the start pose and paste it onto the end. Paste only fills properties whose type matches the copied data.
   - **Advanced** - the full keyposes + intervals model: any number of keyposes, each interval with its own curve and modulation. Use it for multi-step motion or custom holds.
 
 ## Switching between modes

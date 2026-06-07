@@ -289,13 +289,25 @@
     lanes[i] = nl;
     break;
   }
-  // Drift and modulation are alternative authoring states in Basic - the
-  // Hold popover routes to one or the other based on `_holdDrift`, so a
-  // modulation field lingering on a now-drifting Hold has no UI access and
-  // would still wiggle the rendered curve. If this edit just caused the
-  // global Hold pair to drift, wipe modulation from every animatable lane's
-  // hold-start interval (re-linking won't bring it back - matches the
-  // mental model that drift replaced the wobble).
+  [self _clearHoldModulationIfDrifted:lanes];
+  t.lanes = lanes;
+  _timeline = t;
+  self.needsLayout = YES;
+  [self layoutSubtreeIfNeeded]; // flush now so the Hold/Drift label
+                                // refreshes in lockstep with the curve
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
+// Drift and modulation are alternative authoring states in Basic - the Hold
+// popover routes to one or the other based on `_holdDrift`, so a modulation
+// field lingering on a now-drifting Hold has no UI access and would still
+// wiggle the rendered curve. If the edit just caused the global Hold pair to
+// drift, wipe modulation from every animatable lane's hold-start interval
+// (re-linking won't bring it back - matches the mental model that drift
+// replaced the wobble). Mutates `lanes` in place.
+- (void)_clearHoldModulationIfDrifted:(NSMutableArray<KKLane *> *)lanes {
   BOOL nowDrifts = NO;
   for (KKLane *lane in lanes) {
     if (!lane.enabled || lane.keyposes.count < 2)
@@ -308,33 +320,26 @@
       break;
     }
   }
-  if (nowDrifts)
-    for (NSInteger li = 0; li < (NSInteger)lanes.count; li++) {
-      KKLane *lane = lanes[li];
-      if (!lane.enabled || lane.keyposes.count < 2)
-        continue;
-      KKHoldShape s = KKShapeOfLane(lane);
-      KKInterval *iv = lane.keyposes[s.holdStart].outgoing;
-      if (!iv || iv.modulation == KKIntervalModulationNone)
-        continue;
-      KKLane *nl2 = [lane copy];
-      NSMutableArray<KKKeyPose *> *kps2 = [nl2.keyposes mutableCopy];
-      KKKeyPose *kp = [kps2[s.holdStart] copy];
-      KKInterval *niv = [iv copy];
-      niv.modulation = KKIntervalModulationNone;
-      kp.outgoing = niv;
-      kps2[s.holdStart] = kp;
-      nl2.keyposes = kps2;
-      lanes[li] = nl2;
-    }
-  t.lanes = lanes;
-  _timeline = t;
-  self.needsLayout = YES;
-  [self layoutSubtreeIfNeeded]; // flush now so the Hold/Drift label
-                                // refreshes in lockstep with the curve
-  [self setNeedsDisplay:YES];
-  if (self.onTimelineMutated)
-    self.onTimelineMutated(t);
+  if (!nowDrifts)
+    return;
+  for (NSInteger li = 0; li < (NSInteger)lanes.count; li++) {
+    KKLane *lane = lanes[li];
+    if (!lane.enabled || lane.keyposes.count < 2)
+      continue;
+    KKHoldShape s = KKShapeOfLane(lane);
+    KKInterval *iv = lane.keyposes[s.holdStart].outgoing;
+    if (!iv || iv.modulation == KKIntervalModulationNone)
+      continue;
+    KKLane *nl2 = [lane copy];
+    NSMutableArray<KKKeyPose *> *kps2 = [nl2.keyposes mutableCopy];
+    KKKeyPose *kp = [kps2[s.holdStart] copy];
+    KKInterval *niv = [iv copy];
+    niv.modulation = KKIntervalModulationNone;
+    kp.outgoing = niv;
+    kps2[s.holdStart] = kp;
+    nl2.keyposes = kps2;
+    lanes[li] = nl2;
+  }
 }
 
 @end

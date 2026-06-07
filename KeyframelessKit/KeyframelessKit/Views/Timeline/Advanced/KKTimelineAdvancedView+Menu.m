@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKKeyposeClipboard.h"
 #import "KKLocalized.h"
 #import "KKTimelineAdvancedView_Private.h"
 
@@ -42,6 +43,10 @@
   }
 
   NSMenu *menu = [[NSMenu alloc] init];
+  // Explicit enablement so a non-matching Paste can be greyed (the default
+  // autoenable would keep it live because self responds to the action).
+  menu.autoenablesItems = NO;
+  NSArray<KKKeyposeClipboardEntry *> *clip = [KKKeyposeClipboard readEntries];
   BOOL hasSelection = _selection.count > 0;
   if (hasSelection) {
     [menu addItemWithTitle:KKLoc(@"Reverse", @"Context menu: reverse keyposes.")
@@ -54,6 +59,8 @@
              keyEquivalent:@""]
         .target = self;
     [menu addItem:[NSMenuItem separatorItem]];
+    [self _addCopyPasteItemsToMenu:menu clip:clip];
+    [menu addItem:[NSMenuItem separatorItem]];
     [menu addItemWithTitle:KKLoc(@"Delete", @"Context menu: delete.")
                     action:@selector(_menuDeleteSelection:)
              keyEquivalent:@""]
@@ -64,6 +71,8 @@
                     action:@selector(_menuRemovePill:)
              keyEquivalent:@""]
         .target = self;
+    [menu addItem:[NSMenuItem separatorItem]];
+    [self _addCopyPasteItemsToMenu:menu clip:clip];
   } else if (_menuGapLabel) {
     [menu addItemWithTitle:KKLoc(@"Add Keypose Here",
                                  @"Context menu: add keypose.")
@@ -97,6 +106,173 @@
     return nil;
   }
   return menu;
+}
+
+// Copy is single-keypose only (one value, one lane); with a multi-selection it
+// is omitted entirely - per the design, you copy one value and paste it onto
+// many. Paste is always shown but greyed unless the clipboard holds an entry
+// whose lane (label + valueType + component count) matches a target keypose.
+- (void)_addCopyPasteItemsToMenu:(NSMenu *)menu
+                            clip:(NSArray<KKKeyposeClipboardEntry *> *)clip {
+  NSString *cLabel;
+  NSInteger cKP;
+  if ([self _singleCopyTargetLabel:&cLabel kpIdx:&cKP])
+    [menu addItemWithTitle:KKLoc(@"Copy Values",
+                                 @"Context menu: copy keypose values.")
+                    action:@selector(_menuCopyValue:)
+             keyEquivalent:@""]
+        .target = self;
+  NSMenuItem *paste =
+      [menu addItemWithTitle:KKLoc(@"Paste Values",
+                                   @"Context menu: paste keypose values.")
+                      action:@selector(_menuPasteValue:)
+               keyEquivalent:@""];
+  paste.target = self;
+  paste.enabled = [self _canPasteEntries:clip];
+}
+
+// The single keypose a Copy would capture: the lone selected pill, or - with no
+// selection - the right-clicked pill. nil when 2+ are selected.
+- (BOOL)_singleCopyTargetLabel:(NSString *_Nullable *_Nullable)outLabel
+                         kpIdx:(NSInteger *_Nullable)outKP {
+  if (_selection.count == 1)
+    return [self _decodeSelectionKey:_selection.anyObject
+                               label:outLabel
+                               kpIdx:outKP];
+  if (_selection.count == 0 && _menuPillLabel) {
+    if (outLabel)
+      *outLabel = _menuPillLabel;
+    if (outKP)
+      *outKP = _menuPillKPIdx;
+    return YES;
+  }
+  return NO;
+}
+
+// Selection keys a Paste would write to: every selected pill, or - with no
+// selection - just the right-clicked pill.
+- (NSArray<NSString *> *)_pasteTargetSelectionKeys {
+  if (_selection.count > 0)
+    return _selection.allObjects;
+  if (_menuPillLabel)
+    return @[ [self _selectionKeyForLabel:_menuPillLabel
+                                    kpIdx:_menuPillKPIdx] ];
+  return @[];
+}
+
+- (BOOL)_canPasteEntries:(NSArray<KKKeyposeClipboardEntry *> *)entries {
+  if (entries.count == 0)
+    return NO;
+  for (NSString *key in [self _pasteTargetSelectionKeys]) {
+    NSString *label;
+    NSInteger kp;
+    if (![self _decodeSelectionKey:key label:&label kpIdx:&kp])
+      continue;
+    KKLane *lane = [self _animatableLaneForLabel:label];
+    if (!lane)
+      continue;
+    for (KKKeyposeClipboardEntry *e in entries)
+      if ([e matchesLane:lane])
+        return YES;
+  }
+  return NO;
+}
+
+- (void)_menuCopyValue:(id)sender {
+  NSString *label;
+  NSInteger kpIdx;
+  if (![self _singleCopyTargetLabel:&label kpIdx:&kpIdx])
+    return;
+  KKLane *lane = [self _animatableLaneForLabel:label];
+  if (!lane || kpIdx < 0 || kpIdx >= (NSInteger)lane.keyposes.count)
+    return;
+  KKKeyposeClipboardEntry *e =
+      [KKKeyposeClipboard entryForKeypose:lane.keyposes[kpIdx] lane:lane];
+  [KKKeyposeClipboard writeEntries:@[ e ]];
+}
+
+- (void)_menuPasteValue:(id)sender {
+  NSArray<KKKeyposeClipboardEntry *> *entries =
+      [KKKeyposeClipboard readEntries];
+  if (entries.count == 0)
+    return;
+
+  // Group target indices per lane so each lane is rewritten in one pass.
+  NSMutableDictionary<NSString *, NSMutableIndexSet *> *byLane =
+      [NSMutableDictionary dictionary];
+  for (NSString *key in [self _pasteTargetSelectionKeys]) {
+    NSString *label;
+    NSInteger kp;
+    if (![self _decodeSelectionKey:key label:&label kpIdx:&kp] || kp < 0)
+      continue;
+    NSMutableIndexSet *s = byLane[label];
+    if (!s) {
+      s = [NSMutableIndexSet indexSet];
+      byLane[label] = s;
+    }
+    [s addIndex:(NSUInteger)kp];
+  }
+
+  KKTimeline *t = [_timeline copy];
+  NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
+  BOOL changed = NO;
+  for (NSString *label in byLane) {
+    NSInteger li = -1;
+    for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
+      if ([lanes[i].label isEqualToString:label]) {
+        li = i;
+        break;
+      }
+    if (li < 0)
+      continue;
+    KKLane *lane = lanes[li];
+    KKKeyposeClipboardEntry *match = nil;
+    for (KKKeyposeClipboardEntry *e in entries)
+      if ([e matchesLane:lane]) {
+        match = e;
+        break;
+      }
+    if (!match)
+      continue;
+    NSMutableArray<KKKeyPose *> *kps = [lane.keyposes mutableCopy];
+    __block BOOL laneChanged = NO;
+    [byLane[label] enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+      if (idx >= kps.count)
+        return;
+      kps[idx] = [match applyToKeypose:kps[idx]];
+      laneChanged = YES;
+      // Mirror the value (not the spatial handles - those are per-keypose path
+      // tangents) across a linked-endpoint run, matching a manual value edit so
+      // a Hold pasted on one side stays consistent.
+      NSInteger k = (NSInteger)idx;
+      while (k > 0 && kps[k - 1].outgoing.endpointsLinked) {
+        KKKeyPose *nk = [kps[k - 1] copy];
+        nk.values = match.values;
+        kps[k - 1] = nk;
+        k--;
+      }
+      k = (NSInteger)idx;
+      while (k + 1 < (NSInteger)kps.count && kps[k].outgoing.endpointsLinked) {
+        KKKeyPose *nk = [kps[k + 1] copy];
+        nk.values = match.values;
+        kps[k + 1] = nk;
+        k++;
+      }
+    }];
+    if (!laneChanged)
+      continue;
+    KKLane *nl = [lane copy];
+    nl.keyposes = kps;
+    lanes[li] = nl;
+    changed = YES;
+  }
+  if (!changed)
+    return;
+  t.lanes = lanes;
+  _timeline = t;
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
 }
 
 - (void)_menuToggleGapLink:(id)sender {
