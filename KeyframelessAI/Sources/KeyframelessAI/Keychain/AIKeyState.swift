@@ -25,14 +25,30 @@ public final class AIKeyState: ObservableObject {
 	private init() {
 		let saved = UserDefaults.standard.string(forKey: Self.activeKey)
 			.flatMap(AIProvider.init(rawValue:))
-		activeProvider = saved ?? .anthropic
+		// Default to Local where it's supported (Apple Silicon, >=16 GB) -
+		// privacy-first, no key needed; cloud otherwise (Intel / low-RAM, where
+		// Local is hidden). A saved choice always wins.
+		activeProvider = saved ?? (AIPlatform.supportsLocal ? .local : .anthropic)
 		refresh()
 	}
 
 	public func refresh() {
-		configuredProviders = AIKeychain.providersWithKeys()
+		var providers = AIKeychain.providersWithKeys()
+		// The local provider has no key; it's "configured" once a model is
+		// downloaded and selected. Only where local is supported (Apple Silicon,
+		// >=16 GB RAM).
+		if AIPlatform.supportsLocal, LocalModelStore.shared.hasReadyModel {
+			providers.append(.local)
+		}
+		configuredProviders = providers
 
-		if !configuredProviders.isEmpty, !configuredProviders.contains(activeProvider) {
+		// Auto-pick a configured provider only when the active one is an
+		// unconfigured CLOUD provider (e.g. its key was deleted). Never bounce
+		// the user off `.local`: sitting on it with no model yet is a valid
+		// state - the config tab is where they download one.
+		if !configuredProviders.isEmpty, activeProvider != .local,
+			!configuredProviders.contains(activeProvider)
+		{
 			activeProvider = configuredProviders.first!
 		}
 	}

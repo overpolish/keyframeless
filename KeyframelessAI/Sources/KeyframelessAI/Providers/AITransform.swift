@@ -8,6 +8,7 @@ import Foundation
 public enum AITransformError: LocalizedError {
 	case noActiveProvider
 	case noKey
+	case localUnavailable
 	case http(Int, String)
 	case decoding(String)
 	case empty
@@ -16,6 +17,8 @@ public enum AITransformError: LocalizedError {
 		switch self {
 		case .noActiveProvider: return "No AI provider configured"
 		case .noKey: return "Missing API key"
+		case .localUnavailable:
+			return AILoc("Couldn't reach the on-device model service.")
 		case .http(let code, let body): return "HTTP \(code): \(body)"
 		case .decoding(let msg): return "Couldn't read response: \(msg)"
 		case .empty: return "Empty response from provider"
@@ -35,7 +38,6 @@ public enum AITransform {
 		modelOverride: String? = nil
 	) async throws -> String {
 		let provider = await MainActor.run { AIKeyState.shared.activeProvider }
-		guard let key = try AIKeychain.load(provider) else { throw AITransformError.noKey }
 
 		let system =
 			overrideSystemPrompt ?? """
@@ -61,6 +63,20 @@ public enum AITransform {
 		// breakeven is one cache hit - only worth it when system is large.
 		let cacheSystem = system.utf8.count >= 4_000
 
+		if provider == .local {
+			let (runner, model) = await MainActor.run {
+				(LocalLLM.runner, LocalModelStore.shared.selectedModelID ?? "")
+			}
+			guard let runner else { throw AITransformError.localUnavailable }
+			return try await runner.complete(
+				modelID: model,
+				system: system,
+				user: "Instruction: \(instruction)\n\nText:\n\(text)",
+				jsonSchemaJSON: nil,
+				enableThinking: false)
+		}
+		guard let key = try AIKeychain.load(provider) else { throw AITransformError.noKey }
+
 		switch provider {
 		case .anthropic:
 			return try await callAnthropic(
@@ -71,6 +87,8 @@ public enum AITransform {
 			return try await callOpenAI(
 				key: key, system: system, instruction: instruction, text: text,
 				model: modelOverride ?? "gpt-4o-mini")
+		case .local:
+			throw AITransformError.localUnavailable
 		}
 	}
 

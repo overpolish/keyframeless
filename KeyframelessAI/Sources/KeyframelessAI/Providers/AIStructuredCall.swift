@@ -39,6 +39,30 @@ enum AIStructuredCall {
 		enableThinking: Bool = false
 	) async throws -> String {
 		let provider = AIKeyState.shared.activeProvider
+		if provider == .local {
+			// The host's llama.cpp runner grammar-constrains output to the schema,
+			// so the model can't emit invalid JSON regardless of size. Cloud
+			// `modelOverride` is ignored; the runner loads the selected model.
+			guard let runner = LocalLLM.runner else {
+				throw AITransformError.localUnavailable
+			}
+			let combinedSystem: String
+			if let prefix = cachedSystemPrefix, !prefix.isEmpty {
+				combinedSystem = prefix + "\n\n" + system
+			} else {
+				combinedSystem = system
+			}
+			let schemaJSON =
+				(try? JSONSerialization.data(withJSONObject: jsonSchema, options: [.sortedKeys]))
+				.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+			return try await runner.complete(
+				modelID: LocalModelStore.shared.selectedModelID ?? "",
+				system: combinedSystem,
+				user: userMessage,
+				jsonSchemaJSON: schemaJSON,
+				enableThinking: enableThinking
+			)
+		}
 		guard let key = try AIKeychain.load(provider) else {
 			throw AITransformError.noKey
 		}
@@ -82,11 +106,14 @@ enum AIStructuredCall {
 				model: openaiModel,
 				isReasoningModel: enableThinking && modelOverride == nil
 			)
+		case .local:
+			throw AITransformError.localUnavailable
 		}
 	}
 
 	// MARK: - Anthropic
 
+	@MainActor
 	private static func callAnthropic(
 		key: String, system: String, cachedPrefix: String?, userMessage: String,
 		schemaName: String, schemaDescription: String,
@@ -194,6 +221,7 @@ enum AIStructuredCall {
 
 	// MARK: - OpenAI
 
+	@MainActor
 	private static func callOpenAI(
 		key: String, system: String, userMessage: String,
 		schemaName: String, jsonSchema: [String: Any], model: String,

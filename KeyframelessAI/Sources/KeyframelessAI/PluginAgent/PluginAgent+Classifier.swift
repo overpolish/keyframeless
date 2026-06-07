@@ -133,7 +133,13 @@ extension AIPluginAgent {
 			jsonSchema: schema,
 			modelOverride: AIKeyState.shared.activeProvider == .anthropic
 				? "claude-haiku-4-5-20251001"
-				: "gpt-4o-mini"
+				: "gpt-4o-mini",
+			// Cloud models route correctly in a single grammar-constrained pass.
+			// A small local model can't: it has to emit `kind` as its first token
+			// with no room to reason, and flips clear mutations to "answer". Give
+			// local the two-pass (reason freely, then format) treatment so routing
+			// is reliable - it's the decision the whole pipeline hinges on.
+			enableThinking: AIKeyState.shared.activeProvider == .local
 		)
 		let data = raw.data(using: .utf8) ?? Data()
 		let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]

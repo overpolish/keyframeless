@@ -30,6 +30,10 @@ public enum AIKeyValidator {
 		case .openai:
 			request = URLRequest(url: URL(string: "https://api.openai.com/v1/models")!)
 			request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+		case .local:
+			// No remote key to validate; the local provider is gated on a
+			// downloaded model instead.
+			return
 		}
 		request.timeoutInterval = 15
 
