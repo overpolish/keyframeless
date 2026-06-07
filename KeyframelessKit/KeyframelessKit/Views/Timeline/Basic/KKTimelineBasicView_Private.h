@@ -154,6 +154,9 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
   double _curBoundaryHoldFrac;
   KKBasicSection _curAnimateSec;
   NSInteger _curDiamond;
+  // Which pill (1-4 diamond model) the right-click context menu targets, so
+  // the copy/paste actions know the boundary column to read/write.
+  NSInteger _menuDiamond;
   // Guide-only: optional callback fired AFTER the existing In/Out checkbox
   // handler runs. Lets a Joyride step advance on user toggle without
   // bypassing the normal _setInEnabled:/_setOutEnabled: path. phase: 0=In,
@@ -269,6 +272,7 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
                   inOn:(BOOL)inOn
                  outOn:(BOOL)outOn
         holdTargetFrac:(double)holdTargetFrac;
+- (void)_clearHoldModulationIfDrifted:(NSMutableArray<KKLane *> *)lanes;
 
 @end
 

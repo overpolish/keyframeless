@@ -6,6 +6,7 @@
 #import "KKLocalized.h"
 #import "KKTimelineBasicView_Private.h"
 
+#import "KKKeyposeClipboard.h"
 #import "KKKeyposeSymbol.h"
 #import "KKMiniViewerView.h"
 #import "KKSegmentEditView.h"
@@ -282,10 +283,17 @@ static const CGFloat kScrubSnapInPx = 4.0;
 // phases as a single transition), so right-click there shows no menu.
 - (NSMenu *)menuForEvent:(NSEvent *)event {
   NSPoint pt = [self convertPoint:event.locationInWindow fromView:nil];
+  KKBasicProj p = [self _projection];
+  // A pill hit → copy/paste that boundary column; otherwise fall through to the
+  // Hold-gap link menu below.
+  NSRect g = [self _graphRect];
+  NSInteger diamond =
+      (NSWidth(g) > 0) ? [self _diamondAtPoint:pt proj:p rect:g] : 0;
+  if (diamond != 0)
+    return [self _pillMenuForDiamond:diamond];
   KKBasicSection sec = [self _sectionAtPoint:pt];
   if (sec != KKBasicSectionHold)
     return nil;
-  KKBasicProj p = [self _projection];
   if (!p.anyAnimatable)
     return nil;
   // Probe the first animatable lane's Hold interval to decide the verb -
@@ -313,6 +321,131 @@ static const CGFloat kScrubSnapInPx = 4.0;
 
 - (void)_menuToggleHoldLink:(id)sender {
   [self _toggleHoldLink];
+}
+
+// The lane-local keypose index a given pill (1-4 diamond model) addresses:
+// In-start is the first keypose, Out-end the last, and the two Hold pills the
+// lane's hold-start / hold-end keyposes (which coincide when there's no drift).
+static NSInteger KKBasicKPIdxForDiamond(KKLane *lane, NSInteger diamond) {
+  KKHoldShape s = KKShapeOfLane(lane);
+  switch (diamond) {
+  case 1:
+    return 0;
+  case 2:
+    return s.holdStart;
+  case 3:
+    return s.holdEnd;
+  case 4:
+    return (NSInteger)lane.keyposes.count - 1;
+  }
+  return -1;
+}
+
+// A pill carries one keypose per enabled animatable lane (the boundary column).
+// Copy is always available; Paste is greyed unless the clipboard holds an entry
+// matching some lane in this timeline (label + valueType + component count).
+- (NSMenu *)_pillMenuForDiamond:(NSInteger)diamond {
+  KKBasicProj p = [self _projection];
+  if (!p.anyAnimatable)
+    return nil;
+  _menuDiamond = diamond;
+  NSMenu *menu = [[NSMenu alloc] init];
+  menu.autoenablesItems = NO;
+  [menu addItemWithTitle:KKLoc(@"Copy Values",
+                               @"Context menu: copy keypose values.")
+                  action:@selector(_menuCopyPillColumn:)
+           keyEquivalent:@""]
+      .target = self;
+  NSArray<KKKeyposeClipboardEntry *> *clip = [KKKeyposeClipboard readEntries];
+  NSMenuItem *paste =
+      [menu addItemWithTitle:KKLoc(@"Paste Values",
+                                   @"Context menu: paste keypose values.")
+                      action:@selector(_menuPastePillColumn:)
+               keyEquivalent:@""];
+  paste.target = self;
+  paste.enabled = [self _canPasteColumnEntries:clip];
+  return menu;
+}
+
+- (BOOL)_canPasteColumnEntries:(NSArray<KKKeyposeClipboardEntry *> *)entries {
+  if (entries.count == 0)
+    return NO;
+  for (KKLane *lane in _timeline.lanes) {
+    if (!lane.enabled)
+      continue;
+    for (KKKeyposeClipboardEntry *e in entries)
+      if ([e matchesLane:lane])
+        return YES;
+  }
+  return NO;
+}
+
+- (void)_menuCopyPillColumn:(id)sender {
+  NSMutableArray<KKKeyposeClipboardEntry *> *entries = [NSMutableArray array];
+  for (KKLane *lane in _timeline.lanes) {
+    if (!lane.enabled)
+      continue;
+    NSInteger idx = KKBasicKPIdxForDiamond(lane, _menuDiamond);
+    if (idx < 0 || idx >= (NSInteger)lane.keyposes.count)
+      continue;
+    [entries addObject:[KKKeyposeClipboard entryForKeypose:lane.keyposes[idx]
+                                                      lane:lane]];
+  }
+  [KKKeyposeClipboard writeEntries:entries];
+}
+
+- (void)_menuPastePillColumn:(id)sender {
+  NSArray<KKKeyposeClipboardEntry *> *entries =
+      [KKKeyposeClipboard readEntries];
+  if (entries.count == 0)
+    return;
+  BOOL linked = [self _holdLinked];
+  KKTimeline *t = [_timeline copy];
+  NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
+  BOOL changed = NO;
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    KKLane *lane = lanes[i];
+    if (!lane.enabled)
+      continue;
+    KKKeyposeClipboardEntry *match = nil;
+    for (KKKeyposeClipboardEntry *e in entries)
+      if ([e matchesLane:lane]) {
+        match = e;
+        break;
+      }
+    if (!match)
+      continue;
+    NSInteger idx = KKBasicKPIdxForDiamond(lane, _menuDiamond);
+    if (idx < 0 || idx >= (NSInteger)lane.keyposes.count)
+      continue;
+    KKLane *nl = [lane copy];
+    NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
+    kps[idx] = [match applyToKeypose:kps[idx]];
+    // A linked Hold mirrors the value (not the spatial handles) to the sibling
+    // interior keypose so the pair stays flat - matching a manual Hold edit.
+    if ((_menuDiamond == 2 || _menuDiamond == 3) && linked) {
+      KKHoldShape s = KKShapeOfLane(nl);
+      NSInteger sib = (_menuDiamond == 2) ? s.holdEnd : s.holdStart;
+      if (sib != idx && sib >= 0 && sib < (NSInteger)kps.count) {
+        KKKeyPose *sk = [kps[sib] copy];
+        sk.values = match.values;
+        kps[sib] = sk;
+      }
+    }
+    nl.keyposes = kps;
+    lanes[i] = nl;
+    changed = YES;
+  }
+  if (!changed)
+    return;
+  [self _clearHoldModulationIfDrifted:lanes];
+  t.lanes = lanes;
+  _timeline = t;
+  self.needsLayout = YES;
+  [self layoutSubtreeIfNeeded];
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
 }
 
 @end
