@@ -9,7 +9,7 @@
 #import <KeyframelessKit/KKTimingStage.h>
 
 static NSString *const kKKKeyposePBType =
-    @"com.overpolish.keyframeless.keyposeValues";
+    @"co.overpolish.keyframeless.keyposeValues";
 static NSInteger const kKKKeyposePBVersion = 1;
 
 @interface KKKeyposeClipboardEntry ()

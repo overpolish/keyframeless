@@ -44,7 +44,7 @@ public struct AIButton: View {
 	private var helpText: String {
 		switch iconState {
 		case .unconfigured: return AILoc("Configure AI key")
-		case .running: return AILoc("Working…")
+		case .running: return AILoc("Working")
 		case .done: return AILoc("Done - click to review")
 		case .idle: return AILoc("AI")
 		}

@@ -1094,44 +1094,44 @@
         }
       }
     },
-    "Loading model…" : {
+    "Loading model" : {
       "comment" : "AI button status while the local model loads into memory.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Modell wird geladen…"
+            "value" : "Modell wird geladen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Cargando modelo…"
+            "value" : "Cargando modelo"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Chargement du modèle…"
+            "value" : "Chargement du modèle"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "モデルを読み込み中…"
+            "value" : "モデルを読み込み中"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "모델 로딩 중…"
+            "value" : "모델 로딩 중"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在加载模型…"
+            "value" : "正在加载模型"
           }
         }
       }
@@ -1514,86 +1514,86 @@
         }
       }
     },
-    "Planning timing…" : {
+    "Planning timing" : {
       "comment" : "AI routing status: planning the timing pass.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Timing wird geplant…"
+            "value" : "Timing wird geplant"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Planificando el tiempo…"
+            "value" : "Planificando el tiempo"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Planification du timing…"
+            "value" : "Planification du timing"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "タイミングを計画中…"
+            "value" : "タイミングを計画中"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "타이밍 계획 중…"
+            "value" : "타이밍 계획 중"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在规划计时…"
+            "value" : "正在规划计时"
           }
         }
       }
     },
-    "Reading prompt…" : {
+    "Reading prompt" : {
       "comment" : "AI routing status: reading/classifying the prompt.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Eingabe wird gelesen…"
+            "value" : "Eingabe wird gelesen"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Leyendo la indicación…"
+            "value" : "Leyendo la indicación"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Lecture de la requête…"
+            "value" : "Lecture de la requête"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "プロンプトを読み取り中…"
+            "value" : "プロンプトを読み取り中"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "프롬프트 읽는 중…"
+            "value" : "프롬프트 읽는 중"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在读取提示…"
+            "value" : "正在读取提示"
           }
         }
       }
@@ -1765,6 +1765,9 @@
           }
         }
       }
+    },
+    "Resolving %@" : {
+
     },
     "Resolving %@…" : {
       "comment" : "AI routing status while resolving a lane. %@ is the lane name (plus an optional progress suffix like \" (1/2)\").",
@@ -2142,86 +2145,86 @@
         }
       }
     },
-    "Testing connection…" : {
+    "Testing connection" : {
       "comment" : "Status shown while validating an API key.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Verbindung wird getestet…"
+            "value" : "Verbindung wird getestet"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Probando conexión…"
+            "value" : "Probando conexión"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Test de la connexion…"
+            "value" : "Test de la connexion"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "接続をテスト中…"
+            "value" : "接続をテスト中"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "연결 테스트 중…"
+            "value" : "연결 테스트 중"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在测试连接…"
+            "value" : "正在测试连接"
           }
         }
       }
     },
-    "Thinking…" : {
+    "Thinking" : {
       "comment" : "Fallback status next to the Run spinner.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Denkt nach…"
+            "value" : "Denkt nach"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Pensando…"
+            "value" : "Pensando"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Réflexion…"
+            "value" : "Réflexion"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "思考中…"
+            "value" : "思考中"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "생각 중…"
+            "value" : "생각 중"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "思考中…"
+            "value" : "思考中"
           }
         }
       }
@@ -2352,44 +2355,44 @@
         }
       }
     },
-    "Working…" : {
+    "Working" : {
       "comment" : "Tooltip on the AI button while a request is in flight.",
       "extractionState" : "manual",
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Arbeitet…"
+            "value" : "Arbeitet"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Trabajando…"
+            "value" : "Trabajando"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "En cours…"
+            "value" : "En cours"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "処理中…"
+            "value" : "処理中"
           }
         },
         "ko" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "작업 중…"
+            "value" : "작업 중"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "处理中…"
+            "value" : "处理中"
           }
         }
       }

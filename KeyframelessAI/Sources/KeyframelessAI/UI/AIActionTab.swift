@@ -204,7 +204,7 @@ struct AIActionTab: View {
 				if draft.isRouting {
 					HStack(spacing: 4) {
 						ProgressView().controlSize(.small)
-						Text(draft.routingStatus ?? AILoc("Thinking…"))
+						Text(draft.routingStatus ?? AILoc("Thinking"))
 					}
 				} else if isDone {
 					Label(AILoc("Done"), systemImage: "checkmark")
@@ -235,17 +235,27 @@ struct AIActionTab: View {
 		}
 
 		draft.isRouting = true
+		draft.pendingAnswer = nil
 		let captured = (selectedCount, productContext, trimmed)
 		Task { @MainActor in
 			do {
-				let intent = try await AIRouter.route(
+				let intent = try await AIRouter.routeStreaming(
 					captured.2,
 					selectedCount: captured.0,
 					productContext: captured.1
-				)
+				) { partial in
+					// First answer token arrived: drop the spinner, reveal the answer
+					// card, and keep filling it as tokens stream in. (A transform never
+					// calls this - it stays a spinner until its preview popover opens.)
+					draft.isRouting = false
+					draft.didAnswerQuestion = true
+					draft.pendingAnswer = partial
+				}
+				// Record both questions and transforms in recents (the plugin branch
+				// above records unconditionally too); only a thrown route skips it.
+				recents.record(captured.2)
 				switch intent {
 				case .transform(let cleanInstruction):
-					recents.record(captured.2)
 					draft.prompt = ""
 					// Keep the icon animating right up until the host puts its
 					// transform preview popover on screen - onRun opens it, so

@@ -13,7 +13,7 @@
 // Mirrors KKOSCGuideBridge's position-notification name (the bridge posts it);
 // the plugin returns this as its help-guide refresh notification.
 NSNotificationName const kRoundedOSCPositionNotification =
-    @"com.overpolish.kk.oscGuidePosition";
+    @"co.overpolish.kk.oscGuidePosition";
 
 static RoundedOSC *sCurrentOSC = nil;
 

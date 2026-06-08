@@ -12,8 +12,8 @@ import Tokenizers
 import os
 
 /// Download progress diagnostics; view in Console.app, subsystem
-/// `com.overpolish.keyframeless`, category `ai.local`.
-private let storeLog = Logger(subsystem: "com.overpolish.keyframeless", category: "ai.local")
+/// `co.overpolish.keyframeless`, category `ai.local`.
+private let storeLog = Logger(subsystem: "co.overpolish.keyframeless", category: "ai.local")
 
 /// Tracks which local models are downloaded + which is selected. With MLX, the
 /// model is a HuggingFace repo that MLX/Hub downloads and caches on demand, so
@@ -49,8 +49,8 @@ public final class LocalModelStore: ObservableObject {
 	/// the on-disk poll divides by this to compute the real fraction.
 	private var downloadTotalBytes: Int64 = 0
 
-	private static let selectedKey = "com.overpolish.ai.local.selectedModel"
-	private static let downloadedKey = "com.overpolish.ai.local.downloadedModels"
+	private static let selectedKey = "co.overpolish.ai.local.selectedModel"
+	private static let downloadedKey = "co.overpolish.ai.local.downloadedModels"
 
 	private init() {
 		let saved = Set(UserDefaults.standard.stringArray(forKey: Self.downloadedKey) ?? [])
@@ -113,7 +113,7 @@ public final class LocalModelStore: ObservableObject {
 		}
 
 		do {
-			let hub = HubClient()
+			let hub = HubClient(cache: Self.sharedHubCache())
 			_ = try await hub.downloadSnapshot(of: repo) { @MainActor [weak self] progress in
 				self?.downloadTotalBytes = progress.totalUnitCount
 			}
@@ -168,11 +168,22 @@ public final class LocalModelStore: ObservableObject {
 		UserDefaults.standard.set(Array(downloadedModels), forKey: Self.downloadedKey)
 	}
 
+	/// The shared cache used for downloads. When the app-group container is
+	/// available, downloads land in the shared cache so any client's spawned
+	/// helper finds the model (no re-download); otherwise the default cache.
+	static func sharedHubCache() -> HubCache {
+		if let dir = LocalAIHelperSocket.sharedModelCacheDir() {
+			return HubCache(cacheDirectory: dir)
+		}
+		return .default
+	}
+
 	/// The HuggingFace Hub cache directory for a repo, e.g.
 	/// `<cache>/models--mlx-community--gemma-4-26b-a4b-it-4bit`.
 	private static func repoCacheDir(_ repoID: String) -> URL {
 		let dirName = "models--" + repoID.replacingOccurrences(of: "/", with: "--")
-		return HubCache.default.cacheDirectory.appendingPathComponent(dirName)
+		let base = LocalAIHelperSocket.sharedModelCacheDir() ?? HubCache.default.cacheDirectory
+		return base.appendingPathComponent(dirName)
 	}
 
 	/// Total byte size of all files under `dir` (0 if it doesn't exist yet).

@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		AA0000000000000000000001 /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000002 /* KeyframelessAI */; };
+		F20AACA22FD7203B0032F7FF /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = F20AACA12FD7203B0032F7FF /* KeyframelessAI */; };
+		F20AACA62FD7205B0032F7FF /* kk-ai-helper in CopyFiles */ = {isa = PBXBuildFile; fileRef = F20AAC9A2FD720220032F7FF /* kk-ai-helper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		F21396022F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F21396032F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
@@ -24,6 +26,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		F20AACA32FD720480032F7FF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F2E2ED6D2F4CA530008620D9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F20AAC992FD720220032F7FF;
+			remoteInfo = "kk-ai-helper";
+		};
 		F2E2ED822F4CA530008620D9 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F2E2ED6D2F4CA530008620D9 /* Project object */;
@@ -41,6 +50,25 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		F20AAC982FD720220032F7FF /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		F20AACA52FD720500032F7FF /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 6;
+			files = (
+				F20AACA62FD7205B0032F7FF /* kk-ai-helper in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F220BFE52F4E07EC0034AF77 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -77,6 +105,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F20AAC9A2FD720220032F7FF /* kk-ai-helper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "kk-ai-helper"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F20AACA72FD720850032F7FF /* Wrapper ApplicationRelease.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Wrapper ApplicationRelease.entitlements"; sourceTree = "<group>"; };
 		F21396012F649EF900E1EC03 /* keyframeless.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = keyframeless.icon; path = ../Assets/keyframeless.icon; sourceTree = SOURCE_ROOT; };
 		F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2E2ED752F4CA530008620D9 /* MagicMove.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MagicMove.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -129,6 +159,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		F20AAC9B2FD720220032F7FF /* kk-ai-helper */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "kk-ai-helper";
+			sourceTree = "<group>";
+		};
 		F2E2ED902F4CA530008620D9 /* MagicMove */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -141,6 +176,14 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		F20AAC972FD720220032F7FF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F20AACA22FD7203B0032F7FF /* KeyframelessAI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F2E2ED722F4CA530008620D9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -170,8 +213,10 @@
 		F2E2ED6C2F4CA530008620D9 = {
 			isa = PBXGroup;
 			children = (
+				F20AACA72FD720850032F7FF /* Wrapper ApplicationRelease.entitlements */,
 				F21396012F649EF900E1EC03 /* keyframeless.icon */,
 				F2E2ED902F4CA530008620D9 /* MagicMove */,
+				F20AAC9B2FD720220032F7FF /* kk-ai-helper */,
 				F2E2ED772F4CA530008620D9 /* Frameworks */,
 				F2E2ED762F4CA530008620D9 /* Products */,
 			);
@@ -182,6 +227,7 @@
 			children = (
 				F2E2ED752F4CA530008620D9 /* MagicMove.app */,
 				F2E2ED802F4CA530008620D9 /* MagicMove XPC Service.pluginkit */,
+				F20AAC9A2FD720220032F7FF /* kk-ai-helper */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -203,6 +249,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		F20AAC992FD720220032F7FF /* kk-ai-helper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F20AACA02FD720220032F7FF /* Build configuration list for PBXNativeTarget "kk-ai-helper" */;
+			buildPhases = (
+				F20AAC962FD720220032F7FF /* Sources */,
+				F20AAC972FD720220032F7FF /* Frameworks */,
+				F20AAC982FD720220032F7FF /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F20AAC9B2FD720220032F7FF /* kk-ai-helper */,
+			);
+			name = "kk-ai-helper";
+			packageProductDependencies = (
+				F20AACA12FD7203B0032F7FF /* KeyframelessAI */,
+			);
+			productName = "kk-ai-helper";
+			productReference = F20AAC9A2FD720220032F7FF /* kk-ai-helper */;
+			productType = "com.apple.product-type.tool";
+		};
 		F2E2ED742F4CA530008620D9 /* Wrapper Application */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F2E2EDBA2F4CA530008620D9 /* Build configuration list for PBXNativeTarget "Wrapper Application" */;
@@ -239,10 +308,12 @@
 				F2E2ED7D2F4CA530008620D9 /* Copy and Code Sign FxPlug.framework */,
 				F2E2ED7E2F4CA530008620D9 /* Copy and Code Sign PluginManager.framework */,
 				F220BFE52F4E07EC0034AF77 /* Embed Frameworks */,
+				F20AACA52FD720500032F7FF /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				F20AACA42FD720480032F7FF /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F2E2ED902F4CA530008620D9 /* MagicMove */,
@@ -262,8 +333,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
+					F20AAC992FD720220032F7FF = {
+						CreatedOnToolsVersion = 26.5;
+					};
 					F2E2ED742F4CA530008620D9 = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
@@ -288,6 +363,7 @@
 			targets = (
 				F2E2ED742F4CA530008620D9 /* Wrapper Application */,
 				F2E2ED7F2F4CA530008620D9 /* XPC Service */,
+				F20AAC992FD720220032F7FF /* kk-ai-helper */,
 			);
 		};
 /* End PBXProject section */
@@ -353,6 +429,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		F20AAC962FD720220032F7FF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F2E2ED712F4CA530008620D9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -370,6 +453,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		F20AACA42FD720480032F7FF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F20AAC992FD720220032F7FF /* kk-ai-helper */;
+			targetProxy = F20AACA32FD720480032F7FF /* PBXContainerItemProxy */;
+		};
 		F2E2ED832F4CA530008620D9 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F2E2ED7F2F4CA530008620D9 /* XPC Service */;
@@ -383,6 +471,37 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		F20AAC9E2FD720220032F7FF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		F20AAC9F2FD720220032F7FF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		F2E2EDB72F4CA530008620D9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -455,6 +574,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = MagicMove;
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "MagicMove/Wrapper Application/Wrapper Application-Bridging-Header.h";
 			};
 			name = Debug;
@@ -464,14 +584,23 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = keyframeless;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
-				CODE_SIGN_ENTITLEMENTS = "MagicMove/Wrapper Application/SandboxEntitlements.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Wrapper ApplicationRelease.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
+				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = NO;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				INFOPLIST_FILE = "MagicMove/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
@@ -479,6 +608,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
 				PRODUCT_NAME = MagicMove;
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "MagicMove/Wrapper Application/Wrapper Application-Bridging-Header.h";
 			};
 			name = Release;
@@ -619,6 +749,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		F20AACA02FD720220032F7FF /* Build configuration list for PBXNativeTarget "kk-ai-helper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F20AAC9E2FD720220032F7FF /* Debug */,
+				F20AAC9F2FD720220032F7FF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		F2E2ED702F4CA530008620D9 /* Build configuration list for PBXProject "MagicMove" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -650,6 +789,10 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		AA0000000000000000000002 /* KeyframelessAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KeyframelessAI;
+		};
+		F20AACA12FD7203B0032F7FF /* KeyframelessAI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KeyframelessAI;
 		};

@@ -4,10 +4,14 @@
  */
 
 import Foundation
+import os
 
-/// Local inference, behind a protocol so the engine is swappable. The default is
-/// `MLXLocalLLMRunner` - Apple's MLX, in-process (no helper / XPC / launch
-/// infrastructure). Plugins need no setup.
+private let llmLog = Logger(subsystem: "co.overpolish.keyframeless", category: "ai.helper")
+
+/// Local inference, behind a protocol so the engine is swappable. Two concrete
+/// runners ship: `SharedHelperRunner` (talks to one shared out-of-process helper
+/// over an app-group socket) and `MLXLocalLLMRunner` (Apple MLX, in-process).
+/// The right one is chosen automatically - see `LocalLLM.defaultRunner`.
 public protocol LocalLLMRunner: Sendable {
 	/// Run one chat completion against the on-demand-loaded local model.
 	/// - Parameters:
@@ -57,7 +61,48 @@ extension LocalLLMRunner {
 }
 
 public enum LocalLLM {
-	/// Defaults to the in-process MLX runner. Overridable for tests / alternate
-	/// engines. Load or inference failure surfaces as a thrown error at call time.
-	@MainActor public static var runner: LocalLLMRunner? = MLXLocalLLMRunner()
+	/// The active runner. Defaults per host (see `defaultRunner`); overridable for
+	/// tests / alternate engines. `nil` means local inference is unavailable and
+	/// the `.local` dispatch throws rather than runs.
+	@MainActor public static var runner: LocalLLMRunner? = defaultRunner()
+
+	/// Name of the helper executable, embedded in each client's bundle.
+	private static let helperName = "kk-ai-helper"
+
+	/// Pick the right engine for the current host:
+	/// - If the app-group socket is reachable (the `group.co.overpolish.keyframeless`
+	///   entitlement is present), use the SHARED out-of-process helper for EVERY
+	///   client - extension AND plugins. One helper process, one model load, serving
+	///   them all: it dodges the FCP workflow extension's ~1 GB cap AND stops each
+	///   plugin XPC instance from loading its own ~16 GB copy. The first client to
+	///   call spawns it from its own bundle; the rest connect over the socket.
+	/// - Otherwise (no app-group entitlement wired yet): the memory-capped extension
+	///   can't load MLX in-process, so local is disabled (nil); a plugin has the
+	///   headroom, so it falls back to the in-process MLX runner.
+	@MainActor static func defaultRunner() -> LocalLLMRunner? {
+		if let shared = SharedHelperRunner(helperLocator: { helperBinaryURL() }) {
+			llmLog.notice("LocalLLM: shared out-of-process helper (app-group)")
+			return shared
+		}
+		guard Bundle.main.bundleURL.pathExtension == "appex" else {
+			llmLog.notice("LocalLLM: in-process MLX (plugin, no app-group)")
+			return MLXLocalLLMRunner()
+		}
+		llmLog.error("LocalLLM: extension has no app-group socket; local disabled")
+		return nil
+	}
+
+	/// The helper executable embedded in THIS client's bundle (sandbox only allows
+	/// exec'ing in-bundle binaries). Resolved via the auxiliary-executable lookup,
+	/// with a direct Contents/MacOS fallback.
+	private static func helperBinaryURL() -> URL? {
+		let fm = FileManager.default
+		if let aux = Bundle.main.url(forAuxiliaryExecutable: helperName),
+			fm.fileExists(atPath: aux.path)
+		{
+			return aux
+		}
+		let direct = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/\(helperName)")
+		return fm.fileExists(atPath: direct.path) ? direct : nil
+	}
 }

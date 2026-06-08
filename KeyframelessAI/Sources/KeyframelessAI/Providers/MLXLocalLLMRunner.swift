@@ -14,9 +14,9 @@ import Tokenizers
 import os
 
 /// Timing log for local inference. Lands in the unified log; view in Console.app
-/// by filtering subsystem `com.overpolish.keyframeless` category `ai.local`
+/// by filtering subsystem `co.overpolish.keyframeless` category `ai.local`
 /// (the plugin runs as an XPC process, so also filter by that process name).
-private let localLog = Logger(subsystem: "com.overpolish.keyframeless", category: "ai.local")
+private let localLog = Logger(subsystem: "co.overpolish.keyframeless", category: "ai.local")
 
 /// In-process local inference via Apple's MLX. Loads the model once (cached
 /// across calls) and runs entirely inside the calling process - no helper, no
@@ -92,7 +92,7 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 		// reads as a hang. Replace it with an honest "Thinking…" once the model is
 		// actually generating. Only the local path hits this; cloud keeps its
 		// granular labels (its passes are fast HTTP calls).
-		await MainActor.run { AIDraftState.shared.routingStatus = AILoc("Thinking…") }
+		await LocalRunnerStatus.report(AILoc("Thinking"))
 
 		// Qwen3 non-thinking recommended sampling (temp 0.7 / top_p 0.8 / top_k 20).
 		// NOT greedy/low-temp - Qwen warns that degrades quality + repeats. The
@@ -180,7 +180,7 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 						throw RunnerError.unknownModel(modelID)
 					}
 					let container = try await loadContainer(model: model)
-					await MainActor.run { AIDraftState.shared.routingStatus = AILoc("Thinking…") }
+					await LocalRunnerStatus.report(AILoc("Thinking"))
 					let params = GenerateParameters(
 						maxTokens: 4096, temperature: 0.7, topP: 0.8, topK: 20)
 					let session = ChatSession(
@@ -242,21 +242,37 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 
 	private func loadContainer(model: LocalAIModel) async throws -> ModelContainer {
 		if let container, loadedRepoID == model.repoID { return container }
-		await MainActor.run { AIDraftState.shared.routingStatus = AILoc("Loading model…") }
+		await LocalRunnerStatus.report(AILoc("Loading model"))
 		// MoE/multimodal Gemma 4 must go through the VLM factory (its MoE blocks
 		// live there); dense text models use the default LLM loader.
 		let loaded: ModelContainer
+		let hub = Self.hubClient()
 		if model.usesVLMFactory {
 			loaded = try await VLMModelFactory.shared.loadContainer(
-				from: #hubDownloader(), using: #huggingFaceTokenizerLoader(),
+				from: #hubDownloader(hub), using: #huggingFaceTokenizerLoader(),
 				configuration: ModelConfiguration(id: model.repoID))
 		} else {
 			loaded = try await loadModelContainer(
-				from: #hubDownloader(), using: #huggingFaceTokenizerLoader(), id: model.repoID)
+				from: #hubDownloader(hub), using: #huggingFaceTokenizerLoader(), id: model.repoID)
 		}
 		container = loaded
 		loadedRepoID = model.repoID
 		return loaded
+	}
+
+	/// HubClient that loads from the SHARED app-group model cache so the host app
+	/// and the spawned helper find the model the clients downloaded - never
+	/// re-downloading. The host resolves the group container directly (it's
+	/// entitled); the spawned helper (which may not be) reads the `HF_HUB_CACHE`
+	/// the parent passed. Falls back to the default cache (e.g. in-process plugins).
+	private static func hubClient() -> HubClient {
+		if let dir = LocalAIHelperSocket.sharedModelCacheDir() {
+			return HubClient(cache: HubCache(cacheDirectory: dir))
+		}
+		if let env = ProcessInfo.processInfo.environment["HF_HUB_CACHE"], !env.isEmpty {
+			return HubClient(cache: HubCache(cacheDirectory: URL(fileURLWithPath: env)))
+		}
+		return HubClient()
 	}
 
 	/// Elapsed milliseconds since `start`, rounded, for timing logs.

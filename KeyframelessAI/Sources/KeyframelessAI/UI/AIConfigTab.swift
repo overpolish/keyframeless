@@ -79,7 +79,7 @@ struct AIConfigTab: View {
 		case .idle:
 			EmptyView()
 		case .validating:
-			Label(AILoc("Testing connection…"), systemImage: "ellipsis.circle")
+			Label(AILoc("Testing connection"), systemImage: "ellipsis.circle")
 				.font(.caption)
 				.foregroundStyle(Color.aiSecondaryText)
 		case .success:
