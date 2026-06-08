@@ -19,9 +19,14 @@ enum AIPlatform {
 	static let physicalMemoryGB: Int = Int(
 		ProcessInfo.processInfo.physicalMemory / 1_073_741_824)
 
-	/// Whether local inference is offered at all: Apple Silicon AND >=16 GB RAM.
-	/// Below 16 GB the smallest worthwhile model (Qwen 9B) leaves no headroom for
-	/// FCP and the quality isn't worth it - those users get the cloud (BYOK)
-	/// providers instead.
-	static let supportsLocal: Bool = isAppleSilicon && physicalMemoryGB >= 16
+	/// Minimum installed RAM to offer local inference. The catalog is all-MoE
+	/// (big-model quality at low compute, but ALL experts stay resident ~16 GB),
+	/// so 24 GB is the real floor: less than that swaps against FCP. Smaller dense
+	/// models were dropped (transform quality wasn't worth it). A hard gate, same
+	/// spirit as the Intel gate - under-spec machines use cloud (BYOK) instead;
+	/// that's a fundamental limitation of local LLMs, not a bug.
+	static let minLocalRAMGB = 24
+
+	/// Whether local inference is offered at all: Apple Silicon AND >= 24 GB RAM.
+	static let supportsLocal: Bool = isAppleSilicon && physicalMemoryGB >= minLocalRAMGB
 }

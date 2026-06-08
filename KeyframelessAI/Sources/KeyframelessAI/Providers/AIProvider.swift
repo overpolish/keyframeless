@@ -9,7 +9,7 @@ public enum AIProvider: String, CaseIterable, Identifiable, Sendable {
 	public var id: String { rawValue }
 
 	/// Cases offered to the user. Local is hidden unless the machine supports it
-	/// (Apple Silicon with >=16 GB RAM); otherwise only the cloud providers show.
+	/// (Apple Silicon with >= 24 GB RAM); otherwise only the cloud providers show.
 	public static var availableCases: [AIProvider] {
 		AIPlatform.supportsLocal ? allCases : allCases.filter { $0 != .local }
 	}

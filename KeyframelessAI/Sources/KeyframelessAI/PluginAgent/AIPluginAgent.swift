@@ -103,7 +103,7 @@ public final class AIPluginAgent: NSObject {
 		let classification = try await classify(
 			prompt: prompt, productContext: productContext, laneLabels: labels)
 		if classification.kind == "answer" {
-			let docs = await renderDocs()
+			let docs = await renderDocs(for: prompt)
 			let reply = try await answerQuestion(
 				prompt: prompt, productContext: productContext, docs: docs)
 			return AIPluginResult(answer: reply)

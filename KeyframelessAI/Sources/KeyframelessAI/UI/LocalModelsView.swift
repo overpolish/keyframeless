@@ -63,34 +63,54 @@ private struct LocalModelRow: View {
 				.frame(width: 6, height: 6)
 
 			VStack(alignment: .leading, spacing: 1) {
-				HStack(spacing: 6) {
-					Text(model.displayName)
-						.font(.system(size: 12, weight: isSelected ? .medium : .regular))
-						.foregroundStyle(isDownloaded ? Color.primary : Color.aiSecondaryText)
+				Text(model.displayName)
+					.font(.system(size: 12, weight: isSelected ? .medium : .regular))
+					.foregroundStyle(isDownloaded ? Color.primary : Color.aiSecondaryText)
+					.lineLimit(1)
+					.truncationMode(.tail)
+				Text(model.blurb)
+					.font(.system(size: 10))
+					.foregroundStyle(Color.aiSecondaryText)
+					.lineLimit(1)
+					.truncationMode(.tail)
+			}
+			.layoutPriority(1)
+
+			Spacer(minLength: 8)
+
+			if isDownloading {
+				// Downloading: progress ONLY. The fixed-size badges + the progress
+				// bar together overflow the row and collapse the (flexible) title,
+				// so we drop the badges here - the title keeps its space.
+				DownloadProgress(progress: store.downloadProgress, accent: accent) {
+					store.cancelDownload()
+				}
+			} else {
+				// Right-aligned badges, STACKED: "Recommended" on its own row above
+				// the size+RAM row. Three pills side-by-side are too wide and
+				// truncate the title/blurb; stacking halves the right-column width.
+				// Size + RAM are neutral (gray) badges (the gray matches the guide's
+				// "completed" chip); the green "Recommended" only shows on the
+				// best-fit model. Distinct icons disambiguate disk vs memory.
+				VStack(alignment: .trailing, spacing: 3) {
 					if model.id == LocalModelCatalog.recommendedModelID {
 						AIPillBadge(
 							label: AILoc("Recommended"),
 							systemImage: "desktopcomputer", color: .green)
 					}
-					Text(model.sizeDescription)
-						.font(.system(size: 10))
-						.foregroundStyle(Color.aiTertiaryText)
+					HStack(spacing: 4) {
+						AIPillBadge(
+							label: model.sizeDescription,
+							systemImage: "internaldrive", color: .secondary)
+						AIPillBadge(
+							label: "\(model.minRAMGB) GB",
+							systemImage: "memorychip", color: .secondary)
+					}
 				}
-				Text(model.blurb)
-					.font(.system(size: 10))
-					.foregroundStyle(Color.aiSecondaryText)
-					.fixedSize(horizontal: false, vertical: true)
-			}
-
-			Spacer(minLength: 8)
-
-			if isDownloading {
-				DownloadProgress(progress: store.downloadProgress, accent: accent) {
-					store.cancelDownload()
-				}
-			} else if !isDownloaded {
-				DownloadButton(accent: accent, disabled: store.downloadingModel != nil) {
-					Task { await store.download(model.id) }
+				if !isDownloaded {
+					DownloadButton(accent: accent, disabled: store.downloadingModel != nil) {
+						Task { await store.download(model.id) }
+					}
 				}
 			}
 		}
@@ -151,9 +171,11 @@ private struct DownloadButton: View {
 			HStack(spacing: 3) {
 				Image(systemName: "arrow.down.circle")
 				Text(AILoc("Download"))
+					.lineLimit(1)
 			}
 			.font(.system(size: 10))
 			.foregroundStyle(disabled ? Color.secondary : accent)
+			.fixedSize()
 		}
 		.buttonStyle(.plain)
 		.disabled(disabled)

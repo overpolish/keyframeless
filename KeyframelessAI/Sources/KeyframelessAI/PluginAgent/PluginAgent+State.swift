@@ -72,8 +72,15 @@ extension AIPluginAgent {
 	}
 
 	@MainActor
-	static func renderDocs() async -> String {
-		let entries = await AIKnowledgeRegistry.shared.allEntries()
+	static func renderDocs(for prompt: String) async -> String {
+		// Local models prefill slowly, so retrieve only the topics relevant to the
+		// prompt instead of dumping the whole knowledge base (a 10k-token jam costs
+		// ~70s of prefill on device). Cloud has fast prefill + a big context window,
+		// so it keeps the full docs for maximum answer quality.
+		let entries =
+			AIKeyState.shared.activeProvider == .local
+			? await AIKnowledgeRegistry.shared.relevantEntries(to: prompt, limit: 2)
+			: await AIKnowledgeRegistry.shared.allEntries()
 		guard !entries.isEmpty else { return "REFERENCE DOCS:\n(none registered)" }
 		let bySource = Dictionary(grouping: entries) { $0.source }
 		var out = "REFERENCE DOCS:\n"

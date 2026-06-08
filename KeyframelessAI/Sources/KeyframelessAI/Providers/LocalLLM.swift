@@ -25,6 +25,35 @@ public protocol LocalLLMRunner: Sendable {
 		jsonSchemaJSON: String?,
 		enableThinking: Bool
 	) async throws -> String
+
+	/// Stream a PLAIN-TEXT completion (an answer) token-by-token so the UI can
+	/// show the reply as it's written. No schema, no thinking - streaming only
+	/// makes sense for free-form answers (a structured/transform result is applied
+	/// atomically, so there's nothing to show mid-flight). Yields incremental
+	/// chunks; the consumer accumulates. Default: a single chunk via `complete`.
+	func completeStreaming(
+		modelID: String, system: String, user: String
+	) async -> AsyncThrowingStream<String, Error>
+}
+
+extension LocalLLMRunner {
+	public func completeStreaming(
+		modelID: String, system: String, user: String
+	) async -> AsyncThrowingStream<String, Error> {
+		AsyncThrowingStream { continuation in
+			Task {
+				do {
+					let text = try await complete(
+						modelID: modelID, system: system, user: user,
+						jsonSchemaJSON: nil, enableThinking: false)
+					continuation.yield(text)
+					continuation.finish()
+				} catch {
+					continuation.finish(throwing: error)
+				}
+			}
+		}
+	}
 }
 
 public enum LocalLLM {

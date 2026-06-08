@@ -18,7 +18,14 @@ public enum AIRouter {
 		selectedCount: Int,
 		productContext: String
 	) async throws -> AIIntent {
-		let entries = await AIKnowledgeRegistry.shared.allEntries()
+		// Local models prefill slowly: retrieve only the prompt-relevant topics
+		// rather than dumping the whole knowledge base (a 10k-token jam = ~70s of
+		// on-device prefill). Cloud keeps the full docs - fast prefill, big context.
+		let useLocal = await MainActor.run { AIKeyState.shared.activeProvider == .local }
+		let entries =
+			useLocal
+			? await AIKnowledgeRegistry.shared.relevantEntries(to: userPrompt, limit: 4)
+			: await AIKnowledgeRegistry.shared.allEntries()
 		let docsSection = Self.renderDocs(entries)
 
 		let system = """

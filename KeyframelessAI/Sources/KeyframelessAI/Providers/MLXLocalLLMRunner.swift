@@ -5,6 +5,7 @@
 
 import Foundation
 import HuggingFace
+import MLX
 import MLXHuggingFace
 import MLXLLM
 import MLXLMCommon
@@ -42,7 +43,35 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 	private var container: ModelContainer?
 	private var loadedRepoID: String?
 
-	public init() {}
+	/// A local "think" pass (reason freely, then grammar-format) roughly DOUBLES
+	/// each structured step - and verbose models (Qwen3 especially) ramble to the
+	/// token cap, so the reasoning pass alone can run ~50s on a 9B. Off by default:
+	/// one-shot structured output is usually fine and keeps the pipeline snappy.
+	/// Flip to true to trade speed for quality on hard prompts.
+	nonisolated(unsafe) static var thinkingEnabled = false
+
+	public init() {
+		Self.capCacheOnce()
+	}
+
+	/// MLX's buffer cache defaults to the FULL memory limit (~1.5x the device
+	/// working set), so during inference it accumulates many GB of freed-but-
+	/// retained buffers - a 4-bit 9B whose WEIGHTS are ~5 GB balloons to ~15 GB
+	/// resident (measured), which on a 24 GB unified-memory Mac (shared with FCP)
+	/// forces swap and was the cause of the swapping/thrash. Cap it to keep the
+	/// footprint near the live model size. Measured: 512 MB vs 2 GB made NO
+	/// difference to prefill/decode speed here, so we take the smaller footprint.
+	/// Only bounds RETAINED freed buffers, not live allocations; `memoryLimit`
+	/// untouched.
+	nonisolated(unsafe) private static var cacheCapped = false
+	private static func capCacheOnce() {
+		guard !cacheCapped else { return }
+		cacheCapped = true
+		let before = MLX.Memory.cacheLimit
+		MLX.Memory.cacheLimit = 512 * 1024 * 1024
+		localLog.notice(
+			"GPU cacheLimit \(before, privacy: .public) -> 512MB (bound footprint, avoid swap)")
+	}
 
 	public func complete(
 		modelID: String, system: String, user: String, jsonSchemaJSON: String?,
@@ -92,10 +121,12 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 		// hundred tokens, and an uncapped budget lets Qwen3 ramble for thousands of
 		// tokens - the difference between a snappy answer and a minute-long stall.
 		var formatSystem = system
-		if enableThinking {
-			// Qwen3 thinking-mode recommended sampling.
+		if enableThinking && Self.thinkingEnabled {
+			// Qwen3 thinking-mode recommended sampling. Budget capped HARD at 384:
+			// routing/timing reasoning fits in a couple hundred tokens, and Qwen3
+			// otherwise rambles straight to the cap (1024 tok ≈ 50s on a 9B).
 			let thinkParams = GenerateParameters(
-				maxTokens: 1024, temperature: 0.6, topP: 0.95, topK: 20)
+				maxTokens: 384, temperature: 0.6, topP: 0.95, topK: 20)
 			let thinker = ChatSession(
 				container,
 				instructions: system,
@@ -133,6 +164,40 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 			throw RunnerError.badJSON(String(result.raw.prefix(400)))
 		}
 		return json
+	}
+
+	/// Token-by-token plain-text generation for the answer path. Same setup as the
+	/// no-schema branch of `complete`, but yields each chunk as it's produced so
+	/// the popover can render the reply live (decode is ~30 tok/s, so a multi-
+	/// second answer appears as it's written instead of all at once at the end).
+	public func completeStreaming(
+		modelID: String, system: String, user: String
+	) async -> AsyncThrowingStream<String, Error> {
+		AsyncThrowingStream { continuation in
+			let task = Task {
+				do {
+					guard let model = LocalModelCatalog.model(id: modelID) else {
+						throw RunnerError.unknownModel(modelID)
+					}
+					let container = try await loadContainer(model: model)
+					await MainActor.run { AIDraftState.shared.routingStatus = AILoc("Thinking…") }
+					let params = GenerateParameters(
+						maxTokens: 4096, temperature: 0.7, topP: 0.8, topK: 20)
+					let session = ChatSession(
+						container, instructions: system, generateParameters: params,
+						additionalContext: ["enable_thinking": false])
+					for try await chunk in session.streamResponse(
+						to: user, images: [], videos: [])
+					{
+						continuation.yield(chunk)
+					}
+					continuation.finish()
+				} catch {
+					continuation.finish(throwing: error)
+				}
+			}
+			continuation.onTermination = { _ in task.cancel() }
+		}
 	}
 
 	private struct StructuredResult {
