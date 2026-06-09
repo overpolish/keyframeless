@@ -253,6 +253,33 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
                             fracB:b.time
                              tint:tint
                            rulerY:rulerY];
+    return;
+  }
+
+  // Leading / trailing hold: not an editable interval, so show its duration in
+  // gray (informational only) to match the gray line.
+  if (_hoverEdgeLabel) {
+    KKLane *lane = [self _animatableLaneForLabel:_hoverEdgeLabel];
+    if (!lane || lane.keyposes.count < 1)
+      return;
+    NSColor *gray = [[NSColor inspectorLabel] colorWithAlphaComponent:0.5];
+    if (_hoverEdgeLeading) {
+      [self _drawDurationPillInRect:g
+                             tracks:tracks
+                               lane:lane
+                              fracA:0.0
+                              fracB:lane.keyposes.firstObject.time
+                               tint:gray
+                             rulerY:rulerY];
+    } else {
+      [self _drawDurationPillInRect:g
+                             tracks:tracks
+                               lane:lane
+                              fracA:lane.keyposes.lastObject.time
+                              fracB:[self _lastFrameFrac]
+                               tint:gray
+                             rulerY:rulerY];
+    }
   }
 }
 
@@ -421,7 +448,11 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   // (tracks edge minus kPillW/2) so the lane line reaches under the t=0 /
   // t=1 pill's outer half - same edge the per-gap loop's first/last
   // segment will also be extended to below.
-  NSColor *flatColor = [neutral colorWithAlphaComponent:compAlpha];
+  // Leading (pre-first-pill) and trailing (post-last-pill) holds aren't gaps
+  // between two pills, so there's no draggable interval there - draw them gray
+  // to signal "not editable", distinct from the accent-coloured editable holds.
+  NSColor *flatColor =
+      [[NSColor inspectorLabel] colorWithAlphaComponent:compAlpha * 0.5];
   CGFloat leftEdge = NSMinX(tracks) - innerEdgePad;
   CGFloat rightEdge = NSMaxX(tracks) + innerEdgePad;
   if (firstX > leftEdge) {

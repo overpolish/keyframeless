@@ -134,6 +134,12 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSString *_hoverGapLabel;
   NSInteger _hoverGapAIdx;
 
+  // Hover over a non-editable leading (before first pill) / trailing (after
+  // last pill) hold: label of that lane (nil = not hovering an edge hold) and
+  // which end. Drives the gray informational duration readout.
+  NSString *_hoverEdgeLabel;
+  BOOL _hoverEdgeLeading;
+
   // Backing ivars for public properties - declared here so categories can
   // read/write them directly (auto-synthesized ivars aren't visible to
   // categories). Property synthesis in the core .m picks these up.

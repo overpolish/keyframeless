@@ -155,6 +155,8 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
   NSInteger row = [self _laneRowAtPoint:pt];
   NSString *gapLabel = nil;
   NSInteger gapAIdx = -1;
+  NSString *edgeLabel = nil;
+  BOOL edgeLeading = NO;
   if (row >= 0) {
     NSArray<KKLane *> *anim = [self _animatableLanes];
     NSRect tracks = [self _tracksRect];
@@ -169,16 +171,30 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
       if (aIdx >= 0) {
         gapLabel = lane.label;
         gapAIdx = aIdx;
+      } else if (lane.keyposes.count >= 1) {
+        // Before the first / after the last pill: a non-editable hold region.
+        if (frac < lane.keyposes.firstObject.time) {
+          edgeLabel = lane.label;
+          edgeLeading = YES;
+        } else if (frac > lane.keyposes.lastObject.time) {
+          edgeLabel = lane.label;
+          edgeLeading = NO;
+        }
       }
     }
   }
   BOOL gapChanged =
       ![gapLabel isEqualToString:_hoverGapLabel] || gapAIdx != _hoverGapAIdx;
-  if (row == _hoverLaneRow && !gapChanged)
+  BOOL edgeChanged = (edgeLabel != nil) != (_hoverEdgeLabel != nil) ||
+                     ![edgeLabel isEqualToString:_hoverEdgeLabel] ||
+                     (edgeLabel != nil && edgeLeading != _hoverEdgeLeading);
+  if (row == _hoverLaneRow && !gapChanged && !edgeChanged)
     return;
   _hoverLaneRow = row;
   _hoverGapLabel = gapLabel;
   _hoverGapAIdx = gapAIdx;
+  _hoverEdgeLabel = edgeLabel;
+  _hoverEdgeLeading = edgeLeading;
   [self setNeedsDisplay:YES];
 }
 
@@ -193,11 +209,12 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
 }
 
 - (void)mouseExited:(NSEvent *)event {
-  if (_hoverLaneRow == -1 && _hoverGapAIdx == -1)
+  if (_hoverLaneRow == -1 && _hoverGapAIdx == -1 && !_hoverEdgeLabel)
     return;
   _hoverLaneRow = -1;
   _hoverGapLabel = nil;
   _hoverGapAIdx = -1;
+  _hoverEdgeLabel = nil;
   [self setNeedsDisplay:YES];
 }
 
