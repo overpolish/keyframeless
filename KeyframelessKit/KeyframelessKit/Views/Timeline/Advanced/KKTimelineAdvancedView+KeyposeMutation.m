@@ -261,13 +261,15 @@
     return NO;
   KKKeyPose *dup = lane.keyposes[dupIdx];
   NSRect tracks = [self _tracksRect];
-  CGFloat dupX = [self _xForFrac:dup.time inTracks:tracks];
+  CGFloat dupX = [self _xForFrac:dup.time inLane:lane inTracks:tracks];
   NSInteger targetIdx = -1;
   CGFloat bestDist = kSnapInPx;
   for (NSInteger j = 0; j < (NSInteger)lane.keyposes.count; j++) {
     if (j == dupIdx)
       continue;
-    CGFloat x = [self _xForFrac:lane.keyposes[j].time inTracks:tracks];
+    CGFloat x = [self _xForFrac:lane.keyposes[j].time
+                         inLane:lane
+                       inTracks:tracks];
     CGFloat d = fabs(x - dupX);
     if (d < bestDist) {
       bestDist = d;

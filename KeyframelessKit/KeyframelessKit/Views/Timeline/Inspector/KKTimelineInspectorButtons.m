@@ -16,6 +16,7 @@ static const CGFloat kPlayIconSize = 11.0;
 static const CGFloat kResetIconSize = 11.0;
 static const CGFloat kClearIconSize = 11.0;
 static const CGFloat kOnionSkinIconSize = 11.0;
+static const CGFloat kDynamicIconSize = 11.0;
 
 NSButton *KKResetToDefaultButton(id target, SEL action) {
   NSImage *resetImg =
@@ -77,6 +78,9 @@ static NSImage *KKDetachImage(void) {
 }
 static NSImage *KKOnionSkinImage(void) {
   return KKSymbolImage(@"film", kOnionSkinIconSize);
+}
+static NSImage *KKDynamicImage(void) {
+  return KKSymbolImage(@"arrow.left.and.right", kDynamicIconSize);
 }
 
 // Shared body for the centred icon-only buttons (Loop / Play / Reset /
@@ -337,6 +341,34 @@ static void KKDrawCentredIcon(NSImage *tinted, NSRect bounds) {
 
 - (NSSize)intrinsicContentSize {
   return NSMakeSize(ceil(KKOnionSkinImage().size.width) + 2.5, 18.0);
+}
+
+@end
+
+@implementation KKDynamicButton
+
+- (BOOL)isFlipped {
+  return YES;
+}
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
+- (void)drawRect:(NSRect)dirtyRect {
+  NSColor *tint = _on ? [NSColor accentMatchingHost]
+                      : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
+  KKDrawCentredIcon(KKTintedImage(KKDynamicImage(), tint), self.bounds);
+}
+
+- (void)mouseDown:(NSEvent *)event {
+  _on = !_on;
+  [self setNeedsDisplay:YES];
+  if (_onToggled)
+    _onToggled(_on);
+}
+
+- (NSSize)intrinsicContentSize {
+  return NSMakeSize(ceil(KKDynamicImage().size.width) + 2.5, 18.0);
 }
 
 @end

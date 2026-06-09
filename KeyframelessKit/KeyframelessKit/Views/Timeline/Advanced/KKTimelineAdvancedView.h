@@ -37,6 +37,16 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) double frameDurationSeconds;
 @property(nonatomic) double playheadFraction;
 
+/// Opt-in "Dynamic" display warp. When OFF (default) the time axis is linear
+/// and pill positions are the real keypose times. When ON, each lane's
+/// intervals are warped so short transitions stay grabbable (every gap is at
+/// least one pill wide) and long holds compress - the warp is per-lane because
+/// lanes have independent keyposes, so the global playhead is replaced by a
+/// per-lane playback line. The ruler stays linear (real time) in both modes.
+/// Display-only: never written to the blob, render, or undo. Persisted as a
+/// global user preference.
+@property(nonatomic) BOOL dynamicDisplay;
+
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);

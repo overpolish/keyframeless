@@ -69,4 +69,12 @@ FOUNDATION_EXPORT NSButton *KKResetToDefaultButton(id target, SEL action);
 @property(nonatomic, copy, nullable) void (^onToggled)(BOOL isOn);
 @end
 
+/// "Dynamic" toggle (accent when `on`). Spread-arrows icon - turns on the
+/// Advanced timeline's non-linear lane display so short transitions stay
+/// grabbable. Display-only viewing aid (see KKTimelineAdvancedView).
+@interface KKDynamicButton : NSView
+@property(nonatomic) BOOL on;
+@property(nonatomic, copy, nullable) void (^onToggled)(BOOL isOn);
+@end
+
 NS_ASSUME_NONNULL_END

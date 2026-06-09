@@ -5,6 +5,12 @@
 
 #import "KKTimelineAdvancedView_Private.h"
 
+// Global user preference (not per-clip): the Dynamic display warp is a viewing
+// aid, so it persists across sessions and clips like a UI setting, never in the
+// timeline blob.
+static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
+    @"KKAdvancedDynamicDisplay";
+
 @implementation KKTimelineAdvancedView
 
 - (instancetype)initWithAvailableLanes:(NSArray<KKLane *> *)availableLanes
@@ -22,8 +28,20 @@
     _hoverLaneRow = -1;
     _hoverGapAIdx = -1;
     _zp = [[KKTimelineZoomPan alloc] init];
+    _dynamicDisplay = [[NSUserDefaults standardUserDefaults]
+        boolForKey:kKKAdvancedDynamicDisplayDefaultsKey];
   }
   return self;
+}
+
+- (void)setDynamicDisplay:(BOOL)dynamicDisplay {
+  if (_dynamicDisplay == dynamicDisplay)
+    return;
+  _dynamicDisplay = dynamicDisplay;
+  [[NSUserDefaults standardUserDefaults]
+      setBool:dynamicDisplay
+       forKey:kKKAdvancedDynamicDisplayDefaultsKey];
+  [self setNeedsDisplay:YES];
 }
 
 - (void)resetZoom {
@@ -146,7 +164,7 @@
     if (row < (NSInteger)anim.count && pt.x >= NSMinX(tracks) &&
         pt.x <= NSMaxX(tracks)) {
       KKLane *lane = anim[row];
-      double frac = [self _fracForX:pt.x inTracks:tracks];
+      double frac = [self _fracForX:pt.x inLane:lane inTracks:tracks];
       NSInteger aIdx = [self _intervalStartKPIdxInLane:lane atFrac:frac];
       if (aIdx >= 0) {
         gapLabel = lane.label;

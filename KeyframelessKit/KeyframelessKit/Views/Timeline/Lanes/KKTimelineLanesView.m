@@ -759,8 +759,23 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
         [s->_advancedGraph clearSelection];
     };
   }
+  if (!_dynamicButton) {
+    _dynamicButton = [[KKDynamicButton alloc] init];
+    _dynamicButton.translatesAutoresizingMaskIntoConstraints = NO;
+    _dynamicButton.toolTip =
+        KKLoc(@"Dynamic",
+              @"Toggle: non-linear timeline display so short transitions stay "
+              @"grabbable.");
+    __weak typeof(self) weakSelf = self;
+    _dynamicButton.onToggled = ^(BOOL isOn) {
+      __strong typeof(weakSelf) s = weakSelf;
+      if (s)
+        s->_advancedGraph.dynamicDisplay = isOn;
+    };
+  }
+  _dynamicButton.on = _advancedGraph.dynamicDisplay;
   _clearSelectionButton.enabled = (_advancedGraph.selectionCount > 0);
-  return @[ _clearSelectionButton ];
+  return @[ _dynamicButton, _clearSelectionButton ];
 }
 
 - (void)setRenderMode:(KKMiniViewerRenderMode)mode {
