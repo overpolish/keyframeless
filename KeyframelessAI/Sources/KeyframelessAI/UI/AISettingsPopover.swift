@@ -50,7 +50,7 @@ public struct AISettingsPopover: View {
 		self.isPluginMode = isPluginMode
 		self.onRun = onRun
 		self.onDismiss = onDismiss
-		let initial: Tab = AIKeyState.shared.hasAnyKey ? .action : .config
+		let initial: Tab = AIKeyState.shared.activeIsConfigured ? .action : .config
 		_tab = State(initialValue: initial)
 	}
 
@@ -59,7 +59,14 @@ public struct AISettingsPopover: View {
 			HStack(spacing: 8) {
 				tabBar
 				Spacer(minLength: 0)
-				SharedProviderPicker()
+				SharedProviderPicker { picked in
+					// Picking a provider that isn't set up yet (cloud with no
+					// key, or local with no model) drops the user on Config so
+					// they can finish setup.
+					if !keyState.configuredProviders.contains(picked) {
+						tab = .config
+					}
+				}
 			}
 			.padding(.horizontal, 12)
 			.padding(.top, 10)
@@ -84,7 +91,7 @@ public struct AISettingsPopover: View {
 			}
 			.padding(14)
 		}
-		.frame(width: 360)
+		.frame(width: 380)
 		.fixedSize(horizontal: false, vertical: true)
 		.animation(.easeInOut(duration: 0.18), value: tab)
 		.popoverGlassFix()
@@ -97,7 +104,9 @@ public struct AISettingsPopover: View {
 		HStack(spacing: 4) {
 			ForEach(Tab.allCases) { t in
 				let isSelected = tab == t
-				let isDisabled = (t == .action && !keyState.hasAnyKey)
+				// Action is unusable until the ACTIVE provider can actually run
+				// (cloud key present, or a local model downloaded + selected).
+				let isDisabled = (t == .action && !keyState.activeIsConfigured)
 				Button {
 					tab = t
 				} label: {
@@ -114,7 +123,7 @@ public struct AISettingsPopover: View {
 							Capsule().fill(Color.accentColor)
 						}
 					}
-					.foregroundStyle(isSelected ? Color.white : .secondary)
+					.foregroundStyle(isSelected ? Color.white : Color.aiSecondaryText)
 					.contentShape(Capsule())
 					.opacity(isDisabled ? 0.35 : 1)
 				}
@@ -128,6 +137,7 @@ public struct AISettingsPopover: View {
 struct SharedProviderPicker: View {
 	@StateObject private var keyState = AIKeyState.shared
 	@State private var showMenu = false
+	var onPick: (AIProvider) -> Void = { _ in }
 
 	var body: some View {
 		Button {
@@ -140,22 +150,23 @@ struct SharedProviderPicker: View {
 					.font(.system(size: 11, weight: .medium))
 				Image(systemName: "chevron.up.chevron.down")
 					.font(.system(size: 8))
-					.foregroundStyle(.tertiary)
+					.foregroundStyle(Color.aiTertiaryText)
 			}
 			.padding(.horizontal, 8)
 			.padding(.vertical, 4)
 			.background(Capsule().fill(Color.white.opacity(0.08)))
-			.foregroundStyle(.secondary)
+			.foregroundStyle(Color.aiSecondaryText)
 			.contentShape(Capsule())
 		}
 		.buttonStyle(.plain)
 		.popover(isPresented: $showMenu, arrowEdge: .bottom) {
 			VStack(alignment: .leading, spacing: 2) {
-				ForEach(AIProvider.allCases) { p in
+				ForEach(AIProvider.availableCases) { p in
 					let configured = keyState.configuredProviders.contains(p)
 					Button {
 						keyState.activeProvider = p
 						showMenu = false
+						onPick(p)
 					} label: {
 						HStack(spacing: 8) {
 							AIProviderLogo(provider: p)
@@ -163,12 +174,8 @@ struct SharedProviderPicker: View {
 							Text(p.displayName)
 								.font(.system(size: 12))
 							if !configured {
-								Text(AILoc("no key"))
-									.font(.system(size: 9))
-									.foregroundStyle(.tertiary)
-									.padding(.horizontal, 5)
-									.padding(.vertical, 1)
-									.background(Capsule().strokeBorder(Color.white.opacity(0.12)))
+								AIPillBadge(
+									label: p.requiresAPIKey ? AILoc("No key") : AILoc("No model"))
 							}
 							Spacer()
 							if p == keyState.activeProvider {

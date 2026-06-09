@@ -53,11 +53,11 @@
 }
 
 - (NSNotificationName)guideStepNotificationName {
-  return @"com.overpolish.kk.oscGuideStep";
+  return @"co.overpolish.kk.oscGuideStep";
 }
 
 - (NSNotificationName)guidePositionNotificationName {
-  return @"com.overpolish.kk.oscGuidePosition";
+  return @"co.overpolish.kk.oscGuidePosition";
 }
 
 - (NSInteger)guideStep {

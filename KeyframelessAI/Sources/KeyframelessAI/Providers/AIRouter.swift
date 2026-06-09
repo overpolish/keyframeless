@@ -18,7 +18,79 @@ public enum AIRouter {
 		selectedCount: Int,
 		productContext: String
 	) async throws -> AIIntent {
-		let entries = await AIKnowledgeRegistry.shared.allEntries()
+		let (system, userMessage) = await buildPrompt(
+			userPrompt, selectedCount: selectedCount, productContext: productContext)
+		let raw = try await AITransform.transform(
+			instruction: userMessage, text: "", overrideSystemPrompt: system)
+		return classify(raw)
+	}
+
+	/// Like `route`, but streams a Shape B (answer) reply into `onAnswerChunk` as
+	/// it's generated instead of returning it all at once. The decision is made from
+	/// the FIRST non-whitespace token: a transform always starts with `<TRANSFORM>`,
+	/// so a leading `<` means "buffer silently, it's a transform" and anything else
+	/// means "this is an answer, stream it". A transform never calls `onAnswerChunk`.
+	/// `onAnswerChunk` receives the cumulative answer text so far (already label-
+	/// stripped). Cloud providers don't stream token-by-token (the underlying call is
+	/// atomic), so there the answer arrives as a single final chunk - still correct,
+	/// just not incremental. The returned intent is authoritative; the final answer
+	/// reply equals the last streamed value.
+	public static func routeStreaming(
+		_ userPrompt: String,
+		selectedCount: Int,
+		productContext: String,
+		onAnswerChunk: @escaping @MainActor (String) -> Void
+	) async throws -> AIIntent {
+		let (system, userMessage) = await buildPrompt(
+			userPrompt, selectedCount: selectedCount, productContext: productContext)
+		let decision = DecisionBox()
+		let raw = try await AITransform.transformStreaming(
+			instruction: userMessage, text: "", overrideSystemPrompt: system
+		) { cumulative in
+			if decision.isTransform == nil {
+				decision.isTransform = firstShapeIsTransform(cumulative)
+			}
+			if decision.isTransform == false {
+				let shown = stripAnswerLabel(
+					cumulative.trimmingCharacters(in: .whitespacesAndNewlines))
+				await onAnswerChunk(shown)
+			}
+		}
+		return classify(raw)
+	}
+
+	/// nil until the first non-whitespace char arrives, then true if it's `<` (a
+	/// `<TRANSFORM>` tag is opening) else false (a Shape B answer).
+	private static func firstShapeIsTransform(_ cumulative: String) -> Bool? {
+		guard let first = cumulative.first(where: { !$0.isWhitespace }) else { return nil }
+		return first == "<"
+	}
+
+	private static func classify(_ raw: String) -> AIIntent {
+		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+		if let extracted = extractTransform(from: trimmed) {
+			return .transform(instruction: extracted)
+		}
+		return .answer(reply: stripAnswerLabel(trimmed))
+	}
+
+	/// Holds the streamed transform-vs-answer decision. A reference box so the
+	/// `@Sendable` streaming callback can flip it (the callback is invoked serially).
+	private final class DecisionBox: @unchecked Sendable {
+		var isTransform: Bool?
+	}
+
+	/// Builds the routing system prompt + user message. Local models prefill slowly,
+	/// so they get only the prompt-relevant docs (a 10k-token jam = ~70s on-device);
+	/// cloud keeps the full docs (fast prefill, big context).
+	private static func buildPrompt(
+		_ userPrompt: String, selectedCount: Int, productContext: String
+	) async -> (system: String, userMessage: String) {
+		let useLocal = await MainActor.run { AIKeyState.shared.activeProvider == .local }
+		let entries =
+			useLocal
+			? await AIKnowledgeRegistry.shared.relevantEntries(to: userPrompt, limit: 4)
+			: await AIKnowledgeRegistry.shared.allEntries()
 		let docsSection = Self.renderDocs(entries)
 
 		let system = """
@@ -55,20 +127,8 @@ public enum AIRouter {
 			\(docsSection)
 			"""
 
-		let userMessage =
-			"[\(selectedCount) item(s) selected]\n\n\(userPrompt)"
-
-		let raw = try await AITransform.transform(
-			instruction: userMessage,
-			text: "",
-			overrideSystemPrompt: system
-		)
-		let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-
-		if let extracted = extractTransform(from: trimmed) {
-			return .transform(instruction: extracted)
-		}
-		return .answer(reply: stripAnswerLabel(trimmed))
+		let userMessage = "[\(selectedCount) item(s) selected]\n\n\(userPrompt)"
+		return (system, userMessage)
 	}
 
 	private static func stripAnswerLabel(_ raw: String) -> String {

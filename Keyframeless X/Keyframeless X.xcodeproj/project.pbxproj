@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		F207778B2FA3FD7B00AA4E71 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = F207778A2FA3FD7B00AA4E71 /* FluidAudio */; };
+		F20AACB42FD728000032F7FF /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = F20AACB32FD728000032F7FF /* KeyframelessAI */; };
+		F20AACB82FD7281C0032F7FF /* kk-ai-helper in CopyFiles */ = {isa = PBXBuildFile; fileRef = F20AACAC2FD727B00032F7FF /* kk-ai-helper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		F23EEFDA2FC893D500AFBA1E /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = F23EEFD92FC893D500AFBA1E /* KeyframelessAI */; };
 		F274D93A2F6E7AC2001FE373 /* Profanity in Resources */ = {isa = PBXBuildFile; fileRef = F274D9392F6E7AC2001FE373 /* Profanity */; };
 		F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; };
@@ -18,6 +20,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		F20AACB52FD728100032F7FF /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = F29C84BE2F68205E0073B1A9 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F20AACAB2FD727B00032F7FF;
+			remoteInfo = "kk-ai-helper";
+		};
 		F29C84EB2F6820750073B1A9 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F29C84BE2F68205E0073B1A9 /* Project object */;
@@ -28,6 +37,25 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		F20AACAA2FD727B00032F7FF /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		F20AACB72FD728120032F7FF /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 6;
+			files = (
+				F20AACB82FD7281C0032F7FF /* kk-ai-helper in CopyFiles */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F28BD2322F68595000C5F6B7 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -53,6 +81,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F20AACAC2FD727B00032F7FF /* kk-ai-helper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "kk-ai-helper"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F274D9392F6E7AC2001FE373 /* Profanity */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Profanity; path = "Keyframeless X FCP/Resources/Profanity"; sourceTree = "<group>"; };
 		F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F29C84C62F68205E0073B1A9 /* Keyframeless X.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Keyframeless X.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -96,6 +125,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		F20AACAD2FD727B00032F7FF /* kk-ai-helper */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "kk-ai-helper";
+			sourceTree = "<group>";
+		};
 		F29C84C82F68205E0073B1A9 /* Keyframeless X */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "Keyframeless X";
@@ -112,6 +146,14 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		F20AACA92FD727B00032F7FF /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F20AACB42FD728000032F7FF /* KeyframelessAI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F29C84C32F68205E0073B1A9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -148,6 +190,7 @@
 				F274D9392F6E7AC2001FE373 /* Profanity */,
 				F29C84C82F68205E0073B1A9 /* Keyframeless X */,
 				F29C84E12F6820750073B1A9 /* Keyframeless X FCP */,
+				F20AACAD2FD727B00032F7FF /* kk-ai-helper */,
 				F28BD22E2F68595000C5F6B7 /* Frameworks */,
 				F29C84C72F68205E0073B1A9 /* Products */,
 			);
@@ -158,6 +201,7 @@
 			children = (
 				F29C84C62F68205E0073B1A9 /* Keyframeless X.app */,
 				F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */,
+				F20AACAC2FD727B00032F7FF /* kk-ai-helper */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -165,6 +209,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		F20AACAB2FD727B00032F7FF /* kk-ai-helper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F20AACB22FD727B00032F7FF /* Build configuration list for PBXNativeTarget "kk-ai-helper" */;
+			buildPhases = (
+				F20AACA82FD727B00032F7FF /* Sources */,
+				F20AACA92FD727B00032F7FF /* Frameworks */,
+				F20AACAA2FD727B00032F7FF /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				F20AACAD2FD727B00032F7FF /* kk-ai-helper */,
+			);
+			name = "kk-ai-helper";
+			packageProductDependencies = (
+				F20AACB32FD728000032F7FF /* KeyframelessAI */,
+			);
+			productName = "kk-ai-helper";
+			productReference = F20AACAC2FD727B00032F7FF /* kk-ai-helper */;
+			productType = "com.apple.product-type.tool";
+		};
 		F29C84C52F68205E0073B1A9 /* Keyframeless X */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F29C84D12F68205F0073B1A9 /* Build configuration list for PBXNativeTarget "Keyframeless X" */;
@@ -197,10 +264,12 @@
 				F29C84DD2F6820750073B1A9 /* Frameworks */,
 				F29C84DE2F6820750073B1A9 /* Resources */,
 				F28BD2322F68595000C5F6B7 /* Embed Frameworks */,
+				F20AACB72FD728120032F7FF /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				F20AACB62FD728100032F7FF /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F29C84E12F6820750073B1A9 /* Keyframeless X FCP */,
@@ -223,9 +292,12 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2630;
+				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2640;
 				TargetAttributes = {
+					F20AACAB2FD727B00032F7FF = {
+						CreatedOnToolsVersion = 26.5;
+					};
 					F29C84C52F68205E0073B1A9 = {
 						CreatedOnToolsVersion = 26.3;
 					};
@@ -261,6 +333,7 @@
 			targets = (
 				F29C84C52F68205E0073B1A9 /* Keyframeless X */,
 				F29C84DF2F6820750073B1A9 /* Keyframeless X FCP */,
+				F20AACAB2FD727B00032F7FF /* kk-ai-helper */,
 			);
 		};
 /* End PBXProject section */
@@ -284,6 +357,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		F20AACA82FD727B00032F7FF /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F29C84C22F68205E0073B1A9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -301,6 +381,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		F20AACB62FD728100032F7FF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F20AACAB2FD727B00032F7FF /* kk-ai-helper */;
+			targetProxy = F20AACB52FD728100032F7FF /* PBXContainerItemProxy */;
+		};
 		F29C84EC2F6820750073B1A9 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F29C84DF2F6820750073B1A9 /* Keyframeless X FCP */;
@@ -309,6 +394,34 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		F20AACB02FD727B00032F7FF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		F20AACB12FD727B00032F7FF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 		F29C84CF2F68205F0073B1A9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -438,13 +551,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = keyframeless;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_ENTITLEMENTS = "Keyframeless X/Keyframeless X.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -475,13 +588,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = keyframeless;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_ENTITLEMENTS = "Keyframeless X/Keyframeless X.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -515,13 +628,11 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = "Keyframeless X FCP/Keyframeless_X_FCP.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readwrite;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -565,6 +676,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
@@ -590,13 +702,11 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = "Keyframeless X FCP/Keyframeless_X_FCP.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readwrite;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -640,6 +750,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
@@ -660,6 +771,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		F20AACB22FD727B00032F7FF /* Build configuration list for PBXNativeTarget "kk-ai-helper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F20AACB02FD727B00032F7FF /* Debug */,
+				F20AACB12FD727B00032F7FF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		F29C84C12F68205E0073B1A9 /* Build configuration list for PBXProject "Keyframeless X" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -721,6 +841,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F20777892FA3FD7B00AA4E71 /* XCRemoteSwiftPackageReference "FluidAudio" */;
 			productName = FluidAudio;
+		};
+		F20AACB32FD728000032F7FF /* KeyframelessAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KeyframelessAI;
 		};
 		F23EEFD92FC893D500AFBA1E /* KeyframelessAI */ = {
 			isa = XCSwiftPackageProductDependency;

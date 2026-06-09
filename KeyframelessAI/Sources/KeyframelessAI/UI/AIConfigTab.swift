@@ -21,15 +21,23 @@ struct AIConfigTab: View {
 	private var provider: AIProvider { keyState.activeProvider }
 
 	var body: some View {
+		if provider == .local {
+			LocalModelsView()
+		} else {
+			keyEntryForm
+		}
+	}
+
+	private var keyEntryForm: some View {
 		VStack(alignment: .leading, spacing: 12) {
 			HStack(spacing: 8) {
 				Text(AILoc("API Key"))
 					.font(.system(size: 12, weight: .medium))
-					.foregroundStyle(.secondary)
+					.foregroundStyle(Color.aiSecondaryText)
 				SecureField(
 					savedKeyExists
 						? AILoc("Saved - paste to replace")
-						: AILoc("Paste \(provider.keyPrefixHint)…"),
+						: AILoc("Paste \(provider.keyPrefixHint ?? "")…"),
 					text: $keyInput
 				)
 				.textFieldStyle(.roundedBorder)
@@ -39,8 +47,10 @@ struct AIConfigTab: View {
 			statusLine
 
 			HStack {
-				Link(AILoc("Get a key"), destination: provider.keyConsoleURL)
-					.font(.caption)
+				if let consoleURL = provider.keyConsoleURL {
+					Link(AILoc("Get a key"), destination: consoleURL)
+						.font(.caption)
+				}
 				Spacer()
 				if savedKeyExists {
 					Button(AILoc("Delete"), role: .destructive) { delete() }
@@ -69,9 +79,9 @@ struct AIConfigTab: View {
 		case .idle:
 			EmptyView()
 		case .validating:
-			Label(AILoc("Testing connection…"), systemImage: "ellipsis.circle")
+			Label(AILoc("Testing connection"), systemImage: "ellipsis.circle")
 				.font(.caption)
-				.foregroundStyle(.secondary)
+				.foregroundStyle(Color.aiSecondaryText)
 		case .success:
 			Label(AILoc("Key works"), systemImage: "checkmark.circle.fill")
 				.font(.caption)

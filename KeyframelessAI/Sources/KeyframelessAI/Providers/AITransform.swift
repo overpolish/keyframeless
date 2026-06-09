@@ -8,6 +8,7 @@ import Foundation
 public enum AITransformError: LocalizedError {
 	case noActiveProvider
 	case noKey
+	case localUnavailable
 	case http(Int, String)
 	case decoding(String)
 	case empty
@@ -16,6 +17,8 @@ public enum AITransformError: LocalizedError {
 		switch self {
 		case .noActiveProvider: return "No AI provider configured"
 		case .noKey: return "Missing API key"
+		case .localUnavailable:
+			return AILoc("Couldn't reach the on-device model service.")
 		case .http(let code, let body): return "HTTP \(code): \(body)"
 		case .decoding(let msg): return "Couldn't read response: \(msg)"
 		case .empty: return "Empty response from provider"
@@ -24,6 +27,26 @@ public enum AITransformError: LocalizedError {
 }
 
 public enum AITransform {
+	/// Default system prompt for a plain text-transformation call (used when the
+	/// caller doesn't override it, e.g. the routing prompt does).
+	private static let defaultSystemPrompt = """
+		You are a text transformation function, not a conversational assistant.
+
+		Apply the user's instruction to the input text and output the result. \
+		Output ONLY the transformed text. No preamble, no quotes around the \
+		output, no commentary, no explanation, no apology, no questions back.
+
+		Rules:
+		- If the instruction is already satisfied (e.g. asked to translate to a \
+		language the text is already in), output the input text verbatim.
+		- If the instruction is unclear or impossible, output the input text \
+		verbatim. Do not explain.
+		- Never write phrases like "The text is already...", "Here is the...", \
+		"I cannot...". These are forbidden.
+		- Preserve word boundaries (spaces between words).
+		- Do not add or remove sentences unless the instruction explicitly says to.
+		"""
+
 	/// Run a user instruction (e.g. "translate to german", "fix capitalization")
 	/// against a plain-text input. Returns the transformed text only - no preamble,
 	/// no surrounding quotes, no commentary. Caller is responsible for re-aligning
@@ -35,31 +58,27 @@ public enum AITransform {
 		modelOverride: String? = nil
 	) async throws -> String {
 		let provider = await MainActor.run { AIKeyState.shared.activeProvider }
-		guard let key = try AIKeychain.load(provider) else { throw AITransformError.noKey }
 
-		let system =
-			overrideSystemPrompt ?? """
-				You are a text transformation function, not a conversational assistant.
-
-				Apply the user's instruction to the input text and output the result. \
-				Output ONLY the transformed text. No preamble, no quotes around the \
-				output, no commentary, no explanation, no apology, no questions back.
-
-				Rules:
-				- If the instruction is already satisfied (e.g. asked to translate to a \
-				language the text is already in), output the input text verbatim.
-				- If the instruction is unclear or impossible, output the input text \
-				verbatim. Do not explain.
-				- Never write phrases like "The text is already...", "Here is the...", \
-				"I cannot...". These are forbidden.
-				- Preserve word boundaries (spaces between words).
-				- Do not add or remove sentences unless the instruction explicitly says to.
-				"""
+		let system = overrideSystemPrompt ?? Self.defaultSystemPrompt
 
 		// Mark the system prompt as cacheable when it's big enough to be worth
 		// it. Anthropic charges 125% to write the cache and 10% to read, so the
 		// breakeven is one cache hit - only worth it when system is large.
 		let cacheSystem = system.utf8.count >= 4_000
+
+		if provider == .local {
+			let (runner, model) = await MainActor.run {
+				(LocalLLM.runner, LocalModelStore.shared.selectedModelID ?? "")
+			}
+			guard let runner else { throw AITransformError.localUnavailable }
+			return try await runner.complete(
+				modelID: model,
+				system: system,
+				user: "Instruction: \(instruction)\n\nText:\n\(text)",
+				jsonSchemaJSON: nil,
+				enableThinking: false)
+		}
+		guard let key = try AIKeychain.load(provider) else { throw AITransformError.noKey }
 
 		switch provider {
 		case .anthropic:
@@ -71,7 +90,50 @@ public enum AITransform {
 			return try await callOpenAI(
 				key: key, system: system, instruction: instruction, text: text,
 				model: modelOverride ?? "gpt-4o-mini")
+		case .local:
+			throw AITransformError.localUnavailable
 		}
+	}
+
+	/// Streaming sibling of `transform`. For the LOCAL provider it streams tokens
+	/// from the on-device model, invoking `onChunk` with the cumulative text so far
+	/// after each token, and returns the full text. For CLOUD providers (no SSE here)
+	/// it runs `transform` atomically and emits a single final chunk - same result,
+	/// just not incremental. `onChunk` is async so callers can hop to the main actor
+	/// to drive UI; it's awaited per token, so calls stay ordered.
+	public static func transformStreaming(
+		instruction: String,
+		text: String,
+		overrideSystemPrompt: String? = nil,
+		onChunk: @escaping @Sendable (String) async -> Void
+	) async throws -> String {
+		let provider = await MainActor.run { AIKeyState.shared.activeProvider }
+
+		if provider == .local {
+			let system = overrideSystemPrompt ?? Self.defaultSystemPrompt
+			let (runner, model) = await MainActor.run {
+				(LocalLLM.runner, LocalModelStore.shared.selectedModelID ?? "")
+			}
+			guard let runner else { throw AITransformError.localUnavailable }
+			var acc = ""
+			for try await chunk in await runner.completeStreaming(
+				modelID: model,
+				system: system,
+				user: "Instruction: \(instruction)\n\nText:\n\(text)")
+			{
+				acc += chunk
+				await onChunk(acc)
+			}
+			let trimmed = acc.trimmingCharacters(in: .whitespacesAndNewlines)
+			guard !trimmed.isEmpty else { throw AITransformError.empty }
+			return trimmed
+		}
+
+		// Cloud: no token streaming here - run atomically, emit one final chunk.
+		let full = try await transform(
+			instruction: instruction, text: text, overrideSystemPrompt: overrideSystemPrompt)
+		await onChunk(full)
+		return full
 	}
 
 	private static func callAnthropic(

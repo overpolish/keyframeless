@@ -7,7 +7,7 @@ public enum AIKeychainError: Error {
 }
 
 public enum AIKeychain {
-    private static let service = "com.overpolish.ai-keys"
+    private static let service = "co.overpolish.ai-keys"
 
     public static func save(_ key: String, for provider: AIProvider) throws {
         guard let data = key.data(using: .utf8) else {

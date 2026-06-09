@@ -31,10 +31,33 @@ extension AIPluginAgent {
 		let templateModulation: String
 	}
 
+	/// A plainly-phrased question (ends with "?", opens with a question word).
+	/// Routes straight to the answer path, skipping the classify LLM call - one
+	/// fewer ~100 tok/s prefill pass, and it avoids small models misrouting a
+	/// question to "mutation". Commands ("spin once", "move left") don't match, so
+	/// they still go through the classifier.
+	static func looksLikeQuestion(_ prompt: String) -> Bool {
+		let t = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard t.hasSuffix("?") else { return false }
+		let first = String(t.lowercased().prefix(while: { $0.isLetter }))
+		let qWords: Set<String> = [
+			"what", "whats", "how", "hows", "why", "when", "where", "who", "whos",
+			"which", "whose", "whom", "can", "could", "does", "do", "did", "is",
+			"are", "am", "was", "were", "will", "would", "should", "explain", "tell",
+		]
+		return qWords.contains(first)
+	}
+
 	@MainActor
 	static func classify(
 		prompt: String, productContext: String, laneLabels: [String]
 	) async throws -> Classification {
+		// Obvious questions bypass the (locally expensive) LLM router.
+		if looksLikeQuestion(prompt) {
+			return Classification(
+				kind: "answer", complexity: "simple", clarification: nil,
+				template: "none", templateLane: "", templateModulation: "")
+		}
 		let laneList =
 			laneLabels.isEmpty
 			? "(no lanes available)"
@@ -133,7 +156,13 @@ extension AIPluginAgent {
 			jsonSchema: schema,
 			modelOverride: AIKeyState.shared.activeProvider == .anthropic
 				? "claude-haiku-4-5-20251001"
-				: "gpt-4o-mini"
+				: "gpt-4o-mini",
+			// Cloud models route correctly in a single grammar-constrained pass.
+			// A small local model can't: it has to emit `kind` as its first token
+			// with no room to reason, and flips clear mutations to "answer". Give
+			// local the two-pass (reason freely, then format) treatment so routing
+			// is reliable - it's the decision the whole pipeline hinges on.
+			enableThinking: AIKeyState.shared.activeProvider == .local
 		)
 		let data = raw.data(using: .utf8) ?? Data()
 		let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] ?? [:]
@@ -161,6 +190,28 @@ extension AIPluginAgent {
 			or <...> style symbols; the answer is shown as plain text. If the docs \
 			don't cover the question, say so briefly.
 			"""
+		// Local: answer as PLAIN TEXT. Small models reliably write good prose but
+		// routinely fail to wrap it in a {answer:...} JSON envelope - which surfaces
+		// as "didn't return JSON" AND triggers a retry of the whole (slow) prefill,
+		// doubling latency for nothing. The prose IS the answer, so skip the wrapper.
+		if AIKeyState.shared.activeProvider == .local {
+			guard let runner = LocalLLM.runner else { throw AITransformError.localUnavailable }
+			let combined = docs.isEmpty ? system : (docs + "\n\n" + system)
+			let modelID = LocalModelStore.shared.selectedModelID ?? ""
+			// Stream the reply straight into the popover's answer card so the user
+			// reads it as it's written, rather than waiting for the whole thing.
+			AIDraftState.shared.pendingAnswer = nil
+			var acc = ""
+			for try await chunk in await runner.completeStreaming(
+				modelID: modelID, system: combined, user: prompt)
+			{
+				acc += chunk
+				AIDraftState.shared.pendingAnswer = acc
+			}
+			let final = MLXLocalLLMRunner.stripThink(acc)
+			AIDraftState.shared.pendingAnswer = final
+			return final
+		}
 		let schema: [String: Any] = [
 			"type": "object",
 			"additionalProperties": false,

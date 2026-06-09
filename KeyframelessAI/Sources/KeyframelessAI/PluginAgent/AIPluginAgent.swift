@@ -90,7 +90,7 @@ public final class AIPluginAgent: NSObject {
 		clipDurationSeconds: Double,
 		currentInspectorMode: String
 	) async throws -> AIPluginResult {
-		AIDraftState.shared.routingStatus = AILoc("Reading prompt…")
+		AIDraftState.shared.routingStatus = AILoc("Reading prompt")
 		// Pass 0a: classify. No docs in this prompt - classifier is just a
 		// router. If the answer path wins, Pass 0b loads docs and writes the
 		// reply. This keeps the mutation path (the hot path) cheap. We
@@ -103,7 +103,7 @@ public final class AIPluginAgent: NSObject {
 		let classification = try await classify(
 			prompt: prompt, productContext: productContext, laneLabels: labels)
 		if classification.kind == "answer" {
-			let docs = await renderDocs()
+			let docs = await renderDocs(for: prompt)
 			let reply = try await answerQuestion(
 				prompt: prompt, productContext: productContext, docs: docs)
 			return AIPluginResult(answer: reply)
@@ -134,7 +134,7 @@ public final class AIPluginAgent: NSObject {
 			return AIPluginResult(mutationJSON: templated)
 		}
 
-		AIDraftState.shared.routingStatus = AILoc("Planning timing…")
+		AIDraftState.shared.routingStatus = AILoc("Planning timing")
 		// Pass 1: timing. Thinking only when the classifier flagged the prompt
 		// as "complex" - simple template-matchable prompts don't need 4k
 		// reasoning tokens.
@@ -171,7 +171,7 @@ public final class AIPluginAgent: NSObject {
 		for (opIdx, op) in effectiveOperations.enumerated() {
 			let suffix = totalOps > 1 ? " (\(opIdx + 1)/\(totalOps))" : ""
 			let laneLabel = "\(op.lane)\(suffix)"
-			AIDraftState.shared.routingStatus = AILoc("Resolving \(laneLabel)…")
+			AIDraftState.shared.routingStatus = AILoc("Resolving \(laneLabel)")
 			let oldKeyposes = currentLanes[op.lane] ?? []
 			let oldIntervals = currentIntervals[op.lane] ?? []
 			async let valuesAsync = resolveValues(

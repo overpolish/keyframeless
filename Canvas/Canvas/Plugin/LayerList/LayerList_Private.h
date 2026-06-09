@@ -23,9 +23,9 @@ static const CGFloat kLayerBorderAlpha __attribute__((unused)) = 0.05;
 static const CGFloat kLayerGroupIndent __attribute__((unused)) = 18.0;
 
 static NSString *const _Nonnull kLayerDragType __attribute__((unused)) =
-    @"com.overpolish.canvas.layerDrag";
+    @"co.overpolish.canvas.layerDrag";
 static NSString *const _Nonnull kLayerDuplicateDragType
-    __attribute__((unused)) = @"com.overpolish.canvas.layerDuplicateDrag";
+    __attribute__((unused)) = @"co.overpolish.canvas.layerDuplicateDrag";
 
 @class KKCapStyleView;
 @class KKCustomGroupHeaderView;
