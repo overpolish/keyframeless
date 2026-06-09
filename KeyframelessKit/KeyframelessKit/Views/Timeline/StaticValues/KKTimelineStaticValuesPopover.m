@@ -425,24 +425,16 @@
       if (s->_rowAddToAnimatedHandler)
         s->_rowAddToAnimatedHandler(label);
     };
-  // Any component with unit "px" scales by the media size: even-index
-  // components (W/X-like) use media width; odd-index (H/Y-like) use height.
-  // Covers Crop (W,H,X,Y) and any plugin lane that declares px units (e.g.
-  // Position X/Y, Scale W/H). Returns 0 until the feed resolves, which the
-  // row treats as "fall back to raw norm".
-  NSArray<NSString *> *units = lane.componentUnits;
-  BOOL anyPx = NO;
-  for (NSString *u in units) {
-    if ([u isEqualToString:@"px"]) {
-      anyPx = YES;
-      break;
-    }
-  }
-  if (anyPx) {
+  // Lanes that opt into `componentsScaleWithMedia` store a normalised 0..1
+  // value but display it as pixels: even-index components (W/X-like) use media
+  // width; odd-index (H/Y-like) use height, with the inverse on typed input.
+  // Covers Crop (W,H,X,Y), Position X/Y, Anchor X/Y. The componentUnits string
+  // is cosmetic and does NOT drive this - a lane can show "px" while storing
+  // raw pixels (Glow Radius). Returns 0 until the feed resolves, which the row
+  // treats as "fall back to raw norm".
+  if (lane.componentsScaleWithMedia) {
     row.componentScale = ^double(NSInteger i) {
       __strong typeof(weak) s = weak;
-      if (i >= (NSInteger)units.count || ![units[i] isEqualToString:@"px"])
-        return 1.0;
       CGSize m = s ? s->_miniViewer.sourceMediaSize : CGSizeZero;
       double scale = (i % 2 == 0) ? m.width : m.height;
       return scale;

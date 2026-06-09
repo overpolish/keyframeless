@@ -5,10 +5,16 @@
 
 #pragma once
 
+#import "GlowInspectorView.h"
 #import "Plugin.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
+@class KKPlayheadPoller;
+
+// Render struct: every field a lane could feed. M1 fills radiusX/Y from the
+// Radius lane and the rest from the kGlowM1* fallbacks; later milestones
+// promote them to real lanes / mode params one at a time.
 typedef struct {
   float radiusX;
   float radiusY;
@@ -26,28 +32,40 @@ typedef struct {
   float threshold;
 } GlowPluginState;
 
+@interface GlowPlugin ()
+@property(nonatomic, weak, nullable) GlowInspectorView *inspectorView;
+@property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
+@property(nonatomic, strong, nullable) KKPlayheadPoller *playheadPoller;
+/// Returns a copy of `timeline` with every lane's lastKnownClipDuration set to
+/// the current effect duration (seconds). Must be called inside an action
+/// scope (FxTimingAPI resolves there).
+- (nullable KKTimeline *)timelineStampedWithClipDuration:
+    (nullable KKTimeline *)timeline;
+@end
+
 NS_ASSUME_NONNULL_BEGIN
 
 @interface GlowPlugin (Parameters)
 - (BOOL)addParametersWithError:(NSError **)error;
 @end
 
-@interface GlowPlugin (Visibility)
-- (void)updateParameterVisibilityAtTime:(CMTime)time;
-@end
-
-@interface GlowPlugin (Presets)
-- (void)applyPresetAtTime:(CMTime)time;
+@interface GlowPlugin (CustomUI)
+- (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED;
++ (NSArray<KKLane *> *)availableLanes;
 @end
 
 @interface GlowPlugin (Render)
+- (BOOL)scheduleInputs:(NSArray<FxImageTileRequest *> *_Nullable *_Nullable)
+                           inputImageRequests
+       withPluginState:(NSData *)pluginState
+                atTime:(CMTime)renderTime
+                 error:(NSError **)error;
 - (BOOL)pluginState:(NSData *_Nullable *_Nonnull)pluginState
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error;
-/// Computes per-frame Glow params at `time`. Used by both the normal
-/// render path (via pluginState:atTime:) and the motion blur sub-frame
-/// sample loop.
+/// Computes per-frame Glow params at `time`. Used by both the normal render
+/// path (via pluginState:atTime:) and the motion blur sub-frame sample loop.
 - (BOOL)glowParams:(GlowPluginState *)outParams
             atTime:(CMTime)time
              error:(NSError **)error;

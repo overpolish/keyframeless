@@ -94,16 +94,15 @@
 			membershipExceptions = (
 				"/Localized: Plugin/InfoPlist.strings",
 				"/Localized: Plugin/Localizable.strings",
-				Plugin/Glow.metal,
+				Plugin/Core/main.m,
+				Plugin/Core/Plugin.m,
+				"Plugin/Core/Plugin+CustomUI.m",
+				"Plugin/Core/Plugin+Parameters.m",
+				Plugin/Inspector/GlowInspectorView.m,
+				Plugin/Render/Glow.metal,
+				Plugin/Render/GlowMiniViewerRenderer.m,
+				"Plugin/Render/Plugin+Render.m",
 				Plugin/Info.plist,
-				Plugin/main.m,
-				Plugin/OSC.m,
-				Plugin/Plugin.m,
-				"Plugin/Plugin+CustomUI.m",
-				"Plugin/Plugin+Parameters.m",
-				"Plugin/Plugin+Render.m",
-				"Plugin/Plugin+Presets.m",
-				"Plugin/Plugin+Visibility.m",
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;
@@ -486,7 +485,7 @@
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
@@ -556,7 +555,7 @@
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;

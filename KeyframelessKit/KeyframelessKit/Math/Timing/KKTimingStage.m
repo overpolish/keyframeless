@@ -282,6 +282,7 @@
   c.aspectLinkable = _aspectLinkable;
   c.aspectLinked = _aspectLinked;
   c.integerValued = _integerValued;
+  c.componentsScaleWithMedia = _componentsScaleWithMedia;
   return c;
 }
 
@@ -313,6 +314,8 @@
     d[@"aspect_linked"] = @YES;
   if (_integerValued)
     d[@"integer_valued"] = @YES;
+  if (_componentsScaleWithMedia)
+    d[@"components_scale_with_media"] = @YES;
   return d;
 }
 
@@ -343,6 +346,7 @@
   l.aspectLinkable = [d[@"aspect_linkable"] boolValue];
   l.aspectLinked = [d[@"aspect_linked"] boolValue];
   l.integerValued = [d[@"integer_valued"] boolValue];
+  l.componentsScaleWithMedia = [d[@"components_scale_with_media"] boolValue];
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {
     NSMutableArray *kps = [NSMutableArray arrayWithCapacity:rawKps.count];

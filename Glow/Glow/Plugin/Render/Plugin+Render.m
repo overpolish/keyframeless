@@ -4,11 +4,11 @@
  */
 
 #import "Constants.h"
+#import "GlowMiniViewerRenderer.h"
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import <IOSurface/IOSurfaceObjC.h>
 #import <KeyframelessKit/KKDataBlob.h>
-#import <KeyframelessKit/KKEasing.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
 static const float kMaxBlurDimension = 2048.0f;
@@ -181,7 +181,6 @@ static void _encodeGlowPipeline(
       [mps encodeToCommandBuffer:cb
                    sourceTexture:bloomPrepTex
               destinationTexture:bloomBlurTex];
-      [mps release];
     }
   }
 
@@ -353,12 +352,31 @@ static void _texPairReturn(NSInteger idx) {
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 @implementation GlowPlugin (Render)
 
+- (BOOL)scheduleInputs:(NSArray<FxImageTileRequest *> *_Nullable *_Nullable)
+                           inputImageRequests
+       withPluginState:(NSData *)pluginState
+                atTime:(CMTime)renderTime
+                 error:(NSError **)error {
+  KKMotionBlurState mbState = {0};
+  if (pluginState.length >= sizeof(KKMotionBlurState))
+    [pluginState getBytes:&mbState length:sizeof(mbState)];
+  NSArray *reqs = KKBuildSourceRequests(
+      renderTime, mbState, GlowMiniViewerRequestPath, self.renderCache,
+      ^id(CMTime t) {
+        return [[FxImageTileRequest alloc]
+            initWithSource:kFxImageTileRequestSourceEffectClip
+                      time:t
+            includeFilters:YES
+               parameterID:0];
+      });
+  *inputImageRequests = reqs;
+  return YES;
+}
+
 - (BOOL)pluginState:(NSData **)pluginState
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error {
-  [self updateParameterVisibilityAtTime:renderTime];
-
   GlowPluginState params;
   if (![self glowParams:&params atTime:renderTime error:error])
     return NO;
@@ -367,14 +385,38 @@ static void _texPairReturn(NSInteger idx) {
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  KKMotionBlurState mbState =
-      [KKMotionBlur snapshotStateWithParameterAPI:paramAPI
-                                        timingAPI:timingAPI
-                                           atTime:renderTime];
+  NSString *mbJSON = KKReadCustomParamString(paramAPI, kKKParamMotionBlurData);
+  KKMotionBlurState mbState = [KKMotionBlur snapshotStateFromJSON:mbJSON
+                                                        timingAPI:timingAPI
+                                                           atTime:renderTime];
 
-  if (mbState.enabled && mbState.transitionsOnly &&
-      ![self multiStageAnyLaneInTransitionAtTime:renderTime]) {
-    mbState.enabled = false;
+  // Per-frame fire-mode gate. In transitions-only / value-changing modes, skip
+  // the multi-pass on frames where nothing relevant moves across the shutter.
+  if (mbState.enabled && mbState.mode != KKMotionBlurModeAlways) {
+    CMTime es = kCMTimeZero, dur = kCMTimeZero;
+    [timingAPI startTimeForEffect:&es];
+    [timingAPI durationTimeForEffect:&dur];
+    double durSec = CMTimeGetSeconds(dur);
+    if (durSec > 0) {
+      NSArray<NSValue *> *times = [KKMotionBlur sampleTimesForState:mbState
+                                                         renderTime:renderTime];
+      CMTime tEarliest = renderTime;
+      if (times.count)
+        [times.lastObject getValue:&tEarliest];
+      double fracEnd =
+          (CMTimeGetSeconds(renderTime) - CMTimeGetSeconds(es)) / durSec;
+      double fracStart =
+          (CMTimeGetSeconds(tEarliest) - CMTimeGetSeconds(es)) / durSec;
+      NSString *tlJSON =
+          KKReadCustomParamString(paramAPI, kKKParamTimelineData);
+      KKTimeline *tl =
+          tlJSON.length ? [KKTimeline timelineFromJSON:tlJSON] : nil;
+      if (![KKMotionBlur frameShouldBlurForMode:mbState.mode
+                                       timeline:tl
+                                      fracStart:fracStart
+                                        fracEnd:fracEnd])
+        mbState.enabled = NO;
+    }
   }
 
   // Layout: [KKMotionBlurState | N × GlowPluginState]. Sample 0 is at
@@ -414,149 +456,69 @@ static void _texPairReturn(NSInteger idx) {
     return NO;
   }
 
-  double radiusX = 100, radiusY = 100, intensity = 1.5, falloff = 1.0,
-         noise = 0.0;
-  [api getFloatValue:&radiusX fromParameter:kParamRadiusX atTime:renderTime];
-  [api getFloatValue:&radiusY fromParameter:kParamRadiusY atTime:renderTime];
-  [api getFloatValue:&intensity
-       fromParameter:kParamIntensity
-              atTime:renderTime];
-  [api getFloatValue:&falloff fromParameter:kParamFalloff atTime:renderTime];
-  double threshold = 0.0;
-  [api getFloatValue:&threshold
-       fromParameter:kParamThreshold
-              atTime:renderTime];
-  [api getFloatValue:&noise fromParameter:kParamNoise atTime:renderTime];
-  double noiseOffset = 0.0;
-  [api getFloatValue:&noiseOffset
-       fromParameter:kParamNoiseOffset
-              atTime:renderTime];
-  double noiseSpeed = 0.0;
-  [api getFloatValue:&noiseSpeed
-       fromParameter:kParamNoiseSpeed
-              atTime:renderTime];
-  double noiseSeedVal = CMTimeGetSeconds(renderTime) * noiseSpeed * 5.0;
+  NSString *timelineJSON = KKReadCustomParamString(api, kKKParamTimelineData);
+  KKTimeline *timeline =
+      timelineJSON.length ? [KKTimeline timelineFromJSON:timelineJSON] : nil;
 
-  double posX = 0.5, posY = 0.5;
-  [api getXValue:&posX
-             YValue:&posY
-      fromParameter:kParamPosition
-             atTime:renderTime];
-
-  int gradType = 0;
-  double gradAngle = 0;
-  [api getIntValue:&gradType
-      fromParameter:kParamGradientType
-             atTime:renderTime];
-  [api getFloatValue:&gradAngle
-       fromParameter:kParamGradientAngle
-              atTime:renderTime];
-
-  // Read lanes JSON inline + evaluate via the public eval function. Builds
-  // the same `label -> values` dict the legacy pump used to return so the
-  // downstream code below is unchanged.
-  NSString *lanesJSON = KKReadCustomParamString(api, kKKParamMultiStageData);
-  NSArray<KKTimingLane *> *lanes =
-      lanesJSON.length ? [KKTimingLane lanesFromJSON:lanesJSON] : nil;
-  CMTime effectStart2 = kCMTimeZero, effectDuration2 = kCMTimeZero;
-  id<FxTimingAPI_v4> timingAPI =
-      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  [timingAPI startTimeForEffect:&effectStart2];
-  [timingAPI durationTimeForEffect:&effectDuration2];
-  double durSec2 = CMTimeGetSeconds(effectDuration2);
-  double frac2 = (durSec2 > 0)
-                     ? MAX(0.0, MIN(1.0, (CMTimeGetSeconds(renderTime) -
-                                          CMTimeGetSeconds(effectStart2)) /
-                                             durSec2))
-                     : 0.0;
-  NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *multiStage =
-      [NSMutableDictionary dictionaryWithCapacity:lanes.count];
-  for (KKTimingLane *lane in lanes) {
-    if (!lane.enabled || !lane.propertyLabel.length)
-      continue;
-    NSArray<NSNumber *> *vals = KKTimingLaneValueAtFraction(lane, frac2);
-    if (vals.count > 0)
-      multiStage[lane.propertyLabel] = vals;
+  // Loop toggle (lives in the UI-state blob) drives the playhead poll wrap.
+  NSString *uiJSON = KKReadCustomParamString(api, kParamUIState);
+  if (uiJSON.length) {
+    NSDictionary *ui = [NSJSONSerialization
+        JSONObjectWithData:[uiJSON dataUsingEncoding:NSUTF8StringEncoding]
+                   options:0
+                     error:nil];
+    if ([ui isKindOfClass:[NSDictionary class]])
+      self.renderCache.loopEnabled = [ui[@"loopEnabled"] boolValue];
   }
 
-  KKColorResult *color = [self colorAtTime:renderTime];
-
-  simd_float3 finalColor = color.solidColor;
-  simd_float3 finalLUT[KK_GRADIENT_LUT_SIZE];
-
-  if (color.mode == KKColorModeGradient) {
-    if (color.gradientLUT)
-      memcpy(finalLUT, color.gradientLUT,
-             sizeof(simd_float3) * KK_GRADIENT_LUT_SIZE);
-    else
-      for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
-        finalLUT[i] = (simd_float3){1, 1, 1};
+  BOOL hasTiming = KKRefreshRenderCache(
+      self.apiManager, (KKTimelineInspectorView *)self.inspectorView,
+      self.renderCache);
+  double durSec = self.renderCache.effectDurSec;
+  double frac = hasTiming
+                    ? MAX(0.0, MIN(1.0, (CMTimeGetSeconds(renderTime) -
+                                         self.renderCache.effectStartSec) /
+                                            durSec))
+                    : 0.0;
+  // Live scrubber: render ticks stop ~1s before the clip end. Arm the
+  // self-terminating poll so it follows currentTime through the tail.
+  if (hasTiming) {
+    KKPlayheadPoller *poller = self.playheadPoller;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [poller ensureRunning];
+    });
   }
 
-  NSArray<NSNumber *> *msColor = multiStage[@"Color"];
-  if (color.mode == KKColorModeSolid && msColor.count >= 3) {
-    finalColor = (simd_float3){(float)msColor[0].doubleValue,
-                               (float)msColor[1].doubleValue,
-                               (float)msColor[2].doubleValue};
-  }
-
-  // Multi-stage gradient LUT: `[r0, g0, b0, r1, g1, b1, ...]` of length
-  // `3 * KK_GRADIENT_LUT_SIZE` - wins over the static gradient when present.
-  NSArray<NSNumber *> *msGradient = multiStage[@"Gradient"];
-  if (color.mode == KKColorModeGradient &&
-      msGradient.count == (NSUInteger)(KK_GRADIENT_LUT_SIZE * 3)) {
-    for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++) {
-      finalLUT[i] = (simd_float3){
-          (float)msGradient[i * 3 + 0].doubleValue,
-          (float)msGradient[i * 3 + 1].doubleValue,
-          (float)msGradient[i * 3 + 2].doubleValue,
-      };
+  // M1: only the Radius lane drives the render. Every other GlowPluginState
+  // field uses the kGlowM1* fallbacks until later milestones promote them to
+  // lanes / mode params. Radius is a 2-component aspect-linked lane [X, Y].
+  NSArray<NSNumber *> *radiusVals = nil;
+  for (KKLane *lane in timeline.lanes) {
+    if ([lane.label isEqualToString:@"Radius"]) {
+      radiusVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      break;
     }
   }
-
-  NSArray<NSNumber *> *msRadius = multiStage[@"Radius"];
-  NSArray<NSNumber *> *msIntensity = multiStage[@"Intensity"];
-  NSArray<NSNumber *> *msFalloff = multiStage[@"Falloff"];
-  NSArray<NSNumber *> *msNoise = multiStage[@"Noise"];
-  NSArray<NSNumber *> *msPosition = multiStage[@"Position"];
-  NSArray<NSNumber *> *msNoiseOffset = multiStage[@"N. Offset"];
-
-  double outRadiusX = msRadius.count >= 1 ? msRadius[0].doubleValue : radiusX;
-  double outRadiusY = msRadius.count >= 2 ? msRadius[1].doubleValue : radiusY;
-  double outIntensity =
-      msIntensity.count >= 1 ? msIntensity[0].doubleValue : intensity;
-  double outFalloff =
-      msFalloff.count >= 1 ? (1.0 + msFalloff[0].doubleValue) : (1.0 + falloff);
-  double outNoise = msNoise.count >= 1 ? msNoise[0].doubleValue : noise;
-  double outOffsetX =
-      (msPosition.count >= 1 ? msPosition[0].doubleValue : posX) - 0.5;
-  double outOffsetY =
-      (msPosition.count >= 2 ? msPosition[1].doubleValue : posY) - 0.5;
-  double outNoiseOffsetVal =
-      msNoiseOffset.count >= 1 ? msNoiseOffset[0].doubleValue : noiseOffset;
+  double rX = radiusVals.count >= 1 ? radiusVals[0].doubleValue : kGlowM1Radius;
+  double rY = radiusVals.count >= 2 ? radiusVals[1].doubleValue : rX;
 
   GlowPluginState state = {
-      .radiusX = (float)outRadiusX,
-      .radiusY = (float)outRadiusY,
-      .intensity = (float)outIntensity,
-      .falloff = (float)outFalloff,
-      .noise = (float)outNoise,
-      .noiseOffset = (float)outNoiseOffsetVal,
-      .offset = {(float)outOffsetX, (float)outOffsetY},
-      .glowColor = finalColor,
-      .colorMode = (int)color.mode,
-      .gradientType = gradType,
-      .gradientAngle = (float)gradAngle,
-      .noiseSeed = (float)noiseSeedVal,
-      .threshold = (float)threshold,
+      .radiusX = (float)rX,
+      .radiusY = (float)rY,
+      .intensity = kGlowM1Intensity,
+      .falloff = kGlowM1Falloff,
+      .noise = kGlowM1Noise,
+      .noiseOffset = kGlowM1NoiseOffset,
+      .offset = {0.0f, 0.0f},
+      .glowColor = {1.0f, 1.0f, 1.0f},
+      .colorMode = kGlowM1ColorMode,
+      .gradientType = kGlowM1GradientType,
+      .gradientAngle = kGlowM1GradientAngle,
+      .noiseSeed = kGlowM1NoiseSeed,
+      .threshold = kGlowM1Threshold,
   };
-
-  if (color.mode == KKColorModeGradient) {
-    memcpy(state.gradientLUT, finalLUT, sizeof(state.gradientLUT));
-  } else {
-    for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
-      state.gradientLUT[i] = state.glowColor;
-  }
+  for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
+    state.gradientLUT[i] = state.glowColor;
 
   *outParams = state;
   return YES;
@@ -636,11 +598,6 @@ static void _texPairReturn(NSInteger idx) {
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
-  [KKPlugin multiStageRenderTickForAPI:self.apiManager
-                                atTime:renderTime
-                                sender:self];
-  [KKPlugin colorSyncFromParams:self.apiManager];
-
   if (!pluginState ||
       pluginState.length <
           sizeof(KKMotionBlurState) + sizeof(GlowPluginState) ||
@@ -655,6 +612,19 @@ static void _texPairReturn(NSInteger idx) {
                                   userInfo:nil];
     return NO;
   }
+
+  // Mini-viewer source feed: publish the raw source per slot (single-slot =
+  // playhead, multi-slot = boundary preview / filmstrip / onion). The renderer
+  // applies the glow shader locally in the inspector process.
+  [self
+      kkPublishMiniViewerFeedForDestination:destinationImage
+                               sourceImages:sourceImages
+                             descriptorPath:GlowMiniViewerDescriptorPath
+                            boundaryReqSecs:self.renderCache.boundaryReqSecs
+                           boundaryReqFracs:self.renderCache.boundaryReqFracs
+                            multiSlotActive:self.renderCache.boundaryFeedActive
+                          changesOutputSize:YES
+                                 defaultTag:0.0];
 
   @autoreleasepool {
 

@@ -80,6 +80,7 @@ static NSString *_RoundedAILaneSchemaText(void) {
   crop.componentMin = @[ @0.0, @0.0, @-0.5, @-0.5 ];
   crop.componentMax = @[ @1.0, @1.0, @0.5, @0.5 ];
   crop.componentUnits = @[ @"px", @"px", @"px", @"px" ];
+  crop.componentsScaleWithMedia = YES; // stored 0..1, displayed as pixels
   [crop insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                         values:@[ @1.0, @1.0, @0.0, @0.0 ]]];
 

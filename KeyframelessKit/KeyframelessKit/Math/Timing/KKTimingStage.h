@@ -204,6 +204,17 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// `aspectLinkable`. Default NO.
 @property(nonatomic) BOOL integerValued;
 
+/// When YES the value-popover scales this lane's components by the media size
+/// for DISPLAY only: even-index components (W/X-like) by media width,
+/// odd-index (H/Y-like) by media height, with the inverse applied to typed
+/// input. The stored and rendered value is always raw - scaling never reaches
+/// the shader. Build-time metadata like `aspectLinkable`; default NO. Set this
+/// on lanes whose stored value is a normalised 0..1 fraction the user should
+/// see as pixels (Crop, Position, Anchor). The `componentUnits` string (e.g.
+/// @"px") is purely cosmetic and does NOT drive this - a lane can show a "px"
+/// suffix while storing/rendering absolute pixels (e.g. Glow's Radius).
+@property(nonatomic) BOOL componentsScaleWithMedia;
+
 + (instancetype)laneWithLabel:(NSString *)label;
 
 - (void)insertKeypose:(KKKeyPose *)keypose; // inserts maintaining time order

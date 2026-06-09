@@ -19,6 +19,7 @@
                          boundaryReqFracs:
                              (NSArray<NSNumber *> *)boundaryReqFracs
                           multiSlotActive:(BOOL)multiSlotActive
+                        changesOutputSize:(BOOL)changesOutputSize
                                defaultTag:(double)defaultTag {
   if (sourceImages.count == 0 || !destinationImage.ioSurface)
     return;
@@ -85,14 +86,19 @@
       continue;
     // FCP's project-library preview re-runs the effect into a browser-thumb
     // destination while passing the same source → aspect ping-pong. Gate on
-    // dest aspect matching the source within a generous tolerance.
-    FxRect dImg = destinationImage.imagePixelBounds;
-    int sW = sImg.right - sImg.left, sH = sImg.top - sImg.bottom;
-    int dW = dImg.right - dImg.left, dH = dImg.top - dImg.bottom;
-    double sAsp = (sH > 0) ? fabs((double)sW / (double)sH) : 0;
-    double dAsp = (dH > 0) ? fabs((double)dW / (double)dH) : 0;
-    if (sAsp > 0 && dAsp > 0 && fabs(sAsp - dAsp) > 0.05)
-      continue;
+    // dest aspect matching the source within a generous tolerance. SKIP this
+    // gate for bounds-expanding effects (changesOutputSize): their dest aspect
+    // legitimately differs from the source, so the gate would drop every frame
+    // and the feed would never publish (IOSurfaceLookup failures downstream).
+    if (!changesOutputSize) {
+      FxRect dImg = destinationImage.imagePixelBounds;
+      int sW = sImg.right - sImg.left, sH = sImg.top - sImg.bottom;
+      int dW = dImg.right - dImg.left, dH = dImg.top - dImg.bottom;
+      double sAsp = (sH > 0) ? fabs((double)sW / (double)sH) : 0;
+      double dAsp = (dH > 0) ? fabs((double)dW / (double)dH) : 0;
+      if (sAsp > 0 && dAsp > 0 && fabs(sAsp - dAsp) > 0.05)
+        continue;
+    }
     KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
     MTLPixelFormat pf =
         [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];

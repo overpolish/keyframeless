@@ -556,6 +556,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       fixed.componentUnits = tmpl.componentUnits;
       fixed.componentLabels = tmpl.componentLabels;
       fixed.componentLabelColors = tmpl.componentLabelColors;
+      fixed.componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
       lanes[presentIdx] = fixed;
       continue;
     }
@@ -566,6 +567,15 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.componentUnits = tmpl.componentUnits;
     lane.componentLabels = tmpl.componentLabels;
     lane.componentLabelColors = tmpl.componentLabelColors;
+    lane.componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
+    // Build-time metadata the template defines. A fresh lane must inherit these
+    // or it loses the template's defaults - e.g. `aspectLinked` (so an
+    // aspect-linkable lane like Radius/Scale starts LOCKED when the template
+    // says so), spatial-curve capability, and whole-number rounding.
+    lane.aspectLinkable = tmpl.aspectLinkable;
+    lane.aspectLinked = tmpl.aspectLinked;
+    lane.spatialCurvable = tmpl.spatialCurvable;
+    lane.integerValued = tmpl.integerValued;
     lane.enabled = NO; // constant until the dropdown makes it animatable
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                           values:[self _defaultValuesForLabel:

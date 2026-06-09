@@ -514,6 +514,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   position.componentMin = @[];
   position.componentMax = @[];
   position.componentUnits = @[ @"px", @"px" ];
+  position.componentsScaleWithMedia = YES; // stored 0..1, displayed as pixels
   position.componentLabels = @[ @"X", @"Y" ];
   // 2D spatial path: keyposes can be smooth (curved). Lights the per-keypose
   // corner/smooth toggle in the value popover and curves the motion path.
@@ -574,6 +575,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   anchor.componentMin = @[];
   anchor.componentMax = @[];
   anchor.componentUnits = @[ @"px", @"px" ];
+  anchor.componentsScaleWithMedia = YES; // stored 0..1, displayed as pixels
   anchor.componentLabels = @[ @"X", @"Y" ];
   [anchor insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
 
