@@ -227,6 +227,12 @@
                                            descMarkup:KKLoc(@"Play or pause",
                                                             @"Help shortcut.")],
                [KKHelpShortcut
+                   shortcutWithKeysMarkup:KKLoc(@"<kbd>⌘ ⌥</kbd> + click",
+                                                @"Shortcut keys.")
+                               descMarkup:KKLoc(@"Move the playhead there to "
+                                                @"preview",
+                                                @"Help shortcut.")],
+               [KKHelpShortcut
                    shortcutWithKeysMarkup:@"<kbd>⌘ Z</kbd> / <kbd>⌘ ⇧ Z</kbd>"
                                descMarkup:KKLoc(
                                               @"Undo / redo, including inside "

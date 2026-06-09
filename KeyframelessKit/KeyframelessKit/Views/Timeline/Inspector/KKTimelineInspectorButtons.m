@@ -354,6 +354,16 @@ static void KKDrawCentredIcon(NSImage *tinted, NSRect bounds) {
   return YES;
 }
 
+// Custom setter so a programmatic `on =` (the guide forcing/restoring Dynamic)
+// repaints the glyph - the synthesized setter wouldn't, leaving a stale icon
+// while the model is already correct.
+- (void)setOn:(BOOL)on {
+  if (_on == on)
+    return;
+  _on = on;
+  [self setNeedsDisplay:YES];
+}
+
 - (void)drawRect:(NSRect)dirtyRect {
   NSColor *tint = _on ? [NSColor accentMatchingHost]
                       : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
@@ -361,8 +371,7 @@ static void KKDrawCentredIcon(NSImage *tinted, NSRect bounds) {
 }
 
 - (void)mouseDown:(NSEvent *)event {
-  _on = !_on;
-  [self setNeedsDisplay:YES];
+  self.on = !_on;
   if (_onToggled)
     _onToggled(_on);
 }

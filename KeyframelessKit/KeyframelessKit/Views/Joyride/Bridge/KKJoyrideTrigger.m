@@ -130,6 +130,12 @@
   return [self _t:KKJoyrideTriggerTypePlayToggleEdge];
 }
 
++ (instancetype)dynamicToggled {
+  KKJoyrideTrigger *t = [self _t:KKJoyrideTriggerTypeDynamicToggled];
+  t->_intArg = -1; // either direction
+  return t;
+}
+
 - (instancetype)thenWaitFor:(KKJoyrideTrigger *)next {
   _next = next;
   return self;

@@ -187,6 +187,19 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
     (KKMiniViewerRenderMode mode);
 @property(nonatomic, copy, nullable) void (^onGuideFilmstripCellActivated)
     (double fraction);
+/// Fires when the Advanced toolbar's Dynamic toggle is clicked (`on` = its new
+/// state). The Advanced-timing guide wires this via the lanes binder to advance
+/// its Dynamic step.
+@property(nonatomic, copy, nullable) void (^onGuideDynamicToggled)(BOOL on);
+
+/// Screen rect of the Dynamic accessory button (for the guide's spotlight), or
+/// `NSZeroRect` if it isn't on screen yet. Only meaningful on the Advanced tab.
+- (NSRect)guideDynamicButtonScreenRect;
+
+/// Force the Dynamic display state, keeping the timeline and the toolbar glyph
+/// in lockstep (the guide forces it off at start and restores it on completion,
+/// so both must visibly track the value, not just the model).
+- (void)guideSetDynamicDisplay:(BOOL)on;
 
 /// Path to the mini-viewer source descriptor JSON the render side publishes.
 /// Threaded into the static-values popover so spatial lanes (Crop) can show a

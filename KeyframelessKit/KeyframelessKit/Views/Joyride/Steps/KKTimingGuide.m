@@ -176,27 +176,37 @@ static const CGFloat kDragSnapPx = 14.0;
 
 + (KKLane *)_seedLaneWithLabel:(NSString *)label
                      valueType:(NSInteger)valueType
-                        values:(NSArray<NSNumber *> *)values {
+                   startValues:(NSArray<NSNumber *> *)startValues
+                     endValues:(NSArray<NSNumber *> *)endValues {
   KKLane *lane = [KKLane laneWithLabel:label];
   lane.enabled = YES; // animatable
   lane.valueType = (KKLaneValueType)valueType;
   lane.keyposes = @[
-    [KKKeyPose keyposeAtTime:0.0 values:values],
-    [KKKeyPose keyposeAtTime:1.0 values:values],
+    [KKKeyPose keyposeAtTime:0.0 values:startValues],
+    [KKKeyPose keyposeAtTime:1.0 values:endValues],
   ];
   return lane;
 }
 
 + (KKTimeline *)advancedSeedTimelineForConfig:(KKTimingGuideConfig *)config {
   KKTimeline *tl = [KKTimeline timeline];
+  // Seed a real transition (start -> target) rather than a flat hold, so the
+  // demo timeline shows motion the user can retime - and so the Dynamic step
+  // has an actual transition to space out. Falls back to a flat hold if no
+  // target is configured.
+  NSArray<NSNumber *> *primaryEnd = config.primaryTargetValues.count
+                                        ? config.primaryTargetValues
+                                        : config.primarySeedValues;
   KKLane *primary = [self _seedLaneWithLabel:config.primaryLabel
                                    valueType:config.primaryValueType
-                                      values:config.primarySeedValues];
+                                 startValues:config.primarySeedValues
+                                   endValues:primaryEnd];
   NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
   if (config.secondaryLabel) {
     KKLane *secondary = [self _seedLaneWithLabel:config.secondaryLabel
                                        valueType:config.secondaryValueType
-                                          values:config.secondarySeedValues];
+                                     startValues:config.secondarySeedValues
+                                       endValues:config.secondarySeedValues];
     [lanes addObject:secondary];
   }
   [lanes addObject:primary];
@@ -618,9 +628,11 @@ static const CGFloat kDragSnapPx = 14.0;
   NSString *addLabel = config.secondaryLabel ?: config.primaryLabel;
 
   const NSInteger ixSwitch = 0, ixIntro = 1, ixCmdClick = 2, ixPopover = 3,
-                  ixDrag = 4, ixMarquee = 5, ixGroupDrag = 6, ixDone = 7;
+                  ixDrag = 4, ixMarquee = 5, ixGroupDrag = 6, ixDynamic = 7,
+                  ixOverview = 8, ixDone = 9;
   (void)ixSwitch;
   (void)ixIntro;
+  (void)ixOverview;
   (void)ixDone;
 
   KKJoyrideStep *sSwitch = [KKJoyrideStep
@@ -853,6 +865,29 @@ static const CGFloat kDragSnapPx = 14.0;
         return fabs(now - kGroupTargetFrac) <= kGroupSnapFrac;
       }];
 
+  KKJoyrideStep *sDynamic = [KKJoyrideStep
+      stepWithMessage:KKLoc(@"Tap <accent>Dynamic</accent> to space out short "
+                            @"transitions so they stay easy to grab on a long "
+                            @"clip.",
+                            @"Advanced timing guide: try the Dynamic display "
+                            @"toggle.")
+           targetView:nil];
+  sDynamic.spotlightCircular = YES;
+  sDynamic.targetScreenRect = ^NSRect {
+    __strong KKTimelineLanesView *l = weakLanes;
+    return l ? [l guideDynamicButtonScreenRect] : NSZeroRect;
+  };
+
+  KKJoyrideStep *sOverview = [KKJoyrideStep
+      stepWithMessage:KKLoc(@"Now you can see and edit every transition "
+                            @"<accent>without zooming in</accent>.",
+                            @"Advanced timing guide: Dynamic value (no zooming "
+                            @"to reach each transition).")
+           targetView:^NSView * {
+             return weakAdv;
+           }];
+  sOverview.showsNext = YES;
+
   KKJoyrideStep *sDone = [KKJoyrideStep
       stepWithMessage:KKLoc(@"That's <accent>Advanced</accent> timing: add "
                             @"keyposes anywhere and shape each one "
@@ -867,9 +902,14 @@ static const CGFloat kDragSnapPx = 14.0;
          advanceOn:[KKJoyrideTrigger staticValuesPopoverWillOpen]
          dismissOn:nil];
   [binder bindStep:sPopover atIndex:ixPopover advanceOn:nil dismissOn:nil];
+  [binder bindStep:sDynamic
+           atIndex:ixDynamic
+         advanceOn:[KKJoyrideTrigger dynamicToggled]
+         dismissOn:nil];
 
   return @[
-    sSwitch, sIntro, sCmdClick, sPopover, sDrag, sMarquee, sGroupDrag, sDone
+    sSwitch, sIntro, sCmdClick, sPopover, sDrag, sMarquee, sGroupDrag, sDynamic,
+    sOverview, sDone
   ];
 }
 

@@ -477,6 +477,12 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   NSInteger priorTab = self.activeTab;
   KKMiniViewerRenderMode priorRenderMode = self.basicLanesView.renderMode;
   self.basicLanesView.renderMode = KKMiniViewerRenderModeOff;
+  // Start with the Dynamic display OFF so the guide's Dynamic step demonstrates
+  // turning it ON; restore the user's choice on completion (mirrors the tab /
+  // render-mode restore - the setter persists, so this writes the prior value
+  // back).
+  BOOL priorDynamic = self.basicLanesView.advancedGraph.dynamicDisplay;
+  [self.basicLanesView guideSetDynamicDisplay:NO];
   KKJoyrideGuideHost *host = [self timingGuideHost];
   host.forwardsGestures = YES; // cmd-click + drag must reach the lane view
 
@@ -517,6 +523,7 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
           return;
         s.onGuideTabChanged = nil;
         s.basicLanesView.renderMode = priorRenderMode;
+        [s.basicLanesView guideSetDynamicDisplay:priorDynamic];
         if (priorTab != s.activeTab)
           [s setActiveTab:priorTab];
       }];
