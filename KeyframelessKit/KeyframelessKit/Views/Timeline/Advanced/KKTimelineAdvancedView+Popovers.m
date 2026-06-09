@@ -48,7 +48,7 @@
   // popover arrow lands on the pill body.
   NSRect tracks = [self _tracksRect];
   NSRect row = [self _rowRectForIndex:laneIdx count:lanes.count];
-  CGFloat x = [self _xForFrac:frac inTracks:tracks];
+  CGFloat x = [self _xForFrac:frac inLane:lane inTracks:tracks];
   CGFloat pillBot = NSMinY(row) + kPillInsetY;
   CGFloat pillTop = NSMaxY(row) - kPillInsetY;
   if (pillTop <= pillBot) {
@@ -245,8 +245,8 @@
     return;
   NSRect tracks = [self _tracksRect];
   NSRect row = [self _rowRectForIndex:animIdx count:anim.count];
-  CGFloat xA = [self _xForFrac:a.time inTracks:tracks];
-  CGFloat xB = [self _xForFrac:b.time inTracks:tracks];
+  CGFloat xA = [self _xForFrac:a.time inLane:anim[animIdx] inTracks:tracks];
+  CGFloat xB = [self _xForFrac:b.time inLane:anim[animIdx] inTracks:tracks];
   // When zoomed + scrolled, the gap's mathematical midpoint may sit outside
   // the visible scroll region OR under the label gutter (left of tracks).
   // NSPopover refuses to anchor to an offscreen view, and anchoring under

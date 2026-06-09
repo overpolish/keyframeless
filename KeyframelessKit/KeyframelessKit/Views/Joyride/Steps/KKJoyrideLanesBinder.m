@@ -132,6 +132,7 @@
     lanes.onGapPopoverCurveChanged = nil;
     lanes.onGuideRenderModeChanged = nil;
     lanes.onGuideFilmstripCellActivated = nil;
+    lanes.onGuideDynamicToggled = nil;
     KKTimelineBasicView *graph = lanes.basicGraph;
     graph.onPhaseToggled = nil;
     graph.onDiamondTapped = nil;
@@ -297,6 +298,16 @@
       return;
     [s _fireType:KKJoyrideTriggerTypeFilmstripCellActivated
           intArg:0
+         intArg2:0
+           label:nil];
+  };
+
+  lanes.onGuideDynamicToggled = ^(BOOL on) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    [s _fireType:KKJoyrideTriggerTypeDynamicToggled
+          intArg:on ? 1 : 0
          intArg2:0
            label:nil];
   };
@@ -562,6 +573,7 @@
   case KKJoyrideTriggerTypeDiamondTapped:
   case KKJoyrideTriggerTypeGapTapped:
   case KKJoyrideTriggerTypeRenderModeChanged:
+  case KKJoyrideTriggerTypeDynamicToggled:
   case KKJoyrideTriggerTypeMiniViewerViewTransformChanged:
     if (t.intArg >= 0 && t.intArg != intArg)
       return NO;

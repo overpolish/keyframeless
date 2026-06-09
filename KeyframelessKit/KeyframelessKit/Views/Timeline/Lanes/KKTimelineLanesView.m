@@ -759,8 +759,41 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
         [s->_advancedGraph clearSelection];
     };
   }
+  if (!_dynamicButton) {
+    _dynamicButton = [[KKDynamicButton alloc] init];
+    _dynamicButton.translatesAutoresizingMaskIntoConstraints = NO;
+    _dynamicButton.toolTip =
+        KKLoc(@"Dynamic",
+              @"Toggle: non-linear timeline display so short transitions stay "
+              @"grabbable.");
+    __weak typeof(self) weakSelf = self;
+    _dynamicButton.onToggled = ^(BOOL isOn) {
+      __strong typeof(weakSelf) s = weakSelf;
+      if (!s)
+        return;
+      s->_advancedGraph.dynamicDisplay = isOn;
+      if (s->_onGuideDynamicToggled)
+        s->_onGuideDynamicToggled(isOn);
+    };
+  }
+  _dynamicButton.on = _advancedGraph.dynamicDisplay;
   _clearSelectionButton.enabled = (_advancedGraph.selectionCount > 0);
-  return @[ _clearSelectionButton ];
+  return @[ _dynamicButton, _clearSelectionButton ];
+}
+
+- (NSRect)guideDynamicButtonScreenRect {
+  NSWindow *w = _dynamicButton.window;
+  if (!_dynamicButton || !w)
+    return NSZeroRect;
+  NSRect inWindow = [_dynamicButton convertRect:_dynamicButton.bounds
+                                         toView:nil];
+  return [w convertRectToScreen:inWindow];
+}
+
+- (void)guideSetDynamicDisplay:(BOOL)on {
+  _advancedGraph.dynamicDisplay = on; // persists + marks the timeline dirty
+  _dynamicButton.on = on;             // keep the toolbar glyph in sync
+  [_advancedGraph setNeedsDisplay:YES];
 }
 
 - (void)setRenderMode:(KKMiniViewerRenderMode)mode {

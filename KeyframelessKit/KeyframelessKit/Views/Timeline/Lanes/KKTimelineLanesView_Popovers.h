@@ -51,6 +51,9 @@ NS_ASSUME_NONNULL_BEGIN
   // _clearSelectionButton is lazily created and only included in the
   // accessoryButtons list while the Advanced tab is active.
   KKClearSelectionButton *_clearSelectionButton;
+  // Advanced-only non-linear display toggle, lazily created and surfaced in
+  // accessoryButtons alongside _clearSelectionButton.
+  KKDynamicButton *_dynamicButton;
   // Mini-viewer render mode (Off/Filmstrip/Onion). Drives the boundary
   // value popover's preview shape. The 3-way pill lives in the popover
   // header (KKTimelineLanesView+Helpers.m); the lanes view just owns the

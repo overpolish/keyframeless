@@ -40,11 +40,19 @@
       [cands addObject:@(l.keyposes[j].time)];
     }
   }
+  // Under the warp, snap is measured in the DRAGGED lane's visual space (other
+  // lanes' pills sit at different x, so cross-lane snapping aligns times, not
+  // pixels). Project candidates through that lane's warp; linear otherwise.
+  KKLane *dragLane =
+      _dynamicDisplay ? [self _animatableLaneForLabel:skipLane] : nil;
   __weak typeof(self) weakSelf = self;
   return KKTimelineSnapFracInPixels(
       x, rawFrac, cands,
       ^CGFloat(double frac) {
-        return [weakSelf _xForFrac:frac inTracks:tracks];
+        __strong typeof(weakSelf) s = weakSelf;
+        if (dragLane)
+          return [s _xForFrac:frac inLane:dragLane inTracks:tracks];
+        return [s _xForFrac:frac inTracks:tracks];
       },
       kSnapInPx, &_dragSnapFrac);
 }
@@ -81,11 +89,32 @@
   _optPressOnEmpty = NO;
   _eraserActive = NO;
   _eraserLaneRow = -1;
+  _scrubLaneLabel = nil;
   [_dragOriginTimes removeAllObjects];
+  _dragFrozenLaneTimes = nil;
   NSInteger laneIdx = -1, kpIdx = -1;
   BOOL hitPill = [self _pillAtPoint:pt lane:&laneIdx kp:&kpIdx];
 
   [self.window makeFirstResponder:self];
+
+  // cmd+opt anywhere (even on a pill) = "scrub to here" for quick preview.
+  // Checked before the other opt/cmd gestures so it always wins. Lane-aware so
+  // the time lands where the cursor sits under the warp; drags keep scrubbing.
+  if (cmdKey && optKey) {
+    NSRect tracks = [self _tracksRect];
+    NSInteger row = [self _laneRowAtPoint:pt];
+    NSArray<KKLane *> *anim = [self _animatableLanes];
+    KKLane *lane = (row >= 0 && row < (NSInteger)anim.count) ? anim[row] : nil;
+    double frac = lane ? [self _fracForX:pt.x inLane:lane inTracks:tracks]
+                       : [self _fracForX:pt.x inTracks:tracks];
+    _scrubbing = YES;
+    _scrubLaneLabel = lane ? [lane.label copy] : nil;
+    _playheadFraction = frac;
+    [self setNeedsDisplay:YES];
+    if (self.onScrub)
+      self.onScrub([self _deliveredScrubFracFromVisual:frac]);
+    return;
+  }
 
   if (optKey && hitPill) {
     KKLane *lane = [self _animatableLanes][laneIdx];
@@ -120,7 +149,10 @@
     NSInteger row = [self _laneRowAtPoint:pt];
     if (row >= 0) {
       NSRect tracks = [self _tracksRect];
-      double frac = [self _fracForX:pt.x inTracks:tracks];
+      NSArray<KKLane *> *anim = [self _animatableLanes];
+      KKLane *lane = (row < (NSInteger)anim.count) ? anim[row] : nil;
+      double frac = lane ? [self _fracForX:pt.x inLane:lane inTracks:tracks]
+                         : [self _fracForX:pt.x inTracks:tracks];
       [self _addAndOpenKPForLaneIdx:row atFrac:frac];
       return;
     }
@@ -145,7 +177,7 @@
       pt.x <= NSMaxX(tracksForGap)) {
     NSArray<KKLane *> *anim = [self _animatableLanes];
     NSRect tracks = tracksForGap;
-    double frac = [self _fracForX:pt.x inTracks:tracks];
+    double frac = [self _fracForX:pt.x inLane:anim[gapLane] inTracks:tracks];
     NSInteger aIdx = [self _intervalStartKPIdxInLane:anim[gapLane] atFrac:frac];
     if (shiftKey && aIdx >= 0) {
       NSString *gKey = [self _gapKeyForLabel:anim[gapLane].label aIdx:aIdx];
@@ -232,15 +264,37 @@
           }
         }
         NSRect tracks = [self _tracksRect];
-        _dragOriginFrac = [self _fracForX:_pressPoint.x inTracks:tracks];
+        if (_dynamicDisplay) {
+          KKLane *pressLane = [self _animatableLaneForLabel:_pressLaneLabel];
+          _dragFrozenLaneTimes =
+              pressLane ? [self _laneKeyposeTimes:pressLane] : nil;
+          _dragOriginFrac = [self _frozenDragFracForX:_pressPoint.x
+                                             inTracks:tracks];
+        } else {
+          _dragOriginFrac = [self _fracForX:_pressPoint.x inTracks:tracks];
+        }
       }
     }
     NSRect tracks = [self _tracksRect];
-    double newFrac = [self _fracForX:pt.x inTracks:tracks];
     if (_dragOriginTimes.count > 0) {
-      double delta = newFrac - _dragOriginFrac;
+      // Selection drag: invert through the frozen warp so the group doesn't
+      // creep as its members move (the live warp depends on their positions).
+      double cur = _dynamicDisplay
+                       ? [self _frozenDragFracForX:pt.x inTracks:tracks]
+                       : [self _fracForX:pt.x inTracks:tracks];
+      double delta = cur - _dragOriginFrac;
       [self _moveSelectionByDelta:delta];
     } else {
+      double newFrac;
+      if (_dynamicDisplay) {
+        KKLane *pressLane = [self _animatableLaneForLabel:_pressLaneLabel];
+        newFrac = [self _dragFracForX:pt.x
+                               inLane:pressLane
+                        draggingKPIdx:_pressKPIdx
+                             inTracks:tracks];
+      } else {
+        newFrac = [self _fracForX:pt.x inTracks:tracks];
+      }
       newFrac = [self _snappedDragFracForX:pt.x
                                       frac:newFrac
                                   inTracks:tracks
@@ -270,7 +324,16 @@
   if (!_scrubbing)
     return;
   NSRect tracks = [self _tracksRect];
-  double frac = [self _snappedScrubFracForX:pt.x inTracks:tracks];
+  double frac;
+  if (_scrubLaneLabel) {
+    // cmd+opt lane scrub: invert through the lane's warp (free, no snap) so the
+    // time follows the cursor where the user is looking.
+    KKLane *lane = [self _animatableLaneForLabel:_scrubLaneLabel];
+    frac = lane ? [self _fracForX:pt.x inLane:lane inTracks:tracks]
+                : [self _snappedScrubFracForX:pt.x inTracks:tracks];
+  } else {
+    frac = [self _snappedScrubFracForX:pt.x inTracks:tracks];
+  }
   _playheadFraction = frac;
   [self setNeedsDisplay:YES];
   if (self.onScrub)
@@ -319,6 +382,7 @@
       _dragActive = NO;
       _dragSnapFrac = NAN;
       [_dragOriginTimes removeAllObjects];
+      _dragFrozenLaneTimes = nil;
       [self setNeedsDisplay:YES];
       if (self.onDragEnd)
         self.onDragEnd();
@@ -374,6 +438,7 @@
     return;
   }
   _scrubbing = NO;
+  _scrubLaneLabel = nil;
 }
 
 - (void)_addPillsInRect:(NSRect)rect
@@ -387,7 +452,9 @@
       continue;
     KKLane *lane = anim[i];
     for (NSInteger j = 0; j < (NSInteger)lane.keyposes.count; j++) {
-      CGFloat x = [self _xForFrac:lane.keyposes[j].time inTracks:tracks];
+      CGFloat x = [self _xForFrac:lane.keyposes[j].time
+                           inLane:lane
+                         inTracks:tracks];
       if (x >= NSMinX(rect) && x <= NSMaxX(rect))
         [sel addObject:[self _selectionKeyForLabel:lane.label kpIdx:j]];
     }
@@ -405,8 +472,12 @@
       continue;
     KKLane *lane = anim[i];
     for (NSInteger j = 0; j + 1 < (NSInteger)lane.keyposes.count; j++) {
-      CGFloat xA = [self _xForFrac:lane.keyposes[j].time inTracks:tracks];
-      CGFloat xB = [self _xForFrac:lane.keyposes[j + 1].time inTracks:tracks];
+      CGFloat xA = [self _xForFrac:lane.keyposes[j].time
+                            inLane:lane
+                          inTracks:tracks];
+      CGFloat xB = [self _xForFrac:lane.keyposes[j + 1].time
+                            inLane:lane
+                          inTracks:tracks];
       CGFloat mid = (xA + xB) * 0.5;
       if (mid >= NSMinX(rect) && mid <= NSMaxX(rect))
         [sel addObject:[self _gapKeyForLabel:lane.label aIdx:j]];

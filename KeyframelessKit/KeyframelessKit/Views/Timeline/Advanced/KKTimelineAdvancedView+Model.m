@@ -286,6 +286,7 @@
       if (_topKPIdx < 0 || _topKPIdx >= (NSInteger)lanes[i].keyposes.count)
         break;
       CGFloat x = [self _xForFrac:lanes[i].keyposes[_topKPIdx].time
+                           inLane:lanes[i]
                          inTracks:tracks];
       if (fabs(pt.x - x) <= halfHit) {
         *outLaneIdx = i;
@@ -301,7 +302,9 @@
       continue;
     KKLane *lane = lanes[i];
     for (NSInteger j = (NSInteger)lane.keyposes.count - 1; j >= 0; j--) {
-      CGFloat x = [self _xForFrac:lane.keyposes[j].time inTracks:tracks];
+      CGFloat x = [self _xForFrac:lane.keyposes[j].time
+                           inLane:lane
+                         inTracks:tracks];
       if (fabs(pt.x - x) <= halfHit) {
         *outLaneIdx = i;
         *outKPIdx = j;

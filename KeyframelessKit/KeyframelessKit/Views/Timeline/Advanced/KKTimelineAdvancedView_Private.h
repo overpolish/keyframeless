@@ -68,6 +68,10 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   KKTimeline *_timeline;
   BOOL _scrubbing;
   double _snappedScrubFrac;
+  // Non-nil while a cmd+opt "scrub to here" gesture is active: the lane the
+  // press landed in, so the drag keeps inverting the cursor through that lane's
+  // warp (free, unsnapped) instead of the linear ruler mapping.
+  NSString *_scrubLaneLabel;
   NSView *_popoverAnchor;
 
   NSString *_pressLaneLabel;
@@ -95,6 +99,11 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 
   NSMutableDictionary<NSString *, NSNumber *> *_dragOriginTimes;
   double _dragOriginFrac;
+
+  // Snapshot of the pressed lane's keypose times, captured at the start of a
+  // multi-selection drag so the cursor->frac mapping stays stable under the
+  // Dynamic warp while the whole group moves (see -_frozenDragFracForX:).
+  NSArray<NSNumber *> *_dragFrozenLaneTimes;
 
   NSInteger _lastEmittedSelectionCount;
 
@@ -125,12 +134,19 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSString *_hoverGapLabel;
   NSInteger _hoverGapAIdx;
 
+  // Hover over a non-editable leading (before first pill) / trailing (after
+  // last pill) hold: label of that lane (nil = not hovering an edge hold) and
+  // which end. Drives the gray informational duration readout.
+  NSString *_hoverEdgeLabel;
+  BOOL _hoverEdgeLeading;
+
   // Backing ivars for public properties - declared here so categories can
   // read/write them directly (auto-synthesized ivars aren't visible to
   // categories). Property synthesis in the core .m picks these up.
   double _clipDurationSeconds;
   double _frameDurationSeconds;
   double _playheadFraction;
+  BOOL _dynamicDisplay;
   BOOL _interactionsBlocked;
   void (^_onSelectionChanged)(void);
 }
@@ -150,6 +166,27 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (NSRect)_tracksRect;
 - (CGFloat)_xForFrac:(double)frac inTracks:(NSRect)t;
 - (double)_fracForX:(CGFloat)x inTracks:(NSRect)t;
+// Fraction of the last renderable frame; the warp + linear projections map the
+// data domain [0, lastFrameFrac] onto the full track width.
+- (double)_lastFrameFrac;
+// Lane-aware projection (KKTimelineAdvancedView+Warp.m): when dynamicDisplay is
+// ON each lane's intervals are warped so short transitions stay grabbable;
+// falls back to the linear -_xForFrac:inTracks: when OFF / lane has < 2
+// keyposes. The ruler + scrub keep using the linear variant.
+- (CGFloat)_xForFrac:(double)frac inLane:(KKLane *)lane inTracks:(NSRect)t;
+- (double)_fracForX:(CGFloat)x inLane:(KKLane *)lane inTracks:(NSRect)t;
+// Cursor->frac while dragging the single keypose `kpIdx` in `lane`: bisects
+// the warp so the dragged pill tracks the cursor without ping. Linear fallback
+// when dynamicDisplay is OFF.
+- (double)_dragFracForX:(CGFloat)x
+                 inLane:(KKLane *)lane
+          draggingKPIdx:(NSInteger)kpIdx
+               inTracks:(NSRect)t;
+// Cursor->frac during a multi-selection drag, via the frozen pressed-lane warp
+// snapshot (_dragFrozenLaneTimes). Linear fallback when OFF / no snapshot.
+- (double)_frozenDragFracForX:(CGFloat)x inTracks:(NSRect)t;
+// Pressed-lane keypose times as NSNumbers (for the frozen-warp snapshot).
+- (NSArray<NSNumber *> *)_laneKeyposeTimes:(KKLane *)lane;
 - (CGFloat)_rowHeightForCount:(NSInteger)n;
 - (NSRect)_rowRectForIndex:(NSInteger)i count:(NSInteger)n;
 // Largest valid _scrollY: total row height minus the visible tracks height
@@ -178,6 +215,7 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 // Drawing - drawRect helpers (see +Drawing.m).
 - (void)_drawDurationPillInRect:(NSRect)g
                          tracks:(NSRect)tracks
+                           lane:(KKLane *)lane
                           fracA:(double)fracA
                           fracB:(double)fracB
                            tint:(NSColor *)tint

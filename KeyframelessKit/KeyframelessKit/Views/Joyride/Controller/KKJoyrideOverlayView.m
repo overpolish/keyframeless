@@ -49,6 +49,13 @@
                        if (add.count)
                          [s addAttributes:add range:r];
                      }];
+  // Word-wrap so long messages break onto multiple lines when the bubble caps
+  // its width (see kJTipMaxTextW), instead of clipping or truncating.
+  NSMutableParagraphStyle *ps = [[NSMutableParagraphStyle alloc] init];
+  ps.lineBreakMode = NSLineBreakByWordWrapping;
+  [s addAttribute:NSParagraphStyleAttributeName
+            value:ps
+            range:NSMakeRange(0, s.length)];
   _attributedMessage = s;
 }
 

@@ -18,6 +18,9 @@ static const CGFloat kJTipArrowH = 6.0;
 static const CGFloat kJTipArrowHalfW = 5.0;
 static const CGFloat kJTipRowGap = 6.0;
 static const CGFloat kJTipBottomRowH = 18.0;
+// Cap the message width so a long sentence wraps instead of stretching into one
+// very wide tooltip; the bubble grows in height instead.
+static const CGFloat kJTipMaxTextW = 300.0;
 
 @implementation _KKJoyrideOverlayView (Drawing)
 
@@ -140,7 +143,15 @@ static const CGFloat kJTipBottomRowH = 18.0;
 }
 
 - (void)_drawBubbleAnchoredAt:(NSRect)paddedSpot {
-  NSSize textSz = _attributedMessage ? [_attributedMessage size] : NSZeroSize;
+  // Measure the wrapped text: cap the width at kJTipMaxTextW so a long sentence
+  // breaks onto multiple lines (height grows) instead of one very wide bubble.
+  NSSize textSz = NSZeroSize;
+  if (_attributedMessage) {
+    NSRect tb = [_attributedMessage
+        boundingRectWithSize:NSMakeSize(kJTipMaxTextW, CGFLOAT_MAX)
+                     options:NSStringDrawingUsesLineFragmentOrigin];
+    textSz = NSMakeSize(ceil(NSWidth(tb)), ceil(NSHeight(tb)));
+  }
 
   BOOL hasSteps = _step > 0 && _totalSteps > 0;
   NSString *stepStr = hasSteps
@@ -211,7 +222,9 @@ static const CGFloat kJTipBottomRowH = 18.0;
 
   [self _drawBubble:bubbleRect arrowX:NSMidX(paddedSpot) drawBelow:drawBelow];
   [_attributedMessage
-      drawAtPoint:NSMakePoint(bubbleX + kJTipPadH, bubbleY + kJTipPadV)];
+      drawWithRect:NSMakeRect(bubbleX + kJTipPadH, bubbleY + kJTipPadV,
+                              textSz.width, textSz.height)
+           options:NSStringDrawingUsesLineFragmentOrigin];
 
   if (hasSteps) {
     CGFloat bottomRowTop = bubbleY + kJTipPadV + textSz.height + kJTipRowGap;

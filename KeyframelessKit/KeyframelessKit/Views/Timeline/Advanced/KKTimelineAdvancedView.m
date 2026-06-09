@@ -5,6 +5,12 @@
 
 #import "KKTimelineAdvancedView_Private.h"
 
+// Global user preference (not per-clip): the Dynamic display warp is a viewing
+// aid, so it persists across sessions and clips like a UI setting, never in the
+// timeline blob.
+static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
+    @"KKAdvancedDynamicDisplay";
+
 @implementation KKTimelineAdvancedView
 
 - (instancetype)initWithAvailableLanes:(NSArray<KKLane *> *)availableLanes
@@ -22,8 +28,20 @@
     _hoverLaneRow = -1;
     _hoverGapAIdx = -1;
     _zp = [[KKTimelineZoomPan alloc] init];
+    _dynamicDisplay = [[NSUserDefaults standardUserDefaults]
+        boolForKey:kKKAdvancedDynamicDisplayDefaultsKey];
   }
   return self;
+}
+
+- (void)setDynamicDisplay:(BOOL)dynamicDisplay {
+  if (_dynamicDisplay == dynamicDisplay)
+    return;
+  _dynamicDisplay = dynamicDisplay;
+  [[NSUserDefaults standardUserDefaults]
+      setBool:dynamicDisplay
+       forKey:kKKAdvancedDynamicDisplayDefaultsKey];
+  [self setNeedsDisplay:YES];
 }
 
 - (void)resetZoom {
@@ -137,6 +155,8 @@
   NSInteger row = [self _laneRowAtPoint:pt];
   NSString *gapLabel = nil;
   NSInteger gapAIdx = -1;
+  NSString *edgeLabel = nil;
+  BOOL edgeLeading = NO;
   if (row >= 0) {
     NSArray<KKLane *> *anim = [self _animatableLanes];
     NSRect tracks = [self _tracksRect];
@@ -146,21 +166,35 @@
     if (row < (NSInteger)anim.count && pt.x >= NSMinX(tracks) &&
         pt.x <= NSMaxX(tracks)) {
       KKLane *lane = anim[row];
-      double frac = [self _fracForX:pt.x inTracks:tracks];
+      double frac = [self _fracForX:pt.x inLane:lane inTracks:tracks];
       NSInteger aIdx = [self _intervalStartKPIdxInLane:lane atFrac:frac];
       if (aIdx >= 0) {
         gapLabel = lane.label;
         gapAIdx = aIdx;
+      } else if (lane.keyposes.count >= 1) {
+        // Before the first / after the last pill: a non-editable hold region.
+        if (frac < lane.keyposes.firstObject.time) {
+          edgeLabel = lane.label;
+          edgeLeading = YES;
+        } else if (frac > lane.keyposes.lastObject.time) {
+          edgeLabel = lane.label;
+          edgeLeading = NO;
+        }
       }
     }
   }
   BOOL gapChanged =
       ![gapLabel isEqualToString:_hoverGapLabel] || gapAIdx != _hoverGapAIdx;
-  if (row == _hoverLaneRow && !gapChanged)
+  BOOL edgeChanged = (edgeLabel != nil) != (_hoverEdgeLabel != nil) ||
+                     ![edgeLabel isEqualToString:_hoverEdgeLabel] ||
+                     (edgeLabel != nil && edgeLeading != _hoverEdgeLeading);
+  if (row == _hoverLaneRow && !gapChanged && !edgeChanged)
     return;
   _hoverLaneRow = row;
   _hoverGapLabel = gapLabel;
   _hoverGapAIdx = gapAIdx;
+  _hoverEdgeLabel = edgeLabel;
+  _hoverEdgeLeading = edgeLeading;
   [self setNeedsDisplay:YES];
 }
 
@@ -175,11 +209,12 @@
 }
 
 - (void)mouseExited:(NSEvent *)event {
-  if (_hoverLaneRow == -1 && _hoverGapAIdx == -1)
+  if (_hoverLaneRow == -1 && _hoverGapAIdx == -1 && !_hoverEdgeLabel)
     return;
   _hoverLaneRow = -1;
   _hoverGapLabel = nil;
   _hoverGapAIdx = -1;
+  _hoverEdgeLabel = nil;
   [self setNeedsDisplay:YES];
 }
 

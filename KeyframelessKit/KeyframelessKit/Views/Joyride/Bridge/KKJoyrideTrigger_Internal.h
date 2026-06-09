@@ -29,6 +29,7 @@ typedef NS_ENUM(NSInteger, KKJoyrideTriggerType) {
   KKJoyrideTriggerTypeFilmstripCellActivated,
   KKJoyrideTriggerTypeMiniViewerOptHide,
   KKJoyrideTriggerTypePlayToggleEdge,
+  KKJoyrideTriggerTypeDynamicToggled,
 };
 
 @interface KKJoyrideTrigger ()

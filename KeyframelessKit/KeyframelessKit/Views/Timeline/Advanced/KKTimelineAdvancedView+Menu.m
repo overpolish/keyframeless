@@ -33,7 +33,7 @@
     NSRect tracks = [self _tracksRect];
     if (row >= 0 && row < (NSInteger)anim.count && pt.x >= NSMinX(tracks) &&
         pt.x <= NSMaxX(tracks)) {
-      double frac = [self _fracForX:pt.x inTracks:tracks];
+      double frac = [self _fracForX:pt.x inLane:anim[row] inTracks:tracks];
       NSInteger aIdx = [self _intervalStartKPIdxInLane:anim[row] atFrac:frac];
       _menuGapLabel = [anim[row].label copy];
       _menuGapAIdx = aIdx;

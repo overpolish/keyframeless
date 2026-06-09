@@ -41,6 +41,7 @@ Snapping: a small guide line appears when a dragged keypose comes within a few p
 ### Playback while editing
 
 - Spacebar plays or pauses FCP's playhead so you can scrub through your animation without leaving the inspector.
+- Cmd-Option-click anywhere on a lane (even on a pill) jumps the playhead to that moment for a quick preview, and Cmd-Option-drag scrubs continuously. It works the same in the linear and Dynamic views; in Dynamic the time lands where the cursor sits in that lane's warped layout.
 - Cmd-Z and Cmd-Shift-Z undo and redo any edit, including ones made inside popovers.
 
 ### Inside popovers

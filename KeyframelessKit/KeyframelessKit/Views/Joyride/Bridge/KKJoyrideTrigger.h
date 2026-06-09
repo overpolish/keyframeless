@@ -81,6 +81,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// currentTime the way an inferred play state would inside a guide.
 + (instancetype)playToggleEdge;
 
+/// Fires when the Advanced toolbar's Dynamic display toggle is clicked (either
+/// direction - the step just wants the user to try it).
++ (instancetype)dynamicToggled;
+
 #pragma mark - Combinators
 
 /// Arms when `self` fires while the step is active; advances only after

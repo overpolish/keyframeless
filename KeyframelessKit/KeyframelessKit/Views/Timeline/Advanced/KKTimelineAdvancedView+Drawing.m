@@ -151,6 +151,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 
 - (void)_drawDurationPillInRect:(NSRect)g
                          tracks:(NSRect)tracks
+                           lane:(KKLane *)lane
                           fracA:(double)fracA
                           fracB:(double)fracB
                            tint:(NSColor *)tint
@@ -167,8 +168,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     NSForegroundColorAttributeName : tint,
   };
   NSSize sz = [txt sizeWithAttributes:attrs];
-  CGFloat xA = [self _xForFrac:fracA inTracks:tracks];
-  CGFloat xB = [self _xForFrac:fracB inTracks:tracks];
+  CGFloat xA = [self _xForFrac:fracA inLane:lane inTracks:tracks];
+  CGFloat xB = [self _xForFrac:fracB inLane:lane inTracks:tracks];
   CGFloat cx = (xA + xB) / 2.0;
   CGFloat x = round(cx - sz.width / 2.0);
   x = MAX(NSMinX(tracks), MIN(NSMaxX(tracks) - sz.width, x));
@@ -208,6 +209,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
               : warn;
       [self _drawDurationPillInRect:g
                              tracks:tracks
+                               lane:lane
                               fracA:prev.time
                               fracB:tHere
                                tint:tint
@@ -221,6 +223,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
               : warn;
       [self _drawDurationPillInRect:g
                              tracks:tracks
+                               lane:lane
                               fracA:tHere
                               fracB:next.time
                                tint:tint
@@ -245,10 +248,38 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     NSColor *tint = KKAdvValuesEqual(a.values, b.values) ? neutral : warn;
     [self _drawDurationPillInRect:g
                            tracks:tracks
+                             lane:lane
                             fracA:a.time
                             fracB:b.time
                              tint:tint
                            rulerY:rulerY];
+    return;
+  }
+
+  // Leading / trailing hold: not an editable interval, so show its duration in
+  // gray (informational only) to match the gray line.
+  if (_hoverEdgeLabel) {
+    KKLane *lane = [self _animatableLaneForLabel:_hoverEdgeLabel];
+    if (!lane || lane.keyposes.count < 1)
+      return;
+    NSColor *gray = [[NSColor inspectorLabel] colorWithAlphaComponent:0.5];
+    if (_hoverEdgeLeading) {
+      [self _drawDurationPillInRect:g
+                             tracks:tracks
+                               lane:lane
+                              fracA:0.0
+                              fracB:lane.keyposes.firstObject.time
+                               tint:gray
+                             rulerY:rulerY];
+    } else {
+      [self _drawDurationPillInRect:g
+                             tracks:tracks
+                               lane:lane
+                              fracA:lane.keyposes.lastObject.time
+                              fracB:[self _lastFrameFrac]
+                               tint:gray
+                             rulerY:rulerY];
+    }
   }
 }
 
@@ -277,6 +308,33 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (void)_drawDragSnapGuideInRect:(NSRect)g tracks:(NSRect)tracks {
   if (isnan(_dragSnapFrac))
     return;
+  // Under the warp the snap target is a time, not a cross-lane column, so a
+  // full-height guide would zigzag. Draw it only inside the dragged lane's row
+  // at that lane's warped x; linear mode keeps the full-height guide.
+  if (_dynamicDisplay && _pressLaneLabel) {
+    NSArray<KKLane *> *anim = [self _animatableLanes];
+    for (NSInteger i = 0; i < (NSInteger)anim.count; i++) {
+      if (![anim[i].label isEqualToString:_pressLaneLabel])
+        continue;
+      NSRect row = [self _rowRectForIndex:i count:anim.count];
+      CGFloat y0 = MAX(NSMinY(row), NSMinY(g));
+      CGFloat y1 = MIN(NSMaxY(row), NSMaxY(g));
+      if (y1 <= y0)
+        return;
+      CGFloat lx = round([self _xForFrac:_dragSnapFrac
+                                  inLane:anim[i]
+                                inTracks:tracks]) +
+                   0.5;
+      NSBezierPath *line = [NSBezierPath bezierPath];
+      [line moveToPoint:NSMakePoint(lx, y0)];
+      [line lineToPoint:NSMakePoint(lx, y1)];
+      line.lineWidth = 1.0;
+      [[NSColor systemYellowColor] setStroke];
+      [line stroke];
+      return;
+    }
+    return;
+  }
   CGFloat x = [self _xForFrac:_dragSnapFrac inTracks:tracks];
   x = round(x) + 0.5;
   NSBezierPath *line = [NSBezierPath bezierPath];
@@ -384,13 +442,17 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   // the kp position, drawing a constant across the whole row.
   KKKeyPose *firstKP = kps.firstObject;
   KKKeyPose *lastKP = kps.lastObject;
-  CGFloat firstX = [self _xForFrac:firstKP.time inTracks:tracks];
-  CGFloat lastX = [self _xForFrac:lastKP.time inTracks:tracks];
+  CGFloat firstX = [self _xForFrac:firstKP.time inLane:lane inTracks:tracks];
+  CGFloat lastX = [self _xForFrac:lastKP.time inLane:lane inTracks:tracks];
   // Leading/trailing flat fills extend out to the widened inner clip
   // (tracks edge minus kPillW/2) so the lane line reaches under the t=0 /
   // t=1 pill's outer half - same edge the per-gap loop's first/last
   // segment will also be extended to below.
-  NSColor *flatColor = [neutral colorWithAlphaComponent:compAlpha];
+  // Leading (pre-first-pill) and trailing (post-last-pill) holds aren't gaps
+  // between two pills, so there's no draggable interval there - draw them gray
+  // to signal "not editable", distinct from the accent-coloured editable holds.
+  NSColor *flatColor =
+      [[NSColor inspectorLabel] colorWithAlphaComponent:compAlpha * 0.5];
   CGFloat leftEdge = NSMinX(tracks) - innerEdgePad;
   CGFloat rightEdge = NSMaxX(tracks) + innerEdgePad;
   if (firstX > leftEdge) {
@@ -415,8 +477,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   for (NSInteger i = 0; i + 1 < (NSInteger)kps.count; i++) {
     KKKeyPose *a = kps[i];
     KKKeyPose *b = kps[i + 1];
-    CGFloat xA = [self _xForFrac:a.time inTracks:tracks];
-    CGFloat xB = [self _xForFrac:b.time inTracks:tracks];
+    CGFloat xA = [self _xForFrac:a.time inLane:lane inTracks:tracks];
+    CGFloat xB = [self _xForFrac:b.time inLane:lane inTracks:tracks];
     if (xB - xA < 0.5)
       continue;
     // First/last gap: extend the segment so it sits under the boundary
@@ -534,8 +596,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   for (NSInteger i = 0; i + 1 < (NSInteger)kps.count; i++) {
     if (![self _gapSelected:lane aIdx:i])
       continue;
-    CGFloat xA = [self _xForFrac:kps[i].time inTracks:tracks];
-    CGFloat xB = [self _xForFrac:kps[i + 1].time inTracks:tracks];
+    CGFloat xA = [self _xForFrac:kps[i].time inLane:lane inTracks:tracks];
+    CGFloat xB = [self _xForFrac:kps[i + 1].time inLane:lane inTracks:tracks];
     if (xB - xA < 1.0)
       continue;
     if (i == 0)
@@ -564,8 +626,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       continue;
     if (!KKAdvValuesEqual(kps[i].values, kps[i + 1].values))
       continue;
-    CGFloat xA = [self _xForFrac:kps[i].time inTracks:tracks];
-    CGFloat xB = [self _xForFrac:kps[i + 1].time inTracks:tracks];
+    CGFloat xA = [self _xForFrac:kps[i].time inLane:lane inTracks:tracks];
+    CGFloat xB = [self _xForFrac:kps[i + 1].time inLane:lane inTracks:tracks];
     if (xB - xA < 4.0)
       continue;
     NSBezierPath *tie = [NSBezierPath bezierPath];
@@ -590,7 +652,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
                         warn:(NSColor *)warn {
   NSArray<KKKeyPose *> *kps = lane.keyposes;
   KKKeyPose *kp = kps[i];
-  CGFloat x = [self _xForFrac:kp.time inTracks:tracks];
+  CGFloat x = [self _xForFrac:kp.time inLane:lane inTracks:tracks];
   BOOL warnHere = NO;
   if (i > 0 && !KKAdvValuesEqual(kps[i - 1].values, kp.values))
     warnHere = YES;
@@ -651,8 +713,10 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (void)_drawPlayheadInRect:(NSRect)g tracks:(NSRect)tracks {
   if (_playheadFraction < 0.0)
     return;
-  CGFloat px = [self _xForFrac:_playheadFraction inTracks:tracks];
-  px = round(px) + 0.5;
+  // The ruler is linear (real time) in both modes, so the knob always sits at
+  // the linear playhead position up in the ruler band.
+  CGFloat knobX =
+      round([self _xForFrac:_playheadFraction inTracks:tracks]) + 0.5;
   CGFloat top = NSMaxY(g) + kRulerGap + kRulerH;
   NSColor *phc = [NSColor inspectorLabel];
   // Contain the scrubber horizontally to the tracks area (not the full
@@ -665,19 +729,46 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSRectClip(NSMakeRect(NSMinX(tracks) - knobHalf, NSMinY(g),
                         NSWidth(tracks) + 2.0 * knobHalf,
                         NSMaxY(self.bounds) - NSMinY(g)));
-  NSBezierPath *line = [NSBezierPath bezierPath];
-  [line moveToPoint:NSMakePoint(px, NSMinY(g))];
-  [line lineToPoint:NSMakePoint(px, top)];
-  line.lineWidth = 1.0;
-  [[phc colorWithAlphaComponent:0.85] setStroke];
-  [line stroke];
+
+  if (_dynamicDisplay) {
+    // Lanes warp independently, so a single cross-lane line would lie. Draw a
+    // per-lane playback line at this real time's warped position in each row;
+    // only the ruler thumb spans the linear axis above.
+    NSArray<KKLane *> *lanes = [self _animatableLanes];
+    for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+      KKLane *lane = lanes[i];
+      NSRect row = [self _rowRectForIndex:i count:lanes.count];
+      CGFloat y0 = MAX(NSMinY(row), NSMinY(g));
+      CGFloat y1 = MIN(NSMaxY(row), NSMaxY(g));
+      if (y1 <= y0)
+        continue;
+      CGFloat lx = round([self _xForFrac:_playheadFraction
+                                  inLane:lane
+                                inTracks:tracks]) +
+                   0.5;
+      NSBezierPath *line = [NSBezierPath bezierPath];
+      [line moveToPoint:NSMakePoint(lx, y0)];
+      [line lineToPoint:NSMakePoint(lx, y1)];
+      line.lineWidth = 1.0;
+      [[phc colorWithAlphaComponent:0.85] setStroke];
+      [line stroke];
+    }
+  } else {
+    NSBezierPath *line = [NSBezierPath bezierPath];
+    [line moveToPoint:NSMakePoint(knobX, NSMinY(g))];
+    [line lineToPoint:NSMakePoint(knobX, top)];
+    line.lineWidth = 1.0;
+    [[phc colorWithAlphaComponent:0.85] setStroke];
+    [line stroke];
+  }
+
   CGFloat kw = 7.0, kh = 6.0;
   NSBezierPath *knob = [NSBezierPath bezierPath];
-  [knob moveToPoint:NSMakePoint(px - kw / 2.0, top)];
-  [knob lineToPoint:NSMakePoint(px + kw / 2.0, top)];
-  [knob lineToPoint:NSMakePoint(px + kw / 2.0, top - kh + 3.0)];
-  [knob lineToPoint:NSMakePoint(px, top - kh)];
-  [knob lineToPoint:NSMakePoint(px - kw / 2.0, top - kh + 3.0)];
+  [knob moveToPoint:NSMakePoint(knobX - kw / 2.0, top)];
+  [knob lineToPoint:NSMakePoint(knobX + kw / 2.0, top)];
+  [knob lineToPoint:NSMakePoint(knobX + kw / 2.0, top - kh + 3.0)];
+  [knob lineToPoint:NSMakePoint(knobX, top - kh)];
+  [knob lineToPoint:NSMakePoint(knobX - kw / 2.0, top - kh + 3.0)];
   [knob closePath];
   [phc setFill];
   [knob fill];

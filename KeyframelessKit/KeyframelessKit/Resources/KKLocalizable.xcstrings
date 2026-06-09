@@ -883,6 +883,48 @@
         }
       }
     },
+    "Dynamic": {
+      "comment": "Toggle: non-linear timeline display so short transitions stay grabbable.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dynamisch"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dinámico"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dynamique"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダイナミック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다이내믹"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动态"
+          }
+        }
+      }
+    },
     "Constants": {
       "comment": "Constants editor tab/section header.",
       "extractionState": "manual",
@@ -9699,6 +9741,216 @@
           "stringUnit": {
             "state": "translated",
             "value": "<accent>固定过渡</accent> - 预设会将其过渡（运动部分）保存为固定时长，而将保持段保存为可变，因此应用的预设无论片段长短都能保持相同的感觉。"
+          }
+        }
+      }
+    },
+    "The <accent>Dynamic</accent> toolbar toggle (Advanced) widens short transitions so they stay easy to grab on a long clip; each lane then shows its own playback line. It's display-only, off by default, and never changes the animation.": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Schalter <accent>Dynamisch</accent> in der Symbolleiste (Erweitert) verbreitert kurze Übergänge, damit sie auf einem langen Clip leicht zu greifen bleiben; jede Spur zeigt dann ihre eigene Abspiellinie. Er dient nur der Anzeige, ist standardmäßig aus und ändert nie die Animation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El conmutador <accent>Dinámico</accent> de la barra de herramientas (Avanzado) ensancha las transiciones cortas para que sigan siendo fáciles de agarrar en un clip largo; entonces cada pista muestra su propia línea de reproducción. Es solo de visualización, está desactivado por omisión y nunca cambia la animación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bouton <accent>Dynamique</accent> de la barre d'outils (Avancé) élargit les transitions courtes pour qu'elles restent faciles à saisir sur un plan long ; chaque piste affiche alors sa propre ligne de lecture. Il sert uniquement à l'affichage, est désactivé par défaut et ne modifie jamais l'animation."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ツールバーの<accent>ダイナミック</accent>スイッチ(詳細)は、短いトランジションを広げて長いクリップでもつかみやすくします。各レーンはそれぞれの再生ラインを表示します。表示専用で、デフォルトはオフ、アニメーションを変更することはありません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "툴바의 <accent>다이내믹</accent> 토글(고급)은 짧은 트랜지션을 넓혀 긴 클립에서도 쉽게 잡을 수 있게 합니다. 그러면 각 레인이 자체 재생 라인을 표시합니다. 보기 전용이고 기본값은 꺼짐이며 애니메이션을 변경하지 않습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具栏中的<accent>动态</accent>开关（高级）会加宽短转场，使其在长片段上也易于抓取；此时每条轨道都会显示各自的播放线。它仅用于显示，默认关闭，且绝不更改动画。"
+          }
+        }
+      }
+    },
+    "<kbd>⌘ ⌥</kbd> + click": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘ ⌥</kbd> + Klick"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘ ⌥</kbd> + clic"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘ ⌥</kbd> + clic"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘ ⌥</kbd> + クリック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘ ⌥</kbd> + 클릭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘ ⌥</kbd> + 点击"
+          }
+        }
+      }
+    },
+    "Move the playhead there to preview": {
+      "comment": "Help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abspielposition dorthin bewegen (Vorschau)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover la posición de reproducción ahí (vista previa)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplacer la tête de lecture ici (aperçu)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再生ヘッドをそこへ移動（プレビュー）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "재생 헤드를 그곳으로 이동(미리 보기)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将播放头移到该处（预览）"
+          }
+        }
+      }
+    },
+    "Tap <accent>Dynamic</accent> to space out short transitions so they stay easy to grab on a long clip.": {
+      "comment": "Advanced timing guide: try the Dynamic display toggle.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippen Sie auf <accent>Dynamisch</accent>, um kurze Übergänge zu spreizen, damit sie auf einem langen Clip leicht zu greifen bleiben."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca <accent>Dinámico</accent> para separar las transiciones cortas y que sigan siendo fáciles de agarrar en un clip largo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez <accent>Dynamique</accent> pour espacer les transitions courtes afin qu'elles restent faciles à saisir sur un plan long."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>ダイナミック</accent>をタップすると、短いトランジションが広がり、長いクリップでもつかみやすくなります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>다이내믹</accent>을 탭하면 짧은 트랜지션이 넓어져 긴 클립에서도 쉽게 잡을 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击<accent>动态</accent>可拉开短转场，使其在长片段上也易于抓取。"
+          }
+        }
+      }
+    },
+    "Now you can see and edit every transition <accent>without zooming in</accent>.": {
+      "comment": "Advanced timing guide: Dynamic value (no zooming to reach each transition).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jetzt sehen und bearbeiten Sie jeden Übergang <accent>ohne Hineinzoomen</accent>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahora puedes ver y editar cada transición <accent>sin ampliar</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vous pouvez maintenant voir et modifier chaque transition <accent>sans zoomer</accent>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>ズームせずに</accent>すべてのトランジションを見て編集できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이제 <accent>확대하지 않고도</accent> 모든 트랜지션을 보고 편집할 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现在无需<accent>放大</accent>即可查看和编辑每个转场。"
           }
         }
       }
