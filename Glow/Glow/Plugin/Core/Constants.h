@@ -18,6 +18,11 @@ static const UInt32 kParamUIState = 201;
 /// -scheduleInputs: for the (otherwise cached) static frame.
 static const UInt32 kParamRenderNudge = 202;
 
+// Viewer on-screen-control part identifiers. M1 has the radius ring only; the
+// Position offset arc (inherited KKArcOSC handle) lights up with the Position
+// lane in a later milestone.
+static const NSInteger kOSCRadiusPart = 100;
+
 // M1 render fallbacks for every GlowPluginState field that isn't a lane yet.
 // Shared by the render path and the mini-viewer preview so they stay in sync
 // as later milestones promote these to real lanes / mode params.

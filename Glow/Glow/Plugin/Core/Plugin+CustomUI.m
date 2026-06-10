@@ -5,8 +5,10 @@
 
 #import "Constants.h"
 #import "GlowInspectorView.h"
+#import "GlowOSCRadiusMath.h"
 #import "Plugin_Private.h"
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
+#import <KeyframelessKit/KKPlugin+OSCVisibility.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
 @implementation GlowPlugin (CustomUI)
@@ -56,7 +58,14 @@
     double motionBlurShutterAngle = st.motionBlurShutterAngle;
     NSInteger motionBlurSamples = st.motionBlurSamples;
     NSInteger motionBlurMode = st.motionBlurMode;
+    BOOL oscMasterVisible = st.oscMasterVisible;
+    NSDictionary *uiState = st.uiState;
     KKTimeline *timeline = [self timelineStampedWithClipDuration:st.timeline];
+
+    // Cold-boot seed for the OSC. Without this, the first drawOSC tick after a
+    // relaunch sees an empty snapshot and the ring reads the default radius.
+    // parameterChanged catches up later, but only after a redraw nudge.
+    GlowSetTimelineSnapshot(timeline);
 
     // Frame + clip duration for the keypose-snap epsilon and the basic-view
     // scrubber clamp. FxTimingAPI resolves inside this action scope; we also
@@ -72,11 +81,14 @@
       [timingAPI durationTimeForEffect:&clipDur];
       seedFrameDurSec = CMTimeGetSeconds(frameDur);
       seedClipDurSec = CMTimeGetSeconds(clipDur);
+      if (seedFrameDurSec > 0)
+        GlowSetFrameDurationSeconds(seedFrameDurSec);
     }
 
     // Per-instance state: mint the UUID inside the action scope where the
-    // setting API resolves.
-    KKInstanceStateEnsureForAPI(self.apiManager);
+    // setting API resolves, and seed the OSC master-visibility tick.
+    KKInstanceStateEnsureForAPI(self.apiManager).oscMasterVisible =
+        oscMasterVisible;
 
     [actionAPI endAction:self];
 
@@ -95,6 +107,23 @@
     [view setMotionBlurShutterAngle:motionBlurShutterAngle
                             samples:motionBlurSamples];
     [view setMotionBlurMode:(KKMotionBlurMode)motionBlurMode];
+
+    // On-screen-control visibility: master tick + the single Radius pill +
+    // opt-click-hide + opt-reveal. Shared glue in KKPlugin (OSCVisibility); the
+    // renderer is the view's mini-viewer delegate.
+    KKMiniViewerRenderer *oscRenderer =
+        (KKMiniViewerRenderer *)view.miniViewerDelegate;
+    NSArray<NSArray<NSString *> *> *oscCompounds = @[ @[ @"Radius" ] ];
+    oscRenderer.handlesHidden = !oscMasterVisible;
+    [self kkApplyOSCVisibilityFromState:uiState
+                            elementKeys:[KKPlugin kkOSCElementKeysForCompounds:
+                                                      oscCompounds]
+                               renderer:oscRenderer];
+    [self kkWireOSCVisibilityForView:view
+                            renderer:oscRenderer
+                           compounds:oscCompounds
+                             paramID:kParamUIState];
+    [view setOSCVisible:oscMasterVisible];
 
     [self kkWireStandardInspectorCallbacksForView:view
                                    uiStateParamID:kParamUIState

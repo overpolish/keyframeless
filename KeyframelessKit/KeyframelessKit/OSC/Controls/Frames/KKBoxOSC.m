@@ -4,12 +4,43 @@
  */
 
 #import "KKBoxOSC.h"
+#import "KKResizeCursor.h"
+#import <AppKit/NSCursor.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKOSCLabel.h>
 #import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKRectBorderOSC.h>
 
-@implementation KKBoxOSC
+@implementation KKBoxOSC {
+  BOOL _cursorSet;
+}
+
+// Show the FCP resize cursor for the hovered handle (corner -> diagonal, edge
+// -> horizontal/vertical), matching the viewer ring; reset to the arrow when
+// off the handles. Mirrors KKRingOSC's cursor handling.
+- (void)_applyResizeCursorForHandle:(NSInteger)handleIndex {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return;
+  NSCursor *cursor = nil;
+  if (handleIndex >= 0) {
+    // Opt-hover hide/show takes precedence over the resize cursor.
+    if (_visibilityHint == 1)
+      cursor = KKVisibilityHideCursor();
+    else if (_visibilityHint == 2)
+      cursor = KKVisibilityShowCursor();
+    else
+      cursor = KKResizeCursorForBoxHandle(handleIndex);
+  }
+  if (cursor) {
+    [oscAPI setCursor:cursor];
+    _cursorSet = YES;
+  } else if (_cursorSet) {
+    [oscAPI setCursor:[NSCursor arrowCursor]];
+    _cursorSet = NO;
+  }
+}
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super init];
@@ -141,12 +172,14 @@
     self.hoveredIndex = best;
     result = KKBoxPartHandleBase + best;
   }
+  [self _applyResizeCursorForHandle:self.hoveredIndex];
   return result;
 }
 
 - (void)resetHover {
   self.hoveredIndex = -1;
   self.draggingIndex = -1;
+  [self _applyResizeCursorForHandle:-1];
 }
 
 @end

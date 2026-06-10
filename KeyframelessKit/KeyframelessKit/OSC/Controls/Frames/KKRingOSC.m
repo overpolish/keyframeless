@@ -5,43 +5,11 @@
 
 #import "KKRingOSC.h"
 #import "KKOSCShaderTypes.h"
+#import "KKResizeCursor.h"
 #import "NSColor+KKColors.h"
 #import <AppKit/NSCursor.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
-
-static NSCursor *resizeCursorForAngle(double radians) {
-  double deg = radians * 180.0 / M_PI;
-  if (deg < 0)
-    deg += 360.0;
-
-  int sector = ((int)round(deg / 45.0)) % 8;
-
-  switch (sector) {
-  case 0: // Right
-  case 4: // Left
-    return [NSCursor resizeLeftRightCursor];
-  case 2: // Up
-  case 6: // Down
-    return [NSCursor resizeUpDownCursor];
-  case 1:   // Top-right
-  case 5: { // Bottom-left
-    SEL sel = NSSelectorFromString(@"_windowResizeNorthEastSouthWestCursor");
-    if ([NSCursor respondsToSelector:sel])
-      return [NSCursor performSelector:sel];
-    return [NSCursor resizeLeftRightCursor];
-  }
-  case 3:   // Top-left
-  case 7: { // Bottom-right
-    SEL sel = NSSelectorFromString(@"_windowResizeNorthWestSouthEastCursor");
-    if ([NSCursor respondsToSelector:sel])
-      return [NSCursor performSelector:sel];
-    return [NSCursor resizeUpDownCursor];
-  }
-  default:
-    return [NSCursor arrowCursor];
-  }
-}
 
 static NSColor *ringIdleFillColor(void) {
   return [NSColor colorWithRed:0xCE / 255.0
@@ -91,6 +59,7 @@ static NSColor *ringActiveStrokeColor(void) {
     _ringRadiusY = 50.0f;
     _fillWidth = 2.0f;
     _ringOutlineWidth = 1.5f;
+    _ghostAlpha = 1.0f;
   }
   return self;
 }
@@ -128,7 +97,7 @@ static NSColor *ringActiveStrokeColor(void) {
   double angle = atan2(dy, dx);
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  [oscAPI setCursor:resizeCursorForAngle(angle)];
+  [oscAPI setCursor:KKResizeCursorForAngle(angle)];
 }
 
 - (BOOL)hitTestAtMousePositionX:(double)positionX
@@ -151,11 +120,29 @@ static NSColor *ringActiveStrokeColor(void) {
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
 
   if (ringDist < hitWidth) {
+    // Opt-hover hide/show affordance takes precedence: the eye cursor signals
+    // that an Opt-click toggles visibility (not a resize/re-enable drag).
+    if (_visibilityHint == 1 || _visibilityHint == 2) {
+      [oscAPI setCursor:(_visibilityHint == 2 ? KKVisibilityShowCursor()
+                                              : KKVisibilityHideCursor())];
+      _cursorSet = YES;
+      return YES;
+    }
+    // A dimmed ghost is a re-enable target (Opt-click), not a resize handle -
+    // keep the plain arrow rather than the resize cursor, but still report the
+    // hit so the Opt-click toggle resolves.
+    if (_ghostAlpha < 0.999f) {
+      if (_cursorSet) {
+        [oscAPI setCursor:[NSCursor arrowCursor]];
+        _cursorSet = NO;
+      }
+      return YES;
+    }
     if (_hoverCursor)
       [oscAPI setCursor:_hoverCursor];
     else {
       double angle = atan2(dy, dx);
-      [oscAPI setCursor:resizeCursorForAngle(angle)];
+      [oscAPI setCursor:KKResizeCursorForAngle(angle)];
     }
     _cursorSet = YES;
     return YES;
@@ -177,6 +164,13 @@ static NSColor *ringActiveStrokeColor(void) {
       [self pipelineStateForDestinationImage:destinationImage];
   if (!ps)
     return;
+
+  // A dimmed ghost (Opt-hold reveal of a hidden ring) reads as idle, not
+  // hovered/active - emphasis would make a re-enable target look interactive.
+  if (_ghostAlpha < 0.999f) {
+    isHovered = NO;
+    isActive = NO;
+  }
 
   float fillWidth = (isHovered || isActive) ? 2.5f : 2.0f;
   float outlineWidth = (isHovered || isActive) ? 1.5f : 1.0f;
@@ -211,6 +205,9 @@ static NSColor *ringActiveStrokeColor(void) {
     fillColor = [ringIdleFillColor() simdFloat4];
     strokeColor = [ringIdleStrokeColor() simdFloat4];
   }
+
+  fillColor.w *= _ghostAlpha;
+  strokeColor.w *= _ghostAlpha;
 
   KKRingOSCParams params = {.ringRadiusX = _ringRadius / outerRadiusPixels,
                             .ringRadiusY = _ringRadiusY / outerRadiusPixels,

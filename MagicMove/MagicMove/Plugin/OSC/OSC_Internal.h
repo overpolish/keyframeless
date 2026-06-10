@@ -51,6 +51,10 @@ enum {
 @property(nonatomic, retain) KKSquarePointOSC *anchorPointOSC;
 @property(nonatomic, retain) KKSnapEngine *anchorSnap;
 @property(nonatomic) BOOL anchorHovered;
+// YES while we've forced the move cursor over a draggable point (anchor /
+// position / path); reset to the arrow when the pointer leaves them. The scale
+// box self-manages its resize cursor (KKBoxOSC), rotation has none yet.
+@property(nonatomic) BOOL pointCursorSet;
 @property(nonatomic) double anchorGrabValX;
 @property(nonatomic) double anchorGrabValY;
 @property(nonatomic) simd_float2 anchorPressObject;

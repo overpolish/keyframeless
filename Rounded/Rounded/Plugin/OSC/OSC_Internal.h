@@ -17,6 +17,10 @@ NS_ASSUME_NONNULL_BEGIN
   double _dragStartRadius;
   double _dragCurrentRadius;
   KKCropOSC *_cropOSC;
+  // YES while we've forced the radius point's move cursor, so we can reset it
+  // to the arrow when the pointer leaves the handle (the crop box self-manages
+  // its own resize cursor via KKBoxOSC).
+  BOOL _radiusCursorSet;
 }
 // Geometry/time helpers implemented in the primary @implementation (OSC.m);
 // called by the MouseHandlers category.

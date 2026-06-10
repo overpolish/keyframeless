@@ -114,6 +114,27 @@ static const BOOL kPointShadingLighterTop = YES;
   if (!_arcPipeline)
     KKLogError(@"KKMiniViewerView: arc pipeline failed: %@", err);
 
+  // Elliptical ring (Glow radius): the in-viewer `KKRingOSCFragment` shader, so
+  // the mini ring is pixel-identical to the viewer (single-pass ellipse SDF -
+  // no tessellation seams or fill/outline bleed). Same premultiplied-over
+  // blend.
+  MTLRenderPipelineDescriptor *rgp = [[MTLRenderPipelineDescriptor alloc] init];
+  rgp.vertexFunction = [lib newFunctionWithName:@"KKVertexShader"];
+  rgp.fragmentFunction = [lib newFunctionWithName:@"KKRingOSCFragment"];
+  rgp.colorAttachments[0].pixelFormat = self.colorPixelFormat;
+  rgp.colorAttachments[0].blendingEnabled = YES;
+  rgp.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
+  rgp.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
+  rgp.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+  rgp.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorSourceAlpha;
+  rgp.colorAttachments[0].destinationRGBBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  rgp.colorAttachments[0].destinationAlphaBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  _ringPipeline = [device newRenderPipelineStateWithDescriptor:rgp error:&err];
+  if (!_ringPipeline)
+    KKLogError(@"KKMiniViewerView: ring pipeline failed: %@", err);
+
   // Rotation gizmo: shared `KKRotationOSCFragment` shader. Same blend mode
   // as the other glyph pipelines so the rings composite straight over the
   // image.
@@ -269,6 +290,57 @@ static const BOOL kPointShadingLighterTop = YES;
   params.outlineWidth = (float)((radiusPx * params.outlineWidth) / qh);
   simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
   [enc setRenderPipelineState:_rotationPipeline];
+  [enc setVertexBytes:quad
+               length:sizeof(quad)
+              atIndex:KKVertexInputIndex_Vertices];
+  [enc setVertexBytes:&vp
+               length:sizeof(vp)
+              atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setFragmentBytes:&params
+                 length:sizeof(params)
+                atIndex:KKOSCFragmentIndex_DrawColor];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+}
+
+- (void)_encodeRingOSCAt:(CGPoint)centerPts
+               radiusXPt:(CGFloat)radiusXPt
+               radiusYPt:(CGFloat)radiusYPt
+               fillColor:(simd_float4)fillColor
+             strokeColor:(simd_float4)strokeColor
+             fillWidthPt:(CGFloat)fillWidthPt
+          outlineWidthPt:(CGFloat)outlineWidthPt
+                 encoder:(id<MTLRenderCommandEncoder>)enc {
+  if (!_ringPipeline)
+    return;
+  CGSize d = self.drawableSize;
+  CGFloat s = self.window.backingScaleFactor;
+  if (s <= 0)
+    s = 2.0;
+  // Everything to drawable pixels. The quad is square at the outer extent (max
+  // axis + half the fill band + the outline), with texcoord in [-1,1]; the
+  // shader's normalized radii/widths are pixel sizes over that outer extent -
+  // the exact normalization KKRingOSC uses in the viewer.
+  CGFloat rxPx = radiusXPt * s, ryPx = radiusYPt * s;
+  CGFloat fillPx = fillWidthPt * s, outPx = outlineWidthPt * s;
+  CGFloat outerPx = MAX(rxPx, ryPx) + fillPx / 2.0 + outPx;
+  if (outerPx <= 0.5)
+    return;
+  CGPoint centered = CGPointMake(centerPts.x * s - d.width / 2.0,
+                                 centerPts.y * s - d.height / 2.0);
+  KKVertex2D quad[6];
+  [KKRenderPrimitives generateQuadVertices:quad
+                                    center:centered
+                                      size:(float)outerPx];
+  simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
+  KKRingOSCParams params = {
+      .ringRadiusX = (float)(rxPx / outerPx),
+      .ringRadiusY = (float)(ryPx / outerPx),
+      .fillHalfWidth = (float)((fillPx / 2.0) / outerPx),
+      .outlineWidth = (float)(outPx / outerPx),
+      .fillColor = fillColor,
+      .strokeColor = strokeColor,
+  };
+  [enc setRenderPipelineState:_ringPipeline];
   [enc setVertexBytes:quad
                length:sizeof(quad)
               atIndex:KKVertexInputIndex_Vertices];

@@ -95,6 +95,14 @@
   self.hoverTargetIsAnchor = NO;
   self.anchorHovered = NO;
   self.scaleHitHandle = -1;
+  // Clear any move cursor forced over a point last hover; the point branches
+  // below re-set it, the scale box sets its own resize cursor, rotation none.
+  if (self.pointCursorSet) {
+    id<FxOnScreenControlAPI_v4> resetAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [resetAPI setCursor:[NSCursor arrowCursor]];
+    self.pointCursorSet = NO;
+  }
   double frac = [self _fractionAtTime:time];
   // Bootstrap the guide bridge's screen<->canvas reference (the only place a
   // valid canvas scale + screen point arrive together). Done before the early
@@ -111,6 +119,7 @@
         [self.anchorPointOSC hitRadius]) {
       self.anchorHovered = YES;
       *activePart = kOSCAnchorPart;
+      [self _setViewerPointCursorForLabel:@"Anchor"];
       return;
     }
   }
@@ -122,6 +131,7 @@
                         outFrac:NULL
                        outIsOut:NULL]) {
     *activePart = kOSCPathHandlePart;
+    [self _setViewerPointCursorForLabel:@"Path"];
     return;
   }
   // Opt-reveal makes a hidden handle hit-testable so an opt-click re-shows it.
@@ -133,6 +143,7 @@
                                           positionY:positionY
                                              atTime:time]) {
     *activePart = kOSCPositionPart;
+    [self _setViewerPointCursorForLabel:@"Position"];
     return;
   }
   // Any keypose anchor dot is grabbable, independent of the playhead - so a
@@ -142,6 +153,7 @@
       !isnan([self _anchorFracNearCanvasX:positionX y:positionY])) {
     self.hoverTargetIsAnchor = YES;
     *activePart = kOSCPositionPart;
+    [self _setViewerPointCursorForLabel:@"Path"];
     return;
   }
   // Scale box handles sit just outside the rotation rings; check them before
@@ -152,6 +164,13 @@
        (self.optRevealActive && [self kkOSCRevealEligible:@"Scale"])) &&
       _scaleVisibleAtFraction(frac);
   if (scaleReachable) {
+    // Opt-hover hide/show affordance on the scale handles (eye/eye.slash when
+    // an Opt-click would toggle the Scale box, i.e. master on - not peek mode).
+    BOOL scaleToggle = self.optRevealActive && ![self kkOSCMasterOff];
+    BOOL scaleRevealOnly = ![self kkOSCElementVisible:@"Scale"] &&
+                           self.optRevealActive &&
+                           [self kkOSCRevealEligible:@"Scale"];
+    self.scaleBox.visibilityHint = scaleToggle ? (scaleRevealOnly ? 2 : 1) : 0;
     NSInteger sh = [self _scaleHandleHitAtCanvasX:positionX
                                                 y:positionY
                                            atTime:time];
@@ -172,8 +191,33 @@
                                         positionY:positionY
                                            atTime:time]) {
       *activePart = kOSCRotationPart;
+      // Opt-hover hide/show affordance for the hit ring's axis (eye/eye.slash);
+      // overrides the rotate cursor the ring just set. Per-axis label matches
+      // -_oscElementKeyForActivePart: (Rotation.X/Y/Z).
+      NSInteger ax = self.rotationOSC.activeAxis;
+      NSString *axis = (ax == 0) ? @"X" : (ax == 1) ? @"Y" : @"Z";
+      NSCursor *eye = [self
+          kkVisibilityCursorForLabel:[NSString stringWithFormat:@"Rotation.%@",
+                                                                axis]];
+      if (eye) {
+        id<FxOnScreenControlAPI_v4> oscAPI =
+            [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+        [oscAPI setCursor:eye];
+      }
     }
   }
+}
+
+// Force FCP's move cursor over a draggable point (anchor / position / path) and
+// remember it so the next hover off the point resets to the arrow.
+- (void)_setViewerPointCursorForLabel:(NSString *)label {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  // FCP's move cursor, or the Opt-hover eye/eye.slash when an Opt-click would
+  // toggle this handle's visibility.
+  [oscAPI setCursor:([self kkVisibilityCursorForLabel:label]
+                         ?: KKPointMoveCursor())];
+  self.pointCursorSet = YES;
 }
 
 - (NSInteger)_scaleHandleHitAtCanvasX:(double)x

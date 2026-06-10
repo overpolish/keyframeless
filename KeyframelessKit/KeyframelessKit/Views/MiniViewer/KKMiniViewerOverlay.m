@@ -252,8 +252,26 @@
   }
 }
 
+// Mirror the viewer's resize/move cursors over the mini-canvas handles. The
+// delegate returns the cursor for the hovered point (or nil for the arrow);
+// during a drag mouseMoved doesn't fire, so the cursor set on the last hover
+// persists through the drag, then a fresh move re-evaluates it.
+- (void)_updateHoverCursorAtWindowPoint:(NSPoint)windowPoint {
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  NSCursor *cursor = nil;
+  if ([d respondsToSelector:@selector(miniViewer:cursorAtPoint:contentRect:)]) {
+    NSPoint p = [self convertPoint:windowPoint fromView:nil];
+    cursor = [d miniViewer:c
+             cursorAtPoint:p
+               contentRect:[c contentRectInViewPoints]];
+  }
+  [(cursor ?: [NSCursor arrowCursor]) set];
+}
+
 - (void)mouseMoved:(NSEvent *)e {
   [self _setOptReveal:(e.modifierFlags & NSEventModifierFlagOption) != 0];
+  [self _updateHoverCursorAtWindowPoint:e.locationInWindow];
 }
 
 - (void)flagsChanged:(NSEvent *)e {
@@ -262,6 +280,7 @@
 
 - (void)mouseExited:(NSEvent *)e {
   [self _setOptReveal:NO];
+  [[NSCursor arrowCursor] set];
 }
 
 @end

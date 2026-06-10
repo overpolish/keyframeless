@@ -84,6 +84,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKRandomRowView.h>
 #import <KeyframelessKit/KKRectBorderOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
+#import <KeyframelessKit/KKResizeCursor.h>
 #import <KeyframelessKit/KKRingOSC.h>
 #import <KeyframelessKit/KKRotationOSC.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>

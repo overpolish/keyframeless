@@ -409,21 +409,44 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
       ([self kkOSCElementVisible:@"Radius"] ||
        (self.optRevealActive && [self kkOSCRevealEligible:@"Radius"])) &&
       (inGuide || RoundedLaneVisibleAtFraction(@"Radius", frac));
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   if (radiusInteractive && [self hitTestAtMousePositionX:positionX
                                                positionY:positionY
                                                   atTime:time]) {
     *activePart = kOSCRadiusPart;
-  } else if (([self kkOSCElementVisible:@"Crop"] ||
-              (self.optRevealActive && [self kkOSCRevealEligible:@"Crop"])) &&
-             RoundedLaneVisibleAtFraction(@"Crop", frac)) {
-    // Radius didn't catch it → try crop handles / rect.
-    NSInteger cropPart = [_cropOSC hitTestAtMousePositionX:positionX
-                                                 positionY:positionY
-                                                    atTime:time];
-    if (cropPart == KKCropPartRect) {
-      *activePart = kOSCCropRectPart;
-    } else if (cropPart >= KKCropPartPointBase) {
-      *activePart = kOSCCropPointBase + (cropPart - KKCropPartPointBase);
+    // The radius is a draggable point → FCP's move cursor, or the Opt-hover
+    // eye/eye.slash when an Opt-click would toggle its visibility.
+    [oscAPI setCursor:([self kkVisibilityCursorForLabel:@"Radius"]
+                           ?: KKPointMoveCursor())];
+    _radiusCursorSet = YES;
+  } else {
+    // Off the radius point: drop our forced move cursor; the crop box's
+    // hitTest (below) then sets its own resize cursor, or leaves the arrow.
+    if (_radiusCursorSet) {
+      [oscAPI setCursor:[NSCursor arrowCursor]];
+      _radiusCursorSet = NO;
+    }
+    if (([self kkOSCElementVisible:@"Crop"] ||
+         (self.optRevealActive && [self kkOSCRevealEligible:@"Crop"])) &&
+        RoundedLaneVisibleAtFraction(@"Crop", frac)) {
+      // Opt-hover hide/show affordance on the crop handles (eye/eye.slash when
+      // an Opt-click would toggle the Crop OSC, i.e. master on - not peek
+      // mode).
+      BOOL cropToggle = self.optRevealActive && ![self kkOSCMasterOff];
+      BOOL cropRevealOnly = ![self kkOSCElementVisible:@"Crop"] &&
+                            self.optRevealActive &&
+                            [self kkOSCRevealEligible:@"Crop"];
+      _cropOSC.visibilityHint = cropToggle ? (cropRevealOnly ? 2 : 1) : 0;
+      // Radius didn't catch it → try crop handles / rect.
+      NSInteger cropPart = [_cropOSC hitTestAtMousePositionX:positionX
+                                                   positionY:positionY
+                                                      atTime:time];
+      if (cropPart == KKCropPartRect) {
+        *activePart = kOSCCropRectPart;
+      } else if (cropPart >= KKCropPartPointBase) {
+        *activePart = kOSCCropPointBase + (cropPart - KKCropPartPointBase);
+      }
     }
   }
   // The only place screen + canvas coords arrive together. Hand it to the

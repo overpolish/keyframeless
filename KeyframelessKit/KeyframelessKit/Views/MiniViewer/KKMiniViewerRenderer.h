@@ -104,6 +104,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)labelVisibleOrRevealing:(NSString *)label;
 /// 0.3 when `label` is user-hidden (revealed-ghost dimming), else 1.0.
 - (CGFloat)ghostAlphaForLabel:(NSString *)label;
+/// The Opt-hover visibility cursor for `label`, or nil if none applies: `eye`
+/// (show) over a revealed ghost, `eye.slash` (hide) over a visible handle -
+/// only when Opt is held and the master is on (peek mode returns nil).
+/// Subclasses call this in `cursorAtPoint:` when the pointer is over `label`'s
+/// handle, e.g. `return [self kkVisibilityCursorForLabel:lbl] ?:
+/// KKPointMoveCursor();`
+- (nullable NSCursor *)kkVisibilityCursorForLabel:(NSString *)label;
 /// Draw alpha for the motion-path overlay (line + anchors + handles). Default
 /// 1.0; a subclass with a hideable path returns a ghost alpha while revealing.
 - (CGFloat)motionPathGhostAlpha;

@@ -61,6 +61,7 @@
 				OSC/Controls/Handles/KKArcOSC.h,
 				OSC/Controls/Handles/KKPointOSC.h,
 				OSC/Controls/Handles/KKSquarePointOSC.h,
+				OSC/Utilities/KKResizeCursor.h,
 				OSC/Utilities/KKSnapEngine.h,
 				"Plugin/CustomViews/KKPlugin+InspectorCallbacks.h",
 				"Plugin/CustomViews/KKPlugin+MiniViewerFeed.h",

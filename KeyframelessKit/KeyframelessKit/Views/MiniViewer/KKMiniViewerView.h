@@ -42,6 +42,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// mutations). Points are clip-normalized: (0,0) top-left, (1,1) bottom-right.
 @protocol KKMiniViewerDelegate <NSObject>
 @optional
+/// YES if the effect should be rendered into a processed texture sized to the
+/// DISPLAY resolution (downscaled to the content rect, capped at source) rather
+/// than the full source size. Only soft / bounds-expanding effects (e.g. Glow)
+/// benefit - rendering at display res preserves their soft falloff. A transform
+/// shader that normalizes the fragment position by the dest texture's own pixel
+/// dims must return NO (the default), or a smaller dest would zoom it in.
+- (BOOL)prefersDisplayResolutionProcessing;
 /// Run the plugin's effect on `source` into `dest` (same size as the source
 /// frame), encoding into `commandBuffer`. Return YES if a pass was encoded;
 /// NO (or unimplemented) → the canvas displays the raw source. The plugin
@@ -98,6 +105,26 @@ NS_ASSUME_NONNULL_BEGIN
 /// nil/empty for none.
 - (NSArray<KKMiniBox *> *)miniViewer:(KKMiniViewerView *)canvas
                  boxesForContentRect:(CGRect)contentRect;
+/// An elliptical ring OSC to draw (e.g. Glow's radius), centred at `outCenter`
+/// with per-axis pixel radii `outRadiusX`/`outRadiusY`, all in overlay points
+/// (y-up). Return NO for none. The canvas strokes it in the Metal pass like the
+/// box borders; the delegate owns hit-testing + the drag-to-value mapping
+/// (handleHitAtPoint / beginHandleDrag / dragHandleToPoint), same as the box.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+        ringCenter:(out CGPoint *)outCenter
+           radiusX:(out CGFloat *)outRadiusX
+           radiusY:(out CGFloat *)outRadiusY
+       contentRect:(CGRect)contentRect;
+/// Visual emphasis for the ring stroke, mirroring the viewer ring's idle /
+/// hover / active states: 0 = idle, 1 = hovered, 2 = active (being dragged).
+/// The canvas brightens + thickens the stroke accordingly. Default 0 when the
+/// delegate doesn't implement it. The delegate is responsible for invalidating
+/// the canvas (setNeedsDisplay) when its hover state changes.
+- (NSInteger)miniViewerRingEmphasis:(KKMiniViewerView *)canvas;
+/// Draw alpha for the ring: 1.0 normal, < 1.0 (e.g. 0.3) when it's an Opt-hold
+/// revealed ghost of a hidden ring, so the canvas dims it like the other ghost
+/// handles. Default 1.0 when the delegate doesn't implement it.
+- (CGFloat)miniViewerRingGhostAlpha:(KKMiniViewerView *)canvas;
 /// Push externally-edited constant values (slider/field) into the delegate
 /// so the preview updates live, without persisting (the host coalesces the
 /// real write). `values` is the lane's value array (Float: [v]; Crop:
@@ -136,6 +163,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     rotationHitAtPoint:(CGPoint)point
            contentRect:(CGRect)contentRect;
+/// The cursor to show while hovering `point` (overlay points), or nil for the
+/// default arrow - lets the mini-canvas mirror the viewer's resize / move
+/// cursors over its handles. Must be a pure hit-test (no drag-state side
+/// effects); the overlay calls it on every mouseMoved.
+- (nullable NSCursor *)miniViewer:(KKMiniViewerView *)canvas
+                    cursorAtPoint:(CGPoint)point
+                      contentRect:(CGRect)contentRect;
 - (void)miniViewer:(KKMiniViewerView *)canvas
     rotationBeginDragAtPoint:(CGPoint)point
                  contentRect:(CGRect)contentRect;

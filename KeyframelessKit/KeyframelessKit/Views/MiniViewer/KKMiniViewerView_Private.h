@@ -83,6 +83,7 @@ NS_ASSUME_NONNULL_BEGIN
   id<MTLRenderPipelineState> _pointPipeline;
   id<MTLRenderPipelineState> _squarePipeline;
   id<MTLRenderPipelineState> _arcPipeline;
+  id<MTLRenderPipelineState> _ringPipeline;
   id<MTLRenderPipelineState> _rotationPipeline;
   id<MTLRenderPipelineState> _linePipeline;
   id<MTLRenderPipelineState> _aaLinePipeline;
@@ -125,6 +126,18 @@ NS_ASSUME_NONNULL_BEGIN
                     radiusPx:(CGFloat)radiusPx
                       params:(KKRotationOSCParams)params
                      encoder:(id<MTLRenderCommandEncoder>)enc;
+// Single-pass elliptical fill+outline ring, using the viewer's
+// KKRingOSCFragment (same shader the in-viewer radius ring uses) - no
+// tessellation seams or fill/outline bleed. Center + radii + widths are in
+// overlay points (y-up).
+- (void)_encodeRingOSCAt:(CGPoint)centerPts
+               radiusXPt:(CGFloat)radiusXPt
+               radiusYPt:(CGFloat)radiusYPt
+               fillColor:(simd_float4)fillColor
+             strokeColor:(simd_float4)strokeColor
+             fillWidthPt:(CGFloat)fillWidthPt
+          outlineWidthPt:(CGFloat)outlineWidthPt
+                 encoder:(id<MTLRenderCommandEncoder>)enc;
 - (void)_encodeRectBorder:(CGRect)br
                 lineColor:(simd_float4)lineColor
                   encoder:(id<MTLRenderCommandEncoder>)enc;

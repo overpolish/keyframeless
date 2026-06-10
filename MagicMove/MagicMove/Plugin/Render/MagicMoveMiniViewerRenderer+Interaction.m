@@ -594,6 +594,39 @@ static const double kMiniScaleFineFactor = 0.2;
   return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
 }
 
+// Cursor hover (same precedence as -handleHitAtPoint:): the draggable points
+// (anchor, position, path) show the move cursor; the scale box's handles show
+// the matching resize cursor. Falls back to super (point / crop) for the rest.
+- (NSCursor *)miniViewer:(KKMiniViewerView *)canvas
+           cursorAtPoint:(CGPoint)p
+             contentRect:(CGRect)cr {
+  if (CGRectIsEmpty(cr))
+    return nil;
+  self.canvas = canvas;
+  NSInteger idx;
+  BOOL isOut;
+  // Each handle shows the Opt-hover eye/eye.slash when an Opt-click would
+  // toggle its visibility (labels match -optClickHandleAtPoint:), else its
+  // move/resize cursor. Built-in point/crop/rotation fall to super (also
+  // eye-aware).
+  if ([self _anchorSquareHitAtPoint:p contentRect:cr])
+    return [self kkVisibilityCursorForLabel:@"Anchor"] ?: KKPointMoveCursor();
+  if ([self pointHandleHitAtPoint:p contentRect:cr])
+    return [self kkVisibilityCursorForLabel:self.pointLabel]
+               ?: KKPointMoveCursor();
+  if ([self _pathHandleHitAtPoint:p
+                      contentRect:cr
+                         outIndex:&idx
+                         outIsOut:&isOut])
+    return [self kkVisibilityCursorForLabel:@"Path"] ?: KKPointMoveCursor();
+  if ([self _pathAnchorHitAtPoint:p contentRect:cr outIndex:&idx])
+    return [self kkVisibilityCursorForLabel:@"Path"] ?: KKPointMoveCursor();
+  if ([self _scaleHandleHitAtPoint:p contentRect:cr outIndex:&idx])
+    return [self kkVisibilityCursorForLabel:@"Scale"]
+               ?: KKResizeCursorForBoxHandle(idx);
+  return [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
+}
+
 - (void)miniViewer:(KKMiniViewerView *)canvas
     beginHandleDragAtPoint:(CGPoint)p
                contentRect:(CGRect)cr {

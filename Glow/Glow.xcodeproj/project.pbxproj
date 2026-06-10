@@ -98,11 +98,14 @@
 				Plugin/Core/Plugin.m,
 				"Plugin/Core/Plugin+CustomUI.m",
 				"Plugin/Core/Plugin+Parameters.m",
+				Plugin/Info.plist,
 				Plugin/Inspector/GlowInspectorView.m,
+				"Plugin/OSC/GlowOSC+MouseHandlers.m",
+				Plugin/OSC/GlowOSCRadiusMath.m,
+				Plugin/OSC/OSC.m,
 				Plugin/Render/Glow.metal,
 				Plugin/Render/GlowMiniViewerRenderer.m,
 				"Plugin/Render/Plugin+Render.m",
-				Plugin/Info.plist,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;

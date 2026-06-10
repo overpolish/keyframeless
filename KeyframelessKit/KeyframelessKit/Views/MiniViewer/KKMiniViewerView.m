@@ -419,11 +419,21 @@ static const NSUInteger kFilmstripGridCols = 5;
   // as a tighter/dimmer glow than the viewer. Rendering at the size it's shown
   // keeps it faithful. (Handles/OSC use the content rect, not these pixels, so
   // this is display-only.)
+  //
+  // OPT-IN: only soft/bounds effects benefit. A renderer that normalizes by the
+  // dest texture's own pixel size (e.g. MagicMove's transform shader divides
+  // the framebuffer position by the texture dims) would zoom in by source/dest
+  // if the dest shrank, so it keeps the full source size (the pre-display-res
+  // default). Renderers opt in via -prefersDisplayResolutionProcessing.
   NSUInteger srcW = slot.sourceTexture.width, srcH = slot.sourceTexture.height;
   CGRect content = [self _contentRectInDrawable];
   NSUInteger tW = srcW, tH = srcH;
-  if (content.size.width >= 1.0 && content.size.height >= 1.0 && srcW > 0 &&
-      srcH > 0) {
+  id<KKMiniViewerDelegate> del = self.canvasDelegate;
+  BOOL displayRes =
+      [del respondsToSelector:@selector(prefersDisplayResolutionProcessing)] &&
+      [(id)del prefersDisplayResolutionProcessing];
+  if (displayRes && content.size.width >= 1.0 && content.size.height >= 1.0 &&
+      srcW > 0 && srcH > 0) {
     double s = MIN(content.size.width / (double)srcW,
                    content.size.height / (double)srcH);
     s = MIN(s, 1.0); // never upscale past the source
