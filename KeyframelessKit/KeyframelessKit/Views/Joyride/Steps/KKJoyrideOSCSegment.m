@@ -47,6 +47,40 @@
   if (firstStepOnEnter)
     s1.onEnter = firstStepOnEnter;
 
+  // Present the real OSC's cursor through the pass-through overlay while the
+  // pointer is over the spotlight. FCP's own imperative setCursor doesn't
+  // survive while the guide panel is frontmost, so the strategy hands us the
+  // cursor the control would show and we set it here (also re-applied during
+  // the drag below). Setting spotlightMouseMoved opts the controller's move
+  // monitor in for this step.
+  // On hover (in/out of the spotlight) present the control's cursor through the
+  // pass-through overlay AND flip the OSC's hover emphasis (FCP runs neither
+  // its own cursor nor its hitTest hover while the guide panel is frontmost).
+  // The hover flag lives on the bridge; the OSC's drawOSC reads it.
+  // requestRedraw forces the viewer to re-run drawOSC so the emphasis change
+  // shows.
+  NSCursor *_Nullable (^cursorFor)(NSPoint) = strategy.cursorForScreenPoint;
+  void (^setHover)(BOOL) = ^(BOOL hovered) {
+    if (bridge.handleHovered == hovered)
+      return;
+    bridge.handleHovered = hovered;
+    if (strategy.requestRedraw)
+      strategy.requestRedraw();
+  };
+  s1.spotlightMouseMoved = ^(NSPoint screenPt) {
+    if (cursorFor) {
+      NSCursor *c = cursorFor(screenPt);
+      if (c)
+        [c set];
+    }
+    setHover(YES);
+  };
+  s1.spotlightMouseExited = ^(NSPoint screenPt) {
+    if (cursorFor)
+      [[NSCursor arrowCursor] set]; // drop the control cursor on un-hover
+    setHover(NO);
+  };
+
   KKJoyrideStep *s3 = [KKJoyrideStep stepWithMessage:strategy.selectedMessage
                                           targetView:nil];
   NSRect (^finalRect)(void) = strategy.finalStepTargetRect;
@@ -90,6 +124,13 @@
     [g updateMessage:dragMessage stepNumber:dragStepNumber];
   };
   s1.spotlightMouseDragged = ^(NSPoint screenPt) {
+    // Hold the control's cursor through the drag (the move monitor only fires
+    // before the press; the drag monitor fires here).
+    if (cursorFor) {
+      NSCursor *c = cursorFor(screenPt);
+      if (c)
+        [c set];
+    }
     if (!strategy.valueForScreenPoint)
       return;
     id v = strategy.valueForScreenPoint(screenPt);
@@ -105,6 +146,11 @@
     if (strategy.requireTargetHit && !onTarget) {
       return; // user can press+drag again to land on it
     }
+    // Drag done - drop back to the arrow so the next (non-pass-through) step
+    // doesn't strand the control's cursor, and clear the hover emphasis.
+    if (cursorFor)
+      [[NSCursor arrowCursor] set];
+    setHover(NO);
     bridge.guideStep = 3;
   };
 

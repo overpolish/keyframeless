@@ -134,6 +134,66 @@ static MTLPixelFormat GlowSRGBVariant(MTLPixelFormat f) {
             forContentRect:cr];
 }
 
+// The shared timing guide drives its drag-to-target steps through the
+// mini-viewer's generic "point handle" hooks (spot rect, target rect, driven
+// drag). Glow has a ring, not a point, so expose a point-handle anchor sitting
+// on the ellipse at 45 degrees (top-right of the ring): pressing it lands on
+// the ring stroke, and dragging it outward grows the radius - exactly the
+// gesture a user makes. pointHandleStyle is None so the kit paints no dot here;
+// the ring is the glyph. The base wrappers gate on `pointLabel` (which Glow
+// doesn't set), so override them to gate on the ring's own active state.
+static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
+
+- (KKMiniHandleStyle)pointHandleStyle {
+  return KKMiniHandleStyleNone;
+}
+
+- (CGPoint)_ringHandlePointForCenter:(CGPoint)c
+                             radiusX:(CGFloat)rx
+                             radiusY:(CGFloat)ry {
+  return CGPointMake(c.x + rx * kGlowRingHandleCos,
+                     c.y + ry * kGlowRingHandleCos);
+}
+
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    pointHandleCenter:(out CGPoint *)outCenter
+          contentRect:(CGRect)cr {
+  CGPoint c = CGPointZero;
+  CGFloat rx = 0, ry = 0;
+  if (![self _ringCenter:&c radiusX:&rx radiusY:&ry forContentRect:cr])
+    return NO;
+  if (outCenter)
+    *outCenter = [self _ringHandlePointForCenter:c radiusX:rx radiusY:ry];
+  return YES;
+}
+
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    pointHandleCenter:(out CGPoint *)outCenter
+            forValues:(NSArray<NSNumber *> *)values
+          contentRect:(CGRect)cr {
+  if (![self _ringActiveForContentRect:cr])
+    return NO;
+  double valX = values.count >= 1 ? values[0].doubleValue : kGlowM1Radius;
+  double valY = values.count >= 2 ? values[1].doubleValue : valX;
+  double k = MIN(cr.size.width, cr.size.height) * kGlowMiniRingK;
+  CGPoint c = CGPointMake(CGRectGetMidX(cr), CGRectGetMidY(cr));
+  CGFloat rx = (CGFloat)(k * sqrt(MAX(0.0, valX)));
+  CGFloat ry = (CGFloat)(k * sqrt(MAX(0.0, valY)));
+  if (outCenter)
+    *outCenter = [self _ringHandlePointForCenter:c radiusX:rx radiusY:ry];
+  return YES;
+}
+
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    pointHandleCenter:(out CGPoint *)outCenter
+             forValue:(double)value
+          contentRect:(CGRect)cr {
+  return [self miniViewer:canvas
+        pointHandleCenter:outCenter
+                forValues:@[ @(value), @(value) ]
+              contentRect:cr];
+}
+
 // Hit the ring stroke (within a few points of the ellipse edge).
 - (BOOL)_ringHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
   CGPoint c = CGPointZero;

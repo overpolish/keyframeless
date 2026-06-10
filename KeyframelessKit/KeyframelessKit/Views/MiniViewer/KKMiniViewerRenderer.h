@@ -148,6 +148,10 @@ NS_ASSUME_NONNULL_BEGIN
 typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
   KKMiniHandleStylePoint = 0, ///< Default: solid dot (matches KKPointOSC).
   KKMiniHandleStyleArc = 1,   ///< Ring (matches KKArcOSC).
+  KKMiniHandleStyleNone = 2,  ///< No glyph: the renderer draws its own control
+                              ///< (e.g. Glow's radius ring) but still exposes a
+                              ///< point-handle anchor for guides / programmatic
+                              ///< drag.
 };
 
 #pragma mark - Subclass effect + point handle (override)

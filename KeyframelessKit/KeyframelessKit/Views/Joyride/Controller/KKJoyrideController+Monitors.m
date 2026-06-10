@@ -192,7 +192,8 @@ static const NSEventModifierFlags kJoyrideModifierMask =
   // OSC's opt-reveal needs, so we observe moves ourselves and drive the step's
   // control - the move equivalent of the click path above. Only installed when
   // the step opts in.
-  if (currentStep.spotlightMouseMoved) {
+  if (currentStep.spotlightMouseMoved || currentStep.spotlightMouseExited) {
+    _wasInsideSpotlight = NO; // fresh in/out tracking per step
     _globalMoveMonitor =
         [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskMouseMoved
                                                handler:^(NSEvent *event) {
@@ -217,13 +218,19 @@ static const NSEventModifierFlags kJoyrideModifierMask =
 - (void)_handleMouseMoved {
   KKJoyrideStep *step = [self _currentStep];
   void (^moved)(NSPoint) = step.spotlightMouseMoved;
-  if (!moved)
+  void (^exited)(NSPoint) = step.spotlightMouseExited;
+  if (!moved && !exited)
     return;
   NSPoint mouse = NSEvent.mouseLocation;
   NSRect spot = [_overlay screenSpotRect];
-  if (NSIsEmptyRect(spot) || !NSPointInRect(mouse, spot))
-    return;
-  moved(mouse);
+  BOOL inside = !NSIsEmptyRect(spot) && NSPointInRect(mouse, spot);
+  if (inside) {
+    if (moved)
+      moved(mouse);
+  } else if (_wasInsideSpotlight && exited) {
+    exited(mouse); // left the spotlight - let the step undo per-hover state
+  }
+  _wasInsideSpotlight = inside;
 }
 
 - (void)_removeGlobalMonitor {

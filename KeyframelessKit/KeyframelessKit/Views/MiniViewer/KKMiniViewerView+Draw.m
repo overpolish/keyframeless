@@ -373,7 +373,10 @@
         isActive = [(KKMiniViewerRenderer *)del pointHandleIsActive];
         ghostAlpha = [(KKMiniViewerRenderer *)del pointHandleGhostAlpha];
       }
-      if (style == KKMiniHandleStyleArc) {
+      if (style == KKMiniHandleStyleNone) {
+        // The renderer exposes a point-handle anchor (for guides / driven
+        // drag) but paints its own control - draw no default glyph here.
+      } else if (style == KKMiniHandleStyleArc) {
         [self _encodeArcHandleGlyphAt:handleCenterPts
                              isActive:isActive
                            ghostAlpha:ghostAlpha

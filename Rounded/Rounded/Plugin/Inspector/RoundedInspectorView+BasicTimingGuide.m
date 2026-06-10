@@ -8,6 +8,7 @@
 #import "RoundedInspectorView_Private.h"
 #import <KeyframelessKit/KKOSCGuideBridge.h>
 #import <KeyframelessKit/KKOSCGuideStrategy.h>
+#import <KeyframelessKit/KKResizeCursor.h>
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingGuide.h>
@@ -116,6 +117,11 @@ static double RoundedGuideCurrentRadius(KKTimelineLanesView *lanes) {
               kRoundedOSCGuideTargetSnap)
                  ? @(kOSCGuideTargetRadius)
                  : v;
+    };
+    // The Radius handle's hover cursor (same as the real OSC's
+    // KKPointMoveCursor), presented through the pass-through overlay.
+    s.cursorForScreenPoint = ^NSCursor *(NSPoint pt) {
+      return KKPointMoveCursor();
     };
     s.requireTargetHit = YES;
     return s;

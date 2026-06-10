@@ -433,6 +433,12 @@ MagicMoveShapingGuideSteps(KKJoyrideController *guide,
       }
       return v;
     };
+    // The Position handle's hover cursor (same as the real OSC's
+    // _setViewerPointCursorForLabel:): the point-move cursor, shown through the
+    // pass-through overlay while the guide panel is frontmost.
+    s.cursorForScreenPoint = ^NSCursor *(NSPoint pt) {
+      return KKPointMoveCursor();
+    };
     s.requireTargetHit = YES;
     return s;
   };

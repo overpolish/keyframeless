@@ -390,8 +390,11 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
     return;
 
   self.ghostAlpha = radiusGhost ? [self kkRevealGhostAlpha] : 1.0f;
+  // During a guide, FCP doesn't run its own hover hitTest (the guide panel is
+  // frontmost), so take the hover emphasis from the bridge.
+  BOOL guideHover = inGuide && RoundedGuideBridge().handleHovered;
   [self drawAtCanvasPosition:radiusPos
-                   isHovered:(activePart == kOSCRadiusPart)
+                   isHovered:(activePart == kOSCRadiusPart || guideHover)
                     isActive:self.isDragging && (activePart == kOSCRadiusPart)
             destinationImage:destinationImage
                       atTime:time];

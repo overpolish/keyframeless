@@ -77,3 +77,38 @@ NSPoint KKJoyrideSnapToTarget(NSPoint p, NSRect targetRect, CGFloat tolerance) {
 }
 
 @end
+
+void KKJoyrideStepAttachCursor(KKJoyrideStep *step,
+                               NSCursor *_Nullable (^cursorFor)(NSPoint)) {
+  if (!step || !cursorFor)
+    return;
+  // Hover (before press): the move monitor drives this when in the spotlight.
+  step.spotlightMouseMoved = ^(NSPoint pt) {
+    NSCursor *c = cursorFor(pt);
+    if (c)
+      [c set];
+  };
+  step.spotlightMouseExited = ^(NSPoint pt) {
+    // Re-query at the now-outside point: for a point-aware source like the
+    // mini-viewer this returns the arrow AND clears the renderer's hover
+    // emphasis (its cursor hook doubles as its hover hook).
+    NSCursor *c = cursorFor(pt);
+    [(c ?: [NSCursor arrowCursor]) set];
+  };
+  // Hold the cursor through the drag (no move events fire while a button is
+  // down; the drag monitor fires here instead). Chain the existing handlers.
+  void (^prevDrag)(NSPoint) = step.spotlightMouseDragged;
+  step.spotlightMouseDragged = ^(NSPoint pt) {
+    NSCursor *c = cursorFor(pt);
+    if (c)
+      [c set];
+    if (prevDrag)
+      prevDrag(pt);
+  };
+  void (^prevUp)(NSPoint) = step.spotlightMouseUp;
+  step.spotlightMouseUp = ^(NSPoint pt) {
+    if (prevUp)
+      prevUp(pt);
+    [[NSCursor arrowCursor] set]; // drag done - back to arrow for the next step
+  };
+}

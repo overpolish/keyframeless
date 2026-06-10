@@ -273,8 +273,11 @@
   // Position arc handle, drawn above rotation + scale so it stays on top.
   if (posVisible || posGhost) {
     self.fillAlpha = posGhost ? [self kkRevealGhostAlpha] : 1.0f;
+    // During a guide, FCP doesn't run its own hover hitTest (the guide panel is
+    // frontmost), so take the hover emphasis from the bridge.
+    BOOL guideHover = inGuide && MagicMoveSharedOSCGuideBridge().handleHovered;
     [self drawAtCanvasPosition:pos
-                     isHovered:handleTargeted
+                     isHovered:(handleTargeted || guideHover)
                       isActive:draggingHandle
               destinationImage:destinationImage
                         atTime:time];

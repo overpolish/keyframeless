@@ -48,6 +48,14 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniViewerView *c) {
       config.oscGuideBridge ? config.oscGuideBridge() : nil;
   KKOSCGuideStrategy *strategy =
       config.oscGuideStrategy ? config.oscGuideStrategy() : nil;
+  // Let the segment nudge a viewer redraw when the hover emphasis changes (FCP
+  // won't re-run drawOSC on its own while the guide panel is frontmost).
+  if (strategy && !strategy.requestRedraw && config.requestPreviewRender) {
+    void (^previewRender)(void) = config.requestPreviewRender;
+    strategy.requestRedraw = ^{
+      previewRender();
+    };
+  }
   BOOL interactive = (bridge != nil && strategy != nil);
 
   NSRect (^viewerRect)(void) = ^NSRect {
@@ -55,6 +63,14 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniViewerView *c) {
   };
   NSRect (^canvasRect)(void) = ^NSRect {
     return KKOSCGuideCanvasScreenRect(weakBinder.latestMiniViewer);
+  };
+  // Present the mini-viewer's real hover cursor (its angle/move cursor, or the
+  // eye/eye.slash under Option) through the pass-through overlay during the
+  // opt-hide / re-show steps - its own tracking can't fire while the panel
+  // captures the mouse. Off the handle this returns the arrow.
+  void (^applyMiniCursor)(NSPoint) = ^(NSPoint p) {
+    NSCursor *c = [weakBinder.latestMiniViewer cursorAtScreenPoint:p];
+    [(c ?: [NSCursor arrowCursor]) set];
   };
 
   // drag(2 or 1) + gear, pill, open, opt-hide, peek, reshow, checkbox, re-open,
@@ -240,6 +256,18 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniViewerView *c) {
   };
   sOptHide.spotlightCircular = YES;
   sOptHide.spotlightPassThrough = YES;
+  // Drive opt-reveal on hover (the renderer's own opt-tracking can't fire while
+  // the panel captures the mouse) so the eye.slash hide affordance + cursor
+  // show over the still-visible handle, then present that cursor.
+  sOptHide.spotlightMouseMoved = ^(NSPoint screenPt) {
+    [weakBinder.latestMiniViewer
+        setGuidePeekActive:(NSEvent.modifierFlags &
+                            NSEventModifierFlagOption) != 0];
+    applyMiniCursor(screenPt);
+  };
+  sOptHide.spotlightMouseExited = ^(NSPoint screenPt) {
+    applyMiniCursor(screenPt);
+  };
   sOptHide.spotlightMouseDown = ^(NSPoint screenPt) {
     optClickDrive(screenPt, NO);
   };
@@ -272,6 +300,10 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniViewerView *c) {
     [weakBinder.latestMiniViewer
         setGuidePeekActive:(NSEvent.modifierFlags &
                             NSEventModifierFlagOption) != 0];
+    applyMiniCursor(screenPt); // eye (show) over the revealed ghost
+  };
+  sReshow.spotlightMouseExited = ^(NSPoint screenPt) {
+    applyMiniCursor(screenPt);
   };
   // ensureReveal: the hidden handle is only hit-testable while reveal is on, so
   // turn it on before the toggle (the click may land without a preceding move).

@@ -1,0 +1,636 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "Glow": {
+      "comment": "Help section title (plugin name).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow"
+          }
+        }
+      }
+    },
+    "Glow adds a soft, animatable glow around a clip's content. Drop it on a clip from the Effects browser. It animates with the shared timeline, so see the Timing sections for how Basic, Advanced, easing, and motion blur work.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow fügt ein weiches, animierbares Leuchten um den Inhalt eines Clips hinzu. Ziehe es aus dem Effekte-Browser auf einen Clip. Es animiert mit der gemeinsamen Timeline; siehe daher die Timing-Abschnitte dazu, wie Einfach, Erweitert, Easing und Bewegungsunschärfe funktionieren."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow añade un resplandor suave y animable alrededor del contenido de un clip. Arrástralo a un clip desde el explorador de Efectos. Se anima con la línea de tiempo compartida, así que consulta las secciones de Sincronización para ver cómo funcionan Básico, Avanzado, la suavización y el desenfoque de movimiento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow ajoute une lueur douce et animable autour du contenu d'un plan. Faites-le glisser sur un plan depuis le navigateur d'effets. Il s'anime avec la timeline partagée ; consultez donc les sections Minutage pour savoir comment fonctionnent Basique, Avancé, le lissage et le flou de mouvement."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow はクリップの内容のまわりに、アニメート可能な柔らかいグローを追加します。エフェクトブラウザからクリップにドロップしてください。共有タイムラインでアニメートするため、「基本」「詳細」、イージング、モーションブラーの動作についてはタイミングのセクションを参照してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow는 클립 내용 주위에 부드럽고 애니메이션할 수 있는 광채를 더합니다. 효과 브라우저에서 클립으로 드래그하세요. 공유 타임라인으로 애니메이션되므로 기본, 고급, 이징, 모션 블러의 작동 방식은 타이밍 섹션을 참조하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow 在片段内容周围添加柔和、可制作动画的辉光。从“效果”浏览器将它拖到片段上。它使用共享时间线制作动画，因此请参阅“计时”部分了解“基本”、“高级”、缓动和运动模糊的工作方式。"
+          }
+        }
+      }
+    },
+    "Parameters:": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parameter:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parámetros:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paramètres :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パラメータ:"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "매개변수:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参数："
+          }
+        }
+      }
+    },
+    "<accent>Radius</accent> - the size of the glow, in pixels (0 = no glow, up to 500 for a large halo). Has X and Y components, aspect-lockable, so the glow can be a circle or stretched into an oval. The default is 100.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Radius</accent> - die Größe des Leuchtens, in Pixeln (0 = kein Leuchten, bis zu 500 für einen großen Schein). Hat X- und Y-Komponenten, seitenverhältnissperrbar, sodass das Leuchten ein Kreis oder zu einem Oval gestreckt sein kann. Der Standardwert ist 100."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Radio</accent> - el tamaño del resplandor, en píxeles (0 = sin resplandor, hasta 500 para un halo grande). Tiene componentes X e Y, con relación de aspecto bloqueable, de modo que el resplandor puede ser un círculo o estirarse en un óvalo. El valor por omisión es 100."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rayon</accent> - la taille de la lueur, en pixels (0 = aucune lueur, jusqu'à 500 pour un grand halo). Possède des composantes X et Y, à proportions verrouillables, de sorte que la lueur peut être un cercle ou étirée en ovale. La valeur par défaut est 100."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>半径</accent> - グローの大きさ（ピクセル単位、0 = グローなし、最大 500 で大きなハロー）。X と Y のコンポーネントがあり、縦横比をロックできるため、グローを円にも楕円にも引き伸ばせます。デフォルトは 100 です。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>반경</accent> - 광채의 크기(픽셀 단위, 0 = 광채 없음, 최대 500은 큰 후광). X 및 Y 구성 요소가 있으며 종횡비를 잠글 수 있어 광채를 원이나 타원으로 늘릴 수 있습니다. 기본값은 100입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>半径</accent> - 辉光的大小，以像素为单位（0 = 无辉光，最大 500 为大光环）。具有 X 和 Y 分量，可锁定长宽比，因此辉光可以是圆形，也可以拉伸为椭圆形。默认值为 100。"
+          }
+        }
+      }
+    },
+    "Drag the Radius ring": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den Radius-Ring ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra el anillo de radio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faire glisser l'anneau de rayon"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "半径リングをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "반경 링 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖移半径环"
+          }
+        }
+      }
+    },
+    "Set the glow size on the canvas": {
+      "comment": "Help shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Größe des Leuchtens auf der Arbeitsfläche festlegen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajusta el tamaño del resplandor en el lienzo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Définir la taille de la lueur sur le canevas"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンバス上でグローの大きさを設定"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "캔버스에서 광채 크기 설정"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在画布上设置辉光大小"
+          }
+        }
+      }
+    },
+    "On-screen control shortcuts": {
+      "comment": "Help section title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kurzbefehle für Bildschirmsteuerung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atajos de controles en pantalla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raccourcis des contrôles à l'écran"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オンスクリーンコントロールのショートカット"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면 컨트롤 단축키"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕控件快捷键"
+          }
+        }
+      }
+    },
+    "Glow, a Final Cut Pro plugin that adds a soft animatable glow around a clip and animates it with the shared Keyframeless timeline system (Basic and Advanced timing, easing, motion blur). Always refer to yourself as Glow. Detailed feature information is in the reference docs below.": {
+      "comment": "AI assistant product context for Glow plugin.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow, ein Final-Cut-Pro-Plugin, das ein weiches, animierbares Leuchten um einen Clip hinzufügt und es mit dem gemeinsamen Keyframeless-Timeline-System animiert (einfaches und erweitertes Timing, Easing, Bewegungsunschärfe). Bezeichne dich immer als Glow. Ausführliche Funktionsinformationen findest du in den Referenzdokumenten unten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow, un plugin de Final Cut Pro que añade un resplandor suave y animable alrededor de un clip y lo anima con el sistema de línea de tiempo compartido de Keyframeless (tiempo Básico y Avanzado, suavización, desenfoque de movimiento). Refiérete siempre a ti mismo como Glow. La información detallada de las funciones está en los documentos de referencia a continuación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow, un module externe Final Cut Pro qui ajoute une lueur douce et animable autour d'un plan et l'anime avec le système de timeline partagé Keyframeless (timing Basique et Avancé, lissage, flou de mouvement). Désignez-vous toujours comme Glow. Des informations détaillées sur les fonctionnalités se trouvent dans la documentation de référence ci-dessous."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow は、クリップのまわりにアニメート可能な柔らかいグローを追加し、共有の Keyframeless タイムラインシステム（基本・詳細タイミング、イージング、モーションブラー）でアニメートする Final Cut Pro プラグインです。常に自分を Glow と呼んでください。機能の詳細は下記のリファレンスドキュメントにあります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow는 클립 주위에 부드럽고 애니메이션할 수 있는 광채를 더하고 공유 Keyframeless 타임라인 시스템(기본 및 고급 타이밍, 이징, 모션 블러)으로 애니메이션하는 Final Cut Pro 플러그인입니다. 항상 자신을 Glow라고 칭하세요. 자세한 기능 정보는 아래 참조 문서에 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow 是一个 Final Cut Pro 插件，可在片段周围添加柔和、可制作动画的辉光，并使用共享的 Keyframeless 时间线系统（基本和高级计时、缓动、运动模糊）制作动画。请始终自称为 Glow。详细的功能信息见下方的参考文档。"
+          }
+        }
+      }
+    },
+    "Glow in with bounce": {
+      "comment": "AI example chip: animate glow in.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leuchten mit Sprung einblenden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer aparecer el resplandor con rebote"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faire apparaître la lueur avec rebond"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グローをバウンドで出現させる"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "광채를 바운스로 나타내기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让辉光弹跳出现"
+          }
+        }
+      }
+    },
+    "Animate the glow growing from 0 to 200 over 1 second with bounce.": {
+      "comment": "AI example value: animate glow in.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animiere das Leuchten über 1 Sekunde von 0 auf 200 mit einem Sprung."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anima el resplandor creciendo de 0 a 200 durante 1 segundo con rebote."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anime la lueur de 0 à 200 sur 1 seconde avec un rebond."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グローを1秒かけて0から200までバウンドさせながら大きくする。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "광채를 1초 동안 0에서 200까지 바운스로 커지게 애니메이션하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 1 秒内让辉光从 0 弹跳放大到 200。"
+          }
+        }
+      }
+    },
+    "Pulse the glow": {
+      "comment": "AI example chip: pulse the glow.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leuchten pulsieren lassen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer pulsar el resplandor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faire pulser la lueur"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グローを脈動させる"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "광채를 맥동시키기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让辉光脉动"
+          }
+        }
+      }
+    },
+    "Pulse the glow larger and back a few times across the clip.": {
+      "comment": "AI example value: pulse the glow.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lass das Leuchten über den Clip hinweg ein paar Mal größer und wieder kleiner pulsieren."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz que el resplandor pulse haciéndose más grande y volviendo varias veces a lo largo del clip."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fais pulser la lueur en l'agrandissant et en la réduisant plusieurs fois sur la durée du plan."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリップ全体でグローを数回、大きくしては戻して脈動させる。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "클립 전체에서 광채가 몇 번 커졌다 돌아오며 맥동하게 하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让辉光在整个片段中放大并缩回，脉动几次。"
+          }
+        }
+      }
+    },
+    "What's Basic vs Advanced?": {
+      "comment": "AI example chip: Basic vs Advanced timing question.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ist Einfach vs. Erweitert?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué es Básico frente a Avanzado?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quelle différence entre Basique et Avancé ?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「基本」と「詳細」の違いは？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본과 고급의 차이는?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基本与高级有什么区别？"
+          }
+        }
+      }
+    },
+    "What's the difference between Basic and Advanced timing?": {
+      "comment": "AI example value: Basic vs Advanced timing question.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ist der Unterschied zwischen einfachem und erweitertem Timing?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuál es la diferencia entre el tiempo Básico y Avanzado?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quelle est la différence entre le timing Basique et Avancé ?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「基本」タイミングと「詳細」タイミングの違いは何ですか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본 타이밍과 고급 타이밍의 차이는 무엇인가요?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基本计时和高级计时有什么区别？"
+          }
+        }
+      }
+    },
+    "Ask a question or describe an animation…": {
+      "comment": "AI prompt field placeholder for Glow.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stelle eine Frage oder beschreibe eine Animation…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz una pregunta o describe una animación…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posez une question ou décrivez une animation…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "質問するか、アニメーションを入力…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "질문하거나 애니메이션을 설명하세요…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提问或描述一个动画…"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

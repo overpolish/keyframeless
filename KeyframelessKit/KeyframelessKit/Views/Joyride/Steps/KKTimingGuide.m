@@ -168,6 +168,10 @@ static const CGFloat kDragSnapPx = 14.0;
   KKLane *primary = [KKLane laneWithLabel:config.primaryLabel];
   primary.enabled = NO; // constant until the user opts it in to animation
   primary.valueType = (KKLaneValueType)config.primaryValueType;
+  // Mirror the real lane's aspect-link so OSC drags during the guide follow the
+  // same path the plugin uses (e.g. Glow's radius ring: uniform when linked).
+  primary.aspectLinkable = config.primaryAspectLinked;
+  primary.aspectLinked = config.primaryAspectLinked;
   primary.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
                                           values:config.primarySeedValues] ];
   tl.lanes = @[ primary ];
@@ -176,11 +180,14 @@ static const CGFloat kDragSnapPx = 14.0;
 
 + (KKLane *)_seedLaneWithLabel:(NSString *)label
                      valueType:(NSInteger)valueType
+                  aspectLinked:(BOOL)aspectLinked
                    startValues:(NSArray<NSNumber *> *)startValues
                      endValues:(NSArray<NSNumber *> *)endValues {
   KKLane *lane = [KKLane laneWithLabel:label];
   lane.enabled = YES; // animatable
   lane.valueType = (KKLaneValueType)valueType;
+  lane.aspectLinkable = aspectLinked;
+  lane.aspectLinked = aspectLinked;
   lane.keyposes = @[
     [KKKeyPose keyposeAtTime:0.0 values:startValues],
     [KKKeyPose keyposeAtTime:1.0 values:endValues],
@@ -199,12 +206,14 @@ static const CGFloat kDragSnapPx = 14.0;
                                         : config.primarySeedValues;
   KKLane *primary = [self _seedLaneWithLabel:config.primaryLabel
                                    valueType:config.primaryValueType
+                                aspectLinked:config.primaryAspectLinked
                                  startValues:config.primarySeedValues
                                    endValues:primaryEnd];
   NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
   if (config.secondaryLabel) {
     KKLane *secondary = [self _seedLaneWithLabel:config.secondaryLabel
                                        valueType:config.secondaryValueType
+                                    aspectLinked:NO
                                      startValues:config.secondarySeedValues
                                        endValues:config.secondarySeedValues];
     [lanes addObject:secondary];
@@ -318,6 +327,11 @@ static const CGFloat kDragSnapPx = 14.0;
             NSIsEmptyRect(t) ? 1e9 : hypot(p.x - NSMidX(t), p.y - NSMidY(t));
         return dpx <= 14.0;
       }];
+  // Present the mini-viewer's real hover cursor through the pass-through
+  // overlay (its own tracking can't fire while the panel captures the mouse).
+  KKJoyrideStepAttachCursor(sEditConstant, ^NSCursor *(NSPoint pt) {
+    return [weakBinder.latestMiniViewer cursorAtScreenPoint:pt];
+  });
 
   KKJoyrideStep *sAdd = [KKJoyrideStep
       stepWithMessage:KKLoc(@"Plugins don't animate by default. Tap <symbol "
@@ -437,6 +451,9 @@ static const CGFloat kDragSnapPx = 14.0;
             NSIsEmptyRect(t) ? 1e9 : hypot(p.x - NSMidX(t), p.y - NSMidY(t));
         return dpx <= 14.0;
       }];
+  KKJoyrideStepAttachCursor(sEdit, ^NSCursor *(NSPoint pt) {
+    return [weakBinder.latestMiniViewer cursorAtScreenPoint:pt];
+  });
 
   KKJoyrideStep *sGap = [KKJoyrideStep
       stepWithMessage:KKLoc(@"Click the <warn>gap</warn> between keyposes to "

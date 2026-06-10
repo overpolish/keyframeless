@@ -109,6 +109,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Component count for the primary lane (1 for Radius, 2 for Position).
 @property(nonatomic) NSInteger primaryComponentCount;
 
+/// Whether the primary lane's components are aspect-linked (move together).
+/// The seed timeline mirrors this so OSC drags during the guide behave like
+/// the real lane - e.g. Glow's radius ring, whose mini-viewer drag takes a
+/// uniform path when linked and a per-axis path when not. Default NO.
+@property(nonatomic) BOOL primaryAspectLinked;
+
 /// Endpoint values written at both t=0 and t=1 for the primary lane in the
 /// Advanced seed. Count must match `primaryComponentCount`.
 @property(nonatomic, copy) NSArray<NSNumber *> *primarySeedValues;

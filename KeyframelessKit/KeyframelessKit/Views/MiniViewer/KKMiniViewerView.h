@@ -347,6 +347,12 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 /// way the viewer OSC guide spotlights the in-viewer handle.
 - (NSRect)pointHandleScreenRect;
 
+/// The cursor the canvas delegate would show at `screenPoint` (its
+/// `miniViewer:cursorAtPoint:contentRect:`), or nil. Lets a guide present the
+/// real hover cursor while its pass-through overlay captures the mouse (the
+/// mini-viewer's own tracking can't fire then).
+- (nullable NSCursor *)cursorAtScreenPoint:(NSPoint)screenPoint;
+
 /// Drive the point handle from screen points - the exact path a real overlay
 /// drag takes (delegate hit-test/commit + the `onHandleDragBegin/End`
 /// coalescing), so a guide can capture the gesture (clicks can't pass through

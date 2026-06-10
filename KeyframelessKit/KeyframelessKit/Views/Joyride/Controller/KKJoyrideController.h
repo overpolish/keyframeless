@@ -55,6 +55,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// `[NSEvent modifierFlags]`).
 @property(nonatomic, copy, nullable) void (^spotlightMouseMoved)
     (NSPoint screenPoint);
+/// Called with the (now-outside) point when the cursor leaves the spotlight
+/// after having been inside it, on a step that also sets `spotlightMouseMoved`.
+/// Lets a step undo per-hover state - e.g. reset a custom cursor and clear the
+/// control's hover emphasis.
+@property(nonatomic, copy, nullable) void (^spotlightMouseExited)
+    (NSPoint screenPoint);
 /// Magnify (pinch) events are delivered to the frontmost window - the guide
 /// panel - and `ignoresMouseEvents` does NOT pass gestures through (unlike
 /// clicks/scroll), so they're dropped before reaching content below. When

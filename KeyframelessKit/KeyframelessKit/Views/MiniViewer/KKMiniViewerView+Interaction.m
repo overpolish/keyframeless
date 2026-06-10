@@ -148,6 +148,16 @@
                    fromView:nil];
 }
 
+- (NSCursor *)cursorAtScreenPoint:(NSPoint)screenPoint {
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
+  if (!self.window ||
+      ![d respondsToSelector:@selector(miniViewer:cursorAtPoint:contentRect:)])
+    return nil;
+  return [d miniViewer:self
+         cursorAtPoint:[self _viewPointForScreenPoint:screenPoint]
+           contentRect:[self contentRectInViewPoints]];
+}
+
 - (void)beginPointHandleDragAtScreenPoint:(NSPoint)screenPoint {
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (![d respondsToSelector:

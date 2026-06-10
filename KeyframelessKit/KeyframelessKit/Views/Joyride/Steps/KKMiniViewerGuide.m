@@ -35,6 +35,10 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniViewerView *c) {
   KKLane *primary = [KKLane laneWithLabel:config.primaryLabel];
   primary.enabled = YES; // animatable, so the Advanced sequencer shows keyposes
   primary.valueType = (KKLaneValueType)config.primaryValueType;
+  // Mirror the real lane's aspect-link so OSC drags during the guide follow the
+  // same path the plugin uses (e.g. Glow's radius ring: uniform when linked).
+  primary.aspectLinkable = config.primaryAspectLinked;
+  primary.aspectLinked = config.primaryAspectLinked;
   NSArray<NSArray<NSNumber *> *> *frames = config.miniViewerSeedValues;
   NSMutableArray<KKKeyPose *> *kps = [NSMutableArray array];
   NSUInteger n = frames.count;

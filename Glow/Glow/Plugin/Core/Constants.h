@@ -23,6 +23,30 @@ static const UInt32 kParamRenderNudge = 202;
 // lane in a later milestone.
 static const NSInteger kOSCRadiusPart = 100;
 
+@class KKOSCGuideBridge;
+/// The shared OSC-guide engine for this XPC process - the generic affine /
+/// staleness / notification state behind Glow's radius-ring OSC guide. Hand
+/// this to a KKJoyrideOSCSegment to build a guide for the ring OSC.
+extern KKOSCGuideBridge *GlowSharedOSCGuideBridge(void);
+/// Re-anchors the bridge's screen↔canvas map by pairing the given screen point
+/// with the ring handle's current canvas position. Call on the press so the
+/// drag uses a mapping that survived zoom-to-fit. No-op until drawOSC has run.
+extern void GlowOSCCaptureGuideAnchorAtScreen(NSPoint screenPt);
+/// Pushes the live [X, Y] radius the guide drag is writing so the ring can
+/// track it from the drawOSC tick (the blob is unreadable there).
+extern void GlowSetGuideRadiusValues(NSArray<NSNumber *> *values);
+/// Maps a screen point to the [X, Y] radius that places the ring edge under it
+/// (distance from centre through the ring mapping R = minDim*0.012*sqrt(val),
+/// linked so both axes match). Falls back to the last guide radius until the
+/// bridge has cached usable geometry.
+extern NSArray<NSNumber *> *
+GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt);
+
+/// Radius value (px per axis) the OSC guide targets during the interactive
+/// drag step. Matches the Basic guide's primaryTargetValues; shared between
+/// OSC.m and GlowInspectorView+BasicTimingGuide.m.
+static const double kGlowOSCGuideTargetRadius = 250.0;
+
 // M1 render fallbacks for every GlowPluginState field that isn't a lane yet.
 // Shared by the render path and the mini-viewer preview so they stay in sync
 // as later milestones promote these to real lanes / mode params.

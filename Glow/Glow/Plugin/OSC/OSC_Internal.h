@@ -32,6 +32,16 @@ NS_ASSUME_NONNULL_BEGIN
 - (double)canvasMinDimension;
 - (void)updateRingForFraction:(double)frac;
 
+// OSC-guide bridge helpers (OSC.m): the clip frame's object-corners in canvas
+// space, the [X, Y] radius the ring draws at a fraction (guide-scoped value
+// while a guide step runs, else the snapshot), and the ring "handle" / target
+// points (a point on the ellipse at 45 degrees) the bridge spotlights.
+- (BOOL)getCanvasTopRight:(CGPoint *)outTopRight
+               bottomLeft:(CGPoint *)outBottomLeft;
+- (NSArray<NSNumber *> *)guideRadiusValuesForFraction:(double)frac;
+- (CGPoint)ringHandleCanvasPositionForFraction:(double)frac;
+- (CGPoint)guideTargetCanvasPosition;
+
 @end
 
 /// Pointer event handlers (mouseMoved/Down/Dragged/Up). Split out of OSC.m for

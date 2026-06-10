@@ -7,6 +7,7 @@
 #import "GlowOSCRadiusMath.h"
 #import "OSC_Internal.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKOSCGuideBridge.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
 #define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
@@ -53,6 +54,13 @@
   _ringDragStartValY = v.count > 1 ? v[1].doubleValue : _ringDragStartValX;
 
   [self.radiusRing updateCursorForMouseX:positionX positionY:positionY];
+
+  // OSC guide: grabbing the real viewer ring advances the drag step (the guide
+  // panel's spotlight passes the press through to FCP, so this is where the
+  // user's drag of the actual handle is seen).
+  if (GlowSharedOSCGuideBridge().guideStep == 1)
+    GlowSharedOSCGuideBridge().guideStep = 2;
+
   if (forceUpdate)
     *forceUpdate = YES;
 }
@@ -108,6 +116,12 @@
                                               : _ringDragStartValY;
   }
 
+  // OSC guide: snap a linked drag onto the glowing target when close, so the
+  // user lands the ring exactly (mirrors the strategy's snapValue).
+  if (GlowSharedOSCGuideBridge().guideStep == 2 && effLinked &&
+      fabs(newX - kGlowOSCGuideTargetRadius) < 30.0)
+    newX = newY = kGlowOSCGuideTargetRadius;
+
   [self.radiusRing updateCursorForMouseX:positionX positionY:positionY];
   [self _writeRadiusValues:@[ @(newX), @(newY) ]
                     atTime:time
@@ -121,10 +135,17 @@
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
   [self kkResetOptHideArming];
+  BOOL wasDragging = _ringDragging;
   _ringDragging = NO;
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   [oscAPI setCursor:[NSCursor arrowCursor]];
+
+  // OSC guide: releasing the real ring after a drag completes the drag step
+  // (the segment's observer advances the joyride when guideStep hits 3).
+  if (wasDragging && GlowSharedOSCGuideBridge().guideStep == 2)
+    GlowSharedOSCGuideBridge().guideStep = 3;
+
   if (forceUpdate)
     *forceUpdate = NO;
 }

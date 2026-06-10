@@ -8,7 +8,89 @@
 #import "GlowOSCRadiusMath.h"
 #import "OSC_Internal.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKOSCGuideBridge.h>
 #import <KeyframelessKit/KeyframelessKit.h>
+
+// The live OSC for this XPC process, so the inspector's guide functions (same
+// process) can reach the ring geometry through the C entry points below.
+static GlowOSC *sCurrentOSC = nil;
+
+// One generic OSC-guide engine per XPC process (the affine / staleness / step +
+// position notifications). Reused unchanged by the KKJoyrideOSCSegment the
+// inspector builds; the ring-specific math is the two C functions below it.
+static KKOSCGuideBridge *GlowGuideBridge(void) {
+  static KKOSCGuideBridge *sBridge = nil;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    sBridge = [[KKOSCGuideBridge alloc] init];
+    // The default 30pt spotlight suits a small point handle (Rounded's dot);
+    // Glow's ring is a large thin ellipse, so a wide cutout just frames empty
+    // canvas with the stroke lost inside it. Match the mini-viewer's spotlight:
+    // its handle radius is kKKMiniHandleOuterPt (4.5), and both cutouts go
+    // through the same -8/-3 inset, so 4.5 here reproduces the mini's size.
+    sBridge.spotlightHandleRadius = 4.5;
+  });
+  return sBridge;
+}
+
+KKOSCGuideBridge *GlowSharedOSCGuideBridge(void) { return GlowGuideBridge(); }
+
+// Guide-scoped [X, Y] radius. The OSC cannot read the timeline blob from the
+// drawOSC tick (FxParameterRetrievalAPI is nil there), so during the guide the
+// strategy pushes the live radius here (same XPC process) and the ring tracks
+// it without the unreadable blob.
+static NSArray<NSNumber *> *sGuideRadiusValues = nil;
+
+void GlowSetGuideRadiusValues(NSArray<NSNumber *> *values) {
+  if (values.count >= 1)
+    sGuideRadiusValues = [values copy];
+}
+
+// Re-anchor the bridge's screen↔canvas map by pairing a screen point with the
+// ring handle's current canvas position (the bridge supplies the live scale).
+static BOOL GlowReanchor(GlowOSC *osc, NSPoint screenPt) {
+  if (!osc)
+    return NO;
+  CGPoint handle = [osc
+      ringHandleCanvasPositionForFraction:[osc fractionAtTime:kCMTimeZero]];
+  return [GlowGuideBridge() reanchorAtScreen:screenPt handleCanvasPos:handle];
+}
+
+void GlowOSCCaptureGuideAnchorAtScreen(NSPoint screenPt) {
+  GlowOSC *osc = sCurrentOSC;
+  if (!osc) {
+    KKLogWarn(@"[GlowOSCGuide] capture anchor skipped: no current OSC");
+    return;
+  }
+  if (!GlowReanchor(osc, screenPt))
+    KKLogWarn(@"[GlowOSCGuide] capture anchor skipped: no live scale yet "
+              @"(drawOSC has not run)");
+}
+
+// Inverse of the ring's radius mapping: screen → canvas (via the bridge's
+// affine), then distance from the clip centre back through
+// R = minDim*0.012*sqrt(val), linked so both axes match - the same uniform path
+// a real ring drag takes. Falls back to the last guide radius until the bridge
+// has cached usable geometry.
+NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
+  KKOSCGuideBridge *b = GlowGuideBridge();
+  NSArray<NSNumber *> *fallback =
+      sGuideRadiusValues ?: @[ @(kGlowM1Radius), @(kGlowM1Radius) ];
+  CGPoint tr = b.currentCanvasTopRight, bl = b.currentCanvasBottomLeft;
+  double cx = 0, cy = 0;
+  if (!b.geometryValid || ![b screenToCanvas:screenPt outX:&cx outY:&cy])
+    return fallback;
+  double centerX = (tr.x + bl.x) * 0.5;
+  double centerY = (tr.y + bl.y) * 0.5;
+  double minDim = fmin(fabs(tr.x - bl.x), fabs(tr.y - bl.y));
+  double c = minDim * 0.012;
+  if (c <= 0.0)
+    return fallback;
+  double dist = hypot(cx - centerX, cy - centerY);
+  double r = dist / c;
+  double val = MAX(0.0, MIN(500.0, r * r));
+  return @[ @(val), @(val) ];
+}
 
 @implementation GlowOSC
 
@@ -22,8 +104,71 @@
     // active fill + stroke (the pre-v3 Glow ring look). Leave hoverCursor nil
     // too, so the ring picks the resize cursor from the hover angle
     // (left/right, up/down, or the two diagonals) instead of a fixed one.
+    sCurrentOSC = self;
   }
   return self;
+}
+
+- (void)dealloc {
+  if (sCurrentOSC == self)
+    sCurrentOSC = nil;
+}
+
+- (BOOL)getCanvasTopRight:(CGPoint *)outTopRight
+               bottomLeft:(CGPoint *)outBottomLeft {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return NO;
+  CGPoint tr = {0, 0}, bl = {0, 0};
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:1.0
+                          fromY:1.0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&tr.x
+                            toY:&tr.y];
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0.0
+                          fromY:0.0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&bl.x
+                            toY:&bl.y];
+  if (outTopRight)
+    *outTopRight = tr;
+  if (outBottomLeft)
+    *outBottomLeft = bl;
+  return YES;
+}
+
+// During a guide step the ring draws the strategy-pushed value (the blob is
+// unreadable in the drawOSC tick); otherwise the parameterChanged snapshot.
+- (NSArray<NSNumber *> *)guideRadiusValuesForFraction:(double)frac {
+  if (GlowGuideBridge().guideStep > 0 && sGuideRadiusValues.count >= 1)
+    return sGuideRadiusValues;
+  return GlowOSCRadiusValuesAtFraction(frac);
+}
+
+// A point on the ellipse at 45 degrees (top-right) - the single "handle" the
+// guide bridge spotlights and drives. Any point on the ring works; the drag
+// itself maps the cursor's distance from centre, not this point.
+- (CGPoint)ringHandleCanvasPositionForFraction:(double)frac {
+  CGPoint center = [self canvasCenter];
+  double minDim = [self canvasMinDimension];
+  NSArray<NSNumber *> *v = [self guideRadiusValuesForFraction:frac];
+  double rx = v.count > 0 ? v[0].doubleValue : kGlowM1Radius;
+  double ry = v.count > 1 ? v[1].doubleValue : rx;
+  double rrx = minDim * 0.012 * sqrt(MAX(0.0, rx));
+  double rry = minDim * 0.012 * sqrt(MAX(0.0, ry));
+  const double k = M_SQRT1_2;
+  return CGPointMake(center.x + rrx * k, center.y + rry * k);
+}
+
+- (CGPoint)guideTargetCanvasPosition {
+  CGPoint center = [self canvasCenter];
+  double minDim = [self canvasMinDimension];
+  double rr = minDim * 0.012 * sqrt(MAX(0.0, kGlowOSCGuideTargetRadius));
+  const double k = M_SQRT1_2;
+  return CGPointMake(center.x + rr * k, center.y + rr * k);
 }
 
 - (double)fractionAtTime:(CMTime)time {
@@ -95,7 +240,7 @@
 // monotonically. Matches the pre-v3 Glow ring sizing.
 - (void)updateRingForFraction:(double)frac {
   double minDim = [self canvasMinDimension];
-  NSArray<NSNumber *> *v = GlowOSCRadiusValuesAtFraction(frac);
+  NSArray<NSNumber *> *v = [self guideRadiusValuesForFraction:frac];
   double rx = v[0].doubleValue;
   double ry = v.count > 1 ? v[1].doubleValue : rx;
   _radiusRing.ringRadius = (float)(minDim * 0.012 * sqrt(MAX(0.0, rx)));
@@ -125,14 +270,38 @@
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
+  double frac = [self fractionAtTime:time];
+
+  // Pull the live geometry FCP only exposes from this tick and feed it to the
+  // generic OSC-guide bridge - it owns the zoom-invariant CANVAS→screen affine,
+  // the viewer-rect recompute, and the spotlight position notifications. spC=0
+  // means "no scale this tick" (the bridge keeps the last).
+  CGPoint trC = {0, 0}, blC = {0, 0};
+  [self getCanvasTopRight:&trC bottomLeft:&blC];
+  id<FxOnScreenControlAPI_v2> oscAPI2 =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
+  double rawZoom = oscAPI2 ? ([oscAPI2 canvasZoom] / 100.0) : 0.0;
+  double displayScale = [[NSScreen mainScreen] backingScaleFactor];
+  double spC =
+      (rawZoom > 0.0 && displayScale > 0.0) ? rawZoom / displayScale : 0.0;
+  [GlowGuideBridge()
+      ingestDrawTickWithCanvasTopRight:trC
+                            bottomLeft:blC
+                           canvasScale:spC
+                       handleCanvasPos:
+                           [self ringHandleCanvasPositionForFraction:frac]
+                       targetCanvasPos:[self guideTargetCanvasPosition]
+                             hasTarget:YES];
+
   // Visibility rule (matches Rounded / mini-viewer): show when the lane is a
   // constant (always) or animated and the playhead is on a keypose; mid-drag
-  // the active ring always draws so the handle tracks the cursor. Opt-reveal
+  // the active ring always draws so the handle tracks the cursor. While a guide
+  // step runs the ring is always drawn so the user has it to grab. Opt-reveal
   // surfaces a hidden ring so an opt-click can re-show it.
-  double frac = [self fractionAtTime:time];
+  BOOL inGuide = GlowGuideBridge().guideStep > 0;
   BOOL shownHere =
-      _ringDragging || GlowOSCLaneVisibleAtFraction(@"Radius", frac);
-  BOOL enabled = [self kkOSCElementVisible:@"Radius"];
+      _ringDragging || inGuide || GlowOSCLaneVisibleAtFraction(@"Radius", frac);
+  BOOL enabled = inGuide || [self kkOSCElementVisible:@"Radius"];
   BOOL visible = shownHere && enabled;
   BOOL reveal = !visible && self.optRevealActive && shownHere &&
                 [self kkOSCRevealEligible:@"Radius"];
@@ -144,6 +313,10 @@
   [self updateRingForFraction:frac];
   CGPoint center = [self canvasCenter];
   _radiusRing.center = center;
+  // During a guide, FCP doesn't run its own hover hitTest (the guide panel is
+  // frontmost), so take the hover emphasis from the bridge instead of
+  // activePart.
+  BOOL guideHover = inGuide && GlowGuideBridge().handleHovered;
   // When only shown via Opt-reveal, dim it to a re-enable ghost - BUT not in
   // "peek and use" mode (master off + Opt), where kkRevealGhostAlpha
   // returns 1.0 because the revealed controls are fully interactive. Remap the
@@ -151,7 +324,7 @@
   float revealGA = reveal ? [self kkRevealGhostAlpha] : 1.0f;
   _radiusRing.ghostAlpha = (revealGA < 1.0f) ? 0.6f : 1.0f;
   [_radiusRing drawAtCanvasPosition:center
-                          isHovered:(activePart == kOSCRadiusPart)
+                          isHovered:(activePart == kOSCRadiusPart || guideHover)
                            isActive:_ringDragging
                    destinationImage:destinationImage
                              atTime:time];
@@ -189,6 +362,30 @@
   }
   if (*activePart != kOSCRadiusPart)
     [_radiusRing clearCursorIfSet];
+
+  // The only place screen + canvas coords arrive together. Feed the bridge: it
+  // velocity-gates the sample, re-anchors the screen↔canvas map, recomputes the
+  // viewer rect, and posts the spotlight position. The handle position is only
+  // needed while a guide step is active.
+  CGPoint tr = {0, 0}, bl = {0, 0};
+  if (![self getCanvasTopRight:&tr bottomLeft:&bl])
+    return;
+  id<FxOnScreenControlAPI_v2> oscAPI2 =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
+  double rawZoom = oscAPI2 ? ([oscAPI2 canvasZoom] / 100.0) : 1.0;
+  double displayScale = [[NSScreen mainScreen] backingScaleFactor];
+  double spC = rawZoom / displayScale;
+  CGPoint handle = CGPointZero;
+  if (GlowGuideBridge().guideStep > 0)
+    handle =
+        [self ringHandleCanvasPositionForFraction:[self fractionAtTime:time]];
+  [GlowGuideBridge() ingestHitTestAtScreen:NSEvent.mouseLocation
+                                 canvasPos:CGPointMake(positionX, positionY)
+                               canvasScale:spC
+                                  topRight:tr
+                                bottomLeft:bl
+                                  onHandle:(*activePart == kOSCRadiusPart)
+                           handleCanvasPos:handle];
 }
 
 @end

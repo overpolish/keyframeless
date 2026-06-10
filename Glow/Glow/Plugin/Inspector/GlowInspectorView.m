@@ -5,6 +5,7 @@
 
 #import "GlowInspectorView.h"
 
+#import "GlowInspectorView+Guides.h"
 #import "GlowInspectorView_Private.h"
 #import "GlowMiniViewerRenderer.h"
 
@@ -27,6 +28,12 @@
     self.miniViewerDescriptorPath = GlowMiniViewerDescriptorPath;
     self.miniViewerRequestPath = GlowMiniViewerRequestPath;
     self.managePopoverSpotlightLabel = @"Radius";
+    // The kit's restart/autostart machinery pulls a fresh config from here.
+    __weak typeof(self) weak = self;
+    self.timingGuideConfigProvider = ^KKTimingGuideConfig * {
+      __strong typeof(weak) s = weak;
+      return s ? [s _timingGuideConfig] : nil;
+    };
   }
   return self;
 }
