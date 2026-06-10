@@ -22,6 +22,7 @@ static const CGFloat kCompoundGap = 6.0;
   NSScrollView *_scroll;
   NSStackView *_stack;
   NSArray<KKPillToggleRowView *> *_rows;
+  NSMutableSet<NSString *> *_crossSwept; // (ci.seg) keys painted this sweep
   _KKCompoundEdgeShadow *_leftShadow;
   _KKCompoundEdgeShadow *_rightShadow;
   CAGradientLayer *_leftGrad;
@@ -46,10 +47,22 @@ static const CGFloat kCompoundGap = 6.0;
       if (s && s->_onToggled)
         s->_onToggled(ci, segIdx, on);
     };
+    row.onOptionToggled = ^(NSInteger segIdx) {
+      __strong typeof(weakSelf) s = weakSelf;
+      if (s && s->_onOptionToggled)
+        s->_onOptionToggled(ci, segIdx);
+    };
     row.onDragBegin = ^{
       __strong typeof(weakSelf) s = weakSelf;
-      if (s && s->_onDragBegin)
+      if (!s)
+        return;
+      s->_crossSwept = [NSMutableSet set]; // fresh paint-set per gesture
+      if (s->_onDragBegin)
         s->_onDragBegin();
+    };
+    row.onSweepToWindowPoint = ^(NSPoint windowPoint, BOOL targetOn) {
+      __strong typeof(weakSelf) s = weakSelf;
+      [s _crossSweepAtWindowPoint:windowPoint target:targetOn];
     };
     row.onDragEnd = ^{
       __strong typeof(weakSelf) s = weakSelf;
@@ -173,6 +186,52 @@ static const CGFloat kCompoundGap = 6.0;
   for (NSInteger i = 0;
        i < (NSInteger)_rows.count && i < (NSInteger)states.count; i++)
     _rows[i].states = states[i];
+}
+
+- (void)setWarningStates:(NSArray<NSArray<NSNumber *> *> *)warningStates {
+  _warningStates = [warningStates copy];
+  for (NSInteger i = 0; i < (NSInteger)_rows.count; i++)
+    _rows[i].warningStates =
+        i < (NSInteger)warningStates.count ? warningStates[i] : nil;
+}
+
+- (void)setDragExcludedIndices:(NSArray<NSIndexSet *> *)dragExcludedIndices {
+  _dragExcludedIndices = [dragExcludedIndices copy];
+  for (NSInteger i = 0; i < (NSInteger)_rows.count; i++)
+    _rows[i].dragExcludedIndices =
+        i < (NSInteger)dragExcludedIndices.count ? dragExcludedIndices[i] : nil;
+}
+
+// Continue a drag-sweep started in one capsule into whichever capsule contains
+// `windowPoint`, painting that segment to the sweep's target state. Each
+// (compound, segment) is painted at most once per gesture.
+- (void)_crossSweepAtWindowPoint:(NSPoint)windowPoint target:(BOOL)target {
+  if (!_crossCapsuleSweep)
+    return;
+  if (!_crossSwept)
+    _crossSwept = [NSMutableSet set];
+  for (NSInteger ci = 0; ci < (NSInteger)_rows.count; ci++) {
+    KKPillToggleRowView *row = _rows[ci];
+    NSInteger seg = [row pillIndexAtViewPoint:[row convertPoint:windowPoint
+                                                       fromView:nil]];
+    if (seg == NSNotFound)
+      continue;
+    // Found the capsule under the cursor; skip painting a sweep-excluded
+    // (master) segment but don't keep scanning - no other capsule holds it.
+    NSIndexSet *excl = ci < (NSInteger)_dragExcludedIndices.count
+                           ? _dragExcludedIndices[ci]
+                           : nil;
+    if ([excl containsIndex:seg])
+      return;
+    NSString *key = [NSString stringWithFormat:@"%ld.%ld", (long)ci, (long)seg];
+    if ([_crossSwept containsObject:key])
+      return;
+    [_crossSwept addObject:key];
+    [row setState:target atIndex:seg];
+    if (_onToggled)
+      _onToggled(ci, seg, target);
+    return;
+  }
 }
 
 - (NSRect)screenRectForCompoundIndex:(NSInteger)compoundIdx {

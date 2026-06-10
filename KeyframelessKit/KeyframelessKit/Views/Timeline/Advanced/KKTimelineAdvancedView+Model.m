@@ -13,7 +13,7 @@
 - (NSArray<KKLane *> *)_animatableLanes {
   NSMutableArray<KKLane *> *out = [NSMutableArray array];
   for (KKLane *l in _timeline.lanes)
-    if (l.enabled)
+    if (l.enabled && ![_hiddenLaneLabels containsObject:l.label])
       [out addObject:l];
   return out;
 }

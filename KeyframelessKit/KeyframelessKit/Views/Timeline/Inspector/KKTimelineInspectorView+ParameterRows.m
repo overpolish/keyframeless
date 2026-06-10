@@ -12,6 +12,7 @@
 #import "KKCompoundPillBar.h"
 #import "KKConstants.h"
 #import "KKLabelView.h"
+#import "KKLaneCategoryNav.h"
 #import "KKMiniViewerView.h"
 #import "KKParameterRowView.h"
 #import "KKPillToggleRowView.h"
@@ -202,19 +203,6 @@
   NSArray<NSString *> *labels = [_basicView orderedParamLabels];
   if (labels.count < 2)
     return;
-  NSMutableArray<NSString *> *titles =
-      [NSMutableArray arrayWithCapacity:labels.count];
-  for (NSString *label in labels)
-    [titles addObject:KKLocalizedParamName(label)];
-
-  KKReorderListView *list = [[KKReorderListView alloc] initWithItemIDs:labels
-                                                                titles:titles];
-  list.translatesAutoresizingMaskIntoConstraints = NO;
-  __weak typeof(self) weak = self;
-  list.onReorder = ^(NSArray<NSString *> *newOrder) {
-    KKTimelineInspectorView *strong = weak;
-    [strong->_basicView applyParamOrder:newOrder];
-  };
 
   // Wrap in the lanes-view popover content view for the macOS 26 liquid-glass
   // double-border fix (same as the motion-blur / OSC popovers).
@@ -228,7 +216,6 @@
          symbolName:@"arrow.up.arrow.down"];
   header.translatesAutoresizingMaskIntoConstraints = NO;
   [content addSubview:header];
-  [content addSubview:list];
   [NSLayoutConstraint activateConstraints:@[
     [header.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
                                          constant:KKPaddingMD],
@@ -236,15 +223,76 @@
                                           constant:-KKPaddingMD],
     [header.topAnchor constraintEqualToAnchor:content.topAnchor
                                      constant:KKPaddingMD],
-    [list.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
-                                       constant:KKPaddingMD],
-    [list.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
-                                        constant:-KKPaddingMD],
-    [list.topAnchor constraintEqualToAnchor:header.bottomAnchor
-                                   constant:KKPaddingSM],
-    [list.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
-                                      constant:-KKPaddingMD],
   ]];
+
+  NSArray<NSString *> *categoryKeys = KKLaneCategoryKeys(_availableLanes);
+  __weak typeof(self) weak = self;
+
+  if (categoryKeys.count > 1) {
+    // Category pills filter the reorder list to one category at a time; the
+    // category blocks themselves stay in the plugin's order. Dragging reorders
+    // within the shown category, merged back into the full order on each
+    // change.
+    _paramOrderLabels = labels;
+    _paramOrderCatByLabel = KKLaneCategoryByLabel(_availableLanes);
+    _paramOrderCategoryKeys = categoryKeys;
+    _paramOrderSelectedCategory = categoryKeys.firstObject;
+    _paramOrderContent = content;
+
+    KKPillToggleRowView *pill = KKMakeLaneCategoryPill(
+        _availableLanes, categoryKeys.firstObject, ^(NSString *categoryKey) {
+          KKTimelineInspectorView *strong = weak;
+          if (!strong)
+            return;
+          strong->_paramOrderSelectedCategory = categoryKey;
+          [strong _rebuildParamOrderList];
+        });
+    [content addSubview:pill];
+
+    NSView *listContainer = [[NSView alloc] initWithFrame:NSZeroRect];
+    listContainer.translatesAutoresizingMaskIntoConstraints = NO;
+    [content addSubview:listContainer];
+    _paramOrderListContainer = listContainer;
+
+    [NSLayoutConstraint activateConstraints:@[
+      [pill.centerXAnchor constraintEqualToAnchor:content.centerXAnchor],
+      [pill.topAnchor constraintEqualToAnchor:header.bottomAnchor
+                                     constant:KKPaddingSM],
+      [listContainer.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
+                                                  constant:KKPaddingMD],
+      [listContainer.trailingAnchor
+          constraintEqualToAnchor:content.trailingAnchor
+                         constant:-KKPaddingMD],
+      [listContainer.topAnchor constraintEqualToAnchor:pill.bottomAnchor
+                                              constant:KKPaddingSM],
+      [listContainer.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
+                                                 constant:-KKPaddingMD],
+    ]];
+    [self _rebuildParamOrderList];
+  } else {
+    NSMutableArray<NSString *> *titles =
+        [NSMutableArray arrayWithCapacity:labels.count];
+    for (NSString *label in labels)
+      [titles addObject:KKLocalizedParamName(label)];
+    KKReorderListView *list =
+        [[KKReorderListView alloc] initWithItemIDs:labels titles:titles];
+    list.translatesAutoresizingMaskIntoConstraints = NO;
+    list.onReorder = ^(NSArray<NSString *> *newOrder) {
+      KKTimelineInspectorView *strong = weak;
+      [strong->_basicView applyParamOrder:newOrder];
+    };
+    [content addSubview:list];
+    [NSLayoutConstraint activateConstraints:@[
+      [list.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
+                                         constant:KKPaddingMD],
+      [list.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
+                                          constant:-KKPaddingMD],
+      [list.topAnchor constraintEqualToAnchor:header.bottomAnchor
+                                     constant:KKPaddingSM],
+      [list.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
+                                        constant:-KKPaddingMD],
+    ]];
+  }
 
   NSViewController *vc = [[NSViewController alloc] init];
   vc.view = content;
@@ -255,6 +303,79 @@
   [_paramOrderPopover showRelativeToRect:_paramOrderButton.bounds
                                   ofView:_paramOrderButton
                            preferredEdge:NSRectEdgeMinY];
+}
+
+// Rebuild the reorder list to show only the selected category's params (in
+// their current relative order) and resize the popover to fit. Dragging within
+// the list merges the new sub-order back into the full order.
+// A label's category for the reorder UI: its own categoryKey, or the first
+// category when uncategorised (so stray params stay reachable in one place
+// rather than vanishing from every category page).
+- (NSString *)_paramOrderEffectiveCategory:(NSString *)label {
+  NSString *c = _paramOrderCatByLabel[label];
+  return c.length ? c : _paramOrderCategoryKeys.firstObject;
+}
+
+- (void)_rebuildParamOrderList {
+  if (!_paramOrderListContainer)
+    return;
+  [_paramOrderList removeFromSuperview];
+
+  NSMutableArray<NSString *> *ids = [NSMutableArray array];
+  NSMutableArray<NSString *> *titles = [NSMutableArray array];
+  for (NSString *label in _paramOrderLabels)
+    if ([[self _paramOrderEffectiveCategory:label]
+            isEqualToString:_paramOrderSelectedCategory]) {
+      [ids addObject:label];
+      [titles addObject:KKLocalizedParamName(label)];
+    }
+
+  KKReorderListView *list = [[KKReorderListView alloc] initWithItemIDs:ids
+                                                                titles:titles];
+  list.translatesAutoresizingMaskIntoConstraints = NO;
+  __weak typeof(self) weak = self;
+  NSString *category = _paramOrderSelectedCategory;
+  list.onReorder = ^(NSArray<NSString *> *newOrder) {
+    [weak _applyParamSubOrder:newOrder forCategory:category];
+  };
+  [_paramOrderListContainer addSubview:list];
+  [NSLayoutConstraint activateConstraints:@[
+    [list.leadingAnchor
+        constraintEqualToAnchor:_paramOrderListContainer.leadingAnchor],
+    [list.trailingAnchor
+        constraintEqualToAnchor:_paramOrderListContainer.trailingAnchor],
+    [list.topAnchor constraintEqualToAnchor:_paramOrderListContainer.topAnchor],
+    [list.bottomAnchor
+        constraintEqualToAnchor:_paramOrderListContainer.bottomAnchor],
+  ]];
+  _paramOrderList = list;
+
+  [_paramOrderContent layoutSubtreeIfNeeded];
+  if (_paramOrderPopover.isShown)
+    _paramOrderPopover.contentSize = _paramOrderContent.fittingSize;
+}
+
+// Splice the reordered category sub-order back into the full param order: the
+// block of `category` items is replaced in place (at its first occurrence),
+// every other label keeps its position. Persists via applyParamOrder.
+- (void)_applyParamSubOrder:(NSArray<NSString *> *)subOrder
+                forCategory:(NSString *)category {
+  NSMutableArray<NSString *> *result = [NSMutableArray array];
+  BOOL inserted = NO;
+  for (NSString *label in _paramOrderLabels) {
+    if ([[self _paramOrderEffectiveCategory:label] isEqualToString:category]) {
+      if (!inserted) {
+        [result addObjectsFromArray:subOrder];
+        inserted = YES;
+      }
+      continue; // this category's items are represented by subOrder
+    }
+    [result addObject:label];
+  }
+  if (!inserted)
+    [result addObjectsFromArray:subOrder];
+  _paramOrderLabels = result;
+  [_basicView applyParamOrder:result];
 }
 
 - (void)_oscSettingsClicked:(id)sender {

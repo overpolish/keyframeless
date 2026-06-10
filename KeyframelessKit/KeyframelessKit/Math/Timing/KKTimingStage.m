@@ -234,6 +234,13 @@
 
 @implementation KKLane
 
+- (instancetype)init {
+  self = [super init];
+  if (self)
+    _animatable = YES; // default: every lane can be animated
+  return self;
+}
+
 + (instancetype)laneWithLabel:(NSString *)label {
   KKLane *l = [[KKLane alloc] init];
   l.laneID = [NSUUID UUID];
@@ -241,6 +248,15 @@
   l.enabled = YES;
   l.keyposes = @[];
   return l;
+}
+
+- (void)kkApplyPickerMetadataFrom:(KKLane *)tmpl {
+  if (!tmpl)
+    return;
+  _categoryKey = [tmpl.categoryKey copy];
+  _categorySymbol = [tmpl.categorySymbol copy];
+  _animatable = tmpl.animatable;
+  _seedField = tmpl.seedField;
 }
 
 - (void)insertKeypose:(KKKeyPose *)keypose {
@@ -283,6 +299,10 @@
   c.aspectLinked = _aspectLinked;
   c.integerValued = _integerValued;
   c.componentsScaleWithMedia = _componentsScaleWithMedia;
+  c.categoryKey = [_categoryKey copy];
+  c.categorySymbol = [_categorySymbol copy];
+  c.animatable = _animatable;
+  c.seedField = _seedField;
   return c;
 }
 
@@ -316,6 +336,14 @@
     d[@"integer_valued"] = @YES;
   if (_componentsScaleWithMedia)
     d[@"components_scale_with_media"] = @YES;
+  if (_categoryKey)
+    d[@"category_key"] = _categoryKey;
+  if (_categorySymbol)
+    d[@"category_symbol"] = _categorySymbol;
+  if (!_animatable)
+    d[@"animatable"] = @NO;
+  if (_seedField)
+    d[@"seed_field"] = @YES;
   return d;
 }
 
@@ -347,6 +375,10 @@
   l.aspectLinked = [d[@"aspect_linked"] boolValue];
   l.integerValued = [d[@"integer_valued"] boolValue];
   l.componentsScaleWithMedia = [d[@"components_scale_with_media"] boolValue];
+  l.categoryKey = d[@"category_key"];
+  l.categorySymbol = d[@"category_symbol"];
+  l.animatable = d[@"animatable"] ? [d[@"animatable"] boolValue] : YES;
+  l.seedField = [d[@"seed_field"] boolValue];
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {
     NSMutableArray *kps = [NSMutableArray arrayWithCapacity:rawKps.count];

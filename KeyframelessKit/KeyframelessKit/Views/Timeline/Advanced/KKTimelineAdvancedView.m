@@ -270,6 +270,15 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
   [self setNeedsDisplay:YES];
 }
 
+- (void)applyHiddenLaneLabels:(NSSet<NSString *> *)labels {
+  NSSet<NSString *> *next = labels.count ? [labels copy] : nil;
+  if (next == _hiddenLaneLabels || [next isEqualToSet:_hiddenLaneLabels])
+    return;
+  _hiddenLaneLabels = next;
+  [self _clampScroll];
+  [self setNeedsDisplay:YES];
+}
+
 - (void)setFrameSize:(NSSize)newSize {
   [super setFrameSize:newSize];
   [self _clampScroll];

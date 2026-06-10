@@ -11,8 +11,8 @@
 static const CGFloat kPillHeight = 18.0;
 static const CGFloat kPillSpacing = 2.0;
 static const CGFloat kPillPadX = 5.0;
-static const CGFloat kPillIconSize = 10.0;
-static const CGFloat kPillIconGap = 3.0;
+static const CGFloat kPillIconSize = 12.0;
+static const CGFloat kPillIconGap = 4.0;
 static const CGFloat kGroupTrackInset = 2.0;
 static const CGFloat kGroupPillHeight = 22.0;
 static const CGFloat kGroupPillPadX = 8.0;
@@ -107,6 +107,19 @@ static const CGFloat kGroupPillPadX = 8.0;
   [self setNeedsDisplay:YES];
 }
 
+- (void)setWarningStates:(NSArray<NSNumber *> *)warningStates {
+  if (_warningStates == warningStates ||
+      [_warningStates isEqualToArray:warningStates])
+    return;
+  _warningStates = [warningStates copy];
+  [self setNeedsDisplay:YES];
+}
+
+- (BOOL)_warningAtIndex:(NSInteger)i {
+  return i >= 0 && i < (NSInteger)_warningStates.count &&
+         _warningStates[i].boolValue;
+}
+
 - (NSFont *)pillFont {
   return [NSFont systemFontOfSize:KKFontSizeSM weight:NSFontWeightMedium];
 }
@@ -167,6 +180,9 @@ static const CGFloat kGroupPillPadX = 8.0;
   for (NSInteger i = 0; i < _count; i++) {
     NSRect r = rects[i].rectValue;
     BOOL on = _states[i].boolValue;
+    // A soloed pill reads in the warning tint instead of the accent.
+    NSColor *onColor = [self _warningAtIndex:i] ? [NSColor warning]
+                                                : [NSColor accentMatchingHost];
 
     if (_grouped) {
       if (on) {
@@ -177,7 +193,7 @@ static const CGFloat kGroupPillPadX = 8.0;
             [NSBezierPath bezierPathWithRoundedRect:hr
                                             xRadius:hr_radius
                                             yRadius:hr_radius];
-        [[[NSColor accentMatchingHost] colorWithAlphaComponent:0.15] setFill];
+        [[onColor colorWithAlphaComponent:0.28] setFill];
         [highlight fill];
       }
     } else {
@@ -185,7 +201,7 @@ static const CGFloat kGroupPillPadX = 8.0;
                                                          xRadius:KKRadiusMD
                                                          yRadius:KKRadiusMD];
       if (on) {
-        [[[NSColor accentMatchingHost] colorWithAlphaComponent:0.15] setFill];
+        [[onColor colorWithAlphaComponent:0.15] setFill];
         [bg fill];
       } else {
         [[[NSColor inspectorLabel] colorWithAlphaComponent:0.06] setFill];
@@ -193,9 +209,11 @@ static const CGFloat kGroupPillPadX = 8.0;
       }
     }
 
+    // Selected reads in the host accent (or warning when soloed); unselected
+    // stays legible (not a faint ghost) so multi-pill rows like the category
+    // nav are easy to scan.
     NSColor *tint =
-        on ? [NSColor accentMatchingHost]
-           : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
+        on ? onColor : [[NSColor inspectorLabel] colorWithAlphaComponent:0.6];
 
     if (_iconAndLabel) {
       NSImage *icon =
@@ -282,11 +300,22 @@ static const CGFloat kGroupPillPadX = 8.0;
   return NSNotFound;
 }
 
+- (NSInteger)pillIndexAtViewPoint:(NSPoint)point {
+  return [self _pillIndexAt:point];
+}
+
 - (void)mouseDown:(NSEvent *)event {
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
   NSInteger i = [self _pillIndexAt:loc];
   if (i == NSNotFound)
     return;
+
+  // Option-click is a distinct action (the lane filter uses it to solo). Only
+  // diverts when a handler is wired, so every other pill keeps normal clicks.
+  if ((event.modifierFlags & NSEventModifierFlagOption) && _onOptionToggled) {
+    _onOptionToggled(i);
+    return;
+  }
 
   // Radio: single-select, no sweep / undo bracket (consumer-managed).
   // Clear every other pill so only the picked one ends up on (without this
@@ -301,6 +330,16 @@ static const CGFloat kGroupPillPadX = 8.0;
     [self setStates:next];
     if (_onToggled)
       _onToggled(i, YES);
+    return;
+  }
+
+  // Sweep-excluded pill (e.g. a group master): plain toggle, never a drag
+  // origin, so dragging off it doesn't paint the whole group.
+  if ([_dragExcludedIndices containsIndex:i]) {
+    BOOL target = !_states[i].boolValue;
+    [self setState:target atIndex:i];
+    if (_onToggled)
+      _onToggled(i, target);
     return;
   }
 
@@ -323,8 +362,15 @@ static const CGFloat kGroupPillPadX = 8.0;
     return;
   NSPoint loc = [self convertPoint:event.locationInWindow fromView:nil];
   NSInteger i = [self _pillIndexAt:loc];
-  if (i == NSNotFound || [_swept containsIndex:i])
+  if (i == NSNotFound) {
+    // Cursor left this capsule - let the container continue the paint into a
+    // neighbouring capsule at the same target state (cross-capsule sweep).
+    if (_onSweepToWindowPoint)
+      _onSweepToWindowPoint(event.locationInWindow, _dragTargetState);
     return;
+  }
+  if ([_swept containsIndex:i] || [_dragExcludedIndices containsIndex:i])
+    return; // already painted, or a sweep-excluded master pill
   [_swept addIndex:i];
   if (_states[i].boolValue == _dragTargetState)
     return; // already in the target state - nothing to write

@@ -238,6 +238,20 @@
                                               @"Undo / redo, including inside "
                                               @"popovers",
                                               @"Help shortcut.")],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:KKLoc(@"Drag across filter pills",
+                                                @"Shortcut keys.")
+                               descMarkup:KKLoc(
+                                              @"Show or hide several lanes at "
+                                              @"once",
+                                              @"Help shortcut.")],
+               [KKHelpShortcut
+                   shortcutWithKeysMarkup:KKLoc(
+                                              @"<kbd>⌥</kbd> + click a filter "
+                                              @"pill",
+                                              @"Shortcut keys.")
+                               descMarkup:KKLoc(@"Solo that lane or group",
+                                                @"Help shortcut.")],
              ]];
   s.icon = [NSImage imageWithSystemSymbolName:@"keyboard"
                      accessibilityDescription:nil];
@@ -264,6 +278,10 @@
     [self _knowledgeSectionWithTitle:KKLoc(@"Presets", @"Help section title.")
                                topic:@"presets"
                               symbol:@"bookmark"],
+    [self _knowledgeSectionWithTitle:KKLoc(@"Filtering lanes",
+                                           @"Help section title.")
+                               topic:@"lane-filter"
+                              symbol:@"line.3.horizontal.decrease.circle"],
     [self _builtInTimingShortcutsSection],
   ];
 }

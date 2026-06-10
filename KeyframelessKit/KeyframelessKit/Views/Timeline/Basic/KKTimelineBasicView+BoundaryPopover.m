@@ -94,6 +94,7 @@
     dl.aspectLinkable = tmpl ? tmpl.aspectLinkable : lane.aspectLinkable;
     dl.aspectLinked = lane.aspectLinked;
     dl.integerValued = tmpl ? tmpl.integerValued : lane.integerValued;
+    [dl kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     KKKeyPose *dlKp = [KKKeyPose keyposeAtTime:0.0 values:vals ?: @[ @0.0 ]];
     // Carry the curve state from the keypose nearest this boundary (matches the
     // nearest-match write) so the row's toggle reflects it.

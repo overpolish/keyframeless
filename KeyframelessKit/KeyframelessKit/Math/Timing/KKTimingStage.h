@@ -215,7 +215,35 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// suffix while storing/rendering absolute pixels (e.g. Glow's Radius).
 @property(nonatomic) BOOL componentsScaleWithMedia;
 
+/// Navigational category for the static-values popover (Constants + Keypose):
+/// lanes sharing a `categoryKey` are shown together behind one icon pill, so a
+/// plugin with many params can split them into pages (e.g. "Core", "Noise")
+/// instead of one long list. Purely a popover view filter - it does NOT affect
+/// the timeline, sequencer, or `groupKey` lane grouping. `categorySymbol` is
+/// the pill's SF Symbol. nil categoryKey = uncategorised (always shown; no pill
+/// row appears unless >1 distinct category exists). Build-time metadata.
+@property(nonatomic, copy, nullable) NSString *categoryKey;
+@property(nonatomic, copy, nullable) NSString *categorySymbol;
+
+/// When NO the property can't be animated: it's left out of the Animated
+/// dropdown and its "make animatable" button is hidden in Constants, so it
+/// stays a value-only param (e.g. a noise seed). Default YES. Build-time
+/// metadata.
+@property(nonatomic) BOOL animatable;
+
+/// When YES the value row presents a seed control (current value + re-roll,
+/// the same `KKSeedView` the gap popover uses) instead of a slider - for a
+/// random integer that isn't a meaningful range. Pair with `animatable = NO`
+/// and `integerValued = YES`. Default NO. Build-time metadata.
+@property(nonatomic) BOOL seedField;
+
 + (instancetype)laneWithLabel:(NSString *)label;
+
+/// Copy the param-picker build-time metadata (`categoryKey`, `categorySymbol`,
+/// `animatable`, `seedField`) from a plugin template lane onto this one. Used
+/// when display lanes are seeded/rebuilt from a persisted blob that predates
+/// these fields. Leaves value/keyposes/enabled and other state untouched.
+- (void)kkApplyPickerMetadataFrom:(KKLane *)tmpl;
 
 - (void)insertKeypose:(KKKeyPose *)keypose; // inserts maintaining time order
 - (void)removeKeyposeAtIndex:(NSUInteger)index;

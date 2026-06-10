@@ -42,6 +42,9 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @interface _KKManagePopoverView : NSView <NSSearchFieldDelegate>
+// Set by the host so the dropdown can resize itself to the visible row count as
+// the category pill / search narrows the list.
+@property(nonatomic, weak, nullable) NSPopover *popover;
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                 checkedLabels:(NSSet<NSString *> *)checked
                      onToggle:(void (^)(NSString *label))onToggle;
@@ -94,7 +97,11 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 - (instancetype)initWithLane:(KKLane *)lane
                  showsRemove:(BOOL)showsRemove
           showsAddToAnimated:(BOOL)showsAddToAnimated
-                 showsSmooth:(BOOL)showsSmooth;
+                 showsSmooth:(BOOL)showsSmooth
+            labelColumnWidth:(CGFloat)labelColumnWidth;
+/// Width to pin every row's label column to, so the value controls line up
+/// regardless of label length (the widest localized param name). 0 = natural.
++ (CGFloat)labelColumnWidthForLanes:(NSArray<KKLane *> *)lanes;
 /// The KKSliderView (Float rows), for a guide that drives the slider.
 - (nullable NSView *)guideSliderView;
 /// The number field for component `i` (Float: 0; Crop: 0..3 = W,H,X,Y), for
@@ -125,22 +132,29 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// path that wires onion-skin filmstrip clicks) can attach extra closures
 /// without threading another init parameter.
 @property(nonatomic, readonly, nullable) KKMiniViewerView *miniViewer;
-- (instancetype)
-     initWithLanes:(NSArray<KKLane *> *)lanes
-    descriptorPath:(nullable NSString *)descriptorPath
-        clipAspect:(CGFloat)clipAspect
-       headerTitle:(nullable NSString *)headerTitle
-      headerDetail:(nullable NSString *)headerDetail
-        headerIcon:(nullable NSImage *)headerIcon
-    canvasDelegate:(nullable id<KKMiniViewerDelegate>)canvasDelegate
-        renderMode:(KKMiniViewerRenderMode)renderMode
-     onModeChanged:(nullable void (^)(KKMiniViewerRenderMode mode))onModeChanged
-        onNavigate:(nullable void (^)(NSInteger direction))onNavigate
-     onHandleValue:(nullable void (^)(NSString *label,
-                                      NSArray<NSNumber *> *values))onHandleValue
-       onDragBegin:(nullable void (^)(void))onDragBegin
-         onDragEnd:(nullable void (^)(void))onDragEnd
-      editsKeypose:(BOOL)editsKeypose;
+- (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
+               descriptorPath:(nullable NSString *)descriptorPath
+                   clipAspect:(CGFloat)clipAspect
+                  headerTitle:(nullable NSString *)headerTitle
+                 headerDetail:(nullable NSString *)headerDetail
+                   headerIcon:(nullable NSImage *)headerIcon
+               canvasDelegate:(nullable id<KKMiniViewerDelegate>)canvasDelegate
+                   renderMode:(KKMiniViewerRenderMode)renderMode
+                onModeChanged:(nullable void (^)(KKMiniViewerRenderMode mode))
+                                  onModeChanged
+                   onNavigate:(nullable void (^)(NSInteger direction))onNavigate
+                onHandleValue:(nullable void (^)(NSString *label,
+                                                 NSArray<NSNumber *> *values))
+                                  onHandleValue
+                  onDragBegin:(nullable void (^)(void))onDragBegin
+                    onDragEnd:(nullable void (^)(void))onDragEnd
+                 editsKeypose:(BOOL)editsKeypose
+              initialCategory:(nullable NSString *)initialCategory;
+
+/// Fired when the user picks a category pill (constants popover uses it to
+/// remember the last tab). Not fired for the initial selection.
+@property(nonatomic, copy, nullable) void (^onCategoryChanged)
+    (NSString *category);
 
 /// Wire the per-keypose smooth toggle (shown on `spatialCurvable` lane rows in
 /// the keypose popover). Fired with the lane label + new state; the host
@@ -237,6 +251,11 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
            descriptorPath:(nullable NSString *)descriptorPath
                clipAspect:(CGFloat)clipAspect
             reserveHeader:(BOOL)reserveHeader;
++ (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes
+           descriptorPath:(nullable NSString *)descriptorPath
+               clipAspect:(CGFloat)clipAspect
+            reserveHeader:(BOOL)reserveHeader
+         selectedCategory:(nullable NSString *)selectedCategory;
 @end
 
 @interface _KKDropdownTrigger : NSView

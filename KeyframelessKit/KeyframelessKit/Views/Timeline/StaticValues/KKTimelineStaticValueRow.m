@@ -7,6 +7,7 @@
 #import "KKMiniViewerView.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
+#import "KKSeedView.h"
 #import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineLanesView_Private.h"
@@ -132,7 +133,10 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   BOOL _smoothOn;
   NSButton *_linkBtn; // aspect-link toggle, left of the value fields
   BOOL _linkOn;
-  BOOL _integerValued; // fields display + round to whole numbers
+  BOOL _integerValued;   // fields display + round to whole numbers
+  KKSeedView *_seedView; // seed control (value + re-roll), seedField lanes only
+  BOOL _seedField;
+  CGFloat _labelColumnW; // uniform label-column width (0 = natural)
 }
 
 - (void)setDefaultValues:(NSArray<NSNumber *> *)defaultValues {
@@ -308,10 +312,26 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return [NSString stringWithFormat:(intFmt ? @"%.0f" : @"%.2f"), dv];
 }
 
++ (CGFloat)labelColumnWidthForLanes:(NSArray<KKLane *> *)lanes {
+  NSDictionary *attrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:KKFontSizeSM
+                                            weight:NSFontWeightRegular]
+  };
+  CGFloat w = 0;
+  for (KKLane *lane in lanes) {
+    NSString *name = KKLocalizedParamName(lane.label);
+    w = MAX(w, ceil([name sizeWithAttributes:attrs].width));
+  }
+  // Trailing breathing room so the value controls never butt up against the
+  // widest label.
+  return w > 0 ? w + KKPaddingMD : w;
+}
+
 - (instancetype)initWithLane:(KKLane *)lane
                  showsRemove:(BOOL)showsRemove
           showsAddToAnimated:(BOOL)showsAddToAnimated
-                 showsSmooth:(BOOL)showsSmooth {
+                 showsSmooth:(BOOL)showsSmooth
+            labelColumnWidth:(CGFloat)labelColumnWidth {
   CGFloat h = [_KKStaticValueRow heightForLane:lane];
   self = [super initWithFrame:NSMakeRect(0, 0, kCanvasPopoverW, h)];
   if (!self)
@@ -322,9 +342,16 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   _cmax = lane.componentMax ?: @[];
   _cunits = lane.componentUnits ?: @[];
   _integerValued = lane.integerValued;
+  _seedField = lane.seedField;
+  _labelColumnW = labelColumnWidth;
 
   NSTextField *title = _KKMakeCaption(KKLocalizedParamName(lane.label));
   [self addSubview:title];
+  // Uniform label column so the value controls line up across rows regardless
+  // of label length (widest localized name); 54 is the legacy fallback.
+  [title.widthAnchor
+      constraintEqualToConstant:(_labelColumnW > 0 ? _labelColumnW : 54.0)]
+      .active = YES;
 
   // Leading gutter, shared slot. Keypose popover (Advanced) uses "−" to
   // remove this lane's KP at the open fraction; constants popover uses the
@@ -388,7 +415,38 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 
   NSArray<NSString *> *caps = KKLaneComponentLabels(lane);
   NSArray<NSColor *> *capColors = lane.componentLabelColors;
-  if (caps.count >= 2) {
+  if (_seedField) {
+    // A random integer, not a range: the gap-popover seed control (value +
+    // re-roll) instead of a slider. Stored as the lane's single value.
+    _seedView = [[KKSeedView alloc] init];
+    _seedView.translatesAutoresizingMaskIntoConstraints = NO;
+    __weak typeof(self) weak = self;
+    _seedView.onSeedChanged = ^(uint32_t s) {
+      [weak _setValues:@[ @((double)s) ] emit:YES];
+    };
+    _seedView.onReroll = ^{
+      __strong typeof(weak) ss = weak;
+      uint32_t s = arc4random_uniform(100000);
+      ss->_seedView.seed = s;
+      [ss _setValues:@[ @((double)s) ] emit:YES];
+    };
+    [self addSubview:_seedView];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_seedView.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
+                                               constant:-KKPaddingLG],
+      [_seedView.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
+                                      constant:KKPaddingMD],
+      // The seed control has no intrinsic height; without pinning it to the
+      // row it collapses to a zero-height frame and its field/button fall
+      // outside hit-testing (looks disabled). Fill the row's height.
+      [_seedView.topAnchor constraintEqualToAnchor:self.topAnchor],
+      [_seedView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+    ]];
+  } else if (caps.count >= 2) {
     NSInteger n = (NSInteger)caps.count;
     NSMutableArray<NSView *> *arranged = [NSMutableArray array];
     NSMutableArray<NSTextField *> *fs = [NSMutableArray array];
@@ -523,7 +581,6 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
       [title.leadingAnchor constraintEqualToAnchor:titleLead
                                           constant:titleLeadInset],
       [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-      [title.widthAnchor constraintEqualToConstant:54.0],
       [_slider.leadingAnchor constraintEqualToAnchor:title.trailingAnchor
                                             constant:KKPaddingSM],
       [_slider.trailingAnchor constraintEqualToAnchor:cell.leadingAnchor
@@ -568,6 +625,8 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   }
   if (_slider && _values.count && ![self _fieldEditing:_fields[0]])
     _slider.doubleValue = _values[0].doubleValue;
+  if (_seedView && _values.count)
+    _seedView.seed = (uint32_t)llround(_values[0].doubleValue);
   if (_angleKnobs.count && !_angleKnobDragging) {
     for (NSInteger i = 0;
          i < (NSInteger)_angleKnobs.count && i < (NSInteger)_values.count;

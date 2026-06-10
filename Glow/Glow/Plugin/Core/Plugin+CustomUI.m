@@ -57,11 +57,58 @@ static NSString *_GlowAILaneSchemaText(void) {
   radius.componentLabels = @[ @"X", @"Y" ];
   radius.aspectLinkable = YES;
   radius.aspectLinked = YES;
+  // Param-picker category: Radius is the "Core" page; the noise params split
+  // off into their own "Noise" page (see the static-values popover pills).
+  radius.categoryKey = @"Core";
+  radius.categorySymbol = @"circle.dotted";
   [radius
       insertKeypose:[KKKeyPose
                         keyposeAtTime:0.0
                                values:@[ @(kGlowM1Radius), @(kGlowM1Radius) ]]];
-  return @[ radius ];
+
+  // Noise: grain mixed into the glow. Amount + Spread animate; Seed is a
+  // value-only random integer (the gap-popover seed control). Render wiring is
+  // a later step - these currently display but don't yet affect the glow.
+  // Amount + Spread are 0-100% in the UI (whole percentages, like Opacity); the
+  // shader takes 0-1, so the render param-eval divides by 100 (step C). Names
+  // are short because the "Noise" category already carries the context.
+  KKLane *noise = [KKLane laneWithLabel:@"Amount"];
+  noise.valueType = KKLaneValueTypeFloat;
+  noise.componentMin = @[ @0.0 ];
+  noise.componentMax = @[ @100.0 ];
+  noise.componentUnits = @[ @"%" ];
+  noise.integerValued = YES;
+  noise.categoryKey = @"Noise";
+  noise.categorySymbol = @"waveform";
+  [noise insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                         values:@[ @(kGlowM1Noise * 100.0) ]]];
+
+  KKLane *noiseSpread = [KKLane laneWithLabel:@"Spread"];
+  noiseSpread.valueType = KKLaneValueTypeFloat;
+  noiseSpread.componentMin = @[ @0.0 ];
+  noiseSpread.componentMax = @[ @100.0 ];
+  noiseSpread.componentUnits = @[ @"%" ];
+  noiseSpread.integerValued = YES;
+  noiseSpread.categoryKey = @"Noise";
+  noiseSpread.categorySymbol = @"waveform";
+  [noiseSpread
+      insertKeypose:[KKKeyPose
+                        keyposeAtTime:0.0
+                               values:@[ @(kGlowM1NoiseOffset * 100.0) ]]];
+
+  KKLane *noiseSeed = [KKLane laneWithLabel:@"Seed"];
+  noiseSeed.valueType = KKLaneValueTypeFloat;
+  noiseSeed.componentMin = @[ @0.0 ];
+  noiseSeed.componentMax = @[ @99999.0 ];
+  noiseSeed.integerValued = YES;
+  noiseSeed.animatable = NO; // value-only random seed, never a lane
+  noiseSeed.seedField = YES; // value + re-roll, not a slider
+  noiseSeed.categoryKey = @"Noise";
+  noiseSeed.categorySymbol = @"waveform";
+  [noiseSeed insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                             values:@[ @(kGlowM1NoiseSeed) ]]];
+
+  return @[ radius, noiseSeed, noise, noiseSpread ];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {

@@ -112,6 +112,7 @@
     display.aspectLinkable = tmpl ? tmpl.aspectLinkable : l.aspectLinkable;
     display.aspectLinked = l.aspectLinked;
     display.integerValued = tmpl ? tmpl.integerValued : l.integerValued;
+    [display kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     KKKeyPose *displayKp = [KKKeyPose keyposeAtTime:0.0
                                              values:vals ?: @[ @0.0 ]];
     // Carry the curve state so the row's toggle reflects this keypose.
@@ -171,7 +172,8 @@
       s.onDragEnd();
   };
   self.onValuePopover(_popoverAnchor, displayLanes, frac, excludedLabels,
-                      onValue, onAnimate, onRemove, onDragBegin, onDragEnd);
+                      lane.categoryKey, onValue, onAnimate, onRemove,
+                      onDragBegin, onDragEnd);
 }
 
 - (void)requestValuePopoverAtFraction:(double)fraction {

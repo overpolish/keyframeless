@@ -174,20 +174,22 @@
   };
 
   _KKStaticValuesPopoverView *staticView = [[_KKStaticValuesPopoverView alloc]
-       initWithLanes:cfg.lanes
-      descriptorPath:self.miniViewerDescriptorPath
-          clipAspect:self.miniViewerClipAspect
-         headerTitle:cfg.headerTitle
-        headerDetail:cfg.headerDetail
-          headerIcon:cfg.headerIcon
-      canvasDelegate:self.miniViewerDelegate
-          renderMode:cfg.renderMode
-       onModeChanged:cfg.onModeChanged
-          onNavigate:cfg.onNavigate
-       onHandleValue:onHandleValue
-         onDragBegin:onDragBeginBlock
-           onDragEnd:onDragEndBlock
-        editsKeypose:cfg.isBoundary];
+        initWithLanes:cfg.lanes
+       descriptorPath:self.miniViewerDescriptorPath
+           clipAspect:self.miniViewerClipAspect
+          headerTitle:cfg.headerTitle
+         headerDetail:cfg.headerDetail
+           headerIcon:cfg.headerIcon
+       canvasDelegate:self.miniViewerDelegate
+           renderMode:cfg.renderMode
+        onModeChanged:cfg.onModeChanged
+           onNavigate:cfg.onNavigate
+        onHandleValue:onHandleValue
+          onDragBegin:onDragBeginBlock
+            onDragEnd:onDragEndBlock
+         editsKeypose:cfg.isBoundary
+      initialCategory:cfg.initialCategory];
+  staticView.onCategoryChanged = cfg.onCategoryChanged;
 
   _openStaticView = staticView;
   _openStaticIsBoundary = cfg.isBoundary;

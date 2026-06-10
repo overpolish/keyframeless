@@ -130,6 +130,7 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                                              s.onManagePopoverClosed();
                                          }];
   _openManagePopover = pop;
+  manageView.popover = pop;
 
   if (self.onManagePopoverWillOpen) {
     NSString *targetLabel =
@@ -446,6 +447,8 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
                               displayLanes:(NSArray<KKLane *> *)lanes
                                   fraction:(double)fraction
                             excludedLabels:(NSArray<NSString *> *)excludedLabels
+                           initialCategory:(NSString *)initialCategory
+                         remembersCategory:(BOOL)remembersCategory
                                    onValue:
                                        (void (^)(NSString *,
                                                  NSArray<NSNumber *> *))onValue
@@ -465,6 +468,20 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   cfg.renderMode = _renderMode;
   cfg.isBoundary = YES;
   cfg.fraction = fraction;
+  // Open on the clicked keypose's category (the Advanced keypose popover can
+  // span all categories, so the clicked lane's category is passed in explicitly
+  // rather than guessed from the first display lane). The Basic boundary
+  // popover has no single clicked lane, so it remembers the last tab instead.
+  NSString *initCat =
+      initialCategory.length ? initialCategory : lanes.firstObject.categoryKey;
+  if (remembersCategory && _rememberedCategory.length)
+    initCat = _rememberedCategory;
+  cfg.initialCategory = initCat;
+  if (remembersCategory)
+    cfg.onCategoryChanged = ^(NSString *category) {
+      __strong typeof(weak) s = weak;
+      s->_rememberedCategory = [category copy];
+    };
   cfg.excludedLabels = excludedLabels;
   cfg.onValue = onValue;
   cfg.onAnimate = onAnimate;
@@ -510,6 +527,12 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   cfg.headerIcon =
       [KKPopoverHeaderView iconImageForSymbolName:@"slider.horizontal.3"];
   cfg.renderMode = KKMiniViewerRenderModeOff;
+  // Remember the last category tab across reopens of the constants popover.
+  cfg.initialCategory = _rememberedCategory;
+  cfg.onCategoryChanged = ^(NSString *category) {
+    __strong typeof(weak) s = weak;
+    s->_rememberedCategory = [category copy];
+  };
   // Constants commits go through -_setLaneValues:forLabel: (cfg.onValue=nil).
   // Outer drag begin/end forward to the lanes view's properties so a guide
   // observer is informed (same hook the boundary popover's caller wires).

@@ -66,6 +66,10 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 @package
   NSArray<KKLane *> *_availableLanes;
   KKTimeline *_timeline;
+  // Labels of opted-in lanes the user hid via the lane-filter bar. Filtered out
+  // of -_animatableLanes so the whole view (rows, hit-testing, heights) skips
+  // them. View state only - never serialized.
+  NSSet<NSString *> *_hiddenLaneLabels;
   BOOL _scrubbing;
   double _snappedScrubFrac;
   // Non-nil while a cmd+opt "scrub to here" gesture is active: the lane the
