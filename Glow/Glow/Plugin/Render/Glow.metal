@@ -98,7 +98,7 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
     float2 destUV = pxInDest / (*destImgSizePx);
     float2 srcUV = (pxInDest - (*srcOriginInDestPx)) / (*srcImgSizePx);
 
-    constexpr sampler s(mag_filter::linear, min_filter::linear);
+    constexpr sampler s(mag_filter::linear, min_filter::linear, address::clamp_to_zero);
     constexpr sampler srcS(mag_filter::linear, min_filter::linear, address::clamp_to_zero);
 
     half4 original = source.sample(srcS, srcUV);
@@ -121,6 +121,13 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
     float2 uvScale = float2(maxR / max(rx, 0.01), maxR / max(ry, 0.01));
     float2 scaledUV = bCenter + (offsetUV - bCenter) * uvScale;
     float4 blur = float4(blurred.sample(s, scaledUV));
+    // The elliptical UV scaling pushes scaledUV outside the valid blur region
+    // (the active sub-rect [0, bScale]) for fragments far along the squashed
+    // axis when rx/ry is small. There's no glow out there, so zero it - else the
+    // sampler pulls the texture's edge / unused-pool content into a soft band
+    // along the top/bottom (or left/right) of the frame.
+    if (any(scaledUV < float2(0.0)) || any(scaledUV > bScale))
+        blur = float4(0.0);
 
     float t = 1.0 - blur.a;
 
