@@ -520,9 +520,7 @@ static const double kMiniScaleFineFactor = 0.2;
   NSInteger li = [lanes indexOfObject:lane];
   if (li == NSNotFound)
     return;
-  KKLane *nl = [lane copy];
-  NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
-  KKKeyPose *nk = [kps[_pathIndex] copy];
+  KKLane *nl;
   if (_pathPart == 0) {
     // Anchor: delta-based move (no jump) + Shift axis-lock + Cmd-snap.
     double nx = _pathGrabValX + (curNX - _pathPressNX);
@@ -538,9 +536,17 @@ static const double kMiniScaleFineFactor = 0.2;
       [self _snapPositionX:&nx Y:&ny contentRect:cr excludeIndex:_pathIndex];
     else
       [_snapEngine reset];
-    nk.values = @[ @(nx), @(ny) ];
+    // Propagate the value to any hold-linked twin (a coincident keypose joined
+    // by a linked interval) - otherwise dragging one anchor of a linked pair
+    // leaves the other behind, diverging an intended Hold into an invalid
+    // state.
+    nl = KKLaneBySettingValuesAtIndex(lane, _pathIndex, @[ @(nx), @(ny) ]);
   } else {
     // Tangent handle: offset from the anchor; symmetric unless Shift breaks it.
+    // Per-keypose curve shape is NOT shared by a hold-link, so write it alone.
+    nl = [lane copy];
+    NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
+    KKKeyPose *nk = [kps[_pathIndex] copy];
     double ax = nk.values.count > 0 ? nk.values[0].doubleValue : 0.5;
     double ay = nk.values.count > 1 ? nk.values[1].doubleValue : 0.5;
     double offX = curNX - ax, offY = curNY - ay;
@@ -557,9 +563,9 @@ static const double kMiniScaleFineFactor = 0.2;
       if (!shift)
         nk.outHandle = mir;
     }
+    kps[_pathIndex] = nk;
+    nl.keyposes = kps;
   }
-  kps[_pathIndex] = nk;
-  nl.keyposes = kps;
   lanes[li] = nl;
   KKTimeline *t = [self.timeline copy];
   t.lanes = lanes;
@@ -817,10 +823,23 @@ static const double kMiniScaleFineFactor = 0.2;
     if (![lane.label isEqualToString:@"Position"])
       continue;
     NSArray<KKKeyPose *> *kps = lane.keyposes;
+    // Skip the edited keypose AND its hold-linked twins: a coincident keypose
+    // joined by a linked interval moves WITH the drag, so it's the same point -
+    // leaving it in would snap the anchor to itself (a phantom accent guide).
+    NSMutableIndexSet *skip = [NSMutableIndexSet indexSet];
+    if (excludeIndex >= 0 && excludeIndex < (NSInteger)kps.count) {
+      [skip addIndex:(NSUInteger)excludeIndex];
+      for (NSInteger i = excludeIndex;
+           i + 1 < (NSInteger)kps.count && kps[i].outgoing.endpointsLinked; i++)
+        [skip addIndex:(NSUInteger)(i + 1)];
+      for (NSInteger i = excludeIndex;
+           i > 0 && kps[i - 1].outgoing.endpointsLinked; i--)
+        [skip addIndex:(NSUInteger)(i - 1)];
+    }
     if (kps.count > 0)
       objs = malloc(kps.count * sizeof(simd_float2));
     for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
-      if (k == excludeIndex)
+      if ([skip containsIndex:(NSUInteger)k])
         continue;
       NSArray<NSNumber *> *v = kps[k].values;
       if (v.count < 2)

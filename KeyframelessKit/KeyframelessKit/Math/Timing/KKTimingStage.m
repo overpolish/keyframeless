@@ -433,42 +433,50 @@ NSInteger KKLaneNearestKeyposeIndex(KKLane *lane, double frac) {
   return best;
 }
 
-KKLane *KKLaneBySettingValuesNearestFraction(KKLane *lane, double frac,
-                                             NSArray<NSNumber *> *values) {
+KKLane *KKLaneBySettingValuesAtIndex(KKLane *lane, NSInteger index,
+                                     NSArray<NSNumber *> *values) {
   KKLane *nl = [lane copy];
-  NSArray<KKKeyPose *> *kps = nl.keyposes;
-  if (kps.count == 0) {
-    nl.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
+  NSMutableArray<KKKeyPose *> *mkps = [nl.keyposes mutableCopy];
+  if (index < 0 || index >= (NSInteger)mkps.count)
     return nl;
-  }
-  NSInteger best = KKLaneNearestKeyposeIndex(nl, frac);
-  NSMutableArray<KKKeyPose *> *mkps = [kps mutableCopy];
   // Copy-preserve (not rebuild) so spatialSmooth + in/out handles + outgoing
   // survive a value edit - the "edit resets the path to linear" class of bug.
-  KKKeyPose *nk = [mkps[best] copy];
+  KKKeyPose *nk = [mkps[index] copy];
   nk.values = values;
-  mkps[best] = nk;
+  mkps[index] = nk;
   // Hold-link propagation: a linked interval's two endpoints share one value.
-  // Walk the WHOLE linked chain outward from `best` in both directions - not
+  // Walk the WHOLE linked chain outward from `index` in both directions - not
   // just the immediate neighbour. A multi-segment hold chains several keyposes
   // (e.g. coincident boundary pairs kp1=kp2, kp3=kp4 joined by linked intervals
   // kp1->kp2->kp3->kp4); stopping after one step left the far end stale
   // mid-drag so the motion path drew a phantom segment until a mouse-up
   // reconcile re-synced the chain. The chain stops at the first non-linked
   // interval, so unlinked endpoints (In-start / Out-end) are never touched.
-  for (NSInteger i = best;
+  for (NSInteger i = index;
        i + 1 < (NSInteger)mkps.count && mkps[i].outgoing.endpointsLinked; i++) {
     KKKeyPose *np = [mkps[i + 1] copy];
     np.values = values;
     mkps[i + 1] = np;
   }
-  for (NSInteger i = best; i > 0 && mkps[i - 1].outgoing.endpointsLinked; i--) {
+  for (NSInteger i = index; i > 0 && mkps[i - 1].outgoing.endpointsLinked;
+       i--) {
     KKKeyPose *np = [mkps[i - 1] copy];
     np.values = values;
     mkps[i - 1] = np;
   }
   nl.keyposes = mkps;
   return nl;
+}
+
+KKLane *KKLaneBySettingValuesNearestFraction(KKLane *lane, double frac,
+                                             NSArray<NSNumber *> *values) {
+  if (lane.keyposes.count == 0) {
+    KKLane *nl = [lane copy];
+    nl.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
+    return nl;
+  }
+  return KKLaneBySettingValuesAtIndex(
+      lane, KKLaneNearestKeyposeIndex(lane, frac), values);
 }
 
 KKTimeline *

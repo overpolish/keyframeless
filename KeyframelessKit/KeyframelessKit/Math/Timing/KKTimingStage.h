@@ -284,6 +284,17 @@ FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingAspectLinked(
 FOUNDATION_EXPORT NSInteger KKLaneNearestKeyposeIndex(KKLane *lane,
                                                       double frac);
 
+/// Returns a copy of `lane` with the keypose at `index` set to `values`,
+/// copy-preserving spatialSmooth / in-out handles / outgoing interval, and
+/// propagating the new value to hold-linked neighbours (the linked chain on
+/// either side). Out-of-range `index` returns an unchanged copy. Use this when
+/// the caller already knows WHICH keypose to edit (e.g. a grabbed path-anchor
+/// dot); the nearest-fraction variant below is for playhead-relative edits.
+/// Input lane is not mutated.
+FOUNDATION_EXPORT KKLane *
+KKLaneBySettingValuesAtIndex(KKLane *lane, NSInteger index,
+                             NSArray<NSNumber *> *values);
+
 /// Returns a copy of `lane` with the keypose nearest `frac` set to `values`,
 /// copy-preserving spatialSmooth / in-out handles / outgoing interval, and
 /// propagating the new value to hold-linked neighbours. An empty lane gets a
