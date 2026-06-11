@@ -82,6 +82,8 @@ static MTLPixelFormat GlowSRGBVariant(MTLPixelFormat f) {
     return @[ @(kGlowM1Noise * 100.0) ];
   if ([label isEqualToString:@"Spread"])
     return @[ @(kGlowM1NoiseOffset * 100.0) ];
+  if ([label isEqualToString:@"Grain Size"])
+    return @[ @(kGlowM1NoiseGrain * 100.0) ];
   if ([label isEqualToString:@"Speed"])
     return @[ @(kGlowM1NoiseSpeed * 100.0) ];
   if ([label isEqualToString:@"Seed"])
@@ -553,11 +555,11 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
     float intensity = kGlowM1Intensity, falloff = kGlowM1Falloff,
           gradAngle = kGlowM1GradientAngle, threshold = kGlowM1Threshold;
     // Noise group lanes (Amount + Spread are 0-100% in the UI; shader takes
-    // 0-1). Seed perturbs the pattern (noiseSeedHash). The preview renders a
-    // single frame with no playback clock, so the flow phase stays at 0 - the
-    // grain is animated by the FCP canvas, not the mini preview.
+    // 0-1). Seed perturbs the pattern (noiseSeedHash).
     NSArray<NSNumber *> *amountVals = [self valuesForLabel:@"Amount"];
     NSArray<NSNumber *> *spreadVals = [self valuesForLabel:@"Spread"];
+    NSArray<NSNumber *> *grainVals = [self valuesForLabel:@"Grain Size"];
+    NSArray<NSNumber *> *speedVals = [self valuesForLabel:@"Speed"];
     NSArray<NSNumber *> *seedVals = [self valuesForLabel:@"Seed"];
     float noise = amountVals.count >= 1
                       ? (float)(amountVals[0].doubleValue / 100.0)
@@ -565,9 +567,22 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
     float noiseOffset = spreadVals.count >= 1
                             ? (float)(spreadVals[0].doubleValue / 100.0)
                             : kGlowM1NoiseOffset;
-    float noiseSeed = 0.0f; // flow phase (static in the preview)
+    // Flow phase at the previewed frame: editFraction is the live playhead time
+    // (the "Showing current frame" preview sets it), so map it to clip-local
+    // seconds x Speed x 5 to match the main render's
+    // CMTimeGetSeconds(renderTime) * speed * 5. Without this the grain would
+    // ignore Speed in the preview even though the viewer drifts it.
+    double clipDur = 0.0;
+    for (KKLane *l in self.timeline.lanes)
+      clipDur = MAX(clipDur, l.lastKnownClipDuration);
+    double speed = speedVals.count >= 1 ? speedVals[0].doubleValue / 100.0
+                                        : kGlowM1NoiseSpeed;
+    float noiseSeed = (float)(self.editFraction * clipDur * speed * 5.0);
     float noiseSeedHash =
         seedVals.count >= 1 ? (float)seedVals[0].doubleValue : kGlowM1NoiseSeed;
+    float noiseGrain =
+        GlowNoiseGrainCells(grainVals.count >= 1 ? grainVals[0].doubleValue
+                                                 : kGlowM1NoiseGrain * 100.0);
     int colorMode = kGlowM1ColorMode, gradType = kGlowM1GradientType;
     simd_float2 offset = {0.0f, 0.0f};
     simd_float3 glowColor = {1.0f, 1.0f, 1.0f};
@@ -618,6 +633,9 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
     [e setFragmentBytes:&noiseSeedHash
                  length:sizeof(noiseSeedHash)
                 atIndex:FragmentIndex_NoiseSeedHash];
+    [e setFragmentBytes:&noiseGrain
+                 length:sizeof(noiseGrain)
+                atIndex:FragmentIndex_NoiseGrain];
     [e setFragmentBytes:&blurUVScale
                  length:sizeof(blurUVScale)
                 atIndex:FragmentIndex_BlurUVScale];

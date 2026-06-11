@@ -29,7 +29,9 @@ typedef enum FragmentIndex {
     FragmentIndex_SrcImgSizePx = 18,
     // Static pattern seed (perturbs the spatial hash). Separate from NoiseSeed,
     // which is the time-driven radial-flow phase.
-    FragmentIndex_NoiseSeedHash = 19
+    FragmentIndex_NoiseSeedHash = 19,
+    // Grain cell count along the longest axis (coarseness). Lower = chunkier.
+    FragmentIndex_NoiseGrain = 20
 } FragmentIndex;
 
 #define KK_GRADIENT_LUT_SIZE 64

@@ -211,44 +211,86 @@
         }
       }
     },
-    "Amount, Spread, and Speed animate on the timeline like any other property; Seed is a constant set in the Constants panel / Noise tab.": {
+    "<accent>Grain Size</accent> - the size of each grain speck, 0-100%. Low is fine, tiny grain; high is coarse, chunky grain. Default 50.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Menge, Streuung und Geschwindigkeit lassen sich auf der Timeline wie jede andere Eigenschaft animieren; Startwert ist ein konstanter Wert, der im Konstanten-Bereich / Rauschen-Tab festgelegt wird."
+            "value": "<accent>Körnungsgröße</accent> - die Größe jedes Korns, 0-100 %. Niedrig ist feines, winziges Korn; hoch ist grobes, klobiges Korn. Standard 50."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cantidad, Dispersión y Velocidad se animan en la línea de tiempo como cualquier otra propiedad; Semilla es una constante que se fija en el panel de Constantes / pestaña Ruido."
+            "value": "<accent>Tamaño de grano</accent> - el tamaño de cada mota de grano, 0-100 %. Bajo es grano fino y diminuto; alto es grano grueso y basto. Por omisión 50."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quantité, Diffusion et Vitesse s’animent sur la timeline comme toute autre propriété ; Graine est une constante définie dans le panneau Constantes / l’onglet Bruit."
+            "value": "<accent>Taille du grain</accent> - la taille de chaque grain, 0-100 %. Bas donne un grain fin et minuscule ; haut un grain grossier et épais. Par défaut 50."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "量、広がり、速度は他のプロパティと同様にタイムラインでアニメートできます。シードは定数で、定数パネル / ノイズタブで設定します。"
+            "value": "<accent>粒子サイズ</accent> - 各粒子の大きさ、0〜100%。低いと細かく小さな粒子、高いと粗く大きな粒子になります。デフォルト50。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "양, 확산, 속도는 다른 속성처럼 타임라인에서 애니메이션할 수 있습니다. 시드는 상수 패널 / 노이즈 탭에서 설정하는 상수입니다."
+            "value": "<accent>입자 크기</accent> - 각 입자의 크기, 0-100%. 낮으면 곱고 작은 입자, 높으면 거칠고 굵은 입자입니다. 기본값 50."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "数量、扩散和速度可像其他属性一样在时间线上制作动画；种子是在“常量”面板/“噪点”标签中设置的常量。"
+            "value": "<accent>颗粒大小</accent> - 每个颗粒的大小，0-100%。低值为细小颗粒；高值为粗大颗粒。默认 50。"
+          }
+        }
+      }
+    },
+    "Amount, Spread, Grain Size, and Speed animate on the timeline like any other property; Seed is a constant set in the Constants panel / Noise tab.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menge, Streuung, Körnungsgröße und Geschwindigkeit lassen sich auf der Timeline wie jede andere Eigenschaft animieren; Startwert ist ein konstanter Wert, der im Konstanten-Bereich / Rauschen-Tab festgelegt wird."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cantidad, Dispersión, Tamaño de grano y Velocidad se animan en la línea de tiempo como cualquier otra propiedad; Semilla es una constante que se fija en el panel de Constantes / pestaña Ruido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantité, Diffusion, Taille du grain et Vitesse s’animent sur la timeline comme toute autre propriété ; Graine est une constante définie dans le panneau Constantes / l’onglet Bruit."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "量、広がり、粒子サイズ、速度は他のプロパティと同様にタイムラインでアニメートできます。シードは定数で、定数パネル / ノイズタブで設定します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "양, 확산, 입자 크기, 속도는 다른 속성처럼 타임라인에서 애니메이션할 수 있습니다. 시드는 상수 패널 / 노이즈 탭에서 설정하는 상수입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数量、扩散、颗粒大小和速度可像其他属性一样在时间线上制作动画；种子是在“常量”面板/“噪点”标签中设置的常量。"
           }
         }
       }

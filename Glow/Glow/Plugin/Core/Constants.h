@@ -59,6 +59,16 @@ static const float kGlowM1NoiseSeed = 0.0f;
 // Outward-flow rate (0-1). The shader's noiseSeed phase = time * speed * 5.
 // Default 0 = static grain; raise Speed to make it drift outward.
 static const float kGlowM1NoiseSpeed = 0.0f;
+// Grain Size (0-1 fraction; x100 = the UI %). Higher = larger, chunkier grain
+// (fewer cells). 0.5 reproduces the historical fixed 600-cell look.
+static const float kGlowM1NoiseGrain = 0.5f;
+// Map a Grain Size % to the shader's cell count along the longest axis:
+// 0% -> 1000 cells (fine), 50% -> 600 (legacy look), 100% -> 200 (chunky).
+static inline float GlowNoiseGrainCells(double pct) {
+  double f = pct / 100.0;
+  f = f < 0.0 ? 0.0 : (f > 1.0 ? 1.0 : f);
+  return (float)(1000.0 - 800.0 * f);
+}
 static const float kGlowM1Threshold = 0.0f; // 0 => bloom path is never hit
 static const int kGlowM1ColorMode = 2; // shader: 2 = Dynamic (source-coloured)
 static const int kGlowM1GradientType = 0;

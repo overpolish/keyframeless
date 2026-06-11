@@ -250,6 +250,10 @@ static void _encodeGlowPipeline(
     [e setFragmentBytes:&nseedHash
                  length:sizeof(nseedHash)
                 atIndex:FragmentIndex_NoiseSeedHash];
+    float ngrain = state.noiseGrain;
+    [e setFragmentBytes:&ngrain
+                 length:sizeof(ngrain)
+                atIndex:FragmentIndex_NoiseGrain];
     simd_float2 blurUVScale = {(float)bW / (float)prepTex.width,
                                (float)bH / (float)prepTex.height};
     [e setFragmentBytes:&blurUVScale
@@ -511,6 +515,8 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
   NSArray<NSNumber *> *amountVals = _GlowLaneValues(timeline, @"Amount", frac);
   NSArray<NSNumber *> *spreadVals = _GlowLaneValues(timeline, @"Spread", frac);
   NSArray<NSNumber *> *speedVals = _GlowLaneValues(timeline, @"Speed", frac);
+  NSArray<NSNumber *> *grainVals =
+      _GlowLaneValues(timeline, @"Grain Size", frac);
   NSArray<NSNumber *> *seedVals = _GlowLaneValues(timeline, @"Seed", frac);
   double rX = radiusVals.count >= 1 ? radiusVals[0].doubleValue : kGlowM1Radius;
   double rY = radiusVals.count >= 2 ? radiusVals[1].doubleValue : rX;
@@ -523,6 +529,8 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
                                       : kGlowM1NoiseSpeed;
   double seed =
       seedVals.count >= 1 ? seedVals[0].doubleValue : kGlowM1NoiseSeed;
+  double grainPct = grainVals.count >= 1 ? grainVals[0].doubleValue
+                                         : kGlowM1NoiseGrain * 100.0;
   // noiseSeed is the radial-flow PHASE - a time-driven term so the grain drifts
   // outward at `speed` (evaluated per motion-blur sub-sample, so it animates).
   // The Seed is separate: it perturbs the spatial pattern (noiseSeedHash).
@@ -542,6 +550,7 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
       .gradientAngle = kGlowM1GradientAngle,
       .noiseSeed = (float)noiseSeed,
       .noiseSeedHash = (float)seed,
+      .noiseGrain = GlowNoiseGrainCells(grainPct),
       .threshold = kGlowM1Threshold,
   };
   for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)

@@ -39,6 +39,8 @@ static NSString *_GlowAILaneSchemaText(void) {
          @"reaches "
          @"into the glow's falloff (low = near the edge, high = through the "
          @"whole glow). Default 0.\n"
+         @"- \"Grain Size\": single value, percent 0..100. Size of each grain "
+         @"speck (low = fine/tiny, high = coarse/chunky). Default 50.\n"
          @"- \"Speed\": single value, percent 0..100. How fast the grain "
          @"animates over time (0 = static). Default 0.\n"
          @"- \"Seed\": single integer, the random grain-pattern seed. NOT "
@@ -108,6 +110,22 @@ static NSString *_GlowAILaneSchemaText(void) {
                         keyposeAtTime:0.0
                                values:@[ @(kGlowM1NoiseOffset * 100.0) ]]];
 
+  // Grain Size (animatable %): higher = larger, chunkier grain (fewer cells).
+  // 50% reproduces the historical fixed grain; render maps it via
+  // GlowNoiseGrainCells.
+  KKLane *noiseGrain = [KKLane laneWithLabel:@"Grain Size"];
+  noiseGrain.valueType = KKLaneValueTypeFloat;
+  noiseGrain.componentMin = @[ @0.0 ];
+  noiseGrain.componentMax = @[ @100.0 ];
+  noiseGrain.componentUnits = @[ @"%" ];
+  noiseGrain.integerValued = YES;
+  noiseGrain.categoryKey = @"Noise";
+  noiseGrain.categorySymbol = @"waveform";
+  [noiseGrain
+      insertKeypose:[KKKeyPose
+                        keyposeAtTime:0.0
+                               values:@[ @(kGlowM1NoiseGrain * 100.0) ]]];
+
   // Speed (animatable %): the shader phase = Seed + time * (Speed/100) * 5, so
   // the grain drifts outward over time (the old "animated noise" behaviour).
   KKLane *noiseSpeed = [KKLane laneWithLabel:@"Speed"];
@@ -139,7 +157,7 @@ static NSString *_GlowAILaneSchemaText(void) {
   [noiseSeed insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                              values:@[ @(kGlowM1NoiseSeed) ]]];
 
-  return @[ radius, noiseSeed, noise, noiseSpread, noiseSpeed ];
+  return @[ radius, noiseSeed, noise, noiseSpread, noiseGrain, noiseSpeed ];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {

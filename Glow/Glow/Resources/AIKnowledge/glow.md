@@ -13,10 +13,11 @@ Parameters are split into two groups (shown as category pills in the inspector):
 - Noise - optional grain mixed into the glow for a textured, less perfectly-smooth halo:
   - **Amount** - how much grain is mixed in, 0-100%. 0 is a clean glow; higher breaks the halo up into grain.
   - **Spread** - how far the grain reaches into the glow's falloff, 0-100%. Low keeps grain near the edge; high pushes it through the whole glow.
+  - **Grain Size** - the size of each grain speck, 0-100%. Low is fine, tiny grain; high is coarse, chunky grain. Default 50.
   - **Speed** - how fast the grain animates over time, 0-100%. 0 is a static grain; raise it to make the grain shimmer. Default 0.
   - **Seed** - a random value that picks which grain pattern you get; re-roll it for a different look. Not animatable (a fixed pattern for the clip).
 
-Amount, Spread, and Speed animate on the timeline like any other property; Seed is a constant set in the Constants panel / Noise tab.
+Amount, Spread, Grain Size, and Speed animate on the timeline like any other property; Seed is a constant set in the Constants panel / Noise tab.
 
 ## Showing and hiding on-screen controls
 
