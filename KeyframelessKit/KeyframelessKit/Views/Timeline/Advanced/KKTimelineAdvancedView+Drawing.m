@@ -33,6 +33,47 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 
 @implementation KKTimelineAdvancedView (Drawing)
 
+- (void)_drawGroupDividerForLane:(KKLane *)lane inStrip:(NSRect)strip {
+  NSColor *ink = [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
+
+  NSString *name = KKLocalizedParamName(lane.categoryKey ?: @"");
+  NSDictionary *attrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:kGroupDividerFontSize
+                                            weight:NSFontWeightSemibold],
+    NSForegroundColorAttributeName : ink,
+    NSKernAttributeName : @0.5,
+  };
+  NSSize tsz = [name sizeWithAttributes:attrs];
+
+  NSImage *icon = nil;
+  CGFloat iconW = 0, iconH = 0;
+  if (lane.categorySymbol.length) {
+    NSImageSymbolConfiguration *cfg = [[NSImageSymbolConfiguration
+        configurationWithPointSize:kGroupDividerFontSize
+                            weight:NSFontWeightSemibold]
+        configurationByApplyingConfiguration:
+            [NSImageSymbolConfiguration
+                configurationWithHierarchicalColor:ink]];
+    icon = [[NSImage imageWithSystemSymbolName:lane.categorySymbol
+                      accessibilityDescription:nil]
+        imageWithSymbolConfiguration:cfg];
+    iconW = icon.size.width;
+    iconH = icon.size.height;
+  }
+
+  CGFloat iconGap = icon ? KKPaddingSM : 0.0;
+  CGFloat midY = NSMidY(strip);
+
+  // Left-aligned icon + label flush to the strip's left edge.
+  CGFloat x = NSMinX(strip);
+  if (icon) {
+    [icon drawInRect:NSMakeRect(x, floor(midY - iconH * 0.5), iconW, iconH)];
+    x += iconW + iconGap;
+  }
+  [name drawAtPoint:NSMakePoint(x, floor(midY - tsz.height * 0.5))
+      withAttributes:attrs];
+}
+
 - (void)drawRect:(NSRect)dirtyRect {
   NSRect g = [self _graphRect];
   if (NSWidth(g) <= 0 || NSHeight(g) <= 0)
@@ -60,9 +101,17 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   [NSGraphicsContext saveGraphicsState];
   [track addClip];
 
+  NSArray<NSNumber *> *divFlags = [self _groupDividerFlags];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
     NSRect row = [self _rowRectForIndex:i count:lanes.count];
+    // Category header strip sits directly above the first row of each group.
+    if (i < (NSInteger)divFlags.count && divFlags[i].boolValue) {
+      NSRect strip = NSMakeRect(NSMinX(g) + kRowLabelInset, NSMaxY(row),
+                                NSMaxX(g) - 2.0 * kRowLabelInset - NSMinX(g),
+                                kGroupDividerH);
+      [self _drawGroupDividerForLane:lane inStrip:strip];
+    }
     if (i == _hoverLaneRow) {
       // Extend the hover highlight by kPillW/2 on each side so it lines up
       // with the boundary pills (which sit centred on tracks.minX / maxX)

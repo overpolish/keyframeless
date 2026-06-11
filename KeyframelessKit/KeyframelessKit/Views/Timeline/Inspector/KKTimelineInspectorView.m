@@ -28,12 +28,12 @@
 #import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKTimingCompat.h>
 
-// 220 base + 30 reserved for the lane-filter pill bar above the Advanced
+// 260 base + 30 reserved for the lane-filter pill bar above the Advanced
 // timeline (matches kLaneFilterBarH in KKTimelineLanesView+Helpers.m). The
 // FxPlug custom-UI height is fixed at init, so the strip is reserved
 // unconditionally; the graph absorbs it when the bar is hidden (Basic / <2
 // lanes), so there is no empty gap.
-static const CGFloat kInspectorHeight = 220.0 + 30.0;
+static const CGFloat kInspectorHeight = 260.0 + 30.0;
 const CGFloat kHeaderRowHeight = 28.0;
 // The motion-blur parameter row sits in its own section below the box. The
 // custom-UI height is fixed at init, so we reserve this once up front.

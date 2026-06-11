@@ -30,6 +30,14 @@ static const CGFloat kRowLabelInset = 8.0;
 static const CGFloat kRowMin = 30.0;
 static const CGFloat kRowGap = 2.0;
 
+// Thin "icon Name" strip drawn above the first row of each categorised group,
+// so the timeline mirrors the inspector's category grouping and a group's name
+// is always present (even when only that group is shown). Consumes its own
+// height; lanes share the remainder. Zero when no lanes are categorised.
+static const CGFloat kGroupDividerH = 24.0;
+// Divider icon + label point size, matched to the duration-overlay text.
+static const CGFloat kGroupDividerFontSize = 9.0;
+
 // Boundary pill - vertical capsule spanning the row, same width as Basic.
 static const CGFloat kPillW = 6.0;
 static const CGFloat kPillInsetY = 3.0;
@@ -193,6 +201,10 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (NSArray<NSNumber *> *)_laneKeyposeTimes:(KKLane *)lane;
 - (CGFloat)_rowHeightForCount:(NSInteger)n;
 - (NSRect)_rowRectForIndex:(NSInteger)i count:(NSInteger)n;
+// Per-animatable-lane flags marking the first lane of each categorised run (a
+// group-header strip is drawn above those rows). All-NO when no lane is
+// categorised, so the layout collapses to the flat row model.
+- (NSArray<NSNumber *> *)_groupDividerFlags;
 // Largest valid _scrollY: total row height minus the visible tracks height
 // (0 when every row fits, i.e. no scrolling needed).
 - (CGFloat)_maxScrollY;
@@ -248,6 +260,9 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 // Top/bottom fade shadows over the scrolling rows (mirrors KKPaddedScrollView)
 // - top fade shown while scrolled down, bottom fade while more rows lie below.
 - (void)_drawScrollFadesInRect:(NSRect)g;
+// Draw a "── icon Name ──" category header in `strip` (above a group's first
+// row), using `lane`'s categoryKey (localized) + categorySymbol.
+- (void)_drawGroupDividerForLane:(KKLane *)lane inStrip:(NSRect)strip;
 
 // Interaction - scrub + drag + edits + keyboard + menu.
 - (BOOL)_isInScrubBand:(NSPoint)pt;
