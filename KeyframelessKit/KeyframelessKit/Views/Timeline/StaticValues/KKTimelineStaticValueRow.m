@@ -20,6 +20,10 @@
 const CGFloat kFloatRowH = 30.0;
 static const CGFloat kCropRowH = 30.0; // single-line W/H/X/Y hstack
 static const CGFloat kStaticFieldW = 40.0;
+// Cap on the (uniform) label column so a long localized name (e.g. German
+// "Geschwindigkeit") can't push the value controls off the popover's right
+// edge. Longer names truncate with an ellipsis; the full name shows on hover.
+static const CGFloat kMaxLabelColW = 86.0;
 
 static NSTextField *_KKMakeNumberField(void) {
   return [KKValueTextField valueField];
@@ -323,8 +327,8 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     w = MAX(w, ceil([name sizeWithAttributes:attrs].width));
   }
   // Trailing breathing room so the value controls never butt up against the
-  // widest label.
-  return w > 0 ? w + KKPaddingMD : w;
+  // widest label, capped so a very long localized name can't eat the row.
+  return w > 0 ? MIN(w + KKPaddingMD, kMaxLabelColW) : w;
 }
 
 - (instancetype)initWithLane:(KKLane *)lane
@@ -346,6 +350,11 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   _labelColumnW = labelColumnWidth;
 
   NSTextField *title = _KKMakeCaption(KKLocalizedParamName(lane.label));
+  // Truncate a too-long localized name to an ellipsis (the column is capped);
+  // the full name is on hover so nothing is lost.
+  title.lineBreakMode = NSLineBreakByTruncatingTail;
+  title.usesSingleLineMode = YES;
+  title.toolTip = KKLocalizedParamName(lane.label);
   [self addSubview:title];
   // Uniform label column so the value controls line up across rows regardless
   // of label length (widest localized name); 54 is the legacy fallback.
@@ -426,7 +435,11 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     };
     _seedView.onReroll = ^{
       __strong typeof(weak) ss = weak;
-      uint32_t s = arc4random_uniform(100000);
+      // Re-roll within the lane's range so values stay evenly distributed
+      // (a fixed 0..100000 would clamp-pile onto the max for a small range).
+      uint32_t hi =
+          ss->_cmax.count ? (uint32_t)ss->_cmax[0].doubleValue : 99999;
+      uint32_t s = arc4random_uniform(hi + 1);
       ss->_seedView.seed = s;
       [ss _setValues:@[ @((double)s) ] emit:YES];
     };

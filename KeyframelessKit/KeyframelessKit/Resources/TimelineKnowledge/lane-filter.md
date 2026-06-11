@@ -3,9 +3,11 @@ id: lane-filter
 summary: Property categories and the lane filter bar for focusing the Advanced timeline
 ---
 
-Some plugins group their properties into categories - for example Glow splits its lanes into a Core group and a Noise group. Categories are optional: a plugin with no categories just lists its properties flat.
+Some plugins group their properties into categories (for example Glow's **Core** and **Noise**). When there is more than one category, **category pills** let you switch between groups in the value-editor popover, the Animated dropdown, and the parameter list, and a **filter bar** above the Advanced timeline lets you show, hide, or solo lanes so you can focus on a few at a time. Categories are optional - a plugin with no categories just lists its properties flat.
 
-Where categories appear: the value-editor popover (Constants and keyposes), the Animated dropdown, and the Parameter Order list all show category pills when a plugin has more than one category. Pick a pill to narrow the list to that category. The keypose popover opens on the clicked keypose's category; the Constants popover remembers the last category you used (in Basic timing).
+### Where categories appear
+
+The value-editor popover (Constants and keyposes), the Animated dropdown, and the Parameter Order list all show category pills when a plugin has more than one category. Pick a pill to narrow the list to that category. The keypose popover opens on the clicked keypose's category; the Constants popover remembers the last category you used (in Basic timing).
 
 ### The lane filter bar
 

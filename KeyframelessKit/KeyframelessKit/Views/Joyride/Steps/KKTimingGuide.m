@@ -209,6 +209,7 @@ static const CGFloat kDragSnapPx = 14.0;
                                 aspectLinked:config.primaryAspectLinked
                                  startValues:config.primarySeedValues
                                    endValues:primaryEnd];
+  primary.categoryKey = config.primaryCategoryKey;
   NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
   if (config.secondaryLabel) {
     KKLane *secondary = [self _seedLaneWithLabel:config.secondaryLabel
@@ -216,6 +217,7 @@ static const CGFloat kDragSnapPx = 14.0;
                                     aspectLinked:NO
                                      startValues:config.secondarySeedValues
                                        endValues:config.secondarySeedValues];
+    secondary.categoryKey = config.secondaryCategoryKey;
     [lanes addObject:secondary];
   }
   [lanes addObject:primary];
@@ -644,13 +646,18 @@ static const CGFloat kDragSnapPx = 14.0;
   // property), else the primary lane.
   NSString *addLabel = config.secondaryLabel ?: config.primaryLabel;
 
+  // The lane-filter step is only meaningful (and only has a visible filter bar
+  // to spotlight) when the seed has two lanes, so include it only then. It sits
+  // after the lane-editing steps, so a user hiding a lane there can't strand an
+  // earlier step that targets a specific lane row. Its presence shifts the
+  // Dynamic/Overview/Done indices by one.
+  const BOOL includeFilter = config.secondaryLabel != nil;
   const NSInteger ixSwitch = 0, ixIntro = 1, ixCmdClick = 2, ixPopover = 3,
-                  ixDrag = 4, ixMarquee = 5, ixGroupDrag = 6, ixDynamic = 7,
-                  ixOverview = 8, ixDone = 9;
+                  ixDrag = 4, ixMarquee = 5, ixGroupDrag = 6;
+  const NSInteger ixFilter = includeFilter ? 7 : -1;
+  const NSInteger ixDynamic = includeFilter ? 8 : 7;
   (void)ixSwitch;
   (void)ixIntro;
-  (void)ixOverview;
-  (void)ixDone;
 
   KKJoyrideStep *sSwitch = [KKJoyrideStep
       stepWithMessage:KKLoc(@"Tap <accent>Advanced</accent> for the "
@@ -882,6 +889,19 @@ static const CGFloat kDragSnapPx = 14.0;
         return fabs(now - kGroupTargetFrac) <= kGroupSnapFrac;
       }];
 
+  KKJoyrideStep *sFilter = [KKJoyrideStep
+      stepWithMessage:KKLoc(
+                          @"These <accent>filter</accent> pills show or hide "
+                          @"lanes - tap one to focus the timeline on the "
+                          @"properties you care about.",
+                          @"Advanced timing guide: try the lane-filter pills.")
+           targetView:nil];
+  sFilter.spotlightCircular = NO;
+  sFilter.targetScreenRect = ^NSRect {
+    __strong KKTimelineLanesView *l = weakLanes;
+    return l ? [l guideLaneFilterBarScreenRect] : NSZeroRect;
+  };
+
   KKJoyrideStep *sDynamic = [KKJoyrideStep
       stepWithMessage:KKLoc(@"Tap <accent>Dynamic</accent> to space out short "
                             @"transitions so they stay easy to grab on a long "
@@ -919,15 +939,23 @@ static const CGFloat kDragSnapPx = 14.0;
          advanceOn:[KKJoyrideTrigger staticValuesPopoverWillOpen]
          dismissOn:nil];
   [binder bindStep:sPopover atIndex:ixPopover advanceOn:nil dismissOn:nil];
+  if (includeFilter)
+    [binder bindStep:sFilter
+             atIndex:ixFilter
+           advanceOn:[KKJoyrideTrigger laneFilterToggled]
+           dismissOn:nil];
   [binder bindStep:sDynamic
            atIndex:ixDynamic
          advanceOn:[KKJoyrideTrigger dynamicToggled]
          dismissOn:nil];
 
-  return @[
-    sSwitch, sIntro, sCmdClick, sPopover, sDrag, sMarquee, sGroupDrag, sDynamic,
-    sOverview, sDone
-  ];
+  NSMutableArray<KKJoyrideStep *> *steps =
+      [@[ sSwitch, sIntro, sCmdClick, sPopover, sDrag, sMarquee, sGroupDrag ]
+          mutableCopy];
+  if (includeFilter)
+    [steps addObject:sFilter];
+  [steps addObjectsFromArray:@[ sDynamic, sOverview, sDone ]];
+  return steps;
 }
 
 @end

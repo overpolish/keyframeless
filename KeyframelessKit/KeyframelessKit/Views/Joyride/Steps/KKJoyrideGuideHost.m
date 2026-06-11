@@ -25,10 +25,15 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
   KKJoyrideLanesBinder *_binder;
   KKTimeline *_savedTimeline;
   // Advanced-graph selection at seed time, cleared for the guide's duration and
-  // restored on teardown so the guide's marquee / multi-select doesn't leak out.
+  // restored on teardown so the guide's marquee / multi-select doesn't leak
+  // out.
   NSSet<NSString *> *_savedPillKeys;
   NSSet<NSString *> *_savedGapKeys;
   BOOL _didSaveSelection;
+  // Lane-filter visibility at seed time: the guide shows every lane for its
+  // duration, then the user's hidden set is reinstated on teardown.
+  NSSet<NSString *> *_savedHiddenLaneLabels;
+  BOOL _didSaveHidden;
   NSInteger _finalIndex;
 }
 
@@ -154,8 +159,14 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
     _didSaveSelection = YES;
     [adv clearSelection];
   }
+  // Snapshot the user's lane-filter visibility, then reveal every lane so the
+  // guide's seed (and its spotlight steps) aren't hidden behind a filtered-out
+  // pill. Restored on teardown.
+  _savedHiddenLaneLabels = [_lanesView guideLaneFilterHiddenLabels];
+  _didSaveHidden = YES;
   if (self.timelineApplier)
     self.timelineApplier(seed);
+  [_lanesView guideShowAllLanes];
 }
 
 - (void)runBuildSteps:
@@ -227,18 +238,26 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
   _savedPillKeys = nil;
   _savedGapKeys = nil;
   _didSaveSelection = NO;
+  NSSet<NSString *> *hidden = _savedHiddenLaneLabels;
+  BOOL restoreHidden = _didSaveHidden;
+  _savedHiddenLaneLabels = nil;
+  _didSaveHidden = NO;
   void (^applier)(KKTimeline *) = self.timelineApplier;
   __weak KKTimelineLanesView *lanesView = _lanesView;
   void (^restoreSel)(void) = ^{
     if (restoreSelection)
       [lanesView.advancedGraph applySelectionPillKeys:pills gapKeys:gaps];
+    // After the user's timeline is back (its real lanes rebuilt the filter
+    // bar), reinstate the pills they had hidden before the guide.
+    if (restoreHidden)
+      [lanesView guideRestoreLaneFilterHidden:hidden];
   };
   if (saved && applier) {
     dispatch_async(dispatch_get_main_queue(), ^{
       applier(saved);
       restoreSel();
     });
-  } else if (restoreSelection) {
+  } else if (restoreSelection || restoreHidden) {
     dispatch_async(dispatch_get_main_queue(), restoreSel);
   }
 }

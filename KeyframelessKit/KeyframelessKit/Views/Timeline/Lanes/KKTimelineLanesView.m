@@ -176,6 +176,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     __strong typeof(weakFilter) s = weakFilter;
     [s _applyLaneFilterHidden:hidden];
   };
+  _laneFilterBar.onUserToggled = ^{
+    __strong typeof(weakFilter) s = weakFilter;
+    if (s->_onGuideLaneFilterToggled)
+      s->_onGuideLaneFilterToggled();
+  };
   [_laneStack addArrangedSubview:_laneFilterBar];
   [_laneFilterBar.widthAnchor constraintEqualToAnchor:_laneStack.widthAnchor]
       .active = YES;

@@ -55,6 +55,24 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onGapPopoverCurveChanged)
     (NSInteger curveType);
 
+/// The lanes the user has currently hidden via the lane-filter bar. The guide
+/// host snapshots this before it takes over the timeline so it can be restored
+/// afterwards.
+- (NSSet<NSString *> *)guideLaneFilterHiddenLabels;
+
+/// Make every lane visible for the duration of a guide (clears any solo), so a
+/// guide's steps aren't fighting a user-hidden lane.
+- (void)guideShowAllLanes;
+
+/// Restore a previously-snapshotted hidden set once the guide hands the
+/// timeline back. No-op safe if the labels no longer exist.
+- (void)guideRestoreLaneFilterHidden:(NSSet<NSString *> *)hidden;
+
+/// Screen rect of the Advanced lane-filter bar (for the guide's spotlight), or
+/// `NSZeroRect` if it isn't visible (fewer than two animated lanes, or not on
+/// the Advanced tab).
+- (NSRect)guideLaneFilterBarScreenRect;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -137,6 +137,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *secondarySeedValues;
 @property(nonatomic) NSInteger secondaryValueType;
 
+/// Optional category keys for the seed lanes (e.g. Glow's @"Core" / @"Noise").
+/// When set, the Advanced seed carries them so the lane-filter bar groups the
+/// pills into the real `[Category | lane]` capsules the plugin shows, and the
+/// guide's filter step teaches the grouping. nil = ungrouped single pills.
+@property(nonatomic, copy, nullable) NSString *primaryCategoryKey;
+@property(nonatomic, copy, nullable) NSString *secondaryCategoryKey;
+
 /// The mini-viewer guide seeds the primary lane with one keypose per entry
 /// here (distinct values, so Filmstrip/Onion show visibly different frames).
 /// Each element is a value array matching `primaryComponentCount`. ~4 entries

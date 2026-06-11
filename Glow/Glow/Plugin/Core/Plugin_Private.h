@@ -28,7 +28,8 @@ typedef struct {
   int gradientType;
   float gradientAngle;
   simd_float3 gradientLUT[KK_GRADIENT_LUT_SIZE];
-  float noiseSeed;
+  float noiseSeed;     // time-driven radial-flow phase
+  float noiseSeedHash; // static pattern seed (perturbs the spatial hash)
   float threshold;
 } GlowPluginState;
 

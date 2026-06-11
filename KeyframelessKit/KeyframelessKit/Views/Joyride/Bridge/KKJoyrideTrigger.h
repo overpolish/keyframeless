@@ -85,6 +85,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// direction - the step just wants the user to try it).
 + (instancetype)dynamicToggled;
 
+/// Fires when the user toggles (or solos) a pill in the Advanced lane-filter
+/// bar - any direction. Programmatic show-all/restore (e.g. the guide taking
+/// over) does NOT fire this; only a real user click does.
++ (instancetype)laneFilterToggled;
+
 #pragma mark - Combinators
 
 /// Arms when `self` fires while the step is active; advances only after

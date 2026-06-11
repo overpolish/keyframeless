@@ -136,6 +136,10 @@
   return t;
 }
 
++ (instancetype)laneFilterToggled {
+  return [self _t:KKJoyrideTriggerTypeLaneFilterToggled];
+}
+
 - (instancetype)thenWaitFor:(KKJoyrideTrigger *)next {
   _next = next;
   return self;

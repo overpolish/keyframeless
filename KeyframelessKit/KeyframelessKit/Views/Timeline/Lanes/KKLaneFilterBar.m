@@ -77,6 +77,22 @@ static const CGFloat kLaneFilterPillH = 22.0;
   return hidden;
 }
 
+- (void)showAllLanes {
+  [_soloLabels removeAllObjects];
+  [_visible removeAllObjects];
+  [_visible addObjectsFromArray:_allLabels];
+  [self _emitVisibilityChange];
+}
+
+- (void)applyHiddenLabels:(NSSet<NSString *> *)hidden {
+  [_soloLabels removeAllObjects];
+  [_visible removeAllObjects];
+  for (NSString *lab in _allLabels)
+    if (![hidden containsObject:lab])
+      [_visible addObject:lab];
+  [self _emitVisibilityChange];
+}
+
 // Group consecutive same-category lanes into a [Category | lane | lane] capsule
 // (leading category segment is the group master); an uncategorised lane is its
 // own single-segment capsule. Sets _compoundLaneLabels / _compoundHasHeader and
@@ -138,6 +154,15 @@ static const CGFloat kLaneFilterPillH = 22.0;
   _bar.translatesAutoresizingMaskIntoConstraints = NO;
   _bar.crossCapsuleSweep = YES;
   _bar.dragExcludedIndices = [self _masterExcludedIndices];
+  // The bar scrolls horizontally; its (potentially wide, e.g. long localized
+  // labels) intrinsic content width must NOT inflate the inspector's
+  // fittingSize and push the timeline off the right edge. Yield to the
+  // available width instead of driving it.
+  [_bar setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
+                                 forOrientation:
+                                     NSLayoutConstraintOrientationHorizontal];
+  [_bar setContentHuggingPriority:NSLayoutPriorityDefaultLow
+                   forOrientation:NSLayoutConstraintOrientationHorizontal];
   __weak typeof(self) weak = self;
   _bar.onToggled = ^(NSInteger ci, NSInteger seg, BOOL on) {
     [weak _toggleCompound:ci segment:seg on:on];
@@ -249,6 +274,8 @@ static const CGFloat kLaneFilterPillH = 22.0;
   }
   // Empty is allowed now (host shows an "all hidden" message).
   [self _emitVisibilityChange];
+  if (self.onUserToggled)
+    self.onUserToggled();
 }
 
 // Option-click: solo the clicked lane/group (only it visible, drawn warning).
@@ -267,6 +294,8 @@ static const CGFloat kLaneFilterPillH = 22.0;
     _visible = [targetSet mutableCopy];
   }
   [self _emitVisibilityChange];
+  if (self.onUserToggled)
+    self.onUserToggled();
 }
 
 @end

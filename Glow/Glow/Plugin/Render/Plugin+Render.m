@@ -246,6 +246,10 @@ static void _encodeGlowPipeline(
     [e setFragmentBytes:&nseed
                  length:sizeof(nseed)
                 atIndex:FragmentIndex_NoiseSeed];
+    float nseedHash = state.noiseSeedHash;
+    [e setFragmentBytes:&nseedHash
+                 length:sizeof(nseedHash)
+                atIndex:FragmentIndex_NoiseSeedHash];
     simd_float2 blurUVScale = {(float)bW / (float)prepTex.width,
                                (float)bH / (float)prepTex.height};
     [e setFragmentBytes:&blurUVScale
@@ -443,6 +447,17 @@ static void _texPairReturn(NSInteger idx) {
   return (*pluginState != nil);
 }
 
+// Smoothed value(s) of the lane named `label` at `frac`, or nil when the
+// timeline has no such lane (caller falls back to the kGlowM1* default). Seed
+// is a single-keypose lane, so it evaluates to its constant at any fraction.
+static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
+                                            NSString *label, double frac) {
+  for (KKLane *lane in timeline.lanes)
+    if ([lane.label isEqualToString:label])
+      return KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+  return nil;
+}
+
 - (BOOL)glowParams:(GlowPluginState *)outParams
             atTime:(CMTime)renderTime
              error:(NSError **)error {
@@ -489,32 +504,44 @@ static void _texPairReturn(NSInteger idx) {
     });
   }
 
-  // M1: only the Radius lane drives the render. Every other GlowPluginState
-  // field uses the kGlowM1* fallbacks until later milestones promote them to
-  // lanes / mode params. Radius is a 2-component aspect-linked lane [X, Y].
-  NSArray<NSNumber *> *radiusVals = nil;
-  for (KKLane *lane in timeline.lanes) {
-    if ([lane.label isEqualToString:@"Radius"]) {
-      radiusVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
-      break;
-    }
-  }
+  // Radius (2-component aspect-linked [X, Y]) + the Noise group (Amount,
+  // Spread, Seed) drive the render. Every other GlowPluginState field uses the
+  // kGlowM1* fallbacks until later milestones promote them to lanes.
+  NSArray<NSNumber *> *radiusVals = _GlowLaneValues(timeline, @"Radius", frac);
+  NSArray<NSNumber *> *amountVals = _GlowLaneValues(timeline, @"Amount", frac);
+  NSArray<NSNumber *> *spreadVals = _GlowLaneValues(timeline, @"Spread", frac);
+  NSArray<NSNumber *> *speedVals = _GlowLaneValues(timeline, @"Speed", frac);
+  NSArray<NSNumber *> *seedVals = _GlowLaneValues(timeline, @"Seed", frac);
   double rX = radiusVals.count >= 1 ? radiusVals[0].doubleValue : kGlowM1Radius;
   double rY = radiusVals.count >= 2 ? radiusVals[1].doubleValue : rX;
+  // Amount + Spread + Speed are 0-100% in the UI; the shader takes 0-1.
+  double noise =
+      amountVals.count >= 1 ? amountVals[0].doubleValue / 100.0 : kGlowM1Noise;
+  double noiseOffset = spreadVals.count >= 1 ? spreadVals[0].doubleValue / 100.0
+                                             : kGlowM1NoiseOffset;
+  double speed = speedVals.count >= 1 ? speedVals[0].doubleValue / 100.0
+                                      : kGlowM1NoiseSpeed;
+  double seed =
+      seedVals.count >= 1 ? seedVals[0].doubleValue : kGlowM1NoiseSeed;
+  // noiseSeed is the radial-flow PHASE - a time-driven term so the grain drifts
+  // outward at `speed` (evaluated per motion-blur sub-sample, so it animates).
+  // The Seed is separate: it perturbs the spatial pattern (noiseSeedHash).
+  double noiseSeed = CMTimeGetSeconds(renderTime) * speed * 5.0;
 
   GlowPluginState state = {
       .radiusX = (float)rX,
       .radiusY = (float)rY,
       .intensity = kGlowM1Intensity,
       .falloff = kGlowM1Falloff,
-      .noise = kGlowM1Noise,
-      .noiseOffset = kGlowM1NoiseOffset,
+      .noise = (float)noise,
+      .noiseOffset = (float)noiseOffset,
       .offset = {0.0f, 0.0f},
       .glowColor = {1.0f, 1.0f, 1.0f},
       .colorMode = kGlowM1ColorMode,
       .gradientType = kGlowM1GradientType,
       .gradientAngle = kGlowM1GradientAngle,
-      .noiseSeed = kGlowM1NoiseSeed,
+      .noiseSeed = (float)noiseSeed,
+      .noiseSeedHash = (float)seed,
       .threshold = kGlowM1Threshold,
   };
   for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)

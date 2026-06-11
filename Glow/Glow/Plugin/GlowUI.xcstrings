@@ -1,6 +1,426 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "<accent>Amount</accent> - how much grain is mixed in, 0-100%. 0 is a clean glow; higher breaks the halo up into grain.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Menge</accent> - wie viel Korn beigemischt wird, 0-100 %. 0 ist ein sauberer Schein; höhere Werte zerlegen den Halo in Korn."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Cantidad</accent> - cuánto grano se mezcla, 0-100 %. 0 es un resplandor limpio; valores mayores descomponen el halo en grano."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Quantité</accent> - quelle quantité de grain est mélangée, 0-100 %. 0 donne une lueur nette ; plus haut décompose le halo en grain."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>量</accent> - 混ぜる粒子の量、0〜100%。0はクリーンなグロー、高くするとハローが粒状になります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>양</accent> - 섞이는 입자의 양, 0-100%. 0은 깨끗한 글로우이고, 높일수록 후광이 입자로 분해됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>数量</accent> - 混入多少颗粒，0-100%。0 为干净的辉光；越高越会把光晕分解成颗粒。"
+          }
+        }
+      }
+    },
+    "<accent>Radius</accent> - the size of the glow, in pixels (0 = no glow, up to 500 for a large halo). Has X and Y components, aspect-lockable, so the glow can be a circle or stretched into an oval. The default is 100.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Radius</accent> - die Größe des Leuchtens, in Pixeln (0 = kein Leuchten, bis zu 500 für einen großen Schein). Hat X- und Y-Komponenten, seitenverhältnissperrbar, sodass das Leuchten ein Kreis oder zu einem Oval gestreckt sein kann. Der Standardwert ist 100."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Radio</accent> - el tamaño del resplandor, en píxeles (0 = sin resplandor, hasta 500 para un halo grande). Tiene componentes X e Y, con relación de aspecto bloqueable, de modo que el resplandor puede ser un círculo o estirarse en un óvalo. El valor por omisión es 100."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rayon</accent> - la taille de la lueur, en pixels (0 = aucune lueur, jusqu'à 500 pour un grand halo). Possède des composantes X et Y, à proportions verrouillables, de sorte que la lueur peut être un cercle ou étirée en ovale. La valeur par défaut est 100."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>半径</accent> - グローの大きさ（ピクセル単位、0 = グローなし、最大 500 で大きなハロー）。X と Y のコンポーネントがあり、縦横比をロックできるため、グローを円にも楕円にも引き伸ばせます。デフォルトは 100 です。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>반경</accent> - 광채의 크기(픽셀 단위, 0 = 광채 없음, 최대 500은 큰 후광). X 및 Y 구성 요소가 있으며 종횡비를 잠글 수 있어 광채를 원이나 타원으로 늘릴 수 있습니다. 기본값은 100입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>半径</accent> - 辉光的大小，以像素为单位（0 = 无辉光，最大 500 为大光环）。具有 X 和 Y 分量，可锁定长宽比，因此辉光可以是圆形，也可以拉伸为椭圆形。默认值为 100。"
+          }
+        }
+      }
+    },
+    "<accent>Seed</accent> - a random value that picks which grain pattern you get; re-roll it for a different look. Not animatable (a fixed pattern for the clip).": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Startwert</accent> - ein Zufallswert, der das Kornmuster bestimmt; neu würfeln für ein anderes Aussehen. Nicht animierbar (ein festes Muster für den Clip)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Semilla</accent> - un valor aleatorio que elige el patrón de grano; vuelve a generarlo para un aspecto distinto. No animable (un patrón fijo para el clip)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Graine</accent> - une valeur aléatoire qui choisit le motif de grain ; relancez-la pour un autre rendu. Non animable (un motif fixe pour le plan)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>シード</accent> - 粒子パターンを決めるランダムな値。振り直すと別の見た目になります。アニメート不可(クリップ全体で固定パターン)。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>시드</accent> - 입자 패턴을 결정하는 무작위 값. 다시 생성하면 다른 모양이 됩니다. 애니메이션 불가(클립 전체에 고정된 패턴)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>种子</accent> - 决定颗粒图案的随机值；重新生成可获得不同外观。不可动画（片段使用固定图案）。"
+          }
+        }
+      }
+    },
+    "<accent>Speed</accent> - how fast the grain animates over time, 0-100%. 0 is a static grain; raise it to make the grain shimmer. Default 0.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Geschwindigkeit</accent> - wie schnell sich das Korn über die Zeit bewegt, 0-100 %. 0 ist ein statisches Korn; erhöhen, damit das Korn flimmert. Standard 0."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Velocidad</accent> - con qué rapidez se anima el grano en el tiempo, 0-100 %. 0 es un grano estático; súbelo para que el grano titile. Por omisión 0."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Vitesse</accent> - à quelle vitesse le grain s’anime dans le temps, 0-100 %. 0 donne un grain statique ; augmentez pour faire scintiller le grain. Par défaut 0."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>速度</accent> - 粒子が時間とともにどれだけ速くアニメートするか、0〜100%。0は静止した粒子。上げると粒子がちらつきます。デフォルト0。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>속도</accent> - 입자가 시간에 따라 얼마나 빠르게 애니메이션되는지, 0-100%. 0은 정적인 입자이고, 높이면 입자가 반짝입니다. 기본값 0."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>速度</accent> - 颗粒随时间动画的快慢，0-100%。0 为静态颗粒；调高可让颗粒闪烁。默认 0。"
+          }
+        }
+      }
+    },
+    "<accent>Spread</accent> - how far the grain reaches into the glow's falloff, 0-100%. Low keeps grain near the edge; high pushes it through the whole glow.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Streuung</accent> - wie weit das Korn in den Abfall des Scheins reicht, 0-100 %. Niedrig hält das Korn am Rand; hoch verteilt es über den ganzen Schein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Dispersión</accent> - hasta dónde llega el grano en la caída del resplandor, 0-100 %. Bajo mantiene el grano cerca del borde; alto lo extiende por todo el resplandor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Diffusion</accent> - jusqu’où le grain pénètre dans l’atténuation de la lueur, 0-100 %. Bas garde le grain près du bord ; haut le répartit dans toute la lueur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>広がり</accent> - 粒子がグローの減衰のどこまで届くか、0〜100%。低いと粒子は端付近に、高いとグロー全体に広がります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>확산</accent> - 입자가 글로우의 감쇠에서 얼마나 멀리 도달하는지, 0-100%. 낮으면 가장자리 근처에, 높으면 글로우 전체로 퍼집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>扩散</accent> - 颗粒延伸到辉光衰减的多远，0-100%。低值使颗粒靠近边缘；高值将其推及整个辉光。"
+          }
+        }
+      }
+    },
+    "Amount, Spread, and Speed animate on the timeline like any other property; Seed is a constant set in the Constants panel / Noise tab.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menge, Streuung und Geschwindigkeit lassen sich auf der Timeline wie jede andere Eigenschaft animieren; Startwert ist ein konstanter Wert, der im Konstanten-Bereich / Rauschen-Tab festgelegt wird."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cantidad, Dispersión y Velocidad se animan en la línea de tiempo como cualquier otra propiedad; Semilla es una constante que se fija en el panel de Constantes / pestaña Ruido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantité, Diffusion et Vitesse s’animent sur la timeline comme toute autre propriété ; Graine est une constante définie dans le panneau Constantes / l’onglet Bruit."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "量、広がり、速度は他のプロパティと同様にタイムラインでアニメートできます。シードは定数で、定数パネル / ノイズタブで設定します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "양, 확산, 속도는 다른 속성처럼 타임라인에서 애니메이션할 수 있습니다. 시드는 상수 패널 / 노이즈 탭에서 설정하는 상수입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数量、扩散和速度可像其他属性一样在时间线上制作动画；种子是在“常量”面板/“噪点”标签中设置的常量。"
+          }
+        }
+      }
+    },
+    "Animate the glow growing from 0 to 200 over 1 second with bounce.": {
+      "comment": "AI example value: animate glow in.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animiere das Leuchten über 1 Sekunde von 0 auf 200 mit einem Sprung."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anima el resplandor creciendo de 0 a 200 durante 1 segundo con rebote."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anime la lueur de 0 à 200 sur 1 seconde avec un rebond."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グローを1秒かけて0から200までバウンドさせながら大きくする。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "광채를 1초 동안 0에서 200까지 바운스로 커지게 애니메이션하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 1 秒内让辉光从 0 弹跳放大到 200。"
+          }
+        }
+      }
+    },
+    "Ask a question or describe an animation…": {
+      "comment": "AI prompt field placeholder for Glow.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stelle eine Frage oder beschreibe eine Animation…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz una pregunta o describe una animación…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posez une question ou décrivez une animation…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "質問するか、アニメーションを入力…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "질문하거나 애니메이션을 설명하세요…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提问或描述一个动画…"
+          }
+        }
+      }
+    },
+    "Core:": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kern:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Núcleo:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noyau :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コア:"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "코어:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核心："
+          }
+        }
+      }
+    },
+    "Drag the Radius ring": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den Radius-Ring ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra el anillo de radio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faire glisser l'anneau de rayon"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "半径リングをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "반경 링 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖移半径环"
+          }
+        }
+      }
+    },
     "Glow": {
       "comment": "Help section title (plugin name).",
       "extractionState": "manual",
@@ -85,212 +505,44 @@
         }
       }
     },
-    "Parameters:": {
-      "comment": "Glow help tip (from AIKnowledge markdown).",
+    "Glow in with bounce": {
+      "comment": "AI example chip: animate glow in.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Parameter:"
+            "value": "Leuchten mit Sprung einblenden"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Parámetros:"
+            "value": "Hacer aparecer el resplandor con rebote"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Paramètres :"
+            "value": "Faire apparaître la lueur avec rebond"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "パラメータ:"
+            "value": "グローをバウンドで出現させる"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "매개변수:"
+            "value": "광채를 바운스로 나타내기"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "参数："
-          }
-        }
-      }
-    },
-    "<accent>Radius</accent> - the size of the glow, in pixels (0 = no glow, up to 500 for a large halo). Has X and Y components, aspect-lockable, so the glow can be a circle or stretched into an oval. The default is 100.": {
-      "comment": "Glow help tip (from AIKnowledge markdown).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Radius</accent> - die Größe des Leuchtens, in Pixeln (0 = kein Leuchten, bis zu 500 für einen großen Schein). Hat X- und Y-Komponenten, seitenverhältnissperrbar, sodass das Leuchten ein Kreis oder zu einem Oval gestreckt sein kann. Der Standardwert ist 100."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Radio</accent> - el tamaño del resplandor, en píxeles (0 = sin resplandor, hasta 500 para un halo grande). Tiene componentes X e Y, con relación de aspecto bloqueable, de modo que el resplandor puede ser un círculo o estirarse en un óvalo. El valor por omisión es 100."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Rayon</accent> - la taille de la lueur, en pixels (0 = aucune lueur, jusqu'à 500 pour un grand halo). Possède des composantes X et Y, à proportions verrouillables, de sorte que la lueur peut être un cercle ou étirée en ovale. La valeur par défaut est 100."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>半径</accent> - グローの大きさ（ピクセル単位、0 = グローなし、最大 500 で大きなハロー）。X と Y のコンポーネントがあり、縦横比をロックできるため、グローを円にも楕円にも引き伸ばせます。デフォルトは 100 です。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>반경</accent> - 광채의 크기(픽셀 단위, 0 = 광채 없음, 최대 500은 큰 후광). X 및 Y 구성 요소가 있으며 종횡비를 잠글 수 있어 광채를 원이나 타원으로 늘릴 수 있습니다. 기본값은 100입니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>半径</accent> - 辉光的大小，以像素为单位（0 = 无辉光，最大 500 为大光环）。具有 X 和 Y 分量，可锁定长宽比，因此辉光可以是圆形，也可以拉伸为椭圆形。默认值为 100。"
-          }
-        }
-      }
-    },
-    "Drag the Radius ring": {
-      "comment": "Shortcut keys.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Den Radius-Ring ziehen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Arrastra el anillo de radio"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faire glisser l'anneau de rayon"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "半径リングをドラッグ"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "반경 링 드래그"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "拖移半径环"
-          }
-        }
-      }
-    },
-    "Set the glow size on the canvas": {
-      "comment": "Help shortcut.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Größe des Leuchtens auf der Arbeitsfläche festlegen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajusta el tamaño del resplandor en el lienzo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Définir la taille de la lueur sur le canevas"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "キャンバス上でグローの大きさを設定"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "캔버스에서 광채 크기 설정"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在画布上设置辉光大小"
-          }
-        }
-      }
-    },
-    "On-screen control shortcuts": {
-      "comment": "Help section title.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kurzbefehle für Bildschirmsteuerung"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Atajos de controles en pantalla"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Raccourcis des contrôles à l'écran"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "オンスクリーンコントロールのショートカット"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "화면 컨트롤 단축키"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "屏幕控件快捷键"
+            "value": "让辉光弹跳出现"
           }
         }
       }
@@ -337,86 +589,170 @@
         }
       }
     },
-    "Glow in with bounce": {
-      "comment": "AI example chip: animate glow in.",
+    "Noise - optional grain mixed into the glow for a textured, less perfectly-smooth halo:": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Leuchten mit Sprung einblenden"
+            "value": "Rauschen - optionales Korn, das in den Schein gemischt wird, für einen strukturierten, weniger perfekt glatten Halo:"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Hacer aparecer el resplandor con rebote"
+            "value": "Ruido - grano opcional mezclado en el resplandor para un halo con textura, menos perfectamente suave:"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Faire apparaître la lueur avec rebond"
+            "value": "Bruit - grain optionnel mélangé à la lueur pour un halo texturé, moins parfaitement lisse :"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "グローをバウンドで出現させる"
+            "value": "ノイズ - グローに混ぜるオプションの粒子。質感のある、完全には滑らかでないハローになります:"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "광채를 바운스로 나타내기"
+            "value": "노이즈 - 글로우에 섞는 선택적 입자. 질감이 있는, 완벽하게 매끄럽지 않은 후광을 만듭니다:"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "让辉光弹跳出现"
+            "value": "噪点 - 混入辉光的可选颗粒，营造有质感、不那么完美平滑的光晕："
           }
         }
       }
     },
-    "Animate the glow growing from 0 to 200 over 1 second with bounce.": {
-      "comment": "AI example value: animate glow in.",
+    "On-screen control shortcuts": {
+      "comment": "Help section title.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Animiere das Leuchten über 1 Sekunde von 0 auf 200 mit einem Sprung."
+            "value": "Kurzbefehle für Bildschirmsteuerung"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anima el resplandor creciendo de 0 a 200 durante 1 segundo con rebote."
+            "value": "Atajos de controles en pantalla"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Anime la lueur de 0 à 200 sur 1 seconde avec un rebond."
+            "value": "Raccourcis des contrôles à l'écran"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "グローを1秒かけて0から200までバウンドさせながら大きくする。"
+            "value": "オンスクリーンコントロールのショートカット"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "광채를 1초 동안 0에서 200까지 바운스로 커지게 애니메이션하세요."
+            "value": "화면 컨트롤 단축키"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "在 1 秒内让辉光从 0 弹跳放大到 200。"
+            "value": "屏幕控件快捷键"
+          }
+        }
+      }
+    },
+    "Parameters are split into two groups (shown as category pills in the inspector): <accent>Core</accent> and <accent>Noise</accent>.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Parameter sind in zwei Gruppen unterteilt (als Kategorie-Pills im Informationsfenster): <accent>Kern</accent> und <accent>Rauschen</accent>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los parámetros se dividen en dos grupos (mostrados como píldoras de categoría en el inspector): <accent>Núcleo</accent> y <accent>Ruido</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les paramètres sont répartis en deux groupes (affichés comme pastilles de catégorie dans l’inspecteur) : <accent>Noyau</accent> et <accent>Bruit</accent>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パラメータは2つのグループに分かれています(インスペクタにカテゴリピルとして表示): <accent>コア</accent>と<accent>ノイズ</accent>。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "매개변수는 두 그룹으로 나뉩니다(인스펙터에 카테고리 알약으로 표시): <accent>코어</accent>와 <accent>노이즈</accent>."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参数分为两组（在检查器中显示为类别药丸）：<accent>核心</accent>和<accent>噪点</accent>。"
+          }
+        }
+      }
+    },
+    "Parameters:": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parameter:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parámetros:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paramètres :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パラメータ:"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "매개변수:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参数："
           }
         }
       }
@@ -505,6 +841,48 @@
         }
       }
     },
+    "Set the glow size on the canvas": {
+      "comment": "Help shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Größe des Leuchtens auf der Arbeitsfläche festlegen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajusta el tamaño del resplandor en el lienzo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Définir la taille de la lueur sur le canevas"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンバス上でグローの大きさを設定"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "캔버스에서 광채 크기 설정"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在画布上设置辉光大小"
+          }
+        }
+      }
+    },
     "What's Basic vs Advanced?": {
       "comment": "AI example chip: Basic vs Advanced timing question.",
       "extractionState": "manual",
@@ -585,48 +963,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "基本计时和高级计时有什么区别？"
-          }
-        }
-      }
-    },
-    "Ask a question or describe an animation…": {
-      "comment": "AI prompt field placeholder for Glow.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Stelle eine Frage oder beschreibe eine Animation…"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Haz una pregunta o describe una animación…"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Posez une question ou décrivez une animation…"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "質問するか、アニメーションを入力…"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "질문하거나 애니메이션을 설명하세요…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "提问或描述一个动画…"
           }
         }
       }

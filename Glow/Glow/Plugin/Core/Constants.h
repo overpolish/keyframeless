@@ -56,6 +56,9 @@ static const float kGlowM1Falloff = 1.0f;   // = 1 + falloff(0); pre-v3 default
 static const float kGlowM1Noise = 0.0f;
 static const float kGlowM1NoiseOffset = 0.0f;
 static const float kGlowM1NoiseSeed = 0.0f;
+// Outward-flow rate (0-1). The shader's noiseSeed phase = time * speed * 5.
+// Default 0 = static grain; raise Speed to make it drift outward.
+static const float kGlowM1NoiseSpeed = 0.0f;
 static const float kGlowM1Threshold = 0.0f; // 0 => bloom path is never hit
 static const int kGlowM1ColorMode = 2; // shader: 2 = Dynamic (source-coloured)
 static const int kGlowM1GradientType = 0;

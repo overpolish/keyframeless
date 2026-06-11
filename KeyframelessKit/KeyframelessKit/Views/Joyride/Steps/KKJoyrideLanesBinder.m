@@ -133,6 +133,7 @@
     lanes.onGuideRenderModeChanged = nil;
     lanes.onGuideFilmstripCellActivated = nil;
     lanes.onGuideDynamicToggled = nil;
+    lanes.onGuideLaneFilterToggled = nil;
     KKTimelineBasicView *graph = lanes.basicGraph;
     graph.onPhaseToggled = nil;
     graph.onDiamondTapped = nil;
@@ -308,6 +309,16 @@
       return;
     [s _fireType:KKJoyrideTriggerTypeDynamicToggled
           intArg:on ? 1 : 0
+         intArg2:0
+           label:nil];
+  };
+
+  lanes.onGuideLaneFilterToggled = ^{
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    [s _fireType:KKJoyrideTriggerTypeLaneFilterToggled
+          intArg:0
          intArg2:0
            label:nil];
   };

@@ -82,6 +82,7 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
                               constant float *noiseAmount [[buffer(FragmentIndex_Noise)]],
                               constant float *noiseOffset [[buffer(FragmentIndex_NoiseOffset)]],
                               constant float *noiseSeed [[buffer(FragmentIndex_NoiseSeed)]],
+                              constant float *noiseSeedHash [[buffer(FragmentIndex_NoiseSeedHash)]],
                               constant float2 *blurUVScale [[buffer(FragmentIndex_BlurUVScale)]],
                               constant float *thresholdPtr [[buffer(FragmentIndex_Threshold)]],
                               constant float2 *tileOffsetPx [[buffer(FragmentIndex_TileOffsetPx)]],
@@ -135,7 +136,18 @@ fragment float4 glowComposite(RasterizerData in [[stage_in]],
     float fade = 1.0 - smoothstep(0.0, 1.0 / glowFalloff, t);
     float nAmt = *noiseAmount;
     if (nAmt > 0.0) {
-        float2 px = destUV * float2(blurred.get_width(), blurred.get_height());
+        // Resolution-independent grain: a fixed cell count along the longest
+        // axis, aspect-corrected from the dest image size, so the full-res
+        // render and the low-res mini-viewer show the same grain density (and
+        // an export doesn't change grain with resolution). Tune kNoiseGrainCells
+        // for finer (higher) / coarser (lower) grain.
+        const float kNoiseGrainCells = 600.0;
+        float2 dis = *destImgSizePx;
+        // The Seed shifts the whole spatial pattern: hash it to a bounded
+        // offset so any seed value works (the raw seed itself never enters a
+        // hash directly, dodging float-precision limits at large values).
+        float2 seedOffset = float2(hash12(float2(*noiseSeedHash, 11.0)), hash12(float2(*noiseSeedHash, 23.0))) * 1024.0;
+        float2 px = destUV * dis * (kNoiseGrainCells / max(dis.x, dis.y)) + seedOffset;
         float radialDist = 1.0 - blur.a;
         float pixelRand = hash12(floor(px));
         // Single radial flow - all layers move outward at the same speed

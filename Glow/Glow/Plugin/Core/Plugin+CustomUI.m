@@ -23,7 +23,8 @@
 
 /// Plain-text coordinate-space description for the AI agent's value-resolution
 /// pass. Kept tight: this is the only context that pass sees alongside the
-/// prompt. Glow has one lane - Radius - in canonical pixels.
+/// prompt. Lanes: Radius (Core) + the Noise group (Amount, Spread, Speed,
+/// Seed).
 static NSString *_GlowAILaneSchemaText(void) {
   return @"Lane labels and value spaces:\n\n"
          @"- \"Radius\": two numeric components [X, Y], aspect-linked. Each is "
@@ -31,7 +32,18 @@ static NSString *_GlowAILaneSchemaText(void) {
          @"glow, "
          @"500 = a large halo). Default [100, 100]. X and Y are normally kept "
          @"equal; apply a single radius the user asks for to both "
-         @"components.\n";
+         @"components.\n"
+         @"- \"Amount\": single value, percent 0..100. How much grain is mixed "
+         @"into the glow (0 = clean glow, higher = more grain). Default 0.\n"
+         @"- \"Spread\": single value, percent 0..100. How far the grain "
+         @"reaches "
+         @"into the glow's falloff (low = near the edge, high = through the "
+         @"whole glow). Default 0.\n"
+         @"- \"Speed\": single value, percent 0..100. How fast the grain "
+         @"animates over time (0 = static). Default 0.\n"
+         @"- \"Seed\": single integer, the random grain-pattern seed. NOT "
+         @"animatable - one constant for the clip; re-roll for a different "
+         @"pattern. Default 0.\n";
 }
 
 @implementation GlowPlugin (CustomUI)
@@ -96,10 +108,29 @@ static NSString *_GlowAILaneSchemaText(void) {
                         keyposeAtTime:0.0
                                values:@[ @(kGlowM1NoiseOffset * 100.0) ]]];
 
+  // Speed (animatable %): the shader phase = Seed + time * (Speed/100) * 5, so
+  // the grain drifts outward over time (the old "animated noise" behaviour).
+  KKLane *noiseSpeed = [KKLane laneWithLabel:@"Speed"];
+  noiseSpeed.valueType = KKLaneValueTypeFloat;
+  noiseSpeed.componentMin = @[ @0.0 ];
+  noiseSpeed.componentMax = @[ @100.0 ];
+  noiseSpeed.componentUnits = @[ @"%" ];
+  noiseSpeed.integerValued = YES;
+  noiseSpeed.categoryKey = @"Noise";
+  noiseSpeed.categorySymbol = @"waveform";
+  [noiseSpeed
+      insertKeypose:[KKKeyPose
+                        keyposeAtTime:0.0
+                               values:@[ @(kGlowM1NoiseSpeed * 100.0) ]]];
+
+  // Seed: the random pattern seed (value-only re-roll field, never a lane). The
+  // shader hashes it to a bounded spatial offset, so any value picks a distinct
+  // grain pattern - it isn't fed into a hash directly, so there's no
+  // float-precision cap to keep it small.
   KKLane *noiseSeed = [KKLane laneWithLabel:@"Seed"];
   noiseSeed.valueType = KKLaneValueTypeFloat;
   noiseSeed.componentMin = @[ @0.0 ];
-  noiseSeed.componentMax = @[ @99999.0 ];
+  noiseSeed.componentMax = @[ @999999.0 ];
   noiseSeed.integerValued = YES;
   noiseSeed.animatable = NO; // value-only random seed, never a lane
   noiseSeed.seedField = YES; // value + re-roll, not a slider
@@ -108,7 +139,7 @@ static NSString *_GlowAILaneSchemaText(void) {
   [noiseSeed insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                              values:@[ @(kGlowM1NoiseSeed) ]]];
 
-  return @[ radius, noiseSeed, noise, noiseSpread ];
+  return @[ radius, noiseSeed, noise, noiseSpread, noiseSpeed ];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {

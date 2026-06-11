@@ -77,6 +77,15 @@ static MTLPixelFormat GlowSRGBVariant(MTLPixelFormat f) {
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
   if ([label isEqualToString:@"Radius"])
     return @[ @(kGlowM1Radius), @(kGlowM1Radius) ];
+  // Noise lanes store percentages (0-100); the kGlowM1* defaults are 0-1.
+  if ([label isEqualToString:@"Amount"])
+    return @[ @(kGlowM1Noise * 100.0) ];
+  if ([label isEqualToString:@"Spread"])
+    return @[ @(kGlowM1NoiseOffset * 100.0) ];
+  if ([label isEqualToString:@"Speed"])
+    return @[ @(kGlowM1NoiseSpeed * 100.0) ];
+  if ([label isEqualToString:@"Seed"])
+    return @[ @(kGlowM1NoiseSeed) ];
   return [super defaultValuesForLabel:label];
 }
 
@@ -542,9 +551,23 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
 
     float rxF = effRx, ryF = effRy;
     float intensity = kGlowM1Intensity, falloff = kGlowM1Falloff,
-          noise = kGlowM1Noise, noiseOffset = kGlowM1NoiseOffset,
-          noiseSeed = kGlowM1NoiseSeed, gradAngle = kGlowM1GradientAngle,
-          threshold = kGlowM1Threshold;
+          gradAngle = kGlowM1GradientAngle, threshold = kGlowM1Threshold;
+    // Noise group lanes (Amount + Spread are 0-100% in the UI; shader takes
+    // 0-1). Seed perturbs the pattern (noiseSeedHash). The preview renders a
+    // single frame with no playback clock, so the flow phase stays at 0 - the
+    // grain is animated by the FCP canvas, not the mini preview.
+    NSArray<NSNumber *> *amountVals = [self valuesForLabel:@"Amount"];
+    NSArray<NSNumber *> *spreadVals = [self valuesForLabel:@"Spread"];
+    NSArray<NSNumber *> *seedVals = [self valuesForLabel:@"Seed"];
+    float noise = amountVals.count >= 1
+                      ? (float)(amountVals[0].doubleValue / 100.0)
+                      : kGlowM1Noise;
+    float noiseOffset = spreadVals.count >= 1
+                            ? (float)(spreadVals[0].doubleValue / 100.0)
+                            : kGlowM1NoiseOffset;
+    float noiseSeed = 0.0f; // flow phase (static in the preview)
+    float noiseSeedHash =
+        seedVals.count >= 1 ? (float)seedVals[0].doubleValue : kGlowM1NoiseSeed;
     int colorMode = kGlowM1ColorMode, gradType = kGlowM1GradientType;
     simd_float2 offset = {0.0f, 0.0f};
     simd_float3 glowColor = {1.0f, 1.0f, 1.0f};
@@ -592,6 +615,9 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
     [e setFragmentBytes:&noiseSeed
                  length:sizeof(noiseSeed)
                 atIndex:FragmentIndex_NoiseSeed];
+    [e setFragmentBytes:&noiseSeedHash
+                 length:sizeof(noiseSeedHash)
+                atIndex:FragmentIndex_NoiseSeedHash];
     [e setFragmentBytes:&blurUVScale
                  length:sizeof(blurUVScale)
                 atIndex:FragmentIndex_BlurUVScale];
