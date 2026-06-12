@@ -6,6 +6,7 @@
 #import "GlowMiniViewerRenderer.h"
 
 #import "Constants.h"
+#import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <Metal/Metal.h>
@@ -45,6 +46,7 @@ static MTLPixelFormat GlowSRGBVariant(MTLPixelFormat f) {
 @implementation GlowMiniViewerRenderer {
   id<MTLRenderPipelineState> _prepPipeline;
   id<MTLRenderPipelineState> _compPipeline;
+  id<MTLRenderPipelineState> _bloomPrepPipeline;
   MTLPixelFormat _pipelineFormat;
   BOOL _ringGrabbed;
   BOOL _ringHovered;
@@ -77,6 +79,15 @@ static MTLPixelFormat GlowSRGBVariant(MTLPixelFormat f) {
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
   if ([label isEqualToString:@"Radius"])
     return @[ @(kGlowM1Radius), @(kGlowM1Radius) ];
+  // Core lanes (whole percent). Must match the availableLanes keypose defaults,
+  // else a fresh instance (lane not yet in the timeline) previews with the
+  // wrong value - e.g. Intensity falling back to 0 shows no glow until edited.
+  if ([label isEqualToString:@"Intensity"])
+    return @[ @(kGlowM1Intensity * 100.0) ];
+  if ([label isEqualToString:@"Falloff"])
+    return @[ @((kGlowM1Falloff - 1.0) * 100.0) ];
+  if ([label isEqualToString:@"Threshold"])
+    return @[ @(kGlowM1Threshold * 100.0) ];
   // Noise lanes store percentages (0-100); the kGlowM1* defaults are 0-1.
   if ([label isEqualToString:@"Amount"])
     return @[ @(kGlowM1Noise * 100.0) ];
@@ -89,6 +100,16 @@ static MTLPixelFormat GlowSRGBVariant(MTLPixelFormat f) {
   if ([label isEqualToString:@"Seed"])
     return @[ @(kGlowM1NoiseSeed) ];
   return [super defaultValuesForLabel:label];
+}
+
+// Source new constant lanes from the plugin template so a first mini-viewer
+// edit on a fresh instance keeps Radius's aspect-link (and units/bounds)
+// instead of building a bare lane that drops them.
+- (KKLane *)templateLaneForLabel:(NSString *)label {
+  for (KKLane *l in [GlowPlugin availableLanes])
+    if ([l.label isEqualToString:label])
+      return l;
+  return nil;
 }
 
 // The radius ring shows for a constant, visible (or opt-revealed) Radius lane -
@@ -371,7 +392,8 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
 
 - (BOOL)_ensurePipelinesForDevice:(id<MTLDevice>)device
                       pixelFormat:(MTLPixelFormat)format {
-  if (_prepPipeline && _compPipeline && _pipelineFormat == format)
+  if (_prepPipeline && _compPipeline && _bloomPrepPipeline &&
+      _pipelineFormat == format)
     return YES;
   NSError *err = nil;
   id<MTLLibrary> lib =
@@ -407,8 +429,22 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
     KKLogError(@"GlowMiniViewerRenderer: composite pipeline failed: %@", err);
     return NO;
   }
+  // Bloom bright-pass prep (only used when Threshold > 0), mirroring the main
+  // render's bloom lane so the preview blooms the same way the viewer does.
+  MTLRenderPipelineDescriptor *bloom =
+      [[MTLRenderPipelineDescriptor alloc] init];
+  bloom.vertexFunction = [lib newFunctionWithName:@"vertexShader"];
+  bloom.fragmentFunction = [lib newFunctionWithName:@"glowBloomPrep"];
+  bloom.colorAttachments[0].pixelFormat = kGlowMiniBlurFormat;
+  id<MTLRenderPipelineState> bloomPS =
+      [device newRenderPipelineStateWithDescriptor:bloom error:&err];
+  if (!bloomPS) {
+    KKLogError(@"GlowMiniViewerRenderer: bloom pipeline failed: %@", err);
+    return NO;
+  }
   _prepPipeline = prepPS;
   _compPipeline = compPS;
+  _bloomPrepPipeline = bloomPS;
   _pipelineFormat = format;
   return YES;
 }
@@ -430,8 +466,10 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
 
 // Self-contained glow preview. Unlike the render path (Plugin+Render.m) this
 // runs in the inspector process on raw source/dest MTLTextures, so it cannot
-// touch the render-side texture pool. M1 skips the bloom lane (threshold 0)
-// and uses the kGlowM1* fallbacks for every field except the animated radius.
+// touch the render-side texture pool. Drives Radius + the Core lanes
+// (Intensity, Falloff, Threshold's bloom) + the Noise group; remaining fields
+// (colour / gradient / offset) use the kGlowM1* fallbacks until those lanes
+// land.
 - (BOOL)encodeEffectFromSource:(id<MTLTexture>)source
                           into:(id<MTLTexture>)dest
                  commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
@@ -522,6 +560,57 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
             destinationTexture:blurTex];
   }
 
+  // 2b) Bloom bright-pass lane (Threshold > 0 only): extract bright source
+  // areas then blur them, mirroring the main render. The composite samples this
+  // at texture index 2; when Threshold is 0 it reuses the plain blur (no
+  // bloom).
+  NSArray<NSNumber *> *thresholdVals = [self valuesForLabel:@"Threshold"];
+  float threshold = thresholdVals.count >= 1
+                        ? (float)(thresholdVals[0].doubleValue / 100.0)
+                        : kGlowM1Threshold;
+  id<MTLTexture> bloomTex = blurTex;
+  if (threshold > 0.0f && _bloomPrepPipeline) {
+    id<MTLTexture> bloomPrep = [self _scratchForDevice:dest.device
+                                                format:kGlowMiniBlurFormat
+                                                 width:dest.width
+                                                height:dest.height];
+    id<MTLTexture> bloomBlur = [self _scratchForDevice:dest.device
+                                                format:kGlowMiniBlurFormat
+                                                 width:dest.width
+                                                height:dest.height];
+    if (bloomPrep && bloomBlur) {
+      MTLRenderPassDescriptor *rpd =
+          [MTLRenderPassDescriptor renderPassDescriptor];
+      rpd.colorAttachments[0].texture = bloomPrep;
+      rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+      rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+      id<MTLRenderCommandEncoder> e =
+          [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+      [e setViewport:viewport];
+      [e setVertexBytes:srcV
+                 length:sizeof(srcV)
+                atIndex:KKVertexInputIndex_Vertices];
+      [e setVertexBytes:&vp
+                 length:sizeof(vp)
+                atIndex:KKVertexInputIndex_ViewportSize];
+      [e setRenderPipelineState:_bloomPrepPipeline];
+      [e setFragmentTexture:source atIndex:KKTextureIndex_InputImage];
+      [e setFragmentBytes:&threshold length:sizeof(threshold) atIndex:0];
+      [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
+            vertexStart:0
+            vertexCount:4];
+      [e endEncoding];
+      MPSImageGaussianBlur *mps =
+          [[MPSImageGaussianBlur alloc] initWithDevice:dest.device sigma:sigma];
+      mps.edgeMode = MPSImageEdgeModeClamp;
+      [mps encodeToCommandBuffer:commandBuffer
+                   sourceTexture:bloomPrep
+              destinationTexture:bloomBlur];
+      bloomTex = bloomBlur;
+    }
+  }
+
   // 3) Composite into dest. Geometry mirrors the render path's full-image
   // case; sampling is derived from the fragment window position + uniforms.
   KKVertex2D dstV[] = {
@@ -549,11 +638,20 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
     [e setRenderPipelineState:_compPipeline];
     [e setFragmentTexture:source atIndex:KKTextureIndex_InputImage];
     [e setFragmentTexture:blurTex atIndex:1];
-    [e setFragmentTexture:blurTex atIndex:2];
+    [e setFragmentTexture:bloomTex atIndex:2];
 
     float rxF = effRx, ryF = effRy;
-    float intensity = kGlowM1Intensity, falloff = kGlowM1Falloff,
-          gradAngle = kGlowM1GradientAngle, threshold = kGlowM1Threshold;
+    float gradAngle = kGlowM1GradientAngle;
+    // Core lanes: Intensity is a whole percent (100 = 1.0); Falloff's % maps to
+    // glowFalloff = 1 + value/100 (Threshold was already read for the bloom).
+    NSArray<NSNumber *> *intensityVals = [self valuesForLabel:@"Intensity"];
+    NSArray<NSNumber *> *falloffVals = [self valuesForLabel:@"Falloff"];
+    float intensity = intensityVals.count >= 1
+                          ? (float)(intensityVals[0].doubleValue / 100.0)
+                          : kGlowM1Intensity;
+    float falloff = falloffVals.count >= 1
+                        ? (float)(1.0 + falloffVals[0].doubleValue / 100.0)
+                        : kGlowM1Falloff;
     // Noise group lanes (Amount + Spread are 0-100% in the UI; shader takes
     // 0-1). Seed perturbs the pattern (noiseSeedHash).
     NSArray<NSNumber *> *amountVals = [self valuesForLabel:@"Amount"];

@@ -9,6 +9,9 @@ Parameters are split into two groups (shown as category pills in the inspector):
 
 - Core:
   - **Radius** - the size of the glow, in pixels (0 = no glow, up to 500 for a large halo). Has X and Y components, aspect-lockable, so the glow can be a circle or stretched into an oval. The default is 100.
+  - **Intensity** - how bright the glow is, 0-300%. 100% is normal; higher pushes the glow brighter. Default 100.
+  - **Falloff** - how the glow fades at its edge, 0-200%. 0 is the softest, widest fade; higher tightens the edge. Default 0.
+  - **Threshold** - a bloom cutoff, 0-100%. 0 means no bloom; raise it to make the brightest parts of the clip bloom into the glow. Default 0.
 
 - Noise - optional grain mixed into the glow for a textured, less perfectly-smooth halo:
   - **Amount** - how much grain is mixed in, 0-100%. 0 is a clean glow; higher breaks the halo up into grain.

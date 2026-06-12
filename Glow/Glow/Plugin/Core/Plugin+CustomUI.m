@@ -23,8 +23,8 @@
 
 /// Plain-text coordinate-space description for the AI agent's value-resolution
 /// pass. Kept tight: this is the only context that pass sees alongside the
-/// prompt. Lanes: Radius (Core) + the Noise group (Amount, Spread, Speed,
-/// Seed).
+/// prompt. Lanes: the Core group (Radius, Intensity, Falloff, Threshold) + the
+/// Noise group (Amount, Spread, Grain Size, Speed, Seed).
 static NSString *_GlowAILaneSchemaText(void) {
   return @"Lane labels and value spaces:\n\n"
          @"- \"Radius\": two numeric components [X, Y], aspect-linked. Each is "
@@ -33,6 +33,12 @@ static NSString *_GlowAILaneSchemaText(void) {
          @"500 = a large halo). Default [100, 100]. X and Y are normally kept "
          @"equal; apply a single radius the user asks for to both "
          @"components.\n"
+         @"- \"Intensity\": single value, percent 0..300. Glow brightness "
+         @"(100 = normal, higher = brighter). Default 100.\n"
+         @"- \"Falloff\": single value, percent 0..200. Edge softness "
+         @"(0 = softest/widest, higher = tighter edge). Default 0.\n"
+         @"- \"Threshold\": single value, percent 0..100. Bloom bright-pass "
+         @"cutoff (0 = no bloom, higher blooms bright areas). Default 0.\n"
          @"- \"Amount\": single value, percent 0..100. How much grain is mixed "
          @"into the glow (0 = clean glow, higher = more grain). Default 0.\n"
          @"- \"Spread\": single value, percent 0..100. How far the grain "
@@ -79,6 +85,52 @@ static NSString *_GlowAILaneSchemaText(void) {
       insertKeypose:[KKKeyPose
                         keyposeAtTime:0.0
                                values:@[ @(kGlowM1Radius), @(kGlowM1Radius) ]]];
+
+  // Intensity (Core, animatable %): glow brightness multiplier. Stored as a
+  // whole percent (100 = 1.0); render divides by 100. Range mirrors the old
+  // slider (0-300%, default 100%).
+  KKLane *intensity = [KKLane laneWithLabel:@"Intensity"];
+  intensity.valueType = KKLaneValueTypeFloat;
+  intensity.componentMin = @[ @0.0 ];
+  intensity.componentMax = @[ @300.0 ];
+  intensity.componentUnits = @[ @"%" ];
+  intensity.integerValued = YES;
+  intensity.categoryKey = @"Core";
+  intensity.categorySymbol = @"circle.dotted";
+  [intensity
+      insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                      values:@[ @(kGlowM1Intensity * 100.0) ]]];
+
+  // Falloff (Core, animatable %): edge softness. The shader uses glowFalloff =
+  // 1 + value, so the lane's 0-200% maps to a 1.0-3.0 falloff (higher = tighter
+  // edge). Default 0% (= glowFalloff 1.0 = kGlowM1Falloff).
+  KKLane *falloff = [KKLane laneWithLabel:@"Falloff"];
+  falloff.valueType = KKLaneValueTypeFloat;
+  falloff.componentMin = @[ @0.0 ];
+  falloff.componentMax = @[ @200.0 ];
+  falloff.componentUnits = @[ @"%" ];
+  falloff.integerValued = YES;
+  falloff.categoryKey = @"Core";
+  falloff.categorySymbol = @"circle.dotted";
+  [falloff
+      insertKeypose:[KKKeyPose
+                        keyposeAtTime:0.0
+                               values:@[ @((kGlowM1Falloff - 1.0) * 100.0) ]]];
+
+  // Threshold (Core, animatable %): bloom bright-pass cutoff. 0 = no bloom (the
+  // bloom render lane is skipped); raising it blooms bright source areas.
+  // Stored as a whole percent (0-100); render divides by 100.
+  KKLane *threshold = [KKLane laneWithLabel:@"Threshold"];
+  threshold.valueType = KKLaneValueTypeFloat;
+  threshold.componentMin = @[ @0.0 ];
+  threshold.componentMax = @[ @100.0 ];
+  threshold.componentUnits = @[ @"%" ];
+  threshold.integerValued = YES;
+  threshold.categoryKey = @"Core";
+  threshold.categorySymbol = @"circle.dotted";
+  [threshold
+      insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                      values:@[ @(kGlowM1Threshold * 100.0) ]]];
 
   // Noise: grain mixed into the glow. Amount + Spread animate; Seed is a
   // value-only random integer (the gap-popover seed control). Render wiring is
@@ -157,7 +209,10 @@ static NSString *_GlowAILaneSchemaText(void) {
   [noiseSeed insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                              values:@[ @(kGlowM1NoiseSeed) ]]];
 
-  return @[ radius, noiseSeed, noise, noiseSpread, noiseGrain, noiseSpeed ];
+  return @[
+    radius, intensity, falloff, threshold, noiseSeed, noise, noiseSpread,
+    noiseGrain, noiseSpeed
+  ];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {

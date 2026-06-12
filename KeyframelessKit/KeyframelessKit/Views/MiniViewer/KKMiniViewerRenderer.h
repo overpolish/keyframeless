@@ -9,6 +9,7 @@
 #import <KeyframelessKit/KKMiniViewerView.h>
 
 @class KKTimeline;
+@class KKLane;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -140,6 +141,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// Default value array for a label when the timeline has no (or a short)
 /// lane for it. Default `@[ @0 ]`.
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label;
+/// The plugin's `availableLanes` template lane for `label`, if any. When a
+/// constant-value edit (e.g. a mini-viewer handle drag) targets a lane not yet
+/// present in the timeline, the new lane is built from this template so it
+/// keeps the template's metadata - aspect-link, units, bounds, integer-valued -
+/// rather than a bare lane that drops them (which would, e.g., clear an
+/// aspect-lock on the first drag of a fresh instance). Returns nil by default
+/// (bare lane).
+- (nullable KKLane *)templateLaneForLabel:(NSString *)label;
 
 /// Glyph style for the renderer's point handle (the one returned by
 /// `pointHandleCenter:forContentRect:`). Mini-viewer draws the same glyph

@@ -43,6 +43,42 @@
         }
       }
     },
+    "<accent>Intensity</accent> - how bright the glow is, 0-300%. 100% is normal; higher pushes the glow brighter. Default 100.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "<accent>Intensität</accent> - wie hell der Schein ist, 0-300 %. 100 % ist normal; höher macht den Schein heller. Standard 100." } },
+        "es": { "stringUnit": { "state": "translated", "value": "<accent>Intensidad</accent> - el brillo del resplandor, 0-300 %. 100 % es normal; más alto lo hace más brillante. Por omisión 100." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "<accent>Intensité</accent> - la luminosité de la lueur, 0-300 %. 100 % est normal ; plus haut rend la lueur plus vive. Par défaut 100." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "<accent>強度</accent> - グローの明るさ、0〜300%。100%が標準で、上げるとグローが明るくなります。デフォルト100。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "<accent>강도</accent> - 글로우의 밝기, 0-300%. 100%가 표준이며, 높이면 글로우가 더 밝아집니다. 기본값 100." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "<accent>强度</accent> - 辉光的亮度，0-300%。100% 为正常；调高会让辉光更亮。默认 100。" } }
+      }
+    },
+    "<accent>Falloff</accent> - how the glow fades at its edge, 0-200%. 0 is the softest, widest fade; higher tightens the edge. Default 0.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "<accent>Abfall</accent> - wie der Schein an seiner Kante ausläuft, 0-200 %. 0 ist der weichste, breiteste Verlauf; höher verengt die Kante. Standard 0." } },
+        "es": { "stringUnit": { "state": "translated", "value": "<accent>Caída</accent> - cómo se desvanece el resplandor en su borde, 0-200 %. 0 es el desvanecido más suave y amplio; más alto ajusta el borde. Por omisión 0." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "<accent>Atténuation</accent> - comment la lueur s'estompe à son bord, 0-200 %. 0 donne le fondu le plus doux et large ; plus haut resserre le bord. Par défaut 0." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "<accent>減衰</accent> - グローが縁でどのように消えるか、0〜200%。0は最も柔らかく広いフェード。上げると縁が引き締まります。デフォルト0。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "<accent>감쇠</accent> - 글로우가 가장자리에서 사라지는 방식, 0-200%. 0은 가장 부드럽고 넓은 페이드이고, 높이면 가장자리가 좁아집니다. 기본값 0." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "<accent>衰减</accent> - 辉光在边缘的淡出方式，0-200%。0 为最柔和、最宽的淡出；调高会收紧边缘。默认 0。" } }
+      }
+    },
+    "<accent>Threshold</accent> - a bloom cutoff, 0-100%. 0 means no bloom; raise it to make the brightest parts of the clip bloom into the glow. Default 0.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "<accent>Schwelle</accent> - ein Bloom-Schwellenwert, 0-100 %. 0 bedeutet kein Bloom; höher lässt die hellsten Bereiche des Clips in den Schein strahlen. Standard 0." } },
+        "es": { "stringUnit": { "state": "translated", "value": "<accent>Umbral</accent> - un corte de bloom, 0-100 %. 0 significa sin bloom; súbelo para que las zonas más brillantes del clip irradien en el resplandor. Por omisión 0." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "<accent>Seuil</accent> - un seuil de bloom, 0-100 %. 0 signifie aucun bloom ; augmentez-le pour que les zones les plus claires du plan diffusent dans la lueur. Par défaut 0." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "<accent>しきい値</accent> - ブルームのしきい値、0〜100%。0はブルームなし。上げるとクリップの最も明るい部分がグローに広がります。デフォルト0。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "<accent>임계값</accent> - 블룸 컷오프, 0-100%. 0은 블룸 없음이며, 높이면 클립의 가장 밝은 부분이 글로우로 번집니다. 기본값 0." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "<accent>阈值</accent> - 泛光阈值，0-100%。0 表示无泛光；调高可让片段最亮的部分泛入辉光。默认 0。" } }
+      }
+    },
     "<accent>Radius</accent> - the size of the glow, in pixels (0 = no glow, up to 500 for a large halo). Has X and Y components, aspect-lockable, so the glow can be a circle or stretched into an oval. The default is 100.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",

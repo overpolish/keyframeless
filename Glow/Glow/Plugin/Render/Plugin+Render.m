@@ -512,6 +512,12 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
   // Spread, Seed) drive the render. Every other GlowPluginState field uses the
   // kGlowM1* fallbacks until later milestones promote them to lanes.
   NSArray<NSNumber *> *radiusVals = _GlowLaneValues(timeline, @"Radius", frac);
+  NSArray<NSNumber *> *intensityVals =
+      _GlowLaneValues(timeline, @"Intensity", frac);
+  NSArray<NSNumber *> *falloffVals =
+      _GlowLaneValues(timeline, @"Falloff", frac);
+  NSArray<NSNumber *> *thresholdVals =
+      _GlowLaneValues(timeline, @"Threshold", frac);
   NSArray<NSNumber *> *amountVals = _GlowLaneValues(timeline, @"Amount", frac);
   NSArray<NSNumber *> *spreadVals = _GlowLaneValues(timeline, @"Spread", frac);
   NSArray<NSNumber *> *speedVals = _GlowLaneValues(timeline, @"Speed", frac);
@@ -520,6 +526,17 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
   NSArray<NSNumber *> *seedVals = _GlowLaneValues(timeline, @"Seed", frac);
   double rX = radiusVals.count >= 1 ? radiusVals[0].doubleValue : kGlowM1Radius;
   double rY = radiusVals.count >= 2 ? radiusVals[1].doubleValue : rX;
+  // Intensity is a whole percent (100 = 1.0). Falloff's % maps to the shader's
+  // glowFalloff = 1 + value/100. Threshold's % is the 0-1 bloom cutoff.
+  double intensity = intensityVals.count >= 1
+                         ? intensityVals[0].doubleValue / 100.0
+                         : kGlowM1Intensity;
+  double falloff = falloffVals.count >= 1
+                       ? 1.0 + falloffVals[0].doubleValue / 100.0
+                       : kGlowM1Falloff;
+  double threshold = thresholdVals.count >= 1
+                         ? thresholdVals[0].doubleValue / 100.0
+                         : kGlowM1Threshold;
   // Amount + Spread + Speed are 0-100% in the UI; the shader takes 0-1.
   double noise =
       amountVals.count >= 1 ? amountVals[0].doubleValue / 100.0 : kGlowM1Noise;
@@ -539,8 +556,8 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
   GlowPluginState state = {
       .radiusX = (float)rX,
       .radiusY = (float)rY,
-      .intensity = kGlowM1Intensity,
-      .falloff = kGlowM1Falloff,
+      .intensity = (float)intensity,
+      .falloff = (float)falloff,
       .noise = (float)noise,
       .noiseOffset = (float)noiseOffset,
       .offset = {0.0f, 0.0f},
@@ -551,7 +568,7 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
       .noiseSeed = (float)noiseSeed,
       .noiseSeedHash = (float)seed,
       .noiseGrain = GlowNoiseGrainCells(grainPct),
-      .threshold = kGlowM1Threshold,
+      .threshold = (float)threshold,
   };
   for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
     state.gradientLUT[i] = state.glowColor;

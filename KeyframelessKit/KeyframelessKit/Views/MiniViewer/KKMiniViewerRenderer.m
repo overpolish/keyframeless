@@ -95,6 +95,9 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
   return @[ @0 ];
 }
+- (KKLane *)templateLaneForLabel:(NSString *)label {
+  return nil;
+}
 
 #pragma mark - Subclass effect + point handle (defaults)
 
@@ -532,10 +535,14 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     }
   }
   if (!replaced) {
-    KKLane *lane = [KKLane laneWithLabel:label];
+    // Build from the plugin template when available so the new lane keeps its
+    // metadata (aspect-link, units, bounds) - a bare lane drops those, which on
+    // a fresh instance clears e.g. Radius/Scale aspect-lock on the first drag.
+    KKLane *tmpl = [self templateLaneForLabel:label];
+    KKLane *lane = tmpl ? [tmpl copy] : [KKLane laneWithLabel:label];
     lane.valueType = (KKLaneValueType)[self valueTypeForLabel:label];
     lane.enabled = NO; // a value edit must not opt the property in
-    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:values]];
+    lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
     [lanes addObject:lane];
   }
   updated.lanes = lanes;
