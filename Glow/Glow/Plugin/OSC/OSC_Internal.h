@@ -10,9 +10,14 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class KKPositionOSC;
+
 @interface GlowOSC () {
 @protected
   BOOL _ringDragging;
+  // YES while the Position handle / a motion-path tangent is being dragged
+  // (mirrored into the Position controller's `dragging` so it keeps drawing).
+  BOOL _positionDragging;
   // Cursor offset from the ring centre at mouse-down (signed dx/dy and the
   // radial distance), plus the per-axis radius values then. A linked drag
   // scales both axes by the radial-distance ratio (circle); an unlinked drag
@@ -24,6 +29,10 @@ NS_ASSUME_NONNULL_BEGIN
   double _ringDragStartValX;
   double _ringDragStartValY;
 }
+
+// Reusable Position handle + motion path (offsets the glow), composed alongside
+// the radius ring. guideProvider is nil (Glow has no Position guide).
+@property(nonatomic, strong) KKPositionOSC *positionController;
 
 // Geometry/time helpers implemented in the primary @implementation (OSC.m);
 // called by the MouseHandlers category.

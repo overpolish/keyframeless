@@ -7,6 +7,7 @@
 #import "Constants.h"
 #import "GlowOSCRadiusMath.h"
 #import "OSC_Internal.h"
+#import "Plugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKOSCGuideBridge.h>
 #import <KeyframelessKit/KeyframelessKit.h>
@@ -104,6 +105,16 @@ NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
     // active fill + stroke (the pre-v3 Glow ring look). Leave hoverCursor nil
     // too, so the ring picks the resize cursor from the hover angle
     // (left/right, up/down, or the two diagonals) instead of a fixed one.
+    _positionController = [[KKPositionOSC alloc] initWithAPIManager:apiManager
+                                                          laneLabel:@"Position"
+                                                          pathLabel:@"Path"];
+    _positionController.positionActivePart = kOSCPositionPart;
+    _positionController.tangentActivePart = kOSCPathHandlePart;
+    // No Position guide in Glow (the OSC guide is the radius ring only).
+    _positionController.guideProvider = nil;
+    for (KKLane *l in [GlowPlugin availableLanes])
+      if ([l.label isEqualToString:@"Position"])
+        _positionController.templateLane = l;
     sCurrentOSC = self;
   }
   return self;
@@ -251,11 +262,21 @@ NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
 // M1. The master tick / pills / opt-click-hide / opt-reveal all live in
 // KKOnScreenControl.
 - (NSArray<NSString *> *)oscElementKeys {
-  return @[ @"Radius" ];
+  return @[ @"Radius", @"Position", @"Path" ];
 }
 
 - (nullable NSString *)oscElementKeyForActivePart:(NSInteger)activePart {
-  return (activePart == kOSCRadiusPart) ? @"Radius" : nil;
+  if (activePart == kOSCRadiusPart)
+    return @"Radius";
+  // A tangent handle is part of the motion path; the arc handle / anchor dot is
+  // the Position lane. The controller's hover state disambiguates an arc handle
+  // (Position) from a keypose anchor dot (also Position, but the dot belongs to
+  // the path element so opt-click hides Path).
+  if (activePart == kOSCPathHandlePart)
+    return @"Path";
+  if (activePart == kOSCPositionPart)
+    return self.positionController.hoverTargetIsAnchor ? @"Path" : @"Position";
+  return nil;
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
@@ -293,6 +314,15 @@ NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
                        targetCanvasPos:[self guideTargetCanvasPosition]
                              hasTarget:YES];
 
+  // Motion path (line + keypose anchors + tangent handles) is drawn FIRST, so
+  // it sits under the ring. The controller owns its own visibility gating
+  // (Position/Path element keys, shared per-instance state) and reads the live
+  // drag flag for mid-drag draw.
+  _positionController.dragging = _positionDragging;
+  [_positionController drawPathInDestination:destinationImage
+                                      atTime:time
+                                  activePart:activePart];
+
   // Visibility rule (matches Rounded / mini-viewer): show when the lane is a
   // constant (always) or animated and the playhead is on a keypose; mid-drag
   // the active ring always draws so the handle tracks the cursor. While a guide
@@ -305,29 +335,38 @@ NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
   BOOL visible = shownHere && enabled;
   BOOL reveal = !visible && self.optRevealActive && shownHere &&
                 [self kkOSCRevealEligible:@"Radius"];
-  if (!visible && !reveal) {
+  if (visible || reveal) {
+    [self updateRingForFraction:frac];
+    // The glow is offset by Position (render: offset = pos-0.5), so the ring
+    // centres on the Position handle, not the fixed clip centre - it tracks the
+    // glow like MagicMove's rings/box track its Position.
+    CGPoint center = [self.positionController positionCanvasAtTime:time];
+    _radiusRing.center = center;
+    // During a guide, FCP doesn't run its own hover hitTest (the guide panel is
+    // frontmost), so take the hover emphasis from the bridge instead of
+    // activePart.
+    BOOL guideHover = inGuide && GlowGuideBridge().handleHovered;
+    // When only shown via Opt-reveal, dim it to a re-enable ghost - BUT not in
+    // "peek and use" mode (master off + Opt), where kkRevealGhostAlpha
+    // returns 1.0 because the revealed controls are fully interactive. Remap
+    // the base 0.3 dim to 0.6 (0.3 reads too faint for a thin ring).
+    float revealGA = reveal ? [self kkRevealGhostAlpha] : 1.0f;
+    _radiusRing.ghostAlpha = (revealGA < 1.0f) ? 0.6f : 1.0f;
+    [_radiusRing
+        drawAtCanvasPosition:center
+                   isHovered:(activePart == kOSCRadiusPart || guideHover)
+                    isActive:_ringDragging
+            destinationImage:destinationImage
+                      atTime:time];
+  } else {
     [_radiusRing clearCursorIfSet];
-    return;
   }
 
-  [self updateRingForFraction:frac];
-  CGPoint center = [self canvasCenter];
-  _radiusRing.center = center;
-  // During a guide, FCP doesn't run its own hover hitTest (the guide panel is
-  // frontmost), so take the hover emphasis from the bridge instead of
-  // activePart.
-  BOOL guideHover = inGuide && GlowGuideBridge().handleHovered;
-  // When only shown via Opt-reveal, dim it to a re-enable ghost - BUT not in
-  // "peek and use" mode (master off + Opt), where kkRevealGhostAlpha
-  // returns 1.0 because the revealed controls are fully interactive. Remap the
-  // base 0.3 dim to 0.6 (0.3 reads too faint for a thin ring).
-  float revealGA = reveal ? [self kkRevealGhostAlpha] : 1.0f;
-  _radiusRing.ghostAlpha = (revealGA < 1.0f) ? 0.6f : 1.0f;
-  [_radiusRing drawAtCanvasPosition:center
-                          isHovered:(activePart == kOSCRadiusPart || guideHover)
-                           isActive:_ringDragging
-                   destinationImage:destinationImage
-                             atTime:time];
+  // Position arc handle (+ Cmd-snap guides during a Position drag) drawn LAST,
+  // on top of the ring so it stays grabbable at the clip centre.
+  [_positionController drawHandleInDestination:destinationImage
+                                        atTime:time
+                                    activePart:activePart];
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -336,14 +375,26 @@ NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
                             atTime:(CMTime)time {
   *activePart = 0;
   double frac = [self fractionAtTime:time];
+
+  // Position handle / motion path is the foreground control (tangent > arc >
+  // anchor precedence, owned by the controller); it sets its own viewer cursor
+  // on a hit. Map a non-None result to our activePart and skip the ring so the
+  // small centre handle wins over the ring stroke passing through it.
+  KKPositionHit ph = [self.positionController hitTestAtX:positionX
+                                                       y:positionY
+                                                  atTime:time];
+  if (ph != KKPositionHitNone)
+    *activePart = (ph == KKPositionHitTangentHandle) ? kOSCPathHandlePart
+                                                     : kOSCPositionPart;
+
   BOOL enabled = [self kkOSCElementVisible:@"Radius"];
   BOOL revealOnly =
       !enabled && self.optRevealActive && [self kkOSCRevealEligible:@"Radius"];
   BOOL interactive =
       (enabled || revealOnly) && GlowOSCLaneVisibleAtFraction(@"Radius", frac);
-  if (interactive) {
+  if (*activePart == 0 && interactive) {
     [self updateRingForFraction:frac];
-    _radiusRing.center = [self canvasCenter];
+    _radiusRing.center = [self.positionController positionCanvasAtTime:time];
     // Reveal-only = a dim ghost: the ring keeps the arrow cursor (not resize)
     // but still reports the hit so an Opt-click can re-enable it. Peek mode
     // (master off + Opt) stays full (kkRevealGhostAlpha == 1.0) so it's

@@ -21,11 +21,12 @@ enum {
   kOSCAnchorPart = 5,
 };
 
-@interface MagicMoveOSC ()
-@property(nonatomic, retain) KKSnapEngine *snapEngine;
+@interface MagicMoveOSC () <KKPositionGuideProvider>
+/// The reusable Position control (arc handle + motion path + drag/snap/smooth),
+/// composed into this host OSC. Owns all the Position glue that used to live in
+/// the +Drawing / +HitTest / +MouseHandlers categories.
+@property(nonatomic, retain) KKPositionOSC *positionController;
 @property(nonatomic, retain) KKRotationOSC *rotationOSC;
-@property(nonatomic, retain) KKPointOSC *anchorOSC;
-@property(nonatomic, retain) KKPointOSC *handleOSC;
 /// Feed one drawOSC tick to the shared guide bridge so it can compute the
 /// viewer screen rect (for the timing guide's watch-back cutout). `pos` is the
 /// current Position in canvas space. Cheap; called every drawOSC tick.
@@ -75,34 +76,6 @@ enum {
 /// integers.
 @property(nonatomic) CGPoint scaleEffCursor;
 @property(nonatomic) CGPoint scaleLastCursor;
-/// YES while the user holds Cmd during a position drag - snaps to canvas
-/// anchors and other keypose positions. Default is free (no snap) so the
-/// user can position pixel-precisely without fighting the engine.
-@property(nonatomic) BOOL cmdSnapActive;
-/// Object-space position captured at position-drag mouseDown. Used as the
-/// anchor for Shift axis-lock: the locked axis stays pinned to this value,
-/// the dominant axis tracks the cursor.
-@property(nonatomic) simd_float2 posPressObject;
-/// Time (0–1) of the keypose anchor the user grabbed for a position drag, or
-/// NaN to edit the keypose nearest the playhead (handle drag / on-keypose
-/// press) - the prior behaviour.
-@property(nonatomic) double dragAnchorFrac;
-/// Set by the hit-test: YES when the hovered position target is a keypose
-/// anchor dot rather than the playhead arc handle (both report
-/// kOSCPositionPart). Keeps the arc from lighting up when you hover an anchor.
-@property(nonatomic) BOOL hoverTargetIsAnchor;
-/// Time (0–1) of the keypose whose tangent handle is being dragged (NaN = none)
-/// and which side. Set on mouseDown for kOSCPathHandlePart.
-@property(nonatomic) double dragHandleFrac;
-@property(nonatomic) BOOL dragHandleIsOut;
-/// Wall-clock + keypose of the last position press, for active-part
-/// double-click detection (FCP gives no reliable clickCount in the viewer).
-@property(nonatomic) double lastClickTime;
-@property(nonatomic) double lastClickFrac;
-/// Grabbed keypose's object value at press, for delta-based dragging (so a
-/// press off the dot centre doesn't jump the keypose to the cursor).
-@property(nonatomic) double posGrabValX;
-@property(nonatomic) double posGrabValY;
 @property(nonatomic)
     CGPoint rotPressCanvas;            // canvas pixel where rot drag began
 @property(nonatomic) double rotPressX; // rotation values (rad) at press
@@ -132,15 +105,7 @@ enum {
 @interface MagicMoveOSC (Drawing)
 @end
 
-// Hit helpers used both here and from MouseHandlers' mouseDown; declared on the
-// category (not the class extension) so the primary @implementation isn't
-// flagged for an incomplete implementation.
 @interface MagicMoveOSC (HitTest)
-- (double)_anchorFracNearCanvasX:(double)x y:(double)y;
-- (BOOL)_handleHitAtCanvasX:(double)x
-                          y:(double)y
-                    outFrac:(double *_Nullable)outFrac
-                   outIsOut:(BOOL *_Nullable)outIsOut;
 @end
 
 @interface MagicMoveOSC (MouseHandlers)

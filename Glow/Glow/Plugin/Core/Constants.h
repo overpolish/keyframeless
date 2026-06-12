@@ -18,10 +18,13 @@ static const UInt32 kParamUIState = 201;
 /// -scheduleInputs: for the (otherwise cached) static frame.
 static const UInt32 kParamRenderNudge = 202;
 
-// Viewer on-screen-control part identifiers. M1 has the radius ring only; the
-// Position offset arc (inherited KKArcOSC handle) lights up with the Position
-// lane in a later milestone.
+// Viewer on-screen-control part identifiers. The radius ring is 100; the
+// Position handle (1) and its motion-path tangent handles (3) are the reusable
+// KKPositionOSC's host-side activePart numbers (its defaults, kept here so the
+// ring's 100 never collides).
 static const NSInteger kOSCRadiusPart = 100;
+static const NSInteger kOSCPositionPart = 1;
+static const NSInteger kOSCPathHandlePart = 3;
 
 @class KKOSCGuideBridge;
 /// The shared OSC-guide engine for this XPC process - the generic affine /

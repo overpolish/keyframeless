@@ -548,6 +548,15 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
       seedVals.count >= 1 ? seedVals[0].doubleValue : kGlowM1NoiseSeed;
   double grainPct = grainVals.count >= 1 ? grainVals[0].doubleValue
                                          : kGlowM1NoiseGrain * 100.0;
+  // Position (2D spatial, normalised 0..1, 0.5 = centred). Glow offset =
+  // pos-0.5 (Y stays up: a +offset.y expands the glow toward the top, matching
+  // the Y-up Position handle). Default (no lane) = no offset.
+  NSArray<NSNumber *> *positionVals =
+      _GlowLaneValues(timeline, @"Position", frac);
+  double offX =
+      positionVals.count >= 1 ? positionVals[0].doubleValue - 0.5 : 0.0;
+  double offY =
+      positionVals.count >= 2 ? positionVals[1].doubleValue - 0.5 : 0.0;
   // noiseSeed is the radial-flow PHASE - a time-driven term so the grain drifts
   // outward at `speed` (evaluated per motion-blur sub-sample, so it animates).
   // The Seed is separate: it perturbs the spatial pattern (noiseSeedHash).
@@ -560,7 +569,7 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
       .falloff = (float)falloff,
       .noise = (float)noise,
       .noiseOffset = (float)noiseOffset,
-      .offset = {0.0f, 0.0f},
+      .offset = {(float)offX, (float)offY},
       .glowColor = {1.0f, 1.0f, 1.0f},
       .colorMode = kGlowM1ColorMode,
       .gradientType = kGlowM1GradientType,

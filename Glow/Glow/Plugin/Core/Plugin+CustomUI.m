@@ -39,6 +39,14 @@ static NSString *_GlowAILaneSchemaText(void) {
          @"(0 = softest/widest, higher = tighter edge). Default 0.\n"
          @"- \"Threshold\": single value, percent 0..100. Bloom bright-pass "
          @"cutoff (0 = no bloom, higher blooms bright areas). Default 0.\n"
+         @"- \"Position\": two numeric components [X, Y], normalised 0..1 of "
+         @"the "
+         @"clip ([0.5, 0.5] = centred = the glow sits on the clip). Offsets "
+         @"the "
+         @"glow: X<0.5 shifts it left, X>0.5 right; Y<0.5 down, Y>0.5 up. May "
+         @"be "
+         @"animated along a curved path (keyposes can be smooth). Default "
+         @"[0.5, 0.5].\n"
          @"- \"Amount\": single value, percent 0..100. How much grain is mixed "
          @"into the glow (0 = clean glow, higher = more grain). Default 0.\n"
          @"- \"Spread\": single value, percent 0..100. How far the grain "
@@ -132,6 +140,22 @@ static NSString *_GlowAILaneSchemaText(void) {
       insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                       values:@[ @(kGlowM1Threshold * 100.0) ]]];
 
+  // Position (Core, 2D spatial): offsets the glow. Stored normalised 0..1
+  // (0.5, 0.5 = centred = no offset); render maps it to glow offset = pos-0.5.
+  // Generalised via the kit's KKPositionOSC / KKPositionMiniController (same
+  // curved-path Position as MagicMove). Off-canvas allowed, so no min/max.
+  KKLane *position = [KKLane laneWithLabel:@"Position"];
+  position.valueType = KKLaneValueTypeGeneric;
+  position.componentMin = @[];
+  position.componentMax = @[];
+  position.componentUnits = @[ @"px", @"px" ];
+  position.componentsScaleWithMedia = YES; // stored 0..1, displayed as pixels
+  position.componentLabels = @[ @"X", @"Y" ];
+  position.spatialCurvable = YES;
+  position.categoryKey = @"Core";
+  position.categorySymbol = @"circle.dotted";
+  [position insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
+
   // Noise: grain mixed into the glow. Amount + Spread animate; Seed is a
   // value-only random integer (the gap-popover seed control). Render wiring is
   // a later step - these currently display but don't yet affect the glow.
@@ -210,8 +234,8 @@ static NSString *_GlowAILaneSchemaText(void) {
                                              values:@[ @(kGlowM1NoiseSeed) ]]];
 
   return @[
-    radius, intensity, falloff, threshold, noiseSeed, noise, noiseSpread,
-    noiseGrain, noiseSpeed
+    radius, intensity, falloff, threshold, position, noiseSeed, noise,
+    noiseSpread, noiseGrain, noiseSpeed
   ];
 }
 
@@ -287,7 +311,8 @@ static NSString *_GlowAILaneSchemaText(void) {
     // renderer is the view's mini-viewer delegate.
     KKMiniViewerRenderer *oscRenderer =
         (KKMiniViewerRenderer *)view.miniViewerDelegate;
-    NSArray<NSArray<NSString *> *> *oscCompounds = @[ @[ @"Radius" ] ];
+    NSArray<NSArray<NSString *> *> *oscCompounds =
+        @[ @[ @"Radius" ], @[ @"Position" ], @[ @"Path" ] ];
     oscRenderer.handlesHidden = !oscMasterVisible;
     [self kkApplyOSCVisibilityFromState:uiState
                             elementKeys:[KKPlugin kkOSCElementKeysForCompounds:
@@ -314,6 +339,9 @@ static NSString *_GlowAILaneSchemaText(void) {
                                renderNudgeParamID:kParamRenderNudge
                                     dragUndoLabel:@"Adjust Radius"
                                detachedWindowSize:CGSizeMake(720.0, 460.0)];
+    // Mini-viewer motion-path edits (Position anchor / tangent drag) persist
+    // the whole blob through the same writer as inspector timeline mutations.
+    oscRenderer.onTimelinePersist = view.onTimelineMutated;
 
     self.inspectorView = view;
     if (!self.playheadPoller) {
@@ -397,14 +425,15 @@ static NSString *_GlowAILaneSchemaText(void) {
         registerBundleDocsWithName:@"Glow"
                             bundle:[NSBundle bundleForClass:[GlowPlugin class]]
                       subdirectory:@"AIKnowledge"];
-    // Shared on-screen-control docs live in the kit framework. Glow only has a
-    // radius ring (no rotation OSC), so filter to the visibility topic.
+    // Shared on-screen-control docs live in the kit framework. Glow has the
+    // radius ring (no rotation OSC) plus the shared Position handle / motion
+    // path, so filter to those topics.
     [KKAIKnowledge
         registerBundleDocsWithName:@"On-Screen Controls"
                             bundle:[NSBundle
                                        bundleForClass:[KKOnScreenControl class]]
                       subdirectory:nil
-                      onlyTopicIDs:@[ @"visibility" ]];
+                      onlyTopicIDs:@[ @"visibility", @"position" ]];
   });
 
   NSString *productContext = GLoc(

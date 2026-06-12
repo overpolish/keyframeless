@@ -38,11 +38,32 @@
       *forceUpdate = YES;
     return;
   }
+  // Position handle / keypose anchor, and motion-path tangent handles, are
+  // owned by the controller (press capture, double-click smooth toggle, the
+  // whole drag write). The hit-test already set hoverTargetIsAnchor, so map the
+  // part.
+  if (activePart == kOSCPositionPart || activePart == kOSCPathHandlePart) {
+    KKPositionHit hit = (activePart == kOSCPathHandlePart)
+                            ? KKPositionHitTangentHandle
+                            : (self.positionController.hoverTargetIsAnchor
+                                   ? KKPositionHitAnchorDot
+                                   : KKPositionHitHandle);
+    _positionDragging = YES;
+    [self.positionController mouseDownAtX:positionX
+                                        y:positionY
+                                      hit:hit
+                                modifiers:modifiers
+                              forceUpdate:forceUpdate
+                                   atTime:time];
+    return;
+  }
   if (activePart != kOSCRadiusPart)
     return;
 
   _ringDragging = YES;
-  CGPoint center = [self canvasCenter];
+  // The ring is centred on the Position handle (the glow's offset centre), so
+  // the drag measures the cursor relative to that, not the fixed clip centre.
+  CGPoint center = [self.positionController positionCanvasAtTime:time];
   _ringDragStartDx = positionX - center.x;
   _ringDragStartDy = positionY - center.y;
   _ringDragStartDist = sqrt(_ringDragStartDx * _ringDragStartDx +
@@ -77,10 +98,24 @@
       *forceUpdate = YES;
     return;
   }
+  if (activePart == kOSCPositionPart || activePart == kOSCPathHandlePart) {
+    KKPositionHit hit = (activePart == kOSCPathHandlePart)
+                            ? KKPositionHitTangentHandle
+                            : (self.positionController.hoverTargetIsAnchor
+                                   ? KKPositionHitAnchorDot
+                                   : KKPositionHitHandle);
+    [self.positionController mouseDraggedAtX:positionX
+                                           y:positionY
+                                         hit:hit
+                                   modifiers:modifiers
+                                 forceUpdate:forceUpdate
+                                      atTime:time];
+    return;
+  }
   if (activePart != kOSCRadiusPart || !_ringDragging || _ringDragStartDist <= 0)
     return;
 
-  CGPoint center = [self canvasCenter];
+  CGPoint center = [self.positionController positionCanvasAtTime:time];
   double dx = positionX - center.x;
   double dy = positionY - center.y;
 
@@ -135,6 +170,8 @@
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
   [self kkResetOptHideArming];
+  [self.positionController mouseUp];
+  _positionDragging = NO;
   BOOL wasDragging = _ringDragging;
   _ringDragging = NO;
   id<FxOnScreenControlAPI_v4> oscAPI =

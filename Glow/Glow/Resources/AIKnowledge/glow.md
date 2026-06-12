@@ -12,6 +12,7 @@ Parameters are split into two groups (shown as category pills in the inspector):
   - **Intensity** - how bright the glow is, 0-300%. 100% is normal; higher pushes the glow brighter. Default 100.
   - **Falloff** - how the glow fades at its edge, 0-200%. 0 is the softest, widest fade; higher tightens the edge. Default 0.
   - **Threshold** - a bloom cutoff, 0-100%. 0 means no bloom; raise it to make the brightest parts of the clip bloom into the glow. Default 0.
+  - **Position** - where the glow sits relative to the clip, as an X / Y offset. Centred by default (the glow sits on the clip); drag it to push the glow off to one side. It can be animated so the glow drifts along a path, with a draggable handle and a curved motion path on the canvas.
 
 - Noise - optional grain mixed into the glow for a textured, less perfectly-smooth halo:
   - **Amount** - how much grain is mixed in, 0-100%. 0 is a clean glow; higher breaks the halo up into grain.
@@ -24,4 +25,4 @@ Amount, Spread, Grain Size, and Speed animate on the timeline like any other pro
 
 ## Showing and hiding on-screen controls
 
-Glow's on-screen control - the **Radius** ring (an ellipse around the clip whose size is the glow radius) - can be hidden to declutter the canvas: the inspector's "On-Screen Controls" tick toggles it, its settings cog has a Radius pill, and you can Option-click the ring on the viewer or mini-viewer to hide it (Option-hold reveals a hidden ring as a dimmed ghost to click back). See the shared on-screen-control visibility docs for the full behaviour, including the mouse-movement nuance of the reveal.
+Glow has two on-screen controls: the **Radius** ring (an ellipse around the clip whose size is the glow radius) and the **Position** handle (a small ring at the glow's centre, with a motion path once Position is animated). The ring follows the Position handle, so moving the glow offset carries the radius ring with it. Either can be hidden to declutter the canvas: the inspector's "On-Screen Controls" tick toggles them all, its settings cog has Radius / Position / Path pills, and you can Option-click a control on the viewer or mini-viewer to hide just that one (Option-hold reveals a hidden control as a dimmed ghost to click back). See the shared on-screen-control visibility docs for the full behaviour, including the mouse-movement nuance of the reveal.

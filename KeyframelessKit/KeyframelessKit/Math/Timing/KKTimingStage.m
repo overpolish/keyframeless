@@ -257,6 +257,10 @@
   _categorySymbol = [tmpl.categorySymbol copy];
   _animatable = tmpl.animatable;
   _seedField = tmpl.seedField;
+  // Pixel-display flag is template metadata too: keypose/boundary popovers
+  // rebuild a display lane and must carry it, or a normalised 0..1 spatial lane
+  // (Position / Crop / Anchor) shows raw fractions instead of pixels.
+  _componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
 }
 
 - (void)insertKeypose:(KKKeyPose *)keypose {
@@ -417,12 +421,32 @@ KKTimeline *KKTimelineSettingSpatialSmooth(KKTimeline *timeline,
         best = j;
       }
     }
-    if (kps[best].spatialSmooth == on)
-      return nil; // already in that state - no commit, no undo entry
+    // A hold-linked pair is two coincident keyposes the user sees as one, so
+    // toggle the whole linked run (best + its twins) - otherwise clicking the
+    // incoming half leaves the outgoing twin a corner and the curve doesn't
+    // change. Walk both directions across linked intervals.
+    NSMutableIndexSet *run =
+        [NSMutableIndexSet indexSetWithIndex:(NSUInteger)best];
+    for (NSInteger j = best;
+         j + 1 < (NSInteger)kps.count && kps[j].outgoing.endpointsLinked; j++)
+      [run addIndex:(NSUInteger)(j + 1)];
+    for (NSInteger j = best; j > 0 && kps[j - 1].outgoing.endpointsLinked; j--)
+      [run addIndex:(NSUInteger)(j - 1)];
+    __block BOOL anyDiffers = NO;
+    [run enumerateIndexesUsingBlock:^(NSUInteger j, BOOL *stop) {
+      if (kps[j].spatialSmooth != on) {
+        anyDiffers = YES;
+        *stop = YES;
+      }
+    }];
+    if (!anyDiffers)
+      return nil; // whole run already in that state - no commit, no undo entry
     NSMutableArray<KKKeyPose *> *mkps = [kps mutableCopy];
-    KKKeyPose *nk = [mkps[best] copy];
-    nk.spatialSmooth = on;
-    mkps[best] = nk;
+    [run enumerateIndexesUsingBlock:^(NSUInteger j, BOOL *stop) {
+      KKKeyPose *nk = [mkps[j] copy];
+      nk.spatialSmooth = on;
+      mkps[j] = nk;
+    }];
     nl.keyposes = mkps;
     lanes[i] = nl;
     t.lanes = lanes;

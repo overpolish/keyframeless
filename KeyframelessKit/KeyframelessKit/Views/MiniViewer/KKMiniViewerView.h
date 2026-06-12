@@ -99,6 +99,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     anchorSquareCenter:(out CGPoint *)outCenter
            contentRect:(CGRect)contentRect;
+/// A secondary Position handle (the arc glyph) for a plugin whose main point
+/// handle is something else (e.g. Glow's radius ring). Centre in overlay points
+/// (y-up), drawn with the shared arc glyph so it matches the viewer's Position
+/// handle. Return NO for none. Dimming for a revealed ghost comes from the
+/// renderer's `positionHandleGhostAlpha`; the active (pressed) emphasis from
+/// `positionHandleIsActive`.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    positionHandleCenter:(out CGPoint *)outCenter
+             contentRect:(CGRect)contentRect;
 /// All rectangular box OSCs to draw - crop, scale, and any future box gizmo -
 /// as `KKMiniBox` descriptors (outline + 8 handles + optional readout). The
 /// canvas renders each uniformly, so a new box OSC needs no new draw path.

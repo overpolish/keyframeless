@@ -56,6 +56,19 @@ static MTLPixelFormat GlowSRGBVariant(MTLPixelFormat f) {
   // the perpendicular axis (a box-edge-handle feel) instead of collapsing it.
   double _ringStartDx, _ringStartDy, _ringStartDist;
   double _ringStartValX, _ringStartValY;
+  // Reusable Position handle + motion path (offsets the glow), the same
+  // controller MagicMove's mini uses. Lazily built (no init override here).
+  KKPositionMiniController *_positionMini;
+  BOOL _positionGrabbed; // the Position arc handle (not a path anchor/tangent)
+}
+
+- (KKPositionMiniController *)positionMini {
+  if (!_positionMini)
+    _positionMini =
+        [[KKPositionMiniController alloc] initWithRenderer:self
+                                                 laneLabel:@"Position"
+                                                 pathLabel:@"Path"];
+  return _positionMini;
 }
 
 // Glow has no Crop lane (M1) - return nil so the base renderer doesn't try to
@@ -99,6 +112,9 @@ static MTLPixelFormat GlowSRGBVariant(MTLPixelFormat f) {
     return @[ @(kGlowM1NoiseSpeed * 100.0) ];
   if ([label isEqualToString:@"Seed"])
     return @[ @(kGlowM1NoiseSeed) ];
+  // Position: normalised 0..1, centred = no offset (matches availableLanes).
+  if ([label isEqualToString:@"Position"])
+    return @[ @0.5, @0.5 ];
   return [super defaultValuesForLabel:label];
 }
 
@@ -287,6 +303,15 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     handleHitAtPoint:(CGPoint)p
          contentRect:(CGRect)cr {
+  // Position handle / motion path (foreground): the centre arc, then the path
+  // tangents / anchors. Owned by the controller.
+  if ([self _positionActiveForContentRect:cr] &&
+      [self.positionMini pointHandleHitAtPoint:p contentRect:cr])
+    return YES;
+  if ([self.positionMini pathHandleHitAtPoint:p contentRect:cr])
+    return YES;
+  if ([self.positionMini pathAnchorHitAtPoint:p contentRect:cr])
+    return YES;
   if ([self _ringHitAtPoint:p contentRect:cr])
     return YES;
   return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
@@ -296,6 +321,23 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
     beginHandleDragAtPoint:(CGPoint)p
                contentRect:(CGRect)cr {
   _ringGrabbed = NO;
+  _positionGrabbed = NO;
+  // Position arc handle takes the grab first (foreground, centre).
+  if ([self _positionActiveForContentRect:cr] &&
+      [self.positionMini pointHandleHitAtPoint:p contentRect:cr]) {
+    self.canvas = canvas;
+    _positionGrabbed = YES;
+    [self.positionMini beginPointDragAtPoint:p contentRect:cr];
+    [self.positionMini applyPointDragToPoint:p
+                                 contentRect:cr
+                                      canvas:canvas
+                                   modifiers:0];
+    return;
+  }
+  // Then the motion-path anchors / tangent handles (controller-owned).
+  self.canvas = canvas;
+  if ([self.positionMini beginPathDragAtPoint:p contentRect:cr])
+    return;
   if ([self _ringHitAtPoint:p contentRect:cr]) {
     self.canvas = canvas;
     _ringGrabbed = YES;
@@ -317,6 +359,19 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
     dragHandleToPoint:(CGPoint)p
           contentRect:(CGRect)cr
             modifiers:(NSEventModifierFlags)modifiers {
+  if (_positionGrabbed) {
+    [self.positionMini applyPointDragToPoint:p
+                                 contentRect:cr
+                                      canvas:canvas
+                                   modifiers:modifiers];
+    return;
+  }
+  if (self.positionMini.pathGrabbed) {
+    [self.positionMini applyPathDragToPoint:p
+                                contentRect:cr
+                                  modifiers:modifiers];
+    return;
+  }
   if (_ringGrabbed) {
     [self _applyRingDragToPoint:p
                     contentRect:cr
@@ -331,6 +386,16 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
 }
 
 - (void)miniViewerEndHandleDrag:(KKMiniViewerView *)canvas {
+  _positionGrabbed = NO;
+  // endDrag resets the shared snap engine and reports whether a motion-path
+  // drag was active (so the full blob is persisted).
+  if ([self.positionMini endDrag]) {
+    if (self.onTimelinePersist)
+      self.onTimelinePersist(self.timeline);
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return;
+  }
   if (_ringGrabbed) {
     _ringGrabbed = NO;
     // Repaint the Metal pass so the ring drops from active back to hover/idle
@@ -343,6 +408,14 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
 - (NSCursor *)miniViewer:(KKMiniViewerView *)canvas
            cursorAtPoint:(CGPoint)p
              contentRect:(CGRect)cr {
+  self.canvas = canvas;
+  // Position handle / motion path show the move cursor (or the Opt eye).
+  if ([self _positionActiveForContentRect:cr] &&
+      [self.positionMini pointHandleHitAtPoint:p contentRect:cr])
+    return [self kkVisibilityCursorForLabel:@"Position"] ?: KKPointMoveCursor();
+  if ([self.positionMini pathHandleHitAtPoint:p contentRect:cr] ||
+      [self.positionMini pathAnchorHitAtPoint:p contentRect:cr])
+    return [self kkVisibilityCursorForLabel:@"Path"] ?: KKPointMoveCursor();
   BOOL hit = [self _ringHitAtPoint:p contentRect:cr];
   BOOL ghost = [self _ringIsGhost];
   // Opt-hover hide/show affordance: only when an Opt-click would actually
@@ -381,6 +454,22 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     optClickHandleAtPoint:(CGPoint)p
               contentRect:(CGRect)cr {
+  if (self.onHandleVisibilityToggled &&
+      [self _positionActiveForContentRect:cr] &&
+      [self.positionMini pointHandleHitAtPoint:p contentRect:cr]) {
+    self.onHandleVisibilityToggled(@"Position");
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return YES;
+  }
+  if (self.onHandleVisibilityToggled &&
+      ([self.positionMini pathHandleHitAtPoint:p contentRect:cr] ||
+       [self.positionMini pathAnchorHitAtPoint:p contentRect:cr])) {
+    self.onHandleVisibilityToggled(@"Path");
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return YES;
+  }
   if (self.onHandleVisibilityToggled && [self _ringHitAtPoint:p
                                                   contentRect:cr]) {
     self.onHandleVisibilityToggled(@"Radius");
@@ -388,6 +477,72 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
     return YES;
   }
   return [super miniViewer:canvas optClickHandleAtPoint:p contentRect:cr];
+}
+
+#pragma mark Position handle + motion path (forwarded to the controller)
+
+- (BOOL)_positionActiveForContentRect:(CGRect)cr {
+  return !CGRectIsEmpty(cr) &&
+         ![self.suppressedHandleLabels containsObject:@"Position"] &&
+         [self isConstantLabel:@"Position"] &&
+         [self labelVisibleOrRevealing:@"Position"];
+}
+
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    positionHandleCenter:(out CGPoint *)outCenter
+             contentRect:(CGRect)cr {
+  if (![self _positionActiveForContentRect:cr])
+    return NO;
+  return [self.positionMini pointHandleCenter:outCenter forContentRect:cr];
+}
+
+- (CGFloat)positionHandleGhostAlpha {
+  return [self ghostAlphaForLabel:@"Position"];
+}
+
+- (BOOL)positionHandleIsActive {
+  return _positionGrabbed;
+}
+
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
+    motionPathPolylineForContentRect:(CGRect)cr {
+  return [self.positionMini motionPathPolylineForContentRect:cr];
+}
+
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
+    motionPathAnchorsForContentRect:(CGRect)cr {
+  return [self.positionMini motionPathAnchorsForContentRect:cr];
+}
+
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
+    motionPathHandleSegmentsForContentRect:(CGRect)cr {
+  return [self.positionMini motionPathHandleSegmentsForContentRect:cr];
+}
+
+- (CGFloat)motionPathGhostAlpha {
+  return [self ghostAlphaForLabel:@"Path"];
+}
+
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    doubleClickAtPoint:(CGPoint)p
+           contentRect:(CGRect)cr {
+  self.canvas = canvas;
+  return [self.positionMini toggleSmoothAtPoint:p contentRect:cr];
+}
+
+- (void)miniViewer:(KKMiniViewerView *)canvas
+     snapGuideHasX:(out BOOL *)hasX
+                 X:(out CGFloat *)outX
+      fromKeyposeX:(out BOOL *)fromKeyposeX
+              hasY:(out BOOL *)hasY
+                 Y:(out CGFloat *)outY
+      fromKeyposeY:(out BOOL *)fromKeyposeY {
+  [self.positionMini snapGuideHasX:hasX
+                                 X:outX
+                      fromKeyposeX:fromKeyposeX
+                              hasY:hasY
+                                 Y:outY
+                      fromKeyposeY:fromKeyposeY];
 }
 
 - (BOOL)_ensurePipelinesForDevice:(id<MTLDevice>)device
@@ -682,7 +837,18 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
         GlowNoiseGrainCells(grainVals.count >= 1 ? grainVals[0].doubleValue
                                                  : kGlowM1NoiseGrain * 100.0);
     int colorMode = kGlowM1ColorMode, gradType = kGlowM1GradientType;
-    simd_float2 offset = {0.0f, 0.0f};
+    // Position (2D, normalised 0..1, 0.5 = centred). The shader's offset is the
+    // NEGATED Position (it shifts the blur SAMPLE point, so negating moves the
+    // glow in the drag direction) - the main render feeds
+    // -state.offset * (srcDim/destDim); the mini renders source->dest at the
+    // same size (ratio 1), so just negate. Without the negation both axes read
+    // reversed versus the viewer.
+    NSArray<NSNumber *> *positionVals = [self valuesForLabel:@"Position"];
+    simd_float2 offset = {
+        positionVals.count >= 1 ? (float)(0.5 - positionVals[0].doubleValue)
+                                : 0.0f,
+        positionVals.count >= 2 ? (float)(0.5 - positionVals[1].doubleValue)
+                                : 0.0f};
     simd_float3 glowColor = {1.0f, 1.0f, 1.0f};
     simd_float3 lut[KK_GRADIENT_LUT_SIZE];
     for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)

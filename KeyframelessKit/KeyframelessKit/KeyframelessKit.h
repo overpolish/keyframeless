@@ -81,6 +81,8 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPointRowView.h>
 #import <KeyframelessKit/KKPopoverExtraRow.h>
 #import <KeyframelessKit/KKPopupSelectView.h>
+#import <KeyframelessKit/KKPositionMiniController.h>
+#import <KeyframelessKit/KKPositionOSC.h>
 #import <KeyframelessKit/KKRandomRowView.h>
 #import <KeyframelessKit/KKRectBorderOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>

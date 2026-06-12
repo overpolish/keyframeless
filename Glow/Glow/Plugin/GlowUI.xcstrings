@@ -79,6 +79,18 @@
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "<accent>阈值</accent> - 泛光阈值，0-100%。0 表示无泛光；调高可让片段最亮的部分泛入辉光。默认 0。" } }
       }
     },
+    "<accent>Position</accent> - where the glow sits relative to the clip, as an X / Y offset. Centred by default (the glow sits on the clip); drag it to push the glow off to one side. It can be animated so the glow drifts along a path, with a draggable handle and a curved motion path on the canvas.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": { "stringUnit": { "state": "translated", "value": "<accent>Position</accent> - wo der Schein relativ zum Clip sitzt, als X-/Y-Versatz. Standardmäßig zentriert (der Schein sitzt auf dem Clip); ziehe ihn, um den Schein zur Seite zu verschieben. Er kann animiert werden, sodass der Schein einer Bahn folgt, mit einem ziehbaren Griff und einem gekrümmten Bewegungspfad auf der Leinwand." } },
+        "es": { "stringUnit": { "state": "translated", "value": "<accent>Posición</accent> - dónde se sitúa el resplandor respecto al clip, como un desplazamiento X / Y. Centrado por omisión (el resplandor se sitúa sobre el clip); arrástralo para desplazar el resplandor hacia un lado. Puede animarse para que el resplandor recorra una trayectoria, con un tirador arrastrable y una trayectoria de movimiento curva en el lienzo." } },
+        "fr": { "stringUnit": { "state": "translated", "value": "<accent>Position</accent> - où se place la lueur par rapport au plan, sous forme de décalage X / Y. Centrée par défaut (la lueur se place sur le plan) ; faites-la glisser pour décaler la lueur sur le côté. Elle peut être animée pour que la lueur suive une trajectoire, avec une poignée déplaçable et une trajectoire de mouvement courbe sur le canevas." } },
+        "ja": { "stringUnit": { "state": "translated", "value": "<accent>位置</accent> - グローをクリップに対してどこに置くか、X / Y のオフセットで指定します。デフォルトでは中央（グローはクリップに重なります）。ドラッグするとグローを片側にずらせます。アニメーションさせるとグローがパスに沿って移動し、キャンバス上にドラッグできるハンドルと曲線のモーションパスが表示されます。" } },
+        "ko": { "stringUnit": { "state": "translated", "value": "<accent>위치</accent> - 글로우가 클립을 기준으로 어디에 놓이는지를 X / Y 오프셋으로 지정합니다. 기본값은 가운데(글로우가 클립 위에 놓임)이며, 드래그하면 글로우를 한쪽으로 옮길 수 있습니다. 애니메이션하면 글로우가 경로를 따라 움직이며, 캔버스에 드래그할 수 있는 핸들과 곡선 모션 경로가 표시됩니다." } },
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "<accent>位置</accent> - 辉光相对于片段的位置，以 X / Y 偏移表示。默认居中（辉光位于片段上）；拖动即可将辉光移向一侧。可对其制作动画，使辉光沿路径移动，并在画布上显示可拖动的控制柄和一条曲线运动路径。" } }
+      }
+    },
     "<accent>Radius</accent> - the size of the glow, in pixels (0 = no glow, up to 500 for a large halo). Has X and Y components, aspect-lockable, so the glow can be a circle or stretched into an oval. The default is 100.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",

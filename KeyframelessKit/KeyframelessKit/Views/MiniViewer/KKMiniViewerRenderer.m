@@ -492,6 +492,14 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                             contentRect:cr];
 }
 
+- (CGPoint)handlePointForContentRect:(CGRect)cr
+                            position:(NSArray<NSNumber *> *)pos {
+  double px = pos.count > 0 ? pos[0].doubleValue : 0.5;
+  double py = pos.count > 1 ? pos[1].doubleValue : 0.5;
+  return CGPointMake(CGRectGetMinX(cr) + px * cr.size.width,
+                     CGRectGetMinY(cr) + py * cr.size.height);
+}
+
 - (KKTimeline *)_timelineBySettingValues:(NSArray<NSNumber *> *)values
                                 forLabel:(NSString *)label {
   if (self.boundaryEditing) {
@@ -613,6 +621,14 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 
 - (CGFloat)anchorSquareGhostAlpha {
   return 1.0; // no anchor square by default; MagicMove overrides
+}
+
+- (CGFloat)positionHandleGhostAlpha {
+  return 1.0; // no secondary Position handle by default; Glow overrides
+}
+
+- (BOOL)positionHandleIsActive {
+  return NO; // no secondary Position handle by default; Glow overrides
 }
 
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas

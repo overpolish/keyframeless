@@ -409,6 +409,27 @@
                        sizeScale:pointSizeScale
                          encoder:enc];
     }
+
+    // Secondary Position arc handle (a plugin whose main point handle is
+    // something else - e.g. Glow's radius ring - draws its Position here with
+    // the same arc glyph the viewer uses).
+    CGPoint posCenterPts;
+    if ([del respondsToSelector:
+                 @selector(miniViewer:positionHandleCenter:contentRect:)] &&
+        [del miniViewer:self
+            positionHandleCenter:&posCenterPts
+                     contentRect:cr]) {
+      BOOL posActive = NO;
+      CGFloat posGhost = 1.0;
+      if ([del isKindOfClass:[KKMiniViewerRenderer class]]) {
+        posActive = [(KKMiniViewerRenderer *)del positionHandleIsActive];
+        posGhost = [(KKMiniViewerRenderer *)del positionHandleGhostAlpha];
+      }
+      [self _encodeArcHandleGlyphAt:posCenterPts
+                           isActive:posActive
+                         ghostAlpha:posGhost
+                            encoder:enc];
+    }
   }
 
   [enc endEncoding];

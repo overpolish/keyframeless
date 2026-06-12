@@ -919,14 +919,16 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                                        bundleForClass:[MagicMovePlugin class]]
                       subdirectory:@"AIKnowledge"];
     // Shared on-screen-control docs live in the kit framework (flattened to its
-    // Resources root). Magic Move uses the rotation gizmo + the visibility
-    // system, so expose just those two topics.
+    // Resources root). Magic Move uses the Position handle / motion path, the
+    // rotation gizmo, and the visibility system, so expose those topics.
     [KKAIKnowledge
         registerBundleDocsWithName:@"On-Screen Controls"
                             bundle:[NSBundle
                                        bundleForClass:[KKOnScreenControl class]]
                       subdirectory:nil
-                      onlyTopicIDs:@[ @"visibility", @"rotation" ]];
+                      onlyTopicIDs:@[
+                        @"visibility", @"rotation", @"position"
+                      ]];
   });
 
   NSString *productContext = MMLoc(

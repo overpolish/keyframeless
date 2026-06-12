@@ -1,0 +1,129 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#pragma once
+
+#import <KeyframelessKit/KKArcOSC.h>
+#import <KeyframelessKit/KKPointOSC.h>
+#import <KeyframelessKit/KKSnapEngine.h>
+
+@class KKLane;
+@class KKOSCGuideBridge;
+
+NS_ASSUME_NONNULL_BEGIN
+
+/// Result of a Position hit-test. The host maps a non-None value to its own
+/// `activePart` (Handle / AnchorDot both mean "the Position lane";
+/// TangentHandle means "the motion-path tangent").
+typedef NS_ENUM(NSInteger, KKPositionHit) {
+  KKPositionHitNone = 0,
+  KKPositionHitHandle = 1,       // the playhead arc handle
+  KKPositionHitAnchorDot = 2,    // a keypose anchor dot (a Position target)
+  KKPositionHitTangentHandle = 3 // an in/out tangent handle
+};
+
+/// Supplied by a plugin that runs an OSC guide over its Position handle (e.g.
+/// MagicMove). nil = no guide; the handle reads the live timeline normally.
+@protocol KKPositionGuideProvider <NSObject>
+/// The per-process guide bridge (for `guideStep` + `handleHovered`).
+- (KKOSCGuideBridge *)positionGuideBridge;
+/// The live guide-pushed Position in object [0,1] space (the drawOSC tick can't
+/// read the blob, so the inspector drag pushes it here).
+- (CGPoint)positionGuideObjectValue;
+@end
+
+/// Reusable Position on-screen control: the playhead arc handle, the motion
+/// path (line + keypose anchor dots + tangent handles), and all of their
+/// drawing / hit-testing / drag / snap / smooth-toggle logic, keyed on a lane
+/// label. It is itself a `KKOnScreenControl` (so it owns coordinate conversion,
+/// the process timeline snapshot, the action-scope writer, and the visibility
+/// helpers), but the host plugin's OSC stays the single FxPlug control and
+/// forwards draw / hit-test / mouse to it - composing it alongside its own
+/// controls (a ring, scale box, rotation rings, ...). See KKPositionOSC.m for
+/// the host-forwarding contract.
+@interface KKPositionOSC : KKArcOSC
+
+- (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
+                         laneLabel:(NSString *)laneLabel
+                         pathLabel:(NSString *)pathLabel;
+
+/// The lane this control reads/writes (e.g. @"Position").
+@property(nonatomic, copy) NSString *laneLabel;
+/// The element key for the motion path (line / anchors / tangent handles), a
+/// separately-hideable OSC element (e.g. @"Path").
+@property(nonatomic, copy) NSString *pathLabel;
+
+/// Lane template (from the host's `availableLanes`) used to build the lane when
+/// a drag writes a Position that doesn't exist in the snapshot yet, so the new
+/// lane keeps the plugin's exact metadata (units, spatial-curvable, ...).
+@property(nonatomic, copy, nullable) KKLane *templateLane;
+
+/// The host's `activePart` numbers for "this is the Position handle/anchor" and
+/// "this is a tangent handle". The host sets these once so the controller can
+/// gate its draw on the live activePart. Defaults 1 and 3.
+@property(nonatomic) NSInteger positionActivePart;
+@property(nonatomic) NSInteger tangentActivePart;
+
+/// The host mirrors its FxPlug `isDragging` here each draw tick (the controller
+/// doesn't receive FCP's mouse bookkeeping directly).
+@property(nonatomic) BOOL dragging;
+
+/// nil = no guide.
+@property(nonatomic, weak, nullable) id<KKPositionGuideProvider> guideProvider;
+
+/// Set by the hit-test: YES when the hovered Position target is a keypose
+/// anchor dot rather than the playhead arc handle (both report Handle/AnchorDot
+/// to the host). The host reads this for element-key mapping (anchor -> Path).
+@property(nonatomic, readonly) BOOL hoverTargetIsAnchor;
+
+/// Owned glyphs (exposed so the host can restyle them).
+@property(nonatomic, readonly) KKPointOSC *anchorDotOSC;  // keypose dots
+@property(nonatomic, readonly) KKPointOSC *tangentDotOSC; // tangent dots
+@property(nonatomic, readonly) KKSnapEngine *snapEngine;
+
+/// Canvas-space point of the Position handle at `time` (the playhead value, or
+/// the guide-pushed value during a guide). The host's other controls (rotation,
+/// scale, anchor pivot) centre on this.
+- (CGPoint)positionCanvasAtTime:(CMTime)time;
+/// Clip fraction (0..1) at `time`.
+- (double)fractionAtTime:(CMTime)time;
+
+/// Draw the motion path (line + tangent handles + keypose anchor dots). Drawn
+/// FIRST (under the host's other controls). Split from the handle draw so the
+/// host can interleave its own controls between them at the right z-order.
+- (void)drawPathInDestination:(FxImageTile *)destinationImage
+                       atTime:(CMTime)time
+                   activePart:(NSInteger)activePart;
+/// Draw the playhead arc handle (+ the Cmd-snap guides during a Position drag).
+/// Drawn LAST (over the host's other controls).
+- (void)drawHandleInDestination:(FxImageTile *)destinationImage
+                         atTime:(CMTime)time
+                     activePart:(NSInteger)activePart;
+
+/// Hit-test the Position elements (tangent handle, arc handle, anchor dot - in
+/// that precedence). Sets the viewer cursor on a hit. The host calls this in
+/// its own precedence chain and maps the result to its activePart.
+- (KKPositionHit)hitTestAtX:(double)x y:(double)y atTime:(CMTime)time;
+
+/// Forwarded mouse events. The host calls these when its activePart is in the
+/// Position range. `hit` distinguishes the handle/anchor (a value drag) from a
+/// tangent handle (a curve edit).
+- (void)mouseDownAtX:(double)x
+                   y:(double)y
+                 hit:(KKPositionHit)hit
+           modifiers:(NSUInteger)modifiers
+         forceUpdate:(BOOL *)forceUpdate
+              atTime:(CMTime)time;
+- (void)mouseDraggedAtX:(double)x
+                      y:(double)y
+                    hit:(KKPositionHit)hit
+              modifiers:(NSUInteger)modifiers
+            forceUpdate:(BOOL *)forceUpdate
+                 atTime:(CMTime)time;
+- (void)mouseUp;
+
+@end
+
+NS_ASSUME_NONNULL_END

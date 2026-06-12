@@ -161,19 +161,16 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   self = [super initWithAPIManager:apiManager];
   if (self) {
     self.clearsOnDraw = NO;
-    _snapEngine = [[KKSnapEngine alloc] init];
+    _positionController = [[KKPositionOSC alloc] initWithAPIManager:apiManager
+                                                          laneLabel:@"Position"
+                                                          pathLabel:@"Path"];
+    _positionController.positionActivePart = kOSCPositionPart;
+    _positionController.tangentActivePart = kOSCPathHandlePart;
+    _positionController.guideProvider = self;
+    for (KKLane *l in [MagicMovePlugin availableLanes])
+      if ([l.label isEqualToString:@"Position"])
+        _positionController.templateLane = l;
     _rotationOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
-    _anchorOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
-    // Match the crop/radius points in Rounded so the anchors are easy to hit.
-    _anchorOSC.oscRadius = 7.0f;
-    _anchorOSC.outlineWidth = 2.0f;
-    // Must not clear the destination, or each dot wipes the path line and the
-    // previously-drawn anchors (leaving only the last point).
-    _anchorOSC.clearsOnDraw = NO;
-    _handleOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
-    _handleOSC.oscRadius = 5.0f;
-    _handleOSC.outlineWidth = 1.5f;
-    _handleOSC.clearsOnDraw = NO;
     _scaleBox = [[KKBoxOSC alloc] initWithAPIManager:apiManager];
     // Extra grab slack so the compact gizmo's handles stay easy to hit.
     _scaleBox.hitPadding = 6.0;
@@ -182,10 +179,6 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
     _anchorSnap = [[KKSnapEngine alloc] init];
     _scaleHitHandle = -1;
     _scaleGrabHandle = -1;
-    _dragAnchorFrac = NAN;
-    _dragHandleFrac = NAN;
-    _lastClickTime = -1.0;
-    _lastClickFrac = NAN;
   }
   return self;
 }
@@ -250,31 +243,22 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                           durSec));
 }
 
+// The clip's centre in canvas space - the Position handle's value. Rotation,
+// scale, and the anchor pivot all centre on it, so it stays a host method,
+// shimmed to the Position controller which owns the read (+ the guide branch).
 - (CGPoint)oscPositionAtTime:(CMTime)time {
-  id<FxOnScreenControlAPI_v4> oscAPI =
-      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  if (!oscAPI)
-    return CGPointZero;
-  double objX, objY;
-  if (MagicMoveGuideBridge().guideStep > 0) {
-    // During the guide the handle follows the guide-scoped position the drag
-    // pushes in (the blob is unreadable in this tick).
-    objX = sGuidePosition.x;
-    objY = sGuidePosition.y;
-  } else {
-    NSArray<NSNumber *> *vals =
-        _positionValuesAtFraction([self _fractionAtTime:time]);
-    objX = vals[0].doubleValue;
-    objY = vals[1].doubleValue;
-  }
-  CGPoint canvas = CGPointZero;
-  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                          fromX:objX
-                          fromY:objY
-                        toSpace:kFxDrawingCoordinates_CANVAS
-                            toX:&canvas.x
-                            toY:&canvas.y];
-  return canvas;
+  return [self.positionController positionCanvasAtTime:time];
+}
+
+// KKPositionGuideProvider: the controller reads the guide bridge + the
+// guide-pushed Position through these (so the controller stays plugin-agnostic
+// while Magic Move keeps its singleton bridge + sGuidePosition).
+- (KKOSCGuideBridge *)positionGuideBridge {
+  return MagicMoveGuideBridge();
+}
+
+- (CGPoint)positionGuideObjectValue {
+  return sGuidePosition;
 }
 
 // Min dimension of the clip's frame in canvas space (object [0,1]^2 corners
@@ -357,7 +341,7 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   if (activePart == kOSCAnchorPart)
     return @"Anchor";
   if (activePart == kOSCPositionPart)
-    return self.hoverTargetIsAnchor ? @"Path" : @"Position";
+    return self.positionController.hoverTargetIsAnchor ? @"Path" : @"Position";
   if (activePart == kOSCRotationPart) {
     switch (self.rotationOSC.activeAxis) {
     case 0:
