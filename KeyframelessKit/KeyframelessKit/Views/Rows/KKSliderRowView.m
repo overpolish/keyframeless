@@ -57,6 +57,12 @@ static const CGFloat kSliderToFieldGap = 6.0;
   _field.delegate = self;
   _field.target = self;
   _field.action = @selector(_fieldChanged:);
+  // Scrub the whole range in ~200 plain steps; Shift/Option adjust at drag
+  // time.
+  double span = maxValue - minValue;
+  _field.scrubStep = span > 0 ? span / 200.0 : 1.0;
+  _field.onScrubBegin = onDragBegin;
+  _field.onScrubEnd = onDragEnd;
   _field.translatesAutoresizingMaskIntoConstraints = NO;
   [self.controlContainer addSubview:_field];
 

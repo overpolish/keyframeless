@@ -22,6 +22,7 @@ static const CGFloat kCompLabelGap = 2.0;
   void (^_onValue)(NSArray<NSNumber *> *);
   void (^_onDragBegin)(void);
   void (^_onDragEnd)(void);
+  BOOL _scrubbing; // a field scrub brackets the whole drag, not each tick
 }
 
 - (instancetype)initWithTitle:(NSString *)title
@@ -55,6 +56,20 @@ static const CGFloat kCompLabelGap = 2.0;
     field.delegate = self;
     field.target = self;
     field.action = @selector(_fieldChanged:);
+    field.scrubStep = 1.0; // point components are in pixels
+    __weak typeof(self) weakSelf = self;
+    field.onScrubBegin = ^{
+      __strong typeof(weakSelf) s = weakSelf;
+      s->_scrubbing = YES;
+      if (s->_onDragBegin)
+        s->_onDragBegin();
+    };
+    field.onScrubEnd = ^{
+      __strong typeof(weakSelf) s = weakSelf;
+      s->_scrubbing = NO;
+      if (s->_onDragEnd)
+        s->_onDragEnd();
+    };
     field.translatesAutoresizingMaskIntoConstraints = NO;
     [self.controlContainer addSubview:field];
     [fields addObject:field];
@@ -108,14 +123,17 @@ static const CGFloat kCompLabelGap = 2.0;
 - (void)_fieldChanged:(KKValueTextField *)sender {
   if (!_onValue)
     return;
-  if (_onDragBegin)
+  // A scrub brackets the whole drag via onScrubBegin/End; only a typed commit
+  // needs its own one-shot drag group here.
+  BOOL bracket = !_scrubbing;
+  if (bracket && _onDragBegin)
     _onDragBegin();
   NSMutableArray<NSNumber *> *vals =
       [NSMutableArray arrayWithCapacity:_fields.count];
   for (KKValueTextField *f in _fields)
     [vals addObject:@(f.doubleValue)];
   _onValue(vals);
-  if (_onDragEnd)
+  if (bracket && _onDragEnd)
     _onDragEnd();
 }
 

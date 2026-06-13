@@ -142,7 +142,9 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   BOOL _smoothOn;
   NSButton *_linkBtn; // aspect-link toggle, left of the value fields
   BOOL _linkOn;
-  BOOL _integerValued;   // fields display + round to whole numbers
+  BOOL _integerValued;            // fields display + round to whole numbers
+  BOOL _componentsScaleWithMedia; // display = norm x media px
+                                  // (Position/Anchor/Crop)
   KKSeedView *_seedView; // seed control (value + re-roll), seedField lanes only
   BOOL _seedField;
   KKPillToggleRowView *_choicePill;    // grouped radio pill, choiceLabels only
@@ -295,6 +297,39 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return s > 0 ? s : 1.0;
 }
 
+// Scrub step matching the component's displayed precision: whole numbers for
+// pixel-scaled (crop), integer, and angle fields; 0.01 for raw 2-decimal
+// fields (scale, radius, 0..1 factors). Shift/Option scale this at drag time.
+- (double)_scrubStepForComponent:(NSInteger)i {
+  if (_valueType == KKLaneValueTypeAngle)
+    return 1.0;
+  // Pixel-displayed (media-scaled), integer, and crop fields step by whole
+  // units. Key off componentsScaleWithMedia rather than the runtime scale:
+  // the scale resolves lazily (0 until the mini-viewer feed arrives), so at
+  // construction _scaleAt: would read 1.0 and mis-pick the 0.01 raw step -
+  // making a Position/Anchor scrub move 0.01px per step (invisible).
+  BOOL intFmt = _componentsScaleWithMedia || _integerValued;
+  return intFmt ? 1.0 : 0.01;
+}
+
+// Wire a freshly created value field for scrubbing: per-component step plus
+// drag-undo bracketing through the row's onDragBegin/onDragEnd.
+- (void)_configureScrubForField:(NSTextField *)fld component:(NSInteger)i {
+  if (![fld isKindOfClass:[KKValueTextField class]])
+    return;
+  KKValueTextField *vf = (KKValueTextField *)fld;
+  vf.scrubStep = [self _scrubStepForComponent:i];
+  __weak typeof(self) weak = self;
+  vf.onScrubBegin = ^{
+    if (weak.onDragBegin)
+      weak.onDragBegin();
+  };
+  vf.onScrubEnd = ^{
+    if (weak.onDragEnd)
+      weak.onDragEnd();
+  };
+}
+
 - (BOOL)isFlipped {
   return YES;
 }
@@ -366,6 +401,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   _cmax = lane.componentMax ?: @[];
   _cunits = lane.componentUnits ?: @[];
   _integerValued = lane.integerValued;
+  _componentsScaleWithMedia = lane.componentsScaleWithMedia;
   _seedField = lane.seedField;
   _choiceLabels = [lane.choiceLabels copy];
   _labelColumnW = labelColumnWidth;
@@ -591,6 +627,19 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
       _gradientAngleField.target = self;
       _gradientAngleField.action = @selector(_gradientAngleFieldCommitted:);
       _gradientAngleField.delegate = (id<NSTextFieldDelegate>)self;
+      if ([_gradientAngleField isKindOfClass:[KKValueTextField class]]) {
+        KKValueTextField *gf = (KKValueTextField *)_gradientAngleField;
+        gf.scrubStep = 1.0; // degrees
+        __weak typeof(self) weak = self;
+        gf.onScrubBegin = ^{
+          if (weak.onDragBegin)
+            weak.onDragBegin();
+        };
+        gf.onScrubEnd = ^{
+          if (weak.onDragEnd)
+            weak.onDragEnd();
+        };
+      }
       _gradientAngleContainer =
           [NSStackView stackViewWithViews:@[ _gradientAngleKnob, angleCell ]];
       ((NSStackView *)_gradientAngleContainer).spacing = KKSpacingSM;
@@ -676,6 +725,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
       fld.target = self;
       fld.action = @selector(_fieldCommitted:);
       fld.delegate = (id<NSTextFieldDelegate>)self; // live-typing for a guide
+      [self _configureScrubForField:fld component:i];
       [fs addObject:fld];
       if (_valueType == KKLaneValueTypeAngle) {
         // Mini circular knob ahead of each field. Range -180..180 so one
@@ -769,6 +819,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     fld.target = self;
     fld.action = @selector(_fieldCommitted:);
     fld.delegate = (id<NSTextFieldDelegate>)self;
+    [self _configureScrubForField:fld component:0];
     _fields = @[ fld ];
     _slider = [KKSliderView styledSlider];
     _slider.translatesAutoresizingMaskIntoConstraints = NO;

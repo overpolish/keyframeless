@@ -53,6 +53,7 @@ Snapping: a small guide line appears when a dragged keypose comes within a few p
 
 ### Inside popovers
 
+- Click and drag a number field to scrub its value (right/up increases, left/down decreases). Shift drags in larger steps, Option in finer ones; the pointer hides and holds its spot for the drag.
 - Return commits the number field you're typing in.
 - Tab moves to the next number field (Shift-Tab to the previous one), like a web form.
 - Esc cancels the in-progress edit and closes the popover.
