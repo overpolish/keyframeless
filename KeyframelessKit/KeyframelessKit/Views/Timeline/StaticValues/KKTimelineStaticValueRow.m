@@ -145,6 +145,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   BOOL _integerValued;            // fields display + round to whole numbers
   BOOL _componentsScaleWithMedia; // display = norm x media px
                                   // (Position/Anchor/Crop)
+  double _laneScrubStep;          // lane's explicit scrub increment (0 = auto)
   KKSeedView *_seedView; // seed control (value + re-roll), seedField lanes only
   BOOL _seedField;
   KKPillToggleRowView *_choicePill;    // grouped radio pill, choiceLabels only
@@ -301,6 +302,8 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 // pixel-scaled (crop), integer, and angle fields; 0.01 for raw 2-decimal
 // fields (scale, radius, 0..1 factors). Shift/Option scale this at drag time.
 - (double)_scrubStepForComponent:(NSInteger)i {
+  if (_laneScrubStep > 0)
+    return _laneScrubStep; // plugin-specified increment wins over the auto rule
   if (_valueType == KKLaneValueTypeAngle)
     return 1.0;
   // Pixel-displayed (media-scaled), integer, and crop fields step by whole
@@ -402,6 +405,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   _cunits = lane.componentUnits ?: @[];
   _integerValued = lane.integerValued;
   _componentsScaleWithMedia = lane.componentsScaleWithMedia;
+  _laneScrubStep = lane.scrubStep;
   _seedField = lane.seedField;
   _choiceLabels = [lane.choiceLabels copy];
   _labelColumnW = labelColumnWidth;

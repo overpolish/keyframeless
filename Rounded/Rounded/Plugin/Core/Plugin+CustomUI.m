@@ -70,6 +70,9 @@ static NSString *_RoundedAILaneSchemaText(void) {
   radius.componentMin = @[ @0.0 ];
   radius.componentMax = @[ @100.0 ];
   radius.componentUnits = @[ @"%" ];
+  // 0..100% shown with decimals: scrub by 1%/step, not the 0.01 the auto rule
+  // would pick for a 2-decimal field.
+  radius.scrubStep = 1.0;
   // Template default == the product default constant (seeded when the
   // property has no lane yet; keeps the constants editor in sync with the
   // render fallback).

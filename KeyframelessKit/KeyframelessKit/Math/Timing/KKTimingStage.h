@@ -204,6 +204,14 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// `aspectLinkable`. Default NO.
 @property(nonatomic) BOOL integerValued;
 
+/// Plain (no-modifier) increment for one drag-step when scrubbing this lane's
+/// value fields (Shift/Option then scale it x10 / x0.1). Build-time metadata.
+/// Default 0, which means "auto": the row picks 1.0 for whole-number fields
+/// (integer / media-pixel) and 0.01 for raw 2-decimal fields. Set this when the
+/// auto guess is wrong - e.g. Glow's Radius is a raw 0..500 px value shown with
+/// decimals, so it wants 1.0 rather than the 0.01 the auto rule would choose.
+@property(nonatomic) double scrubStep;
+
 /// When YES the value-popover scales this lane's components by the media size
 /// for DISPLAY only: even-index components (W/X-like) by media width,
 /// odd-index (H/Y-like) by media height, with the inverse applied to typed

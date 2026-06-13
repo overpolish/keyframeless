@@ -265,6 +265,7 @@
   // rebuild a display lane and must carry it, or a normalised 0..1 spatial lane
   // (Position / Crop / Anchor) shows raw fractions instead of pixels.
   _componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
+  _scrubStep = tmpl.scrubStep;
 }
 
 - (void)insertKeypose:(KKKeyPose *)keypose {
@@ -306,6 +307,7 @@
   c.aspectLinkable = _aspectLinkable;
   c.aspectLinked = _aspectLinked;
   c.integerValued = _integerValued;
+  c.scrubStep = _scrubStep;
   c.componentsScaleWithMedia = _componentsScaleWithMedia;
   c.categoryKey = [_categoryKey copy];
   c.categorySymbol = [_categorySymbol copy];
@@ -346,6 +348,8 @@
     d[@"aspect_linked"] = @YES;
   if (_integerValued)
     d[@"integer_valued"] = @YES;
+  if (_scrubStep > 0)
+    d[@"scrub_step"] = @(_scrubStep);
   if (_componentsScaleWithMedia)
     d[@"components_scale_with_media"] = @YES;
   if (_categoryKey)
@@ -394,6 +398,7 @@
   l.aspectLinkable = [d[@"aspect_linkable"] boolValue];
   l.aspectLinked = [d[@"aspect_linked"] boolValue];
   l.integerValued = [d[@"integer_valued"] boolValue];
+  l.scrubStep = [d[@"scrub_step"] doubleValue];
   l.componentsScaleWithMedia = [d[@"components_scale_with_media"] boolValue];
   l.categoryKey = d[@"category_key"];
   l.categorySymbol = d[@"category_symbol"];
