@@ -14,9 +14,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// click-and-drag sweep; onDragBegin/End bracket the whole gesture so the
 /// consumer coalesces it to one undo entry. Plugin-agnostic and reusable
 /// (e.g. a Canvas layer list with many lanes).
+@class KKPillToggleRowView;
+
 @interface KKPillBar : NSView
 
 - (instancetype)initWithLabels:(NSArray<NSString *> *)labels;
+/// Wrap an already-configured pill row (e.g. the category nav pill from
+/// KKMakeLaneCategoryPill, with its own onToggled) in the scroll + edge-fade.
+/// The row keeps its callbacks; the bar only adds overflow scrolling.
+- (instancetype)initWithPillRow:(KKPillToggleRowView *)row;
 
 @property(nonatomic, copy) NSArray<NSNumber *> *states;
 @property(nonatomic, copy, nullable) void (^onToggled)

@@ -433,6 +433,12 @@ MagicMoveShapingGuideSteps(KKJoyrideController *guide,
       }
       return v;
     };
+    // The Position handle's hover cursor (same as the real OSC's
+    // _setViewerPointCursorForLabel:): the point-move cursor, shown through the
+    // pass-through overlay while the guide panel is frontmost.
+    s.cursorForScreenPoint = ^NSCursor *(NSPoint pt) {
+      return KKPointMoveCursor();
+    };
     s.requireTargetHit = YES;
     return s;
   };
@@ -514,6 +520,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   position.componentMin = @[];
   position.componentMax = @[];
   position.componentUnits = @[ @"px", @"px" ];
+  position.componentsScaleWithMedia = YES; // stored 0..1, displayed as pixels
   position.componentLabels = @[ @"X", @"Y" ];
   // 2D spatial path: keyposes can be smooth (curved). Lights the per-keypose
   // corner/smooth toggle in the value popover and curves the motion path.
@@ -574,6 +581,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   anchor.componentMin = @[];
   anchor.componentMax = @[];
   anchor.componentUnits = @[ @"px", @"px" ];
+  anchor.componentsScaleWithMedia = YES; // stored 0..1, displayed as pixels
   anchor.componentLabels = @[ @"X", @"Y" ];
   [anchor insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
 
@@ -911,14 +919,16 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
                                        bundleForClass:[MagicMovePlugin class]]
                       subdirectory:@"AIKnowledge"];
     // Shared on-screen-control docs live in the kit framework (flattened to its
-    // Resources root). Magic Move uses the rotation gizmo + the visibility
-    // system, so expose just those two topics.
+    // Resources root). Magic Move uses the Position handle / motion path, the
+    // rotation gizmo, and the visibility system, so expose those topics.
     [KKAIKnowledge
         registerBundleDocsWithName:@"On-Screen Controls"
                             bundle:[NSBundle
                                        bundleForClass:[KKOnScreenControl class]]
                       subdirectory:nil
-                      onlyTopicIDs:@[ @"visibility", @"rotation" ]];
+                      onlyTopicIDs:@[
+                        @"visibility", @"rotation", @"position"
+                      ]];
   });
 
   NSString *productContext = MMLoc(

@@ -36,6 +36,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// `onStopsChanged` writes coalesce into a single host undo entry.
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onDragEnd)(void);
+/// Fires YES when a stop's shared colour panel is opened and NO when it closes.
+/// A bar hosted in a transient popover uses this to suspend the popover's
+/// outside-click dismissal while the panel (a separate window) is up.
+@property(nonatomic, copy, nullable) void (^onColorEditingChanged)(BOOL editing)
+    ;
 - (void)setColor:(NSColor *)color forStopAtIndex:(NSInteger)index;
 - (void)setPosition:(CGFloat)position forStopAtIndex:(NSInteger)index;
 - (void)setMidpoint:(CGFloat)midpoint forStopAtIndex:(NSInteger)index;

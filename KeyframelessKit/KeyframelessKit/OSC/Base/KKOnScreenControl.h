@@ -11,6 +11,7 @@
 #import <simd/simd.h>
 
 @class FxImageTile;
+@class NSCursor;
 @protocol PROAPIAccessing;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -135,6 +136,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// the "peek and use" modifier, so the revealed controls read as fully usable,
 /// not as dimmed re-show targets. Use in place of a literal 0.3 ghost alpha.
 - (float)kkRevealGhostAlpha;
+
+/// The Opt-hover visibility cursor for `label`, or nil if none applies. Returns
+/// the `eye.slash` (hide) cursor when Opt is held over a visible, toggleable
+/// element, or `eye` (show) over a revealed ghost - but nil in peek-and-use
+/// mode (master off), where Opt-click doesn't toggle. Call from a hit-test when
+/// the pointer is over `label`'s handle, e.g. `[oscAPI setCursor:[self
+/// kkVisibilityCursorForLabel:lbl] ?: KKPointMoveCursor()]`.
+- (nullable NSCursor *)kkVisibilityCursorForLabel:(NSString *)label;
 
 /// Call at the top of mouseMoved:. Tracks the Option-reveal state (updates
 /// optRevealActive and requests a redraw on change) and resets the per-press

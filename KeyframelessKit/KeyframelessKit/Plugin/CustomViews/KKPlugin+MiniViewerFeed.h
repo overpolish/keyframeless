@@ -33,6 +33,7 @@ NS_ASSUME_NONNULL_BEGIN
                          boundaryReqFracs:
                              (nullable NSArray<NSNumber *> *)boundaryReqFracs
                           multiSlotActive:(BOOL)multiSlotActive
+                        changesOutputSize:(BOOL)changesOutputSize
                                defaultTag:(double)defaultTag;
 
 @end

@@ -34,7 +34,10 @@ NSString *MagicMoveMiniViewerRequestPathForUUID(NSString *uuid) {
 
 - (instancetype)init {
   if ((self = [super init])) {
-    _snapEngine = [[KKSnapEngine alloc] init];
+    _positionMini =
+        [[KKPositionMiniController alloc] initWithRenderer:self
+                                                 laneLabel:@"Position"
+                                                 pathLabel:@"Path"];
   }
   return self;
 }
@@ -266,10 +269,7 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
 
 - (CGPoint)_handlePointForContentRect:(CGRect)cr
                              position:(NSArray<NSNumber *> *)pos {
-  double px = pos.count > 0 ? pos[0].doubleValue : 0.5;
-  double py = pos.count > 1 ? pos[1].doubleValue : 0.5;
-  return CGPointMake(CGRectGetMinX(cr) + px * cr.size.width,
-                     CGRectGetMinY(cr) + py * cr.size.height);
+  return [self handlePointForContentRect:cr position:pos];
 }
 
 - (NSString *)rotationLabel {

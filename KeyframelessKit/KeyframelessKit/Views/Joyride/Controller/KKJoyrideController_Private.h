@@ -29,6 +29,7 @@ NS_ASSUME_NONNULL_BEGIN
   id _localMoveMonitor;
   BOOL _active;
   BOOL _syntheticDragActive;
+  BOOL _wasInsideSpotlight;
   NSMutableArray *_focusObservers;
   NSArray<NSWindow *> *_hostPassthroughWindows;
 }

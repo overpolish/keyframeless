@@ -33,6 +33,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// fire onTimelineMutated.
 - (void)applyTimeline:(KKTimeline *)timeline;
 
+/// Labels of opted-in lanes to hide (lane-filter bar). View state only; the
+/// whole view re-derives from -_animatableLanes so it redraws with those rows
+/// removed. Pass an empty/nil set to show all.
+- (void)applyHiddenLaneLabels:(nullable NSSet<NSString *> *)labels;
+
 @property(nonatomic) double clipDurationSeconds;
 @property(nonatomic) double frameDurationSeconds;
 @property(nonatomic) double playheadFraction;
@@ -103,12 +108,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// `previewFraction` is the clicked KP's time (mini-viewer evaluates the
 /// frame there). The host wires this to KKTimelineLanesView's existing
 /// boundary-popover plumbing - same coalesced drag chain Basic uses.
-@property(nonatomic, copy, nullable) void (^onValuePopover)
-    (NSView *anchorView, NSArray<KKLane *> *displayLanes,
-     double previewFraction, NSArray<NSString *> *excludedLabels,
-     void (^onValue)(NSString *label, NSArray<NSNumber *> *values),
-     void (^onAnimate)(NSString *label), void (^onRemove)(NSString *label),
-     void (^onValueDragBegin)(void), void (^onValueDragEnd)(void));
+@property(nonatomic, copy, nullable) void (^onValuePopover)(
+    NSView *anchorView, NSArray<KKLane *> *displayLanes, double previewFraction,
+    NSArray<NSString *> *excludedLabels, NSString *_Nullable primaryCategory,
+    void (^onValue)(NSString *label, NSArray<NSNumber *> *values),
+    void (^onAnimate)(NSString *label), void (^onRemove)(NSString *label),
+    void (^onValueDragBegin)(void), void (^onValueDragEnd)(void));
 
 /// Asked by the value popover when removing the last keypose at a time leaves
 /// nothing left to edit there - the host closes the open popover.
@@ -178,6 +183,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Flip the global aspect lock on the lane named `label`. Routed from the value
 /// popover's link toggle.
 - (void)writeAspectLinkedForLabel:(NSString *)label isOn:(BOOL)on;
+/// Set the radial/linear type on every keypose of the composite-gradient lane
+/// `label`. Routed from the value popover's type pill (keypose editor).
+- (void)writeGradientTypeForLabel:(NSString *)label type:(NSInteger)type;
 
 @end
 

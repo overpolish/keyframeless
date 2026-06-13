@@ -11,6 +11,7 @@
 
 @class KKTimelineBasicView;
 @class KKTimelineAdvancedView;
+@class KKLaneFilterBar;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -102,6 +103,14 @@ NS_ASSUME_NONNULL_BEGIN
   // Cached live clip duration (seconds) so the keypose/curve popover headers
   // can show times. Forwarded from setClipDurationSeconds:.
   double _clipDurationSeconds;
+  // Last category tab the user picked, so reopening the constants popover (or,
+  // in Basic, a keypose/boundary popover) returns to that tab. Not used by the
+  // Advanced keypose popover, which seeds from the clicked keypose's category.
+  NSString *_rememberedCategory;
+  // Lane-visibility filter bar above the Advanced timeline (hidden when fewer
+  // than two opted-in lanes, or in Basic). Pushes its hidden set to the
+  // Advanced graph; state is ephemeral (not serialized).
+  KKLaneFilterBar *_laneFilterBar;
 }
 
 // Model + refresh helpers implemented in the primary @implementation; the
@@ -140,6 +149,8 @@ NS_ASSUME_NONNULL_BEGIN
                               displayLanes:(NSArray<KKLane *> *)lanes
                                   fraction:(double)fraction
                             excludedLabels:(NSArray<NSString *> *)excludedLabels
+                           initialCategory:(nullable NSString *)initialCategory
+                         remembersCategory:(BOOL)remembersCategory
                                    onValue:
                                        (void (^)(NSString *label,
                                                  NSArray<NSNumber *> *values))
@@ -293,6 +304,12 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 @property(nonatomic, copy, nullable) void (^onNavigate)(NSInteger dir);
 @property(nonatomic, copy, nullable) void (^onModeChanged)
     (KKMiniViewerRenderMode mode);
+// Category pill pre-selection: the keypose popover seeds this with the clicked
+// keypose's category so it opens on the right tab; the constants popover seeds
+// it with the remembered last category and updates it via onCategoryChanged.
+@property(nonatomic, copy, nullable) NSString *initialCategory;
+@property(nonatomic, copy, nullable) void (^onCategoryChanged)
+    (NSString *category);
 @end
 
 @interface KKTimelineLanesView (StaticValuesPresent)

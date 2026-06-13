@@ -11,6 +11,7 @@
 @protocol PROAPIAccessing;
 @class KKPlayButton;
 @class KKPillToggleRowView;
+@class KKReorderListView;
 @class KKResetZoomButton;
 @class KKLoopButton;
 @class KKConstantsButton;
@@ -103,6 +104,16 @@ NS_ASSUME_NONNULL_BEGIN
   NSButton *_paramOrderButton;
   NSPopover *_paramOrderPopover;
   BOOL _showsParamOrderRow;
+  // Param-order popover category-pill state (set only when the params split
+  // into >1 category): the reorder list shows one category at a time, dragging
+  // reorders within it, and the sub-order is merged back into the full order.
+  NSView *_paramOrderContent;
+  NSView *_paramOrderListContainer;
+  KKReorderListView *_paramOrderList;
+  NSArray<NSString *> *_paramOrderLabels; // current full order
+  NSDictionary<NSString *, NSString *> *_paramOrderCatByLabel;
+  NSArray<NSString *> *_paramOrderCategoryKeys;
+  NSString *_paramOrderSelectedCategory;
   KKParameterRowView *_presetsRow;
   NSButton *_presetsButton;
   id _presetsPopover;

@@ -178,6 +178,84 @@
     }
   }
 
+  // Ring OSC (e.g. Glow's radius): the in-viewer KKRingOSC, rendered through
+  // the SAME shader (_ringPipeline / KKRingOSCFragment) - a single-pass
+  // elliptical fill+outline. No tessellation seams, no fill/outline bleed.
+  if (_ringPipeline && del &&
+      [del respondsToSelector:
+               @selector(miniViewer:ringCenter:radiusX:radiusY:contentRect:)]) {
+    CGPoint rc = CGPointZero;
+    CGFloat rrx = 0, rry = 0;
+    CGRect ringCR = [self contentRectInViewPoints];
+    if ([del miniViewer:self
+             ringCenter:&rc
+                radiusX:&rrx
+                radiusY:&rry
+            contentRect:ringCR] &&
+        rrx > 0.5 && rry > 0.5) {
+      // Viewer KKRingOSC idle / hover / active, VERBATIM: same colors AND the
+      // same fillWidth / outlineWidth (2.0/1.0, 2.5/1.5). The viewer's widths
+      // are canvas pixels; the mini shows the source shrunk by crMin/srcMin
+      // (preview pt over source px), so scaling the viewer widths by that
+      // factor gives the identical stroke-to-ring proportion the viewer renders
+      // (it normalizes fillWidth/outerRadiusPixels - we match that scale, not a
+      // guessed point size).
+      NSInteger emphasis =
+          [del respondsToSelector:@selector(miniViewerRingEmphasis:)]
+              ? [del miniViewerRingEmphasis:self]
+              : 0;
+      simd_float4 fillColor, strokeColor;
+      CGFloat viewerFillPx, viewerOutlinePx;
+      if (emphasis >= 2) { // active
+        fillColor = (simd_float4){1.0f, 1.0f, 1.0f, 1.0f};
+        strokeColor = (simd_float4){0.0f, 0.0f, 0.0f, 1.0f};
+        viewerFillPx = 2.5;
+        viewerOutlinePx = 1.5;
+      } else if (emphasis >= 1) { // hover
+        fillColor = (simd_float4){0xD0 / 255.0f, 0xCA / 255.0f, 0xCD / 255.0f,
+                                  0xB2 / 255.0f};
+        strokeColor = (simd_float4){0x09 / 255.0f, 0x07 / 255.0f, 0x0A / 255.0f,
+                                    0xAD / 255.0f};
+        viewerFillPx = 2.5;
+        viewerOutlinePx = 1.5;
+      } else { // idle
+        fillColor = (simd_float4){0xCE / 255.0f, 0xCB / 255.0f, 0xCE / 255.0f,
+                                  0xB1 / 255.0f};
+        strokeColor = (simd_float4){0x1B / 255.0f, 0x18 / 255.0f, 0x1D / 255.0f,
+                                    0x9F / 255.0f};
+        viewerFillPx = 2.0;
+        viewerOutlinePx = 1.0;
+      }
+      // Dim to a ghost when the ring is only shown because of an Opt-hold
+      // reveal of a hidden ring (matches the point/box/rotation ghost handles).
+      CGFloat ringGhostAlpha =
+          [del respondsToSelector:@selector(miniViewerRingGhostAlpha:)]
+              ? [del miniViewerRingGhostAlpha:self]
+              : 1.0;
+      fillColor.w *= (float)ringGhostAlpha;
+      strokeColor.w *= (float)ringGhostAlpha;
+
+      CGSize src = [self sourceMediaSize];
+      CGFloat srcMin = MIN(src.width, src.height);
+      CGFloat crMin = MIN(ringCR.size.width, ringCR.size.height);
+      CGFloat srcScale = (srcMin > 0.5) ? crMin / srcMin : [self _canvasScale];
+      // The viewer thickens BOTH fill + outline on hover/active, but at mini
+      // scale its px deltas (x srcScale) are sub-perceptible. Add a flat point
+      // boost so the hover/active outline visibly grows like the viewer. Fill
+      // is also nudged +0.5pt in every state, plus a touch more (+0.1) at idle.
+      CGFloat outlineBoostPt = (emphasis >= 1) ? 0.35 : 0.0;
+      CGFloat fillBoostPt = (emphasis == 0) ? 0.6 : 0.5;
+      [self _encodeRingOSCAt:rc
+                   radiusXPt:rrx
+                   radiusYPt:rry
+                   fillColor:fillColor
+                 strokeColor:strokeColor
+                 fillWidthPt:viewerFillPx * srcScale + fillBoostPt
+              outlineWidthPt:viewerOutlinePx * srcScale + outlineBoostPt
+                     encoder:enc];
+    }
+  }
+
   // Motion path (Magic Move): red trajectory line + tangent connectors under
   // the dots, then anchor + handle dots. Drawn beneath the position handle.
   if (del &&
@@ -295,7 +373,10 @@
         isActive = [(KKMiniViewerRenderer *)del pointHandleIsActive];
         ghostAlpha = [(KKMiniViewerRenderer *)del pointHandleGhostAlpha];
       }
-      if (style == KKMiniHandleStyleArc) {
+      if (style == KKMiniHandleStyleNone) {
+        // The renderer exposes a point-handle anchor (for guides / driven
+        // drag) but paints its own control - draw no default glyph here.
+      } else if (style == KKMiniHandleStyleArc) {
         [self _encodeArcHandleGlyphAt:handleCenterPts
                              isActive:isActive
                            ghostAlpha:ghostAlpha
@@ -327,6 +408,27 @@
                       ghostAlpha:ghostAlpha
                        sizeScale:pointSizeScale
                          encoder:enc];
+    }
+
+    // Secondary Position arc handle (a plugin whose main point handle is
+    // something else - e.g. Glow's radius ring - draws its Position here with
+    // the same arc glyph the viewer uses).
+    CGPoint posCenterPts;
+    if ([del respondsToSelector:
+                 @selector(miniViewer:positionHandleCenter:contentRect:)] &&
+        [del miniViewer:self
+            positionHandleCenter:&posCenterPts
+                     contentRect:cr]) {
+      BOOL posActive = NO;
+      CGFloat posGhost = 1.0;
+      if ([del isKindOfClass:[KKMiniViewerRenderer class]]) {
+        posActive = [(KKMiniViewerRenderer *)del positionHandleIsActive];
+        posGhost = [(KKMiniViewerRenderer *)del positionHandleGhostAlpha];
+      }
+      [self _encodeArcHandleGlyphAt:posCenterPts
+                           isActive:posActive
+                         ghostAlpha:posGhost
+                            encoder:enc];
     }
   }
 

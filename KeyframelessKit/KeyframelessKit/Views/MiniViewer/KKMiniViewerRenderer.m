@@ -6,9 +6,28 @@
 #import "KKMiniViewerRenderer.h"
 
 #import "KKMiniViewerCropEditor.h"
+#import "KKResizeCursor.h"
 #import <KeyframelessKit/KKRotationOSCMath.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimingStage.h>
+
+// Map a KKMiniViewerCropEditor handle index (0-7: TL, TC, TR, RC, BR, BC, BL,
+// LC) to a resize-cursor kind. Mirrors the crop box's corner/edge layout.
+static KKResizeCursorKind KKMiniCropResizeKind(NSInteger cropPtIndex) {
+  switch (cropPtIndex) {
+  case 0: // TopLeft
+  case 4: // BottomRight
+    return KKResizeCursorDiagonalNWSE;
+  case 2: // TopRight
+  case 6: // BottomLeft
+    return KKResizeCursorDiagonalNESW;
+  case 1: // TopCenter
+  case 5: // BottomCenter
+    return KKResizeCursorVertical;
+  default: // RightCenter (3), LeftCenter (7)
+    return KKResizeCursorHorizontal;
+  }
+}
 
 // 28pt at the 230pt mini-viewer baseline (see project_miniviewer_osc_port).
 // Matches the viewer arc:ring outer-extent ratio (~9:34 → 9pt mini arc →
@@ -75,6 +94,9 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 }
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
   return @[ @0 ];
+}
+- (KKLane *)templateLaneForLabel:(NSString *)label {
+  return nil;
 }
 
 #pragma mark - Subclass effect + point handle (defaults)
@@ -470,6 +492,14 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                             contentRect:cr];
 }
 
+- (CGPoint)handlePointForContentRect:(CGRect)cr
+                            position:(NSArray<NSNumber *> *)pos {
+  double px = pos.count > 0 ? pos[0].doubleValue : 0.5;
+  double py = pos.count > 1 ? pos[1].doubleValue : 0.5;
+  return CGPointMake(CGRectGetMinX(cr) + px * cr.size.width,
+                     CGRectGetMinY(cr) + py * cr.size.height);
+}
+
 - (KKTimeline *)_timelineBySettingValues:(NSArray<NSNumber *> *)values
                                 forLabel:(NSString *)label {
   if (self.boundaryEditing) {
@@ -513,10 +543,14 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     }
   }
   if (!replaced) {
-    KKLane *lane = [KKLane laneWithLabel:label];
+    // Build from the plugin template when available so the new lane keeps its
+    // metadata (aspect-link, units, bounds) - a bare lane drops those, which on
+    // a fresh instance clears e.g. Radius/Scale aspect-lock on the first drag.
+    KKLane *tmpl = [self templateLaneForLabel:label];
+    KKLane *lane = tmpl ? [tmpl copy] : [KKLane laneWithLabel:label];
     lane.valueType = (KKLaneValueType)[self valueTypeForLabel:label];
     lane.enabled = NO; // a value edit must not opt the property in
-    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:values]];
+    lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
     [lanes addObject:lane];
   }
   updated.lanes = lanes;
@@ -589,6 +623,14 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return 1.0; // no anchor square by default; MagicMove overrides
 }
 
+- (CGFloat)positionHandleGhostAlpha {
+  return 1.0; // no secondary Position handle by default; Glow overrides
+}
+
+- (BOOL)positionHandleIsActive {
+  return NO; // no secondary Position handle by default; Glow overrides
+}
+
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     extraHandleCentersForContentRect:(CGRect)cr {
   if (![self _cropActiveForContentRect:cr])
@@ -657,6 +699,16 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   if ([self _peekActive])
     return 1.0;
   return [self _userHiddenLabel:label] ? 0.3 : 1.0;
+}
+
+- (NSCursor *)kkVisibilityCursorForLabel:(NSString *)label {
+  if (!label || !self.revealHidden || self.handlesHidden ||
+      !self.onHandleVisibilityToggled)
+    return nil;
+  // Opt held + master on (not peek). eye over a revealed ghost (Opt-click
+  // shows), eye.slash over a visible handle (Opt-click hides).
+  return ([self ghostAlphaForLabel:label] < 1.0) ? KKVisibilityShowCursor()
+                                                 : KKVisibilityHideCursor();
 }
 
 - (CGFloat)motionPathGhostAlpha {
@@ -733,6 +785,53 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
          [_cropEditor partAtPoint:p
                            values:[self valuesForLabel:self.cropLabel]
                       contentRect:cr] >= 0;
+}
+
+// Hover hit-test for the cursor, same precedence as -handleHitAtPoint:: the
+// point handle shows the move cursor, a rotation ring the quadrant rotate
+// cursor, a crop handle the matching resize cursor. Subclasses add their own
+// handle types (scale, anchor, path) and fall back to super. rotationHitTest
+// runs on every hover via -handleHitAtPoint: already, so calling it here adds
+// no new side effect.
+- (NSCursor *)miniViewer:(KKMiniViewerView *)canvas
+           cursorAtPoint:(CGPoint)p
+             contentRect:(CGRect)cr {
+  if (CGRectIsEmpty(cr))
+    return nil;
+  self.canvas = canvas;
+  BOOL pointFirst = [self pointHandleBeatsRotation];
+  if (pointFirst && [self _pointActiveForContentRect:cr] &&
+      [self pointHandleHitAtPoint:p contentRect:cr])
+    return [self kkVisibilityCursorForLabel:self.pointLabel]
+               ?: KKPointMoveCursor();
+  if ([self _rotationActiveForContentRect:cr] &&
+      [self rotationHitTestAtPoint:p contentRect:cr]) {
+    // rotationHitTestAtPoint set _rotActiveAxis (0=X, 1=Y, 2=Z); the cursor
+    // encodes that axis, not the hover position.
+    NSString *axis = (_rotActiveAxis == 0)   ? @"X"
+                     : (_rotActiveAxis == 1) ? @"Y"
+                                             : @"Z";
+    NSString *ringKey =
+        [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
+    CGPoint rc = [self rotationCenterForContentRect:cr];
+    return [self kkVisibilityCursorForLabel:ringKey]
+               ?: KKRotationAxisCursor(_rotActiveAxis,
+                                       atan2(p.y - rc.y, p.x - rc.x));
+  }
+  if (!pointFirst && [self _pointActiveForContentRect:cr] &&
+      [self pointHandleHitAtPoint:p contentRect:cr])
+    return [self kkVisibilityCursorForLabel:self.pointLabel]
+               ?: KKPointMoveCursor();
+  if ([self _cropActiveForContentRect:cr]) {
+    NSInteger part =
+        [_cropEditor partAtPoint:p
+                          values:[self valuesForLabel:self.cropLabel]
+                     contentRect:cr];
+    if (part >= 1)
+      return [self kkVisibilityCursorForLabel:self.cropLabel]
+                 ?: KKResizeCursorOfKind(KKMiniCropResizeKind(part - 1));
+  }
+  return nil;
 }
 
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas

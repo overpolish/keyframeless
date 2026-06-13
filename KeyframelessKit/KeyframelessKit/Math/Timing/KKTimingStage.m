@@ -234,6 +234,13 @@
 
 @implementation KKLane
 
+- (instancetype)init {
+  self = [super init];
+  if (self)
+    _animatable = YES; // default: every lane can be animated
+  return self;
+}
+
 + (instancetype)laneWithLabel:(NSString *)label {
   KKLane *l = [[KKLane alloc] init];
   l.laneID = [NSUUID UUID];
@@ -241,6 +248,23 @@
   l.enabled = YES;
   l.keyposes = @[];
   return l;
+}
+
+- (void)kkApplyPickerMetadataFrom:(KKLane *)tmpl {
+  if (!tmpl)
+    return;
+  _categoryKey = [tmpl.categoryKey copy];
+  _categorySymbol = [tmpl.categorySymbol copy];
+  _animatable = tmpl.animatable;
+  _seedField = tmpl.seedField;
+  _choiceLabels = [tmpl.choiceLabels copy];
+  _visibleWhenLabel = [tmpl.visibleWhenLabel copy];
+  _visibleWhenValues = [tmpl.visibleWhenValues copy];
+  _gradientShowsTypeAngle = tmpl.gradientShowsTypeAngle;
+  // Pixel-display flag is template metadata too: keypose/boundary popovers
+  // rebuild a display lane and must carry it, or a normalised 0..1 spatial lane
+  // (Position / Crop / Anchor) shows raw fractions instead of pixels.
+  _componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
 }
 
 - (void)insertKeypose:(KKKeyPose *)keypose {
@@ -282,6 +306,15 @@
   c.aspectLinkable = _aspectLinkable;
   c.aspectLinked = _aspectLinked;
   c.integerValued = _integerValued;
+  c.componentsScaleWithMedia = _componentsScaleWithMedia;
+  c.categoryKey = [_categoryKey copy];
+  c.categorySymbol = [_categorySymbol copy];
+  c.animatable = _animatable;
+  c.seedField = _seedField;
+  c.choiceLabels = [_choiceLabels copy];
+  c.visibleWhenLabel = [_visibleWhenLabel copy];
+  c.visibleWhenValues = [_visibleWhenValues copy];
+  c.gradientShowsTypeAngle = _gradientShowsTypeAngle;
   return c;
 }
 
@@ -313,6 +346,24 @@
     d[@"aspect_linked"] = @YES;
   if (_integerValued)
     d[@"integer_valued"] = @YES;
+  if (_componentsScaleWithMedia)
+    d[@"components_scale_with_media"] = @YES;
+  if (_categoryKey)
+    d[@"category_key"] = _categoryKey;
+  if (_categorySymbol)
+    d[@"category_symbol"] = _categorySymbol;
+  if (!_animatable)
+    d[@"animatable"] = @NO;
+  if (_seedField)
+    d[@"seed_field"] = @YES;
+  if (_choiceLabels)
+    d[@"choice_labels"] = _choiceLabels;
+  if (_visibleWhenLabel) {
+    d[@"visible_when_label"] = _visibleWhenLabel;
+    d[@"visible_when_values"] = _visibleWhenValues ?: @[];
+  }
+  if (_gradientShowsTypeAngle)
+    d[@"gradient_type_angle"] = @YES;
   return d;
 }
 
@@ -343,6 +394,17 @@
   l.aspectLinkable = [d[@"aspect_linkable"] boolValue];
   l.aspectLinked = [d[@"aspect_linked"] boolValue];
   l.integerValued = [d[@"integer_valued"] boolValue];
+  l.componentsScaleWithMedia = [d[@"components_scale_with_media"] boolValue];
+  l.categoryKey = d[@"category_key"];
+  l.categorySymbol = d[@"category_symbol"];
+  l.animatable = d[@"animatable"] ? [d[@"animatable"] boolValue] : YES;
+  l.seedField = [d[@"seed_field"] boolValue];
+  if ([d[@"choice_labels"] isKindOfClass:[NSArray class]])
+    l.choiceLabels = d[@"choice_labels"];
+  l.visibleWhenLabel = d[@"visible_when_label"];
+  if ([d[@"visible_when_values"] isKindOfClass:[NSArray class]])
+    l.visibleWhenValues = d[@"visible_when_values"];
+  l.gradientShowsTypeAngle = [d[@"gradient_type_angle"] boolValue];
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {
     NSMutableArray *kps = [NSMutableArray arrayWithCapacity:rawKps.count];
@@ -381,12 +443,32 @@ KKTimeline *KKTimelineSettingSpatialSmooth(KKTimeline *timeline,
         best = j;
       }
     }
-    if (kps[best].spatialSmooth == on)
-      return nil; // already in that state - no commit, no undo entry
+    // A hold-linked pair is two coincident keyposes the user sees as one, so
+    // toggle the whole linked run (best + its twins) - otherwise clicking the
+    // incoming half leaves the outgoing twin a corner and the curve doesn't
+    // change. Walk both directions across linked intervals.
+    NSMutableIndexSet *run =
+        [NSMutableIndexSet indexSetWithIndex:(NSUInteger)best];
+    for (NSInteger j = best;
+         j + 1 < (NSInteger)kps.count && kps[j].outgoing.endpointsLinked; j++)
+      [run addIndex:(NSUInteger)(j + 1)];
+    for (NSInteger j = best; j > 0 && kps[j - 1].outgoing.endpointsLinked; j--)
+      [run addIndex:(NSUInteger)(j - 1)];
+    __block BOOL anyDiffers = NO;
+    [run enumerateIndexesUsingBlock:^(NSUInteger j, BOOL *stop) {
+      if (kps[j].spatialSmooth != on) {
+        anyDiffers = YES;
+        *stop = YES;
+      }
+    }];
+    if (!anyDiffers)
+      return nil; // whole run already in that state - no commit, no undo entry
     NSMutableArray<KKKeyPose *> *mkps = [kps mutableCopy];
-    KKKeyPose *nk = [mkps[best] copy];
-    nk.spatialSmooth = on;
-    mkps[best] = nk;
+    [run enumerateIndexesUsingBlock:^(NSUInteger j, BOOL *stop) {
+      KKKeyPose *nk = [mkps[j] copy];
+      nk.spatialSmooth = on;
+      mkps[j] = nk;
+    }];
     nl.keyposes = mkps;
     lanes[i] = nl;
     t.lanes = lanes;
@@ -413,6 +495,37 @@ KKTimeline *KKTimelineSettingAspectLinked(KKTimeline *timeline, NSString *label,
   return nil;
 }
 
+KKTimeline *KKTimelineSettingGradientType(KKTimeline *timeline, NSString *label,
+                                          NSInteger type) {
+  KKTimeline *t = [timeline copy];
+  NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    if (![lanes[i].label isEqualToString:label])
+      continue;
+    KKLane *nl = [lanes[i] copy];
+    NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
+    BOOL changed = NO;
+    for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
+      NSArray<NSNumber *> *v = kps[k].values;
+      if (v.count < 1 || (NSInteger)llround(v[0].doubleValue) == type)
+        continue;
+      NSMutableArray<NSNumber *> *nv = [v mutableCopy];
+      nv[0] = @((double)type);
+      KKKeyPose *nk = [kps[k] copy]; // preserve time/outgoing/spatial state
+      nk.values = nv;
+      kps[k] = nk;
+      changed = YES;
+    }
+    if (!changed)
+      return nil;
+    nl.keyposes = kps;
+    lanes[i] = nl;
+    t.lanes = lanes;
+    return t;
+  }
+  return nil;
+}
+
 NSInteger KKLaneNearestKeyposeIndex(KKLane *lane, double frac) {
   NSArray<KKKeyPose *> *kps = lane.keyposes;
   if (kps.count == 0)
@@ -429,42 +542,50 @@ NSInteger KKLaneNearestKeyposeIndex(KKLane *lane, double frac) {
   return best;
 }
 
-KKLane *KKLaneBySettingValuesNearestFraction(KKLane *lane, double frac,
-                                             NSArray<NSNumber *> *values) {
+KKLane *KKLaneBySettingValuesAtIndex(KKLane *lane, NSInteger index,
+                                     NSArray<NSNumber *> *values) {
   KKLane *nl = [lane copy];
-  NSArray<KKKeyPose *> *kps = nl.keyposes;
-  if (kps.count == 0) {
-    nl.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
+  NSMutableArray<KKKeyPose *> *mkps = [nl.keyposes mutableCopy];
+  if (index < 0 || index >= (NSInteger)mkps.count)
     return nl;
-  }
-  NSInteger best = KKLaneNearestKeyposeIndex(nl, frac);
-  NSMutableArray<KKKeyPose *> *mkps = [kps mutableCopy];
   // Copy-preserve (not rebuild) so spatialSmooth + in/out handles + outgoing
   // survive a value edit - the "edit resets the path to linear" class of bug.
-  KKKeyPose *nk = [mkps[best] copy];
+  KKKeyPose *nk = [mkps[index] copy];
   nk.values = values;
-  mkps[best] = nk;
+  mkps[index] = nk;
   // Hold-link propagation: a linked interval's two endpoints share one value.
-  // Walk the WHOLE linked chain outward from `best` in both directions - not
+  // Walk the WHOLE linked chain outward from `index` in both directions - not
   // just the immediate neighbour. A multi-segment hold chains several keyposes
   // (e.g. coincident boundary pairs kp1=kp2, kp3=kp4 joined by linked intervals
   // kp1->kp2->kp3->kp4); stopping after one step left the far end stale
   // mid-drag so the motion path drew a phantom segment until a mouse-up
   // reconcile re-synced the chain. The chain stops at the first non-linked
   // interval, so unlinked endpoints (In-start / Out-end) are never touched.
-  for (NSInteger i = best;
+  for (NSInteger i = index;
        i + 1 < (NSInteger)mkps.count && mkps[i].outgoing.endpointsLinked; i++) {
     KKKeyPose *np = [mkps[i + 1] copy];
     np.values = values;
     mkps[i + 1] = np;
   }
-  for (NSInteger i = best; i > 0 && mkps[i - 1].outgoing.endpointsLinked; i--) {
+  for (NSInteger i = index; i > 0 && mkps[i - 1].outgoing.endpointsLinked;
+       i--) {
     KKKeyPose *np = [mkps[i - 1] copy];
     np.values = values;
     mkps[i - 1] = np;
   }
   nl.keyposes = mkps;
   return nl;
+}
+
+KKLane *KKLaneBySettingValuesNearestFraction(KKLane *lane, double frac,
+                                             NSArray<NSNumber *> *values) {
+  if (lane.keyposes.count == 0) {
+    KKLane *nl = [lane copy];
+    nl.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
+    return nl;
+  }
+  return KKLaneBySettingValuesAtIndex(
+      lane, KKLaneNearestKeyposeIndex(lane, frac), values);
 }
 
 KKTimeline *
@@ -745,4 +866,58 @@ NSArray<NSString *> *KKLaneComponentLabels(KKLane *lane) {
     return out;
   }
   }
+}
+
+// Component values a lane currently holds for a visibility test - the live
+// override (mid-edit) when present, else the first keypose.
+static NSArray<NSNumber *> *_KKLaneCondValues(
+    KKLane *lane,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel) {
+  NSArray<NSNumber *> *v = valuesByLabel[lane.label];
+  return v ?: (lane.keyposes.firstObject.values ?: @[]);
+}
+
+static BOOL _KKLaneCondVisible(
+    KKLane *lane, NSDictionary<NSString *, KKLane *> *byLabel,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel,
+    NSMutableDictionary<NSString *, NSNumber *> *memo) {
+  if (lane.visibleWhenLabel.length == 0)
+    return YES;
+  // Controller not in this set - the rule can't be evaluated, so don't filter.
+  KKLane *ctrl = byLabel[lane.visibleWhenLabel];
+  if (!ctrl)
+    return YES;
+  NSNumber *cached = memo[lane.label];
+  if (cached)
+    return cached.boolValue;
+  memo[lane.label] = @NO; // cycle guard
+  NSArray<NSNumber *> *cv = _KKLaneCondValues(ctrl, valuesByLabel);
+  NSInteger idx = cv.count ? (NSInteger)llround(cv[0].doubleValue) : 0;
+  BOOL pass = NO;
+  for (NSNumber *n in lane.visibleWhenValues)
+    if ((NSInteger)llround(n.doubleValue) == idx) {
+      pass = YES;
+      break;
+    }
+  BOOL vis = pass;
+  if (vis && ctrl != lane)
+    vis = _KKLaneCondVisible(ctrl, byLabel, valuesByLabel, memo);
+  memo[lane.label] = @(vis);
+  return vis;
+}
+
+NSSet<NSString *> *KKConditionalVisibleLaneLabels(
+    NSArray<KKLane *> *lanes,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel) {
+  NSMutableDictionary<NSString *, KKLane *> *byLabel =
+      [NSMutableDictionary dictionaryWithCapacity:lanes.count];
+  for (KKLane *l in lanes)
+    byLabel[l.label] = l;
+  NSMutableSet<NSString *> *out = [NSMutableSet setWithCapacity:lanes.count];
+  NSMutableDictionary<NSString *, NSNumber *> *memo =
+      [NSMutableDictionary dictionaryWithCapacity:lanes.count];
+  for (KKLane *l in lanes)
+    if (_KKLaneCondVisible(l, byLabel, valuesByLabel ?: @{}, memo))
+      [out addObject:l.label];
+  return out;
 }

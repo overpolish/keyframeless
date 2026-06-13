@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLaneFilterBar.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTimelineLanesView_Private.h"
@@ -56,6 +57,26 @@
 
 - (void)setOnGapPopoverCurveChanged:(void (^)(NSInteger))block {
   _onGapPopoverCurveChanged = [block copy];
+}
+
+- (NSSet<NSString *> *)guideLaneFilterHiddenLabels {
+  return [_laneFilterBar hiddenLabels];
+}
+
+- (void)guideShowAllLanes {
+  [_laneFilterBar showAllLanes];
+}
+
+- (void)guideRestoreLaneFilterHidden:(NSSet<NSString *> *)hidden {
+  [_laneFilterBar applyHiddenLabels:hidden ?: [NSSet set]];
+}
+
+- (NSRect)guideLaneFilterBarScreenRect {
+  KKLaneFilterBar *bar = _laneFilterBar;
+  NSWindow *w = bar.window;
+  if (!bar || bar.isHidden || !w)
+    return NSZeroRect;
+  return [w convertRectToScreen:[bar convertRect:bar.bounds toView:nil]];
 }
 
 @end

@@ -11,7 +11,9 @@ extern void KKDrawCheckerboard(NSRect rect);
 
 static const CGFloat kSwatchSize = 14.0;
 
-@implementation KKColorWellView
+@implementation KKColorWellView {
+  BOOL _editing; // panel opened from this swatch and not yet closed
+}
 
 - (instancetype)initWithFrame:(NSRect)frame {
   self = [super initWithFrame:frame];
@@ -28,10 +30,18 @@ static const CGFloat kSwatchSize = 14.0;
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   if (!self.window) {
+    // The popover (or whatever hosts the swatch) is going away - stop editing
+    // and detach from the shared panel so a stray callback can't fire into a
+    // dead row.
+    [self _endEditing];
     NSColorPanel *panel = [NSColorPanel sharedColorPanel];
     [panel setTarget:nil];
     [panel setAction:nil];
   }
+}
+
+- (void)dealloc {
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
 }
 
 - (NSSize)intrinsicContentSize {
@@ -79,7 +89,38 @@ static const CGFloat kSwatchSize = 14.0;
     [hostWindow addChildWindow:panel ordered:NSWindowAbove];
   }
 
+  [self _beginEditingWithPanel:panel];
   [panel orderFront:nil];
+}
+
+- (void)_beginEditingWithPanel:(NSColorPanel *)panel {
+  if (_editing)
+    return;
+  _editing = YES;
+  // Restore normal popover dismissal the moment the panel closes.
+  [[NSNotificationCenter defaultCenter]
+      addObserver:self
+         selector:@selector(_panelWillClose:)
+             name:NSWindowWillCloseNotification
+           object:panel];
+  if (_onColorEditingChanged)
+    _onColorEditingChanged(YES);
+}
+
+- (void)_endEditing {
+  if (!_editing)
+    return;
+  _editing = NO;
+  [[NSNotificationCenter defaultCenter]
+      removeObserver:self
+                name:NSWindowWillCloseNotification
+              object:nil];
+  if (_onColorEditingChanged)
+    _onColorEditingChanged(NO);
+}
+
+- (void)_panelWillClose:(NSNotification *)note {
+  [self _endEditing];
 }
 
 - (void)_colorPanelChanged:(NSColorPanel *)panel {

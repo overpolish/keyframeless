@@ -30,8 +30,25 @@ NS_ASSUME_NONNULL_BEGIN
 /// matching compound's label count).
 @property(nonatomic, copy) NSArray<NSArray<NSNumber *> *> *states;
 
+/// Per-compound warning flags (same shape as `states`); a segment that is on
+/// AND flagged renders in the warning tint (used to mark soloed lanes).
+@property(nonatomic, copy, nullable)
+    NSArray<NSArray<NSNumber *> *> *warningStates;
+
 @property(nonatomic, copy, nullable) void (^onToggled)
     (NSInteger compoundIdx, NSInteger segmentIdx, BOOL isOn);
+/// Option-click on a segment fires this instead of the normal toggle.
+@property(nonatomic, copy, nullable) void (^onOptionToggled)
+    (NSInteger compoundIdx, NSInteger segmentIdx);
+/// When YES, a drag-sweep started in one capsule continues painting into
+/// neighbouring capsules at the same target state. NO (default) keeps each
+/// capsule's sweep self-contained, so the "applies to" row is unchanged.
+@property(nonatomic) BOOL crossCapsuleSweep;
+
+/// Per-compound index sets of segments excluded from drag-sweep (they still
+/// toggle on a plain click). Used to keep group-master segments out of the
+/// lane-filter sweep. nil = nothing excluded (default).
+@property(nonatomic, copy, nullable) NSArray<NSIndexSet *> *dragExcludedIndices;
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onDragEnd)(void);
 

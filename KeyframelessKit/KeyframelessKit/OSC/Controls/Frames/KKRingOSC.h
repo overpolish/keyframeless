@@ -35,9 +35,22 @@ NS_ASSUME_NONNULL_BEGIN
 /// fill colors are derived from this color at varying alpha levels.
 @property(nonatomic, strong, nullable) NSColor *tintColor;
 
+/// Draw alpha (multiplies fill + stroke). Default 1.0; set < 1.0 to dim the
+/// ring as an Opt-hold revealed ghost. While < 1.0 the ring also ignores
+/// hover/active emphasis and shows the arrow cursor (it's a re-enable target,
+/// not an interactive control).
+@property(nonatomic) float ghostAlpha;
+
 /// Fixed cursor to use on hover instead of the angle-based resize cursor.
 /// When nil (default), the ring picks a resize cursor based on mouse angle.
 @property(nonatomic, strong, nullable) NSCursor *hoverCursor;
+
+/// Opt-hover visibility affordance: 0 = none (normal resize/ghost cursor),
+/// 1 = "hide" (eye.slash, an Opt-click will hide a visible ring), 2 = "show"
+/// (eye, an Opt-click will re-enable a revealed ghost). Set by the owner when
+/// Opt is held over a toggleable ring; the ring shows the matching cursor on
+/// hit and tracks it so clearCursorIfSet resets it. Default 0.
+@property(nonatomic) NSInteger visibilityHint;
 
 /// Updates the resize cursor direction based on mouse position relative to
 /// center. Call during drag to keep the cursor aligned with drag direction.

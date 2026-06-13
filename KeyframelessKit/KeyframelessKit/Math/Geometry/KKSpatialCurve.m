@@ -13,13 +13,28 @@
 static void _kkSpatialHandleOffset(NSArray<KKKeyPose *> *kps, NSUInteger i,
                                    BOOL isOut, double *dx, double *dy) {
   KKKeyPose *kp = kps[i];
+  NSUInteger n = kps.count;
+  // A side facing a hold-linked interval (two coincident keyposes the user sees
+  // as one parked point) contributes no handle: the zero-length hold segment
+  // must stay at the anchor instead of bulging into a loop the object travels
+  // over the hold, and the twin then draws a single exterior handle like a path
+  // endpoint. Overrides any manual handle a symmetric drag stored there.
+  if (isOut && i + 1 < n && kp.outgoing.endpointsLinked) {
+    *dx = 0;
+    *dy = 0;
+    return;
+  }
+  if (!isOut && i > 0 && kps[i - 1].outgoing.endpointsLinked) {
+    *dx = 0;
+    *dy = 0;
+    return;
+  }
   NSArray<NSNumber *> *manual = isOut ? kp.outHandle : kp.inHandle;
   if (manual.count >= 2) {
     *dx = manual[0].doubleValue;
     *dy = manual[1].doubleValue;
     return;
   }
-  NSUInteger n = kps.count;
   double px = kp.values[0].doubleValue, py = kp.values[1].doubleValue;
   if (i > 0 && i + 1 < n) {
     double ax = kps[i - 1].values[0].doubleValue;

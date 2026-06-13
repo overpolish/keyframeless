@@ -94,6 +94,7 @@
     dl.aspectLinkable = tmpl ? tmpl.aspectLinkable : lane.aspectLinkable;
     dl.aspectLinked = lane.aspectLinked;
     dl.integerValued = tmpl ? tmpl.integerValued : lane.integerValued;
+    [dl kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     KKKeyPose *dlKp = [KKKeyPose keyposeAtTime:0.0 values:vals ?: @[ @0.0 ]];
     // Carry the curve state from the keypose nearest this boundary (matches the
     // nearest-match write) so the row's toggle reflects it.
@@ -234,6 +235,16 @@
 
 - (void)writeAspectLinkedForLabel:(NSString *)label isOn:(BOOL)on {
   KKTimeline *t = KKTimelineSettingAspectLinked(_timeline, label, on);
+  if (!t)
+    return;
+  _timeline = t;
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
+- (void)writeGradientTypeForLabel:(NSString *)label type:(NSInteger)type {
+  KKTimeline *t = KKTimelineSettingGradientType(_timeline, label, type);
   if (!t)
     return;
   _timeline = t;

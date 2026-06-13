@@ -5,10 +5,12 @@
 
 #import "KKRotationOSC.h"
 #import "KKOSCShaderTypes.h"
+#import "KKResizeCursor.h"
 #import "KKRotationOSCMath.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #include <AppKit/AppKit.h>
+#import <AppKit/NSCursor.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
@@ -23,6 +25,7 @@ static const float kHitThresholdPixels = 10.0f;
   float _pressRotX; // original angles at press for redo math
   float _pressRotY;
   float _pressRotZ;
+  BOOL _cursorSet; // YES while we've forced a rotate cursor over a ring
 }
 
 @synthesize colorX = _colorX;
@@ -92,12 +95,24 @@ static const float kHitThresholdPixels = 10.0f;
       bestFrontT = h.frontT;
     }
   }
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   if (bestFrontK < 0 || bestFront > kHitThresholdPixels) {
     _activeAxis = -1;
+    if (_cursorSet) {
+      [oscAPI setCursor:[NSCursor arrowCursor]];
+      _cursorSet = NO;
+    }
     return NO;
   }
   _activeAxis = bestFrontK;
   _pressAngle = bestFrontT;
+  // Cursor encodes the axis (X -> up/down resize, Y -> left/right resize, Z ->
+  // rotate) so it stays clear as the gizmo reorients. Canvas Y-up for the Z
+  // quadrant: dy = posY - centerY.
+  double cursorAngle = atan2(positionY - _center.y, positionX - _center.x);
+  [oscAPI setCursor:KKRotationAxisCursor(bestFrontK, cursorAngle)];
+  _cursorSet = YES;
   return YES;
 }
 

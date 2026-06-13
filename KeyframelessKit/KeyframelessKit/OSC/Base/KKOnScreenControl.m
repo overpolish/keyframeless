@@ -5,6 +5,7 @@
 
 #import "KKOnScreenControl.h"
 #import "KKOSCShaderTypes.h"
+#import "KKResizeCursor.h"
 #import "NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
@@ -209,6 +210,20 @@
 
 - (float)kkRevealGhostAlpha {
   return [self kkOSCMasterOff] ? 1.0f : 0.3f;
+}
+
+- (NSCursor *)kkVisibilityCursorForLabel:(NSString *)label {
+  if (!label)
+    return nil;
+  // Only when an Opt-click would actually toggle: Opt held AND master on (peek
+  // mode reveals interactive controls instead of toggling).
+  if (!self.optRevealActive || [self kkOSCMasterOff])
+    return nil;
+  BOOL enabled = [self kkOSCElementVisible:label];
+  BOOL revealOnly = !enabled && [self kkOSCRevealEligible:label];
+  if (!enabled && !revealOnly)
+    return nil; // not over a toggleable element this frame
+  return revealOnly ? KKVisibilityShowCursor() : KKVisibilityHideCursor();
 }
 
 - (BOOL)kkOSCElementIndividuallyHidden:(NSString *)label {

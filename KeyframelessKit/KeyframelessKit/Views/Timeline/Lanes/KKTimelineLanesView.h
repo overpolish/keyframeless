@@ -191,6 +191,10 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// state). The Advanced-timing guide wires this via the lanes binder to advance
 /// its Dynamic step.
 @property(nonatomic, copy, nullable) void (^onGuideDynamicToggled)(BOOL on);
+/// Fires when the user toggles a pill in the lane-filter bar (any direction).
+/// The Advanced-timing guide wires this via the lanes binder to advance its
+/// "try the filter" step. Programmatic show-all/restore does not fire it.
+@property(nonatomic, copy, nullable) void (^onGuideLaneFilterToggled)(void);
 
 /// Screen rect of the Dynamic accessory button (for the guide's spotlight), or
 /// `NSZeroRect` if it isn't on screen yet. Only meaningful on the Advanced tab.

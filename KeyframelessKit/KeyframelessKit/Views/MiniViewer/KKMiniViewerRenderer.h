@@ -9,6 +9,7 @@
 #import <KeyframelessKit/KKMiniViewerView.h>
 
 @class KKTimeline;
+@class KKLane;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -98,12 +99,26 @@ NS_ASSUME_NONNULL_BEGIN
 /// Alpha to draw the anchor pivot square at: 1.0 normal, 0.3 when it's a
 /// revealed ghost. Default 1.0; a plugin with an anchor square overrides it.
 - (CGFloat)anchorSquareGhostAlpha;
+/// Alpha to draw the secondary Position arc handle at: 1.0 normal, 0.3 when
+/// it's a revealed ghost. Default 1.0; a plugin with a secondary Position
+/// handle overrides it.
+- (CGFloat)positionHandleGhostAlpha;
+/// YES while the secondary Position handle is being dragged (lights the active
+/// arc emphasis). Default NO.
+- (BOOL)positionHandleIsActive;
 /// YES when `label` (an OSC element key) is visible or being revealed as a
 /// ghost (opt-hold). Lets a subclass gate motion-path drawing / hit-testing the
 /// same way the built-in handles gate on their own labels.
 - (BOOL)labelVisibleOrRevealing:(NSString *)label;
 /// 0.3 when `label` is user-hidden (revealed-ghost dimming), else 1.0.
 - (CGFloat)ghostAlphaForLabel:(NSString *)label;
+/// The Opt-hover visibility cursor for `label`, or nil if none applies: `eye`
+/// (show) over a revealed ghost, `eye.slash` (hide) over a visible handle -
+/// only when Opt is held and the master is on (peek mode returns nil).
+/// Subclasses call this in `cursorAtPoint:` when the pointer is over `label`'s
+/// handle, e.g. `return [self kkVisibilityCursorForLabel:lbl] ?:
+/// KKPointMoveCursor();`
+- (nullable NSCursor *)kkVisibilityCursorForLabel:(NSString *)label;
 /// Draw alpha for the motion-path overlay (line + anchors + handles). Default
 /// 1.0; a subclass with a hideable path returns a ghost alpha while revealing.
 - (CGFloat)motionPathGhostAlpha;
@@ -133,6 +148,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// Default value array for a label when the timeline has no (or a short)
 /// lane for it. Default `@[ @0 ]`.
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label;
+/// The plugin's `availableLanes` template lane for `label`, if any. When a
+/// constant-value edit (e.g. a mini-viewer handle drag) targets a lane not yet
+/// present in the timeline, the new lane is built from this template so it
+/// keeps the template's metadata - aspect-link, units, bounds, integer-valued -
+/// rather than a bare lane that drops them (which would, e.g., clear an
+/// aspect-lock on the first drag of a fresh instance). Returns nil by default
+/// (bare lane).
+- (nullable KKLane *)templateLaneForLabel:(NSString *)label;
 
 /// Glyph style for the renderer's point handle (the one returned by
 /// `pointHandleCenter:forContentRect:`). Mini-viewer draws the same glyph
@@ -141,6 +164,10 @@ NS_ASSUME_NONNULL_BEGIN
 typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
   KKMiniHandleStylePoint = 0, ///< Default: solid dot (matches KKPointOSC).
   KKMiniHandleStyleArc = 1,   ///< Ring (matches KKArcOSC).
+  KKMiniHandleStyleNone = 2,  ///< No glyph: the renderer draws its own control
+                              ///< (e.g. Glow's radius ring) but still exposes a
+                              ///< point-handle anchor for guides / programmatic
+                              ///< drag.
 };
 
 #pragma mark - Subclass effect + point handle (override)
@@ -269,6 +296,12 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 - (void)clearLiveValues;
 /// The crop box rect for the current crop values within `contentRect`.
 - (CGRect)cropRectForContentRect:(CGRect)contentRect;
+/// Map a normalized clip-space position (`[x, y]`, 0..1, y-up within the
+/// content rect) to an overlay point. Generic helper used by any plugin that
+/// places handles/anchors in clip space (e.g. a Position point handle or a
+/// motion-path anchor).
+- (CGPoint)handlePointForContentRect:(CGRect)contentRect
+                            position:(NSArray<NSNumber *> *)position;
 /// Optimistically set the timeline + report the edit + redraw. Used by both
 /// the crop editor path and subclass point drags.
 - (void)commitValues:(NSArray<NSNumber *> *)values

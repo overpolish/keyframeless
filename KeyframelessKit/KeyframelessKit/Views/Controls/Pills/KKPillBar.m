@@ -29,9 +29,16 @@ static const CGFloat kEdgeW = 16.0; // overflow-shadow gradient width
 }
 
 - (instancetype)initWithLabels:(NSArray<NSString *> *)labels {
+  return [self
+      initWithPillRow:[[KKPillToggleRowView alloc] initWithLabels:labels]];
+}
+
+- (instancetype)initWithPillRow:(KKPillToggleRowView *)row {
   self = [super initWithFrame:NSZeroRect];
   if (self) {
-    _row = [[KKPillToggleRowView alloc] initWithLabels:labels];
+    _row = row;
+    // The row is framed manually as the scroll's documentView.
+    _row.translatesAutoresizingMaskIntoConstraints = YES;
 
     _scroll = [[NSScrollView alloc] initWithFrame:NSZeroRect];
     _scroll.drawsBackground = NO;

@@ -92,6 +92,11 @@
     if (s.onDragEnd)
       s.onDragEnd();
   };
+  _bar.onColorEditingChanged = ^(BOOL editing) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s.onColorEditingChanged)
+      s.onColorEditingChanged(editing);
+  };
   _favPopover.onApplyFavorite = ^(NSArray<KKGradientStop *> *newStops) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)

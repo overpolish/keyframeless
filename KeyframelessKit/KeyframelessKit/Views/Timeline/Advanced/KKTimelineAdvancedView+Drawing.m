@@ -12,7 +12,30 @@
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKEasing.h>
+#import <KeyframelessKit/KKGradientBarView.h>
+#import <KeyframelessKit/KKGradientSampling.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
+
+// Derived graph values for a composite gradient lane value
+// [type, angleDegrees, <flat stops>]: a stops "signature" line, plus an angle
+// line when linear. Lets the generic curve drawing plot 1-2 meaningful lines
+// instead of the raw component tangle.
+static NSArray<NSNumber *> *KKAdvGradientDerived(NSArray<NSNumber *> *composite,
+                                                 BOOL linear) {
+  double angle = composite.count >= 2 ? composite[1].doubleValue : 0.0;
+  // Continuous (not wrapped mod 360): a modulation wiggle that crosses 0/360
+  // would teleport top-to-bottom on a wrapped track. The plot auto-scales the
+  // angle component to its sampled range, so an out-of-[0,1] value just widens
+  // the scale instead of clipping or wrapping.
+  double angleNorm = angle / 360.0;
+  NSArray<KKGradientStop *> *stops =
+      composite.count > 2
+          ? KKGradientStopsFromFlat([composite
+                subarrayWithRange:NSMakeRange(2, composite.count - 2)])
+          : nil;
+  double sig = KKGradientStopsSignature(stops);
+  return linear ? @[ @(angleNorm), @(sig) ] : @[ @(sig) ];
+}
 
 BOOL KKAdvValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   return KKValuesEqual(a, b); // shared impl (Basic+Model)
@@ -32,6 +55,47 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 }
 
 @implementation KKTimelineAdvancedView (Drawing)
+
+- (void)_drawGroupDividerForLane:(KKLane *)lane inStrip:(NSRect)strip {
+  NSColor *ink = [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
+
+  NSString *name = KKLocalizedParamName(lane.categoryKey ?: @"");
+  NSDictionary *attrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:kGroupDividerFontSize
+                                            weight:NSFontWeightSemibold],
+    NSForegroundColorAttributeName : ink,
+    NSKernAttributeName : @0.5,
+  };
+  NSSize tsz = [name sizeWithAttributes:attrs];
+
+  NSImage *icon = nil;
+  CGFloat iconW = 0, iconH = 0;
+  if (lane.categorySymbol.length) {
+    NSImageSymbolConfiguration *cfg = [[NSImageSymbolConfiguration
+        configurationWithPointSize:kGroupDividerFontSize
+                            weight:NSFontWeightSemibold]
+        configurationByApplyingConfiguration:
+            [NSImageSymbolConfiguration
+                configurationWithHierarchicalColor:ink]];
+    icon = [[NSImage imageWithSystemSymbolName:lane.categorySymbol
+                      accessibilityDescription:nil]
+        imageWithSymbolConfiguration:cfg];
+    iconW = icon.size.width;
+    iconH = icon.size.height;
+  }
+
+  CGFloat iconGap = icon ? KKPaddingSM : 0.0;
+  CGFloat midY = NSMidY(strip);
+
+  // Left-aligned icon + label flush to the strip's left edge.
+  CGFloat x = NSMinX(strip);
+  if (icon) {
+    [icon drawInRect:NSMakeRect(x, floor(midY - iconH * 0.5), iconW, iconH)];
+    x += iconW + iconGap;
+  }
+  [name drawAtPoint:NSMakePoint(x, floor(midY - tsz.height * 0.5))
+      withAttributes:attrs];
+}
 
 - (void)drawRect:(NSRect)dirtyRect {
   NSRect g = [self _graphRect];
@@ -60,9 +124,17 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   [NSGraphicsContext saveGraphicsState];
   [track addClip];
 
+  NSArray<NSNumber *> *divFlags = [self _groupDividerFlags];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
     NSRect row = [self _rowRectForIndex:i count:lanes.count];
+    // Category header strip sits directly above the first row of each group.
+    if (i < (NSInteger)divFlags.count && divFlags[i].boolValue) {
+      NSRect strip = NSMakeRect(NSMinX(g) + kRowLabelInset, NSMaxY(row),
+                                NSMaxX(g) - 2.0 * kRowLabelInset - NSMinX(g),
+                                kGroupDividerH);
+      [self _drawGroupDividerForLane:lane inStrip:strip];
+    }
     if (i == _hoverLaneRow) {
       // Extend the hover highlight by kPillW/2 on each side so it lines up
       // with the boundary pills (which sit centred on tracks.minX / maxX)
@@ -365,6 +437,20 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   CGFloat clampHi = NSMaxY(row);
 
   NSUInteger compCount = kps.firstObject.values.count;
+  // Composite gradient lanes don't plot their raw [type, angle, stops...] -
+  // they plot 1-2 derived lines (a stops "signature", plus angle when linear),
+  // all in 0..1, so the scale stays fixed and the raw sampling below is
+  // skipped.
+  BOOL gradComposite = (lane.valueType == KKLaneValueTypeGradient &&
+                        lane.gradientShowsTypeAngle);
+  BOOL gradLinear = gradComposite && kps.firstObject.values.count >= 1 &&
+                    llround(kps.firstObject.values[0].doubleValue) == 1;
+  NSArray<NSNumber *> * (^laneVals)(NSArray<NSNumber *> *) =
+      ^NSArray<NSNumber *> *(NSArray<NSNumber *> *raw) {
+    return gradComposite ? KKAdvGradientDerived(raw, gradLinear) : raw;
+  };
+  if (gradComposite)
+    compCount = gradLinear ? 2 : 1;
   // Plot range = union of the lane's declared componentMin/Max and the
   // *actual* per-component min/max sampled across all intervals (so
   // modulation overshoot or out-of-range edits expand the visual scale
@@ -379,7 +465,12 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     [plotMin addObject:@0.0];
   while (plotMax.count < compCount)
     [plotMax addObject:@1.0];
-  for (NSInteger i = 0; i + 1 < (NSInteger)kps.count; i++) {
+  // For a Linear gradient only the angle line (derived component 0) auto-scales
+  // to its sampled range so a modulation wiggle shows clean symmetric humps;
+  // the signature line stays on the fixed 0..1 scale. Non-gradient lanes expand
+  // all components as before. Radial gradients have nothing to expand.
+  NSUInteger expandCount = gradComposite ? (gradLinear ? 1 : 0) : compCount;
+  for (NSInteger i = 0; expandCount > 0 && i + 1 < (NSInteger)kps.count; i++) {
     KKKeyPose *ka = kps[i];
     KKKeyPose *kb = kps[i + 1];
     BOOL flat =
@@ -389,8 +480,9 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     for (NSInteger k = 0; k <= samples; k++) {
       double t = (samples > 0) ? (double)k / (double)samples : 0.0;
       double gFrac = ka.time + (kb.time - ka.time) * t;
-      NSArray<NSNumber *> *vals = KKTimelineLaneValueAtFraction(lane, gFrac);
-      for (NSUInteger c = 0; c < compCount && c < vals.count; c++) {
+      NSArray<NSNumber *> *vals =
+          laneVals(KKTimelineLaneValueAtFraction(lane, gFrac));
+      for (NSUInteger c = 0; c < expandCount && c < vals.count; c++) {
         double v = vals[c].doubleValue;
         if (v < plotMin[c].doubleValue)
           plotMin[c] = @(v);
@@ -456,18 +548,18 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   CGFloat leftEdge = NSMinX(tracks) - innerEdgePad;
   CGFloat rightEdge = NSMaxX(tracks) + innerEdgePad;
   if (firstX > leftEdge) {
-    for (NSUInteger c = 0; c < compCount && c < firstKP.values.count; c++) {
-      double n =
-          KKAdvNormComponent(firstKP.values[c].doubleValue, cMin, cMax, c);
+    NSArray<NSNumber *> *fv = laneVals(firstKP.values);
+    for (NSUInteger c = 0; c < compCount && c < fv.count; c++) {
+      double n = KKAdvNormComponent(fv[c].doubleValue, cMin, cMax, c);
       CGFloat y = round(yBot + (yTop - yBot) * n) + 0.5;
       NSPoint pts[2] = {NSMakePoint(leftEdge, y), NSMakePoint(firstX, y)};
       KKStrokeTimelineCurve(pts, 2, lineW, NO, flatColor);
     }
   }
   if (lastX < rightEdge) {
-    for (NSUInteger c = 0; c < compCount && c < lastKP.values.count; c++) {
-      double n =
-          KKAdvNormComponent(lastKP.values[c].doubleValue, cMin, cMax, c);
+    NSArray<NSNumber *> *lv = laneVals(lastKP.values);
+    for (NSUInteger c = 0; c < compCount && c < lv.count; c++) {
+      double n = KKAdvNormComponent(lv[c].doubleValue, cMin, cMax, c);
       CGFloat y = round(yBot + (yTop - yBot) * n) + 0.5;
       NSPoint pts[2] = {NSMakePoint(lastX, y), NSMakePoint(rightEdge, y)};
       KKStrokeTimelineCurve(pts, 2, lineW, NO, flatColor);
@@ -494,13 +586,26 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     BOOL hasModulation = iv && iv.modulation != KKIntervalModulationNone;
     NSColor *base = anyDiffer ? warn : neutral;
     NSColor *color = [base colorWithAlphaComponent:compAlpha];
+    // Colour lanes draw each channel in its own tint (R/G/B/A); other
+    // multi-component lanes (including the composite gradient's derived
+    // angle/signature lines) keep the shared accent/warn.
+    NSArray<NSColor *> *compColors = (lane.valueType == KKLaneValueTypeColor)
+                                         ? lane.componentLabelColors
+                                         : nil;
+    NSColor * (^curveColorForComp)(NSUInteger) = ^NSColor *(NSUInteger c) {
+      if (compColors && c < compColors.count &&
+          [compColors[c] isKindOfClass:[NSColor class]])
+        return [compColors[c] colorWithAlphaComponent:compAlpha];
+      return color;
+    };
 
     if (!anyDiffer && !hasModulation) {
-      for (NSUInteger c = 0; c < compCount; c++) {
-        double n = KKAdvNormComponent(a.values[c].doubleValue, cMin, cMax, c);
+      NSArray<NSNumber *> *av = laneVals(a.values);
+      for (NSUInteger c = 0; c < compCount && c < av.count; c++) {
+        double n = KKAdvNormComponent(av[c].doubleValue, cMin, cMax, c);
         CGFloat y = round(yBot + (yTop - yBot) * n) + 0.5;
         NSPoint pts[2] = {NSMakePoint(xA, y), NSMakePoint(xB, y)};
-        KKStrokeTimelineCurve(pts, 2, lineW, NO, color);
+        KKStrokeTimelineCurve(pts, 2, lineW, NO, curveColorForComp(c));
       }
       continue;
     }
@@ -522,7 +627,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       double t = (double)k / (double)n;
       double globalFrac = a.time + (b.time - a.time) * t;
       NSArray<NSNumber *> *vals =
-          KKTimelineLaneValueAtFraction(lane, globalFrac);
+          laneVals(KKTimelineLaneValueAtFraction(lane, globalFrac));
       CGFloat x = xA + (xB - xA) * t;
       for (NSUInteger c = 0; c < compCount; c++) {
         double v =
@@ -537,7 +642,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       }
     }
     for (NSUInteger c = 0; c < compCount; c++) {
-      KKStrokeTimelineCurve(pts[c], n + 1, lineW, NO, color);
+      KKStrokeTimelineCurve(pts[c], n + 1, lineW, NO, curveColorForComp(c));
       free(pts[c]);
     }
     free(pts);

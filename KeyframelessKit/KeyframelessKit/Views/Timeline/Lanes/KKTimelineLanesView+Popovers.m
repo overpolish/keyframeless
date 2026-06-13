@@ -102,9 +102,19 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   NSSet<NSString *> *checked = [self _optedInLabelsSet];
   __weak typeof(self) weak = self;
 
+  // Mode-gated lanes drop out of the manage list (and their category, e.g. the
+  // whole "Color" group when Mode = Dynamic) - computed over the timeline so
+  // the controller Mode resolves to its current value.
+  NSSet<NSString *> *condVisible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+  NSMutableArray<KKLane *> *visibleLanes = [NSMutableArray array];
+  for (KKLane *l in _availableLanes)
+    if ([condVisible containsObject:l.label])
+      [visibleLanes addObject:l];
+
   __block _KKManagePopoverView *manageView = nil;
   manageView = [[_KKManagePopoverView alloc]
-      initWithLanes:_availableLanes
+      initWithLanes:visibleLanes
       checkedLabels:checked
            onToggle:^(NSString *label) {
              __strong typeof(weak) s = weak;
@@ -130,6 +140,7 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                                              s.onManagePopoverClosed();
                                          }];
   _openManagePopover = pop;
+  manageView.popover = pop;
 
   if (self.onManagePopoverWillOpen) {
     NSString *targetLabel =
@@ -239,6 +250,14 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                 [NSNotificationCenter.defaultCenter removeObserver:closeObs];
               }];
 
+  // The content view can transiently veto dismissal (e.g. while a colour
+  // swatch's shared NSColorPanel is open - a separate window whose clicks would
+  // otherwise count as "outside" and close the popover mid-edit).
+  BOOL (^contentSuppressesDismiss)(void) = ^BOOL {
+    return [content respondsToSelector:@selector(suppressesPopoverDismiss)] &&
+           [(id)content suppressesPopoverDismiss];
+  };
+
   // Scroll over the mini viewer = zoom/pan (events arrive global in
   // ViewBridge XPC - see [[project_viewbridge_global_sendEvent]]); scroll
   // elsewhere keeps the old outside-dismiss behavior.
@@ -251,6 +270,8 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                                    handler:^NSEvent *(NSEvent *e) {
                                      if (canvas && [canvas pointerOverCanvas])
                                        return e; // let the responder handle it
+                                     if (contentSuppressesDismiss())
+                                       return e;
                                      if (e.window != popoverWindow)
                                        [weakPopover close];
                                      return e;
@@ -260,6 +281,8 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
       addGlobalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                     handler:^(NSEvent *e) {
                                       if (canvas && [canvas pointerOverCanvas])
+                                        return;
+                                      if (contentSuppressesDismiss())
                                         return;
                                       [weakPopover close];
                                     }];
@@ -285,6 +308,8 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
     return NO;
   };
   void (^closeIfOutsidePopover)(void) = ^{
+    if (contentSuppressesDismiss())
+      return;
     NSWindow *pw = [weakPopover contentViewController].view.window;
     NSPoint p = NSEvent.mouseLocation;
     if (pw && NSPointInRect(p, pw.frame))
@@ -446,6 +471,8 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
                               displayLanes:(NSArray<KKLane *> *)lanes
                                   fraction:(double)fraction
                             excludedLabels:(NSArray<NSString *> *)excludedLabels
+                           initialCategory:(NSString *)initialCategory
+                         remembersCategory:(BOOL)remembersCategory
                                    onValue:
                                        (void (^)(NSString *,
                                                  NSArray<NSNumber *> *))onValue
@@ -465,6 +492,20 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   cfg.renderMode = _renderMode;
   cfg.isBoundary = YES;
   cfg.fraction = fraction;
+  // Open on the clicked keypose's category (the Advanced keypose popover can
+  // span all categories, so the clicked lane's category is passed in explicitly
+  // rather than guessed from the first display lane). The Basic boundary
+  // popover has no single clicked lane, so it remembers the last tab instead.
+  NSString *initCat =
+      initialCategory.length ? initialCategory : lanes.firstObject.categoryKey;
+  if (remembersCategory && _rememberedCategory.length)
+    initCat = _rememberedCategory;
+  cfg.initialCategory = initCat;
+  if (remembersCategory)
+    cfg.onCategoryChanged = ^(NSString *category) {
+      __strong typeof(weak) s = weak;
+      s->_rememberedCategory = [category copy];
+    };
   cfg.excludedLabels = excludedLabels;
   cfg.onValue = onValue;
   cfg.onAnimate = onAnimate;
@@ -510,6 +551,12 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   cfg.headerIcon =
       [KKPopoverHeaderView iconImageForSymbolName:@"slider.horizontal.3"];
   cfg.renderMode = KKMiniViewerRenderModeOff;
+  // Remember the last category tab across reopens of the constants popover.
+  cfg.initialCategory = _rememberedCategory;
+  cfg.onCategoryChanged = ^(NSString *category) {
+    __strong typeof(weak) s = weak;
+    s->_rememberedCategory = [category copy];
+  };
   // Constants commits go through -_setLaneValues:forLabel: (cfg.onValue=nil).
   // Outer drag begin/end forward to the lanes view's properties so a guide
   // observer is informed (same hook the boundary popover's caller wires).

@@ -242,6 +242,7 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
                               boundaryReqSecs:self.renderCache.boundaryReqSecs
                              boundaryReqFracs:self.renderCache.boundaryReqFracs
                               multiSlotActive:YES
+                            changesOutputSize:NO
                                    defaultTag:CMTimeGetSeconds(renderTime)];
 
   simd_float2 tileOffsetPx = {

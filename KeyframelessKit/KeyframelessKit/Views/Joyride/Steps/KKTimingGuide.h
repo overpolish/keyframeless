@@ -109,6 +109,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Component count for the primary lane (1 for Radius, 2 for Position).
 @property(nonatomic) NSInteger primaryComponentCount;
 
+/// Whether the primary lane's components are aspect-linked (move together).
+/// The seed timeline mirrors this so OSC drags during the guide behave like
+/// the real lane - e.g. Glow's radius ring, whose mini-viewer drag takes a
+/// uniform path when linked and a per-axis path when not. Default NO.
+@property(nonatomic) BOOL primaryAspectLinked;
+
 /// Endpoint values written at both t=0 and t=1 for the primary lane in the
 /// Advanced seed. Count must match `primaryComponentCount`.
 @property(nonatomic, copy) NSArray<NSNumber *> *primarySeedValues;
@@ -130,6 +136,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Optional secondary-lane seed (only consulted when `secondaryLabel` set).
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *secondarySeedValues;
 @property(nonatomic) NSInteger secondaryValueType;
+
+/// Optional category keys for the seed lanes (e.g. Glow's @"Core" / @"Noise").
+/// When set, the Advanced seed carries them so the lane-filter bar groups the
+/// pills into the real `[Category | lane]` capsules the plugin shows, and the
+/// guide's filter step teaches the grouping. nil = ungrouped single pills.
+@property(nonatomic, copy, nullable) NSString *primaryCategoryKey;
+@property(nonatomic, copy, nullable) NSString *secondaryCategoryKey;
 
 /// The mini-viewer guide seeds the primary lane with one keypose per entry
 /// here (distinct values, so Filmstrip/Onion show visibly different frames).

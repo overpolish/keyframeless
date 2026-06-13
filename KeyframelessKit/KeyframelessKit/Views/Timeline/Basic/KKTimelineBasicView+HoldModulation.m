@@ -38,6 +38,12 @@
     KKLane *lane = lanes[i];
     if (!lane.enabled || lane.keyposes.count < 2)
       continue;
+    // Only a Linear gradient is modulatable (its Angle); a Radial gradient is
+    // never a target (see +Popovers). Non-gradient lanes are unaffected.
+    if (lane.valueType == KKLaneValueTypeGradient &&
+        (lane.keyposes.firstObject.values.count < 1 ||
+         llround(lane.keyposes.firstObject.values[0].doubleValue) != 1))
+      continue;
     KKHoldShape s = KKShapeOfLane(lane);
     KKInterval *cur = lane.keyposes[s.holdStart].outgoing;
     if (anyParticipating &&

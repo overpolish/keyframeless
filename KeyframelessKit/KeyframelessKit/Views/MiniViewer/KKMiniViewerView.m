@@ -208,7 +208,9 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
                                      width:w
                                     height:h
                                  mipmapped:NO];
-    td.usage = MTLTextureUsageShaderRead;
+    // PixelFormatView so a renderer can take an sRGB view for a linear-light
+    // working pass (e.g. Glow blurs in linear, not gamma-encoded, space).
+    td.usage = MTLTextureUsageShaderRead | MTLTextureUsagePixelFormatView;
     td.storageMode = MTLStorageModeShared;
     id<MTLTexture> tex = [self.device newTextureWithDescriptor:td
                                                      iosurface:surf
@@ -409,16 +411,45 @@ static const NSUInteger kFilmstripGridCols = 5;
 - (void)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot {
   if (!slot.sourceTexture)
     return;
-  if (slot.processedTexture &&
-      slot.processedTexture.width == slot.sourceTexture.width &&
-      slot.processedTexture.height == slot.sourceTexture.height)
+  // Render the effect at DISPLAY resolution (the content rect's pixel size in
+  // the drawable), aspect-preserved and capped at the source size so we never
+  // upscale. The processed texture is only ever blitted 1:1 into its cell, so
+  // rendering it at full source res and then minifying into the small popover
+  // throws away the soft falloff of effects like Glow - making the preview read
+  // as a tighter/dimmer glow than the viewer. Rendering at the size it's shown
+  // keeps it faithful. (Handles/OSC use the content rect, not these pixels, so
+  // this is display-only.)
+  //
+  // OPT-IN: only soft/bounds effects benefit. A renderer that normalizes by the
+  // dest texture's own pixel size (e.g. MagicMove's transform shader divides
+  // the framebuffer position by the texture dims) would zoom in by source/dest
+  // if the dest shrank, so it keeps the full source size (the pre-display-res
+  // default). Renderers opt in via -prefersDisplayResolutionProcessing.
+  NSUInteger srcW = slot.sourceTexture.width, srcH = slot.sourceTexture.height;
+  CGRect content = [self _contentRectInDrawable];
+  NSUInteger tW = srcW, tH = srcH;
+  id<KKMiniViewerDelegate> del = self.canvasDelegate;
+  BOOL displayRes =
+      [del respondsToSelector:@selector(prefersDisplayResolutionProcessing)] &&
+      [(id)del prefersDisplayResolutionProcessing];
+  if (displayRes && content.size.width >= 1.0 && content.size.height >= 1.0 &&
+      srcW > 0 && srcH > 0) {
+    double s = MIN(content.size.width / (double)srcW,
+                   content.size.height / (double)srcH);
+    s = MIN(s, 1.0); // never upscale past the source
+    tW = (NSUInteger)MAX(1.0, round((double)srcW * s));
+    tH = (NSUInteger)MAX(1.0, round((double)srcH * s));
+  }
+  if (slot.processedTexture && slot.processedTexture.width == tW &&
+      slot.processedTexture.height == tH)
     return;
   MTLTextureDescriptor *td = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
-                                   width:slot.sourceTexture.width
-                                  height:slot.sourceTexture.height
+                                   width:tW
+                                  height:tH
                                mipmapped:NO];
-  td.usage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget;
+  td.usage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget |
+             MTLTextureUsagePixelFormatView;
   td.storageMode = MTLStorageModePrivate;
   slot.processedTexture = [self.device newTextureWithDescriptor:td];
 }

@@ -53,4 +53,14 @@ NS_ASSUME_NONNULL_BEGIN
 extern NSPoint KKJoyrideSnapToTarget(NSPoint p, NSRect targetRect,
                                      CGFloat tolerance);
 
+/// Make a pass-through drag/spotlight step present the cursor that
+/// `cursorForScreenPoint` returns while the pointer is in its spotlight (hover
+/// + drag), resetting to the arrow on exit / release. For steps whose
+/// underlying view can't update the cursor itself because the guide panel
+/// captures the mouse (in-viewer OSC, mini-viewer handle). No-op if either
+/// argument is nil. Wraps the step's existing drag/up blocks.
+extern void KKJoyrideStepAttachCursor(
+    KKJoyrideStep *step,
+    NSCursor *_Nullable (^cursorForScreenPoint)(NSPoint screenPoint));
+
 NS_ASSUME_NONNULL_END

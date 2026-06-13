@@ -12,6 +12,7 @@
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKEasing.h>
+#import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
 @implementation KKTimelineBasicView (Popovers)
@@ -56,6 +57,9 @@
   for (KKLane *lane in _timeline.lanes) {
     if (!lane.enabled || lane.keyposes.count < 2)
       continue;
+    // A gradient stays a single top-level toggle here (does it ease or hold
+    // flat during the phase) - it is NOT component-expanded, and it is excluded
+    // only from the Hold-modulation/wiggle capsule below.
     KKHoldShape s = KKShapeOfLane(lane);
     BOOL applies =
         isOut ? (s.outEnabled && !lane.keyposes[s.holdEnd].outgoing.holdsFlat)
@@ -379,11 +383,20 @@
   for (KKLane *lane in _timeline.lanes) {
     if (!lane.enabled || lane.keyposes.count < 2)
       continue;
+    BOOL isGradient = (lane.valueType == KKLaneValueTypeGradient);
+    BOOL gradientLinear =
+        isGradient && lane.keyposes.firstObject.values.count >= 1 &&
+        llround(lane.keyposes.firstObject.values[0].doubleValue) == 1;
+    if (isGradient && !gradientLinear)
+      continue; // only a Linear gradient is modulatable (its Angle)
     NSArray<NSString *> *compLabels = KKLaneComponentLabels(lane);
     NSUInteger compCount = lane.keyposes.firstObject.values.count;
     KKInterval *liv = lane.keyposes[KKShapeOfLane(lane).holdStart].outgoing;
     BOOL laneModActive = liv && liv.modulation != KKIntervalModulationNone;
-    if (compLabels.count > 1 && compCount > 1) {
+    // Solid colour and gradient stay one lane-level toggle (no per-channel
+    // wiggle); a Linear gradient's toggle reads "Angle".
+    if (!isGradient && lane.valueType != KKLaneValueTypeColor &&
+        compLabels.count > 1 && compCount > 1) {
       showsLinked = YES;
       NSIndexSet *mask = liv.modulationComponents;
       NSMutableArray<NSString *> *segLabels =
@@ -406,7 +419,9 @@
       [partCompoundLabels addObject:segLabels];
       [partCompoundStates addObject:segStates];
     } else {
-      [partCompoundLabels addObject:@[ lane.label ]];
+      // The gradient's lone toggle reads "Angle" but still targets its lane.
+      NSString *disp = isGradient ? KKLocalizedParamName(@"Angle") : lane.label;
+      [partCompoundLabels addObject:@[ disp ]];
       [partCompoundStates addObject:@[ @(laneModActive) ]];
       [partLaneLabels addObject:lane.label];
       [partComponentIdx addObject:@(-2)]; // single-segment, lane-level
@@ -425,11 +440,18 @@
     for (KKLane *lane in strong->_timeline.lanes) {
       if (!lane.enabled || lane.keyposes.count < 2)
         continue;
+      BOOL isGradient2 = (lane.valueType == KKLaneValueTypeGradient);
+      BOOL gradientLinear2 =
+          isGradient2 && lane.keyposes.firstObject.values.count >= 1 &&
+          llround(lane.keyposes.firstObject.values[0].doubleValue) == 1;
+      if (isGradient2 && !gradientLinear2)
+        continue; // mirror the builder's radial-gradient skip
       NSArray<NSString *> *compLabels2 = KKLaneComponentLabels(lane);
       NSUInteger compCount2 = lane.keyposes.firstObject.values.count;
       KKInterval *liv2 = lane.keyposes[KKShapeOfLane(lane).holdStart].outgoing;
       BOOL active = liv2 && liv2.modulation != KKIntervalModulationNone;
-      if (compLabels2.count > 1 && compCount2 > 1) {
+      if (!isGradient2 && lane.valueType != KKLaneValueTypeColor &&
+          compLabels2.count > 1 && compCount2 > 1) {
         NSMutableArray<NSNumber *> *segStates =
             [NSMutableArray arrayWithObject:@(active)];
         NSIndexSet *mask = liv2.modulationComponents;

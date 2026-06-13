@@ -174,20 +174,22 @@
   };
 
   _KKStaticValuesPopoverView *staticView = [[_KKStaticValuesPopoverView alloc]
-       initWithLanes:cfg.lanes
-      descriptorPath:self.miniViewerDescriptorPath
-          clipAspect:self.miniViewerClipAspect
-         headerTitle:cfg.headerTitle
-        headerDetail:cfg.headerDetail
-          headerIcon:cfg.headerIcon
-      canvasDelegate:self.miniViewerDelegate
-          renderMode:cfg.renderMode
-       onModeChanged:cfg.onModeChanged
-          onNavigate:cfg.onNavigate
-       onHandleValue:onHandleValue
-         onDragBegin:onDragBeginBlock
-           onDragEnd:onDragEndBlock
-        editsKeypose:cfg.isBoundary];
+        initWithLanes:cfg.lanes
+       descriptorPath:self.miniViewerDescriptorPath
+           clipAspect:self.miniViewerClipAspect
+          headerTitle:cfg.headerTitle
+         headerDetail:cfg.headerDetail
+           headerIcon:cfg.headerIcon
+       canvasDelegate:self.miniViewerDelegate
+           renderMode:cfg.renderMode
+        onModeChanged:cfg.onModeChanged
+           onNavigate:cfg.onNavigate
+        onHandleValue:onHandleValue
+          onDragBegin:onDragBeginBlock
+            onDragEnd:onDragEndBlock
+         editsKeypose:cfg.isBoundary
+      initialCategory:cfg.initialCategory];
+  staticView.onCategoryChanged = cfg.onCategoryChanged;
 
   _openStaticView = staticView;
   _openStaticIsBoundary = cfg.isBoundary;
@@ -224,6 +226,24 @@
     else
       [s->_basicGraph writeAspectLinkedForLabel:label isOn:on];
   }];
+
+  // Gradient type (radial/linear): a single non-animated property, so editing
+  // it in the keypose editor rewrites every keypose of the lane. Only wired for
+  // the keypose (boundary) popover; the constants editor commits it per-row.
+  if (cfg.isBoundary) {
+    __weak typeof(self) weakType = self;
+    [staticView setOnGradientTypeChanged:^(NSString *label, NSInteger type) {
+      __strong typeof(weakType) s = weakType;
+      if (!s)
+        return;
+      s->_boundaryRedriveSuppressUntil =
+          [NSDate timeIntervalSinceReferenceDate] + 0.4;
+      if (s->_activeTab == 1)
+        [s->_advancedGraph writeGradientTypeForLabel:label type:type];
+      else
+        [s->_basicGraph writeGradientTypeForLabel:label type:type];
+    }];
+  }
 
   if (cfg.isBoundary) {
     [staticView

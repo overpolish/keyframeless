@@ -42,6 +42,9 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @interface _KKManagePopoverView : NSView <NSSearchFieldDelegate>
+// Set by the host so the dropdown can resize itself to the visible row count as
+// the category pill / search narrows the list.
+@property(nonatomic, weak, nullable) NSPopover *popover;
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                 checkedLabels:(NSSet<NSString *> *)checked
                      onToggle:(void (^)(NSString *label))onToggle;
@@ -91,10 +94,25 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// slot as the smooth toggle) that flips the global aspect lock. Fires with the
 /// new state; the host persists `aspectLinked` on the lane.
 @property(nonatomic, copy, nullable) void (^onLinkToggled)(BOOL on);
+/// A KKLaneValueTypeColor row carries a colour swatch that opens the shared
+/// colour panel. Fires YES while that panel is open and NO when it closes, so
+/// the hosting popover can suspend its transient auto-dismiss during the edit.
+@property(nonatomic, copy, nullable) void (^onColorEditing)(BOOL editing);
+/// A composite-gradient row's radial/linear type pill fires this with the new
+/// type index. When set, the host applies it to ALL keyposes of the lane (type
+/// is a single, non-animated property); when nil, the row commits it to the
+/// open keypose like any other value (constants editor). Lets type stay
+/// editable once the gradient is animated.
+@property(nonatomic, copy, nullable) void (^onGradientTypeChanged)
+    (NSInteger type);
 - (instancetype)initWithLane:(KKLane *)lane
                  showsRemove:(BOOL)showsRemove
           showsAddToAnimated:(BOOL)showsAddToAnimated
-                 showsSmooth:(BOOL)showsSmooth;
+                 showsSmooth:(BOOL)showsSmooth
+            labelColumnWidth:(CGFloat)labelColumnWidth;
+/// Width to pin every row's label column to, so the value controls line up
+/// regardless of label length (the widest localized param name). 0 = natural.
++ (CGFloat)labelColumnWidthForLanes:(NSArray<KKLane *> *)lanes;
 /// The KKSliderView (Float rows), for a guide that drives the slider.
 - (nullable NSView *)guideSliderView;
 /// The number field for component `i` (Float: 0; Crop: 0..3 = W,H,X,Y), for
@@ -125,22 +143,29 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// path that wires onion-skin filmstrip clicks) can attach extra closures
 /// without threading another init parameter.
 @property(nonatomic, readonly, nullable) KKMiniViewerView *miniViewer;
-- (instancetype)
-     initWithLanes:(NSArray<KKLane *> *)lanes
-    descriptorPath:(nullable NSString *)descriptorPath
-        clipAspect:(CGFloat)clipAspect
-       headerTitle:(nullable NSString *)headerTitle
-      headerDetail:(nullable NSString *)headerDetail
-        headerIcon:(nullable NSImage *)headerIcon
-    canvasDelegate:(nullable id<KKMiniViewerDelegate>)canvasDelegate
-        renderMode:(KKMiniViewerRenderMode)renderMode
-     onModeChanged:(nullable void (^)(KKMiniViewerRenderMode mode))onModeChanged
-        onNavigate:(nullable void (^)(NSInteger direction))onNavigate
-     onHandleValue:(nullable void (^)(NSString *label,
-                                      NSArray<NSNumber *> *values))onHandleValue
-       onDragBegin:(nullable void (^)(void))onDragBegin
-         onDragEnd:(nullable void (^)(void))onDragEnd
-      editsKeypose:(BOOL)editsKeypose;
+- (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
+               descriptorPath:(nullable NSString *)descriptorPath
+                   clipAspect:(CGFloat)clipAspect
+                  headerTitle:(nullable NSString *)headerTitle
+                 headerDetail:(nullable NSString *)headerDetail
+                   headerIcon:(nullable NSImage *)headerIcon
+               canvasDelegate:(nullable id<KKMiniViewerDelegate>)canvasDelegate
+                   renderMode:(KKMiniViewerRenderMode)renderMode
+                onModeChanged:(nullable void (^)(KKMiniViewerRenderMode mode))
+                                  onModeChanged
+                   onNavigate:(nullable void (^)(NSInteger direction))onNavigate
+                onHandleValue:(nullable void (^)(NSString *label,
+                                                 NSArray<NSNumber *> *values))
+                                  onHandleValue
+                  onDragBegin:(nullable void (^)(void))onDragBegin
+                    onDragEnd:(nullable void (^)(void))onDragEnd
+                 editsKeypose:(BOOL)editsKeypose
+              initialCategory:(nullable NSString *)initialCategory;
+
+/// Fired when the user picks a category pill (constants popover uses it to
+/// remember the last tab). Not fired for the initial selection.
+@property(nonatomic, copy, nullable) void (^onCategoryChanged)
+    (NSString *category);
 
 /// Wire the per-keypose smooth toggle (shown on `spatialCurvable` lane rows in
 /// the keypose popover). Fired with the lane label + new state; the host
@@ -151,6 +176,12 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// constants and keypose popovers). Fired with the lane label + new state; the
 /// host writes `aspectLinked` on the lane (global, not per-keypose).
 - (void)setOnLinkToggled:(void (^)(NSString *label, BOOL on))handler;
+
+/// Wire the gradient radial/linear type pill (keypose editor only). Fired with
+/// the lane label + new type index; the host applies it to every keypose of the
+/// lane (type is a single, non-animated property).
+- (void)setOnGradientTypeChanged:(void (^)(NSString *label,
+                                           NSInteger type))handler;
 
 /// Update the header title in place (e.g. the keypose time as you navigate
 /// between keyposes). No-op if the popover has no header.
@@ -203,6 +234,11 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// `handler(label)` to flip the lane to animatable. Same lifecycle as
 /// `setRowRemoveHandler:` - must be set before rows are (re)built.
 - (void)setRowAddToAnimatedHandler:(void (^)(NSString *label))handler;
+/// YES while a colour-swatch row's shared NSColorPanel is open. The present
+/// path's outside-click / scroll dismissal monitors read this and skip closing,
+/// so interacting with the panel (a separate window) doesn't dismiss the
+/// popover before the colour commits.
+- (BOOL)suppressesPopoverDismiss;
 /// The value-editor row (slider/fields) for `label`, or nil. Lets a guide
 /// spotlight a specific constant's control.
 - (nullable NSView *)rowViewForLabel:(NSString *)label;
@@ -237,6 +273,11 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
            descriptorPath:(nullable NSString *)descriptorPath
                clipAspect:(CGFloat)clipAspect
             reserveHeader:(BOOL)reserveHeader;
++ (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes
+           descriptorPath:(nullable NSString *)descriptorPath
+               clipAspect:(CGFloat)clipAspect
+            reserveHeader:(BOOL)reserveHeader
+         selectedCategory:(nullable NSString *)selectedCategory;
 @end
 
 @interface _KKDropdownTrigger : NSView

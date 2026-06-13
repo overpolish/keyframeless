@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLaneCategoryNav.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerView.h"
+#import "KKPillBar.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKSliderView.h"
@@ -184,16 +186,32 @@ static void _clearPopoverBackground(NSView *view) {
 
 @end
 
+static const CGFloat kManagePillH = 24.0;
+
 @implementation _KKManagePopoverView {
   NSSet<NSString *> *_checkedLabels;
   _KKSearchField *_searchField;
   NSMutableArray<_KKManageRow *> *_allRows;
   NSStackView *_rowStack;
+  // Category nav pill between the search field and the rows (same control as
+  // the value popover). Filters rows to the selected category, EXCEPT while a
+  // search query is active - search spans every category so a param is always
+  // findable.
+  KKPillToggleRowView *_categoryPill;
+  NSString *_selectedCategory;
+  NSDictionary<NSString *, NSString *> *_rowCategoryByLabel;
+  BOOL _hasPill;
 }
 
 + (CGFloat)heightForLaneCount:(NSInteger)count {
-  return KKPaddingMD + kSearchH + KKPaddingMD + count * kRowHeight +
-         KKPaddingMD;
+  return [self heightForRowCount:count hasPill:NO];
+}
+
++ (CGFloat)heightForRowCount:(NSInteger)count hasPill:(BOOL)hasPill {
+  CGFloat h = KKPaddingMD + kSearchH + KKPaddingMD;
+  if (hasPill)
+    h += kManagePillH + KKSpacingSM;
+  return h + count * kRowHeight + KKPaddingMD;
 }
 
 - (BOOL)isFlipped {
@@ -203,12 +221,38 @@ static void _clearPopoverBackground(NSView *view) {
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                 checkedLabels:(NSSet<NSString *> *)checked
                      onToggle:(void (^)(NSString *))onToggle {
-  CGFloat h = [_KKManagePopoverView heightForLaneCount:lanes.count];
+  // Only animatable lanes get a row (value-only params like a seed can't be
+  // added to the timeline), so categories + sizing are derived from that
+  // subset. Computed into locals before super init, then stored on self
+  // afterwards.
+  NSMutableArray<KKLane *> *animatable = [NSMutableArray array];
+  for (KKLane *lane in lanes)
+    if (lane.animatable)
+      [animatable addObject:lane];
+
+  NSDictionary<NSString *, NSString *> *catByLabel =
+      KKLaneCategoryByLabel(animatable);
+  NSArray<NSString *> *keys = KKLaneCategoryKeys(animatable);
+  BOOL hasPill = keys.count > 1;
+  NSString *selected = hasPill ? keys.firstObject : nil;
+
+  // Initial visible rows = the first category's rows (or all when no pill), so
+  // the popover opens hugging that page; it resizes as the pill/search narrows.
+  NSInteger initialVisible = 0;
+  for (KKLane *lane in animatable)
+    if (!hasPill || catByLabel[lane.label] == nil ||
+        [catByLabel[lane.label] isEqualToString:selected])
+      initialVisible++;
+  CGFloat h = [_KKManagePopoverView heightForRowCount:initialVisible
+                                              hasPill:hasPill];
   self = [super initWithFrame:NSMakeRect(0, 0, kPopoverW, h)];
   if (!self)
     return nil;
   _checkedLabels = [checked copy];
   _allRows = [NSMutableArray array];
+  _rowCategoryByLabel = catByLabel;
+  _hasPill = hasPill;
+  _selectedCategory = selected;
 
   _searchField = [[_KKSearchField alloc] init];
   _searchField.translatesAutoresizingMaskIntoConstraints = NO;
@@ -218,31 +262,77 @@ static void _clearPopoverBackground(NSView *view) {
   _searchField.font = [NSFont systemFontOfSize:KKFontSizeSM
                                         weight:NSFontWeightRegular];
   _searchField.focusRingType = NSFocusRingTypeNone;
-  [self addSubview:_searchField];
+  // Category pill on top, then the search field, then the rows.
+  NSLayoutYAxisAnchor *searchTop = self.topAnchor;
+  CGFloat searchTopInset = KKPaddingMD;
+  if (_hasPill) {
+    __weak typeof(self) weak = self;
+    _categoryPill =
+        KKMakeLaneCategoryPill(animatable, selected, ^(NSString *categoryKey) {
+          __strong typeof(weak) ss = weak;
+          if (!ss)
+            return;
+          ss->_selectedCategory = categoryKey;
+          [ss _applyFilterAndResize];
+        });
+    // Wrap the category pill in a horizontal scroll with edge-fade shadows so a
+    // long category run (Core | Color | Noise | ...) stays on one row and
+    // scrolls instead of forcing the popover wide. Centred while it fits; the
+    // leading/trailing caps let it shrink-to-scroll on overflow.
+    KKPillBar *pillBar = [[KKPillBar alloc] initWithPillRow:_categoryPill];
+    pillBar.translatesAutoresizingMaskIntoConstraints = NO;
+    // Hug content at intrinsic width when it fits, but a near-zero compression
+    // resistance lets it shrink below intrinsic so the inner scroll view takes
+    // over on overflow (instead of staying full-width and clipping). Mirrors
+    // KKSegmentEditView's participation bar.
+    [pillBar setContentHuggingPriority:NSLayoutPriorityRequired - 1
+                        forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [pillBar
+        setContentCompressionResistancePriority:1
+                                 forOrientation:
+                                     NSLayoutConstraintOrientationHorizontal];
+    [self addSubview:pillBar];
+    [NSLayoutConstraint activateConstraints:@[
+      [pillBar.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+      [pillBar.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:self.leadingAnchor
+                                      constant:KKPaddingMD],
+      [pillBar.trailingAnchor
+          constraintLessThanOrEqualToAnchor:self.trailingAnchor
+                                   constant:-KKPaddingMD],
+      [pillBar.topAnchor constraintEqualToAnchor:self.topAnchor
+                                        constant:KKPaddingMD],
+      [pillBar.heightAnchor constraintEqualToConstant:kManagePillH],
+    ]];
+    searchTop = pillBar.bottomAnchor;
+    searchTopInset = KKSpacingSM;
+  }
 
+  [self addSubview:_searchField];
+  [NSLayoutConstraint activateConstraints:@[
+    [_searchField.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                               constant:KKPaddingMD],
+    [_searchField.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                                constant:-KKPaddingMD],
+    [_searchField.topAnchor constraintEqualToAnchor:searchTop
+                                           constant:searchTopInset],
+    [_searchField.heightAnchor constraintEqualToConstant:kSearchH],
+  ]];
+
+  NSLayoutYAxisAnchor *rowsTop = _searchField.bottomAnchor;
   _rowStack = [NSStackView stackViewWithViews:@[]];
   _rowStack.translatesAutoresizingMaskIntoConstraints = NO;
   _rowStack.orientation = NSUserInterfaceLayoutOrientationVertical;
   _rowStack.spacing = 0;
   _rowStack.detachesHiddenViews = YES;
   [self addSubview:_rowStack];
-
   [NSLayoutConstraint activateConstraints:@[
-    [_searchField.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                               constant:KKPaddingMD],
-    [_searchField.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                                constant:-KKPaddingMD],
-    [_searchField.topAnchor constraintEqualToAnchor:self.topAnchor
-                                           constant:KKPaddingMD],
-    [_searchField.heightAnchor constraintEqualToConstant:kSearchH],
-
     [_rowStack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [_rowStack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-    [_rowStack.topAnchor constraintEqualToAnchor:_searchField.bottomAnchor
-                                        constant:KKSpacingSM],
+    [_rowStack.topAnchor constraintEqualToAnchor:rowsTop constant:KKSpacingSM],
   ]];
 
-  for (KKLane *lane in lanes) {
+  for (KKLane *lane in animatable) {
     _KKManageRow *row = [[_KKManageRow alloc] initWithFrame:NSZeroRect];
     row.translatesAutoresizingMaskIntoConstraints = NO;
     row.rowLabel = lane.label;
@@ -257,7 +347,40 @@ static void _clearPopoverBackground(NSView *view) {
         YES;
     [_allRows addObject:row];
   }
+  [self _applyFilter];
   return self;
+}
+
+// Hide rows outside the selected category, and within it hide rows that don't
+// match the search query - search is scoped to the current category. Returns
+// the visible row count so the caller can resize the popover to hug it.
+- (NSInteger)_applyFilter {
+  NSString *query = _searchField.stringValue;
+  BOOL searching = query.length > 0;
+  NSInteger visible = 0;
+  for (_KKManageRow *row in _allRows) {
+    BOOL matchSearch =
+        !searching || [row.rowLabel rangeOfString:query
+                                          options:NSCaseInsensitiveSearch]
+                              .location != NSNotFound;
+    NSString *cat = _rowCategoryByLabel[row.rowLabel];
+    BOOL matchCategory =
+        !_hasPill || cat.length == 0 || [cat isEqualToString:_selectedCategory];
+    BOOL show = matchSearch && matchCategory;
+    row.hidden = !show;
+    if (show)
+      visible++;
+  }
+  return visible;
+}
+
+- (void)_applyFilterAndResize {
+  NSInteger visible = [self _applyFilter];
+  if (!self.popover)
+    return;
+  self.popover.contentSize = NSMakeSize(
+      kPopoverW, [_KKManagePopoverView heightForRowCount:MAX(visible, 1)
+                                                 hasPill:_hasPill]);
 }
 
 - (void)updateCheckedLabels:(NSSet<NSString *> *)checked {
@@ -280,13 +403,7 @@ static void _clearPopoverBackground(NSView *view) {
 }
 
 - (void)controlTextDidChange:(NSNotification *)note {
-  NSString *query = _searchField.stringValue;
-  for (_KKManageRow *row in _allRows) {
-    row.hidden =
-        query.length > 0 && [row.rowLabel rangeOfString:query
-                                                options:NSCaseInsensitiveSearch]
-                                    .location == NSNotFound;
-  }
+  [self _applyFilterAndResize];
 }
 
 @end

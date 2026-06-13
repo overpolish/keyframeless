@@ -11,9 +11,16 @@
 @implementation KKTimelineAdvancedView (Model)
 
 - (NSArray<KKLane *> *)_animatableLanes {
+  // Mode-gated lanes (visibleWhen) drop out of the graph when their
+  // controller's current value doesn't match - e.g. an animated Gradient lane
+  // is hidden while Mode = Solid. Computed over the full lane set so the
+  // controller resolves; display-only, the blob keeps every lane.
+  NSSet<NSString *> *condVisible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
   NSMutableArray<KKLane *> *out = [NSMutableArray array];
   for (KKLane *l in _timeline.lanes)
-    if (l.enabled)
+    if (l.enabled && ![_hiddenLaneLabels containsObject:l.label] &&
+        [condVisible containsObject:l.label])
       [out addObject:l];
   return out;
 }
@@ -114,11 +121,52 @@
   return f < 0.0 ? 0.0 : (f > hi ? hi : f);
 }
 
+- (NSArray<NSNumber *> *)_groupDividerFlags {
+  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  NSMutableArray<NSNumber *> *flags =
+      [NSMutableArray arrayWithCapacity:lanes.count];
+  NSString *prev = nil;
+  for (KKLane *l in lanes) {
+    NSString *cat = l.categoryKey.length ? l.categoryKey : nil;
+    // A header sits above the first lane of each categorised run, and stays
+    // even when only that one group is shown - so e.g. Amount / Spread / Speed
+    // keep the "Noise" header that gives them meaning. Uncategorised lanes get
+    // no header, so plugins without categories keep the flat layout.
+    BOOL start = cat != nil && ![cat isEqualToString:prev];
+    [flags addObject:@(start)];
+    prev = cat;
+  }
+  return flags;
+}
+
+// Divider strips + inter-lane gaps that precede lane `upto` (exclusive when
+// negative-sentinel), summed from the group flags. `upto` == n totals them all.
+- (void)_dividerCount:(NSInteger *)outDividers
+             gapCount:(NSInteger *)outGaps
+              through:(NSInteger)upto {
+  NSArray<NSNumber *> *flags = [self _groupDividerFlags];
+  NSInteger d = 0, g = 0;
+  for (NSInteger j = 0; j < upto; j++) {
+    BOOL start = j < (NSInteger)flags.count && flags[j].boolValue;
+    if (start)
+      d++;
+    else if (j > 0)
+      g++; // a non-start row below the top carries a plain gap above it
+  }
+  if (outDividers)
+    *outDividers = d;
+  if (outGaps)
+    *outGaps = g;
+}
+
 - (CGFloat)_rowHeightForCount:(NSInteger)n {
   if (n <= 0)
     return 0.0;
   NSRect t = [self _tracksRect];
-  CGFloat avail = NSHeight(t) - kRowGap * (CGFloat)(n - 1);
+  NSInteger dividers = 0, gaps = 0;
+  [self _dividerCount:&dividers gapCount:&gaps through:n];
+  CGFloat avail = NSHeight(t) - kRowGap * (CGFloat)gaps -
+                  kGroupDividerH * (CGFloat)dividers;
   CGFloat h = avail / (CGFloat)n;
   if (h < kRowMin)
     h = kRowMin;
@@ -128,11 +176,15 @@
 - (NSRect)_rowRectForIndex:(NSInteger)i count:(NSInteger)n {
   NSRect t = [self _tracksRect];
   CGFloat h = [self _rowHeightForCount:n];
-  CGFloat stride = h + kRowGap;
-  // +_scrollY raises the rows (the view is y-up), bringing lower rows up into
-  // the tracks viewport. Single funnel: drawing, hit-testing and popover
-  // anchors all read row positions from here, so they stay in sync.
-  CGFloat y = NSMaxY(t) - h - stride * (CGFloat)i + _scrollY;
+  // Dividers + gaps stacked above this row's top (the row's own leading divider
+  // is counted; its preceding plain gap is not, since a group-start row has a
+  // strip instead). +_scrollY raises the rows (y-up). Single funnel: drawing,
+  // hit-testing and popover anchors all read row positions from here.
+  NSInteger dAbove = 0, gAbove = 0;
+  [self _dividerCount:&dAbove gapCount:&gAbove through:i + 1];
+  CGFloat y = NSMaxY(t) + _scrollY -
+              ((CGFloat)(i + 1) * h + (CGFloat)gAbove * kRowGap +
+               (CGFloat)dAbove * kGroupDividerH);
   return NSMakeRect(NSMinX(t), y, NSWidth(t), h);
 }
 
@@ -141,7 +193,10 @@
   if (n <= 0)
     return 0.0;
   CGFloat h = [self _rowHeightForCount:n];
-  CGFloat contentH = (h + kRowGap) * (CGFloat)n - kRowGap;
+  NSInteger dividers = 0, gaps = 0;
+  [self _dividerCount:&dividers gapCount:&gaps through:n];
+  CGFloat contentH = h * (CGFloat)n + kRowGap * (CGFloat)gaps +
+                     kGroupDividerH * (CGFloat)dividers;
   CGFloat avail = NSHeight([self _tracksRect]);
   return MAX(0.0, contentH - avail);
 }

@@ -52,6 +52,12 @@ enum {
 /// < 1.0 to render the box as a dimmed "ghost" during opt-reveal.
 @property(nonatomic) float ghostAlpha;
 
+/// Opt-hover visibility affordance (like KKRingOSC): 0 = none (normal resize
+/// cursor), 1 = "hide" (eye.slash over a visible box), 2 = "show" (eye over a
+/// revealed ghost). Set by the owner when Opt is held over a toggleable box;
+/// the hovered handle then shows the eye cursor instead of a resize cursor.
+@property(nonatomic) NSInteger visibilityHint;
+
 /// Extra grab slack added to each handle's hitRadius, default 0. Set > 0 for a
 /// more forgiving hit target (the scale box uses this).
 @property(nonatomic) double hitPadding;

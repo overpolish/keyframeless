@@ -5,6 +5,7 @@
 
 #import "KKTimelineLanesView.h"
 #import "KKCheckboxRowView.h"
+#import "KKLaneFilterBar.h"
 #import "KKLocalized.h"
 #import "KKSegmentEditView.h"
 #import "KKTimelineAdvancedView.h"
@@ -136,10 +137,12 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
                               timeline:(KKTimeline *)timeline {
   self = [super initWithFrame:NSZeroRect];
   if (self) {
-    _availableLanes = [availableLanes
-        sortedArrayUsingComparator:^NSComparisonResult(KKLane *a, KKLane *b) {
-          return [a.label localizedCaseInsensitiveCompare:b.label];
-        }];
+    // Keep the plugin's declared order - it's the authoritative default for the
+    // sequencer, constants/keypose popovers, category pills, and the parameter-
+    // order list (all of which rank by availableLanes index). Sorting it here
+    // alphabetically would override that and is what made categories appear in
+    // the wrong order.
+    _availableLanes = [availableLanes copy];
     _timeline = [self _timelineSeededFrom:timeline];
     _miniViewerClipAspect = 16.0 / 9.0;
     [self _buildUI];
@@ -162,6 +165,25 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   [_laneStack setContentHuggingPriority:NSLayoutPriorityRequired
                          forOrientation:NSLayoutConstraintOrientationVertical];
   [self addSubview:_laneStack];
+
+  // Lane-visibility filter bar at the very top of the timeline content (below
+  // the inspector's Basic/Advanced toggle row). Hidden until there are >=2
+  // opted-in lanes in Advanced; pushes its hidden set to the Advanced graph.
+  _laneFilterBar = [[KKLaneFilterBar alloc] initWithLanes:@[]];
+  _laneFilterBar.hidden = YES;
+  __weak typeof(self) weakFilter = self;
+  _laneFilterBar.onVisibilityChanged = ^(NSSet<NSString *> *hidden) {
+    __strong typeof(weakFilter) s = weakFilter;
+    [s _applyLaneFilterHidden:hidden];
+  };
+  _laneFilterBar.onUserToggled = ^{
+    __strong typeof(weakFilter) s = weakFilter;
+    if (s->_onGuideLaneFilterToggled)
+      s->_onGuideLaneFilterToggled();
+  };
+  [_laneStack addArrangedSubview:_laneFilterBar];
+  [_laneFilterBar.widthAnchor constraintEqualToAnchor:_laneStack.widthAnchor]
+      .active = YES;
 
   NSView *footerRow = [[NSView alloc] init];
   footerRow.translatesAutoresizingMaskIntoConstraints = NO;
@@ -312,6 +334,8 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
                                      displayLanes:displayLanes
                                          fraction:frac
                                    excludedLabels:excludedLabels
+                                  initialCategory:nil
+                                remembersCategory:YES
                                           onValue:onValue
                                         onAnimate:onAnimate
                                          onRemove:onRemove
@@ -390,7 +414,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   _advancedGraph.onHoldModulationPopover = KKMakeHoldForwarder(self);
   _advancedGraph.onValuePopover =
       ^(NSView *anchor, NSArray<KKLane *> *displayLanes, double frac,
-        NSArray<NSString *> *excludedLabels,
+        NSArray<NSString *> *excludedLabels, NSString *primaryCategory,
         void (^onValue)(NSString *, NSArray<NSNumber *> *),
         void (^onAnimate)(NSString *), void (^onRemove)(NSString *),
         void (^onDragBegin)(void), void (^onDragEnd)(void)) {
@@ -399,6 +423,8 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
                                      displayLanes:displayLanes
                                          fraction:frac
                                    excludedLabels:excludedLabels
+                                  initialCategory:primaryCategory
+                                remembersCategory:NO
                                           onValue:onValue
                                         onAnimate:onAnimate
                                          onRemove:onRemove
@@ -414,23 +440,61 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   _basicGraph.onHoldModulationPopover = KKMakeHoldForwarder(self);
 }
 
+// Push the lane-filter's hidden set to the Advanced graph and update the
+// graph/empty-state hint. Called from _refresh AND from the bar's live
+// onVisibilityChanged (a pill toggle doesn't run a full _refresh), so the
+// "All lanes hidden" message appears the moment the last lane is hidden.
+- (void)_applyLaneFilterHidden:(NSSet<NSString *> *)hidden {
+  [_advancedGraph applyHiddenLaneLabels:hidden];
+  NSSet<NSString *> *condVisible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+  NSInteger optedIn = 0;
+  for (KKLane *l in _timeline.lanes)
+    if (l.enabled && [condVisible containsObject:l.label])
+      optedIn++;
+  BOOL anyOptedIn = optedIn > 0;
+  BOOL showAdvanced = anyOptedIn && _activeTab == 1;
+  BOOL allFiltered =
+      showAdvanced && optedIn >= 2 && (NSInteger)hidden.count >= optedIn;
+  _advancedGraph.hidden = !showAdvanced || allFiltered;
+  if (!anyOptedIn)
+    _hintLabel.stringValue = KKLoc(@"No animated properties",
+                                   @"Empty state: no animated properties.");
+  else if (allFiltered)
+    _hintLabel.stringValue =
+        KKLoc(@"All lanes hidden",
+              @"Empty state: every animated lane is hidden by the filter bar.");
+  _hintLabel.hidden = anyOptedIn && !allFiltered;
+}
+
 - (void)_refresh {
-  // Basic mode shows one shared motion graph (not per-property rows): the
-  // graph fills the content area whenever ≥1 property is animatable.
-  BOOL anyOptedIn = NO;
-  for (KKLane *tmpl in _availableLanes) {
-    if ([self _isAnimatableLabel:tmpl.label]) {
-      anyOptedIn = YES;
-      break;
-    }
-  }
+  // Opted-in lanes in parameter order (_timeline.lanes is already sorted),
+  // filtered by the Mode-gating visibleWhen rule - a lane hidden by the current
+  // Mode doesn't count as animated, so the empty state shows when it's the only
+  // one. The graph fills the content area whenever >=1 property is animated AND
+  // visible.
+  NSSet<NSString *> *condVisible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+  NSMutableArray<KKLane *> *optedIn = [NSMutableArray array];
+  for (KKLane *l in _timeline.lanes)
+    if (l.enabled && [condVisible containsObject:l.label])
+      [optedIn addObject:l];
+  BOOL anyOptedIn = optedIn.count > 0;
   BOOL showBasic = anyOptedIn && _activeTab == 0;
   BOOL showAdvanced = anyOptedIn && _activeTab == 1;
-  _hintLabel.hidden = anyOptedIn;
   _basicGraph.hidden = !showBasic;
-  _advancedGraph.hidden = !showAdvanced;
   [_basicGraph applyTimeline:_timeline];
   [_advancedGraph applyTimeline:_timeline];
+
+  // Shown in Advanced when there are >=2 lanes worth filtering; the bar's
+  // hidden set drives which rows the graph draws.
+  [_laneFilterBar applyLanes:optedIn];
+  BOOL showFilter = showAdvanced && optedIn.count >= 2;
+  _laneFilterBar.hidden = !showFilter;
+  // Graph visibility + empty-state hint (also driven live by the bar's
+  // onVisibilityChanged, which doesn't run a full _refresh).
+  [self
+      _applyLaneFilterHidden:showFilter ? [_laneFilterBar hiddenLabels] : nil];
 
   // Now that the sub-views' _timeline ivars are fresh, refresh any open
   // hold-modulation popover's participation pills. The rebuilder closure
@@ -483,7 +547,8 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 
   NSMutableArray<NSString *> *opted = [NSMutableArray array];
   for (KKLane *tmpl in _availableLanes)
-    if ([self _isAnimatableLabel:tmpl.label])
+    if ([self _isAnimatableLabel:tmpl.label] &&
+        [condVisible containsObject:tmpl.label])
       [opted addObject:tmpl.label];
   _dropdownTrigger.selectedLabels = opted;
   [_dropdownTrigger setNeedsDisplay:YES];
@@ -556,6 +621,8 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       fixed.componentUnits = tmpl.componentUnits;
       fixed.componentLabels = tmpl.componentLabels;
       fixed.componentLabelColors = tmpl.componentLabelColors;
+      fixed.componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
+      [fixed kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
       lanes[presentIdx] = fixed;
       continue;
     }
@@ -566,23 +633,38 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.componentUnits = tmpl.componentUnits;
     lane.componentLabels = tmpl.componentLabels;
     lane.componentLabelColors = tmpl.componentLabelColors;
+    lane.componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
+    // Build-time metadata the template defines. A fresh lane must inherit these
+    // or it loses the template's defaults - e.g. `aspectLinked` (so an
+    // aspect-linkable lane like Radius/Scale starts LOCKED when the template
+    // says so), spatial-curve capability, and whole-number rounding.
+    lane.aspectLinkable = tmpl.aspectLinkable;
+    lane.aspectLinked = tmpl.aspectLinked;
+    lane.spatialCurvable = tmpl.spatialCurvable;
+    lane.integerValued = tmpl.integerValued;
+    [lane kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     lane.enabled = NO; // constant until the dropdown makes it animatable
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                           values:[self _defaultValuesForLabel:
                                                            tmpl.label]]];
     [lanes addObject:lane];
   }
-  // Display order: the user's drag-to-reorder list if set, else alphabetical.
-  // This is the single chokepoint every view + popover inherits (they all
-  // iterate _timeline.lanes in order). Labels present in paramOrder lead in
-  // that order; anything not listed (incl. the whole default) falls back to
-  // alphabetical after them.
+  // Display order: the user's drag-to-reorder list if set, else the plugin's
+  // declared `availableLanes` order (the author's intended default), with
+  // alphabetical only as a final tiebreaker for stray labels in neither. This
+  // is the single chokepoint every view + popover inherits (they all iterate
+  // _timeline.lanes in order). Labels present in paramOrder lead in that order.
   NSArray<NSString *> *order = out.paramOrder;
   NSMutableDictionary<NSString *, NSNumber *> *rank =
       [NSMutableDictionary dictionaryWithCapacity:order.count];
   for (NSInteger i = 0; i < (NSInteger)order.count; i++)
     if (!rank[order[i]])
       rank[order[i]] = @(i);
+  NSMutableDictionary<NSString *, NSNumber *> *tmplRank =
+      [NSMutableDictionary dictionaryWithCapacity:_availableLanes.count];
+  for (NSInteger i = 0; i < (NSInteger)_availableLanes.count; i++)
+    if (!tmplRank[_availableLanes[i].label])
+      tmplRank[_availableLanes[i].label] = @(i);
   [lanes sortUsingComparator:^NSComparisonResult(KKLane *a, KKLane *b) {
     NSNumber *ra = rank[a.label];
     NSNumber *rb = rank[b.label];
@@ -591,6 +673,14 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     if (ra)
       return NSOrderedAscending;
     if (rb)
+      return NSOrderedDescending;
+    NSNumber *ta = tmplRank[a.label];
+    NSNumber *tb = tmplRank[b.label];
+    if (ta && tb)
+      return [ta compare:tb];
+    if (ta)
+      return NSOrderedAscending;
+    if (tb)
       return NSOrderedDescending;
     return [a.label localizedCaseInsensitiveCompare:b.label];
   }];
@@ -663,15 +753,20 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   NSMutableSet<NSString *> *avail = [NSMutableSet set];
   for (KKLane *l in _availableLanes)
     [avail addObject:l.label];
+  // Mode-gated lanes drop out of the reorder list too (e.g. no "Gradient" row
+  // while Mode = Solid). Computed over the timeline so the controller resolves.
+  NSSet<NSString *> *condVisible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
   // _timeline.lanes is already in display order (sorted in
   // _timelineSeededFrom:) and - post-seed - contains every available property,
   // so its order is the source of truth for the reorder list.
   NSMutableArray<NSString *> *out = [NSMutableArray array];
   for (KKLane *l in _timeline.lanes)
-    if ([avail containsObject:l.label] && ![out containsObject:l.label])
+    if ([avail containsObject:l.label] && ![out containsObject:l.label] &&
+        [condVisible containsObject:l.label])
       [out addObject:l.label];
   for (KKLane *l in _availableLanes)
-    if (![out containsObject:l.label])
+    if (![out containsObject:l.label] && [condVisible containsObject:l.label])
       [out addObject:l.label];
   return out;
 }

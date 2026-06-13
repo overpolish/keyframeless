@@ -4,8 +4,134 @@
  */
 
 #import "KKGradientSampling.h"
+#import "KKColor.h"
 #import "KKGradientBarView.h"
 #import <AppKit/AppKit.h>
+
+static void _KKStopSRGBA(KKGradientStop *s, CGFloat *r, CGFloat *g, CGFloat *b,
+                         CGFloat *a) {
+  NSColor *c =
+      [s.color colorUsingColorSpace:[NSColorSpace sRGBColorSpace]] ?: s.color;
+  [c getRed:r green:g blue:b alpha:a];
+}
+
+// The gradient's colour at position p (0..1), via its rasterised LUT (which
+// bakes in midpoints). Used to resample two gradients onto a common set of stop
+// positions so they can be blended even when their stop counts differ.
+static NSColor *_KKGradientColorAtPosition(NSArray<KKGradientStop *> *stops,
+                                           double p) {
+  simd_float3 lut[KK_GRADIENT_LUT_SIZE];
+  KKGradientSampleStopsToLUT(stops, lut, KK_GRADIENT_LUT_SIZE);
+  double x = MAX(0.0, MIN(1.0, p)) * (KK_GRADIENT_LUT_SIZE - 1);
+  int i0 = (int)floor(x);
+  int i1 = i0 + 1 < KK_GRADIENT_LUT_SIZE ? i0 + 1 : i0;
+  double f = x - i0;
+  return [NSColor colorWithSRGBRed:lut[i0].x * (1 - f) + lut[i1].x * f
+                             green:lut[i0].y * (1 - f) + lut[i1].y * f
+                              blue:lut[i0].z * (1 - f) + lut[i1].z * f
+                             alpha:1.0];
+}
+
+// Resample `stops` to one stop per position in `positions` (sorted, 0..1).
+// Stops landing on the gradient curve don't change its look, so resampling at
+// the union of two gradients' positions keeps each endpoint accurate.
+static NSArray<KKGradientStop *> *
+_KKResampleStopsAtPositions(NSArray<KKGradientStop *> *stops,
+                            NSArray<NSNumber *> *positions) {
+  NSMutableArray<KKGradientStop *> *out =
+      [NSMutableArray arrayWithCapacity:positions.count];
+  for (NSNumber *pn in positions)
+    [out addObject:[KKGradientStop stopWithPosition:pn.doubleValue
+                                              color:_KKGradientColorAtPosition(
+                                                        stops, pn.doubleValue)
+                                           midpoint:0.5]];
+  return out;
+}
+
+NSArray<NSNumber *> *KKGradientCompositeInterp(NSArray<NSNumber *> *from,
+                                               NSArray<NSNumber *> *to,
+                                               double t) {
+  if (from.count < 2)
+    return from;
+  double type = from[0].doubleValue; // held - never interpolated
+  double aAngle = from[1].doubleValue;
+  double bAngle = to.count >= 2 ? to[1].doubleValue : aAngle;
+  double angle = aAngle + (bAngle - aAngle) * t;
+
+  NSArray<KKGradientStop *> *aStops =
+      from.count > 2 ? KKGradientStopsFromFlat([from
+                           subarrayWithRange:NSMakeRange(2, from.count - 2)])
+                     : nil;
+  NSArray<KKGradientStop *> *bStops =
+      to.count > 2 ? KKGradientStopsFromFlat(
+                         [to subarrayWithRange:NSMakeRange(2, to.count - 2)])
+                   : nil;
+
+  // When the two keyframes have different stop counts, resample both onto the
+  // union of their stop positions so the colours still blend (rather than
+  // holding the first keyframe). Equal counts interpolate stop-for-stop.
+  NSArray<KKGradientStop *> *ra = aStops, *rb = bStops;
+  if (aStops.count && bStops.count && aStops.count != bStops.count) {
+    NSMutableArray<NSNumber *> *positions = [NSMutableArray array];
+    for (KKGradientStop *s in aStops)
+      [positions addObject:@(s.position)];
+    for (KKGradientStop *s in bStops)
+      [positions addObject:@(s.position)];
+    [positions sortUsingSelector:@selector(compare:)];
+    NSMutableArray<NSNumber *> *uniq = [NSMutableArray array];
+    for (NSNumber *p in positions)
+      if (uniq.count == 0 ||
+          fabs(uniq.lastObject.doubleValue - p.doubleValue) > 1e-4)
+        [uniq addObject:p];
+    ra = _KKResampleStopsAtPositions(aStops, uniq);
+    rb = _KKResampleStopsAtPositions(bStops, uniq);
+  }
+
+  NSArray<KKGradientStop *> *outStops = ra;
+  if (ra.count && ra.count == rb.count) {
+    NSMutableArray<KKGradientStop *> *m =
+        [NSMutableArray arrayWithCapacity:ra.count];
+    for (NSUInteger i = 0; i < ra.count; i++) {
+      KKGradientStop *sa = ra[i], *sb = rb[i];
+      CGFloat ar, ag, ab, aa, br, bg, bb, ba;
+      _KKStopSRGBA(sa, &ar, &ag, &ab, &aa);
+      _KKStopSRGBA(sb, &br, &bg, &bb, &ba);
+      NSColor *c = [NSColor colorWithSRGBRed:ar + (br - ar) * t
+                                       green:ag + (bg - ag) * t
+                                        blue:ab + (bb - ab) * t
+                                       alpha:aa + (ba - aa) * t];
+      [m addObject:[KKGradientStop
+                       stopWithPosition:sa.position +
+                                        (sb.position - sa.position) * t
+                                  color:c
+                               midpoint:sa.midpoint +
+                                        (sb.midpoint - sa.midpoint) * t]];
+    }
+    outStops = m;
+  }
+
+  NSMutableArray<NSNumber *> *out = [@[ @(type), @(angle) ] mutableCopy];
+  if (outStops)
+    [out addObjectsFromArray:KKGradientFlatFromStops(outStops)];
+  return out;
+}
+
+double KKGradientStopsSignature(NSArray<KKGradientStop *> *stops) {
+  if (!stops.count)
+    return 0.0;
+  double acc = 0.0;
+  for (KKGradientStop *s in stops) {
+    CGFloat r, g, b, a;
+    _KKStopSRGBA(s, &r, &g, &b, &a);
+    double lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    // Spread the weights so position / colour / midpoint changes all move the
+    // result and rarely cancel - a continuous "fingerprint" of the gradient.
+    acc += s.position * 0.31 + lum * 0.37 + s.midpoint * 0.13 + r * 0.07 +
+           g * 0.11 + b * 0.09 + a * 0.05;
+  }
+  double v = acc / (double)stops.count;
+  return MAX(0.0, MIN(1.0, v));
+}
 
 NSString *KKDefaultGradientJSON(void) {
   return @"[{\"p\":0,\"r\":0,\"g\":0,\"b\":0},"

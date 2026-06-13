@@ -28,6 +28,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// located). Mirror of the old RoundedSetOSCGuideStep.
 @property(nonatomic) NSInteger guideStep;
 
+/// YES while the guide pointer is over the control's spotlight - the segment
+/// sets it on hover in/out so the OSC's drawOSC can show its hover emphasis
+/// (FCP doesn't run its own hitTest hover while the guide panel is frontmost).
+/// Cleared automatically when guideStep returns to 0.
+@property(nonatomic) BOOL handleHovered;
+
 /// Radius (pt) of the square spotlight rect built around the handle/target
 /// screen points. Default 30.
 @property(nonatomic) CGFloat spotlightHandleRadius;

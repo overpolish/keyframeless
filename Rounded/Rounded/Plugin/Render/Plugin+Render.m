@@ -230,6 +230,7 @@
                             boundaryReqSecs:self.renderCache.boundaryReqSecs
                            boundaryReqFracs:self.renderCache.boundaryReqFracs
                             multiSlotActive:self.renderCache.boundaryFeedActive
+                          changesOutputSize:NO
                                  defaultTag:0.0];
 
   id<MTLRenderPipelineState> pipelineState =

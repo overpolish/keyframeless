@@ -9,6 +9,7 @@
 
 @implementation KKOSCGuideBridge {
   NSInteger _guideStep;
+  BOOL _handleHovered;
 
   NSPoint _handleScreenPos;
   BOOL _hasHandleScreenPos;
@@ -68,6 +69,8 @@
   _guideStep = step;
   if (step == 0 || step == 1)
     _hasHandleScreenPos = NO;
+  if (step == 0)
+    _handleHovered = NO; // guide ended - drop any lingering hover emphasis
   NSNotificationName name = self.guideStepNotificationName;
   dispatch_async(dispatch_get_main_queue(), ^{
     [[NSNotificationCenter defaultCenter] postNotificationName:name

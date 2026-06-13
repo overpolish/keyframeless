@@ -51,6 +51,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// `value` unchanged. Optional; nil = no snapping.
 @property(nonatomic, copy, nullable) id (^snapValue)(id value);
 
+/// The cursor the real OSC would show at `screenPt` (e.g. the ring's
+/// angle-based resize cursor), so the guide can present it through the
+/// pass-through overlay - FCP's own imperative setCursor doesn't survive while
+/// the guide panel is frontmost. Optional; nil = leave the cursor untouched.
+@property(nonatomic, copy, nullable) NSCursor *_Nullable (^cursorForScreenPoint)
+    (NSPoint screenPt);
+
+/// Force the viewer OSC to redraw (so a hover-emphasis change shows). FCP only
+/// re-runs drawOSC on a param change while the guide panel is frontmost, so the
+/// segment calls this when the bridge's `handleHovered` flips. Typically
+/// forwards to the inspector's preview-render nudge. Optional.
+@property(nonatomic, copy, nullable) void (^requestRedraw)(void);
+
 /// When YES the drag step only advances once the value is on the target at
 /// release; when NO any release advances.
 @property(nonatomic) BOOL requireTargetHit;
