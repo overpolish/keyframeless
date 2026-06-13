@@ -11,7 +11,11 @@
 #import "KKLocalized.h"
 #import "KKLog.h"
 #import "KKMarkup.h"
+#import "KKPluginHost.h"
 #import "KKPlugin_Private.h"
+#import "KKTimelineInspectorView.h"
+#import "KKTimingEvaluation.h"
+#import "KKTimingStage.h"
 #import <FxPlug/FxPlugSDK.h>
 
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -49,6 +53,172 @@
           encoding:NSUTF8StringEncoding];
   KKWriteCustomParamString(setAPI, json, paramID);
   [actionAPI endAction:self];
+}
+
+- (void)patchMaintainTimingEnabled:(BOOL)enabled paramID:(UInt32)paramID {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSString *existing = KKReadCustomParamString(getAPI, paramID);
+  NSMutableDictionary *state =
+      (existing.length
+           ? [NSJSONSerialization
+                 JSONObjectWithData:[existing
+                                        dataUsingEncoding:NSUTF8StringEncoding]
+                            options:0
+                              error:nil]
+           : nil)
+          ?: @{};
+  state = [state mutableCopy];
+  state[@"maintainTiming"] = @(enabled);
+  if (enabled) {
+    // Anchor to the current source in-point + clip duration. FxTimingAPI
+    // resolves here inside the action scope.
+    id<FxTimingAPI_v4> timingAPI =
+        [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+    CMTime srcStart = kCMTimeZero, clipDur = kCMTimeZero;
+    [timingAPI startTimeOfInputToFilter:&srcStart];
+    [timingAPI durationTimeForEffect:&clipDur];
+    state[@"maintainAnchorSrcIn"] = @(CMTimeGetSeconds(srcStart));
+    state[@"maintainAnchorDur"] = @(CMTimeGetSeconds(clipDur));
+  }
+  NSString *json = [[NSString alloc]
+      initWithData:[NSJSONSerialization dataWithJSONObject:state
+                                                   options:0
+                                                     error:nil]
+          encoding:NSUTF8StringEncoding];
+  KKWriteCustomParamString(setAPI, json, paramID);
+  [actionAPI endAction:self];
+}
+
+// Seconds the source range must hold steady after a trim before the bake
+// commits. The render-remap previews the move live throughout; this only delays
+// the destructive blob rewrite so a continuous clip-edge drag commits once on
+// release instead of churning every frame.
+static const double kKKMaintainTimingBakeSettleSecs = 0.3;
+
+- (void)bakeMaintainTimingForCache:(KKRenderCache *)cache
+                   timelineParamID:(UInt32)timelineParamID
+                    uiStateParamID:(UInt32)uiStateParamID {
+  if (!cache.maintainTimingEnabled || cache.anchorDurSec <= 0 ||
+      cache.effectDurSec <= 0)
+    return;
+  double curSrcIn = cache.sourceInSec, curDur = cache.effectDurSec;
+  // Already aligned to the anchor → nothing pending.
+  if (fabs(curSrcIn - cache.anchorSrcInSec) < 1.0e-4 &&
+      fabs(curDur - cache.anchorDurSec) < 1.0e-4)
+    return;
+  // Only (re)arm the settle timer when the range actually moves. A steady value
+  // (drag released / paused) schedules nothing new, so the last-armed timer
+  // fires and commits exactly once.
+  if (fabs(curSrcIn - cache.bakeLastSeenSrcInSec) < 1.0e-4 &&
+      fabs(curDur - cache.bakeLastSeenDurSec) < 1.0e-4)
+    return;
+  cache.bakeLastSeenSrcInSec = curSrcIn;
+  cache.bakeLastSeenDurSec = curDur;
+  cache.bakeGeneration += 1;
+  NSInteger gen = cache.bakeGeneration;
+
+  __weak typeof(self) weak = self;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW,
+                    (int64_t)(kKKMaintainTimingBakeSettleSecs * NSEC_PER_SEC)),
+      dispatch_get_main_queue(), ^{
+        __strong typeof(weak) strong = weak;
+        // Superseded by a later change → that change owns the commit.
+        if (!strong || gen != cache.bakeGeneration)
+          return;
+        [strong _commitMaintainTimingBakeWithTimelineParamID:timelineParamID
+                                              uiStateParamID:uiStateParamID];
+      });
+}
+
+- (KKTimelineInspectorView *)maintainTimingInspectorView {
+  return nil;
+}
+
+- (void)_commitMaintainTimingBakeWithTimelineParamID:(UInt32)timelineParamID
+                                      uiStateParamID:(UInt32)uiStateParamID {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+
+  // Re-read the CURRENT source range fresh from FxTimingAPI here, not a value
+  // captured off a render tick: trims surface on render ticks that FCP can
+  // coalesce, so a captured value may lag the real clip (the cause of the
+  // "graph sometimes lands wrong / doesn't update" inconsistency).
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  CMTime srcStart = kCMTimeZero, clipDur = kCMTimeZero, frameDur = kCMTimeZero;
+  [timingAPI startTimeOfInputToFilter:&srcStart];
+  [timingAPI durationTimeForEffect:&clipDur];
+  [timingAPI frameDuration:&frameDur];
+  double curSrcIn = CMTimeGetSeconds(srcStart);
+  double curDur = CMTimeGetSeconds(clipDur);
+  double frameDurSec = CMTimeGetSeconds(frameDur);
+  // Snap a keypose within half a frame of an edge (e.g. a split AT a keypose)
+  // to the edge instead of duplicating it.
+  double edgeEps = curDur > 0 ? 0.5 * frameDurSec / curDur : 0.0;
+
+  // Read the anchor the BLOB is currently framed in from the UI-state (not a
+  // captured cache value), so back-to-back trims compose correctly: each bake
+  // maps the blob from its actual current frame to the new range.
+  NSString *uiJSON = KKReadCustomParamString(getAPI, uiStateParamID);
+  NSMutableDictionary *st =
+      (uiJSON.length
+           ? [[NSJSONSerialization
+                 JSONObjectWithData:[uiJSON
+                                        dataUsingEncoding:NSUTF8StringEncoding]
+                            options:0
+                              error:nil] mutableCopy]
+           : nil)
+          ?: [NSMutableDictionary dictionary];
+  double fromSrcIn = [st[@"maintainAnchorSrcIn"] doubleValue];
+  double fromDur = [st[@"maintainAnchorDur"] doubleValue];
+  KKTimeline *retimed = nil;
+  if (curDur > 0 && fromDur > 0 &&
+      (fabs(curSrcIn - fromSrcIn) > 1.0e-4 ||
+       fabs(curDur - fromDur) > 1.0e-4)) {
+    NSString *tlJSON = KKReadCustomParamString(getAPI, timelineParamID);
+    KKTimeline *tl = tlJSON.length ? [KKTimeline timelineFromJSON:tlJSON] : nil;
+    if (tl) {
+      retimed = KKTimelineRetimedForMediaAnchor(
+          tl, fromSrcIn, fromDur, curSrcIn, curDur,
+          ^NSArray<NSNumber *> *(KKLane *lane, double frac) {
+            return KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+          },
+          edgeEps);
+      NSString *outJSON = [KKTimeline jsonFromTimeline:retimed];
+      if (outJSON)
+        KKWriteCustomParamString(setAPI, outJSON, timelineParamID);
+    }
+    st[@"maintainAnchorSrcIn"] = @(curSrcIn);
+    st[@"maintainAnchorDur"] = @(curDur);
+    NSString *stJSON = [[NSString alloc]
+        initWithData:[NSJSONSerialization dataWithJSONObject:st
+                                                     options:0
+                                                       error:nil]
+            encoding:NSUTF8StringEncoding];
+    KKWriteCustomParamString(setAPI, stJSON, uiStateParamID);
+  }
+  [actionAPI endAction:self];
+
+  // Push straight to the graph so it refreshes even if the parameterChanged
+  // round-trip from this self-write is dropped (the inconsistency symptom).
+  if (retimed)
+    [[self maintainTimingInspectorView] applyTimeline:retimed];
 }
 
 - (NSArray<KKHelpSection *> *)helpSections {

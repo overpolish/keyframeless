@@ -148,12 +148,13 @@ static NSString *_RoundedAILaneSchemaText(void) {
     [actionAPI endAction:self];
 
     NSArray<KKLane *> *available = [RoundedPlugin availableLanes];
-    RoundedInspectorView *view =
-        [[RoundedInspectorView alloc] initWithAPIManager:self.apiManager
-                                             loopEnabled:loopEnabled
-                                               activeTab:activeTab
-                                          availableLanes:available
-                                                timeline:timeline];
+    RoundedInspectorView *view = [[RoundedInspectorView alloc]
+           initWithAPIManager:self.apiManager
+                  loopEnabled:loopEnabled
+        maintainTimingEnabled:st.maintainTimingEnabled
+                    activeTab:activeTab
+               availableLanes:available
+                     timeline:timeline];
     // Seed the basic-view scrubber clamp immediately. Plugin+Render's
     // dispatch_async push runs once on first render - if it raced ahead
     // and weakSelf.inspectorView was still nil, the basic view would

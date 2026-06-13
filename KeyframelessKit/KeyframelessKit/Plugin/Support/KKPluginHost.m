@@ -132,6 +132,28 @@ NSArray *KKBuildSourceRequests(CMTime renderTime, KKMotionBlurState mbState,
   return reqs;
 }
 
+double KKMaintainTimingRemappedFraction(double clipFrac, KKRenderCache *cache) {
+  if (!cache.maintainTimingEnabled || cache.anchorDurSec <= 0 ||
+      cache.effectDurSec <= 0)
+    return clipFrac;
+  // Frame's absolute media time, then back to the authored fraction relative to
+  // the anchor's clip span. Source in-point shifts on head-trim and holds on
+  // tail-trim, so this single map covers grow/shrink from either edge (and
+  // split, where each half is the same media at a different in-point).
+  double mediaT = cache.sourceInSec + clipFrac * cache.effectDurSec;
+  double f = (mediaT - cache.anchorSrcInSec) / cache.anchorDurSec;
+  return MAX(0.0, MIN(1.0, f));
+}
+
+void KKRenderCacheApplyUIState(KKRenderCache *cache, NSDictionary *uiState) {
+  if (![uiState isKindOfClass:[NSDictionary class]])
+    return;
+  cache.loopEnabled = [uiState[@"loopEnabled"] boolValue];
+  cache.maintainTimingEnabled = [uiState[@"maintainTiming"] boolValue];
+  cache.anchorSrcInSec = [uiState[@"maintainAnchorSrcIn"] doubleValue];
+  cache.anchorDurSec = [uiState[@"maintainAnchorDur"] doubleValue];
+}
+
 BOOL KKRefreshRenderCache(id<PROAPIAccessing> apiManager,
                           KKTimelineInspectorView *inspectorView,
                           KKRenderCache *cache) {
@@ -150,6 +172,7 @@ BOOL KKRefreshRenderCache(id<PROAPIAccessing> apiManager,
   cache.effectDurSec = durSec;
   CMTime srcStart = kCMTimeZero, tlStart = kCMTimeZero;
   [timingAPI startTimeOfInputToFilter:&srcStart];
+  cache.sourceInSec = CMTimeGetSeconds(srcStart);
   [timingAPI timelineTime:&tlStart fromInputTime:srcStart];
   cache.timelineStartSec = CMTimeGetSeconds(tlStart);
   CMTime frameDur = kCMTimeZero;
@@ -169,5 +192,6 @@ BOOL KKRefreshRenderCache(id<PROAPIAccessing> apiManager,
         [iv setFrameDurationSeconds:frameDurSec];
     });
   }
+
   return YES;
 }

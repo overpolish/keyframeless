@@ -9073,48 +9073,6 @@
       },
       "comment": "Timing guide: closing step."
     },
-    "The <accent>Dynamic</accent> toolbar toggle (Advanced) widens short transitions so they stay easy to grab on a long clip; each lane then shows its own playback line. It's display-only, off by default, and never changes the animation.": {
-      "comment": "Help text.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Schalter <accent>Dynamisch</accent> in der Symbolleiste (Erweitert) verbreitert kurze Übergänge, damit sie auf einem langen Clip leicht zu greifen bleiben; jede Spur zeigt dann ihre eigene Abspiellinie. Er dient nur der Anzeige, ist standardmäßig aus und ändert nie die Animation."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El conmutador <accent>Dinámico</accent> de la barra de herramientas (Avanzado) ensancha las transiciones cortas para que sigan siendo fáciles de agarrar en un clip largo; entonces cada pista muestra su propia línea de reproducción. Es solo de visualización, está desactivado por omisión y nunca cambia la animación."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le bouton <accent>Dynamique</accent> de la barre d'outils (Avancé) élargit les transitions courtes pour qu'elles restent faciles à saisir sur un plan long ; chaque piste affiche alors sa propre ligne de lecture. Il sert uniquement à l'affichage, est désactivé par défaut et ne modifie jamais l'animation."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ツールバーの<accent>ダイナミック</accent>スイッチ(詳細)は、短いトランジションを広げて長いクリップでもつかみやすくします。各レーンはそれぞれの再生ラインを表示します。表示専用で、デフォルトはオフ、アニメーションを変更することはありません。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "툴바의 <accent>다이내믹</accent> 토글(고급)은 짧은 트랜지션을 넓혀 긴 클립에서도 쉽게 잡을 수 있게 합니다. 그러면 각 레인이 자체 재생 라인을 표시합니다. 보기 전용이고 기본값은 꺼짐이며 애니메이션을 변경하지 않습니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "工具栏中的<accent>动态</accent>开关（高级）会加宽短转场，使其在长片段上也易于抓取；此时每条轨道都会显示各自的播放线。它仅用于显示，默认关闭，且绝不更改动画。"
-          }
-        }
-      }
-    },
     "The <accent>graph</accent> updates to show the movement.": {
       "extractionState": "manual",
       "localizations": {
@@ -10413,6 +10371,216 @@
           "stringUnit": {
             "state": "translated",
             "value": "v%@ 可用"
+          }
+        }
+      }
+    },
+    "Maintain Timing": {
+      "comment": "Toolbar toggle: pin the animation to absolute time so trimming or splitting the clip keeps each keypose where it is.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timing beibehalten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener tiempo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conserver le minutage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タイミングを維持"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "타이밍 유지"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保持时间"
+          }
+        }
+      }
+    },
+    "<accent>Maintain Timing</accent> locks the animation to absolute time - trimming or splitting the clip then retimes the keyposes to hold their position.": {
+      "comment": "Advanced timing guide: the Maintain Timing lock toggle.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Timing beibehalten</accent> sperrt die Animation auf absolute Zeit - beim Trimmen oder Teilen des Clips werden die Keyposes neu getimt, damit sie ihre Position halten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Mantener tiempo</accent> bloquea la animación en tiempo absoluto: al recortar o dividir el clip, los keyposes se vuelven a temporizar para mantener su posición."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Conserver le minutage</accent> verrouille l'animation sur le temps absolu : rogner ou diviser le plan recale alors les keyposes pour conserver leur position."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>タイミングを維持</accent>はアニメーションを絶対時間に固定します。クリップをトリミングまたは分割すると、キーポーズが位置を保つように再タイミングされます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>타이밍 유지</accent>는 애니메이션을 절대 시간에 고정합니다. 클립을 트리밍하거나 분할하면 키포즈가 위치를 유지하도록 다시 타이밍됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>保持时间</accent>将动画锁定到绝对时间：修剪或拆分片段时，关键姿势会重新计时以保持其位置。"
+          }
+        }
+      }
+    },
+    "Advanced timeline only:": {
+      "comment": "Help tip: header grouping the Advanced-only toolbar toggles.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur erweiterte Timeline:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo línea de tiempo avanzada:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timeline avancée uniquement :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細タイムラインのみ："
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "고급 타임라인 전용:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅高级时间线："
+          }
+        }
+      }
+    },
+    "The <accent>Dynamic</accent> toolbar toggle widens short transitions so they stay easy to grab on a long clip; each lane then shows its own playback line. It's display-only, off by default, and never changes the animation.": {
+      "comment": "Help tip: the Dynamic toolbar toggle (nested under Advanced).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Schalter <accent>Dynamisch</accent> in der Symbolleiste verbreitert kurze Übergänge, damit sie auf einem langen Clip leicht zu greifen bleiben; jede Spur zeigt dann ihre eigene Abspiellinie. Er dient nur der Anzeige, ist standardmäßig aus und ändert nie die Animation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El conmutador <accent>Dinámico</accent> de la barra de herramientas ensancha las transiciones cortas para que sigan siendo fáciles de agarrar en un clip largo; entonces cada pista muestra su propia línea de reproducción. Es solo de visualización, está desactivado por omisión y nunca cambia la animación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bouton <accent>Dynamique</accent> de la barre d'outils élargit les transitions courtes pour qu'elles restent faciles à saisir sur un plan long ; chaque piste affiche alors sa propre ligne de lecture. Il sert uniquement à l'affichage, est désactivé par défaut et ne modifie jamais l'animation."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ツールバーの<accent>ダイナミック</accent>スイッチは、短いトランジションを広げて長いクリップでもつかみやすくします。各レーンはそれぞれの再生ラインを表示します。表示専用で、デフォルトはオフ、アニメーションを変更することはありません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "툴바의 <accent>다이내믹</accent> 토글은 짧은 트랜지션을 넓혀 긴 클립에서도 쉽게 잡을 수 있게 합니다. 그러면 각 레인이 자체 재생 라인을 표시합니다. 보기 전용이고 기본값은 꺼짐이며 애니메이션을 변경하지 않습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具栏中的<accent>动态</accent>开关会加宽短转场，使其在长片段上也易于抓取；此时每条轨道都会显示各自的播放线。它仅用于显示，默认关闭，且绝不更改动画。"
+          }
+        }
+      }
+    },
+    "The <accent>Maintain Timing</accent> toolbar toggle is a lock that pins the animation to absolute time: trimming, growing, or splitting the clip then retimes the keyposes to hold their position instead of stretching with the clip, and a split stays continuous across the cut. It bakes the retime into the data, so it persists when you turn the lock off.": {
+      "comment": "Help tip: the Maintain Timing toolbar toggle (nested under Advanced).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Werkzeugleisten-Umschalter <accent>Timing beibehalten</accent> ist eine Sperre, die die Animation auf absolute Zeit fixiert: Trimmen, Verlängern oder Teilen des Clips timt die Keyposes dann neu, damit sie ihre Position halten, statt sich mit dem Clip zu dehnen, und eine Teilung bleibt über den Schnitt hinweg durchgehend. Die Neutaktung wird in die Daten eingebrannt und bleibt erhalten, wenn du die Sperre ausschaltest."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El conmutador <accent>Mantener tiempo</accent> de la barra de herramientas es un bloqueo que fija la animación en tiempo absoluto: recortar, alargar o dividir el clip vuelve a temporizar los keyposes para que mantengan su posición en lugar de estirarse con el clip, y una división se mantiene continua a través del corte. Integra la nueva temporización en los datos, por lo que persiste al desactivar el bloqueo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bouton <accent>Conserver le minutage</accent> de la barre d'outils est un verrou qui fixe l'animation sur le temps absolu : rogner, allonger ou diviser le plan recale alors les keyposes pour conserver leur position au lieu de s'étirer avec le plan, et une division reste continue de part et d'autre de la coupe. Le recalage est intégré aux données et persiste lorsque vous désactivez le verrou."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ツールバーの<accent>タイミングを維持</accent>トグルは、アニメーションを絶対時間に固定するロックです。オンにすると、クリップのトリミング・延長・分割でキーポーズが再タイミングされ、クリップに合わせて伸びるのではなく位置を保ちます。分割しても切れ目で連続します。再タイミングはデータに焼き込まれるため、ロックを解除しても保持されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "툴바의 <accent>타이밍 유지</accent> 토글은 애니메이션을 절대 시간에 고정하는 잠금입니다. 켜면 클립을 트리밍, 확장 또는 분할할 때 키포즈가 클립에 따라 늘어나는 대신 위치를 유지하도록 다시 타이밍되며, 분할해도 잘린 지점에서 연속됩니다. 재타이밍은 데이터에 적용되어 잠금을 꺼도 유지됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具栏的<accent>保持时间</accent>开关是一个锁，可将动画固定到绝对时间：修剪、延长或拆分片段时，关键姿势会重新计时以保持其位置，而不是随片段拉伸，并且拆分在剪切处保持连续。重新计时会写入数据，因此关闭锁后仍会保留。"
           }
         }
       }

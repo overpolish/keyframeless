@@ -337,6 +337,37 @@ FOUNDATION_EXPORT KKTimeline *KKTimelineRebalanced(KKTimeline *timeline,
                                                    double oldDuration,
                                                    double newDuration);
 
+/// "Maintain Timing" bake: rewrites each keypose's time fraction so its
+/// ABSOLUTE source-media position is preserved when the clip's source range
+/// changes from (`fromSrcIn`, `fromDur`) to (`toSrcIn`, `toDur`) — i.e. a
+/// trim/grow/split. A keypose at fraction `f` sits at media time
+/// `fromSrcIn + f*fromDur`; its new fraction is `(media - toSrcIn) / toDur`.
+/// Keyposes pushed off an edge are COALESCED (not piled up): of the head run
+/// (f<=0) only the last survives at 0, of the tail run (f>=1) only the first
+/// survives at 1, so no keyposes ever overlap. Interior keyposes (0<f<1) keep
+/// their remapped time. Lanes with < 2 keyposes (constants) are left untouched.
+/// Preserves handles/intervals/smoothing. Returns a new KKTimeline; input is
+/// not mutated.
+///
+/// `sampler` (optional) evaluates the ORIGINAL lane at a 0-1 fraction; when
+/// given, a SYNTHESIZED edge keypose takes the INTERPOLATED value at the clip
+/// boundary (original fraction `(toSrcIn - fromSrcIn)/fromDur` for the head,
+/// `(toSrcIn + toDur - fromSrcIn)/fromDur` for the tail) instead of its own raw
+/// value. This makes a SPLIT continuous: both halves sample the same media
+/// fraction at the cut, so their boundary values match. Pass nil to keep raw
+/// values (no evaluator dependency).
+///
+/// `edgeEps` is the near-edge tolerance (a 0-1 fraction, ~half a frame). A real
+/// keypose within `edgeEps` of an edge — e.g. a split landing AT a keypose —
+/// is snapped to that edge (keeping its own value + easing) rather than being
+/// kept as a separate interior keypose alongside a synthesized boundary, which
+/// would leave two coincident keyposes. 0 disables it.
+typedef NSArray<NSNumber *> *_Nullable (^KKLaneFractionSampler)(KKLane *lane,
+                                                                double frac);
+FOUNDATION_EXPORT KKTimeline *KKTimelineRetimedForMediaAnchor(
+    KKTimeline *timeline, double fromSrcIn, double fromDur, double toSrcIn,
+    double toDur, KKLaneFractionSampler _Nullable sampler, double edgeEps);
+
 /// Returns a copy of `timeline` with `spatialSmooth` set to `on` on the
 /// keypose nearest `frac` in the lane named `label`. Nearest-match (not exact)
 /// so it is robust to a lane storing its endpoint a frame short of 0/1.

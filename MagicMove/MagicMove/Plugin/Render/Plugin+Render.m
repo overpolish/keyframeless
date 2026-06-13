@@ -143,20 +143,23 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
   KKTimeline *timeline =
       timelineJSON.length ? [KKTimeline timelineFromJSON:timelineJSON] : nil;
 
-  // Cache the loop toggle (lives in the UI-state blob) so the main-queue
-  // playhead poll can decide whether to wrap at the clip end.
+  // Cache the loop toggle + maintain-timing anchor (both live in the UI-state
+  // blob) so the playhead poll can wrap at the clip end and the frac remap can
+  // pin keyposes to absolute media time.
   NSString *uiJSON = KKReadCustomParamString(paramGetAPI, kParamUIState);
   if (uiJSON.length) {
     NSDictionary *ui = [NSJSONSerialization
         JSONObjectWithData:[uiJSON dataUsingEncoding:NSUTF8StringEncoding]
                    options:0
                      error:nil];
-    if ([ui isKindOfClass:[NSDictionary class]])
-      self.renderCache.loopEnabled = [ui[@"loopEnabled"] boolValue];
+    KKRenderCacheApplyUIState(self.renderCache, ui);
   }
 
   BOOL hasTiming = KKRefreshRenderCache(self.apiManager, self.inspectorView,
                                         self.renderCache);
+  [self bakeMaintainTimingForCache:self.renderCache
+                   timelineParamID:kKKParamTimelineData
+                    uiStateParamID:kParamUIState];
   if (hasTiming) {
     KKPlayheadPoller *poller = self.playheadPoller;
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -168,6 +171,7 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
   // it's been populated once).
   double frac = KKFracForTime(time, self.renderCache.effectStartSec,
                               self.renderCache.effectDurSec);
+  frac = KKMaintainTimingRemappedFraction(frac, self.renderCache);
   KKMagicMoveFillParamsFromTimeline(outParams, timeline, frac,
                                     self.renderCache.effectDurSec);
   return YES;

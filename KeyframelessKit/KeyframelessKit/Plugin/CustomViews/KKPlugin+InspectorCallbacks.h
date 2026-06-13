@@ -23,6 +23,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// `renderMode` is a `KKMiniViewerRenderMode` carried as NSInteger.
 @interface KKInspectorPersistedState : NSObject
 @property(nonatomic) BOOL loopEnabled;
+@property(nonatomic) BOOL maintainTimingEnabled;
 @property(nonatomic) NSInteger activeTab;
 @property(nonatomic) BOOL oscMasterVisible;
 @property(nonatomic) NSInteger renderMode;

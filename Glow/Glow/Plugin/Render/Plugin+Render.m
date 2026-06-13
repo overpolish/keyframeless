@@ -480,26 +480,30 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
   KKTimeline *timeline =
       timelineJSON.length ? [KKTimeline timelineFromJSON:timelineJSON] : nil;
 
-  // Loop toggle (lives in the UI-state blob) drives the playhead poll wrap.
+  // Loop toggle drives the playhead poll wrap; the maintain-timing anchor pins
+  // keyposes to absolute media time. Both live in the UI-state blob.
   NSString *uiJSON = KKReadCustomParamString(api, kParamUIState);
   if (uiJSON.length) {
     NSDictionary *ui = [NSJSONSerialization
         JSONObjectWithData:[uiJSON dataUsingEncoding:NSUTF8StringEncoding]
                    options:0
                      error:nil];
-    if ([ui isKindOfClass:[NSDictionary class]])
-      self.renderCache.loopEnabled = [ui[@"loopEnabled"] boolValue];
+    KKRenderCacheApplyUIState(self.renderCache, ui);
   }
 
   BOOL hasTiming = KKRefreshRenderCache(
       self.apiManager, (KKTimelineInspectorView *)self.inspectorView,
       self.renderCache);
+  [self bakeMaintainTimingForCache:self.renderCache
+                   timelineParamID:kKKParamTimelineData
+                    uiStateParamID:kParamUIState];
   double durSec = self.renderCache.effectDurSec;
   double frac = hasTiming
                     ? MAX(0.0, MIN(1.0, (CMTimeGetSeconds(renderTime) -
                                          self.renderCache.effectStartSec) /
                                             durSec))
                     : 0.0;
+  frac = KKMaintainTimingRemappedFraction(frac, self.renderCache);
   // Live scrubber: render ticks stop ~1s before the clip end. Arm the
   // self-terminating poll so it follows currentTime through the tail.
   if (hasTiming) {

@@ -59,6 +59,12 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 #pragma mark - Callbacks (host wires playback / loop param / FxRemoteWindow)
 
 @property(nonatomic, copy, nullable) void (^onLoopToggled)(BOOL enabled);
+/// "Maintain Timing" toggle flipped. The host persists the flag in its
+/// UI-state blob and (when turning on) captures the absolute source-media
+/// anchor so later trims/grows re-derive keypose fractions instead of
+/// rescaling them.
+@property(nonatomic, copy, nullable) void (^onMaintainTimingToggled)
+    (BOOL enabled);
 @property(nonatomic, copy, nullable) void (^onTabChanged)(NSInteger tab);
 /// The "On-Screen Controls" master tick was toggled. The host persists the
 /// flag (its UI-state blob) and updates its per-instance OSC-visibility cache.
@@ -140,6 +146,7 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
                        loopEnabled:(BOOL)loopEnabled
+             maintainTimingEnabled:(BOOL)maintainTimingEnabled
                          activeTab:(NSInteger)activeTab
                     availableLanes:(NSArray<KKLane *> *)availableLanes
                           timeline:(KKTimeline *)timeline
@@ -149,6 +156,7 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 
 - (void)applyTimeline:(KKTimeline *)timeline;
 - (void)setLoopEnabled:(BOOL)enabled;
+- (void)setMaintainTimingEnabled:(BOOL)enabled;
 - (void)setActiveTab:(NSInteger)tab;
 /// Push the persisted mini-viewer render mode from the host's UI-state
 /// blob. The 3-way pill lives in the keypose-value popover header (only

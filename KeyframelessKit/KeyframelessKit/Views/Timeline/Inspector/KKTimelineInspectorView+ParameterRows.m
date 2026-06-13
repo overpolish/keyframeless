@@ -586,6 +586,11 @@
         constraintEqualToAnchor:_playButton.trailingAnchor
                        constant:KKSpacingSM],
     [_loopButton.centerYAnchor constraintEqualToAnchor:headerRow.centerYAnchor],
+    [_maintainTimingButton.leadingAnchor
+        constraintEqualToAnchor:_loopButton.trailingAnchor
+                       constant:KKSpacingSM],
+    [_maintainTimingButton.centerYAnchor
+        constraintEqualToAnchor:headerRow.centerYAnchor],
     [_resetButton.trailingAnchor
         constraintEqualToAnchor:headerRow.trailingAnchor
                        constant:-KKPaddingMD],

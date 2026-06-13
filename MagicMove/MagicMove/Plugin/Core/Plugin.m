@@ -13,6 +13,10 @@
 #pragma clang diagnostic ignored "-Wprotocol"
 @implementation MagicMovePlugin
 
+- (KKTimelineInspectorView *)maintainTimingInspectorView {
+  return self.inspectorView;
+}
+
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager {
   KKLogInfo(@"MagicMovePlugin: initialized");
   self = [super initWithAPIManager:newApiManager];

@@ -37,6 +37,7 @@
           : @{};
   st.uiState = uiState;
   st.loopEnabled = [uiState[@"loopEnabled"] boolValue];
+  st.maintainTimingEnabled = [uiState[@"maintainTiming"] boolValue];
   st.activeTab = [uiState[@"activeTab"] integerValue];
   // Default visible when the key is absent (existing clips never wrote it).
   st.oscMasterVisible = uiState[@"oscMasterVisible"]
@@ -95,6 +96,12 @@
     [strong patchUIStateKey:@"loopEnabled"
                       value:@(enabled)
                     paramID:uiStateParamID];
+  };
+  view.onMaintainTimingToggled = ^(BOOL enabled) {
+    __strong typeof(weak) strong = weak;
+    if (!strong)
+      return;
+    [strong patchMaintainTimingEnabled:enabled paramID:uiStateParamID];
   };
   view.onTabChanged = ^(NSInteger tab) {
     __strong typeof(weak) strong = weak;

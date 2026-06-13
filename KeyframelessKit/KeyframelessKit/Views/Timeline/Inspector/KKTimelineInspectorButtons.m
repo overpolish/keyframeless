@@ -17,6 +17,7 @@ static const CGFloat kResetIconSize = 11.0;
 static const CGFloat kClearIconSize = 11.0;
 static const CGFloat kOnionSkinIconSize = 11.0;
 static const CGFloat kDynamicIconSize = 11.0;
+static const CGFloat kMaintainTimingIconSize = 11.0;
 
 NSButton *KKResetToDefaultButton(id target, SEL action) {
   NSImage *resetImg =
@@ -82,16 +83,27 @@ static NSImage *KKOnionSkinImage(void) {
 static NSImage *KKDynamicImage(void) {
   return KKSymbolImage(@"arrow.left.and.right", kDynamicIconSize);
 }
+static NSImage *KKMaintainTimingImage(void) {
+  NSImage *img = KKSymbolImage(@"lock.badge.clock", kMaintainTimingIconSize);
+  if (!img) // older OS without this symbol
+    img = KKSymbolImage(@"lock", kMaintainTimingIconSize);
+  return img;
+}
 
 // Shared body for the centred icon-only buttons (Loop / Play / Reset /
 // Detach). `tinted` is already coloured; just centre and blit.
 static void KKDrawCentredIcon(NSImage *tinted, NSRect bounds) {
   CGFloat x = NSMidX(bounds) - tinted.size.width / 2.0;
   CGFloat y = NSMidY(bounds) - tinted.size.height / 2.0;
-  [tinted drawAtPoint:NSMakePoint(x, y)
-             fromRect:NSZeroRect
-            operation:NSCompositingOperationSourceOver
-             fraction:1.0];
+  // These buttons are isFlipped=YES; drawAtPoint: ignores that and renders the
+  // image upside down (only visible on a vertically-asymmetric glyph like the
+  // lock). respectFlipped:YES draws it upright.
+  [tinted drawInRect:NSMakeRect(x, y, tinted.size.width, tinted.size.height)
+            fromRect:NSZeroRect
+           operation:NSCompositingOperationSourceOver
+            fraction:1.0
+      respectFlipped:YES
+               hints:nil];
 }
 
 @implementation KKLoopButton
@@ -378,6 +390,40 @@ static void KKDrawCentredIcon(NSImage *tinted, NSRect bounds) {
 
 - (NSSize)intrinsicContentSize {
   return NSMakeSize(ceil(KKDynamicImage().size.width) + 2.5, 18.0);
+}
+
+@end
+
+@implementation KKMaintainTimingButton
+
+- (BOOL)isFlipped {
+  return YES;
+}
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
+- (void)setOn:(BOOL)on {
+  if (_on == on)
+    return;
+  _on = on;
+  [self setNeedsDisplay:YES];
+}
+
+- (void)drawRect:(NSRect)dirtyRect {
+  NSColor *tint = _on ? [NSColor accentMatchingHost]
+                      : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
+  KKDrawCentredIcon(KKTintedImage(KKMaintainTimingImage(), tint), self.bounds);
+}
+
+- (void)mouseDown:(NSEvent *)event {
+  self.on = !_on;
+  if (_onToggled)
+    _onToggled(_on);
+}
+
+- (NSSize)intrinsicContentSize {
+  return NSMakeSize(ceil(KKMaintainTimingImage().size.width) + 2.5, 18.0);
 }
 
 @end

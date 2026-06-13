@@ -13,11 +13,13 @@
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
                        loopEnabled:(BOOL)loopEnabled
+             maintainTimingEnabled:(BOOL)maintainTimingEnabled
                          activeTab:(NSInteger)activeTab
                     availableLanes:(NSArray<KKLane *> *)availableLanes
                           timeline:(KKTimeline *)timeline {
   self = [super initWithAPIManager:apiManager
                        loopEnabled:loopEnabled
+             maintainTimingEnabled:maintainTimingEnabled
                          activeTab:activeTab
                     availableLanes:availableLanes
                           timeline:timeline];

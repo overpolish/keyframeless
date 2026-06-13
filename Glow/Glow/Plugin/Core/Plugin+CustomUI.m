@@ -328,6 +328,7 @@ static NSString *_GlowAILaneSchemaText(void) {
     GlowInspectorView *view =
         [[GlowInspectorView alloc] initWithAPIManager:self.apiManager
                                           loopEnabled:loopEnabled
+                                maintainTimingEnabled:st.maintainTimingEnabled
                                             activeTab:activeTab
                                        availableLanes:available
                                              timeline:timeline];
