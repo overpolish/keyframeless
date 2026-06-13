@@ -215,7 +215,9 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 		let jsonSystem =
 			system + "\n\n"
 			+ "Respond with ONLY a single JSON object conforming to this JSON Schema. "
-			+ "No prose, no explanation, no markdown code fences - just the raw JSON.\n\n"
+			+ "No prose, no explanation, no markdown code fences - just the raw JSON. "
+			+ "Every number must be a plain decimal literal (e.g. 0.092), never a "
+			+ "fraction or arithmetic expression like 1/10.867. No trailing commas.\n\n"
 			+ "JSON Schema:\n\(schemaString)"
 		let session = ChatSession(
 			container,
@@ -228,16 +230,76 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 	}
 
 	/// Best-effort: return the substring from the first `{` to the last `}` if
-	/// it parses as a JSON object, else nil.
+	/// it parses as a JSON object, else nil. Small local models sometimes emit
+	/// not-quite-JSON (an arithmetic expression like `"time": 1 / 10.867` instead
+	/// of `0.092`, or a trailing comma), which a strict parser rejects - so if the
+	/// raw candidate fails, we repair those quirks and retry once.
 	private static func extractJSONObject(from s: String) -> String? {
 		guard let open = s.firstIndex(of: "{"), let close = s.lastIndex(of: "}"),
 			open < close
 		else { return nil }
 		let candidate = String(s[open...close])
-		guard let data = candidate.data(using: .utf8),
-			(try? JSONSerialization.jsonObject(with: data)) is [String: Any]
-		else { return nil }
-		return candidate
+		if Self.parsesAsObject(candidate) { return candidate }
+		let repaired = Self.repairLooseJSON(candidate)
+		if repaired != candidate, Self.parsesAsObject(repaired) { return repaired }
+		return nil
+	}
+
+	private static func parsesAsObject(_ s: String) -> Bool {
+		guard let data = s.data(using: .utf8) else { return false }
+		return (try? JSONSerialization.jsonObject(with: data)) is [String: Any]
+	}
+
+	/// Fix the two not-JSON things small models emit most: arithmetic in a value
+	/// position (`: 1 / 10.867`) and trailing commas before `}`/`]`.
+	private static func repairLooseJSON(_ s: String) -> String {
+		var out = Self.evalValueArithmetic(s)
+		if let tc = try? NSRegularExpression(pattern: #",(\s*[}\]])"#) {
+			out = tc.stringByReplacingMatches(
+				in: out, range: NSRange(out.startIndex..., in: out),
+				withTemplate: "$1")
+		}
+		return out
+	}
+
+	/// Evaluate `number op number` only where it sits in a JSON value position
+	/// (right after `:`, `[`, or `,`), so keys and string contents are untouched.
+	/// Repeats leftmost-first to fold chains; capped to avoid any runaway.
+	private static func evalValueArithmetic(_ s: String) -> String {
+		guard
+			let regex = try? NSRegularExpression(
+				pattern:
+					#"([:\[,]\s*)(-?\d+(?:\.\d+)?)\s*([-+*/])\s*(-?\d+(?:\.\d+)?)"#)
+		else { return s }
+		var out = s
+		for _ in 0..<200 {
+			let full = NSRange(out.startIndex..., in: out)
+			guard let m = regex.firstMatch(in: out, range: full),
+				let rAll = Range(m.range, in: out),
+				let rPre = Range(m.range(at: 1), in: out),
+				let rA = Range(m.range(at: 2), in: out),
+				let rOp = Range(m.range(at: 3), in: out),
+				let rB = Range(m.range(at: 4), in: out),
+				let a = Double(out[rA]), let b = Double(out[rB])
+			else { break }
+			let v: Double
+			switch out[rOp.lowerBound] {
+			case "+": v = a + b
+			case "-": v = a - b
+			case "*": v = a * b
+			default: v = b != 0 ? a / b : 0
+			}
+			out.replaceSubrange(rAll, with: String(out[rPre]) + Self.numLiteral(v))
+		}
+		return out
+	}
+
+	private static func numLiteral(_ v: Double) -> String {
+		if v == v.rounded() && abs(v) < 1e15 { return String(Int(v)) }
+		var s = String(format: "%.6f", v)
+		while s.hasSuffix("0") { s.removeLast() }
+		if s.hasSuffix(".") { s.removeLast() }
+		return s
 	}
 
 	private func loadContainer(model: LocalAIModel) async throws -> ModelContainer {
