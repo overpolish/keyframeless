@@ -66,6 +66,7 @@ void KKDrawCheckerboard(NSRect rect) {
   NSPoint _dragOrigin;
   NSInteger _colorPickerStopIndex;
   BOOL _ignoreNextColorPanel;
+  BOOL _colorEditing; // a stop's shared panel is open
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
@@ -87,10 +88,44 @@ void KKDrawCheckerboard(NSRect rect) {
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   if (!self.window) {
+    [self _endColorEditing];
     NSColorPanel *panel = [NSColorPanel sharedColorPanel];
     [panel setTarget:nil];
     [panel setAction:nil];
   }
+}
+
+- (void)dealloc {
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)_beginColorEditingWithPanel:(NSColorPanel *)panel {
+  if (_colorEditing)
+    return;
+  _colorEditing = YES;
+  [[NSNotificationCenter defaultCenter]
+      addObserver:self
+         selector:@selector(_gradientPanelWillClose:)
+             name:NSWindowWillCloseNotification
+           object:panel];
+  if (_onColorEditingChanged)
+    _onColorEditingChanged(YES);
+}
+
+- (void)_endColorEditing {
+  if (!_colorEditing)
+    return;
+  _colorEditing = NO;
+  [[NSNotificationCenter defaultCenter]
+      removeObserver:self
+                name:NSWindowWillCloseNotification
+              object:nil];
+  if (_onColorEditingChanged)
+    _onColorEditingChanged(NO);
+}
+
+- (void)_gradientPanelWillClose:(NSNotification *)note {
+  [self _endColorEditing];
 }
 
 - (BOOL)isFlipped {
@@ -466,6 +501,7 @@ void KKDrawCheckerboard(NSRect rect) {
     [self.window addChildWindow:panel ordered:NSWindowAbove];
   }
 
+  [self _beginColorEditingWithPanel:panel];
   [panel orderFront:nil];
   _ignoreNextColorPanel = NO;
 }

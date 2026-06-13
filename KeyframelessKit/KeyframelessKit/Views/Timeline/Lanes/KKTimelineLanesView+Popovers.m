@@ -102,9 +102,19 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   NSSet<NSString *> *checked = [self _optedInLabelsSet];
   __weak typeof(self) weak = self;
 
+  // Mode-gated lanes drop out of the manage list (and their category, e.g. the
+  // whole "Color" group when Mode = Dynamic) - computed over the timeline so
+  // the controller Mode resolves to its current value.
+  NSSet<NSString *> *condVisible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+  NSMutableArray<KKLane *> *visibleLanes = [NSMutableArray array];
+  for (KKLane *l in _availableLanes)
+    if ([condVisible containsObject:l.label])
+      [visibleLanes addObject:l];
+
   __block _KKManagePopoverView *manageView = nil;
   manageView = [[_KKManagePopoverView alloc]
-      initWithLanes:_availableLanes
+      initWithLanes:visibleLanes
       checkedLabels:checked
            onToggle:^(NSString *label) {
              __strong typeof(weak) s = weak;
@@ -240,6 +250,14 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                 [NSNotificationCenter.defaultCenter removeObserver:closeObs];
               }];
 
+  // The content view can transiently veto dismissal (e.g. while a colour
+  // swatch's shared NSColorPanel is open - a separate window whose clicks would
+  // otherwise count as "outside" and close the popover mid-edit).
+  BOOL (^contentSuppressesDismiss)(void) = ^BOOL {
+    return [content respondsToSelector:@selector(suppressesPopoverDismiss)] &&
+           [(id)content suppressesPopoverDismiss];
+  };
+
   // Scroll over the mini viewer = zoom/pan (events arrive global in
   // ViewBridge XPC - see [[project_viewbridge_global_sendEvent]]); scroll
   // elsewhere keeps the old outside-dismiss behavior.
@@ -252,6 +270,8 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                                    handler:^NSEvent *(NSEvent *e) {
                                      if (canvas && [canvas pointerOverCanvas])
                                        return e; // let the responder handle it
+                                     if (contentSuppressesDismiss())
+                                       return e;
                                      if (e.window != popoverWindow)
                                        [weakPopover close];
                                      return e;
@@ -261,6 +281,8 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
       addGlobalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                     handler:^(NSEvent *e) {
                                       if (canvas && [canvas pointerOverCanvas])
+                                        return;
+                                      if (contentSuppressesDismiss())
                                         return;
                                       [weakPopover close];
                                     }];
@@ -286,6 +308,8 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
     return NO;
   };
   void (^closeIfOutsidePopover)(void) = ^{
+    if (contentSuppressesDismiss())
+      return;
     NSWindow *pw = [weakPopover contentViewController].view.window;
     NSPoint p = NSEvent.mouseLocation;
     if (pw && NSPointInRect(p, pw.frame))

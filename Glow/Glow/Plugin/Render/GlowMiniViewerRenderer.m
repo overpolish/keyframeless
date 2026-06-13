@@ -8,6 +8,7 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
+#import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <Metal/Metal.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
@@ -648,6 +649,14 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
   double rx = rv.count >= 1 ? rv[0].doubleValue : kGlowM1Radius;
   double ry = rv.count >= 2 ? rv[1].doubleValue : rx;
 
+  // Colour resolved by the shared kit helper (reads via valuesForLabel:), so
+  // the mini preview matches the main render.
+  KKColorLanesValue cv = KKColorLanesResolve(
+      nil, /*includesDynamic=*/YES, ^NSArray<NSNumber *> *(NSString *label) {
+        return [self valuesForLabel:label];
+      });
+  int glowColorMode = GlowShaderColorModeFromKK(cv.mode);
+
   // Map the full source frame to the dest (same as the main viewer: the glow
   // forms wherever the source is transparent - around a logo's edges, etc. -
   // which for normal centred content is INSIDE the frame). Radius is canonical
@@ -697,7 +706,7 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
               atIndex:KKVertexInputIndex_ViewportSize];
     [e setRenderPipelineState:_prepPipeline];
     [e setFragmentTexture:source atIndex:KKTextureIndex_InputImage];
-    int cm = kGlowM1ColorMode;
+    int cm = glowColorMode;
     [e setFragmentBytes:&cm length:sizeof(cm) atIndex:0];
     [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
           vertexStart:0
@@ -796,7 +805,7 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
     [e setFragmentTexture:bloomTex atIndex:2];
 
     float rxF = effRx, ryF = effRy;
-    float gradAngle = kGlowM1GradientAngle;
+    float gradAngle = cv.gradientAngle;
     // Core lanes: Intensity is a whole percent (100 = 1.0); Falloff's % maps to
     // glowFalloff = 1 + value/100 (Threshold was already read for the bloom).
     NSArray<NSNumber *> *intensityVals = [self valuesForLabel:@"Intensity"];
@@ -836,7 +845,8 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
     float noiseGrain =
         GlowNoiseGrainCells(grainVals.count >= 1 ? grainVals[0].doubleValue
                                                  : kGlowM1NoiseGrain * 100.0);
-    int colorMode = kGlowM1ColorMode, gradType = kGlowM1GradientType;
+    int colorMode = glowColorMode;
+    int gradType = cv.gradientType;
     // Position (2D, normalised 0..1, 0.5 = centred). The shader's offset is the
     // NEGATED Position (it shifts the blur SAMPLE point, so negating moves the
     // glow in the drag direction) - the main render feeds
@@ -849,10 +859,9 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
                                 : 0.0f,
         positionVals.count >= 2 ? (float)(0.5 - positionVals[1].doubleValue)
                                 : 0.0f};
-    simd_float3 glowColor = {1.0f, 1.0f, 1.0f};
+    simd_float3 glowColor = cv.solidColor;
     simd_float3 lut[KK_GRADIENT_LUT_SIZE];
-    for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
-      lut[i] = glowColor;
+    memcpy(lut, cv.gradientLUT, sizeof(cv.gradientLUT));
     simd_float2 blurUVScale = {1.0f, 1.0f};
     simd_float2 tileOffsetPx = {0.0f, 0.0f};
     simd_float2 destImgSizePx = {W, H};

@@ -6,6 +6,7 @@
 #import "KKLaneCategoryNav.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerView.h"
+#import "KKPillBar.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKSliderView.h"
@@ -274,14 +275,36 @@ static const CGFloat kManagePillH = 24.0;
           ss->_selectedCategory = categoryKey;
           [ss _applyFilterAndResize];
         });
-    [self addSubview:_categoryPill];
+    // Wrap the category pill in a horizontal scroll with edge-fade shadows so a
+    // long category run (Core | Color | Noise | ...) stays on one row and
+    // scrolls instead of forcing the popover wide. Centred while it fits; the
+    // leading/trailing caps let it shrink-to-scroll on overflow.
+    KKPillBar *pillBar = [[KKPillBar alloc] initWithPillRow:_categoryPill];
+    pillBar.translatesAutoresizingMaskIntoConstraints = NO;
+    // Hug content at intrinsic width when it fits, but a near-zero compression
+    // resistance lets it shrink below intrinsic so the inner scroll view takes
+    // over on overflow (instead of staying full-width and clipping). Mirrors
+    // KKSegmentEditView's participation bar.
+    [pillBar setContentHuggingPriority:NSLayoutPriorityRequired - 1
+                        forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [pillBar
+        setContentCompressionResistancePriority:1
+                                 forOrientation:
+                                     NSLayoutConstraintOrientationHorizontal];
+    [self addSubview:pillBar];
     [NSLayoutConstraint activateConstraints:@[
-      [_categoryPill.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
-      [_categoryPill.topAnchor constraintEqualToAnchor:self.topAnchor
-                                              constant:KKPaddingMD],
-      [_categoryPill.heightAnchor constraintEqualToConstant:kManagePillH],
+      [pillBar.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+      [pillBar.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:self.leadingAnchor
+                                      constant:KKPaddingMD],
+      [pillBar.trailingAnchor
+          constraintLessThanOrEqualToAnchor:self.trailingAnchor
+                                   constant:-KKPaddingMD],
+      [pillBar.topAnchor constraintEqualToAnchor:self.topAnchor
+                                        constant:KKPaddingMD],
+      [pillBar.heightAnchor constraintEqualToConstant:kManagePillH],
     ]];
-    searchTop = _categoryPill.bottomAnchor;
+    searchTop = pillBar.bottomAnchor;
     searchTopInset = KKSpacingSM;
   }
 

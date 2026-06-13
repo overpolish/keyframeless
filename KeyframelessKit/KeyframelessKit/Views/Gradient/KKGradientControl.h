@@ -29,6 +29,12 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
 @property(nonatomic, copy, nullable) void (^onDragEnd)(void);
 
+/// Forwarded from the gradient bar: YES while a stop's shared colour panel is
+/// open, NO when it closes. A control hosted inside a transient popover uses
+/// this to suspend the popover's outside-click dismissal during the edit.
+@property(nonatomic, copy, nullable) void (^onColorEditingChanged)(BOOL editing)
+    ;
+
 @end
 
 NS_ASSUME_NONNULL_END

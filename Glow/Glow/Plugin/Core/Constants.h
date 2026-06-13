@@ -6,8 +6,7 @@
 #pragma once
 
 #import <Foundation/Foundation.h>
-
-static NSString *const kPluginID = @"co.overpolish.keyframeless.Glow";
+#import <KeyframelessKit/KKConstants.h> // KKColorMode
 
 // v3 custom-UI / persistence params (mirrors Rounded). The shared timeline,
 // motion-blur and instance-id blobs use the kit-owned IDs (kKKParam*).
@@ -73,6 +72,8 @@ static inline float GlowNoiseGrainCells(double pct) {
   return (float)(1000.0 - 800.0 * f);
 }
 static const float kGlowM1Threshold = 0.0f; // 0 => bloom path is never hit
-static const int kGlowM1ColorMode = 2; // shader: 2 = Dynamic (source-coloured)
-static const int kGlowM1GradientType = 0;
-static const float kGlowM1GradientAngle = 0.0f;
+// Map the kit's semantic colour mode (from KKColorLanesResolve) to the shader's
+// colorMode enum: Solid -> 0, Gradient -> 1, Dynamic -> 2.
+static inline int GlowShaderColorModeFromKK(KKColorMode m) {
+  return m == KKColorModeSolid ? 0 : (m == KKColorModeGradient ? 1 : 2);
+}

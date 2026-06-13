@@ -51,6 +51,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// inset highlight inside the track.
 @property(nonatomic) BOOL grouped;
 
+/// Grouped variant with no track background - only the active pill's highlight
+/// is drawn. Use for an inline mode/type selector that sits inside other
+/// content so it doesn't read as a second navigational bar. No-op unless
+/// `grouped`.
+@property(nonatomic) BOOL hidesGroupTrack;
+
 - (instancetype)initWithLabels:(NSArray<NSString *> *)labels;
 - (instancetype)initWithIcons:(NSArray<NSImage *> *)icons;
 - (instancetype)initWithLabels:(NSArray<NSString *> *)labels

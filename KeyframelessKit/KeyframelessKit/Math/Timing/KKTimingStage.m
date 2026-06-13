@@ -257,6 +257,10 @@
   _categorySymbol = [tmpl.categorySymbol copy];
   _animatable = tmpl.animatable;
   _seedField = tmpl.seedField;
+  _choiceLabels = [tmpl.choiceLabels copy];
+  _visibleWhenLabel = [tmpl.visibleWhenLabel copy];
+  _visibleWhenValues = [tmpl.visibleWhenValues copy];
+  _gradientShowsTypeAngle = tmpl.gradientShowsTypeAngle;
   // Pixel-display flag is template metadata too: keypose/boundary popovers
   // rebuild a display lane and must carry it, or a normalised 0..1 spatial lane
   // (Position / Crop / Anchor) shows raw fractions instead of pixels.
@@ -307,6 +311,10 @@
   c.categorySymbol = [_categorySymbol copy];
   c.animatable = _animatable;
   c.seedField = _seedField;
+  c.choiceLabels = [_choiceLabels copy];
+  c.visibleWhenLabel = [_visibleWhenLabel copy];
+  c.visibleWhenValues = [_visibleWhenValues copy];
+  c.gradientShowsTypeAngle = _gradientShowsTypeAngle;
   return c;
 }
 
@@ -348,6 +356,14 @@
     d[@"animatable"] = @NO;
   if (_seedField)
     d[@"seed_field"] = @YES;
+  if (_choiceLabels)
+    d[@"choice_labels"] = _choiceLabels;
+  if (_visibleWhenLabel) {
+    d[@"visible_when_label"] = _visibleWhenLabel;
+    d[@"visible_when_values"] = _visibleWhenValues ?: @[];
+  }
+  if (_gradientShowsTypeAngle)
+    d[@"gradient_type_angle"] = @YES;
   return d;
 }
 
@@ -383,6 +399,12 @@
   l.categorySymbol = d[@"category_symbol"];
   l.animatable = d[@"animatable"] ? [d[@"animatable"] boolValue] : YES;
   l.seedField = [d[@"seed_field"] boolValue];
+  if ([d[@"choice_labels"] isKindOfClass:[NSArray class]])
+    l.choiceLabels = d[@"choice_labels"];
+  l.visibleWhenLabel = d[@"visible_when_label"];
+  if ([d[@"visible_when_values"] isKindOfClass:[NSArray class]])
+    l.visibleWhenValues = d[@"visible_when_values"];
+  l.gradientShowsTypeAngle = [d[@"gradient_type_angle"] boolValue];
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {
     NSMutableArray *kps = [NSMutableArray arrayWithCapacity:rawKps.count];
@@ -466,6 +488,37 @@ KKTimeline *KKTimelineSettingAspectLinked(KKTimeline *timeline, NSString *label,
       return nil; // already in that state - no commit, no undo entry
     KKLane *nl = [lanes[i] copy];
     nl.aspectLinked = on;
+    lanes[i] = nl;
+    t.lanes = lanes;
+    return t;
+  }
+  return nil;
+}
+
+KKTimeline *KKTimelineSettingGradientType(KKTimeline *timeline, NSString *label,
+                                          NSInteger type) {
+  KKTimeline *t = [timeline copy];
+  NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    if (![lanes[i].label isEqualToString:label])
+      continue;
+    KKLane *nl = [lanes[i] copy];
+    NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
+    BOOL changed = NO;
+    for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
+      NSArray<NSNumber *> *v = kps[k].values;
+      if (v.count < 1 || (NSInteger)llround(v[0].doubleValue) == type)
+        continue;
+      NSMutableArray<NSNumber *> *nv = [v mutableCopy];
+      nv[0] = @((double)type);
+      KKKeyPose *nk = [kps[k] copy]; // preserve time/outgoing/spatial state
+      nk.values = nv;
+      kps[k] = nk;
+      changed = YES;
+    }
+    if (!changed)
+      return nil;
+    nl.keyposes = kps;
     lanes[i] = nl;
     t.lanes = lanes;
     return t;
@@ -813,4 +866,58 @@ NSArray<NSString *> *KKLaneComponentLabels(KKLane *lane) {
     return out;
   }
   }
+}
+
+// Component values a lane currently holds for a visibility test - the live
+// override (mid-edit) when present, else the first keypose.
+static NSArray<NSNumber *> *_KKLaneCondValues(
+    KKLane *lane,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel) {
+  NSArray<NSNumber *> *v = valuesByLabel[lane.label];
+  return v ?: (lane.keyposes.firstObject.values ?: @[]);
+}
+
+static BOOL _KKLaneCondVisible(
+    KKLane *lane, NSDictionary<NSString *, KKLane *> *byLabel,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel,
+    NSMutableDictionary<NSString *, NSNumber *> *memo) {
+  if (lane.visibleWhenLabel.length == 0)
+    return YES;
+  // Controller not in this set - the rule can't be evaluated, so don't filter.
+  KKLane *ctrl = byLabel[lane.visibleWhenLabel];
+  if (!ctrl)
+    return YES;
+  NSNumber *cached = memo[lane.label];
+  if (cached)
+    return cached.boolValue;
+  memo[lane.label] = @NO; // cycle guard
+  NSArray<NSNumber *> *cv = _KKLaneCondValues(ctrl, valuesByLabel);
+  NSInteger idx = cv.count ? (NSInteger)llround(cv[0].doubleValue) : 0;
+  BOOL pass = NO;
+  for (NSNumber *n in lane.visibleWhenValues)
+    if ((NSInteger)llround(n.doubleValue) == idx) {
+      pass = YES;
+      break;
+    }
+  BOOL vis = pass;
+  if (vis && ctrl != lane)
+    vis = _KKLaneCondVisible(ctrl, byLabel, valuesByLabel, memo);
+  memo[lane.label] = @(vis);
+  return vis;
+}
+
+NSSet<NSString *> *KKConditionalVisibleLaneLabels(
+    NSArray<KKLane *> *lanes,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel) {
+  NSMutableDictionary<NSString *, KKLane *> *byLabel =
+      [NSMutableDictionary dictionaryWithCapacity:lanes.count];
+  for (KKLane *l in lanes)
+    byLabel[l.label] = l;
+  NSMutableSet<NSString *> *out = [NSMutableSet setWithCapacity:lanes.count];
+  NSMutableDictionary<NSString *, NSNumber *> *memo =
+      [NSMutableDictionary dictionaryWithCapacity:lanes.count];
+  for (KKLane *l in lanes)
+    if (_KKLaneCondVisible(l, byLabel, valuesByLabel ?: @{}, memo))
+      [out addObject:l.label];
+  return out;
 }

@@ -20,6 +20,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKCheckboxView.h>
 #import <KeyframelessKit/KKChevronView.h>
 #import <KeyframelessKit/KKColor.h>
+#import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKColorWellView.h>
 #import <KeyframelessKit/KKConstants.h>
 #import <KeyframelessKit/KKCropModel.h>

@@ -183,6 +183,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Flip the global aspect lock on the lane named `label`. Routed from the value
 /// popover's link toggle.
 - (void)writeAspectLinkedForLabel:(NSString *)label isOn:(BOOL)on;
+/// Set the radial/linear type on every keypose of the composite-gradient lane
+/// `label`. Routed from the value popover's type pill (keypose editor).
+- (void)writeGradientTypeForLabel:(NSString *)label type:(NSInteger)type;
 
 @end
 

@@ -71,6 +71,7 @@
 				"Plugin/KKPlugin+Color.h",
 				"Plugin/KKPlugin+Crop.h",
 				Plugin/Support/KKColor.h,
+				Plugin/Support/KKColorLanes.h,
 				Plugin/Support/KKConstants.h,
 				Plugin/Support/KKDataBlob.h,
 				Plugin/Support/KKHostInfo.h,

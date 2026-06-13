@@ -5,7 +5,7 @@ summary: What Glow does
 
 Glow adds a soft, animatable glow around a clip's content. Drop it on a clip from the Effects browser. It animates with the shared timeline, so see the Timing sections for how Basic, Advanced, easing, and motion blur work.
 
-Parameters are split into two groups (shown as category pills in the inspector): **Core** and **Noise**.
+Parameters are split into three groups (shown as category pills in the inspector): **Core**, **Color**, and **Noise**.
 
 - Core:
   - **Radius** - the size of the glow, in pixels (0 = no glow, up to 500 for a large halo). Has X and Y components, aspect-lockable, so the glow can be a circle or stretched into an oval. The default is 100.
@@ -13,6 +13,9 @@ Parameters are split into two groups (shown as category pills in the inspector):
   - **Falloff** - how the glow fades at its edge, 0-200%. 0 is the softest, widest fade; higher tightens the edge. Default 0.
   - **Threshold** - a bloom cutoff, 0-100%. 0 means no bloom; raise it to make the brightest parts of the clip bloom into the glow. Default 0.
   - **Position** - where the glow sits relative to the clip, as an X / Y offset. Centred by default (the glow sits on the clip); drag it to push the glow off to one side. It can be animated so the glow drifts along a path, with a draggable handle and a curved motion path on the canvas.
+
+- Color - how the glow is tinted:
+  - **Mode** - **Dynamic** (the default) takes the colour from the clip so the glow matches the content, **Solid** is one colour you pick, and **Gradient** blends colour stops (radial or linear, with an angle for the linear type). Solid and Gradient can be animated.
 
 - Noise - optional grain mixed into the glow for a textured, less perfectly-smooth halo:
   - **Amount** - how much grain is mixed in, 0-100%. 0 is a clean glow; higher breaks the halo up into grain.

@@ -11,9 +11,16 @@
 @implementation KKTimelineAdvancedView (Model)
 
 - (NSArray<KKLane *> *)_animatableLanes {
+  // Mode-gated lanes (visibleWhen) drop out of the graph when their
+  // controller's current value doesn't match - e.g. an animated Gradient lane
+  // is hidden while Mode = Solid. Computed over the full lane set so the
+  // controller resolves; display-only, the blob keeps every lane.
+  NSSet<NSString *> *condVisible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
   NSMutableArray<KKLane *> *out = [NSMutableArray array];
   for (KKLane *l in _timeline.lanes)
-    if (l.enabled && ![_hiddenLaneLabels containsObject:l.label])
+    if (l.enabled && ![_hiddenLaneLabels containsObject:l.label] &&
+        [condVisible containsObject:l.label])
       [out addObject:l];
   return out;
 }

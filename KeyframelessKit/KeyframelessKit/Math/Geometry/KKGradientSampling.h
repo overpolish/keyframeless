@@ -53,4 +53,18 @@ NSArray<NSNumber *> *KKGradientInterpFlatLUT(NSArray<NSNumber *> *fromFlat,
                                              NSArray<NSNumber *> *toFlat,
                                              double t, int size);
 
+/// Interpolate two COMPOSITE gradient values - `[type, angleDegrees, <flat
+/// stops>]` - at `t`. `type` is held from `from` (discrete, never animated),
+/// `angle` is lerped, and the stops are interpolated structurally when both
+/// sides have the same stop count (else held from `from`). Returns a composite
+/// value in the same layout.
+NSArray<NSNumber *> *KKGradientCompositeInterp(NSArray<NSNumber *> *from,
+                                               NSArray<NSNumber *> *to,
+                                               double t);
+
+/// A single 0..1 "signature" of a stop set - a weighted aggregate of every
+/// stop's position, midpoint and colour so any edit moves it. Used to plot an
+/// animated gradient as one graph line (alongside the angle line).
+double KKGradientStopsSignature(NSArray<KKGradientStop *> *stops);
+
 NS_ASSUME_NONNULL_END

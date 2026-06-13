@@ -8,6 +8,7 @@
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import <IOSurface/IOSurfaceObjC.h>
+#import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
@@ -557,6 +558,18 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
       positionVals.count >= 1 ? positionVals[0].doubleValue - 0.5 : 0.0;
   double offY =
       positionVals.count >= 2 ? positionVals[1].doubleValue - 0.5 : 0.0;
+  // Colour (Dynamic / Solid / Gradient) resolved by the shared kit helper,
+  // which reads the Mode/Solid/Gradient lanes via this provider (so the same
+  // code path serves the mini-viewer). Maps the semantic mode to the shader's
+  // enum.
+  KKColorLanesValue cv = KKColorLanesResolve(
+      nil, /*includesDynamic=*/YES, ^NSArray<NSNumber *> *(NSString *label) {
+        return _GlowLaneValues(timeline, label, frac);
+      });
+  int colorMode = GlowShaderColorModeFromKK(cv.mode);
+  simd_float3 glowColor = cv.solidColor;
+  int gradientType = cv.gradientType;
+  float gradientAngle = cv.gradientAngle;
   // noiseSeed is the radial-flow PHASE - a time-driven term so the grain drifts
   // outward at `speed` (evaluated per motion-blur sub-sample, so it animates).
   // The Seed is separate: it perturbs the spatial pattern (noiseSeedHash).
@@ -570,17 +583,18 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
       .noise = (float)noise,
       .noiseOffset = (float)noiseOffset,
       .offset = {(float)offX, (float)offY},
-      .glowColor = {1.0f, 1.0f, 1.0f},
-      .colorMode = kGlowM1ColorMode,
-      .gradientType = kGlowM1GradientType,
-      .gradientAngle = kGlowM1GradientAngle,
+      .glowColor = glowColor,
+      .colorMode = colorMode,
+      .gradientType = gradientType,
+      .gradientAngle = gradientAngle,
       .noiseSeed = (float)noiseSeed,
       .noiseSeedHash = (float)seed,
       .noiseGrain = GlowNoiseGrainCells(grainPct),
       .threshold = (float)threshold,
   };
-  for (int i = 0; i < KK_GRADIENT_LUT_SIZE; i++)
-    state.gradientLUT[i] = state.glowColor;
+  // The resolver already sampled the gradient stops into a LUT (or left it a
+  // white fill for non-gradient modes, which the shader ignores).
+  memcpy(state.gradientLUT, cv.gradientLUT, sizeof(cv.gradientLUT));
 
   *outParams = state;
   return YES;

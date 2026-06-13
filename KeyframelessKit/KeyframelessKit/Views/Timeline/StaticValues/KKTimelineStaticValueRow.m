@@ -3,6 +3,10 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKColorWellView.h"
+#import "KKGradientBarView.h"
+#import "KKGradientControl.h"
+#import "KKGradientSampling.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerView.h"
 #import "KKPillToggleRowView.h"
@@ -18,7 +22,8 @@
 #import <QuartzCore/QuartzCore.h>
 
 const CGFloat kFloatRowH = 30.0;
-static const CGFloat kCropRowH = 30.0; // single-line W/H/X/Y hstack
+static const CGFloat kCropRowH = 30.0;     // single-line W/H/X/Y hstack
+static const CGFloat kGradientRowH = 42.0; // 36pt gradient control + padding
 static const CGFloat kStaticFieldW = 40.0;
 // Cap on the (uniform) label column so a long localized name (e.g. German
 // "Geschwindigkeit") can't push the value controls off the popover's right
@@ -140,6 +145,18 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   BOOL _integerValued;   // fields display + round to whole numbers
   KKSeedView *_seedView; // seed control (value + re-roll), seedField lanes only
   BOOL _seedField;
+  KKPillToggleRowView *_choicePill;    // grouped radio pill, choiceLabels only
+  NSArray<NSString *> *_choiceLabels;  // English identifiers (count >= 2)
+  KKColorWellView *_colorWell;         // swatch, KKLaneValueTypeColor only
+  KKGradientControl *_gradientControl; // KKLaneValueTypeGradient only
+  BOOL
+      _suppressGradientRefresh; // mid own-edit: don't reset the control's stops
+  BOOL _gradientWithTypeAngle;  // value = [type, angle, <flat stops>]
+  KKPillToggleRowView *_gradientTypePill; // radial/linear, composite only
+  NSView *_gradientAngleContainer;        // knob + field, hidden unless linear
+  NSSlider *_gradientAngleKnob;
+  NSTextField *_gradientAngleField;
+  BOOL _gradientAngleKnobDragging;
   CGFloat _labelColumnW; // uniform label-column width (0 = natural)
 }
 
@@ -283,14 +300,17 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 }
 
 + (CGFloat)heightForLane:(KKLane *)lane {
+  if (lane.valueType == KKLaneValueTypeGradient)
+    return kGradientRowH;
   return KKLaneComponentLabels(lane).count >= 2 ? kCropRowH : kFloatRowH;
 }
 
 // NSStackView sizes arranged rows by their intrinsic height; without this
 // the rows collapse on top of each other (no height constraint otherwise).
 - (NSSize)intrinsicContentSize {
-  return NSMakeSize(NSViewNoIntrinsicMetric,
-                    _fields.count >= 2 ? kCropRowH : kFloatRowH);
+  CGFloat h = _gradientControl ? kGradientRowH
+                               : (_fields.count >= 2 ? kCropRowH : kFloatRowH);
+  return NSMakeSize(NSViewNoIntrinsicMetric, h);
 }
 
 - (double)_clamp:(double)v index:(NSInteger)i {
@@ -347,6 +367,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   _cunits = lane.componentUnits ?: @[];
   _integerValued = lane.integerValued;
   _seedField = lane.seedField;
+  _choiceLabels = [lane.choiceLabels copy];
   _labelColumnW = labelColumnWidth;
 
   NSTextField *title = _KKMakeCaption(KKLocalizedParamName(lane.label));
@@ -424,7 +445,179 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 
   NSArray<NSString *> *caps = KKLaneComponentLabels(lane);
   NSArray<NSColor *> *capColors = lane.componentLabelColors;
-  if (_seedField) {
+  if (_choiceLabels.count >= 2) {
+    // A structural enum (e.g. a colour mode): a grouped radio pill, one segment
+    // per choice, instead of a number field. The lane's single value is the
+    // selected index. Labels localize at display time like any param name.
+    NSMutableArray<NSString *> *locLabels =
+        [NSMutableArray arrayWithCapacity:_choiceLabels.count];
+    for (NSString *c in _choiceLabels)
+      [locLabels addObject:KKLocalizedParamName(c)];
+    _choicePill = [[KKPillToggleRowView alloc] initWithLabels:locLabels];
+    _choicePill.radioMode = YES;
+    _choicePill.grouped = YES;
+    _choicePill.hidesGroupTrack = YES; // inline selector, not a nav bar
+    _choicePill.translatesAutoresizingMaskIntoConstraints = NO;
+    __weak typeof(self) weak = self;
+    _choicePill.onToggled = ^(NSInteger index, BOOL isOn) {
+      if (isOn)
+        [weak _setValues:@[ @((double)index) ] emit:YES];
+    };
+    [self addSubview:_choicePill];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_choicePill.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
+                                                 constant:-KKPaddingLG],
+      [_choicePill.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
+                                      constant:KKPaddingMD],
+      [_choicePill.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    ]];
+  } else if (_valueType == KKLaneValueTypeColor) {
+    // A solid colour: a swatch that opens the system colour panel. Stored as
+    // [r, g, b, a] in sRGB 0..1 (the shader linearises). KKColorWellView is a
+    // dumb NSView - no FxPlug action scope needed.
+    _colorWell = [[KKColorWellView alloc] initWithFrame:NSZeroRect];
+    _colorWell.translatesAutoresizingMaskIntoConstraints = NO;
+    __weak typeof(self) weak = self;
+    _colorWell.onColorChanged = ^(NSColor *c) {
+      NSColor *s = [c colorUsingColorSpace:[NSColorSpace sRGBColorSpace]] ?: c;
+      CGFloat r = 0, g = 0, b = 0, a = 1;
+      [s getRed:&r green:&g blue:&b alpha:&a];
+      [weak _setValues:@[ @(r), @(g), @(b), @(a) ] emit:YES];
+    };
+    _colorWell.onColorEditingChanged = ^(BOOL editing) {
+      __strong typeof(weak) ss = weak;
+      if (ss.onColorEditing)
+        ss.onColorEditing(editing);
+    };
+    [self addSubview:_colorWell];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_colorWell.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
+                                                constant:-KKPaddingLG],
+      [_colorWell.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
+                                      constant:KKPaddingMD],
+      [_colorWell.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_colorWell.widthAnchor constraintEqualToConstant:28.0],
+      [_colorWell.heightAnchor constraintEqualToConstant:16.0],
+    ]];
+  } else if (_valueType == KKLaneValueTypeGradient) {
+    // The shared gradient editor (bar + favourites/reverse/distribute). Stored
+    // as a flat [pos, r, g, b, mid] per stop; the row converts to/from
+    // KKGradientStop. Editing a stop opens the shared colour panel, so it
+    // reports onColorEditing up to suspend the popover's dismissal (same as the
+    // solid swatch).
+    _gradientWithTypeAngle = lane.gradientShowsTypeAngle;
+    __weak typeof(self) weak = self;
+    _gradientControl = [[KKGradientControl alloc] initWithFrame:NSZeroRect];
+    _gradientControl.translatesAutoresizingMaskIntoConstraints = NO;
+    // Without an explicit height the control collapses (its bar is pinned to
+    // its own top/bottom), leaving a zero-height, un-clickable strip.
+    [_gradientControl.heightAnchor constraintEqualToConstant:36.0].active = YES;
+    [_gradientControl
+        setContentHuggingPriority:1
+                   forOrientation:NSLayoutConstraintOrientationHorizontal];
+    _gradientControl.onStopsChanged = ^(NSArray<KKGradientStop *> *stops) {
+      __strong typeof(weak) ss = weak;
+      if (!ss)
+        return;
+      ss->_suppressGradientRefresh = YES;
+      [ss _setValues:[ss _composeGradientWithStops:stops] emit:YES];
+      ss->_suppressGradientRefresh = NO;
+    };
+    _gradientControl.onDragBegin = ^{
+      __strong typeof(weak) ss = weak;
+      if (ss.onDragBegin)
+        ss.onDragBegin();
+    };
+    _gradientControl.onDragEnd = ^{
+      __strong typeof(weak) ss = weak;
+      if (ss.onDragEnd)
+        ss.onDragEnd();
+    };
+    _gradientControl.onColorEditingChanged = ^(BOOL editing) {
+      __strong typeof(weak) ss = weak;
+      if (ss.onColorEditing)
+        ss.onColorEditing(editing);
+    };
+
+    NSMutableArray<NSView *> *arranged = [NSMutableArray array];
+    if (_gradientWithTypeAngle) {
+      // Radial/linear toggle (value[0]). Type is a single, non-animated
+      // property: in the per-keypose editor the change is routed via
+      // onGradientTypeChanged to ALL keyposes (so type stays editable once
+      // animated); in the constants editor (no handler) it commits normally.
+      _gradientTypePill = [[KKPillToggleRowView alloc] initWithLabels:@[
+        KKLocalizedParamName(@"Radial"), KKLocalizedParamName(@"Linear")
+      ]];
+      _gradientTypePill.radioMode = YES;
+      _gradientTypePill.grouped = YES;
+      _gradientTypePill.hidesGroupTrack = YES; // inline, not a nav bar
+      _gradientTypePill.translatesAutoresizingMaskIntoConstraints = NO;
+      _gradientTypePill.onToggled = ^(NSInteger index, BOOL isOn) {
+        __strong typeof(weak) ss = weak;
+        if (!ss || !isOn)
+          return;
+        NSMutableArray<NSNumber *> *v = [ss->_values mutableCopy];
+        if (v.count >= 1)
+          v[0] = @((double)index);
+        if (ss.onGradientTypeChanged) {
+          [ss _setValues:v emit:NO];       // immediate UI (angle reveal)
+          ss.onGradientTypeChanged(index); // persists across all keyposes
+        } else {
+          [ss _setValues:v emit:YES]; // constants: commit the single keypose
+        }
+      };
+      [arranged addObject:_gradientTypePill];
+
+      _gradientAngleKnob = [[NSSlider alloc] initWithFrame:NSZeroRect];
+      _gradientAngleKnob.sliderType = NSSliderTypeCircular;
+      _gradientAngleKnob.controlSize = NSControlSizeMini;
+      _gradientAngleKnob.minValue = 0.0;
+      _gradientAngleKnob.maxValue = 360.0;
+      _gradientAngleKnob.continuous = YES;
+      _gradientAngleKnob.target = self;
+      _gradientAngleKnob.action = @selector(_gradientAngleKnobMoved:);
+      _gradientAngleKnob.translatesAutoresizingMaskIntoConstraints = NO;
+      _KKValueField *angleCell = [[_KKValueField alloc] init];
+      [angleCell setSuffix:@"°"];
+      _gradientAngleField = angleCell.field;
+      _gradientAngleField.target = self;
+      _gradientAngleField.action = @selector(_gradientAngleFieldCommitted:);
+      _gradientAngleField.delegate = (id<NSTextFieldDelegate>)self;
+      _gradientAngleContainer =
+          [NSStackView stackViewWithViews:@[ _gradientAngleKnob, angleCell ]];
+      ((NSStackView *)_gradientAngleContainer).spacing = KKSpacingSM;
+      ((NSStackView *)_gradientAngleContainer).alignment =
+          NSLayoutAttributeCenterY;
+      _gradientAngleContainer.translatesAutoresizingMaskIntoConstraints = NO;
+      [arranged addObject:_gradientAngleContainer];
+    }
+    [arranged addObject:_gradientControl];
+
+    NSStackView *hs = [NSStackView stackViewWithViews:arranged];
+    hs.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    hs.alignment = NSLayoutAttributeCenterY;
+    hs.spacing = KKPaddingMD;
+    hs.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:hs];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [hs.leadingAnchor constraintEqualToAnchor:title.trailingAnchor
+                                       constant:KKPaddingMD],
+      [hs.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
+                                        constant:-KKPaddingLG],
+      [hs.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    ]];
+  } else if (_seedField) {
     // A random integer, not a range: the gap-popover seed control (value +
     // re-roll) instead of a slider. Stored as the lane's single value.
     _seedView = [[KKSeedView alloc] init];
@@ -459,14 +652,20 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
       [_seedView.topAnchor constraintEqualToAnchor:self.topAnchor],
       [_seedView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
     ]];
-  } else if (caps.count >= 2) {
+  } else if (caps.count >= 2 ||
+             (_valueType == KKLaneValueTypeAngle && caps.count >= 1)) {
+    // Angle lanes (knob + field) route here for a single component too - a lone
+    // angle (e.g. a gradient direction) still wants the circular knob, not a
+    // 0..1 slider.
     NSInteger n = (NSInteger)caps.count;
     NSMutableArray<NSView *> *arranged = [NSMutableArray array];
     NSMutableArray<NSTextField *> *fs = [NSMutableArray array];
     NSMutableArray<NSSlider *> *knobs = [NSMutableArray array];
     for (NSInteger i = 0; i < n; i++) {
       _KKValueField *cell = [[_KKValueField alloc] init];
-      [cell setPrefix:caps[i]];
+      NSString *prefix = caps[i].length ? caps[i] : nil;
+      if (prefix)
+        [cell setPrefix:prefix];
       [cell setSuffix:(i < (NSInteger)_cunits.count ? _cunits[i] : nil)];
       if (i < (NSInteger)capColors.count) {
         NSColor *c = capColors[i];
@@ -610,6 +809,59 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return self;
 }
 
+// Gradient value layout: pure flat stops, or - for a composite type/angle lane
+// - [type, angleDegrees, <flat stops>]. These split/join the parts.
+- (NSArray<KKGradientStop *> *)_currentGradientStops {
+  NSArray<NSNumber *> *flat = _values;
+  if (_gradientWithTypeAngle)
+    flat = _values.count > 2
+               ? [_values subarrayWithRange:NSMakeRange(2, _values.count - 2)]
+               : @[];
+  return KKGradientStopsFromFlat(flat);
+}
+
+- (NSArray<NSNumber *> *)_composeGradientWithStops:
+    (NSArray<KKGradientStop *> *)stops {
+  NSArray<NSNumber *> *flat = KKGradientFlatFromStops(stops);
+  if (!_gradientWithTypeAngle)
+    return flat;
+  double type = _values.count >= 1 ? _values[0].doubleValue : 0.0;
+  double angle = _values.count >= 2 ? _values[1].doubleValue : 0.0;
+  NSMutableArray<NSNumber *> *out = [@[ @(type), @(angle) ] mutableCopy];
+  [out addObjectsFromArray:flat];
+  return out;
+}
+
+- (void)_updateGradientAngleVisibility {
+  NSInteger type = _values.count >= 1 ? llround(_values[0].doubleValue) : 0;
+  _gradientAngleContainer.hidden = (type != 1); // angle only for Linear
+}
+
+- (void)_gradientAngleKnobMoved:(NSSlider *)sender {
+  if (!_gradientAngleKnobDragging) {
+    [sender.window makeFirstResponder:nil];
+    _gradientAngleKnobDragging = YES;
+    if (self.onDragBegin)
+      self.onDragBegin();
+  }
+  NSMutableArray<NSNumber *> *v = [_values mutableCopy];
+  if (v.count >= 2)
+    v[1] = @(sender.doubleValue);
+  [self _setValues:v emit:YES];
+  if (NSApp.currentEvent.type == NSEventTypeLeftMouseUp) {
+    _gradientAngleKnobDragging = NO;
+    if (self.onDragEnd)
+      self.onDragEnd();
+  }
+}
+
+- (void)_gradientAngleFieldCommitted:(NSTextField *)sender {
+  NSMutableArray<NSNumber *> *v = [_values mutableCopy];
+  if (v.count >= 2)
+    v[1] = @(sender.doubleValue);
+  [self _setValues:v emit:YES];
+}
+
 // Per-component clamp; for Crop additionally keep the box inside the image
 // (|x| ≤ (1-w)/2, |y| ≤ (1-h)/2) so typed values match the OSC, which
 // never lets the crop rect exceed the image.
@@ -640,6 +892,37 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     _slider.doubleValue = _values[0].doubleValue;
   if (_seedView && _values.count)
     _seedView.seed = (uint32_t)llround(_values[0].doubleValue);
+  if (_choicePill && _values.count) {
+    NSInteger sel = (NSInteger)llround(_values[0].doubleValue);
+    for (NSInteger i = 0; i < (NSInteger)_choiceLabels.count; i++)
+      [_choicePill setState:(i == sel) atIndex:i];
+  }
+  if (_colorWell && _values.count >= 3) {
+    CGFloat a = _values.count >= 4 ? _values[3].doubleValue : 1.0;
+    _colorWell.color = [NSColor colorWithSRGBRed:_values[0].doubleValue
+                                           green:_values[1].doubleValue
+                                            blue:_values[2].doubleValue
+                                           alpha:a];
+  }
+  if (_gradientControl) {
+    if (!_suppressGradientRefresh) {
+      NSArray<KKGradientStop *> *stops = [self _currentGradientStops];
+      if (stops)
+        _gradientControl.stops = stops;
+    }
+    if (_gradientWithTypeAngle) {
+      NSInteger type = _values.count >= 1 ? llround(_values[0].doubleValue) : 0;
+      [_gradientTypePill setState:(type == 0) atIndex:0];
+      [_gradientTypePill setState:(type == 1) atIndex:1];
+      double angle = _values.count >= 2 ? _values[1].doubleValue : 0.0;
+      if (!_gradientAngleKnobDragging)
+        _gradientAngleKnob.doubleValue = angle;
+      if (![self _fieldEditing:_gradientAngleField])
+        _gradientAngleField.stringValue =
+            [NSString stringWithFormat:@"%.0f", angle];
+      [self _updateGradientAngleVisibility];
+    }
+  }
   if (_angleKnobs.count && !_angleKnobDragging) {
     for (NSInteger i = 0;
          i < (NSInteger)_angleKnobs.count && i < (NSInteger)_values.count;

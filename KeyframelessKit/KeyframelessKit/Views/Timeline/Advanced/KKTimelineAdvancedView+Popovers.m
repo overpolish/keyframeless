@@ -6,6 +6,7 @@
 #import "KKTimelineAdvancedView_Private.h"
 
 #import <KeyframelessKit/KKEasing.h>
+#import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
 @implementation KKTimelineAdvancedView (Popovers)
@@ -24,6 +25,16 @@
 
 - (void)writeAspectLinkedForLabel:(NSString *)label isOn:(BOOL)on {
   KKTimeline *t = KKTimelineSettingAspectLinked(_timeline, label, on);
+  if (!t)
+    return;
+  _timeline = t;
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
+- (void)writeGradientTypeForLabel:(NSString *)label type:(NSInteger)type {
+  KKTimeline *t = KKTimelineSettingGradientType(_timeline, label, type);
   if (!t)
     return;
   _timeline = t;
@@ -236,6 +247,19 @@
   KKKeyPose *b = lane.keyposes[aIdx + 1];
   KKInterval *iv = a.outgoing ?: [[KKInterval alloc] init];
 
+  // A Radial gradient hold has nothing to wiggle (angle is meaningless), so no
+  // modulation popover opens for it. Bail BEFORE repositioning the shared
+  // anchor (otherwise an already-open curve popover would slide onto this gap)
+  // and close whatever is open. A Linear gradient DOES expose an Angle wiggle
+  // below.
+  if (lane.valueType == KKLaneValueTypeGradient &&
+      KKAdvValuesEqual(a.values, b.values) &&
+      (a.values.count < 1 || llround(a.values[0].doubleValue) != 1)) {
+    if (self.onRequestClosePopover)
+      self.onRequestClosePopover();
+    return;
+  }
+
   NSArray<KKLane *> *anim = [self _animatableLanes];
   NSInteger animIdx = -1;
   for (NSInteger i = 0; i < (NSInteger)anim.count; i++)
@@ -321,10 +345,18 @@
     };
     NSArray<NSString *> *compLabels = KKLaneComponentLabels(lane);
     NSUInteger compCount = lane.keyposes.firstObject.values.count;
-    BOOL multiComp = (compLabels.count > 1 && compCount > 1);
+    // Solid colour and gradient stay one lane-level toggle (no per-channel
+    // wiggle). A Linear gradient's single toggle reads "Angle" - that is the
+    // only part the evaluator wiggles.
+    BOOL multiComp = (lane.valueType != KKLaneValueTypeColor &&
+                      lane.valueType != KKLaneValueTypeGradient &&
+                      compLabels.count > 1 && compCount > 1);
     BOOL laneModActive = iv.modulation != KKIntervalModulationNone;
+    NSString *masterLabel = (lane.valueType == KKLaneValueTypeGradient)
+                                ? KKLocalizedParamName(@"Angle")
+                                : label;
     NSMutableArray<NSString *> *segLabels =
-        [NSMutableArray arrayWithObject:label];
+        [NSMutableArray arrayWithObject:masterLabel];
     NSMutableArray<NSNumber *> *segStates =
         [NSMutableArray arrayWithObject:@(laneModActive)];
     if (multiComp) {

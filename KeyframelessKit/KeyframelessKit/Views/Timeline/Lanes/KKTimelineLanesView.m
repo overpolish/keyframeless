@@ -446,9 +446,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 // "All lanes hidden" message appears the moment the last lane is hidden.
 - (void)_applyLaneFilterHidden:(NSSet<NSString *> *)hidden {
   [_advancedGraph applyHiddenLaneLabels:hidden];
+  NSSet<NSString *> *condVisible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
   NSInteger optedIn = 0;
   for (KKLane *l in _timeline.lanes)
-    if (l.enabled)
+    if (l.enabled && [condVisible containsObject:l.label])
       optedIn++;
   BOOL anyOptedIn = optedIn > 0;
   BOOL showAdvanced = anyOptedIn && _activeTab == 1;
@@ -466,28 +468,26 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 }
 
 - (void)_refresh {
-  // Basic mode shows one shared motion graph (not per-property rows): the
-  // graph fills the content area whenever ≥1 property is animatable.
-  BOOL anyOptedIn = NO;
-  for (KKLane *tmpl in _availableLanes) {
-    if ([self _isAnimatableLabel:tmpl.label]) {
-      anyOptedIn = YES;
-      break;
-    }
-  }
+  // Opted-in lanes in parameter order (_timeline.lanes is already sorted),
+  // filtered by the Mode-gating visibleWhen rule - a lane hidden by the current
+  // Mode doesn't count as animated, so the empty state shows when it's the only
+  // one. The graph fills the content area whenever >=1 property is animated AND
+  // visible.
+  NSSet<NSString *> *condVisible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+  NSMutableArray<KKLane *> *optedIn = [NSMutableArray array];
+  for (KKLane *l in _timeline.lanes)
+    if (l.enabled && [condVisible containsObject:l.label])
+      [optedIn addObject:l];
+  BOOL anyOptedIn = optedIn.count > 0;
   BOOL showBasic = anyOptedIn && _activeTab == 0;
   BOOL showAdvanced = anyOptedIn && _activeTab == 1;
   _basicGraph.hidden = !showBasic;
   [_basicGraph applyTimeline:_timeline];
   [_advancedGraph applyTimeline:_timeline];
 
-  // Lane-filter bar: opted-in lanes in parameter order (_timeline.lanes is
-  // already sorted). Shown in Advanced when there are >=2 lanes worth
-  // filtering; the bar's hidden set drives which rows the graph draws.
-  NSMutableArray<KKLane *> *optedIn = [NSMutableArray array];
-  for (KKLane *l in _timeline.lanes)
-    if (l.enabled)
-      [optedIn addObject:l];
+  // Shown in Advanced when there are >=2 lanes worth filtering; the bar's
+  // hidden set drives which rows the graph draws.
   [_laneFilterBar applyLanes:optedIn];
   BOOL showFilter = showAdvanced && optedIn.count >= 2;
   _laneFilterBar.hidden = !showFilter;
@@ -547,7 +547,8 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 
   NSMutableArray<NSString *> *opted = [NSMutableArray array];
   for (KKLane *tmpl in _availableLanes)
-    if ([self _isAnimatableLabel:tmpl.label])
+    if ([self _isAnimatableLabel:tmpl.label] &&
+        [condVisible containsObject:tmpl.label])
       [opted addObject:tmpl.label];
   _dropdownTrigger.selectedLabels = opted;
   [_dropdownTrigger setNeedsDisplay:YES];
@@ -752,15 +753,20 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   NSMutableSet<NSString *> *avail = [NSMutableSet set];
   for (KKLane *l in _availableLanes)
     [avail addObject:l.label];
+  // Mode-gated lanes drop out of the reorder list too (e.g. no "Gradient" row
+  // while Mode = Solid). Computed over the timeline so the controller resolves.
+  NSSet<NSString *> *condVisible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
   // _timeline.lanes is already in display order (sorted in
   // _timelineSeededFrom:) and - post-seed - contains every available property,
   // so its order is the source of truth for the reorder list.
   NSMutableArray<NSString *> *out = [NSMutableArray array];
   for (KKLane *l in _timeline.lanes)
-    if ([avail containsObject:l.label] && ![out containsObject:l.label])
+    if ([avail containsObject:l.label] && ![out containsObject:l.label] &&
+        [condVisible containsObject:l.label])
       [out addObject:l.label];
   for (KKLane *l in _availableLanes)
-    if (![out containsObject:l.label])
+    if (![out containsObject:l.label] && [condVisible containsObject:l.label])
       [out addObject:l.label];
   return out;
 }

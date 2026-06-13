@@ -9,6 +9,7 @@
 #import "GlowOSCRadiusMath.h"
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKHelpSection.h>
 #import <KeyframelessKit/KKLog.h>
@@ -23,8 +24,9 @@
 
 /// Plain-text coordinate-space description for the AI agent's value-resolution
 /// pass. Kept tight: this is the only context that pass sees alongside the
-/// prompt. Lanes: the Core group (Radius, Intensity, Falloff, Threshold) + the
-/// Noise group (Amount, Spread, Grain Size, Speed, Seed).
+/// prompt. Lanes: the Core group (Radius, Intensity, Falloff, Threshold,
+/// Position), the Color group (Mode), and the Noise group (Amount, Spread,
+/// Grain Size, Speed, Seed).
 static NSString *_GlowAILaneSchemaText(void) {
   return @"Lane labels and value spaces:\n\n"
          @"- \"Radius\": two numeric components [X, Y], aspect-linked. Each is "
@@ -47,6 +49,21 @@ static NSString *_GlowAILaneSchemaText(void) {
          @"be "
          @"animated along a curved path (keyposes can be smooth). Default "
          @"[0.5, 0.5].\n"
+         @"- \"Mode\": the glow colour mode. A structural choice (NOT "
+         @"animated), "
+         @"stored as an index: 0 = Dynamic (the glow takes its colour from the "
+         @"underlying source pixels, the default), 1 = Solid, 2 = Gradient. "
+         @"Default 0.\n"
+         @"- \"Solid\": the glow tint when Mode = Solid, as [r, g, b, a] in "
+         @"sRGB 0..1. Only used when Mode = Solid. Default [1, 1, 1, 1] "
+         @"(white).\n"
+         @"- \"Gradient\": the glow gradient when Mode = Gradient. A composite "
+         @"value [type, angleDegrees, <flat [pos, r, g, b, mid] per stop>] "
+         @"where "
+         @"type 0 = radial, 1 = linear (angle applies only to linear). Only "
+         @"used "
+         @"when Mode = Gradient. Edited via the inline gradient picker, not "
+         @"typed.\n"
          @"- \"Amount\": single value, percent 0..100. How much grain is mixed "
          @"into the glow (0 = clean glow, higher = more grain). Default 0.\n"
          @"- \"Spread\": single value, percent 0..100. How far the grain "
@@ -156,6 +173,20 @@ static NSString *_GlowAILaneSchemaText(void) {
   position.categorySymbol = @"circle.dotted";
   [position insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
 
+  // Color (its own category): the reusable kit colour group - a Mode pill
+  // (Dynamic / Solid / Gradient) gating a solid swatch and a composite gradient
+  // (radial/linear + angle + stops), all animatable. The grouping (categoryKey)
+  // is ours; the content is the shared KKColorLanes helper.
+  NSArray<KKLane *> *colorLanes =
+      KKColorLanesMake(nil, /*includesDynamic=*/YES, /*animatable=*/YES);
+  for (KKLane *l in colorLanes) {
+    l.categoryKey = @"Color";
+    l.categorySymbol = @"paintpalette";
+  }
+  KKLane *colorMode = colorLanes[0];
+  KKLane *solidColor = colorLanes[1];
+  KKLane *gradient = colorLanes[2];
+
   // Noise: grain mixed into the glow. Amount + Spread animate; Seed is a
   // value-only random integer (the gap-popover seed control). Render wiring is
   // a later step - these currently display but don't yet affect the glow.
@@ -234,8 +265,8 @@ static NSString *_GlowAILaneSchemaText(void) {
                                              values:@[ @(kGlowM1NoiseSeed) ]]];
 
   return @[
-    radius, intensity, falloff, threshold, position, noiseSeed, noise,
-    noiseSpread, noiseGrain, noiseSpeed
+    radius, intensity, falloff, threshold, position, colorMode, solidColor,
+    gradient, noiseSeed, noise, noiseSpread, noiseGrain, noiseSpeed
   ];
 }
 
@@ -434,6 +465,16 @@ static NSString *_GlowAILaneSchemaText(void) {
                                        bundleForClass:[KKOnScreenControl class]]
                       subdirectory:nil
                       onlyTopicIDs:@[ @"visibility", @"position" ]];
+    // Color (Dynamic/Solid/Gradient) is a shared property whose doc lives in
+    // the kit framework. Glow uses it to tint the glow, so opt into the central
+    // doc (every adopting plugin registers this same topic - the doc is plugin
+    // agnostic).
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"Color"
+                            bundle:[NSBundle
+                                       bundleForClass:[KKOnScreenControl class]]
+                      subdirectory:nil
+                      onlyTopicIDs:@[ @"color" ]];
   });
 
   NSString *productContext = GLoc(

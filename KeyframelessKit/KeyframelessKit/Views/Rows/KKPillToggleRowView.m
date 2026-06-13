@@ -165,7 +165,7 @@ static const CGFloat kGroupPillPadX = 8.0;
 - (void)drawRect:(NSRect)dirtyRect {
   NSArray<NSValue *> *rects = [self pillRects];
 
-  if (_grouped) {
+  if (_grouped && !_hidesGroupTrack) {
     CGFloat h = [self currentPillHeight];
     CGFloat totalW = NSMaxX(rects.lastObject.rectValue);
     NSRect trackRect = NSMakeRect(0, 0, totalW, h);

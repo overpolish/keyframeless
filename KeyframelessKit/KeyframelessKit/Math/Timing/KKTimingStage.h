@@ -237,10 +237,35 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// and `integerValued = YES`. Default NO. Build-time metadata.
 @property(nonatomic) BOOL seedField;
 
+/// When set (count >= 2) the value row presents a grouped radio pill (one
+/// segment per label) instead of a number field, and the lane's single value is
+/// the selected index (0-based). Labels are English identifiers, localized for
+/// display via `KKLocalizedParamName`. Pair with `animatable = NO` and
+/// `integerValued = YES` for a structural enum (e.g. a colour mode). nil/empty
+/// = a normal numeric row. Build-time metadata.
+@property(nonatomic, copy, nullable) NSArray<NSString *> *choiceLabels;
+
+/// Conditional visibility (static-values / constants popover only): this lane's
+/// row shows only when the lane named `visibleWhenLabel` has a component-0
+/// value (rounded) listed in `visibleWhenValues`. Cascades: a lane is also
+/// hidden when its controller is itself hidden (so chaining Angle -> Type ->
+/// Mode works). A nil `visibleWhenLabel` = always visible. Build-time metadata;
+/// serialized so a rebuilt display lane keeps the rule.
+@property(nonatomic, copy, nullable) NSString *visibleWhenLabel;
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *visibleWhenValues;
+
+/// For a KKLaneValueTypeGradient lane: when YES the row also shows an inline
+/// radial/linear type toggle and (for linear) an angle knob, all in one row,
+/// and the lane value is laid out as `[type, angleDegrees, <flat stops...>]`
+/// instead of pure stops. Default NO (plain stops-only gradient, e.g. Canvas).
+/// Build- time metadata.
+@property(nonatomic) BOOL gradientShowsTypeAngle;
+
 + (instancetype)laneWithLabel:(NSString *)label;
 
 /// Copy the param-picker build-time metadata (`categoryKey`, `categorySymbol`,
-/// `animatable`, `seedField`) from a plugin template lane onto this one. Used
+/// `animatable`, `seedField`, `choiceLabels`) from a plugin template lane onto
+/// this one. Used
 /// when display lanes are seeded/rebuilt from a persisted blob that predates
 /// these fields. Leaves value/keyposes/enabled and other state untouched.
 - (void)kkApplyPickerMetadataFrom:(KKLane *)tmpl;
@@ -256,6 +281,19 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// lanes fall back to "1", "2", ... indices.
 FOUNDATION_EXPORT
 NSArray<NSString *> *_Nullable KKLaneComponentLabels(KKLane *lane);
+
+/// Labels of the lanes currently visible under the `visibleWhen` cascade: a
+/// lane with no rule is always visible; one with a rule shows only when its
+/// controller lane's component-0 value is in `visibleWhenValues` AND the
+/// controller is itself visible (cascades). A controller absent from `lanes`
+/// can't gate, so the lane shows. `valuesByLabel` overrides a lane's current
+/// component values (e.g. mid-edit); lanes absent from it fall back to their
+/// first keypose. Pass nil to use first-keypose values throughout. Used to hide
+/// mode-gated lanes uniformly across the timeline UI (graph, filter bar, param
+/// order) and the constants/keypose popover.
+FOUNDATION_EXPORT NSSet<NSString *> *KKConditionalVisibleLaneLabels(
+    NSArray<KKLane *> *lanes,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *_Nullable valuesByLabel);
 
 /// Metadata for a group header in the sequencer.
 /// Lanes reference groupKey only; group display state lives in
@@ -305,6 +343,15 @@ FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingSpatialSmooth(
 /// can skip the commit + undo entry.
 FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingAspectLinked(
     KKTimeline *timeline, NSString *label, BOOL on);
+
+/// Returns a copy of `timeline` with the composite-gradient lane named `label`
+/// set to gradient `type` (value index 0) on EVERY keypose - the type is a
+/// single, non-animated property of the gradient, so it stays uniform across
+/// the animation while angle/stops keyframe. Preserves each keypose's
+/// angle/stops and other state. Returns nil when nothing changed (caller skips
+/// the commit).
+FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingGradientType(
+    KKTimeline *timeline, NSString *label, NSInteger type);
 
 /// Index of the keypose whose time is nearest `frac`, or NSNotFound when the
 /// lane has no keyposes. The shared "which keypose does this interaction edit"

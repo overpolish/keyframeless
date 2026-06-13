@@ -243,6 +243,16 @@
     self.onTimelineMutated(t);
 }
 
+- (void)writeGradientTypeForLabel:(NSString *)label type:(NSInteger)type {
+  KKTimeline *t = KKTimelineSettingGradientType(_timeline, label, type);
+  if (!t)
+    return;
+  _timeline = t;
+  [self setNeedsDisplay:YES];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
 // Rewrite the keyposes that make up `boundary` for the lane `label`,
 // preserving times + intervals. Hold sets every interior/edge hold keypose
 // equal (stays flat); In-start / Out-end set just their endpoint keypose.

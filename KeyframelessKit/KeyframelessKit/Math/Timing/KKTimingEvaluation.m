@@ -5,8 +5,8 @@
 
 #import "KKTimingEvaluation.h"
 
-#import "KKColor.h"
 #import "KKBezierPath.h"
+#import "KKColor.h"
 #import "KKGradientSampling.h"
 #import "KKSpatialCurve.h"
 
@@ -235,6 +235,40 @@ static NSArray<NSNumber *> *KKLaneRawValueAtFraction(KKLane *lane,
                                      iv.intensity, iv.frequency)
                      : localT;
 
+  // Composite gradient lanes interpolate specially: type is held, angle lerps,
+  // stops blend structurally - a per-component lerp of [type, angle, stops...]
+  // would be nonsense (type 0<->1) and breaks on a stop-count change.
+  if (lane.valueType == KKLaneValueTypeGradient &&
+      lane.gradientShowsTypeAngle) {
+    NSArray<NSNumber *> *g =
+        KKGradientCompositeInterp(a.values, b.values, easedT);
+    // The angle (component 1) is the one wiggle-able part of a gradient, and
+    // only on a Linear gradient (type 1) - Radial ignores angle entirely.
+    if (iv && iv.modulation != KKIntervalModulationNone && g.count >= 2 &&
+        llround(g[0].doubleValue) == 1) {
+      NSIndexSet *mask = iv.modulationComponents;
+      if (!mask || [mask containsIndex:1]) {
+        KKHoldEffect effect = (iv.modulation == KKIntervalModulationWiggle)
+                                  ? KKHoldEffectWiggle
+                              : (iv.modulation == KKIntervalModulationHandheld)
+                                  ? KKHoldEffectHandheld
+                                  : KKHoldEffectBounce;
+        double f =
+            KKApplyHoldEffect(localT, effect, iv.modulationIntensity,
+                              iv.modulationFrequency, (int)iv.modulationSeed);
+        // Angle wiggles ADDITIVELY (uniform +/-degrees), not multiplicatively,
+        // so the swing is independent of the base angle and never runs away at
+        // large angles. Quarter-range (90 deg of 360) matches the additive form
+        // KKApplyModulationFactor uses for zero-centred params. Trig in the
+        // shader is periodic, so an angle past 0/360 is fine - no wrap needed.
+        NSMutableArray<NSNumber *> *m = [g mutableCopy];
+        m[1] = @(g[1].doubleValue + (f - 1.0) * 360.0 * 0.25);
+        return m;
+      }
+    }
+    return g;
+  }
+
   NSUInteger valCount = MIN(a.values.count, b.values.count);
   NSMutableArray<NSNumber *> *result =
       [NSMutableArray arrayWithCapacity:valCount];
@@ -352,6 +386,11 @@ double KKHermiteJoinBlend(double frac, double boundary, double window,
 NSArray<NSNumber *> *KKTimelineLaneValueAtFractionSmoothed(KKLane *lane,
                                                            double frac) {
   NSArray<KKKeyPose *> *kps = lane.keyposes;
+  // Composite gradient values aren't a vector of independent scalars, so the C1
+  // per-component join blend would corrupt them - use the raw (gradient-aware)
+  // interpolation directly.
+  if (lane.valueType == KKLaneValueTypeGradient && lane.gradientShowsTypeAngle)
+    return KKLaneRawValueAtFraction(lane, frac);
   if (kps.count < 3)
     return KKLaneRawValueAtFraction(lane, frac); // no interior join to round
   if (frac <= kps.firstObject.time || frac >= kps.lastObject.time)

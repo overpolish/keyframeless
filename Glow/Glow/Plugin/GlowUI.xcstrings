@@ -1,6 +1,132 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Parameters are split into three groups (shown as category pills in the inspector): <accent>Core</accent>, <accent>Color</accent>, and <accent>Noise</accent>.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Parameter sind in drei Gruppen unterteilt (als Kategorie-Pills im Informationsfenster): <accent>Kern</accent>, <accent>Farbe</accent> und <accent>Rauschen</accent>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los parámetros se dividen en tres grupos (mostrados como píldoras de categoría en el inspector): <accent>Núcleo</accent>, <accent>Color</accent> y <accent>Ruido</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les paramètres sont répartis en trois groupes (affichés comme pastilles de catégorie dans l’inspecteur) : <accent>Noyau</accent>, <accent>Couleur</accent> et <accent>Bruit</accent>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パラメータは3つのグループに分かれています(インスペクタにカテゴリピルとして表示): <accent>コア</accent>、<accent>カラー</accent>、<accent>ノイズ</accent>。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "매개변수는 세 그룹으로 나뉩니다(인스펙터에 카테고리 알약으로 표시): <accent>코어</accent>, <accent>색상</accent>, <accent>노이즈</accent>."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "参数分为三组（在检查器中显示为类别药丸）：<accent>核心</accent>、<accent>颜色</accent>和<accent>噪点</accent>。"
+          }
+        }
+      }
+    },
+    "Color - how the glow is tinted:": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farbe - wie der Schein eingefärbt wird:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color - cómo se tiñe el resplandor:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couleur - comment la lueur est teintée :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カラー - グローの色付け方法:"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "색상 - 글로우의 색조를 지정하는 방법:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "颜色 - 如何为辉光着色："
+          }
+        }
+      }
+    },
+    "<accent>Mode</accent> - <accent>Dynamic</accent> (the default) takes the colour from the clip so the glow matches the content, <accent>Solid</accent> is one colour you pick, and <accent>Gradient</accent> blends colour stops (radial or linear, with an angle for the linear type). Solid and Gradient can be animated.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Modus</accent> - <accent>Dynamisch</accent> (der Standard) nimmt die Farbe aus dem Clip, sodass der Schein zum Inhalt passt, <accent>Einfarbig</accent> ist eine einzelne Farbe deiner Wahl und <accent>Verlauf</accent> mischt Farbstopps (radial oder linear, mit einem Winkel beim linearen Typ). Einfarbig und Verlauf können animiert werden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Modo</accent> - <accent>Dinámico</accent> (el valor por omisión) toma el color del clip para que el resplandor coincida con el contenido, <accent>Sólido</accent> es un único color que eliges y <accent>Degradado</accent> combina paradas de color (radial o lineal, con un ángulo para el tipo lineal). Sólido y Degradado se pueden animar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Mode</accent> - <accent>Dynamique</accent> (par défaut) prend la couleur du plan pour que la lueur corresponde au contenu, <accent>Uni</accent> est une seule couleur que vous choisissez et <accent>Dégradé</accent> mélange des arrêts de couleur (radial ou linéaire, avec un angle pour le type linéaire). Uni et Dégradé peuvent être animés."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>モード</accent> - <accent>ダイナミック</accent>(デフォルト)はクリップから色を取り込み、グローを内容に合わせます。<accent>単色</accent>は選んだ単一の色、<accent>グラデーション</accent>はカラーストップをブレンドします(放射状または線形。線形タイプでは角度を指定)。単色とグラデーションはアニメーションできます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>모드</accent> - <accent>다이내믹</accent>(기본값)은 클립에서 색상을 가져와 글로우를 콘텐츠에 맞추고, <accent>단색</accent>은 직접 고른 단일 색상이며, <accent>그라데이션</accent>은 색상 정지점을 혼합합니다(방사형 또는 선형, 선형 유형에서는 각도 지정). 단색과 그라데이션은 애니메이션할 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>模式</accent> - <accent>动态</accent>（默认）从片段取色，使辉光与内容匹配；<accent>纯色</accent>是你选择的单一颜色；<accent>渐变</accent>混合多个色标（径向或线性，线性类型可设角度）。纯色和渐变可制作动画。"
+          }
+        }
+      }
+    },
     "<accent>Amount</accent> - how much grain is mixed in, 0-100%. 0 is a clean glow; higher breaks the halo up into grain.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
@@ -759,48 +885,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "屏幕控件快捷键"
-          }
-        }
-      }
-    },
-    "Parameters are split into two groups (shown as category pills in the inspector): <accent>Core</accent> and <accent>Noise</accent>.": {
-      "comment": "Glow help tip (from AIKnowledge markdown).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Parameter sind in zwei Gruppen unterteilt (als Kategorie-Pills im Informationsfenster): <accent>Kern</accent> und <accent>Rauschen</accent>."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Los parámetros se dividen en dos grupos (mostrados como píldoras de categoría en el inspector): <accent>Núcleo</accent> y <accent>Ruido</accent>."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les paramètres sont répartis en deux groupes (affichés comme pastilles de catégorie dans l’inspecteur) : <accent>Noyau</accent> et <accent>Bruit</accent>."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "パラメータは2つのグループに分かれています(インスペクタにカテゴリピルとして表示): <accent>コア</accent>と<accent>ノイズ</accent>。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "매개변수는 두 그룹으로 나뉩니다(인스펙터에 카테고리 알약으로 표시): <accent>코어</accent>와 <accent>노이즈</accent>."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "参数分为两组（在检查器中显示为类别药丸）：<accent>核心</accent>和<accent>噪点</accent>。"
           }
         }
       }

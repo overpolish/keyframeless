@@ -227,6 +227,24 @@
       [s->_basicGraph writeAspectLinkedForLabel:label isOn:on];
   }];
 
+  // Gradient type (radial/linear): a single non-animated property, so editing
+  // it in the keypose editor rewrites every keypose of the lane. Only wired for
+  // the keypose (boundary) popover; the constants editor commits it per-row.
+  if (cfg.isBoundary) {
+    __weak typeof(self) weakType = self;
+    [staticView setOnGradientTypeChanged:^(NSString *label, NSInteger type) {
+      __strong typeof(weakType) s = weakType;
+      if (!s)
+        return;
+      s->_boundaryRedriveSuppressUntil =
+          [NSDate timeIntervalSinceReferenceDate] + 0.4;
+      if (s->_activeTab == 1)
+        [s->_advancedGraph writeGradientTypeForLabel:label type:type];
+      else
+        [s->_basicGraph writeGradientTypeForLabel:label type:type];
+    }];
+  }
+
   if (cfg.isBoundary) {
     [staticView
         setHeaderLinked:[self _anyLinkedKeyposeAtFraction:cfg.fraction]];

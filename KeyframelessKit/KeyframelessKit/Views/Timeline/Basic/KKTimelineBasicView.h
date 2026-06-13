@@ -160,6 +160,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Flip the global aspect lock on the lane named `label`. Routed from the value
 /// popover's link toggle.
 - (void)writeAspectLinkedForLabel:(NSString *)label isOn:(BOOL)on;
+- (void)writeGradientTypeForLabel:(NSString *)label type:(NSInteger)type;
 @end
 
 NS_ASSUME_NONNULL_END
