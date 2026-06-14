@@ -64,6 +64,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
                        loopEnabled:(BOOL)loopEnabled
+             maintainTimingEnabled:(BOOL)maintainTimingEnabled
                          activeTab:(NSInteger)activeTab
                     availableLanes:(NSArray<KKLane *> *)availableLanes
                           timeline:(KKTimeline *)timeline {
@@ -90,7 +91,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
 
   NSView *box = [self _buildBox];
   [self _buildTabBar];
-  [self _buildHeaderButtons:loopEnabled];
+  [self _buildHeaderButtons:loopEnabled maintainTiming:maintainTimingEnabled];
   NSView *headerRow = [self _buildHeaderRow:box];
   [self _buildContentArea:box availableLanes:availableLanes timeline:timeline];
   if (_showsMotionBlurRow)
@@ -146,7 +147,8 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   };
 }
 
-- (void)_buildHeaderButtons:(BOOL)loopEnabled {
+- (void)_buildHeaderButtons:(BOOL)loopEnabled
+             maintainTiming:(BOOL)maintainTimingEnabled {
   __weak typeof(self) weak = self;
 
   _constantsButton = [[KKConstantsButton alloc] init];
@@ -191,6 +193,21 @@ const CGFloat kMBCheckboxTrailing = 23.0;
       weak.onLoopToggled(isOn);
   };
 
+  _maintainTimingButton = [[KKMaintainTimingButton alloc] init];
+  _maintainTimingButton.translatesAutoresizingMaskIntoConstraints = NO;
+  _maintainTimingButton.on = maintainTimingEnabled;
+  // Advanced-only: Basic parks the first/last keypose at the clip edges, so a
+  // retimed (off-edge) keypose isn't a representable Basic state.
+  _maintainTimingButton.hidden = (_selectedTab != KKTimelineTabAdvanced);
+  _maintainTimingButton.toolTip =
+      KKLoc(@"Maintain Timing",
+            @"Toolbar toggle: pin the animation to absolute time so trimming "
+            @"or splitting the clip keeps each keypose where it is.");
+  _maintainTimingButton.onToggled = ^(BOOL isOn) {
+    if (weak.onMaintainTimingToggled)
+      weak.onMaintainTimingToggled(isOn);
+  };
+
   _resetButton = [[KKResetZoomButton alloc] init];
   _resetButton.translatesAutoresizingMaskIntoConstraints = NO;
   _resetButton.onTapped = ^{
@@ -219,6 +236,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   [box addSubview:headerRow];
   [headerRow addSubview:_playButton];
   [headerRow addSubview:_loopButton];
+  [headerRow addSubview:_maintainTimingButton];
   [headerRow addSubview:_accessoryStack];
   [headerRow addSubview:_resetButton];
   return headerRow;
@@ -391,6 +409,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     return;
   }
   _selectedTab = tab;
+  _maintainTimingButton.hidden = (tab != KKTimelineTabAdvanced);
   [_tabBar setState:(tab == KKTimelineTabBasic) atIndex:KKTimelineTabBasic];
   [_tabBar setState:(tab == KKTimelineTabAdvanced)
             atIndex:KKTimelineTabAdvanced];
@@ -457,6 +476,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   if (changed && _guideOwnsTab)
     return;
   _selectedTab = (KKTimelineTab)tab;
+  _maintainTimingButton.hidden = (tab != KKTimelineTabAdvanced);
   [_tabBar setState:(tab == KKTimelineTabBasic) atIndex:KKTimelineTabBasic];
   [_tabBar setState:(tab == KKTimelineTabAdvanced)
             atIndex:KKTimelineTabAdvanced];
@@ -480,6 +500,11 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   _loopButton.on = enabled;
   [_loopButton setNeedsDisplay:YES];
   [_detachedView setLoopEnabled:enabled];
+}
+
+- (void)setMaintainTimingEnabled:(BOOL)enabled {
+  _maintainTimingButton.on = enabled;
+  [_detachedView setMaintainTimingEnabled:enabled];
 }
 
 - (void)setClipDurationSeconds:(double)seconds {
@@ -526,6 +551,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   KKTimelineInspectorView *copy =
       [[[self class] alloc] initWithAPIManager:_apiManager
                                    loopEnabled:_loopButton.on
+                         maintainTimingEnabled:_maintainTimingButton.on
                                      activeTab:_selectedTab
                                 availableLanes:_availableLanes
                                       timeline:_basicView.currentTimeline];
@@ -542,6 +568,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   // Propagate standard callbacks (subclasses propagate any extras after
   // calling super).
   copy.onLoopToggled = _onLoopToggled;
+  copy.onMaintainTimingToggled = _onMaintainTimingToggled;
   copy.onTabChanged = _onTabChanged;
   copy.onMotionBlurChanged = _onMotionBlurChanged;
   [copy setMotionBlurEnabled:_mbCheckbox.isChecked];

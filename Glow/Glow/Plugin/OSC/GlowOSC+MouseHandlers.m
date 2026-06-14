@@ -124,18 +124,16 @@
   BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;
   BOOL effLinked = GlowOSCRadiusAspectLinked() ^ shift;
 
-  // Invert the ring's radius mapping (R = minDim * 0.012 * sqrt(val)) so the
-  // ring edge tracks the cursor 1:1 (sticks to the mouse, like the box OSC)
-  // rather than lagging behind a distance ratio.
-  double c = [self canvasMinDimension] * 0.012;
-  if (c <= 0.0)
-    c = 1.0;
+  // Invert the ring's scale-gizmo radius mapping so the ring edge tracks the
+  // cursor 1:1 (sticks to the mouse, like the box OSC) rather than lagging
+  // behind a distance ratio. See GlowOSCRadiusForRingExtent.
+  double minDim = [self canvasMinDimension];
 
   double newX, newY;
   if (effLinked) {
     // Uniform: the ring edge follows the cursor's radial distance.
-    double r = sqrt(dx * dx + dy * dy) / c;
-    newX = newY = CLAMP(r * r, 0.0, 500.0);
+    double r = GlowOSCRadiusForRingExtent(sqrt(dx * dx + dy * dy), minDim);
+    newX = newY = CLAMP(r, 0.0, 500.0);
   } else {
     // Per-axis: each radius follows its own cursor component, so a horizontal
     // drag grows X and a vertical drag grows Y. An axis grabbed near its
@@ -144,10 +142,11 @@
     // ring size.
     static const double kCardinalFrac = 0.25;
     double minComp = kCardinalFrac * _ringDragStartDist;
-    double rx = fabs(dx) / c, ry = fabs(dy) / c;
-    newX = (fabs(_ringDragStartDx) > minComp) ? CLAMP(rx * rx, 0.0, 500.0)
+    double rx = GlowOSCRadiusForRingExtent(fabs(dx), minDim);
+    double ry = GlowOSCRadiusForRingExtent(fabs(dy), minDim);
+    newX = (fabs(_ringDragStartDx) > minComp) ? CLAMP(rx, 0.0, 500.0)
                                               : _ringDragStartValX;
-    newY = (fabs(_ringDragStartDy) > minComp) ? CLAMP(ry * ry, 0.0, 500.0)
+    newY = (fabs(_ringDragStartDy) > minComp) ? CLAMP(ry, 0.0, 500.0)
                                               : _ringDragStartValY;
   }
 

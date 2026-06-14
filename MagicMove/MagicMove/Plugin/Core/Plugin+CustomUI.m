@@ -666,12 +666,13 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   [actionAPI endAction:self];
 
   NSArray<KKLane *> *available = [MagicMovePlugin availableLanes];
-  KKTimelineInspectorView *view =
-      [[MagicMoveInspectorView alloc] initWithAPIManager:self.apiManager
-                                             loopEnabled:loopEnabled
-                                               activeTab:activeTab
-                                          availableLanes:available
-                                                timeline:timeline];
+  KKTimelineInspectorView *view = [[MagicMoveInspectorView alloc]
+         initWithAPIManager:self.apiManager
+                loopEnabled:loopEnabled
+      maintainTimingEnabled:st.maintainTimingEnabled
+                  activeTab:activeTab
+             availableLanes:available
+                   timeline:timeline];
 
   if (!self.miniViewerRenderer) {
     self.miniViewerRenderer = [[MagicMoveMiniViewerRenderer alloc] init];

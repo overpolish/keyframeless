@@ -25,6 +25,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// if not on screen. Used by joyride steps that cutout the play control.
 - (NSRect)guidePlayButtonScreenRect;
 
+/// Screen rect of the Maintain Timing lock button (Advanced-only) in the header
+/// row. NSZeroRect if not on screen / hidden (Basic tab).
+- (NSRect)guideMaintainTimingButtonScreenRect;
+
 /// Screen rect of the Basic (0) or Advanced (1) segment in the tab bar.
 /// NSZeroRect if not on screen. Used by joyride steps that cutout a single
 /// tab segment.

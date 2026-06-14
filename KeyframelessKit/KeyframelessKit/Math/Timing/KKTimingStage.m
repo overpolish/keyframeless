@@ -265,6 +265,7 @@
   // rebuild a display lane and must carry it, or a normalised 0..1 spatial lane
   // (Position / Crop / Anchor) shows raw fractions instead of pixels.
   _componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
+  _scrubStep = tmpl.scrubStep;
 }
 
 - (void)insertKeypose:(KKKeyPose *)keypose {
@@ -306,6 +307,7 @@
   c.aspectLinkable = _aspectLinkable;
   c.aspectLinked = _aspectLinked;
   c.integerValued = _integerValued;
+  c.scrubStep = _scrubStep;
   c.componentsScaleWithMedia = _componentsScaleWithMedia;
   c.categoryKey = [_categoryKey copy];
   c.categorySymbol = [_categorySymbol copy];
@@ -346,6 +348,8 @@
     d[@"aspect_linked"] = @YES;
   if (_integerValued)
     d[@"integer_valued"] = @YES;
+  if (_scrubStep > 0)
+    d[@"scrub_step"] = @(_scrubStep);
   if (_componentsScaleWithMedia)
     d[@"components_scale_with_media"] = @YES;
   if (_categoryKey)
@@ -394,6 +398,7 @@
   l.aspectLinkable = [d[@"aspect_linkable"] boolValue];
   l.aspectLinked = [d[@"aspect_linked"] boolValue];
   l.integerValued = [d[@"integer_valued"] boolValue];
+  l.scrubStep = [d[@"scrub_step"] doubleValue];
   l.componentsScaleWithMedia = [d[@"components_scale_with_media"] boolValue];
   l.categoryKey = d[@"category_key"];
   l.categorySymbol = d[@"category_symbol"];
@@ -749,6 +754,103 @@ KKTimeline *KKTimelineRebalanced(KKTimeline *timeline, double oldDuration,
       copy.time = MIN(1.0, MAX(0.0, t));
       [newKps addObject:copy];
     }
+    newLane.keyposes = newKps;
+    [newLanes addObject:newLane];
+  }
+
+  result.lanes = newLanes;
+  return result;
+}
+
+// Builds the coalesced edge keypose: `edge` moved to `newTime` (keeping its
+// easing/handles), but with the INTERPOLATED value at the clip boundary when a
+// sampler is supplied — `fOrig` is the boundary's fraction in the original
+// frame. Without a sampler it keeps `edge`'s raw value.
+static KKKeyPose *KKRetimeBoundaryKeypose(KKKeyPose *edge, double newTime,
+                                          KKLane *lane, double fOrig,
+                                          KKLaneFractionSampler sampler) {
+  KKKeyPose *kp = [edge keyposeBySettingTime:newTime];
+  if (sampler) {
+    NSArray<NSNumber *> *v = sampler(lane, MIN(1.0, MAX(0.0, fOrig)));
+    if (v.count)
+      kp.values = v;
+  }
+  return kp;
+}
+
+KKTimeline *KKTimelineRetimedForMediaAnchor(KKTimeline *timeline,
+                                            double fromSrcIn, double fromDur,
+                                            double toSrcIn, double toDur,
+                                            KKLaneFractionSampler sampler,
+                                            double edgeEps) {
+  if (fromDur <= 0 || toDur <= 0)
+    return timeline;
+  double eps = MAX(0.0, MIN(0.25, edgeEps));
+
+  KKTimeline *result = [timeline copy];
+  NSMutableArray<KKLane *> *newLanes =
+      [NSMutableArray arrayWithCapacity:result.lanes.count];
+
+  for (KKLane *lane in result.lanes) {
+    KKLane *newLane = [lane copy];
+    newLane.lastKnownClipDuration = toDur;
+    NSArray<KKKeyPose *> *kps = lane.keyposes;
+    if (kps.count < 2) {
+      [newLanes addObject:newLane];
+      continue;
+    }
+
+    // Map each keypose to its new fraction `f = (media - toSrcIn)/toDur`. The
+    // map is monotonic in `kp.time`, so the keyposes split into a head run
+    // (f below the clip start), interior (inside), and a tail run (past the
+    // end). Off-edge runs are COALESCED to a single edge keypose instead of
+    // piling up (which would leave overlapping keyposes — invalid, the visible
+    // trim/split symptom).
+    //   - If a REAL keypose sits ON the edge (within `eps`, e.g. a split AT a
+    //     keypose), snap THAT one to the edge — keeping its own value + easing,
+    //     and NOT also adding a synthesized boundary (the duplicate-keypose
+    //     bug). `eps` is ~half a frame.
+    //   - Otherwise synthesize one boundary keypose carrying the INTERPOLATED
+    //     value at the clip edge (so a split is continuous).
+    KKKeyPose *headBelow = nil; // last keypose with f < -eps
+    KKKeyPose *headNear = nil;  // last keypose with |f| <= eps
+    KKKeyPose *tailNear = nil;  // first keypose with |f-1| <= eps
+    KKKeyPose *tailAbove = nil; // first keypose with f > 1+eps
+    NSMutableArray<KKKeyPose *> *interior = [NSMutableArray array];
+    for (KKKeyPose *kp in kps) {
+      double media = fromSrcIn + kp.time * fromDur;
+      double f = (media - toSrcIn) / toDur;
+      if (f < -eps) {
+        headBelow = kp;
+      } else if (f <= eps) {
+        headNear = kp;
+      } else if (f < 1.0 - eps) {
+        [interior addObject:[kp keyposeBySettingTime:f]];
+      } else if (f <= 1.0 + eps) {
+        if (!tailNear)
+          tailNear = kp;
+      } else if (!tailAbove) {
+        tailAbove = kp;
+      }
+    }
+
+    NSMutableArray<KKKeyPose *> *newKps = [NSMutableArray array];
+    if (headNear)
+      [newKps addObject:[headNear keyposeBySettingTime:0.0]];
+    else if (headBelow)
+      [newKps addObject:KKRetimeBoundaryKeypose(headBelow, 0.0, lane,
+                                                (toSrcIn - fromSrcIn) / fromDur,
+                                                sampler)];
+    [newKps addObjectsFromArray:interior];
+    if (tailNear)
+      [newKps addObject:[tailNear keyposeBySettingTime:1.0]];
+    else if (tailAbove)
+      [newKps addObject:KKRetimeBoundaryKeypose(
+                            tailAbove, 1.0, lane,
+                            (toSrcIn + toDur - fromSrcIn) / fromDur, sampler)];
+    if (newKps.count == 0)
+      [newKps addObject:[kps.firstObject keyposeBySettingTime:0.0]];
+
     newLane.keyposes = newKps;
     [newLanes addObject:newLane];
   }

@@ -30,6 +30,15 @@ FOUNDATION_EXPORT NSButton *KKResetToDefaultButton(id target, SEL action);
 @property(nonatomic, copy, nullable) void (^onToggled)(BOOL isOn);
 @end
 
+/// "Maintain Timing" toggle (accent when `on`). Lock icon - pins the
+/// animation to absolute source-media time so trimming / growing / splitting
+/// the clip preserves where each keypose lands instead of rescaling it with
+/// the clip's new duration.
+@interface KKMaintainTimingButton : NSView
+@property(nonatomic) BOOL on;
+@property(nonatomic, copy, nullable) void (^onToggled)(BOOL isOn);
+@end
+
 /// Momentary tap button. Play/pause icon (accent while `playing`).
 @interface KKPlayButton : NSView
 @property(nonatomic) BOOL playing;

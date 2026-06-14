@@ -20,6 +20,8 @@
 @class KKHelpGuide;
 @class KKTimingLane;
 @class KKTimingSegment;
+@class KKRenderCache;
+@class KKTimelineInspectorView;
 @class NSBezierPath;
 @protocol PROAPIAccessing;
 @protocol FxParameterCreationAPI_v5;
@@ -545,6 +547,32 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// a single custom-string param as a JSON object. The param must already be
 /// registered as a custom-string parameter.
 - (void)patchUIStateKey:(NSString *)key value:(id)value paramID:(UInt32)paramID;
+
+/// Persists the "Maintain Timing" toggle into the UI-state blob at `paramID`.
+/// When enabling, captures the current source-media in-point + clip duration
+/// (read from FxTimingAPI inside the action scope) as the anchor the render
+/// remap pins keyposes to, so trimming/growing/splitting holds their absolute
+/// position. All keys are written in one action scope (single undo entry).
+- (void)patchMaintainTimingEnabled:(BOOL)enabled paramID:(UInt32)paramID;
+
+/// "Maintain Timing" bake. Call from the render tick (after
+/// KKRefreshRenderCache populates `cache`). When the lock is on and the clip's
+/// source range has moved away from the stored anchor (a trim/grow surfaced
+/// this tick), it rewrites the timeline blob's keypose fractions to hold their
+/// absolute media position and advances the anchor — both in one action scope
+/// (dispatched to the main queue, since the render tick has no action scope).
+/// The blob write flows to the Advanced graph via the normal parameterChanged
+/// path, so the keyposes visibly move. A per-tick guard on `cache` makes it
+/// fire once per trim, not every frame while the async write is in flight.
+/// No-op when the lock is off, no anchor is set, or the range already matches.
+- (void)bakeMaintainTimingForCache:(KKRenderCache *)cache
+                   timelineParamID:(UInt32)timelineParamID
+                    uiStateParamID:(UInt32)uiStateParamID;
+
+/// The plugin's timeline inspector, if open. Override to return it so the bake
+/// can push the retimed timeline straight to the graph (the parameterChanged
+/// round-trip from a self-write isn't always reliable). Default nil.
+- (nullable KKTimelineInspectorView *)maintainTimingInspectorView;
 
 /// Override to provide help/keyboard-shortcut sections. Each section is
 /// rendered as a titled block with a tips bullet list and/or a 2-column

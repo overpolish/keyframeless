@@ -14,6 +14,7 @@
 @class KKReorderListView;
 @class KKResetZoomButton;
 @class KKLoopButton;
+@class KKMaintainTimingButton;
 @class KKConstantsButton;
 @class KKDetachButton;
 @class KKTimelineLanesView;
@@ -84,6 +85,7 @@ NS_ASSUME_NONNULL_BEGIN
   KKResetZoomButton *_resetButton;
   NSStackView *_accessoryStack;
   KKLoopButton *_loopButton;
+  KKMaintainTimingButton *_maintainTimingButton;
   KKConstantsButton *_constantsButton;
   KKDetachButton *_detachButton;
   NSView *_contentView;

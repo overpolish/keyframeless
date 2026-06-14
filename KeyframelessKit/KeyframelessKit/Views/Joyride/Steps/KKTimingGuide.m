@@ -925,6 +925,22 @@ static const CGFloat kDragSnapPx = 14.0;
            }];
   sOverview.showsNext = YES;
 
+  KKJoyrideStep *sMaintain = [KKJoyrideStep
+      stepWithMessage:KKLoc(
+                          @"<accent>Maintain Timing</accent> locks the "
+                          @"animation to absolute time - trimming or splitting "
+                          @"the clip then retimes the keyposes to hold their "
+                          @"position.",
+                          @"Advanced timing guide: the Maintain Timing lock "
+                          @"toggle.")
+           targetView:nil];
+  sMaintain.spotlightCircular = YES;
+  sMaintain.showsNext = YES;
+  sMaintain.targetScreenRect = ^NSRect {
+    KKTimelineInspectorView *insp = config.inspectorView;
+    return insp ? [insp guideMaintainTimingButtonScreenRect] : NSZeroRect;
+  };
+
   KKJoyrideStep *sDone = [KKJoyrideStep
       stepWithMessage:KKLoc(@"That's <accent>Advanced</accent> timing: add "
                             @"keyposes anywhere and shape each one "
@@ -954,7 +970,7 @@ static const CGFloat kDragSnapPx = 14.0;
           mutableCopy];
   if (includeFilter)
     [steps addObject:sFilter];
-  [steps addObjectsFromArray:@[ sDynamic, sOverview, sDone ]];
+  [steps addObjectsFromArray:@[ sDynamic, sOverview, sMaintain, sDone ]];
   return steps;
 }
 

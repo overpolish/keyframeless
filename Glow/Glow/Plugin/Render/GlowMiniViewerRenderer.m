@@ -6,6 +6,7 @@
 #import "GlowMiniViewerRenderer.h"
 
 #import "Constants.h"
+#import "GlowOSCRadiusMath.h"
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKColorLanes.h>
@@ -24,11 +25,6 @@ NSString *const GlowMiniViewerRequestPath =
 // tighter/dimmer glow than the viewer. Compositing still targets the 8-bit
 // dest; only the blur intermediates need the extra precision.
 static const MTLPixelFormat kGlowMiniBlurFormat = MTLPixelFormatRGBA16Float;
-
-// Ring radius (overlay points) = contentRectMinDim * kGlowMiniRingK *
-// sqrt(val). Same proportion the viewer ring uses, so the mini ring is a
-// faithful preview.
-static const double kGlowMiniRingK = 0.012;
 
 // The sRGB sibling of an 8-bit format, so a view of it gamma-encodes on write /
 // decodes on read (a linear-light working pass). Returns the input unchanged if
@@ -162,13 +158,13 @@ static MTLPixelFormat GlowSRGBVariant(MTLPixelFormat f) {
   NSArray<NSNumber *> *v = [self valuesForLabel:@"Radius"];
   double rxVal = v.count >= 1 ? v[0].doubleValue : kGlowM1Radius;
   double ryVal = v.count >= 2 ? v[1].doubleValue : rxVal;
-  double k = MIN(cr.size.width, cr.size.height) * kGlowMiniRingK;
+  double minDim = MIN(cr.size.width, cr.size.height);
   if (outCenter)
     *outCenter = CGPointMake(CGRectGetMidX(cr), CGRectGetMidY(cr));
   if (outRx)
-    *outRx = (CGFloat)(k * sqrt(MAX(0.0, rxVal)));
+    *outRx = (CGFloat)GlowOSCRingExtentForRadius(rxVal, minDim);
   if (outRy)
-    *outRy = (CGFloat)(k * sqrt(MAX(0.0, ryVal)));
+    *outRy = (CGFloat)GlowOSCRingExtentForRadius(ryVal, minDim);
   return YES;
 }
 
@@ -224,10 +220,10 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
     return NO;
   double valX = values.count >= 1 ? values[0].doubleValue : kGlowM1Radius;
   double valY = values.count >= 2 ? values[1].doubleValue : valX;
-  double k = MIN(cr.size.width, cr.size.height) * kGlowMiniRingK;
+  double minDim = MIN(cr.size.width, cr.size.height);
   CGPoint c = CGPointMake(CGRectGetMidX(cr), CGRectGetMidY(cr));
-  CGFloat rx = (CGFloat)(k * sqrt(MAX(0.0, valX)));
-  CGFloat ry = (CGFloat)(k * sqrt(MAX(0.0, valY)));
+  CGFloat rx = (CGFloat)GlowOSCRingExtentForRadius(valX, minDim);
+  CGFloat ry = (CGFloat)GlowOSCRingExtentForRadius(valY, minDim);
   if (outCenter)
     *outCenter = [self _ringHandlePointForCenter:c radiusX:rx radiusY:ry];
   return YES;
@@ -267,8 +263,8 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
 
 // Resize identical to the viewer ring (GlowOSC mouseDragged). Shift inverts the
 // lane's aspect-link for this drag (same as the scale box). The cursor maps
-// directly through the inverse of the ring's radius mapping
-// (R = minDim * 0.012 * sqrt(val)) so the ring edge sticks to the mouse 1:1:
+// directly through the inverse of the ring's scale-gizmo radius mapping (see
+// GlowOSCRadiusForRingExtent) so the ring edge sticks to the mouse 1:1:
 //   - effectively linked  -> uniform: ring edge follows the cursor's distance.
 //   - effectively unlinked -> per-axis: each radius follows its own cursor
 //     component. An axis grabbed near its cardinal (a side: start component
@@ -277,8 +273,8 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
                   contentRect:(CGRect)cr
                     modifiers:(NSEventModifierFlags)modifiers
                        canvas:(KKMiniViewerView *)canvas {
-  double c = MIN(cr.size.width, cr.size.height) * kGlowMiniRingK;
-  if (c <= 0.0 || _ringStartDist <= 0)
+  double minDim = MIN(cr.size.width, cr.size.height);
+  if (minDim <= 0.0 || _ringStartDist <= 0)
     return;
   double dx = p.x - CGRectGetMidX(cr);
   double dy = p.y - CGRectGetMidY(cr);
@@ -286,15 +282,16 @@ static const double kGlowRingHandleCos = M_SQRT1_2; // cos / sin of 45 degrees
   BOOL effLinked = [self _radiusAspectLinked] ^ shift;
   double newX, newY;
   if (effLinked) {
-    double r = hypot(dx, dy) / c;
-    newX = newY = MAX(0.0, MIN(500.0, r * r));
+    double r = GlowOSCRadiusForRingExtent(hypot(dx, dy), minDim);
+    newX = newY = MAX(0.0, MIN(500.0, r));
   } else {
     static const double kCardinalFrac = 0.25;
     double minComp = kCardinalFrac * _ringStartDist;
-    double rx = fabs(dx) / c, ry = fabs(dy) / c;
-    newX = (fabs(_ringStartDx) > minComp) ? MAX(0.0, MIN(500.0, rx * rx))
+    double rx = GlowOSCRadiusForRingExtent(fabs(dx), minDim);
+    double ry = GlowOSCRadiusForRingExtent(fabs(dy), minDim);
+    newX = (fabs(_ringStartDx) > minComp) ? MAX(0.0, MIN(500.0, rx))
                                           : _ringStartValX;
-    newY = (fabs(_ringStartDy) > minComp) ? MAX(0.0, MIN(500.0, ry * ry))
+    newY = (fabs(_ringStartDy) > minComp) ? MAX(0.0, MIN(500.0, ry))
                                           : _ringStartValY;
   }
   [self commitValues:@[ @(newX), @(newY) ] forLabel:@"Radius" canvas:canvas];

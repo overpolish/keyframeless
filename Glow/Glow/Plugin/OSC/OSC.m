@@ -69,10 +69,10 @@ void GlowOSCCaptureGuideAnchorAtScreen(NSPoint screenPt) {
 }
 
 // Inverse of the ring's radius mapping: screen → canvas (via the bridge's
-// affine), then distance from the clip centre back through
-// R = minDim*0.012*sqrt(val), linked so both axes match - the same uniform path
-// a real ring drag takes. Falls back to the last guide radius until the bridge
-// has cached usable geometry.
+// affine), then distance from the clip centre back through the scale-gizmo
+// curve (GlowOSCRadiusForRingExtent), linked so both axes match - the same
+// uniform path a real ring drag takes. Falls back to the last guide radius
+// until the bridge has cached usable geometry.
 NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
   KKOSCGuideBridge *b = GlowGuideBridge();
   NSArray<NSNumber *> *fallback =
@@ -84,12 +84,10 @@ NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
   double centerX = (tr.x + bl.x) * 0.5;
   double centerY = (tr.y + bl.y) * 0.5;
   double minDim = fmin(fabs(tr.x - bl.x), fabs(tr.y - bl.y));
-  double c = minDim * 0.012;
-  if (c <= 0.0)
+  if (minDim <= 0.0)
     return fallback;
   double dist = hypot(cx - centerX, cy - centerY);
-  double r = dist / c;
-  double val = MAX(0.0, MIN(500.0, r * r));
+  double val = MAX(0.0, MIN(500.0, GlowOSCRadiusForRingExtent(dist, minDim)));
   return @[ @(val), @(val) ];
 }
 
@@ -168,8 +166,8 @@ NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
   NSArray<NSNumber *> *v = [self guideRadiusValuesForFraction:frac];
   double rx = v.count > 0 ? v[0].doubleValue : kGlowM1Radius;
   double ry = v.count > 1 ? v[1].doubleValue : rx;
-  double rrx = minDim * 0.012 * sqrt(MAX(0.0, rx));
-  double rry = minDim * 0.012 * sqrt(MAX(0.0, ry));
+  double rrx = GlowOSCRingExtentForRadius(rx, minDim);
+  double rry = GlowOSCRingExtentForRadius(ry, minDim);
   const double k = M_SQRT1_2;
   return CGPointMake(center.x + rrx * k, center.y + rry * k);
 }
@@ -177,7 +175,7 @@ NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
 - (CGPoint)guideTargetCanvasPosition {
   CGPoint center = [self canvasCenter];
   double minDim = [self canvasMinDimension];
-  double rr = minDim * 0.012 * sqrt(MAX(0.0, kGlowOSCGuideTargetRadius));
+  double rr = GlowOSCRingExtentForRadius(kGlowOSCGuideTargetRadius, minDim);
   const double k = M_SQRT1_2;
   return CGPointMake(center.x + rr * k, center.y + rr * k);
 }
@@ -246,16 +244,17 @@ NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
   return (m > 1.0) ? m : 1000.0;
 }
 
-// Map the per-axis radius value (px, 0..500) to a canvas ring radius. The sqrt
-// keeps a large blur from sending the ring far off-screen while still growing
-// monotonically. Matches the pre-v3 Glow ring sizing.
+// Map the per-axis radius value (px, 0..500) to a canvas ring radius via the
+// shared scale-gizmo curve, so the ring matches the MagicMove scale box: a
+// visible minimum size at 0 (never collapses to a point) growing linearly then
+// sqrt-compressed past the pivot. See GlowOSCRingExtentForRadius.
 - (void)updateRingForFraction:(double)frac {
   double minDim = [self canvasMinDimension];
   NSArray<NSNumber *> *v = [self guideRadiusValuesForFraction:frac];
   double rx = v[0].doubleValue;
   double ry = v.count > 1 ? v[1].doubleValue : rx;
-  _radiusRing.ringRadius = (float)(minDim * 0.012 * sqrt(MAX(0.0, rx)));
-  _radiusRing.ringRadiusY = (float)(minDim * 0.012 * sqrt(MAX(0.0, ry)));
+  _radiusRing.ringRadius = (float)GlowOSCRingExtentForRadius(rx, minDim);
+  _radiusRing.ringRadiusY = (float)GlowOSCRingExtentForRadius(ry, minDim);
 }
 
 // Override the base OSC-visibility hooks: Glow exposes only the Radius ring in

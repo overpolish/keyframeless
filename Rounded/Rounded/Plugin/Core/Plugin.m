@@ -12,6 +12,10 @@
 
 @implementation RoundedPlugin
 
+- (KKTimelineInspectorView *)maintainTimingInspectorView {
+  return (KKTimelineInspectorView *)self.inspectorView;
+}
+
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
   self = [super initWithAPIManager:newApiManager];

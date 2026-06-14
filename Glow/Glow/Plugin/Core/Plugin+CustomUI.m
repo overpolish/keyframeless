@@ -100,6 +100,9 @@ static NSString *_GlowAILaneSchemaText(void) {
   // normalised 0..1 and opt into the pixel display scaling.
   radius.componentUnits = @[ @"px", @"px" ];
   radius.componentLabels = @[ @"X", @"Y" ];
+  // Raw px shown with decimals: scrub by 1 px/step, not the 0.01 the auto rule
+  // would pick for a 2-decimal field.
+  radius.scrubStep = 1.0;
   radius.aspectLinkable = YES;
   radius.aspectLinked = YES;
   // Param-picker category: Radius is the "Core" page; the noise params split
@@ -325,6 +328,7 @@ static NSString *_GlowAILaneSchemaText(void) {
     GlowInspectorView *view =
         [[GlowInspectorView alloc] initWithAPIManager:self.apiManager
                                           loopEnabled:loopEnabled
+                                maintainTimingEnabled:st.maintainTimingEnabled
                                             activeTab:activeTab
                                        availableLanes:available
                                              timeline:timeline];

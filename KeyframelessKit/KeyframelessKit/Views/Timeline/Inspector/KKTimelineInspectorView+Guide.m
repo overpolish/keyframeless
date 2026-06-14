@@ -126,6 +126,12 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   return [w convertRectToScreen:[btn convertRect:btn.bounds toView:nil]];
 }
 
+- (NSRect)guideMaintainTimingButtonScreenRect {
+  if (_maintainTimingButton.hidden)
+    return NSZeroRect;
+  return KKGuideScreenRectForView(_maintainTimingButton);
+}
+
 - (NSRect)guideTabSegmentScreenRectForTab:(NSInteger)tab {
   KKPillToggleRowView *bar = [self _guideTabBar];
   if (!bar)
