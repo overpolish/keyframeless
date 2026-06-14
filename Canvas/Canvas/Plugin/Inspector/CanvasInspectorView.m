@@ -1,0 +1,43 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#import "CanvasInspectorView.h"
+#import "CanvasMiniViewerRenderer.h"
+
+@implementation CanvasInspectorView {
+  CanvasMiniViewerRenderer *_miniViewerRenderer;
+}
+
+- (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
+                       loopEnabled:(BOOL)loopEnabled
+             maintainTimingEnabled:(BOOL)maintainTimingEnabled
+                         activeTab:(NSInteger)activeTab
+                    availableLanes:(NSArray<KKLane *> *)availableLanes
+                          timeline:(KKTimeline *)timeline {
+  self = [super initWithAPIManager:apiManager
+                       loopEnabled:loopEnabled
+             maintainTimingEnabled:maintainTimingEnabled
+                         activeTab:activeTab
+                    availableLanes:availableLanes
+                          timeline:timeline];
+  if (self) {
+    _miniViewerRenderer = [[CanvasMiniViewerRenderer alloc] init];
+    _miniViewerRenderer.timeline = timeline;
+    // No on-screen controls yet (increment 1): the preview is a clean
+    // passthrough frame with no handles drawn or hit-tested.
+    _miniViewerRenderer.handlesHidden = YES;
+    self.miniViewerDelegate = _miniViewerRenderer;
+    self.miniViewerDescriptorPath = CanvasMiniViewerDescriptorPath;
+    self.miniViewerRequestPath = CanvasMiniViewerRequestPath;
+  }
+  return self;
+}
+
+- (void)applyTimeline:(KKTimeline *)timeline {
+  [super applyTimeline:timeline];
+  _miniViewerRenderer.timeline = timeline;
+}
+
+@end
