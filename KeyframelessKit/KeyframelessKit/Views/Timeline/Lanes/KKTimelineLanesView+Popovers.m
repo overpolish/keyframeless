@@ -7,6 +7,7 @@
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTokens.h"
@@ -315,6 +316,10 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
     if (pw && NSPointInRect(p, pw.frame))
       return;
     if (pointInJoyridePanel(p))
+      return;
+    // A plugin's companion side panel (e.g. a layer list shown beside the
+    // popover) registers itself as keep-alive so clicking it doesn't dismiss.
+    if (KKPopoverPointInKeepAliveWindow(p))
       return;
     [weakPopover close];
   };

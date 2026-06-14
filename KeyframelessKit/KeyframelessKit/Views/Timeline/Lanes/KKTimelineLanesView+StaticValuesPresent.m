@@ -7,6 +7,7 @@
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTokens.h"
@@ -319,6 +320,10 @@
                         __strong typeof(weak) s = weak;
                         if (!s)
                           return;
+                        [NSNotificationCenter.defaultCenter
+                            postNotificationName:
+                                KKStaticValuesPopoverDidCloseNotification
+                                          object:s];
                         s->_openStaticView = nil;
                         if (isBoundary) {
                           s->_openStaticIsBoundary = NO;
@@ -340,6 +345,26 @@
                           s.onStaticValuesPopoverClosed();
                       }];
   staticView.popover = popover;
+
+  // Companion-panel signal: a plugin (e.g. Canvas's layer list) observes this
+  // to show a panel beside the popover. Scoped to this lanes view via `object`.
+  // `contentRect` is the VISIBLE card's screen rect (the window frame includes
+  // shadow + arrow padding, so it's taller/wider than the card) - a companion
+  // panel aligns to this, not the window frame.
+  NSView *contentView = popover.contentViewController.view;
+  NSWindow *popoverWindow = contentView.window;
+  NSMutableDictionary *info = [NSMutableDictionary dictionary];
+  if (popoverWindow) {
+    info[@"window"] = popoverWindow;
+    NSRect cardScreen = [popoverWindow
+        convertRectToScreen:[contentView convertRect:contentView.bounds
+                                              toView:nil]];
+    info[@"contentRect"] = [NSValue valueWithRect:cardScreen];
+  }
+  [NSNotificationCenter.defaultCenter
+      postNotificationName:KKStaticValuesPopoverDidOpenNotification
+                    object:self
+                  userInfo:info];
 
   if (self.onStaticValuesPopoverWillOpen) {
     __weak _KKStaticValuesPopoverView *weakStatic = staticView;

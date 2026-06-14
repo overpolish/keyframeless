@@ -100,6 +100,8 @@
 				"Plugin/Core/Plugin+Render.m",
 				Plugin/Info.plist,
 				Plugin/Inspector/CanvasInspectorView.m,
+				Plugin/Inspector/CanvasLayerListController.m,
+				Plugin/Inspector/CanvasLayerListView.m,
 				Plugin/Inspector/CanvasMiniViewerRenderer.m,
 				Plugin/main.m,
 				"Wrapper Application/Info.plist",

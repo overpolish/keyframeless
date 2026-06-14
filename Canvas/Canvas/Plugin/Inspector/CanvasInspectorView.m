@@ -4,10 +4,12 @@
  */
 
 #import "CanvasInspectorView.h"
+#import "CanvasLayerListController.h"
 #import "CanvasMiniViewerRenderer.h"
 
 @implementation CanvasInspectorView {
   CanvasMiniViewerRenderer *_miniViewerRenderer;
+  CanvasLayerListController *_layerListController;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
@@ -31,8 +33,18 @@
     self.miniViewerDelegate = _miniViewerRenderer;
     self.miniViewerDescriptorPath = CanvasMiniViewerDescriptorPath;
     self.miniViewerRequestPath = CanvasMiniViewerRequestPath;
+
+    // Layers panel: appears to the left of value/constants popovers (kit posts
+    // scoped open/close notifications; the panel registers keep-alive so
+    // interacting with it doesn't dismiss the popover).
+    _layerListController =
+        [[CanvasLayerListController alloc] initWithLanesView:self.basicLanesView];
   }
   return self;
+}
+
+- (void)dealloc {
+  [_layerListController invalidate];
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {
