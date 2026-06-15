@@ -5,6 +5,7 @@
 
 #import "CanvasLayerListController.h"
 #import "CanvasLayerListView.h"
+#import "CanvasLayerRender.h"
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <QuartzCore/QuartzCore.h>
@@ -64,6 +65,10 @@ static const CGFloat kSlideDistance = 12.0;
 
 - (void)reload {
   [_listView reloadFromParam];
+}
+
+- (NSArray<KKBezierPath *> *)currentLayerPaths {
+  return CanvasReadLayerPaths(_apiManager, self.paramActionTarget ?: self);
 }
 
 - (void)dealloc {

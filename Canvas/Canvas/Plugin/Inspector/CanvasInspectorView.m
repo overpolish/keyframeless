@@ -40,12 +40,21 @@
     _layerListController =
         [[CanvasLayerListController alloc] initWithLanesView:self.basicLanesView
                                                   apiManager:apiManager];
+    [self _syncLayersToRenderer];
   }
   return self;
 }
 
 - (void)dealloc {
   [_layerListController invalidate];
+}
+
+// Push the current layer stack to the mini-viewer renderer so its preview
+// composites the same layers the main render does. The renderer re-runs on the
+// next published source frame (no explicit redraw needed - editing a layer
+// re-renders the clip).
+- (void)_syncLayersToRenderer {
+  _miniViewerRenderer.layers = [_layerListController currentLayerPaths];
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {
@@ -55,10 +64,14 @@
 
 - (void)reloadLayerList {
   [_layerListController reload];
+  [self _syncLayersToRenderer];
 }
 
 - (void)setLayerParamActionTarget:(id)target {
   _layerListController.paramActionTarget = target;
+  // The target is the host-recognized plugin for action scopes; now that it's
+  // set, do an authoritative read to seed the preview's layers.
+  [self _syncLayersToRenderer];
 }
 
 @end

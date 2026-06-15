@@ -91,6 +91,17 @@ indented by their depth.
 - Actions act on the whole selection when you right-click a row that's part of a
   multi-selection; otherwise just that row.
 
+## Rendering
+
+Visible **image layers** are drawn onto the clip, composited front-to-back over
+the source frame (the topmost row draws last, on top). Each image fills its
+layer's rectangle. Hidden layers, groups, and non-image layers are skipped. The
+source clip shows through wherever no layer covers it. The inspector's
+mini-viewer preview composites the same layers the same way, so it matches the
+main viewer.
+
 ## Pending re-add (tracked during the v3 rebuild)
 
-- Rendering the layers to the canvas (render is currently a passthrough).
+- Per-layer transform (scale / position / rotation) and on-canvas OSC.
+- Per-layer opacity in the render.
+- Shape (stroke / fill) layers and SVG import.

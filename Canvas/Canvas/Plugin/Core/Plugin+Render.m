@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "CanvasLayerRender.h"
 #import "CanvasMiniViewerRenderer.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
+#import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMotionBlur.h>
@@ -85,7 +87,16 @@
     });
   }
 
-  *pluginState = [NSData data];
+  // Snapshot the layer stack into the state blob so the render reads no params.
+  // The param value is base64 of +[KKBezierPath blobFromPaths:]; decode it back
+  // to the raw blob here and hand the raw blob to render (pathsFromBlob:).
+  NSData *layerBlob = nil;
+  if (api) {
+    NSString *b64 = KKReadCustomParamString(api, kParamLayerData);
+    if (b64.length)
+      layerBlob = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
+  }
+  *pluginState = layerBlob ?: [NSData data];
   return YES;
 }
 
@@ -145,6 +156,32 @@
     return NO;
   }
 
+  // Image-layer overlay pipeline: same positioned-quad vertex shader, sampled
+  // straight through, composited over the source with premultiplied-alpha "over"
+  // (the loader stores premultiplied textures).
+  id<MTLRenderPipelineState> imagePS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Canvas.image"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:kitBundleID
+                                  vertexShader:@"KKVertexShader"
+                                fragmentShader:@"KKTexturePassthroughFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+
+  // Decode the layer stack snapshotted into the state blob (bottom of the array
+  // draws in front, so composite back-to-front: last index first).
+  NSArray<KKBezierPath *> *layers =
+      pluginState.length ? [KKBezierPath pathsFromBlob:pluginState] : nil;
+  id<MTLDevice> device = [cache deviceWithRegistryID:regID];
+  NSMutableDictionary<NSString *, id<MTLTexture>> *texCache =
+      self.imageTextureCache;
+
+  float outputWidth = (float)(destinationImage.tilePixelBounds.right -
+                              destinationImage.tilePixelBounds.left);
+  float outputHeight = (float)(destinationImage.tilePixelBounds.top -
+                               destinationImage.tilePixelBounds.bottom);
+
   return [self
       encodeRenderCommandsForDestinationImage:destinationImage
                                  sourceImages:sourceImages
@@ -163,6 +200,13 @@
                                                MTLPrimitiveTypeTriangleStrip
                                               vertexStart:0
                                               vertexCount:4];
+
+                                       if (!imagePS || !device)
+                                         return;
+                                       [encoder setRenderPipelineState:imagePS];
+                                       CanvasEncodeImageLayers(
+                                           layers, encoder, device, texCache,
+                                           outputWidth, outputHeight);
                                      }];
 }
 

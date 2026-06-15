@@ -26,6 +26,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Re-read the layer blob and rebuild the panel (forwarded on undo/redo). A
 /// no-op if the panel hasn't been created yet.
 - (void)reload;
+/// The current decoded layer stack, read straight from the param (works even
+/// while the panel is closed). Used to feed the mini-viewer renderer.
+- (NSArray<KKBezierPath *> *)currentLayerPaths;
 @end
 
 NS_ASSUME_NONNULL_END

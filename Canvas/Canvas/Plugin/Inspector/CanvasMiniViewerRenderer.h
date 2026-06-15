@@ -7,6 +7,8 @@
 
 #import <KeyframelessKit/KeyframelessKit.h>
 
+@class KKBezierPath;
+
 NS_ASSUME_NONNULL_BEGIN
 
 /// Cross-process rendezvous path: the render side's `KKMiniViewerFeed`
@@ -19,11 +21,13 @@ extern NSString *const CanvasMiniViewerDescriptorPath;
 extern NSString *const CanvasMiniViewerRequestPath;
 
 /// Canvas's mini-viewer delegate. The generic timeline / handle scaffolding
-/// lives in `KKMiniViewerRenderer`; this subclass currently adds nothing - the
-/// base does a raw source passthrough, which matches Canvas's passthrough
-/// render (increment 1). The real shape preview + OSC handles land here as the
-/// rendering features are rebuilt onto the v3 timing core.
+/// lives in `KKMiniViewerRenderer`; this subclass runs the same image-layer
+/// compositing as the main render (Plugin+Render.m) over the source frame, so
+/// the preview matches the viewer. The host keeps `layers` synced from the
+/// `kParamLayerData` blob (see CanvasInspectorView).
 @interface CanvasMiniViewerRenderer : KKMiniViewerRenderer
+/// The layer stack to composite, kept in sync by the host. Index 0 is topmost.
+@property(nonatomic, copy, nullable) NSArray<KKBezierPath *> *layers;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -5,6 +5,7 @@
 
 #import "CanvasLayerListView_Private.h"
 
+#import "CanvasLayerRender.h"
 #import "CanvasLayerRowViews.h"
 #import "CanvasLayerTree.h"
 #import "CanvasLocalized.h"
@@ -352,21 +353,7 @@
   id<PROAPIAccessing> api = self.apiManager;
   if (!api)
     return [NSMutableArray array];
-  id<FxCustomParameterActionAPI_v4> action =
-      [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!action)
-    return [NSMutableArray array];
-  id target = self.paramActionTarget ?: self;
-  [action startAction:target];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  NSString *b64 = KKReadCustomParamString(getAPI, kParamLayerData);
-  [action endAction:target];
-  if (b64.length == 0)
-    return [NSMutableArray array];
-  NSData *blob = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
-  NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
-  return paths ?: [NSMutableArray array];
+  return CanvasReadLayerPaths(api, self.paramActionTarget ?: self);
 }
 
 - (void)_writePaths:(NSArray<KKBezierPath *> *)paths {
@@ -469,6 +456,9 @@
                                        NSEventModifierFlags m =
                                            e.modifierFlags &
                                            NSEventModifierFlagDeviceIndependentFlagsMask;
+                                       // Delete / Backspace / Forward-delete
+                                       // remove the selection and are consumed
+                                       // so they never reach FCP.
                                        if (e.keyCode == 51 ||
                                            e.keyCode == 117) {
                                          [s _deleteSelectedRows];

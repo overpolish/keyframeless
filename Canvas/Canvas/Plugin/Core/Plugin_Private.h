@@ -15,6 +15,11 @@
 @property(nonatomic, weak, nullable) CanvasInspectorView *inspectorView;
 @property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
 @property(nonatomic, strong, nullable) KKPlayheadPoller *playheadPoller;
+/// Per-instance cache of decoded image-layer textures, keyed by file path.
+/// (Instance-scoped, not a static - every plugin instance is a separate XPC
+/// process.)
+@property(nonatomic, strong, nonnull)
+    NSMutableDictionary<NSString *, id<MTLTexture>> *imageTextureCache;
 /// Returns a copy of `timeline` with every lane's lastKnownClipDuration set to
 /// the current effect duration (seconds). Must be called inside an action
 /// scope (FxTimingAPI resolves there).

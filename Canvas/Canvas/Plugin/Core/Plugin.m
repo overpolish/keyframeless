@@ -20,6 +20,7 @@
   self = [super initWithAPIManager:newApiManager];
   if (self) {
     _renderCache = [[KKRenderCache alloc] init];
+    _imageTextureCache = [NSMutableDictionary dictionary];
   }
   return self;
 }
