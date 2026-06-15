@@ -1,0 +1,204 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Drag images here to add them as layers" : {
+      "comment" : "Layers panel hint text under the list.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bilder hierher ziehen, um sie als Ebenen hinzuzufügen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Arrastra imágenes aquí para añadirlas como capas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Glissez des images ici pour les ajouter comme calques"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "画像をここにドラッグしてレイヤーとして追加"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "이미지를 여기로 드래그하여 레이어로 추가"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将图像拖到此处添加为图层"
+          }
+        }
+      }
+    },
+    "Delete" : {
+      "comment" : "Layer context menu.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Löschen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Eliminar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Supprimer" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "削除" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "삭제" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "删除" } }
+      }
+    },
+    "Duplicate" : {
+      "comment" : "Layer context menu.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Duplizieren" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Duplicar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Dupliquer" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "複製" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "복제" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "复制" } }
+      }
+    },
+    "Group" : {
+      "comment" : "Layer context menu.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Gruppieren" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Agrupar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Grouper" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "グループ化" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "그룹화" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "编组" } }
+      }
+    },
+    "Ungroup" : {
+      "comment" : "Layer context menu.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Gruppierung aufheben" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Desagrupar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Dégrouper" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "グループ解除" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "그룹 해제" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "取消编组" } }
+      }
+    },
+    "Remove from Group" : {
+      "comment" : "Layer context menu.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Aus Gruppe entfernen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Quitar del grupo" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Retirer du groupe" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "グループから削除" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "그룹에서 제거" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "从编组中移除" } }
+      }
+    },
+    "Layers" : {
+      "comment" : "Layers panel title.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ebenen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Capas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Calques"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "レイヤー"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "레이어"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图层"
+          }
+        }
+      }
+    },
+    "Rename" : {
+      "comment" : "Layer context menu.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "translated", "value" : "Umbenennen" } },
+        "es" : { "stringUnit" : { "state" : "translated", "value" : "Renombrar" } },
+        "fr" : { "stringUnit" : { "state" : "translated", "value" : "Renommer" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "名称変更" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "이름 변경" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "重命名" } }
+      }
+    },
+    "No shapes" : {
+      "comment" : "Layers panel empty state.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keine Formen"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sin formas"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Aucune forme"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "シェイプなし"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "셰이프 없음"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无形状"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

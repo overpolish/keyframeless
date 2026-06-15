@@ -1,0 +1,96 @@
+# Layers
+
+Canvas is a layer-based drawing/animation effect. Each clip holds a stack of
+**layers** (shapes, imported images, SVGs, and groups). The **Layers panel**
+opens to the left of any value/constants editing popover and lists every layer
+top-to-bottom (topmost layer draws in front).
+
+A layer is a `KKBezierPath`. The whole stack is serialized to a hidden
+`kParamLayerData` param (base64 of `+[KKBezierPath blobFromPaths:]`); the Layers
+panel reads and writes that blob directly and rebuilds its rows. (There is no
+reactive store / OSC pump in this version - those were removed in the v3
+rebuild.)
+
+## Adding layers
+
+- **Drag image files** (png, jpg, jpeg, webp, heic, tiff, gif, bmp) from Finder
+  onto the Layers panel to add them as image layers. A drop line shows where the
+  new layers will be inserted in the stack. The panel stays open while you
+  switch to Finder (an outside-click only dismisses it when it lands in the
+  host app).
+- (SVG import, shape drawing: pending re-add.)
+
+## Per-layer controls (each row)
+
+- **Visibility** (eye): toggles `hidden`. Hidden layers are dimmed and not
+  drawn. **Option-click** the eye to _solo_ a layer (hide all others);
+  option-click again to restore. On a group, both apply to the whole subtree.
+- **Lock** (padlock): toggles `locked` (the layer is still drawn but not
+  interactive on the canvas, and can't be drag-reordered). On a group it locks
+  the whole subtree.
+- **Name**: click to select. (Double-click to rename: pending re-add.)
+- **Thumbnail / icon**: image layers show a thumbnail; groups show a folder;
+  shapes show a generic icon.
+
+## Selection
+
+- Click a row to select it. Cmd-click toggles a row in/out of the selection;
+  Shift-click extends a range. The selected rows are highlighted; selection
+  drives the context-menu actions.
+- **Delete / Backspace** removes the selected layers (and a selected group's
+  contents). The key is handled by the panel and does not fall through to Final
+  Cut.
+- **Undo / Redo** (Cmd-Z / Cmd-Shift-Z): layer edits go through Final Cut's
+  normal undo, so the standard shortcuts step backward and forward through them
+  (add, delete, rename, group/ungroup, reorder, visibility/lock); the panel
+  refreshes to match.
+
+## Reordering
+
+- **Drag a row** up or down to restack it; a line shows where it will land
+  (topmost layer draws in front). Grab the row anywhere on its body - the name,
+  the thumbnail/folder glyph, or empty space. The eye and lock are buttons and
+  act on click instead.
+- Dragging a row that's part of a multi-selection moves the whole selection.
+- **Locked layers can't be dragged** - lock a layer to pin its position in the
+  stack (locked rows are skipped when dragging a multi-selection).
+
+## Grouping
+
+Layers can be nested in **groups** (folders). A group is a `KKBezierPath` with
+`isGroup = YES` and a `groupID`; its members carry that id in `parentGroupID`
+and sit contiguously right after the group in the stack. Nested rows are
+indented by their depth.
+
+- **Group** (context menu, or **Cmd-G**): wraps the selected rows in a new
+  "Group" folder. Selecting a group includes all its descendants.
+- **Ungroup** (on a group row): dissolves the group; its children move up to the
+  group's parent level.
+- **Remove from Group** (on a nested row): lifts that one row out, placing it
+  just above its group.
+- Duplicate/Delete on a group act on the whole subtree (children travel with the
+  group; duplicated groups get fresh ids).
+- **Collapse / expand**: click the disclosure chevron on a group row to hide or
+  show its contents (a UI-only state, not saved in the document).
+- **Group visibility / lock propagate**: toggling a group's eye or lock applies
+  to every layer inside it. Revealing or unlocking a nested layer also reveals /
+  unlocks its enclosing groups so it isn't stranded. Option-clicking a group's
+  eye solos the whole group.
+- **Drag into / out of groups**: drop a row on the lower half of an expanded
+  group to make it the group's first child; the drop line indents to show the
+  target level. Drop at another row's level (or below everything) to move it
+  out. Dragging a group moves its whole subtree, and you can't drop a group
+  inside itself.
+
+## Context menu (right-click a row)
+
+- **Rename**: edit the layer name inline (also: double-click the name/thumbnail).
+- **Duplicate**: copy the layer(s) (and a group's contents).
+- **Delete**: remove the layer(s) (and a group's contents).
+- **Group / Ungroup / Remove from Group**: see Grouping above.
+- Actions act on the whole selection when you right-click a row that's part of a
+  multi-selection; otherwise just that row.
+
+## Pending re-add (tracked during the v3 rebuild)
+
+- Rendering the layers to the canvas (render is currently a passthrough).

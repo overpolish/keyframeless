@@ -21,14 +21,29 @@ static const NSTimeInterval kShowDelay = 0.1;
 static const NSTimeInterval kFadeDuration = 0.28;
 static const CGFloat kSlideDistance = 12.0;
 
+// Borderless panels can't become key by default, which blocks text editing
+// (inline layer rename). `becomesKeyOnlyIfNeeded` keeps button clicks from
+// stealing focus while still letting a text field become key when edited.
+@interface CanvasLayerPanel : NSPanel
+@end
+@implementation CanvasLayerPanel
+- (BOOL)canBecomeKeyWindow {
+  return YES;
+}
+@end
+
 @implementation CanvasLayerListController {
   NSPanel *_panel;
+  __weak CanvasLayerListView *_listView;
   __weak NSWindow *_parentWindow; // also the pending target during the delay
   BOOL _visible;
+  __weak id<PROAPIAccessing> _apiManager;
 }
 
-- (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView {
+- (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView
+                       apiManager:(id<PROAPIAccessing>)apiManager {
   if ((self = [super init])) {
+    _apiManager = apiManager;
     NSNotificationCenter *nc = NSNotificationCenter.defaultCenter;
     [nc addObserver:self
            selector:@selector(_popoverDidOpen:)
@@ -45,6 +60,10 @@ static const CGFloat kSlideDistance = 12.0;
 - (void)invalidate {
   [NSNotificationCenter.defaultCenter removeObserver:self];
   [self _hide];
+}
+
+- (void)reload {
+  [_listView reloadFromParam];
 }
 
 - (void)dealloc {
@@ -73,12 +92,16 @@ static const CGFloat kSlideDistance = 12.0;
 - (NSPanel *)_ensurePanel {
   if (_panel)
     return _panel;
-  NSPanel *p =
-      [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, kPanelWidth, 300)
-                                 styleMask:NSWindowStyleMaskBorderless |
-                                           NSWindowStyleMaskNonactivatingPanel
-                                   backing:NSBackingStoreBuffered
-                                     defer:YES];
+  NSPanel *p = [[CanvasLayerPanel alloc]
+      initWithContentRect:NSMakeRect(0, 0, kPanelWidth, 300)
+                styleMask:NSWindowStyleMaskBorderless |
+                          NSWindowStyleMaskNonactivatingPanel
+                  backing:NSBackingStoreBuffered
+                    defer:YES];
+  // Take key so a text field (inline rename) can capture keyboard.
+  // (Nonactivating means it does so WITHOUT activating our XPC process /
+  // deactivating FCP.)
+  p.becomesKeyOnlyIfNeeded = NO;
   p.hasShadow = YES;
   p.releasedWhenClosed = NO;
   p.backgroundColor = NSColor.clearColor;
@@ -91,6 +114,9 @@ static const CGFloat kSlideDistance = 12.0;
   CanvasLayerListView *content =
       [[CanvasLayerListView alloc] initWithFrame:NSZeroRect];
   content.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+  content.apiManager = _apiManager;
+  content.paramActionTarget = self.paramActionTarget;
+  _listView = content;
 
   if (@available(macOS 26.0, *)) {
     // Match the popover: it's drawn with the new Liquid Glass material

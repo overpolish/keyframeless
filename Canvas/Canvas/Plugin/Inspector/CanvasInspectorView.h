@@ -14,6 +14,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// live setters). Canvas-specific extras (mini-viewer renderer, OSC, guides)
 /// get added back as those features are rebuilt onto the v3 timing core.
 @interface CanvasInspectorView : KKTimelineInspectorView
+/// Re-read the layer blob and refresh the Layers panel (on undo/redo).
+- (void)reloadLayerList;
+/// The host-recognized object (plugin) to open parameter actions with, so the
+/// Layers panel's writes persist. Set by the plugin after creating the view.
+- (void)setLayerParamActionTarget:(nullable id)target;
 @end
 
 NS_ASSUME_NONNULL_END

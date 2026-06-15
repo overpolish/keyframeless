@@ -14,9 +14,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// notifications (scoped to one lanes view) and shows the panel to the LEFT of
 /// the popover as a child window, registered keep-alive so clicking it doesn't
 /// dismiss the popover. Increment 1: placeholder content (positioning only).
+@protocol PROAPIAccessing;
+
 @interface CanvasLayerListController : NSObject
-- (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView;
+- (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView
+                       apiManager:(id<PROAPIAccessing>)apiManager;
 - (void)invalidate;
+/// Host-recognized object (the plugin) to open parameter actions with;
+/// forwarded to the layer list so its param writes actually persist.
+@property(nonatomic, weak, nullable) id paramActionTarget;
+/// Re-read the layer blob and rebuild the panel (forwarded on undo/redo). A
+/// no-op if the panel hasn't been created yet.
+- (void)reload;
 @end
 
 NS_ASSUME_NONNULL_END

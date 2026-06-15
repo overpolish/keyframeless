@@ -94,6 +94,8 @@
 			membershipExceptions = (
 				"/Localized: Plugin/InfoPlist.strings",
 				"/Localized: Plugin/Localizable.strings",
+				Plugin/CanvasUI.xcstrings,
+				Plugin/Core/CanvasLocalized.m,
 				Plugin/Core/Plugin.m,
 				"Plugin/Core/Plugin+CustomUI.m",
 				"Plugin/Core/Plugin+Parameters.m",
@@ -102,6 +104,11 @@
 				Plugin/Inspector/CanvasInspectorView.m,
 				Plugin/Inspector/CanvasLayerListController.m,
 				Plugin/Inspector/CanvasLayerListView.m,
+				"Plugin/Inspector/CanvasLayerListView+DragDrop.m",
+				"Plugin/Inspector/CanvasLayerListView+Grouping.m",
+				"Plugin/Inspector/CanvasLayerListView+Rows.m",
+				Plugin/Inspector/CanvasLayerRowViews.m,
+				Plugin/Inspector/CanvasLayerTree.m,
 				Plugin/Inspector/CanvasMiniViewerRenderer.m,
 				Plugin/main.m,
 				"Wrapper Application/Info.plist",
@@ -271,6 +278,12 @@
 			knownRegions = (
 				en,
 				Base,
+				de,
+				es,
+				fr,
+				ja,
+				ko,
+				"zh-Hans",
 			);
 			mainGroup = F2E2ED6C2F4CA530008620D9;
 			minimizedProjectReferenceProxies = 1;

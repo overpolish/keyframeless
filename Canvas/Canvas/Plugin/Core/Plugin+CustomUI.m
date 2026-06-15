@@ -77,6 +77,10 @@
                                detachedWindowSize:CGSizeMake(720.0, 460.0)];
 
     self.inspectorView = view;
+    // The Layers panel opens parameter actions to read/write kParamLayerData;
+    // they only persist if the action sender is a host-recognized editor (the
+    // plugin), like the playhead poller's actionTarget below.
+    [view setLayerParamActionTarget:self];
     if (!self.playheadPoller) {
       self.playheadPoller =
           [[KKPlayheadPoller alloc] initWithAPIManager:self.apiManager

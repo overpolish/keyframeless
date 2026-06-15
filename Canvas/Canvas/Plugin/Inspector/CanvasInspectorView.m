@@ -38,7 +38,8 @@
     // scoped open/close notifications; the panel registers keep-alive so
     // interacting with it doesn't dismiss the popover).
     _layerListController =
-        [[CanvasLayerListController alloc] initWithLanesView:self.basicLanesView];
+        [[CanvasLayerListController alloc] initWithLanesView:self.basicLanesView
+                                                  apiManager:apiManager];
   }
   return self;
 }
@@ -50,6 +51,14 @@
 - (void)applyTimeline:(KKTimeline *)timeline {
   [super applyTimeline:timeline];
   _miniViewerRenderer.timeline = timeline;
+}
+
+- (void)reloadLayerList {
+  [_layerListController reload];
+}
+
+- (void)setLayerParamActionTarget:(id)target {
+  _layerListController.paramActionTarget = target;
 }
 
 @end

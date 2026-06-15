@@ -161,6 +161,44 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   }
 }
 
+// PID of the app owning the topmost normal window under `screenPoint`
+// (NSEvent.mouseLocation coords). 0 if none/unknown. Used so an outside-click
+// in ANOTHER app (e.g. clicking Finder to drag in a file) doesn't dismiss the
+// popover - only a click within the host app should.
+static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
+  NSScreen *primary = NSScreen.screens.firstObject;
+  if (!primary)
+    return 0;
+  // NSEvent.mouseLocation is bottom-left origin; CGWindow bounds are top-left
+  // (y down from the primary display top).
+  CGPoint cgPt =
+      CGPointMake(screenPoint.x, NSMaxY(primary.frame) - screenPoint.y);
+  CFArrayRef list = CGWindowListCopyWindowInfo(
+      kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+      kCGNullWindowID);
+  if (!list)
+    return 0;
+  pid_t owner = 0;
+  CFIndex count = CFArrayGetCount(list); // front-to-back
+  for (CFIndex i = 0; i < count; i++) {
+    NSDictionary *win =
+        (__bridge NSDictionary *)CFArrayGetValueAtIndex(list, i);
+    if ([win[(__bridge id)kCGWindowLayer] intValue] != 0)
+      continue; // normal app windows only
+    CGRect bounds = CGRectZero;
+    if (!CGRectMakeWithDictionaryRepresentation(
+            (__bridge CFDictionaryRef)win[(__bridge id)kCGWindowBounds],
+            &bounds))
+      continue;
+    if (CGRectContainsPoint(bounds, cgPt)) {
+      owner = (pid_t)[win[(__bridge id)kCGWindowOwnerPID] intValue];
+      break;
+    }
+  }
+  CFRelease(list);
+  return owner;
+}
+
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
                                onClose:(void (^)(void))onClose {
@@ -198,6 +236,10 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
 
   NSWindow *popoverWindow = popover.contentViewController.view.window;
   CFTimeInterval shownAt = CACurrentMediaTime();
+  // Host app (FCP) is frontmost when the popover opens. Captured so an
+  // outside-click in another app doesn't dismiss it.
+  pid_t hostPID =
+      NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
   __weak NSPopover *weakPopover = popover;
   KKMiniViewerView *canvas = KKFindMiniViewer(content);
   __block id localMon = nil;
@@ -271,6 +313,11 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                                    handler:^NSEvent *(NSEvent *e) {
                                      if (canvas && [canvas pointerOverCanvas])
                                        return e; // let the responder handle it
+                                     // Scroll inside a companion side panel
+                                     // scrolls it, doesn't dismiss.
+                                     if (KKPopoverPointInKeepAliveWindow(
+                                             NSEvent.mouseLocation))
+                                       return e;
                                      if (contentSuppressesDismiss())
                                        return e;
                                      if (e.window != popoverWindow)
@@ -282,6 +329,9 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
       addGlobalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                     handler:^(NSEvent *e) {
                                       if (canvas && [canvas pointerOverCanvas])
+                                        return;
+                                      if (KKPopoverPointInKeepAliveWindow(
+                                              NSEvent.mouseLocation))
                                         return;
                                       if (contentSuppressesDismiss())
                                         return;
@@ -321,6 +371,14 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
     // popover) registers itself as keep-alive so clicking it doesn't dismiss.
     if (KKPopoverPointInKeepAliveWindow(p))
       return;
+    // Only an outside click within the HOST app dismisses. A click in another
+    // app (e.g. Finder, to drag a file into the panel) leaves it open. Fall
+    // back to the old close-on-outside if we couldn't resolve the host PID.
+    if (hostPID != 0) {
+      pid_t owner = KKWindowOwnerPIDAtScreenPoint(p);
+      if (owner != hostPID)
+        return;
+    }
     [weakPopover close];
   };
   mouseLocalMon = [NSEvent

@@ -21,4 +21,11 @@ static const UInt32 kParamUIState = 201;
 /// for the (otherwise cached) static frame.
 static const UInt32 kParamRenderNudge = 202;
 
+/// Hidden, persisted base64 of the KKBezierPath layer blob (the layer list).
+/// The Layers panel reads/writes this; render ignores it for now (passthrough).
+/// NOTE: ID 210 was briefly registered as a *string* param during development;
+/// FCP caches a parameter's type by ID, so a custom write to 210 was accepted
+/// but never stored. Use a fresh ID that was only ever a custom (blob) param.
+static const UInt32 kParamLayerData = 211;
+
 NS_ASSUME_NONNULL_END

@@ -63,6 +63,17 @@
     return NO;
   }
 
+  // Custom (data-blob) param, not a string param: FxPlug tracks custom params
+  // for undo/redo (string params aren't). HIDDEN only - matching the kit's
+  // persistent blobs (timeline/motion-blur/gradient); adding NOT_ANIMATABLE
+  // stops the custom value from round-tripping (writes read back empty).
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kParamLayerData
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN]) {
+    return NO;
+  }
+
   return YES;
 }
 

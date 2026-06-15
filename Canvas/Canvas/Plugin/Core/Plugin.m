@@ -80,6 +80,13 @@
         nil, (KKTimelineInspectorView *)self.inspectorView);
   }
 
+  // Undo/redo (or any external change) of the layer stack: refresh the panel.
+  if (parameterID == kParamLayerData) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [(CanvasInspectorView *)self.inspectorView reloadLayerList];
+    });
+  }
+
   return YES;
 }
 
@@ -107,7 +114,7 @@
 
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
   if (parameterID == kKKParamTimelineData || parameterID == kParamUIState ||
-      parameterID == kParamRenderNudge)
+      parameterID == kParamRenderNudge || parameterID == kParamLayerData)
     return [NSSet setWithObject:[KKDataBlob class]];
   return [super classesForCustomParameterID:parameterID];
 }
