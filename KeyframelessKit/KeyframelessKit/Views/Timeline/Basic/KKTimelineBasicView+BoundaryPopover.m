@@ -16,6 +16,49 @@
 
 @implementation KKTimelineBasicView (BoundaryPopover)
 
+- (NSString *)_resolveBasicActiveLayerKey {
+  BOOL hasLayers = NO;
+  for (KKLane *l in _timeline.lanes)
+    if (l.enabled && l.layerKey.length) {
+      hasLayers = YES;
+      break;
+    }
+  if (!hasLayers)
+    return nil; // single-owner timeline: no scoping
+  NSString *resolved = nil;
+  if (_activeLayerKey.length)
+    for (KKLane *l in _timeline.lanes)
+      if (l.enabled && [l.layerKey isEqualToString:_activeLayerKey]) {
+        resolved = _activeLayerKey;
+        break;
+      }
+  if (!resolved) // selected layer has nothing animated -> first that does
+    for (KKLane *l in _timeline.lanes)
+      if (l.enabled && l.layerKey.length) {
+        resolved = l.layerKey;
+        break;
+      }
+  if (resolved && ![resolved isEqualToString:_activeLayerKey]) {
+    _activeLayerKey = [resolved copy];
+    if (self.onKeyposeLayerActivated)
+      self.onKeyposeLayerActivated(resolved);
+  }
+  return resolved;
+}
+
+- (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey {
+  BOOL eligible = NO;
+  for (KKLane *l in _timeline.lanes)
+    if (l.enabled && [l.layerKey isEqualToString:layerKey]) {
+      eligible = YES;
+      break;
+    }
+  if (!eligible || [layerKey isEqualToString:_activeLayerKey])
+    return;
+  _activeLayerKey = [layerKey copy];
+  [self _openBoundaryPopoverForDiamond:_curDiamond]; // re-drive scoped to it
+}
+
 - (void)_openBoundaryPopoverForDiamond:(NSInteger)d {
   if (_onDiamondTapped)
     _onDiamondTapped(d);
@@ -50,11 +93,18 @@
   // - with valueType / component bounds taken from the plugin template
   // (canonical), exactly like _timelineSeededFrom:, so the reused
   // static-values rows pick the right editor (Radius float 0–100, Crop grid).
+  // Multi-owner timelines: scope the popover's params to ONE layer (the
+  // host-selected one, or the first animated layer), so it doesn't list every
+  // layer's values. nil for single-owner plugins (shows all, as before).
+  NSString *activeLayer = [self _resolveBasicActiveLayerKey];
+
   NSMutableArray<KKLane *> *displayLanes = [NSMutableArray array];
   NSMutableArray<NSString *> *excludedLabels = [NSMutableArray array];
   for (KKLane *lane in _timeline.lanes) {
     if (!lane.enabled)
       continue;
+    if (activeLayer && ![lane.layerKey isEqualToString:activeLayer])
+      continue; // another layer's lane - not in this popover
     // A property "doesn't apply to" this boundary's phase when it has no
     // keypose there OR its phase interval is flat (holdsFlat) - either way it
     // sits at Hold through the phase. Flag it excluded (row becomes a message +
@@ -94,6 +144,10 @@
     dl.aspectLinkable = tmpl ? tmpl.aspectLinkable : lane.aspectLinkable;
     dl.aspectLinked = lane.aspectLinked;
     dl.integerValued = tmpl ? tmpl.integerValued : lane.integerValued;
+    // Media-scaled (normalised 0..1 shown as pixels) is template metadata; the
+    // row keys pixel display off it. Without it Position showed the raw 0.5.
+    dl.componentsScaleWithMedia =
+        tmpl ? tmpl.componentsScaleWithMedia : lane.componentsScaleWithMedia;
     [dl kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     KKKeyPose *dlKp = [KKKeyPose keyposeAtTime:0.0 values:vals ?: @[ @0.0 ]];
     // Carry the curve state from the keypose nearest this boundary (matches the

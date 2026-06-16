@@ -356,11 +356,18 @@
   NSMutableDictionary *info = [NSMutableDictionary dictionary];
   if (popoverWindow) {
     info[@"window"] = popoverWindow;
+    info[@"contentView"] = contentView; // so a companion can re-align on flip
     NSRect cardScreen = [popoverWindow
         convertRectToScreen:[contentView convertRect:contentView.bounds
                                               toView:nil]];
     info[@"contentRect"] = [NSValue valueWithRect:cardScreen];
   }
+  // A keypose (boundary) popover edits one moment in time: a companion layer
+  // list uses `isBoundary` + `fraction` to gray layers that have no keypose at
+  // that time. A constants popover sets isBoundary NO (every layer selectable).
+  info[@"isBoundary"] = @(isBoundary);
+  info[@"fraction"] = @(cfg.fraction);
+  info[@"kind"] = isBoundary ? @"keypose" : @"constants";
   [NSNotificationCenter.defaultCenter
       postNotificationName:KKStaticValuesPopoverDidOpenNotification
                     object:self

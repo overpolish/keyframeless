@@ -206,7 +206,7 @@ static const CGFloat kKKCategoryPillH = 24.0;
       KKConditionalVisibleLaneLabels(lanes, valuesByLabel);
   CGFloat rows = 0;
   NSArray<NSArray<NSString *> *> *cats = KKOrderedLaneCategories(lanes);
-  if (cats.count > 1) {
+  if (cats.count > 0) {
     // Size to the selected category page only (its rows + any uncategorised
     // rows that show on every page), plus the pill row itself - so the popover
     // hugs each page and switching pills resizes to fit. Default to the first
@@ -831,6 +831,11 @@ static const CGFloat kKKCategoryPillH = 24.0;
   [self applyExcludedLabels:excluded
                     message:_excludedMessage
                   onAnimate:_onAnimate];
+  // Re-fit the popover to the rebuilt rows (a re-target / add / remove can
+  // change the row count). No-op until the popover exists (the initial build's
+  // rebuild calls run before showRelative sizes it). Uses the authoritative
+  // height calc, same as the category-switch resize.
+  [self _resizePopoverToSelectedCategory];
 }
 
 // Live (per-tick) UI update during a mini-viewer handle drag - refresh the

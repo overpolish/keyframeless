@@ -228,7 +228,7 @@
   NSArray<NSString *> *categoryKeys = KKLaneCategoryKeys(_availableLanes);
   __weak typeof(self) weak = self;
 
-  if (categoryKeys.count > 1) {
+  if (categoryKeys.count > 0) {
     // Category pills filter the reorder list to one category at a time; the
     // category blocks themselves stay in the plugin's order. Dragging reorders
     // within the shown category, merged back into the full order on each

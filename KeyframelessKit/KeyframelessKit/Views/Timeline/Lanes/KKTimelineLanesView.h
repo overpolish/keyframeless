@@ -40,6 +40,48 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// Does not fire onTimelineMutated.
 - (void)applyTimeline:(KKTimeline *)timeline;
 
+/// Optional all-owners (all-layers) timeline. When set, BOTH graphs (Basic +
+/// Advanced) render and edit this instead of the single-owner `timeline`: every
+/// animated lane across every layer shows, all editable, independent of which
+/// layer is selected. Lanes must carry unique labels + layerKey/layerLabel for
+/// the per-layer headers. The single-owner `timeline` still drives the Animated
+/// dropdown + Constants (the layer list picks which owner those target). nil
+/// (single-owner plugins) => the graphs use `timeline` as before.
+@property(nonatomic, copy, nullable) KKTimeline *graphTimeline;
+/// Owner (layer) keys in display order, so the graph lanes group in the layer
+/// list's stack order. nil = no ordering.
+@property(nonatomic, copy, nullable) NSArray<NSString *> *layerOrder;
+/// Fired when an edit in a graph mutates the `graphTimeline` (all layers). The
+/// host splits it back per owner. Only used when `graphTimeline` is set;
+/// otherwise edits flow through `onTimelineMutated` as usual.
+@property(nonatomic, copy, nullable) void (^onGraphTimelineMutated)
+    (KKTimeline *updated);
+/// Fired when a keypose popover opens scoped to one layer (multi-owner graph),
+/// so the host can highlight that layer in its layer list.
+@property(nonatomic, copy, nullable) void (^onKeyposeLayerActivated)
+    (NSString *layerKey);
+/// Re-point an OPEN keypose popover at a different layer's keypose at the same
+/// time (driven by the host's layer-list selection). No-op if no keypose
+/// popover is open.
+- (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey;
+/// Host's selected layer (multi-owner), so a freshly-opened keypose popover
+/// scopes its params to that layer (nil => the first animated layer).
+@property(nonatomic, copy, nullable) NSString *activeLayerKey;
+/// Host hint (multi-owner): YES if SOME layer still has a constant param, so
+/// the Constants button stays available even when the selected layer is fully
+/// animated (open it, then pick the layer with constants in the panel).
+@property(nonatomic) BOOL ownerConstantsAvailable;
+/// Multi-owner: names of every animated layer, listed in the Animated dropdown
+/// trigger with +N truncation ("layer 1, layer 2 +1"). nil/empty for
+/// single-owner plugins (the trigger shows the property summary instead).
+@property(nonatomic, copy, nullable) NSArray<NSString *> *dropdownLayerTitles;
+
+/// Optional minimum content height (points) for the Animated (manage) popover,
+/// so a sparse property list - and the layer panel beside it, which matches the
+/// popover height - isn't uncomfortably short. 0 (default) keeps the popover
+/// hugging its rows.
+@property(nonatomic) CGFloat minimumManagePopoverHeight;
+
 /// Live clip duration (seconds) for the Basic motion-graph ruler, pushed
 /// from the render tick (a clip trim never fires parameterChanged:).
 - (void)setClipDurationSeconds:(double)seconds;

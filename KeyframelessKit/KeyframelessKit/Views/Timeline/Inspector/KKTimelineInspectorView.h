@@ -102,6 +102,11 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
      KKMotionBlurMode mode);
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
+/// Fired right before the Constants popover opens (button tap), so a multi-owner
+/// host can switch the selected owner to one that actually has constants (the
+/// popover shows the selected owner's constants - landing on an empty one would
+/// open nothing). Runs synchronously before the popover reads the timeline.
+@property(nonatomic, copy, nullable) void (^onConstantsWillShow)(void);
 /// Start / end of a continuous mini-viewer handle drag - host wraps the
 /// burst of `onTimelineMutated` writes in one undo group.
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);

@@ -367,6 +367,19 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
             path->_shape = [KKShape shapeWithKind:shapeKind
                                             bytes:bytes + hdr
                                         available:need];
+            hdr += need;
+          }
+        }
+        if (ver >= 29 && data.length >= hdr + 4) {
+          uint32_t ajLen;
+          memcpy(&ajLen, bytes + hdr, 4);
+          hdr += 4;
+          if (ajLen > 0 && data.length >= hdr + ajLen) {
+            path->_animationJSON =
+                [[NSString alloc] initWithBytes:bytes + hdr
+                                         length:ajLen
+                                       encoding:NSUTF8StringEncoding];
+            hdr += ajLen;
           }
         }
       }
@@ -464,7 +477,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 28;
+  uint8_t propVersion = 29;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -588,6 +601,14 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:&shapeKind length:1];
   if (payload)
     [data appendData:payload];
+  // v29: animationJSON (uint32 length-prefixed UTF-8; opaque per-layer payload,
+  // e.g. a serialized KKTimeline). uint32 length since a timeline can exceed
+  // the 64KB a uint16 allows.
+  NSData *ajData = [_animationJSON dataUsingEncoding:NSUTF8StringEncoding];
+  uint32_t ajLen = (uint32_t)ajData.length;
+  [data appendBytes:&ajLen length:4];
+  if (ajLen > 0)
+    [data appendData:ajData];
   return data;
 }
 

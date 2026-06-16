@@ -97,6 +97,7 @@
 				Plugin/CanvasUI.xcstrings,
 				Plugin/Core/CanvasImageTexture.m,
 				Plugin/Core/CanvasLayerRender.m,
+				Plugin/Core/CanvasLayerTimeline.m,
 				Plugin/Core/CanvasLocalized.m,
 				Plugin/Core/Plugin.m,
 				"Plugin/Core/Plugin+CustomUI.m",

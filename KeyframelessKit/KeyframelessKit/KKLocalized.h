@@ -24,6 +24,12 @@ FOUNDATION_EXPORT NSBundle *KKLocalizationBundle(void);
 /// sharing keep working.
 FOUNDATION_EXPORT NSString *KKLocalizedParamName(NSString *englishName);
 
+/// Clamp a user-typed layer name to 15 characters, appending an ellipsis when
+/// it overflows, so layer pills/labels (filter bar, Animated dropdown) stay
+/// compact. Names at or under the limit are returned unchanged. Display only -
+/// never use the result as identity.
+FOUNDATION_EXPORT NSString *KKTruncatedLayerName(NSString *name);
+
 NS_ASSUME_NONNULL_END
 
 /// Localize a KeyframelessKit-owned, user-visible string (e.g. joyride chrome)

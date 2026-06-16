@@ -24,6 +24,7 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
     _dragSnapFrac = NAN;
     _selection = [NSMutableSet set];
     _selectedGaps = [NSMutableSet set];
+    _collapsedLayerKeys = [NSMutableSet set];
     _dragOriginTimes = [NSMutableDictionary dictionary];
     _hoverLaneRow = -1;
     _hoverGapAIdx = -1;
@@ -32,6 +33,14 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
         boolForKey:kKKAdvancedDynamicDisplayDefaultsKey];
   }
   return self;
+}
+
+- (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey {
+  if (layerKey == _activeLayerKey || [layerKey isEqualToString:_activeLayerKey])
+    return;
+  _activeLayerKey = [layerKey copy];
+  // Re-point the open keypose popover at this layer's keypose at the same time.
+  [self requestValuePopoverAtFraction:_currentPopoverFrac];
 }
 
 - (void)setDynamicDisplay:(BOOL)dynamicDisplay {

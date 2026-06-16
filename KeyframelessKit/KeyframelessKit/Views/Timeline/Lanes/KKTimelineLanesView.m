@@ -294,11 +294,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     __strong typeof(weakSelf) s = weakSelf;
     if (!s)
       return;
-    s->_timeline = updated;
-    [s _refresh];
-    [s _republishBoundaryRequestIfOpen];
-    if (s->_onTimelineMutated)
-      s->_onTimelineMutated(updated);
+    [s _graphDidMutateTimeline:updated];
   };
   _basicGraph.onDragBegin = ^{
     __strong typeof(weakSelf) s = weakSelf;
@@ -354,6 +350,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
                                                     timeline:_timeline];
   _advancedGraph.translatesAutoresizingMaskIntoConstraints = NO;
   _advancedGraph.hidden = YES;
+  _advancedGraph.onKeyposeLayerActivated = ^(NSString *layerKey) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s && s->_onKeyposeLayerActivated)
+      s->_onKeyposeLayerActivated(layerKey);
+  };
   [_centeredArea addSubview:_advancedGraph
                  positioned:NSWindowBelow
                  relativeTo:_hintLabel];
@@ -388,11 +389,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     __strong typeof(weakSelf) s = weakSelf;
     if (!s)
       return;
-    s->_timeline = updated;
-    [s _refresh];
-    [s _republishBoundaryRequestIfOpen];
-    if (s->_onTimelineMutated)
-      s->_onTimelineMutated(updated);
+    [s _graphDidMutateTimeline:updated];
   };
   _advancedGraph.onDragBegin = ^{
     __strong typeof(weakSelf) s = weakSelf;
@@ -438,6 +435,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   };
 
   _basicGraph.onHoldModulationPopover = KKMakeHoldForwarder(self);
+  _basicGraph.onKeyposeLayerActivated = ^(NSString *layerKey) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s && s->_onKeyposeLayerActivated)
+      s->_onKeyposeLayerActivated(layerKey);
+  };
 }
 
 // Push the lane-filter's hidden set to the Advanced graph and update the
@@ -446,10 +448,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 // "All lanes hidden" message appears the moment the last lane is hidden.
 - (void)_applyLaneFilterHidden:(NSSet<NSString *> *)hidden {
   [_advancedGraph applyHiddenLaneLabels:hidden];
+  KKTimeline *gt = [self _graphTimeline];
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+      KKConditionalVisibleLaneLabels(gt.lanes, nil);
   NSInteger optedIn = 0;
-  for (KKLane *l in _timeline.lanes)
+  for (KKLane *l in gt.lanes)
     if (l.enabled && [condVisible containsObject:l.label])
       optedIn++;
   BOOL anyOptedIn = optedIn > 0;
@@ -475,16 +478,22 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   // visible.
   NSSet<NSString *> *condVisible =
       KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+  // The graphs render/gate off the all-layers graphTimeline (when set), so the
+  // graph fills the area whenever ANY layer animates a property - never empties
+  // just because the selected layer (which drives the dropdown below) doesn't.
+  KKTimeline *gt = [self _graphTimeline];
+  NSSet<NSString *> *condVisibleGraph =
+      KKConditionalVisibleLaneLabels(gt.lanes, nil);
   NSMutableArray<KKLane *> *optedIn = [NSMutableArray array];
-  for (KKLane *l in _timeline.lanes)
-    if (l.enabled && [condVisible containsObject:l.label])
+  for (KKLane *l in gt.lanes)
+    if (l.enabled && [condVisibleGraph containsObject:l.label])
       [optedIn addObject:l];
   BOOL anyOptedIn = optedIn.count > 0;
   BOOL showBasic = anyOptedIn && _activeTab == 0;
   BOOL showAdvanced = anyOptedIn && _activeTab == 1;
   _basicGraph.hidden = !showBasic;
-  [_basicGraph applyTimeline:_timeline];
-  [_advancedGraph applyTimeline:_timeline];
+  [_basicGraph applyTimeline:gt];
+  [_advancedGraph applyTimeline:gt];
 
   // Shown in Advanced when there are >=2 lanes worth filtering; the bar's
   // hidden set drives which rows the graph draws.
@@ -782,12 +791,83 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 }
 
 - (BOOL)hasUnoptedLanes {
-  return [self _unoptedLanes].count > 0;
+  // Multi-owner: another (non-selected) layer may still have constants even
+  // when the selected one is fully animated - the host sets
+  // ownerConstantsAvailable so the Constants button stays reachable (you open
+  // it, then pick that layer in the panel).
+  return [self _unoptedLanes].count > 0 || _ownerConstantsAvailable;
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {
   _timeline = [self _timelineSeededFrom:timeline];
   [self _refresh];
+}
+
+// A graph (Basic or Advanced) committed an edit. In multi-owner mode the edit
+// is on the all-layers graphTimeline, so route it to onGraphTimelineMutated and
+// let the host split it back per owner (then reload re-feeds both timelines);
+// _timeline (the single selected owner) must NOT be overwritten with the tagged
+// all-layers set. Single-owner mode keeps the original flow.
+- (void)_graphDidMutateTimeline:(KKTimeline *)updated {
+  if (_graphTimeline) {
+    if (_onGraphTimelineMutated)
+      _onGraphTimelineMutated(updated);
+    return;
+  }
+  _timeline = updated;
+  [self _refresh];
+  [self _republishBoundaryRequestIfOpen];
+  if (_onTimelineMutated)
+    _onTimelineMutated(updated);
+}
+
+// The lane set the GRAPHS render/edit: the multi-owner graphTimeline when set,
+// else the single-owner _timeline.
+- (KKTimeline *)_graphTimeline {
+  return _graphTimeline ?: _timeline;
+}
+
+- (void)setGraphTimeline:(KKTimeline *)graphTimeline {
+  _graphTimeline = graphTimeline;
+  [self _refresh];
+}
+- (KKTimeline *)graphTimeline {
+  return _graphTimeline;
+}
+
+- (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey {
+  // Only meaningful while a keypose (boundary) popover is open. Route to
+  // whichever graph is active (Basic tab vs Advanced tab).
+  if (!_openStaticView || !_openStaticIsBoundary)
+    return;
+  if (_activeTab == 0)
+    [_basicGraph retargetKeyposePopoverToLayerKey:layerKey];
+  else
+    [_advancedGraph retargetKeyposePopoverToLayerKey:layerKey];
+}
+
+- (void)setActiveLayerKey:(NSString *)activeLayerKey {
+  _activeLayerKey = [activeLayerKey copy];
+  _basicGraph.activeLayerKey = activeLayerKey; // scopes the Basic keypose popover
+}
+- (NSString *)activeLayerKey {
+  return _activeLayerKey;
+}
+
+- (void)setDropdownLayerTitles:(NSArray<NSString *> *)dropdownLayerTitles {
+  _dropdownTrigger.layerTitles = dropdownLayerTitles;
+  [_dropdownTrigger setNeedsDisplay:YES];
+}
+- (NSArray<NSString *> *)dropdownLayerTitles {
+  return _dropdownTrigger.layerTitles;
+}
+
+- (void)setLayerOrder:(NSArray<NSString *> *)layerOrder {
+  _advancedGraph.layerOrder = layerOrder;
+  [_advancedGraph setNeedsDisplay:YES];
+}
+- (NSArray<NSString *> *)layerOrder {
+  return _advancedGraph.layerOrder;
 }
 
 - (void)setClipDurationSeconds:(double)seconds {

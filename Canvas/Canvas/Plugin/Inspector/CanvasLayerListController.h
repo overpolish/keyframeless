@@ -23,12 +23,26 @@ NS_ASSUME_NONNULL_BEGIN
 /// Host-recognized object (the plugin) to open parameter actions with;
 /// forwarded to the layer list so its param writes actually persist.
 @property(nonatomic, weak, nullable) id paramActionTarget;
+/// Number of template (animatable) params per layer, so the panel can tell when
+/// a layer is fully animated (no constants) and gray it in the Constants popover.
+@property(nonatomic) NSUInteger templateLaneCount;
+/// The host's currently-selected layer, used to pre-highlight the panel when it
+/// opens beside a popover that doesn't drive the highlight itself (e.g. the
+/// Animated dropdown).
+@property(nonatomic, copy, nullable) NSString *selectedLayerID;
 /// Re-read the layer blob and rebuild the panel (forwarded on undo/redo). A
 /// no-op if the panel hasn't been created yet.
 - (void)reload;
 /// The current decoded layer stack, read straight from the param (works even
 /// while the panel is closed). Used to feed the mini-viewer renderer.
 - (NSArray<KKBezierPath *> *)currentLayerPaths;
+/// Fired when the panel's primary selection changes (that layer's layerID, or
+/// nil). The host uses it to switch which layer the inspector timeline edits.
+@property(nonatomic, copy, nullable) void (^onPrimaryLayerSelected)
+    (NSString *_Nullable layerID);
+/// Highlight `layerID` in the panel's list WITHOUT firing onPrimaryLayerSelected
+/// (mirrors a keypose popover's active layer into the list).
+- (void)highlightLayerID:(nullable NSString *)layerID;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -56,6 +56,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
 
+/// Multi-owner timelines: the host's selected layer, so the keypose popover
+/// scopes its params to that layer (nil => first animated layer).
+@property(nonatomic, copy, nullable) NSString *activeLayerKey;
+/// Fired when a keypose popover resolves its scope to a layer, so the host can
+/// highlight that layer in its layer list.
+@property(nonatomic, copy, nullable) void (^onKeyposeLayerActivated)
+    (NSString *layerKey);
+
 /// Bracket a continuous boundary drag so the host coalesces the burst of
 /// onTimelineMutated writes into one undo group.
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
@@ -152,6 +160,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// inactive cell swaps the popover to the corresponding boundary diamond
 /// (Basic's filmstrip cells correspond to the 4 boundary times).
 - (void)requestValuePopoverAtFraction:(double)fraction;
+/// Re-point an OPEN keypose popover at a different layer (host's layer-list
+/// selection). No-op if that layer has no animated lane.
+- (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey;
 /// Flip the Position keypose nearest `frac` between corner and smooth (bezier)
 /// spatial interpolation. Routed from the keypose popover's curve toggle.
 - (void)writeSpatialSmoothForLabel:(NSString *)label

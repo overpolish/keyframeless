@@ -1,0 +1,61 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#pragma once
+
+#import <Foundation/Foundation.h>
+
+@class KKTimeline, KKLane, KKBezierPath;
+
+NS_ASSUME_NONNULL_BEGIN
+
+/// The layer the inspector edit surfaces currently act on. `selectedLayerID`
+/// picks it (matched by KKBezierPath.layerID); falls back to the first non-group
+/// (topmost) layer when nil/unmatched. nil when there are no editable layers.
+KKBezierPath *_Nullable CanvasSelectedLayerForPaths(
+    NSArray<KKBezierPath *> *paths, NSString *_Nullable selectedLayerID);
+
+/// Builds the PLAIN-label timeline the kit inspector edits for `path` (the
+/// selected layer): the layer's own animationJSON, or lanes seeded from
+/// `templates` (CanvasPlugin.availableLanes) when it has none. Plain labels +
+/// one Transform group, so the kit's Animated dropdown / Constants / Keypose
+/// (which key by plain name) work unchanged. nil path => empty timeline.
+KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *_Nullable path,
+                                       NSArray<KKLane *> *templates);
+
+/// Writes an edited selected-layer timeline back into `path.animationJSON`.
+/// No-op when `path` is nil.
+void CanvasApplyTimelineToPath(KKTimeline *timeline,
+                               KKBezierPath *_Nullable path);
+
+/// The all-layers GRAPH timeline: every layer's ANIMATED (enabled) lanes across
+/// the whole stack, each tagged label "<short>\x1f<layerID>" + layerKey +
+/// layerLabel + layerSymbol (folder for groups), ordered by layer-stack order
+/// then `templates` (parameter) order. Fed to KKTimelineLanesView.graphTimeline
+/// so both graphs show + edit every layer, independent of selection. Layers with
+/// nothing animated contribute no rows.
+KKTimeline *CanvasMergedTimeline(NSArray<KKBezierPath *> *paths,
+                                 NSArray<KKLane *> *templates);
+
+/// Splits an edited merged graph timeline back into each layer's animationJSON,
+/// in place on `paths`: groups lanes by layerKey, strips the tag, and replaces
+/// the matching plain lanes in each layer's stored timeline (constant/disabled
+/// lanes are preserved). `templates` sets each layer's paramOrder.
+void CanvasApplyMergedTimelineToPaths(KKTimeline *merged,
+                                      NSArray<KKBezierPath *> *paths,
+                                      NSArray<KKLane *> *templates);
+
+/// YES if `path` has at least one constant (non-animated) param - i.e. fewer
+/// animated lanes than `templates` (or no animationJSON at all).
+BOOL CanvasLayerHasConstant(KKBezierPath *_Nullable path,
+                            NSArray<KKLane *> *templates);
+
+/// YES if ANY layer has at least one constant (non-animated) param. Drives
+/// whether the Constants button stays available when the selected layer is
+/// fully animated.
+BOOL CanvasAnyLayerHasConstant(NSArray<KKBezierPath *> *paths,
+                               NSArray<KKLane *> *templates);
+
+NS_ASSUME_NONNULL_END

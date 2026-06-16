@@ -326,6 +326,30 @@
 // Re-read the blob and rebuild. Called from the host's parameterChanged: so an
 // undo/redo of kParamLayerData is reflected in the panel. (Our own edits also
 // echo through here harmlessly - the data matches what we just wrote.)
+- (void)highlightLayerID:(NSString *)layerID {
+  NSUInteger idx = NSNotFound;
+  for (NSUInteger i = 0; i < _paths.count; i++)
+    if ([_paths[i].layerID isEqualToString:layerID]) {
+      idx = i;
+      break;
+    }
+  if (idx == NSNotFound && layerID.length)
+    return; // unknown layer - leave the current highlight
+  [_selection removeAllIndexes];
+  if (idx != NSNotFound)
+    [_selection addIndex:idx];
+  [self _applySelectionStyling];
+}
+
+- (void)setNonSelectableLayerIDs:(NSSet<NSString *> *)layerIDs {
+  NSSet<NSString *> *next = layerIDs.count ? [layerIDs copy] : nil;
+  if (next == _nonSelectableLayerIDs ||
+      [next isEqualToSet:_nonSelectableLayerIDs])
+    return;
+  _nonSelectableLayerIDs = next;
+  [self _applySelectionStyling];
+}
+
 - (void)reloadFromParam {
   // Skip the echo of our own write (the host may not have committed it yet, so
   // re-reading here would wipe the just-made edit). Only external changes

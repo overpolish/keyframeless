@@ -37,6 +37,10 @@ static const CGFloat kRowGap = 2.0;
 static const CGFloat kGroupDividerH = 24.0;
 // Divider icon + label point size, matched to the duration-overlay text.
 static const CGFloat kGroupDividerFontSize = 9.0;
+// Layer (owner) header rows hug their content at this fixed height rather than
+// sharing the lane rows' equal split - so a collapsed layer is just a slim
+// header, not a wasted full-height lane row.
+static const CGFloat kLayerHeaderRowH = 22.0;
 
 // Boundary pill - vertical capsule spanning the row, same width as Basic.
 static const CGFloat kPillW = 6.0;
@@ -99,6 +103,12 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 
   NSMutableSet<NSString *> *_selection;
   NSMutableSet<NSString *> *_selectedGaps;
+  // layerKeys whose lanes are collapsed (hidden) in the graph; the layer's
+  // header row stays, with a filled glyph. Display-only, per view instance.
+  NSMutableSet<NSString *> *_collapsedLayerKeys;
+  // The layer the keypose popover currently scopes to (multi-owner timelines).
+  // Set on pill click + by the host's layer-list selection.
+  NSString *_activeLayerKey;
 
   BOOL _gapPressActive;
   NSString *_gapPressLabel;
@@ -210,6 +220,9 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (CGFloat)_maxScrollY;
 // Re-clamp _scrollY into [0, _maxScrollY] after a layout / timeline change.
 - (void)_clampScroll;
+// Scroll the minimum amount so lane row `i` (of `n`) sits fully inside the
+// visible tracks region (so a popover anchored to it isn't clipped/off-screen).
+- (void)_ensureLaneRowVisible:(NSInteger)i count:(NSInteger)n;
 - (NSArray<NSNumber *> *)_snapCandidates;
 - (NSInteger)_intervalStartKPIdxInLane:(KKLane *)lane atFrac:(double)frac;
 - (NSInteger)_animatableIndexForLabel:(NSString *)label;
@@ -263,6 +276,11 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 // Draw a "── icon Name ──" category header in `strip` (above a group's first
 // row), using `lane`'s categoryKey (localized) + categorySymbol.
 - (void)_drawGroupDividerForLane:(KKLane *)lane inStrip:(NSRect)strip;
+// Draws a layer HEADER row (name + symbol + collapse glyph) for a placeholder
+// lane; `collapsed` picks the filled vs outline symbol.
+- (void)_drawLayerHeaderRowForLane:(KKLane *)lane
+                             inRow:(NSRect)row
+                         collapsed:(BOOL)collapsed;
 
 // Interaction - scrub + drag + edits + keyboard + menu.
 - (BOOL)_isInScrubBand:(NSPoint)pt;

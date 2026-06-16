@@ -120,6 +120,9 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
 @package
   NSArray<KKLane *> *_availableLanes;
   KKTimeline *_timeline;
+  // Multi-owner timelines: the layer the keypose popover scopes to (host pushes
+  // the selected layer; resolved to the first animated layer when nil/empty).
+  NSString *_activeLayerKey;
   KKCheckboxView *_inCheck;
   KKCheckboxView *_outCheck;
   NSTextField *_inLabel;
@@ -266,6 +269,11 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
 - (nullable NSString *)_representativeLaneLabelForSection:
     (KKBasicSection)section;
 - (void)_openBoundaryPopoverForDiamond:(NSInteger)d;
+// The layer the keypose popover scopes to: the host-selected `_activeLayerKey`
+// if it has an animated lane, else the first animated layer. nil for
+// single-owner timelines (no scoping). Updates `_activeLayerKey` + fires
+// onKeyposeLayerActivated when it resolves to a different layer.
+- (nullable NSString *)_resolveBasicActiveLayerKey;
 - (void)_writeBoundary:(KKBasicBoundary)boundary
                 values:(NSArray<NSNumber *> *)values
               forLabel:(NSString *)label

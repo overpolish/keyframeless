@@ -19,6 +19,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// The host-recognized object (plugin) to open parameter actions with, so the
 /// Layers panel's writes persist. Set by the plugin after creating the view.
 - (void)setLayerParamActionTarget:(nullable id)target;
+/// layerID of the layer whose timeline the inspector currently edits (driven by
+/// the Layers panel selection; nil = topmost). The plugin's timeline-persist
+/// reads this to write the edit back to the right layer.
+@property(nonatomic, copy, nullable, readonly) NSString *selectedLayerID;
 @end
 
 NS_ASSUME_NONNULL_END

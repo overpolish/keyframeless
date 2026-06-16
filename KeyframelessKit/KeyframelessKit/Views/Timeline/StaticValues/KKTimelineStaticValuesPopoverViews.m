@@ -110,25 +110,36 @@
   return YES;
 }
 
-- (NSString *)_summaryText {
-  if (_selectedLabels.count == 0)
-    return KKLoc(@"Add properties…", @"Button: add animatable properties.");
+- (NSString *)_truncatedJoin:(NSArray<NSString *> *)items localize:(BOOL)loc {
   NSMutableString *s = [NSMutableString string];
-  NSInteger shown = MIN((NSInteger)_selectedLabels.count, kMaxSummaryLabels);
+  NSInteger shown = MIN((NSInteger)items.count, kMaxSummaryLabels);
   for (NSInteger i = 0; i < shown; i++) {
     if (i > 0)
       [s appendString:@", "];
-    [s appendString:KKLocalizedParamName(_selectedLabels[i])];
+    // Layer names (loc==NO) are user-typed and can be long, so clamp each to 15
+    // chars; localized param labels stay as-is.
+    [s appendString:loc ? KKLocalizedParamName(items[i])
+                        : KKTruncatedLayerName(items[i])];
   }
-  NSInteger overflow = (NSInteger)_selectedLabels.count - kMaxSummaryLabels;
+  NSInteger overflow = (NSInteger)items.count - kMaxSummaryLabels;
   if (overflow > 0)
     [s appendFormat:@" +%ld", (long)overflow];
   return s;
 }
 
+- (NSString *)_summaryText {
+  // Multi-owner (Canvas): list every animated layer's name with the same +N
+  // truncation, e.g. "layer 1, layer 2 +1".
+  if (_layerTitles.count)
+    return [self _truncatedJoin:_layerTitles localize:NO];
+  if (_selectedLabels.count == 0)
+    return KKLoc(@"Add properties…", @"Button: add animatable properties.");
+  return [self _truncatedJoin:_selectedLabels localize:YES];
+}
+
 - (void)drawRect:(NSRect)dirty {
   NSString *text = [self _summaryText];
-  BOOL hasSelection = _selectedLabels.count > 0;
+  BOOL hasSelection = _selectedLabels.count > 0 || _layerTitles.count > 0;
   NSColor *textColor =
       hasSelection ? [NSColor inspectorLabel]
                    : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];

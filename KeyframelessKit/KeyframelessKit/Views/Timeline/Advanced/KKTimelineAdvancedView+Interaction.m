@@ -97,6 +97,23 @@
 
   [self.window makeFirstResponder:self];
 
+  // A click on a layer HEADER row toggles that layer's collapse (hides/shows
+  // its lanes); the header row itself stays. No edit gesture below applies.
+  {
+    NSArray<KKLane *> *anim = [self _animatableLanes];
+    NSInteger row = [self _laneRowAtPoint:pt];
+    if (row >= 0 && row < (NSInteger)anim.count && anim[row].headerPlaceholder) {
+      NSString *lk = anim[row].layerKey ?: @"";
+      if ([_collapsedLayerKeys containsObject:lk])
+        [_collapsedLayerKeys removeObject:lk];
+      else
+        [_collapsedLayerKeys addObject:lk];
+      [self _clampScroll];
+      [self setNeedsDisplay:YES];
+      return;
+    }
+  }
+
   // cmd+opt anywhere (even on a pill) = "scrub to here" for quick preview.
   // Checked before the other opt/cmd gestures so it always wins. Lane-aware so
   // the time lands where the cursor sits under the warp; drags keep scrubbing.

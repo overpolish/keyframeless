@@ -97,6 +97,64 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       withAttributes:attrs];
 }
 
+// A layer HEADER row (multi-owner timelines that set `layerKey`/`layerLabel`):
+// the layer's name + symbol, plus a trailing collapse glyph. Drawn heavier than
+// a lane label so the layer reads as the outer grouping level. The symbol shows
+// FILLED when the layer is collapsed, outline when expanded (so the row doubles
+// as the collapse affordance). Defaults to a stacked-squares glyph.
+- (void)_drawLayerHeaderRowForLane:(KKLane *)lane
+                             inRow:(NSRect)row
+                         collapsed:(BOOL)collapsed {
+  NSColor *ink = [[NSColor inspectorLabel] colorWithAlphaComponent:0.9];
+  NSString *name = lane.layerLabel.length ? lane.layerLabel : @"";
+  NSDictionary *attrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:kGroupDividerFontSize
+                                            weight:NSFontWeightBold],
+    NSForegroundColorAttributeName : ink,
+    NSKernAttributeName : @0.3,
+  };
+  NSSize tsz = [name sizeWithAttributes:attrs];
+  CGFloat midY = NSMidY(row);
+  // Anchor to the GRAPH's left/right edges (not the row rect, which starts
+  // after the label gutter) so the layer name lines up flush-left with the
+  // lane labels + category headers below it, instead of looking indented.
+  NSRect g = [self _graphRect];
+
+  NSImageSymbolConfiguration *cfg = [[NSImageSymbolConfiguration
+      configurationWithPointSize:kGroupDividerFontSize
+                          weight:NSFontWeightBold]
+      configurationByApplyingConfiguration:
+          [NSImageSymbolConfiguration configurationWithHierarchicalColor:ink]];
+
+  NSString *base = lane.layerSymbol.length ? lane.layerSymbol : @"square.stack";
+  NSString *symbol = collapsed ? [base stringByAppendingString:@".fill"] : base;
+  NSImage *icon =
+      [[NSImage imageWithSystemSymbolName:symbol accessibilityDescription:nil]
+          imageWithSymbolConfiguration:cfg]
+          ?: [[NSImage imageWithSystemSymbolName:base accessibilityDescription:nil]
+                 imageWithSymbolConfiguration:cfg];
+  CGFloat x = NSMinX(g) + kRowLabelInset;
+  if (icon) {
+    CGFloat iconH = icon.size.height;
+    [icon drawInRect:NSMakeRect(x, floor(midY - iconH * 0.5), icon.size.width,
+                                iconH)];
+    x += icon.size.width + KKPaddingSM;
+  }
+  [name drawAtPoint:NSMakePoint(x, floor(midY - tsz.height * 0.5))
+      withAttributes:attrs];
+
+  // Trailing chevron echoes the collapse state at the graph's right edge.
+  NSString *chev = collapsed ? @"chevron.right" : @"chevron.down";
+  NSImage *chevImg =
+      [[NSImage imageWithSystemSymbolName:chev accessibilityDescription:nil]
+          imageWithSymbolConfiguration:cfg];
+  if (chevImg) {
+    CGFloat cw = chevImg.size.width, ch = chevImg.size.height;
+    [chevImg drawInRect:NSMakeRect(NSMaxX(g) - kRowLabelInset - cw,
+                                   floor(midY - ch * 0.5), cw, ch)];
+  }
+}
+
 - (void)drawRect:(NSRect)dirtyRect {
   NSRect g = [self _graphRect];
   if (NSWidth(g) <= 0 || NSHeight(g) <= 0)
@@ -128,11 +186,21 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
     NSRect row = [self _rowRectForIndex:i count:lanes.count];
+    // A layer header row draws the layer name + collapse glyph in place of a
+    // lane label/curve.
+    if (lane.headerPlaceholder) {
+      [self _drawLayerHeaderRowForLane:lane
+                                 inRow:row
+                             collapsed:[_collapsedLayerKeys
+                                           containsObject:lane.layerKey ?: @""]];
+      continue;
+    }
+    BOOL catStart = i < (NSInteger)divFlags.count && divFlags[i].boolValue;
+    CGFloat stripX = NSMinX(g) + kRowLabelInset;
+    CGFloat stripW = NSMaxX(g) - 2.0 * kRowLabelInset - NSMinX(g);
     // Category header strip sits directly above the first row of each group.
-    if (i < (NSInteger)divFlags.count && divFlags[i].boolValue) {
-      NSRect strip = NSMakeRect(NSMinX(g) + kRowLabelInset, NSMaxY(row),
-                                NSMaxX(g) - 2.0 * kRowLabelInset - NSMinX(g),
-                                kGroupDividerH);
+    if (catStart) {
+      NSRect strip = NSMakeRect(stripX, NSMaxY(row), stripW, kGroupDividerH);
       [self _drawGroupDividerForLane:lane inStrip:strip];
     }
     if (i == _hoverLaneRow) {
@@ -165,6 +233,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSRectClip(NSMakeRect(clipL, NSMinY(g), NSMaxX(g) - clipL, NSHeight(g)));
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
+    if (lane.headerPlaceholder)
+      continue;
     NSRect row = [self _rowRectForIndex:i count:lanes.count];
     [self _drawLane:lane inRow:row tracks:tracks];
   }
@@ -842,6 +912,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     NSArray<KKLane *> *lanes = [self _animatableLanes];
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
       KKLane *lane = lanes[i];
+      if (lane.headerPlaceholder)
+        continue;
       NSRect row = [self _rowRectForIndex:i count:lanes.count];
       CGFloat y0 = MAX(NSMinY(row), NSMinY(g));
       CGFloat y1 = MIN(NSMaxY(row), NSMaxY(g));

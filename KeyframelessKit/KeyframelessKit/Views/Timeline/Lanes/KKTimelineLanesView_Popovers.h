@@ -19,6 +19,16 @@ NS_ASSUME_NONNULL_BEGIN
 @protected
   NSArray<KKLane *> *_availableLanes;
   KKTimeline *_timeline;
+  // Optional multi-owner (layer) timeline. When set, the Basic + Advanced
+  // graphs render and edit THIS (all layers' animated lanes, uniquely tagged)
+  // while _timeline stays the single selected owner that drives the Animated
+  // dropdown + Constants. nil for single-owner plugins (graphs use _timeline).
+  KKTimeline *_graphTimeline;
+  // Host's selected layer (multi-owner), scopes the Basic keypose popover.
+  NSString *_activeLayerKey;
+  // Host hint (multi-owner): some layer has a constant param even if the
+  // selected one doesn't, so the Constants button stays reachable.
+  BOOL _ownerConstantsAvailable;
   NSInteger _activeTab; // 0 = Basic, 1 = Advanced
 
   NSStackView *_laneStack;
@@ -121,6 +131,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable KKLane *)_templateForLabel:(NSString *)label;
 - (BOOL)_isAnimatableLabel:(NSString *)label;
 - (void)_refresh;
+- (KKTimeline *)_graphTimeline;
+- (void)_graphDidMutateTimeline:(KKTimeline *)updated;
 @end
 
 /// Lane add/remove/animatable mutations. Declared in a named category so the

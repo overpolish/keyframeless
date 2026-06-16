@@ -98,6 +98,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// on load.
 @property(nonatomic, copy) NSString *layerID;
 
+/// Opaque per-object animation payload (e.g. a serialized KKTimeline). The
+/// owning plugin defines the format; the geometry layer just round-trips it.
+/// Persists in `dataRepresentation` (v29+); older blobs read nil. Travels with
+/// the path through the blob (duplicate / reorder / group all preserve it).
+@property(nonatomic, copy, nullable) NSString *animationJSON;
+
 /// Whether the Transform group (translate/rotate/scale) applies at render
 /// time. When NO, the path renders at its raw point coords so OSC editing
 /// stays in sync. Default YES.

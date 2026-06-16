@@ -47,6 +47,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, weak, nullable) NSPopover *popover;
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                 checkedLabels:(NSSet<NSString *> *)checked
+                minimumHeight:(CGFloat)minimumHeight
                      onToggle:(void (^)(NSString *label))onToggle;
 - (void)updateCheckedLabels:(NSSet<NSString *> *)checked;
 - (nullable NSView *)rowViewForLabel:(NSString *)label;
@@ -282,6 +283,10 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 
 @interface _KKDropdownTrigger : NSView
 @property(nonatomic, copy, nullable) NSArray<NSString *> *selectedLabels;
+/// Optional owner (layer) names (multi-owner hosts): when non-empty the trigger
+/// lists every animated layer's name with +N truncation ("layer 1, layer 2 +1")
+/// instead of the property summary.
+@property(nonatomic, copy, nullable) NSArray<NSString *> *layerTitles;
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 

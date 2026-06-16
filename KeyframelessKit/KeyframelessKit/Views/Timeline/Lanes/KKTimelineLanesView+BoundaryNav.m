@@ -249,6 +249,8 @@
   // Full row rebuild (not just value rebind): the editable↔Animate split can
   // change between fractions (navigate) or after add/remove, and the one-way
   // applyExcludedLabels: swap can't restore an editable row on its own.
+  // rebuildRowsWithLanes: re-fits the popover to the new row count (handles a
+  // re-target to a layer with fewer params).
   [_openStaticView rebuildRowsWithLanes:lanes excludedLabels:excludedLabels];
   [_openStaticView setHeaderDetail:[self _timeStringForFraction:fraction]];
   [_openStaticView setHeaderLinked:[self _anyLinkedKeyposeAtFraction:fraction]];

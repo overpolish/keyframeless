@@ -42,6 +42,24 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) double frameDurationSeconds;
 @property(nonatomic) double playheadFraction;
 
+/// Owner (layer) keys in display order, so the lanes of a multi-layer timeline
+/// render grouped in the layer-list's stack order. Every lane is editable; the
+/// layer is just a display grouping (drawn via layerKey/layerLabel/layerSymbol).
+/// nil = no ordering (single-owner plugins).
+@property(nonatomic, copy, nullable) NSArray<NSString *> *layerOrder;
+
+/// Multi-owner only: the keypose popover scopes to ONE layer's params (not
+/// every layer's). Fired when a keypose popover opens, with the layer it scoped
+/// to (the clicked pill's layer), so the host can highlight that layer in its
+/// layer list.
+@property(nonatomic, copy, nullable) void (^onKeyposeLayerActivated)
+    (NSString *layerKey);
+
+/// Re-point an OPEN keypose popover at a different layer's keypose at the same
+/// time (driven by the host's layer-list selection). No-op if that layer is
+/// already active or has no keypose at the current time.
+- (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey;
+
 /// Opt-in "Dynamic" display warp. When OFF (default) the time axis is linear
 /// and pill positions are the real keypose times. When ON, each lane's
 /// intervals are warped so short transitions stay grabbable (every gap is at

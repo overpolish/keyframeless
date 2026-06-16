@@ -311,6 +311,10 @@
   c.componentsScaleWithMedia = _componentsScaleWithMedia;
   c.categoryKey = [_categoryKey copy];
   c.categorySymbol = [_categorySymbol copy];
+  c.layerKey = [_layerKey copy];
+  c.layerLabel = [_layerLabel copy];
+  c.layerSymbol = [_layerSymbol copy];
+  c.headerPlaceholder = _headerPlaceholder;
   c.animatable = _animatable;
   c.seedField = _seedField;
   c.choiceLabels = [_choiceLabels copy];
@@ -356,6 +360,12 @@
     d[@"category_key"] = _categoryKey;
   if (_categorySymbol)
     d[@"category_symbol"] = _categorySymbol;
+  if (_layerKey)
+    d[@"layer_key"] = _layerKey;
+  if (_layerLabel)
+    d[@"layer_label"] = _layerLabel;
+  if (_layerSymbol)
+    d[@"layer_symbol"] = _layerSymbol;
   if (!_animatable)
     d[@"animatable"] = @NO;
   if (_seedField)
@@ -402,6 +412,9 @@
   l.componentsScaleWithMedia = [d[@"components_scale_with_media"] boolValue];
   l.categoryKey = d[@"category_key"];
   l.categorySymbol = d[@"category_symbol"];
+  l.layerKey = d[@"layer_key"];
+  l.layerLabel = d[@"layer_label"];
+  l.layerSymbol = d[@"layer_symbol"];
   l.animatable = d[@"animatable"] ? [d[@"animatable"] boolValue] : YES;
   l.seedField = [d[@"seed_field"] boolValue];
   if ([d[@"choice_labels"] isKindOfClass:[NSArray class]])

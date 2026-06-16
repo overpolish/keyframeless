@@ -27,6 +27,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// Re-read the layer blob and rebuild (call from the host's parameterChanged:
 /// so undo/redo of the layer data is reflected here).
 - (void)reloadFromParam;
+/// Layers that can't be selected as the edit target right now (grayed out): a
+/// keypose popover passes the layers with no keypose at its time. Every other
+/// interaction stays live. Pass nil/empty to make all layers selectable (the
+/// Constants popover, or no popover open).
+- (void)setNonSelectableLayerIDs:(nullable NSSet<NSString *> *)layerIDs;
+/// Highlight the row for `layerID` as the selection WITHOUT firing
+/// onPrimaryLayerSelected (used to mirror a keypose popover's active layer into
+/// the list). nil clears the selection.
+- (void)highlightLayerID:(nullable NSString *)layerID;
+/// Fired when the primary (single) selection changes, with that layer's
+/// layerID (nil when the selection is cleared / multi). Drives which layer the
+/// inspector timeline edits.
+@property(nonatomic, copy, nullable) void (^onPrimaryLayerSelected)
+    (NSString *_Nullable layerID);
 @end
 
 NS_ASSUME_NONNULL_END

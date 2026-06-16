@@ -201,6 +201,7 @@ static const CGFloat kManagePillH = 24.0;
   NSString *_selectedCategory;
   NSDictionary<NSString *, NSString *> *_rowCategoryByLabel;
   BOOL _hasPill;
+  CGFloat _minimumHeight;
 }
 
 + (CGFloat)heightForLaneCount:(NSInteger)count {
@@ -220,6 +221,7 @@ static const CGFloat kManagePillH = 24.0;
 
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                 checkedLabels:(NSSet<NSString *> *)checked
+                minimumHeight:(CGFloat)minimumHeight
                      onToggle:(void (^)(NSString *))onToggle {
   // Only animatable lanes get a row (value-only params like a seed can't be
   // added to the timeline), so categories + sizing are derived from that
@@ -233,7 +235,7 @@ static const CGFloat kManagePillH = 24.0;
   NSDictionary<NSString *, NSString *> *catByLabel =
       KKLaneCategoryByLabel(animatable);
   NSArray<NSString *> *keys = KKLaneCategoryKeys(animatable);
-  BOOL hasPill = keys.count > 1;
+  BOOL hasPill = keys.count > 0;
   NSString *selected = hasPill ? keys.firstObject : nil;
 
   // Initial visible rows = the first category's rows (or all when no pill), so
@@ -243,11 +245,13 @@ static const CGFloat kManagePillH = 24.0;
     if (!hasPill || catByLabel[lane.label] == nil ||
         [catByLabel[lane.label] isEqualToString:selected])
       initialVisible++;
-  CGFloat h = [_KKManagePopoverView heightForRowCount:initialVisible
-                                              hasPill:hasPill];
+  CGFloat h = MAX([_KKManagePopoverView heightForRowCount:initialVisible
+                                                   hasPill:hasPill],
+                  minimumHeight);
   self = [super initWithFrame:NSMakeRect(0, 0, kPopoverW, h)];
   if (!self)
     return nil;
+  _minimumHeight = minimumHeight;
   _checkedLabels = [checked copy];
   _allRows = [NSMutableArray array];
   _rowCategoryByLabel = catByLabel;
@@ -379,8 +383,9 @@ static const CGFloat kManagePillH = 24.0;
   if (!self.popover)
     return;
   self.popover.contentSize = NSMakeSize(
-      kPopoverW, [_KKManagePopoverView heightForRowCount:MAX(visible, 1)
-                                                 hasPill:_hasPill]);
+      kPopoverW, MAX([_KKManagePopoverView heightForRowCount:MAX(visible, 1)
+                                                     hasPill:_hasPill],
+                     _minimumHeight));
 }
 
 - (void)updateCheckedLabels:(NSSet<NSString *> *)checked {

@@ -262,8 +262,13 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   __weak KKConstantsButton *weakConstants = _constantsButton;
   __weak KKTimelineLanesView *weakBasic = _basicView;
   _constantsButton.onTapped = ^{
+    KKTimelineInspectorView *strong = weak;
     KKTimelineLanesView *basic = weakBasic;
     KKConstantsButton *btn = weakConstants;
+    // Let the host pick an owner that has constants before the popover reads
+    // the (selected-owner) timeline.
+    if (strong.onConstantsWillShow)
+      strong.onConstantsWillShow();
     if (basic && btn)
       [basic showStaticValuesPopoverFromView:btn];
   };

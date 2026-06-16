@@ -48,6 +48,11 @@ extern NSPasteboardType const kCanvasLayerRowDragType;
   NSStackView *_rowsStack;
   NSStackView *_emptyStack;
   NSMutableIndexSet *_selection;
+  // Layers that can't be selected right now: a keypose popover at time T grays
+  // layers with no keypose at T (you can't edit a keypose they don't have).
+  // Empty for the Constants popover (every layer selectable). Every OTHER
+  // interaction (drag, visibility, lock, rename) stays live on grayed rows.
+  NSSet<NSString *> *_nonSelectableLayerIDs;
   NSImageSymbolConfiguration *_symConfig;
   // Cached state so interactions stay snappy: avoid re-reading the param blob
   // and reloading thumbnails from disk on every click.
@@ -82,6 +87,7 @@ extern NSPasteboardType const kCanvasLayerRowDragType;
 @interface CanvasLayerListView (Rows)
 - (void)_rebuildRows;
 - (void)_applySelectionStyling;
+- (BOOL)_rowNonSelectable:(NSInteger)rowIndex;
 - (NSView *)_rowViewForPath:(KKBezierPath *)path
                       index:(NSUInteger)idx
                    selected:(BOOL)selected;

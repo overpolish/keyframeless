@@ -4,26 +4,55 @@
  */
 
 #import "CanvasInspectorView.h"
+#import "CanvasLayerTimeline.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
 @implementation CanvasPlugin (CustomUI)
 
 + (NSArray<KKLane *> *)availableLanes {
-  // Increment 1: a single dummy animatable lane so the shared timeline UI has
-  // something to drive. The render ignores it for now (literal passthrough) -
-  // real Canvas lanes (path / stroke / fill / transform) land in later steps.
-  KKLane *amount = [KKLane laneWithLabel:@"Amount"];
-  amount.valueType = KKLaneValueTypeFloat;
-  amount.componentMin = @[ @0.0 ];
-  amount.componentMax = @[ @100.0 ];
-  amount.componentUnits = @[ @"%" ];
-  amount.integerValued = YES;
-  [amount insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
-  return @[ amount ];
+  // Transform group. These are lane TEMPLATES: each layer owns its own timeline
+  // built from them (per-layer transforms; the inspector shows the selected
+  // layer's), so a fresh layer starts at identity. The render ignores them
+  // until the transform plumbing lands; stroke / fill groups come later.
+  //
+  // Scale: 2-component aspect-linked percent, modelled on MagicMove's box-OSC
+  // Scale lane so the box OSC drops straight in. Identity = 100%. Unbounded
+  // above (like MagicMove); 0 floor.
+  KKLane *scale = [KKLane laneWithLabel:@"Scale"];
+  scale.valueType = KKLaneValueTypeFloat;
+  scale.componentMin = @[ @0.0, @0.0 ];
+  scale.componentUnits = @[ @"%", @"%" ];
+  scale.componentLabels = @[ @"X", @"Y" ];
+  scale.aspectLinkable = YES;
+  scale.aspectLinked = YES;
+  scale.enabled = NO; // constant by default; animate per-layer via the dropdown
+  scale.categoryKey = @"Transform";
+  scale.categorySymbol = @"arrow.up.and.down.and.arrow.left.and.right";
+  [scale insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @100.0, @100.0 ]]];
+
+  // Position: 2D spatial, stored normalised 0..1 (0.5,0.5 = centred = identity),
+  // displayed as pixels. Same reusable curved-path Position as Glow/MagicMove
+  // (spatialCurvable). Off-canvas allowed, so no min/max.
+  KKLane *position = [KKLane laneWithLabel:@"Position"];
+  position.valueType = KKLaneValueTypeGeneric;
+  position.componentMin = @[];
+  position.componentMax = @[];
+  position.componentUnits = @[ @"px", @"px" ];
+  position.componentsScaleWithMedia = YES; // stored 0..1, displayed as pixels
+  position.componentLabels = @[ @"X", @"Y" ];
+  position.spatialCurvable = YES;
+  position.enabled = NO; // constant by default; animate per-layer via dropdown
+  position.categoryKey = @"Transform";
+  position.categorySymbol = @"arrow.up.and.down.and.arrow.left.and.right";
+  [position insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
+
+  return @[ scale, position ];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
@@ -37,7 +66,24 @@
     KKInspectorPersistedState *st =
         [self kkReadInspectorPersistedStateWithGetAPI:getAPI
                                        uiStateParamID:kParamUIState];
-    KKTimeline *timeline = [self timelineStampedWithClipDuration:st.timeline];
+    // Per-layer timelines: the kit inspector EDITS the SELECTED layer's own
+    // animationJSON with PLAIN labels (so the Animated dropdown / Constants /
+    // Keypose work unchanged). The all-layers overview is drawn separately as
+    // read-only context. (NOT the global kKKParamTimelineData; st.timeline is
+    // unused here.) Selection is the topmost layer until panel-driven selection
+    // lands.
+    NSString *layerB64 = KKReadCustomParamString(getAPI, kParamLayerData);
+    NSMutableArray<KKBezierPath *> *layerPaths =
+        layerB64.length
+            ? [KKBezierPath
+                  pathsFromBlob:[[NSData alloc]
+                                    initWithBase64EncodedString:layerB64
+                                                        options:0]]
+            : [NSMutableArray array];
+    KKTimeline *layerTL = CanvasLayerTimelineForPath(
+        CanvasSelectedLayerForPaths(layerPaths, nil),
+        [CanvasPlugin availableLanes]);
+    KKTimeline *timeline = [self timelineStampedWithClipDuration:layerTL];
 
     // Frame + clip duration for the keypose-snap epsilon and the basic-view
     // scrubber clamp. FxTimingAPI resolves inside this action scope; we push
@@ -75,6 +121,71 @@
                                renderNudgeParamID:kParamRenderNudge
                                     dragUndoLabel:@"Adjust Canvas"
                                detachedWindowSize:CGSizeMake(720.0, 460.0)];
+
+    // Persist timeline edits PER LAYER instead of to the global timeline param:
+    // decompose the edited merged timeline by layerKey and write each layer's
+    // clean animationJSON back into the layer blob. Overrides the shared
+    // wiring's onTimelineMutated (which targets kKKParamTimelineData). Runs in
+    // an action scope so it nests inside the drag undo group (onDragBegin/End).
+    __weak CanvasPlugin *weakSelf = self;
+    view.onTimelineMutated = ^(KKTimeline *updated) {
+      __strong CanvasPlugin *s = weakSelf;
+      if (!s)
+        return;
+      id<FxCustomParameterActionAPI_v4> act = [s.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      if (!act)
+        return;
+      [act startAction:s];
+      id<FxParameterRetrievalAPI_v6> get =
+          [s.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      id<FxParameterSettingAPI_v5> set =
+          [s.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      NSString *b64 = KKReadCustomParamString(get, kParamLayerData);
+      NSMutableArray<KKBezierPath *> *cur =
+          b64.length ? [KKBezierPath
+                           pathsFromBlob:[[NSData alloc]
+                                             initWithBase64EncodedString:b64
+                                                                 options:0]]
+                     : [NSMutableArray array];
+      CanvasApplyTimelineToPath(
+          updated, CanvasSelectedLayerForPaths(
+                       cur, ((CanvasInspectorView *)s.inspectorView)
+                                .selectedLayerID));
+      NSData *blob = [KKBezierPath blobFromPaths:cur];
+      KKWriteCustomParamString(set, [blob base64EncodedStringWithOptions:0],
+                               kParamLayerData);
+      [act endAction:s];
+    };
+
+    // Keypose edits in either graph mutate the ALL-LAYERS graph timeline; split
+    // it back per layer (by layerKey) and write each layer's animationJSON.
+    view.basicLanesView.onGraphTimelineMutated = ^(KKTimeline *merged) {
+      __strong CanvasPlugin *s = weakSelf;
+      if (!s)
+        return;
+      id<FxCustomParameterActionAPI_v4> act = [s.apiManager
+          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+      if (!act)
+        return;
+      [act startAction:s];
+      id<FxParameterRetrievalAPI_v6> get =
+          [s.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+      id<FxParameterSettingAPI_v5> set =
+          [s.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+      NSString *b64 = KKReadCustomParamString(get, kParamLayerData);
+      NSMutableArray<KKBezierPath *> *cur =
+          b64.length ? [KKBezierPath
+                           pathsFromBlob:[[NSData alloc]
+                                             initWithBase64EncodedString:b64
+                                                                 options:0]]
+                     : [NSMutableArray array];
+      CanvasApplyMergedTimelineToPaths(merged, cur, [CanvasPlugin availableLanes]);
+      NSData *blob = [KKBezierPath blobFromPaths:cur];
+      KKWriteCustomParamString(set, [blob base64EncodedStringWithOptions:0],
+                               kParamLayerData);
+      [act endAction:s];
+    };
 
     self.inspectorView = view;
     // The Layers panel opens parameter actions to read/write kParamLayerData;

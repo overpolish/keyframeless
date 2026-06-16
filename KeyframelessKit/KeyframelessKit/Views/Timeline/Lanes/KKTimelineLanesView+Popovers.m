@@ -117,6 +117,7 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   manageView = [[_KKManagePopoverView alloc]
       initWithLanes:visibleLanes
       checkedLabels:checked
+      minimumHeight:self.minimumManagePopoverHeight
            onToggle:^(NSString *label) {
              __strong typeof(weak) s = weak;
              if (!s)
@@ -137,11 +138,36 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                                            if (!s)
                                              return;
                                            s->_openManageView = nil;
+                                           [NSNotificationCenter.defaultCenter
+                                               postNotificationName:
+                                                   KKStaticValuesPopoverDidCloseNotification
+                                                             object:s];
                                            if (s.onManagePopoverClosed)
                                              s.onManagePopoverClosed();
                                          }];
   _openManagePopover = pop;
   manageView.popover = pop;
+
+  // Companion-panel signal (same as the constants/keypose popovers): a
+  // multi-owner host (Canvas) shows its layer list beside the dropdown so you
+  // can pick which owner's animated properties to manage. kind=manage => every
+  // layer is selectable (you can animate any layer's params).
+  NSView *manageContent = pop.contentViewController.view;
+  NSWindow *manageWindow = manageContent.window;
+  if (manageWindow) {
+    NSRect cardScreen = [manageWindow
+        convertRectToScreen:[manageContent convertRect:manageContent.bounds
+                                                toView:nil]];
+    [NSNotificationCenter.defaultCenter
+        postNotificationName:KKStaticValuesPopoverDidOpenNotification
+                      object:self
+                    userInfo:@{
+                      @"window" : manageWindow,
+                      @"contentView" : manageContent,
+                      @"contentRect" : [NSValue valueWithRect:cardScreen],
+                      @"kind" : @"manage",
+                    }];
+  }
 
   if (self.onManagePopoverWillOpen) {
     NSString *targetLabel =
@@ -424,8 +450,14 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                      // responder instead. An NSText (the field
                                      // editor) means a value field is being
                                      // edited: let the arrows move the text
-                                     // cursor rather than navigating.
+                                     // cursor rather than navigating. Also let
+                                     // them through when a field editor is
+                                     // active in the key window (e.g. renaming a
+                                     // layer in the companion panel, a separate
+                                     // window from the popover).
                                      if ([popoverWindow.firstResponder
+                                             isKindOfClass:[NSText class]] ||
+                                         [NSApp.keyWindow.firstResponder
                                              isKindOfClass:[NSText class]])
                                        return e;
                                      [s _navigateBoundaryPopoverDirection:

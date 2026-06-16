@@ -55,6 +55,19 @@
   KKKeyPose *kp = lane.keyposes[kpIdx];
   double frac = kp.time;
 
+  // The keypose popover scopes to this lane's layer (multi-owner timelines).
+  // Tell the host so it highlights that layer in its layer list.
+  if (lane.layerKey.length && ![lane.layerKey isEqualToString:_activeLayerKey]) {
+    _activeLayerKey = [lane.layerKey copy];
+    if (self.onKeyposeLayerActivated)
+      self.onKeyposeLayerActivated(_activeLayerKey);
+  }
+
+  // Scroll the target row fully into view first (e.g. when re-targeting to a
+  // layer whose row was scrolled off), so the popover doesn't anchor to a
+  // clipped/off-screen pill.
+  [self _ensureLaneRowVisible:laneIdx count:lanes.count];
+
   // Anchor: transient invisible subview the size of the clicked pill so the
   // popover arrow lands on the pill body.
   NSRect tracks = [self _tracksRect];
@@ -79,9 +92,18 @@
   // excludedLabels - shown as the "available zone" row with an "Animate"
   // button.
   NSString *groupKey = lane.groupKey;
+  NSString *layerKey = lane.layerKey;
   NSMutableArray<KKLane *> *displayLanes = [NSMutableArray array];
   NSMutableArray<NSString *> *excludedLabels = [NSMutableArray array];
   for (KKLane *l in lanes) {
+    if (l.headerPlaceholder)
+      continue; // layer header rows aren't editable params
+    // Multi-owner timelines: scope the popover to the clicked lane's LAYER, so
+    // a keypose popover shows only that layer's params (not every layer's).
+    BOOL sameLayer =
+        (l.layerKey == layerKey) || [l.layerKey isEqualToString:layerKey];
+    if (!sameLayer)
+      continue;
     BOOL sameGroup =
         (l.groupKey == groupKey) || [l.groupKey isEqualToString:groupKey];
     if (!sameGroup)
@@ -123,6 +145,11 @@
     display.aspectLinkable = tmpl ? tmpl.aspectLinkable : l.aspectLinkable;
     display.aspectLinked = l.aspectLinked;
     display.integerValued = tmpl ? tmpl.integerValued : l.integerValued;
+    // Media-scaled (normalised 0..1 shown as pixels) is template metadata; the
+    // row keys pixel display off it. Without it the keypose popover showed the
+    // raw 0.5 instead of pixels (Constants copies it, so it worked there).
+    display.componentsScaleWithMedia =
+        tmpl ? tmpl.componentsScaleWithMedia : l.componentsScaleWithMedia;
     [display kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     KKKeyPose *displayKp = [KKKeyPose keyposeAtTime:0.0
                                              values:vals ?: @[ @0.0 ]];
@@ -187,12 +214,23 @@
                       onDragBegin, onDragEnd);
 }
 
+// A candidate lane for the keypose popover: a real lane in the active layer
+// (when one is set) - never a header placeholder or another layer's lane.
+- (BOOL)_laneEligibleForValuePopover:(KKLane *)lane {
+  if (lane.headerPlaceholder)
+    return NO;
+  if (_activeLayerKey.length)
+    return [lane.layerKey isEqualToString:_activeLayerKey];
+  return YES;
+}
+
 - (void)requestValuePopoverAtFraction:(double)fraction {
   NSArray<KKLane *> *lanes = [self _animatableLanes];
   NSInteger preferredLane = -1;
   if (_topLaneLabel) {
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-      if ([lanes[i].label isEqualToString:_topLaneLabel]) {
+      if ([lanes[i].label isEqualToString:_topLaneLabel] &&
+          [self _laneEligibleForValuePopover:lanes[i]]) {
         preferredLane = i;
         break;
       }
@@ -212,6 +250,8 @@
   if (foundLane < 0) {
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
       KKLane *l = lanes[i];
+      if (![self _laneEligibleForValuePopover:l])
+        continue;
       for (NSInteger k = 0; k < (NSInteger)l.keyposes.count; k++) {
         if (fabs(l.keyposes[k].time - fraction) < kEps) {
           foundLane = i;

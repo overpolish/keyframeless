@@ -39,17 +39,33 @@
   }];
 
   _emptyStack.hidden = _paths.count > 0;
+  // Re-apply selection styling so the locked-dim state survives a rebuild.
+  [self _applySelectionStyling];
   [self _updateScrollShadows];
+}
+
+// Layer at a visible row index can't be selected as the edit target (no
+// keypose at the keypose popover's time).
+- (BOOL)_rowNonSelectable:(NSInteger)rowIndex {
+  if (!_nonSelectableLayerIDs.count || rowIndex < 0 ||
+      rowIndex >= (NSInteger)_paths.count)
+    return NO;
+  NSString *lid = _paths[(NSUInteger)rowIndex].layerID;
+  return lid.length && [_nonSelectableLayerIDs containsObject:lid];
 }
 
 // Selection is pure UI state - just restyle the existing rows, no rebuild. Rows
 // may be a subset of paths (collapse), so key off each row's own path index.
 - (void)_applySelectionStyling {
   for (CanvasLayerRow *row in (NSArray<CanvasLayerRow *> *)_rowViews) {
+    BOOL sel = [_selection containsIndex:(NSUInteger)row.rowIndex];
     row.layer.backgroundColor =
-        [_selection containsIndex:(NSUInteger)row.rowIndex]
-            ? [[NSColor accent] colorWithAlphaComponent:kSelectionAlpha].CGColor
+        sel ? [[NSColor accent] colorWithAlphaComponent:kSelectionAlpha].CGColor
             : NSColor.clearColor.CGColor;
+    // Gray a row that can't be selected right now (e.g. no keypose at the
+    // keypose popover's time). Purely visual - drag/visibility/lock/rename
+    // still work since alpha doesn't disable hit-testing.
+    row.alphaValue = [self _rowNonSelectable:row.rowIndex] ? 0.4 : 1.0;
   }
 }
 
@@ -277,6 +293,10 @@
   // Take key + focus so keyboard actions (Delete) target the panel.
   [self.window makeKeyWindow];
   [self.window makeFirstResponder:self];
+  // A layer with no keypose at the keypose popover's time can't be the edit
+  // target - ignore the click (other interactions handle themselves).
+  if ([self _rowNonSelectable:(NSInteger)idx])
+    return;
   if (mods & NSEventModifierFlagCommand) {
     if ([_selection containsIndex:idx])
       [_selection removeIndex:idx];
@@ -291,6 +311,18 @@
     [_selection addIndex:idx];
   }
   [self _applySelectionStyling];
+
+  // The active layer for editing = the clicked row if it's still selected,
+  // else the first remaining selection. Drives which layer's timeline the
+  // inspector edits.
+  if (self.onPrimaryLayerSelected) {
+    NSUInteger primary =
+        [_selection containsIndex:idx] ? idx : _selection.firstIndex;
+    NSString *layerID = (primary != NSNotFound && primary < _paths.count)
+                            ? _paths[primary].layerID
+                            : nil;
+    self.onPrimaryLayerSelected(layerID);
+  }
 }
 
 @end

@@ -18,7 +18,10 @@ KKOrderedLaneCategories(NSArray<KKLane *> *lanes) {
     [keys addObject:k];
     [syms addObject:l.categorySymbol.length ? l.categorySymbol : @"circle"];
   }
-  if (keys.count < 2)
+  // Show the category nav whenever ANY category is declared (a single-category
+  // plugin like Canvas's "Transform" still gets its pill). Plugins that set no
+  // categoryKey at all (Rounded, MagicMove) get none, as before.
+  if (keys.count < 1)
     return @[];
   NSMutableArray<NSArray<NSString *> *> *out = [NSMutableArray array];
   for (NSUInteger i = 0; i < keys.count; i++)
@@ -45,7 +48,7 @@ KKLaneCategoryByLabel(NSArray<KKLane *> *lanes) {
 
 NSString *KKResolveLaneCategory(NSArray<KKLane *> *lanes, NSString *requested) {
   NSArray<NSArray<NSString *> *> *cats = KKOrderedLaneCategories(lanes);
-  if (cats.count < 2)
+  if (cats.count < 1)
     return nil;
   if (requested.length)
     for (NSArray<NSString *> *pair in cats)
@@ -65,7 +68,7 @@ KKPillToggleRowView *KKMakeLaneCategoryPill(NSArray<KKLane *> *lanes,
                                             NSString *selected,
                                             void (^onSelect)(NSString *)) {
   NSArray<NSArray<NSString *> *> *cats = KKOrderedLaneCategories(lanes);
-  if (cats.count < 2)
+  if (cats.count < 1)
     return nil;
 
   NSMutableArray<NSString *> *keys = [NSMutableArray array];

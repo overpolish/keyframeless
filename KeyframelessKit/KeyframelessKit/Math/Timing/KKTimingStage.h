@@ -233,6 +233,23 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy, nullable) NSString *categoryKey;
 @property(nonatomic, copy, nullable) NSString *categorySymbol;
 
+/// Optional OUTER grouping level above `categoryKey`, for plugins (e.g. Canvas)
+/// whose timeline holds lanes from several owners - one "layer" per owner. When
+/// set, the Advanced view draws a layer header strip above the category
+/// header(s), giving a layer > category > lane tree; `layerLabel` is the
+/// displayed name and `layerSymbol` an optional SF Symbol. nil (the default for
+/// every other plugin) = no layer level, so their timeline renders unchanged.
+/// Build-time / assembly metadata; the kit never infers it.
+@property(nonatomic, copy, nullable) NSString *layerKey;
+@property(nonatomic, copy, nullable) NSString *layerLabel;
+@property(nonatomic, copy, nullable) NSString *layerSymbol;
+
+/// Transient (never serialized) marker: this lane is a synthetic layer-HEADER
+/// row in the Advanced graph (drawn as the layer's name + collapse glyph, no
+/// keyposes). Set by the view when it injects per-layer header rows; not part
+/// of any plugin's timeline.
+@property(nonatomic) BOOL headerPlaceholder;
+
 /// When NO the property can't be animated: it's left out of the Animated
 /// dropdown and its "make animatable" button is hidden in Constants, so it
 /// stays a value-only param (e.g. a noise seed). Default YES. Build-time
