@@ -98,18 +98,28 @@
 
   [self.window makeFirstResponder:self];
 
-  // A click on a layer HEADER row toggles that layer's collapse (hides/shows
-  // its lanes); the header row itself stays. No edit gesture below applies.
+  // A click on a HEADER row toggles that group's collapse (hides/shows its
+  // lanes); the header row itself stays. Category headers toggle their category
+  // (label == the scoped collapse key), layer headers toggle their layer. No
+  // edit gesture below applies.
   {
     NSArray<KKLane *> *anim = [self _animatableLanes];
     NSInteger row = [self _laneRowAtPoint:pt];
     if (row >= 0 && row < (NSInteger)anim.count &&
         anim[row].headerPlaceholder) {
-      NSString *lk = anim[row].layerKey ?: @"";
-      if ([_collapsedLayerKeys containsObject:lk])
-        [_collapsedLayerKeys removeObject:lk];
-      else
-        [_collapsedLayerKeys addObject:lk];
+      if (anim[row].categoryHeader) {
+        NSString *ck = anim[row].label;
+        if ([_collapsedCategoryKeys containsObject:ck])
+          [_collapsedCategoryKeys removeObject:ck];
+        else
+          [_collapsedCategoryKeys addObject:ck];
+      } else {
+        NSString *lk = anim[row].layerKey ?: @"";
+        if ([_collapsedLayerKeys containsObject:lk])
+          [_collapsedLayerKeys removeObject:lk];
+        else
+          [_collapsedLayerKeys addObject:lk];
+      }
       [self _clampScroll];
       [self setNeedsDisplay:YES];
       return;

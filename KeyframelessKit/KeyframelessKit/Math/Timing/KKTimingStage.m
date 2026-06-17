@@ -330,6 +330,7 @@
   c.layerLabel = [_layerLabel copy];
   c.layerSymbol = [_layerSymbol copy];
   c.headerPlaceholder = _headerPlaceholder;
+  c.categoryHeader = _categoryHeader;
   c.locked = _locked;
   c.animatable = _animatable;
   c.seedField = _seedField;

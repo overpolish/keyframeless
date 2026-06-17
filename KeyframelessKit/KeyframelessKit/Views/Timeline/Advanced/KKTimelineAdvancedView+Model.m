@@ -23,21 +23,26 @@
         [condVisible containsObject:l.label])
       [out addObject:l];
 
-  // Single-owner plugins (no layerKey on any lane) render the flat list
-  // unchanged - no layer headers, no collapse.
+  NSMutableArray<KKLane *> *result = [NSMutableArray array];
+
+  // Single-owner plugins (no layerKey on any lane): no layer level, so the
+  // category headers (if any) sit at the top level. Plugins without categories
+  // append flat - no headers, layout unchanged.
   BOOL hasLayers = NO;
   for (KKLane *l in out)
     if (l.layerKey.length) {
       hasLayers = YES;
       break;
     }
-  if (!hasLayers)
-    return out;
+  if (!hasLayers) {
+    [self _appendCategoryGroupedLanes:out layerKey:nil into:result];
+    return result;
+  }
 
-  // Multi-owner: emit, per layer in stack order, a synthetic HEADER row then
-  // (unless collapsed) that layer's lanes. The header row is always present so
-  // a collapsed layer stays visible + re-expandable.
-  NSMutableArray<KKLane *> *result = [NSMutableArray array];
+  // Multi-owner: emit, per layer in stack order, a synthetic layer HEADER row
+  // then (unless collapsed) that layer's lanes - themselves grouped under
+  // collapsible category headers. The layer header is always present so a
+  // collapsed layer stays visible + re-expandable.
   for (NSString *lk in [self _orderedLayerKeysForLanes:out]) {
     KKLane *sample = nil;
     for (KKLane *l in out)
@@ -47,6 +52,7 @@
       }
     KKLane *header = [sample copy];
     header.headerPlaceholder = YES;
+    header.categoryHeader = NO;
     header.label = lk; // unique, never matches a real lane label
     header.categoryKey = nil;
     header.categorySymbol = nil;
@@ -54,11 +60,54 @@
     [result addObject:header];
     if ([_collapsedLayerKeys containsObject:lk])
       continue;
+    NSMutableArray<KKLane *> *layerLanes = [NSMutableArray array];
     for (KKLane *l in out)
       if ([(l.layerKey ?: @"") isEqualToString:lk])
-        [result addObject:l];
+        [layerLanes addObject:l];
+    [self _appendCategoryGroupedLanes:layerLanes layerKey:lk into:result];
   }
   return result;
+}
+
+// The collapse identity for a category, scoped by its owning layer so the same
+// categoryKey (e.g. "Transform") collapses independently in each Canvas layer.
+// Single-owner plugins pass a nil layerKey, giving a bare category key.
+- (NSString *)_categoryCollapseKeyForLayer:(nullable NSString *)layerKey
+                                  category:(NSString *)category {
+  return [NSString stringWithFormat:@"%@\x1f%@", layerKey ?: @"", category];
+}
+
+// Append `lanes` (already in display order, all from one owner) to `result`,
+// injecting a synthetic CATEGORY HEADER row before the first lane of each
+// categorised run and skipping that run's lanes while the category is
+// collapsed. Uncategorised lanes are always appended with no header, so a
+// plugin that sets no categoryKey keeps the flat layout.
+- (void)_appendCategoryGroupedLanes:(NSArray<KKLane *> *)lanes
+                           layerKey:(nullable NSString *)layerKey
+                               into:(NSMutableArray<KKLane *> *)result {
+  NSString *prevCat = nil;
+  BOOL collapsedRun = NO;
+  for (KKLane *l in lanes) {
+    NSString *cat = l.categoryKey.length ? l.categoryKey : nil;
+    if (cat && ![cat isEqualToString:prevCat]) {
+      NSString *collapseKey = [self _categoryCollapseKeyForLayer:layerKey
+                                                        category:cat];
+      KKLane *header = [l copy];
+      header.headerPlaceholder = YES;
+      header.categoryHeader = YES;
+      header.label = collapseKey; // unique, never matches a real lane label
+      header.keyposes = @[];
+      header.locked = NO;
+      [result addObject:header];
+      collapsedRun = [_collapsedCategoryKeys containsObject:collapseKey];
+    } else if (!cat) {
+      collapsedRun = NO;
+    }
+    prevCat = cat;
+    if (cat && collapsedRun)
+      continue;
+    [result addObject:l];
+  }
 }
 
 // Layer keys present among `lanes`, in layerOrder (stack) order, extras last.
@@ -183,55 +232,27 @@
   return f < 0.0 ? 0.0 : (f > hi ? hi : f);
 }
 
-- (NSArray<NSNumber *> *)_groupDividerFlags {
-  NSArray<KKLane *> *lanes = [self _animatableLanes];
-  NSMutableArray<NSNumber *> *flags =
-      [NSMutableArray arrayWithCapacity:lanes.count];
-  NSString *prevCat = nil, *prevLayer = nil;
-  for (KKLane *l in lanes) {
-    NSString *cat = l.categoryKey.length ? l.categoryKey : nil;
-    NSString *layer = l.layerKey.length ? l.layerKey : nil;
-    // A header sits above the first lane of each categorised run, and stays
-    // even when only that one group is shown - so e.g. Amount / Spread / Speed
-    // keep the "Noise" header that gives them meaning. Uncategorised lanes get
-    // no header, so plugins without categories keep the flat layout. A new
-    // LAYER restarts the category run, so each layer redraws its own category
-    // header (e.g. every layer shows its own "Transform" header).
-    BOOL layerStart = layer != nil && ![layer isEqualToString:prevLayer];
-    BOOL start = cat != nil && (layerStart || ![cat isEqualToString:prevCat]);
-    [flags addObject:@(start)];
-    prevCat = cat;
-    prevLayer = layer;
-  }
-  return flags;
-}
-
-// Divider strips + inter-lane gaps that precede lane `upto` (exclusive when
-// negative-sentinel), summed from the group flags. `upto` == n totals them all.
-// (Layer headers are full rows now, not strips, so only category strips count.)
+// Inter-row gaps that precede row `upto`. Layer AND category headers are full
+// rows now (no thin divider strips), so every row below the top carries a plain
+// kRowGap above it; there are no dividers. `upto` == n totals them all. The
+// dividers out-param is retained (always 0) so the height formulas keep their
+// general `gaps*kRowGap + dividers*kGroupDividerH` shape.
 - (void)_dividerCount:(NSInteger *)outDividers
              gapCount:(NSInteger *)outGaps
               through:(NSInteger)upto {
-  NSArray<NSNumber *> *catFlags = [self _groupDividerFlags];
-  NSInteger d = 0, g = 0;
-  for (NSInteger j = 0; j < upto; j++) {
-    BOOL catStart = j < (NSInteger)catFlags.count && catFlags[j].boolValue;
-    NSInteger strips = (catStart ? 1 : 0);
-    if (strips > 0)
-      d += strips; // each header strip (layer + category) is kGroupDividerH tall
-    else if (j > 0)
-      g++; // a non-start row below the top carries a plain gap above it
-  }
+  NSInteger g = 0;
+  for (NSInteger j = 1; j < upto; j++)
+    g++;
   if (outDividers)
-    *outDividers = d;
+    *outDividers = 0;
   if (outGaps)
     *outGaps = g;
 }
 
 // The height of a single LANE row. Layer-header rows take a fixed compact
 // height (kLayerHeaderRowH) and are excluded from the equal split, so the real
-// lanes share whatever is left - a collapsed layer (header only) frees its space
-// for the others instead of holding a full row.
+// lanes share whatever is left - a collapsed layer (header only) frees its
+// space for the others instead of holding a full row.
 - (CGFloat)_rowHeightForCount:(NSInteger)n {
   if (n <= 0)
     return 0.0;

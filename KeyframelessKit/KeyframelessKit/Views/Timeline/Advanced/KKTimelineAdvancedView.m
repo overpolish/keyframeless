@@ -25,6 +25,7 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
     _selection = [NSMutableSet set];
     _selectedGaps = [NSMutableSet set];
     _collapsedLayerKeys = [NSMutableSet set];
+    _collapsedCategoryKeys = [NSMutableSet set];
     _dragOriginTimes = [NSMutableDictionary dictionary];
     _hoverLaneRow = -1;
     _hoverGapAIdx = -1;

@@ -244,11 +244,17 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy, nullable) NSString *layerLabel;
 @property(nonatomic, copy, nullable) NSString *layerSymbol;
 
-/// Transient (never serialized) marker: this lane is a synthetic layer-HEADER
-/// row in the Advanced graph (drawn as the layer's name + collapse glyph, no
-/// keyposes). Set by the view when it injects per-layer header rows; not part
-/// of any plugin's timeline.
+/// Transient (never serialized) marker: this lane is a synthetic HEADER row in
+/// the Advanced graph (drawn as a name + collapse glyph, no keyposes). Set by
+/// the view when it injects per-layer / per-category header rows; not part of
+/// any plugin's timeline. `categoryHeader` (below) discriminates the two kinds.
 @property(nonatomic) BOOL headerPlaceholder;
+
+/// Transient (never serialized) marker: when paired with `headerPlaceholder`,
+/// this header row is a CATEGORY header (drawn from `categoryKey` /
+/// `categorySymbol`, collapses the lanes of that category) rather than a layer
+/// header. Set by the view when it injects per-category header rows.
+@property(nonatomic) BOOL categoryHeader;
 
 /// Transient (never serialized) marker: this lane is READ-ONLY in the timeline
 /// (e.g. it belongs to a locked layer). The graphs draw it dimmed and reject

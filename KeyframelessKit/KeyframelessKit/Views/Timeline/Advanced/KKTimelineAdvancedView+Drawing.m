@@ -56,9 +56,15 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 
 @implementation KKTimelineAdvancedView (Drawing)
 
-- (void)_drawGroupDividerForLane:(KKLane *)lane inStrip:(NSRect)strip {
+// A category HEADER row: icon + localized category name flush-left, plus a
+// trailing collapse chevron at the graph's right edge (so the row doubles as
+// the collapse affordance, mirroring the layer header). Indented under the
+// layer header when the timeline has a layer level, giving a layer > category
+// > lane tree.
+- (void)_drawCategoryHeaderRowForLane:(KKLane *)lane
+                                inRow:(NSRect)row
+                            collapsed:(BOOL)collapsed {
   NSColor *ink = [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
-
   NSString *name = KKLocalizedParamName(lane.categoryKey ?: @"");
   NSDictionary *attrs = @{
     NSFontAttributeName : [NSFont systemFontOfSize:kGroupDividerFontSize
@@ -67,34 +73,40 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     NSKernAttributeName : @0.5,
   };
   NSSize tsz = [name sizeWithAttributes:attrs];
+  CGFloat midY = NSMidY(row);
+  NSRect g = [self _graphRect];
 
-  NSImage *icon = nil;
-  CGFloat iconW = 0, iconH = 0;
+  NSImageSymbolConfiguration *cfg = [[NSImageSymbolConfiguration
+      configurationWithPointSize:kGroupDividerFontSize
+                          weight:NSFontWeightSemibold]
+      configurationByApplyingConfiguration:
+          [NSImageSymbolConfiguration configurationWithHierarchicalColor:ink]];
+
+  CGFloat x = NSMinX(g) + kRowLabelInset +
+              (lane.layerKey.length ? kCategoryHeaderIndent : 0.0);
   if (lane.categorySymbol.length) {
-    NSImageSymbolConfiguration *cfg = [[NSImageSymbolConfiguration
-        configurationWithPointSize:kGroupDividerFontSize
-                            weight:NSFontWeightSemibold]
-        configurationByApplyingConfiguration:
-            [NSImageSymbolConfiguration
-                configurationWithHierarchicalColor:ink]];
-    icon = [[NSImage imageWithSystemSymbolName:lane.categorySymbol
-                      accessibilityDescription:nil]
+    NSImage *icon = [[NSImage imageWithSystemSymbolName:lane.categorySymbol
+                               accessibilityDescription:nil]
         imageWithSymbolConfiguration:cfg];
-    iconW = icon.size.width;
-    iconH = icon.size.height;
-  }
-
-  CGFloat iconGap = icon ? KKPaddingSM : 0.0;
-  CGFloat midY = NSMidY(strip);
-
-  // Left-aligned icon + label flush to the strip's left edge.
-  CGFloat x = NSMinX(strip);
-  if (icon) {
-    [icon drawInRect:NSMakeRect(x, floor(midY - iconH * 0.5), iconW, iconH)];
-    x += iconW + iconGap;
+    if (icon) {
+      CGFloat iconH = icon.size.height;
+      [icon drawInRect:NSMakeRect(x, floor(midY - iconH * 0.5), icon.size.width,
+                                  iconH)];
+      x += icon.size.width + KKPaddingSM;
+    }
   }
   [name drawAtPoint:NSMakePoint(x, floor(midY - tsz.height * 0.5))
       withAttributes:attrs];
+
+  NSString *chev = collapsed ? @"chevron.right" : @"chevron.down";
+  NSImage *chevImg = [[NSImage imageWithSystemSymbolName:chev
+                                accessibilityDescription:nil]
+      imageWithSymbolConfiguration:cfg];
+  if (chevImg) {
+    CGFloat cw = chevImg.size.width, ch = chevImg.size.height;
+    [chevImg drawInRect:NSMakeRect(NSMaxX(g) - kRowLabelInset - cw,
+                                   floor(midY - ch * 0.5), cw, ch)];
+  }
 }
 
 // A layer HEADER row (multi-owner timelines that set `layerKey`/`layerLabel`):
@@ -197,27 +209,25 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   [NSGraphicsContext saveGraphicsState];
   [track addClip];
 
-  NSArray<NSNumber *> *divFlags = [self _groupDividerFlags];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
     NSRect row = [self _rowRectForIndex:i count:lanes.count];
-    // A layer header row draws the layer name + collapse glyph in place of a
-    // lane label/curve.
+    // A header row draws a name + collapse glyph in place of a lane
+    // label/curve - the category header for a categorised run, otherwise the
+    // layer (owner) header.
     if (lane.headerPlaceholder) {
-      [self
-          _drawLayerHeaderRowForLane:lane
-                               inRow:row
-                           collapsed:[_collapsedLayerKeys
-                                         containsObject:lane.layerKey ?: @""]];
+      if (lane.categoryHeader)
+        [self _drawCategoryHeaderRowForLane:lane
+                                      inRow:row
+                                  collapsed:[_collapsedCategoryKeys
+                                                containsObject:lane.label]];
+      else
+        [self _drawLayerHeaderRowForLane:lane
+                                   inRow:row
+                               collapsed:[_collapsedLayerKeys
+                                             containsObject:lane.layerKey
+                                                                ?: @""]];
       continue;
-    }
-    BOOL catStart = i < (NSInteger)divFlags.count && divFlags[i].boolValue;
-    CGFloat stripX = NSMinX(g) + kRowLabelInset;
-    CGFloat stripW = NSMaxX(g) - 2.0 * kRowLabelInset - NSMinX(g);
-    // Category header strip sits directly above the first row of each group.
-    if (catStart) {
-      NSRect strip = NSMakeRect(stripX, NSMaxY(row), stripW, kGroupDividerH);
-      [self _drawGroupDividerForLane:lane inStrip:strip];
     }
     if (i == _hoverLaneRow) {
       // Extend the hover highlight by kPillW/2 on each side so it lines up
