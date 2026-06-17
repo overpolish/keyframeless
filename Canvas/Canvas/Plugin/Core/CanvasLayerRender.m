@@ -117,12 +117,15 @@ static simd_float2 CanvasTransformCorner(float nx, float ny,
 
 // Per-layer forward transform fed to KKTransformVertexShader. Scale, Z-rotation
 // and Position are already baked into the CPU corner verts (in full-IMAGE
-// centered-pixel space); this adds only the X/Y tilt (about the layer centre),
-// a perspective projection (about the image centre), and a final TILE shift
-// that repositions the image-space result into the current render tile (the
-// shift is applied post-perspective as a constant screen offset, so the
-// vanishing point stays at the image centre across tiles). rotX=rotY=0 +
-// shift=0 gives a pure perspective matrix == orthographic at z=0.
+// centered-pixel space); this adds only the X/Y tilt and a perspective
+// projection ABOUT THE LAYER CENTRE (not the image centre), plus a final TILE
+// shift that repositions the image-space result into the current render tile.
+// Centring the perspective on the layer (Tneg -> rotate -> P -> Tpos) keeps a
+// tilted layer's foreshortening LOCKED as it's dragged around: the layer is its
+// own vanishing point, so its appearance doesn't change with screen position
+// (matches Magic Move). Tpos sits AFTER P, so it's a post-divide screen offset
+// (like Tshift) - it never re-introduces a position-dependent foreshortening.
+// rotX=rotY=0 + shift=0 gives a pure perspective matrix == orthographic at z=0.
 // `centerPx` is the layer centre in image-centered-pixel space; W,H the image
 // dims; `tileShift` the image->tile pixel offset.
 static matrix_float4x4 CanvasLayerTiltMatrix(CanvasLayerTransform t,
@@ -159,8 +162,12 @@ static matrix_float4x4 CanvasLayerTiltMatrix(CanvasLayerTransform t,
       simd_matrix(simd_make_float4(1, 0, 0, 0), simd_make_float4(0, 1, 0, 0),
                   simd_make_float4(0, 0, 1, 0),
                   simd_make_float4(centerPx.x, centerPx.y, 0, 1));
-  matrix_float4x4 model = simd_mul(Tpos, simd_mul(Ry, simd_mul(Rx, Tneg)));
-  return simd_mul(PS, model); // Tshift · P · model
+  // Tpos · P · Ry · Rx · Tneg: translate the layer centre to the origin, tilt,
+  // project (perspective now about the layer centre), translate back as a
+  // post-divide screen offset. Tshift then nudges into the render tile.
+  matrix_float4x4 R = simd_mul(Ry, Rx);
+  matrix_float4x4 model = simd_mul(Tpos, simd_mul(P, simd_mul(R, Tneg)));
+  return simd_mul(Tshift, model); // Tshift · Tpos · P · R · Tneg
 }
 
 NSMutableArray<KKBezierPath *> *CanvasReadLayerPaths(id<PROAPIAccessing> api,
