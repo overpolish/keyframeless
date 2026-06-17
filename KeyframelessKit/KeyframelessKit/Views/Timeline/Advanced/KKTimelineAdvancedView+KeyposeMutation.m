@@ -304,7 +304,21 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   BOOL changed = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    // Exact label match, OR (multi-owner) the ACTIVE owner's lane whose plain
+    // label matches. The mini-viewer point handle commits the PLAIN label
+    // ("Position") from the selected owner's timeline, while a merged Advanced
+    // timeline tags lanes "Position\x1f<ownerID>" - so the exact match misses
+    // and the graph didn't update for the active keypose's OSC drag (field
+    // edits pass the tagged label; path-anchor drags persist the whole blob).
+    // layerKey==_activeLayerKey keeps it scoped to one owner. Single-owner
+    // timelines have no tag / active key, so only the exact branch fires.
+    BOOL match = [lanes[i].label isEqualToString:label];
+    if (!match && _activeLayerKey.length && lanes[i].layerKey.length &&
+        [lanes[i].layerKey isEqualToString:_activeLayerKey] &&
+        [KKPlainLaneLabel(lanes[i].label)
+            isEqualToString:KKPlainLaneLabel(label)])
+      match = YES;
+    if (!match)
       continue;
     KKLane *nl = [lanes[i] copy];
     NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];

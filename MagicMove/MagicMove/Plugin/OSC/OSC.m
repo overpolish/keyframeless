@@ -10,13 +10,6 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <simd/simd.h>
 
-// Scale gizmo half-extent as a fraction of the clip's on-screen frame, so the
-// box tracks the clip (scales with viewer zoom) instead of being a fixed screen
-// size. e0 = 0% half-extent, span = the 0->100% growth; >100% sqrt-compresses
-// (see KKScaleGizmo). Same proportion as the mini-viewer box.
-static const double kScaleGizmoE0Frac = 0.12;
-static const double kScaleGizmoSpanFrac = 0.057;
-
 // Shared per-process OSC guide bridge. MRR-safe static singleton (no
 // dispatch_once / autoreleased static); lives for the process so the inspector
 // guide and the OSC share one instance.
@@ -171,14 +164,15 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
       if ([l.label isEqualToString:@"Position"])
         _positionController.templateLane = l;
     _rotationOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
-    _scaleBox = [[KKBoxOSC alloc] initWithAPIManager:apiManager];
-    // Extra grab slack so the compact gizmo's handles stay easy to hit.
-    _scaleBox.hitPadding = 6.0;
+    _scaleControl = [[KKScaleOSC alloc] initWithAPIManager:apiManager
+                                                 laneLabel:@"Scale"];
+    _scaleControl.scaleActivePart = kOSCScalePart;
+    for (KKLane *l in [MagicMovePlugin availableLanes])
+      if ([l.label isEqualToString:@"Scale"])
+        _scaleControl.templateLane = l;
     _anchorPointOSC = [[KKSquarePointOSC alloc] initWithAPIManager:apiManager];
     _anchorPointOSC.clearsOnDraw = NO;
     _anchorSnap = [[KKSnapEngine alloc] init];
-    _scaleHitHandle = -1;
-    _scaleGrabHandle = -1;
   }
   return self;
 }
@@ -292,13 +286,6 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   double h = hypot(cy.x - c0.x, cy.y - c0.y);
   double m = MIN(w, h);
   return (m > 1.0) ? m : 1000.0;
-}
-
-// Gizmo curve params for the current zoom: fractions of the on-screen frame.
-- (void)_scaleGizmoE0:(double *)outE0 span:(double *)outSpan {
-  double frameMin = [self _onScreenFrameMin];
-  *outE0 = frameMin * kScaleGizmoE0Frac;
-  *outSpan = frameMin * kScaleGizmoSpanFrac;
 }
 
 - (CGPoint)_canvasFromObjX:(double)ox y:(double)oy {

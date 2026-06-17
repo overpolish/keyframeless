@@ -40,7 +40,7 @@
   if (_renderMode != KKMiniViewerRenderModeOff) {
     NSSet<NSString *> *scope = [self _scopedLaneLabelsForOpenPopover];
     NSMutableArray<NSNumber *> *kpTimes = [NSMutableArray array];
-    for (KKLane *lane in _timeline.lanes) {
+    for (KKLane *lane in [self _graphTimeline].lanes) {
       if (!lane.enabled)
         continue;
       if (scope && ![scope containsObject:lane.label])
@@ -82,7 +82,7 @@
 - (NSArray<NSNumber *> *)_animatableKPFractions {
   NSSet<NSString *> *scope = [self _scopedLaneLabelsForOpenPopover];
   NSMutableArray<NSNumber *> *kpTimes = [NSMutableArray array];
-  for (KKLane *lane in _timeline.lanes) {
+  for (KKLane *lane in [self _graphTimeline].lanes) {
     if (!lane.enabled)
       continue;
     if (scope && ![scope containsObject:lane.label])
@@ -112,7 +112,7 @@
                            and:(double)b
                          scope:(nullable NSSet<NSString *> *)scope {
   double mid = 0.5 * (a + b);
-  for (KKLane *lane in _timeline.lanes) {
+  for (KKLane *lane in [self _graphTimeline].lanes) {
     if (!lane.enabled)
       continue;
     if (scope && ![scope containsObject:lane.label])

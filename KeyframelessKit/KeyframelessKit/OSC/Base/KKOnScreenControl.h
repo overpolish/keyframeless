@@ -43,6 +43,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Override to return the canvas-space position of the OSC center.
 - (CGPoint)oscPositionAtTime:(CMTime)time;
 
+/// Clip-local fraction (0..1) at `time`, from the effect's start + duration via
+/// FxTimingAPI. 0 when timing is unavailable. Shared by the composable
+/// controls (Position / Scale); the host's own OSC has its own
+/// `_fractionAtTime`.
+- (double)fractionAtTime:(CMTime)time;
+
 /// Standard distance-based hit test using hitRadius.
 /// Override for non-circular hit testing.
 - (BOOL)hitTestAtMousePositionX:(double)positionX

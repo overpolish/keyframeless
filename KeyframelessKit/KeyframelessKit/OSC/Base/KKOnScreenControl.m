@@ -70,6 +70,22 @@
   return CGPointZero;
 }
 
+- (double)fractionAtTime:(CMTime)time {
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  if (!timingAPI)
+    return 0.0;
+  CMTime effectStart = kCMTimeZero, effectDur = kCMTimeZero;
+  [timingAPI startTimeForEffect:&effectStart];
+  [timingAPI durationTimeForEffect:&effectDur];
+  double durSec = CMTimeGetSeconds(effectDur);
+  if (durSec <= 0)
+    return 0.0;
+  return MAX(0.0,
+             MIN(1.0, (CMTimeGetSeconds(time) - CMTimeGetSeconds(effectStart)) /
+                          durSec));
+}
+
 - (BOOL)hitTestAtMousePositionX:(double)positionX
                       positionY:(double)positionY
                          atTime:(CMTime)time {

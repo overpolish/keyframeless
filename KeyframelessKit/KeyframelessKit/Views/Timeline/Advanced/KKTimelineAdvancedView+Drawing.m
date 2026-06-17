@@ -129,9 +129,10 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSString *base = lane.layerSymbol.length ? lane.layerSymbol : @"square.stack";
   NSString *symbol = collapsed ? [base stringByAppendingString:@".fill"] : base;
   NSImage *icon =
-      [[NSImage imageWithSystemSymbolName:symbol accessibilityDescription:nil]
-          imageWithSymbolConfiguration:cfg]
-          ?: [[NSImage imageWithSystemSymbolName:base accessibilityDescription:nil]
+      [[NSImage imageWithSystemSymbolName:symbol
+                 accessibilityDescription:nil] imageWithSymbolConfiguration:cfg]
+          ?: [[NSImage imageWithSystemSymbolName:base
+                        accessibilityDescription:nil]
                  imageWithSymbolConfiguration:cfg];
   CGFloat x = NSMinX(g) + kRowLabelInset;
   if (icon) {
@@ -140,14 +141,28 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
                                 iconH)];
     x += icon.size.width + KKPaddingSM;
   }
+  // Locked layer: a lock glyph between the layer icon and its name marks the
+  // whole layer read-only (the lanes below are washed instead of overlaid
+  // here).
+  if (lane.locked) {
+    NSImage *lockImg = [[NSImage imageWithSystemSymbolName:@"lock.fill"
+                                  accessibilityDescription:nil]
+        imageWithSymbolConfiguration:cfg];
+    if (lockImg) {
+      CGFloat lh = lockImg.size.height;
+      [lockImg drawInRect:NSMakeRect(x, floor(midY - lh * 0.5),
+                                     lockImg.size.width, lh)];
+      x += lockImg.size.width + KKPaddingSM;
+    }
+  }
   [name drawAtPoint:NSMakePoint(x, floor(midY - tsz.height * 0.5))
       withAttributes:attrs];
 
   // Trailing chevron echoes the collapse state at the graph's right edge.
   NSString *chev = collapsed ? @"chevron.right" : @"chevron.down";
-  NSImage *chevImg =
-      [[NSImage imageWithSystemSymbolName:chev accessibilityDescription:nil]
-          imageWithSymbolConfiguration:cfg];
+  NSImage *chevImg = [[NSImage imageWithSystemSymbolName:chev
+                                accessibilityDescription:nil]
+      imageWithSymbolConfiguration:cfg];
   if (chevImg) {
     CGFloat cw = chevImg.size.width, ch = chevImg.size.height;
     [chevImg drawInRect:NSMakeRect(NSMaxX(g) - kRowLabelInset - cw,
@@ -189,10 +204,11 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     // A layer header row draws the layer name + collapse glyph in place of a
     // lane label/curve.
     if (lane.headerPlaceholder) {
-      [self _drawLayerHeaderRowForLane:lane
-                                 inRow:row
-                             collapsed:[_collapsedLayerKeys
-                                           containsObject:lane.layerKey ?: @""]];
+      [self
+          _drawLayerHeaderRowForLane:lane
+                               inRow:row
+                           collapsed:[_collapsedLayerKeys
+                                         containsObject:lane.layerKey ?: @""]];
       continue;
     }
     BOOL catStart = i < (NSInteger)divFlags.count && divFlags[i].boolValue;
@@ -239,6 +255,21 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     [self _drawLane:lane inRow:row tracks:tracks];
   }
   [NSGraphicsContext restoreGraphicsState]; // curve clip
+
+  // Locked layers are read-only: wash their rows (labels, header, curve, pills)
+  // toward the background so they read as disabled but still visible.
+  NSColor *lockWash =
+      [[NSColor inspectorBackground] colorWithAlphaComponent:0.6];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    // Lane rows wash to read as disabled; the layer HEADER row is left clean
+    // and instead shows a lock glyph (drawn in _drawLayerHeaderRowForLane:).
+    if (!lanes[i].locked || lanes[i].headerPlaceholder)
+      continue;
+    NSRect row = [self _rowRectForIndex:i count:lanes.count];
+    NSRect wash = NSInsetRect(row, -kPillW * 0.5, 0);
+    [lockWash setFill];
+    NSRectFillUsingOperation(wash, NSCompositingOperationSourceOver);
+  }
   [NSGraphicsContext restoreGraphicsState]; // outer rows clip
 
   // Fade shadows over the rows go under the ruler / playhead so those stay

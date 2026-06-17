@@ -94,6 +94,7 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSInteger _pressKPIdx;
   NSPoint _pressPoint;
   BOOL _dragActive;
+  BOOL _pressLocked; // press is on a locked lane: opens read-only, never drags
   double _dragSnapFrac;
 
   NSString *_topLaneLabel;

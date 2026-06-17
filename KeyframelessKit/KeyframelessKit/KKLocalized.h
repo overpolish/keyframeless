@@ -24,6 +24,14 @@ FOUNDATION_EXPORT NSBundle *KKLocalizationBundle(void);
 /// sharing keep working.
 FOUNDATION_EXPORT NSString *KKLocalizedParamName(NSString *englishName);
 
+/// The raw plain lane label of a (possibly owner-tagged) label: the substring
+/// before the U+001F separator a merged multi-owner timeline appends (e.g.
+/// "Scale\x1f<layerID>" -> "Scale"), or the label unchanged when untagged.
+/// Unlike KKLocalizedParamName this does NOT localize - use it for matching a
+/// plain label against tagged lanes (e.g. routing a mini-viewer handle commit
+/// to the active owner's lane).
+FOUNDATION_EXPORT NSString *KKPlainLaneLabel(NSString *label);
+
 /// Clamp a user-typed layer name to 15 characters, appending an ellipsis when
 /// it overflows, so layer pills/labels (filter bar, Animated dropdown) stay
 /// compact. Names at or under the limit are returned unchanged. Display only -

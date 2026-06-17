@@ -84,22 +84,6 @@
   return v.count >= 2 ? v : @[ @0.5, @0.5 ];
 }
 
-- (double)fractionAtTime:(CMTime)time {
-  id<FxTimingAPI_v4> timingAPI =
-      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  if (!timingAPI)
-    return 0.0;
-  CMTime effectStart = kCMTimeZero, effectDur = kCMTimeZero;
-  [timingAPI startTimeForEffect:&effectStart];
-  [timingAPI durationTimeForEffect:&effectDur];
-  double durSec = CMTimeGetSeconds(effectDur);
-  if (durSec <= 0)
-    return 0.0;
-  return MAX(0.0,
-             MIN(1.0, (CMTimeGetSeconds(time) - CMTimeGetSeconds(effectStart)) /
-                          durSec));
-}
-
 - (CGPoint)oscPositionAtTime:(CMTime)time {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
@@ -604,8 +588,11 @@
     tl.lanes = lanes;
   }
 
-  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                           kKKParamTimelineData);
+  if (self.onTimelinePersist)
+    self.onTimelinePersist(tl);
+  else
+    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                             kKKParamTimelineData);
   [actionAPI endAction:self];
   if (forceUpdate)
     *forceUpdate = YES;
@@ -697,9 +684,13 @@
     cur = lane.keyposes[KKLaneNearestKeyposeIndex(lane, frac)].spatialSmooth;
   KKTimeline *tl =
       KKTimelineSettingSpatialSmooth(snap, self.laneLabel, frac, !cur);
-  if (tl)
-    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                             kKKParamTimelineData);
+  if (tl) {
+    if (self.onTimelinePersist)
+      self.onTimelinePersist(tl);
+    else
+      KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                               kKKParamTimelineData);
+  }
   [actionAPI endAction:self];
 }
 
@@ -797,8 +788,11 @@
   posLane.keyposes = out;
   lanes[laneIdx] = posLane;
   tl.lanes = lanes;
-  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                           kKKParamTimelineData);
+  if (self.onTimelinePersist)
+    self.onTimelinePersist(tl);
+  else
+    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                             kKKParamTimelineData);
   [actionAPI endAction:self];
   if (forceUpdate)
     *forceUpdate = YES;

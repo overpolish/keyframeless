@@ -113,6 +113,8 @@
 				Plugin/Inspector/CanvasLayerRowViews.m,
 				Plugin/Inspector/CanvasLayerTree.m,
 				Plugin/Inspector/CanvasMiniViewerRenderer.m,
+				"Plugin/Inspector/CanvasMiniViewerRenderer+Interaction.m",
+				Plugin/OSC/CanvasOSC.m,
 				Plugin/main.m,
 				"Wrapper Application/Info.plist",
 			);

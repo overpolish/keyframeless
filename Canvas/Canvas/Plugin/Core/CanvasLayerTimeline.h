@@ -12,8 +12,9 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// The layer the inspector edit surfaces currently act on. `selectedLayerID`
-/// picks it (matched by KKBezierPath.layerID); falls back to the first non-group
-/// (topmost) layer when nil/unmatched. nil when there are no editable layers.
+/// picks it (matched by KKBezierPath.layerID); falls back to the first
+/// non-group (topmost) layer when nil/unmatched. nil when there are no editable
+/// layers.
 KKBezierPath *_Nullable CanvasSelectedLayerForPaths(
     NSArray<KKBezierPath *> *paths, NSString *_Nullable selectedLayerID);
 
@@ -34,8 +35,8 @@ void CanvasApplyTimelineToPath(KKTimeline *timeline,
 /// the whole stack, each tagged label "<short>\x1f<layerID>" + layerKey +
 /// layerLabel + layerSymbol (folder for groups), ordered by layer-stack order
 /// then `templates` (parameter) order. Fed to KKTimelineLanesView.graphTimeline
-/// so both graphs show + edit every layer, independent of selection. Layers with
-/// nothing animated contribute no rows.
+/// so both graphs show + edit every layer, independent of selection. Layers
+/// with nothing animated contribute no rows.
 KKTimeline *CanvasMergedTimeline(NSArray<KKBezierPath *> *paths,
                                  NSArray<KKLane *> *templates);
 
@@ -57,5 +58,15 @@ BOOL CanvasLayerHasConstant(KKBezierPath *_Nullable path,
 /// fully animated.
 BOOL CanvasAnyLayerHasConstant(NSArray<KKBezierPath *> *paths,
                                NSArray<KKLane *> *templates);
+
+/// Process-wide snapshot of the current layer blob (base64), published by the
+/// inspector and read by the viewer OSC. The OSC can WRITE custom params (its
+/// setting API resolves) but gets an EMPTY READ of kParamLayerData (its
+/// retrieval API is limited in the OSC context), so it can't load the layer
+/// stack to splice its edit into - this static carries it across, mirroring
+/// KKProcessTimelineSnapshot. Same process (the snapshot already crosses
+/// inspector<->OSC), so a plain static is enough.
+void CanvasSetLayerBlobSnapshot(NSString *_Nullable b64);
+NSString *_Nullable CanvasLayerBlobSnapshot(void);
 
 NS_ASSUME_NONNULL_END

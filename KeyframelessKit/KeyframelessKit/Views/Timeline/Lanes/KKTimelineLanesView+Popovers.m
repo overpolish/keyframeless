@@ -131,20 +131,21 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
 
   _openManageView = manageView;
 
-  NSPopover *pop = [self _showPopoverWithContent:manageView
-                                        fromView:anchorView
-                                         onClose:^{
-                                           __strong typeof(weak) s = weak;
-                                           if (!s)
-                                             return;
-                                           s->_openManageView = nil;
-                                           [NSNotificationCenter.defaultCenter
-                                               postNotificationName:
-                                                   KKStaticValuesPopoverDidCloseNotification
-                                                             object:s];
-                                           if (s.onManagePopoverClosed)
-                                             s.onManagePopoverClosed();
-                                         }];
+  NSPopover *pop =
+      [self _showPopoverWithContent:manageView
+                           fromView:anchorView
+                            onClose:^{
+                              __strong typeof(weak) s = weak;
+                              if (!s)
+                                return;
+                              s->_openManageView = nil;
+                              [NSNotificationCenter.defaultCenter
+                                  postNotificationName:
+                                      KKStaticValuesPopoverDidCloseNotification
+                                                object:s];
+                              if (s.onManagePopoverClosed)
+                                s.onManagePopoverClosed();
+                            }];
   _openManagePopover = pop;
   manageView.popover = pop;
 
@@ -334,6 +335,14 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   // (KKMiniViewerView inside an NSScrollView - the proven mechanism). These
   // monitors only keep the outside-scroll-dismiss behavior, and must NOT
   // swallow or close when the pointer is over the canvas.
+  // A scroll only dismisses when it lands within the HOST app (FCP). A scroll
+  // while another app is focused reaches the global monitor too; without this
+  // guard any such scroll closed the popover.
+  BOOL (^scrollInHostApp)(void) = ^BOOL {
+    if (hostPID == 0)
+      return YES; // couldn't resolve host - keep the old close-on-scroll
+    return KKWindowOwnerPIDAtScreenPoint(NSEvent.mouseLocation) == hostPID;
+  };
   localMon = [NSEvent
       addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                    handler:^NSEvent *(NSEvent *e) {
@@ -345,6 +354,8 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                              NSEvent.mouseLocation))
                                        return e;
                                      if (contentSuppressesDismiss())
+                                       return e;
+                                     if (!scrollInHostApp())
                                        return e;
                                      if (e.window != popoverWindow)
                                        [weakPopover close];
@@ -360,6 +371,8 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                               NSEvent.mouseLocation))
                                         return;
                                       if (contentSuppressesDismiss())
+                                        return;
+                                      if (!scrollInHostApp())
                                         return;
                                       [weakPopover close];
                                     }];
@@ -452,9 +465,9 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                      // edited: let the arrows move the text
                                      // cursor rather than navigating. Also let
                                      // them through when a field editor is
-                                     // active in the key window (e.g. renaming a
-                                     // layer in the companion panel, a separate
-                                     // window from the popover).
+                                     // active in the key window (e.g. renaming
+                                     // a layer in the companion panel, a
+                                     // separate window from the popover).
                                      if ([popoverWindow.firstResponder
                                              isKindOfClass:[NSText class]] ||
                                          [NSApp.keyWindow.firstResponder

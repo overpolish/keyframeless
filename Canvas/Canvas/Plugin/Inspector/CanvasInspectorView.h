@@ -16,6 +16,10 @@ NS_ASSUME_NONNULL_BEGIN
 @interface CanvasInspectorView : KKTimelineInspectorView
 /// Re-read the layer blob and refresh the Layers panel (on undo/redo).
 - (void)reloadLayerList;
+/// Sync the popover mini-viewer handles to the OSC visibility (global toggle +
+/// per-element hidden set, from per-instance state) combined with the selected
+/// layer's lock. Call after the plugin applies/refreshes OSC visibility.
+- (void)syncMiniHandleVisibility;
 /// The host-recognized object (plugin) to open parameter actions with, so the
 /// Layers panel's writes persist. Set by the plugin after creating the view.
 - (void)setLayerParamActionTarget:(nullable id)target;

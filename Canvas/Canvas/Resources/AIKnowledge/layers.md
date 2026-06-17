@@ -100,8 +100,39 @@ source clip shows through wherever no layer covers it. The inspector's
 mini-viewer preview composites the same layers the same way, so it matches the
 main viewer.
 
+## Per-layer transform (Scale + Position)
+
+Each layer animates its own **Scale** and **Position** over the clip, through
+the shared Keyframeless timeline (Basic and Advanced timing, easing, motion
+blur). The timeline + value popovers edit whichever layer is selected in the
+Layers panel; the on-screen controls edit it directly:
+
+- **Position** - a draggable handle plus a curved motion path once it has two or
+  more keyposes. Stored normalised (0.5, 0.5 = centred); shown in pixels.
+- **Scale** - a transform bounding box (corners + edge handles, a "X% x Y%"
+  readout). Percentages, aspect-linked by default, floored at 0%.
+
+Both controls appear in the FCP viewer **and** the inspector mini-viewer (same
+handles + keyboard modifiers in each), scoped to the selected layer. Their full
+interaction (drag, snap, aspect-lock, fine mode, the motion path) is the shared
+behaviour documented in the on-screen-control reference.
+
+### Showing and hiding the controls
+
+The inspector's **On-Screen Controls** toggle and its per-control pills
+(Position, Path, Scale) drive visibility. Canvas defaults the global toggle
+**on** but the Transform controls **hidden**, so the viewer stays clean;
+**Option-hold** reveals hidden controls as dimmed ghosts and **Option-click**
+toggles one. A **locked** layer hides its controls.
+
+## Motion blur
+
+The toolbar's motion-blur toggle applies the shared sample-accumulate blur to
+the layer animation (and the underlying content), the same engine the other
+Keyframeless plugins use.
+
 ## Pending re-add (tracked during the v3 rebuild)
 
-- Per-layer transform (scale / position / rotation) and on-canvas OSC.
+- Per-layer **rotation** (lane + on-canvas gizmo).
 - Per-layer opacity in the render.
 - Shape (stroke / fill) layers and SVG import.

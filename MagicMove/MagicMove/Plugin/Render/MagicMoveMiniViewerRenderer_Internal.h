@@ -22,14 +22,6 @@ KKLane *_Nullable MMMiniLaneNamed(KKTimeline *timeline, NSString *label);
   id<MTLRenderPipelineState> _pipeline;
   id<MTLDevice> _pipelineDevice;
   MTLPixelFormat _pipelineFormat;
-  // Scale box drag (mirrors the viewer OSC's absolute + Cmd-fine model).
-  BOOL _scaleGrabbed;
-  NSInteger _scaleGrabHandle; // 0-7
-  CGPoint _scalePressCenter;
-  double _scalePressSclX;
-  double _scalePressSclY;
-  CGPoint _scaleEffCursor; // effective cursor (starts at the grabbed handle)
-  CGPoint _scaleLastCursor;
   // Anchor-square drag: delta-based like Position (snap off unless Cmd).
   BOOL _anchorGrabbed;
   double _anchorGrabValX;
@@ -40,6 +32,8 @@ KKLane *_Nullable MMMiniLaneNamed(KKTimeline *timeline, NSString *label);
 // Reusable Position + motion-path controller (owns the shared snap engine,
 // which the anchor drag and snap-guide reporting also read).
 @property(nonatomic, strong) KKPositionMiniController *positionMini;
+// Reusable Scale transform-box controller (geometry + hit-test + drag).
+@property(nonatomic, strong) KKScaleMiniController *scaleMini;
 // Geometry helper defined in the primary @implementation (the core .m); called
 // across the Interaction category.
 - (CGPoint)_handlePointForContentRect:(CGRect)cr

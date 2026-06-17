@@ -16,7 +16,6 @@ KKLane *_laneNamed(NSString *label) {
 
 KKLane *_positionLane(void) { return _laneNamed(@"Position"); }
 KKLane *_rotationLane(void) { return _laneNamed(@"Rotation"); }
-KKLane *_scaleLane(void) { return _laneNamed(@"Scale"); }
 KKLane *_anchorLane(void) { return _laneNamed(@"Anchor"); }
 
 BOOL _positionVisibleAtFraction(double frac) {
@@ -25,10 +24,6 @@ BOOL _positionVisibleAtFraction(double frac) {
 }
 BOOL _rotationVisibleAtFraction(double frac) {
   return KKLaneVisibleAtFraction(_rotationLane(), frac,
-                                 KKProcessFrameDurationSeconds());
-}
-BOOL _scaleVisibleAtFraction(double frac) {
-  return KKLaneVisibleAtFraction(_scaleLane(), frac,
                                  KKProcessFrameDurationSeconds());
 }
 BOOL _anchorVisibleAtFraction(double frac) {
@@ -76,39 +71,4 @@ NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
   while (out.count < 3)
     [out addObject:@0.0];
   return out;
-}
-
-// (scaleX, scaleY) in PERCENT (100 = identity). Floored at 0 so overshoot
-// easing never shows the box / readout a negative (flipped) scale.
-NSArray<NSNumber *> *_scaleValuesAtFraction(double frac) {
-  KKLane *lane = _scaleLane();
-  if (!lane)
-    return @[ @100.0, @100.0 ];
-  NSArray<NSNumber *> *v =
-      KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
-  NSMutableArray<NSNumber *> *out = [NSMutableArray arrayWithArray:v ?: @[]];
-  while (out.count < 2)
-    [out addObject:@100.0];
-  out[0] = @(fmax(0.0, out[0].doubleValue));
-  out[1] = @(fmax(0.0, out[1].doubleValue));
-  return out;
-}
-
-// Canvas positions of the 8 scale-box handles for a given centre + scale
-// percents: out[0..3] corners (BL, BR, TR, TL), out[4..7] edge midpoints
-// (bottom, right, top, left). Shared by draw + hit-test so they agree.
-void MMScaleHandlePositions(CGPoint center, double sclX, double sclY, double e0,
-                            double span, CGPoint out[8]) {
-  double halfW = KKScaleGizmoExtentForPercent(sclX, e0, span);
-  double halfH = KKScaleGizmoExtentForPercent(sclY, e0, span);
-  double l = center.x - halfW, r = center.x + halfW;
-  double b = center.y - halfH, t = center.y + halfH;
-  out[0] = CGPointMake(l, b);
-  out[1] = CGPointMake(r, b);
-  out[2] = CGPointMake(r, t);
-  out[3] = CGPointMake(l, t);
-  out[4] = CGPointMake(center.x, b);
-  out[5] = CGPointMake(r, center.y);
-  out[6] = CGPointMake(center.x, t);
-  out[7] = CGPointMake(l, center.y);
 }

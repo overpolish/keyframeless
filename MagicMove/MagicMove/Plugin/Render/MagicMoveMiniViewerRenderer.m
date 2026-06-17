@@ -38,6 +38,8 @@ NSString *MagicMoveMiniViewerRequestPathForUUID(NSString *uuid) {
         [[KKPositionMiniController alloc] initWithRenderer:self
                                                  laneLabel:@"Position"
                                                  pathLabel:@"Path"];
+    _scaleMini = [[KKScaleMiniController alloc] initWithRenderer:self
+                                                       laneLabel:@"Scale"];
   }
   return self;
 }
@@ -248,6 +250,13 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   if ([label isEqualToString:@"Rotation"])
     return KKLaneValueTypeAngle;
   return [super valueTypeForLabel:label];
+}
+
+- (KKLane *)templateLaneForLabel:(NSString *)label {
+  for (KKLane *l in self.laneTemplates)
+    if ([l.label isEqualToString:label])
+      return l;
+  return [super templateLaneForLabel:label];
 }
 
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {

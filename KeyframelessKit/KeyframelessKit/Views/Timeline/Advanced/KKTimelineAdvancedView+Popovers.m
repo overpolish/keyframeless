@@ -57,7 +57,8 @@
 
   // The keypose popover scopes to this lane's layer (multi-owner timelines).
   // Tell the host so it highlights that layer in its layer list.
-  if (lane.layerKey.length && ![lane.layerKey isEqualToString:_activeLayerKey]) {
+  if (lane.layerKey.length &&
+      ![lane.layerKey isEqualToString:_activeLayerKey]) {
     _activeLayerKey = [lane.layerKey copy];
     if (self.onKeyposeLayerActivated)
       self.onKeyposeLayerActivated(_activeLayerKey);
@@ -150,6 +151,7 @@
     // raw 0.5 instead of pixels (Constants copies it, so it worked there).
     display.componentsScaleWithMedia =
         tmpl ? tmpl.componentsScaleWithMedia : l.componentsScaleWithMedia;
+    display.locked = l.locked; // locked layer -> read-only value row
     [display kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     KKKeyPose *displayKp = [KKKeyPose keyposeAtTime:0.0
                                              values:vals ?: @[ @0.0 ]];

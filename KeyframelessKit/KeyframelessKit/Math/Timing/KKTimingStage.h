@@ -250,6 +250,11 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// of any plugin's timeline.
 @property(nonatomic) BOOL headerPlaceholder;
 
+/// Transient (never serialized) marker: this lane is READ-ONLY in the timeline
+/// (e.g. it belongs to a locked layer). The graphs draw it dimmed and reject
+/// interaction; set by a multi-owner host when building its merged timeline.
+@property(nonatomic) BOOL locked;
+
 /// When NO the property can't be animated: it's left out of the Animated
 /// dropdown and its "make animatable" button is hidden in Constants, so it
 /// stays a value-only param (e.g. a noise seed). Default YES. Build-time

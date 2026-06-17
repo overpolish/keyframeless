@@ -41,10 +41,10 @@ enum {
 /// Canvas-space corners of the clip's frame (OBJECT (0,0)/(1,1) -> CANVAS),
 /// used by both guide-bridge feeds. NO if the OSC API is unavailable.
 - (BOOL)_guideCanvasTopRight:(CGPoint *)outTR bottomLeft:(CGPoint *)outBL;
-/// Scale transform-box gizmo: the shared KKBoxOSC (border + 8 corner/edge
-/// handles + a "X% x Y%" readout). Sized via KKScaleGizmo from the Scale lane,
-/// centred on Position, drawn outside the rotation rings.
-@property(nonatomic, retain) KKBoxOSC *scaleBox;
+/// Scale transform-box gizmo: the shared kit KKScaleOSC (border + 8 corner/edge
+/// handles + "X% x Y%" readout, the gizmo sizing, drag math and visibility
+/// gating). Centred on Position each tick, drawn outside the rotation rings.
+@property(nonatomic, retain) KKScaleOSC *scaleControl;
 /// Anchor-point pivot: a draggable square at the clip's rotation/scale pivot
 /// (Position + Anchor offset). Snaps to the clip's center / corners / edges /
 /// thirds unless Cmd is held. anchorGrabVal + anchorPressObject give it the
@@ -54,28 +54,11 @@ enum {
 @property(nonatomic) BOOL anchorHovered;
 // YES while we've forced the move cursor over a draggable point (anchor /
 // position / path); reset to the arrow when the pointer leaves them. The scale
-// box self-manages its resize cursor (KKBoxOSC), rotation has none yet.
+// box self-manages its resize cursor (KKScaleOSC/KKBoxOSC), rotation none yet.
 @property(nonatomic) BOOL pointCursorSet;
 @property(nonatomic) double anchorGrabValX;
 @property(nonatomic) double anchorGrabValY;
 @property(nonatomic) simd_float2 anchorPressObject;
-/// Which scale handle (0-7) the hit-test last landed on, and the one currently
-/// grabbed for a drag. -1 = none.
-@property(nonatomic) NSInteger scaleHitHandle;
-@property(nonatomic) NSInteger scaleGrabHandle;
-/// Press state captured at scale mouseDown: the box centre (= Position) and the
-/// scale percents, so the drag preserves ratio / inverts the gizmo curve from a
-/// stable reference rather than tick-to-tick.
-@property(nonatomic) CGPoint scalePressCenter;
-@property(nonatomic) double scalePressSclX;
-@property(nonatomic) double scalePressSclY;
-/// Absolute drag state: the "effective" cursor canvas point that drives the
-/// value (initialised to the grabbed handle so there is no press snap, then
-/// moved by the raw cursor delta - scaled down while Cmd-fine is held), plus
-/// the previous raw cursor for that per-tick delta. Written values round to
-/// integers.
-@property(nonatomic) CGPoint scaleEffCursor;
-@property(nonatomic) CGPoint scaleLastCursor;
 @property(nonatomic)
     CGPoint rotPressCanvas;            // canvas pixel where rot drag began
 @property(nonatomic) double rotPressX; // rotation values (rad) at press
@@ -99,7 +82,9 @@ enum {
 - (CGPoint)_anchorCanvasAtFraction:(double)frac;
 - (BOOL)_configureRotationRingsAtFraction:(double)frac dragging:(BOOL)dragging;
 - (void)_syncRotationColorsFromLane;
-- (void)_scaleGizmoE0:(double *)outE0 span:(double *)outSpan;
+/// On-screen frame min side (canvas units), the reference dimension the scale
+/// gizmo sizes against. Fed to `scaleControl.frameMin` each tick.
+- (double)_onScreenFrameMin;
 @end
 
 @interface MagicMoveOSC (Drawing)

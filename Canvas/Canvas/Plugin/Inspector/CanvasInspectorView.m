@@ -7,6 +7,7 @@
 #import "CanvasLayerListController.h"
 #import "CanvasLayerTimeline.h"
 #import "CanvasMiniViewerRenderer.h"
+#import <KeyframelessKit/KKBezierPath.h>
 
 @implementation CanvasInspectorView {
   CanvasMiniViewerRenderer *_miniViewerRenderer;
@@ -18,6 +19,9 @@
   // re-feed and don't reset the in-progress edit.
   NSString *_laneStructureSignature;
   NSString *_selectedLayerID; // layer the inspector edits (nil = topmost)
+  BOOL _dragging;             // a graph keypose drag is in progress
+  id<PROAPIAccessing>
+      _apiManager; // for per-instance OSC-visibility state reads
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager
@@ -33,13 +37,27 @@
                     availableLanes:availableLanes
                           timeline:timeline];
   if (self) {
+    _apiManager = apiManager;
     _availableLanes = [availableLanes copy];
     _laneStructureSignature = [self _laneSignatureForTimeline:timeline];
     _miniViewerRenderer = [[CanvasMiniViewerRenderer alloc] init];
     _miniViewerRenderer.timeline = timeline;
-    // No on-screen controls yet (increment 1): the preview is a clean
-    // passthrough frame with no handles drawn or hit-tested.
-    _miniViewerRenderer.handlesHidden = YES;
+    _miniViewerRenderer.laneTemplates = availableLanes;
+    // Cold-boot seed for the viewer Position OSC (it reads the snapshot, not
+    // the param). applyTimeline republishes on selection / edits.
+    KKSetProcessTimelineSnapshot(timeline);
+    // Position handle + motion-path overlay for the selected layer (the popover
+    // mini edits that layer's Position lane). Motion-path / smooth-toggle edits
+    // persist the whole layer timeline through onTimelineMutated (read at call
+    // time - it's set after init in Plugin+CustomUI); a plain Position-handle
+    // drag persists through the popover's own keypose write.
+    _miniViewerRenderer.handlesHidden = NO;
+    __weak typeof(self) weakInit = self;
+    _miniViewerRenderer.onTimelinePersist = ^(KKTimeline *tl) {
+      typeof(self) s = weakInit;
+      if (s.onTimelineMutated)
+        s.onTimelineMutated(tl);
+    };
     self.miniViewerDelegate = _miniViewerRenderer;
     self.miniViewerDescriptorPath = CanvasMiniViewerDescriptorPath;
     self.miniViewerRequestPath = CanvasMiniViewerRequestPath;
@@ -87,6 +105,12 @@
   KKTimeline *layerTL = CanvasLayerTimelineForPath(sel, _availableLanes);
   _laneStructureSignature = [self _laneSignatureForTimeline:layerTL];
   [self applyTimeline:layerTL];
+  // The mini composites the live (popover) timeline for this layer, so its
+  // Position handle previews before the edit persists. Use the RESOLVED layer
+  // id (nil _selectedLayerID = topmost) so the override matches a real layer.
+  _miniViewerRenderer.selectedLayerID = sel.layerID;
+  // Mini handles follow OSC visibility + this layer's lock.
+  [self syncMiniHandleVisibility];
   _layerListController.selectedLayerID = _selectedLayerID;
   // Re-point an already-open keypose popover at this layer FIRST: retarget
   // guards against a no-op when the graph's active layer already equals the new
@@ -142,6 +166,8 @@
   }
   self.basicLanesView.dropdownLayerTitles = titles;
   KKBezierPath *sel = CanvasSelectedLayerForPaths(paths, _selectedLayerID);
+  _miniViewerRenderer.selectedLayerID = sel.layerID;
+  [self syncMiniHandleVisibility]; // OSC visibility + lock
   _layerListController.selectedLayerID = sel.layerID;
 }
 
@@ -154,12 +180,73 @@
 // next published source frame (no explicit redraw needed - editing a layer
 // re-renders the clip).
 - (void)_syncLayersToRenderer {
-  _miniViewerRenderer.layers = [_layerListController currentLayerPaths];
+  NSArray<KKBezierPath *> *paths = [_layerListController currentLayerPaths];
+  _miniViewerRenderer.layers = paths;
+  // Publish the blob for the viewer OSC's write path (it can't read
+  // kParamLayerData itself - see CanvasLayerBlobSnapshot).
+  NSData *blob = [KKBezierPath blobFromPaths:paths];
+  CanvasSetLayerBlobSnapshot(blob ? [blob base64EncodedStringWithOptions:0]
+                                  : nil);
+}
+
+// Show the inspector's OSC-visibility row (the global "show controls" toggle +
+// the Position/Path pills). The base defaults NO; Canvas has a viewer Transform
+// OSC, so opt in (matches MagicMove/Rounded).
+- (BOOL)showsOSCVisibilityRow {
+  return YES;
+}
+
+// The popover mini handles follow the SAME OSC visibility as the viewer OSC
+// (global toggle + per-element hidden set, read from per-instance state),
+// plus the selected layer's lock (locked => no handles). Canvas owns this so it
+// can OR in lock without fighting the kit's async master refresh; the inspector
+// toggle/pills write the instance state (nil renderer in kkWire/kkRefresh), and
+// this pushes it onto the mini renderer.
+- (void)syncMiniHandleVisibility {
+  KKPluginInstanceState *st = KKInstanceStateForAPI(_apiManager);
+  BOOL master = st ? st.oscMasterVisible : YES;
+  _miniViewerRenderer.hiddenHandleLabels = st.hiddenOSCElements ?: [NSSet set];
+  KKBezierPath *sel = CanvasSelectedLayerForPaths(
+      [_layerListController currentLayerPaths], _selectedLayerID);
+  _miniViewerRenderer.handlesHidden = !master || sel.locked;
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {
   [super applyTimeline:timeline];
   _miniViewerRenderer.timeline = timeline;
+  // Publish the SELECTED layer's timeline as the process snapshot so the viewer
+  // Position OSC (same process) reads this layer. Its lanes carry layerKey, so
+  // an OSC drag knows which layer's animationJSON to write. (drawOSC can't read
+  // the param - FxParameterRetrievalAPI is nil there - so the snapshot is its
+  // only source.)
+  KKSetProcessTimelineSnapshot(timeline);
+}
+
+// Track a live keypose drag so reloadLayerList knows the per-frame write echoes
+// from one (which it must not let reset the in-progress edit) apart from a real
+// external change like cmd-Z (which must refresh the rendered popover + mini).
+// The host sets onDragBegin/End for undo grouping; we wrap to also flip the
+// flag.
+- (void)setOnDragBegin:(void (^)(void))onDragBegin {
+  __weak typeof(self) weak = self;
+  [super setOnDragBegin:^{
+    typeof(self) s = weak;
+    if (s)
+      s->_dragging = YES;
+    if (onDragBegin)
+      onDragBegin();
+  }];
+}
+
+- (void)setOnDragEnd:(void (^)(void))onDragEnd {
+  __weak typeof(self) weak = self;
+  [super setOnDragEnd:^{
+    typeof(self) s = weak;
+    if (s)
+      s->_dragging = NO;
+    if (onDragEnd)
+      onDragEnd();
+  }];
 }
 
 - (void)reloadLayerList {
@@ -180,20 +267,30 @@
   // animated lane).
   [self _feedGraph];
   NSString *sig = [self _laneSignatureForTimeline:layerTL];
-  if ([sig isEqualToString:_laneStructureSignature])
-    return;
+  BOOL structureChanged = ![sig isEqualToString:_laneStructureSignature];
   _laneStructureSignature = sig;
-  [self applyTimeline:layerTL];
+  // applyTimeline refreshes the mini + any open popover (via the kit's
+  // _refresh). Run it on a structure change always; on a value-only change run
+  // it too UNLESS a drag is live - so cmd-Z / redo / external edits update the
+  // rendered popover value + preview, while an in-progress drag (whose
+  // per-frame echoes keep the same structure) isn't reset out from under the
+  // user.
+  if (structureChanged || !_dragging)
+    [self applyTimeline:layerTL];
 }
 
 // Order-sensitive signature of the lane set (unique tagged labels + layer
-// labels), so a rename or reorder also counts as a structure change.
+// labels + locked state), so a rename, reorder, OR lock-toggle counts as a
+// change and forces applyTimeline - without locked here a pure lock-toggle
+// (which doesn't touch labels) left _timeline stale, so the Constants popover's
+// rows (sourced from _timeline) didn't pick up the read-only state.
 - (NSString *)_laneSignatureForTimeline:(KKTimeline *)timeline {
   NSMutableArray<NSString *> *parts =
       [NSMutableArray arrayWithCapacity:timeline.lanes.count];
   for (KKLane *l in timeline.lanes)
-    [parts addObject:[NSString stringWithFormat:@"%@|%@", l.label ?: @"",
-                                                l.layerLabel ?: @""]];
+    [parts addObject:[NSString stringWithFormat:@"%@|%@|%d", l.label ?: @"",
+                                                l.layerLabel ?: @"",
+                                                l.locked ? 1 : 0]];
   return [parts componentsJoinedByString:@"\n"];
 }
 

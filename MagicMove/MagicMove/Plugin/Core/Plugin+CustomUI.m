@@ -678,6 +678,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
     self.miniViewerRenderer = [[MagicMoveMiniViewerRenderer alloc] init];
   }
   self.miniViewerRenderer.timeline = timeline;
+  self.miniViewerRenderer.laneTemplates = available;
   self.miniViewerRenderer.handlesHidden = !oscMasterVisible;
   [self applyOSCElementsFromUIState:uiState];
   // Wire the master tick + per-element pills + mini-viewer opt-click in one

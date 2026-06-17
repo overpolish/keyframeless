@@ -18,7 +18,6 @@
                             atTime:(CMTime)time {
   *activePart = 0;
   self.anchorHovered = NO;
-  self.scaleHitHandle = -1;
   // Clear any move cursor forced over a point last hover; the point branches
   // below re-set it, the scale box sets its own resize cursor, rotation none.
   if (self.pointCursorSet) {
@@ -61,28 +60,15 @@
     return;
   }
   // Scale box handles sit just outside the rotation rings; check them before
-  // rotation so an edge handle near the ring radius wins over the ring. Only
-  // reachable where the box is shown (or opt-reveal exposes a hidden one).
-  BOOL scaleReachable =
-      ([self kkOSCElementVisible:@"Scale"] ||
-       (self.optRevealActive && [self kkOSCRevealEligible:@"Scale"])) &&
-      _scaleVisibleAtFraction(frac);
-  if (scaleReachable) {
-    // Opt-hover hide/show affordance on the scale handles (eye/eye.slash when
-    // an Opt-click would toggle the Scale box, i.e. master on - not peek mode).
-    BOOL scaleToggle = self.optRevealActive && ![self kkOSCMasterOff];
-    BOOL scaleRevealOnly = ![self kkOSCElementVisible:@"Scale"] &&
-                           self.optRevealActive &&
-                           [self kkOSCRevealEligible:@"Scale"];
-    self.scaleBox.visibilityHint = scaleToggle ? (scaleRevealOnly ? 2 : 1) : 0;
-    NSInteger sh = [self _scaleHandleHitAtCanvasX:positionX
-                                                y:positionY
-                                           atTime:time];
-    if (sh >= 0) {
-      self.scaleHitHandle = sh;
-      *activePart = kOSCScalePart;
-      return;
-    }
+  // rotation so an edge handle near the ring radius wins over the ring. The
+  // control owns reachability + the opt-hover eye affordance internally.
+  self.scaleControl.center = [self oscPositionAtTime:time];
+  self.scaleControl.frameMin = [self _onScreenFrameMin];
+  self.scaleControl.optRevealActive = self.optRevealActive;
+  if ([self.scaleControl hitTestHandleAtX:positionX y:positionY
+                                   atTime:time] >= 0) {
+    *activePart = kOSCScalePart;
+    return;
   }
   if ([self _configureRotationRingsAtFraction:frac dragging:NO]) {
     CGPoint c = [self oscPositionAtTime:time];
@@ -122,25 +108,6 @@
   [oscAPI setCursor:([self kkVisibilityCursorForLabel:label]
                          ?: KKPointMoveCursor())];
   self.pointCursorSet = YES;
-}
-
-- (NSInteger)_scaleHandleHitAtCanvasX:(double)x
-                                    y:(double)y
-                               atTime:(CMTime)time {
-  double frac = [self _fractionAtTime:time];
-  NSArray<NSNumber *> *sv = _scaleValuesAtFraction(frac);
-  double sclX = sv.count > 0 ? sv[0].doubleValue : 100.0;
-  double sclY = sv.count > 1 ? sv[1].doubleValue : 100.0;
-  CGPoint center = [self oscPositionAtTime:time];
-  double e0 = 0, span = 0;
-  [self _scaleGizmoE0:&e0 span:&span];
-  CGPoint handles[8];
-  MMScaleHandlePositions(center, sclX, sclY, e0, span, handles);
-  NSInteger part = [self.scaleBox hitTestAtX:x
-                                           y:y
-                                    topRight:handles[2]
-                                  bottomLeft:handles[0]];
-  return part >= KKBoxPartHandleBase ? part - KKBoxPartHandleBase : -1;
 }
 
 @end

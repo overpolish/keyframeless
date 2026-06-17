@@ -28,6 +28,13 @@ NSString *MagicMoveMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// the effect render falls back to the base passthrough until we add a
 /// dedicated mini-viewer transform shader.
 @interface MagicMoveMiniViewerRenderer : KKMiniViewerRenderer
+/// The plugin's lane templates (`+[MagicMovePlugin availableLanes]`), set by
+/// the inspector. Used by `-templateLaneForLabel:` so a value edit that creates
+/// a lane keeps its metadata (aspectLinked, units), and so the scale-box drag
+/// can read the aspect-link default when the timeline has no Scale lane yet (an
+/// untouched default constant). Without it the mini scale box silently dropped
+/// the aspect lock the inspector + viewer OSC still honoured.
+@property(nonatomic, copy, nullable) NSArray<KKLane *> *laneTemplates;
 @end
 
 NS_ASSUME_NONNULL_END

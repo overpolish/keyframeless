@@ -26,8 +26,12 @@
                  error:(NSError **)error {
   // Slot 0 is the playhead frame (the main viewer render). Additional slots
   // are the boundary / filmstrip / onion frames the mini-viewer requested via
-  // the reverse-channel path. No motion blur yet, so the state is zeroed.
+  // the reverse-channel path, plus motion-blur sub-frame samples. The MB state
+  // is snapshotted into -pluginState: (prefix of the blob); read it back so
+  // KKBuildSourceRequests appends the sub-frame source requests.
   KKMotionBlurState mbState = {0};
+  if (pluginState.length >= sizeof(KKMotionBlurState))
+    [pluginState getBytes:&mbState length:sizeof(mbState)];
   NSArray *reqs = KKBuildSourceRequests(
       renderTime, mbState, CanvasMiniViewerRequestPath, self.renderCache,
       ^id(CMTime t) {
@@ -96,7 +100,23 @@
     if (b64.length)
       layerBlob = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
   }
-  *pluginState = layerBlob ?: [NSData data];
+
+  // Snapshot the motion-blur settings now (the param API is unavailable at
+  // render time). The blob layout is [KKMotionBlurState][layer blob]; render
+  // reads the state prefix, then the per-sample clip fractions are recomputed
+  // there from sampleTimesForState + the render cache (no paramAPI needed).
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  NSString *mbJSON =
+      api ? KKReadCustomParamString(api, kKKParamMotionBlurData) : nil;
+  KKMotionBlurState mbState = [KKMotionBlur snapshotStateFromJSON:mbJSON
+                                                        timingAPI:timingAPI
+                                                           atTime:renderTime];
+  NSMutableData *state = [NSMutableData dataWithBytes:&mbState
+                                               length:sizeof(mbState)];
+  if (layerBlob.length)
+    [state appendData:layerBlob];
+  *pluginState = state;
   return YES;
 }
 
@@ -157,8 +177,8 @@
   }
 
   // Image-layer overlay pipeline: same positioned-quad vertex shader, sampled
-  // straight through, composited over the source with premultiplied-alpha "over"
-  // (the loader stores premultiplied textures).
+  // straight through, composited over the source with premultiplied-alpha
+  // "over" (the loader stores premultiplied textures).
   id<MTLRenderPipelineState> imagePS = [cache
       buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
                                                @".Canvas.image"
@@ -169,10 +189,20 @@
                                 fragmentShader:@"KKTexturePassthroughFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];
 
-  // Decode the layer stack snapshotted into the state blob (bottom of the array
-  // draws in front, so composite back-to-front: last index first).
+  // The state blob is [KKMotionBlurState][layer blob]; split off the MB prefix
+  // before decoding the layer stack (bottom of the array draws in front, so
+  // composite back-to-front: last index first).
+  KKMotionBlurState mbState = {0};
+  NSData *layerBlob = nil;
+  if (pluginState.length >= sizeof(KKMotionBlurState)) {
+    [pluginState getBytes:&mbState length:sizeof(mbState)];
+    if (pluginState.length > sizeof(mbState))
+      layerBlob = [pluginState
+          subdataWithRange:NSMakeRange(sizeof(mbState),
+                                       pluginState.length - sizeof(mbState))];
+  }
   NSArray<KKBezierPath *> *layers =
-      pluginState.length ? [KKBezierPath pathsFromBlob:pluginState] : nil;
+      layerBlob.length ? [KKBezierPath pathsFromBlob:layerBlob] : nil;
   id<MTLDevice> device = [cache deviceWithRegistryID:regID];
   NSMutableDictionary<NSString *, id<MTLTexture>> *texCache =
       self.imageTextureCache;
@@ -182,31 +212,89 @@
   float outputHeight = (float)(destinationImage.tilePixelBounds.top -
                                destinationImage.tilePixelBounds.bottom);
 
+  // Clip-local time a layer's Scale/Position is evaluated at (same remap as
+  // every timing read). Negative when the duration isn't known yet, which tells
+  // CanvasEncodeImageLayers to draw the static rects.
+  double (^fracForTime)(CMTime) = ^double(CMTime t) {
+    if (self.renderCache.effectDurSec <= 0.0)
+      return -1.0;
+    double f = (CMTimeGetSeconds(t) - self.renderCache.effectStartSec) /
+               self.renderCache.effectDurSec;
+    f = MAX(0.0, MIN(1.0, f));
+    return KKMaintainTimingRemappedFraction(f, self.renderCache);
+  };
+  double frac = fracForTime(renderTime);
+
+  // Source passthrough + the layer stack (evaluated at `f`) into one encoder.
+  void (^composite)(id<MTLRenderCommandEncoder>, NSArray<id<MTLTexture>> *,
+                    double) = ^(id<MTLRenderCommandEncoder> enc,
+                                NSArray<id<MTLTexture>> *inputs, double f) {
+    if (!inputs.count)
+      return;
+    [enc setRenderPipelineState:ps];
+    [enc setFragmentTexture:inputs[0] atIndex:KKTextureIndex_InputImage];
+    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+            vertexStart:0
+            vertexCount:4];
+    if (!imagePS || !device)
+      return;
+    [enc setRenderPipelineState:imagePS];
+    CanvasEncodeImageLayers(layers, enc, device, texCache, outputWidth,
+                            outputHeight, f, nil, nil);
+  };
+
+  // Motion blur: accumulate the composite across sub-frame sample times (the
+  // shared KKMotionBlur infra averages N passes). Each pass composites the
+  // layer stack at that sample's clip fraction over its time-matched source
+  // frame, so both the layer animation and the underlying content smear.
+  if (mbState.enabled) {
+    NSArray<NSValue *> *times = [KKMotionBlur sampleTimesForState:mbState
+                                                       renderTime:renderTime];
+    NSMutableArray<NSNumber *> *fracs =
+        [NSMutableArray arrayWithCapacity:times.count];
+    for (NSValue *v in times) {
+      CMTime t = kCMTimeZero;
+      [v getValue:&t];
+      [fracs addObject:@(fracForTime(t))];
+    }
+    BOOL applied = [KKMotionBlur
+        applyToDestinationImage:destinationImage
+                   sourceImages:sourceImages
+                          state:mbState
+                     renderTime:renderTime
+                    renderBlock:^BOOL(int sampleIndex,
+                                      id<MTLTexture> sampleDest,
+                                      id<MTLCommandBuffer> commandBuffer,
+                                      NSArray<id<MTLTexture>> *inputTextures) {
+                      double f =
+                          (sampleIndex >= 0 && sampleIndex < (int)fracs.count)
+                              ? fracs[sampleIndex].doubleValue
+                              : frac;
+                      return [self
+                          encodeFullScreenQuadIntoTexture:sampleDest
+                                         destinationImage:destinationImage
+                                            commandBuffer:commandBuffer
+                                           sourceTextures:inputTextures
+                                                 commands:^(
+                                                     id<MTLRenderCommandEncoder>
+                                                         enc,
+                                                     NSArray<id<MTLTexture>>
+                                                         *texs) {
+                                                   composite(enc, texs, f);
+                                                 }];
+                    }];
+    if (applied)
+      return YES;
+  }
+
+  // No blur (or the accumulate bailed): single composite at the playhead frac.
   return [self
       encodeRenderCommandsForDestinationImage:destinationImage
                                  sourceImages:sourceImages
                                      commands:^(
-                                         id<MTLRenderCommandEncoder> encoder,
+                                         id<MTLRenderCommandEncoder> enc,
                                          NSArray<id<MTLTexture>> *inputs) {
-                                       if (!inputs.count)
-                                         return;
-                                       [encoder setRenderPipelineState:ps];
-                                       [encoder
-                                            setFragmentTexture:inputs[0]
-                                                       atIndex:
-                                                   KKTextureIndex_InputImage];
-                                       [encoder
-                                           drawPrimitives:
-                                               MTLPrimitiveTypeTriangleStrip
-                                              vertexStart:0
-                                              vertexCount:4];
-
-                                       if (!imagePS || !device)
-                                         return;
-                                       [encoder setRenderPipelineState:imagePS];
-                                       CanvasEncodeImageLayers(
-                                           layers, encoder, device, texCache,
-                                           outputWidth, outputHeight);
+                                       composite(enc, inputs, frac);
                                      }];
 }
 

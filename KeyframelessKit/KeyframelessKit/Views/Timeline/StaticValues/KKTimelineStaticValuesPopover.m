@@ -842,13 +842,30 @@ static const CGFloat kKKCategoryPillH = 24.0;
 // matching row's fields/slider WITHOUT persisting (the heavy timeline/FCP
 // write stays coalesced to drag end). The crop size readout lives in the
 // canvas overlay and redraws itself.
+// Resolve a row by label, tolerant of the plain-vs-tagged mismatch: the
+// mini-viewer handle reports the PLAIN lane label ("Position") from the
+// selected owner's timeline, while rows in a merged multi-owner popover are
+// keyed by the tagged label ("Position\x1f<ownerID>"). The popover's rows are
+// scoped to one owner, so matching by plain label is unambiguous. An exact key
+// hit (field edits / single-owner) is returned first, so this is a no-op there.
+- (_KKStaticValueRow *)_rowForLabelTolerant:(NSString *)label {
+  _KKStaticValueRow *row = _rowsByLabel[label];
+  if (row)
+    return row;
+  NSString *plain = KKPlainLaneLabel(label);
+  for (NSString *key in _rowsByLabel)
+    if ([KKPlainLaneLabel(key) isEqualToString:plain])
+      return _rowsByLabel[key];
+  return nil;
+}
+
 - (void)liveUpdateValues:(NSArray<NSNumber *> *)values
                 forLabel:(NSString *)label {
-  [_rowsByLabel[label] applyValues:values];
+  [[self _rowForLabelTolerant:label] applyValues:values];
 }
 
 - (nullable NSView *)rowViewForLabel:(NSString *)label {
-  return _rowsByLabel[label];
+  return [self _rowForLabelTolerant:label];
 }
 
 - (void)guideBeginConstantDrag {

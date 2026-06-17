@@ -161,6 +161,13 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   NSTextField *_gradientAngleField;
   BOOL _gradientAngleKnobDragging;
   CGFloat _labelColumnW; // uniform label-column width (0 = natural)
+  BOOL _locked;          // locked layer: row is read-only (dimmed, no input)
+}
+
+// A locked lane's row shows its values but takes no input: swallow every mouse
+// event (so no field/slider/well/pill responds) and dim to read as disabled.
+- (NSView *)hitTest:(NSPoint)point {
+  return _locked ? nil : [super hitTest:point];
 }
 
 - (void)setDefaultValues:(NSArray<NSNumber *> *)defaultValues {
@@ -860,7 +867,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     ]];
   }
 
-  [self applyLane:lane];
+  [self applyLane:lane]; // also sets _locked + dims when the lane is locked
   return self;
 }
 
@@ -1113,6 +1120,11 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 
 - (void)applyLane:(KKLane *)lane {
   [self applyValues:lane.keyposes.firstObject.values];
+  // Locked lane = read-only: dim + swallow input (handled in hitTest:). Set
+  // here (not just init) so a row reused across an updateUnoptedLanes / rebuild
+  // also reflects the current lock state.
+  _locked = lane.locked;
+  self.alphaValue = _locked ? 0.5 : 1.0;
 }
 
 - (NSView *)guideSliderView {

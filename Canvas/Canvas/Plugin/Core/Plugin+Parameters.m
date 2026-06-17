@@ -74,6 +74,32 @@
     return NO;
   }
 
+  // Motion-blur settings blob (enabled / shutter / samples / mode), written by
+  // the inspector toolbar's MB toggle via the shared inspector callbacks and
+  // read back in -pluginState: to drive the render's sample-accumulate. HIDDEN
+  // + NOT_ANIMATABLE, matching MagicMove. MUST be registered or flipping the
+  // toggle crashes FCP's parameter transaction (it writes this custom param).
+  if (![paramAPI addCustomParameterWithName:@""
+                                parameterID:kKKParamMotionBlurData
+                               defaultValue:[KKDataBlob blobWithData:nil]
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
+    return NO;
+  }
+
+  // Per-instance identity UUID (a STRING param - the effect AND the viewer OSC
+  // read it to resolve the same KKPluginInstanceState, which carries the OSC
+  // visibility). MUST exist before KKInstanceStateEnsureForAPI writes it
+  // (createView); without registering it, that write crashes FCP's parameter
+  // transaction. HIDDEN + NOT_ANIMATABLE, never user-edited.
+  if (![paramAPI addStringParameterWithName:@""
+                                parameterID:kKKParamInstanceID
+                               defaultValue:@""
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
+    return NO;
+  }
+
   return YES;
 }
 

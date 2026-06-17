@@ -42,8 +42,9 @@ static const CGFloat kSlideDistance = 12.0;
   __weak NSView *_popoverContentView; // re-align source when the popover flips
   BOOL _visible;
   __weak id<PROAPIAccessing> _apiManager;
-  // Layer to highlight in the list (a keypose popover's active layer). Stored so
-  // it survives the panel being created lazily AFTER the highlight is requested.
+  // Layer to highlight in the list (a keypose popover's active layer). Stored
+  // so it survives the panel being created lazily AFTER the highlight is
+  // requested.
   NSString *_highlightLayerID;
 }
 
@@ -221,8 +222,35 @@ static const CGFloat kSlideDistance = 12.0;
 // Layers (by layerID) that have NO keypose at clip fraction `frac` in any of
 // their animated lanes - they can't be the edit target of a keypose popover.
 - (NSSet<NSString *> *)_layersWithoutKeyposeAtFraction:(double)frac {
+  NSArray<KKBezierPath *> *paths = [self currentLayerPaths];
+  // The Basic out-end boundary is EDGE-PARKED: its pill (and the popover's
+  // reported fraction) sits at 1.0, but the keypose itself lands at
+  // lastFrameFrac (<1.0). An exact match against 1.0 finds no keypose on ANY
+  // layer, so the whole list dims (yet the layer is fully editable - navigating
+  // to the same keypose shows it un-dimmed). Basic keypose times are shared
+  // across layers, so snap `frac` to the nearest actual keypose time first,
+  // then match against that. A genuinely-constant layer (no keyposes near the
+  // snapped time) still dims correctly.
+  double snapped = frac, bestD = INFINITY;
+  for (KKBezierPath *p in paths) {
+    if (!p.animationJSON.length)
+      continue;
+    KKTimeline *tl = [KKTimeline timelineFromJSON:p.animationJSON];
+    for (KKLane *l in tl.lanes) {
+      if (!l.enabled)
+        continue;
+      for (KKKeyPose *kp in l.keyposes) {
+        double d = fabs(kp.time - frac);
+        if (d < bestD) {
+          bestD = d;
+          snapped = kp.time;
+        }
+      }
+    }
+  }
+
   NSMutableSet<NSString *> *out = [NSMutableSet set];
-  for (KKBezierPath *p in [self currentLayerPaths]) {
+  for (KKBezierPath *p in paths) {
     if (!p.layerID.length)
       continue;
     BOOL has = NO;
@@ -232,7 +260,7 @@ static const CGFloat kSlideDistance = 12.0;
         if (!l.enabled)
           continue;
         for (KKKeyPose *kp in l.keyposes)
-          if (fabs(kp.time - frac) < 1.0e-4) {
+          if (fabs(kp.time - snapped) < 1.0e-4) {
             has = YES;
             break;
           }
@@ -280,8 +308,8 @@ static const CGFloat kSlideDistance = 12.0;
   // height/position.
   NSView *cv = _popoverContentView;
   if (cv.window) {
-    NSRect live =
-        [cv.window convertRectToScreen:[cv convertRect:cv.bounds toView:nil]];
+    NSRect live = [cv.window convertRectToScreen:[cv convertRect:cv.bounds
+                                                          toView:nil]];
     if (!NSIsEmptyRect(live))
       card = live;
   }
@@ -352,8 +380,8 @@ static const CGFloat kSlideDistance = 12.0;
   NSView *cv = _popoverContentView;
   if (!_visible || !cv.window)
     return;
-  NSRect card =
-      [cv.window convertRectToScreen:[cv convertRect:cv.bounds toView:nil]];
+  NSRect card = [cv.window convertRectToScreen:[cv convertRect:cv.bounds
+                                                        toView:nil]];
   if (NSIsEmptyRect(card))
     return;
   [_panel setFrame:[self _panelFrameForCard:card] display:YES];
@@ -364,9 +392,9 @@ static const CGFloat kSlideDistance = 12.0;
 // parent->child move as a delta to our panel AFTER this notification, and the
 // popover's reposition may still be settling, so aligning synchronously here
 // gets overwritten by exactly the popover's move distance (the symptom: the
-// panel ends up offset by an amount that tracks the keypose row). A next-runloop
-// snap runs after the delta + layout land, and a short settle pass catches an
-// animated reposition.
+// panel ends up offset by an amount that tracks the keypose row). A
+// next-runloop snap runs after the delta + layout land, and a short settle pass
+// catches an animated reposition.
 - (void)_popoverFrameChanged:(NSNotification *)note {
   if (!_visible)
     return;

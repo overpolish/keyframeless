@@ -315,6 +315,7 @@
   c.layerLabel = [_layerLabel copy];
   c.layerSymbol = [_layerSymbol copy];
   c.headerPlaceholder = _headerPlaceholder;
+  c.locked = _locked;
   c.animatable = _animatable;
   c.seedField = _seedField;
   c.choiceLabels = [_choiceLabels copy];

@@ -12,37 +12,6 @@
 
 @implementation MagicMoveOSC (Drawing)
 
-// Scale transform box: border + 8 handles (4 corners, 4 edge midpoints) + a
-// "X% x Y%" readout, centred on `center`. Half-extents come from the scale
-// percent through the KKScaleGizmo curve (per axis), so the box is a compact
-// screen-space gizmo that stays grabbable at any value rather than tracking the
-// clip's real pixel bounds.
-- (void)_drawScaleBoxAtCenter:(CGPoint)center
-                       atTime:(CMTime)time
-                   ghostAlpha:(float)ghostAlpha
-                 activeHandle:(NSInteger)activeHandle
-             destinationImage:(FxImageTile *)destinationImage {
-  double frac = [self _fractionAtTime:time];
-  NSArray<NSNumber *> *sv = _scaleValuesAtFraction(frac);
-  double sclX = sv.count > 0 ? sv[0].doubleValue : 100.0;
-  double sclY = sv.count > 1 ? sv[1].doubleValue : 100.0;
-  double e0 = 0, span = 0;
-  [self _scaleGizmoE0:&e0 span:&span];
-  CGPoint handles[8];
-  MMScaleHandlePositions(center, sclX, sclY, e0, span, handles);
-  CGPoint bl = handles[0], tr = handles[2];
-
-  self.scaleBox.ghostAlpha = ghostAlpha;
-  NSString *readout =
-      [NSString stringWithFormat:@"%.0f%% x %.0f%%", sclX, sclY];
-  [self.scaleBox drawWithTopRight:tr
-                       bottomLeft:bl
-                          readout:readout
-                     activeHandle:activeHandle
-                 destinationImage:destinationImage
-                           atTime:time];
-}
-
 - (void)drawOSCWithWidth:(NSInteger)width
                   height:(NSInteger)height
               activePart:(NSInteger)activePart
@@ -93,23 +62,16 @@
             destinationImage:destinationImage
                       atTime:time];
   }
-  // Scale transform box, drawn outside the rotation rings. Only on screen where
-  // the Scale lane is visible (keypose times / constant), same as Position.
-  // Opt-hold reveals a hidden box as a dimmed ghost.
-  BOOL scaleShownHere = _scaleVisibleAtFraction(frac);
-  BOOL scaleEnabled = [self kkOSCElementVisible:@"Scale"];
-  BOOL scaleDragging = self.isDragging && activePart == kOSCScalePart;
-  BOOL scaleVisible = scaleDragging || (scaleEnabled && scaleShownHere);
-  BOOL scaleGhost = !scaleVisible && self.optRevealActive &&
-                    [self kkOSCRevealEligible:@"Scale"] && scaleShownHere;
-  if (scaleVisible || scaleGhost) {
-    NSInteger activeHandle = scaleDragging ? self.scaleGrabHandle : -1;
-    [self _drawScaleBoxAtCenter:pos
-                         atTime:time
-                     ghostAlpha:(scaleGhost ? [self kkRevealGhostAlpha]
-                                            : 1.0f)activeHandle:activeHandle
-               destinationImage:destinationImage];
-  }
+  // Scale transform box, drawn outside the rotation rings. The control owns its
+  // own visibility gating (Scale lane shown here + element enabled + opt-reveal
+  // ghost); we just feed it this tick's centre, gizmo size and drag state.
+  self.scaleControl.center = pos;
+  self.scaleControl.frameMin = [self _onScreenFrameMin];
+  self.scaleControl.dragging = self.isDragging;
+  self.scaleControl.optRevealActive = self.optRevealActive;
+  [self.scaleControl drawInDestination:destinationImage
+                                atTime:time
+                            activePart:activePart];
 
   // Position arc handle (+ Cmd-snap guides during a Position drag), drawn above
   // rotation + scale so it stays on top.

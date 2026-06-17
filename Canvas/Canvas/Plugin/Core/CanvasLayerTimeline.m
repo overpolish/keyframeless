@@ -11,6 +11,15 @@
 // across layers; KKLocalizedParamName strips it for display).
 static NSString *const kCanvasLaneSep = @"\x1f";
 
+// Process-wide layer-blob snapshot for the viewer OSC (see header).
+static NSString *sCanvasLayerBlobSnapshot = nil;
+
+void CanvasSetLayerBlobSnapshot(NSString *b64) {
+  sCanvasLayerBlobSnapshot = [b64 copy];
+}
+
+NSString *CanvasLayerBlobSnapshot(void) { return sCanvasLayerBlobSnapshot; }
+
 KKBezierPath *CanvasSelectedLayerForPaths(NSArray<KKBezierPath *> *paths,
                                           NSString *selectedLayerID) {
   // Groups animate too (their own explicit transform; no propagation), so they
@@ -55,11 +64,12 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
     KKLane *src = [(stored[t.label] ?: t) copy];
     // Tag with the layer for the Advanced view's layer header. The LABEL stays
     // plain ("Scale") so the kit's label-keyed edit surfaces are unaffected;
-    // only layerKey/layerLabel drive the header. Group layers get a folder glyph
-    // (others keep the header's default stacked-squares).
+    // only layerKey/layerLabel drive the header. Group layers get a folder
+    // glyph (others keep the header's default stacked-squares).
     src.layerKey = lid;
     src.layerLabel = name;
     src.layerSymbol = path.isGroup ? @"folder" : nil;
+    src.locked = path.locked; // read-only lanes when the layer is locked
     [lanes addObject:src];
     if (t.label)
       [order addObject:t.label];
@@ -72,6 +82,10 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
 void CanvasApplyTimelineToPath(KKTimeline *timeline, KKBezierPath *path) {
   if (!path)
     return;
+  // No lock guard here: lock is enforced at the UI (Advanced graph blocks
+  // locked lanes; Advanced keypose + Constants popovers render read-only).
+  // Basic deliberately ignores lock (shared timings), and Basic edits flow
+  // through here - guarding would wrongly revert them.
   path.animationJSON = timeline ? [KKTimeline jsonFromTimeline:timeline] : nil;
 }
 
@@ -115,6 +129,7 @@ KKTimeline *CanvasMergedTimeline(NSArray<KKBezierPath *> *paths,
       c.layerKey = lid;
       c.layerLabel = name;
       c.layerSymbol = p.isGroup ? @"folder" : nil;
+      c.locked = p.locked;
       [lanes addObject:c];
       [order addObject:c.label];
     }
@@ -173,6 +188,9 @@ void CanvasApplyMergedTimelineToPaths(KKTimeline *merged,
       [paramOrder addObject:t.label];
 
   for (KKBezierPath *p in paths) {
+    // No lock guard: lock is UI-enforced (Advanced blocks locked lanes), and
+    // Basic ignores lock by design (shared timings) - its edits flow through
+    // the merged write too, so guarding would wrongly revert them.
     NSString *lid = p.layerID.length ? p.layerID : @"";
     NSDictionary<NSString *, KKLane *> *edits = byLayer[lid];
     if (edits.count == 0)

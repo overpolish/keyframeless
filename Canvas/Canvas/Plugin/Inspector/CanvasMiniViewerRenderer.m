@@ -5,6 +5,7 @@
 
 #import "CanvasMiniViewerRenderer.h"
 #import "CanvasLayerRender.h"
+#import "CanvasMiniViewerRenderer_Internal.h"
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
@@ -41,9 +42,87 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   NSMutableDictionary<NSString *, id<MTLTexture>> *_imageTextureCache;
 }
 
+- (instancetype)init {
+  if ((self = [super init])) {
+    _positionMini =
+        [[KKPositionMiniController alloc] initWithRenderer:self
+                                                 laneLabel:@"Position"
+                                                 pathLabel:@"Path"];
+    _scaleMini = [[KKScaleMiniController alloc] initWithRenderer:self
+                                                       laneLabel:@"Scale"];
+  }
+  return self;
+}
+
+// The scale box is concentric with the layer's Position handle (so it follows
+// the layer as it moves), not the content-rect centre.
+- (CGPoint)rotationCenterForContentRect:(CGRect)cr {
+  return [self _handlePointForContentRect:cr
+                                 position:[self valuesForLabel:@"Position"]];
+}
+
+- (KKLane *)templateLaneForLabel:(NSString *)label {
+  for (KKLane *l in self.laneTemplates)
+    if ([l.label isEqualToString:label])
+      return l;
+  return [super templateLaneForLabel:label];
+}
+
+// Position is the only point handle; draw it as a ring (matches the viewer's
+// KKArcOSC + MagicMove's mini), with the motion-path arc through its keyposes.
+- (NSString *)pointLabel {
+  return @"Position";
+}
+
+- (KKMiniHandleStyle)pointHandleStyle {
+  return KKMiniHandleStyleArc;
+}
+
+// The Position handle is an arc (drawn on its own path), so this only sizes the
+// scale-box corner/edge point handles - shrink them so they aren't oversized
+// (matches MagicMove / Rounded).
+- (CGFloat)pointHandleSizeScale {
+  return 0.6;
+}
+
 // Canvas has no Crop lane, so suppress the base's default crop handles.
 - (NSString *)cropLabel {
   return nil;
+}
+
+- (NSInteger)valueTypeForLabel:(NSString *)label {
+  if ([label isEqualToString:@"Position"])
+    return KKLaneValueTypeGeneric;
+  return [super valueTypeForLabel:label];
+}
+
+// Must match the availableLanes template defaults (and the render reader's
+// fallbacks); without an entry the base returns zeros, which would draw an
+// untouched Position handle at the bottom-left corner instead of centred.
+- (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
+  if ([label isEqualToString:@"Position"])
+    return @[ @0.5, @0.5 ];
+  if ([label isEqualToString:@"Scale"])
+    return @[ @100.0, @100.0 ];
+  return [super defaultValuesForLabel:label];
+}
+
+- (CGPoint)_handlePointForContentRect:(CGRect)cr
+                             position:(NSArray<NSNumber *> *)pos {
+  return [self handlePointForContentRect:cr position:pos];
+}
+
+// Selecting another layer must move the handle + recomposite the preview at
+// once: the handle reads `timeline` (the host swaps it alongside this) and the
+// composite scopes its live-override to this id, so force both to repaint
+// instead of waiting for the next published source frame.
+- (void)setSelectedLayerID:(NSString *)selectedLayerID {
+  if (selectedLayerID == _selectedLayerID ||
+      [selectedLayerID isEqualToString:_selectedLayerID])
+    return;
+  _selectedLayerID = [selectedLayerID copy];
+  [self.canvas setNeedsDisplay:YES];
+  [self.canvas setHandlesNeedDisplay];
 }
 
 - (NSMutableDictionary<NSString *, id<MTLTexture>> *)imageTextureCache {
@@ -77,12 +156,11 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     return NO;
   }
 
-  MTLRenderPipelineDescriptor *src =
-      [KKRenderPrimitives createPipelineDescriptorWithVertexFunction:vfn
-                                                   fragmentFunction:ffn
-                                                        pixelFormat:format
-                                                          blendMode:
-                                                              KKBlendModeNone];
+  MTLRenderPipelineDescriptor *src = [KKRenderPrimitives
+      createPipelineDescriptorWithVertexFunction:vfn
+                                fragmentFunction:ffn
+                                     pixelFormat:format
+                                       blendMode:KKBlendModeNone];
   id<MTLRenderPipelineState> srcPS =
       [device newRenderPipelineStateWithDescriptor:src error:&err];
   if (!srcPS) {
@@ -146,8 +224,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   // Read source as linear (sRGB-decode on sample), write dest as linear
   // (sRGB-encode on store); fall back to the plain textures if no view applies.
   id<MTLTexture> srcLin =
-      [source newTextureViewWithPixelFormat:CanvasSRGBVariant(
-                                                source.pixelFormat)]
+      [source
+          newTextureViewWithPixelFormat:CanvasSRGBVariant(source.pixelFormat)]
           ?: source;
   id<MTLTexture> dstSRGB = [dest newTextureViewWithPixelFormat:fmt] ?: dest;
 
@@ -182,10 +260,14 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
           vertexStart:0
           vertexCount:4];
 
-  // 2) Image layers over the source (shared with the main render).
+  // 2) Image layers over the source (shared with the main render), each
+  // transformed at the renderer's current time. editFraction is the keypose /
+  // boundary time when a popover is editing one (so the preview matches the
+  // edited pose) and 0 otherwise (constants resolve correctly there).
   [enc setRenderPipelineState:_imagePipeline];
   CanvasEncodeImageLayers(self.layers ?: @[], enc, cb.device,
-                          self.imageTextureCache, w, h);
+                          self.imageTextureCache, w, h, self.editFraction,
+                          self.selectedLayerID, self.timeline);
 
   [enc endEncoding];
   return YES;

@@ -10,6 +10,7 @@
 #import <KeyframelessKit/KKSnapEngine.h>
 
 @class KKLane;
+@class KKTimeline;
 @class KKOSCGuideBridge;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -73,6 +74,17 @@ typedef NS_ENUM(NSInteger, KKPositionHit) {
 /// nil = no guide.
 @property(nonatomic, weak, nullable) id<KKPositionGuideProvider> guideProvider;
 
+/// Optional persist override. When set, a drag/smooth/tangent edit calls this
+/// with the updated timeline INSTEAD of writing the single
+/// `kKKParamTimelineData` param - so a multi-owner host (e.g. Canvas, whose
+/// layers each carry their own `animationJSON`) can route the write to the
+/// owning layer. The block is invoked inside the control's open action scope,
+/// so the host's get/set API (same apiManager) resolves there. The lane carries
+/// its owner via `layerKey`. nil = default single-param write
+/// (Glow/MagicMove/Rounded unchanged).
+@property(nonatomic, copy, nullable) void (^onTimelinePersist)
+    (KKTimeline *timeline);
+
 /// Set by the hit-test: YES when the hovered Position target is a keypose
 /// anchor dot rather than the playhead arc handle (both report Handle/AnchorDot
 /// to the host). The host reads this for element-key mapping (anchor -> Path).
@@ -87,8 +99,6 @@ typedef NS_ENUM(NSInteger, KKPositionHit) {
 /// the guide-pushed value during a guide). The host's other controls (rotation,
 /// scale, anchor pivot) centre on this.
 - (CGPoint)positionCanvasAtTime:(CMTime)time;
-/// Clip fraction (0..1) at `time`.
-- (double)fractionAtTime:(CMTime)time;
 
 /// Draw the motion path (line + tangent handles + keypose anchor dots). Drawn
 /// FIRST (under the host's other controls). Split from the handle draw so the

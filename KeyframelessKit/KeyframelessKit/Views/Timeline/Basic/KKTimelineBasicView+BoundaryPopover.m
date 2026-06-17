@@ -12,6 +12,7 @@
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKEasing.h>
+#import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
 @implementation KKTimelineBasicView (BoundaryPopover)
@@ -148,6 +149,9 @@
     // row keys pixel display off it. Without it Position showed the raw 0.5.
     dl.componentsScaleWithMedia =
         tmpl ? tmpl.componentsScaleWithMedia : lane.componentsScaleWithMedia;
+    // Basic intentionally ignores lock: its keypose timings are shared/linked
+    // across all layers, so freezing one layer here has no meaning. Lock is an
+    // Advanced-only (per-lane) concept - so don't mark the Basic row read-only.
     [dl kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     KKKeyPose *dlKp = [KKKeyPose keyposeAtTime:0.0 values:vals ?: @[ @0.0 ]];
     // Carry the curve state from the keypose nearest this boundary (matches the
@@ -322,7 +326,21 @@
   KKTimeline *t = [_timeline copy];
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    // Exact label match, OR (multi-owner) the ACTIVE owner's lane whose plain
+    // label matches. The mini-viewer handle commits the PLAIN label from the
+    // selected owner's timeline ("Position"), while a merged Basic timeline
+    // tags lanes "Position\x1f<ownerID>" - so the exact match misses and the
+    // drag pinged back. Field edits already pass the tagged label (exact).
+    // Single-owner timelines have no tag / active key, so only the exact branch
+    // fires (this is a no-op for them). layerKey==_activeLayerKey keeps it
+    // scoped to one owner, so no cross-layer double-write.
+    BOOL match = [lanes[i].label isEqualToString:label];
+    if (!match && _activeLayerKey.length && lanes[i].layerKey.length &&
+        [lanes[i].layerKey isEqualToString:_activeLayerKey] &&
+        [KKPlainLaneLabel(lanes[i].label)
+            isEqualToString:KKPlainLaneLabel(label)])
+      match = YES;
+    if (!match)
       continue;
     KKLane *nl = [lanes[i] copy];
     NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];

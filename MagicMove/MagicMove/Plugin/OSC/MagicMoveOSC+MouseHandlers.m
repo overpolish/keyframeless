@@ -10,13 +10,6 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <simd/simd.h>
 
-// Scale drag is absolute: the grabbed handle tracks the cursor (deterministic,
-// in sync), mapping cursor distance to centre back through the gizmo curve.
-// Holding Cmd engages a fine mode that scales cursor movement down for precise
-// adjustment (essential at high scale, where the compressed box is otherwise
-// hyper-sensitive).
-static const double kScaleFineFactor = 0.2;
-
 @implementation MagicMoveOSC (MouseHandlers)
 
 - (void)mouseUpAtPositionX:(double)positionX
@@ -27,6 +20,7 @@ static const double kScaleFineFactor = 0.2;
                     atTime:(CMTime)time {
   [self kkResetOptHideArming];
   [self.positionController mouseUp];
+  [self.scaleControl mouseUp];
   [self.anchorSnap reset];
   self.anchorHovered = NO;
   [super mouseUpAtPositionX:positionX
@@ -64,24 +58,13 @@ static const double kScaleFineFactor = 0.2;
                   forceUpdate:forceUpdate
                        atTime:time];
   if (activePart == kOSCScalePart) {
-    self.scaleGrabHandle = self.scaleHitHandle;
-    self.scalePressCenter = [self oscPositionAtTime:time];
-    NSArray<NSNumber *> *sv =
-        _scaleValuesAtFraction([self _fractionAtTime:time]);
-    self.scalePressSclX = sv.count > 0 ? sv[0].doubleValue : 100.0;
-    self.scalePressSclY = sv.count > 1 ? sv[1].doubleValue : 100.0;
-    // Effective cursor starts at the grabbed handle (not the raw click point),
-    // so the value begins exactly where it is - no press snap.
-    double e0p = 0, spanp = 0;
-    [self _scaleGizmoE0:&e0p span:&spanp];
-    CGPoint hp[8];
-    MMScaleHandlePositions(self.scalePressCenter, self.scalePressSclX,
-                           self.scalePressSclY, e0p, spanp, hp);
-    self.scaleEffCursor =
-        (self.scaleGrabHandle >= 0 && self.scaleGrabHandle < 8)
-            ? hp[self.scaleGrabHandle]
-            : CGPointMake(positionX, positionY);
-    self.scaleLastCursor = CGPointMake(positionX, positionY);
+    self.scaleControl.center = [self oscPositionAtTime:time];
+    self.scaleControl.frameMin = [self _onScreenFrameMin];
+    [self.scaleControl mouseDownAtX:positionX
+                                  y:positionY
+                          modifiers:modifiers
+                        forceUpdate:forceUpdate
+                             atTime:time];
     return;
   }
   if (activePart == kOSCAnchorPart) {
@@ -190,11 +173,13 @@ static const double kScaleFineFactor = 0.2;
     return;
   }
   if (activePart == kOSCScalePart) {
-    [self _dragScaleToPositionX:positionX
-                      positionY:positionY
-                      modifiers:modifiers
-                    forceUpdate:forceUpdate
-                         atTime:time];
+    self.scaleControl.center = [self oscPositionAtTime:time];
+    self.scaleControl.frameMin = [self _onScreenFrameMin];
+    [self.scaleControl mouseDraggedAtX:positionX
+                                     y:positionY
+                             modifiers:modifiers
+                           forceUpdate:forceUpdate
+                                atTime:time];
     return;
   }
   if (activePart == kOSCAnchorPart) {
@@ -298,110 +283,6 @@ static const double kScaleFineFactor = 0.2;
                            kKKParamTimelineData);
   [actionAPI endAction:self];
   *forceUpdate = YES;
-}
-
-- (void)_dragScaleToPositionX:(double)positionX
-                    positionY:(double)positionY
-                    modifiers:(NSUInteger)modifiers
-                  forceUpdate:(BOOL *)forceUpdate
-                       atTime:(CMTime)time {
-  NSInteger h = self.scaleGrabHandle;
-  if (h < 0)
-    return;
-  // Advance the effective cursor by the raw movement (scaled down for
-  // Cmd-fine). The value comes from its distance to centre through the gizmo
-  // curve, so the grabbed handle tracks the cursor 1:1 in normal mode
-  // (deterministic).
-  double rawDx = positionX - self.scaleLastCursor.x;
-  double rawDy = positionY - self.scaleLastCursor.y;
-  self.scaleLastCursor = CGPointMake(positionX, positionY);
-  double fine = (modifiers & kFxModifierKey_COMMAND) ? kScaleFineFactor : 1.0;
-  CGPoint eff = self.scaleEffCursor;
-  eff.x += rawDx * fine;
-  eff.y += rawDy * fine;
-  self.scaleEffCursor = eff;
-
-  CGPoint c = self.scalePressCenter;
-  double pX = self.scalePressSclX, pY = self.scalePressSclY;
-  double e0 = 0, span = 0;
-  [self _scaleGizmoE0:&e0 span:&span];
-  // Candidate per-axis percents from the effective cursor's distance to centre.
-  double tX = KKScaleGizmoPercentForExtent(fabs(eff.x - c.x), e0, span);
-  double tY = KKScaleGizmoPercentForExtent(fabs(eff.y - c.y), e0, span);
-  // Link is global per-lane; Shift temporarily inverts it for this drag.
-  BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;
-  BOOL effLinked = (_scaleLane().aspectLinked != 0) ^ shift;
-  BOOL haveRatio = (pX > 1e-6 && pY > 1e-6);
-  double newX = pX, newY = pY;
-
-  if (kScaleHandleIsCorner(h)) {
-    if (effLinked && haveRatio) {
-      // Uniform: geometric mean of the two per-axis factors gives a single,
-      // continuous scale factor (no dominant-axis flip); Y follows by ratio.
-      double f = sqrt((tX / pX) * (tY / pY));
-      newX = pX * f;
-      newY = pY * f;
-    } else {
-      newX = tX;
-      newY = tY;
-    }
-  } else if (kScaleHandleControlsX(h)) {
-    newX = tX;
-    newY = effLinked ? (haveRatio ? pY * (tX / pX) : tX) : pY;
-  } else if (kScaleHandleControlsY(h)) {
-    newY = tY;
-    newX = effLinked ? (haveRatio ? pX * (tY / pY) : tY) : pX;
-  }
-
-  // Values snap to integers; floored at 0 (no negative scale).
-  newX = fmax(0.0, round(newX));
-  newY = fmax(0.0, round(newY));
-  [self _writeScaleValues:@[ @(newX), @(newY) ]
-                   atTime:time
-              forceUpdate:forceUpdate];
-}
-
-- (void)_writeScaleValues:(NSArray<NSNumber *> *)newValues
-                   atTime:(CMTime)time
-              forceUpdate:(BOOL *)forceUpdate {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI) {
-    [actionAPI endAction:self];
-    return;
-  }
-
-  double frac = [self _fractionAtTime:time];
-  KKTimeline *snap = KKProcessTimelineSnapshot();
-  KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
-                              snap, @"Scale", frac, newValues)
-                        : nil;
-  if (!tl) {
-    tl = snap ? [snap copy] : [KKTimeline timeline];
-    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-    KKLane *scaleLane = [KKLane laneWithLabel:@"Scale"];
-    scaleLane.valueType = KKLaneValueTypeFloat;
-    scaleLane.componentMin = @[ @0.0, @0.0 ];
-    scaleLane.componentUnits = @[ @"%", @"%" ];
-    scaleLane.componentLabels = @[ @"X", @"Y" ];
-    scaleLane.aspectLinkable = YES;
-    scaleLane.aspectLinked = YES;
-    scaleLane.enabled = NO;
-    scaleLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
-    [lanes addObject:scaleLane];
-    tl.lanes = lanes;
-  }
-
-  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                           kKKParamTimelineData);
-  [actionAPI endAction:self];
-  if (forceUpdate)
-    *forceUpdate = YES;
 }
 
 - (void)_dragAnchorToPositionX:(double)positionX

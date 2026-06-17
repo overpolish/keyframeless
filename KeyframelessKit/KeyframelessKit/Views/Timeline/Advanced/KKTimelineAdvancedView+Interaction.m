@@ -83,6 +83,7 @@
   _pressLaneLabel = nil;
   _pressKPIdx = -1;
   _dragActive = NO;
+  _pressLocked = NO;
   _gapPressActive = NO;
   _marqueeActive = NO;
   _optPressOnPill = NO;
@@ -102,7 +103,8 @@
   {
     NSArray<KKLane *> *anim = [self _animatableLanes];
     NSInteger row = [self _laneRowAtPoint:pt];
-    if (row >= 0 && row < (NSInteger)anim.count && anim[row].headerPlaceholder) {
+    if (row >= 0 && row < (NSInteger)anim.count &&
+        anim[row].headerPlaceholder) {
       NSString *lk = anim[row].layerKey ?: @"";
       if ([_collapsedLayerKeys containsObject:lk])
         [_collapsedLayerKeys removeObject:lk];
@@ -110,6 +112,28 @@
         [_collapsedLayerKeys addObject:lk];
       [self _clampScroll];
       [self setNeedsDisplay:YES];
+      return;
+    }
+  }
+
+  // A locked layer's lanes are read-only. A plain click on a pill still opens
+  // the value popover (which renders read-only, so you can inspect values);
+  // modifier edits, gap edits and drags are all rejected.
+  {
+    NSArray<KKLane *> *anim = [self _animatableLanes];
+    NSInteger row =
+        (hitPill && laneIdx >= 0) ? laneIdx : [self _laneRowAtPoint:pt];
+    if (row >= 0 && row < (NSInteger)anim.count && anim[row].locked) {
+      if (hitPill && !optKey && !cmdKey && !shiftKey) {
+        KKLane *lane = anim[laneIdx];
+        _pressLaneLabel = [lane.label copy];
+        _pressKPIdx = kpIdx;
+        _pressPoint = pt;
+        _topLaneLabel = _pressLaneLabel;
+        _topKPIdx = kpIdx;
+        _pressLocked = YES; // mouseUp opens read-only; mouseDragged won't move
+        [self setNeedsDisplay:YES];
+      }
       return;
     }
   }
@@ -227,6 +251,10 @@
 
 - (void)mouseDragged:(NSEvent *)event {
   NSPoint pt = [self convertPoint:event.locationInWindow fromView:nil];
+
+  if (_pressLocked)
+    return; // locked lane: the press only opens a read-only popover, never
+            // drags
 
   if (_optPressOnEmpty && !_eraserActive) {
     if (hypot(pt.x - _pressPoint.x, pt.y - _pressPoint.y) < kDragThresholdPx)
@@ -418,6 +446,7 @@
       if (li >= 0)
         [self _openValuePopoverForLane:li kp:_pressKPIdx];
     }
+    _pressLocked = NO;
     _pressLaneLabel = nil;
     _pressKPIdx = -1;
     return;

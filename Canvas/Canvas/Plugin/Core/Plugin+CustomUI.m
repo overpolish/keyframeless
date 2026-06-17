@@ -34,11 +34,12 @@
   scale.enabled = NO; // constant by default; animate per-layer via the dropdown
   scale.categoryKey = @"Transform";
   scale.categorySymbol = @"arrow.up.and.down.and.arrow.left.and.right";
-  [scale insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @100.0, @100.0 ]]];
+  [scale insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                         values:@[ @100.0, @100.0 ]]];
 
-  // Position: 2D spatial, stored normalised 0..1 (0.5,0.5 = centred = identity),
-  // displayed as pixels. Same reusable curved-path Position as Glow/MagicMove
-  // (spatialCurvable). Off-canvas allowed, so no min/max.
+  // Position: 2D spatial, stored normalised 0..1 (0.5,0.5 = centred =
+  // identity), displayed as pixels. Same reusable curved-path Position as
+  // Glow/MagicMove (spatialCurvable). Off-canvas allowed, so no min/max.
   KKLane *position = [KKLane laneWithLabel:@"Position"];
   position.valueType = KKLaneValueTypeGeneric;
   position.componentMin = @[];
@@ -80,9 +81,9 @@
                                     initWithBase64EncodedString:layerB64
                                                         options:0]]
             : [NSMutableArray array];
-    KKTimeline *layerTL = CanvasLayerTimelineForPath(
-        CanvasSelectedLayerForPaths(layerPaths, nil),
-        [CanvasPlugin availableLanes]);
+    KKTimeline *layerTL =
+        CanvasLayerTimelineForPath(CanvasSelectedLayerForPaths(layerPaths, nil),
+                                   [CanvasPlugin availableLanes]);
     KKTimeline *timeline = [self timelineStampedWithClipDuration:layerTL];
 
     // Frame + clip duration for the keypose-snap epsilon and the basic-view
@@ -101,6 +102,11 @@
       seedClipDurSec = CMTimeGetSeconds(clipDur);
     }
 
+    // Mint the per-instance state UUID here (inside the action scope, where the
+    // setting API resolves) so the viewer Transform OSC can read its visibility
+    // - without it the OSC reads no state and defaults to visible.
+    KKInstanceStateEnsureForAPI(self.apiManager);
+
     [actionAPI endAction:self];
 
     NSArray<KKLane *> *available = [CanvasPlugin availableLanes];
@@ -115,6 +121,12 @@
       [view setClipDurationSeconds:seedClipDurSec];
     if (seedFrameDurSec > 0)
       [view setFrameDurationSeconds:seedFrameDurSec];
+    // Seed the motion-blur toolbar row from the persisted blob (the standard
+    // callbacks below own the write-back; this restores the toggle on reopen).
+    [view setMotionBlurEnabled:st.motionBlurEnabled];
+    [view setMotionBlurShutterAngle:st.motionBlurShutterAngle
+                            samples:st.motionBlurSamples];
+    [view setMotionBlurMode:(KKMotionBlurMode)st.motionBlurMode];
 
     [self kkWireStandardInspectorCallbacksForView:view
                                    uiStateParamID:kParamUIState
@@ -143,15 +155,15 @@
           [s.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
       NSString *b64 = KKReadCustomParamString(get, kParamLayerData);
       NSMutableArray<KKBezierPath *> *cur =
-          b64.length ? [KKBezierPath
-                           pathsFromBlob:[[NSData alloc]
-                                             initWithBase64EncodedString:b64
-                                                                 options:0]]
-                     : [NSMutableArray array];
+          b64.length
+              ? [KKBezierPath pathsFromBlob:[[NSData alloc]
+                                                initWithBase64EncodedString:b64
+                                                                    options:0]]
+              : [NSMutableArray array];
       CanvasApplyTimelineToPath(
-          updated, CanvasSelectedLayerForPaths(
-                       cur, ((CanvasInspectorView *)s.inspectorView)
-                                .selectedLayerID));
+          updated,
+          CanvasSelectedLayerForPaths(
+              cur, ((CanvasInspectorView *)s.inspectorView).selectedLayerID));
       NSData *blob = [KKBezierPath blobFromPaths:cur];
       KKWriteCustomParamString(set, [blob base64EncodedStringWithOptions:0],
                                kParamLayerData);
@@ -175,12 +187,13 @@
           [s.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
       NSString *b64 = KKReadCustomParamString(get, kParamLayerData);
       NSMutableArray<KKBezierPath *> *cur =
-          b64.length ? [KKBezierPath
-                           pathsFromBlob:[[NSData alloc]
-                                             initWithBase64EncodedString:b64
-                                                                 options:0]]
-                     : [NSMutableArray array];
-      CanvasApplyMergedTimelineToPaths(merged, cur, [CanvasPlugin availableLanes]);
+          b64.length
+              ? [KKBezierPath pathsFromBlob:[[NSData alloc]
+                                                initWithBase64EncodedString:b64
+                                                                    options:0]]
+              : [NSMutableArray array];
+      CanvasApplyMergedTimelineToPaths(merged, cur,
+                                       [CanvasPlugin availableLanes]);
       NSData *blob = [KKBezierPath blobFromPaths:cur];
       KKWriteCustomParamString(set, [blob base64EncodedStringWithOptions:0],
                                kParamLayerData);
@@ -188,6 +201,48 @@
     };
 
     self.inspectorView = view;
+
+    // Viewer OSC visibility: a global "show controls" toggle + per-element
+    // opt-click hide/show, HIDDEN by default (master defaults OFF for Canvas).
+    // nil renderer so the toggle drives only the viewer OSC's instance state
+    // (which CanvasOSC reads), not the popover MINI handles
+    // (editing-contextual, stay shown). Two pills: Position (+ its motion Path)
+    // and Scale.
+    NSArray<NSArray<NSString *> *> *oscCompounds =
+        @[ @[ @"Position", @"Path" ], @[ @"Scale" ] ];
+    // Wire the REAL mini renderer here so onHandleVisibilityToggled is set -
+    // the mini's opt-reveal ghost gates on (revealHidden &&
+    // onHandleVisibilityToggled
+    // != nil); the kit overlay already drives revealHidden on Option-hold, so
+    // this is the missing half (it also gives opt-click-in-mini hide/show, like
+    // MagicMove/Glow). handlesHidden + hiddenHandleLabels stay owned by
+    // -syncMiniHandleVisibility (so lock ORs in without fighting the kit's
+    // async master set); kkRefresh below keeps nil for the same reason.
+    [self kkWireOSCVisibilityForView:view
+                            renderer:(KKMiniViewerRenderer *)
+                                         view.miniViewerDelegate
+                           compounds:oscCompounds
+                             paramID:kParamUIState];
+    NSMutableDictionary *visState =
+        [st.uiState mutableCopy] ?: [NSMutableDictionary dictionary];
+    // Default: global controls ON, but the Transform (Position + Path + Scale)
+    // individually hidden - so the viewer is clean yet opt-hold reveals the
+    // ghost controls to opt-click on (no need to flip the global toggle first).
+    if (!visState[@"oscMasterVisible"])
+      visState[@"oscMasterVisible"] = @YES;
+    if (!visState[@"oscElements"])
+      visState[@"oscElements"] =
+          @{@"Position" : @NO, @"Path" : @NO, @"Scale" : @NO};
+    [self kkRefreshOSCVisibilityFromState:visState
+                                     view:view
+                                 renderer:nil
+                              elementKeys:[CanvasPlugin
+                                              kkOSCElementKeysForCompounds:
+                                                  oscCompounds]];
+    // Push that visibility onto the popover mini handles too (Canvas owns this
+    // - the wiring uses a nil renderer so it doesn't fight the lock state).
+    [view syncMiniHandleVisibility];
+
     // The Layers panel opens parameter actions to read/write kParamLayerData;
     // they only persist if the action sender is a host-recognized editor (the
     // plugin), like the playhead poller's actionTarget below.
