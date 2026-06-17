@@ -953,25 +953,30 @@ static const CGFloat kKKCategoryPillH = 24.0;
   _lanes = [lanes copy];
   [self _seedCurrentValues];
   _labelColumnWidth = [_KKStaticValueRow labelColumnWidthForLanes:lanes];
+  // Make a row for each newly-constant lane (append for now) and refresh the
+  // existing ones.
   for (KKLane *lane in lanes) {
     if (_rowsByLabel[lane.label]) {
       [_rowsByLabel[lane.label] applyLane:lane]; // reflect external edits
       continue;
     }
     _KKStaticValueRow *row = [self _makeRowForLane:lane];
-    NSInteger insertIdx = _stack.arrangedSubviews.count;
-    for (NSInteger i = 0; i < (NSInteger)_stack.arrangedSubviews.count; i++) {
-      _KKStaticValueRow *existing =
-          (_KKStaticValueRow *)_stack.arrangedSubviews[i];
-      if ([lane.label localizedCaseInsensitiveCompare:existing.laneLabel] ==
-          NSOrderedAscending) {
-        insertIdx = i;
-        break;
-      }
-    }
-    [_stack insertArrangedSubview:row atIndex:insertIdx];
+    [_stack addArrangedSubview:row];
     [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
     _rowsByLabel[lane.label] = row;
+  }
+  // Order the stack by the canonical `lanes` order (the parameter order), not
+  // alphabetically: a row restored by cmd-Z (undo of "move to animated") must
+  // land back in its original parameter slot, not get sorted by label. `lanes`
+  // arrives in paramOrder (see _unoptedLanes), so just place each present row
+  // in that sequence.
+  NSInteger pos = 0;
+  for (KKLane *lane in lanes) {
+    _KKStaticValueRow *row = _rowsByLabel[lane.label];
+    if (!row)
+      continue;
+    [_stack removeArrangedSubview:row];
+    [_stack insertArrangedSubview:row atIndex:pos++];
   }
 
   // Rebuild the category nav so a tab disappears the moment its last constant
@@ -991,6 +996,14 @@ static const CGFloat kKKCategoryPillH = 24.0;
                                         clipAspect:_clipAspect
                                      reserveHeader:_hasHeader
                                   selectedCategory:_selectedCategory]);
+
+  // The shared mini-viewer renderer was updated externally (cmd-Z, or a new
+  // layer's lanes arriving while the companion layer-list panel is open), but
+  // the synthesized timeline setter doesn't repaint this open popover's
+  // mini-viewer. Repaint the preview + handles so an Opt-peek reflects the new
+  // lane set without a close/reopen - mirrors -_makeRowForLane:'s onValue path.
+  [_miniViewer setNeedsDisplay:YES];
+  [_miniViewer setHandlesNeedDisplay];
 }
 
 @end

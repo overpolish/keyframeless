@@ -208,7 +208,11 @@
   _miniViewerRenderer.hiddenHandleLabels = st.hiddenOSCElements ?: [NSSet set];
   KKBezierPath *sel = CanvasSelectedLayerForPaths(
       [_layerListController currentLayerPaths], _selectedLayerID);
-  _miniViewerRenderer.handlesHidden = !master || sel.locked;
+  // Master-off is a peekable hide (Opt reveals); lock is a hard, non-peekable,
+  // non-interactive gate - keep them on separate flags so Opt can't peek a
+  // locked layer's handles into existence.
+  _miniViewerRenderer.handlesHidden = !master;
+  _miniViewerRenderer.handlesLocked = sel.locked;
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {

@@ -37,8 +37,27 @@ KKBezierPath *CanvasSelectedLayerForPaths(NSArray<KKBezierPath *> *paths,
 KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
                                        NSArray<KKLane *> *templates) {
   KKTimeline *tl = [KKTimeline timeline];
-  if (!path)
+  if (!path) {
+    // No layer at all (empty stack): still surface the transform lanes, but
+    // LOCKED so the constants popover + graphs render read-only. Editing a
+    // value here has nowhere to persist (no owning layer), so it must not look
+    // adjustable. The kit's seed preserves `locked` on a present lane, and the
+    // templates already carry their identity keypose for the readout.
+    NSMutableArray<KKLane *> *lanes =
+        [NSMutableArray arrayWithCapacity:templates.count];
+    NSMutableArray<NSString *> *order =
+        [NSMutableArray arrayWithCapacity:templates.count];
+    for (KKLane *t in templates) {
+      KKLane *src = [t copy];
+      src.locked = YES;
+      [lanes addObject:src];
+      if (t.label)
+        [order addObject:t.label];
+    }
+    tl.lanes = lanes;
+    tl.paramOrder = order;
     return tl;
+  }
 
   // The layer's own stored lanes, keyed by label (preserve enabled + keyposes).
   NSMutableDictionary<NSString *, KKLane *> *stored =

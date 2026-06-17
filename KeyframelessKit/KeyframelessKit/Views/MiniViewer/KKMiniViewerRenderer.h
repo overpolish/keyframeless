@@ -64,6 +64,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Set by the host when the user toggles the inspector's OSC visibility.
 @property(nonatomic) BOOL handlesHidden;
 
+/// Hard "this layer is locked" gate. Like `handlesHidden` it hides every
+/// handle, but unlike it Option-hold does NOT peek/reveal and nothing is
+/// hit-testable - a locked layer is visible-but-non-interactive, so its OSC
+/// must never become grabbable. Default NO (plugins without per-layer lock
+/// leave it untouched). Set by the host alongside the selection sync.
+@property(nonatomic) BOOL handlesLocked;
+
 /// Per-element OSC visibility from the settings popover's pills: lane labels
 /// the user has individually hidden (e.g. @"Position"). Distinct from
 /// `suppressedHandleLabels` (which the boundary popover owns per-phase) so the

@@ -223,9 +223,11 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 // Reveal mode only bites when the host wired the toggle (so plugins that don't
-// support opt-hide are untouched).
+// support opt-hide are untouched). A locked layer is never revealed - Opt-hold
+// can't peek a non-interactive OSC into existence.
 - (BOOL)_revealActive {
-  return _revealHidden && self.onHandleVisibilityToggled != nil;
+  return !_handlesLocked && _revealHidden &&
+         self.onHandleVisibilityToggled != nil;
 }
 
 // "Peek and use" mode: the master is off (handlesHidden) and Opt is held. Every
@@ -258,6 +260,8 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 //                master-on, so it respects your per-element config rather than
 //                flashing everything).
 - (BOOL)_shownLabel:(NSString *)label {
+  if (_handlesLocked)
+    return NO;
   BOOL hidden = [self _individuallyHiddenLabel:label];
   if (_handlesHidden)
     return [self _revealActive] && !hidden;
@@ -288,6 +292,8 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 // Ring is drawn / hit-tested this frame. Mirrors -_shownLabel: : master-off
 // peek shows only the rings left enabled.
 - (BOOL)_ringShownAtAxis:(int)k {
+  if (_handlesLocked)
+    return NO;
   BOOL hidden = [self _ringIndividuallyHiddenAtAxis:k];
   if (_handlesHidden)
     return [self _revealActive] && !hidden;
@@ -589,6 +595,13 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   _handlesHidden = handlesHidden;
   // Repaint the bound canvas (if a preview/popover is open) so the change
   // shows without a scrub; nil canvas is a no-op.
+  [self.canvas setHandlesNeedDisplay];
+}
+
+- (void)setHandlesLocked:(BOOL)handlesLocked {
+  if (_handlesLocked == handlesLocked)
+    return;
+  _handlesLocked = handlesLocked;
   [self.canvas setHandlesNeedDisplay];
 }
 

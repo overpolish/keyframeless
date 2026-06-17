@@ -99,6 +99,27 @@ static const NSInteger kCanvasOSCPathPart = 3;
   self.scale.dragging = self.isDragging;
 }
 
+// Whether the selected layer (the one the OSC reads via the process timeline
+// snapshot) is locked. A locked layer is visible-but-non-interactive: its OSC
+// is neither drawn nor hit-testable, and Opt-hold can't peek it back - matching
+// the mini-viewer's `handlesLocked`. Derived the same way as the persist path:
+// the snapshot lanes carry the owning `layerKey`; resolve it in the published
+// layer blob.
+- (BOOL)_selectedLayerLocked {
+  NSString *layerID = nil;
+  for (KKLane *l in KKProcessTimelineSnapshot().lanes)
+    if (l.layerKey.length) {
+      layerID = l.layerKey;
+      break;
+    }
+  NSString *b64 = CanvasLayerBlobSnapshot();
+  if (!b64.length)
+    return NO;
+  NSMutableArray<KKBezierPath *> *paths = [KKBezierPath
+      pathsFromBlob:[[NSData alloc] initWithBase64EncodedString:b64 options:0]];
+  return CanvasSelectedLayerForPaths(paths, layerID).locked;
+}
+
 - (void)drawOSCWithWidth:(NSInteger)width
                   height:(NSInteger)height
               activePart:(NSInteger)activePart
@@ -111,6 +132,9 @@ static const NSInteger kCanvasOSCPathPart = 3;
                                        commands:^(id<MTLRenderCommandEncoder> e,
                                                   CGPoint p, simd_uint2 v){
                                        }];
+  // Locked layer: cleared surface only, no handles (and no Opt-reveal).
+  if ([self _selectedLayerLocked])
+    return;
   // The controller (KKPositionOSC) owns ALL the visibility + opt-reveal-ghost
   // gating internally (it reads kkOSCElementVisible / kkOSCRevealEligible +
   // ITS OWN optRevealActive). So just forward our reveal + drag state to it and
@@ -182,6 +206,9 @@ static const NSInteger kCanvasOSCPathPart = 3;
     [resetAPI setCursor:[NSCursor arrowCursor]];
     self.pointCursorSet = NO;
   }
+  // Locked layer: nothing is grabbable (and Opt can't peek it back).
+  if ([self _selectedLayerLocked])
+    return;
   // The controller gates hit-testing on visibility + ITS optRevealActive, so a
   // hidden handle isn't grabbable unless Opt-revealed - forward the reveal flag
   // so a revealed ghost becomes hittable (opt-click re-shows it).
