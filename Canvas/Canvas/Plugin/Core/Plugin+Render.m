@@ -158,28 +158,11 @@
   MTLPixelFormat pf =
       [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
   uint64_t regID = destinationImage.deviceRegistryID;
-  id<MTLRenderPipelineState> ps = [cache
-      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
-                                               @".Canvas.passthrough"
-                                    registryID:regID
-                                   pixelFormat:pf
-                                      bundleID:kitBundleID
-                                  vertexShader:@"KKVertexShader"
-                                fragmentShader:@"KKTexturePassthroughFragment"
-                                     blendMode:KKBlendModeNone];
-  if (!ps) {
-    KKLogError(@"Canvas render bail: no passthrough pipeline");
-    if (outError)
-      *outError = [NSError errorWithDomain:FxPlugErrorDomain
-                                      code:kFxError_InvalidParameter
-                                  userInfo:nil];
-    return NO;
-  }
 
-  // Image-layer overlay pipeline: the transform-aware vertex shader (per-layer
-  // 4x4 model + perspective for 3D tilt), sampled straight through, composited
-  // over the source with premultiplied-alpha "over" (the loader stores
-  // premultiplied textures).
+  // Image pipeline: the transform-aware vertex shader (per-layer 4x4 model +
+  // perspective + tile shift) + the opacity fragment, composited with
+  // premultiplied-alpha "over". Both the source frame AND the layers go through
+  // it so they tile identically in FCP's sub-tiled / reverse-Y library preview.
   id<MTLRenderPipelineState> imagePS = [cache
       buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
                                                @".Canvas.image"
@@ -189,6 +172,14 @@
                                   vertexShader:@"KKTransformVertexShader"
                                 fragmentShader:@"KKTextureOpacityFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];
+  if (!imagePS) {
+    KKLogError(@"Canvas render bail: no image pipeline");
+    if (outError)
+      *outError = [NSError errorWithDomain:FxPlugErrorDomain
+                                      code:kFxError_InvalidParameter
+                                  userInfo:nil];
+    return NO;
+  }
 
   // The state blob is [KKMotionBlurState][layer blob]; split off the MB prefix
   // before decoding the layer stack (bottom of the array draws in front, so
@@ -208,10 +199,20 @@
   NSMutableDictionary<NSString *, id<MTLTexture>> *texCache =
       self.imageTextureCache;
 
-  float outputWidth = (float)(destinationImage.tilePixelBounds.right -
-                              destinationImage.tilePixelBounds.left);
-  float outputHeight = (float)(destinationImage.tilePixelBounds.top -
-                               destinationImage.tilePixelBounds.bottom);
+  // Layers are positioned in FULL-image space; a per-tile shift maps that into
+  // the current render tile (the shader divides by the tile viewport). For a
+  // full-frame tile the shift is 0; FCP's tiled previews pass a non-zero shift
+  // so each tile shows its slice instead of redrawing the whole composite.
+  FxRect tileB = destinationImage.tilePixelBounds;
+  FxRect imgB = destinationImage.imagePixelBounds;
+  float outputWidth = (float)(imgB.right - imgB.left);
+  float outputHeight = (float)(imgB.top - imgB.bottom);
+  float tileShiftX =
+      outputWidth * 0.5f - ((tileB.left + tileB.right) * 0.5f - imgB.left);
+  // Y measured from the image TOP (the vert/shader Y here runs opposite FCP's
+  // Y-up pixel bounds, so a from-bottom reference reversed the tile strip).
+  float tileShiftY =
+      outputHeight * 0.5f - (imgB.top - (tileB.bottom + tileB.top) * 0.5f);
 
   // Clip-local time a layer's Scale/Position is evaluated at (same remap as
   // every timing read). Negative when the duration isn't known yet, which tells
@@ -230,18 +231,17 @@
   void (^composite)(id<MTLRenderCommandEncoder>, NSArray<id<MTLTexture>> *,
                     double) = ^(id<MTLRenderCommandEncoder> enc,
                                 NSArray<id<MTLTexture>> *inputs, double f) {
-    if (!inputs.count)
+    if (!inputs.count || !imagePS || !device)
       return;
-    [enc setRenderPipelineState:ps];
-    [enc setFragmentTexture:inputs[0] atIndex:KKTextureIndex_InputImage];
-    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-            vertexStart:0
-            vertexCount:4];
-    if (!imagePS || !device)
-      return;
+    // Source + layers both go through the image pipeline (transform shader +
+    // tile shift) so they tile identically in FCP's sub-tiled / reverse-Y
+    // library preview. The source is a full-image quad drawn first (over the
+    // cleared target = the source), then the layers composite on top.
     [enc setRenderPipelineState:imagePS];
+    CanvasEncodeSourceTile(enc, inputs[0], outputWidth, outputHeight,
+                           tileShiftX, tileShiftY);
     CanvasEncodeImageLayers(layers, enc, device, texCache, outputWidth,
-                            outputHeight, f, nil, nil);
+                            outputHeight, tileShiftX, tileShiftY, f, nil, nil);
   };
 
   // Motion blur: accumulate the composite across sub-frame sample times (the

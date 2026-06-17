@@ -281,9 +281,11 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   // boundary time when a popover is editing one (so the preview matches the
   // edited pose) and 0 otherwise (constants resolve correctly there).
   [enc setRenderPipelineState:_imagePipeline];
-  CanvasEncodeImageLayers(self.layers ?: @[], enc, cb.device,
-                          self.imageTextureCache, w, h, self.editFraction,
-                          self.selectedLayerID, self.timeline);
+  // The mini renders the whole frame into one dest (no tiling), so image dims =
+  // dest dims and the tile shift is zero.
+  CanvasEncodeImageLayers(
+      self.layers ?: @[], enc, cb.device, self.imageTextureCache, w, h, 0.0f,
+      0.0f, self.editFraction, self.selectedLayerID, self.timeline);
 
   [enc endEncoding];
   return YES;

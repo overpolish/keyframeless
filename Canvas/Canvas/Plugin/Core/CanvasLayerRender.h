@@ -45,11 +45,31 @@ NSMutableArray<KKBezierPath *> *
 /// from `overrideTimeline` (the popover's in-memory edited copy) instead of its
 /// persisted `animationJSON`, so a Position-handle drag tracks immediately.
 /// Pass nil/nil for the main render (every layer reads its own blob).
+///
+/// `imageWidth`/`imageHeight` are the FULL image dimensions (imagePixelBounds),
+/// the space layers are positioned in; `tileShiftX`/`tileShiftY` translate that
+/// image-space content into the current render TILE (the viewport the shader
+/// divides by). For a full-frame render tile==image so shift is 0; FCP's tiled
+/// previews pass a non-zero shift so each tile shows only its slice instead of
+/// redrawing the whole composite.
 void CanvasEncodeImageLayers(
     NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
     id<MTLDevice> device,
-    NSMutableDictionary<NSString *, id<MTLTexture>> *cache, float outputWidth,
-    float outputHeight, double frac, NSString *_Nullable overrideLayerID,
+    NSMutableDictionary<NSString *, id<MTLTexture>> *cache, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY, double frac,
+    NSString *_Nullable overrideLayerID,
     KKTimeline *_Nullable overrideTimeline);
+
+/// Draw the source frame as a full-image quad through the SAME tile transform
+/// (KKTransformVertexShader + the tile-shift matrix) the layers use, so it
+/// tiles identically in FCP's sub-tiled / reverse-Y library preview instead of
+/// relying on the kit helper's UV passthrough (which isn't reliable
+/// cross-tile). The caller must have set a KKTransformVertexShader +
+/// KKTextureOpacityFragment pipeline (the image pipeline); this binds
+/// opacity 1. Draws nothing if no src.
+void CanvasEncodeSourceTile(id<MTLRenderCommandEncoder> encoder,
+                            id<MTLTexture> _Nullable source, float imageWidth,
+                            float imageHeight, float tileShiftX,
+                            float tileShiftY);
 
 NS_ASSUME_NONNULL_END

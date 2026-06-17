@@ -116,23 +116,33 @@ static simd_float2 CanvasTransformCorner(float nx, float ny,
 }
 
 // Per-layer forward transform fed to KKTransformVertexShader. Scale, Z-rotation
-// and Position are already baked into the CPU corner verts; this adds only the
-// X/Y tilt (about the layer centre) and a perspective projection (about the
-// screen centre), so a layer with rotX=rotY=0 gets a pure perspective matrix
-// that reproduces the orthographic 2D result at z=0. Composition is Ry*Rx with
-// Z innermost (on the verts) to match the rotation OSC's Ry*Rx*Rz pose.
-// `centerPx` is the layer centre in centered-pixel space; W,H the output dims.
+// and Position are already baked into the CPU corner verts (in full-IMAGE
+// centered-pixel space); this adds only the X/Y tilt (about the layer centre),
+// a perspective projection (about the image centre), and a final TILE shift
+// that repositions the image-space result into the current render tile (the
+// shift is applied post-perspective as a constant screen offset, so the
+// vanishing point stays at the image centre across tiles). rotX=rotY=0 +
+// shift=0 gives a pure perspective matrix == orthographic at z=0.
+// `centerPx` is the layer centre in image-centered-pixel space; W,H the image
+// dims; `tileShift` the image->tile pixel offset.
 static matrix_float4x4 CanvasLayerTiltMatrix(CanvasLayerTransform t,
                                              simd_float2 centerPx, float W,
-                                             float H) {
+                                             float H, simd_float2 tileShift) {
   // Camera at distance camD on +Z: (x,y,z,1) -> (camD x, camD y, z, z + camD);
   // after the perspective divide, foreshortening scales by camD/(z + camD).
   float camD = fmaxf(W, H);
   matrix_float4x4 P = simd_matrix(
       simd_make_float4(camD, 0, 0, 0), simd_make_float4(0, camD, 0, 0),
       simd_make_float4(0, 0, 1, 1), simd_make_float4(0, 0, 0, camD));
+  // Tile shift OUTSIDE the perspective (homogeneous translate by shift*w) =
+  // constant post-divide screen offset, so it doesn't move the vanishing point.
+  matrix_float4x4 Tshift =
+      simd_matrix(simd_make_float4(1, 0, 0, 0), simd_make_float4(0, 1, 0, 0),
+                  simd_make_float4(0, 0, 1, 0),
+                  simd_make_float4(tileShift.x, tileShift.y, 0, 1));
+  matrix_float4x4 PS = simd_mul(Tshift, P); // Tshift · P
   if (t.rotX == 0.0f && t.rotY == 0.0f)
-    return P; // no tilt: pure perspective is orthographic at z=0
+    return PS; // no tilt: perspective (ortho at z=0) + tile shift
   float cx = cosf(t.rotX), sx = sinf(t.rotX);
   float cy = cosf(t.rotY), sy = sinf(t.rotY);
   matrix_float4x4 Rx = simd_matrix(
@@ -150,7 +160,7 @@ static matrix_float4x4 CanvasLayerTiltMatrix(CanvasLayerTransform t,
                   simd_make_float4(0, 0, 1, 0),
                   simd_make_float4(centerPx.x, centerPx.y, 0, 1));
   matrix_float4x4 model = simd_mul(Tpos, simd_mul(Ry, simd_mul(Rx, Tneg)));
-  return simd_mul(P, model);
+  return simd_mul(PS, model); // Tshift · P · model
 }
 
 NSMutableArray<KKBezierPath *> *CanvasReadLayerPaths(id<PROAPIAccessing> api,
@@ -174,14 +184,49 @@ NSMutableArray<KKBezierPath *> *CanvasReadLayerPaths(id<PROAPIAccessing> api,
   return paths ?: [NSMutableArray array];
 }
 
+void CanvasEncodeSourceTile(id<MTLRenderCommandEncoder> encoder,
+                            id<MTLTexture> source, float imageWidth,
+                            float imageHeight, float tileShiftX,
+                            float tileShiftY) {
+  if (!encoder || !source)
+    return;
+  // A full-image identity quad: same image-centered pixel space + tile-shift as
+  // the layers, so the source tiles the same way (correct in the sub-tiled,
+  // reverse-Y library preview). For a full-frame render shift=0 -> m4=P, which
+  // reproduces the orthographic full-frame source draw.
+  matrix_float4x4 m4 = CanvasLayerTiltMatrix(
+      CanvasLayerTransformIdentity(), simd_make_float2(0.0f, 0.0f), imageWidth,
+      imageHeight, simd_make_float2(tileShiftX, tileShiftY));
+  float halfW = imageWidth * 0.5f, halfH = imageHeight * 0.5f;
+  KKVertex2D quad[4] = {
+      {{halfW, -halfH}, {1, 1}},
+      {{-halfW, -halfH}, {0, 1}},
+      {{halfW, halfH}, {1, 0}},
+      {{-halfW, halfH}, {0, 0}},
+  };
+  float opacity = 1.0f; // image pipeline's opacity fragment reads buffer 0
+  [encoder setVertexBytes:&m4
+                   length:sizeof(m4)
+                  atIndex:KKVertexInputIndex_Transform];
+  [encoder setVertexBytes:quad
+                   length:sizeof(quad)
+                  atIndex:KKVertexInputIndex_Vertices];
+  [encoder setFragmentBytes:&opacity length:sizeof(opacity) atIndex:0];
+  [encoder setFragmentTexture:source atIndex:KKTextureIndex_InputImage];
+  [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+              vertexStart:0
+              vertexCount:4];
+}
+
 void CanvasEncodeImageLayers(
     NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
     id<MTLDevice> device,
-    NSMutableDictionary<NSString *, id<MTLTexture>> *cache, float outputWidth,
-    float outputHeight, double frac, NSString *overrideLayerID,
-    KKTimeline *overrideTimeline) {
+    NSMutableDictionary<NSString *, id<MTLTexture>> *cache, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY, double frac,
+    NSString *overrideLayerID, KKTimeline *overrideTimeline) {
   if (!encoder || !device)
     return;
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
   for (NSInteger i = (NSInteger)layers.count - 1; i >= 0; i--) {
     KKBezierPath *path = layers[i];
     if (!path.isImage || path.hidden || path.isGroup || !path.imagePath.length)
@@ -210,7 +255,7 @@ void CanvasEncodeImageLayers(
       t = CanvasLayerTransformAtFraction(path, frac);
     float cx = (rect.min.x + rect.max.x) * 0.5f;
     float cy = (rect.min.y + rect.max.y) * 0.5f;
-    float aspect = (outputHeight > 0.0f) ? (outputWidth / outputHeight) : 1.0f;
+    float aspect = (imageHeight > 0.0f) ? (imageWidth / imageHeight) : 1.0f;
     simd_float2 br =
         CanvasTransformCorner(rect.max.x, rect.min.y, t, cx, cy, aspect);
     simd_float2 bl =
@@ -219,19 +264,21 @@ void CanvasEncodeImageLayers(
         CanvasTransformCorner(rect.max.x, rect.max.y, t, cx, cy, aspect);
     simd_float2 tl =
         CanvasTransformCorner(rect.min.x, rect.max.y, t, cx, cy, aspect);
-    // Object space (0..1, centred at 0.5) -> pixel space across the output.
-    simd_float2 scale = simd_make_float2(outputWidth, outputHeight);
+    // Object space (0..1, centred at 0.5) -> full-IMAGE centered-pixel space.
+    // The tile shift (into the render tile) is applied in the tilt matrix.
+    simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
     simd_float2 half = simd_make_float2(0.5f, 0.5f);
     br = (br - half) * scale;
     bl = (bl - half) * scale;
     tr = (tr - half) * scale;
     tl = (tl - half) * scale;
-    // X/Y tilt + perspective is applied in the vertex shader about the layer
-    // centre (the 2D scale/Z/position are already baked into the verts above).
+    // X/Y tilt + perspective + tile shift applied in the vertex shader about
+    // the layer centre (the 2D scale/Z/position are already baked into the
+    // verts).
     simd_float2 centerPx =
         (CanvasTransformCorner(cx, cy, t, cx, cy, aspect) - half) * scale;
     matrix_float4x4 tilt =
-        CanvasLayerTiltMatrix(t, centerPx, outputWidth, outputHeight);
+        CanvasLayerTiltMatrix(t, centerPx, imageWidth, imageHeight, tileShift);
 
     KKVertex2D quad[4] = {
         {br, {1, 1}},
