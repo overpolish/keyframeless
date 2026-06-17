@@ -70,32 +70,12 @@
     *activePart = kOSCScalePart;
     return;
   }
-  if ([self _configureRotationRingsAtFraction:frac dragging:NO]) {
-    CGPoint c = [self oscPositionAtTime:time];
-    NSArray<NSNumber *> *r = _rotationValuesAtFraction(frac);
-    self.rotationOSC.rotX = (float)(r[0].doubleValue * M_PI / 180.0);
-    self.rotationOSC.rotY = (float)(r[1].doubleValue * M_PI / 180.0);
-    self.rotationOSC.rotZ = (float)(r[2].doubleValue * M_PI / 180.0);
-    self.rotationOSC.center = c;
-    if ([self.rotationOSC hitTestAtMousePositionX:positionX
-                                        positionY:positionY
-                                           atTime:time]) {
-      *activePart = kOSCRotationPart;
-      // Opt-hover hide/show affordance for the hit ring's axis (eye/eye.slash);
-      // overrides the rotate cursor the ring just set. Per-axis label matches
-      // -_oscElementKeyForActivePart: (Rotation.X/Y/Z).
-      NSInteger ax = self.rotationOSC.activeAxis;
-      NSString *axis = (ax == 0) ? @"X" : (ax == 1) ? @"Y" : @"Z";
-      NSCursor *eye = [self
-          kkVisibilityCursorForLabel:[NSString stringWithFormat:@"Rotation.%@",
-                                                                axis]];
-      if (eye) {
-        id<FxOnScreenControlAPI_v4> oscAPI =
-            [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-        [oscAPI setCursor:eye];
-      }
-    }
-  }
+  // Rotation rings: the shared KKRotationOSC owns ring config + pose + hit-test
+  // + the per-axis opt-hover eye cursor. Feed it this tick's centre + reveal.
+  self.rotationOSC.center = [self oscPositionAtTime:time];
+  self.rotationOSC.optRevealActive = self.optRevealActive;
+  if ([self.rotationOSC hitTestRingAtX:positionX y:positionY atTime:time] >= 0)
+    *activePart = kOSCRotationPart;
 }
 
 // Force FCP's move cursor over a draggable point (anchor / position / path) and

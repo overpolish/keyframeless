@@ -59,19 +59,6 @@ enum {
 @property(nonatomic) double anchorGrabValX;
 @property(nonatomic) double anchorGrabValY;
 @property(nonatomic) simd_float2 anchorPressObject;
-@property(nonatomic)
-    CGPoint rotPressCanvas;            // canvas pixel where rot drag began
-@property(nonatomic) double rotPressX; // rotation values (rad) at press
-@property(nonatomic) double rotPressY;
-@property(nonatomic) double rotPressZ;
-// Per-drag continuity anchor: last-written Euler values. The Euler
-// decomposition has two valid reps and as drag accumulates past ~270° the
-// "nearest to press" rule starts picking the wrong one (because press is
-// far away). Using the previous tick's output as the anchor keeps the
-// per-tick angular step small and unambiguous.
-@property(nonatomic) double rotLastWrittenX;
-@property(nonatomic) double rotLastWrittenY;
-@property(nonatomic) double rotLastWrittenZ;
 
 // Geometry / evaluation helpers implemented in the primary @implementation
 // (OSC.m); the HitTest helpers live in MagicMoveOSC+HitTest.m. Declared here so
@@ -80,8 +67,6 @@ enum {
 - (CGPoint)oscPositionAtTime:(CMTime)time;
 - (CGPoint)_canvasFromObjX:(double)ox y:(double)oy;
 - (CGPoint)_anchorCanvasAtFraction:(double)frac;
-- (BOOL)_configureRotationRingsAtFraction:(double)frac dragging:(BOOL)dragging;
-- (void)_syncRotationColorsFromLane;
 /// On-screen frame min side (canvas units), the reference dimension the scale
 /// gizmo sizes against. Fed to `scaleControl.frameMin` each tick.
 - (double)_onScreenFrameMin;

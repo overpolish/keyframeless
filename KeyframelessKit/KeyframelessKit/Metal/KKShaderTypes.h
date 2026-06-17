@@ -9,7 +9,12 @@
 
 typedef enum KKVertexInputIndex {
     KKVertexInputIndex_Vertices = 0,
-    KKVertexInputIndex_ViewportSize = 1
+    KKVertexInputIndex_ViewportSize = 1,
+    // A float4x4 forward transform (model + perspective) consumed by
+    // KKTransformVertexShader. Maps centered-pixel vertices to a clip-space
+    // position for Metal's perspective divide (the shader still applies the
+    // viewport / 2 normalization). Unused by the plain KKVertexShader.
+    KKVertexInputIndex_Transform = 2
 } KKVertexInputIndex;
 
 typedef enum KKTextureIndex { KKTextureIndex_InputImage = 0 } KKTextureIndex;

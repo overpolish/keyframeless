@@ -15,15 +15,10 @@ KKLane *_laneNamed(NSString *label) {
 }
 
 KKLane *_positionLane(void) { return _laneNamed(@"Position"); }
-KKLane *_rotationLane(void) { return _laneNamed(@"Rotation"); }
 KKLane *_anchorLane(void) { return _laneNamed(@"Anchor"); }
 
 BOOL _positionVisibleAtFraction(double frac) {
   return KKLaneVisibleAtFraction(_positionLane(), frac,
-                                 KKProcessFrameDurationSeconds());
-}
-BOOL _rotationVisibleAtFraction(double frac) {
-  return KKLaneVisibleAtFraction(_rotationLane(), frac,
                                  KKProcessFrameDurationSeconds());
 }
 BOOL _anchorVisibleAtFraction(double frac) {
@@ -56,19 +51,4 @@ NSArray<NSNumber *> *_positionValuesAtFraction(double frac) {
   // anchor (the mini-viewer already uses the raw value, hence stays aligned).
   NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
   return v.count >= 2 ? v : @[ @0.5, @0.5 ];
-}
-
-// (rotX, rotY, rotZ) in DEGREES (matches storage).
-NSArray<NSNumber *> *_rotationValuesAtFraction(double frac) {
-  KKLane *lane = _rotationLane();
-  if (!lane)
-    return @[ @0.0, @0.0, @0.0 ];
-  NSArray<NSNumber *> *v =
-      KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
-  if (v.count >= 3)
-    return v;
-  NSMutableArray *out = [NSMutableArray arrayWithArray:v];
-  while (out.count < 3)
-    [out addObject:@0.0];
-  return out;
 }

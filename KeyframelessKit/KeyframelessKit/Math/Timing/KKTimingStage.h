@@ -293,6 +293,11 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 
 + (instancetype)laneWithLabel:(NSString *)label;
 
+/// Standard FCP-style opacity lane (one whole-percentage component 0..100,
+/// identity 100). Shared so every plugin with an opacity property uses one
+/// definition; the owning plugin sets category / enabled after.
++ (instancetype)opacityLane;
+
 /// Copy the param-picker build-time metadata (`categoryKey`, `categorySymbol`,
 /// `animatable`, `seedField`, `choiceLabels`) from a plugin template lane onto
 /// this one. Used

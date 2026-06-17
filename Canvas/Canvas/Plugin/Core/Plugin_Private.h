@@ -36,6 +36,14 @@ NS_ASSUME_NONNULL_BEGIN
 @interface CanvasPlugin (CustomUI)
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED;
 + (NSArray<KKLane *> *)availableLanes;
+/// The viewer-OSC visibility pill compounds (each array = one pill: primary +
+/// members toggled together). Single source of truth shared by createView's
+/// wiring and the kParamUIState parameterChanged refresh, so the element-key
+/// list can't drift between them (a drift hid the Rotation toggle).
++ (NSArray<NSArray<NSString *> *> *)oscCompounds;
+/// Default per-element visibility seed (the transform OSCs start individually
+/// hidden so the viewer is clean but opt-peek reveals them).
++ (NSDictionary<NSString *, NSNumber *> *)defaultOSCElements;
 @end
 
 @interface CanvasPlugin (Render)

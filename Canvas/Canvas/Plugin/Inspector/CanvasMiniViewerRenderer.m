@@ -54,8 +54,14 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   return self;
 }
 
-// The scale box is concentric with the layer's Position handle (so it follows
-// the layer as it moves), not the content-rect centre.
+// Opt into the base renderer's 3-axis rotation rings (drawn + hit-tested +
+// dragged by KKMiniViewerRenderer), keyed on the "Rotation" lane.
+- (NSString *)rotationLabel {
+  return @"Rotation";
+}
+
+// The rotation rings (and scale box) are concentric with the layer's Position
+// handle (so they follow the layer as it moves), not the content-rect centre.
 - (CGPoint)rotationCenterForContentRect:(CGRect)cr {
   return [self _handlePointForContentRect:cr
                                  position:[self valuesForLabel:@"Position"]];
@@ -93,6 +99,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 - (NSInteger)valueTypeForLabel:(NSString *)label {
   if ([label isEqualToString:@"Position"])
     return KKLaneValueTypeGeneric;
+  if ([label isEqualToString:@"Rotation"])
+    return KKLaneValueTypeAngle;
   return [super valueTypeForLabel:label];
 }
 
@@ -104,6 +112,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     return @[ @0.5, @0.5 ];
   if ([label isEqualToString:@"Scale"])
     return @[ @100.0, @100.0 ];
+  if ([label isEqualToString:@"Rotation"])
+    return @[ @0.0, @0.0, @0.0 ];
   return [super defaultValuesForLabel:label];
 }
 
@@ -149,9 +159,15 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     return NO;
   }
   id<MTLFunction> vfn = [lib newFunctionWithName:@"KKVertexShader"];
+  // Image layers use the transform-aware vertex shader (per-layer 4x4 model +
+  // perspective for 3D tilt), matching the main render's image pipeline so the
+  // preview shows X/Y rotation, not just Z.
+  id<MTLFunction> tvfn = [lib newFunctionWithName:@"KKTransformVertexShader"];
   id<MTLFunction> ffn =
       [lib newFunctionWithName:@"KKTexturePassthroughFragment"];
-  if (!vfn || !ffn) {
+  // Image layers fade by a per-layer Opacity uniform (premultiplied multiply).
+  id<MTLFunction> offn = [lib newFunctionWithName:@"KKTextureOpacityFragment"];
+  if (!vfn || !tvfn || !ffn || !offn) {
     KKLogError(@"CanvasMiniViewerRenderer: missing passthrough shaders");
     return NO;
   }
@@ -169,8 +185,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   }
 
   MTLRenderPipelineDescriptor *img = [KKRenderPrimitives
-      createPipelineDescriptorWithVertexFunction:vfn
-                                fragmentFunction:ffn
+      createPipelineDescriptorWithVertexFunction:tvfn
+                                fragmentFunction:offn
                                      pixelFormat:format
                                        blendMode:KKBlendModePremultipliedAlpha];
   id<MTLRenderPipelineState> imgPS =

@@ -163,62 +163,23 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
     for (KKLane *l in [MagicMovePlugin availableLanes])
       if ([l.label isEqualToString:@"Position"])
         _positionController.templateLane = l;
-    _rotationOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
+    _rotationOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager
+                                                   laneLabel:@"Rotation"];
+    _rotationOSC.rotationActivePart = kOSCRotationPart;
     _scaleControl = [[KKScaleOSC alloc] initWithAPIManager:apiManager
                                                  laneLabel:@"Scale"];
     _scaleControl.scaleActivePart = kOSCScalePart;
-    for (KKLane *l in [MagicMovePlugin availableLanes])
+    for (KKLane *l in [MagicMovePlugin availableLanes]) {
       if ([l.label isEqualToString:@"Scale"])
         _scaleControl.templateLane = l;
+      if ([l.label isEqualToString:@"Rotation"])
+        _rotationOSC.templateLane = l;
+    }
     _anchorPointOSC = [[KKSquarePointOSC alloc] initWithAPIManager:apiManager];
     _anchorPointOSC.clearsOnDraw = NO;
     _anchorSnap = [[KKSnapEngine alloc] init];
   }
   return self;
-}
-
-// Set the rotation rings' per-axis show + ghost-alpha for this frame, and
-// report whether the sphere should be drawn / hit-tested at all. A ring is
-// fully shown when the Rotation master and its own element are on; opt-reveal
-// exposes a hidden ring as a dimmed (0.3), still-hittable ghost so an opt-click
-// can re-show it. Ghosts only appear where the rotation OSC would normally be
-// on screen at this playhead.
-- (BOOL)_configureRotationRingsAtFraction:(double)frac dragging:(BOOL)dragging {
-  BOOL shownHere = _rotationVisibleAtFraction(frac);
-  BOOL activeHere = shownHere || dragging;
-  BOOL master = [self kkOSCElementVisible:@"Rotation"];
-  BOOL xEn = master && [self kkOSCElementVisible:@"Rotation.X"];
-  BOOL yEn = master && [self kkOSCElementVisible:@"Rotation.Y"];
-  BOOL zEn = master && [self kkOSCElementVisible:@"Rotation.Z"];
-  // Per-ring reveal: master-off peek shows only the rings left enabled (a ring
-  // whose own pill or the Rotation compound is off stays off), while master-on
-  // reveal still ghosts the hidden rings for re-showing.
-  BOOL reveal = self.optRevealActive && shownHere;
-  BOOL xShow = (xEn && activeHere) ||
-               (reveal && [self kkOSCRevealEligible:@"Rotation.X"]);
-  BOOL yShow = (yEn && activeHere) ||
-               (reveal && [self kkOSCRevealEligible:@"Rotation.Y"]);
-  BOOL zShow = (zEn && activeHere) ||
-               (reveal && [self kkOSCRevealEligible:@"Rotation.Z"]);
-  self.rotationOSC.showX = xShow;
-  self.rotationOSC.showY = yShow;
-  self.rotationOSC.showZ = zShow;
-  float ghost = [self kkRevealGhostAlpha];
-  self.rotationOSC.ringAlphaX = xEn ? 1.0f : ghost;
-  self.rotationOSC.ringAlphaY = yEn ? 1.0f : ghost;
-  self.rotationOSC.ringAlphaZ = zEn ? 1.0f : ghost;
-  return dragging || xShow || yShow || zShow;
-}
-
-// Pull X/Y/Z ring colors from the Rotation lane's `componentLabelColors`
-// (already red/green/blue in the timeline) so OSC matches the inspector.
-- (void)_syncRotationColorsFromLane {
-  KKLane *lane = _rotationLane();
-  if (lane.componentLabelColors.count >= 3) {
-    self.rotationOSC.colorX = lane.componentLabelColors[0];
-    self.rotationOSC.colorY = lane.componentLabelColors[1];
-    self.rotationOSC.colorZ = lane.componentLabelColors[2];
-  }
 }
 
 - (double)_fractionAtTime:(CMTime)time {

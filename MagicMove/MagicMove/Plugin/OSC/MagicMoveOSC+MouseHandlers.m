@@ -21,6 +21,7 @@
   [self kkResetOptHideArming];
   [self.positionController mouseUp];
   [self.scaleControl mouseUp];
+  [self.rotationOSC mouseUp];
   [self.anchorSnap reset];
   self.anchorHovered = NO;
   [super mouseUpAtPositionX:positionX
@@ -106,40 +107,15 @@
                                    atTime:time];
   }
   if (activePart == kOSCRotationPart) {
-    double frac = [self _fractionAtTime:time];
-    // Capture press values from the KEYPOSE we'll write to (the one nearest
-    // the playhead), not the smoothed interpolation. The smoothed reader
-    // uses an easing curve that overshoots near keypose boundaries - if we
-    // used it as the press baseline, the non-dragged axes would inherit
-    // that overshoot and silently overwrite the keypose's actual values.
-    KKLane *rotLane = _rotationLane();
-    NSArray<NSNumber *> *r = nil;
-    if (rotLane.keyposes.count > 0)
-      r = rotLane.keyposes[KKLaneNearestKeyposeIndex(rotLane, frac)].values;
-    if (r.count < 3)
-      r = @[ @0.0, @0.0, @0.0 ];
-    self.rotPressX = r[0].doubleValue * M_PI / 180.0;
-    self.rotPressY = r[1].doubleValue * M_PI / 180.0;
-    self.rotPressZ = r[2].doubleValue * M_PI / 180.0;
-    self.rotLastWrittenX = self.rotPressX;
-    self.rotLastWrittenY = self.rotPressY;
-    self.rotLastWrittenZ = self.rotPressZ;
-    self.rotPressCanvas = CGPointMake(positionX, positionY);
-    // Sync the inner OSC to the live (smoothed) timeline values - that's
-    // what the user actually sees on screen, so the press tangent has to be
-    // computed against the same pose. The additive base above uses the
-    // raw keypose so non-dragged axes stay untouched at write time.
-    NSArray<NSNumber *> *smoothed = _rotationValuesAtFraction(frac);
-    self.rotationOSC.rotX = (float)(smoothed[0].doubleValue * M_PI / 180.0);
-    self.rotationOSC.rotY = (float)(smoothed[1].doubleValue * M_PI / 180.0);
-    self.rotationOSC.rotZ = (float)(smoothed[2].doubleValue * M_PI / 180.0);
+    // The shared KKRotationOSC owns press capture (nearest keypose), the
+    // smoothed-pose tangent sync, compose/decompose and persistence.
     self.rotationOSC.center = [self oscPositionAtTime:time];
-    [self.rotationOSC mouseDownAtPositionX:positionX
-                                 positionY:positionY
-                                activePart:activePart
-                                 modifiers:modifiers
-                               forceUpdate:forceUpdate
-                                    atTime:time];
+    self.rotationOSC.optRevealActive = self.optRevealActive;
+    [self.rotationOSC mouseDownAtX:positionX
+                                 y:positionY
+                         modifiers:modifiers
+                       forceUpdate:forceUpdate
+                            atTime:time];
   }
 }
 
@@ -165,11 +141,11 @@
     return;
   }
   if (activePart == kOSCRotationPart) {
-    [self _dragRotationToPositionX:positionX
-                         positionY:positionY
-                         modifiers:modifiers
-                       forceUpdate:forceUpdate
-                            atTime:time];
+    [self.rotationOSC mouseDraggedAtX:positionX
+                                    y:positionY
+                            modifiers:modifiers
+                          forceUpdate:forceUpdate
+                               atTime:time];
     return;
   }
   if (activePart == kOSCScalePart) {
@@ -200,89 +176,6 @@
                            : KKPositionHitHandle)modifiers:modifiers
           forceUpdate:forceUpdate
                atTime:time];
-}
-
-- (void)_dragRotationToPositionX:(double)positionX
-                       positionY:(double)positionY
-                       modifiers:(NSUInteger)modifiers
-                     forceUpdate:(BOOL *)forceUpdate
-                          atTime:(CMTime)time {
-  NSInteger axis = self.rotationOSC.activeAxis;
-  if (axis < 0)
-    return;
-  double dAngle = [self.rotationOSC
-      angleDeltaFromPressPoint:self.rotPressCanvas
-                  currentPoint:CGPointMake(positionX, positionY)];
-  // Cmd-snap rounds the OBJECT-axis delta itself to a 15° step, BEFORE
-  // composing into Euler. Snapping the decomposed axis values directly
-  // jiggles the other two axes (their decomposed values change tick-to-
-  // tick as the object rotates, and rounding only one axis leaves a
-  // matrix that doesn't correspond to a pure ring rotation).
-  if (modifiers & kFxModifierKey_COMMAND) {
-    const double kSnapRad = 15.0 * M_PI / 180.0;
-    dAngle = round(dAngle / kSnapRad) * kSnapRad;
-  }
-  // Compose around the OBJECT's current ring axis: R_new = R_press *
-  // R_axis(dAngle). This rotates around the visible ring (which is the
-  // image's current basis), so dragging the X ring after a Y rotation
-  // spins the image around its current X, not global X - matching the
-  // physical-knob intuition the user expects.
-  //
-  // The earlier "additive on dragged axis only" version dodged the asin
-  // gimbal-clamp at ±90° but rotated around global axes instead, which
-  // felt wrong once any other axis was non-zero. We bring back the compose
-  // and handle the asin discontinuity by picking the Euler decomposition
-  // closest to the press pose - so a 0→90→180 sweep stays continuous.
-  double lastRx = self.rotLastWrittenX;
-  double lastRy = self.rotLastWrittenY;
-  double lastRz = self.rotLastWrittenZ;
-  double rx = 0, ry = 0, rz = 0;
-  KKRotationComposeAxisDelta((int)axis, dAngle, self.rotPressX, self.rotPressY,
-                             self.rotPressZ, &lastRx, &lastRy, &lastRz, &rx,
-                             &ry, &rz);
-  self.rotLastWrittenX = lastRx;
-  self.rotLastWrittenY = lastRy;
-  self.rotLastWrittenZ = lastRz;
-  const double kRadToDeg = 180.0 / M_PI;
-  double xDeg = rx * kRadToDeg;
-  double yDeg = ry * kRadToDeg;
-  double zDeg = rz * kRadToDeg;
-  NSArray<NSNumber *> *newValues = @[ @(xDeg), @(yDeg), @(zDeg) ];
-
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI) {
-    [actionAPI endAction:self];
-    return;
-  }
-
-  double frac = [self _fractionAtTime:time];
-  KKTimeline *snap = KKProcessTimelineSnapshot();
-  KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
-                              snap, @"Rotation", frac, newValues)
-                        : nil;
-  if (!tl) {
-    tl = snap ? [snap copy] : [KKTimeline timeline];
-    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-    KKLane *rotLane = [KKLane laneWithLabel:@"Rotation"];
-    rotLane.valueType = KKLaneValueTypeGeneric;
-    rotLane.componentUnits = @[ @"°", @"°", @"°" ];
-    rotLane.componentLabels = @[ @"X", @"Y", @"Z" ];
-    rotLane.enabled = NO;
-    rotLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
-    [lanes addObject:rotLane];
-    tl.lanes = lanes;
-  }
-
-  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                           kKKParamTimelineData);
-  [actionAPI endAction:self];
-  *forceUpdate = YES;
 }
 
 - (void)_dragAnchorToPositionX:(double)positionX

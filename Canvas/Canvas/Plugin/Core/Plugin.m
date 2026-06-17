@@ -72,8 +72,7 @@
     if (!visState[@"oscMasterVisible"])
       visState[@"oscMasterVisible"] = @YES;
     if (!visState[@"oscElements"])
-      visState[@"oscElements"] =
-          @{@"Position" : @NO, @"Path" : @NO, @"Scale" : @NO};
+      visState[@"oscElements"] = [CanvasPlugin defaultOSCElements];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];
@@ -82,7 +81,9 @@
                                      view:(KKTimelineInspectorView *)
                                               self.inspectorView
                                  renderer:nil
-                              elementKeys:@[ @"Position", @"Path", @"Scale" ]];
+                              elementKeys:[CanvasPlugin
+                                              kkOSCElementKeysForCompounds:
+                                                  [CanvasPlugin oscCompounds]]];
       [(CanvasInspectorView *)self.inspectorView syncMiniHandleVisibility];
     });
   }

@@ -47,21 +47,14 @@
 
   // Rotation sphere is centred on the same canvas point as Position (the
   // image rotates around its centre, which is where Position translates it).
-  BOOL rotDragging = self.isDragging && activePart == kOSCRotationPart;
-  if ([self _configureRotationRingsAtFraction:frac dragging:rotDragging]) {
-    [self _syncRotationColorsFromLane];
-    NSArray<NSNumber *> *r = _rotationValuesAtFraction(frac);
-    self.rotationOSC.rotX = (float)(r[0].doubleValue * M_PI / 180.0);
-    self.rotationOSC.rotY = (float)(r[1].doubleValue * M_PI / 180.0);
-    self.rotationOSC.rotZ = (float)(r[2].doubleValue * M_PI / 180.0);
-    self.rotationOSC.center = pos;
-    [self.rotationOSC
-        drawAtCanvasPosition:pos
-                   isHovered:(activePart == kOSCRotationPart)
-                    isActive:self.isDragging && (activePart == kOSCRotationPart)
-            destinationImage:destinationImage
-                      atTime:time];
-  }
+  // The shared KKRotationOSC owns its own visibility gating, colour sync, pose
+  // read and draw; we just feed it this tick's centre + drag/reveal state.
+  self.rotationOSC.center = pos;
+  self.rotationOSC.dragging = self.isDragging;
+  self.rotationOSC.optRevealActive = self.optRevealActive;
+  [self.rotationOSC drawInDestination:destinationImage
+                               atTime:time
+                           activePart:activePart];
   // Scale transform box, drawn outside the rotation rings. The control owns its
   // own visibility gating (Scale lane shown here + element enabled + opt-reveal
   // ghost); we just feed it this tick's centre, gizmo size and drag state.

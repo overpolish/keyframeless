@@ -563,15 +563,9 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   [scale insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                          values:@[ @100.0, @100.0 ]]];
 
-  KKLane *opacity = [KKLane laneWithLabel:@"Opacity"];
-  opacity.valueType = KKLaneValueTypeFloat;
-  // Percentage like FCP's opacity control; 100 = fully opaque. Hard 0-100
-  // bounds (unlike Scale's open top) - there's no meaningful overshoot.
-  opacity.componentMin = @[ @0.0 ];
-  opacity.componentMax = @[ @100.0 ];
-  opacity.componentUnits = @[ @"%" ];
-  opacity.integerValued = YES; // whole percentages only
-  [opacity insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @100.0 ]]];
+  // Shared kit definition (0-100% whole percentages, identity 100), reused by
+  // Canvas too; MagicMove applies it in its own transform shader.
+  KKLane *opacity = [KKLane opacityLane];
 
   KKLane *anchor = [KKLane laneWithLabel:@"Anchor"];
   anchor.valueType = KKLaneValueTypeGeneric;

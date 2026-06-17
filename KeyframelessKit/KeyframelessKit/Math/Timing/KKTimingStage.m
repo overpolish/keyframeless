@@ -250,6 +250,21 @@
   return l;
 }
 
++ (instancetype)opacityLane {
+  // Standard FCP-style opacity: one whole-percentage component, 0..100 (no
+  // overshoot), identity 100 = fully opaque. Shared by every plugin that has an
+  // opacity property (the render multiplies premultiplied RGBA by value/100).
+  // The owning plugin sets category / enabled etc. after as needed.
+  KKLane *opacity = [self laneWithLabel:@"Opacity"];
+  opacity.valueType = KKLaneValueTypeFloat;
+  opacity.componentMin = @[ @0.0 ];
+  opacity.componentMax = @[ @100.0 ];
+  opacity.componentUnits = @[ @"%" ];
+  opacity.integerValued = YES;
+  [opacity insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @100.0 ]]];
+  return opacity;
+}
+
 - (void)kkApplyPickerMetadataFrom:(KKLane *)tmpl {
   if (!tmpl)
     return;

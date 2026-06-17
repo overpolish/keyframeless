@@ -176,17 +176,18 @@
     return NO;
   }
 
-  // Image-layer overlay pipeline: same positioned-quad vertex shader, sampled
-  // straight through, composited over the source with premultiplied-alpha
-  // "over" (the loader stores premultiplied textures).
+  // Image-layer overlay pipeline: the transform-aware vertex shader (per-layer
+  // 4x4 model + perspective for 3D tilt), sampled straight through, composited
+  // over the source with premultiplied-alpha "over" (the loader stores
+  // premultiplied textures).
   id<MTLRenderPipelineState> imagePS = [cache
       buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
                                                @".Canvas.image"
                                     registryID:regID
                                    pixelFormat:pf
                                       bundleID:kitBundleID
-                                  vertexShader:@"KKVertexShader"
-                                fragmentShader:@"KKTexturePassthroughFragment"
+                                  vertexShader:@"KKTransformVertexShader"
+                                fragmentShader:@"KKTextureOpacityFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];
 
   // The state blob is [KKMotionBlurState][layer blob]; split off the MB prefix

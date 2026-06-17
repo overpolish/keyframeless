@@ -16,10 +16,12 @@
 static const NSInteger kCanvasOSCPositionPart = 1;
 static const NSInteger kCanvasOSCScalePart = 2;
 static const NSInteger kCanvasOSCPathPart = 3;
+static const NSInteger kCanvasOSCRotationPart = 4;
 
 @interface CanvasOSC ()
 @property(nonatomic, strong) KKPositionOSC *position;
 @property(nonatomic, strong) KKScaleOSC *scale;
+@property(nonatomic, strong) KKRotationOSC *rotation;
 @property(nonatomic) BOOL pointCursorSet;
 @end
 
@@ -51,6 +53,17 @@ static const NSInteger kCanvasOSCPathPart = 3;
       if ([l.label isEqualToString:@"Scale"])
         _scale.templateLane = l;
     _scale.onTimelinePersist = ^(KKTimeline *tl) {
+      [weak _persistSelectedLayerTimeline:tl];
+    };
+    // Rotation gizmo (3-axis rings), concentric with the Position handle. Same
+    // per-layer persist. Drawn under the scale box + Position handle.
+    _rotation = [[KKRotationOSC alloc] initWithAPIManager:apiManager
+                                                laneLabel:@"Rotation"];
+    _rotation.rotationActivePart = kCanvasOSCRotationPart;
+    for (KKLane *l in [CanvasPlugin availableLanes])
+      if ([l.label isEqualToString:@"Rotation"])
+        _rotation.templateLane = l;
+    _rotation.onTimelinePersist = ^(KKTimeline *tl) {
       [weak _persistSelectedLayerTimeline:tl];
     };
   }
@@ -97,6 +110,14 @@ static const NSInteger kCanvasOSCPathPart = 3;
   self.scale.frameMin = [self _onScreenFrameMin];
   self.scale.optRevealActive = self.optRevealActive;
   self.scale.dragging = self.isDragging;
+}
+
+// Feed the rotation control this tick's centre (= the layer's Position handle)
+// + reveal/drag state. Shared by draw / hit-test / mouse.
+- (void)_syncRotationControlAtTime:(CMTime)time {
+  self.rotation.center = [self.position positionCanvasAtTime:time];
+  self.rotation.optRevealActive = self.optRevealActive;
+  self.rotation.dragging = self.isDragging;
 }
 
 // Whether the selected layer (the one the OSC reads via the process timeline
@@ -147,6 +168,12 @@ static const NSInteger kCanvasOSCPathPart = 3;
   [self.position drawPathInDestination:destinationImage
                                 atTime:time
                             activePart:activePart];
+  // Rotation rings, drawn under the scale box + Position handle. The control
+  // owns its own per-axis visibility + opt-reveal-ghost gating.
+  [self _syncRotationControlAtTime:time];
+  [self.rotation drawInDestination:destinationImage
+                            atTime:time
+                        activePart:activePart];
   // Scale box, drawn over the motion path and under the Position handle (so the
   // handle stays on top + grabbable). The control owns its own visibility +
   // opt-reveal-ghost gating.
@@ -180,7 +207,10 @@ static const NSInteger kCanvasOSCPathPart = 3;
 }
 
 - (NSArray<NSString *> *)oscElementKeys {
-  return @[ @"Position", @"Path", @"Scale" ];
+  return @[
+    @"Position", @"Path", @"Scale", @"Rotation", @"Rotation.X", @"Rotation.Y",
+    @"Rotation.Z"
+  ];
 }
 
 - (NSString *)oscElementKeyForActivePart:(NSInteger)activePart {
@@ -190,6 +220,18 @@ static const NSInteger kCanvasOSCPathPart = 3;
     return @"Scale";
   if (activePart == kCanvasOSCPositionPart)
     return self.position.hoverTargetIsAnchor ? @"Path" : @"Position";
+  if (activePart == kCanvasOSCRotationPart) {
+    switch (self.rotation.activeAxis) {
+    case 0:
+      return @"Rotation.X";
+    case 1:
+      return @"Rotation.Y";
+    case 2:
+      return @"Rotation.Z";
+    default:
+      return @"Rotation";
+    }
+  }
   return nil;
 }
 
@@ -235,8 +277,15 @@ static const NSInteger kCanvasOSCPathPart = 3;
   // Scale box handles, checked after the Position handle/path miss (the control
   // owns reachability + the opt-hover eye affordance + the resize cursor).
   [self _syncScaleControlAtTime:time];
-  if ([self.scale hitTestHandleAtX:positionX y:positionY atTime:time] >= 0)
+  if ([self.scale hitTestHandleAtX:positionX y:positionY atTime:time] >= 0) {
     *activePart = kCanvasOSCScalePart;
+    return;
+  }
+  // Rotation rings, checked last (they sit inside the scale box). The control
+  // owns reachability + the per-axis opt-hover eye + the rotate cursor.
+  [self _syncRotationControlAtTime:time];
+  if ([self.rotation hitTestRingAtX:positionX y:positionY atTime:time] >= 0)
+    *activePart = kCanvasOSCRotationPart;
 }
 
 - (void)mouseDownAtPositionX:(double)positionX
@@ -265,6 +314,15 @@ static const NSInteger kCanvasOSCPathPart = 3;
                    modifiers:modifiers
                  forceUpdate:forceUpdate
                       atTime:time];
+    return;
+  }
+  if (activePart == kCanvasOSCRotationPart) {
+    [self _syncRotationControlAtTime:time];
+    [self.rotation mouseDownAtX:positionX
+                              y:positionY
+                      modifiers:modifiers
+                    forceUpdate:forceUpdate
+                         atTime:time];
     return;
   }
   if (activePart != kCanvasOSCPositionPart && activePart != kCanvasOSCPathPart)
@@ -301,6 +359,15 @@ static const NSInteger kCanvasOSCPathPart = 3;
                          atTime:time];
     return;
   }
+  if (activePart == kCanvasOSCRotationPart) {
+    [self _syncRotationControlAtTime:time];
+    [self.rotation mouseDraggedAtX:positionX
+                                 y:positionY
+                         modifiers:modifiers
+                       forceUpdate:forceUpdate
+                            atTime:time];
+    return;
+  }
   if (activePart != kCanvasOSCPositionPart && activePart != kCanvasOSCPathPart)
     return;
   KKPositionHit hit =
@@ -325,6 +392,7 @@ static const NSInteger kCanvasOSCPathPart = 3;
   [self kkResetOptHideArming];
   [self.position mouseUp];
   [self.scale mouseUp];
+  [self.rotation mouseUp];
   [super mouseUpAtPositionX:positionX
                   positionY:positionY
                  activePart:activePart

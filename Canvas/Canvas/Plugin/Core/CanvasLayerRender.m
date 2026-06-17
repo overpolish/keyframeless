@@ -23,12 +23,14 @@
 // the affine to the four corners on the CPU.
 typedef struct {
   float scaleX, scaleY; // 1.0 = 100%
-  float rotation;       // radians, CCW; 0 = none (no Rotation lane yet)
+  float rotation;       // Z radians, CCW; the in-plane spin (applied 2D on CPU)
   float posX, posY;     // normalised, 0.5 = no offset
+  float rotX, rotY;     // X/Y tilt radians, applied via the perspective matrix
+  float opacity; // 0..1, 1 = fully opaque (multiplies premultiplied RGBA)
 } CanvasLayerTransform;
 
 static CanvasLayerTransform CanvasLayerTransformIdentity(void) {
-  return (CanvasLayerTransform){1.0f, 1.0f, 0.0f, 0.5f, 0.5f};
+  return (CanvasLayerTransform){1.0f, 1.0f, 0.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f};
 }
 
 // A layer's transform from an in-memory timeline (the popover's live-edited
@@ -53,9 +55,25 @@ static CanvasLayerTransform CanvasLayerTransformFromTimeline(KKTimeline *tl,
         t.posX = (float)v[0].doubleValue;
       if (v.count > 1)
         t.posY = (float)v[1].doubleValue;
+    } else if ([lane.label isEqualToString:@"Rotation"]) {
+      // 3-axis Euler [X,Y,Z]°. Z (in-plane spin) is applied on the CPU in the
+      // corner affine; X/Y tilt is applied via the perspective matrix in the
+      // vertex shader (see CanvasLayerTiltMatrix).
+      NSArray<NSNumber *> *v =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      const double kDegToRad = M_PI / 180.0;
+      if (v.count > 0)
+        t.rotX = (float)(v[0].doubleValue * kDegToRad);
+      if (v.count > 1)
+        t.rotY = (float)(v[1].doubleValue * kDegToRad);
+      if (v.count > 2)
+        t.rotation = (float)(v[2].doubleValue * kDegToRad);
+    } else if ([lane.label isEqualToString:@"Opacity"]) {
+      NSArray<NSNumber *> *v =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      if (v.count > 0)
+        t.opacity = (float)(fmax(0.0, fmin(100.0, v[0].doubleValue)) / 100.0);
     }
-    // Rotation lane slots in here once the template exists:
-    //   t.rotation = (float)(degrees * M_PI / 180.0);
   }
   return t;
 }
@@ -70,16 +88,20 @@ static CanvasLayerTransform CanvasLayerTransformAtFraction(KKBezierPath *path,
 
 // Map a normalised object-space corner through the layer's transform: scale,
 // then rotate, about the pivot (cx,cy), then offset by Position. Returns the
-// transformed point still in normalised object space.
+// transformed point still in normalised object space. `aspect` is the canvas
+// pixel aspect (outputWidth/outputHeight): object space is 0..1 in both axes
+// but the canvas is W:H pixels, so the rotation must run in PIXEL space (scale
+// x by aspect, rotate, unscale) or a Z-spin shears the layer by the aspect.
 static simd_float2 CanvasTransformCorner(float nx, float ny,
                                          CanvasLayerTransform t, float cx,
-                                         float cy) {
+                                         float cy, float aspect) {
   float x = (nx - cx) * t.scaleX;
   float y = (ny - cy) * t.scaleY;
   if (t.rotation != 0.0f) {
     float cs = cosf(t.rotation), sn = sinf(t.rotation);
-    float rx = x * cs - y * sn;
-    float ry = x * sn + y * cs;
+    float a = (aspect > 0.0f) ? aspect : 1.0f;
+    float rx = x * cs - y * sn / a;
+    float ry = x * a * sn + y * cs;
     x = rx;
     y = ry;
   }
@@ -91,6 +113,44 @@ static simd_float2 CanvasTransformCorner(float nx, float ny,
   // in both).
   y += cy - (t.posY - 0.5f);
   return simd_make_float2(x, y);
+}
+
+// Per-layer forward transform fed to KKTransformVertexShader. Scale, Z-rotation
+// and Position are already baked into the CPU corner verts; this adds only the
+// X/Y tilt (about the layer centre) and a perspective projection (about the
+// screen centre), so a layer with rotX=rotY=0 gets a pure perspective matrix
+// that reproduces the orthographic 2D result at z=0. Composition is Ry*Rx with
+// Z innermost (on the verts) to match the rotation OSC's Ry*Rx*Rz pose.
+// `centerPx` is the layer centre in centered-pixel space; W,H the output dims.
+static matrix_float4x4 CanvasLayerTiltMatrix(CanvasLayerTransform t,
+                                             simd_float2 centerPx, float W,
+                                             float H) {
+  // Camera at distance camD on +Z: (x,y,z,1) -> (camD x, camD y, z, z + camD);
+  // after the perspective divide, foreshortening scales by camD/(z + camD).
+  float camD = fmaxf(W, H);
+  matrix_float4x4 P = simd_matrix(
+      simd_make_float4(camD, 0, 0, 0), simd_make_float4(0, camD, 0, 0),
+      simd_make_float4(0, 0, 1, 1), simd_make_float4(0, 0, 0, camD));
+  if (t.rotX == 0.0f && t.rotY == 0.0f)
+    return P; // no tilt: pure perspective is orthographic at z=0
+  float cx = cosf(t.rotX), sx = sinf(t.rotX);
+  float cy = cosf(t.rotY), sy = sinf(t.rotY);
+  matrix_float4x4 Rx = simd_matrix(
+      simd_make_float4(1, 0, 0, 0), simd_make_float4(0, cx, sx, 0),
+      simd_make_float4(0, -sx, cx, 0), simd_make_float4(0, 0, 0, 1));
+  matrix_float4x4 Ry =
+      simd_matrix(simd_make_float4(cy, 0, -sy, 0), simd_make_float4(0, 1, 0, 0),
+                  simd_make_float4(sy, 0, cy, 0), simd_make_float4(0, 0, 0, 1));
+  matrix_float4x4 Tneg =
+      simd_matrix(simd_make_float4(1, 0, 0, 0), simd_make_float4(0, 1, 0, 0),
+                  simd_make_float4(0, 0, 1, 0),
+                  simd_make_float4(-centerPx.x, -centerPx.y, 0, 1));
+  matrix_float4x4 Tpos =
+      simd_matrix(simd_make_float4(1, 0, 0, 0), simd_make_float4(0, 1, 0, 0),
+                  simd_make_float4(0, 0, 1, 0),
+                  simd_make_float4(centerPx.x, centerPx.y, 0, 1));
+  matrix_float4x4 model = simd_mul(Tpos, simd_mul(Ry, simd_mul(Rx, Tneg)));
+  return simd_mul(P, model);
 }
 
 NSMutableArray<KKBezierPath *> *CanvasReadLayerPaths(id<PROAPIAccessing> api,
@@ -150,10 +210,15 @@ void CanvasEncodeImageLayers(
       t = CanvasLayerTransformAtFraction(path, frac);
     float cx = (rect.min.x + rect.max.x) * 0.5f;
     float cy = (rect.min.y + rect.max.y) * 0.5f;
-    simd_float2 br = CanvasTransformCorner(rect.max.x, rect.min.y, t, cx, cy);
-    simd_float2 bl = CanvasTransformCorner(rect.min.x, rect.min.y, t, cx, cy);
-    simd_float2 tr = CanvasTransformCorner(rect.max.x, rect.max.y, t, cx, cy);
-    simd_float2 tl = CanvasTransformCorner(rect.min.x, rect.max.y, t, cx, cy);
+    float aspect = (outputHeight > 0.0f) ? (outputWidth / outputHeight) : 1.0f;
+    simd_float2 br =
+        CanvasTransformCorner(rect.max.x, rect.min.y, t, cx, cy, aspect);
+    simd_float2 bl =
+        CanvasTransformCorner(rect.min.x, rect.min.y, t, cx, cy, aspect);
+    simd_float2 tr =
+        CanvasTransformCorner(rect.max.x, rect.max.y, t, cx, cy, aspect);
+    simd_float2 tl =
+        CanvasTransformCorner(rect.min.x, rect.max.y, t, cx, cy, aspect);
     // Object space (0..1, centred at 0.5) -> pixel space across the output.
     simd_float2 scale = simd_make_float2(outputWidth, outputHeight);
     simd_float2 half = simd_make_float2(0.5f, 0.5f);
@@ -161,6 +226,12 @@ void CanvasEncodeImageLayers(
     bl = (bl - half) * scale;
     tr = (tr - half) * scale;
     tl = (tl - half) * scale;
+    // X/Y tilt + perspective is applied in the vertex shader about the layer
+    // centre (the 2D scale/Z/position are already baked into the verts above).
+    simd_float2 centerPx =
+        (CanvasTransformCorner(cx, cy, t, cx, cy, aspect) - half) * scale;
+    matrix_float4x4 tilt =
+        CanvasLayerTiltMatrix(t, centerPx, outputWidth, outputHeight);
 
     KKVertex2D quad[4] = {
         {br, {1, 1}},
@@ -168,6 +239,11 @@ void CanvasEncodeImageLayers(
         {tr, {1, 0}},
         {tl, {0, 0}},
     };
+    [encoder setVertexBytes:&tilt
+                     length:sizeof(tilt)
+                    atIndex:KKVertexInputIndex_Transform];
+    float opacity = t.opacity;
+    [encoder setFragmentBytes:&opacity length:sizeof(opacity) atIndex:0];
     [encoder setVertexBytes:quad
                      length:sizeof(quad)
                     atIndex:KKVertexInputIndex_Vertices];

@@ -53,7 +53,60 @@
   position.categorySymbol = @"arrow.up.and.down.and.arrow.left.and.right";
   [position insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
 
-  return @[ scale, position ];
+  // Rotation: 3-axis (X/Y/Z) Euler degrees, modelled on MagicMove's Rotation
+  // lane so the kit's KKRotationOSC + mini rotation rings drop straight in.
+  // Identity = 0. Unbounded (angles accumulate past 360). Z is the in-plane
+  // spin (rendered today); X/Y tilt renders once the perspective transform
+  // lands. Axis ring colours match MagicMove (X red, Y green, Z blue).
+  KKLane *rotation = [KKLane laneWithLabel:@"Rotation"];
+  rotation.valueType = KKLaneValueTypeAngle;
+  rotation.componentMin = @[];
+  rotation.componentMax = @[];
+  rotation.componentUnits = @[ @"°", @"°", @"°" ];
+  rotation.componentLabels = @[ @"X", @"Y", @"Z" ];
+  rotation.componentLabelColors = @[
+    [NSColor colorWithSRGBRed:0.95 green:0.35 blue:0.35 alpha:1.0],
+    [NSColor colorWithSRGBRed:0.40 green:0.85 blue:0.45 alpha:1.0],
+    [NSColor colorWithSRGBRed:0.40 green:0.60 blue:0.95 alpha:1.0],
+  ];
+  rotation.enabled = NO; // constant by default; animate per-layer via dropdown
+  rotation.categoryKey = @"Transform";
+  rotation.categorySymbol = @"arrow.up.and.down.and.arrow.left.and.right";
+  [rotation insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                            values:@[ @0.0, @0.0, @0.0 ]]];
+
+  // Opacity: shared kit definition (0-100%, identity 100). Per-layer; the
+  // render multiplies the layer's premultiplied RGBA by value/100. No OSC.
+  KKLane *opacity = [KKLane opacityLane];
+  opacity.enabled = NO; // constant by default; animate per-layer via dropdown
+  opacity.categoryKey = @"Transform";
+  opacity.categorySymbol = @"arrow.up.and.down.and.arrow.left.and.right";
+
+  return @[ scale, position, rotation, opacity ];
+}
+
++ (NSArray<NSArray<NSString *> *> *)oscCompounds {
+  return @[
+    @[ @"Position", @"Path" ], @[ @"Scale" ],
+    @[ @"Rotation", @"Rotation.X", @"Rotation.Y", @"Rotation.Z" ]
+  ];
+}
+
++ (NSDictionary<NSString *, NSNumber *> *)defaultOSCElements {
+  // Transform OSCs start hidden so the viewer is clean; Opt-peek reveals them
+  // as ghosts to Opt-click on. Rotation hides its individual X/Y/Z RINGS rather
+  // than the group: Opt-peek only reveals individually-hidden elements, and a
+  // hidden GROUP wouldn't make its axes reveal-eligible (you could never
+  // Opt-click them back). Leaving the group on keeps the rings per-axis
+  // revealable + re-enableable.
+  return @{
+    @"Position" : @NO,
+    @"Path" : @NO,
+    @"Scale" : @NO,
+    @"Rotation.X" : @NO,
+    @"Rotation.Y" : @NO,
+    @"Rotation.Z" : @NO
+  };
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
@@ -206,10 +259,10 @@
     // opt-click hide/show, HIDDEN by default (master defaults OFF for Canvas).
     // nil renderer so the toggle drives only the viewer OSC's instance state
     // (which CanvasOSC reads), not the popover MINI handles
-    // (editing-contextual, stay shown). Two pills: Position (+ its motion Path)
-    // and Scale.
-    NSArray<NSArray<NSString *> *> *oscCompounds =
-        @[ @[ @"Position", @"Path" ], @[ @"Scale" ] ];
+    // (editing-contextual, stay shown). Pills: Position (+ its motion Path),
+    // Scale, and Rotation (+ its X/Y/Z rings). Shared definition so the
+    // parameterChanged refresh uses the identical element-key set.
+    NSArray<NSArray<NSString *> *> *oscCompounds = [CanvasPlugin oscCompounds];
     // Wire the REAL mini renderer here so onHandleVisibilityToggled is set -
     // the mini's opt-reveal ghost gates on (revealHidden &&
     // onHandleVisibilityToggled
@@ -225,14 +278,14 @@
                              paramID:kParamUIState];
     NSMutableDictionary *visState =
         [st.uiState mutableCopy] ?: [NSMutableDictionary dictionary];
-    // Default: global controls ON, but the Transform (Position + Path + Scale)
-    // individually hidden - so the viewer is clean yet opt-hold reveals the
-    // ghost controls to opt-click on (no need to flip the global toggle first).
+    // Default: global controls ON, but the Transform (Position + Path + Scale +
+    // Rotation) individually hidden - so the viewer is clean yet opt-hold
+    // reveals the ghost controls to opt-click on (no need to flip the global
+    // toggle first).
     if (!visState[@"oscMasterVisible"])
       visState[@"oscMasterVisible"] = @YES;
     if (!visState[@"oscElements"])
-      visState[@"oscElements"] =
-          @{@"Position" : @NO, @"Path" : @NO, @"Scale" : @NO};
+      visState[@"oscElements"] = [CanvasPlugin defaultOSCElements];
     [self kkRefreshOSCVisibilityFromState:visState
                                      view:view
                                  renderer:nil
