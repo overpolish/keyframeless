@@ -254,6 +254,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// Defaults to 16:9.
 @property(nonatomic) CGFloat clipAspect;
 
+/// Fixed canvas height (points) the OSC element SIZES (handle radii, ring
+/// strokes, gizmo radius) are scaled against, so they stay a constant screen
+/// size as the popover grows - the preview zooms in but the controls don't,
+/// matching the main viewer. The host sets this to the SMALLEST popover's
+/// canvas height for the clip's aspect. 0 (default) = scale against the live
+/// bounds (legacy "grow with the popover" behaviour). Positions are unaffected;
+/// only sizes read it via -oscSizingHeight.
+@property(nonatomic) CGFloat oscReferenceHeight;
+
+/// The height OSC sizes scale against: `oscReferenceHeight` when set, else the
+/// live `bounds.size.height`. One funnel for every OSC size computation.
+- (CGFloat)oscSizingHeight;
+
 @property(nonatomic, weak, nullable) id<KKMiniViewerDelegate> canvasDelegate;
 
 /// Host sink for handle-driven value edits. The delegate computes the new

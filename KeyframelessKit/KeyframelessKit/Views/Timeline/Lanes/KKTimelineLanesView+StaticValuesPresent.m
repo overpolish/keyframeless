@@ -191,6 +191,10 @@
          editsKeypose:cfg.isBoundary
       initialCategory:cfg.initialCategory];
   staticView.onCategoryChanged = cfg.onCategoryChanged;
+  __weak typeof(self) weakSize = self;
+  staticView.onSizeChanged = ^(NSInteger sizeIndex) {
+    [weakSize _miniViewerSizeDidChange:sizeIndex];
+  };
 
   _openStaticView = staticView;
   _openStaticIsBoundary = cfg.isBoundary;

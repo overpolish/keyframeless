@@ -83,6 +83,11 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   return self;
 }
 
+- (CGFloat)oscSizingHeight {
+  return _oscReferenceHeight > 0 ? _oscReferenceHeight
+                                 : self.bounds.size.height;
+}
+
 - (CGRect)contentRectInViewPoints {
   CGRect r = [self _contentRectInDrawable];
   CGFloat s = self.window.backingScaleFactor;

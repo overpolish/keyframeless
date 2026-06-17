@@ -19,9 +19,15 @@ static const CGFloat kCheckSize = 12.0;
 static const CGFloat kCheckRadius = 3.0;
 static const CGFloat kSearchH = 28.0;
 static const CGFloat kPopoverW = 180.0;
-// Wider variant for the static-values popover when it hosts the mini viewer,
-// so the preview is legible before in-canvas zoom exists.
-static const CGFloat kCanvasPopoverW = 540.0;
+// Static-values popover width when it hosts the mini-viewer, so the preview is
+// legible before in-canvas zoom exists. Three sizes (sm/md/lg) the user toggles
+// via a global preference: a wider popover scales the mini-viewer up
+// aspect-correct (height = width/aspect) while the parameter rows keep their
+// heights and just fill the extra width. `kCanvasPopoverW` is sm (the default,
+// unchanged original width).
+static const CGFloat kCanvasPopoverW = 540.0;       // sm (default)
+static const CGFloat kCanvasPopoverWMedium = 760.0; // md
+static const CGFloat kCanvasPopoverWLarge = 980.0;  // lg
 static const NSInteger kMaxSummaryLabels = 2;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -196,6 +202,21 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// (Off/Filmstrip/Onion), or NSZeroRect if the pill isn't shown. Used by the
 /// mini-viewer guide to spotlight the mode the user should tap.
 - (NSRect)guideRenderModePillScreenRectForMode:(KKMiniViewerRenderMode)mode;
+
+/// Fired when the user picks a size pill segment (0 = sm, 1 = md, 2 = lg). The
+/// popover has already persisted the global preference and resized itself; the
+/// host uses this only to advance the mini-viewer guide's size step.
+@property(nonatomic, copy, nullable) void (^onSizeChanged)(NSInteger sizeIndex);
+
+/// Guide-only: screen rect of the size pill's segment `index` (0/1/2), or
+/// NSZeroRect if there's no mini-viewer (so no size pill).
+- (NSRect)guideSizePillScreenRectForIndex:(NSInteger)index;
+
+/// The global mini-viewer size preference (0 = sm/default, 1 = md, 2 = lg).
+/// Exposed so a guide can reset it to the default for the run and restore the
+/// user's value afterwards.
++ (NSInteger)popoverSizeIndex;
++ (void)setPopoverSizeIndex:(NSInteger)sizeIndex;
 
 /// Enable/disable the popover header's prev/next KP buttons (only meaningful
 /// when `onNavigate` was passed at init). The lanes view calls this on open

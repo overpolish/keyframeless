@@ -227,6 +227,11 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// cell. The mini-viewer guide wires these via the lanes binder.
 @property(nonatomic, copy, nullable) void (^onGuideRenderModeChanged)
     (KKMiniViewerRenderMode mode);
+/// Fires when the boundary popover's size pill switches the mini-viewer size
+/// (`sizeIndex` 0 = sm, 1 = md, 2 = lg). The mini-viewer guide wires this to
+/// advance its "make the preview bigger" step.
+@property(nonatomic, copy, nullable) void (^onGuideMiniViewerSizeChanged)
+    (NSInteger sizeIndex);
 @property(nonatomic, copy, nullable) void (^onGuideFilmstripCellActivated)
     (double fraction);
 /// Fires when the Advanced toolbar's Dynamic toggle is clicked (`on` = its new

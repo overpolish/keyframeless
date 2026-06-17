@@ -207,12 +207,13 @@ static const BOOL kPointShadingLighterTop = YES;
   // viewer KKArcOSC 23→31 hit-grow). Stroke is held constant across states
   // (viewer KKArcOSC keeps strokeWidth=10 fixed while radius grows); the
   // inner ratio is derived so the visible ring stays the same thickness.
-  // Arc + ring sizes track the canvas frame height (NOT contentRect, which
-  // grows on zoom) so they scale uniformly when the popover gets bigger.
-  // Baseline 230pt = the kKKMini constants-popover canvas height at the
-  // original 420pt popover width (16:9).
+  // Arc + ring sizes track the OSC sizing height (the smallest popover's canvas
+  // height when set, else the live bounds) - NOT contentRect (grows on zoom) -
+  // so they stay a constant screen size as the popover grows, the preview
+  // zooming in around them like the main viewer. Baseline 230pt = the kKKMini
+  // constants-popover canvas height at the original 420pt popover width (16:9).
   const CGFloat kBaselineCanvasH = 230.0;
-  CGFloat canvasScale = self.bounds.size.height / kBaselineCanvasH;
+  CGFloat canvasScale = self.oscSizingHeight / kBaselineCanvasH;
   if (canvasScale <= 0)
     canvasScale = 1.0;
   CGFloat outerPt = (isActive ? 12.0 : 9.0) * canvasScale;
@@ -353,11 +354,13 @@ static const BOOL kPointShadingLighterTop = YES;
   [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
 }
 
-// Overlay controls scale with the canvas frame height so they stay
-// proportional as the popover grows/shrinks (baseline 230pt; matches the arc /
-// rotation gizmo). Point glyphs and the motion path use this too.
+// Overlay control SIZES scale with the OSC sizing height (the smallest
+// popover's canvas height when set, else the live bounds) so they stay a
+// constant screen size as the popover grows - the preview zooms in around them
+// like the main viewer (baseline 230pt; matches the arc / rotation gizmo).
+// Point glyphs and the motion path use this too.
 - (CGFloat)_canvasScale {
-  CGFloat cs = self.bounds.size.height / 230.0;
+  CGFloat cs = self.oscSizingHeight / 230.0;
   return cs > 0 ? cs : 1.0;
 }
 

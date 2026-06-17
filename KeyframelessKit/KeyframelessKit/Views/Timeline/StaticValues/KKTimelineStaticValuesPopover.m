@@ -20,6 +20,14 @@
 // Height of the category nav pill row (icon pills under the mini-viewer).
 static const CGFloat kKKCategoryPillH = 24.0;
 
+// Global user preference (not per-clip): the mini-viewer size (0 = sm/default,
+// 1 = md, 2 = lg) is a viewing aid, so it persists across sessions and clips
+// like a UI setting, never in the timeline blob. Read by the width class method
+// so every height calculation that derives from the width follows
+// automatically.
+static NSString *const kKKStaticPopoverSizeDefaultsKey =
+    @"KKStaticPopoverMiniViewerSize";
+
 @interface _KKStaticValuesPopoverView ()
 + (CGFloat)_heightForLanes:(NSArray<KKLane *> *)lanes
             descriptorPath:(nullable NSString *)descriptorPath
@@ -35,6 +43,12 @@ static const CGFloat kKKCategoryPillH = 24.0;
   NSMutableDictionary<NSString *, _KKStaticValueRow *> *_rowsByLabel;
   NSStackView *_stack;
   KKMiniViewerView *_miniViewer;
+  // Header-band 3-segment pill (sm/md/lg) that sets the global mini-viewer
+  // size; the mini-viewer's height constraint is updated in place so the
+  // preview grows/shrinks without reopening the popover. Both nil with no
+  // mini-viewer.
+  KKPillToggleRowView *_sizePill;
+  NSLayoutConstraint *_miniViewerHeightConstraint;
   KKPillToggleRowView *_renderModePill; // guide anchor; nil when no pill shown
   // Category nav: an icon pill row under the mini-viewer that filters which
   // param rows show. nil/empty when <2 distinct lane categories (no pill).
@@ -156,8 +170,39 @@ static const CGFloat kKKCategoryPillH = 24.0;
   }
 }
 
++ (NSInteger)_popoverSizeIndex {
+  NSInteger i = [[NSUserDefaults standardUserDefaults]
+      integerForKey:kKKStaticPopoverSizeDefaultsKey];
+  return i < 0 ? 0 : (i > 2 ? 2 : i);
+}
+
++ (NSInteger)popoverSizeIndex {
+  return [self _popoverSizeIndex];
+}
+
++ (void)setPopoverSizeIndex:(NSInteger)sizeIndex {
+  [[NSUserDefaults standardUserDefaults]
+      setInteger:(sizeIndex < 0 ? 0 : (sizeIndex > 2 ? 2 : sizeIndex))
+          forKey:kKKStaticPopoverSizeDefaultsKey];
+}
+
+- (NSRect)guideSizePillScreenRectForIndex:(NSInteger)index {
+  if (!_sizePill)
+    return NSZeroRect;
+  return [_sizePill guidePillScreenRectAtIndex:index];
+}
+
 + (CGFloat)_popoverWidthForDescriptor:(NSString *)descriptorPath {
-  return descriptorPath.length > 0 ? kCanvasPopoverW : kPopoverW;
+  if (descriptorPath.length == 0)
+    return kPopoverW; // constants-only (no mini-viewer): never resized
+  switch ([self _popoverSizeIndex]) {
+  case 1:
+    return kCanvasPopoverWMedium;
+  case 2:
+    return kCanvasPopoverWLarge;
+  default:
+    return kCanvasPopoverW; // sm
+  }
 }
 
 + (CGFloat)_canvasHeightForAspect:(CGFloat)aspect width:(CGFloat)w {
@@ -291,6 +336,51 @@ static const CGFloat kKKCategoryPillH = 24.0;
   return pill;
 }
 
+// A grouped 3-segment radio pill (sm / md / lg) styled like the render-mode
+// pill beside it; the icons grade from compact to expanded.
+- (KKPillToggleRowView *)_makeSizePillSelected:(NSInteger)sel
+                                 onSizeChanged:(void (^)(NSInteger))cb {
+  NSImage * (^sym)(NSString *) = ^NSImage *(NSString *name) {
+    NSImage *img = [NSImage imageWithSystemSymbolName:name
+                             accessibilityDescription:nil];
+    return img ?: [[NSImage alloc] initWithSize:NSMakeSize(11, 11)];
+  };
+  KKPillToggleRowView *pill = [[KKPillToggleRowView alloc] initWithIcons:@[
+    sym(@"rectangle.arrowtriangle.2.inward"), sym(@"rectangle"),
+    sym(@"rectangle.arrowtriangle.2.outward")
+  ]];
+  pill.translatesAutoresizingMaskIntoConstraints = NO;
+  pill.grouped = YES;
+  pill.radioMode = YES;
+  NSMutableArray<NSNumber *> *states = [NSMutableArray array];
+  for (NSInteger i = 0; i < 3; i++)
+    [states addObject:@(i == sel)];
+  pill.states = states;
+  pill.onToggled = ^(NSInteger index, BOOL isOn) {
+    if (!isOn || !cb)
+      return;
+    cb(index);
+  };
+  return pill;
+}
+
+// Persist the global size preference, grow/shrink the mini-viewer height
+// constraint in place, then re-fit the popover (the width class method now
+// reports the selected size's width, so the height calc follows). The pill
+// repaints its own active segment.
+- (void)_setSizeIndex:(NSInteger)idx {
+  [[NSUserDefaults standardUserDefaults]
+      setInteger:idx
+          forKey:kKKStaticPopoverSizeDefaultsKey];
+  CGFloat W =
+      [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath];
+  _miniViewerHeightConstraint.constant =
+      [_KKStaticValuesPopoverView _canvasHeightForAspect:_clipAspect width:W];
+  [self _resizePopoverToSelectedCategory];
+  if (_onSizeChanged)
+    _onSizeChanged(idx);
+}
+
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                descriptorPath:(NSString *)descriptorPath
                    clipAspect:(CGFloat)clipAspect
@@ -389,6 +479,25 @@ static const CGFloat kKKCategoryPillH = 24.0;
     ]];
   }
 
+  // Size pill (sm/md/lg): trailing-most in the band whenever there's a
+  // mini-viewer, sitting beside the render-mode pill as a second grouped pill.
+  if (descriptorPath.length > 0) {
+    __weak typeof(self) weakSelfSize = self;
+    _sizePill = [self
+        _makeSizePillSelected:[_KKStaticValuesPopoverView _popoverSizeIndex]
+                onSizeChanged:^(NSInteger idx) {
+                  [weakSelfSize _setSizeIndex:idx];
+                }];
+    [self addSubview:_sizePill];
+    [NSLayoutConstraint activateConstraints:@[
+      [_sizePill.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                               constant:-KKPaddingMD],
+      [_sizePill.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                              constant:bandCenterOffset],
+      [_sizePill.heightAnchor constraintEqualToConstant:bandH],
+    ]];
+  }
+
   if (showPill) {
     __weak typeof(self) weakSelfPill = self;
     void (^wrappedModeChanged)(KKMiniViewerRenderMode) =
@@ -402,9 +511,14 @@ static const CGFloat kKKCategoryPillH = 24.0;
                                             onModeChanged:wrappedModeChanged];
     _renderModePill = pill;
     [self addSubview:pill];
+    // Sit to the left of the size pill (which is trailing-most when a
+    // mini-viewer is present); fall back to the band's trailing edge otherwise.
+    NSLayoutXAxisAnchor *pillTrail =
+        _sizePill ? _sizePill.leadingAnchor : self.trailingAnchor;
+    CGFloat pillTrailInset = _sizePill ? -KKSpacingMD : -KKPaddingMD;
     [NSLayoutConstraint activateConstraints:@[
-      [pill.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
-                                          constant:-KKPaddingMD],
+      [pill.trailingAnchor constraintEqualToAnchor:pillTrail
+                                          constant:pillTrailInset],
       [pill.centerYAnchor constraintEqualToAnchor:self.topAnchor
                                          constant:bandCenterOffset],
       [pill.heightAnchor constraintEqualToConstant:bandH],
@@ -440,6 +554,13 @@ static const CGFloat kKKCategoryPillH = 24.0;
         [row refreshDisplay];
     };
     _miniViewer.clipAspect = clipAspect > 0 ? clipAspect : (16.0 / 9.0);
+    // Scale OSC element sizes against the SMALLEST popover's canvas height for
+    // this aspect, so they stay a constant screen size at md/lg - the preview
+    // zooms in around them instead of the controls growing (matches the main
+    // viewer). Aspect is fixed for the popover, so this never changes.
+    _miniViewer.oscReferenceHeight =
+        [_KKStaticValuesPopoverView _canvasHeightForAspect:clipAspect
+                                                     width:kCanvasPopoverW];
     _miniViewer.translatesAutoresizingMaskIntoConstraints = NO;
     _miniViewer.wantsLayer = YES;
     _miniViewer.layer.cornerRadius = 4.0;
@@ -463,6 +584,10 @@ static const CGFloat kKKCategoryPillH = 24.0;
     sv.documentView = _miniViewer;
     [self addSubview:sv];
     NSClipView *clip = sv.contentView;
+    _miniViewerHeightConstraint = [sv.heightAnchor
+        constraintEqualToConstant:[_KKStaticValuesPopoverView
+                                      _canvasHeightForAspect:clipAspect
+                                                       width:W]];
     [NSLayoutConstraint activateConstraints:@[
       [sv.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                        constant:KKPaddingMD],
@@ -470,10 +595,7 @@ static const CGFloat kKKCategoryPillH = 24.0;
                                         constant:-KKPaddingMD],
       [sv.topAnchor constraintEqualToAnchor:canvasTopAnchor
                                    constant:canvasTopInset],
-      [sv.heightAnchor
-          constraintEqualToConstant:[_KKStaticValuesPopoverView
-                                        _canvasHeightForAspect:clipAspect
-                                                         width:W]],
+      _miniViewerHeightConstraint,
       [_miniViewer.leadingAnchor constraintEqualToAnchor:clip.leadingAnchor],
       [_miniViewer.trailingAnchor constraintEqualToAnchor:clip.trailingAnchor],
       [_miniViewer.topAnchor constraintEqualToAnchor:clip.topAnchor],

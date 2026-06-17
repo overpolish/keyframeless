@@ -196,7 +196,7 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 }
 
 - (CGFloat)rotationRadiusPxForCanvas:(KKMiniViewerView *)canvas {
-  CGFloat h = canvas.bounds.size.height;
+  CGFloat h = canvas.oscSizingHeight;
   CGFloat scale = (h > 0) ? (h / kKKRotationBaselineCanvasH) : 1.0;
   return kKKRotationBaselineRadiusPt * scale;
 }

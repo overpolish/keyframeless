@@ -221,7 +221,7 @@
   id del = self.canvasDelegate;
   if ([del isKindOfClass:[KKMiniViewerRenderer class]] &&
       [(KKMiniViewerRenderer *)del pointHandleStyle] == KKMiniHandleStyleArc) {
-    CGFloat canvasScale = self.bounds.size.height / 230.0;
+    CGFloat canvasScale = self.oscSizingHeight / 230.0;
     if (canvasScale <= 0)
       canvasScale = 1.0;
     return 9.0 * canvasScale;

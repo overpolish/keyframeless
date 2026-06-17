@@ -276,6 +276,7 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 - (void)_refreshBoundaryPopoverNavEnabled;
 - (void)_navigateBoundaryPopoverDirection:(NSInteger)direction;
 - (void)_renderModeDidChange:(KKMiniViewerRenderMode)mode;
+- (void)_miniViewerSizeDidChange:(NSInteger)sizeIndex;
 /// In-place re-bind for an already-open boundary popover. Used by the
 /// onion-skin filmstrip when the user clicks an inactive cell - the popover
 /// stays open (no close/reopen blink), the value rows re-display the new

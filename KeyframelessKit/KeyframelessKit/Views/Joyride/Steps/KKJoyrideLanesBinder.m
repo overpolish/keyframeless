@@ -131,6 +131,7 @@
     lanes.onGapPopoverWillOpen = nil;
     lanes.onGapPopoverCurveChanged = nil;
     lanes.onGuideRenderModeChanged = nil;
+    lanes.onGuideMiniViewerSizeChanged = nil;
     lanes.onGuideFilmstripCellActivated = nil;
     lanes.onGuideDynamicToggled = nil;
     lanes.onGuideLaneFilterToggled = nil;
@@ -289,6 +290,16 @@
       return;
     [s _fireType:KKJoyrideTriggerTypeRenderModeChanged
           intArg:(NSInteger)mode
+         intArg2:0
+           label:nil];
+  };
+
+  lanes.onGuideMiniViewerSizeChanged = ^(NSInteger sizeIndex) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    [s _fireType:KKJoyrideTriggerTypeMiniViewerSizeChanged
+          intArg:sizeIndex
          intArg2:0
            label:nil];
   };
@@ -584,6 +595,7 @@
   case KKJoyrideTriggerTypeDiamondTapped:
   case KKJoyrideTriggerTypeGapTapped:
   case KKJoyrideTriggerTypeRenderModeChanged:
+  case KKJoyrideTriggerTypeMiniViewerSizeChanged:
   case KKJoyrideTriggerTypeDynamicToggled:
   case KKJoyrideTriggerTypeMiniViewerViewTransformChanged:
     if (t.intArg >= 0 && t.intArg != intArg)

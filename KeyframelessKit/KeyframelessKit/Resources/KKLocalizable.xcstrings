@@ -8947,6 +8947,48 @@
         }
       }
     },
+    "Tap <accent>Large</accent> for a bigger preview.": {
+      "extractionState": "manual",
+      "comment": "Mini-viewer guide: enlarge the preview.",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tippen Sie auf <accent>Groß</accent> für eine größere Vorschau."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez <accent>Grand</accent> pour un aperçu plus grand."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toca <accent>Grande</accent> para una vista previa más grande."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>大</accent>をタップしてプレビューを拡大します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>크게</accent>를 탭하여 미리보기를 확대합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "轻点<accent>大</accent>放大预览。"
+          }
+        }
+      }
+    },
     "Tap <accent>Onion</accent> to stack the frames.": {
       "extractionState": "manual",
       "comment": "Mini-viewer guide: switch to onion-skin mode.",

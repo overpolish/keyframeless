@@ -64,6 +64,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Fires when the boundary popover's render-mode pill changes the mode. `mode`
 /// is a KKMiniViewerRenderMode (0 = Off, 1 = Filmstrip, 2 = Onion); < 0 = any.
 + (instancetype)renderModeChanged:(NSInteger)mode;
+/// Fires when the boundary popover's size pill changes the mini-viewer size.
+/// `sizeIndex` is 0 = sm, 1 = md, 2 = lg; < 0 = any.
++ (instancetype)miniViewerSizeChanged:(NSInteger)sizeIndex;
 /// Fires when the user clicks an inactive filmstrip cell (navigates to that
 /// keypose). Filmstrip mode only.
 + (instancetype)filmstripCellActivated;

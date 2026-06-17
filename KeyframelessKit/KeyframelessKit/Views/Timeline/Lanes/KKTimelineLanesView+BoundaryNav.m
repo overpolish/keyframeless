@@ -224,6 +224,14 @@
   }
 }
 
+- (void)_miniViewerSizeDidChange:(NSInteger)sizeIndex {
+  // Guide-only observation hook (the popover already persisted the global pref
+  // and resized itself). Lets the mini-viewer guide's "make the preview bigger"
+  // step advance when the user picks the large size.
+  if (self.onGuideMiniViewerSizeChanged)
+    self.onGuideMiniViewerSizeChanged(sizeIndex);
+}
+
 - (void)_republishBoundaryRequestIfOpen {
   if (_renderMode == KKMiniViewerRenderModeOff)
     return;
