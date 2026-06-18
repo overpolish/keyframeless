@@ -118,6 +118,15 @@
   // open). Then set activeLayerKey so the NEXT fresh open scopes here too.
   [self.basicLanesView retargetKeyposePopoverToLayerKey:layerID];
   self.basicLanesView.activeLayerKey = layerID;
+  // Let the plugin swap the active OSC-visibility set to this layer's.
+  if (_onSelectedLayerChanged)
+    _onSelectedLayerChanged(sel.layerID);
+}
+
+- (NSString *)resolvedSelectedLayerID {
+  KKBezierPath *sel = CanvasSelectedLayerForPaths(
+      [_layerListController currentLayerPaths], _selectedLayerID);
+  return sel.layerID;
 }
 
 // Constants edits the selected layer's constant params; if that layer has none

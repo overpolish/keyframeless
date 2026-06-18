@@ -9,11 +9,11 @@
 #import "KKTimelineInspectorView_Private.h"
 
 #import "KKCheckboxView.h"
-#import "KKCompoundPillBar.h"
 #import "KKConstants.h"
 #import "KKLabelView.h"
 #import "KKLaneCategoryNav.h"
 #import "KKMiniViewerView.h"
+#import "KKOSCChecklistView.h"
 #import "KKParameterRowView.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
@@ -387,27 +387,17 @@
   if (!compounds.count)
     return;
 
-  // Localize the display label of each segment (its last dot-separated
-  // component, so @"Rotation.X" reads as "X").
-  NSMutableArray<NSArray<NSString *> *> *labels = [NSMutableArray array];
-  for (NSArray<NSString *> *compound in compounds) {
-    NSMutableArray<NSString *> *group = [NSMutableArray array];
-    for (NSString *key in compound) {
-      NSString *leaf = [key componentsSeparatedByString:@"."].lastObject ?: key;
-      [group addObject:KKLocalizedParamName(leaf)];
-    }
-    [labels addObject:group];
-  }
-
-  KKCompoundPillBar *bar = [[KKCompoundPillBar alloc] initWithCompounds:labels];
-  bar.translatesAutoresizingMaskIntoConstraints = NO;
-  _oscPillBar = bar; // guide spotlight anchor (weak; lives in the popover)
+  // The checklist derives each row's display label from the element key's leaf
+  // (e.g. @"Rotation.X" -> "X") and localizes it itself.
   NSArray<NSArray<NSNumber *> *> *states =
       self.oscVisibilityElementStates ? self.oscVisibilityElementStates() : nil;
-  if (states.count == compounds.count)
-    bar.states = states;
+  KKOSCChecklistView *list = [[KKOSCChecklistView alloc]
+      initWithCompounds:compounds
+                 states:(states.count == compounds.count ? states : @[])];
+  list.translatesAutoresizingMaskIntoConstraints = NO;
+  _oscPillBar = list; // guide spotlight anchor (weak; lives in the popover)
   __weak typeof(self) weak = self;
-  bar.onToggled = ^(NSInteger compoundIdx, NSInteger segIdx, BOOL isOn) {
+  list.onToggled = ^(NSInteger compoundIdx, NSInteger segIdx, BOOL isOn) {
     KKTimelineInspectorView *strong = weak;
     if (strong.oscVisibilityElementToggled)
       strong.oscVisibilityElementToggled(compoundIdx, segIdx, isOn);
@@ -423,42 +413,33 @@
     }
   };
 
-  // Wrap in the lanes-view popover content view so the macOS 26 liquid-glass
-  // double-border fix applies (same as the motion-blur / curve popovers).
-  _KKLVPopoverContentView *content = [[_KKLVPopoverContentView alloc] init];
-  [content addSubview:bar];
-  [NSLayoutConstraint activateConstraints:@[
-    [bar.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
-                                      constant:KKPaddingMD],
-    [bar.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
-                                       constant:-KKPaddingMD],
-    [bar.topAnchor constraintEqualToAnchor:content.topAnchor
-                                  constant:KKPaddingMD],
-    [bar.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
-                                     constant:-KKPaddingMD],
-  ]];
-
-  NSViewController *vc = [[NSViewController alloc] init];
-  vc.view = content;
-  _oscPopover = [[NSPopover alloc] init];
-  // While a guide is running, ViewBridge-routed clicks (the joyride overlay
-  // forwarding a pill click) target the inspector window, not the popover -
-  // Transient reads that as an outside click and dismisses before the pill
-  // toggles. ApplicationDefined keeps it open; the guide owns its lifecycle
-  // (it closes the popover on its opt-click step and on completion).
-  _oscPopover.behavior = _timingGuideHost.isActive
-                             ? NSPopoverBehaviorApplicationDefined
-                             : NSPopoverBehaviorTransient;
-  _oscPopover.contentViewController = vc;
-  _oscPopover.contentSize = content.fittingSize;
-  [_oscPopover showRelativeToRect:_oscSettingsButton.bounds
-                           ofView:_oscSettingsButton
-                    preferredEdge:NSRectEdgeMinY];
+  // Present through the lanes view's companion-capable popover path (same
+  // keep-alive outside-click handling as the value popovers) so a plugin's
+  // companion side panel - Canvas's layer list - can attach beside it and
+  // clicking that panel doesn't dismiss it. The presenter wraps `list` in the
+  // liquid-glass content view (double-border fix) itself, so size + hand it the
+  // checklist directly. `kind:@"osc"` tells the companion every layer is
+  // selectable (like the constants kind).
+  list.frame =
+      NSMakeRect(0, 0, [KKOSCChecklistView preferredWidth], list.fittingHeight);
+  __weak typeof(self) weakClose = self;
+  _oscPopover = [self.basicLanesView
+      showCompanionPopover:list
+                  fromView:_oscSettingsButton
+                      kind:@"osc"
+                   onClose:^{
+                     __strong typeof(weakClose) s = weakClose;
+                     if (!s)
+                       return;
+                     s->_oscPopover = nil;
+                     s->_oscPillBar = nil;
+                   }];
+  list.popover = _oscPopover; // so the search filter can re-fit the height
   // Guide observation: let the OSC guide grab the live popover (passthrough
   // window + pill spotlight) once it has settled into a window and laid out.
   if (self.onGuideOSCSettingsPopoverWillOpen) {
     __weak typeof(self) weakSelf = self;
-    __weak NSView *weakContent = content;
+    __weak NSView *weakContent = _oscPopover.contentViewController.view;
     dispatch_after(
         dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
         dispatch_get_main_queue(), ^{
@@ -468,6 +449,12 @@
             s.onGuideOSCSettingsPopoverWillOpen(c);
         });
   }
+}
+
+- (void)refreshOpenOSCChecklist {
+  if (!_oscPopover.isShown || !_oscPillBar || !self.oscVisibilityElementStates)
+    return;
+  [_oscPillBar reloadStates:self.oscVisibilityElementStates()];
 }
 
 - (void)setOSCVisible:(BOOL)visible {

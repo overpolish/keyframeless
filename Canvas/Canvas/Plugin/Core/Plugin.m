@@ -66,25 +66,26 @@
     BOOL enabled = [state[@"loopEnabled"] boolValue];
     NSInteger tab = [state[@"activeTab"] integerValue];
     // Re-apply the viewer OSC visibility (toggle / pills changed, or
-    // undo/redo). Default: global ON, Transform (Position/Path) hidden when
-    // unset; nil renderer keeps the popover MINI handles independent.
-    NSMutableDictionary *visState = [state mutableCopy];
-    if (!visState[@"oscMasterVisible"])
-      visState[@"oscMasterVisible"] = @YES;
-    if (!visState[@"oscElements"])
-      visState[@"oscElements"] = [CanvasPlugin defaultOSCElements];
+    // undo/redo). Master is global; the per-element set is PER-LAYER
+    // (oscElementsByLayer), so reload that map into the instance state and
+    // re-apply the SELECTED layer's set. nil renderer keeps the popover MINI
+    // handles independent.
+    BOOL oscMaster = state[@"oscMasterVisible"]
+                         ? [state[@"oscMasterVisible"] boolValue]
+                         : YES;
+    NSDictionary *byLayer = state[@"oscElementsByLayer"];
+    NSArray<NSString *> *oscKeys =
+        [CanvasPlugin kkOSCElementKeysForCompounds:[CanvasPlugin oscCompounds]];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];
-      [self
-          kkRefreshOSCVisibilityFromState:visState
-                                     view:(KKTimelineInspectorView *)
-                                              self.inspectorView
-                                 renderer:nil
-                              elementKeys:[CanvasPlugin
-                                              kkOSCElementKeysForCompounds:
-                                                  [CanvasPlugin oscCompounds]]];
-      [(CanvasInspectorView *)self.inspectorView syncMiniHandleVisibility];
+      KKPluginInstanceState *ist = KKInstanceStateEnsureForAPI(self.apiManager);
+      ist.oscMasterVisible = oscMaster;
+      ist.oscElementsByOwner =
+          [byLayer isKindOfClass:[NSDictionary class]] ? byLayer : @{};
+      [self canvasApplyOSCForLayer:((CanvasInspectorView *)self.inspectorView)
+                                       .resolvedSelectedLayerID
+                              keys:oscKeys];
     });
   }
 

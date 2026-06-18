@@ -109,6 +109,59 @@
   };
 }
 
+- (void)canvasApplyOSCForLayer:(NSString *)layerID
+                          keys:(NSArray<NSString *> *)keys {
+  KKPluginInstanceState *ist = KKInstanceStateForAPI(self.apiManager);
+  if (!ist)
+    return;
+  NSDictionary *els = ist.oscElementsByOwner[layerID ?: @""];
+  if (![els isKindOfClass:[NSDictionary class]])
+    els = [CanvasPlugin defaultOSCElements]; // new / unseen layer -> default
+  // Refresh through the kit from a synthesized state (global master + THIS
+  // layer's element map); this sets the active hiddenOSCElements + view + mini.
+  NSDictionary *state =
+      @{@"oscMasterVisible" : @(ist.oscMasterVisible), @"oscElements" : els};
+  [self kkRefreshOSCVisibilityFromState:state
+                                   view:(KKTimelineInspectorView *)
+                                            self.inspectorView
+                               renderer:nil
+                            elementKeys:keys];
+  [(CanvasInspectorView *)self.inspectorView syncMiniHandleVisibility];
+  // If the OSC settings popover is open (companion layer list drove the
+  // switch), refresh its checkboxes to this layer's set.
+  [(KKTimelineInspectorView *)self.inspectorView refreshOpenOSCChecklist];
+}
+
+- (void)canvasToggleOSCElement:(NSString *)key
+                       visible:(BOOL)visible
+                          keys:(NSArray<NSString *> *)keys {
+  CanvasInspectorView *view = (CanvasInspectorView *)self.inspectorView;
+  NSString *layerID = view.resolvedSelectedLayerID ?: @"";
+  KKPluginInstanceState *ist = KKInstanceStateForAPI(self.apiManager);
+  if (!ist)
+    return;
+  // Flip the ACTIVE set (the selected layer's), then write it back into that
+  // layer's slot in the per-layer map and persist the whole map.
+  NSMutableSet<NSString *> *hidden =
+      [(ist.hiddenOSCElements ?: [NSSet set]) mutableCopy];
+  if (visible)
+    [hidden removeObject:key];
+  else
+    [hidden addObject:key];
+  ist.hiddenOSCElements = hidden;
+  NSMutableDictionary<NSString *, NSNumber *> *els =
+      [NSMutableDictionary dictionaryWithCapacity:keys.count];
+  for (NSString *k in keys)
+    els[k] = @(![hidden containsObject:k]);
+  NSMutableDictionary *byLayer = [(ist.oscElementsByOwner ?: @{}) mutableCopy];
+  byLayer[layerID] = els;
+  ist.oscElementsByOwner = byLayer;
+  [self patchUIStateKey:@"oscElementsByLayer"
+                  value:byLayer
+                paramID:kParamUIState];
+  [view syncMiniHandleVisibility];
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kParamInspectorUI) {
     id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
@@ -276,25 +329,63 @@
                                          view.miniViewerDelegate
                            compounds:oscCompounds
                              paramID:kParamUIState];
+    NSArray<NSString *> *oscKeys =
+        [CanvasPlugin kkOSCElementKeysForCompounds:oscCompounds];
     NSMutableDictionary *visState =
         [st.uiState mutableCopy] ?: [NSMutableDictionary dictionary];
-    // Default: global controls ON, but the Transform (Position + Path + Scale +
-    // Rotation) individually hidden - so the viewer is clean yet opt-hold
-    // reveals the ghost controls to opt-click on (no need to flip the global
-    // toggle first).
-    if (!visState[@"oscMasterVisible"])
-      visState[@"oscMasterVisible"] = @YES;
-    if (!visState[@"oscElements"])
-      visState[@"oscElements"] = [CanvasPlugin defaultOSCElements];
-    [self kkRefreshOSCVisibilityFromState:visState
-                                     view:view
-                                 renderer:nil
-                              elementKeys:[CanvasPlugin
-                                              kkOSCElementKeysForCompounds:
-                                                  oscCompounds]];
-    // Push that visibility onto the popover mini handles too (Canvas owns this
-    // - the wiring uses a nil renderer so it doesn't fight the lock state).
-    [view syncMiniHandleVisibility];
+    // Master "show controls" toggle stays GLOBAL (kkWire persists it under
+    // oscMasterVisible). Default ON so opt-hold can reveal the per-layer
+    // ghosts.
+    KKPluginInstanceState *ist = KKInstanceStateEnsureForAPI(self.apiManager);
+    ist.oscMasterVisible = visState[@"oscMasterVisible"]
+                               ? [visState[@"oscMasterVisible"] boolValue]
+                               : YES;
+    // Per-LAYER element visibility: each layer keeps its own hidden set, stored
+    // in kParamUIState["oscElementsByLayer"] keyed by layerID and mirrored into
+    // the per-instance state. The ACTIVE set (ist.hiddenOSCElements, read by
+    // the viewer OSC + mini in this same process) tracks the selected layer;
+    // switch layers -> swap the active set (see -canvasApplyOSCForLayer:keys:).
+    // A new layer with no entry falls back to the shared default seed.
+    NSDictionary *byLayer = visState[@"oscElementsByLayer"];
+    ist.oscElementsByOwner =
+        [byLayer isKindOfClass:[NSDictionary class]] ? byLayer : @{};
+    [self canvasApplyOSCForLayer:view.resolvedSelectedLayerID keys:oscKeys];
+
+    __weak CanvasPlugin *weakOSC = self;
+    // Element toggle routes to the SELECTED layer (replaces the kit's global
+    // per-element handler wired above; master + states stay as kkWire set
+    // them).
+    view.oscVisibilityElementToggled = ^(NSInteger compoundIdx,
+                                         NSInteger segIdx, BOOL isOn) {
+      __strong CanvasPlugin *s = weakOSC;
+      if (compoundIdx < 0 || compoundIdx >= (NSInteger)oscCompounds.count ||
+          segIdx < 0 || segIdx >= (NSInteger)oscCompounds[compoundIdx].count)
+        return;
+      [s canvasToggleOSCElement:oscCompounds[compoundIdx][segIdx]
+                        visible:isOn
+                           keys:oscKeys];
+    };
+    // Opt-click a handle in the MINI viewer hides it for the SELECTED layer too
+    // (kkWire pointed this at the kit's global toggle; re-point per-layer).
+    KKMiniViewerRenderer *miniRenderer =
+        (KKMiniViewerRenderer *)view.miniViewerDelegate;
+    miniRenderer.onHandleVisibilityToggled = ^(NSString *label) {
+      __strong CanvasPlugin *s = weakOSC;
+      BOOL currentlyHidden =
+          [KKInstanceStateForAPI(s.apiManager).hiddenOSCElements
+              containsObject:label];
+      [s canvasToggleOSCElement:label visible:currentlyHidden keys:oscKeys];
+    };
+    // Layer-selection change swaps the active OSC set to that layer's. The mini
+    // updates synchronously (syncMiniHandleVisibility); the VIEWER OSC only
+    // re-reads on its next drawOSC, and a selection isn't a param write, so
+    // nudge a render to redraw it immediately (else it lags a few ticks).
+    // Toggles already nudge via the kParamUIState write.
+    view.onSelectedLayerChanged = ^(NSString *resolvedLayerID) {
+      __strong CanvasPlugin *s = weakOSC;
+      [s canvasApplyOSCForLayer:resolvedLayerID keys:oscKeys];
+      [s kkNudgeRenderWithParamID:kParamRenderNudge];
+    };
 
     // The Layers panel opens parameter actions to read/write kParamLayerData;
     // they only persist if the action sender is a host-recognized editor (the

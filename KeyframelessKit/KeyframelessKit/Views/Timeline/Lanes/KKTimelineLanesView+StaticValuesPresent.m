@@ -351,31 +351,13 @@
   staticView.popover = popover;
 
   // Companion-panel signal: a plugin (e.g. Canvas's layer list) observes this
-  // to show a panel beside the popover. Scoped to this lanes view via `object`.
-  // `contentRect` is the VISIBLE card's screen rect (the window frame includes
-  // shadow + arrow padding, so it's taller/wider than the card) - a companion
-  // panel aligns to this, not the window frame.
-  NSView *contentView = popover.contentViewController.view;
-  NSWindow *popoverWindow = contentView.window;
-  NSMutableDictionary *info = [NSMutableDictionary dictionary];
-  if (popoverWindow) {
-    info[@"window"] = popoverWindow;
-    info[@"contentView"] = contentView; // so a companion can re-align on flip
-    NSRect cardScreen = [popoverWindow
-        convertRectToScreen:[contentView convertRect:contentView.bounds
-                                              toView:nil]];
-    info[@"contentRect"] = [NSValue valueWithRect:cardScreen];
-  }
-  // A keypose (boundary) popover edits one moment in time: a companion layer
-  // list uses `isBoundary` + `fraction` to gray layers that have no keypose at
-  // that time. A constants popover sets isBoundary NO (every layer selectable).
-  info[@"isBoundary"] = @(isBoundary);
-  info[@"fraction"] = @(cfg.fraction);
-  info[@"kind"] = isBoundary ? @"keypose" : @"constants";
-  [NSNotificationCenter.defaultCenter
-      postNotificationName:KKStaticValuesPopoverDidOpenNotification
-                    object:self
-                  userInfo:info];
+  // to show a panel beside the popover (scoped to this lanes view via
+  // `object`). A keypose (boundary) popover passes its `fraction` so the
+  // companion can gray layers with no keypose there; a constants popover leaves
+  // every layer selectable.
+  KKPostStaticValuesPopoverDidOpen(popover, self,
+                                   isBoundary ? @"keypose" : @"constants",
+                                   isBoundary, cfg.fraction);
 
   if (self.onStaticValuesPopoverWillOpen) {
     __weak _KKStaticValuesPopoverView *weakStatic = staticView;

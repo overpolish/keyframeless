@@ -44,6 +44,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// Default per-element visibility seed (the transform OSCs start individually
 /// hidden so the viewer is clean but opt-peek reveals them).
 + (NSDictionary<NSString *, NSNumber *> *)defaultOSCElements;
+
+/// Load `layerID`'s per-layer OSC element set (or the default seed) into the
+/// ACTIVE per-instance state + refresh the inspector + mini. Called on open and
+/// on every layer-selection change so the viewer OSC / mini reflect the
+/// selected layer's own visibility.
+- (void)canvasApplyOSCForLayer:(nullable NSString *)layerID
+                          keys:(NSArray<NSString *> *)keys;
+/// Toggle one element for the SELECTED layer: update the active set + that
+/// layer's stored map + persist the per-layer map to kParamUIState.
+- (void)canvasToggleOSCElement:(NSString *)key
+                       visible:(BOOL)visible
+                          keys:(NSArray<NSString *> *)keys;
 @end
 
 @interface CanvasPlugin (Render)

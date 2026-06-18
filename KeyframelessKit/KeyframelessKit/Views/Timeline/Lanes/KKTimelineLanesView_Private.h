@@ -44,6 +44,9 @@ NS_ASSUME_NONNULL_BEGIN
 @interface _KKManageRow : NSView
 @property(nonatomic, copy) NSString *rowLabel;
 @property(nonatomic) BOOL checked;
+/// Indent depth (0 = top level). Shifts the checkbox + label right so a child
+/// row (e.g. a Rotation axis) reads as nested under its parent. Default 0.
+@property(nonatomic) NSInteger indentLevel;
 @property(nonatomic, copy, nullable) void (^onToggle)(void);
 @end
 

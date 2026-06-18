@@ -24,7 +24,7 @@
 @class _KKCompatBannerView;
 @class _KKMotionBlurSettingsView;
 @class KKJoyrideGuideHost;
-@class KKCompoundPillBar;
+@class KKOSCChecklistView;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -74,7 +74,7 @@ NS_ASSUME_NONNULL_BEGIN
   void (^_onGuideOSCElementToggled)(NSString *label, BOOL visible);
   /// The live per-element OSC pill bar inside the open settings popover (weak;
   /// nil when closed). Exposed for the OSC guide's pill spotlight.
-  __weak KKCompoundPillBar *_oscPillBar;
+  __weak KKOSCChecklistView *_oscPillBar;
 
   // Main inspector state (migrated off the @implementation block so the
   // +ParameterRows / layout categories can reach it).

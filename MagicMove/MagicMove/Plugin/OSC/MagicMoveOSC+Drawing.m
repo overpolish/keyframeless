@@ -32,6 +32,10 @@
   // Mirror our FxPlug drag state into it (its draw gating reads `dragging`),
   // then draw the motion path FIRST so it sits under rotation/scale.
   self.positionController.dragging = self.isDragging;
+  // Feed opt-reveal so a hidden Position handle / path surfaces as a dim ghost
+  // on Opt-hold (the rotation + scale controls below get the same; without it
+  // the viewer never shows the Position peek, though the mini-viewer does).
+  self.positionController.optRevealActive = self.optRevealActive;
   [self.positionController drawPathInDestination:destinationImage
                                           atTime:time
                                       activePart:activePart];

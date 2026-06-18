@@ -153,22 +153,7 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   // multi-owner host (Canvas) shows its layer list beside the dropdown so you
   // can pick which owner's animated properties to manage. kind=manage => every
   // layer is selectable (you can animate any layer's params).
-  NSView *manageContent = pop.contentViewController.view;
-  NSWindow *manageWindow = manageContent.window;
-  if (manageWindow) {
-    NSRect cardScreen = [manageWindow
-        convertRectToScreen:[manageContent convertRect:manageContent.bounds
-                                                toView:nil]];
-    [NSNotificationCenter.defaultCenter
-        postNotificationName:KKStaticValuesPopoverDidOpenNotification
-                      object:self
-                    userInfo:@{
-                      @"window" : manageWindow,
-                      @"contentView" : manageContent,
-                      @"contentRect" : [NSValue valueWithRect:cardScreen],
-                      @"kind" : @"manage",
-                    }];
-  }
+  KKPostStaticValuesPopoverDidOpen(pop, self, @"manage", NO, 0.0);
 
   if (self.onManagePopoverWillOpen) {
     NSString *targetLabel =
@@ -637,6 +622,33 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
 
 - (void)closeManagePopover {
   [_openManagePopover close];
+}
+
+- (NSPopover *)showCompanionPopover:(NSView *)content
+                           fromView:(NSView *)anchor
+                               kind:(NSString *)kind
+                            onClose:(void (^)(void))onClose {
+  // Present through the same keep-alive-aware presenter the value / manage
+  // popovers use (ApplicationDefined + outside-click monitors that ignore
+  // registered companion windows), then post the open/close signals a companion
+  // panel (Canvas's layer list) observes - scoped to this lanes view via
+  // `object`. Lets the OSC settings popover host the layer-list panel too.
+  __weak typeof(self) weak = self;
+  NSPopover *popover =
+      [self _showPopoverWithContent:content
+                           fromView:anchor
+                            onClose:^{
+                              __strong typeof(weak) s = weak;
+                              [NSNotificationCenter.defaultCenter
+                                  postNotificationName:
+                                      KKStaticValuesPopoverDidCloseNotification
+                                                object:s];
+                              if (onClose)
+                                onClose();
+                            }];
+  // isBoundary NO => every layer selectable (like the constants kind).
+  KKPostStaticValuesPopoverDidOpen(popover, self, kind ?: @"osc", NO, 0.0);
+  return popover;
 }
 
 - (void)showStaticValuesPopoverFromView:(NSView *)anchor {

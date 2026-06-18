@@ -38,3 +38,27 @@ BOOL KKPopoverPointInKeepAliveWindow(NSPoint screenPoint) {
       return YES;
   return NO;
 }
+
+void KKPostStaticValuesPopoverDidOpen(NSPopover *popover, id sender,
+                                      NSString *kind, BOOL isBoundary,
+                                      double fraction) {
+  NSView *contentView = popover.contentViewController.view;
+  NSWindow *window = contentView.window;
+  NSMutableDictionary *info = [NSMutableDictionary dictionary];
+  if (window) {
+    info[@"window"] = window;
+    info[@"contentView"] = contentView; // companion can re-align on flip
+    info[@"contentRect"] = [NSValue
+        valueWithRect:[window
+                          convertRectToScreen:[contentView
+                                                  convertRect:contentView.bounds
+                                                       toView:nil]]];
+  }
+  info[@"isBoundary"] = @(isBoundary);
+  info[@"fraction"] = @(fraction);
+  info[@"kind"] = kind ?: @"constants";
+  [NSNotificationCenter.defaultCenter
+      postNotificationName:KKStaticValuesPopoverDidOpenNotification
+                    object:sender
+                  userInfo:info];
+}

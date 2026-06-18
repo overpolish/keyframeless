@@ -100,6 +100,12 @@ NS_ASSUME_NONNULL_BEGIN
                            elementKeys:(NSArray<NSString *> *)keys
                           nudgeParamID:(UInt32)nudgeParamID;
 
+/// Write a nonce to the hidden render-nudge scratch param so the FCP viewer
+/// re-renders and redraws its on-screen controls now. Use when OSC state
+/// changed only in memory (no other param write) - e.g. a multi-owner host
+/// swapping the active layer's visibility set on selection change.
+- (void)kkNudgeRenderWithParamID:(UInt32)nudgeParamID;
+
 @end
 
 NS_ASSUME_NONNULL_END

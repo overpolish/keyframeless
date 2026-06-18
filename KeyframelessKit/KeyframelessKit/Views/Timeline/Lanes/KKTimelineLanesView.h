@@ -288,6 +288,16 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// Open the static-values popover anchored to the given view.
 - (void)showStaticValuesPopoverFromView:(NSView *)anchor;
 
+/// Present arbitrary `content` in a companion-capable popover (same keep-alive
+/// outside-click handling as the value popovers) and post the open/close
+/// signals a companion side panel (Canvas's layer list) observes, tagged with
+/// `kind`. Used by the OSC settings popover so it can host the layer-list panel
+/// too. Returns the popover.
+- (NSPopover *)showCompanionPopover:(NSView *)content
+                           fromView:(NSView *)anchor
+                               kind:(NSString *)kind
+                            onClose:(nullable void (^)(void))onClose;
+
 /// The value-editor row (slider/fields) for `label` in the currently open
 /// static-values popover, or nil if it isn't open / no such lane. Lets a
 /// guide spotlight a specific constant's control.

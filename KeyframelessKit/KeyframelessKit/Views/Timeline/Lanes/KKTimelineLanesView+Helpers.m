@@ -101,6 +101,9 @@ static void _clearPopoverBackground(NSView *view) {
 }
 @end
 
+// Horizontal shift per indent level for a nested (child) manage row.
+static const CGFloat kManageRowIndentStep = 14.0;
+
 @implementation _KKManageRow
 
 - (BOOL)isFlipped {
@@ -110,6 +113,11 @@ static void _clearPopoverBackground(NSView *view) {
   return YES;
 }
 
+- (void)setIndentLevel:(NSInteger)indentLevel {
+  _indentLevel = indentLevel;
+  [self setNeedsDisplay:YES];
+}
+
 - (void)setChecked:(BOOL)checked {
   _checked = checked;
   [self setNeedsDisplay:YES];
@@ -117,10 +125,26 @@ static void _clearPopoverBackground(NSView *view) {
 
 - (void)drawRect:(NSRect)dirty {
   // Square checkbox - Bezier path approach (coordinate-system independent
-  // shape).
-  CGFloat checkX = KKPaddingLG;
+  // shape). Child rows shift right by their indent depth.
+  CGFloat indent = (CGFloat)_indentLevel * kManageRowIndentStep;
+  CGFloat checkX = KKPaddingLG + indent;
   CGFloat checkY = round(NSMidY(self.bounds) - kCheckSize / 2.0);
   NSRect boxRect = NSMakeRect(checkX, checkY, kCheckSize, kCheckSize);
+
+  // Nested rows draw a vertical guide aligned to the PARENT checkbox centre, so
+  // a child reads as belonging to the group above it. Uses the same border tone
+  // as the unchecked checkbox outline (the typical field-border colour).
+  if (_indentLevel > 0) {
+    CGFloat guideX = KKPaddingLG +
+                     (CGFloat)(_indentLevel - 1) * kManageRowIndentStep +
+                     kCheckSize / 2.0;
+    NSBezierPath *guide = [NSBezierPath bezierPath];
+    guide.lineWidth = 1.0;
+    [guide moveToPoint:NSMakePoint(guideX, 0)];
+    [guide lineToPoint:NSMakePoint(guideX, NSHeight(self.bounds))];
+    [[[NSColor inspectorLabel] colorWithAlphaComponent:0.3] setStroke];
+    [guide stroke];
+  }
 
   if (_checked) {
     NSBezierPath *fill = [NSBezierPath bezierPathWithRoundedRect:boxRect
@@ -170,7 +194,7 @@ static void _clearPopoverBackground(NSView *view) {
   };
   NSString *display = KKLocalizedParamName(_rowLabel);
   NSSize textSz = [display sizeWithAttributes:attrs];
-  [display drawAtPoint:NSMakePoint(KKPaddingLG + kCheckSize + 6.0,
+  [display drawAtPoint:NSMakePoint(KKPaddingLG + indent + kCheckSize + 6.0,
                                    NSMidY(self.bounds) - textSz.height / 2.0)
         withAttributes:attrs];
 }
@@ -246,7 +270,7 @@ static const CGFloat kManagePillH = 24.0;
         [catByLabel[lane.label] isEqualToString:selected])
       initialVisible++;
   CGFloat h = MAX([_KKManagePopoverView heightForRowCount:initialVisible
-                                                   hasPill:hasPill],
+                                                  hasPill:hasPill],
                   minimumHeight);
   self = [super initWithFrame:NSMakeRect(0, 0, kPopoverW, h)];
   if (!self)

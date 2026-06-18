@@ -29,4 +29,15 @@ void KKPopoverRemoveKeepAliveWindow(NSWindow *window);
 /// YES if `screenPoint` lies within any registered, visible keep-alive window.
 BOOL KKPopoverPointInKeepAliveWindow(NSPoint screenPoint);
 
+/// Post `KKStaticValuesPopoverDidOpenNotification` for `popover` with the
+/// standard companion-panel userInfo - `window`, `contentView`, and the visible
+/// card's screen rect `contentRect` (the window frame includes shadow/arrow
+/// padding, so a companion aligns to this), plus `kind` / `isBoundary` /
+/// `fraction`. One source of truth for those keys; `object` is `sender` (the
+/// presenting view) so observers can scope to one inspector. Safe if the
+/// popover has no window yet.
+void KKPostStaticValuesPopoverDidOpen(NSPopover *popover, id sender,
+                                      NSString *kind, BOOL isBoundary,
+                                      double fraction);
+
 NS_ASSUME_NONNULL_END

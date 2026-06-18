@@ -27,6 +27,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// the Layers panel selection; nil = topmost). The plugin's timeline-persist
 /// reads this to write the edit back to the right layer.
 @property(nonatomic, copy, nullable, readonly) NSString *selectedLayerID;
+/// The RESOLVED selected layer id (nil `selectedLayerID` -> the topmost layer's
+/// id), i.e. the layer the OSC / mini actually act on. The plugin keys
+/// per-layer OSC visibility off this.
+@property(nonatomic, copy, nullable, readonly)
+    NSString *resolvedSelectedLayerID;
+/// Fired whenever the edited layer changes (panel click / constants fallback),
+/// with the resolved layer id. The plugin loads that layer's per-layer OSC
+/// visibility into the active instance state in response.
+@property(nonatomic, copy, nullable) void (^onSelectedLayerChanged)
+    (NSString *resolvedLayerID);
 @end
 
 NS_ASSUME_NONNULL_END

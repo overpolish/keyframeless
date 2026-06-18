@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKCompoundPillBar.h"
+#import "KKOSCChecklistView.h"
 #import "KKPillToggleRowView.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineInspectorView+Guide.h"
