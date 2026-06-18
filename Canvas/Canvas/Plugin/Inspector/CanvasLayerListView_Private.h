@@ -97,6 +97,10 @@ extern NSPasteboardType const kCanvasLayerRowDragType;
 - (void)selectIndex:(NSUInteger)idx
           modifiers:(NSEventModifierFlags)mods
          clickCount:(NSInteger)clicks;
+// Fire onPrimaryLayerSelected for the current selection's first index. Used by
+// selection paths that set _selection directly (drop / reorder) rather than
+// through selectIndex:, so the inspector swaps its per-layer state to match.
+- (void)_notifyPrimaryLayerSelected;
 @end
 
 @interface CanvasLayerListView (Grouping)

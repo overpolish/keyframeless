@@ -358,6 +358,10 @@ NSPasteboardType const kCanvasLayerRowDragType =
     [self->_selection removeAllIndexes];
     [self->_selection addIndexes:insertAt];
   }];
+  // _modifyPaths: sets _selection directly (no selectIndex:), so the inspector
+  // hasn't swapped its per-layer state (OSC-visibility set etc.) to the new
+  // primary - tell it, or Opt-peek stays bound to the previously active layer.
+  [self _notifyPrimaryLayerSelected];
 }
 
 // Image file drops are handled by the doc view (so they show the drop line and
@@ -395,6 +399,11 @@ NSPasteboardType const kCanvasLayerRowDragType =
     [self->_selection removeAllIndexes];
     [self->_selection addIndexes:newSel];
   }];
+  // Same as reorder: the dropped image is now the primary selection, so swap
+  // the inspector's per-layer state (incl. the OSC-visibility set Opt-peek
+  // reads) to it. Without this the new layer is selected but Opt-peek doesn't
+  // reveal its hidden OSCs until another layer is clicked and re-selected.
+  [self _notifyPrimaryLayerSelected];
 }
 
 @end

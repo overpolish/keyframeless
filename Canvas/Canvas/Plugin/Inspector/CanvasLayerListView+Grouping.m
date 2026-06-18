@@ -214,13 +214,24 @@
   NSUInteger tag = (NSUInteger)sender.tag;
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
     NSIndexSet *targets = [self _targetsWithDescendantsForTag:tag paths:paths];
+    if (targets.count == 0)
+      return;
+    NSUInteger firstDeleted = targets.firstIndex;
     [targets enumerateIndexesWithOptions:NSEnumerationReverse
                               usingBlock:^(NSUInteger idx, BOOL *stop) {
                                 if (idx < paths.count)
                                   [paths removeObjectAtIndex:idx];
                               }];
     [self->_selection removeAllIndexes];
+    // A layer must always stay selected (unless the stack is now empty): pick
+    // the row that shifted into the deleted slot, or the new last row.
+    if (paths.count > 0)
+      [self->_selection addIndex:MIN(firstDeleted, paths.count - 1)];
   }];
+  // Drive the real selection-change so the inspector swaps to the surviving
+  // layer (timeline, OSC set, reset-button state, panel highlight) instead of
+  // leaving the deleted one active - see _notifyPrimaryLayerSelected.
+  [self _notifyPrimaryLayerSelected];
 }
 
 // Group the current selection (Cmd-G). Anchors on the topmost selected row so

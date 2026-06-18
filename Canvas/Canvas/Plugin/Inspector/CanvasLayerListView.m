@@ -536,13 +536,21 @@
       if (idx < paths.count && paths[idx].isGroup)
         [expanded addIndexes:CanvasLayerDescendantIndices(idx, paths)];
     }];
+    NSUInteger firstDeleted = expanded.firstIndex;
     [expanded enumerateIndexesWithOptions:NSEnumerationReverse
                                usingBlock:^(NSUInteger idx, BOOL *stop) {
                                  if (idx < paths.count)
                                    [paths removeObjectAtIndex:idx];
                                }];
     [self->_selection removeAllIndexes];
+    // A layer must always stay selected (unless the stack is now empty): pick
+    // the row that shifted into the deleted slot, or the new last row.
+    if (paths.count > 0)
+      [self->_selection addIndex:MIN(firstDeleted, paths.count - 1)];
   }];
+  // Swap the inspector to the surviving layer (timeline, OSC set, reset-button
+  // state, panel highlight) - see _notifyPrimaryLayerSelected.
+  [self _notifyPrimaryLayerSelected];
 }
 
 #pragma mark - Context menu actions

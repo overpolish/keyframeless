@@ -325,4 +325,14 @@
   }
 }
 
+- (void)_notifyPrimaryLayerSelected {
+  if (!self.onPrimaryLayerSelected)
+    return;
+  NSUInteger primary = _selection.firstIndex;
+  NSString *layerID = (primary != NSNotFound && primary < _paths.count)
+                          ? _paths[primary].layerID
+                          : nil;
+  self.onPrimaryLayerSelected(layerID);
+}
+
 @end
