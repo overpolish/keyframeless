@@ -123,6 +123,8 @@
   if (lanes) {
     lanes.onManagePopoverWillOpen = nil;
     lanes.onManagePopoverClosed = nil;
+    lanes.onFilterPopoverWillOpen = nil;
+    lanes.onFilterPopoverClosed = nil;
     lanes.onLaneOptedIn = nil;
     lanes.onStaticValuesPopoverWillOpen = nil;
     lanes.onStaticValuesPopoverClosed = nil;
@@ -187,6 +189,32 @@
     KKJoyrideController *g = s->_guide;
     g.additionalPassthroughWindow = nil;
     [s _fireType:KKJoyrideTriggerTypeManagePopoverClosed
+          intArg:0
+         intArg2:0
+           label:nil];
+  };
+
+  lanes.onFilterPopoverWillOpen = ^(NSView *content) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    s->_latestFilterPopoverContent = content;
+    KKJoyrideController *g = s->_guide;
+    g.additionalPassthroughWindow = content.window;
+    [s _fireType:KKJoyrideTriggerTypeFilterPopoverWillOpen
+          intArg:0
+         intArg2:0
+           label:nil];
+  };
+
+  lanes.onFilterPopoverClosed = ^{
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    s->_latestFilterPopoverContent = nil;
+    KKJoyrideController *g = s->_guide;
+    g.additionalPassthroughWindow = nil;
+    [s _fireType:KKJoyrideTriggerTypeFilterPopoverClosed
           intArg:0
          intArg2:0
            label:nil];
@@ -568,6 +596,12 @@
   case KKJoyrideCloseOnAdvanceContentPopover: {
     dispatch_async(dispatch_get_main_queue(), ^{
       [lanes guideCloseContentPopover];
+    });
+    break;
+  }
+  case KKJoyrideCloseOnAdvanceFilterPopover: {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [lanes closeFilterPopover];
     });
     break;
   }

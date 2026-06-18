@@ -32,6 +32,8 @@ typedef NS_ENUM(NSInteger, KKJoyrideTriggerType) {
   KKJoyrideTriggerTypePlayToggleEdge,
   KKJoyrideTriggerTypeDynamicToggled,
   KKJoyrideTriggerTypeLaneFilterToggled,
+  KKJoyrideTriggerTypeFilterPopoverWillOpen,
+  KKJoyrideTriggerTypeFilterPopoverClosed,
 };
 
 @interface KKJoyrideTrigger ()

@@ -211,6 +211,14 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// fires. Defaults to nil - first available lane alphabetically is used.
 @property(nonatomic, copy, nullable) NSString *managePopoverSpotlightLabel;
 
+/// Guide hooks for the Advanced lane-filter checklist popover, mirroring the
+/// manage-popover ones. `willOpen` fires (after a short entrance delay) with
+/// the checklist content view so a guide can set passthrough + spotlight it;
+/// `closed` fires when it dismisses.
+@property(nonatomic, copy, nullable) void (^onFilterPopoverWillOpen)
+    (NSView *content);
+@property(nonatomic, copy, nullable) void (^onFilterPopoverClosed)(void);
+
 /// Guide hooks for the static-values (constants) popover, mirroring the
 /// manage-popover ones. `willOpen` fires after the popover appears (short
 /// delay for the entrance animation) with its content view and the live
@@ -346,6 +354,9 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 
 /// Close the manage popover if it is currently open.
 - (void)closeManagePopover;
+
+/// Close the lane-filter checklist popover if it is currently open.
+- (void)closeFilterPopover;
 
 @end
 

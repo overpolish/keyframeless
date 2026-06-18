@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLaneFilterBar.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
@@ -622,6 +623,10 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
 
 - (void)closeManagePopover {
   [_openManagePopover close];
+}
+
+- (void)closeFilterPopover {
+  [_laneFilterBar closeFilterPopover];
 }
 
 - (NSPopover *)showCompanionPopover:(NSView *)content

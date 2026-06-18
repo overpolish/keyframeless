@@ -88,10 +88,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// direction - the step just wants the user to try it).
 + (instancetype)dynamicToggled;
 
-/// Fires when the user toggles (or solos) a pill in the Advanced lane-filter
-/// bar - any direction. Programmatic show-all/restore (e.g. the guide taking
-/// over) does NOT fire this; only a real user click does.
+/// Fires when the user toggles (or solos) a row in the Advanced lane-filter
+/// checklist - any direction. Programmatic show-all/restore (e.g. the guide
+/// taking over) does NOT fire this; only a real user click does.
 + (instancetype)laneFilterToggled;
+
+/// Fires when the Advanced lane-filter checklist popover opens / closes. The
+/// binder sets the popover as a passthrough window on open (so the guide can
+/// let the user interact with it) and captures its content view as
+/// `latestFilterPopoverContent`.
++ (instancetype)filterPopoverWillOpen;
++ (instancetype)filterPopoverClosed;
 
 #pragma mark - Combinators
 

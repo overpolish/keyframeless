@@ -22,6 +22,7 @@ typedef NS_ENUM(NSInteger, KKJoyrideCloseOnAdvance) {
   KKJoyrideCloseOnAdvanceNone = 0,
   KKJoyrideCloseOnAdvanceManagePopover,  // -closeManagePopover
   KKJoyrideCloseOnAdvanceContentPopover, // -guideCloseContentPopover
+  KKJoyrideCloseOnAdvanceFilterPopover,  // -closeFilterPopover
 };
 
 /// Wires a guide to a KKTimelineLanesView's callback properties so plugins
@@ -77,6 +78,11 @@ typedef NS_ENUM(NSInteger, KKJoyrideCloseOnAdvance) {
 
 @property(nonatomic, readonly, weak, nullable) NSView *latestManagePopoverRow;
 - (nullable NSView *)latestOptedInLaneRow;
+
+/// The lane-filter checklist content view, captured when the filter popover
+/// opens (for a guide step's targetScreenRect).
+@property(nonatomic, readonly, weak, nullable)
+    NSView *latestFilterPopoverContent;
 
 @property(nonatomic, readonly, weak, nullable)
     NSView *latestStaticValuesPopoverContent;

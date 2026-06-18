@@ -183,16 +183,37 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       s->_onGuideLaneFilterToggled();
   };
   // Present the filter checklist through the companion-capable popover path so
-  // Canvas's layer list can attach beside it (kind "filter").
+  // Canvas's layer list can attach beside it (kind "filter"). Also fire the
+  // guide hooks (onFilterPopoverWillOpen/Closed) so a guide can make the
+  // checklist interactive, mirroring the Animated manage popover.
   _laneFilterBar.popoverPresenter =
       ^NSPopover *(NSView *content, NSView *anchor, void (^onClose)(void)) {
         __strong typeof(weakFilter) s = weakFilter;
         if (!s)
           return nil;
-        return [s showCompanionPopover:content
-                              fromView:anchor
-                                  kind:@"filter"
-                               onClose:onClose];
+        NSPopover *pop = [s showCompanionPopover:content
+                                        fromView:anchor
+                                            kind:@"filter"
+                                         onClose:^{
+                                           __strong typeof(weakFilter) s2 =
+                                               weakFilter;
+                                           if (onClose)
+                                             onClose();
+                                           if (s2.onFilterPopoverClosed)
+                                             s2.onFilterPopoverClosed();
+                                         }];
+        if (s.onFilterPopoverWillOpen) {
+          __weak NSView *weakContent = content;
+          dispatch_after(
+              dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
+              dispatch_get_main_queue(), ^{
+                __strong typeof(weakFilter) s3 = weakFilter;
+                NSView *c = weakContent;
+                if (s3.onFilterPopoverWillOpen && c)
+                  s3.onFilterPopoverWillOpen(c);
+              });
+        }
+        return pop;
       };
   // The filter cluster is NOT a row here - it's surfaced as a header accessory
   // button (see -accessoryButtons) alongside Dynamic / zoom / Maintain Timing.

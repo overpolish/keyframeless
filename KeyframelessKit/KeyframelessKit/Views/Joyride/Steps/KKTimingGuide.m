@@ -654,8 +654,12 @@ static const CGFloat kDragSnapPx = 14.0;
   const BOOL includeFilter = config.secondaryLabel != nil;
   const NSInteger ixSwitch = 0, ixIntro = 1, ixCmdClick = 2, ixPopover = 3,
                   ixDrag = 4, ixMarquee = 5, ixGroupDrag = 6;
-  const NSInteger ixFilter = includeFilter ? 7 : -1;
-  const NSInteger ixDynamic = includeFilter ? 8 : 7;
+  // The filter is two steps (open the button, then toggle a row in the
+  // popover), present only with a second lane; they shift Dynamic + the rest
+  // down by two.
+  const NSInteger ixFilterOpen = includeFilter ? 7 : -1;
+  const NSInteger ixFilterToggle = includeFilter ? 8 : -1;
+  const NSInteger ixDynamic = includeFilter ? 9 : 7;
   (void)ixSwitch;
   (void)ixIntro;
 
@@ -889,17 +893,32 @@ static const CGFloat kDragSnapPx = 14.0;
         return fabs(now - kGroupTargetFrac) <= kGroupSnapFrac;
       }];
 
-  KKJoyrideStep *sFilter = [KKJoyrideStep
-      stepWithMessage:KKLoc(
-                          @"These <accent>filter</accent> pills show or hide "
-                          @"lanes - tap one to focus the timeline on the "
-                          @"properties you care about.",
-                          @"Advanced timing guide: try the lane-filter pills.")
+  KKJoyrideStep *sFilterOpen = [KKJoyrideStep
+      stepWithMessage:KKLoc(@"Open the <accent>filter</accent> to show or hide "
+                            @"properties on the timeline.",
+                            @"Advanced timing guide: open the lane-visibility "
+                            @"filter.")
            targetView:nil];
-  sFilter.spotlightCircular = NO;
-  sFilter.targetScreenRect = ^NSRect {
+  sFilterOpen.spotlightCircular = YES;
+  sFilterOpen.targetScreenRect = ^NSRect {
     __strong KKTimelineLanesView *l = weakLanes;
     return l ? [l guideLaneFilterBarScreenRect] : NSZeroRect;
+  };
+
+  KKJoyrideStep *sFilterToggle = [KKJoyrideStep
+      stepWithMessage:KKLoc(@"Uncheck a <accent>property</accent> to hide its "
+                            @"lane and focus the timeline.",
+                            @"Advanced timing guide: toggle a property in the "
+                            @"filter checklist.")
+           targetView:nil];
+  sFilterToggle.spotlightCircular = NO;
+  sFilterToggle.targetScreenRect = ^NSRect {
+    __strong NSView *content = weakBinder.latestFilterPopoverContent;
+    NSWindow *w = content.window;
+    if (!content || !w)
+      return NSZeroRect;
+    return [w convertRectToScreen:[content convertRect:content.bounds
+                                                toView:nil]];
   };
 
   KKJoyrideStep *sDynamic = [KKJoyrideStep
@@ -955,11 +974,23 @@ static const CGFloat kDragSnapPx = 14.0;
          advanceOn:[KKJoyrideTrigger staticValuesPopoverWillOpen]
          dismissOn:nil];
   [binder bindStep:sPopover atIndex:ixPopover advanceOn:nil dismissOn:nil];
-  if (includeFilter)
-    [binder bindStep:sFilter
-             atIndex:ixFilter
-           advanceOn:[KKJoyrideTrigger laneFilterToggled]
+  // The filter is a button that opens a checklist popover: advance the first
+  // step when the popover opens, then make the popover interactive
+  // (passthrough) and advance the second when the user toggles a row -
+  // mirroring the Animated dropdown's open-then-toggle pair. Close the popover
+  // on advance.
+  if (includeFilter) {
+    [binder bindStep:sFilterOpen
+             atIndex:ixFilterOpen
+           advanceOn:[KKJoyrideTrigger filterPopoverWillOpen]
            dismissOn:nil];
+    [binder bindStep:sFilterToggle
+             atIndex:ixFilterToggle
+           advanceOn:[KKJoyrideTrigger laneFilterToggled]
+           dismissOn:[KKJoyrideTrigger filterPopoverClosed]];
+    [binder setCloseOnAdvance:KKJoyrideCloseOnAdvanceFilterPopover
+                      forStep:sFilterToggle];
+  }
   [binder bindStep:sDynamic
            atIndex:ixDynamic
          advanceOn:[KKJoyrideTrigger dynamicToggled]
@@ -969,7 +1000,7 @@ static const CGFloat kDragSnapPx = 14.0;
       [@[ sSwitch, sIntro, sCmdClick, sPopover, sDrag, sMarquee, sGroupDrag ]
           mutableCopy];
   if (includeFilter)
-    [steps addObject:sFilter];
+    [steps addObjectsFromArray:@[ sFilterOpen, sFilterToggle ]];
   [steps addObjectsFromArray:@[ sDynamic, sOverview, sMaintain, sDone ]];
   return steps;
 }

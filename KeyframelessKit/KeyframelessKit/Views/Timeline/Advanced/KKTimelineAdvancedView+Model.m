@@ -385,14 +385,17 @@
 }
 
 - (NSInteger)_animatableIndexForLabel:(NSString *)label {
-  NSInteger i = 0;
-  for (KKLane *lane in _timeline.lanes) {
-    if (!lane.enabled)
-      continue;
-    if ([lane.label isEqualToString:label])
+  // Index into the DISPLAYED row list (-_animatableLanes), which injects layer/
+  // category header rows and drops hidden/collapsed/mode-gated lanes - the same
+  // list -_rowRectForIndex:count: walks. Walking _timeline.lanes instead
+  // mis-mapped every row below a category header (e.g. Glow's Core/Noise), so a
+  // guide cutout for a lane/keypose landed on the wrong row. Returns -1 when
+  // the lane isn't currently a visible row (collapsed/hidden), so the guide
+  // rect methods yield NSZeroRect.
+  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
+    if (!lanes[i].headerPlaceholder && [lanes[i].label isEqualToString:label])
       return i;
-    i++;
-  }
   return -1;
 }
 

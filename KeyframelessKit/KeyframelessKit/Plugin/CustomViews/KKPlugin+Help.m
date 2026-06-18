@@ -409,18 +409,11 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
                                               @"popovers",
                                               @"Help shortcut.")],
                [KKHelpShortcut
-                   shortcutWithKeysMarkup:KKLoc(@"Drag across filter pills",
-                                                @"Shortcut keys.")
-                               descMarkup:KKLoc(
-                                              @"Show or hide several lanes at "
-                                              @"once",
-                                              @"Help shortcut.")],
-               [KKHelpShortcut
                    shortcutWithKeysMarkup:KKLoc(
                                               @"<kbd>⌥</kbd> + click a filter "
-                                              @"pill",
+                                              @"row",
                                               @"Shortcut keys.")
-                               descMarkup:KKLoc(@"Solo that lane or group",
+                               descMarkup:KKLoc(@"Solo that property",
                                                 @"Help shortcut.")],
              ]];
   s.icon = [NSImage imageWithSystemSymbolName:@"keyboard"

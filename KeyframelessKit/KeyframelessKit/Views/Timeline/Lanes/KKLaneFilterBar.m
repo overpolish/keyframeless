@@ -230,6 +230,10 @@ static NSButton *_kkGlyphButton(NSString *symbol, CGFloat pt, id target,
   _openList = list;
 }
 
+- (void)closeFilterPopover {
+  [_openPopover close];
+}
+
 #pragma mark - Model forwarding
 
 - (void)_emitVisibilityChange {

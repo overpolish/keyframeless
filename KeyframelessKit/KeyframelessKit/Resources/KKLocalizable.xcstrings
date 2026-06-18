@@ -10668,6 +10668,216 @@
           }
         }
       }
+    },
+    "Open the <accent>filter</accent> to show or hide properties on the timeline.": {
+      "comment": "Advanced timing guide: open the lane-visibility filter.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne den <accent>Filter</accent>, um Eigenschaften in der Timeline ein- oder auszublenden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre el <accent>filtro</accent> para mostrar u ocultar propiedades en la línea de tiempo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrez le <accent>filtre</accent> pour afficher ou masquer des propriétés sur la timeline."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>フィルター</accent>を開いて、タイムラインのプロパティを表示・非表示にします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>필터</accent>를 열어 타임라인에서 속성을 표시하거나 숨깁니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开<accent>筛选</accent>以在时间线上显示或隐藏属性。"
+          }
+        }
+      }
+    },
+    "Uncheck a <accent>property</accent> to hide its lane and focus the timeline.": {
+      "comment": "Advanced timing guide: toggle a property in the filter checklist.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deaktiviere eine <accent>Eigenschaft</accent>, um ihre Spur auszublenden und die Timeline zu fokussieren."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desmarca una <accent>propiedad</accent> para ocultar su carril y centrar la línea de tiempo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Décochez une <accent>propriété</accent> pour masquer sa piste et recentrer la timeline."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>プロパティ</accent>のチェックを外すと、そのレーンを非表示にしてタイムラインを整理できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>속성</accent>의 체크를 해제하면 해당 레인을 숨겨 타임라인에 집중할 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消勾选某个<accent>属性</accent>，即可隐藏其轨道并让时间线更聚焦。"
+          }
+        }
+      }
+    },
+    "Some plugins group their properties into categories (for example Glow's <accent>Core</accent> and <accent>Noise</accent>). When there is more than one category, <accent>category pills</accent> let you switch between groups in the value-editor popover, the Animated dropdown, and the parameter list, and a <accent>lane filter</accent> on the Advanced timeline lets you show or hide individual properties so you can focus on a few at a time. Categories are optional - a plugin with no categories just lists its properties flat.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manche Plug-ins gruppieren ihre Eigenschaften in Kategorien (zum Beispiel <accent>Kern</accent> und <accent>Rauschen</accent> bei Glow). Bei mehr als einer Kategorie können Sie mit <accent>Kategorie-Pills</accent> zwischen Gruppen im Werte-Editor-Popover, im Animiert-Menü und in der Eigenschaftenliste wechseln, und ein <accent>Spurenfilter</accent> auf der erweiterten Timeline blendet einzelne Eigenschaften ein oder aus, damit Sie sich auf wenige konzentrieren können. Kategorien sind optional - ein Plug-in ohne Kategorien listet seine Eigenschaften einfach flach auf."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algunos plugins agrupan sus propiedades en categorías (por ejemplo <accent>Núcleo</accent> y <accent>Ruido</accent> en Glow). Cuando hay más de una categoría, las <accent>píldoras de categoría</accent> permiten cambiar entre grupos en el popover del editor de valores, el menú Animado y la lista de propiedades, y un <accent>filtro de carriles</accent> en la línea de tiempo Avanzada permite mostrar u ocultar propiedades concretas para centrarte en unas pocas. Las categorías son opcionales: un plugin sin categorías simplemente lista sus propiedades de forma plana."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Certains plug-ins regroupent leurs propriétés en catégories (par exemple <accent>Noyau</accent> et <accent>Bruit</accent> dans Glow). Quand il y a plus d’une catégorie, les <accent>pastilles de catégorie</accent> permettent de basculer entre les groupes dans le popover de l’éditeur de valeurs, le menu Animé et la liste des propriétés, et un <accent>filtre de pistes</accent> sur la timeline Avancée permet d’afficher ou masquer des propriétés individuelles pour vous concentrer sur quelques-unes. Les catégories sont facultatives - un plug-in sans catégories liste simplement ses propriétés à plat."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一部のプラグインはプロパティをカテゴリにまとめます(例: Glowの<accent>コア</accent>と<accent>ノイズ</accent>)。カテゴリが複数ある場合、<accent>カテゴリピル</accent>で値エディタのポップオーバー、アニメーションメニュー、プロパティリストのグループを切り替えられます。また、詳細タイムラインの<accent>レーンフィルター</accent>で個々のプロパティを表示・非表示にして、いくつかに集中できます。カテゴリは任意です。カテゴリのないプラグインはプロパティをフラットに並べるだけです。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일부 플러그인은 속성을 카테고리로 묶습니다(예: Glow의 <accent>코어</accent>와 <accent>노이즈</accent>). 카테고리가 둘 이상이면 <accent>카테고리 알약</accent>으로 값 편집기 팝오버, 애니메이션 메뉴, 속성 목록에서 그룹을 전환할 수 있고, 고급 타임라인의 <accent>레인 필터</accent>로 개별 속성을 표시하거나 숨겨 몇 개에만 집중할 수 있습니다. 카테고리는 선택 사항입니다. 카테고리가 없는 플러그인은 속성을 평면으로 나열합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "某些插件会将其属性归入类别（例如 Glow 的<accent>核心</accent>和<accent>噪点</accent>）。当类别多于一个时，<accent>类别药丸</accent>可在值编辑器弹出窗口、“已添加动画”菜单和属性列表中切换组，而“高级”时间线上的<accent>轨道筛选器</accent>可显示或隐藏单个属性，让你专注于少数几个。类别是可选的--没有类别的插件只是平铺列出其属性。"
+          }
+        }
+      }
+    },
+    "<kbd>⌥</kbd> + click a filter row": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + Klick auf eine Filterzeile"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + clic en una fila del filtro"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + clic sur une ligne du filtre"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + フィルター行をクリック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + 필터 행 클릭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + 点击筛选行"
+          }
+        }
+      }
+    },
+    "Solo that property": {
+      "comment": "Help shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur diese Eigenschaft anzeigen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar solo esa propiedad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher uniquement cette propriété"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのプロパティのみ表示"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "해당 속성만 표시"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅显示该属性"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -146,6 +146,14 @@
   return [self _t:KKJoyrideTriggerTypeLaneFilterToggled];
 }
 
++ (instancetype)filterPopoverWillOpen {
+  return [self _t:KKJoyrideTriggerTypeFilterPopoverWillOpen];
+}
+
++ (instancetype)filterPopoverClosed {
+  return [self _t:KKJoyrideTriggerTypeFilterPopoverClosed];
+}
+
 - (instancetype)thenWaitFor:(KKJoyrideTrigger *)next {
   _next = next;
   return self;

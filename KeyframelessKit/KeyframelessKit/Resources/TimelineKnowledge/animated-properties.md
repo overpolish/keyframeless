@@ -7,7 +7,7 @@ Plugins don't animate every property by default. You opt each property in to ani
 
 At the bottom of the lane list there is an "Add properties…" button. Click it to open the Animated popover, which lists every property the plugin exposes with a checkbox next to each. Check a property to give it a lane in the timeline; uncheck it to drop the lane and revert to the value in the Constants panel.
 
-The popover has a search field at the top so you can filter long property lists quickly. When a plugin groups its properties into categories, the popover also shows category pills - pick one to narrow the list to that category (search spans the current category). The same categories drive the lane filter bar above the Advanced timeline; see the lane-filter topic.
+The popover has a search field at the top so you can filter long property lists quickly. When a plugin groups its properties into categories, the popover also shows category pills - pick one to narrow the list to that category (search spans the current category). The same categories drive the lane filter on the Advanced timeline, which uses this exact layout; see the lane-filter topic.
 
 When no properties are opted in, the lane list shows a "No animated properties" empty state - everything renders as constants and the timeline is hidden.
 

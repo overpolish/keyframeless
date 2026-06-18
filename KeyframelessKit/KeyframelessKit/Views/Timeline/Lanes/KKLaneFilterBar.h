@@ -53,6 +53,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// popover dismisses.
 @property(nonatomic, copy, nullable) NSPopover * (^popoverPresenter)
     (NSView *content, NSView *anchor, void (^onClose)(void));
+/// Close the checklist popover if it is open (e.g. a guide closing it on
+/// advance).
+- (void)closeFilterPopover;
 @end
 
 NS_ASSUME_NONNULL_END
