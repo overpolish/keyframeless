@@ -15,6 +15,10 @@
 @property(nonatomic, weak, nullable) CanvasInspectorView *inspectorView;
 @property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
 @property(nonatomic, strong, nullable) KKPlayheadPoller *playheadPoller;
+/// Set while restoring the selected layer from an undo/redo of kParamUIState,
+/// so the selection-change callback skips its (otherwise undoable) re-persist
+/// and doesn't push a duplicate entry onto the undo stack.
+@property(nonatomic) BOOL restoringSelection;
 /// Per-instance cache of decoded image-layer textures, keyed by file path.
 /// (Instance-scoped, not a static - every plugin instance is a separate XPC
 /// process.)

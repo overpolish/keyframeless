@@ -123,6 +123,22 @@
     _onSelectedLayerChanged(sel.layerID);
 }
 
+- (void)restoreSelectedLayerID:(NSString *)layerID {
+  NSArray<KKBezierPath *> *paths = [_layerListController currentLayerPaths];
+  // nil/empty target = topmost layer (the baseline before any selection
+  // persisted, so undoing past the first selection lands back there).
+  KKBezierPath *target =
+      CanvasSelectedLayerForPaths(paths, layerID.length ? layerID : nil);
+  KKBezierPath *current = CanvasSelectedLayerForPaths(paths, _selectedLayerID);
+  if (target == current ||
+      (target.layerID && [target.layerID isEqualToString:current.layerID]))
+    return; // already there - don't churn the UI on unrelated UIState changes
+  [self _selectLayer:layerID.length ? layerID : nil];
+  // A panel click already shows its highlight; an undo/redo-driven restore
+  // doesn't, so move it explicitly to the (resolved) layer.
+  [_layerListController highlightLayerID:target.layerID];
+}
+
 - (NSString *)resolvedSelectedLayerID {
   KKBezierPath *sel = CanvasSelectedLayerForPaths(
       [_layerListController currentLayerPaths], _selectedLayerID);

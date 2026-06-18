@@ -16,6 +16,11 @@ NS_ASSUME_NONNULL_BEGIN
 @interface CanvasInspectorView : KKTimelineInspectorView
 /// Re-read the layer blob and refresh the Layers panel (on undo/redo).
 - (void)reloadLayerList;
+/// Programmatically restore the edited layer (on undo/redo of a selection
+/// change). Like a panel click but ALSO moves the list highlight, since it
+/// doesn't originate from one. Pass nil/empty for the topmost layer. The plugin
+/// guards its persist while this runs so it doesn't write a fresh undo step.
+- (void)restoreSelectedLayerID:(nullable NSString *)layerID;
 /// Sync the popover mini-viewer handles to the OSC visibility (global toggle +
 /// per-element hidden set, from per-instance state) combined with the selected
 /// layer's lock. Call after the plugin applies/refreshes OSC visibility.

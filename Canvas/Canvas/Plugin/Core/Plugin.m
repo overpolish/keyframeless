@@ -76,6 +76,11 @@
     NSDictionary *byLayer = state[@"oscElementsByLayer"];
     NSArray<NSString *> *oscKeys =
         [CanvasPlugin kkOSCElementKeysForCompounds:[CanvasPlugin oscCompounds]];
+    // Undo/redo of a layer-selection change: the persisted selectedLayerID is
+    // the resolved id (or "" / absent = topmost, i.e. the baseline before any
+    // selection persisted). The view method self-guards no-ops, so it's safe to
+    // run on every UIState change (OSC toggles preserve the key, so they no-op).
+    NSString *restoredSel = state[@"selectedLayerID"];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];
@@ -83,9 +88,11 @@
       ist.oscMasterVisible = oscMaster;
       ist.oscElementsByOwner =
           [byLayer isKindOfClass:[NSDictionary class]] ? byLayer : @{};
-      [self canvasApplyOSCForLayer:((CanvasInspectorView *)self.inspectorView)
-                                       .resolvedSelectedLayerID
-                              keys:oscKeys];
+      CanvasInspectorView *view = (CanvasInspectorView *)self.inspectorView;
+      self.restoringSelection = YES;
+      [view restoreSelectedLayerID:restoredSel];
+      self.restoringSelection = NO;
+      [self canvasApplyOSCForLayer:view.resolvedSelectedLayerID keys:oscKeys];
     });
   }
 

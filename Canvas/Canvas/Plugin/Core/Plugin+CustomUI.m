@@ -385,7 +385,16 @@
     view.onSelectedLayerChanged = ^(NSString *resolvedLayerID) {
       __strong CanvasPlugin *s = weakOSC;
       [s canvasApplyOSCForLayer:resolvedLayerID keys:oscKeys];
-      [s kkNudgeRenderWithParamID:kParamRenderNudge];
+      // Persist the selection so it lands on the undo stack (like standard
+      // editors: changing the active layer is itself undoable). Skip while
+      // restoring from an undo/redo, else we'd push a duplicate entry. The
+      // kParamUIState write also forces the render round-trip that redraws the
+      // viewer OSC, so no separate kParamRenderNudge is needed (it would only
+      // add a phantom undo entry - the "takes two cmd-Z" problem).
+      if (!s.restoringSelection)
+        [s patchUIStateKey:@"selectedLayerID"
+                     value:(resolvedLayerID ?: @"")
+                   paramID:kParamUIState];
     };
 
     // The Layers panel opens parameter actions to read/write kParamLayerData;
