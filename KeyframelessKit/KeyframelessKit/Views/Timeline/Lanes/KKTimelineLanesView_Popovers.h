@@ -99,6 +99,15 @@ NS_ASSUME_NONNULL_BEGIN
   // lands in the visible pills/sliders. Same role as the hold-mod
   // reader (curve gap and hold-mod popovers are mutually exclusive).
   KKInterval *_Nullable (^_openGapIntervalReader)(void);
+  // Set while re-opening the gap/modulation popover for a newly-selected layer:
+  // the presenter then re-scopes the OPEN editor's checklist in place (no
+  // close/reopen) instead of building a fresh popover.
+  BOOL _rescopingGapPopover;
+  // The open gap/modulation editor's + its container's height constraints, so
+  // an in-place re-scope (different layer = different row count) resizes the
+  // popover (and the container, else the header is pushed out) by the delta.
+  NSLayoutConstraint *_openSegEditHeightConstraint;
+  NSLayoutConstraint *_openSegContainerHeightConstraint;
   // Extras rows currently shown below the gap-popover segment editor. Held
   // strong while the popover is open so -popoverDidRefresh can fire on
   // cmd-Z without the rows being deallocated mid-flight. Cleared in the

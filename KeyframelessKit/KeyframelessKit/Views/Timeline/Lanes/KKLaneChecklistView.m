@@ -7,6 +7,7 @@
 
 #import "KKLaneCategoryNav.h"
 #import "KKLocalized.h"
+#import "KKPaddedScrollView.h"
 #import "KKPillBar.h"
 #import "KKPillToggleRowView.h"
 #import "KKTimelineLanesView_Private.h" // _KKManageRow, _KKSearchField, tokens
@@ -33,6 +34,25 @@ static const CGFloat kChecklistPillH = 24.0;
 
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                 minimumHeight:(CGFloat)minimumHeight {
+  return [self initWithLanes:lanes
+               minimumHeight:minimumHeight
+                       width:kPopoverW
+               maxBodyHeight:0.0];
+}
+
+- (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
+                        width:(CGFloat)width
+                maxBodyHeight:(CGFloat)maxBodyHeight {
+  return [self initWithLanes:lanes
+               minimumHeight:0.0
+                       width:width
+               maxBodyHeight:maxBodyHeight];
+}
+
+- (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
+                minimumHeight:(CGFloat)minimumHeight
+                        width:(CGFloat)width
+                maxBodyHeight:(CGFloat)maxBodyHeight {
   NSDictionary<NSString *, NSString *> *catByLabel =
       KKLaneCategoryByLabel(lanes);
   NSArray<NSString *> *keys = KKLaneCategoryKeys(lanes);
@@ -49,10 +69,17 @@ static const CGFloat kChecklistPillH = 24.0;
   CGFloat h = MAX([[self class] heightForRowCount:initialVisible
                                           hasPill:hasPill],
                   minimumHeight);
-  self = [super initWithFrame:NSMakeRect(0, 0, kPopoverW, h)];
+  self = [super initWithFrame:NSMakeRect(0, 0, width, h)];
   if (!self)
     return nil;
   _minimumHeight = minimumHeight;
+  _width = width;
+  _maxBodyHeight = maxBodyHeight;
+  // Embedded (hosted in another popover) exactly when a body cap is given. MUST
+  // be set before -_buildChromeForLanes: - that's where the scroll view is
+  // built off this flag; setting it after leaves the rows un-scrolled (they
+  // overflow the host with no clip / fade / hit-testing past the edge).
+  _embedded = maxBodyHeight > 0.0;
   _lanes = [lanes copy];
   _allRows = [NSMutableArray array];
   _rowCategoryByLabel = catByLabel;
@@ -60,6 +87,29 @@ static const CGFloat kChecklistPillH = 24.0;
   _selectedCategory = selected;
   [self _buildChromeForLanes:lanes];
   return self;
+}
+
+// Cap a visible-row count to what fits in `_maxBodyHeight` (0 = uncapped); the
+// scroll view shows this many rows and scrolls the rest.
+- (NSInteger)_cappedRowCount:(NSInteger)count {
+  if (_maxBodyHeight <= 0.0)
+    return count;
+  NSInteger maxRows = (NSInteger)(_maxBodyHeight / kRowHeight);
+  if (maxRows < 1)
+    maxRows = 1;
+  return MIN(count, maxRows);
+}
+
+// Embedded total height for `rows` visible: top pad + (pill) + search + gap +
+// the (capped) scroll body, flush to the bottom (no trailing pad - the host
+// popover supplies the standard bottom padding, so the scroll fade meets that
+// edge instead of floating above a double gap). Matches the constraint layout
+// exactly so the scroll body is never clipped by the host popover edge.
+- (CGFloat)_embeddedHeightForRows:(NSInteger)rows {
+  CGFloat h = KKPaddingMD + kSearchH + KKSpacingSM + rows * kRowHeight;
+  if (_hasPill)
+    h += kChecklistPillH + KKSpacingSM;
+  return h;
 }
 
 // Search field, the optional category pill nav, and the (empty) row stack.
@@ -96,6 +146,30 @@ static const CGFloat kChecklistPillH = 24.0;
   _rowStack.orientation = NSUserInterfaceLayoutOrientationVertical;
   _rowStack.spacing = 0;
   _rowStack.detachesHiddenViews = YES;
+
+  if (_embedded) {
+    // Capped, internally-scrolling area (top/bottom fade via
+    // KKPaddedScrollView) so a long list never balloons the host popover; the
+    // view owns its own (capped) height via `_heightConstraint`.
+    _bodyScroll = [[KKPaddedScrollView alloc] initWithDocumentView:_rowStack
+                                                           padding:0.0];
+    _bodyScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:_bodyScroll];
+    _bodyHeightConstraint =
+        [_bodyScroll.heightAnchor constraintEqualToConstant:kRowHeight];
+    _heightConstraint =
+        [self.heightAnchor constraintEqualToConstant:kRowHeight];
+    [NSLayoutConstraint activateConstraints:@[
+      [_bodyScroll.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+      [_bodyScroll.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+      [_bodyScroll.topAnchor constraintEqualToAnchor:_searchField.bottomAnchor
+                                            constant:KKSpacingSM],
+      _bodyHeightConstraint,
+      _heightConstraint,
+    ]];
+    return;
+  }
+
   [self addSubview:_rowStack];
   [NSLayoutConstraint activateConstraints:@[
     [_rowStack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
@@ -150,6 +224,33 @@ static const CGFloat kChecklistPillH = 24.0;
   // Subclass hook - default no-op.
 }
 
+- (_KKManageRow *)appendRowWithLabel:(NSString *)label
+                         categoryKey:(NSString *)categoryKey
+                         indentLevel:(NSInteger)indentLevel {
+  _KKManageRow *row = [[_KKManageRow alloc] initWithFrame:NSZeroRect];
+  row.translatesAutoresizingMaskIntoConstraints = NO;
+  row.rowLabel = label;
+  row.categoryKey = categoryKey;
+  row.indentLevel = indentLevel;
+  [_rowStack addArrangedSubview:row];
+  [row.widthAnchor constraintEqualToAnchor:_rowStack.widthAnchor].active = YES;
+  [_allRows addObject:row];
+  return row;
+}
+
+- (void)removeAllRows {
+  for (_KKManageRow *row in _allRows)
+    [row removeFromSuperview];
+  [_allRows removeAllObjects];
+}
+
+- (void)refilterAndResize {
+  if (_embedded)
+    [self _applyFilterAndResize];
+  else
+    [self _applyFilter];
+}
+
 - (void)setLanes:(NSArray<KKLane *> *)lanes {
   _lanes = [lanes copy];
   [self rebuildRows];
@@ -158,20 +259,14 @@ static const CGFloat kChecklistPillH = 24.0;
 - (void)rebuildRows {
   // Labels can be layer-tagged (multi-owner re-scope), so refresh the map.
   _rowCategoryByLabel = KKLaneCategoryByLabel(_lanes);
-  for (_KKManageRow *row in _allRows)
-    [row removeFromSuperview];
-  [_allRows removeAllObjects];
+  [self removeAllRows];
   for (KKLane *lane in _lanes) {
-    _KKManageRow *row = [[_KKManageRow alloc] initWithFrame:NSZeroRect];
-    row.translatesAutoresizingMaskIntoConstraints = NO;
-    row.rowLabel = lane.label;
+    _KKManageRow *row = [self appendRowWithLabel:lane.label
+                                     categoryKey:_rowCategoryByLabel[lane.label]
+                                     indentLevel:0];
     [self configureRow:row forLane:lane];
-    [_rowStack addArrangedSubview:row];
-    [row.widthAnchor constraintEqualToAnchor:_rowStack.widthAnchor].active =
-        YES;
-    [_allRows addObject:row];
   }
-  [self _applyFilter];
+  [self refilterAndResize];
 }
 
 - (nullable NSView *)rowViewForLabel:(NSString *)label {
@@ -195,7 +290,7 @@ static const CGFloat kChecklistPillH = 24.0;
         !searching || [row.rowLabel rangeOfString:query
                                           options:NSCaseInsensitiveSearch]
                               .location != NSNotFound;
-    NSString *cat = _rowCategoryByLabel[row.rowLabel];
+    NSString *cat = row.categoryKey;
     BOOL matchCategory =
         !_hasPill || cat.length == 0 || [cat isEqualToString:_selectedCategory];
     BOOL show = matchSearch && matchCategory;
@@ -207,18 +302,26 @@ static const CGFloat kChecklistPillH = 24.0;
 }
 
 - (CGFloat)fittingHeight {
-  return MAX([[self class] heightForRowCount:MAX([self _applyFilter], 1)
-                                     hasPill:_hasPill],
+  NSInteger visible = MAX([self _applyFilter], 1);
+  if (_embedded)
+    return [self _embeddedHeightForRows:[self _cappedRowCount:visible]];
+  return MAX([[self class] heightForRowCount:visible hasPill:_hasPill],
              _minimumHeight);
 }
 
 - (void)_applyFilterAndResize {
-  NSInteger visible = [self _applyFilter];
+  NSInteger visible = MAX([self _applyFilter], 1);
+  if (_embedded) {
+    NSInteger capped = [self _cappedRowCount:visible];
+    _bodyHeightConstraint.constant = capped * kRowHeight;
+    _heightConstraint.constant = [self _embeddedHeightForRows:capped];
+    return;
+  }
   if (self.popover)
-    self.popover.contentSize = NSMakeSize(
-        kPopoverW, MAX([[self class] heightForRowCount:MAX(visible, 1)
-                                               hasPill:_hasPill],
-                       _minimumHeight));
+    self.popover.contentSize =
+        NSMakeSize(kPopoverW, MAX([[self class] heightForRowCount:visible
+                                                          hasPill:_hasPill],
+                                  _minimumHeight));
 }
 
 - (void)controlTextDidChange:(NSNotification *)note {

@@ -175,6 +175,12 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
   // actually open a transition popover (In/Out for now); Hold has its own
   // _openHoldPopover path.
   void (^_onGapTapped)(NSInteger section);
+  // The section of the gap/modulation popover most recently opened from this
+  // view, so a host (Canvas) can re-open it for a newly-selected layer. -1 when
+  // none has been opened. `_lastGapWasHold` distinguishes the Hold-modulation
+  // popover (its own opener) from the In/Out transition popover.
+  KKBasicSection _lastGapSection;
+  BOOL _lastGapWasHold;
 }
 @end
 

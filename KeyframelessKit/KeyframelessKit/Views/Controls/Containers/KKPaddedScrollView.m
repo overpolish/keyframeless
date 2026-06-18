@@ -34,6 +34,7 @@ static const CGFloat KKPaddedScrollShadowH = 16.0;
   KKPaddedScrollShadowView *_topShadow;
   KKPaddedScrollShadowView *_bottomShadow;
   id _boundsObserver;
+  id _docFrameObserver;
 }
 
 - (instancetype)initWithDocumentView:(NSView *)documentView
@@ -58,6 +59,7 @@ static const CGFloat KKPaddedScrollShadowH = 16.0;
 
   documentView.translatesAutoresizingMaskIntoConstraints = NO;
   _scroll.documentView = documentView;
+  documentView.postsFrameChangedNotifications = YES;
 
   // Top + bottom fade overlays. Their alpha tracks scroll position so the
   // top fade reveals as the user scrolls down and the bottom fade hides
@@ -125,6 +127,21 @@ static const CGFloat KKPaddedScrollShadowH = 16.0;
               usingBlock:^(NSNotification *_) {
                 [weakSelf _updateShadows];
               }];
+  // The bounds observer only catches scrolling; a content change (e.g. a
+  // category switch swapping the visible rows + resizing the scroll) doesn't
+  // move the clip, so the fade alpha would stay stale ("n-1": the previous
+  // group's shadow) until the next scroll. The document's frame DOES change, so
+  // observe that - deferred to the next runloop so documentVisibleRect/bounds
+  // are settled (reading them mid-relayout gives the stale geometry).
+  _docFrameObserver = [[NSNotificationCenter defaultCenter]
+      addObserverForName:NSViewFrameDidChangeNotification
+                  object:documentView
+                   queue:nil
+              usingBlock:^(NSNotification *_) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                  [weakSelf _updateShadows];
+                });
+              }];
   // Initial pass once layout settles.
   dispatch_async(dispatch_get_main_queue(), ^{
     [weakSelf _updateShadows];
@@ -136,6 +153,8 @@ static const CGFloat KKPaddedScrollShadowH = 16.0;
 - (void)dealloc {
   if (_boundsObserver)
     [[NSNotificationCenter defaultCenter] removeObserver:_boundsObserver];
+  if (_docFrameObserver)
+    [[NSNotificationCenter defaultCenter] removeObserver:_docFrameObserver];
 }
 
 - (void)_updateShadows {

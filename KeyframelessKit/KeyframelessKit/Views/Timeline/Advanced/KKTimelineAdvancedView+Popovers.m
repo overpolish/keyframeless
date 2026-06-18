@@ -394,13 +394,15 @@
                       lane.valueType != KKLaneValueTypeGradient &&
                       compLabels.count > 1 && compCount > 1);
     BOOL laneModActive = iv.modulation != KKIntervalModulationNone;
-    NSString *masterLabel = (lane.valueType == KKLaneValueTypeGradient)
-                                ? KKLocalizedParamName(@"Angle")
-                                : label;
-    NSMutableArray<NSString *> *segLabels =
-        [NSMutableArray arrayWithObject:masterLabel];
-    NSMutableArray<NSNumber *> *segStates =
-        [NSMutableArray arrayWithObject:@(laneModActive)];
+    // Advanced is per-lane: the curve-type pill already toggles THIS lane's
+    // modulation, so a single-component lane needs no "Applies to" (disabling
+    // it == picking None). A multi-component lane shows just its axes (X / Y)
+    // as flat rows - no redundant master row - so they can be wiggled
+    // independently.
+    NSMutableArray<NSArray<NSString *> *> *partCompoundLabels =
+        [NSMutableArray array];
+    NSMutableArray<NSArray<NSNumber *> *> *partCompoundStates =
+        [NSMutableArray array];
     if (multiComp) {
       NSIndexSet *mask = iv.modulationComponents;
       for (NSUInteger c = 0; c < compCount; c++) {
@@ -408,48 +410,51 @@
             (c < compLabels.count)
                 ? compLabels[c]
                 : [NSString stringWithFormat:@"%lu", (unsigned long)c];
-        [segLabels addObject:cn];
         BOOL on = laneModActive && (!mask || [mask containsIndex:c]);
-        [segStates addObject:@(on)];
+        [partCompoundLabels addObject:@[ cn ]];
+        [partCompoundStates addObject:@[ @(on) ]];
       }
     }
-    NSArray<NSArray<NSString *> *> *partCompoundLabels = @[ segLabels ];
-    NSArray<NSArray<NSNumber *> *> *partCompoundStates = @[ segStates ];
     void (^onParticipation)(NSInteger, BOOL) = ^(NSInteger idx, BOOL on) {
-      [weak
-          _mutateIntervalInLaneLabel:label
-                               kpIdx:aIdx
-                                with:^(KKInterval *iv2) {
-                                  if (idx == 0) {
-                                    iv2.modulation =
-                                        on ? (iv2.modulation !=
-                                                      KKIntervalModulationNone
-                                                  ? iv2.modulation
-                                                  : KKIntervalModulationWiggle)
-                                           : KKIntervalModulationNone;
-                                    return;
-                                  }
-                                  NSUInteger c = (NSUInteger)(idx - 1);
-                                  NSUInteger n =
-                                      lane.keyposes.firstObject.values.count;
-                                  NSMutableIndexSet *m =
-                                      iv2.modulationComponents
-                                          ? [iv2.modulationComponents
-                                                    mutableCopy]
-                                          : ({
-                                              NSMutableIndexSet *all =
-                                                  [NSMutableIndexSet indexSet];
-                                              [all
-                                                  addIndexesInRange:NSMakeRange(
-                                                                        0, n)];
-                                              all;
-                                            });
-                                  if (on)
-                                    [m addIndex:c];
-                                  else
-                                    [m removeIndex:c];
-                                  iv2.modulationComponents = m;
-                                }];
+      [weak _mutateIntervalInLaneLabel:label
+                                 kpIdx:aIdx
+                                  with:^(KKInterval *iv2) {
+                                    // Each row IS one axis (no master). When
+                                    // the lane isn't modulating yet, checking
+                                    // an axis arms just that one; unchecking
+                                    // the last axis drops back to None.
+                                    NSUInteger c = (NSUInteger)idx;
+                                    NSUInteger n =
+                                        lane.keyposes.firstObject.values.count;
+                                    BOOL wasNone = iv2.modulation ==
+                                                   KKIntervalModulationNone;
+                                    NSMutableIndexSet *m;
+                                    if (wasNone) {
+                                      m = [NSMutableIndexSet indexSet];
+                                    } else {
+                                      m = iv2.modulationComponents
+                                              ? [iv2.modulationComponents
+                                                        mutableCopy]
+                                              : ({
+                                                  NSMutableIndexSet *all =
+                                                      [NSMutableIndexSet
+                                                          indexSet];
+                                                  [all addIndexesInRange:
+                                                           NSMakeRange(0, n)];
+                                                  all;
+                                                });
+                                    }
+                                    if (on)
+                                      [m addIndex:c];
+                                    else
+                                      [m removeIndex:c];
+                                    iv2.modulationComponents = m;
+                                    if (m.count == 0)
+                                      iv2.modulation = KKIntervalModulationNone;
+                                    else if (wasNone)
+                                      iv2.modulation =
+                                          KKIntervalModulationWiggle;
+                                  }];
     };
     BOOL showsModLinked = multiComp;
     void (^onLinked)(BOOL) = ^(BOOL on) {
@@ -479,16 +484,20 @@
       BOOL active = iv2 && iv2.modulation != KKIntervalModulationNone;
       NSArray<NSString *> *cl2 = KKLaneComponentLabels(l2);
       NSUInteger cc2 = l2.keyposes.firstObject.values.count;
-      NSMutableArray<NSNumber *> *segStates2 =
-          [NSMutableArray arrayWithObject:@(active)];
-      if (cl2.count > 1 && cc2 > 1) {
+      // One single-segment compound per axis (matches the builder); empty for a
+      // single-component lane (no "Applies to" section).
+      NSMutableArray<NSArray<NSNumber *> *> *out = [NSMutableArray array];
+      BOOL multi =
+          (l2.valueType != KKLaneValueTypeColor &&
+           l2.valueType != KKLaneValueTypeGradient && cl2.count > 1 && cc2 > 1);
+      if (multi) {
         NSIndexSet *mask = iv2.modulationComponents;
         for (NSUInteger c = 0; c < cc2; c++) {
           BOOL on = active && (!mask || [mask containsIndex:c]);
-          [segStates2 addObject:@(on)];
+          [out addObject:@[ @(on) ]];
         }
       }
-      return @[ segStates2 ];
+      return out;
     };
     NSString *capLabelMut = label;
     NSInteger capIdxMut = aIdx;

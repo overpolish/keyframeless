@@ -358,6 +358,11 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// Close the lane-filter checklist popover if it is currently open.
 - (void)closeFilterPopover;
 
+/// Re-open the open gap / modulation ("Applies to") popover against the current
+/// timeline, so a multi-layer host can re-scope it to a newly-selected layer.
+/// No-op when no such popover is open.
+- (void)reopenOpenAppliesToPopover;
+
 @end
 
 NS_ASSUME_NONNULL_END

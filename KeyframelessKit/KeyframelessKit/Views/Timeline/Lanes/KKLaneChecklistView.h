@@ -31,6 +31,15 @@ NS_ASSUME_NONNULL_BEGIN
   BOOL _hasPill;
   CGFloat _minimumHeight;
   NSArray<KKLane *> *_lanes;
+  // Embedded mode (hosted inside another popover, e.g. the gap "Applies to"
+  // section): the row stack lives in a capped, internally-scrolling clip and
+  // the view owns its own height instead of resizing a popover.
+  BOOL _embedded;
+  CGFloat _width;
+  CGFloat _maxBodyHeight;
+  NSView *_bodyScroll; // KKPaddedScrollView (top/bottom fade) when embedded
+  NSLayoutConstraint *_heightConstraint;
+  NSLayoutConstraint *_bodyHeightConstraint;
 }
 
 /// Builds the chrome (search + pill + row stack) sized to `lanes`, but does NOT
@@ -38,12 +47,36 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                 minimumHeight:(CGFloat)minimumHeight;
 
+/// Embedded variant: hosted inside another popover at a fixed `width`, the row
+/// list capped at `maxBodyHeight` (scrolls internally beyond it). The view
+/// drives its own height constraint instead of resizing a `popover`. Used by
+/// the gap popover's "Applies to" section.
+- (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
+                        width:(CGFloat)width
+                maxBodyHeight:(CGFloat)maxBodyHeight;
+
 /// Set by the host so the list can resize the popover to the visible row count.
 @property(nonatomic, weak, nullable) NSPopover *popover;
 
 /// Subclass hook: configure a freshly-created row (`rowLabel` is already set)
 /// for `lane` - its checked/warning state and toggle handlers. Default: no-op.
 - (void)configureRow:(_KKManageRow *)row forLane:(KKLane *)lane;
+
+/// Create a row (label + category + indent set) and register it with the stack
+/// + filtering. The subclass sets its checked state + handlers, then this adds
+/// it. Returns the row. `categoryKey` decides which category page it shows on.
+/// Used both by the default flat rebuild and by subclasses that build their own
+/// rows (e.g. the modulation checklist's master + indented component rows).
+- (_KKManageRow *)appendRowWithLabel:(NSString *)label
+                         categoryKey:(nullable NSString *)categoryKey
+                         indentLevel:(NSInteger)indentLevel;
+
+/// Clear the row stack (call at the start of a `-rebuildRows` override).
+- (void)removeAllRows;
+
+/// Re-run search/category filtering and resize to the visible row count
+/// (popover or embedded height). Call at the end of a `-rebuildRows` override.
+- (void)refilterAndResize;
 
 /// Rebuild every row from the current lane set (calls
 /// `-configureRow:forLane:`).

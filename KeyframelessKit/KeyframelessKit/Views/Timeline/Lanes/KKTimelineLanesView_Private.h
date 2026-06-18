@@ -56,6 +56,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Draw the checkbox + label in the warning tint (the lane filter marks a
 /// soloed row this way). Default NO.
 @property(nonatomic) BOOL warning;
+/// The row's category key, so the checklist can page it under the right
+/// category pill even when its label is not unique (component sub-rows like
+/// "X"/"Y" share labels across lanes). nil = uncategorised (shows on all
+/// pages). Default nil.
+@property(nonatomic, copy, nullable) NSString *categoryKey;
 @property(nonatomic, copy, nullable) void (^onToggle)(void);
 /// Fired on an option-click instead of `onToggle` (the lane filter solos the
 /// row). When nil, an option-click falls through to `onToggle`.

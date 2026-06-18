@@ -118,6 +118,9 @@
   // open). Then set activeLayerKey so the NEXT fresh open scopes here too.
   [self.basicLanesView retargetKeyposePopoverToLayerKey:layerID];
   self.basicLanesView.activeLayerKey = layerID;
+  // Re-scope an open "Applies to" (gap / modulation) popover to this layer's
+  // timeline (now applied above), mirroring the keypose-popover retarget.
+  [self.basicLanesView reopenOpenAppliesToPopover];
   // Let the plugin swap the active OSC-visibility set to this layer's.
   if (_onSelectedLayerChanged)
     _onSelectedLayerChanged(sel.layerID);

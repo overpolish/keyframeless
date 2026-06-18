@@ -197,6 +197,8 @@ static const CGFloat kSlideDistance = 12.0;
     nonSelectable = [self _layersWithoutKeyposeAtFraction:frac];
   else if ([kind isEqualToString:@"constants"])
     nonSelectable = [self _layersWithoutConstant];
+  else if ([kind isEqualToString:@"appliesTo"])
+    nonSelectable = [self _layersWithoutAnimation];
 
   // Pre-highlight the selected layer unless the popover already drove the
   // highlight itself (keypose/constants set it before this notification).
@@ -276,6 +278,30 @@ static const CGFloat kSlideDistance = 12.0;
 
 // Layers (by layerID) that are fully animated (no constant param) - they can't
 // be the edit target of a Constants popover.
+// Layers (by layerID) with NO animated lanes - nothing for a curve / modulation
+// ("Applies to") popover to act on, so they can't be the target.
+- (NSSet<NSString *> *)_layersWithoutAnimation {
+  NSMutableSet<NSString *> *out = [NSMutableSet set];
+  for (KKBezierPath *p in [self currentLayerPaths]) {
+    if (!p.layerID.length)
+      continue;
+    if (p.animationJSON.length == 0) {
+      [out addObject:p.layerID]; // no animation blob at all
+      continue;
+    }
+    KKTimeline *tl = [KKTimeline timelineFromJSON:p.animationJSON];
+    BOOL anyAnimated = NO;
+    for (KKLane *l in tl.lanes)
+      if (l.enabled) {
+        anyAnimated = YES;
+        break;
+      }
+    if (!anyAnimated)
+      [out addObject:p.layerID];
+  }
+  return out;
+}
+
 - (NSSet<NSString *> *)_layersWithoutConstant {
   NSMutableSet<NSString *> *out = [NSMutableSet set];
   for (KKBezierPath *p in [self currentLayerPaths]) {

@@ -47,6 +47,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Reset pinch-zoom/pan back to fit (zoom 1, no pan).
 - (void)resetZoom;
 
+/// Re-open the most-recently-opened gap / modulation popover against the
+/// current timeline (a multi-layer host calls this after switching the selected
+/// layer so the open "Applies to" popover re-scopes to the new layer). No-op if
+/// the new layer's section can't open (e.g. it lacks that phase).
+- (void)reopenLastGapPopover;
+
 /// Fired whenever zoom/pan changes; YES = currently zoomed/panned in (not
 /// at fit). Drives the reset button's enabled/accent state.
 @property(nonatomic, copy, nullable) void (^onZoomChanged)(BOOL zoomed);

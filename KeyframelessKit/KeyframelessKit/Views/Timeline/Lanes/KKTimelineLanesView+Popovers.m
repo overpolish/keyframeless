@@ -629,6 +629,25 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   [_laneFilterBar closeFilterPopover];
 }
 
+- (void)reopenOpenAppliesToPopover {
+  if (!(_openGapEditor || _openHoldModEditor))
+    return;
+  // Basic's "Applies to" is keyed on shared In/Out/Hold sections, so re-derive
+  // it against the new layer's timeline and re-scope the OPEN editor's
+  // checklist in place (the `_rescopingGapPopover` flag routes the re-derived
+  // participation to a rescope instead of a fresh popover - no close/reopen
+  // flicker). Advanced's gap popover is anchored to one layer-specific keypose
+  // interval - re-scoping to another layer's interval is undefined, so just
+  // close it.
+  if (_activeTab == 1) {
+    [_openContentPopover close];
+    return;
+  }
+  _rescopingGapPopover = YES;
+  [_basicGraph reopenLastGapPopover];
+  _rescopingGapPopover = NO;
+}
+
 - (NSPopover *)showCompanionPopover:(NSView *)content
                            fromView:(NSView *)anchor
                                kind:(NSString *)kind
