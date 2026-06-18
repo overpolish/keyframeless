@@ -29,6 +29,7 @@
   scale.componentMin = @[ @0.0, @0.0 ];
   scale.componentUnits = @[ @"%", @"%" ];
   scale.componentLabels = @[ @"X", @"Y" ];
+  scale.integerValued = YES; // whole percentages only (1% scrub step)
   scale.aspectLinkable = YES;
   scale.aspectLinked = YES;
   scale.enabled = NO; // constant by default; animate per-layer via the dropdown
