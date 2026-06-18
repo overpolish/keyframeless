@@ -14,8 +14,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// "compounds" and tracks per-lane visibility + solo. No views - the bar reads
 /// the derived arrays and forwards clicks back as mutations.
 ///
-/// A compound is one capsule of segments. Segments are either MASTER (a layer or
-/// a category header, toggling every lane it heads) or a plain single lane.
+/// A compound is one capsule of segments. Segments are either MASTER (a layer
+/// or a category header, toggling every lane it heads) or a plain single lane.
 ///  - Multi-owner timelines (lanes carry layerKey): ONE compound per layer =
 ///    [layer | (Category | lane ...) ...], layer in stack order.
 ///  - Single-owner: each category run / bare lane is its own compound.
@@ -41,9 +41,17 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Hidden lane labels (for the bar's onVisibilityChanged).
 @property(nonatomic, readonly) NSSet<NSString *> *hiddenLabels;
+/// Soloed lane labels (drawn warning-tinted in the checklist).
+@property(nonatomic, readonly) NSSet<NSString *> *soloedLabels;
 /// YES when any lane is hidden or a solo is in effect - the only time the
 /// reset affordance is meaningful.
 @property(nonatomic, readonly) BOOL filterActive;
+
+/// Per-lane visibility toggle for the checklist (ends any active solo).
+- (void)setLabel:(NSString *)label visible:(BOOL)visible;
+/// Solo a single lane (only it visible). Soloing the active single-lane solo
+/// again clears it and shows every lane.
+- (void)soloLabel:(NSString *)label;
 
 /// Toggle the lane(s) a segment targets (whole group for a master). Ends any
 /// active solo.

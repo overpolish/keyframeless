@@ -7,8 +7,9 @@
 #import "KKLocalized.h"
 
 @implementation KKLaneFilterModel {
-  NSArray<NSString *> *_allLabels;     // every lane, in order
-  NSArray<NSString *> *_laneSignature; // label + layer name + category, per lane
+  NSArray<NSString *> *_allLabels; // every lane, in order
+  NSArray<NSString *>
+      *_laneSignature; // label + layer name + category, per lane
   // Per compound, per segment: the lane labels that segment toggles. A master
   // (layer or category) segment targets every lane it heads; a plain lane
   // segment targets its single lane. Parallel `_segIsMaster` flags masters.
@@ -102,8 +103,8 @@
       NSMutableArray<NSString *> *grp =
           [NSMutableArray arrayWithObject:l.label];
       NSInteger j = i + 1;
-      while (j < (NSInteger)lanes.count &&
-             [lanes[j].categoryKey isEqualToString:cat]) {
+      while (j < (NSInteger)lanes.count && [lanes[j].categoryKey
+                                               isEqualToString:cat]) {
         [grp addObject:lanes[j].label];
         j++;
       }
@@ -130,11 +131,11 @@
 // three parallel per-compound output arrays.
 - (void)_addCompoundForLanes:(NSArray<KKLane *> *)lanes
                  masterLabel:(nullable NSString *)masterLabel
-                  intoDisplay:(NSMutableArray<NSArray<NSString *> *> *)display
-                      targets:
-                          (NSMutableArray<NSArray<NSArray<NSString *> *> *> *)
-                              targets
-                      masters:(NSMutableArray<NSArray<NSNumber *> *> *)masters {
+                 intoDisplay:(NSMutableArray<NSArray<NSString *> *> *)display
+                     targets:
+                         (NSMutableArray<NSArray<NSArray<NSString *> *> *> *)
+                             targets
+                     masters:(NSMutableArray<NSArray<NSNumber *> *> *)masters {
   NSMutableArray<NSString *> *cd = [NSMutableArray array];
   NSMutableArray<NSArray<NSString *> *> *ct = [NSMutableArray array];
   NSMutableArray<NSNumber *> *cm = [NSMutableArray array];
@@ -186,8 +187,8 @@
       NSString *cat = lanes[i].categoryKey;
       NSInteger j = i + 1;
       if (cat.length)
-        while (j < (NSInteger)lanes.count &&
-               [lanes[j].categoryKey isEqualToString:cat])
+        while (j < (NSInteger)lanes.count && [lanes[j].categoryKey
+                                                 isEqualToString:cat])
           j++;
       [self _addCompoundForLanes:[lanes subarrayWithRange:NSMakeRange(i, j - i)]
                      masterLabel:nil
@@ -266,6 +267,32 @@
     if (![_visible containsObject:lab])
       [hidden addObject:lab];
   return hidden;
+}
+
+- (NSSet<NSString *> *)soloedLabels {
+  return [_soloLabels copy];
+}
+
+- (void)setLabel:(NSString *)label visible:(BOOL)visible {
+  if (!label)
+    return;
+  [_soloLabels removeAllObjects]; // a manual toggle ends solo highlighting
+  if (visible)
+    [_visible addObject:label];
+  else
+    [_visible removeObject:label];
+}
+
+- (void)soloLabel:(NSString *)label {
+  if (!label)
+    return;
+  NSSet<NSString *> *target = [NSSet setWithObject:label];
+  if ([_soloLabels isEqualToSet:target]) {
+    [self showAll];
+  } else {
+    _soloLabels = [target mutableCopy];
+    _visible = [target mutableCopy];
+  }
 }
 
 - (BOOL)filterActive {

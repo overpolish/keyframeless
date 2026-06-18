@@ -64,6 +64,94 @@ NSImage *KKCategorySymbolImage(NSString *symbolName,
   return img ?: [[NSImage alloc] initWithSize:NSMakeSize(11, 11)];
 }
 
+// One unit per category run (consecutive same-category lanes, mirroring the
+// filter model's compound grouping) or per bare uncategorised lane. A category
+// unit reads `Category > lane, lane`; a bare lane is just its localized label.
+static NSArray<NSString *> *_kkCategoryUnits(NSArray<KKLane *> *lanes) {
+  NSMutableArray<NSString *> *units = [NSMutableArray array];
+  NSInteger i = 0;
+  while (i < (NSInteger)lanes.count) {
+    KKLane *l = lanes[i];
+    NSString *cat = l.categoryKey;
+    if (cat.length) {
+      NSMutableArray<NSString *> *labels =
+          [NSMutableArray arrayWithObject:KKLocalizedParamName(l.label)];
+      NSInteger j = i + 1;
+      while (j < (NSInteger)lanes.count && [lanes[j].categoryKey
+                                               isEqualToString:cat]) {
+        [labels addObject:KKLocalizedParamName(lanes[j].label)];
+        j++;
+      }
+      [units
+          addObject:[NSString
+                        stringWithFormat:@"%@ > %@", KKLocalizedParamName(cat),
+                                         [labels
+                                             componentsJoinedByString:@", "]]];
+      i = j;
+    } else {
+      [units addObject:KKLocalizedParamName(l.label)];
+      i++;
+    }
+  }
+  return units;
+}
+
+NSString *KKHierarchicalLaneSummary(NSArray<KKLane *> *lanes) {
+  if (lanes.count == 0)
+    return @"";
+
+  BOOL hasLayers = NO;
+  for (KKLane *l in lanes)
+    if (l.layerKey.length) {
+      hasLayers = YES;
+      break;
+    }
+
+  if (hasLayers) {
+    // One unit per layer (first-appearance order), prefixed by the layer name,
+    // its category groups joined by ", "; layers joined by " | ".
+    NSMutableArray<NSString *> *layerKeys = [NSMutableArray array];
+    NSMutableSet<NSString *> *seen = [NSMutableSet set];
+    for (KKLane *l in lanes) {
+      NSString *k = l.layerKey ?: @"";
+      if (![seen containsObject:k]) {
+        [seen addObject:k];
+        [layerKeys addObject:k];
+      }
+    }
+    NSMutableArray<NSString *> *layerStrings = [NSMutableArray array];
+    for (NSString *k in layerKeys) {
+      NSMutableArray<KKLane *> *layerLanes = [NSMutableArray array];
+      NSString *layerLabel = k;
+      for (KKLane *l in lanes)
+        if ([(l.layerKey ?: @"") isEqualToString:k]) {
+          [layerLanes addObject:l];
+          if (l.layerLabel.length)
+            layerLabel = l.layerLabel;
+        }
+      NSString *inner =
+          [_kkCategoryUnits(layerLanes) componentsJoinedByString:@", "];
+      NSString *name = KKTruncatedLayerName(layerLabel);
+      [layerStrings
+          addObject:(inner.length
+                         ? [NSString stringWithFormat:@"%@ > %@", name, inner]
+                         : name)];
+    }
+    return [layerStrings componentsJoinedByString:@" | "];
+  }
+
+  // No layers: category units joined by " | " when any category exists,
+  // otherwise a flat comma list of bare lanes.
+  BOOL hasCategories = NO;
+  for (KKLane *l in lanes)
+    if (l.categoryKey.length) {
+      hasCategories = YES;
+      break;
+    }
+  return [_kkCategoryUnits(lanes)
+      componentsJoinedByString:(hasCategories ? @" | " : @", ")];
+}
+
 KKPillToggleRowView *KKMakeLaneCategoryPill(NSArray<KKLane *> *lanes,
                                             NSString *selected,
                                             void (^onSelect)(NSString *)) {

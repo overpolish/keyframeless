@@ -228,11 +228,28 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   }
   for (NSView *v in _basicView.accessoryButtons)
     [_accessoryStack addArrangedSubview:v];
+  [self _mountFilterAccessory];
+}
+
+// The lane-filter cluster sits centered in the header row (its own slot, not in
+// the right-aligned accessory stack). Mounted once; its own hidden flag (driven
+// by the lanes view) collapses it outside Advanced / with <2 lanes.
+- (void)_mountFilterAccessory {
+  NSView *filter = _basicView.filterAccessory;
+  if (!filter || !_headerRow || filter.superview == _headerRow)
+    return;
+  [filter removeFromSuperview];
+  [_headerRow addSubview:filter];
+  [NSLayoutConstraint activateConstraints:@[
+    [filter.centerXAnchor constraintEqualToAnchor:_headerRow.centerXAnchor],
+    [filter.centerYAnchor constraintEqualToAnchor:_headerRow.centerYAnchor],
+  ]];
 }
 
 - (NSView *)_buildHeaderRow:(NSView *)box {
   NSView *headerRow = [[NSView alloc] init];
   headerRow.translatesAutoresizingMaskIntoConstraints = NO;
+  _headerRow = headerRow;
   [box addSubview:headerRow];
   [headerRow addSubview:_playButton];
   [headerRow addSubview:_loopButton];

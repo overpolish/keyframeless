@@ -5,6 +5,7 @@
 
 #import "KKTimelineLanesView.h"
 #import "KKCheckboxRowView.h"
+#import "KKLaneCategoryNav.h"
 #import "KKLaneFilterBar.h"
 #import "KKLocalized.h"
 #import "KKSegmentEditView.h"
@@ -181,9 +182,20 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     if (s->_onGuideLaneFilterToggled)
       s->_onGuideLaneFilterToggled();
   };
-  [_laneStack addArrangedSubview:_laneFilterBar];
-  [_laneFilterBar.widthAnchor constraintEqualToAnchor:_laneStack.widthAnchor]
-      .active = YES;
+  // Present the filter checklist through the companion-capable popover path so
+  // Canvas's layer list can attach beside it (kind "filter").
+  _laneFilterBar.popoverPresenter =
+      ^NSPopover *(NSView *content, NSView *anchor, void (^onClose)(void)) {
+        __strong typeof(weakFilter) s = weakFilter;
+        if (!s)
+          return nil;
+        return [s showCompanionPopover:content
+                              fromView:anchor
+                                  kind:@"filter"
+                               onClose:onClose];
+      };
+  // The filter cluster is NOT a row here - it's surfaced as a header accessory
+  // button (see -accessoryButtons) alongside Dynamic / zoom / Maintain Timing.
 
   NSView *footerRow = [[NSView alloc] init];
   footerRow.translatesAutoresizingMaskIntoConstraints = NO;
@@ -498,6 +510,10 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   // Shown in Advanced when there are >=2 lanes worth filtering; the bar's
   // hidden set drives which rows the graph draws.
   [_laneFilterBar applyLanes:optedIn];
+  // Scope + size the filter checklist like the Animated dropdown: per active
+  // layer (multi-owner), matching the companion layer panel's height.
+  _laneFilterBar.minimumPopoverHeight = self.minimumManagePopoverHeight;
+  _laneFilterBar.activeLayerKey = _activeLayerKey;
   BOOL showFilter = showAdvanced && optedIn.count >= 2;
   _laneFilterBar.hidden = !showFilter;
   // Graph visibility + empty-state hint (also driven live by the bar's
@@ -560,6 +576,19 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
         [condVisible containsObject:tmpl.label])
       [opted addObject:tmpl.label];
   _dropdownTrigger.selectedLabels = opted;
+  // Hierarchical summary (layer > group > lane | …) from the opted-in KKLanes,
+  // which carry the layerKey/categoryKey grouping; "All" only when nothing is
+  // left un-animated. `hasUnoptedLanes` covers both the selected owner's
+  // constants AND (multi-owner) any other layer's constants - the merged
+  // graphTimeline only carries already-animated lanes, so a plain count of it
+  // would always read "All" for Canvas. Supersedes the legacy truncated-label +
+  // per-owner layerTitles paths.
+  BOOL allOpted = optedIn.count > 0 && ![self hasUnoptedLanes];
+  _dropdownTrigger.summaryOverride =
+      allOpted
+          ? KKLoc(@"All", @"Dropdown summary: every animatable property is "
+                          @"animated.")
+          : KKHierarchicalLaneSummary(optedIn);
   [_dropdownTrigger setNeedsDisplay:YES];
 
   if (_openManageView)
@@ -848,7 +877,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 
 - (void)setActiveLayerKey:(NSString *)activeLayerKey {
   _activeLayerKey = [activeLayerKey copy];
-  _basicGraph.activeLayerKey = activeLayerKey; // scopes the Basic keypose popover
+  _basicGraph.activeLayerKey =
+      activeLayerKey; // scopes the Basic keypose popover
+  // Re-scope an open lane-filter checklist to the newly-selected layer (the
+  // companion layer list drove the switch), like the Animated dropdown.
+  _laneFilterBar.activeLayerKey = activeLayerKey;
 }
 - (NSString *)activeLayerKey {
   return _activeLayerKey;
@@ -954,6 +987,13 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   _dynamicButton.on = _advancedGraph.dynamicDisplay;
   _clearSelectionButton.enabled = (_advancedGraph.selectionCount > 0);
   return @[ _dynamicButton, _clearSelectionButton ];
+}
+
+// The lane-filter cluster is hosted centered in the inspector's header row (its
+// own slot, separate from the right-aligned accessory stack). -_refresh toggles
+// its hidden flag (Advanced + >=2 lanes).
+- (NSView *)filterAccessory {
+  return _laneFilterBar;
 }
 
 - (NSRect)guideDynamicButtonScreenRect {

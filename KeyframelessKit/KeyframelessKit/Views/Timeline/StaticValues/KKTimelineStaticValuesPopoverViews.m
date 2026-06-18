@@ -128,12 +128,15 @@
 }
 
 - (NSString *)_summaryText {
-  // Multi-owner (Canvas): list every animated layer's name with the same +N
-  // truncation, e.g. "layer 1, layer 2 +1".
+  // Host-supplied hierarchical summary (KKHierarchicalLaneSummary) or the "All"
+  // sentinel - this is the modern path. drawRect clips it at the chevron.
+  if (_summaryOverride.length)
+    return _summaryOverride;
+  if (_selectedLabels.count == 0 && _layerTitles.count == 0)
+    return KKLoc(@"Add properties…", @"Button: add animatable properties.");
+  // Fallback when no summary was supplied: the legacy truncated label list.
   if (_layerTitles.count)
     return [self _truncatedJoin:_layerTitles localize:NO];
-  if (_selectedLabels.count == 0)
-    return KKLoc(@"Add properties…", @"Button: add animatable properties.");
   return [self _truncatedJoin:_selectedLabels localize:YES];
 }
 
@@ -143,10 +146,15 @@
   NSColor *textColor =
       hasSelection ? [NSColor inspectorLabel]
                    : [[NSColor inspectorLabel] colorWithAlphaComponent:0.35];
+  // Tail-truncate so a long hierarchical summary (Canvas: layer > group > … |
+  // …) clips at the chevron instead of overflowing the field.
+  NSMutableParagraphStyle *para = [[NSMutableParagraphStyle alloc] init];
+  para.lineBreakMode = NSLineBreakByTruncatingTail;
   NSDictionary *attrs = @{
     NSFontAttributeName : [NSFont systemFontOfSize:KKFontSizeSM
                                             weight:NSFontWeightRegular],
     NSForegroundColorAttributeName : textColor,
+    NSParagraphStyleAttributeName : para,
   };
 
   NSImage *chevRaw = [[NSImage imageWithSystemSymbolName:@"chevron.down"
@@ -172,7 +180,9 @@
                hints:nil];
 
   NSSize textSz = [text sizeWithAttributes:attrs];
-  [text drawAtPoint:NSMakePoint(0, NSMidY(self.bounds) - textSz.height / 2.0)
+  CGFloat textW = MAX(0.0, chevX - 6.0); // stop short of the chevron
+  [text drawInRect:NSMakeRect(0, NSMidY(self.bounds) - textSz.height / 2.0,
+                              textW, textSz.height)
       withAttributes:attrs];
 }
 

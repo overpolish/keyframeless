@@ -164,6 +164,12 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 @property(nonatomic, readonly) NSArray<NSView *> *accessoryButtons;
 @property(nonatomic, copy, nullable) void (^onAccessoryButtonsChanged)(void);
 
+/// The lane-visibility filter cluster (filter glyph + clear), hosted CENTERED
+/// in the inspector's header row rather than in the right-aligned accessory
+/// stack. Self-hiding (Advanced + >=2 lanes), so the inspector can mount it
+/// once.
+@property(nonatomic, readonly) NSView *filterAccessory;
+
 /// Mini-viewer render mode (see typedef above). The 3-way pill lives in the
 /// popover's header bar (only visible while a boundary popover is open).
 /// Setter is the host pushing the persisted value; `onRenderModeChanged`

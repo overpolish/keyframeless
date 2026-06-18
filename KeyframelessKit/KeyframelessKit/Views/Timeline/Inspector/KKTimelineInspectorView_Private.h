@@ -84,6 +84,7 @@ NS_ASSUME_NONNULL_BEGIN
   KKPlayButton *_playButton;
   KKResetZoomButton *_resetButton;
   NSStackView *_accessoryStack;
+  NSView *_headerRow; // hosts the centered lane-filter accessory
   KKLoopButton *_loopButton;
   KKMaintainTimingButton *_maintainTimingButton;
   KKConstantsButton *_constantsButton;

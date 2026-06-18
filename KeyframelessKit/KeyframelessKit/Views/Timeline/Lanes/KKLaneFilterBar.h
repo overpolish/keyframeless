@@ -39,6 +39,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// showAllLanes / applyHiddenLabels mutators. Lets a guide advance its
 /// "try the filter" step without the guide's own setup tripping it.
 @property(nonatomic, copy, nullable) void (^onUserToggled)(void);
+/// Multi-owner hosts (Canvas): the layer the checklist is scoped to. When set,
+/// only that layer's lanes (matched by `layerKey`) are shown, and the companion
+/// layer list switches it; nil = show every lane (single-owner). Setting it
+/// re-scopes an open checklist in place.
+@property(nonatomic, copy, nullable) NSString *activeLayerKey;
+/// Minimum popover height (matches the companion layer panel, like the Animated
+/// dropdown). 0 = hug the rows.
+@property(nonatomic) CGFloat minimumPopoverHeight;
+/// Presents `content` (the filter checklist) in a popover anchored at `anchor`,
+/// returning the popover. The host wires this to its companion-capable popover
+/// path so the Canvas layer list can attach beside it. `onClose` runs when the
+/// popover dismisses.
+@property(nonatomic, copy, nullable) NSPopover * (^popoverPresenter)
+    (NSView *content, NSView *anchor, void (^onClose)(void));
 @end
 
 NS_ASSUME_NONNULL_END

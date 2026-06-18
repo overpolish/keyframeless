@@ -10,6 +10,8 @@
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
+#import "KKLaneChecklistView.h" // _KKLaneChecklistView base
+
 @class KKSegmentEditView;
 @protocol KKMiniViewerDelegate;
 
@@ -47,20 +49,28 @@ NS_ASSUME_NONNULL_BEGIN
 /// Indent depth (0 = top level). Shifts the checkbox + label right so a child
 /// row (e.g. a Rotation axis) reads as nested under its parent. Default 0.
 @property(nonatomic) NSInteger indentLevel;
+/// When non-nil, drawn verbatim as the row label instead of localizing
+/// `rowLabel` (for callers whose labels are already localized, e.g. the lane
+/// filter's compound display strings). Default nil.
+@property(nonatomic, copy, nullable) NSString *displayOverride;
+/// Draw the checkbox + label in the warning tint (the lane filter marks a
+/// soloed row this way). Default NO.
+@property(nonatomic) BOOL warning;
 @property(nonatomic, copy, nullable) void (^onToggle)(void);
+/// Fired on an option-click instead of `onToggle` (the lane filter solos the
+/// row). When nil, an option-click falls through to `onToggle`.
+@property(nonatomic, copy, nullable) void (^onOptionToggle)(void);
 @end
 
-@interface _KKManagePopoverView : NSView <NSSearchFieldDelegate>
-// Set by the host so the dropdown can resize itself to the visible row count as
-// the category pill / search narrows the list.
-@property(nonatomic, weak, nullable) NSPopover *popover;
+// The Animated "manage" dropdown's checkable lane list. Shared chrome (search,
+// category pill, filtering, sizing, `popover`, `rowViewForLabel:`) lives in the
+// base; this only adds opt-in checkbox state.
+@interface _KKManagePopoverView : _KKLaneChecklistView
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                 checkedLabels:(NSSet<NSString *> *)checked
                 minimumHeight:(CGFloat)minimumHeight
                      onToggle:(void (^)(NSString *label))onToggle;
 - (void)updateCheckedLabels:(NSSet<NSString *> *)checked;
-- (nullable NSView *)rowViewForLabel:(NSString *)label;
-+ (CGFloat)heightForLaneCount:(NSInteger)count;
 @end
 
 // Shared static-values UI helpers: defined in the value-row .m, used by the
@@ -311,6 +321,11 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// lists every animated layer's name with +N truncation ("layer 1, layer 2 +1")
 /// instead of the property summary.
 @property(nonatomic, copy, nullable) NSArray<NSString *> *layerTitles;
+/// Pre-computed hierarchical summary string (see KKHierarchicalLaneSummary), or
+/// the localized "All" sentinel. When non-nil it replaces the derived label
+/// list as the field's text. The host owns the empty/placeholder decision by
+/// leaving this nil (then `selectedLabels` drives the placeholder).
+@property(nonatomic, copy, nullable) NSString *summaryOverride;
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 

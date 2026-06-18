@@ -151,6 +151,13 @@
 - (void)_feedGraph {
   NSArray<KKBezierPath *> *paths = [_layerListController currentLayerPaths];
   KKTimeline *merged = CanvasMergedTimeline(paths, _availableLanes);
+  // Some layer still has a constant (un-animated) param? Keep the Constants
+  // button reachable even when the selected layer is fully animated. Set this
+  // BEFORE graphTimeline: the setter runs a refresh that reads
+  // ownerConstantsAvailable to decide the "All" dropdown summary, so a stale
+  // value would mis-label a partially-animated project as "All".
+  self.basicLanesView.ownerConstantsAvailable =
+      CanvasAnyLayerHasConstant(paths, _availableLanes);
   self.basicLanesView.graphTimeline = merged;
   NSMutableArray<NSString *> *order =
       [NSMutableArray arrayWithCapacity:paths.count];
@@ -158,10 +165,6 @@
     if (p.layerID.length)
       [order addObject:p.layerID];
   self.basicLanesView.layerOrder = order;
-  // Some layer still has a constant (un-animated) param? Keep the Constants
-  // button reachable even when the selected layer is fully animated.
-  self.basicLanesView.ownerConstantsAvailable =
-      CanvasAnyLayerHasConstant(paths, _availableLanes);
   // Animated dropdown lists every animated layer's name (layer-stack order), so
   // it reflects the whole project, not just the selected owner.
   NSMutableArray<NSString *> *titles = [NSMutableArray array];
