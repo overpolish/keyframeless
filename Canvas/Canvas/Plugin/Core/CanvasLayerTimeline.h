@@ -31,6 +31,24 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *_Nullable path,
 void CanvasApplyTimelineToPath(KKTimeline *timeline,
                                KKBezierPath *_Nullable path);
 
+/// Re-anchors a GROUP's Position lane onto its content centre for the viewer
+/// OSC. The OSC draws the Position handle (and the scale/rotation gizmo that
+/// centres on it) at the raw lane value in object space, where 0.5,0.5 = clip
+/// centre - but a group's content sits at its bbox centre. So before publishing
+/// a group's timeline to the OSC snapshot, shift its Position keyposes by the
+/// bbox-centre offset; reverse it with CanvasUnshiftGroupOSCPosition before the
+/// OSC's edit persists, so the STORED Position stays the canvas-relative offset
+/// (0.5 = no move) that the render + Constants/keypose popovers use. Returns the
+/// input unchanged for a non-group / unmeasurable group (and preserves each
+/// keypose's spatial-curve state). `paths` is the current layer stack (for the
+/// group's member rects).
+KKTimeline *CanvasShiftGroupOSCPosition(KKTimeline *layerTL,
+                                        KKBezierPath *_Nullable layer,
+                                        NSArray<KKBezierPath *> *paths);
+KKTimeline *CanvasUnshiftGroupOSCPosition(KKTimeline *tl,
+                                          KKBezierPath *_Nullable layer,
+                                          NSArray<KKBezierPath *> *paths);
+
 /// The all-layers GRAPH timeline: every layer's ANIMATED (enabled) lanes across
 /// the whole stack, each tagged label "<short>\x1f<layerID>" + layerKey +
 /// layerLabel + layerSymbol (folder for groups), ordered by layer-stack order

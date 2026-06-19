@@ -5,6 +5,7 @@
 
 #import "CanvasMiniViewerRenderer.h"
 #import "CanvasLayerRender.h"
+#import "CanvasLayerTimeline.h"
 #import "CanvasMiniViewerRenderer_Internal.h"
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
@@ -58,6 +59,65 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 // dragged by KKMiniViewerRenderer), keyed on the "Rotation" lane.
 - (NSString *)rotationLabel {
   return @"Rotation";
+}
+
+// The Position handle draws ON TOP of the rotation rings (matching the main
+// viewer's layering), so the mini hit-test / drag / opt-click prefer it where
+// they overlap - without this the rings (checked first by default) steal clicks
+// meant for the handle.
+- (BOOL)pointHandleBeatsRotation {
+  return YES;
+}
+
+// Re-anchor the gizmo on a selected GROUP's content centre, mirroring the main
+// viewer (CanvasShiftGroupOSCPosition). Position is canvas-relative (0.5,0.5 =
+// clip centre), but a group's content sits at its bbox centre; the offset shifts
+// the Position the GIZMO sees so the handle/scale box/rotation rings sit on the
+// group. NO for a non-group / unmeasurable group. Object Y-up centre (cx,cy) ->
+// Position offset (cx-0.5, 0.5-cy) (Position Y is Y-down, like the viewer).
+- (BOOL)_groupPositionOffsetDX:(double *)outDX dY:(double *)outDY {
+  KKBezierPath *sel =
+      CanvasSelectedLayerForPaths(self.layers, self.selectedLayerID);
+  return CanvasGroupPositionOffset(self.layers, sel, outDX, outDY);
+}
+
+// Shift Position on READ so the gizmo draws on the group content; the base keeps
+// storing the relative value (un-shifted on write below), so there's no
+// double-shift across a drag's live override.
+- (NSArray<NSNumber *> *)valuesForLabel:(NSString *)label {
+  NSArray<NSNumber *> *v = [super valuesForLabel:label];
+  double dx, dy;
+  if ([label isEqualToString:@"Position"] && v.count >= 2 &&
+      [self _groupPositionOffsetDX:&dx dY:&dy])
+    return @[ @(v[0].doubleValue + dx), @(v[1].doubleValue + dy) ];
+  return v;
+}
+
+// Un-shift Position on WRITE (the controller works in the shifted display space)
+// so the base + blob keep the canvas-relative value.
+- (NSArray<NSNumber *> *)_unshiftPositionIfGroup:(NSArray<NSNumber *> *)values
+                                        forLabel:(NSString *)label {
+  double dx, dy;
+  if ([label isEqualToString:@"Position"] && values.count >= 2 &&
+      [self _groupPositionOffsetDX:&dx dY:&dy])
+    return @[ @(values[0].doubleValue - dx), @(values[1].doubleValue - dy) ];
+  return values;
+}
+
+- (void)setLiveValues:(NSArray<NSNumber *> *)values
+             forLabel:(NSString *)label
+           atFraction:(double)fraction {
+  [super setLiveValues:[self _unshiftPositionIfGroup:values forLabel:label]
+              forLabel:label
+            atFraction:fraction];
+}
+
+- (void)commitValues:(NSArray<NSNumber *> *)values
+            forLabel:(NSString *)label
+              canvas:(KKMiniViewerView *)canvas {
+  [super commitValues:[self _unshiftPositionIfGroup:values forLabel:label]
+             forLabel:label
+               canvas:canvas];
 }
 
 // The rotation rings (and scale box) are concentric with the layer's Position

@@ -237,6 +237,12 @@
   _miniViewerRenderer.selectedLayerID = sel.layerID;
   [self syncMiniHandleVisibility]; // OSC visibility + lock
   _layerListController.selectedLayerID = sel.layerID;
+  // The kit re-evaluates the Constants button only in applyTimeline (a
+  // selection/edit). _feedGraph also runs on cold boot + reload (parameterChanged
+  // load), where it just updated ownerConstantsAvailable - so refresh the button
+  // here too, else it stays hidden until the first layer selection even when a
+  // layer has constants.
+  self.constantsButton.hidden = !self.basicLanesView.hasUnoptedLanes;
 }
 
 - (void)dealloc {
@@ -290,8 +296,12 @@
   // Position OSC (same process) reads this layer. Its lanes carry layerKey, so
   // an OSC drag knows which layer's animationJSON to write. (drawOSC can't read
   // the param - FxParameterRetrievalAPI is nil there - so the snapshot is its
-  // only source.)
-  KKSetProcessTimelineSnapshot(timeline);
+  // only source.) For a GROUP, re-anchor Position onto its content centre so the
+  // gizmo sits on the group, not the clip centre (the OSC un-shifts on write).
+  NSArray<KKBezierPath *> *paths = [_layerListController currentLayerPaths];
+  KKBezierPath *sel = CanvasSelectedLayerForPaths(paths, _selectedLayerID);
+  KKSetProcessTimelineSnapshot(
+      CanvasShiftGroupOSCPosition(timeline, sel, paths));
 }
 
 // Track a live keypose drag so reloadLayerList knows the per-frame write echoes
@@ -342,7 +352,9 @@
   // keypose times); it doesn't reset any inspector-side popover/mini edit. The
   // gated applyTimeline below also sets it, but is skipped on a value-only
   // change during a drag - which is exactly when the snapshot went stale.
-  KKSetProcessTimelineSnapshot(layerTL);
+  // (Group: re-anchor Position onto its content centre, like applyTimeline.)
+  KKSetProcessTimelineSnapshot(
+      CanvasShiftGroupOSCPosition(layerTL, sel, paths));
   // Always rebuild the all-layers graph (any layer may have gained/lost an
   // animated lane).
   [self _feedGraph];

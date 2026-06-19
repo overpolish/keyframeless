@@ -1,0 +1,87 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#pragma once
+
+// Internal (non-published) shared math for the Canvas layer render + hit-test:
+// evaluating a layer's transform from its timeline and composing the per-layer
+// 3D model matrix (member + ancestor groups + one perspective). Both
+// CanvasLayerRender.m (encode) and CanvasLayerHitTest.m use these, so they live
+// here rather than as file-statics in one of them.
+
+#import <Foundation/Foundation.h>
+#import <simd/simd.h>
+
+@class KKBezierPath;
+@class KKTimeline;
+
+NS_ASSUME_NONNULL_BEGIN
+
+/// A layer's transform at a clip fraction. Built into a single 3D model matrix
+/// per layer (CanvasComposedModelMatrix): Scale, then Rotation (Z·X·Y as ONE
+/// rigid rotation about the layer centre), then Position, all in one matrix fed
+/// to the kit KKTransformVertexShader - so the axes compose correctly when
+/// combined and a parent group's model matrix simply pre-multiplies.
+typedef struct {
+  float scaleX, scaleY; // 1.0 = 100%
+  float rotation;       // Z radians, CCW; in-plane spin
+  float posX, posY;     // normalised, 0.5 = no offset
+  float rotX, rotY;     // X/Y tilt radians (perspective)
+  float opacity;        // 0..1, 1 = fully opaque (multiplies premultiplied RGBA)
+} CanvasLayerTransform;
+
+/// One ancestor group's transform + its content-bbox pivot, in object space.
+typedef struct {
+  CanvasLayerTransform t;
+  float cx, cy;
+} CanvasGroupXform;
+
+/// Stack capacity for an ancestor chain - a literal (not the const-typed
+/// CanvasLayerGroupDepthGuard) so a buffer of these isn't a VLA; matches it.
+enum { kCanvasGroupXformCap = 32 };
+
+/// Identity transform (scale 1, no rotation, centred position, opaque).
+CanvasLayerTransform CanvasLayerTransformIdentity(void);
+
+/// A layer's transform from an in-memory timeline (the popover's live-edited
+/// copy, so a mini-viewer handle drag previews before it persists).
+CanvasLayerTransform CanvasLayerTransformFromTimeline(KKTimeline *tl,
+                                                      double frac);
+
+/// A layer's transform from its persisted `animationJSON` (identity when none).
+CanvasLayerTransform CanvasLayerTransformAtFraction(KKBezierPath *path,
+                                                    double frac);
+
+/// Legacy per-layer tilt+perspective+tile-shift matrix for 2D-baked verts. Now
+/// only used for the identity full-image source quad (CanvasEncodeSourceTile);
+/// the layer pipeline uses CanvasComposedModelMatrix on raw verts instead.
+matrix_float4x4 CanvasLayerTiltMatrix(CanvasLayerTransform t,
+                                      simd_float2 centerPx, float W, float H,
+                                      simd_float2 tileShift);
+
+/// Fill `out` (capacity `maxN`) with the ancestor group transforms for the
+/// layer at `idx`, INNERMOST parent first; returns the count. `overrideLayerID`
+/// / `overrideTimeline` let a group whose id matches read the live-edited
+/// timeline (mini-viewer drag preview); pass nil/nil for the persisted state.
+NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers, NSUInteger idx,
+                                 double frac,
+                                 NSString *_Nullable overrideLayerID,
+                                 KKTimeline *_Nullable overrideTimeline,
+                                 CanvasGroupXform *out, NSInteger maxN);
+
+/// The full per-member transform fed to the vertex shader: the member's 3D model
+/// matrix composed with each ancestor group's (member first, innermost group …
+/// outermost), then ONE perspective centred on the outermost element's
+/// positioned centre. Applied to RAW rect-corner verts (no CPU 2D baking) so all
+/// rotation axes of each level compose rigidly. `dims` maps object space to the
+/// working pixel space (render: image W,H; hit-test: aspect,1); `memberCenterObj`
+/// is the member's REST centre in object space.
+matrix_float4x4 CanvasComposedModelMatrix(CanvasLayerTransform memberT,
+                                          simd_float2 memberCenterObj,
+                                          const CanvasGroupXform *groups,
+                                          NSInteger ng, simd_float2 dims,
+                                          simd_float2 tileShift);
+
+NS_ASSUME_NONNULL_END

@@ -104,6 +104,17 @@ indented by their depth.
   target level. Drop at another row's level (or below everything) to move it
   out. Dragging a group moves its whole subtree, and you can't drop a group
   inside itself.
+- **Group transform**: a group is a layer like any other - it has its own
+  Scale, Position, Rotation (all three axes: X/Y tilt + Z spin), and Opacity
+  (animatable on the timeline, editable with the same on-screen controls). A
+  group's transform applies on top of each member's own transform as a rigid 3D
+  composition, so moving / scaling / rotating / tilting / fading a group does the
+  same to everything inside it as a unit - each member keeps its own rotation and
+  the whole group rotates around the group's centre. Scale and rotation pivot
+  about the centre of the group's contents; nested groups compose (a child
+  group's transform stacks under its parent's). Selecting a group on the canvas
+  shows its Position handle, scale box, and rotation rings just like a single
+  layer.
 
 ## Context menu (right-click a row)
 
@@ -116,12 +127,30 @@ indented by their depth.
 
 ## Rendering
 
-Visible **image layers** are drawn onto the clip, composited front-to-back over
-the source frame (the topmost row draws last, on top). Each image fills its
-layer's rectangle. Hidden layers, groups, and non-image layers are skipped. The
-source clip shows through wherever no layer covers it. The inspector's
-mini-viewer preview composites the same layers the same way, so it matches the
-main viewer.
+Visible **image layers** are drawn onto the clip over the source frame. Each
+image fills its layer's rectangle, transformed by its own Scale / Position /
+Rotation / Opacity composed with any enclosing group's transform. Hidden layers
+and non-image layers are skipped, and a group draws nothing itself (it only
+transforms its members). The source clip shows through wherever no layer covers
+it. The inspector's mini-viewer preview composites the same layers the same way,
+so it matches the main viewer.
+
+**Stacking order**: layers are drawn back-to-front by their **3D depth** (centre
+distance from the camera), with **layer-list order** as the tiebreak. In
+practice:
+
+- With no 3D tilt, every layer's centre is at the same depth, so **layer order
+  decides stacking** - the topmost row draws on top, exactly like normal 2D
+  compositing.
+- When a **group is tilted** in 3D so a lower layer's centre swings physically in
+  front, that layer draws on top regardless of its list position (and flips back
+  as you rotate past edge-on). In-plane (Z) spin doesn't change depth, so layer
+  order still governs there.
+
+So layer order rules in 2D and is the fallback everywhere; real 3D depth only
+overrides it when a tilt actually puts one layer in front of another. (Stacking
+is decided per layer by its centre, not per pixel, which is exact for the
+non-overlapping image planes Canvas composites.)
 
 ## Per-layer transform (Scale + Position)
 

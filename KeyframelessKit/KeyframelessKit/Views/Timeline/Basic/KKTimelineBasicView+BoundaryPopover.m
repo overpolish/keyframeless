@@ -26,16 +26,25 @@
     }
   if (!hasLayers)
     return nil; // single-owner timeline: no scoping
+  // The keypose popover targets an ANIMATED layer - one whose lane actually has
+  // keyposes (>=2), not merely an enabled/animatable lane. A layer that's only
+  // animatable (e.g. a group with the default identity keypose) has nothing to
+  // open here, so it must fall through to the first layer that does - otherwise
+  // a keyposeless layer stays "active" and selection never moves to the layer
+  // being edited.
+  BOOL (^animated)(KKLane *) = ^BOOL(KKLane *l) {
+    return l.enabled && l.layerKey.length && l.keyposes.count >= 2;
+  };
   NSString *resolved = nil;
   if (_activeLayerKey.length)
     for (KKLane *l in _timeline.lanes)
-      if (l.enabled && [l.layerKey isEqualToString:_activeLayerKey]) {
+      if (animated(l) && [l.layerKey isEqualToString:_activeLayerKey]) {
         resolved = _activeLayerKey;
         break;
       }
-  if (!resolved) // selected layer has nothing animated -> first that does
+  if (!resolved) // active layer isn't animated -> first layer that is
     for (KKLane *l in _timeline.lanes)
-      if (l.enabled && l.layerKey.length) {
+      if (animated(l)) {
         resolved = l.layerKey;
         break;
       }

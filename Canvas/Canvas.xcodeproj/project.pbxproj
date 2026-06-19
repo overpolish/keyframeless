@@ -96,8 +96,10 @@
 				"/Localized: Plugin/Localizable.strings",
 				Plugin/CanvasUI.xcstrings,
 				Plugin/Core/CanvasImageTexture.m,
+				Plugin/Core/CanvasLayerHitTest.m,
 				Plugin/Core/CanvasLayerRender.m,
 				Plugin/Core/CanvasLayerTimeline.m,
+				Plugin/Core/CanvasLayerTransform.m,
 				Plugin/Core/CanvasLocalized.m,
 				Plugin/Core/Plugin.m,
 				"Plugin/Core/Plugin+CustomUI.m",
@@ -115,11 +117,11 @@
 				Plugin/Inspector/CanvasMiniViewerRenderer.m,
 				"Plugin/Inspector/CanvasMiniViewerRenderer+Interaction.m",
 				Plugin/main.m,
+				Plugin/OSC/CanvasOSC.m,
 				"Plugin/OSC/CanvasOSC+AutoSelect.m",
 				"Plugin/OSC/CanvasOSC+Geometry.m",
 				"Plugin/OSC/CanvasOSC+Input.m",
 				"Plugin/OSC/CanvasOSC+State.m",
-				Plugin/OSC/CanvasOSC.m,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;

@@ -355,6 +355,18 @@
     NSDictionary *byLayer = visState[@"oscElementsByLayer"];
     ist.oscElementsByOwner =
         [byLayer isKindOfClass:[NSDictionary class]] ? byLayer : @{};
+    // Restore the SAVED selected layer. createView otherwise starts at the
+    // topmost layer, so after a reboot the inspector/OSC/Constants target layer
+    // 1 instead of the layer that was selected when the project was saved. Do it
+    // BEFORE canvasApplyOSCForLayer so the OSC visibility set is the restored
+    // layer's. restoreSelectedLayerID self-guards no-ops; the persist-on-select
+    // block isn't wired yet (so no churn), but flag restoringSelection anyway.
+    NSString *savedSel = visState[@"selectedLayerID"];
+    if ([savedSel isKindOfClass:[NSString class]] && savedSel.length) {
+      self.restoringSelection = YES;
+      [view restoreSelectedLayerID:savedSel];
+      self.restoringSelection = NO;
+    }
     [self canvasApplyOSCForLayer:view.resolvedSelectedLayerID keys:oscKeys];
 
     __weak CanvasPlugin *weakOSC = self;

@@ -104,4 +104,21 @@ NSString *_Nullable CanvasHitTestLayerID(
     float objY, BOOL alphaAware, NSSet<NSString *> *_Nullable excludedLayerIDs,
     BOOL requireEditableAtFrac, NSArray<KKLane *> *_Nullable templates);
 
+/// The group's content centre in object space (Y-up) = the centre of the union
+/// of its descendant image rects (rest shape, ignoring animation). NO for a
+/// non-group or a group with no rect-shaped image descendants. Used to
+/// re-anchor a group's Position OSC onto its content instead of the clip centre.
+BOOL CanvasGroupContentCenterObj(NSArray<KKBezierPath *> *layers,
+                                 KKBezierPath *group, float *_Nullable outCx,
+                                 float *_Nullable outCy);
+
+/// The object-space Position offset that re-anchors a group's OSC / mini gizmo
+/// onto its content centre: `(cx-0.5, 0.5-cy)` for the content bbox centre
+/// (cx,cy). Position is canvas-relative (0.5,0.5 = clip centre) so the viewer OSC
+/// (CanvasShiftGroupOSCPosition) and the mini gizmo apply this same shift on read
+/// and reverse it on write. NO for a non-group / unmeasurable group.
+BOOL CanvasGroupPositionOffset(NSArray<KKBezierPath *> *layers,
+                               KKBezierPath *_Nullable group,
+                               double *_Nullable outDX, double *_Nullable outDY);
+
 NS_ASSUME_NONNULL_END

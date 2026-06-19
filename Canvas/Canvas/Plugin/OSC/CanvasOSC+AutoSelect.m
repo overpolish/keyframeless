@@ -32,8 +32,8 @@
                             toX:&ox
                             toY:&oy];
   // FCP's OBJECT space here is Y-DOWN (oy=0 at the top) while the render's object
-  // space (CanvasTransformCorner, the quads) is Y-UP (Y=0 at the bottom), so the
-  // mouse Y must be flipped to land in the same space. This is what made
+  // space (the quads, via CanvasComposedModelMatrix) is Y-UP (Y=0 at the
+  // bottom), so the mouse Y must be flipped to land in the same space. This made
   // off-centre layers unselectable (centred/full-frame ones are flip-invariant,
   // so they appeared to work) and X-rotation look mirrored.
   oy = 1.0 - oy;
