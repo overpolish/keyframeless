@@ -55,6 +55,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// hit-testing; the drag still writes the lane value in content space (flat).
 @property(nonatomic, copy, nullable) CGPoint (^centerOverride)(CGRect contentRect);
 
+/// Hit-test half-extent for the square in points (Chebyshev), at the baseline
+/// popover size; scales with the popover. Default 5.0. A host whose anchor pivot
+/// can coincide with a larger Position handle (so the handle would otherwise
+/// swallow it) can shrink this so the anchor keeps a tight central grab zone and
+/// the Position ring around it stays clickable.
+@property(nonatomic) CGFloat hitRadiusPt;
+
 /// Whether the square is shown this tick: the Anchor lane is a constant in the
 /// current popover mode and visible (or opt-revealing).
 - (BOOL)squareShown;

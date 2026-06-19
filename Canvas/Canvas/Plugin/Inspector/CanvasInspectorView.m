@@ -296,12 +296,9 @@
   // Position OSC (same process) reads this layer. Its lanes carry layerKey, so
   // an OSC drag knows which layer's animationJSON to write. (drawOSC can't read
   // the param - FxParameterRetrievalAPI is nil there - so the snapshot is its
-  // only source.) For a GROUP, re-anchor Position onto its content centre so the
-  // gizmo sits on the group, not the clip centre (the OSC un-shifts on write).
-  NSArray<KKBezierPath *> *paths = [_layerListController currentLayerPaths];
-  KKBezierPath *sel = CanvasSelectedLayerForPaths(paths, _selectedLayerID);
-  KKSetProcessTimelineSnapshot(
-      CanvasShiftGroupOSCPosition(timeline, sel, paths));
+  // only source.) Groups publish like layers: their pivot lives in the stored
+  // Anchor lane now, so no Position re-anchor shift is needed.
+  KKSetProcessTimelineSnapshot(timeline);
 }
 
 // Track a live keypose drag so reloadLayerList knows the per-frame write echoes
@@ -352,9 +349,7 @@
   // keypose times); it doesn't reset any inspector-side popover/mini edit. The
   // gated applyTimeline below also sets it, but is skipped on a value-only
   // change during a drag - which is exactly when the snapshot went stale.
-  // (Group: re-anchor Position onto its content centre, like applyTimeline.)
-  KKSetProcessTimelineSnapshot(
-      CanvasShiftGroupOSCPosition(layerTL, sel, paths));
+  KKSetProcessTimelineSnapshot(layerTL);
   // Always rebuild the all-layers graph (any layer may have gained/lost an
   // animated lane).
   [self _feedGraph];

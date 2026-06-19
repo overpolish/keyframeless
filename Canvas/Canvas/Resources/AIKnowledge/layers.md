@@ -110,9 +110,11 @@ indented by their depth.
   group's transform applies on top of each member's own transform as a rigid 3D
   composition, so moving / scaling / rotating / tilting / fading a group does the
   same to everything inside it as a unit - each member keeps its own rotation and
-  the whole group rotates around the group's centre. Scale and rotation pivot
-  about the centre of the group's contents by default, and the group's own
-  **Anchor** point moves that pivot just like it does for a single layer; nested
+  the whole group rotates around the group's pivot. That pivot is the group's own
+  **Anchor** point, set to the centre of the group's contents when the group is
+  created and stored there - so moving a member around inside the group doesn't
+  drift the pivot or shift the other members. Drag the group's anchor square (or
+  keypose its Anchor lane) to move the pivot, just like a single layer; nested
   groups compose (a child group's transform stacks under its parent's). Selecting
   a group on the canvas shows its Position handle, scale box, rotation rings, and
   anchor square just like a single layer.

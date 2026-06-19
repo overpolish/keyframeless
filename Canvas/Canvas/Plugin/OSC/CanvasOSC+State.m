@@ -158,12 +158,7 @@
   KKBezierPath *layer = CanvasSelectedLayerForPaths(paths, layerID);
   if (!layer)
     return;
-  // The control edited in the published (shifted) space for a group; un-shift
-  // Position back to the canvas-relative offset before storing, so the blob +
-  // Constants/keypose popovers keep the 0.5 = no-move convention. No-op for a
-  // non-group.
-  KKTimeline *storeTL = CanvasUnshiftGroupOSCPosition(tl, layer, paths);
-  CanvasApplyTimelineToPath(storeTL, layer);
+  CanvasApplyTimelineToPath(tl, layer);
   NSData *blob = [KKBezierPath blobFromPaths:paths];
   NSString *newB64 = [blob base64EncodedStringWithOptions:0];
   KKWriteCustomParamString(setAPI, newB64, kParamLayerData);

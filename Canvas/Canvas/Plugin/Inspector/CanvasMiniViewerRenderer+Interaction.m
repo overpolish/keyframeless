@@ -161,14 +161,16 @@
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     handleHitAtPoint:(CGPoint)p
          contentRect:(CGRect)cr {
-  // Anchor pivot square is topmost (mirrors the viewer) so it is always
-  // grabbable; the larger Position handle around it stays clickable.
+  // Anchor square is topmost so its TIGHT central grab zone (hitRadiusPt = 3)
+  // wins, but the larger Position handle around it stays clickable - so clicking
+  // the centre square grabs the anchor while the Position arc/ring grabs Position.
+  // The anchor is also grabbable wherever it's offset (e.g. a group, whose pivot
+  // is its content centre).
   self.canvas = canvas;
   if ([self.anchorMini squareHitAtPoint:p contentRect:cr])
     return YES;
   // The active keypose's Position handle wins where it coincides with a path
-  // anchor/tangent (handles sit offset from the anchor, so they stay
-  // grabbable).
+  // anchor/tangent (handles sit offset from the anchor, so they stay grabbable).
   if ([self pointHandleHitAtPoint:p contentRect:cr])
     return YES;
   if ([self.positionMini pathHandleHitAtPoint:p contentRect:cr])
@@ -183,7 +185,7 @@
 - (void)miniViewer:(KKMiniViewerView *)canvas
     beginHandleDragAtPoint:(CGPoint)p
                contentRect:(CGRect)cr {
-  // Anchor square grabs first (topmost, matches the hit-test priority).
+  // Anchor square grabs first (tight central zone, matches the hit-test priority).
   self.canvas = canvas;
   if ([self.anchorMini beginDragAtPoint:p contentRect:cr])
     return;
@@ -267,7 +269,7 @@
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     optClickHandleAtPoint:(CGPoint)p
               contentRect:(CGRect)cr {
-  // Anchor square is topmost, so it claims the opt-click first.
+  // Anchor square (tight central zone) claims the opt-click first.
   self.canvas = canvas;
   if (self.onHandleVisibilityToggled &&
       [self.anchorMini squareHitAtPoint:p contentRect:cr]) {

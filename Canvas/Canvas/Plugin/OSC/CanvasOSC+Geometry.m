@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "CanvasLayerRender.h" // CanvasComposedGroupRotation
+#import "CanvasLayerRender.h" // CanvasComposedGroupPointObj / GroupRotation
 #import "CanvasOSC_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <simd/simd.h>
@@ -46,35 +46,61 @@
     }
 }
 
+// Composed object point (FCP OBJECT Y-down) of a member-local clip point: apply
+// the ancestor groups (render space is Y-up, so flip Y across the boundary).
+- (CGPoint)_composedObjForObjX:(double)ox
+                             y:(double)oy
+                        member:(KKBezierPath *)sel
+                         paths:(NSArray<KKBezierPath *> *)paths
+                          frac:(double)frac
+                        aspect:(float)aspect {
+  float gx = (float)ox, gy = (float)(1.0 - oy);
+  CanvasComposedGroupPointObj(paths, sel, frac, aspect, (float)ox,
+                              (float)(1.0 - oy), &gx, &gy);
+  return CGPointMake(gx, 1.0 - gy);
+}
+
 - (void)_applyGroupComposeOffsetAtTime:(CMTime)time {
+  KKBezierPath *sel = [self _selectedLayer];
+  NSArray<KKBezierPath *> *paths = [self _snapshotPaths];
   double frac = [self fractionAtTime:time];
+  float aspect = (float)[self _canvasAspect];
 
-  // Position + Anchor OSCs stay 2D (member-local): they sit at the layer's own
-  // clip position, NOT where a TRANSFORMED group renders the member. Following
-  // a group's full 3D transform isn't drag-invertible in a 2D viewer - the group
-  // pivots on its content-bbox centre, which the dragged value itself moves, so
-  // any compensating transform feeds back (diverged to 100000s px) and a frozen
-  // one makes the OSC jump on release. We accept the limitation: there's no way
-  // to move around in 3D space in the viewer anyway. (The kit
-  // `parentObjectTransform` hook stays for a future pen-tool path UI.)
-  self.position.parentObjectTransform = matrix_identity_float3x3;
-  self.anchor.parentObjectTransform = matrix_identity_float3x3;
+  // Object-space affine mapping a member-local clip-object point through its
+  // ancestor groups (identity for an ungrouped layer / group selection), so the
+  // member's OSCs draw where the TRANSFORMED group actually renders the member.
+  // Sampled at 3 points (f00, f10, f01). Computed LIVE every tick: it depends
+  // only on the groups' stored transforms + stored Anchor pivots, NEVER on the
+  // member value being dragged - the group pivot is the stored Anchor lane now,
+  // not the live content centre - so there's no feedback (the old content-centre
+  // pivot fed back and forced a freeze hack that made the OSC jump on release).
+  CGPoint f00 = [self _composedObjForObjX:0 y:0 member:sel paths:paths frac:frac aspect:aspect];
+  CGPoint f10 = [self _composedObjForObjX:1 y:0 member:sel paths:paths frac:frac aspect:aspect];
+  CGPoint f01 = [self _composedObjForObjX:0 y:1 member:sel paths:paths frac:frac aspect:aspect];
+  simd_float3x3 A = simd_matrix(
+      simd_make_float3((float)(f10.x - f00.x), (float)(f10.y - f00.y), 0.0f),
+      simd_make_float3((float)(f01.x - f00.x), (float)(f01.y - f00.y), 0.0f),
+      simd_make_float3((float)f00.x, (float)f00.y, 1.0f));
+  // The controls stay axis-aligned (flat); only their drawn position shifts
+  // through A (drag inverts A back to the member's own value).
+  self.position.parentObjectTransform = A;
+  self.anchor.parentObjectTransform = A;
 
-  // Rotation rings DO tilt with the ancestor groups' rotation so the layer-level
-  // gizmo drags along the visually-rotated axes (acts as expected after the group
-  // is spun). This is safe where the affine wasn't: baseRotation depends only on
-  // the group's rotation, never on the member value being dragged, so no feedback
-  // and no jump. The written rotation stays member-local (the group factors out).
-  self.rotation.baseRotation = CanvasComposedGroupRotation(
-      [self _snapshotPaths], [self _selectedLayer], frac);
+  // Rotation rings additionally tilt with the group's rotation (member-local
+  // drag - the group factors out).
+  self.rotation.baseRotation = CanvasComposedGroupRotation(paths, sel, frac);
 
-  // The gizmo cluster (rings + scale box) still centres on the ANCHOR pivot
-  // (AE-standard), computed member-local: Position + Anchor offset.
+  // The gizmo cluster (rings + scale box) centres on the composed ANCHOR pivot
+  // (AE-standard): (Position + Anchor offset) run through A.
   double posX, posY, ax, ay;
   [self _snapshotValuesForLabel:@"Position" frac:frac outX:&posX outY:&posY default:0.5];
   [self _snapshotValuesForLabel:@"Anchor" frac:frac outX:&ax outY:&ay default:0.5];
-  self.gizmoPivotCanvas =
-      [self _rawCanvasFromObjX:(posX + ax - 0.5) y:(posY + ay - 0.5)];
+  simd_float3 piv =
+      simd_mul(A, simd_make_float3((float)(posX + ax - 0.5),
+                                   (float)(posY + ay - 0.5), 1.0f));
+  double pivX = (piv.z != 0.0f) ? piv.x / piv.z : piv.x;
+  double pivY = (piv.z != 0.0f) ? piv.y / piv.z : piv.y;
+  self.gizmoPivotCanvas = [self _rawCanvasFromObjX:pivX y:pivY];
 }
 
 // The canvas-pixel lengths of the object-space unit axes: maps OBJECT (0,0),

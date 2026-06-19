@@ -31,23 +31,15 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *_Nullable path,
 void CanvasApplyTimelineToPath(KKTimeline *timeline,
                                KKBezierPath *_Nullable path);
 
-/// Re-anchors a GROUP's Position lane onto its content centre for the viewer
-/// OSC. The OSC draws the Position handle (and the scale/rotation gizmo that
-/// centres on it) at the raw lane value in object space, where 0.5,0.5 = clip
-/// centre - but a group's content sits at its bbox centre. So before publishing
-/// a group's timeline to the OSC snapshot, shift its Position keyposes by the
-/// bbox-centre offset; reverse it with CanvasUnshiftGroupOSCPosition before the
-/// OSC's edit persists, so the STORED Position stays the canvas-relative offset
-/// (0.5 = no move) that the render + Constants/keypose popovers use. Returns the
-/// input unchanged for a non-group / unmeasurable group (and preserves each
-/// keypose's spatial-curve state). `paths` is the current layer stack (for the
-/// group's member rects).
-KKTimeline *CanvasShiftGroupOSCPosition(KKTimeline *layerTL,
-                                        KKBezierPath *_Nullable layer,
-                                        NSArray<KKBezierPath *> *paths);
-KKTimeline *CanvasUnshiftGroupOSCPosition(KKTimeline *tl,
-                                          KKBezierPath *_Nullable layer,
-                                          NSArray<KKBezierPath *> *paths);
+/// Seeds a freshly-created GROUP's Anchor lane to its content-bbox centre, so the
+/// group's scale/rotation pivot starts where the members sit (matching the old
+/// derived-pivot behaviour) but is now STORED - moving a member no longer drags
+/// the pivot and swings its siblings. No-op for a non-group / unmeasurable group.
+/// `paths` is the layer stack (with the group's members already reparented);
+/// `templates` is CanvasPlugin.availableLanes.
+void CanvasSeedGroupAnchor(KKBezierPath *_Nullable group,
+                           NSArray<KKBezierPath *> *paths,
+                           NSArray<KKLane *> *templates);
 
 /// The all-layers GRAPH timeline: every layer's ANIMATED (enabled) lanes across
 /// the whole stack, each tagged label "<short>\x1f<layerID>" + layerKey +

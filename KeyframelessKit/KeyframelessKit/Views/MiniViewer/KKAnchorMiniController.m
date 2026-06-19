@@ -24,6 +24,7 @@
     _laneLabel = [laneLabel copy];
     _positionLaneLabel = [positionLaneLabel copy];
     _snap = snapEngine;
+    _hitRadiusPt = 5.0;
   }
   return self;
 }
@@ -86,7 +87,7 @@
   // the viewer. Scales with the popover (canvas H / 230).
   CGFloat h = self.renderer.canvas.bounds.size.height;
   CGFloat scale = h > 0 ? h / 230.0 : 1.0;
-  CGFloat r = 5.0 * scale;
+  CGFloat r = self.hitRadiusPt * scale;
   return fmax(fabs(p.x - c.x), fabs(p.y - c.y)) < r;
 }
 

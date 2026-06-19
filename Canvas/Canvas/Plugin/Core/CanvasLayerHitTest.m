@@ -172,6 +172,42 @@ static BOOL CanvasLayerEditableAtFraction(KKBezierPath *path, double frac,
   return NO;
 }
 
+BOOL CanvasComposedGroupPointObj(NSArray<KKBezierPath *> *layers,
+                                 KKBezierPath *member, double frac, float aspect,
+                                 float inX, float inY, float *outX, float *outY) {
+  if (outX)
+    *outX = inX;
+  if (outY)
+    *outY = inY;
+  if (!member || member.isGroup)
+    return YES;
+  NSUInteger idx = [layers indexOfObjectIdenticalTo:member];
+  if (idx == NSNotFound)
+    for (NSUInteger i = 0; i < layers.count; i++)
+      if (layers[i].layerID.length &&
+          [layers[i].layerID isEqualToString:member.layerID]) {
+        idx = i;
+        break;
+      }
+  if (idx == NSNotFound)
+    return YES;
+  CanvasGroupXform groups[kCanvasGroupXformCap];
+  NSInteger ng = CanvasBuildGroupXforms(layers, idx, frac, nil, nil, groups,
+                                        kCanvasGroupXformCap);
+  if (ng == 0)
+    return YES;
+  // Identity member transform centred on the point: the member model becomes a
+  // no-op, so the point (already in clip space) is transformed by the groups
+  // alone, through the same perspective the render applies.
+  simd_float2 c = CanvasProjectedCornerObj(
+      inX, inY, CanvasLayerTransformIdentity(), inX, inY, aspect, groups, ng);
+  if (outX)
+    *outX = c.x;
+  if (outY)
+    *outY = c.y;
+  return YES;
+}
+
 KKRotMatrix3 CanvasComposedGroupRotation(NSArray<KKBezierPath *> *layers,
                                          KKBezierPath *member, double frac) {
   KKRotMatrix3 base = KKRotMatrixIdentity();

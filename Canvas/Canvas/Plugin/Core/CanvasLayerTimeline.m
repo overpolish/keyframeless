@@ -30,61 +30,6 @@ void CanvasSetUIStateSnapshot(NSString *json) {
 
 NSString *CanvasUIStateSnapshot(void) { return sCanvasUIStateSnapshot; }
 
-// Shared body for shift/unshift: copies `layerTL` and offsets every Position
-// keypose's [x,y] by `sign` * the group's content-centre offset. The offset is
-// (cx-0.5, 0.5-cy) where (cx,cy) is the content bbox centre (Y-up): in the OSC's
-// Y-DOWN object space the content centre lands at (cx, 1-cy), so a default lane
-// 0.5,0.5 must move by (cx-0.5, (1-cy)-0.5). Keypose copies preserve the
-// spatial-curve state (handles are anchor-relative, so a constant value shift
-// leaves them valid). Returns `layerTL` unchanged when there's nothing to do.
-static KKTimeline *CanvasShiftGroupPosition(KKTimeline *layerTL,
-                                            KKBezierPath *layer,
-                                            NSArray<KKBezierPath *> *paths,
-                                            double sign) {
-  if (!layerTL)
-    return layerTL;
-  double dx0 = 0, dy0 = 0;
-  if (!CanvasGroupPositionOffset(paths, layer, &dx0, &dy0))
-    return layerTL;
-  double dx = sign * dx0, dy = sign * dy0;
-  if (fabs(dx) < 1e-9 && fabs(dy) < 1e-9)
-    return layerTL;
-  KKTimeline *out = [layerTL copy];
-  NSMutableArray<KKLane *> *lanes = [out.lanes mutableCopy];
-  for (NSUInteger i = 0; i < lanes.count; i++) {
-    KKLane *l = lanes[i];
-    if (![l.label isEqualToString:@"Position"])
-      continue;
-    KKLane *nl = [l copy];
-    NSMutableArray<KKKeyPose *> *kps =
-        [NSMutableArray arrayWithCapacity:l.keyposes.count];
-    for (KKKeyPose *kp in l.keyposes) {
-      KKKeyPose *nk = [kp copy];
-      if (kp.values.count >= 2) {
-        NSMutableArray<NSNumber *> *v = [kp.values mutableCopy];
-        v[0] = @(kp.values[0].doubleValue + dx);
-        v[1] = @(kp.values[1].doubleValue + dy);
-        nk.values = v;
-      }
-      [kps addObject:nk];
-    }
-    nl.keyposes = kps;
-    lanes[i] = nl;
-  }
-  out.lanes = lanes;
-  return out;
-}
-
-KKTimeline *CanvasShiftGroupOSCPosition(KKTimeline *layerTL, KKBezierPath *layer,
-                                        NSArray<KKBezierPath *> *paths) {
-  return CanvasShiftGroupPosition(layerTL, layer, paths, 1.0);
-}
-
-KKTimeline *CanvasUnshiftGroupOSCPosition(KKTimeline *tl, KKBezierPath *layer,
-                                          NSArray<KKBezierPath *> *paths) {
-  return CanvasShiftGroupPosition(tl, layer, paths, -1.0);
-}
-
 KKBezierPath *CanvasSelectedLayerForPaths(NSArray<KKBezierPath *> *paths,
                                           NSString *selectedLayerID) {
   // Groups animate too (their own explicit transform; no propagation), so they
@@ -161,6 +106,27 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
   tl.lanes = lanes;
   tl.paramOrder = order;
   return tl;
+}
+
+void CanvasSeedGroupAnchor(KKBezierPath *group, NSArray<KKBezierPath *> *paths,
+                           NSArray<KKLane *> *templates) {
+  if (!group.isGroup)
+    return;
+  float cx = 0.5f, cy = 0.5f;
+  if (!CanvasGroupContentCenterObj(paths, group, &cx, &cy))
+    return; // no measurable content: leave the anchor at the clip centre
+  // Pivot = clip centre + Anchor offset. Seed the Anchor (Y-down) so the pivot
+  // lands on the content centre (Y-up cy -> 1-cy), matching where the group used
+  // to pivot - but STORED, so moving a member no longer drags the pivot.
+  KKTimeline *tl = CanvasLayerTimelineForPath(group, templates);
+  for (KKLane *l in tl.lanes) {
+    if (![l.label isEqualToString:@"Anchor"])
+      continue;
+    l.keyposes =
+        @[ [KKKeyPose keyposeAtTime:0.0 values:@[ @(cx), @(1.0 - cy) ]] ];
+    break;
+  }
+  CanvasApplyTimelineToPath(tl, group);
 }
 
 void CanvasApplyTimelineToPath(KKTimeline *timeline, KKBezierPath *path) {

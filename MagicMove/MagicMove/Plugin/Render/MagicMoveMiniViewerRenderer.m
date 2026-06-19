@@ -45,6 +45,10 @@ NSString *MagicMoveMiniViewerRequestPathForUUID(NSString *uuid) {
                laneLabel:@"Anchor"
        positionLaneLabel:@"Position"
               snapEngine:_positionMini.snapEngine];
+    // The anchor pivot sits dead-centre on the Position arc at a default anchor,
+    // so keep its grab zone tight - the larger Position handle around it stays
+    // clickable, the small centre square still grabs the anchor.
+    _anchorMini.hitRadiusPt = 3.0;
   }
   return self;
 }

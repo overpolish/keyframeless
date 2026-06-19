@@ -9,7 +9,9 @@
 
 #import "CanvasLayerListView_Private.h"
 
+#import "CanvasLayerTimeline.h"
 #import "CanvasLayerTree.h"
+#import "Plugin_Private.h"
 
 #import <KeyframelessKit/KKBezierPath.h>
 
@@ -287,6 +289,10 @@
     [paths insertObject:group atIndex:insertAt];
     for (NSUInteger i = 0; i < members.count; i++)
       [paths insertObject:members[i] atIndex:insertAt + 1 + i];
+
+    // Pin the group's pivot to its members' centre at creation (stored, so it
+    // won't drift as members move). Members are reparented + in `paths` now.
+    CanvasSeedGroupAnchor(group, paths, [CanvasPlugin availableLanes]);
 
     [self->_selection removeAllIndexes];
     [self->_selection addIndex:insertAt];

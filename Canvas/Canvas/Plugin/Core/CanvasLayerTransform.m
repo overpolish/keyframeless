@@ -209,19 +209,6 @@ BOOL CanvasGroupContentCenterObj(NSArray<KKBezierPath *> *layers,
   return YES;
 }
 
-BOOL CanvasGroupPositionOffset(NSArray<KKBezierPath *> *layers,
-                               KKBezierPath *group, double *outDX,
-                               double *outDY) {
-  float cx = 0.5f, cy = 0.5f;
-  if (!group.isGroup || !CanvasGroupContentCenterObj(layers, group, &cx, &cy))
-    return NO;
-  if (outDX)
-    *outDX = cx - 0.5; // X agrees; Y flips (Position is Y-down)
-  if (outDY)
-    *outDY = 0.5 - cy;
-  return YES;
-}
-
 NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers,
                                  NSUInteger idx, double frac,
                                  NSString *overrideLayerID,
@@ -240,18 +227,18 @@ NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers,
                             *stop = YES;
                             return;
                           }
-                          simd_float2 gmin, gmax;
-                          float gcx = 0.5f, gcy = 0.5f;
-                          if (CanvasGroupContentBoundsObj(layers, gi, &gmin,
-                                                          &gmax)) {
-                            gcx = (gmin.x + gmax.x) * 0.5f;
-                            gcy = (gmin.y + gmax.y) * 0.5f;
-                          }
                           out[n].t = CanvasGroupTransformAtFraction(
                               layers[gi], frac, overrideLayerID,
                               overrideTimeline);
-                          out[n].cx = gcx;
-                          out[n].cy = gcy;
+                          // Pivot base = the clip centre; the group's STORED
+                          // Anchor lane (out[n].t.anchorX/Y) carries the real
+                          // pivot. Was the live content-bbox centre, which moved
+                          // whenever a member moved - so the group's scale /
+                          // rotation swung every sibling. The anchor is seeded to
+                          // the content centre at creation (CanvasSeedGroupAnchor)
+                          // so this is visually identical but now stable.
+                          out[n].cx = 0.5f;
+                          out[n].cy = 0.5f;
                           n++;
                         }];
   return n;

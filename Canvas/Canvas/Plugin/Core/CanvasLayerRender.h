@@ -105,6 +105,18 @@ NSString *_Nullable CanvasHitTestLayerID(
     float objY, BOOL alphaAware, NSSet<NSString *> *_Nullable excludedLayerIDs,
     BOOL requireEditableAtFrac, NSArray<KKLane *> *_Nullable templates);
 
+/// Apply a member's ANCESTOR-GROUP transforms (only) to an object point already
+/// in the member's output / clip object space (Y-up, [0,1]) - the same group
+/// composition + perspective the render uses. Returns the transformed point
+/// (unchanged for an ungrouped layer / group). Lets a member's OSC draw at the
+/// group-composed location of its actual point (move handle, anchor pivot). Safe
+/// to call live now that a group pivots on its STORED Anchor, not the member-
+/// dependent content centre - so it no longer feeds back during a member drag.
+BOOL CanvasComposedGroupPointObj(NSArray<KKBezierPath *> *layers,
+                                 KKBezierPath *_Nullable member, double frac,
+                                 float aspect, float inX, float inY,
+                                 float *_Nullable outX, float *_Nullable outY);
+
 /// The accumulated rotation of a member's ancestor groups (outermost · … ·
 /// innermost), in the SAME Ry·Rx·Rz order the render composes - identity for an
 /// ungrouped layer or a group. Feeds a member's rotation gizmo `baseRotation` so
@@ -116,19 +128,10 @@ KKRotMatrix3 CanvasComposedGroupRotation(NSArray<KKBezierPath *> *layers,
 
 /// The group's content centre in object space (Y-up) = the centre of the union
 /// of its descendant image rects (rest shape, ignoring animation). NO for a
-/// non-group or a group with no rect-shaped image descendants. Used to
-/// re-anchor a group's Position OSC onto its content instead of the clip centre.
+/// non-group or a group with no rect-shaped image descendants. Used to seed a
+/// new group's stored Anchor pivot (CanvasSeedGroupAnchor) onto its content.
 BOOL CanvasGroupContentCenterObj(NSArray<KKBezierPath *> *layers,
                                  KKBezierPath *group, float *_Nullable outCx,
                                  float *_Nullable outCy);
-
-/// The object-space Position offset that re-anchors a group's OSC / mini gizmo
-/// onto its content centre: `(cx-0.5, 0.5-cy)` for the content bbox centre
-/// (cx,cy). Position is canvas-relative (0.5,0.5 = clip centre) so the viewer OSC
-/// (CanvasShiftGroupOSCPosition) and the mini gizmo apply this same shift on read
-/// and reverse it on write. NO for a non-group / unmeasurable group.
-BOOL CanvasGroupPositionOffset(NSArray<KKBezierPath *> *layers,
-                               KKBezierPath *_Nullable group,
-                               double *_Nullable outDX, double *_Nullable outDY);
 
 NS_ASSUME_NONNULL_END
