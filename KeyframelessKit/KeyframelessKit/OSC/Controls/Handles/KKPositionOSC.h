@@ -8,6 +8,7 @@
 #import <KeyframelessKit/KKArcOSC.h>
 #import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKSnapEngine.h>
+#import <simd/simd.h>
 
 @class KKLane;
 @class KKTimeline;
@@ -70,6 +71,15 @@ typedef NS_ENUM(NSInteger, KKPositionHit) {
 /// The host mirrors its FxPlug `isDragging` here each draw tick (the controller
 /// doesn't receive FCP's mouse bookkeeping directly).
 @property(nonatomic) BOOL dragging;
+
+/// A 2D affine in OBJECT space (homogeneous 3x3) mapping the control's own lane
+/// space to an enclosing parent's space - e.g. a Canvas member's clip space to
+/// where its rotated/scaled/translated group actually draws it. Applied forward
+/// to every drawn point (object -> parent -> canvas) and INVERTED on input
+/// (canvas -> parent -> object), so the handle draws where the layer is rendered
+/// AND a drag maps the cursor back through the parent (reacting to the parent's
+/// rotation) instead of skewing or feeding back. Default identity.
+@property(nonatomic) simd_float3x3 parentObjectTransform;
 
 /// nil = no guide.
 @property(nonatomic, weak, nullable) id<KKPositionGuideProvider> guideProvider;

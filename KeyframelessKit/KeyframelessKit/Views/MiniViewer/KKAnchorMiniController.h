@@ -49,6 +49,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// YES while the square is being dragged.
 @property(nonatomic, readonly) BOOL isDragging;
 
+/// Optional override for the square's overlay-point centre (e.g. a Canvas member
+/// inside a transformed group, where the pivot is the group-composed point).
+/// When set, it replaces the default content-space pivot for both drawing and
+/// hit-testing; the drag still writes the lane value in content space (flat).
+@property(nonatomic, copy, nullable) CGPoint (^centerOverride)(CGRect contentRect);
+
 /// Whether the square is shown this tick: the Anchor lane is a constant in the
 /// current popover mode and visible (or opt-revealing).
 - (BOOL)squareShown;

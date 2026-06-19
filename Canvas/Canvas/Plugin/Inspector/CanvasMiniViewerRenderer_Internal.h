@@ -24,6 +24,9 @@ NS_ASSUME_NONNULL_BEGIN
 // across the Interaction category.
 - (CGPoint)_handlePointForContentRect:(CGRect)cr
                              position:(NSArray<NSNumber *> *)pos;
+// Member-local ANCHOR pivot (Position + Anchor) in overlay points - the centre
+// the rotation rings / scale box / anchor square share.
+- (CGPoint)_anchorPivotForContentRect:(CGRect)cr;
 @end
 
 @interface CanvasMiniViewerRenderer (Interaction)

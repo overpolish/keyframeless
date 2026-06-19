@@ -62,8 +62,18 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
     _colorY = [NSColor colorWithRed:0.35 green:0.85 blue:0.40 alpha:1.0];
     _colorZ = [NSColor colorWithRed:0.40 green:0.55 blue:1.0 alpha:1.0];
     _outlineColor = [NSColor colorWithRed:0.0 green:0.0 blue:0.0 alpha:0.75];
+    _baseRotation = KKRotMatrixIdentity();
   }
   return self;
+}
+
+// The displayed pose = parent/group rotation · the object's own Euler. Used for
+// drawing the rings, hit-testing them, and capturing the screen-space drag
+// tangent, so a nested object's rings show + drag in the parent's frame. The
+// written value stays the object's own Euler (the parent factors out).
+- (KKRotMatrix3)_displayMatrix {
+  return KKRotMatrixMul(_baseRotation,
+                        KKBuildRotationMatrix(_rotX, _rotY, _rotZ));
 }
 
 - (NSString *)pipelinePluginID {
@@ -83,7 +93,7 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
 - (BOOL)hitTestAtMousePositionX:(double)positionX
                       positionY:(double)positionY
                          atTime:(CMTime)time {
-  KKRotMatrix3 m = KKBuildRotationMatrix(_rotX, _rotY, _rotZ);
+  KKRotMatrix3 m = [self _displayMatrix];
   // Hit-test in Y-DOWN screen space so it agrees with both the shader's
   // textureCoordinate.y and the renderer's internal screen convention. The
   // canvas itself is Y-UP (positionY increases upward), so negate Y when
@@ -146,7 +156,7 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
   _pressRotZ = _rotZ;
   if (_activeAxis < 0)
     return;
-  KKRotMatrix3 m = KKBuildRotationMatrix(_rotX, _rotY, _rotZ);
+  KKRotMatrix3 m = [self _displayMatrix];
   simd_float3 U, V;
   KKRingBasis(m, (int)_activeAxis, &U, &V);
   double t = _pressAngle;
@@ -190,7 +200,7 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
 
   float quadHalf = _radius + _ringHalfWidth + _outlineWidth + 2.0f;
 
-  KKRotMatrix3 m = KKBuildRotationMatrix(_rotX, _rotY, _rotZ);
+  KKRotMatrix3 m = [self _displayMatrix];
 
   KKRotationOSCParams params = {
       .rotCol0 = m.col0,

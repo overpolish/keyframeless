@@ -56,6 +56,12 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
                laneLabel:@"Anchor"
        positionLaneLabel:@"Position"
               snapEngine:_positionMini.snapEngine];
+    // Keep the anchor square on the same member-local pivot the rings/box use, so
+    // the gizmo cluster stays coincident.
+    __weak CanvasMiniViewerRenderer *weakSelf = self;
+    _anchorMini.centerOverride = ^CGPoint(CGRect cr) {
+      return [weakSelf _anchorPivotForContentRect:cr];
+    };
   }
   return self;
 }
@@ -125,11 +131,32 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
                canvas:canvas];
 }
 
-// The rotation rings (and scale box) are concentric with the layer's Position
-// handle (so they follow the layer as it moves), not the content-rect centre.
+// The member-local ANCHOR pivot (where the layer rotates / scales) in overlay
+// points: Position + Anchor offset. 2D / member-local to match the viewer - the
+// mini is clip-space (it renders the member ungrouped), so following the group's
+// full transform here would put the gizmo where nothing is drawn. The rings still
+// TILT with the group rotation (see rotationBaseMatrix).
+- (CGPoint)_anchorPivotForContentRect:(CGRect)cr {
+  NSArray<NSNumber *> *pos = [self valuesForLabel:@"Position"];
+  NSArray<NSNumber *> *anc = [self valuesForLabel:@"Anchor"];
+  double px = pos.count > 0 ? pos[0].doubleValue : 0.5;
+  double py = pos.count > 1 ? pos[1].doubleValue : 0.5;
+  double ax = anc.count > 0 ? anc[0].doubleValue : 0.5;
+  double ay = anc.count > 1 ? anc[1].doubleValue : 0.5;
+  double pivX = px + ax - 0.5, pivY = py + ay - 0.5; // Position space (Y-down)
+  return [self _handlePointForContentRect:cr position:@[ @(pivX), @(pivY) ]];
+}
+
+// The rotation rings (and scale box) centre on the member-local anchor pivot.
 - (CGPoint)rotationCenterForContentRect:(CGRect)cr {
-  return [self _handlePointForContentRect:cr
-                                 position:[self valuesForLabel:@"Position"]];
+  return [self _anchorPivotForContentRect:cr];
+}
+
+// Rings tilt with the ancestor groups' rotation (drag stays member-local).
+- (KKRotMatrix3)rotationBaseMatrix {
+  KKBezierPath *sel =
+      CanvasSelectedLayerForPaths(self.layers, self.selectedLayerID);
+  return CanvasComposedGroupRotation(self.layers, sel, self.editFraction);
 }
 
 - (KKLane *)templateLaneForLabel:(NSString *)label {

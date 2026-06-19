@@ -172,6 +172,34 @@ static BOOL CanvasLayerEditableAtFraction(KKBezierPath *path, double frac,
   return NO;
 }
 
+KKRotMatrix3 CanvasComposedGroupRotation(NSArray<KKBezierPath *> *layers,
+                                         KKBezierPath *member, double frac) {
+  KKRotMatrix3 base = KKRotMatrixIdentity();
+  if (!member || member.isGroup)
+    return base;
+  NSUInteger idx = [layers indexOfObjectIdenticalTo:member];
+  if (idx == NSNotFound)
+    for (NSUInteger i = 0; i < layers.count; i++)
+      if (layers[i].layerID.length &&
+          [layers[i].layerID isEqualToString:member.layerID]) {
+        idx = i;
+        break;
+      }
+  if (idx == NSNotFound)
+    return base;
+  CanvasGroupXform groups[kCanvasGroupXformCap];
+  NSInteger ng = CanvasBuildGroupXforms(layers, idx, frac, nil, nil, groups,
+                                        kCanvasGroupXformCap);
+  // groups[0] is the innermost parent; compose Rk · base each step so the
+  // outermost ends up leftmost (matching the render's group·member order).
+  for (NSInteger k = 0; k < ng; k++) {
+    KKRotMatrix3 Rk = KKBuildRotationMatrix(groups[k].t.rotX, groups[k].t.rotY,
+                                            groups[k].t.rotation);
+    base = KKRotMatrixMul(Rk, base);
+  }
+  return base;
+}
+
 NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
                                float aspect, float objX, float objY,
                                BOOL alphaAware,

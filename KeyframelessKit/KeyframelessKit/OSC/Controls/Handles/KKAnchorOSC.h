@@ -7,6 +7,7 @@
 
 #import <KeyframelessKit/KKOnScreenControl.h>
 #import <KeyframelessKit/KKSquarePointOSC.h>
+#import <simd/simd.h>
 
 @class KKLane;
 @class KKTimeline;
@@ -77,6 +78,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// control's open action scope.
 @property(nonatomic, copy, nullable) void (^onTimelinePersist)
     (KKTimeline *timeline);
+
+/// A 2D affine in OBJECT space (homogeneous 3x3) mapping the anchor's own clip
+/// space to an enclosing parent's space (e.g. a Canvas member's group). Applied
+/// forward to the default pivot before mapping to canvas, and INVERTED on a drag,
+/// so the square draws where the layer is rendered and dragging reacts to the
+/// parent's rotation/scale instead of skewing or feeding back. Ignored when the
+/// `anchorToCanvas` / `canvasToAnchor` blocks are set. Default identity.
+@property(nonatomic) simd_float3x3 parentObjectTransform;
 
 /// The owned square (exposed so the host can tune size / hit radius).
 @property(nonatomic, readonly) KKSquarePointOSC *square;

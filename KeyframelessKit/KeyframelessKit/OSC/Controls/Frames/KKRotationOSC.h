@@ -7,6 +7,7 @@
 
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKOnScreenControl.h>
+#import <KeyframelessKit/KKRotationOSCMath.h>
 
 @class KKLane;
 @class KKTimeline;
@@ -80,6 +81,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) float rotX;
 @property(nonatomic) float rotY;
 @property(nonatomic) float rotZ;
+
+/// A parent/world rotation pre-applied to the DISPLAYED pose (rings tilt + drag
+/// tangent), so a control on an object nested in a rotated parent (e.g. a Canvas
+/// member inside a rotated group) shows rings in the parent's frame. The drag
+/// still writes the object's OWN Euler (the parent factors out of the value), so
+/// this only affects display + which screen direction each ring drags along.
+/// Default identity.
+@property(nonatomic) KKRotMatrix3 baseRotation;
 
 /// Per-axis ring colors. Default red / green / blue.
 @property(nonatomic, strong) NSColor *colorX;

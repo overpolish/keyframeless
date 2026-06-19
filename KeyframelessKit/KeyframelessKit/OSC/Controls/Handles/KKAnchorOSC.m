@@ -38,6 +38,7 @@
     _square = [[KKSquarePointOSC alloc] initWithAPIManager:apiManager];
     _square.clearsOnDraw = NO;
     _snap = [[KKSnapEngine alloc] init];
+    _parentObjectTransform = matrix_identity_float3x3;
   }
   return self;
 }
@@ -86,8 +87,13 @@
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   NSArray<NSNumber *> *pv = [self _positionValuesAtFraction:self.evalFraction];
-  double objX = pv[0].doubleValue + ax - 0.5;
-  double objY = pv[1].doubleValue + ay - 0.5;
+  // Pivot in the anchor's own clip space, then through the parent transform.
+  simd_float3 p = simd_mul(
+      self.parentObjectTransform,
+      simd_make_float3((float)(pv[0].doubleValue + ax - 0.5),
+                       (float)(pv[1].doubleValue + ay - 0.5), 1.0f));
+  double objX = (p.z != 0.0f) ? p.x / p.z : p.x;
+  double objY = (p.z != 0.0f) ? p.y / p.z : p.y;
   CGPoint c = CGPointZero;
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
                           fromX:objX
@@ -106,13 +112,19 @@
   }
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  double objX = 0.0, objY = 0.0;
+  double qx = 0.0, qy = 0.0;
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
                           fromX:p.x
                           fromY:p.y
                         toSpace:kFxDrawingCoordinates_OBJECT
-                            toX:&objX
-                            toY:&objY];
+                            toX:&qx
+                            toY:&qy];
+  // Map the cursor back through the parent transform into the anchor's own clip
+  // space, so a drag follows the cursor under a rotated/scaled parent.
+  simd_float3 l = simd_mul(simd_inverse(self.parentObjectTransform),
+                           simd_make_float3((float)qx, (float)qy, 1.0f));
+  double objX = (l.z != 0.0f) ? l.x / l.z : l.x;
+  double objY = (l.z != 0.0f) ? l.y / l.z : l.y;
   NSArray<NSNumber *> *pv = [self _positionValuesAtFraction:self.evalFraction];
   if (outAX)
     *outAX = objX - pv[0].doubleValue + 0.5;

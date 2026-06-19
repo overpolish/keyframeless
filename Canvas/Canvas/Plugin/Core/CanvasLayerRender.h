@@ -6,6 +6,7 @@
 #pragma once
 
 #import <Foundation/Foundation.h>
+#import <KeyframelessKit/KKRotationOSCMath.h>
 #import <Metal/Metal.h>
 
 @class KKBezierPath;
@@ -103,6 +104,15 @@ NSString *_Nullable CanvasHitTestLayerID(
     NSArray<KKBezierPath *> *layers, double frac, float aspect, float objX,
     float objY, BOOL alphaAware, NSSet<NSString *> *_Nullable excludedLayerIDs,
     BOOL requireEditableAtFrac, NSArray<KKLane *> *_Nullable templates);
+
+/// The accumulated rotation of a member's ancestor groups (outermost · … ·
+/// innermost), in the SAME Ry·Rx·Rz order the render composes - identity for an
+/// ungrouped layer or a group. Feeds a member's rotation gizmo `baseRotation` so
+/// its rings tilt with the group while the drag still writes the member's own
+/// Euler.
+KKRotMatrix3 CanvasComposedGroupRotation(NSArray<KKBezierPath *> *layers,
+                                         KKBezierPath *_Nullable member,
+                                         double frac);
 
 /// The group's content centre in object space (Y-up) = the centre of the union
 /// of its descendant image rects (rest shape, ignoring animation). NO for a

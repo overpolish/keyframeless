@@ -50,6 +50,7 @@
   // Locked SELECTED layer: its own handles aren't grabbable (and Opt can't peek
   // them back). Auto-select still runs below, so you can click a different layer
   // to switch away from a locked one.
+  [self _applyGroupComposeOffsetAtTime:time];
   if (![self _selectedLayerLocked]) {
     // Anchor pivot square is the topmost control: checked first so it stays
     // grabbable / opt-hideable even when it coincides with the Position handle.
@@ -143,6 +144,7 @@
                     modifiers:modifiers
                   forceUpdate:forceUpdate
                        atTime:time];
+  [self _applyGroupComposeOffsetAtTime:time];
   if (activePart == CanvasOSCPartScale) {
     [self _syncScaleControlAtTime:time];
     [self.scale mouseDownAtX:positionX
@@ -194,6 +196,7 @@
   // (so an opt-click doesn't half-drag).
   if ([self kkArmOptHideForActivePart:activePart modifiers:modifiers])
     return;
+  [self _applyGroupComposeOffsetAtTime:time];
   if (activePart == CanvasOSCPartScale) {
     [self _syncScaleControlAtTime:time];
     [self.scale mouseDraggedAtX:positionX

@@ -59,6 +59,11 @@
 - (BOOL)squareCenter:(out CGPoint *)outCenter forContentRect:(CGRect)cr {
   if (CGRectIsEmpty(cr) || ![self squareShown])
     return NO;
+  if (self.centerOverride) {
+    if (outCenter)
+      *outCenter = self.centerOverride(cr);
+    return YES;
+  }
   double px = 0.5, py = 0.5, ax = 0.5, ay = 0.5;
   [self _positionX:&px y:&py];
   [self _anchorX:&ax y:&ay];

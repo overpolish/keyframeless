@@ -43,6 +43,10 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 // Set while the hover hit-test forced a move/eye/hand cursor, so the next hover
 // can reset it to the arrow.
 @property(nonatomic) BOOL pointCursorSet;
+// Canvas-space centre the rotation rings + scale box sit on this tick: the
+// member-local ANCHOR pivot (where the layer rotates/scales from), recomputed by
+// -_applyGroupComposeOffsetAtTime: each draw / hit / mouse tick.
+@property(nonatomic) CGPoint gizmoPivotCanvas;
 // Layer the hover hit-test resolved for an auto-select pick; consumed by the
 // matching mouseDown.
 @property(nonatomic, copy, nullable) NSString *pendingPickLayerID;
@@ -54,6 +58,11 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 - (double)_canvasAspect;
 - (void)_syncScaleControlAtTime:(CMTime)time;
 - (void)_syncRotationControlAtTime:(CMTime)time;
+// Reset the point controls' group hooks to identity (Position + Anchor stay 2D /
+// member-local - see the .m note) and recompute the member-local anchor pivot the
+// rotation rings + scale box centre on. Call at the top of draw / hit-test /
+// mouse.
+- (void)_applyGroupComposeOffsetAtTime:(CMTime)time;
 @end
 
 // Reading the inspector-published snapshots (layer blob + UIState) and writing

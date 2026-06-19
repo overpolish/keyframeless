@@ -3,10 +3,79 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "CanvasLayerRender.h" // CanvasComposedGroupRotation
 #import "CanvasOSC_Private.h"
 #import <FxPlug/FxPlugSDK.h>
+#import <simd/simd.h>
 
 @implementation CanvasOSC (Geometry)
+
+// Raw OBJECT (Y-down, FCP convention) -> CANVAS, no control offset applied.
+- (CGPoint)_rawCanvasFromObjX:(double)ox y:(double)oy {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  CGPoint c = CGPointZero;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:ox
+                          fromY:oy
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&c.x
+                            toY:&c.y];
+  return c;
+}
+
+// Read a 2-component lane value from the published (selected-layer) snapshot at
+// `frac`, defaulting to `def` when the lane is absent / empty.
+- (void)_snapshotValuesForLabel:(NSString *)label
+                            frac:(double)frac
+                            outX:(double *)outX
+                            outY:(double *)outY
+                         default:(double)def {
+  *outX = def;
+  *outY = def;
+  for (KKLane *l in KKProcessTimelineSnapshot().lanes)
+    if ([l.label isEqualToString:label]) {
+      if (l.keyposes.count == 0)
+        return;
+      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(l, frac);
+      if (v.count > 0)
+        *outX = v[0].doubleValue;
+      if (v.count > 1)
+        *outY = v[1].doubleValue;
+      return;
+    }
+}
+
+- (void)_applyGroupComposeOffsetAtTime:(CMTime)time {
+  double frac = [self fractionAtTime:time];
+
+  // Position + Anchor OSCs stay 2D (member-local): they sit at the layer's own
+  // clip position, NOT where a TRANSFORMED group renders the member. Following
+  // a group's full 3D transform isn't drag-invertible in a 2D viewer - the group
+  // pivots on its content-bbox centre, which the dragged value itself moves, so
+  // any compensating transform feeds back (diverged to 100000s px) and a frozen
+  // one makes the OSC jump on release. We accept the limitation: there's no way
+  // to move around in 3D space in the viewer anyway. (The kit
+  // `parentObjectTransform` hook stays for a future pen-tool path UI.)
+  self.position.parentObjectTransform = matrix_identity_float3x3;
+  self.anchor.parentObjectTransform = matrix_identity_float3x3;
+
+  // Rotation rings DO tilt with the ancestor groups' rotation so the layer-level
+  // gizmo drags along the visually-rotated axes (acts as expected after the group
+  // is spun). This is safe where the affine wasn't: baseRotation depends only on
+  // the group's rotation, never on the member value being dragged, so no feedback
+  // and no jump. The written rotation stays member-local (the group factors out).
+  self.rotation.baseRotation = CanvasComposedGroupRotation(
+      [self _snapshotPaths], [self _selectedLayer], frac);
+
+  // The gizmo cluster (rings + scale box) still centres on the ANCHOR pivot
+  // (AE-standard), computed member-local: Position + Anchor offset.
+  double posX, posY, ax, ay;
+  [self _snapshotValuesForLabel:@"Position" frac:frac outX:&posX outY:&posY default:0.5];
+  [self _snapshotValuesForLabel:@"Anchor" frac:frac outX:&ax outY:&ay default:0.5];
+  self.gizmoPivotCanvas =
+      [self _rawCanvasFromObjX:(posX + ax - 0.5) y:(posY + ay - 0.5)];
+}
 
 // The canvas-pixel lengths of the object-space unit axes: maps OBJECT (0,0),
 // (1,0), (0,1) to CANVAS and returns the X-axis and Y-axis spans. Object space
@@ -63,7 +132,9 @@
 // Feed the scale control this tick's box centre (= the layer's Position handle)
 // + gizmo size + reveal/drag state. Shared by draw / hit-test / mouse.
 - (void)_syncScaleControlAtTime:(CMTime)time {
-  self.scale.center = [self.position positionCanvasAtTime:time];
+  // Concentric with the anchor pivot (where the layer scales from), not the bare
+  // Position handle - the gizmo cluster (box + rings + anchor) shares one centre.
+  self.scale.center = self.gizmoPivotCanvas;
   self.scale.frameMin = [self _onScreenFrameMin];
   self.scale.optRevealActive = self.optRevealActive;
   self.scale.dragging = self.isDragging;
@@ -72,7 +143,9 @@
 // Feed the rotation control this tick's centre (= the layer's Position handle)
 // + reveal/drag state. Shared by draw / hit-test / mouse.
 - (void)_syncRotationControlAtTime:(CMTime)time {
-  self.rotation.center = [self.position positionCanvasAtTime:time];
+  // Centre on the anchor pivot (where the layer rotates around), not the bare
+  // Position handle.
+  self.rotation.center = self.gizmoPivotCanvas;
   self.rotation.optRevealActive = self.optRevealActive;
   self.rotation.dragging = self.isDragging;
 }

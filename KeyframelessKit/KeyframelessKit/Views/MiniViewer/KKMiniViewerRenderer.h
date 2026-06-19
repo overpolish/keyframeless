@@ -7,6 +7,7 @@
 
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMiniViewerView.h>
+#import <KeyframelessKit/KKRotationOSCMath.h>
 
 @class KKTimeline;
 @class KKLane;
@@ -248,6 +249,11 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 /// `contentRect`. Override to lock it to another handle (e.g. MagicMove
 /// uses the Position handle so the rings move with the translated image).
 - (CGPoint)rotationCenterForContentRect:(CGRect)contentRect;
+/// A parent/world rotation pre-applied to the DISPLAYED rings + drag tangent
+/// (not the written value), so a control on an object nested in a rotated parent
+/// (e.g. a Canvas member inside a rotated group) shows rings in the parent's
+/// frame. Default identity.
+- (KKRotMatrix3)rotationBaseMatrix;
 /// Per-axis ring colours, [X, Y, Z]. Default = red / green / blue.
 - (NSArray<NSColor *> *)rotationRingColors;
 /// Per-axis drag direction sign (simd_double3). Default = `{+1, -1, +1}`,

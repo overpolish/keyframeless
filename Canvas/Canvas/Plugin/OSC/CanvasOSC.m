@@ -88,6 +88,10 @@
   // Locked layer: cleared surface only, no handles (and no Opt-reveal).
   if ([self _selectedLayerLocked])
     return;
+  // Re-centre the point controls on where a grouped member is actually drawn
+  // (no-op otherwise); the scale box + rotation rings follow via the Position
+  // handle they centre on.
+  [self _applyGroupComposeOffsetAtTime:time];
   // The controller (KKPositionOSC) owns ALL the visibility + opt-reveal-ghost
   // gating internally (it reads kkOSCElementVisible / kkOSCRevealEligible +
   // ITS OWN optRevealActive). So just forward our reveal + drag state to it and

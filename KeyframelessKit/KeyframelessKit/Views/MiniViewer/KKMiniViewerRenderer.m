@@ -183,6 +183,10 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   return CGPointMake(CGRectGetMidX(cr), CGRectGetMidY(cr));
 }
 
+- (KKRotMatrix3)rotationBaseMatrix {
+  return KKRotMatrixIdentity();
+}
+
 - (NSArray<NSColor *> *)rotationRingColors {
   return @[
     [NSColor colorWithRed:1.00 green:0.30 blue:0.30 alpha:1.0],
@@ -203,15 +207,19 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 
 #pragma mark - Rotation gizmo: state machine (default impls)
 
-// Returns the current world matrix from rotationEulerDegrees.
+// The displayed world matrix = parent/group rotation · the object's own Euler.
+// Used for drawing the rings, hit-testing them, and the drag tangent, so a nested
+// object's rings show + drag in the parent's frame; the written value stays the
+// object's own Euler (the parent factors out of the compose).
 - (KKRotMatrix3)_currentRotationMatrix {
   NSArray<NSNumber *> *r = [self rotationEulerDegrees];
   double xDeg = r[0].doubleValue;
   double yDeg = r[1].doubleValue;
   double zDeg = r[2].doubleValue;
-  return KKBuildRotationMatrix((float)(xDeg * M_PI / 180.0),
-                               (float)(yDeg * M_PI / 180.0),
-                               (float)(zDeg * M_PI / 180.0));
+  KKRotMatrix3 pose = KKBuildRotationMatrix((float)(xDeg * M_PI / 180.0),
+                                            (float)(yDeg * M_PI / 180.0),
+                                            (float)(zDeg * M_PI / 180.0));
+  return KKRotMatrixMul([self rotationBaseMatrix], pose);
 }
 
 // Converts an NSColor to the simd_float4 the rotation shader wants.
