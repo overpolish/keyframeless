@@ -60,6 +60,19 @@
   return [self ghostAlphaForLabel:@"Path"];
 }
 
+// Anchor pivot square - the kit canvas draws it from these; geometry + ghost
+// live in the reusable KKAnchorMiniController.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    anchorSquareCenter:(out CGPoint *)outCenter
+           contentRect:(CGRect)cr {
+  self.canvas = canvas;
+  return [self.anchorMini squareCenter:outCenter forContentRect:cr];
+}
+
+- (CGFloat)anchorSquareGhostAlpha {
+  return [self.anchorMini ghostAlpha];
+}
+
 - (BOOL)pointHandleCenter:(out CGPoint *)outCenter forContentRect:(CGRect)cr {
   return [self.positionMini pointHandleCenter:outCenter forContentRect:cr];
 }
@@ -148,6 +161,11 @@
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     handleHitAtPoint:(CGPoint)p
          contentRect:(CGRect)cr {
+  // Anchor pivot square is topmost (mirrors the viewer) so it is always
+  // grabbable; the larger Position handle around it stays clickable.
+  self.canvas = canvas;
+  if ([self.anchorMini squareHitAtPoint:p contentRect:cr])
+    return YES;
   // The active keypose's Position handle wins where it coincides with a path
   // anchor/tangent (handles sit offset from the anchor, so they stay
   // grabbable).
@@ -165,7 +183,11 @@
 - (void)miniViewer:(KKMiniViewerView *)canvas
     beginHandleDragAtPoint:(CGPoint)p
                contentRect:(CGRect)cr {
-  // Position handle first (the base re-checks it and drives the point grab
+  // Anchor square grabs first (topmost, matches the hit-test priority).
+  self.canvas = canvas;
+  if ([self.anchorMini beginDragAtPoint:p contentRect:cr])
+    return;
+  // Position handle next (the base re-checks it and drives the point grab
   // lifecycle), then the motion-path anchors / tangent handles (the controller
   // owns those; the base doesn't know about them).
   if ([self pointHandleHitAtPoint:p contentRect:cr]) {
@@ -186,6 +208,13 @@
     dragHandleToPoint:(CGPoint)p
           contentRect:(CGRect)cr
             modifiers:(NSEventModifierFlags)modifiers {
+  if (self.anchorMini.isDragging) {
+    [self.anchorMini applyDragToPoint:p
+                          contentRect:cr
+                            modifiers:modifiers
+                               canvas:canvas];
+    return;
+  }
   if (self.positionMini.pathGrabbed) {
     [self.positionMini applyPathDragToPoint:p
                                 contentRect:cr
@@ -213,6 +242,7 @@
 }
 
 - (void)miniViewerEndHandleDrag:(KKMiniViewerView *)canvas {
+  [self.anchorMini endDrag];
   [self.scaleMini endDrag];
   // endDrag resets the shared snap engine and reports whether a motion-path
   // drag was active (the only Position-side edit that persists the whole blob;
@@ -237,7 +267,16 @@
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     optClickHandleAtPoint:(CGPoint)p
               contentRect:(CGRect)cr {
-  // The built-in Position handle claims the opt-click first (so at the active
+  // Anchor square is topmost, so it claims the opt-click first.
+  self.canvas = canvas;
+  if (self.onHandleVisibilityToggled &&
+      [self.anchorMini squareHitAtPoint:p contentRect:cr]) {
+    self.onHandleVisibilityToggled(@"Anchor");
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return YES;
+  }
+  // The built-in Position handle claims the opt-click next (so at the active
   // keypose it wins over the coincident path anchor), then the path catches its
   // own anchors / tangents.
   if ([super miniViewer:canvas optClickHandleAtPoint:p contentRect:cr])
@@ -266,6 +305,8 @@
   if (CGRectIsEmpty(cr))
     return nil;
   self.canvas = canvas;
+  if ([self.anchorMini squareHitAtPoint:p contentRect:cr])
+    return [self kkVisibilityCursorForLabel:@"Anchor"] ?: KKPointMoveCursor();
   if ([self pointHandleHitAtPoint:p contentRect:cr])
     return [self kkVisibilityCursorForLabel:self.pointLabel]
                ?: KKPointMoveCursor();

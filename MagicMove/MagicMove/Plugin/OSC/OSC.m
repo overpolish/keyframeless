@@ -175,9 +175,15 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
       if ([l.label isEqualToString:@"Rotation"])
         _rotationOSC.templateLane = l;
     }
-    _anchorPointOSC = [[KKSquarePointOSC alloc] initWithAPIManager:apiManager];
-    _anchorPointOSC.clearsOnDraw = NO;
-    _anchorSnap = [[KKSnapEngine alloc] init];
+    // Anchor pivot square (clip-space pivot: the kit control's default geometry
+    // shifts the sibling Position lane by the Anchor offset and maps it to
+    // canvas, so no geometry blocks are needed here).
+    _anchorControl = [[KKAnchorOSC alloc] initWithAPIManager:apiManager
+                                                   laneLabel:@"Anchor"];
+    _anchorControl.anchorActivePart = kOSCAnchorPart;
+    for (KKLane *l in [MagicMovePlugin availableLanes])
+      if ([l.label isEqualToString:@"Anchor"])
+        _anchorControl.templateLane = l;
   }
   return self;
 }
@@ -260,17 +266,6 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                             toX:&c.x
                             toY:&c.y];
   return c;
-}
-
-// Canvas point of the anchor pivot at a fraction: the clip centre (Position)
-// shifted by the Anchor offset, in object space, mapped to canvas. The pivot
-// travels with the clip, so it tracks Position as the playhead moves.
-- (CGPoint)_anchorCanvasAtFraction:(double)frac {
-  NSArray<NSNumber *> *pv = _positionValuesAtFraction(frac);
-  NSArray<NSNumber *> *av = _anchorValuesAtFraction(frac);
-  double objX = pv[0].doubleValue + av[0].doubleValue - 0.5;
-  double objY = pv[1].doubleValue + av[1].doubleValue - 0.5;
-  return [self _canvasFromObjX:objX y:objY];
 }
 
 // Override the base OSC-visibility hooks: the full element-key list, and the

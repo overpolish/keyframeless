@@ -15,48 +15,54 @@
 
 static matrix_float4x4 CanvasTranslate4(float x, float y) {
   return simd_matrix(simd_make_float4(1, 0, 0, 0), simd_make_float4(0, 1, 0, 0),
-                     simd_make_float4(0, 0, 1, 0), simd_make_float4(x, y, 0, 1));
+                     simd_make_float4(0, 0, 1, 0),
+                     simd_make_float4(x, y, 0, 1));
 }
 
 static matrix_float4x4 CanvasScale4(float sx, float sy, float sz) {
-  return simd_matrix(simd_make_float4(sx, 0, 0, 0), simd_make_float4(0, sy, 0, 0),
-                     simd_make_float4(0, 0, sz, 0), simd_make_float4(0, 0, 0, 1));
+  return simd_matrix(
+      simd_make_float4(sx, 0, 0, 0), simd_make_float4(0, sy, 0, 0),
+      simd_make_float4(0, 0, sz, 0), simd_make_float4(0, 0, 0, 1));
 }
 
-// In-plane (Z) rotation, CCW. Pixel space already carries the aspect, so no fudge.
+// In-plane (Z) rotation, CCW. Pixel space already carries the aspect, so no
+// fudge.
 static matrix_float4x4 CanvasRotZ4(float a) {
   float c = cosf(a), s = sinf(a);
-  return simd_matrix(simd_make_float4(c, s, 0, 0), simd_make_float4(-s, c, 0, 0),
-                     simd_make_float4(0, 0, 1, 0), simd_make_float4(0, 0, 0, 1));
+  return simd_matrix(
+      simd_make_float4(c, s, 0, 0), simd_make_float4(-s, c, 0, 0),
+      simd_make_float4(0, 0, 1, 0), simd_make_float4(0, 0, 0, 1));
 }
 
 // Tilt about the screen X axis (positive tips the top toward the viewer).
 static matrix_float4x4 CanvasRotX4(float a) {
   float c = cosf(a), s = sinf(a);
   return simd_matrix(simd_make_float4(1, 0, 0, 0), simd_make_float4(0, c, s, 0),
-                     simd_make_float4(0, -s, c, 0), simd_make_float4(0, 0, 0, 1));
+                     simd_make_float4(0, -s, c, 0),
+                     simd_make_float4(0, 0, 0, 1));
 }
 
 // Tilt about the screen Y axis (positive tips the right edge away).
 static matrix_float4x4 CanvasRotY4(float a) {
   float c = cosf(a), s = sinf(a);
-  return simd_matrix(simd_make_float4(c, 0, -s, 0), simd_make_float4(0, 1, 0, 0),
-                     simd_make_float4(s, 0, c, 0), simd_make_float4(0, 0, 0, 1));
+  return simd_matrix(simd_make_float4(c, 0, -s, 0),
+                     simd_make_float4(0, 1, 0, 0), simd_make_float4(s, 0, c, 0),
+                     simd_make_float4(0, 0, 0, 1));
 }
 
 // Camera at distance camD on +Z: (x,y,z,1) -> (camD x, camD y, z, z + camD);
 // after the perspective divide, foreshortening scales by camD/(z + camD).
 static matrix_float4x4 CanvasPerspective4(float camD) {
-  return simd_matrix(simd_make_float4(camD, 0, 0, 0),
-                     simd_make_float4(0, camD, 0, 0),
-                     simd_make_float4(0, 0, 1, 1),
-                     simd_make_float4(0, 0, 0, camD));
+  return simd_matrix(
+      simd_make_float4(camD, 0, 0, 0), simd_make_float4(0, camD, 0, 0),
+      simd_make_float4(0, 0, 1, 1), simd_make_float4(0, 0, 0, camD));
 }
 
 #pragma mark - Layer transform evaluation
 
 CanvasLayerTransform CanvasLayerTransformIdentity(void) {
-  return (CanvasLayerTransform){1.0f, 1.0f, 0.0f, 0.5f, 0.5f, 0.0f, 0.0f, 1.0f};
+  return (CanvasLayerTransform){1.0f, 1.0f, 0.0f, 0.5f, 0.5f,
+                                0.0f, 0.0f, 1.0f, 0.5f, 0.5f};
 }
 
 CanvasLayerTransform CanvasLayerTransformFromTimeline(KKTimeline *tl,
@@ -94,6 +100,18 @@ CanvasLayerTransform CanvasLayerTransformFromTimeline(KKTimeline *tl,
           KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
       if (v.count > 0)
         t.opacity = (float)(fmax(0.0, fmin(100.0, v[0].doubleValue)) / 100.0);
+    } else if ([lane.label isEqualToString:@"Anchor"]) {
+      // Pivot for Rotation/Scale, normalised (0.5,0.5 = layer centre). Empty
+      // lane on a cold-boot snapshot evaluates to [0,0]; keep the centre
+      // default.
+      if (lane.keyposes.count > 0) {
+        NSArray<NSNumber *> *v =
+            KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+        if (v.count > 0)
+          t.anchorX = (float)v[0].doubleValue;
+        if (v.count > 1)
+          t.anchorY = (float)v[1].doubleValue;
+      }
     }
   }
   return t;
@@ -124,17 +142,19 @@ CanvasGroupTransformAtFraction(KKBezierPath *group, double frac,
 
 #pragma mark - Group content bounds / centre
 
-// Bounds of where the image layers nested under the group at `groupIdx` actually
-// SIT, in object space (Y-up) - the bbox of each member's TRANSFORMED centre
-// (rect centre + its Position offset), not the raw shape rect. Images are
-// created centred at (0.5,0.5) and moved by their Position transform, so the
-// rest rect alone collapses every layer to the clip centre; the group must pivot
-// about its content's real location. Evaluated at frac 0 (the members' base
-// pose) so the pivot is STABLE as it (and its members) animate. NO when the
-// group has no rect-shaped image descendants. Scale/rotation about a layer's OWN
-// centre don't move that centre, so only the Position offset matters here.
+// Bounds of where the image layers nested under the group at `groupIdx`
+// actually SIT, in object space (Y-up) - the bbox of each member's TRANSFORMED
+// centre (rect centre + its Position offset), not the raw shape rect. Images
+// are created centred at (0.5,0.5) and moved by their Position transform, so
+// the rest rect alone collapses every layer to the clip centre; the group must
+// pivot about its content's real location. Evaluated at frac 0 (the members'
+// base pose) so the pivot is STABLE as it (and its members) animate. NO when
+// the group has no rect-shaped image descendants. Scale/rotation about a
+// layer's OWN centre don't move that centre, so only the Position offset
+// matters here.
 static BOOL CanvasGroupContentBoundsObj(NSArray<KKBezierPath *> *layers,
-                                        NSUInteger groupIdx, simd_float2 *outMin,
+                                        NSUInteger groupIdx,
+                                        simd_float2 *outMin,
                                         simd_float2 *outMax) {
   NSIndexSet *desc = CanvasLayerDescendantIndices(groupIdx, layers);
   __block BOOL found = NO;
@@ -202,14 +222,16 @@ BOOL CanvasGroupPositionOffset(NSArray<KKBezierPath *> *layers,
   return YES;
 }
 
-NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers, NSUInteger idx,
-                                 double frac, NSString *overrideLayerID,
+NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers,
+                                 NSUInteger idx, double frac,
+                                 NSString *overrideLayerID,
                                  KKTimeline *overrideTimeline,
                                  CanvasGroupXform *out, NSInteger maxN) {
   // A group sits before its members in the flat stack, so a nested group has a
   // higher index than its parent - reverse index order gives innermost-first,
   // matching the parentGroupID chain (the index set loses the order). Composing
-  // innermost-first means each outer group transforms the already-placed result.
+  // innermost-first means each outer group transforms the already-placed
+  // result.
   NSIndexSet *anc = CanvasLayerAncestorIndices(idx, layers);
   __block NSInteger n = 0;
   [anc enumerateIndexesWithOptions:NSEnumerationReverse
@@ -245,13 +267,12 @@ matrix_float4x4 CanvasLayerTiltMatrix(CanvasLayerTransform t,
   if (t.rotX == 0.0f && t.rotY == 0.0f)
     return simd_mul(Tshift, P); // no tilt: perspective (ortho at z=0) + shift
   // Tpos · P · Ry · Rx · Tneg: centre the layer at the origin, tilt, project
-  // (perspective about the layer centre), translate back as a post-divide screen
-  // offset; Tshift then nudges into the render tile.
+  // (perspective about the layer centre), translate back as a post-divide
+  // screen offset; Tshift then nudges into the render tile.
   matrix_float4x4 R = simd_mul(CanvasRotY4(t.rotY), CanvasRotX4(t.rotX));
-  matrix_float4x4 model =
-      simd_mul(CanvasTranslate4(centerPx.x, centerPx.y),
-               simd_mul(P, simd_mul(R, CanvasTranslate4(-centerPx.x,
-                                                        -centerPx.y))));
+  matrix_float4x4 model = simd_mul(
+      CanvasTranslate4(centerPx.x, centerPx.y),
+      simd_mul(P, simd_mul(R, CanvasTranslate4(-centerPx.x, -centerPx.y))));
   return simd_mul(Tshift, model);
 }
 
@@ -261,21 +282,33 @@ matrix_float4x4 CanvasLayerTiltMatrix(CanvasLayerTransform t,
 // into a separate 2D bake - that split made combining Z with X/Y, or with a
 // group's rotation, interleave wrong). Rotation about the rest centre then
 // translate by Position == rotation about the POSITIONED centre (where the OSC
-// rings sit). Z is scaled by the X/Y average so scaling TILTED geometry (a group
-// shrinking its members, which carry a Z-extent) shrinks uniformly instead of
-// flattening to a sliver; a no-op for flat (Z=0) geometry.
+// rings sit). Z is scaled by the X/Y average so scaling TILTED geometry (a
+// group shrinking its members, which carry a Z-extent) shrinks uniformly
+// instead of flattening to a sliver; a no-op for flat (Z=0) geometry.
+// `anchorPx` shifts the Rotation/Scale pivot off the layer centre (0 = centre).
+// R/S swing around piv = centerPx + anchorPx instead, so a corner/edge anchor
+// makes the layer spin/grow from there. With identity R/S it cancels out (the
+// layer still sits at posPx), so the anchor does nothing visible on its own.
 static matrix_float4x4 CanvasLayerModelMatrix(CanvasLayerTransform t,
                                               simd_float2 centerPx,
-                                              simd_float2 posPx) {
+                                              simd_float2 posPx,
+                                              simd_float2 anchorPx) {
   float scaleZ = sqrtf(fmaxf(0.0f, t.scaleX * t.scaleY));
   matrix_float4x4 S = CanvasScale4(t.scaleX, t.scaleY, scaleZ);
   matrix_float4x4 R = simd_mul(
       CanvasRotY4(t.rotY),
       simd_mul(CanvasRotX4(t.rotX), CanvasRotZ4(t.rotation))); // Ry·Rx·Rz
-  matrix_float4x4 Tneg = CanvasTranslate4(-centerPx.x, -centerPx.y);
-  matrix_float4x4 Tpos =
-      CanvasTranslate4(centerPx.x + posPx.x, centerPx.y + posPx.y);
+  simd_float2 piv = centerPx + anchorPx;
+  matrix_float4x4 Tneg = CanvasTranslate4(-piv.x, -piv.y);
+  matrix_float4x4 Tpos = CanvasTranslate4(piv.x + posPx.x, piv.y + posPx.y);
   return simd_mul(Tpos, simd_mul(R, simd_mul(S, Tneg)));
+}
+
+// The Anchor pivot offset in pixel space (Y flips: lane Y is Y-down, pixel
+// Y-up), as a fraction of `dims`. 0 when the anchor is centred (0.5,0.5).
+static simd_float2 CanvasAnchorOffsetPx(CanvasLayerTransform t,
+                                        simd_float2 dims) {
+  return simd_make_float2(t.anchorX - 0.5f, -(t.anchorY - 0.5f)) * dims;
 }
 
 // The Position offset in pixel space (Y flips: lane Y is Y-down, pixel Y-up).
@@ -291,7 +324,8 @@ matrix_float4x4 CanvasComposedModelMatrix(CanvasLayerTransform memberT,
   simd_float2 half = simd_make_float2(0.5f, 0.5f);
   simd_float2 mcPx = (memberCenterObj - half) * dims;
   simd_float2 mPosPx = CanvasPosOffsetPx(memberT, dims);
-  matrix_float4x4 model = CanvasLayerModelMatrix(memberT, mcPx, mPosPx);
+  matrix_float4x4 model = CanvasLayerModelMatrix(
+      memberT, mcPx, mPosPx, CanvasAnchorOffsetPx(memberT, dims));
   simd_float2 pcPx = mcPx + mPosPx; // perspective centre = outermost element
   // Total scale applied to the geometry (member * each group, X/Y average). The
   // camera distance scales by this so the perspective is SCALE-INVARIANT: a
@@ -302,7 +336,10 @@ matrix_float4x4 CanvasComposedModelMatrix(CanvasLayerTransform memberT,
     simd_float2 gcPx =
         (simd_make_float2(groups[k].cx, groups[k].cy) - half) * dims;
     simd_float2 gPosPx = CanvasPosOffsetPx(groups[k].t, dims);
-    model = simd_mul(CanvasLayerModelMatrix(groups[k].t, gcPx, gPosPx), model);
+    model = simd_mul(
+        CanvasLayerModelMatrix(groups[k].t, gcPx, gPosPx,
+                               CanvasAnchorOffsetPx(groups[k].t, dims)),
+        model);
     pcPx = gcPx + gPosPx; // outermost group wins
     camScale *= sqrtf(fmaxf(0.0f, groups[k].t.scaleX * groups[k].t.scaleY));
   }

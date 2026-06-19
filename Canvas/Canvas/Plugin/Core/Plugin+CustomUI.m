@@ -76,6 +76,23 @@
   [rotation insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                             values:@[ @0.0, @0.0, @0.0 ]]];
 
+  // Anchor: the pivot Rotation and Scale swing around. 2-component, stored
+  // normalised 0..1 (0.5,0.5 = the layer centre = identity), displayed as
+  // pixels, same space as Position. Off-layer allowed, so no min/max. Modelled
+  // on MagicMove's Anchor lane so the kit's KKAnchorOSC + mini drop straight in.
+  // On its own it does nothing - it only moves where rotation/scale pivot.
+  KKLane *anchor = [KKLane laneWithLabel:@"Anchor"];
+  anchor.valueType = KKLaneValueTypeGeneric;
+  anchor.componentMin = @[];
+  anchor.componentMax = @[];
+  anchor.componentUnits = @[ @"px", @"px" ];
+  anchor.componentsScaleWithMedia = YES; // stored 0..1, displayed as pixels
+  anchor.componentLabels = @[ @"X", @"Y" ];
+  anchor.enabled = NO; // constant by default; animate per-layer via the dropdown
+  anchor.categoryKey = @"Transform";
+  anchor.categorySymbol = @"arrow.up.and.down.and.arrow.left.and.right";
+  [anchor insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
+
   // Opacity: shared kit definition (0-100%, identity 100). Per-layer; the
   // render multiplies the layer's premultiplied RGBA by value/100. No OSC.
   KKLane *opacity = [KKLane opacityLane];
@@ -83,13 +100,13 @@
   opacity.categoryKey = @"Transform";
   opacity.categorySymbol = @"arrow.up.and.down.and.arrow.left.and.right";
 
-  return @[ scale, position, rotation, opacity ];
+  return @[ scale, position, rotation, anchor, opacity ];
 }
 
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {
   return @[
     @[ @"Position", @"Path" ], @[ @"Scale" ],
-    @[ @"Rotation", @"Rotation.X", @"Rotation.Y", @"Rotation.Z" ]
+    @[ @"Rotation", @"Rotation.X", @"Rotation.Y", @"Rotation.Z" ], @[ @"Anchor" ]
   ];
 }
 
@@ -106,7 +123,8 @@
     @"Scale" : @NO,
     @"Rotation.X" : @NO,
     @"Rotation.Y" : @NO,
-    @"Rotation.Z" : @NO
+    @"Rotation.Z" : @NO,
+    @"Anchor" : @NO
   };
 }
 

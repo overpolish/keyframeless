@@ -26,8 +26,6 @@
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
-  double frac = [self _fractionAtTime:time];
-
   // The Position handle + motion path are owned by the Position controller.
   // Mirror our FxPlug drag state into it (its draw gating reads `dragging`),
   // then draw the motion path FIRST so it sits under rotation/scale.
@@ -76,29 +74,14 @@
                                             atTime:time
                                         activePart:activePart];
 
-  // Anchor-point pivot square, at the clip's pivot (Position + Anchor offset).
-  // Shown where the Anchor lane is visible (keypose times / constant), same as
-  // Scale/Position; opt-hold reveals a hidden one as a dimmed ghost.
-  BOOL anchorShownHere = _anchorVisibleAtFraction(frac);
-  BOOL anchorEnabled = [self kkOSCElementVisible:@"Anchor"];
-  BOOL anchorDragging = self.isDragging && activePart == kOSCAnchorPart;
-  BOOL anchorVisible = anchorDragging || (anchorEnabled && anchorShownHere);
-  BOOL anchorGhost = !anchorVisible && self.optRevealActive &&
-                     [self kkOSCRevealEligible:@"Anchor"] && anchorShownHere;
-  if (anchorVisible || anchorGhost) {
-    self.anchorPointOSC.ghostAlpha =
-        anchorGhost ? [self kkRevealGhostAlpha] : 1.0f;
-    CGPoint ac = [self _anchorCanvasAtFraction:frac];
-    [self.anchorPointOSC drawAtCanvasPosition:ac
-                                    isHovered:self.anchorHovered
-                                     isActive:anchorDragging
-                             destinationImage:destinationImage
-                                       atTime:time];
-  }
-
-  [self.anchorSnap drawSnapGuidesWithOSC:self
-                           isObjectSpace:YES
-                        destinationImage:destinationImage];
+  // Anchor-point pivot square (topmost), drawn by the shared kit control: it
+  // owns its visibility gating + ghost + Cmd-snap guides; we just feed it this
+  // tick's drag / opt-reveal state.
+  self.anchorControl.dragging = self.isDragging;
+  self.anchorControl.optRevealActive = self.optRevealActive;
+  [self.anchorControl drawInDestination:destinationImage
+                                 atTime:time
+                             activePart:activePart];
 }
 
 @end

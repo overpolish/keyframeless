@@ -45,20 +45,15 @@ enum {
 /// handles + "X% x Y%" readout, the gizmo sizing, drag math and visibility
 /// gating). Centred on Position each tick, drawn outside the rotation rings.
 @property(nonatomic, retain) KKScaleOSC *scaleControl;
-/// Anchor-point pivot: a draggable square at the clip's rotation/scale pivot
-/// (Position + Anchor offset). Snaps to the clip's center / corners / edges /
-/// thirds unless Cmd is held. anchorGrabVal + anchorPressObject give it the
-/// same delta-based drag as Position.
-@property(nonatomic, retain) KKSquarePointOSC *anchorPointOSC;
-@property(nonatomic, retain) KKSnapEngine *anchorSnap;
-@property(nonatomic) BOOL anchorHovered;
+/// Anchor-point pivot: the shared kit KKAnchorOSC (a draggable square at the
+/// clip's rotation/scale pivot, with its own delta drag + Cmd-snap + visibility
+/// gating + persist). The pivot geometry (Position + Anchor offset, in clip
+/// space) is injected via its anchorToCanvas / canvasToAnchor blocks.
+@property(nonatomic, retain) KKAnchorOSC *anchorControl;
 // YES while we've forced the move cursor over a draggable point (anchor /
 // position / path); reset to the arrow when the pointer leaves them. The scale
 // box self-manages its resize cursor (KKScaleOSC/KKBoxOSC), rotation none yet.
 @property(nonatomic) BOOL pointCursorSet;
-@property(nonatomic) double anchorGrabValX;
-@property(nonatomic) double anchorGrabValY;
-@property(nonatomic) simd_float2 anchorPressObject;
 
 // Geometry / evaluation helpers implemented in the primary @implementation
 // (OSC.m); the HitTest helpers live in MagicMoveOSC+HitTest.m. Declared here so
@@ -66,7 +61,6 @@ enum {
 - (double)_fractionAtTime:(CMTime)time;
 - (CGPoint)oscPositionAtTime:(CMTime)time;
 - (CGPoint)_canvasFromObjX:(double)ox y:(double)oy;
-- (CGPoint)_anchorCanvasAtFraction:(double)frac;
 /// On-screen frame min side (canvas units), the reference dimension the scale
 /// gizmo sizes against. Fed to `scaleControl.frameMin` each tick.
 - (double)_onScreenFrameMin;

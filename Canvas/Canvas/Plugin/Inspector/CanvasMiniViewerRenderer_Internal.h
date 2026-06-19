@@ -17,6 +17,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, strong) KKPositionMiniController *positionMini;
 // Reusable Scale transform-box controller (geometry + hit-test + drag).
 @property(nonatomic, strong) KKScaleMiniController *scaleMini;
+// Reusable Anchor-square controller (centre + hit-test + delta drag + Cmd-snap,
+// sharing the Position controller's snap engine).
+@property(nonatomic, strong) KKAnchorMiniController *anchorMini;
 // Position handle centre for a content rect (proxies the base helper); called
 // across the Interaction category.
 - (CGPoint)_handlePointForContentRect:(CGRect)cr

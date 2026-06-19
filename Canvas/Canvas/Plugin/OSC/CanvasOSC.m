@@ -56,6 +56,19 @@
     _rotation.onTimelinePersist = ^(KKTimeline *tl) {
       [weak _persistSelectedLayerTimeline:tl];
     };
+    // Anchor pivot square (topmost), concentric with the Position handle. The
+    // kit control's default clip-space geometry (sibling Position lane + Anchor
+    // offset) is exactly Canvas's per-layer pivot, so no geometry blocks are
+    // needed for an image layer. Same per-layer persist.
+    _anchor = [[KKAnchorOSC alloc] initWithAPIManager:apiManager
+                                            laneLabel:@"Anchor"];
+    _anchor.anchorActivePart = CanvasOSCPartAnchor;
+    for (KKLane *l in [CanvasPlugin availableLanes])
+      if ([l.label isEqualToString:@"Anchor"])
+        _anchor.templateLane = l;
+    _anchor.onTimelinePersist = ^(KKTimeline *tl) {
+      [weak _persistSelectedLayerTimeline:tl];
+    };
   }
   return self;
 }
@@ -103,12 +116,19 @@
   [self.position drawHandleInDestination:destinationImage
                                   atTime:time
                               activePart:activePart];
+  // Anchor pivot square, drawn last so it sits on top of every other control.
+  // The control owns its own visibility + opt-reveal-ghost gating + snap guides.
+  self.anchor.optRevealActive = self.optRevealActive;
+  self.anchor.dragging = self.isDragging;
+  [self.anchor drawInDestination:destinationImage
+                          atTime:time
+                      activePart:activePart];
 }
 
 - (NSArray<NSString *> *)oscElementKeys {
   return @[
     @"Position", @"Path", @"Scale", @"Rotation", @"Rotation.X", @"Rotation.Y",
-    @"Rotation.Z"
+    @"Rotation.Z", @"Anchor"
   ];
 }
 
@@ -117,6 +137,8 @@
     return @"Path";
   if (activePart == CanvasOSCPartScale)
     return @"Scale";
+  if (activePart == CanvasOSCPartAnchor)
+    return @"Anchor";
   if (activePart == CanvasOSCPartPosition)
     return self.position.hoverTargetIsAnchor ? @"Path" : @"Position";
   if (activePart == CanvasOSCPartRotation) {

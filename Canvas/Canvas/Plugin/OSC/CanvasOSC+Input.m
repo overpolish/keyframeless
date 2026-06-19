@@ -51,6 +51,15 @@
   // them back). Auto-select still runs below, so you can click a different layer
   // to switch away from a locked one.
   if (![self _selectedLayerLocked]) {
+    // Anchor pivot square is the topmost control: checked first so it stays
+    // grabbable / opt-hideable even when it coincides with the Position handle.
+    // The control owns reachability + the move/eye cursor.
+    self.anchor.optRevealActive = self.optRevealActive;
+    if ([self.anchor hitTestAtX:positionX y:positionY atTime:time] >= 0) {
+      *activePart = CanvasOSCPartAnchor;
+      self.pointCursorSet = YES;
+      return;
+    }
     // The controller gates hit-testing on visibility + ITS optRevealActive, so a
     // hidden handle isn't grabbable unless Opt-revealed - forward the reveal flag
     // so a revealed ghost becomes hittable (opt-click re-shows it).
@@ -152,6 +161,14 @@
                          atTime:time];
     return;
   }
+  if (activePart == CanvasOSCPartAnchor) {
+    [self.anchor mouseDownAtX:positionX
+                            y:positionY
+                    modifiers:modifiers
+                  forceUpdate:forceUpdate
+                       atTime:time];
+    return;
+  }
   if (activePart != CanvasOSCPartPosition && activePart != CanvasOSCPartPath)
     return;
   KKPositionHit hit =
@@ -195,6 +212,14 @@
                             atTime:time];
     return;
   }
+  if (activePart == CanvasOSCPartAnchor) {
+    [self.anchor mouseDraggedAtX:positionX
+                               y:positionY
+                       modifiers:modifiers
+                     forceUpdate:forceUpdate
+                          atTime:time];
+    return;
+  }
   if (activePart != CanvasOSCPartPosition && activePart != CanvasOSCPartPath)
     return;
   KKPositionHit hit =
@@ -220,6 +245,7 @@
   [self.position mouseUp];
   [self.scale mouseUp];
   [self.rotation mouseUp];
+  [self.anchor mouseUp];
   [super mouseUpAtPositionX:positionX
                   positionY:positionY
                  activePart:activePart

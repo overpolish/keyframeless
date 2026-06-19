@@ -51,6 +51,11 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
                                                  pathLabel:@"Path"];
     _scaleMini = [[KKScaleMiniController alloc] initWithRenderer:self
                                                        laneLabel:@"Scale"];
+    _anchorMini = [[KKAnchorMiniController alloc]
+        initWithRenderer:self
+               laneLabel:@"Anchor"
+       positionLaneLabel:@"Position"
+              snapEngine:_positionMini.snapEngine];
   }
   return self;
 }

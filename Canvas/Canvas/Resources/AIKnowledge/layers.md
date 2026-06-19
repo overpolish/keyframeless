@@ -111,10 +111,11 @@ indented by their depth.
   composition, so moving / scaling / rotating / tilting / fading a group does the
   same to everything inside it as a unit - each member keeps its own rotation and
   the whole group rotates around the group's centre. Scale and rotation pivot
-  about the centre of the group's contents; nested groups compose (a child
-  group's transform stacks under its parent's). Selecting a group on the canvas
-  shows its Position handle, scale box, and rotation rings just like a single
-  layer.
+  about the centre of the group's contents by default, and the group's own
+  **Anchor** point moves that pivot just like it does for a single layer; nested
+  groups compose (a child group's transform stacks under its parent's). Selecting
+  a group on the canvas shows its Position handle, scale box, rotation rings, and
+  anchor square just like a single layer.
 
 ## Context menu (right-click a row)
 
@@ -129,7 +130,7 @@ indented by their depth.
 
 Visible **image layers** are drawn onto the clip over the source frame. Each
 image fills its layer's rectangle, transformed by its own Scale / Position /
-Rotation / Opacity composed with any enclosing group's transform. Hidden layers
+Rotation / Anchor / Opacity composed with any enclosing group's transform. Hidden layers
 and non-image layers are skipped, and a group draws nothing itself (it only
 transforms its members). The source clip shows through wherever no layer covers
 it. The inspector's mini-viewer preview composites the same layers the same way,
@@ -163,17 +164,42 @@ Layers panel; the on-screen controls edit it directly:
   more keyposes. Stored normalised (0.5, 0.5 = centred); shown in pixels.
 - **Scale** - a transform bounding box (corners + edge handles, a "X% x Y%"
   readout). Percentages, aspect-linked by default, floored at 0%.
+- **Anchor** - a small square at the pivot that Rotation and Scale swing around.
+  Stored normalised (0.5, 0.5 = the layer centre); shown in pixels.
 
 Both controls appear in the FCP viewer **and** the inspector mini-viewer (same
 handles + keyboard modifiers in each), scoped to the selected layer. Their full
 interaction (drag, snap, aspect-lock, fine mode, the motion path) is the shared
 behaviour documented in the on-screen-control reference.
 
+### Anchor point
+
+The **Anchor** is the pivot Rotation and Scale swing around. It sits at the layer
+centre by default, so rotation spins around the middle and scale grows from it.
+Move it onto a corner and the layer rotates around that corner and scales out from
+it; on an edge midpoint and it hinges along that edge; off the layer entirely and
+it orbits a point in empty space. On its own the anchor does nothing visible - it
+only matters when there is rotation or scale to pivot.
+
+It is an animatable lane like the others (leave it constant for a fixed pivot, or
+keypose it to move the pivot over time), and it works the same on a **group**,
+where it shifts the group's pivot off its content centre.
+
+Set it three ways: drag the square on the viewer, drag it on the inspector
+mini-viewer, or type X / Y in the keypose value popover (off-layer values are
+allowed). Hold **Cmd** while dragging to snap the pivot to the layer's centre /
+corners / edge-midpoints / thirds, with guide lines showing the catch - the same
+Cmd-snap the Position and Rotation controls use. The square is the topmost
+control, drawn over the rotation rings, scale box and Position handle; because it
+is small, the larger Position handle around it stays clickable, so both remain
+grabbable when they sit on the same spot (the default centre).
+
 ### Showing and hiding the controls
 
 The inspector's **On-Screen Controls** toggle and its per-control pills
-(Position, Path, Scale) drive visibility. Canvas defaults the global toggle
-**on** but the Transform controls **hidden**, so the viewer stays clean;
+(Position, Path, Scale, Rotation, Anchor) drive visibility. Canvas defaults the
+global toggle **on** but the Transform controls **hidden**, so the viewer stays
+clean;
 **Option-hold** reveals hidden controls as dimmed ghosts and **Option-click**
 toggles one. A **locked** layer hides its controls.
 

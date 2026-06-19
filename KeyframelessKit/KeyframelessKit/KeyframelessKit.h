@@ -13,6 +13,8 @@ FOUNDATION_EXPORT const unsigned char
 
 #import <KeyframelessKit/KKAlertStackView.h>
 #import <KeyframelessKit/KKAlertView.h>
+#import <KeyframelessKit/KKAnchorMiniController.h>
+#import <KeyframelessKit/KKAnchorOSC.h>
 #import <KeyframelessKit/KKArcOSC.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKBoxOSC.h>

@@ -29,7 +29,8 @@ typedef struct {
   float rotation;       // Z radians, CCW; in-plane spin
   float posX, posY;     // normalised, 0.5 = no offset
   float rotX, rotY;     // X/Y tilt radians (perspective)
-  float opacity;        // 0..1, 1 = fully opaque (multiplies premultiplied RGBA)
+  float opacity; // 0..1, 1 = fully opaque (multiplies premultiplied RGBA)
+  float anchorX, anchorY; // pivot, normalised; 0.5 = layer centre (no offset)
 } CanvasLayerTransform;
 
 /// One ancestor group's transform + its content-bbox pivot, in object space.
@@ -65,19 +66,19 @@ matrix_float4x4 CanvasLayerTiltMatrix(CanvasLayerTransform t,
 /// layer at `idx`, INNERMOST parent first; returns the count. `overrideLayerID`
 /// / `overrideTimeline` let a group whose id matches read the live-edited
 /// timeline (mini-viewer drag preview); pass nil/nil for the persisted state.
-NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers, NSUInteger idx,
-                                 double frac,
+NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers,
+                                 NSUInteger idx, double frac,
                                  NSString *_Nullable overrideLayerID,
                                  KKTimeline *_Nullable overrideTimeline,
                                  CanvasGroupXform *out, NSInteger maxN);
 
-/// The full per-member transform fed to the vertex shader: the member's 3D model
-/// matrix composed with each ancestor group's (member first, innermost group …
-/// outermost), then ONE perspective centred on the outermost element's
-/// positioned centre. Applied to RAW rect-corner verts (no CPU 2D baking) so all
-/// rotation axes of each level compose rigidly. `dims` maps object space to the
-/// working pixel space (render: image W,H; hit-test: aspect,1); `memberCenterObj`
-/// is the member's REST centre in object space.
+/// The full per-member transform fed to the vertex shader: the member's 3D
+/// model matrix composed with each ancestor group's (member first, innermost
+/// group … outermost), then ONE perspective centred on the outermost element's
+/// positioned centre. Applied to RAW rect-corner verts (no CPU 2D baking) so
+/// all rotation axes of each level compose rigidly. `dims` maps object space to
+/// the working pixel space (render: image W,H; hit-test: aspect,1);
+/// `memberCenterObj` is the member's REST centre in object space.
 matrix_float4x4 CanvasComposedModelMatrix(CanvasLayerTransform memberT,
                                           simd_float2 memberCenterObj,
                                           const CanvasGroupXform *groups,

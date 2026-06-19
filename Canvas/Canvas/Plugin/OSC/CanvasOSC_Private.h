@@ -16,6 +16,7 @@
 @class KKPositionOSC;
 @class KKScaleOSC;
 @class KKRotationOSC;
+@class KKAnchorOSC;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -29,6 +30,7 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
   CanvasOSCPartPath = 3,
   CanvasOSCPartRotation = 4,
   CanvasOSCPartLayerPick = 5,
+  CanvasOSCPartAnchor = 6,
 };
 
 @interface CanvasOSC ()
@@ -36,6 +38,8 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 @property(nonatomic, strong) KKPositionOSC *position;
 @property(nonatomic, strong) KKScaleOSC *scale;
 @property(nonatomic, strong) KKRotationOSC *rotation;
+// The anchor pivot square (topmost), concentric region with the Position handle.
+@property(nonatomic, strong) KKAnchorOSC *anchor;
 // Set while the hover hit-test forced a move/eye/hand cursor, so the next hover
 // can reset it to the arrow.
 @property(nonatomic) BOOL pointCursorSet;
