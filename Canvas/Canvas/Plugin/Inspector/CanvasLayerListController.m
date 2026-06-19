@@ -79,6 +79,11 @@ static const CGFloat kSlideDistance = 12.0;
   [_listView highlightLayerID:layerID]; // no-op until the panel/list exists
 }
 
+- (void)setAutoSelect:(BOOL)autoSelect {
+  _autoSelect = autoSelect;
+  [_listView setAutoSelect:autoSelect]; // no-op until the panel/list exists
+}
+
 - (NSArray<KKBezierPath *> *)currentLayerPaths {
   return CanvasReadLayerPaths(_apiManager, self.paramActionTarget ?: self);
 }
@@ -139,6 +144,15 @@ static const CGFloat kSlideDistance = 12.0;
     if (s.onPrimaryLayerSelected)
       s.onPrimaryLayerSelected(layerID);
   };
+  content.onAutoSelectToggled = ^(BOOL on) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s)
+      return;
+    s->_autoSelect = on;
+    if (s.onAutoSelectToggled)
+      s.onAutoSelectToggled(on);
+  };
+  content.autoSelect = _autoSelect;
   _listView = content;
 
   if (@available(macOS 26.0, *)) {
@@ -199,6 +213,12 @@ static const CGFloat kSlideDistance = 12.0;
     nonSelectable = [self _layersWithoutConstant];
   else if ([kind isEqualToString:@"appliesTo"])
     nonSelectable = [self _layersWithoutAnimation];
+
+  // Mirror the gating onto the mini-viewer's auto-select (and anything else the
+  // host wires) so clicking a layer in the popover preview honors the same
+  // keypose/constants rule as the layer list.
+  if (self.onNonSelectableLayersChanged)
+    self.onNonSelectableLayersChanged(nonSelectable);
 
   // Pre-highlight the selected layer unless the popover already drove the
   // highlight itself (keypose/constants set it before this notification).
@@ -377,6 +397,9 @@ static const CGFloat kSlideDistance = 12.0;
   // Apply any pending highlight (requested before the list view existed).
   if (_highlightLayerID)
     [_listView highlightLayerID:_highlightLayerID];
+  // Reflect the current toggle state (may have changed via undo/redo while the
+  // panel was closed).
+  [_listView setAutoSelect:_autoSelect];
   _visible = YES;
 
   // Animate on the next runloop tick - once the window is actually on screen,
@@ -451,6 +474,8 @@ static const CGFloat kSlideDistance = 12.0;
   [nc removeObserver:self name:NSWindowDidMoveNotification object:nil];
   [nc removeObserver:self name:NSWindowDidResizeNotification object:nil];
   [_listView setNonSelectableLayerIDs:nil];
+  if (self.onNonSelectableLayersChanged)
+    self.onNonSelectableLayersChanged(nil);
   KKPopoverRemoveKeepAliveWindow(_panel);
   [parent removeChildWindow:_panel];
   [_panel orderOut:nil];

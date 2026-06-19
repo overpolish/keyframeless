@@ -37,6 +37,19 @@ extern NSString *const CanvasMiniViewerRequestPath;
 /// metadata (aspectLinked, units) and the scale-box drag reads the aspect-link
 /// default when the timeline has no Scale lane yet.
 @property(nonatomic, copy, nullable) NSArray<KKLane *> *laneTemplates;
+/// When YES, a click on the preview body (missing every handle) picks the
+/// topmost image layer under the cursor and fires `onSelectLayer` - the
+/// mini-viewer counterpart of the viewer's auto-select toggle. Off by default;
+/// the inspector mirrors the persisted "Auto-select layers" state onto it.
+@property(nonatomic) BOOL autoSelectEnabled;
+/// Layers that can't be auto-selected right now (mirrors the layer list's
+/// non-selectable gating - e.g. a keypose popover only lets you pick layers with
+/// a keypose at that time). A click over one falls through to the layer beneath.
+@property(nonatomic, copy, nullable) NSSet<NSString *> *nonSelectableLayerIDs;
+/// Fired with the picked layer's id when a background click auto-selects a layer
+/// (only when `autoSelectEnabled`). The inspector wires this to its layer
+/// selection so the timeline / OSC / Constants follow.
+@property(nonatomic, copy, nullable) void (^onSelectLayer)(NSString *layerID);
 @end
 
 NS_ASSUME_NONNULL_END

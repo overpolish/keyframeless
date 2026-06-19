@@ -555,6 +555,16 @@ BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
     if (fabs(t - frac) <= epsilon)
       return YES;
   }
+  // Lead-in / lead-out: the value holds flat BEFORE the first keypose and AFTER
+  // the last one (drawn gray in the timeline), so keep the handle grabbable
+  // across those flat edges - a drag there writes the nearest (i.e. first /
+  // last) keypose. Uses the ACTUAL keypose times so an animation whose motion
+  // starts/ends mid-clip stays editable across its holds, not only at the
+  // projected timeline ends. The interior transition (between first and last)
+  // stays hidden - only the on-keypose checks above light it up there.
+  if (n >= 2 &&
+      (frac <= kps.firstObject.time || frac >= kps.lastObject.time))
+    return YES;
   return NO;
 }
 

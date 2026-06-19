@@ -214,6 +214,11 @@
     // - without it the OSC reads no state and defaults to visible.
     KKInstanceStateEnsureForAPI(self.apiManager);
 
+    // Publish the full UIState JSON for the viewer OSC (it can't read the custom
+    // param) - it reads view-prefs like "autoSelect" and uses it as the base to
+    // merge a new selection into on a hit-test click.
+    CanvasSetUIStateSnapshot(KKReadCustomParamString(getAPI, kParamUIState));
+
     [actionAPI endAction:self];
 
     NSArray<KKLane *> *available = [CanvasPlugin availableLanes];
@@ -395,6 +400,16 @@
         [s patchUIStateKey:@"selectedLayerID"
                      value:(resolvedLayerID ?: @"")
                    paramID:kParamUIState];
+    };
+
+    // "Auto-select layers" toggle: seed the checkbox from the persisted state
+    // (OFF when absent) and persist flips to kParamUIState. The write triggers
+    // parameterChanged, which re-publishes the UIState snapshot the viewer OSC
+    // reads.
+    [view setAutoSelect:[visState[@"autoSelect"] boolValue]];
+    view.onAutoSelectChanged = ^(BOOL on) {
+      __strong CanvasPlugin *s = weakOSC;
+      [s patchUIStateKey:@"autoSelect" value:@(on) paramID:kParamUIState];
     };
 
     // The Layers panel opens parameter actions to read/write kParamLayerData;

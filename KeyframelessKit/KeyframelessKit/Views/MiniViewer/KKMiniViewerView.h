@@ -92,6 +92,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     doubleClickAtPoint:(CGPoint)point
            contentRect:(CGRect)contentRect;
+/// A single click landed on the preview body, missing every handle (the overlay
+/// only swallows handle hits) and not on a filmstrip cell. `point` is in overlay
+/// points (y-up). Lets a delegate pick whatever object is under the cursor (e.g.
+/// click-to-select a layer). Return YES if handled.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    backgroundClickAtPoint:(CGPoint)point
+               contentRect:(CGRect)contentRect;
 /// Anchor-point pivot square (Magic Move). Centre in overlay points (y-up),
 /// drawn with the shared `KKSquarePointOSC` glyph so it matches the viewer.
 /// Return NO for none. Dimming for a revealed ghost comes from the renderer's

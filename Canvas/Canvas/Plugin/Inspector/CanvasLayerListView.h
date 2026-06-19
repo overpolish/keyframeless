@@ -41,6 +41,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// inspector timeline edits.
 @property(nonatomic, copy, nullable) void (^onPrimaryLayerSelected)
     (NSString *_Nullable layerID);
+/// "Auto-select layers" toggle state (clicking a layer in the viewer selects
+/// it). Drives the checkbox above the list; setting it updates the checkbox
+/// without firing onAutoSelectToggled.
+@property(nonatomic) BOOL autoSelect;
+/// Fired when the user flips the "Auto-select layers" checkbox.
+@property(nonatomic, copy, nullable) void (^onAutoSelectToggled)(BOOL on);
 @end
 
 NS_ASSUME_NONNULL_END

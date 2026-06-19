@@ -43,6 +43,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// Highlight `layerID` in the panel's list WITHOUT firing onPrimaryLayerSelected
 /// (mirrors a keypose popover's active layer into the list).
 - (void)highlightLayerID:(nullable NSString *)layerID;
+/// "Auto-select layers" toggle state, mirrored onto the panel's checkbox when it
+/// (re)opens. Setting it does NOT fire onAutoSelectToggled.
+@property(nonatomic) BOOL autoSelect;
+/// Fired when the user flips the panel's "Auto-select layers" checkbox.
+@property(nonatomic, copy, nullable) void (^onAutoSelectToggled)(BOOL on);
+/// Fired when the set of non-selectable layers changes (a popover opened with
+/// its gating, or closed -> nil). Lets the host mirror the same gating onto the
+/// mini-viewer's auto-select. Same set passed to the panel's grayed rows.
+@property(nonatomic, copy, nullable) void (^onNonSelectableLayersChanged)
+    (NSSet<NSString *> *_Nullable layerIDs);
 @end
 
 NS_ASSUME_NONNULL_END

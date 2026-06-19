@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "CanvasLayerTimeline.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import <KeyframelessKit/KKDataBlob.h>
@@ -55,6 +56,9 @@
         [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     NSString *json = KKReadCustomParamString(getAPI, kParamUIState);
     [actionAPI endAction:self];
+    // Keep the viewer OSC's UIState snapshot fresh after every write (toggle,
+    // selection, OSC visibility, undo/redo).
+    CanvasSetUIStateSnapshot(json);
     NSDictionary *state =
         (json.length ? [NSJSONSerialization
                            JSONObjectWithData:
@@ -81,9 +85,11 @@
     // selection persisted). The view method self-guards no-ops, so it's safe to
     // run on every UIState change (OSC toggles preserve the key, so they no-op).
     NSString *restoredSel = state[@"selectedLayerID"];
+    BOOL autoSelect = [state[@"autoSelect"] boolValue];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];
+      [(CanvasInspectorView *)self.inspectorView setAutoSelect:autoSelect];
       KKPluginInstanceState *ist = KKInstanceStateEnsureForAPI(self.apiManager);
       ist.oscMasterVisible = oscMaster;
       ist.oscElementsByOwner =

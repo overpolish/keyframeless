@@ -112,6 +112,16 @@
       }
     }
   }
+  // No handle (the overlay swallows those) and no filmstrip cell: offer the
+  // click to the delegate as a background pick (e.g. click-to-select a layer).
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
+  if ([d respondsToSelector:@selector(miniViewer:
+                                backgroundClickAtPoint:contentRect:)]) {
+    [d miniViewer:self
+        backgroundClickAtPoint:[self convertPoint:event.locationInWindow
+                                         fromView:nil]
+                   contentRect:[self contentRectInViewPoints]];
+  }
 }
 
 - (void)mouseUp:(NSEvent *)event {

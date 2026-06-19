@@ -4,6 +4,7 @@
  */
 
 #import "CanvasOSC.h"
+#import "CanvasLayerRender.h"
 #import "CanvasLayerTimeline.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
@@ -17,12 +18,20 @@ static const NSInteger kCanvasOSCPositionPart = 1;
 static const NSInteger kCanvasOSCScalePart = 2;
 static const NSInteger kCanvasOSCPathPart = 3;
 static const NSInteger kCanvasOSCRotationPart = 4;
+// Auto-select: claim a click over an (unselected) image layer to select it.
+static const NSInteger kCanvasOSCLayerPickPart = 5;
 
 @interface CanvasOSC ()
 @property(nonatomic, strong) KKPositionOSC *position;
 @property(nonatomic, strong) KKScaleOSC *scale;
 @property(nonatomic, strong) KKRotationOSC *rotation;
 @property(nonatomic) BOOL pointCursorSet;
+// Layer the hover hit-test resolved for an auto-select pick; consumed by the
+// matching mouseDown.
+@property(nonatomic, copy, nullable) NSString *pendingPickLayerID;
+// Override of the kit's (private) opt-click element-hide writer, so Canvas's
+// per-layer + full-state write is used instead of the kit's partial one.
+- (void)kkToggleOSCElementHidden:(NSString *)key;
 @end
 
 @implementation CanvasOSC
@@ -70,14 +79,15 @@ static const NSInteger kCanvasOSCRotationPart = 4;
   return self;
 }
 
-// Min dimension of the canvas frame (object [0,1]^2 corners converted to
-// canvas) - the reference length the scale gizmo sizes against, so the box
-// tracks the clip with viewer zoom rather than being a fixed screen size.
-- (double)_onScreenFrameMin {
+// The canvas-pixel lengths of the object-space unit axes: maps OBJECT (0,0),
+// (1,0), (0,1) to CANVAS and returns the X-axis and Y-axis spans. Object space
+// is normalised [0,1] but the canvas is W:H pixels, so these give both the
+// gizmo's reference size and the pixel aspect. NO when the OSC API is absent.
+- (BOOL)_objectBasisWidth:(double *)outW height:(double *)outH {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   if (!oscAPI)
-    return 1000.0;
+    return NO;
   CGPoint c0 = CGPointZero, cx = CGPointZero, cy = CGPointZero;
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
                           fromX:0
@@ -97,8 +107,18 @@ static const NSInteger kCanvasOSCRotationPart = 4;
                         toSpace:kFxDrawingCoordinates_CANVAS
                             toX:&cy.x
                             toY:&cy.y];
-  double w = hypot(cx.x - c0.x, cx.y - c0.y);
-  double h = hypot(cy.x - c0.x, cy.y - c0.y);
+  *outW = hypot(cx.x - c0.x, cx.y - c0.y);
+  *outH = hypot(cy.x - c0.x, cy.y - c0.y);
+  return YES;
+}
+
+// Min dimension of the canvas frame - the reference length the scale gizmo sizes
+// against, so the box tracks the clip with viewer zoom rather than being a fixed
+// screen size.
+- (double)_onScreenFrameMin {
+  double w = 0, h = 0;
+  if (![self _objectBasisWidth:&w height:&h])
+    return 1000.0;
   double m = MIN(w, h);
   return (m > 1.0) ? m : 1000.0;
 }
@@ -126,19 +146,179 @@ static const NSInteger kCanvasOSCRotationPart = 4;
 // the mini-viewer's `handlesLocked`. Derived the same way as the persist path:
 // the snapshot lanes carry the owning `layerKey`; resolve it in the published
 // layer blob.
-- (BOOL)_selectedLayerLocked {
+// The current layer stack, decoded from the inspector-published blob snapshot
+// (the OSC can't read kParamLayerData directly). Cached by the blob string so a
+// hover (which hit-tests every mouse-move) doesn't re-decode the blob each tick;
+// re-decodes only when the blob actually changes. Read-only callers - the
+// persist path decodes its own fresh copy before mutating.
+- (NSArray<KKBezierPath *> *)_snapshotPaths {
+  NSString *b64 = CanvasLayerBlobSnapshot();
+  if (!b64.length)
+    return @[];
+  static NSString *sLastB64 = nil;
+  static NSArray<KKBezierPath *> *sLastPaths = nil;
+  if (sLastPaths && [b64 isEqualToString:sLastB64])
+    return sLastPaths;
+  NSArray<KKBezierPath *> *paths = [KKBezierPath
+      pathsFromBlob:[[NSData alloc] initWithBase64EncodedString:b64 options:0]];
+  sLastB64 = [b64 copy];
+  sLastPaths = paths;
+  return paths;
+}
+
+// The layer the OSC acts on, resolved against the stack (nil/topmost handled):
+// the process timeline snapshot's lanes carry the owning layerKey (set by the
+// inspector when it publishes the selected layer's timeline).
+- (KKBezierPath *)_selectedLayer {
   NSString *layerID = nil;
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
     if (l.layerKey.length) {
       layerID = l.layerKey;
       break;
     }
-  NSString *b64 = CanvasLayerBlobSnapshot();
-  if (!b64.length)
-    return NO;
-  NSMutableArray<KKBezierPath *> *paths = [KKBezierPath
-      pathsFromBlob:[[NSData alloc] initWithBase64EncodedString:b64 options:0]];
-  return CanvasSelectedLayerForPaths(paths, layerID).locked;
+  return CanvasSelectedLayerForPaths([self _snapshotPaths], layerID);
+}
+
+- (NSString *)_resolvedSelectedLayerID {
+  return [self _selectedLayer].layerID;
+}
+
+- (BOOL)_selectedLayerLocked {
+  return [self _selectedLayer].locked;
+}
+
+// The current kParamUIState as a dictionary, parsed from the inspector-published
+// snapshot (the OSC can't read the custom param itself). Empty dict when absent.
+- (NSDictionary *)_uiStateDict {
+  NSString *json = CanvasUIStateSnapshot();
+  NSDictionary *st =
+      json.length
+          ? [NSJSONSerialization
+                JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
+                           options:0
+                             error:nil]
+          : nil;
+  return [st isKindOfClass:[NSDictionary class]] ? st : @{};
+}
+
+// Mutate kParamUIState and write it back inside an action scope. The OSC can't
+// READ the custom param to merge, so `mutate` runs on a copy of the published
+// snapshot (preserving every key Canvas keeps there - selectedLayerID,
+// activeTab, oscElementsByLayer, ...); the write fires the effect's
+// parameterChanged, and we republish the snapshot so a follow-up write sees the
+// new value before the round-trip. The single home for OSC-side UIState writes.
+- (void)_writeUIStateMerging:(void (^)(NSMutableDictionary *state))mutate {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!actionAPI || !setAPI)
+    return;
+  NSMutableDictionary *state = [[self _uiStateDict] mutableCopy];
+  mutate(state);
+  NSString *newJSON = [[NSString alloc]
+      initWithData:[NSJSONSerialization dataWithJSONObject:state
+                                                   options:0
+                                                     error:nil]
+          encoding:NSUTF8StringEncoding];
+  [actionAPI startAction:self];
+  KKWriteCustomParamString(setAPI, newJSON, kParamUIState);
+  [actionAPI endAction:self];
+  CanvasSetUIStateSnapshot(newJSON);
+}
+
+// "Auto-select layers" toggle, read from the UIState snapshot (the OSC can't
+// read the custom param). Default OFF when absent.
+- (BOOL)_autoSelectEnabled {
+  return [[self _uiStateDict][@"autoSelect"] boolValue];
+}
+
+// Canvas pixel aspect (outputWidth/outputHeight), from the object-space basis.
+- (double)_canvasAspect {
+  double w = 0, h = 0;
+  if (![self _objectBasisWidth:&w height:&h] || h <= 0.0)
+    return 1.0;
+  return w / h;
+}
+
+// Topmost image layer under the cursor (alpha-aware), or nil. Converts the
+// canvas mouse point to object space and evaluates each layer's transform at the
+// playhead fraction.
+- (NSString *)_pickLayerIDAtX:(double)x y:(double)y atTime:(CMTime)time {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return nil;
+  double ox = 0, oy = 0;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                          fromX:x
+                          fromY:y
+                        toSpace:kFxDrawingCoordinates_OBJECT
+                            toX:&ox
+                            toY:&oy];
+  // FCP's OBJECT space here is Y-DOWN (oy=0 at the top) while the render's object
+  // space (CanvasTransformCorner, the quads) is Y-UP (Y=0 at the bottom), so the
+  // mouse Y must be flipped to land in the same space. This is what made
+  // off-centre layers unselectable (centred/full-frame ones are flip-invariant,
+  // so they appeared to work) and X-rotation look mirrored.
+  oy = 1.0 - oy;
+  NSArray<KKBezierPath *> *paths = [self _snapshotPaths];
+  if (!paths.count)
+    return nil;
+  return CanvasHitTestLayerID(paths, [self fractionAtTime:time],
+                              (float)[self _canvasAspect], (float)ox, (float)oy,
+                              /*alphaAware=*/YES, /*excluded=*/nil,
+                              /*requireEditableAtFrac=*/YES,
+                              [CanvasPlugin availableLanes]);
+}
+
+// Merge the picked layer id into the current UIState (snapshot base, since the
+// OSC can't read the custom param) and write it back inside an action scope. The
+// write fires the effect's parameterChanged, which re-selects the layer in the
+// inspector + drives the per-layer OSC/mini state. Mirrors the kit's OSC opt-hide
+// write (kkToggleOSCElementHidden).
+- (void)_commitPickSelection {
+  NSString *layerID = self.pendingPickLayerID;
+  if (!layerID.length)
+    return;
+  [self _writeUIStateMerging:^(NSMutableDictionary *state) {
+    state[@"selectedLayerID"] = layerID;
+  }];
+}
+
+// Master-on opt-click over a handle toggles that element's visibility. The kit
+// base rebuilds kParamUIState from `st.lastUIState` and writes the GLOBAL
+// "oscElements" key - but Canvas keeps visibility PER LAYER
+// ("oscElementsByLayer") and overwrites lastUIState with a partial 2-key dict on
+// every layer switch (canvasApplyOSCForLayer), so the kit write (a) doesn't
+// persist for Canvas's per-layer read and (b) DROPS selectedLayerID/activeTab,
+// resetting selection to topmost + the tab to Basic. Override to flip the
+// SELECTED layer's set and write the FULL state, merged into the snapshot base
+// (the OSC can't read the custom param to merge itself).
+- (void)kkToggleOSCElementHidden:(NSString *)key {
+  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
+  NSMutableSet<NSString *> *hidden =
+      [(st.hiddenOSCElements ?: [NSSet set]) mutableCopy];
+  if ([hidden containsObject:key])
+    [hidden removeObject:key];
+  else
+    [hidden addObject:key];
+  st.hiddenOSCElements = hidden;
+
+  NSString *layerID = [self _resolvedSelectedLayerID] ?: @"";
+  NSMutableDictionary<NSString *, NSNumber *> *els =
+      [NSMutableDictionary dictionary];
+  for (NSString *k in [self oscElementKeys])
+    els[k] = @(![hidden containsObject:k]);
+
+  [self _writeUIStateMerging:^(NSMutableDictionary *state) {
+    NSMutableDictionary *byLayer =
+        [(state[@"oscElementsByLayer"] ?: @{}) mutableCopy];
+    byLayer[layerID] = els;
+    state[@"oscElementsByLayer"] = byLayer;
+    st.oscElementsByOwner = byLayer; // keep the in-process map in step
+    st.lastUIState = state;
+  }];
 }
 
 - (void)drawOSCWithWidth:(NSInteger)width
@@ -248,44 +428,64 @@ static const NSInteger kCanvasOSCRotationPart = 4;
     [resetAPI setCursor:[NSCursor arrowCursor]];
     self.pointCursorSet = NO;
   }
-  // Locked layer: nothing is grabbable (and Opt can't peek it back).
-  if ([self _selectedLayerLocked])
-    return;
-  // The controller gates hit-testing on visibility + ITS optRevealActive, so a
-  // hidden handle isn't grabbable unless Opt-revealed - forward the reveal flag
-  // so a revealed ghost becomes hittable (opt-click re-shows it).
-  self.position.optRevealActive = self.optRevealActive;
-  KKPositionHit ph = [self.position hitTestAtX:positionX
-                                             y:positionY
-                                        atTime:time];
-  if (ph != KKPositionHitNone) {
-    *activePart = (ph == KKPositionHitTangentHandle) ? kCanvasOSCPathPart
-                                                     : kCanvasOSCPositionPart;
-    self.pointCursorSet = YES; // the controller set the move/eye cursor
-    // When an opt-click would toggle this element's visibility (master on),
-    // show the eye / eye.slash affordance over its handle instead.
-    NSCursor *eye = [self
-        kkVisibilityCursorForLabel:[self
-                                       oscElementKeyForActivePart:*activePart]];
-    if (eye) {
+  // Locked SELECTED layer: its own handles aren't grabbable (and Opt can't peek
+  // them back). Auto-select still runs below, so you can click a different layer
+  // to switch away from a locked one.
+  if (![self _selectedLayerLocked]) {
+    // The controller gates hit-testing on visibility + ITS optRevealActive, so a
+    // hidden handle isn't grabbable unless Opt-revealed - forward the reveal flag
+    // so a revealed ghost becomes hittable (opt-click re-shows it).
+    self.position.optRevealActive = self.optRevealActive;
+    KKPositionHit ph = [self.position hitTestAtX:positionX
+                                               y:positionY
+                                          atTime:time];
+    if (ph != KKPositionHitNone) {
+      *activePart = (ph == KKPositionHitTangentHandle) ? kCanvasOSCPathPart
+                                                       : kCanvasOSCPositionPart;
+      self.pointCursorSet = YES; // the controller set the move/eye cursor
+      // When an opt-click would toggle this element's visibility (master on),
+      // show the eye / eye.slash affordance over its handle instead.
+      NSCursor *eye = [self
+          kkVisibilityCursorForLabel:[self oscElementKeyForActivePart:
+                                               *activePart]];
+      if (eye) {
+        id<FxOnScreenControlAPI_v4> oscAPI =
+            [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+        [oscAPI setCursor:eye];
+      }
+      return;
+    }
+    // Scale box handles, checked after the Position handle/path miss (the control
+    // owns reachability + the opt-hover eye affordance + the resize cursor).
+    [self _syncScaleControlAtTime:time];
+    if ([self.scale hitTestHandleAtX:positionX y:positionY atTime:time] >= 0) {
+      *activePart = kCanvasOSCScalePart;
+      return;
+    }
+    // Rotation rings, checked last (they sit inside the scale box). The control
+    // owns reachability + the per-axis opt-hover eye + the rotate cursor.
+    [self _syncRotationControlAtTime:time];
+    if ([self.rotation hitTestRingAtX:positionX y:positionY atTime:time] >= 0) {
+      *activePart = kCanvasOSCRotationPart;
+      return;
+    }
+  }
+
+  // Auto-select: no handle was grabbed, so if the toggle is on, claim a click
+  // over the topmost (unselected) image layer to select it. Clicking the
+  // already-selected layer is a no-op (don't claim - leave the click to FCP).
+  self.pendingPickLayerID = nil;
+  if ([self _autoSelectEnabled]) {
+    NSString *hit = [self _pickLayerIDAtX:positionX y:positionY atTime:time];
+    if (hit.length && ![hit isEqualToString:[self _resolvedSelectedLayerID]]) {
+      self.pendingPickLayerID = hit;
+      *activePart = kCanvasOSCLayerPickPart;
       id<FxOnScreenControlAPI_v4> oscAPI =
           [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-      [oscAPI setCursor:eye];
+      [oscAPI setCursor:[NSCursor pointingHandCursor]];
+      self.pointCursorSet = YES;
     }
-    return;
   }
-  // Scale box handles, checked after the Position handle/path miss (the control
-  // owns reachability + the opt-hover eye affordance + the resize cursor).
-  [self _syncScaleControlAtTime:time];
-  if ([self.scale hitTestHandleAtX:positionX y:positionY atTime:time] >= 0) {
-    *activePart = kCanvasOSCScalePart;
-    return;
-  }
-  // Rotation rings, checked last (they sit inside the scale box). The control
-  // owns reachability + the per-axis opt-hover eye + the rotate cursor.
-  [self _syncRotationControlAtTime:time];
-  if ([self.rotation hitTestRingAtX:positionX y:positionY atTime:time] >= 0)
-    *activePart = kCanvasOSCRotationPart;
 }
 
 - (void)mouseDownAtPositionX:(double)positionX
@@ -294,6 +494,14 @@ static const NSInteger kCanvasOSCRotationPart = 4;
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
+  // Auto-select pick: the hover hit-test claimed a click over an unselected
+  // image layer - commit the selection and consume the click (no drag).
+  if (activePart == kCanvasOSCLayerPickPart) {
+    [self _commitPickSelection];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   // Opt-click over the handle (master on) toggles this element's visibility
   // instead of dragging; master off leaves it a normal drag (peek-and-use).
   if ([self kkArmOptHideForActivePart:activePart modifiers:modifiers]) {

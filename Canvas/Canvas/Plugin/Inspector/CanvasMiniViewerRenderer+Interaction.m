@@ -3,10 +3,43 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "CanvasLayerRender.h"
 #import "CanvasMiniViewerRenderer_Internal.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
 @implementation CanvasMiniViewerRenderer (Interaction)
+
+// Auto-select hit-test in the mini. The content rect maps object X directly and
+// object Y FLIPPED (content/Position is y-down: py=0 at the top per
+// handlePointForContentRect; the render's object space is y-up), so
+// objY = 1 - (p.y - minY)/h - matching the viewer's mouse-Y flip. Honors the
+// toggle + the non-selectable gating (e.g. a keypose popover only lets you pick
+// layers with a keypose at that time), mirroring the layer list.
+- (NSString *)_autoSelectLayerAtPoint:(CGPoint)p contentRect:(CGRect)cr {
+  if (!self.autoSelectEnabled || cr.size.width <= 0 || cr.size.height <= 0)
+    return nil;
+  float objX = (float)((p.x - CGRectGetMinX(cr)) / cr.size.width);
+  float objY = (float)(1.0 - (p.y - CGRectGetMinY(cr)) / cr.size.height);
+  float aspect = (float)(cr.size.width / cr.size.height);
+  return CanvasHitTestLayerID(self.layers ?: @[], self.editFraction, aspect,
+                              objX, objY, /*alphaAware=*/YES,
+                              self.nonSelectableLayerIDs,
+                              /*requireEditableAtFrac=*/NO, /*templates=*/nil);
+}
+
+// A click on the preview body (no handle hit) picks the topmost selectable image
+// layer under the cursor, like the viewer OSC; editing then follows via
+// onSelectLayer -> the inspector's _selectLayer.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    backgroundClickAtPoint:(CGPoint)p
+               contentRect:(CGRect)cr {
+  NSString *hit = [self _autoSelectLayerAtPoint:p contentRect:cr];
+  if (!hit.length || [hit isEqualToString:self.selectedLayerID])
+    return NO;
+  if (self.onSelectLayer)
+    self.onSelectLayer(hit);
+  return YES;
+}
 
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     motionPathPolylineForContentRect:(CGRect)cr {
@@ -244,6 +277,11 @@
   if ([self.scaleMini handleHitAtPoint:p contentRect:cr outIndex:&idx])
     return [self kkVisibilityCursorForLabel:@"Scale"]
                ?: KKResizeCursorForBoxHandle(idx);
+  // Over a selectable layer body (auto-select would pick it): pointing hand,
+  // matching the viewer OSC's hover cursor.
+  NSString *pick = [self _autoSelectLayerAtPoint:p contentRect:cr];
+  if (pick.length && ![pick isEqualToString:self.selectedLayerID])
+    return [NSCursor pointingHandCursor];
   return [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
 }
 

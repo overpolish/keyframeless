@@ -12,6 +12,7 @@
 #import "Constants.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKCheckboxRowView.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKShape.h>
 #import <KeyframelessKit/KKTokens.h>
@@ -22,6 +23,7 @@
 // Build-time helpers (implemented in the primary @implementation below).
 @interface CanvasLayerListView ()
 - (NSTextField *)_buildTitleLabel;
+- (void)_buildAutoSelectRow;
 - (void)_buildScrollWell;
 - (void)_buildEmptyState;
 - (NSStackView *)_buildHintRow;
@@ -50,6 +52,7 @@
 
 - (void)_build {
   NSTextField *title = [self _buildTitleLabel];
+  [self _buildAutoSelectRow];
   [self _buildScrollWell];
   [self _buildEmptyState];
   NSStackView *hint = [self _buildHintRow];
@@ -73,6 +76,45 @@
   title.translatesAutoresizingMaskIntoConstraints = NO;
   [self addSubview:title];
   return title;
+}
+
+// "Auto-select layers" toggle, sitting just under the title and above the well.
+// Standard label-left / checkbox-right row (KKCheckboxRowView), like motion
+// blur etc. Off by default; when on, clicking a layer in the viewer selects it.
+// Images only for now (the OSC hit-test skips non-image layers).
+- (void)_buildAutoSelectRow {
+  __weak typeof(self) weakSelf = self;
+  KKCheckboxRowView *row = [[KKCheckboxRowView alloc]
+      initWithTitle:CLoc(@"Auto-select layers",
+                         @"Companion-panel toggle: click a layer in the "
+                         @"viewer to select it.")
+            tooltip:CLoc(@"Click a layer in the viewer to select it.",
+                         @"Tooltip for the Auto-select layers toggle.")
+            binding:^BOOL {
+              __strong typeof(weakSelf) s = weakSelf;
+              return s ? s->_autoSelectState : NO;
+            }
+    disabledBinding:nil
+           onToggle:^(BOOL on) {
+             __strong typeof(weakSelf) s = weakSelf;
+             if (!s)
+               return;
+             s->_autoSelectState = on;
+             if (s.onAutoSelectToggled)
+               s.onAutoSelectToggled(on);
+           }];
+  row.translatesAutoresizingMaskIntoConstraints = NO;
+  [self addSubview:row];
+  _autoSelectRow = row;
+}
+
+- (BOOL)autoSelect {
+  return _autoSelectState;
+}
+
+- (void)setAutoSelect:(BOOL)autoSelect {
+  _autoSelectState = autoSelect;
+  [_autoSelectRow popoverDidRefresh]; // re-reads the binding into the checkbox
 }
 
 // The scrollable well: scroll view + flipped document view + the vertical rows
@@ -192,12 +234,20 @@
   NSView *rows = _rowsStack;
   NSClipView *clip = scroll.contentView;
 
+  KKCheckboxRowView *autoRow = _autoSelectRow;
   [NSLayoutConstraint activateConstraints:@[
     [title.topAnchor constraintEqualToAnchor:self.topAnchor constant:pad],
     [title.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                         constant:pad],
 
-    [scroll.topAnchor constraintEqualToAnchor:title.bottomAnchor
+    [autoRow.topAnchor constraintEqualToAnchor:title.bottomAnchor
+                                      constant:KKSpacingXS],
+    [autoRow.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                          constant:pad],
+    [autoRow.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                           constant:-pad],
+
+    [scroll.topAnchor constraintEqualToAnchor:autoRow.bottomAnchor
                                      constant:KKSpacingSM],
     [scroll.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                          constant:pad],

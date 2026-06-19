@@ -42,6 +42,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// visibility into the active instance state in response.
 @property(nonatomic, copy, nullable) void (^onSelectedLayerChanged)
     (NSString *resolvedLayerID);
+/// Reflect the persisted "Auto-select layers" toggle onto the Layers panel
+/// checkbox (seed from createView + on undo/redo). Does not fire
+/// onAutoSelectChanged.
+- (void)setAutoSelect:(BOOL)autoSelect;
+/// Fired when the user flips the "Auto-select layers" checkbox in the Layers
+/// panel. The plugin persists it to kParamUIState.
+@property(nonatomic, copy, nullable) void (^onAutoSelectChanged)(BOOL on);
 @end
 
 NS_ASSUME_NONNULL_END

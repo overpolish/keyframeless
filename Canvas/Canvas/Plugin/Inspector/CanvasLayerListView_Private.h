@@ -10,6 +10,7 @@
 #import "CanvasLayerListView.h"
 
 @class KKBezierPath;
+@class KKCheckboxRowView;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -63,7 +64,9 @@ extern NSPasteboardType const kCanvasLayerRowDragType;
   NSView *_bottomShadow;
   NSView *_listBorder;
   NSTextField *_hintLabel;
-  NSInteger _editingIndex; // row being inline-renamed, or -1
+  KKCheckboxRowView *_autoSelectRow; // "Auto-select layers" toggle above list
+  BOOL _autoSelectState;             // backs the row's live binding
+  NSInteger _editingIndex;           // row being inline-renamed, or -1
   __weak NSTextField *_editingField;
   NSMutableSet<NSString *> *_collapsedGroups; // UI-only collapsed group IDs
   id _keyMonitor;                             // local keyDown monitor

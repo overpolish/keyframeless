@@ -58,6 +58,11 @@
       if (s.onTimelineMutated)
         s.onTimelineMutated(tl);
     };
+    // Auto-select in the mini-viewer: a body click picks the layer under the
+    // cursor (gated by autoSelectEnabled, mirrored from the persisted toggle).
+    _miniViewerRenderer.onSelectLayer = ^(NSString *layerID) {
+      [weakInit _selectAndHighlightLayer:layerID];
+    };
     self.miniViewerDelegate = _miniViewerRenderer;
     self.miniViewerDescriptorPath = CanvasMiniViewerDescriptorPath;
     self.miniViewerRequestPath = CanvasMiniViewerRequestPath;
@@ -72,11 +77,29 @@
     _layerListController.onPrimaryLayerSelected = ^(NSString *layerID) {
       [weak _selectLayer:layerID];
     };
-    // A keypose popover scoped itself to a layer (clicked pill) -> mirror that
-    // into the layer list's highlight.
-    self.basicLanesView.onKeyposeLayerActivated = ^(NSString *layerKey) {
+    _layerListController.onAutoSelectToggled = ^(BOOL on) {
       typeof(self) s = weak;
-      [s->_layerListController highlightLayerID:layerKey];
+      if (s.onAutoSelectChanged)
+        s.onAutoSelectChanged(on);
+    };
+    // Mirror the popover's non-selectable gating onto the MINI preview (same
+    // rule as the layer rows). The MAIN VIEWER gates itself by the playhead in
+    // the OSC (a layer is clickable there if it has a constant or a keypose at
+    // the playhead), so it needs nothing pushed here.
+    _layerListController.onNonSelectableLayersChanged = ^(NSSet<NSString *> *s) {
+      typeof(self) ss = weak;
+      ss->_miniViewerRenderer.nonSelectableLayerIDs = s;
+    };
+    // A keypose popover scoped itself to a layer (clicked a keypose in that
+    // layer's lane) -> make it the SELECTED layer, not just a highlight, so the
+    // viewer OSC / mini / Constants all follow the layer being edited. Without a
+    // real selection change the viewer OSC kept reading the previously-selected
+    // layer (it reads the process-snapshot timeline, which only applyTimeline
+    // republishes). _selectLayer no-ops the popover retarget (the graph already
+    // scoped itself before firing this), so there's no loop; also move the list
+    // highlight since this didn't originate from a panel click.
+    self.basicLanesView.onKeyposeLayerActivated = ^(NSString *layerKey) {
+      [weak _selectAndHighlightLayer:layerKey];
     };
     // Opening Constants: if the selected layer has no constants, land on the
     // first layer that does (the popover shows the selected owner's constants).
@@ -124,6 +147,20 @@
   // Let the plugin swap the active OSC-visibility set to this layer's.
   if (_onSelectedLayerChanged)
     _onSelectedLayerChanged(sel.layerID);
+}
+
+// Select a layer AND move the list highlight. Used when the selection originates
+// somewhere other than a panel row click (a keypose-lane click, a mini-viewer
+// auto-select) - those don't set the row highlight themselves, unlike
+// onPrimaryLayerSelected which fires from the row click that already highlights.
+- (void)_selectAndHighlightLayer:(NSString *)layerID {
+  [self _selectLayer:layerID];
+  [_layerListController highlightLayerID:layerID];
+}
+
+- (void)setAutoSelect:(BOOL)autoSelect {
+  _layerListController.autoSelect = autoSelect;
+  _miniViewerRenderer.autoSelectEnabled = autoSelect;
 }
 
 - (void)restoreSelectedLayerID:(NSString *)layerID {
@@ -298,6 +335,14 @@
   NSArray<KKBezierPath *> *paths = [_layerListController currentLayerPaths];
   KKBezierPath *sel = CanvasSelectedLayerForPaths(paths, _selectedLayerID);
   KKTimeline *layerTL = CanvasLayerTimelineForPath(sel, _availableLanes);
+  // Always refresh the viewer OSC's process snapshot with the selected layer's
+  // CURRENT keyposes - even mid-drag. The snapshot only feeds the viewer
+  // control's draw + visibility (which must track a just-added/moved keypose, so
+  // its lead-in/out hold visibility recomputes against the new first/last
+  // keypose times); it doesn't reset any inspector-side popover/mini edit. The
+  // gated applyTimeline below also sets it, but is skipped on a value-only
+  // change during a drag - which is exactly when the snapshot went stale.
+  KKSetProcessTimelineSnapshot(layerTL);
   // Always rebuild the all-layers graph (any layer may have gained/lost an
   // animated lane).
   [self _feedGraph];

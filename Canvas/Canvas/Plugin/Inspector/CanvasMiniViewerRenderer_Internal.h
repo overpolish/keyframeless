@@ -24,6 +24,11 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @interface CanvasMiniViewerRenderer (Interaction)
+// The layer auto-select would pick at `p` (or nil): topmost selectable image
+// layer under the cursor, honoring autoSelectEnabled + nonSelectableLayerIDs.
+// Shared by the background-click selector and the hover cursor.
+- (nullable NSString *)_autoSelectLayerAtPoint:(CGPoint)p
+                                   contentRect:(CGRect)cr;
 @end
 
 NS_ASSUME_NONNULL_END

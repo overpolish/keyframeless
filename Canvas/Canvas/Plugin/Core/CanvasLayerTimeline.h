@@ -69,4 +69,13 @@ BOOL CanvasAnyLayerHasConstant(NSArray<KKBezierPath *> *paths,
 void CanvasSetLayerBlobSnapshot(NSString *_Nullable b64);
 NSString *_Nullable CanvasLayerBlobSnapshot(void);
 
+/// Process-wide snapshot of the current kParamUIState JSON, published by the
+/// inspector and read by the viewer OSC. Same rationale as the layer blob: the
+/// OSC can WRITE kParamUIState (e.g. to change the selected layer on a hit-test
+/// click) but can't READ the custom param, so it needs the current full state
+/// as a base to merge its one key into without dropping the others. Also lets
+/// the OSC read view-preference flags like "autoSelect".
+void CanvasSetUIStateSnapshot(NSString *_Nullable json);
+NSString *_Nullable CanvasUIStateSnapshot(void);
+
 NS_ASSUME_NONNULL_END

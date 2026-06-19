@@ -10,6 +10,7 @@
 
 @class KKBezierPath;
 @class KKTimeline;
+@class KKLane;
 @protocol PROAPIAccessing;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -71,5 +72,36 @@ void CanvasEncodeSourceTile(id<MTLRenderCommandEncoder> encoder,
                             id<MTLTexture> _Nullable source, float imageWidth,
                             float imageHeight, float tileShiftX,
                             float tileShiftY);
+
+/// Click-to-select hit-test: returns the `layerID` of the TOPMOST image layer
+/// whose on-screen quad contains the object-space point (`objX`,`objY`) in
+/// [0,1] (Y-up, the render's object space), evaluated at clip fraction `frac`,
+/// or nil if none. `aspect` is the canvas pixel aspect (outputW/outputH) so the
+/// transform (scale / Z-rotation / position / X-Y tilt + perspective) matches
+/// the render exactly - the math is scale-invariant in object space, so only
+/// the aspect is needed, not the pixel dimensions.
+///
+/// When `alphaAware` is YES, a click over a TRANSPARENT image pixel (raw image
+/// alpha, NOT the layer's Opacity) falls through to the layer beneath, so you
+/// select what you actually see; NO uses the transformed bounding quad alone.
+/// Skips hidden / group / locked / non-image / non-rect layers. Evaluates each
+/// layer's own persisted `animationJSON` (selection acts on persisted state).
+///
+/// Layers whose `layerID` is in `excludedLayerIDs` are skipped too (a click
+/// over one falls through to the layer beneath) - used by the mini-viewer to
+/// mirror the layer list's "non-selectable" gating (e.g. a keypose popover only
+/// lets you pick layers with a keypose at that time). Pass nil for no
+/// exclusion.
+///
+/// When `requireEditableAtFrac` is YES (the main viewer), a layer is skipped
+/// unless it's editable at `frac`: it has at least one constant (per
+/// `templates`) OR an animated lane visible at `frac` (at a keypose or its
+/// lead-in/out hold). So a fully-animated layer with no keypose at the playhead
+/// isn't pickable on the canvas. Pass NO + nil templates to skip this gate (the
+/// mini-viewer, which is already gated by its popover set).
+NSString *_Nullable CanvasHitTestLayerID(
+    NSArray<KKBezierPath *> *layers, double frac, float aspect, float objX,
+    float objY, BOOL alphaAware, NSSet<NSString *> *_Nullable excludedLayerIDs,
+    BOOL requireEditableAtFrac, NSArray<KKLane *> *_Nullable templates);
 
 NS_ASSUME_NONNULL_END

@@ -20,6 +20,15 @@ void CanvasSetLayerBlobSnapshot(NSString *b64) {
 
 NSString *CanvasLayerBlobSnapshot(void) { return sCanvasLayerBlobSnapshot; }
 
+// Process-wide kParamUIState snapshot for the viewer OSC (see header).
+static NSString *sCanvasUIStateSnapshot = nil;
+
+void CanvasSetUIStateSnapshot(NSString *json) {
+  sCanvasUIStateSnapshot = [json copy];
+}
+
+NSString *CanvasUIStateSnapshot(void) { return sCanvasUIStateSnapshot; }
+
 KKBezierPath *CanvasSelectedLayerForPaths(NSArray<KKBezierPath *> *paths,
                                           NSString *selectedLayerID) {
   // Groups animate too (their own explicit transform; no propagation), so they
