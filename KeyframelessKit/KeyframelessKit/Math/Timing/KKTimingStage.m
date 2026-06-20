@@ -794,7 +794,7 @@ KKTimeline *KKTimelineRebalanced(KKTimeline *timeline, double oldDuration,
 
 // Builds the coalesced edge keypose: `edge` moved to `newTime` (keeping its
 // easing/handles), but with the INTERPOLATED value at the clip boundary when a
-// sampler is supplied — `fOrig` is the boundary's fraction in the original
+// sampler is supplied - `fOrig` is the boundary's fraction in the original
 // frame. Without a sampler it keeps `edge`'s raw value.
 static KKKeyPose *KKRetimeBoundaryKeypose(KKKeyPose *edge, double newTime,
                                           KKLane *lane, double fOrig,
@@ -834,10 +834,10 @@ KKTimeline *KKTimelineRetimedForMediaAnchor(KKTimeline *timeline,
     // map is monotonic in `kp.time`, so the keyposes split into a head run
     // (f below the clip start), interior (inside), and a tail run (past the
     // end). Off-edge runs are COALESCED to a single edge keypose instead of
-    // piling up (which would leave overlapping keyposes — invalid, the visible
+    // piling up (which would leave overlapping keyposes - invalid, the visible
     // trim/split symptom).
     //   - If a REAL keypose sits ON the edge (within `eps`, e.g. a split AT a
-    //     keypose), snap THAT one to the edge — keeping its own value + easing,
+    //     keypose), snap THAT one to the edge - keeping its own value + easing,
     //     and NOT also adding a synthesized boundary (the duplicate-keypose
     //     bug). `eps` is ~half a frame.
     //   - Otherwise synthesize one boundary keypose carrying the INTERPOLATED

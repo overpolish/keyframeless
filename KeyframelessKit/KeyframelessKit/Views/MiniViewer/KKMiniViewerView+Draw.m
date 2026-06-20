@@ -166,6 +166,22 @@
     }
   }
 
+  // Alignment grid - drawn first (under the box borders + glyphs), tiled across
+  // the whole view to match the in-viewer grid. Two-tone for legibility.
+  if (_linePipeline && del &&
+      [del respondsToSelector:@selector(miniViewer:gridSpacingX:spacingY:
+                                        contentRect:)]) {
+    CGFloat gnx = 0, gny = 0;
+    CGRect gcr = [self contentRectInViewPoints];
+    if ([del miniViewer:self gridSpacingX:&gnx spacingY:&gny contentRect:gcr] &&
+        gnx > 0 && gny > 0) {
+      [self _encodeGridWithSpacingX:gnx
+                           spacingY:gny
+                        contentRect:gcr
+                            encoder:enc];
+    }
+  }
+
   // Box OSC borders (crop, scale, ...) - drawn here (before the glyphs) so the
   // handles sit on top of the line, not under it. Every box matches the in-
   // viewer KKRectBorderOSC default (white 0.6), dimmed by its ghost alpha.
@@ -430,6 +446,21 @@
                          ghostAlpha:posGhost
                             encoder:enc];
     }
+  }
+
+  // Toolbar chrome, drawn LAST (on top of the grid + handles), the same way the
+  // viewer draws it over the gizmo. The delegate renders its KKToolbar into this
+  // pass via the shared -drawInEncoder: path, using the toolbar pipeline.
+  if (_toolbarPipeline && del &&
+      [del respondsToSelector:@selector(miniViewer:drawToolbarInEncoder:device:
+                                        pipeline:viewportWidth:height:)]) {
+    CGSize d = self.drawableSize;
+    [del miniViewer:self
+        drawToolbarInEncoder:enc
+                      device:self.device
+                    pipeline:_toolbarPipeline
+               viewportWidth:(float)d.width
+                      height:(float)d.height];
   }
 
   [enc endEncoding];

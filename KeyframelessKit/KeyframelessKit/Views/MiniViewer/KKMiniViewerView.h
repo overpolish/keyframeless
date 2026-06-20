@@ -121,6 +121,51 @@ NS_ASSUME_NONNULL_BEGIN
 /// nil/empty for none.
 - (NSArray<KKMiniBox *> *)miniViewer:(KKMiniViewerView *)canvas
                  boxesForContentRect:(CGRect)contentRect;
+/// An optional alignment grid to draw UNDER the OSC handles, matching the in-
+/// viewer grid. Return NO for no grid. `outSpacingX`/`outSpacingY` are the cell
+/// size as a FRACTION of the content rect (already adaptively adjusted by the
+/// delegate); the canvas tiles the lines across the whole view (so they fill the
+/// letterbox margins too), two-tone like the viewer so they read on any footage.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+       gridSpacingX:(out CGFloat *)outSpacingX
+          spacingY:(out CGFloat *)outSpacingY
+       contentRect:(CGRect)contentRect;
+/// Draw floating toolbar chrome on TOP of everything, into the mini's Metal pass.
+/// The canvas supplies a KKVertexShader/KKLabelFragment `pipeline` (premultiplied
+/// alpha) for the drawable's pixel format and the viewport size in drawable px;
+/// the delegate renders its KKToolbar via -drawInEncoder:device:pipeline:...,
+/// so the mini shows the same bar as the viewer.
+- (void)miniViewer:(KKMiniViewerView *)canvas
+    drawToolbarInEncoder:(id<MTLRenderCommandEncoder>)encoder
+                  device:(id<MTLDevice>)device
+                pipeline:(id<MTLRenderPipelineState>)pipeline
+           viewportWidth:(float)width
+                  height:(float)height;
+// Toolbar input. All points are overlay view points (y-up); the delegate
+// converts to its toolbar's space + hit-tests. `toolbarTagAtPoint:` returns the
+// item tag (0 = none, <0 = bar body, >0 = an item) so the canvas can claim the
+// click. `toolbarMouseDownAtPoint:` performs the press action and returns YES if
+// it began a drag (the handle), so the canvas routes the following dragged/up to
+// the toolbar. `toolbarHoverTag:` drives the tooltip + cursor.
+- (NSInteger)miniViewer:(KKMiniViewerView *)canvas
+       toolbarTagAtPoint:(CGPoint)viewPoint;
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    toolbarMouseDownAtPoint:(CGPoint)viewPoint;
+- (void)miniViewer:(KKMiniViewerView *)canvas
+    toolbarDraggedToPoint:(CGPoint)viewPoint;
+- (void)miniViewerToolbarMouseUp:(KKMiniViewerView *)canvas;
+- (void)miniViewer:(KKMiniViewerView *)canvas toolbarHoverTag:(NSInteger)tag;
+/// Cursor for a hovered toolbar tag (e.g. the move cursor over the drag handle),
+/// or nil for the default arrow. Lets the canvas show the right cursor over the
+/// bar instead of the handle-resize cursors.
+- (nullable NSCursor *)miniViewer:(KKMiniViewerView *)canvas
+              toolbarCursorForTag:(NSInteger)tag;
+/// A key was pressed while the mini is the key window (the toolbar's tool
+/// shortcuts, e.g. Control+letter). `chars` is charactersIgnoringModifiers.
+/// Return YES to consume the event. Optional.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+       toolbarKeyDownChars:(NSString *)chars
+                 modifiers:(NSEventModifierFlags)modifiers;
 /// An elliptical ring OSC to draw (e.g. Glow's radius), centred at `outCenter`
 /// with per-axis pixel radii `outRadiusX`/`outRadiusY`, all in overlay points
 /// (y-up). Return NO for none. The canvas strokes it in the Metal pass like the

@@ -11,12 +11,14 @@
 // others without -Wundeclared-selector.
 
 #import "CanvasOSC.h"
+#import "CanvasToolbar.h" // CanvasToolbarTag + CanvasMakeToolbar (shared w/ mini)
 #import <KeyframelessKit/KeyframelessKit.h>
 
 @class KKPositionOSC;
 @class KKScaleOSC;
 @class KKRotationOSC;
 @class KKAnchorOSC;
+@class KKToolbar;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -50,12 +52,30 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 // Layer the hover hit-test resolved for an auto-select pick; consumed by the
 // matching mouseDown.
 @property(nonatomic, copy, nullable) NSString *pendingPickLayerID;
+
+// The combined viewer toolbar (drag handle + grid/adaptive/spacing/snap), global
+// screen chrome whose state lives in kParamUIState (not parameters).
+@property(nonatomic, strong) KKToolbar *toolbar;
+// While the drag handle is held: the mouse + toolbar centre at press (ioSurface
+// px), and the viewport size cached from the last draw (mouse callbacks don't
+// get it) so the drag can normalise the new position for UI-state storage.
+@property(nonatomic) BOOL toolbarDragging;
+@property(nonatomic) CGPoint toolbarPressMouse;
+@property(nonatomic) CGPoint toolbarPressCenter;
+@property(nonatomic) CGSize toolbarIOSize;
+// The exact object-space cell size the grid LAST drew (after Auto). The snap
+// reuses it so it can never diverge from the drawn lines (0 = not drawn yet).
+@property(nonatomic) double drawnGridObjSpacingX;
+@property(nonatomic) double drawnGridObjSpacingY;
 @end
 
 // Canvas-space geometry + sub-control feeding.
 @interface CanvasOSC (Geometry)
 - (double)_onScreenFrameMin;
 - (double)_canvasAspect;
+// Raw OBJECT (Y-down) <-> CANVAS (ioSurface px) conversions, no control offset.
+- (CGPoint)_rawCanvasFromObjX:(double)ox y:(double)oy;
+- (CGPoint)_rawObjFromCanvasX:(double)cx y:(double)cy;
 - (void)_syncScaleControlAtTime:(CMTime)time;
 - (void)_syncRotationControlAtTime:(CMTime)time;
 // Reset the point controls' group hooks to identity (Position + Anchor stay 2D /
@@ -75,6 +95,37 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 - (NSDictionary *)_uiStateDict;
 - (void)_writeUIStateMerging:(void (^)(NSMutableDictionary *state))mutate;
 - (void)_persistSelectedLayerTimeline:(KKTimeline *)tl;
+@end
+
+// The combined viewer toolbar (grid + drag handle), screen chrome backed by
+// kParamUIState. Build / draw / hit-test / drag, all coords in ioSurface px.
+@interface CanvasOSC (Toolbar)
+- (void)_setupToolbar;
+- (void)_drawToolbarWithWidth:(NSInteger)width
+                       height:(NSInteger)height
+             destinationImage:(FxImageTile *)destinationImage;
+// Raw KKToolbar hit result: an item tag, 0 (miss), or -1 (toolbar body).
+- (NSInteger)_toolbarHitTestAtX:(double)x y:(double)y;
+- (void)_toolbarMouseDownTag:(NSInteger)tag atX:(double)x y:(double)y;
+- (void)_toolbarMouseDraggedAtX:(double)x y:(double)y;
+- (void)_toolbarMouseUp;
+// Control+letter tool shortcuts (^V/^X/^B/^G). Returns YES if it consumed the key.
+- (BOOL)_handleToolbarKey:(unsigned short)asciiKey modifiers:(NSUInteger)modifiers;
+// Grid settings read from kParamUIState (defaults: off / Auto / 10 / off).
+- (BOOL)_gridEnabled;
+- (BOOL)_gridAdaptive;
+- (NSInteger)_gridSpacing;
+- (BOOL)_gridSnap;
+@end
+
+// Grid overlay (under the gizmo), gated on the UI-state grid settings.
+@interface CanvasOSC (Grid)
+- (void)_drawGridWithWidth:(NSInteger)width
+                    height:(NSInteger)height
+          destinationImage:(FxImageTile *)destinationImage;
+// Generic grid snap: pin a canvas point to the nearest grid intersection (no-op
+// unless Snap is on). The Position / Anchor canvasSnapProvider blocks call this.
+- (CGPoint)_snapCanvasPointToGrid:(CGPoint)cp;
 @end
 
 // Click-to-select: pick the layer under the cursor + commit the selection.

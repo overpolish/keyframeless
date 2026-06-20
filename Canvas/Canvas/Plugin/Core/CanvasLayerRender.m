@@ -126,13 +126,14 @@ void CanvasEncodeImageLayers(
     float cx = (rect.min.x + rect.max.x) * 0.5f;
     float cy = (rect.min.y + rect.max.y) * 0.5f;
     // Compose the layer's full 3D model with each ancestor group's so a parent
-    // group moves/scales/spins/tilts its members as a rigid unit. RAW rect-corner
-    // verts go to the shader; ALL of scale/rotation(X,Y,Z)/position/perspective
-    // live in the matrix so the axes compose correctly even when combined.
+    // group moves/scales/spins/tilts its members as a rigid unit. RAW
+    // rect-corner verts go to the shader; ALL of
+    // scale/rotation(X,Y,Z)/position/perspective live in the matrix so the axes
+    // compose correctly even when combined.
     CanvasGroupXform groups[kCanvasGroupXformCap];
-    NSInteger ng = CanvasBuildGroupXforms(
-        layers, (NSUInteger)i, frac, overrideLayerID, overrideTimeline, groups,
-        kCanvasGroupXformCap);
+    NSInteger ng =
+        CanvasBuildGroupXforms(layers, (NSUInteger)i, frac, overrideLayerID,
+                               overrideTimeline, groups, kCanvasGroupXformCap);
     matrix_float4x4 m = CanvasComposedModelMatrix(t, simd_make_float2(cx, cy),
                                                   groups, ng, scale, tileShift);
     // Group opacity multiplies the member's (a 40% group halves a 50% member).
@@ -148,18 +149,14 @@ void CanvasEncodeImageLayers(
     float depth = cClip.z;
 
     items[count].matrix = m;
-    items[count].quad[0] =
-        (KKVertex2D){(simd_make_float2(rect.max.x, rect.min.y) - half) * scale,
-                     {1, 1}};
-    items[count].quad[1] =
-        (KKVertex2D){(simd_make_float2(rect.min.x, rect.min.y) - half) * scale,
-                     {0, 1}};
-    items[count].quad[2] =
-        (KKVertex2D){(simd_make_float2(rect.max.x, rect.max.y) - half) * scale,
-                     {1, 0}};
-    items[count].quad[3] =
-        (KKVertex2D){(simd_make_float2(rect.min.x, rect.max.y) - half) * scale,
-                     {0, 0}};
+    items[count].quad[0] = (KKVertex2D){
+        (simd_make_float2(rect.max.x, rect.min.y) - half) * scale, {1, 1}};
+    items[count].quad[1] = (KKVertex2D){
+        (simd_make_float2(rect.min.x, rect.min.y) - half) * scale, {0, 1}};
+    items[count].quad[2] = (KKVertex2D){
+        (simd_make_float2(rect.max.x, rect.max.y) - half) * scale, {1, 0}};
+    items[count].quad[3] = (KKVertex2D){
+        (simd_make_float2(rect.min.x, rect.max.y) - half) * scale, {0, 0}};
     items[count].opacity = opacity;
     items[count].tex = tex;
     items[count].depth = depth;
@@ -168,10 +165,11 @@ void CanvasEncodeImageLayers(
   }
 
   // Back-to-front by 3D depth so a layer rotated physically in front (e.g. a
-  // group tilted past edge-on) draws on top. Equal depth (flat / untilted layers
-  // all at z=0) falls back to layer-stack order, so normal 2D stacking is
-  // unchanged. Painter's order - correct for the non-intersecting image planes
-  // Canvas composites (a depth buffer would be needed for intersecting quads).
+  // group tilted past edge-on) draws on top. Equal depth (flat / untilted
+  // layers all at z=0) falls back to layer-stack order, so normal 2D stacking
+  // is unchanged. Painter's order - correct for the non-intersecting image
+  // planes Canvas composites (a depth buffer would be needed for intersecting
+  // quads).
   qsort_b(items, (size_t)count, sizeof(CanvasDrawItem),
           ^int(const void *a, const void *b) {
             const CanvasDrawItem *ia = a, *ib = b;
@@ -187,7 +185,9 @@ void CanvasEncodeImageLayers(
     [encoder setVertexBytes:&it->matrix
                      length:sizeof(it->matrix)
                     atIndex:KKVertexInputIndex_Transform];
-    [encoder setFragmentBytes:&it->opacity length:sizeof(it->opacity) atIndex:0];
+    [encoder setFragmentBytes:&it->opacity
+                       length:sizeof(it->opacity)
+                      atIndex:0];
     [encoder setVertexBytes:it->quad
                      length:sizeof(it->quad)
                     atIndex:KKVertexInputIndex_Vertices];
@@ -197,4 +197,37 @@ void CanvasEncodeImageLayers(
                 vertexCount:4];
   }
   free(items);
+}
+
+simd_float3x3 CanvasSquareToQuadHomography(CGPoint p0, CGPoint p1, CGPoint p2,
+                                           CGPoint p3) {
+  double dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dx3 = p0.x - p1.x + p2.x - p3.x;
+  double dy1 = p1.y - p2.y, dy2 = p3.y - p2.y, dy3 = p0.y - p1.y + p2.y - p3.y;
+  double a, b, c, d, e, f, g, h;
+  if (fabs(dx3) < 1e-9 && fabs(dy3) < 1e-9) {
+    // Parallelogram = affine, no perspective term.
+    a = p1.x - p0.x;
+    b = p2.x - p1.x;
+    c = p0.x;
+    d = p1.y - p0.y;
+    e = p2.y - p1.y;
+    f = p0.y;
+    g = 0;
+    h = 0;
+  } else {
+    double den = dx1 * dy2 - dx2 * dy1;
+    if (fabs(den) < 1e-12)
+      return matrix_identity_float3x3; // degenerate, don't blow up
+    g = (dx3 * dy2 - dx2 * dy3) / den;
+    h = (dx1 * dy3 - dx3 * dy1) / den;
+    a = p1.x - p0.x + g * p1.x;
+    b = p3.x - p0.x + h * p3.x;
+    c = p0.x;
+    d = p1.y - p0.y + g * p1.y;
+    e = p3.y - p0.y + h * p3.y;
+    f = p0.y;
+  }
+  return simd_matrix(simd_make_float3((float)a, (float)d, (float)g),
+                     simd_make_float3((float)b, (float)e, (float)h),
+                     simd_make_float3((float)c, (float)f, 1.0f));
 }

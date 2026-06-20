@@ -50,6 +50,29 @@ extern NSString *const CanvasMiniViewerRequestPath;
 /// (only when `autoSelectEnabled`). The inspector wires this to its layer
 /// selection so the timeline / OSC / Constants follow.
 @property(nonatomic, copy, nullable) void (^onSelectLayer)(NSString *layerID);
+
+/// Shared alignment-grid state, mirrored from the viewer's kParamUIState by the
+/// inspector so the mini grid matches the viewer's. The mini draws the grid (and
+/// snaps drags to it) when `gridEnabled`; `gridAdaptive` doubles the spacing as
+/// it gets dense; `gridSpacing` is the base cell size in output pixels.
+@property(nonatomic) BOOL gridEnabled;
+@property(nonatomic) BOOL gridAdaptive;
+@property(nonatomic) NSInteger gridSpacing;
+/// When YES, dragging the Position handle / Anchor square in the mini snaps to
+/// the grid (matches the viewer's snap toggle).
+@property(nonatomic) BOOL gridSnap;
+/// Active drawing tool tag (shared with the viewer toolbar), for the radio
+/// highlight. 0 = none/default.
+@property(nonatomic) NSInteger toolbarTool;
+/// Shared toolbar position, normalized to the viewport (0..1). {-1,-1} = the
+/// default bottom-centre anchor (until the user drags it in either surface).
+@property(nonatomic) CGPoint toolbarNormPos;
+/// Fired when a mini-toolbar interaction changes shared UI state, so the host
+/// persists it to kParamUIState (which round-trips to the viewer too). Keys match
+/// the OSC's: gridEnabled / gridAdaptive / gridSpacing / gridSnap / tool, and the
+/// mini's own miniToolbarPos (@[nx, ny]).
+@property(nonatomic, copy, nullable) void (^onPatchUIState)(NSString *key,
+                                                            id value);
 @end
 
 NS_ASSUME_NONNULL_END

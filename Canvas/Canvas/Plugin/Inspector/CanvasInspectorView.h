@@ -49,6 +49,21 @@ NS_ASSUME_NONNULL_BEGIN
 /// Fired when the user flips the "Auto-select layers" checkbox in the Layers
 /// panel. The plugin persists it to kParamUIState.
 @property(nonatomic, copy, nullable) void (^onAutoSelectChanged)(BOOL on);
+/// Mirror the shared alignment-grid state (from kParamUIState) onto the mini-
+/// viewer renderer so the popover preview's grid matches the viewer's. Seeded
+/// from createView and on every UIState change / undo-redo.
+- (void)setGridEnabled:(BOOL)enabled
+              adaptive:(BOOL)adaptive
+               spacing:(NSInteger)spacing
+                  snap:(BOOL)snap;
+/// Mirror the shared toolbar tool + position (kParamUIState) onto the mini so its
+/// toolbar matches the viewer's. `normPos` is {-1,-1} for the default anchor.
+- (void)setToolbarTool:(NSInteger)tool normPos:(CGPoint)normPos;
+/// Fired when the mini-viewer's toolbar changes a kParamUIState key (grid toggles,
+/// tool, miniToolbarPos). The plugin persists it (and the write round-trips to the
+/// viewer + mini).
+@property(nonatomic, copy, nullable) void (^onUIStatePatch)(NSString *key,
+                                                            id value);
 @end
 
 NS_ASSUME_NONNULL_END

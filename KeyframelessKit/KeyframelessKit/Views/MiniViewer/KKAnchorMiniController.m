@@ -97,10 +97,16 @@
     return NO;
   _grabbed = YES;
   [self _anchorX:&_grabValX y:&_grabValY];
-  if (cr.size.width > 0)
-    _pressNX = (p.x - CGRectGetMinX(cr)) / cr.size.width;
-  if (cr.size.height > 0)
-    _pressNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+  if (self.viewToValue && cr.size.width > 0 && cr.size.height > 0) {
+    simd_float2 v = self.viewToValue(p, cr);
+    _pressNX = v.x;
+    _pressNY = v.y;
+  } else {
+    if (cr.size.width > 0)
+      _pressNX = (p.x - CGRectGetMinX(cr)) / cr.size.width;
+    if (cr.size.height > 0)
+      _pressNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+  }
   return YES;
 }
 
@@ -114,8 +120,15 @@
                   canvas:(KKMiniViewerView *)canvas {
   if (!_grabbed || cr.size.width <= 0 || cr.size.height <= 0)
     return;
-  double nx = (p.x - CGRectGetMinX(cr)) / cr.size.width;
-  double ny = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+  double nx, ny;
+  if (self.viewToValue) {
+    simd_float2 v = self.viewToValue(p, cr);
+    nx = v.x;
+    ny = v.y;
+  } else {
+    nx = (p.x - CGRectGetMinX(cr)) / cr.size.width;
+    ny = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+  }
   double newX = _grabValX + (nx - _pressNX);
   double newY = _grabValY + (ny - _pressNY);
   if (modifiers & NSEventModifierFlagCommand) {
@@ -141,6 +154,14 @@
                           thresholdY:thrY];
     newX = sn.x - posX + 0.5;
     newY = sn.y - posY + 0.5;
+  } else if (self.gridSnapPivot) {
+    double posX = 0.5, posY = 0.5;
+    [self _positionX:&posX y:&posY];
+    simd_float2 pivot = {(float)(posX + newX - 0.5), (float)(posY + newY - 0.5)};
+    simd_float2 sn = self.gridSnapPivot(pivot, cr);
+    newX = sn.x - posX + 0.5;
+    newY = sn.y - posY + 0.5;
+    [_snap reset];
   } else {
     [_snap reset];
   }

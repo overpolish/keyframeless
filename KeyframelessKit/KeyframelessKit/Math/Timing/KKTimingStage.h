@@ -372,7 +372,7 @@ FOUNDATION_EXPORT KKTimeline *KKTimelineRebalanced(KKTimeline *timeline,
 
 /// "Maintain Timing" bake: rewrites each keypose's time fraction so its
 /// ABSOLUTE source-media position is preserved when the clip's source range
-/// changes from (`fromSrcIn`, `fromDur`) to (`toSrcIn`, `toDur`) — i.e. a
+/// changes from (`fromSrcIn`, `fromDur`) to (`toSrcIn`, `toDur`) - i.e. a
 /// trim/grow/split. A keypose at fraction `f` sits at media time
 /// `fromSrcIn + f*fromDur`; its new fraction is `(media - toSrcIn) / toDur`.
 /// Keyposes pushed off an edge are COALESCED (not piled up): of the head run
@@ -391,7 +391,7 @@ FOUNDATION_EXPORT KKTimeline *KKTimelineRebalanced(KKTimeline *timeline,
 /// values (no evaluator dependency).
 ///
 /// `edgeEps` is the near-edge tolerance (a 0-1 fraction, ~half a frame). A real
-/// keypose within `edgeEps` of an edge — e.g. a split landing AT a keypose —
+/// keypose within `edgeEps` of an edge - e.g. a split landing AT a keypose -
 /// is snapped to that edge (keeping its own value + easing) rather than being
 /// kept as a separate interior keypose alongside a synthesized boundary, which
 /// would leave two coincident keyposes. 0 disables it.

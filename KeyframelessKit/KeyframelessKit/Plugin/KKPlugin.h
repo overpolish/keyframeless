@@ -559,7 +559,7 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// KKRefreshRenderCache populates `cache`). When the lock is on and the clip's
 /// source range has moved away from the stored anchor (a trim/grow surfaced
 /// this tick), it rewrites the timeline blob's keypose fractions to hold their
-/// absolute media position and advances the anchor — both in one action scope
+/// absolute media position and advances the anchor - both in one action scope
 /// (dispatched to the main queue, since the render tick has no action scope).
 /// The blob write flows to the Advanced graph via the normal parameterChanged
 /// path, so the keyposes visibly move. A per-tick guard on `cache` makes it

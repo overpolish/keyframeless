@@ -79,6 +79,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onTimelinePersist)
     (KKTimeline *timeline);
 
+/// Optional persistent snap (e.g. a grid) applied to the dragged pivot's CANVAS
+/// point when Cmd is NOT held. The host returns the snapped canvas point; the
+/// control converts it back to the anchor value. Same hook the Position control
+/// uses (canvas space), so a host can drive both from one grid. nil = no snap.
+@property(nonatomic, copy, nullable) CGPoint (^canvasSnapProvider)
+    (CGPoint canvasPoint);
+
 /// A 2D affine in OBJECT space (homogeneous 3x3) mapping the anchor's own clip
 /// space to an enclosing parent's space (e.g. a Canvas member's group). Applied
 /// forward to the default pivot before mapping to canvas, and INVERTED on a drag,

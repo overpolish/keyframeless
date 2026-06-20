@@ -109,9 +109,10 @@ NSString *_Nullable CanvasHitTestLayerID(
 /// in the member's output / clip object space (Y-up, [0,1]) - the same group
 /// composition + perspective the render uses. Returns the transformed point
 /// (unchanged for an ungrouped layer / group). Lets a member's OSC draw at the
-/// group-composed location of its actual point (move handle, anchor pivot). Safe
-/// to call live now that a group pivots on its STORED Anchor, not the member-
-/// dependent content centre - so it no longer feeds back during a member drag.
+/// group-composed location of its actual point (move handle, anchor pivot).
+/// Safe to call live now that a group pivots on its STORED Anchor, not the
+/// member- dependent content centre - so it no longer feeds back during a
+/// member drag.
 BOOL CanvasComposedGroupPointObj(NSArray<KKBezierPath *> *layers,
                                  KKBezierPath *_Nullable member, double frac,
                                  float aspect, float inX, float inY,
@@ -119,12 +120,21 @@ BOOL CanvasComposedGroupPointObj(NSArray<KKBezierPath *> *layers,
 
 /// The accumulated rotation of a member's ancestor groups (outermost · … ·
 /// innermost), in the SAME Ry·Rx·Rz order the render composes - identity for an
-/// ungrouped layer or a group. Feeds a member's rotation gizmo `baseRotation` so
-/// its rings tilt with the group while the drag still writes the member's own
-/// Euler.
+/// ungrouped layer or a group. Feeds a member's rotation gizmo `baseRotation`
+/// so its rings tilt with the group while the drag still writes the member's
+/// own Euler.
 KKRotMatrix3 CanvasComposedGroupRotation(NSArray<KKBezierPath *> *layers,
                                          KKBezierPath *_Nullable member,
                                          double frac);
+
+/// Heckbert square->quad homography: maps the unit square
+/// (0,0),(1,0),(1,1),(0,1) onto the four given quad corners. Column-major (M *
+/// (u,v,1) -> (X,Y,W); divide by W). A planar member projected through its
+/// group transform is a projective map, so this captures it exactly (and
+/// `simd_inverse` gives the reverse for snapping a composed point back to a
+/// member value). Pure math.
+simd_float3x3 CanvasSquareToQuadHomography(CGPoint p0, CGPoint p1, CGPoint p2,
+                                           CGPoint p3);
 
 /// The group's content centre in object space (Y-up) = the centre of the union
 /// of its descendant image rects (rest shape, ignoring animation). NO for a

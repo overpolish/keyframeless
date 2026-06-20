@@ -233,6 +233,11 @@
     CGPoint cand = [self _anchorToCanvasX:newX y:newY];
     CGPoint snapped = [self.snap snapCanvasPoint:cand toTargets:targets count:n];
     [self _canvasToAnchor:snapped outAX:&newX outAY:&newY];
+  } else if (self.canvasSnapProvider) {
+    CGPoint cand = [self _anchorToCanvasX:newX y:newY];
+    CGPoint snapped = self.canvasSnapProvider(cand);
+    [self _canvasToAnchor:snapped outAX:&newX outAY:&newY];
+    [self.snap reset];
   } else {
     [self.snap reset];
   }

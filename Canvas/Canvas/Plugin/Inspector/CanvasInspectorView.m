@@ -63,6 +63,12 @@
     _miniViewerRenderer.onSelectLayer = ^(NSString *layerID) {
       [weakInit _selectAndHighlightLayer:layerID];
     };
+    // Mini toolbar -> persist the shared/per-surface kParamUIState keys.
+    _miniViewerRenderer.onPatchUIState = ^(NSString *key, id value) {
+      typeof(self) s = weakInit;
+      if (s.onUIStatePatch)
+        s.onUIStatePatch(key, value);
+    };
     self.miniViewerDelegate = _miniViewerRenderer;
     self.miniViewerDescriptorPath = CanvasMiniViewerDescriptorPath;
     self.miniViewerRequestPath = CanvasMiniViewerRequestPath;
@@ -161,6 +167,21 @@
 - (void)setAutoSelect:(BOOL)autoSelect {
   _layerListController.autoSelect = autoSelect;
   _miniViewerRenderer.autoSelectEnabled = autoSelect;
+}
+
+- (void)setGridEnabled:(BOOL)enabled
+              adaptive:(BOOL)adaptive
+               spacing:(NSInteger)spacing
+                  snap:(BOOL)snap {
+  _miniViewerRenderer.gridEnabled = enabled;
+  _miniViewerRenderer.gridAdaptive = adaptive;
+  _miniViewerRenderer.gridSpacing = spacing;
+  _miniViewerRenderer.gridSnap = snap;
+}
+
+- (void)setToolbarTool:(NSInteger)tool normPos:(CGPoint)normPos {
+  _miniViewerRenderer.toolbarTool = tool;
+  _miniViewerRenderer.toolbarNormPos = normPos;
 }
 
 - (void)restoreSelectedLayerID:(NSString *)layerID {

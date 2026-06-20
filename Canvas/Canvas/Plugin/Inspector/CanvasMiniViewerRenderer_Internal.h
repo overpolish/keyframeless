@@ -10,7 +10,26 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class KKToolbar;
+
 @interface CanvasMiniViewerRenderer ()
+// Output dims of the last composite (= the rendered frame size), captured in
+// -encodeEffectFromSource:. The grid spacing is in these output pixels, so the
+// mini grid lands on the same cells as the viewer.
+@property(nonatomic) CGFloat renderWidth;
+@property(nonatomic) CGFloat renderHeight;
+// The exact normalized cell size the grid LAST drew (after Auto). The snap reuses
+// it so it can't diverge from the drawn lines (0 = not drawn yet).
+@property(nonatomic) double drawnGridNX;
+@property(nonatomic) double drawnGridNY;
+// The mini's own toolbar instance (the SAME bar as the viewer, built by the
+// shared CanvasMakeToolbar). State is driven per-draw from the shared kParamUIState
+// the inspector mirrors onto this renderer; it's drawn via the kit's toolbar hook.
+@property(nonatomic, strong) KKToolbar *toolbar;
+// Drag-handle press state (drawable px, y-down layout space).
+@property(nonatomic) CGPoint toolbarPressMouse;
+@property(nonatomic) CGPoint toolbarPressAnchor;
+@property(nonatomic) BOOL toolbarDragging;
 // Reusable Position + motion-path controller (owns the shared snap engine and
 // the whole Position/Path drag-state machine). Canvas has no anchor / rotation
 // in the mini, so Position is the only point handle.
@@ -27,6 +46,10 @@ NS_ASSUME_NONNULL_BEGIN
 // Member-local ANCHOR pivot (Position + Anchor) in overlay points - the centre
 // the rotation rings / scale box / anchor square share.
 - (CGPoint)_anchorPivotForContentRect:(CGRect)cr;
+// Snap a normalized object point to the grid (no-op unless gridSnap). Used by the
+// Position/Anchor mini controllers' grid-snap blocks.
+- (simd_float2)_snapNormalizedPointToGrid:(simd_float2)p
+                              contentRect:(CGRect)cr;
 @end
 
 @interface CanvasMiniViewerRenderer (Interaction)

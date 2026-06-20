@@ -437,9 +437,34 @@
     // parameterChanged, which re-publishes the UIState snapshot the viewer OSC
     // reads.
     [view setAutoSelect:[visState[@"autoSelect"] boolValue]];
+    // Seed the mini's grid + toolbar state on cold load too (pluginState only
+    // fires on a change, so without this the mini grid / toolbar position would
+    // sit at defaults until the user interacts).
+    [view setGridEnabled:[visState[@"gridEnabled"] boolValue]
+                adaptive:(visState[@"gridAdaptive"]
+                              ? [visState[@"gridAdaptive"] boolValue]
+                              : YES)
+                 spacing:(visState[@"gridSpacing"]
+                              ? [visState[@"gridSpacing"] integerValue]
+                              : 10)
+                    snap:[visState[@"gridSnap"] boolValue]];
+    NSArray *seedTbPos = visState[@"miniToolbarPos"];
+    CGPoint seedTbNorm =
+        ([seedTbPos isKindOfClass:[NSArray class]] && seedTbPos.count == 2)
+            ? CGPointMake([seedTbPos[0] doubleValue], [seedTbPos[1] doubleValue])
+            : CGPointMake(-1, -1);
+    [view setToolbarTool:(visState[@"tool"] ? [visState[@"tool"] integerValue]
+                                            : 0)
+                 normPos:seedTbNorm];
     view.onAutoSelectChanged = ^(BOOL on) {
       __strong CanvasPlugin *s = weakOSC;
       [s patchUIStateKey:@"autoSelect" value:@(on) paramID:kParamUIState];
+    };
+    // Mini-viewer toolbar toggles / drag persist their kParamUIState key the same
+    // way; the write round-trips to refresh both the viewer OSC + the mini.
+    view.onUIStatePatch = ^(NSString *key, id value) {
+      __strong CanvasPlugin *s = weakOSC;
+      [s patchUIStateKey:key value:value paramID:kParamUIState];
     };
 
     // The Layers panel opens parameter actions to read/write kParamLayerData;

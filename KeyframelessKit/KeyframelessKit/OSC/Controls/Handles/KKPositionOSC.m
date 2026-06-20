@@ -538,6 +538,18 @@
                  atFraction:targetFrac];
     newX = snapped.x;
     newY = snapped.y;
+  } else if (self.canvasSnapProvider) {
+    // Use the parent-aware conversion pair (_canvasFromObjX / _objFromCanvasX) so
+    // the round-trip stays consistent when the control is nested in a transformed
+    // parent (a Canvas member in a rotated group). canvasPointFromObjectPoint is
+    // the raw object->canvas and would mismatch the inverse below, offsetting the
+    // snapped handle.
+    CGPoint cp = [self _canvasFromObjX:newX y:newY];
+    CGPoint sp = self.canvasSnapProvider(cp);
+    CGPoint so = [self _objFromCanvasX:sp.x y:sp.y];
+    newX = so.x;
+    newY = so.y;
+    [self.snapEngine reset];
   } else {
     [self.snapEngine reset];
   }

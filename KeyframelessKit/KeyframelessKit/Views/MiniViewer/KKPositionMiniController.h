@@ -51,6 +51,21 @@ NS_ASSUME_NONNULL_BEGIN
 /// `snapGuideHasX:…` reporter and its anchor drag.
 @property(nonatomic, readonly) KKSnapEngine *snapEngine;
 
+/// Optional grid snap applied to the dragged normalized value when Cmd is NOT
+/// held (Cmd still does the centre/corner/keypose snap). The host returns the
+/// snapped value for the given content rect; nil = no grid snap. Mirrors the
+/// viewer Position OSC's `canvasSnapProvider`.
+@property(nonatomic, copy, nullable) simd_float2 (^gridSnapValue)
+    (simd_float2 normalizedValue, CGRect contentRect);
+
+/// Optional map from a content-rect view point to the member-local normalized
+/// value (the inverse of how the handle is drawn). Set by a host whose handle is
+/// drawn through a parent transform (a Canvas member in a transformed group) so a
+/// drag follows the cursor instead of drifting. nil = the plain content-rect
+/// normalization. Mirrors the viewer Position OSC's `_objFromCanvasX` inverse.
+@property(nonatomic, copy, nullable) simd_float2 (^viewToValue)
+    (CGPoint viewPoint, CGRect contentRect);
+
 /// YES while a Position handle or a Path anchor/tangent is being dragged.
 @property(nonatomic, readonly) BOOL isDragging;
 /// YES while a Path anchor/tangent (not the Position handle) is being dragged.

@@ -95,6 +95,13 @@ typedef NS_ENUM(NSInteger, KKPositionHit) {
 @property(nonatomic, copy, nullable) void (^onTimelinePersist)
     (KKTimeline *timeline);
 
+/// Optional persistent snap (e.g. a grid), applied to the dragged handle's
+/// CANVAS point when Cmd is NOT held. The host returns the snapped canvas point;
+/// the control converts it back to the lane value. Generic (canvas space) so the
+/// Anchor control and a future pen tool reuse the same hook. nil = no snap.
+@property(nonatomic, copy, nullable) CGPoint (^canvasSnapProvider)
+    (CGPoint canvasPoint);
+
 /// Set by the hit-test: YES when the hovered Position target is a keypose
 /// anchor dot rather than the playhead arc handle (both report Handle/AnchorDot
 /// to the host). The host reads this for element-key mapping (anchor -> Path).

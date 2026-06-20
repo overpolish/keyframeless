@@ -32,6 +32,16 @@
   if ([NSEvent modifierFlags] & NSEventModifierFlagOption)
     eff |= kFxModifierKey_OPTION;
   [self kkUpdateOptRevealWithModifiers:eff forceUpdate:forceUpdate];
+
+  // Toolbar hover tooltip: show the localized bubble for the button under the
+  // cursor (a real item tag > 0); clear it otherwise. Redraw only on a change.
+  NSInteger tbHit = [self _toolbarHitTestAtX:positionX y:positionY];
+  NSInteger newHover = (tbHit > 0 && !self.toolbarDragging) ? tbHit : 0;
+  if (newHover != self.toolbar.hoveredTag) {
+    self.toolbar.hoveredTag = newHover;
+    if (forceUpdate)
+      *forceUpdate = YES;
+  }
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -46,6 +56,22 @@
         [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
     [resetAPI setCursor:[NSCursor arrowCursor]];
     self.pointCursorSet = NO;
+  }
+  // Toolbar (global chrome) sits on top: claim its hits before any handle or
+  // layer pick. A tag > 0 is an item; < 0 is the toolbar body (swallow).
+  NSInteger tbHit = [self _toolbarHitTestAtX:positionX y:positionY];
+  if (tbHit != 0) {
+    *activePart = (tbHit < 0) ? CanvasToolbarBackground : tbHit;
+    id<FxOnScreenControlAPI_v4> tbAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    // Move cursor over the drag handle; plain arrow over the buttons / body.
+    if (tbHit == CanvasToolbarDragHandle) {
+      [tbAPI setCursor:KKPointMoveCursor()];
+      self.pointCursorSet = YES; // reset to arrow on the next hover off it
+    } else {
+      [tbAPI setCursor:[NSCursor arrowCursor]];
+    }
+    return;
   }
   // Locked SELECTED layer: its own handles aren't grabbable (and Opt can't peek
   // them back). Auto-select still runs below, so you can click a different layer
@@ -123,6 +149,22 @@
                    modifiers:(NSUInteger)modifiers
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
+  // Drop any hover tooltip the moment a press starts (it must not linger through
+  // a drag); mouse-moved re-establishes it afterwards.
+  self.toolbar.hoveredTag = 0;
+  // Toolbar: the body swallows the click; an item toggles its flag or (the drag
+  // handle) starts the bar move. None of these touch the gizmo / layer path.
+  if (activePart == CanvasToolbarBackground) {
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
+  if (activePart >= CanvasToolbarDragHandle) {
+    [self _toolbarMouseDownTag:activePart atX:positionX y:positionY];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   // Auto-select pick: the hover hit-test claimed a click over an unselected
   // image layer - commit the selection and consume the click (no drag).
   if (activePart == CanvasOSCPartLayerPick) {
@@ -192,6 +234,12 @@
                       modifiers:(NSUInteger)modifiers
                     forceUpdate:(BOOL *)forceUpdate
                          atTime:(CMTime)time {
+  if (self.toolbarDragging) {
+    [self _toolbarMouseDraggedAtX:positionX y:positionY];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   // Opt-hide latched on the first event sticks for the rest of the interaction
   // (so an opt-click doesn't half-drag).
   if ([self kkArmOptHideForActivePart:activePart modifiers:modifiers])
@@ -244,6 +292,12 @@
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
+  if (self.toolbarDragging) {
+    [self _toolbarMouseUp];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   [self kkResetOptHideArming];
   [self.position mouseUp];
   [self.scale mouseUp];
@@ -254,6 +308,29 @@
                  activePart:activePart
                   modifiers:modifiers
                 forceUpdate:forceUpdate
+                     atTime:time];
+}
+
+- (void)keyDownAtPositionX:(double)positionX
+                 positionY:(double)positionY
+                keyPressed:(unsigned short)asciiKey
+                 modifiers:(NSUInteger)modifiers
+               forceUpdate:(BOOL *)forceUpdate
+                 didHandle:(BOOL *)didHandle
+                    atTime:(CMTime)time {
+  if ([self _handleToolbarKey:asciiKey modifiers:modifiers]) {
+    if (forceUpdate)
+      *forceUpdate = YES;
+    if (didHandle)
+      *didHandle = YES;
+    return;
+  }
+  [super keyDownAtPositionX:positionX
+                  positionY:positionY
+                 keyPressed:asciiKey
+                  modifiers:modifiers
+                forceUpdate:forceUpdate
+                  didHandle:didHandle
                      atTime:time];
 }
 

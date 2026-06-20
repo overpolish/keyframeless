@@ -55,6 +55,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// hit-testing; the drag still writes the lane value in content space (flat).
 @property(nonatomic, copy, nullable) CGPoint (^centerOverride)(CGRect contentRect);
 
+/// Optional grid snap applied when Cmd is NOT held (Cmd still snaps to the
+/// content's own centre/corners). The host snaps the anchor PIVOT - a normalized
+/// object point - to the grid; the controller converts it back to the anchor
+/// offset. nil = no grid snap. Mirrors the viewer Anchor OSC's canvasSnapProvider.
+@property(nonatomic, copy, nullable) simd_float2 (^gridSnapPivot)
+    (simd_float2 normalizedPivot, CGRect contentRect);
+
+/// Optional map from a content-rect view point to the member-local normalized
+/// value (inverse of the draw transform), so a drag follows the cursor when the
+/// pivot is drawn through a parent/group transform. nil = plain normalization.
+@property(nonatomic, copy, nullable) simd_float2 (^viewToValue)
+    (CGPoint viewPoint, CGRect contentRect);
+
 /// Hit-test half-extent for the square in points (Chebyshev), at the baseline
 /// popover size; scales with the popover. Default 5.0. A host whose anchor pivot
 /// can coincide with a larger Position handle (so the handle would otherwise

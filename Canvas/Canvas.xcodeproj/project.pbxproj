@@ -120,8 +120,11 @@
 				Plugin/OSC/CanvasOSC.m,
 				"Plugin/OSC/CanvasOSC+AutoSelect.m",
 				"Plugin/OSC/CanvasOSC+Geometry.m",
+				"Plugin/OSC/CanvasOSC+Grid.m",
 				"Plugin/OSC/CanvasOSC+Input.m",
 				"Plugin/OSC/CanvasOSC+State.m",
+				"Plugin/OSC/CanvasOSC+Toolbar.m",
+				Plugin/OSC/CanvasToolbar.m,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;

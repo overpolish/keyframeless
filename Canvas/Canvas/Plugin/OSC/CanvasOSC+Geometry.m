@@ -24,6 +24,20 @@
   return c;
 }
 
+// Raw CANVAS (ioSurface px) -> OBJECT (Y-down), no control offset applied.
+- (CGPoint)_rawObjFromCanvasX:(double)cx y:(double)cy {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  CGPoint o = CGPointZero;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                          fromX:cx
+                          fromY:cy
+                        toSpace:kFxDrawingCoordinates_OBJECT
+                            toX:&o.x
+                            toY:&o.y];
+  return o;
+}
+
 // Read a 2-component lane value from the published (selected-layer) snapshot at
 // `frac`, defaulting to `def` when the lane is absent / empty.
 - (void)_snapshotValuesForLabel:(NSString *)label
@@ -66,23 +80,23 @@
   double frac = [self fractionAtTime:time];
   float aspect = (float)[self _canvasAspect];
 
-  // Object-space affine mapping a member-local clip-object point through its
-  // ancestor groups (identity for an ungrouped layer / group selection), so the
-  // member's OSCs draw where the TRANSFORMED group actually renders the member.
-  // Sampled at 3 points (f00, f10, f01). Computed LIVE every tick: it depends
-  // only on the groups' stored transforms + stored Anchor pivots, NEVER on the
-  // member value being dragged - the group pivot is the stored Anchor lane now,
-  // not the live content centre - so there's no feedback (the old content-centre
-  // pivot fed back and forced a freeze hack that made the OSC jump on release).
-  CGPoint f00 = [self _composedObjForObjX:0 y:0 member:sel paths:paths frac:frac aspect:aspect];
-  CGPoint f10 = [self _composedObjForObjX:1 y:0 member:sel paths:paths frac:frac aspect:aspect];
-  CGPoint f01 = [self _composedObjForObjX:0 y:1 member:sel paths:paths frac:frac aspect:aspect];
-  simd_float3x3 A = simd_matrix(
-      simd_make_float3((float)(f10.x - f00.x), (float)(f10.y - f00.y), 0.0f),
-      simd_make_float3((float)(f01.x - f00.x), (float)(f01.y - f00.y), 0.0f),
-      simd_make_float3((float)f00.x, (float)f00.y, 1.0f));
-  // The controls stay axis-aligned (flat); only their drawn position shifts
-  // through A (drag inverts A back to the member's own value).
+  // Object-space PROJECTIVE map (homography) taking a member-local clip-object
+  // point through its ancestor groups (identity for an ungrouped layer / group
+  // selection), so the member's OSCs draw where the TRANSFORMED group actually
+  // renders the member. Sampled at the 4 unit-square corners (a 3-point affine
+  // dropped the perspective term and offset the OSC under group tilt). Computed
+  // LIVE every tick: it depends only on the groups' stored transforms + stored
+  // Anchor pivots, NEVER on the member value being dragged - the group pivot is
+  // the stored Anchor lane now, not the live content centre - so there's no
+  // feedback (the old content-centre pivot fed back and forced a freeze hack).
+  CGPoint p0 = [self _composedObjForObjX:0 y:0 member:sel paths:paths frac:frac aspect:aspect];
+  CGPoint p1 = [self _composedObjForObjX:1 y:0 member:sel paths:paths frac:frac aspect:aspect];
+  CGPoint p2 = [self _composedObjForObjX:1 y:1 member:sel paths:paths frac:frac aspect:aspect];
+  CGPoint p3 = [self _composedObjForObjX:0 y:1 member:sel paths:paths frac:frac aspect:aspect];
+  simd_float3x3 A = CanvasSquareToQuadHomography(p0, p1, p2, p3);
+  // The controls stay flat; their drawn position warps through A (the perspective
+  // divide happens in KKPositionOSC / the pivot; drag inverts A to the member's
+  // own value).
   self.position.parentObjectTransform = A;
   self.anchor.parentObjectTransform = A;
 

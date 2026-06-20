@@ -9,6 +9,7 @@
 
 @implementation _KKMiniViewerOverlay {
   BOOL _dragging;
+  BOOL _toolbarDragging;
   NSTrackingArea *_optTrackingArea;
   BOOL _optReveal;
 }
@@ -51,10 +52,15 @@
 - (NSView *)hitTest:(NSPoint)pt {
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  NSPoint p = [self convertPoint:pt fromView:self.superview];
+  // The toolbar (chrome) sits on top: claim its hits before the handles so the
+  // click doesn't fall through to a layer drag / pan.
+  if ([d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)] &&
+      [d miniViewer:c toolbarTagAtPoint:p] != 0)
+    return self;
   if (![d respondsToSelector:@selector(
                                  miniViewer:handleHitAtPoint:contentRect:)])
     return nil;
-  NSPoint p = [self convertPoint:pt fromView:self.superview];
   return [d miniViewer:c
              handleHitAtPoint:p
                   contentRect:[c contentRectInViewPoints]]
@@ -139,6 +145,17 @@
   if (e.clickCount == 2) {
     [self.window makeFirstResponder:nil];
     id<KKMiniViewerDelegate> dd = c.canvasDelegate;
+    // A double-click on the toolbar (chrome) is the toolbar's - toggle once,
+    // never reset the view's zoom/pan.
+    if ([dd respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)]) {
+      NSPoint tp = [self convertPoint:e.locationInWindow fromView:nil];
+      if ([dd miniViewer:c toolbarTagAtPoint:tp] != 0) {
+        if ([dd respondsToSelector:@selector(miniViewer:toolbarMouseDownAtPoint:)])
+          [dd miniViewer:c toolbarMouseDownAtPoint:tp];
+        [self setNeedsDisplay:YES];
+        return;
+      }
+    }
     if ([dd respondsToSelector:
                 @selector(miniViewer:doubleClickAtPoint:contentRect:)] &&
         [dd miniViewer:c
@@ -153,6 +170,19 @@
     return;
   }
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  // Toolbar (chrome) first: a body / item press is handled by the toolbar and
+  // never touches the gizmo or a layer pick.
+  if ([d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)]) {
+    NSPoint tp = [self convertPoint:e.locationInWindow fromView:nil];
+    if ([d miniViewer:c toolbarTagAtPoint:tp] != 0) {
+      [self.window makeFirstResponder:nil];
+      _toolbarDragging =
+          [d respondsToSelector:@selector(miniViewer:toolbarMouseDownAtPoint:)] &&
+          [d miniViewer:c toolbarMouseDownAtPoint:tp];
+      [self setNeedsDisplay:YES];
+      return;
+    }
+  }
   if (![d respondsToSelector:
               @selector(miniViewer:beginHandleDragAtPoint:contentRect:)])
     return;
@@ -191,10 +221,18 @@
 }
 
 - (void)mouseDragged:(NSEvent *)e {
-  if (!_dragging)
-    return;
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  if (_toolbarDragging) {
+    if ([d respondsToSelector:@selector(miniViewer:toolbarDraggedToPoint:)])
+      [d miniViewer:c
+          toolbarDraggedToPoint:[self convertPoint:e.locationInWindow
+                                          fromView:nil]];
+    [self setNeedsDisplay:YES];
+    return;
+  }
+  if (!_dragging)
+    return;
   CGPoint p = [self convertPoint:e.locationInWindow fromView:nil];
   CGRect cr = [c contentRectInViewPoints];
   if ([d respondsToSelector:
@@ -210,11 +248,18 @@
 }
 
 - (void)mouseUp:(NSEvent *)e {
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  if (_toolbarDragging) {
+    _toolbarDragging = NO;
+    if ([d respondsToSelector:@selector(miniViewerToolbarMouseUp:)])
+      [d miniViewerToolbarMouseUp:c];
+    [self setNeedsDisplay:YES];
+    return;
+  }
   if (!_dragging)
     return;
   _dragging = NO;
-  KKMiniViewerView *c = self.canvas;
-  id<KKMiniViewerDelegate> d = c.canvasDelegate;
   if ([d respondsToSelector:@selector(miniViewerEndHandleDrag:)])
     [d miniViewerEndHandleDrag:c];
   if (c.onHandleDragEnd)
@@ -271,6 +316,23 @@
 
 - (void)mouseMoved:(NSEvent *)e {
   [self _setOptReveal:(e.modifierFlags & NSEventModifierFlagOption) != 0];
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  if ([d respondsToSelector:@selector(miniViewer:toolbarHoverTag:)] &&
+      [d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)]) {
+    NSPoint p = [self convertPoint:e.locationInWindow fromView:nil];
+    NSInteger tag = [d miniViewer:c toolbarTagAtPoint:p];
+    [d miniViewer:c toolbarHoverTag:tag];
+    if (tag != 0) {
+      // Over the toolbar: it owns the cursor (move over the handle, arrow
+      // elsewhere); skip the handle-resize cursor logic below.
+      NSCursor *cur = nil;
+      if ([d respondsToSelector:@selector(miniViewer:toolbarCursorForTag:)])
+        cur = [d miniViewer:c toolbarCursorForTag:tag];
+      [(cur ?: [NSCursor arrowCursor]) set];
+      return;
+    }
+  }
   [self _updateHoverCursorAtWindowPoint:e.locationInWindow];
 }
 
@@ -280,6 +342,10 @@
 
 - (void)mouseExited:(NSEvent *)e {
   [self _setOptReveal:NO];
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  if ([d respondsToSelector:@selector(miniViewer:toolbarHoverTag:)])
+    [d miniViewer:c toolbarHoverTag:0];
   [[NSCursor arrowCursor] set];
 }
 

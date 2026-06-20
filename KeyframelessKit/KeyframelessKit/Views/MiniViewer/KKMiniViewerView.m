@@ -172,20 +172,45 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   return YES;
 }
 
+// Toolbar tool shortcuts (Control+letter). Same XPC routing caveat as the reset
+// key: in FCP's ViewBridge the event may only reach the GLOBAL monitor, so we
+// can fire but not always swallow it. Gate on the mini being the visible key
+// window and skip while a value field (NSText) is editing.
+- (BOOL)_handleToolbarKeyEvent:(NSEvent *)e {
+  if (!self.window.isVisible || !self.window.isKeyWindow)
+    return NO;
+  if ([self.window.firstResponder isKindOfClass:[NSText class]])
+    return NO;
+  if (![self.canvasDelegate
+          respondsToSelector:@selector(miniViewer:
+                                 toolbarKeyDownChars:modifiers:)])
+    return NO;
+  NSString *chars = e.charactersIgnoringModifiers;
+  if (chars.length == 0)
+    return NO;
+  return [self.canvasDelegate miniViewer:self
+                    toolbarKeyDownChars:chars
+                              modifiers:e.modifierFlags];
+}
+
 - (void)_installKeyMonitor {
   __weak typeof(self) weak = self;
   _keyMon = [NSEvent
       addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
                                    handler:^NSEvent *(NSEvent *e) {
                                      __strong typeof(self) s = weak;
-                                     return [s _handleResetKeyEvent:e] ? nil
-                                                                       : e;
+                                     if ([s _handleResetKeyEvent:e] ||
+                                         [s _handleToolbarKeyEvent:e])
+                                       return nil;
+                                     return e;
                                    }];
   _keyGlobalMon =
       [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskKeyDown
                                              handler:^(NSEvent *e) {
                                                __strong typeof(self) s = weak;
-                                               [s _handleResetKeyEvent:e];
+                                               if ([s _handleResetKeyEvent:e])
+                                                 return;
+                                               [s _handleToolbarKeyEvent:e];
                                              }];
 }
 

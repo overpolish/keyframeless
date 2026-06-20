@@ -4,6 +4,7 @@
  */
 
 #import "CanvasLayerRender.h"
+#import "CanvasLayerTimeline.h" // CanvasSetUIStateSnapshot
 #import "CanvasMiniViewerRenderer.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
@@ -74,6 +75,12 @@
   if (api) {
     NSString *uiJSON = KKReadCustomParamString(api, kParamUIState);
     if (uiJSON.length) {
+      // Seed the viewer OSC's UIState snapshot here too (the OSC can't read the
+      // param directly). pluginState only fires on a CHANGE, so on a cold FCP
+      // launch the snapshot would be empty until the user interacts - leaving the
+      // toolbar / grid at defaults. Render runs before the OSC draws, so seeding
+      // here restores them immediately.
+      CanvasSetUIStateSnapshot(uiJSON);
       NSDictionary *ui = [NSJSONSerialization
           JSONObjectWithData:[uiJSON dataUsingEncoding:NSUTF8StringEncoding]
                      options:0

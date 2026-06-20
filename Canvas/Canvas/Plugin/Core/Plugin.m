@@ -86,10 +86,34 @@
     // run on every UIState change (OSC toggles preserve the key, so they no-op).
     NSString *restoredSel = state[@"selectedLayerID"];
     BOOL autoSelect = [state[@"autoSelect"] boolValue];
+    // Shared alignment-grid state - mirror onto the popover mini-viewer so its
+    // grid matches the viewer's (same keys the OSC writes via _writeUIStateMerging).
+    BOOL gridEnabled = [state[@"gridEnabled"] boolValue];
+    BOOL gridAdaptive =
+        state[@"gridAdaptive"] ? [state[@"gridAdaptive"] boolValue] : YES;
+    NSInteger gridSpacing =
+        state[@"gridSpacing"] ? [state[@"gridSpacing"] integerValue] : 10;
+    BOOL gridSnap = [state[@"gridSnap"] boolValue];
+    // The active tool is shared (a logical editing mode). The toolbar POSITION is
+    // per-surface (the viewer + mini differ in size/aspect, and the mini render is
+    // Y-mirrored): the mini reads/writes its own `miniToolbarPos`, not the viewer's
+    // `toolbarPos`. Absent -> {-1,-1} = the mini's own default anchor (top).
+    NSInteger tbTool = state[@"tool"] ? [state[@"tool"] integerValue] : 0;
+    NSArray *tbPos = state[@"miniToolbarPos"];
+    CGPoint tbNorm =
+        ([tbPos isKindOfClass:[NSArray class]] && tbPos.count == 2)
+            ? CGPointMake([tbPos[0] doubleValue], [tbPos[1] doubleValue])
+            : CGPointMake(-1, -1);
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];
       [(CanvasInspectorView *)self.inspectorView setAutoSelect:autoSelect];
+      [(CanvasInspectorView *)self.inspectorView setGridEnabled:gridEnabled
+                                                      adaptive:gridAdaptive
+                                                       spacing:gridSpacing
+                                                          snap:gridSnap];
+      [(CanvasInspectorView *)self.inspectorView setToolbarTool:tbTool
+                                                       normPos:tbNorm];
       KKPluginInstanceState *ist = KKInstanceStateEnsureForAPI(self.apiManager);
       ist.oscMasterVisible = oscMaster;
       ist.oscElementsByOwner =

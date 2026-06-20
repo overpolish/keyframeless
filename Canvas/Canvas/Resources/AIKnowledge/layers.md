@@ -205,9 +205,50 @@ clean;
 **Option-hold** reveals hidden controls as dimmed ghosts and **Option-click**
 toggles one. A **locked** layer hides its controls.
 
+## Toolbar
+
+A small floating toolbar sits over the preview in **both** the FCP viewer and
+the inspector mini-viewer - the same bar, the same buttons, and the same shared
+state, so a tool, grid toggle, or cell size set on one surface shows on the
+other. It is screen chrome: its settings are remembered but never change the
+render, only the editing overlay. Drag it anywhere by the **grip handle** on its
+left; the position survives zoom and size changes and is remembered separately
+per surface (the viewer and the mini each keep their own spot, since they differ
+in size and aspect).
+
+A divider splits it into two groups. The buttons are icon-only; **hover any
+button for a localized tooltip** naming what it does.
+
+- **Tools** - cursor, pen, rectangle, ellipse, with keyboard shortcuts
+  **^V / ^X / ^B / ^G** shown on the button. The shortcuts work whenever either
+  surface is focused. Selecting a tool (by click or shortcut) highlights it and
+  stores it as the active tool. Drawing with the pen and shape tools is pending
+  re-add, so for now picking a tool only sets the selection.
+- **Grid controls** - see below.
+
+### Grid
+
+- **Grid** - toggles the overlay grid across the **whole preview** (it fills the
+  letterbox margins too, not just the playback rectangle). Off by default. The
+  grid is drawn as a subtle two-tone line (a darker edge under a lighter core)
+  so it stays legible over both light and dark footage.
+- **Auto grid spacing** - when on, keeps the cells readable by doubling the
+  spacing as you zoom out so the grid never collapses into a grey wash; when off,
+  the spacing stays fixed. On by default (the icon switches between the dotted
+  "auto" and plain "fixed" grid glyph).
+- **Cell size** - cycles the base cell size through **10 / 20 / 50 / 100** canvas
+  pixels (so the grid is pinned to the canvas and scales on screen with zoom).
+  The button shows the current value.
+- **Snap to grid** - toggles snapping to the grid. Off by default. While it's on,
+  dragging a layer's **Position** handle or its **Anchor** square pins the point
+  to the nearest grid intersection (hold **Cmd** during a drag to override it
+  with the usual centre / corner / keypose snapping instead). The grid spacing
+  used is the one shown, so turn the grid on to see where things land. Snapping
+  is shared infrastructure, so future path / shape editing will reuse it.
+
 ## Motion blur
 
-The toolbar's motion-blur toggle applies the shared sample-accumulate blur to
+The inspector's motion-blur control applies the shared sample-accumulate blur to
 the layer animation (and the underlying content), the same engine the other
 Keyframeless plugins use.
 
@@ -216,3 +257,5 @@ Keyframeless plugins use.
 - Per-layer **rotation** (lane + on-canvas gizmo).
 - Per-layer opacity in the render.
 - Shape (stroke / fill) layers and SVG import.
+- **Drawing tools** (pen / rectangle / ellipse) - the toolbar buttons and
+  shortcuts exist but only select the tool for now.

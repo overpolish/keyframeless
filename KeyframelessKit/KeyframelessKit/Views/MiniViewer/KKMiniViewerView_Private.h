@@ -87,6 +87,7 @@ NS_ASSUME_NONNULL_BEGIN
   id<MTLRenderPipelineState> _rotationPipeline;
   id<MTLRenderPipelineState> _linePipeline;
   id<MTLRenderPipelineState> _aaLinePipeline;
+  id<MTLRenderPipelineState> _toolbarPipeline;
 }
 - (CGRect)contentRectInViewPoints;
 - (CGSize)sourceMediaSize;
@@ -141,6 +142,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_encodeRectBorder:(CGRect)br
                 lineColor:(simd_float4)lineColor
                   encoder:(id<MTLRenderCommandEncoder>)enc;
+- (void)_encodeGridWithSpacingX:(CGFloat)nx
+                       spacingY:(CGFloat)ny
+                    contentRect:(CGRect)cr
+                        encoder:(id<MTLRenderCommandEncoder>)enc;
 - (void)_encodeHandleGlyphAt:(CGPoint)centerPts
                    fillColor:(simd_float4)fillColor
                      encoder:(id<MTLRenderCommandEncoder>)enc;

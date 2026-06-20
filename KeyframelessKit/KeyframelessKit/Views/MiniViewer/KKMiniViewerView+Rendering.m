@@ -76,6 +76,26 @@ static const BOOL kPointShadingLighterTop = YES;
   if (!_pointPipeline)
     KKLogError(@"KKMiniViewerView: point pipeline failed: %@", err);
 
+  // Toolbar chrome (KKToolbar): shared KKLabelFragment, PREMULTIPLIED-alpha
+  // blend (source One) since its textures are premultiplied. Passed to the
+  // delegate so it can render the SAME bar as the viewer into this pass.
+  MTLRenderPipelineDescriptor *tb = [[MTLRenderPipelineDescriptor alloc] init];
+  tb.vertexFunction = [lib newFunctionWithName:@"KKVertexShader"];
+  tb.fragmentFunction = [lib newFunctionWithName:@"KKLabelFragment"];
+  tb.colorAttachments[0].pixelFormat = self.colorPixelFormat;
+  tb.colorAttachments[0].blendingEnabled = YES;
+  tb.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
+  tb.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
+  tb.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
+  tb.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+  tb.colorAttachments[0].destinationRGBBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  tb.colorAttachments[0].destinationAlphaBlendFactor =
+      MTLBlendFactorOneMinusSourceAlpha;
+  _toolbarPipeline = [device newRenderPipelineStateWithDescriptor:tb error:&err];
+  if (!_toolbarPipeline)
+    KKLogError(@"KKMiniViewerView: toolbar pipeline failed: %@", err);
+
   // Shared KKSquarePointOSC glyph (Magic Move anchor pivot). Same blend mode
   // as the point pipeline, different fragment.
   MTLRenderPipelineDescriptor *sq = [[MTLRenderPipelineDescriptor alloc] init];
@@ -366,6 +386,66 @@ static const BOOL kPointShadingLighterTop = YES;
 
 // Thin rectangle outline (view-point rect) drawn as four filled edge quads via
 // the flat-colour line pipeline. Shared by the crop border + the scale box.
+// Tiles an alignment grid across the whole view, positioned by the content rect
+// and the per-axis spacing (a fraction of the content rect). Two opaque passes -
+// a wider dark halo under a thin light core - so the lines read on both light
+// and dark footage, matching the in-viewer grid. Lines are thin filled quads
+// drawn through the flat-colour _linePipeline (same path as the box borders).
+- (void)_encodeGridWithSpacingX:(CGFloat)nx
+                       spacingY:(CGFloat)ny
+                    contentRect:(CGRect)cr
+                        encoder:(id<MTLRenderCommandEncoder>)enc {
+  if (nx <= 0 || ny <= 0 || cr.size.width <= 0 || cr.size.height <= 0)
+    return;
+  CGSize d = self.drawableSize;
+  CGFloat s = self.window.backingScaleFactor;
+  if (s <= 0)
+    s = 2.0;
+  CGFloat viewW = d.width / s, viewH = d.height / s;
+  CGFloat cellX = nx * cr.size.width, cellY = ny * cr.size.height;
+  if (cellX < 0.5 || cellY < 0.5)
+    return; // too dense to be useful (and would flood the loop)
+
+  CGFloat W = d.width, H = d.height;
+  simd_uint2 vp = {(unsigned)W, (unsigned)H};
+  [enc setRenderPipelineState:_linePipeline];
+  [enc setVertexBytes:&vp
+               length:sizeof(vp)
+              atIndex:KKVertexInputIndex_ViewportSize];
+
+  // A filled quad in DRAWABLE-pixel-centred coords (origin at the centre). Line
+  // widths are kept thin in drawable px (hairlines) and pixel-snapped so they
+  // read as subtle as the viewer's high-res grid rather than fat 3-4px bars.
+  void (^quad)(float, float, float, float) = ^(float L, float B, float R,
+                                               float T) {
+    KKVertex2D q[4] = {
+        {{L, T}, {0, 0}}, {{L, B}, {0, 0}}, {{R, T}, {0, 0}}, {{R, B}, {0, 0}}};
+    [enc setVertexBytes:q length:sizeof(q) atIndex:KKVertexInputIndex_Vertices];
+    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+  };
+
+  // halfPx = half line width in DRAWABLE pixels (dark halo just wider than the
+  // light core). Centres are pixel-snapped (floor + 0.5) for crisp hairlines.
+  void (^pass)(simd_float4, CGFloat) = ^(simd_float4 color, CGFloat halfPx) {
+    [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
+    NSInteger k0 = (NSInteger)floor((0 - cr.origin.x) / cellX);
+    NSInteger k1 = (NSInteger)ceil((viewW - cr.origin.x) / cellX);
+    for (NSInteger k = k0; k <= k1; k++) {
+      float cx = (float)(floor((cr.origin.x + k * cellX) * s) + 0.5);
+      quad(cx - halfPx - W / 2, -H / 2, cx + halfPx - W / 2, H / 2);
+    }
+    NSInteger j0 = (NSInteger)floor((0 - cr.origin.y) / cellY);
+    NSInteger j1 = (NSInteger)ceil((viewH - cr.origin.y) / cellY);
+    for (NSInteger j = j0; j <= j1; j++) {
+      float cy = (float)(floor((cr.origin.y + j * cellY) * s) + 0.5);
+      quad(-W / 2, cy - halfPx - H / 2, W / 2, cy + halfPx - H / 2);
+    }
+  };
+
+  pass((simd_float4){0.14f, 0.14f, 0.14f, 1.0f}, 0.75); // dark halo (~1.5px)
+  pass((simd_float4){0.19f, 0.19f, 0.19f, 1.0f}, 0.5);  // light core (~1px)
+}
+
 - (void)_encodeRectBorder:(CGRect)br
                 lineColor:(simd_float4)lineColor
                   encoder:(id<MTLRenderCommandEncoder>)enc {

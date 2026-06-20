@@ -35,6 +35,10 @@
     _position.onTimelinePersist = ^(KKTimeline *tl) {
       [weak _persistSelectedLayerTimeline:tl];
     };
+    // Grid snap (when the toolbar Snap toggle is on); no-op otherwise.
+    _position.canvasSnapProvider = ^CGPoint(CGPoint cp) {
+      return [weak _snapCanvasPointToGrid:cp];
+    };
     // Scale box, concentric with the Position handle. Same per-layer persist.
     _scale = [[KKScaleOSC alloc] initWithAPIManager:apiManager
                                           laneLabel:@"Scale"];
@@ -69,6 +73,10 @@
     _anchor.onTimelinePersist = ^(KKTimeline *tl) {
       [weak _persistSelectedLayerTimeline:tl];
     };
+    _anchor.canvasSnapProvider = ^CGPoint(CGPoint cp) {
+      return [weak _snapCanvasPointToGrid:cp];
+    };
+    [self _setupToolbar];
   }
   return self;
 }
@@ -85,9 +93,16 @@
                                        commands:^(id<MTLRenderCommandEncoder> e,
                                                   CGPoint p, simd_uint2 v){
                                        }];
-  // Locked layer: cleared surface only, no handles (and no Opt-reveal).
-  if ([self _selectedLayerLocked])
+  // Grid overlay (under the gizmo + toolbar), independent of selection / lock.
+  [self _drawGridWithWidth:width height:height destinationImage:destinationImage];
+  // Locked layer: cleared surface only, no handles (and no Opt-reveal) - the
+  // toolbar (global chrome) still draws on top.
+  if ([self _selectedLayerLocked]) {
+    [self _drawToolbarWithWidth:width
+                         height:height
+               destinationImage:destinationImage];
     return;
+  }
   // Re-centre the point controls on where a grouped member is actually drawn
   // (no-op otherwise); the scale box + rotation rings follow via the Position
   // handle they centre on.
@@ -127,6 +142,11 @@
   [self.anchor drawInDestination:destinationImage
                           atTime:time
                       activePart:activePart];
+  // Toolbar (grid + drag handle), global screen chrome, drawn last so it sits on
+  // top of the gizmo.
+  [self _drawToolbarWithWidth:width
+                       height:height
+             destinationImage:destinationImage];
 }
 
 - (NSArray<NSString *> *)oscElementKeys {
