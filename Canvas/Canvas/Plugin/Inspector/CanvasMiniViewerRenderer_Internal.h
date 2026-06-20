@@ -6,6 +6,7 @@
 #pragma once
 
 #import "CanvasMiniViewerRenderer.h"
+#import "CanvasPathEditController.h" // shared path anchor/handle editing
 #import "CanvasPenController.h" // CanvasPenSurface + shared pen state machine
 #import <KeyframelessKit/KeyframelessKit.h>
 
@@ -17,6 +18,9 @@ NS_ASSUME_NONNULL_BEGIN
 // Shared pen state machine; this renderer is its surface (CanvasMiniViewerRenderer
 // +Pen.m implements CanvasPenSurface). Set in -init.
 @property(nonatomic, strong) CanvasPenController *penController;
+// Shared anchor/handle editor for the selected path (this renderer is its
+// surface via the same CanvasPenSurface the pen uses).
+@property(nonatomic, strong) CanvasPathEditController *pathEditController;
 // The content rect (overlay view points) of the in-flight pen input / draw, so
 // the surface coordinate methods can convert without it being threaded through.
 @property(nonatomic) CGRect penContentRect;

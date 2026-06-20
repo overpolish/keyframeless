@@ -135,6 +135,13 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *inHandle;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *outHandle;
 
+/// Opaque per-keypose geometry payload for OSC-edited geometry lanes (e.g. a
+/// path's Points): the shape AT this keypose, captured via KKMorphSnapshot. The
+/// renderer interpolates between adjacent keyposes' snapshots. Storing it on the
+/// keypose means it travels with the keypose through copy / move / remove, so no
+/// parallel array needs syncing. nil for ordinary scalar lanes. Default nil.
+@property(nonatomic, copy, nullable) NSData *geometrySnapshot;
+
 + (instancetype)keyposeAtTime:(double)time values:(NSArray<NSNumber *> *)values;
 
 /// Returns a copy of the receiver with a new time, preserving everything else
@@ -272,6 +279,14 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// random integer that isn't a meaningful range. Pair with `animatable = NO`
 /// and `integerValued = YES`. Default NO. Build-time metadata.
 @property(nonatomic) BOOL seedField;
+
+/// When YES the property is edited only via an on-screen control (no numeric
+/// fields): the value / keypose / constants popover shows a message row
+/// ("Edit on canvas") instead of value fields. The lane still animates
+/// (keyposes drive timing) and appears in the timeline; only the inline value
+/// editor is replaced. Use for geometry-style properties (e.g. a path's
+/// points). Default NO. Build-time metadata.
+@property(nonatomic) BOOL oscEditedOnly;
 
 /// When set (count >= 2) the value row presents a grouped radio pill (one
 /// segment per label) instead of a number field, and the lane's single value is
@@ -466,5 +481,24 @@ FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingValuesNearestFraction(
 + (nullable KKTimeline *)timelineFromJSON:(NSString *)json;
 
 @end
+
+/// Geometry-aware keypose "value" equality. For an OSC-edited geometry lane
+/// (`oscEditedOnly`) the keyposes carry no scalar - their value IS the shape -
+/// so this compares their morph-snapshot hashes; for any other lane it compares
+/// the scalar `values`. Use it wherever the timeline asks "do these two
+/// keyposes hold the same value?" (drift / transition detection) so geometry
+/// lanes are handled correctly instead of always reading equal (empty values).
+FOUNDATION_EXPORT BOOL KKLaneKeyposeValuesEqual(KKLane *lane, KKKeyPose *a,
+                                                KKKeyPose *b);
+
+/// The geometry snapshot a geometry lane (`oscEditedOnly`) DISPLAYS at `frac`:
+/// the surrounding keyposes' snapshots interpolated with the segment's easing
+/// curve (mirrors the renderer). Use it when inserting a keypose so the new one
+/// captures the shape currently shown - otherwise splitting a hold gives the
+/// new keypose no snapshot, it falls back to the base shape, and the segment
+/// reads as a transition. Returns nil when the surrounding keyposes have no
+/// usable snapshots (so the new keypose falls back to the base, like them).
+FOUNDATION_EXPORT NSData *_Nullable KKLaneGeometrySnapshotAtFraction(
+    KKLane *lane, double frac);
 
 NS_ASSUME_NONNULL_END

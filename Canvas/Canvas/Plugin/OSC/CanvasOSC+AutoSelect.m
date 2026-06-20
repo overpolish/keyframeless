@@ -40,11 +40,13 @@
   NSArray<KKBezierPath *> *paths = [self _snapshotPaths];
   if (!paths.count)
     return nil;
+  double bw = 0, bh = 0;
+  [self _objectBasisWidth:&bw height:&bh]; // canvas px height for stroke pick tol
   return CanvasHitTestLayerID(paths, [self fractionAtTime:time],
                               (float)[self _canvasAspect], (float)ox, (float)oy,
                               /*alphaAware=*/YES, /*excluded=*/nil,
                               /*requireEditableAtFrac=*/YES,
-                              [CanvasPlugin availableLanes]);
+                              [CanvasPlugin availableLanes], (float)bh);
 }
 
 // Merge the picked layer id into the current UIState (snapshot base, since the

@@ -59,4 +59,11 @@ FOUNDATION_EXPORT NSUInteger KKMorphInterpolate(NSData *fromBlob,
 FOUNDATION_EXPORT NSUInteger KKMorphInterpolateSampleCount(NSData *fromBlob,
                                                            NSData *toBlob);
 
+/// A stable hash of a snapshot's geometry mapped to [0,1). Equal shapes hash
+/// equal; any difference (all but certainly) hashes differently - so a geometry
+/// lane (which has no scalar of its own) can both plot a line between keyposes
+/// AND have holds vs transitions detected by comparing signatures. Returns 0.5
+/// for a nil / empty blob (so two un-snapshotted keyposes read as a hold).
+FOUNDATION_EXPORT double KKMorphSnapshotSignature(NSData *_Nullable blob);
+
 NS_ASSUME_NONNULL_END

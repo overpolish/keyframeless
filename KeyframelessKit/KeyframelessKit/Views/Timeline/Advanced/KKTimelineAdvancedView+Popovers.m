@@ -7,6 +7,7 @@
 
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKLocalized.h>
+#import <KeyframelessKit/KKPathMorph.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
 @implementation KKTimelineAdvancedView (Popovers)
@@ -151,6 +152,11 @@
     // raw 0.5 instead of pixels (Constants copies it, so it worked there).
     display.componentsScaleWithMedia =
         tmpl ? tmpl.componentsScaleWithMedia : l.componentsScaleWithMedia;
+    // OSC-edited-only (geometry lanes like Points) shows the "edit on canvas"
+    // message instead of value fields. It's template metadata, but fall back to
+    // the source lane (it's serialized too) so a keypose popover still matches
+    // the constants row when the template isn't resolved.
+    display.oscEditedOnly = tmpl ? tmpl.oscEditedOnly : l.oscEditedOnly;
     display.locked = l.locked; // locked layer -> read-only value row
     [display kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     KKKeyPose *displayKp = [KKKeyPose keyposeAtTime:0.0
@@ -302,6 +308,18 @@
     return;
   }
 
+  // Geometry lane (Points): a hold (identical shapes at both ends) has nothing
+  // to ease or modulate, so close any open popover rather than show dead
+  // controls. A transition (different shapes) falls through to the curve pills
+  // below (endpointsEqual is forced NO for geometry).
+  if (lane.oscEditedOnly &&
+      KKMorphSnapshotSignature(a.geometrySnapshot) ==
+          KKMorphSnapshotSignature(b.geometrySnapshot)) {
+    if (self.onRequestClosePopover)
+      self.onRequestClosePopover();
+    return;
+  }
+
   NSArray<KKLane *> *anim = [self _animatableLanes];
   NSInteger animIdx = -1;
   for (NSInteger i = 0; i < (NSInteger)anim.count; i++)
@@ -354,7 +372,13 @@
       s.onDragEnd();
   };
 
-  if (KKAdvValuesEqual(a.values, b.values)) {
+  // Geometry lanes (Points) carry no scalar of their own, so value-equality
+  // always reads "equal" - but the shape DOES change between keyposes and the
+  // morph eases via the curve (modulation is a no-op for geometry). Always
+  // route them to the curve pills, never the modulation popover.
+  BOOL endpointsEqual =
+      lane.oscEditedOnly ? NO : KKAdvValuesEqual(a.values, b.values);
+  if (endpointsEqual) {
     if (!self.onHoldModulationPopover)
       return;
     void (^onModulation)(KKIntervalModulation) = ^(KKIntervalModulation m) {
@@ -607,12 +631,18 @@
     iv.endpointsLinked = newLinked;
     if (!newLinked)
       iv.curve = KKIntervalCurveLinear;
-    KKKeyPose *newA = [KKKeyPose keyposeAtTime:a.time values:a.values];
+    // Copy-preserve A (keyposeAtTime:values: would drop its spatial state +
+    // geometrySnapshot); only its outgoing interval changes.
+    KKKeyPose *newA = [a copy];
     newA.outgoing = iv;
     kps[aIdx] = newA;
     if (newLinked) {
-      KKKeyPose *newB = [KKKeyPose keyposeAtTime:b.time values:a.values];
-      newB.outgoing = b.outgoing;
+      // Linking collapses B onto A's value (a hold). For a geometry lane the
+      // "value" IS the shape, so carry A's snapshot too - otherwise B keeps its
+      // own shape (or falls back to base) and the link doesn't actually hold.
+      KKKeyPose *newB = [b copy];
+      newB.values = a.values;
+      newB.geometrySnapshot = a.geometrySnapshot;
       kps[aIdx + 1] = newB;
     }
     nl.keyposes = kps;
@@ -668,7 +698,11 @@
       if (idx < 0 || idx + 1 >= (NSInteger)kps.count)
         continue;
       KKKeyPose *src = kps[idx];
-      KKKeyPose *newKP = [KKKeyPose keyposeAtTime:src.time values:src.values];
+      // Copy-preserve: keyposeAtTime:values: would drop the keypose's spatial
+      // state (spatialSmooth / in-out handles) AND its geometrySnapshot, so a
+      // curve change would silently reset a Points keypose's shape to the base
+      // (i.e. the last-edited keypose's). See [[project_keypose_copy_preserve_spatial]].
+      KKKeyPose *newKP = [src copy];
       KKInterval *iv = [src.outgoing copy] ?: [[KKInterval alloc] init];
       mut(iv);
       newKP.outgoing = iv;

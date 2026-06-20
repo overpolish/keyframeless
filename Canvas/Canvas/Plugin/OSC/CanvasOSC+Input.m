@@ -133,6 +133,8 @@
     [self _syncScaleControlAtTime:time];
     if ([self.scale hitTestHandleAtX:positionX y:positionY atTime:time] >= 0) {
       *activePart = CanvasOSCPartScale;
+      self.pointCursorSet = YES; // the control set a resize / eye cursor: reset
+                                 // it on the next hover off
       return;
     }
     // Rotation rings, checked last (they sit inside the scale box). The control
@@ -140,10 +142,25 @@
     [self _syncRotationControlAtTime:time];
     if ([self.rotation hitTestRingAtX:positionX y:positionY atTime:time] >= 0) {
       *activePart = CanvasOSCPartRotation;
+      self.pointCursorSet = YES; // the control set a rotate / eye cursor: reset
+                                 // it on the next hover off
       return;
     }
   }
 
+  // Path point editing: a click on the selected path's anchor / tangent handle
+  // (cursor tool, Points OSC visible) grabs it. Checked before auto-select so a
+  // click on an anchor edits the path instead of re-picking a layer beneath.
+  if ([self _activeTool] == CanvasToolbarToolCursor &&
+      [self kkOSCElementVisible:@"Points"] &&
+      [self _pathEditHitAtX:positionX y:positionY] != CanvasPathEditHitNone) {
+    *activePart = CanvasOSCPartPathEdit;
+    id<FxOnScreenControlAPI_v4> peAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [peAPI setCursor:KKPointMoveCursor()];
+    self.pointCursorSet = YES;
+    return;
+  }
   // Auto-select: no handle was grabbed, so if the toggle is on, claim a click
   // over the topmost (unselected) image layer to select it. Clicking the
   // already-selected layer is a no-op (don't claim - leave the click to FCP).
@@ -190,6 +207,13 @@
                          y:positionY
                  modifiers:modifiers
                     atTime:time];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
+  // Path point editing: grab the anchor / handle the hover hit-test claimed.
+  if (activePart == CanvasOSCPartPathEdit) {
+    [self _pathEditMouseDownAtX:positionX y:positionY modifiers:modifiers];
     if (forceUpdate)
       *forceUpdate = YES;
     return;
@@ -276,6 +300,13 @@
       *forceUpdate = YES;
     return;
   }
+  // Path point editing: drag the grabbed anchor / handle.
+  if ([self _pathEditDragging]) {
+    [self _pathEditMouseDraggedAtX:positionX y:positionY modifiers:modifiers];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   // Opt-hide latched on the first event sticks for the rest of the interaction
   // (so an opt-click doesn't half-drag).
   if ([self kkArmOptHideForActivePart:activePart modifiers:modifiers])
@@ -336,6 +367,12 @@
   }
   if ([self _penToolActive]) {
     [self _penMouseUp];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
+  if ([self _pathEditDragging]) {
+    [self _pathEditMouseUp];
     if (forceUpdate)
       *forceUpdate = YES;
     return;

@@ -420,6 +420,14 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   return path;
 }
 
+- (id)copyWithZone:(NSZone *)zone {
+  // Round-trip through the canonical serializer so the copy stays complete
+  // (points, contours, shape, animationJSON, morph targets, every property)
+  // without a parallel field-by-field copy that would silently drop anything
+  // added to dataRepresentation later.
+  return [KKBezierPath pathWithData:[self dataRepresentation]];
+}
+
 - (NSData *)dataRepresentation {
   uint32_t count = (uint32_t)_count;
   uint8_t flags = _closed ? 1 : 0;

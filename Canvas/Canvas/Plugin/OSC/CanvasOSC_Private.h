@@ -11,6 +11,7 @@
 // others without -Wundeclared-selector.
 
 #import "CanvasOSC.h"
+#import "CanvasPathEditController.h" // shared path anchor/handle editing
 #import "CanvasPenController.h" // CanvasPenSurface + the shared pen state machine
 #import "CanvasToolbar.h" // CanvasToolbarTag + CanvasMakeToolbar (shared w/ mini)
 #import <KeyframelessKit/KeyframelessKit.h>
@@ -22,6 +23,7 @@
 @class KKToolbar;
 @class KKPointOSC;
 @class CanvasPenController;
+@class CanvasPathEditController;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -39,6 +41,8 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
   // The pen tool claims the whole canvas (minus the toolbar) so FCP routes
   // every click to the OSC, not just clicks over a handle.
   CanvasOSCPartPen = 7,
+  // An anchor / tangent handle of the selected path's point-edit OSC.
+  CanvasOSCPartPathEdit = 8,
 };
 
 @interface CanvasOSC ()
@@ -76,6 +80,9 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 // The shared pen state machine; this OSC is its drawing + persistence surface
 // (CanvasOSC+Pen.m implements CanvasPenSurface). Created lazily.
 @property(nonatomic, strong) CanvasPenController *penController;
+// Shared anchor/handle editor for the selected path (CanvasOSC is its surface
+// via the same CanvasPenSurface the pen uses).
+@property(nonatomic, strong) CanvasPathEditController *pathEditController;
 // Set for the span of a pen overlay draw so the surface draw primitives know the
 // FxImageTile + time to encode into.
 @property(nonatomic, assign) FxImageTile *penDrawDest;
@@ -90,6 +97,9 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 @interface CanvasOSC (Geometry)
 - (double)_onScreenFrameMin;
 - (double)_canvasAspect;
+// Canvas-pixel lengths of the object-space unit axes (height feeds the stroke
+// pick tolerance in CanvasHitTestLayerID). NO when the OSC API is absent.
+- (BOOL)_objectBasisWidth:(double *)outW height:(double *)outH;
 // Raw OBJECT (Y-down) <-> CANVAS (ioSurface px) conversions, no control offset.
 - (CGPoint)_rawCanvasFromObjX:(double)ox y:(double)oy;
 - (CGPoint)_rawObjFromCanvasX:(double)cx y:(double)cy;
@@ -179,9 +189,21 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
                              height:(NSInteger)height
                    destinationImage:(FxImageTile *)destinationImage
                              atTime:(CMTime)time;
+// The selected vector path's edit OSC (anchors + connecting curve), read-only,
+// projected to where the stroke renders. No-op unless the selected layer is a
+// drawn path. (Drawn alongside the gizmo for now; gated to enter-mode later.)
+- (void)_drawSelectedPathEditOSCInDestination:(FxImageTile *)destinationImage
+                                       atTime:(CMTime)time;
 // The cursor the pen tool shows at a CANVAS point: the close-shape glyph when
 // hovering the first anchor (with a loop placed), else the pen glyph.
 - (NSCursor *)_penCursorForCanvasX:(double)x y:(double)y;
+// Path point editing (cursor tool): hit-test / drag the selected path's anchors
+// + handles via the shared CanvasPathEditController. Coords are CANVAS px.
+- (CanvasPathEditHit)_pathEditHitAtX:(double)x y:(double)y;
+- (BOOL)_pathEditMouseDownAtX:(double)x y:(double)y modifiers:(NSUInteger)mods;
+- (void)_pathEditMouseDraggedAtX:(double)x y:(double)y modifiers:(NSUInteger)mods;
+- (void)_pathEditMouseUp;
+- (BOOL)_pathEditDragging;
 @end
 
 NS_ASSUME_NONNULL_END

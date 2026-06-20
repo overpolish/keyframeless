@@ -14,6 +14,7 @@
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKGradientBarView.h>
 #import <KeyframelessKit/KKGradientSampling.h>
+#import <KeyframelessKit/KKPathMorph.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
 // Derived graph values for a composite gradient lane value
@@ -39,6 +40,27 @@ static NSArray<NSNumber *> *KKAdvGradientDerived(NSArray<NSNumber *> *composite,
 
 BOOL KKAdvValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   return KKValuesEqual(a, b); // shared impl (Basic+Model)
+}
+
+// A geometry lane (oscEditedOnly, e.g. a path's Points) carries no scalar of
+// its own - just a per-keypose shape snapshot. Rewrite it to a single 0..1
+// component whose value at each keypose is that snapshot's signature, so the
+// generic curve drawing plots a line that moves between distinct shapes. Same
+// idea as the gradient lane's derived line. Curve/easing state is preserved
+// (KKKeyPose copy keeps `outgoing`), so the plotted line eases like the morph.
+static KKLane *KKAdvGeometryLaneForPlot(KKLane *lane) {
+  NSMutableArray<KKKeyPose *> *kps =
+      [NSMutableArray arrayWithCapacity:lane.keyposes.count];
+  for (KKKeyPose *kp in lane.keyposes) {
+    KKKeyPose *c = [kp copy];
+    c.values = @[ @(KKMorphSnapshotSignature(kp.geometrySnapshot)) ];
+    [kps addObject:c];
+  }
+  KKLane *out = [lane copy];
+  out.keyposes = kps;
+  out.componentMin = @[ @0.0 ];
+  out.componentMax = @[ @1.0 ];
+  return out;
 }
 
 // Normalise one component value to [0,1] given its [min,max] bounds. No
@@ -532,6 +554,11 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSArray<KKKeyPose *> *kps = lane.keyposes;
   if (kps.count == 0)
     return;
+  // Geometry lanes (Points) have no scalar to plot - swap in a signature line.
+  if (lane.oscEditedOnly) {
+    lane = KKAdvGeometryLaneForPlot(lane);
+    kps = lane.keyposes;
+  }
   NSColor *neutral = [NSColor accentMatchingHost];
   NSColor *warn = [NSColor warning];
 
@@ -578,9 +605,13 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     [plotMax addObject:@1.0];
   // For a Linear gradient only the angle line (derived component 0) auto-scales
   // to its sampled range so a modulation wiggle shows clean symmetric humps;
-  // the signature line stays on the fixed 0..1 scale. Non-gradient lanes expand
-  // all components as before. Radial gradients have nothing to expand.
-  NSUInteger expandCount = gradComposite ? (gradLinear ? 1 : 0) : compCount;
+  // the signature line stays on the fixed 0..1 scale. A geometry lane's hash
+  // signature is already in [0,1) and must stay on that fixed scale (expanding
+  // it to the sampled hash range makes the line fill the row and read as if
+  // un-normalised). Non-gradient lanes expand all components as before.
+  NSUInteger expandCount = (gradComposite || lane.oscEditedOnly)
+                               ? (gradLinear ? 1 : 0)
+                               : compCount;
   for (NSInteger i = 0; expandCount > 0 && i + 1 < (NSInteger)kps.count; i++) {
     KKKeyPose *ka = kps[i];
     KKKeyPose *kb = kps[i + 1];

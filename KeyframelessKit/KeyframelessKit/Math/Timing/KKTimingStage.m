@@ -5,6 +5,51 @@
 
 #import "KKTimingStage.h"
 
+#import "KKBezierPath.h"
+#import "KKEasing.h"
+#import "KKPathMorph.h"
+
+BOOL KKLaneKeyposeValuesEqual(KKLane *lane, KKKeyPose *a, KKKeyPose *b) {
+  if (lane.oscEditedOnly)
+    return KKMorphSnapshotSignature(a.geometrySnapshot) ==
+           KKMorphSnapshotSignature(b.geometrySnapshot);
+  NSArray<NSNumber *> *va = a.values, *vb = b.values;
+  if (va.count != vb.count)
+    return NO;
+  for (NSUInteger i = 0; i < va.count; i++)
+    if (fabs(va[i].doubleValue - vb[i].doubleValue) > 1.0e-4)
+      return NO;
+  return YES;
+}
+
+NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  if (kps.count == 0)
+    return nil;
+  if (frac <= kps.firstObject.time)
+    return kps.firstObject.geometrySnapshot;
+  if (frac >= kps.lastObject.time)
+    return kps.lastObject.geometrySnapshot;
+  for (NSUInteger i = 0; i + 1 < kps.count; i++) {
+    KKKeyPose *a = kps[i], *b = kps[i + 1];
+    if (frac < a.time || frac > b.time)
+      continue;
+    NSData *sa = a.geometrySnapshot, *sb = b.geometrySnapshot;
+    if (!sa || !sb)
+      return sa ?: sb; // partial / un-snapshotted: fall back to the base shape
+    double span = b.time - a.time;
+    double t = span > 1e-9 ? (frac - a.time) / span : 0.0;
+    double e = a.outgoing ? KKApplyEasing(t, (KKEasingCurve)a.outgoing.curve,
+                                          a.outgoing.intensity,
+                                          a.outgoing.frequency)
+                          : t;
+    KKBezierPath *p = [[KKBezierPath alloc] init];
+    KKMorphInterpolateApply(sa, sb, (float)e, p);
+    return KKMorphSnapshotCapture(p);
+  }
+  return nil;
+}
+
 // ---------------------------------------------------------------------------
 // KKInterval
 // ---------------------------------------------------------------------------
@@ -178,6 +223,7 @@
   c.spatialSmooth = _spatialSmooth;
   c.inHandle = [_inHandle copy];
   c.outHandle = [_outHandle copy];
+  c.geometrySnapshot = [_geometrySnapshot copy];
   return c;
 }
 
@@ -201,6 +247,8 @@
     d[@"in_handle"] = _inHandle;
   if (_outHandle)
     d[@"out_handle"] = _outHandle;
+  if (_geometrySnapshot)
+    d[@"geom_snapshot"] = [_geometrySnapshot base64EncodedStringWithOptions:0];
   return d;
 }
 
@@ -219,6 +267,10 @@
   id oh = d[@"out_handle"];
   if ([oh isKindOfClass:[NSArray class]])
     kp.outHandle = oh;
+  id gs = d[@"geom_snapshot"];
+  if ([gs isKindOfClass:[NSString class]])
+    kp.geometrySnapshot = [[NSData alloc] initWithBase64EncodedString:gs
+                                                              options:0];
   return kp;
 }
 
@@ -272,6 +324,7 @@
   _categorySymbol = [tmpl.categorySymbol copy];
   _animatable = tmpl.animatable;
   _seedField = tmpl.seedField;
+  _oscEditedOnly = tmpl.oscEditedOnly;
   _choiceLabels = [tmpl.choiceLabels copy];
   _visibleWhenLabel = [tmpl.visibleWhenLabel copy];
   _visibleWhenValues = [tmpl.visibleWhenValues copy];
@@ -334,6 +387,7 @@
   c.locked = _locked;
   c.animatable = _animatable;
   c.seedField = _seedField;
+  c.oscEditedOnly = _oscEditedOnly;
   c.choiceLabels = [_choiceLabels copy];
   c.visibleWhenLabel = [_visibleWhenLabel copy];
   c.visibleWhenValues = [_visibleWhenValues copy];
@@ -387,6 +441,8 @@
     d[@"animatable"] = @NO;
   if (_seedField)
     d[@"seed_field"] = @YES;
+  if (_oscEditedOnly)
+    d[@"osc_edited_only"] = @YES;
   if (_choiceLabels)
     d[@"choice_labels"] = _choiceLabels;
   if (_visibleWhenLabel) {
@@ -434,6 +490,7 @@
   l.layerSymbol = d[@"layer_symbol"];
   l.animatable = d[@"animatable"] ? [d[@"animatable"] boolValue] : YES;
   l.seedField = [d[@"seed_field"] boolValue];
+  l.oscEditedOnly = [d[@"osc_edited_only"] boolValue];
   if ([d[@"choice_labels"] isKindOfClass:[NSArray class]])
     l.choiceLabels = d[@"choice_labels"];
   l.visibleWhenLabel = d[@"visible_when_label"];

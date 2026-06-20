@@ -248,6 +248,7 @@
       while (k > 0 && kps[k - 1].outgoing.endpointsLinked) {
         KKKeyPose *nk = [kps[k - 1] copy];
         nk.values = match.values;
+        nk.geometrySnapshot = match.geometrySnapshot; // geometry lane: mirror shape
         kps[k - 1] = nk;
         k--;
       }
@@ -255,6 +256,7 @@
       while (k + 1 < (NSInteger)kps.count && kps[k].outgoing.endpointsLinked) {
         KKKeyPose *nk = [kps[k + 1] copy];
         nk.values = match.values;
+        nk.geometrySnapshot = match.geometrySnapshot; // geometry lane: mirror shape
         kps[k + 1] = nk;
         k++;
       }

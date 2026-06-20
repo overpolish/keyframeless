@@ -190,8 +190,10 @@
     if (on)
       iv.curve = KKIntervalCurveLinear; // a fresh drift starts linear
     b.outgoing = iv;
-    if (!on) // relink → flatten: hold-end mirrors hold-start
+    if (!on) { // relink → flatten: hold-end mirrors hold-start
       c.values = b.values;
+      c.geometrySnapshot = b.geometrySnapshot; // geometry lane: hold the shape too
+    }
     c.outgoing = kps[s.holdEnd].outgoing;
     kps[s.holdStart] = b;
     kps[s.holdEnd] = c;

@@ -5,6 +5,8 @@
 
 #import "CanvasLayerTimeline.h" // blob + UIState snapshots
 #import "CanvasOSC_Private.h"
+#import "CanvasPathMorph.h" // CanvasPathMorphedAtFraction
+#import "CanvasPathOSC.h" // CanvasDrawPathEditOSC
 #import "CanvasPenController.h"
 #import "Constants.h" // kParamLayerData / kParamUIState
 #import <FxPlug/FxPlugSDK.h>
@@ -72,6 +74,32 @@ static CanvasPenModifiers PenModsFromFx(NSUInteger m) {
   [self.penController confirmIfContextLost];
 }
 
+#pragma mark - Path-edit input forwarding (called by CanvasOSC+Input)
+
+- (CanvasPathEditHit)_pathEditHitAtX:(double)x y:(double)y {
+  return [self.pathEditController hitTestAtX:x y:y];
+}
+
+- (BOOL)_pathEditMouseDownAtX:(double)x y:(double)y modifiers:(NSUInteger)mods {
+  return [self.pathEditController mouseDownAtX:x
+                                            y:y
+                                    modifiers:PenModsFromFx(mods)];
+}
+
+- (void)_pathEditMouseDraggedAtX:(double)x
+                               y:(double)y
+                       modifiers:(NSUInteger)mods {
+  [self.pathEditController mouseDraggedAtX:x y:y modifiers:PenModsFromFx(mods)];
+}
+
+- (void)_pathEditMouseUp {
+  [self.pathEditController mouseUp];
+}
+
+- (BOOL)_pathEditDragging {
+  return self.pathEditController.dragging;
+}
+
 - (NSCursor *)_penCursorForCanvasX:(double)x y:(double)y {
   static NSCursor *pen, *close;
   static dispatch_once_t once;
@@ -90,6 +118,35 @@ static CanvasPenModifiers PenModsFromFx(NSUInteger m) {
   self.penDrawDest = destinationImage;
   self.penDrawTime = time;
   [self.penController draw];
+  self.penDrawDest = nil;
+}
+
+- (void)_drawSelectedPathEditOSCInDestination:(FxImageTile *)destinationImage
+                                       atTime:(CMTime)time {
+  if (![self kkOSCElementVisible:@"Points"])
+    return; // toggled off in the OSC-visibility popover
+  NSString *sel = [self _resolvedSelectedLayerID];
+  if (!sel.length)
+    return;
+  KKBezierPath *path = nil;
+  NSArray<KKBezierPath *> *paths = [self _snapshotPaths];
+  for (KKBezierPath *p in paths)
+    if ([p.layerID isEqualToString:sel]) {
+      path = p;
+      break;
+    }
+  if (!path || path.isImage || path.isGroup || !path.strokeEnabled ||
+      path.count < 1)
+    return;
+  double frac = [self fractionAtTime:time];
+  // OSC rule: anchors show only when the path is constant or the playhead is on
+  // a Points keypose - hidden between keyposes (the stroke still morphs).
+  if (!CanvasPathGeometryEditableAtFraction(path, frac))
+    return;
+  self.penDrawDest = destinationImage;
+  self.penDrawTime = time;
+  CanvasDrawPathEditOSC(self, paths, CanvasPathMorphedAtFraction(path, frac),
+                        frac, (float)[self _canvasAspect]);
   self.penDrawDest = nil;
 }
 
@@ -142,6 +199,14 @@ static CanvasPenModifiers PenModsFromFx(NSUInteger m) {
   return [self _resolvedSelectedLayerID];
 }
 
+- (NSArray<KKBezierPath *> *)penAllLayers {
+  return [self _snapshotPaths];
+}
+
+- (double)penEditFraction {
+  return [self fractionAtTime:self.penDrawTime];
+}
+
 // Action-scoped read-modify-write of the layer blob (the OSC can't READ the
 // custom param, so it round-trips the inspector snapshot). When `selectID` is
 // set, the selection is written in the SAME action so it undoes together.
@@ -180,6 +245,22 @@ static CanvasPenModifiers PenModsFromFx(NSUInteger m) {
   CanvasSetLayerBlobSnapshot(newBlob);
   if (newState)
     CanvasSetUIStateSnapshot(newState);
+}
+
+- (void)penSetLiveLayers:(NSArray<KKBezierPath *> *)paths {
+  // Live preview only: update the process snapshot (the OSC reads it) without an
+  // action scope, so a continuous drag doesn't spawn an undo step per tick.
+  NSString *blob =
+      [[KKBezierPath blobFromPaths:paths] base64EncodedStringWithOptions:0];
+  CanvasSetLayerBlobSnapshot(blob);
+}
+
+- (void)penCommitLiveLayers {
+  // Commit the live snapshot to the param as ONE undo step (the snapshot already
+  // holds the dragged geometry, so the mutate is a no-op round-trip).
+  [self penMutateBlob:^(NSMutableArray<KKBezierPath *> *paths){
+  }
+        selectLayerID:nil];
 }
 
 #pragma mark - CanvasPenSurface (draw primitives)

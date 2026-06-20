@@ -86,6 +86,8 @@
     _penHandleOSC.outlineWidth = 1.5f;
     _penHandleOSC.clearsOnDraw = NO;
     _penController = [[CanvasPenController alloc] initWithSurface:self];
+    _pathEditController =
+        [[CanvasPathEditController alloc] initWithSurface:self];
     [self _setupToolbar];
   }
   return self;
@@ -96,6 +98,7 @@
               activePart:(NSInteger)activePart
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
+  self.penDrawTime = time; // current playhead, read by penEditFraction in input
   // Reset the draw surface (no-op encode) so only the handle/path are visible.
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero
@@ -166,6 +169,10 @@
   [self.anchor drawInDestination:destinationImage
                           atTime:time
                       activePart:activePart];
+  // Selected drawn path's edit OSC (anchors + curve), always shown when a vector
+  // path is selected. The transform gizmo above is hidden by default via the OSC
+  // visibility system, so the two don't clutter each other.
+  [self _drawSelectedPathEditOSCInDestination:destinationImage atTime:time];
   // Toolbar (grid + drag handle), global screen chrome, drawn last so it sits on
   // top of the gizmo.
   [self _drawToolbarWithWidth:width
@@ -175,8 +182,8 @@
 
 - (NSArray<NSString *> *)oscElementKeys {
   return @[
-    @"Position", @"Path", @"Scale", @"Rotation", @"Rotation.X", @"Rotation.Y",
-    @"Rotation.Z", @"Anchor"
+    @"Points", @"Position", @"Path", @"Scale", @"Rotation", @"Rotation.X",
+    @"Rotation.Y", @"Rotation.Z", @"Anchor"
   ];
 }
 

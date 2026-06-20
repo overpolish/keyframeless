@@ -295,6 +295,48 @@
         }
       }
     },
+    "Points": {
+      "comment": "Property/category name (display only; English label is the stable identity key). Translators may localize or keep it per language.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Punkte"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Puntos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Points"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ポイント"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "포인트"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点"
+          }
+        }
+      }
+    },
     "Position": {
       "comment": "Property name (display only; English label is the stable identity key). Translators may localize or keep it per language.",
       "extractionState": "manual",

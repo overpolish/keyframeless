@@ -58,6 +58,8 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
     NSMutableArray<NSString *> *order =
         [NSMutableArray arrayWithCapacity:templates.count];
     for (KKLane *t in templates) {
+      if ([t.label isEqualToString:@"Points"])
+        continue; // no layer = no path geometry
       KKLane *src = [t copy];
       src.locked = YES;
       [lanes addObject:src];
@@ -90,6 +92,10 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
   NSMutableArray<NSString *> *order =
       [NSMutableArray arrayWithCapacity:templates.count];
   for (KKLane *t in templates) {
+    // Points (path geometry) applies to vector-path layers only - images and
+    // groups have no editable anchors.
+    if ([t.label isEqualToString:@"Points"] && (path.isImage || path.isGroup))
+      continue;
     KKLane *src = [(stored[t.label] ?: t) copy];
     // Tag with the layer for the Advanced view's layer header. The LABEL stays
     // plain ("Scale") so the kit's label-keyed edit surfaces are unaffected;

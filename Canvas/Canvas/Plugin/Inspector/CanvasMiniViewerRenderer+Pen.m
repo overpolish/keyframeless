@@ -4,7 +4,9 @@
  */
 
 #import "CanvasMiniViewerRenderer_Internal.h"
-#import "CanvasToolbar.h" // CanvasToolbarToolPen
+#import "CanvasPathMorph.h" // CanvasPathMorphedAtFraction
+#import "CanvasPathOSC.h"  // CanvasDrawPathEditOSC
+#import "CanvasToolbar.h"  // CanvasToolbarToolPen
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKBezierPath.h>
 
@@ -94,29 +96,74 @@ static NSCursor *MiniPenCursor(NSString *name, NSPoint hot) {
   self.penDrawCanvas = canvas;
   [self.penController confirmIfContextLost]; // tool / layer switch finalises
   [self.penController draw];
+  // Selected drawn path's edit OSC (anchors + curve), when not actively drawing.
+  if (self.toolbarTool != CanvasToolbarToolPen)
+    [self _drawSelectedPathEditOSC];
   self.penDrawCanvas = nil;
+}
+
+- (void)_drawSelectedPathEditOSC {
+  if (self.handlesHidden || [self.hiddenHandleLabels containsObject:@"Points"])
+    return; // toggled off in the OSC-visibility popover
+  NSString *sel = self.selectedLayerID;
+  if (!sel.length)
+    return;
+  KKBezierPath *path = nil;
+  for (KKBezierPath *p in self.layers)
+    if ([p.layerID isEqualToString:sel]) {
+      path = p;
+      break;
+    }
+  if (!path || path.isImage || path.isGroup || !path.strokeEnabled ||
+      path.count < 1)
+    return;
+  // OSC rule: anchors show only when constant or on a Points keypose.
+  if (!CanvasPathGeometryEditableAtFraction(path, self.editFraction))
+    return;
+  CanvasDrawPathEditOSC(self, self.layers ?: @[],
+                        CanvasPathMorphedAtFraction(path, self.editFraction),
+                        self.editFraction, (float)[self penCanvasAspect]);
 }
 
 #pragma mark - CanvasPenSurface (coords)
 
-// Position space is Y-DOWN (0 = top); KKBezierPath points are Y-UP - flip Y.
+// The pen + path-edit OSC use the RAW content-rect map (the base class linear
+// map), NOT the gizmo's handlePointForContentRect override: the gizmo folds in a
+// geometry-centre offset that would shift mid-draw (the in-progress path's bbox
+// centre keeps changing), and the path-edit OSC already projects through the full
+// layer transform before it gets here. Position space is Y-DOWN; KKBezierPath
+// points are Y-UP - flip Y.
 - (CGPoint)penObjFromSurfaceX:(double)x y:(double)y {
-  simd_float2 m = [self _memberValueForViewPoint:CGPointMake(x, y)
-                                     contentRect:self.penContentRect];
-  return CGPointMake(m.x, 1.0 - m.y);
+  CGRect cr = self.penContentRect;
+  if (cr.size.width <= 0 || cr.size.height <= 0)
+    return CGPointMake(0.5, 0.5);
+  double px = (x - cr.origin.x) / cr.size.width;
+  double py = (y - cr.origin.y) / cr.size.height; // Y-down normalized
+  return CGPointMake(px, 1.0 - py);               // Y-up object
 }
 
 - (CGPoint)penSnappedObjFromSurfaceX:(double)x y:(double)y {
-  simd_float2 m = [self _memberValueForViewPoint:CGPointMake(x, y)
-                                     contentRect:self.penContentRect];
-  simd_float2 sn = [self _snapNormalizedPointToGrid:m
-                                        contentRect:self.penContentRect];
+  CGPoint o = [self penObjFromSurfaceX:x y:y]; // Y-up
+  simd_float2 ydown = simd_make_float2((float)o.x, (float)(1.0 - o.y));
+  simd_float2 sn = [self _penRawSnapToGrid:ydown contentRect:self.penContentRect];
   return CGPointMake(sn.x, 1.0 - sn.y);
 }
 
 - (CGPoint)penSurfacePointFromObj:(CGPoint)objYUp {
-  return [self handlePointForContentRect:self.penContentRect
-                                position:@[ @(objYUp.x), @(1.0 - objYUp.y) ]];
+  return [super handlePointForContentRect:self.penContentRect
+                                 position:@[ @(objYUp.x), @(1.0 - objYUp.y) ]];
+}
+
+// Raw grid snap for the pen: snap a Y-down normalized point to the drawn grid
+// cells directly (no gizmo homography). Mirrors the cell sizing the grid draws.
+- (simd_float2)_penRawSnapToGrid:(simd_float2)p contentRect:(CGRect)cr {
+  if (!self.gridEnabled || !self.gridSnap)
+    return p;
+  double nx = self.drawnGridNX, ny = self.drawnGridNY;
+  if (nx <= 0 || ny <= 0)
+    return p;
+  return simd_make_float2((float)(round(p.x / nx) * nx),
+                          (float)(round(p.y / ny) * ny));
 }
 
 - (BOOL)penGridSnapping {
@@ -152,6 +199,23 @@ static NSCursor *MiniPenCursor(NSString *name, NSPoint hot) {
   self.layers = paths; // immediate so penLayerWithID sees it on the next draw/click
   if (self.onPersistLayers)
     self.onPersistLayers(paths, selectID);
+}
+
+- (NSArray<KKBezierPath *> *)penAllLayers {
+  return self.layers ?: @[];
+}
+
+- (double)penEditFraction {
+  return self.editFraction;
+}
+
+- (void)penSetLiveLayers:(NSArray<KKBezierPath *> *)paths {
+  self.layers = paths; // mini renders from self.layers -> live preview, no persist
+}
+
+- (void)penCommitLiveLayers {
+  if (self.onPersistLayers)
+    self.onPersistLayers(self.layers, nil);
 }
 
 #pragma mark - CanvasPenSurface (draw primitives, Metal pass - match motion path)

@@ -34,7 +34,7 @@ NS_ASSUME_NONNULL_BEGIN
 @class KKEllipseShape;
 @class KKLineShape;
 
-@interface KKBezierPath : NSObject
+@interface KKBezierPath : NSObject <NSCopying>
 
 /// Number of points.
 @property(nonatomic, readonly) NSUInteger count;

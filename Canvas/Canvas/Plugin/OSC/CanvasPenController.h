@@ -43,10 +43,21 @@ typedef NS_OPTIONS(NSUInteger, CanvasPenModifiers) {
 
 - (nullable KKBezierPath *)penLayerWithID:(NSString *)layerID;
 - (nullable NSString *)penSelectedLayerID;
+/// The full layer stack + the current edit fraction, so the path-edit controller
+/// can project the selected path's geometry through its transform + groups (pen
+/// CREATION is member-local, but EDITING a transformed/grouped path needs these).
+- (NSArray<KKBezierPath *> *)penAllLayers;
+- (double)penEditFraction;
 /// One undo action: decode the blob, run `mutate`, write it back; if `selectID`
 /// is non-nil, set that layer as the selection in the SAME action.
 - (void)penMutateBlob:(void (^)(NSMutableArray<KKBezierPath *> *paths))mutate
         selectLayerID:(nullable NSString *)selectID;
+/// LIVE (no undo) preview during a continuous drag: swap in `paths` so the OSC
+/// overlay (and, where it renders from this state, the surface) updates without
+/// committing an undo step.
+- (void)penSetLiveLayers:(NSArray<KKBezierPath *> *)paths;
+/// Commit the live state as ONE undo action (called on drag end).
+- (void)penCommitLiveLayers;
 
 /// Overlay draw primitives, called during the surface's draw pass. Inputs are
 /// normalized Y-up object points; the surface converts + strokes/fills.

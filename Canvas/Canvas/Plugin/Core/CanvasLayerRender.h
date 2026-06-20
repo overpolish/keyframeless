@@ -94,19 +94,28 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
                               NSString *_Nullable overrideLayerID,
                               KKTimeline *_Nullable overrideTimeline);
 
-/// Click-to-select hit-test: returns the `layerID` of the TOPMOST image layer
-/// whose on-screen quad contains the object-space point (`objX`,`objY`) in
-/// [0,1] (Y-up, the render's object space), evaluated at clip fraction `frac`,
-/// or nil if none. `aspect` is the canvas pixel aspect (outputW/outputH) so the
-/// transform (scale / Z-rotation / position / X-Y tilt + perspective) matches
-/// the render exactly - the math is scale-invariant in object space, so only
-/// the aspect is needed, not the pixel dimensions.
+/// Click-to-select hit-test: returns the `layerID` of the TOPMOST layer hit by
+/// the object-space point (`objX`,`objY`) in [0,1] (Y-up, the render's object
+/// space), evaluated at clip fraction `frac`, or nil if none. Image layers hit
+/// when the point is inside their transformed quad; VECTOR (stroke) layers hit
+/// when the point is within their transformed stroke. Images and vectors share
+/// one topmost-first loop so z-order between them is unified. `aspect` is the
+/// canvas pixel aspect (outputW/outputH) so the transform (scale / Z-rotation /
+/// position / X-Y tilt + perspective) matches the render exactly.
+///
+/// `canvasHeightPx` (the render output height, or a viewer-canvas proxy) sizes
+/// the vector stroke pick tolerance only; a generous object-space slop floor
+/// applies so clicking near a thin stroke still selects it. Pass 0 for the
+/// default reference. Ignored for image layers.
 ///
 /// When `alphaAware` is YES, a click over a TRANSPARENT image pixel (raw image
 /// alpha, NOT the layer's Opacity) falls through to the layer beneath, so you
 /// select what you actually see; NO uses the transformed bounding quad alone.
-/// Skips hidden / group / locked / non-image / non-rect layers. Evaluates each
-/// layer's own persisted `animationJSON` (selection acts on persisted state).
+/// (Vector layers ignore it - the stroke distance test is itself "what you
+/// see", so a click in an open stroke's hollow interior falls through.) Skips
+/// hidden / group / locked layers, and non-image layers without a stroke.
+/// Evaluates each layer's own persisted `animationJSON` (selection acts on
+/// persisted state).
 ///
 /// Layers whose `layerID` is in `excludedLayerIDs` are skipped too (a click
 /// over one falls through to the layer beneath) - used by the mini-viewer to
@@ -123,7 +132,37 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
 NSString *_Nullable CanvasHitTestLayerID(
     NSArray<KKBezierPath *> *layers, double frac, float aspect, float objX,
     float objY, BOOL alphaAware, NSSet<NSString *> *_Nullable excludedLayerIDs,
-    BOOL requireEditableAtFrac, NSArray<KKLane *> *_Nullable templates);
+    BOOL requireEditableAtFrac, NSArray<KKLane *> *_Nullable templates,
+    float canvasHeightPx);
+
+/// Project a layer-local normalized point (Y-up [0,1], the raw KKBezierPath
+/// space) through the layer's transform at `frac` + its ancestor groups +
+/// perspective into screen-object space (Y-up [0,1], the render's object space) -
+/// the SAME projection CanvasHitTestLayerID uses, so a path-edit OSC draws its
+/// anchors / segments exactly where the stroke renders. For many points prefer
+/// the batched form (it builds the transform once).
+simd_float2 CanvasProjectLayerPointObj(NSArray<KKBezierPath *> *layers,
+                                       KKBezierPath *path, double frac,
+                                       float aspect, float localX, float localY);
+
+/// Batched CanvasProjectLayerPointObj: builds the layer transform + group
+/// composition ONCE, then projects `count` local points (`localPts`) into
+/// `outProj`. Both buffers are `count` long.
+void CanvasProjectLayerPointsObj(NSArray<KKBezierPath *> *layers,
+                                 KKBezierPath *path, double frac, float aspect,
+                                 const simd_float2 *localPts,
+                                 simd_float2 *outProj, NSUInteger count);
+
+/// Inverse of CanvasProjectLayerPointObj: map a screen-object point (Y-up [0,1],
+/// the render's object space) back to the layer's local normalized point (Y-up
+/// [0,1], the raw KKBezierPath space), through the inverse of the layer
+/// transform + groups + perspective. Built by projecting the 4 unit-square
+/// corners and inverting the resulting homography. Used by path-anchor dragging
+/// to follow the cursor under any layer transform.
+simd_float2 CanvasUnprojectLayerPointObj(NSArray<KKBezierPath *> *layers,
+                                         KKBezierPath *path, double frac,
+                                         float aspect, float screenX,
+                                         float screenY);
 
 /// Apply a member's ANCESTOR-GROUP transforms (only) to an object point already
 /// in the member's output / clip object space (Y-up, [0,1]) - the same group

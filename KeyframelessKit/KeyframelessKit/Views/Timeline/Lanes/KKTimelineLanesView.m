@@ -685,6 +685,13 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       lanes[presentIdx] = fixed;
       continue;
     }
+    // Geometry lanes (oscEditedOnly, e.g. a path's Points) are opt-in per layer:
+    // the plugin includes them in the applied timeline only for layers that
+    // support them (a vector path, not an image/group). Don't re-seed one the
+    // source timeline deliberately omitted - otherwise its category (e.g.
+    // "Core") shows as a constant for every layer.
+    if (tmpl.oscEditedOnly)
+      continue;
     KKLane *lane = [KKLane laneWithLabel:tmpl.label];
     lane.valueType = tmpl.valueType;
     lane.componentMin = tmpl.componentMin;

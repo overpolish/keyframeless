@@ -159,7 +159,13 @@
     if (!vals)
       vals = [self _templateDefaultValuesForLabel:src.label];
     KKLane *nl = [src copy];
-    [nl insertKeypose:[KKKeyPose keyposeAtTime:frac values:vals]];
+    KKKeyPose *inserted = [KKKeyPose keyposeAtTime:frac values:vals];
+    // Geometry lane: capture the shape shown at this fraction so splitting a
+    // hold yields an identical keypose (no phantom transition) instead of a
+    // snapshot-less keypose that falls back to the base shape.
+    if (src.oscEditedOnly)
+      inserted.geometrySnapshot = KKLaneGeometrySnapshotAtFraction(src, frac);
+    [nl insertKeypose:inserted];
     // The user added an independent checkpoint - break any link chain at
     // this insertion point so the first value edit doesn't propagate into
     // the neighbours.
@@ -285,6 +291,7 @@
   KKKeyPose *tgt = kps[targetIdx];
   KKKeyPose *fixed = [tgt keyposeBySettingTime:tgt.time];
   fixed.values = dup.values;
+  fixed.geometrySnapshot = dup.geometrySnapshot; // geometry lane: carry the shape
   kps[targetIdx] = fixed;
   nl.keyposes = kps;
   [nl removeKeyposeAtIndex:dupIdx];

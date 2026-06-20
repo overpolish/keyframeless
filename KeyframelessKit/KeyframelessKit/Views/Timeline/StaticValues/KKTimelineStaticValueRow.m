@@ -150,6 +150,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   BOOL _seedField;
   KKPillToggleRowView *_choicePill;    // grouped radio pill, choiceLabels only
   NSArray<NSString *> *_choiceLabels;  // English identifiers (count >= 2)
+  BOOL _oscEditedOnly; // geometry-style lane: message instead of value fields
   KKColorWellView *_colorWell;         // swatch, KKLaneValueTypeColor only
   KKGradientControl *_gradientControl; // KKLaneValueTypeGradient only
   BOOL
@@ -182,6 +183,10 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 // Reset is only meaningful when a default exists AND the current value
 // differs from it - hidden otherwise so a row at default has no clutter.
 - (void)_updateResetVisibility {
+  if (_oscEditedOnly) {
+    _reset.hidden = YES; // geometry lane: nothing to reset
+    return;
+  }
   BOOL atDefault =
       _defaultValues.count > 0 && _values.count == _defaultValues.count;
   for (NSInteger i = 0; atDefault && i < (NSInteger)_values.count; i++)
@@ -415,6 +420,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   _laneScrubStep = lane.scrubStep;
   _seedField = lane.seedField;
   _choiceLabels = [lane.choiceLabels copy];
+  _oscEditedOnly = lane.oscEditedOnly;
   _labelColumnW = labelColumnWidth;
 
   NSTextField *title = _KKMakeCaption(KKLocalizedParamName(lane.label));
@@ -489,6 +495,35 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     [_reset.widthAnchor constraintEqualToConstant:15.0],
     [_reset.heightAnchor constraintEqualToConstant:15.0],
   ]];
+
+  // OSC-edited-only lane (e.g. a path's points): no inline value editor. Keep
+  // the standard row (title + the make-animatable / remove gutter button) but
+  // show an "edit on canvas" message where the value fields would be.
+  if (_oscEditedOnly) {
+    _reset.hidden = YES; // no scalar value to reset for a geometry lane
+    NSTextField *msg = _KKMakeCaption(
+        KKLoc(@"Edit on canvas",
+              @"OSC-only lane: edit via the on-screen control."));
+    msg.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
+    msg.alignment = NSTextAlignmentRight; // sits where the value fields would be
+    msg.lineBreakMode = NSLineBreakByTruncatingTail;
+    msg.usesSingleLineMode = YES;
+    [self addSubview:msg];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [msg.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
+                                      constant:KKPaddingSM],
+      // Align where the value controls end (leave the reset-button slot) so
+      // the message lines up with every other lane row.
+      [msg.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
+                                         constant:-KKPaddingLG],
+      [msg.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    ]];
+    return self;
+  }
 
   NSArray<NSString *> *caps = KKLaneComponentLabels(lane);
   NSArray<NSColor *> *capColors = lane.componentLabelColors;

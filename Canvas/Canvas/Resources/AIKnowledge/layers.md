@@ -54,7 +54,11 @@ pointer changes to a hand over a selectable layer.
 
 - It is **alpha-aware** for images: clicking a transparent part of a layer
   falls through and selects whatever opaque layer is beneath, so you select what
-  you actually see. (Images only for now.)
+  you actually see.
+- For **drawn paths** it picks the layer whose **stroke** you click on (or near);
+  clicking inside an open path's hollow interior falls through to whatever is
+  behind it, since there's nothing there to hit. Images and paths share one
+  front-to-back order, so you always get the topmost thing under the pointer.
 - It respects the layer's transform, so a moved / scaled / rotated layer is
   picked where it actually appears.
 - Locked and hidden layers are skipped.

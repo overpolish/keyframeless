@@ -260,8 +260,8 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
     // this, adding a new (initially-flat) animatable lane would mask an
     // existing drifted lane and visually flatten the curve.
     if (!p.holdDrift && s.holdEnd > s.holdStart &&
-        !KKValuesEqual(lane.keyposes[s.holdStart].values,
-                       lane.keyposes[s.holdEnd].values))
+        !KKLaneKeyposeValuesEqual(lane, lane.keyposes[s.holdStart],
+                                  lane.keyposes[s.holdEnd]))
       p.holdDrift = YES;
     // In/Out is "on" when at least one property still APPLIES (its phase
     // interval isn't flat). A property toggled off via applies-to keeps its

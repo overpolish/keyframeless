@@ -92,6 +92,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     _toolbar = CanvasMakeToolbar(nil); // uiScale + flip set per-draw in the hook
     _toolbarNormPos = CGPointMake(-1, -1); // default anchor until dragged
     _penController = [[CanvasPenController alloc] initWithSurface:self];
+    _pathEditController =
+        [[CanvasPathEditController alloc] initWithSurface:self];
   }
   return self;
 }
@@ -292,9 +294,18 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
       CanvasSelectedLayerForPaths(self.layers, self.selectedLayerID);
   if (sel && cr.size.height > 0) {
     float aspect = (float)(cr.size.width / cr.size.height);
-    float gx = (float)mx, gy = (float)(1.0 - my);
-    CanvasComposedGroupPointObj(self.layers, sel, self.editFraction, aspect,
-                                (float)mx, (float)(1.0 - my), &gx, &gy);
+    // Centre the gizmo on the layer's GEOMETRY (bbox centre), so Position=0.5
+    // lands on a path drawn off-centre - the same (objectCentre-0.5) member-local
+    // pre-translation the viewer folds into parentObjectTransform. No-op for a
+    // full-frame image / group (centre 0.5). Object centre is render Y-UP. This
+    // is the GIZMO mapping; the pen/path-edit OSC use the raw base map (their
+    // points are already in - or being defined in - geometry space).
+    simd_float2 gc = CanvasLayerObjectCenter(sel);
+    float lx = (float)mx + (gc.x - 0.5f);             // Y-up member-local
+    float lyUp = (float)(1.0 - my) + (gc.y - 0.5f);
+    float gx = lx, gy = lyUp;
+    CanvasComposedGroupPointObj(self.layers, sel, self.editFraction, aspect, lx,
+                                lyUp, &gx, &gy);
     return [super handlePointForContentRect:cr
                                    position:@[ @(gx), @(1.0 - (double)gy) ]];
   }

@@ -100,12 +100,31 @@
   opacity.categoryKey = @"Transform";
   opacity.categorySymbol = @"arrow.up.and.down.and.arrow.left.and.right";
 
-  return @[ scale, position, rotation, anchor, opacity ];
+  // Points: the path's geometry (anchors + handles). OSC-edited only - the
+  // inspector shows an "edit on canvas" message instead of value fields. Still
+  // animatable: keyposes drive a geometry morph (the points at each keypose are
+  // stored as morph snapshots; the render interpolates - wired separately).
+  // Scoped to vector-path layers in CanvasLayerTimelineForPath (images / groups
+  // have no editable points). Its anchors OSC is the "Points" element.
+  KKLane *points = [KKLane laneWithLabel:@"Points"];
+  points.valueType = KKLaneValueTypeGeneric;
+  points.componentMin = @[];
+  points.componentMax = @[];
+  points.componentUnits = @[];
+  points.componentLabels = @[];
+  points.animatable = YES;
+  points.oscEditedOnly = YES;
+  points.enabled = NO; // constant by default; animate per-layer via the dropdown
+  points.categoryKey = @"Core";
+  points.categorySymbol = @"scribble.variable";
+  [points insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[]]];
+
+  return @[ points, scale, position, rotation, anchor, opacity ];
 }
 
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {
   return @[
-    @[ @"Position", @"Path" ], @[ @"Scale" ],
+    @[ @"Points" ], @[ @"Position", @"Path" ], @[ @"Scale" ],
     @[ @"Rotation", @"Rotation.X", @"Rotation.Y", @"Rotation.Z" ], @[ @"Anchor" ]
   ];
 }
@@ -118,6 +137,8 @@
   // Opt-click them back). Leaving the group on keeps the rings per-axis
   // revealable + re-enableable.
   return @{
+    @"Points" : @YES, // the path-edit anchors show by default (point-editing is
+                      // the obvious action); transform OSCs start hidden
     @"Position" : @NO,
     @"Path" : @NO,
     @"Scale" : @NO,
@@ -146,6 +167,30 @@
                                renderer:nil
                             elementKeys:keys];
   [(CanvasInspectorView *)self.inspectorView syncMiniHandleVisibility];
+  // Scope the OSC checklist's path-only "Points" element to vector-path layers:
+  // images / groups drop it so they don't list a control they can't use. The
+  // checklist + its states read this live property (see kkWire), so the next
+  // open rebuilds against the scoped set.
+  KKBezierPath *layer = nil;
+  NSString *b64 = CanvasLayerBlobSnapshot();
+  if (b64.length) {
+    NSArray<KKBezierPath *> *paths = [KKBezierPath
+        pathsFromBlob:[[NSData alloc] initWithBase64EncodedString:b64
+                                                          options:0]];
+    for (KKBezierPath *p in paths)
+      if ([p.layerID isEqualToString:(layerID ?: @"")]) {
+        layer = p;
+        break;
+      }
+  }
+  BOOL vector =
+      layer && !layer.isImage && !layer.isGroup && layer.strokeEnabled;
+  NSMutableArray<NSArray<NSString *> *> *scoped = [NSMutableArray array];
+  for (NSArray<NSString *> *c in [CanvasPlugin oscCompounds])
+    if (vector || ![c containsObject:@"Points"])
+      [scoped addObject:c];
+  ((KKTimelineInspectorView *)self.inspectorView).oscVisibilityCompounds =
+      scoped;
   // If the OSC settings popover is open (companion layer list drove the
   // switch), refresh its checkboxes to this layer's set.
   [(KKTimelineInspectorView *)self.inspectorView refreshOpenOSCChecklist];
@@ -394,10 +439,15 @@
     view.oscVisibilityElementToggled = ^(NSInteger compoundIdx,
                                          NSInteger segIdx, BOOL isOn) {
       __strong CanvasPlugin *s = weakOSC;
-      if (compoundIdx < 0 || compoundIdx >= (NSInteger)oscCompounds.count ||
-          segIdx < 0 || segIdx >= (NSInteger)oscCompounds[compoundIdx].count)
+      // Index into the LIVE (per-layer scoped) compounds, not the full set, so
+      // the checklist's row indices map to the right element after Points is
+      // dropped for an image / group.
+      NSArray<NSArray<NSString *> *> *cmp =
+          ((KKTimelineInspectorView *)s.inspectorView).oscVisibilityCompounds;
+      if (compoundIdx < 0 || compoundIdx >= (NSInteger)cmp.count ||
+          segIdx < 0 || segIdx >= (NSInteger)cmp[compoundIdx].count)
         return;
-      [s canvasToggleOSCElement:oscCompounds[compoundIdx][segIdx]
+      [s canvasToggleOSCElement:cmp[compoundIdx][segIdx]
                         visible:isOn
                            keys:oscKeys];
     };

@@ -155,10 +155,19 @@ static const CGFloat kScrubSnapInPx = 4.0;
       pt, NSMinX(g), NSMaxX([self _containerRect]), NSMaxY(g));
 }
 
+- (BOOL)acceptsFirstResponder {
+  return YES;
+}
+
 - (void)mouseDown:(NSEvent *)event {
   NSPoint pt = [self convertPoint:event.locationInWindow fromView:nil];
   NSRect g = [self _graphRect];
   _dragActive = NO;
+  // Take first responder so the inspector's ViewBridge window becomes key:
+  // otherwise FCP stays key and eats arrow keys (scrubbing its timeline)
+  // before the boundary popover's left/right keypose-nav monitor can see them.
+  // Advanced does the same on mouseDown.
+  [self.window makeFirstResponder:self];
   KKBasicProj p = [self _projection];
   _scrubbing = [self _isInScrubBand:pt rect:g];
   if (_scrubbing) {
@@ -429,6 +438,7 @@ static NSInteger KKBasicKPIdxForDiamond(KKLane *lane, NSInteger diamond) {
       if (sib != idx && sib >= 0 && sib < (NSInteger)kps.count) {
         KKKeyPose *sk = [kps[sib] copy];
         sk.values = match.values;
+        sk.geometrySnapshot = match.geometrySnapshot; // geometry lane: mirror shape
         kps[sib] = sk;
       }
     }

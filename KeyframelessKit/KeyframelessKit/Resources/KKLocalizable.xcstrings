@@ -10878,6 +10878,48 @@
           }
         }
       }
+    },
+    "Edit on canvas": {
+      "comment": "OSC-only lane: edit via the on-screen control.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf der Leinwand bearbeiten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar en el lienzo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier sur le canevas"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンバスで編集"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "캔버스에서 편집"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在画布上编辑"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

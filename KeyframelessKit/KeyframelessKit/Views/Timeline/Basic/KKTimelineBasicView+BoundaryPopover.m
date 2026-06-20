@@ -158,6 +158,11 @@
     // row keys pixel display off it. Without it Position showed the raw 0.5.
     dl.componentsScaleWithMedia =
         tmpl ? tmpl.componentsScaleWithMedia : lane.componentsScaleWithMedia;
+    // OSC-edited geometry lanes (Points) show the "edit on canvas" message
+    // instead of value fields + reset. It's template metadata, but fall back to
+    // the source lane (it's serialized too) so the Basic boundary popover
+    // matches the constants row and Advanced.
+    dl.oscEditedOnly = tmpl ? tmpl.oscEditedOnly : lane.oscEditedOnly;
     // Basic intentionally ignores lock: its keypose timings are shared/linked
     // across all layers, so freezing one layer here has no meaning. Lock is an
     // Advanced-only (per-lane) concept - so don't mark the Basic row read-only.
@@ -406,8 +411,8 @@
       continue;
     KKHoldShape s = KKShapeOfLane(lane);
     if (s.holdEnd > s.holdStart &&
-        !KKValuesEqual(lane.keyposes[s.holdStart].values,
-                       lane.keyposes[s.holdEnd].values)) {
+        !KKLaneKeyposeValuesEqual(lane, lane.keyposes[s.holdStart],
+                                  lane.keyposes[s.holdEnd])) {
       nowDrifts = YES;
       break;
     }

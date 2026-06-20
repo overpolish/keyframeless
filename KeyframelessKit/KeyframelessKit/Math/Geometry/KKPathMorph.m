@@ -167,6 +167,24 @@ void KKMorphSnapshotApply(NSData *blob, KKBezierPath *path) {
   [path restoreShape:readShapeTail(blob)];
 }
 
+double KKMorphSnapshotSignature(NSData *blob) {
+  if (blob.length == 0)
+    return 0.5;
+  // FNV-1a over the whole snapshot blob. A mean-of-points fingerprint collides
+  // (move one anchor left, another right by the same amount → same mean → a
+  // real transition reads as a flat hold). A hash gives equal-shape → equal,
+  // any-difference → (all but certainly) distinct, so holds vs transitions are
+  // detected exactly. Mapped to [0,1) for plotting on the normalised track.
+  const uint8_t *bytes = blob.bytes;
+  NSUInteger n = blob.length;
+  uint64_t h = 1469598103934665603ULL;
+  for (NSUInteger i = 0; i < n; i++) {
+    h ^= bytes[i];
+    h *= 1099511628211ULL;
+  }
+  return (double)(h >> 11) / (double)(1ULL << 53);
+}
+
 // --- Cubic helpers -----------------------------------------------------
 
 // Convert a snapshot blob into a flat cubic-segment list. `outSegs` is

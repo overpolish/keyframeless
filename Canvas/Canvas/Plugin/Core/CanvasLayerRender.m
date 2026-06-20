@@ -6,6 +6,7 @@
 #import "CanvasLayerRender.h"
 #import "CanvasImageTexture.h"
 #import "CanvasLayerTransform.h"
+#import "CanvasPathMorph.h"
 #import "CanvasStrokeTessellate.h"
 #import "Constants.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -244,11 +245,19 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
     if (path.count < 2 || path.strokeWidth <= 0.0f)
       continue;
 
-    NSUInteger cap = CanvasStrokeVertexCapacity(path);
+    // Geometry AT this fraction: the base points for a constant path, or the
+    // interpolated shape between the Points keyposes' snapshots for an animated
+    // one. (Static-rect preview, frac < 0, uses the base.)
+    KKBezierPath *geom =
+        (frac < 0.0) ? path : CanvasPathMorphedAtFraction(path, frac);
+    if (geom.count < 2)
+      continue;
+
+    NSUInteger cap = CanvasStrokeVertexCapacity(geom);
     if (cap == 0)
       continue;
     KKVertex2D *verts = malloc(sizeof(KKVertex2D) * cap);
-    NSUInteger vc = CanvasTessellateStroke(path, path.strokeWidth, imageWidth,
+    NSUInteger vc = CanvasTessellateStroke(geom, path.strokeWidth, imageWidth,
                                            imageHeight, verts, cap);
     if (vc < 4) {
       free(verts);
@@ -269,7 +278,7 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
         CanvasBuildGroupXforms(layers, (NSUInteger)i, frac, overrideLayerID,
                                overrideTimeline, groups, kCanvasGroupXformCap);
     matrix_float4x4 m = CanvasComposedModelMatrix(
-        t, CanvasLayerObjectCenter(path), groups, ng, scale, tileShift);
+        t, CanvasLayerObjectCenter(geom), groups, ng, scale, tileShift);
 
     float opacity = t.opacity * path.opacity;
     for (NSInteger k = 0; k < ng; k++)

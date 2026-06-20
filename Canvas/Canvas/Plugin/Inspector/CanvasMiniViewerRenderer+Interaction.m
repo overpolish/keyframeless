@@ -12,9 +12,32 @@
 
 // Transform handles (Position / motion path / Scale box / Anchor square) only
 // show under the cursor tool; a drawing tool (pen, rect, ellipse) owns the
-// canvas and hides them, matching the viewer OSC's pen branch.
+// canvas and hides them, matching the viewer OSC's pen branch. (Per-element
+// visibility - incl. the gizmo being hidden by default - is governed separately
+// by the OSC visibility system.)
 - (BOOL)_transformHandlesActive {
   return (self.toolbarTool ?: CanvasToolbarToolCursor) == CanvasToolbarToolCursor;
+}
+
+// NS modifiers -> the shared controller's surface-neutral flags.
+static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
+  CanvasPenModifiers o = CanvasPenModNone;
+  if (m & NSEventModifierFlagShift)
+    o |= CanvasPenModShift;
+  if (m & NSEventModifierFlagCommand)
+    o |= CanvasPenModCmd;
+  if (m & NSEventModifierFlagControl)
+    o |= CanvasPenModCtrl;
+  return o;
+}
+
+// Path point editing is live when the cursor tool is active and the Points
+// anchors OSC is shown (master on + not individually hidden).
+- (BOOL)_pathEditContext {
+  if ((self.toolbarTool ?: CanvasToolbarToolCursor) != CanvasToolbarToolCursor)
+    return NO;
+  return !self.handlesHidden &&
+         ![self.hiddenHandleLabels containsObject:@"Points"];
 }
 
 // Auto-select hit-test in the mini. The content rect maps object X directly and
@@ -32,7 +55,8 @@
   return CanvasHitTestLayerID(self.layers ?: @[], self.editFraction, aspect,
                               objX, objY, /*alphaAware=*/YES,
                               self.nonSelectableLayerIDs,
-                              /*requireEditableAtFrac=*/NO, /*templates=*/nil);
+                              /*requireEditableAtFrac=*/NO, /*templates=*/nil,
+                              (float)self.renderHeight);
 }
 
 // A click on the preview body (no handle hit) picks the topmost selectable image
@@ -194,6 +218,12 @@
   // The anchor is also grabbable wherever it's offset (e.g. a group, whose pivot
   // is its content centre).
   self.canvas = canvas;
+  self.penContentRect = cr;
+  // Path point editing claims first (so the overlay grabs the click for an
+  // anchor/handle instead of letting it fall through to a view pan).
+  if ([self _pathEditContext] &&
+      [self.pathEditController hitTestAtX:p.x y:p.y] != CanvasPathEditHitNone)
+    return YES;
   if ([self.anchorMini squareHitAtPoint:p contentRect:cr])
     return YES;
   // The active keypose's Position handle wins where it coincides with a path
@@ -212,8 +242,14 @@
 - (void)miniViewer:(KKMiniViewerView *)canvas
     beginHandleDragAtPoint:(CGPoint)p
                contentRect:(CGRect)cr {
-  // Anchor square grabs first (tight central zone, matches the hit-test priority).
   self.canvas = canvas;
+  self.penContentRect = cr;
+  // Path point editing grabs an anchor / handle first (the gizmo is hidden for a
+  // selected path, so this is the primary interaction).
+  if ([self _pathEditContext] &&
+      [self.pathEditController mouseDownAtX:p.x y:p.y modifiers:CanvasPenModNone])
+    return;
+  // Anchor square grabs first (tight central zone, matches the hit-test priority).
   if ([self.anchorMini beginDragAtPoint:p contentRect:cr])
     return;
   // Position handle next (the base re-checks it and drives the point grab
@@ -237,6 +273,14 @@
     dragHandleToPoint:(CGPoint)p
           contentRect:(CGRect)cr
             modifiers:(NSEventModifierFlags)modifiers {
+  self.penContentRect = cr;
+  if (self.pathEditController.dragging) {
+    [self.pathEditController mouseDraggedAtX:p.x
+                                          y:p.y
+                                  modifiers:CanvasEditModsFromNS(modifiers)];
+    [canvas setNeedsDisplay:YES];
+    return;
+  }
   if (self.anchorMini.isDragging) {
     [self.anchorMini applyDragToPoint:p
                           contentRect:cr
@@ -271,6 +315,12 @@
 }
 
 - (void)miniViewerEndHandleDrag:(KKMiniViewerView *)canvas {
+  if (self.pathEditController.dragging) {
+    [self.pathEditController mouseUp];
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return;
+  }
   [self.anchorMini endDrag];
   [self.scaleMini endDrag];
   // endDrag resets the shared snap engine and reports whether a motion-path
@@ -334,6 +384,10 @@
   if (CGRectIsEmpty(cr))
     return nil;
   self.canvas = canvas;
+  self.penContentRect = cr;
+  if ([self _pathEditContext] &&
+      [self.pathEditController hitTestAtX:p.x y:p.y] != CanvasPathEditHitNone)
+    return KKPointMoveCursor();
   if ([self.anchorMini squareHitAtPoint:p contentRect:cr])
     return [self kkVisibilityCursorForLabel:@"Anchor"] ?: KKPointMoveCursor();
   if ([self pointHandleHitAtPoint:p contentRect:cr])
