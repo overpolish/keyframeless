@@ -10,6 +10,7 @@
 @implementation _KKMiniViewerOverlay {
   BOOL _dragging;
   BOOL _toolbarDragging;
+  BOOL _toolDrawing;
   NSTrackingArea *_optTrackingArea;
   BOOL _optReveal;
 }
@@ -57,6 +58,12 @@
   // click doesn't fall through to a layer drag / pan.
   if ([d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)] &&
       [d miniViewer:c toolbarTagAtPoint:p] != 0)
+    return self;
+  // A drawing tool (pen) claims the whole canvas, so a click places a point
+  // instead of click-drag panning the view. Two-finger / scroll pan still works
+  // (scrollWheel bubbles to the canvas regardless of this hit-test).
+  if ([d respondsToSelector:@selector(miniViewerToolDrawingActive:)] &&
+      [d miniViewerToolDrawingActive:c])
     return self;
   if (![d respondsToSelector:@selector(
                                  miniViewer:handleHitAtPoint:contentRect:)])
@@ -135,10 +142,41 @@
                          fillAttributes:attrs];
     }
   }
+  // The drawing tool's overlay is drawn in the Metal pass (matching the motion
+  // path's glyph/line look), not here.
 }
 
 - (void)mouseDown:(NSEvent *)e {
   KKMiniViewerView *c = self.canvas;
+  // Free-drawing tool (pen): route every press here (the delegate's controller
+  // does its own double-click detection). The toolbar (chrome) still wins; no
+  // handle-drag / auto-select / reset-view path runs.
+  {
+    id<KKMiniViewerDelegate> td = c.canvasDelegate;
+    if ([td respondsToSelector:@selector(miniViewerToolDrawingActive:)] &&
+        [td miniViewerToolDrawingActive:c]) {
+      NSPoint tp = [self convertPoint:e.locationInWindow fromView:nil];
+      if ([td respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)] &&
+          [td miniViewer:c toolbarTagAtPoint:tp] != 0) {
+        [self.window makeFirstResponder:nil];
+        _toolbarDragging =
+            [td respondsToSelector:@selector(miniViewer:toolbarMouseDownAtPoint:)] &&
+            [td miniViewer:c toolbarMouseDownAtPoint:tp];
+        [self setNeedsDisplay:YES];
+        return;
+      }
+      [self.window makeFirstResponder:nil];
+      _toolDrawing = YES;
+      if ([td respondsToSelector:@selector(miniViewer:
+                                     toolDownAtPoint:contentRect:modifiers:)])
+        [td miniViewer:c
+              toolDownAtPoint:tp
+                  contentRect:[c contentRectInViewPoints]
+                    modifiers:e.modifierFlags];
+      [c setNeedsDisplay:YES]; // tool overlay draws in the Metal pass
+      return;
+    }
+  }
   // A double-click is always "reset view", even when it lands on the crop
   // box / a handle (the overlay's hitTest swallows those clicks, so the
   // canvas's own -mouseDown: never sees them otherwise).
@@ -223,6 +261,16 @@
 - (void)mouseDragged:(NSEvent *)e {
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  if (_toolDrawing) {
+    if ([d respondsToSelector:@selector(miniViewer:
+                                   toolDraggedToPoint:contentRect:modifiers:)])
+      [d miniViewer:c
+          toolDraggedToPoint:[self convertPoint:e.locationInWindow fromView:nil]
+                 contentRect:[c contentRectInViewPoints]
+                   modifiers:e.modifierFlags];
+    [c setNeedsDisplay:YES];
+    return;
+  }
   if (_toolbarDragging) {
     if ([d respondsToSelector:@selector(miniViewer:toolbarDraggedToPoint:)])
       [d miniViewer:c
@@ -250,6 +298,15 @@
 - (void)mouseUp:(NSEvent *)e {
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  if (_toolDrawing) {
+    _toolDrawing = NO;
+    if ([d respondsToSelector:@selector(miniViewer:toolUpAtPoint:contentRect:)])
+      [d miniViewer:c
+            toolUpAtPoint:[self convertPoint:e.locationInWindow fromView:nil]
+              contentRect:[c contentRectInViewPoints]];
+    [c setNeedsDisplay:YES];
+    return;
+  }
   if (_toolbarDragging) {
     _toolbarDragging = NO;
     if ([d respondsToSelector:@selector(miniViewerToolbarMouseUp:)])
@@ -318,6 +375,31 @@
   [self _setOptReveal:(e.modifierFlags & NSEventModifierFlagOption) != 0];
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  // Drawing tool active: feed the cursor (rubber-band + snap ghost) + redraw,
+  // but still let the toolbar own the cursor when hovering it (below).
+  if ([d respondsToSelector:@selector(miniViewerToolDrawingActive:)] &&
+      [d miniViewerToolDrawingActive:c]) {
+    NSPoint p = [self convertPoint:e.locationInWindow fromView:nil];
+    BOOL overToolbar =
+        [d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)] &&
+        [d miniViewer:c toolbarTagAtPoint:p] != 0;
+    if (!overToolbar) {
+      CGRect cr = [c contentRectInViewPoints];
+      if ([d respondsToSelector:@selector(miniViewer:
+                                     toolMovedToPoint:contentRect:)]) {
+        [d miniViewer:c toolMovedToPoint:p contentRect:cr];
+        [c setNeedsDisplay:YES];
+      }
+      // The tool owns the cursor (pen / close glyph) over the canvas; skip the
+      // handle-resize hover logic below.
+      NSCursor *cur = nil;
+      if ([d respondsToSelector:@selector(miniViewer:
+                                     toolCursorAtPoint:contentRect:)])
+        cur = [d miniViewer:c toolCursorAtPoint:p contentRect:cr];
+      [(cur ?: [NSCursor arrowCursor]) set];
+      return;
+    }
+  }
   if ([d respondsToSelector:@selector(miniViewer:toolbarHoverTag:)] &&
       [d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)]) {
     NSPoint p = [self convertPoint:e.locationInWindow fromView:nil];

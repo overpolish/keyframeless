@@ -76,6 +76,16 @@
     _anchor.canvasSnapProvider = ^CGPoint(CGPoint cp) {
       return [weak _snapCanvasPointToGrid:cp];
     };
+    // Pen-tool anchor + tangent dots, matching the Position path OSC's look.
+    _penAnchorOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    _penAnchorOSC.oscRadius = 7.0f;
+    _penAnchorOSC.outlineWidth = 2.0f;
+    _penAnchorOSC.clearsOnDraw = NO;
+    _penHandleOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
+    _penHandleOSC.oscRadius = 5.0f;
+    _penHandleOSC.outlineWidth = 1.5f;
+    _penHandleOSC.clearsOnDraw = NO;
+    _penController = [[CanvasPenController alloc] initWithSurface:self];
     [self _setupToolbar];
   }
   return self;
@@ -93,11 +103,25 @@
                                        commands:^(id<MTLRenderCommandEncoder> e,
                                                   CGPoint p, simd_uint2 v){
                                        }];
+  // A tool / layer switch while drawing confirms the in-progress path as-is.
+  [self _penConfirmIfContextLost];
   // Grid overlay (under the gizmo + toolbar), independent of selection / lock.
   [self _drawGridWithWidth:width height:height destinationImage:destinationImage];
   // Locked layer: cleared surface only, no handles (and no Opt-reveal) - the
   // toolbar (global chrome) still draws on top.
   if ([self _selectedLayerLocked]) {
+    [self _drawToolbarWithWidth:width
+                         height:height
+               destinationImage:destinationImage];
+    return;
+  }
+  // Pen tool: no transform gizmo (matches photo-editor pen UX) - only the grid,
+  // the in-progress path preview, and the toolbar draw.
+  if ([self _penToolActive]) {
+    [self _drawPenInProgressWithWidth:width
+                               height:height
+                     destinationImage:destinationImage
+                               atTime:time];
     [self _drawToolbarWithWidth:width
                          height:height
                destinationImage:destinationImage];

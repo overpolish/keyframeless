@@ -11,6 +11,7 @@
 // others without -Wundeclared-selector.
 
 #import "CanvasOSC.h"
+#import "CanvasPenController.h" // CanvasPenSurface + the shared pen state machine
 #import "CanvasToolbar.h" // CanvasToolbarTag + CanvasMakeToolbar (shared w/ mini)
 #import <KeyframelessKit/KeyframelessKit.h>
 
@@ -19,6 +20,8 @@
 @class KKRotationOSC;
 @class KKAnchorOSC;
 @class KKToolbar;
+@class KKPointOSC;
+@class CanvasPenController;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -33,6 +36,9 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
   CanvasOSCPartRotation = 4,
   CanvasOSCPartLayerPick = 5,
   CanvasOSCPartAnchor = 6,
+  // The pen tool claims the whole canvas (minus the toolbar) so FCP routes
+  // every click to the OSC, not just clicks over a handle.
+  CanvasOSCPartPen = 7,
 };
 
 @interface CanvasOSC ()
@@ -67,6 +73,17 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 // reuses it so it can never diverge from the drawn lines (0 = not drawn yet).
 @property(nonatomic) double drawnGridObjSpacingX;
 @property(nonatomic) double drawnGridObjSpacingY;
+// The shared pen state machine; this OSC is its drawing + persistence surface
+// (CanvasOSC+Pen.m implements CanvasPenSurface). Created lazily.
+@property(nonatomic, strong) CanvasPenController *penController;
+// Set for the span of a pen overlay draw so the surface draw primitives know the
+// FxImageTile + time to encode into.
+@property(nonatomic, assign) FxImageTile *penDrawDest;
+@property(nonatomic) CMTime penDrawTime;
+// Reusable dot controls for the anchors + tangent handles, matching the Position
+// path OSC's look (shared KKPointOSC, not hand-drawn squares).
+@property(nonatomic, strong) KKPointOSC *penAnchorOSC;
+@property(nonatomic, strong) KKPointOSC *penHandleOSC;
 @end
 
 // Canvas-space geometry + sub-control feeding.
@@ -111,6 +128,8 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 - (void)_toolbarMouseUp;
 // Control+letter tool shortcuts (^V/^X/^B/^G). Returns YES if it consumed the key.
 - (BOOL)_handleToolbarKey:(unsigned short)asciiKey modifiers:(NSUInteger)modifiers;
+// The active drawing tool from kParamUIState (CanvasToolbarTool*, default cursor).
+- (NSInteger)_activeTool;
 // Grid settings read from kParamUIState (defaults: off / Auto / 10 / off).
 - (BOOL)_gridEnabled;
 - (BOOL)_gridAdaptive;
@@ -133,6 +152,36 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 - (BOOL)_autoSelectEnabled;
 - (nullable NSString *)_pickLayerIDAtX:(double)x y:(double)y atTime:(CMTime)time;
 - (void)_commitPickSelection;
+@end
+
+// Pen tool: this OSC is the drawing + persistence SURFACE for the shared
+// CanvasPenController. The methods below are the input/draw entry points the
+// other categories call; the CanvasPenSurface methods (coords, blob, draw
+// primitives) are implemented in CanvasOSC+Pen.m. Mouse coords are CANVAS px.
+@interface CanvasOSC (Pen) <CanvasPenSurface>
+- (BOOL)_penToolActive;
+// If a path is being drawn but the pen tool was deselected or the selection moved
+// to another layer, confirm (end) the in-progress path as-is (no close). Call at
+// the top of draw so a tool / layer switch finalises the current path.
+- (void)_penConfirmIfContextLost;
+// Returns YES if the pen consumed the click (always, while active).
+- (BOOL)_penMouseDownAtX:(double)x y:(double)y modifiers:(NSUInteger)modifiers
+                  atTime:(CMTime)time;
+- (void)_penMouseMovedAtX:(double)x y:(double)y;
+// Click-drag after placing an anchor pulls its bezier handles (modifiers match
+// the Position path OSC: Shift = axis-lock, Cmd = 45deg snap, Ctrl = cusp).
+- (void)_penMouseDraggedAtX:(double)x y:(double)y modifiers:(NSUInteger)modifiers;
+- (void)_penMouseUp;
+// Return/Enter finishes an open path; Esc cancels. YES if consumed.
+- (BOOL)_penKeyDown:(unsigned short)asciiKey modifiers:(NSUInteger)modifiers
+             atTime:(CMTime)time;
+- (void)_drawPenInProgressWithWidth:(NSInteger)width
+                             height:(NSInteger)height
+                   destinationImage:(FxImageTile *)destinationImage
+                             atTime:(CMTime)time;
+// The cursor the pen tool shows at a CANVAS point: the close-shape glyph when
+// hovering the first anchor (with a loop placed), else the pen glyph.
+- (NSCursor *)_penCursorForCanvasX:(double)x y:(double)y;
 @end
 
 NS_ASSUME_NONNULL_END

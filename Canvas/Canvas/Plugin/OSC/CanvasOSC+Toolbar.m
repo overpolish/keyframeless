@@ -27,6 +27,11 @@ static NSString *const kCanvasUIGridSnap = @"gridSnap";
   self.toolbar = CanvasMakeToolbar(self.apiManager);
 }
 
+- (NSInteger)_activeTool {
+  id v = [self _uiStateDict][kCanvasUITool];
+  return v ? [v integerValue] : CanvasToolbarToolCursor;
+}
+
 - (void)_drawToolbarWithWidth:(NSInteger)width
                        height:(NSInteger)height
              destinationImage:(FxImageTile *)destinationImage {

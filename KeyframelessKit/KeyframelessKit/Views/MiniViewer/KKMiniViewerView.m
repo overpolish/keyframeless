@@ -193,6 +193,29 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
                               modifiers:e.modifierFlags];
 }
 
+// Esc / Return etc. for an active drawing tool (pen), via the same monitor as
+// the reset + toolbar shortcuts. Gated on the mini being the key window + a
+// drawing tool active + not editing a field.
+- (BOOL)_handleToolKeyEvent:(NSEvent *)e {
+  if (!self.window.isVisible || !self.window.isKeyWindow)
+    return NO;
+  if ([self.window.firstResponder isKindOfClass:[NSText class]])
+    return NO;
+  if (![self.canvasDelegate respondsToSelector:@selector(miniViewerToolDrawingActive:)] ||
+      ![self.canvasDelegate miniViewerToolDrawingActive:self])
+    return NO;
+  if (![self.canvasDelegate respondsToSelector:@selector(miniViewer:toolKeyDown:)])
+    return NO;
+  NSString *chars = e.charactersIgnoringModifiers;
+  if (chars.length == 0)
+    return NO;
+  BOOL handled = [self.canvasDelegate miniViewer:self
+                                     toolKeyDown:[chars characterAtIndex:0]];
+  if (handled)
+    [self setNeedsDisplay:YES]; // redraw the tool overlay (Metal pass) after the key
+  return handled;
+}
+
 - (void)_installKeyMonitor {
   __weak typeof(self) weak = self;
   _keyMon = [NSEvent
@@ -200,7 +223,8 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
                                    handler:^NSEvent *(NSEvent *e) {
                                      __strong typeof(self) s = weak;
                                      if ([s _handleResetKeyEvent:e] ||
-                                         [s _handleToolbarKeyEvent:e])
+                                         [s _handleToolbarKeyEvent:e] ||
+                                         [s _handleToolKeyEvent:e])
                                        return nil;
                                      return e;
                                    }];
@@ -210,7 +234,9 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
                                                __strong typeof(self) s = weak;
                                                if ([s _handleResetKeyEvent:e])
                                                  return;
-                                               [s _handleToolbarKeyEvent:e];
+                                               if ([s _handleToolbarKeyEvent:e])
+                                                 return;
+                                               [s _handleToolKeyEvent:e];
                                              }];
 }
 

@@ -73,6 +73,13 @@ extern NSString *const CanvasMiniViewerRequestPath;
 /// mini's own miniToolbarPos (@[nx, ny]).
 @property(nonatomic, copy, nullable) void (^onPatchUIState)(NSString *key,
                                                             id value);
+
+/// Fired when the pen tool mutates the layer stack (a new / extended vector
+/// layer). The host writes `paths` to kParamLayerData (one undo action) and, if
+/// `selectLayerID` is non-nil, makes that the selected layer. The renderer has
+/// already updated its own `layers` so the next draw/click sees the change.
+@property(nonatomic, copy, nullable) void (^onPersistLayers)
+    (NSArray<KKBezierPath *> *paths, NSString *_Nullable selectLayerID);
 @end
 
 NS_ASSUME_NONNULL_END

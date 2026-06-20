@@ -449,6 +449,18 @@
   }
 
   // Toolbar chrome, drawn LAST (on top of the grid + handles), the same way the
+  // Tool overlay (pen anchors / handles / curve / ghost), above the gizmo but
+  // under the toolbar chrome. The delegate encodes via -encodeToolDotAtPoint: /
+  // -encodeToolLineStrip:, which use this armed encoder + the glyph/line
+  // pipelines (same look as the motion path).
+  if ((_pointPipeline || _linePipeline) && del &&
+      [del respondsToSelector:@selector(miniViewerDrawToolOverlay:contentRect:)]) {
+    _toolEncoder = enc;
+    [del miniViewerDrawToolOverlay:self
+                       contentRect:[self contentRectInViewPoints]];
+    _toolEncoder = nil;
+  }
+
   // viewer draws it over the gizmo. The delegate renders its KKToolbar into this
   // pass via the shared -drawInEncoder: path, using the toolbar pipeline.
   if (_toolbarPipeline && del &&
@@ -473,6 +485,28 @@
 
 - (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size {
   [self setNeedsDisplay:YES];
+}
+
+- (void)encodeToolDotAtPoint:(CGPoint)viewPoint
+                        fill:(simd_float4)fill
+                   sizeScale:(CGFloat)sizeScale {
+  if (!_toolEncoder || !_pointPipeline)
+    return;
+  [self _encodeHandleGlyphAt:viewPoint
+                   fillColor:fill
+                   sizeScale:sizeScale
+                     encoder:_toolEncoder];
+}
+
+- (void)encodeToolLineStrip:(NSArray<NSValue *> *)viewPoints
+                      color:(simd_float4)color
+                halfWidthPt:(CGFloat)halfWidthPt {
+  if (!_toolEncoder || !_linePipeline || viewPoints.count < 2)
+    return;
+  [self _encodeMotionLineStrip:viewPoints
+                         color:color
+                   halfWidthPt:halfWidthPt
+                       encoder:_toolEncoder];
 }
 
 @end

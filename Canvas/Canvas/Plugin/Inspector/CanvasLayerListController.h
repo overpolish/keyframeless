@@ -36,6 +36,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// The current decoded layer stack, read straight from the param (works even
 /// while the panel is closed). Used to feed the mini-viewer renderer.
 - (NSArray<KKBezierPath *> *)currentLayerPaths;
+/// Persist `paths` to kParamLayerData in one undo action (works whether or not
+/// the panel is open). Used by the mini-viewer pen tool to commit drawn layers.
+- (void)writePaths:(NSArray<KKBezierPath *> *)paths;
 /// Fired when the panel's primary selection changes (that layer's layerID, or
 /// nil). The host uses it to switch which layer the inspector timeline edits.
 @property(nonatomic, copy, nullable) void (^onPrimaryLayerSelected)

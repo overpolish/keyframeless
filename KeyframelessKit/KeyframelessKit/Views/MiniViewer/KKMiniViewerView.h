@@ -166,6 +166,39 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
        toolbarKeyDownChars:(NSString *)chars
                  modifiers:(NSEventModifierFlags)modifiers;
+/// A free-drawing tool (e.g. the pen) is active: the overlay routes raw mouse
+/// events here instead of the handle-drag path (no onHandleDragBegin/End
+/// grouping, no auto-select). All points are overlay view points (y-up). The
+/// delegate draws the in-progress overlay via -drawToolOverlayInContentRect:.
+- (BOOL)miniViewerToolDrawingActive:(KKMiniViewerView *)canvas;
+- (void)miniViewer:(KKMiniViewerView *)canvas
+       toolDownAtPoint:(CGPoint)point
+           contentRect:(CGRect)contentRect
+             modifiers:(NSEventModifierFlags)modifiers;
+- (void)miniViewer:(KKMiniViewerView *)canvas
+    toolDraggedToPoint:(CGPoint)point
+           contentRect:(CGRect)contentRect
+             modifiers:(NSEventModifierFlags)modifiers;
+- (void)miniViewer:(KKMiniViewerView *)canvas
+       toolUpAtPoint:(CGPoint)point
+         contentRect:(CGRect)contentRect;
+- (void)miniViewer:(KKMiniViewerView *)canvas
+    toolMovedToPoint:(CGPoint)point
+         contentRect:(CGRect)contentRect;
+/// A key (Esc / Return) while a drawing tool is active. Return YES if consumed.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas toolKeyDown:(unsigned short)key;
+/// The cursor the drawing tool wants at `point` (e.g. the pen / close-shape
+/// glyph), or nil for the default. Driven from the overlay's mouseMoved.
+- (nullable NSCursor *)miniViewer:(KKMiniViewerView *)canvas
+              toolCursorAtPoint:(CGPoint)point
+                    contentRect:(CGRect)contentRect;
+/// Draw the tool's in-progress overlay (pen anchors / handles / curve / ghost)
+/// in the Metal pass, on top of everything. The delegate encodes via the canvas's
+/// -encodeToolDotAtPoint:... / -encodeToolLineStrip:... so it uses the SAME glyph
+/// + line look as the motion path. Called once per frame; the canvas has the
+/// encoder armed for the duration.
+- (void)miniViewerDrawToolOverlay:(KKMiniViewerView *)canvas
+                      contentRect:(CGRect)contentRect;
 /// An elliptical ring OSC to draw (e.g. Glow's radius), centred at `outCenter`
 /// with per-axis pixel radii `outRadiusX`/`outRadiusY`, all in overlay points
 /// (y-up). Return NO for none. The canvas strokes it in the Metal pass like the
@@ -320,6 +353,19 @@ NS_ASSUME_NONNULL_BEGIN
 - (CGFloat)oscSizingHeight;
 
 @property(nonatomic, weak, nullable) id<KKMiniViewerDelegate> canvasDelegate;
+
+/// Draw primitives for a tool overlay - ONLY valid inside the delegate's
+/// -miniViewerDrawToolOverlay: callback (the canvas has its render encoder +
+/// pipelines armed then; no-ops otherwise). They use the same glyph + line
+/// rendering as the motion path, so a tool's anchors / handles / curve match the
+/// rest of the OSC. Points are overlay view points (y-up); `sizeScale` is the
+/// fraction of the standard handle-glyph size (anchors ~0.6, handle dots ~0.5).
+- (void)encodeToolDotAtPoint:(CGPoint)viewPoint
+                        fill:(simd_float4)fill
+                   sizeScale:(CGFloat)sizeScale;
+- (void)encodeToolLineStrip:(NSArray<NSValue *> *)viewPoints
+                      color:(simd_float4)color
+                halfWidthPt:(CGFloat)halfWidthPt;
 
 /// Host sink for handle-driven value edits. The delegate computes the new
 /// lane values during a drag and calls `-reportHandleValueForLabel:values:`,

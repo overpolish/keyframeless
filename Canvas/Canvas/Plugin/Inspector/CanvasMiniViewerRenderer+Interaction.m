@@ -5,9 +5,17 @@
 
 #import "CanvasLayerRender.h"
 #import "CanvasMiniViewerRenderer_Internal.h"
+#import "CanvasToolbar.h" // CanvasToolbarToolCursor
 #import <KeyframelessKit/KeyframelessKit.h>
 
 @implementation CanvasMiniViewerRenderer (Interaction)
+
+// Transform handles (Position / motion path / Scale box / Anchor square) only
+// show under the cursor tool; a drawing tool (pen, rect, ellipse) owns the
+// canvas and hides them, matching the viewer OSC's pen branch.
+- (BOOL)_transformHandlesActive {
+  return (self.toolbarTool ?: CanvasToolbarToolCursor) == CanvasToolbarToolCursor;
+}
 
 // Auto-select hit-test in the mini. The content rect maps object X directly and
 // object Y FLIPPED (content/Position is y-down: py=0 at the top per
@@ -43,16 +51,22 @@
 
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     motionPathPolylineForContentRect:(CGRect)cr {
+  if (![self _transformHandlesActive])
+    return @[];
   return [self.positionMini motionPathPolylineForContentRect:cr];
 }
 
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     motionPathAnchorsForContentRect:(CGRect)cr {
+  if (![self _transformHandlesActive])
+    return @[];
   return [self.positionMini motionPathAnchorsForContentRect:cr];
 }
 
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     motionPathHandleSegmentsForContentRect:(CGRect)cr {
+  if (![self _transformHandlesActive])
+    return @[];
   return [self.positionMini motionPathHandleSegmentsForContentRect:cr];
 }
 
@@ -66,6 +80,8 @@
     anchorSquareCenter:(out CGPoint *)outCenter
            contentRect:(CGRect)cr {
   self.canvas = canvas;
+  if (![self _transformHandlesActive])
+    return NO;
   return [self.anchorMini squareCenter:outCenter forContentRect:cr];
 }
 
@@ -74,6 +90,8 @@
 }
 
 - (BOOL)pointHandleCenter:(out CGPoint *)outCenter forContentRect:(CGRect)cr {
+  if (![self _transformHandlesActive])
+    return NO;
   return [self.positionMini pointHandleCenter:outCenter forContentRect:cr];
 }
 
@@ -87,6 +105,8 @@
 - (BOOL)pointHandleCenter:(out CGPoint *)outCenter
                 forValues:(NSArray<NSNumber *> *)values
            forContentRect:(CGRect)cr {
+  if (![self _transformHandlesActive])
+    return NO;
   return [self.positionMini pointHandleCenter:outCenter
                                     forValues:values
                                forContentRect:cr];
@@ -126,17 +146,23 @@
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
       scaleBoxRect:(out CGRect *)outRect
     forContentRect:(CGRect)cr {
+  if (![self _transformHandlesActive])
+    return NO;
   return [self.scaleMini boxRect:outRect forContentRect:cr];
 }
 
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     scaleHandleCentersForContentRect:(CGRect)cr {
+  if (![self _transformHandlesActive])
+    return @[];
   return [self.scaleMini handleCentersForContentRect:cr];
 }
 
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
        scaleHandleCentersForValues:(NSArray<NSNumber *> *)values
                        contentRect:(CGRect)cr {
+  if (![self _transformHandlesActive])
+    return @[];
   return [self.scaleMini handleCentersForValues:values contentRect:cr];
 }
 
@@ -148,7 +174,8 @@
   NSMutableArray<KKMiniBox *> *boxes = [[super miniViewer:canvas
                                       boxesForContentRect:cr] mutableCopy];
   CGRect sb;
-  if ([self.scaleMini boxRect:&sb forContentRect:cr]) {
+  if ([self _transformHandlesActive] &&
+      [self.scaleMini boxRect:&sb forContentRect:cr]) {
     [boxes addObject:[KKMiniBox boxWithRect:sb
                               handleCenters:[self.scaleMini
                                                 handleCentersForContentRect:cr]

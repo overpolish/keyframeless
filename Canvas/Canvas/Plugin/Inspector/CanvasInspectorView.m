@@ -69,6 +69,19 @@
       if (s.onUIStatePatch)
         s.onUIStatePatch(key, value);
     };
+    // Mini pen tool -> commit the drawn vector layer(s) to kParamLayerData (one
+    // undo each), refresh the viewer-OSC blob snapshot + panel, and select the
+    // new layer on create.
+    _miniViewerRenderer.onPersistLayers =
+        ^(NSArray<KKBezierPath *> *paths, NSString *selectID) {
+          typeof(self) s = weakInit;
+          if (!s)
+            return;
+          [s->_layerListController writePaths:paths];
+          [s _syncLayersToRenderer];
+          if (selectID.length)
+            [s _selectAndHighlightLayer:selectID];
+        };
     self.miniViewerDelegate = _miniViewerRenderer;
     self.miniViewerDescriptorPath = CanvasMiniViewerDescriptorPath;
     self.miniViewerRequestPath = CanvasMiniViewerRequestPath;

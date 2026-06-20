@@ -6,6 +6,7 @@
 #import "CanvasLayerRender.h"
 #import "CanvasImageTexture.h"
 #import "CanvasLayerTransform.h"
+#import "CanvasStrokeTessellate.h"
 #import "Constants.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
@@ -197,6 +198,97 @@ void CanvasEncodeImageLayers(
                 vertexCount:4];
   }
   free(items);
+}
+
+simd_float2 CanvasLayerObjectCenter(KKBezierPath *path) {
+  if (!path || path.isGroup)
+    return simd_make_float2(0.5f, 0.5f); // groups pivot on their stored Anchor
+  if ([path.shape isKindOfClass:[KKRectShape class]]) {
+    KKRectShape *r = (KKRectShape *)path.shape;
+    return (r.min + r.max) * 0.5f;
+  }
+  if ([path.shape isKindOfClass:[KKEllipseShape class]]) {
+    KKEllipseShape *e = (KKEllipseShape *)path.shape;
+    return (e.min + e.max) * 0.5f;
+  }
+  if (path.count == 0)
+    return simd_make_float2(0.5f, 0.5f);
+  KKBezierPoint p0 = [path pointAtIndex:0];
+  simd_float2 lo = simd_make_float2(p0.x, p0.y), hi = lo;
+  for (NSUInteger i = 1; i < path.count; i++) {
+    KKBezierPoint p = [path pointAtIndex:i];
+    lo = simd_min(lo, simd_make_float2(p.x, p.y));
+    hi = simd_max(hi, simd_make_float2(p.x, p.y));
+  }
+  return (lo + hi) * 0.5f;
+}
+
+void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
+                              id<MTLRenderCommandEncoder> encoder,
+                              id<MTLDevice> device, float imageWidth,
+                              float imageHeight, float tileShiftX,
+                              float tileShiftY, double frac,
+                              NSString *overrideLayerID,
+                              KKTimeline *overrideTimeline) {
+  if (!encoder || !device || layers.count == 0)
+    return;
+  simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
+
+  // Bottom-first (array index 0 = topmost, drawn last) so vector layers stack
+  // like the image pass. No depth sort yet - strokes draw after the images.
+  for (NSInteger i = (NSInteger)layers.count - 1; i >= 0; i--) {
+    KKBezierPath *path = layers[i];
+    if (path.isImage || path.isGroup || path.hidden || !path.strokeEnabled)
+      continue;
+    if (path.count < 2 || path.strokeWidth <= 0.0f)
+      continue;
+
+    NSUInteger cap = CanvasStrokeVertexCapacity(path);
+    if (cap == 0)
+      continue;
+    KKVertex2D *verts = malloc(sizeof(KKVertex2D) * cap);
+    NSUInteger vc = CanvasTessellateStroke(path, path.strokeWidth, imageWidth,
+                                           imageHeight, verts, cap);
+    if (vc < 4) {
+      free(verts);
+      continue;
+    }
+
+    CanvasLayerTransform t;
+    if (frac < 0.0)
+      t = CanvasLayerTransformIdentity();
+    else if (overrideTimeline && overrideLayerID.length &&
+             [path.layerID isEqualToString:overrideLayerID])
+      t = CanvasLayerTransformFromTimeline(overrideTimeline, frac);
+    else
+      t = CanvasLayerTransformAtFraction(path, frac);
+
+    CanvasGroupXform groups[kCanvasGroupXformCap];
+    NSInteger ng =
+        CanvasBuildGroupXforms(layers, (NSUInteger)i, frac, overrideLayerID,
+                               overrideTimeline, groups, kCanvasGroupXformCap);
+    matrix_float4x4 m = CanvasComposedModelMatrix(
+        t, CanvasLayerObjectCenter(path), groups, ng, scale, tileShift);
+
+    float opacity = t.opacity * path.opacity;
+    for (NSInteger k = 0; k < ng; k++)
+      opacity *= groups[k].t.opacity;
+    simd_float4 color =
+        simd_make_float4(path.strokeR, path.strokeG, path.strokeB, opacity);
+
+    [encoder setVertexBytes:&m
+                     length:sizeof(m)
+                    atIndex:KKVertexInputIndex_Transform];
+    [encoder setVertexBytes:verts
+                     length:sizeof(KKVertex2D) * vc
+                    atIndex:KKVertexInputIndex_Vertices];
+    [encoder setFragmentBytes:&color length:sizeof(color) atIndex:0];
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                vertexStart:0
+                vertexCount:vc];
+    free(verts);
+  }
 }
 
 simd_float3x3 CanvasSquareToQuadHomography(CGPoint p0, CGPoint p1, CGPoint p2,

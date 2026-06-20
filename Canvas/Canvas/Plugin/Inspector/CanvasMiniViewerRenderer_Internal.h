@@ -6,6 +6,7 @@
 #pragma once
 
 #import "CanvasMiniViewerRenderer.h"
+#import "CanvasPenController.h" // CanvasPenSurface + shared pen state machine
 #import <KeyframelessKit/KeyframelessKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -13,6 +14,19 @@ NS_ASSUME_NONNULL_BEGIN
 @class KKToolbar;
 
 @interface CanvasMiniViewerRenderer ()
+// Shared pen state machine; this renderer is its surface (CanvasMiniViewerRenderer
+// +Pen.m implements CanvasPenSurface). Set in -init.
+@property(nonatomic, strong) CanvasPenController *penController;
+// The content rect (overlay view points) of the in-flight pen input / draw, so
+// the surface coordinate methods can convert without it being threaded through.
+@property(nonatomic) CGRect penContentRect;
+// The canvas during a pen overlay draw, so the surface draw primitives can encode
+// dots / lines via its armed Metal encoder. Set only inside the draw hook.
+@property(nonatomic, weak) KKMiniViewerView *penDrawCanvas;
+// View point (overlay y-up) -> normalized member value (Position space, Y-down),
+// through the inverse group homography. Used by the pen surface (it flips to the
+// Y-up KKBezierPath space).
+- (simd_float2)_memberValueForViewPoint:(CGPoint)vp contentRect:(CGRect)cr;
 // Output dims of the last composite (= the rendered frame size), captured in
 // -encodeEffectFromSource:. The grid spacing is in these output pixels, so the
 // mini grid lands on the same cells as the viewer.
@@ -58,6 +72,12 @@ NS_ASSUME_NONNULL_BEGIN
 // Shared by the background-click selector and the hover cursor.
 - (nullable NSString *)_autoSelectLayerAtPoint:(CGPoint)p
                                    contentRect:(CGRect)cr;
+@end
+
+// The mini is the drawing SURFACE for the shared pen controller: it implements
+// the CanvasPenSurface coords/blob/draw primitives (CoreGraphics) and the kit's
+// tool-drawing delegate hooks (forwarding to the controller).
+@interface CanvasMiniViewerRenderer (Pen) <CanvasPenSurface>
 @end
 
 NS_ASSUME_NONNULL_END

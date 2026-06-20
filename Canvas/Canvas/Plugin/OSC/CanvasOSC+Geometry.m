@@ -94,6 +94,18 @@
   CGPoint p2 = [self _composedObjForObjX:1 y:1 member:sel paths:paths frac:frac aspect:aspect];
   CGPoint p3 = [self _composedObjForObjX:0 y:1 member:sel paths:paths frac:frac aspect:aspect];
   simd_float3x3 A = CanvasSquareToQuadHomography(p0, p1, p2, p3);
+  // Centre the gizmo + Position/Anchor handles on the layer's GEOMETRY (its bbox
+  // centre), not the clip centre, by folding a member-local translation of
+  // (objectCenter - 0.5) into the parent transform. Then Position=0.5 maps to the
+  // geometry centre - the same pivot the render uses - so a path drawn off-centre
+  // gets its transform OSC on the path. A full-frame image (centre 0.5) is a
+  // no-op; a group stays 0.5 (it pivots on its stored Anchor). The object centre
+  // is render-space Y-UP; flip Y into the OSC's Y-DOWN object space.
+  simd_float2 gc = CanvasLayerObjectCenter(sel);
+  simd_float3x3 T =
+      simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
+                  simd_make_float3(gc.x - 0.5f, (1.0f - gc.y) - 0.5f, 1));
+  A = simd_mul(A, T);
   // The controls stay flat; their drawn position warps through A (the perspective
   // divide happens in KKPositionOSC / the pivot; drag inverts A to the member's
   // own value).

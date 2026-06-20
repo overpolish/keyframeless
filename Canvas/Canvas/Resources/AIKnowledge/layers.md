@@ -222,8 +222,9 @@ button for a localized tooltip** naming what it does.
 - **Tools** - cursor, pen, rectangle, ellipse, with keyboard shortcuts
   **^V / ^X / ^B / ^G** shown on the button. The shortcuts work whenever either
   surface is focused. Selecting a tool (by click or shortcut) highlights it and
-  stores it as the active tool. Drawing with the pen and shape tools is pending
-  re-add, so for now picking a tool only sets the selection.
+  stores it as the active tool. The **pen** tool draws paths (see below); the
+  rectangle / ellipse tools are pending re-add, so picking one only sets the
+  selection for now.
 - **Grid controls** - see below.
 
 ### Grid
@@ -246,6 +247,55 @@ button for a localized tooltip** naming what it does.
   used is the one shown, so turn the grid on to see where things land. Snapping
   is shared infrastructure, so future path / shape editing will reuse it.
 
+## Drawing with the pen tool
+
+Pick the **pen** tool (**^X**, or the pen button on the toolbar) and the cursor
+becomes a pen nib. The transform gizmo hides while the pen is active, matching
+how a photo editor's pen tool works. Drawing works the same in the FCP viewer
+**and** the inspector mini-viewer (the same shared pen engine drives both).
+
+- **Place anchors** - click to drop a corner point. The layer is created on the
+  **first click**, so it appears in the layer list and renders straight away (a
+  20px red stroke for now); each further click extends it live.
+- **Curves** - click and **drag** as you place a point to pull out its bezier
+  tangent handles. Each anchor has two handles: an **in** handle that shapes the
+  segment arriving at it and an **out** handle that shapes the segment leaving
+  it. A plain click leaves both empty (a corner); a click-drag pulls both out,
+  mirrored, so the curve passes smoothly through the point. While dragging a
+  handle:
+  - **Shift** - lock the handle to horizontal / vertical.
+  - **Cmd** - snap its angle to 45° steps.
+  - **Ctrl** - cusp: drop the **in** side so the segment arrives straight and
+    only the outgoing side curves.
+
+  These are the same modifiers the Position motion-path handles use. (The mirror
+  case - curved _in_, straight _out_ - and freely retracting / breaking a handle
+  after the fact come with path editing, below.)
+
+- **Snap to grid** - when grid **Snap** is on, placed anchors snap to grid
+  intersections and a dimmed **ghost dot** shows where the next click will land
+  (including the first point). Handle drags stay free, and a press only becomes a
+  curve once the mouse clearly moves, so a snapped click won't curve by accident.
+- **Close the path** - click the **first anchor**; the cursor shows the
+  close-shape glyph and the anchor highlights as you approach it. **Click-drag**
+  the first anchor instead to smooth it, so the closing segment curves (the same
+  drag that curves a freshly placed point); a plain click closes with a corner.
+- **Finish an open path** - click the **last anchor** (it shows the same
+  close-shape cursor + highlight), **double-click**, or press **Return**.
+  Switching to another tool or selecting a different layer also confirms the path
+  as-is (it isn't closed, just committed where it stands).
+- **Cancel** - press **Esc** to discard the path you're drawing.
+
+Anchors show as dots and tangent handles as smaller dots on lines, the same look
+as the Position motion path; the whole click(-drag) for a point is a single undo
+step, so Cmd-Z walks back anchor by anchor (the first undo also removes the
+layer). When you switch back to the **cursor** tool the path stays selected and
+its transform gizmo appears centred on the path's bounding box.
+
+Stroke style is a fixed 20px red for now; per-path stroke width / colour / fill,
+and editing an existing path's anchors (move, add, delete, convert
+corner/smooth, retract a handle), are still to come.
+
 ## Motion blur
 
 The inspector's motion-blur control applies the shared sample-accumulate blur to
@@ -256,6 +306,8 @@ Keyframeless plugins use.
 
 - Per-layer **rotation** (lane + on-canvas gizmo).
 - Per-layer opacity in the render.
-- Shape (stroke / fill) layers and SVG import.
-- **Drawing tools** (pen / rectangle / ellipse) - the toolbar buttons and
-  shortcuts exist but only select the tool for now.
+- **Rectangle / ellipse** tools (the pen tool draws; these still only select).
+- **Editing** an existing drawn path (move / add / delete anchors, retoggle
+  corner-smooth) with the cursor tool.
+- Stroke **styling** (width / colour UI - currently a fixed 20px red) and
+  **fill**, plus the sketch (hand-drawn) render style and SVG import.

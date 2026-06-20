@@ -6,7 +6,10 @@
 #import "CanvasLayerListController.h"
 #import "CanvasLayerListView.h"
 #import "CanvasLayerRender.h"
+#import "Constants.h" // kParamLayerData
+#import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKDataBlob.h> // KKWriteCustomParamString
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTimingStage.h>
 #import <KeyframelessKit/KKTokens.h>
@@ -86,6 +89,26 @@ static const CGFloat kSlideDistance = 12.0;
 
 - (NSArray<KKBezierPath *> *)currentLayerPaths {
   return CanvasReadLayerPaths(_apiManager, self.paramActionTarget ?: self);
+}
+
+- (void)writePaths:(NSArray<KKBezierPath *> *)paths {
+  id<PROAPIAccessing> api = _apiManager;
+  if (!api)
+    return;
+  id<FxCustomParameterActionAPI_v4> action =
+      [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!action)
+    return;
+  id target = self.paramActionTarget ?: self;
+  [action startAction:target];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSData *blob = [KKBezierPath blobFromPaths:paths];
+  KKWriteCustomParamString(setAPI, [blob base64EncodedStringWithOptions:0],
+                           kParamLayerData);
+  [action endAction:target];
+  // Rebuild the open panel from the just-written param (no-op when closed).
+  [_listView reloadFromParam];
 }
 
 - (void)dealloc {

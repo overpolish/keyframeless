@@ -188,6 +188,21 @@
     return NO;
   }
 
+  // Stroke pipeline: the SAME transform vertex shader (so vector strokes compose
+  // with CanvasComposedModelMatrix exactly like image quads) + the kit's
+  // antialiased line fragment, which reads the signed edge distance the
+  // tessellator packs into textureCoordinate.y. One pipeline serves normal AND
+  // (later) sketch strokes - sketch is a path pre-jitter, not a second pipeline.
+  id<MTLRenderPipelineState> strokePS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Canvas.stroke"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:kitBundleID
+                                  vertexShader:@"KKTransformVertexShader"
+                                fragmentShader:@"KKLineFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+
   // The state blob is [KKMotionBlurState][layer blob]; split off the MB prefix
   // before decoding the layer stack (bottom of the array draws in front, so
   // composite back-to-front: last index first).
@@ -249,6 +264,12 @@
                            tileShiftX, tileShiftY);
     CanvasEncodeImageLayers(layers, enc, device, texCache, outputWidth,
                             outputHeight, tileShiftX, tileShiftY, f, nil, nil);
+    // Vector strokes (pen / shape layers) over the images, same tile transform.
+    if (strokePS) {
+      [enc setRenderPipelineState:strokePS];
+      CanvasEncodeVectorLayers(layers, enc, device, outputWidth, outputHeight,
+                               tileShiftX, tileShiftY, f, nil, nil);
+    }
   };
 
   // Motion blur: accumulate the composite across sub-frame sample times (the

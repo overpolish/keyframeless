@@ -74,6 +74,26 @@ void CanvasEncodeSourceTile(id<MTLRenderCommandEncoder> encoder,
                             float imageHeight, float tileShiftX,
                             float tileShiftY);
 
+/// Strokes every visible VECTOR layer (a non-image, non-group path with
+/// `strokeEnabled`) over whatever the encoder already drew. The caller must
+/// have set a stroke pipeline (`KKTransformVertexShader` + `KKLineFragment`,
+/// premultiplied) on `encoder`; the viewport-size buffer at
+/// `KKVertexInputIndex_ViewportSize` is inherited from the kit's encoder setup
+/// (same as the image pass). Each layer's path is tessellated to a constant-
+/// width triangle strip in the SAME centered-pixel object space as the image
+/// quads and drawn through `CanvasComposedModelMatrix`, so a stroke moves /
+/// scales / tilts / groups exactly like an image layer. `frac`,
+/// `overrideLayerID` and `overrideTimeline` behave as in
+/// CanvasEncodeImageLayers. Stroke colour is the layer's `strokeR/G/B`; alpha
+/// folds in the layer + ancestor-group opacity.
+void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
+                              id<MTLRenderCommandEncoder> encoder,
+                              id<MTLDevice> device, float imageWidth,
+                              float imageHeight, float tileShiftX,
+                              float tileShiftY, double frac,
+                              NSString *_Nullable overrideLayerID,
+                              KKTimeline *_Nullable overrideTimeline);
+
 /// Click-to-select hit-test: returns the `layerID` of the TOPMOST image layer
 /// whose on-screen quad contains the object-space point (`objX`,`objY`) in
 /// [0,1] (Y-up, the render's object space), evaluated at clip fraction `frac`,
@@ -126,6 +146,14 @@ BOOL CanvasComposedGroupPointObj(NSArray<KKBezierPath *> *layers,
 KKRotMatrix3 CanvasComposedGroupRotation(NSArray<KKBezierPath *> *layers,
                                          KKBezierPath *_Nullable member,
                                          double frac);
+
+/// A layer's geometry centre in normalized object space (Y-up [0,1]) - the
+/// pivot the render rotates / scales about and the gizmo cluster centres on.
+/// Rect / ellipse shapes use their bbox centre; a drawn path uses its point
+/// bbox; a group (or empty) returns (0.5, 0.5) since groups pivot on their
+/// stored Anchor. Shared by CanvasEncodeVectorLayers and the OSC gizmo so both
+/// agree.
+simd_float2 CanvasLayerObjectCenter(KKBezierPath *path);
 
 /// Heckbert square->quad homography: maps the unit square
 /// (0,0),(1,0),(1,1),(0,1) onto the four given quad corners. Column-major (M *

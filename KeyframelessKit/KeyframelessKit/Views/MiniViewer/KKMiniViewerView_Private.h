@@ -88,6 +88,9 @@ NS_ASSUME_NONNULL_BEGIN
   id<MTLRenderPipelineState> _linePipeline;
   id<MTLRenderPipelineState> _aaLinePipeline;
   id<MTLRenderPipelineState> _toolbarPipeline;
+  // The render encoder armed during -miniViewerDrawToolOverlay: so the public
+  // encodeTool* methods can encode into the current pass. nil otherwise.
+  __unsafe_unretained id<MTLRenderCommandEncoder> _toolEncoder;
 }
 - (CGRect)contentRectInViewPoints;
 - (CGSize)sourceMediaSize;

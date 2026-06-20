@@ -42,6 +42,13 @@
     if (forceUpdate)
       *forceUpdate = YES;
   }
+  // Pen tool: track the cursor for the rubber-band + the grid-snap ghost (the
+  // latter shows before the first point too).
+  if ([self _penToolActive]) {
+    [self _penMouseMovedAtX:positionX y:positionY];
+    if (forceUpdate)
+      *forceUpdate = YES;
+  }
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX
@@ -71,6 +78,17 @@
     } else {
       [tbAPI setCursor:[NSCursor arrowCursor]];
     }
+    return;
+  }
+  // Pen tool: claim the whole canvas (below the toolbar) so every click routes
+  // to the OSC, and show the pen / close-shape cursor. Bypasses the gizmo
+  // handles + auto-select entirely while drawing.
+  if ([self _penToolActive]) {
+    *activePart = CanvasOSCPartPen;
+    id<FxOnScreenControlAPI_v4> penAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [penAPI setCursor:[self _penCursorForCanvasX:positionX y:positionY]];
+    self.pointCursorSet = YES;
     return;
   }
   // Locked SELECTED layer: its own handles aren't grabbable (and Opt can't peek
@@ -165,6 +183,17 @@
       *forceUpdate = YES;
     return;
   }
+  // Pen tool: clicks place anchor points / close the path instead of driving the
+  // gizmo. Gated on the active tool, so the cursor tool keeps the gizmo.
+  if ([self _penToolActive]) {
+    [self _penMouseDownAtX:positionX
+                         y:positionY
+                 modifiers:modifiers
+                    atTime:time];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   // Auto-select pick: the hover hit-test claimed a click over an unselected
   // image layer - commit the selection and consume the click (no drag).
   if (activePart == CanvasOSCPartLayerPick) {
@@ -240,6 +269,13 @@
       *forceUpdate = YES;
     return;
   }
+  // Pen tool: a press-drag after placing an anchor pulls its bezier handles.
+  if ([self _penToolActive]) {
+    [self _penMouseDraggedAtX:positionX y:positionY modifiers:modifiers];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   // Opt-hide latched on the first event sticks for the rest of the interaction
   // (so an opt-click doesn't half-drag).
   if ([self kkArmOptHideForActivePart:activePart modifiers:modifiers])
@@ -298,6 +334,12 @@
       *forceUpdate = YES;
     return;
   }
+  if ([self _penToolActive]) {
+    [self _penMouseUp];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   [self kkResetOptHideArming];
   [self.position mouseUp];
   [self.scale mouseUp];
@@ -319,6 +361,14 @@
                  didHandle:(BOOL *)didHandle
                     atTime:(CMTime)time {
   if ([self _handleToolbarKey:asciiKey modifiers:modifiers]) {
+    if (forceUpdate)
+      *forceUpdate = YES;
+    if (didHandle)
+      *didHandle = YES;
+    return;
+  }
+  if ([self _penToolActive] &&
+      [self _penKeyDown:asciiKey modifiers:modifiers atTime:time]) {
     if (forceUpdate)
       *forceUpdate = YES;
     if (didHandle)

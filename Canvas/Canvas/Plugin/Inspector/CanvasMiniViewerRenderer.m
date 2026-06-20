@@ -36,8 +36,9 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 }
 
 @implementation CanvasMiniViewerRenderer {
-  id<MTLRenderPipelineState> _pipeline;      // source passthrough (no blend)
-  id<MTLRenderPipelineState> _imagePipeline; // image overlay (premult alpha)
+  id<MTLRenderPipelineState> _pipeline;       // source passthrough (no blend)
+  id<MTLRenderPipelineState> _imagePipeline;  // image overlay (premult alpha)
+  id<MTLRenderPipelineState> _strokePipeline; // vector stroke (premult alpha)
   MTLPixelFormat _pipelineFormat;
   // Image-layer textures, keyed by path. The renderer lives in the inspector
   // process (separate from the render XPC), so it can't share the plugin's
@@ -90,6 +91,7 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     // mini surface. apiManager nil is fine (KKToolbar only stores it).
     _toolbar = CanvasMakeToolbar(nil); // uiScale + flip set per-draw in the hook
     _toolbarNormPos = CGPointMake(-1, -1); // default anchor until dragged
+    _penController = [[CanvasPenController alloc] initWithSurface:self];
   }
   return self;
 }
@@ -515,7 +517,10 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
       [lib newFunctionWithName:@"KKTexturePassthroughFragment"];
   // Image layers fade by a per-layer Opacity uniform (premultiplied multiply).
   id<MTLFunction> offn = [lib newFunctionWithName:@"KKTextureOpacityFragment"];
-  if (!vfn || !tvfn || !ffn || !offn) {
+  // Vector strokes: transform vertex shader (compose like image layers) + the
+  // antialiased line fragment, matching the main render's stroke pipeline.
+  id<MTLFunction> lfn = [lib newFunctionWithName:@"KKLineFragment"];
+  if (!vfn || !tvfn || !ffn || !offn || !lfn) {
     KKLogError(@"CanvasMiniViewerRenderer: missing passthrough shaders");
     return NO;
   }
@@ -544,8 +549,21 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     return NO;
   }
 
+  MTLRenderPipelineDescriptor *stroke = [KKRenderPrimitives
+      createPipelineDescriptorWithVertexFunction:tvfn
+                                fragmentFunction:lfn
+                                     pixelFormat:format
+                                       blendMode:KKBlendModePremultipliedAlpha];
+  id<MTLRenderPipelineState> strokePS =
+      [device newRenderPipelineStateWithDescriptor:stroke error:&err];
+  if (!strokePS) {
+    KKLogError(@"CanvasMiniViewerRenderer: stroke pipeline failed: %@", err);
+    return NO;
+  }
+
   _pipeline = srcPS;
   _imagePipeline = imgPS;
+  _strokePipeline = strokePS;
   _pipelineFormat = format;
   return YES;
 }
@@ -636,6 +654,15 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   CanvasEncodeImageLayers(
       self.layers ?: @[], enc, cb.device, self.imageTextureCache, w, h, 0.0f,
       0.0f, self.editFraction, self.selectedLayerID, self.timeline);
+
+  // 3) Vector strokes over the images, same pipeline + transform as the main
+  // render.
+  if (_strokePipeline) {
+    [enc setRenderPipelineState:_strokePipeline];
+    CanvasEncodeVectorLayers(self.layers ?: @[], enc, cb.device, w, h, 0.0f,
+                             0.0f, self.editFraction, self.selectedLayerID,
+                             self.timeline);
+  }
 
   [enc endEncoding];
   return YES;
