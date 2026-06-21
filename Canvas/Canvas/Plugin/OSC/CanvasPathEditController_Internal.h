@@ -35,6 +35,7 @@ NS_ASSUME_NONNULL_BEGIN
   CGPoint _marqueeStart, _marqueeEnd; // surface points
   CFTimeInterval _lastClickTime;      // for the viewer's timing double-click
   NSInteger _lastClickAnchor;         // anchor of the last click, -1 = none
+  NSInteger _grabCorner; // corner-radius widget being dragged, -1 = none
 }
 
 /// The selected layer if it's an editable vector path, else nil.
@@ -58,6 +59,12 @@ NS_ASSUME_NONNULL_BEGIN
                   outT:(double *)outT;
 /// Toggle anchor `idx` corner<->smooth (called by the base double-click path).
 - (BOOL)_toggleSmoothAtIndex:(NSUInteger)idx;
+/// Publish the current selection to the other surface (cross-process sync).
+- (void)_publishSelection;
+/// Corner-radius widget under a surface point, or -1 (implemented in +Corners).
+- (NSInteger)_cornerWidgetHitAtX:(double)x y:(double)y;
+/// Live corner-radius drag for the grabbed corner (implemented in +Corners).
+- (void)_dragCornerToX:(double)x y:(double)y modifiers:(CanvasPenModifiers)mods;
 
 @end
 

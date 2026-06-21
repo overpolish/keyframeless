@@ -4,6 +4,7 @@
  */
 
 #import "CanvasLayerRender.h" // project / unproject
+#import "CanvasAnchorSelectionSync.h" // cross-process selection sync
 #import "CanvasPathEditController_Internal.h"
 #import "CanvasPathMorph.h" // per-keypose geometry writes
 #import <KeyframelessKit/KKBezierPath.h>
@@ -18,6 +19,7 @@ static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
   if (self) {
     _surface = surface;
     _grabAnchor = -1;
+    _grabCorner = -1;
     _lastClickAnchor = -1;
     _selectedAnchors = [NSMutableIndexSet indexSet];
   }
@@ -34,6 +36,20 @@ static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
 
 - (void)clearSelection {
   [_selectedAnchors removeAllIndexes];
+  [self _publishSelection];
+}
+
+- (void)setSelectedAnchorIndexes:(NSIndexSet *)indexes {
+  // Applied from the other surface's published selection - set without
+  // re-publishing so the two surfaces can't ping-pong.
+  [_selectedAnchors removeAllIndexes];
+  if (indexes)
+    [_selectedAnchors addIndexes:indexes];
+}
+
+- (void)_publishSelection {
+  CanvasPublishAnchorSelection([_surface penSurfaceTag],
+                               [_surface penSelectedLayerID], _selectedAnchors);
 }
 
 - (BOOL)marqueeActive {
@@ -101,8 +117,19 @@ static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
     return YES;
   }
 
-  // Empty: start a marquee (only over an editable selected path).
+  // Corner-radius widget (just inside a corner, in the empty area): start a
+  // radius drag. Checked before the marquee so the widget is grabbable.
   _lastClickAnchor = -1; // an empty click breaks a double-click-on-anchor run
+  NSInteger cw = [self _cornerWidgetHitAtX:x y:y];
+  if (cw >= 0) {
+    _grabCorner = cw;
+    _grabAnchor = -1;
+    _dragStartGeom = [[self _workingPath] copy];
+    _dragging = YES;
+    return YES;
+  }
+
+  // Empty: start a marquee (only over an editable selected path).
   if (![self canMarqueeAtX:x y:y])
     return NO;
   if (!(mods & (CanvasPenModShift | CanvasPenModOpt)))
@@ -124,6 +151,12 @@ static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
   if (_marqueeActive) {
     _marqueeEnd = CGPointMake(x, y);
     return; // the surface redraws on drag; selection commits on mouseUp
+  }
+
+  // Corner-radius drag (lives in the +Corners category).
+  if (_grabCorner >= 0) {
+    [self _dragCornerToX:x y:y modifiers:mods];
+    return;
   }
   if (_grabAnchor < 0 || !_dragStartGeom ||
       _grabAnchor >= (NSInteger)_dragStartGeom.count)
@@ -196,14 +229,19 @@ static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
     _marqueeActive = NO;
     _dragging = NO;
     _grabAnchor = -1;
+    _grabCorner = -1;
     _dragStartGeom = nil;
-    return; // selection-only: no geometry change to commit
+    [self _publishSelection]; // selection changed - sync to the other surface
+    return;                   // selection-only: no geometry change to commit
   }
   if (_dragging && _didEdit)
     [_surface penCommitLiveLayers]; // covers a pen-insert click with no drag
   _dragging = NO;
   _grabAnchor = -1;
+  _grabCorner = -1;
   _dragStartGeom = nil;
+  // Sync the (possibly changed) selection to the other surface.
+  [self _publishSelection];
 }
 
 // Select every anchor whose projected position lands inside the marquee rect.

@@ -163,6 +163,11 @@ static KKBezierPath *CanvasGeometryReversed(KKBezierPath *src) {
   }
   [out setBezierPoints:pts count:n closed:src.closed];
   free(pts);
+  // setBezierPoints clears the corner radii - re-apply them in reversed order so
+  // each radius stays with its anchor (else a pen prepend / reverse drops them).
+  if (src.hasCornerRadii)
+    for (NSUInteger i = 0; i < n; i++)
+      [out setCornerRadius:[src cornerRadiusAtIndex:(n - 1 - i)] atIndex:i];
   return out;
 }
 

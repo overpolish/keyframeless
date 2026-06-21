@@ -82,6 +82,14 @@ static NSColor *ringActiveStrokeColor(void) {
          _ringOutlineWidth;
 }
 
+- (void)applyRadiusWidgetStyle {
+  _ringRadius = 7.0f;
+  _ringRadiusY = 7.0f;
+  _fillWidth = 3.0f;
+  _ringOutlineWidth = 1.5f;
+  self.clearsOnDraw = NO;
+}
+
 - (void)clearCursorIfSet {
   if (!_cursorSet)
     return;

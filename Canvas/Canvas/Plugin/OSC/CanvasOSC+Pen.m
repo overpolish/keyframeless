@@ -7,6 +7,7 @@
 #import "CanvasOSC_Private.h"
 #import "CanvasPathMorph.h" // CanvasPathMorphedAtFraction
 #import "CanvasPathOSC.h"   // CanvasDrawPathEditOSC
+#import "CanvasAnchorSelectionSync.h" // cross-process selection sync
 #import "CanvasPenController.h"
 #import "CanvasPenCursors.h" // shared pen cursor set
 #import "CanvasPenMarquee.h" // shared dashed-marquee perimeter walk
@@ -161,6 +162,10 @@ static CanvasPenModifiers PenModsFromFx(NSUInteger m) {
   NSString *sel = [self _resolvedSelectedLayerID];
   if (!sel.length)
     return;
+  // Pick up an anchor selection published by the mini (cross-process sync).
+  NSIndexSet *synced = CanvasConsumeAnchorSelection(@"osc", sel);
+  if (synced)
+    [self.pathEditController setSelectedAnchorIndexes:synced];
   KKBezierPath *path = nil;
   NSArray<KKBezierPath *> *paths = [self _snapshotPaths];
   for (KKBezierPath *p in paths)
@@ -182,7 +187,8 @@ static CanvasPenModifiers PenModsFromFx(NSUInteger m) {
                         frac, (float)[self _canvasAspect],
                         self.pathEditController.selectedAnchors,
                         self.pathEditController.marqueeActive,
-                        self.pathEditController.marqueeSurfaceRect, ghost);
+                        self.pathEditController.marqueeSurfaceRect, ghost,
+                        [self _activeTool] == CanvasToolbarToolCursor);
   self.penDrawDest = nil;
 }
 
@@ -233,6 +239,10 @@ static CanvasPenModifiers PenModsFromFx(NSUInteger m) {
 
 - (NSString *)penSelectedLayerID {
   return [self _resolvedSelectedLayerID];
+}
+
+- (NSString *)penSurfaceTag {
+  return @"osc";
 }
 
 - (NSArray<KKBezierPath *> *)penAllLayers {
@@ -387,6 +397,21 @@ static CanvasPenModifiers PenModsFromFx(NSUInteger m) {
                          destinationImage:self.penDrawDest
                                    atTime:self.penDrawTime];
   self.penAnchorOSC.fillColorOverride = nil;
+}
+
+- (void)penDrawRingAtObj:(CGPoint)objYUp maxed:(BOOL)maxed {
+  if (!self.penDrawDest)
+    return;
+  // The shared KKRingOSC glyph (same control as the Glow radius ring), tinted
+  // accent - or error at the clamp. The ring shader is crisp by construction
+  // (no line-strip anti-alias washout), so no manual pixel-snap is needed.
+  self.penCornerRingOSC.tintColor =
+      maxed ? [NSColor error] : [NSColor accentMatchingHost];
+  [self.penCornerRingOSC drawAtCanvasPosition:[self _penCanvasFromObj:objYUp]
+                                    isHovered:NO
+                                     isActive:NO
+                             destinationImage:self.penDrawDest
+                                       atTime:self.penDrawTime];
 }
 
 - (void)penDrawMarqueeRect:(CGRect)r {

@@ -4,6 +4,7 @@
  */
 
 #import "CanvasLayerRender.h"
+#import "CanvasCornerFillet.h"
 #import "CanvasImageTexture.h"
 #import "CanvasLayerTransform.h"
 #import "CanvasPathMorph.h"
@@ -252,6 +253,12 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
         (frac < 0.0) ? path : CanvasPathMorphedAtFraction(path, frac);
     if (geom.count < 2)
       continue;
+    // Round any per-anchor corners into the display fillet before stroking
+    // (aspect-correct; no-op when nothing is rounded).
+    if (geom.hasCornerRadii)
+      geom = CanvasPathByExpandingCorners(
+          geom,
+          imageHeight > 0 ? (float)imageWidth / (float)imageHeight : 1.0f);
 
     NSUInteger cap = CanvasStrokeVertexCapacity(geom);
     if (cap == 0)

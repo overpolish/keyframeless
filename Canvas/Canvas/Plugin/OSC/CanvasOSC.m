@@ -85,6 +85,10 @@
     _penHandleOSC.oscRadius = 5.0f;
     _penHandleOSC.outlineWidth = 1.5f;
     _penHandleOSC.clearsOnDraw = NO;
+    // Live-corner radius widget: the shared ring control, small + tinted accent
+    // (same standard style as Rounded's radius handle).
+    _penCornerRingOSC = [[KKRingOSC alloc] initWithAPIManager:apiManager];
+    [_penCornerRingOSC applyRadiusWidgetStyle];
     _penController = [[CanvasPenController alloc] initWithSurface:self];
     _pathEditController =
         [[CanvasPathEditController alloc] initWithSurface:self];

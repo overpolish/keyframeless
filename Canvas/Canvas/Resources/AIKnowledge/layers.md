@@ -272,9 +272,9 @@ how a photo editor's pen tool works. Drawing works the same in the FCP viewer
   - **Ctrl** - cusp: drop the **in** side so the segment arrives straight and
     only the outgoing side curves.
 
-  These are the same modifiers the Position motion-path handles use. (The mirror
-  case - curved _in_, straight _out_ - and freely retracting / breaking a handle
-  after the fact come with path editing, below.)
+  These are the same modifiers the Position motion-path handles use. (Freely
+  retracting / breaking a handle after the fact is done with the cursor tool - see
+  "Editing a path" below.)
 
 - **Snap to grid** - when grid **Snap** is on, placed anchors snap to grid
   intersections and a dimmed **ghost dot** shows where the next click will land
@@ -294,11 +294,52 @@ Anchors show as dots and tangent handles as smaller dots on lines, the same look
 as the Position motion path; the whole click(-drag) for a point is a single undo
 step, so Cmd-Z walks back anchor by anchor (the first undo also removes the
 layer). When you switch back to the **cursor** tool the path stays selected and
-its transform gizmo appears centred on the path's bounding box.
+its anchors stay editable (see below).
 
-Stroke style is a fixed 20px red for now; per-path stroke width / colour / fill,
-and editing an existing path's anchors (move, add, delete, convert
-corner/smooth, retract a handle), are still to come.
+The pen tool is also context-sensitive on an existing selected path: clicking a
+**segment** inserts an anchor there (preserving the curve), and clicking either
+open **endpoint** continues drawing from that tip. Holding **Opt** over an anchor
+turns the cursor into a delete nib and removes that point.
+
+Stroke style is a fixed 20px red for now; per-path stroke width / colour / fill
+are still to come.
+
+## Editing a path (cursor tool)
+
+With the **cursor** tool and a vector path selected, its anchors and tangent
+handles are editable directly - in both the FCP viewer and the inspector
+mini-viewer (the selection stays in sync between the two):
+
+- **Move** - drag an anchor (grid-snaps like the pen) or drag a tangent handle
+  (free; **Ctrl** breaks the handle into a cusp). Multiple selected anchors move
+  together.
+- **Select** - click an anchor; **Shift**-click to add/remove; drag an empty area
+  over the path to **marquee**-select a group of anchors (**Opt**-drag subtracts).
+- **Delete** - press **Delete**/**Backspace** to remove the selected anchors. The
+  cursor-tool delete is "destructive" like Illustrator's Direct-Selection: deleting
+  an anchor from a **closed** path **opens** it at that gap. (The pen tool's
+  Opt-delete is the "smart" delete - the neighbours reconnect and a closed path
+  stays closed.) Removing the last viable anchor deletes the layer.
+- **Convert corner <-> smooth** - **double-click** an anchor to toggle it between a
+  sharp corner (no handles) and a smooth point (auto-generated tangents).
+
+Edits are per-keypose: on an animated path they change the keypose the playhead is
+parked on (anchors are read-only between keyposes). Each drag is one undo step.
+
+## Rounding corners (live corner widget)
+
+Every interior corner of a selected path shows a small accent **ring** just inside
+it (cursor tool only) - the same control style as the radius handle in the Rounded
+plugin. Drag the ring inward to round that corner, back out to sharpen it; it turns
+**red** at the maximum radius (half the shorter adjacent edge). The rounding is
+**per corner** and fully re-editable - drag the same widget again any time, or drag
+it to zero to restore the sharp corner. While a corner is rounded its stored tangent
+handles are hidden (the rounding owns that corner); they return when you clear the
+radius.
+
+Because the radius is stored on the anchor (not baked into extra points), it
+**animates**: a corner can morph smoothly from sharp to rounded across Points
+keyposes. Rounding doesn't require a closed path - it works on any join.
 
 ## Motion blur
 
@@ -311,7 +352,5 @@ Keyframeless plugins use.
 - Per-layer **rotation** (lane + on-canvas gizmo).
 - Per-layer opacity in the render.
 - **Rectangle / ellipse** tools (the pen tool draws; these still only select).
-- **Editing** an existing drawn path (move / add / delete anchors, retoggle
-  corner-smooth) with the cursor tool.
 - Stroke **styling** (width / colour UI - currently a fixed 20px red) and
   **fill**, plus the sketch (hand-drawn) render style and SVG import.

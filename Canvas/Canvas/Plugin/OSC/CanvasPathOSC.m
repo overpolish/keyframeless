@@ -4,7 +4,8 @@
  */
 
 #import "CanvasPathOSC.h"
-#import "CanvasLayerRender.h"   // CanvasProjectLayerPointsObj
+#import "CanvasCornerFillet.h" // corner widget geometry
+#import "CanvasLayerRender.h"  // CanvasProjectLayerPointsObj
 #import "CanvasPenController.h" // CanvasPenSurface draw primitives
 #import <KeyframelessKit/KKBezierPath.h>
 #import <simd/simd.h>
@@ -51,20 +52,26 @@ void CanvasDrawPathEditOSC(id<CanvasPenSurface> surface,
                            NSArray<KKBezierPath *> *layers, KKBezierPath *path,
                            double frac, float aspect, NSIndexSet *selected,
                            BOOL marqueeActive, CGRect marqueeSurfaceRect,
-                           BOOL ghost) {
+                           BOOL ghost, BOOL showCornerWidgets) {
   NSUInteger count = path.count;
   if (!surface || count < 1)
     return;
 
-  // The line: flatten -> project -> draw as one curve strip.
-  if (count >= 2) {
-    NSUInteger segs = path.closed ? count : count - 1;
+  // The guide curve is drawn from the corner-expanded geometry so it traces the
+  // rounded stroke (the anchors below stay at the stored sharp corners). Project
+  // through the SAME path's transform - the expansion only changes local points.
+  KKBezierPath *curvePath =
+      path.hasCornerRadii ? CanvasPathByExpandingCorners(path, aspect) : path;
+  NSUInteger curveCount = curvePath.count;
+  if (curveCount >= 2) {
+    NSUInteger segs = curvePath.closed ? curveCount : curveCount - 1;
     NSUInteger cap = segs * kPathOSCSteps + 2;
     simd_float2 *local = malloc(sizeof(simd_float2) * cap);
-    NSUInteger n = CanvasPathOSCFlatten(path, local, cap);
+    NSUInteger n = CanvasPathOSCFlatten(curvePath, local, cap);
     if (n >= 2) {
       simd_float2 *proj = malloc(sizeof(simd_float2) * n);
-      CanvasProjectLayerPointsObj(layers, path, frac, aspect, local, proj, n);
+      CanvasProjectLayerPointsObj(layers, curvePath, frac, aspect, local, proj,
+                                  n);
       CGPoint *cg = malloc(sizeof(CGPoint) * n);
       for (NSUInteger i = 0; i < n; i++)
         cg[i] = CGPointMake(proj[i].x, proj[i].y);
@@ -85,8 +92,13 @@ void CanvasDrawPathEditOSC(id<CanvasPenSurface> surface,
   CanvasProjectLayerPointsObj(layers, path, frac, aspect, aLocal, aProj, count);
 
   // Tangent handles (under the anchor dots): a line from the anchor to each
-  // non-zero handle end, with the surface's handle endpoint dot.
+  // non-zero handle end, with the surface's handle endpoint dot. A corner with a
+  // radius set hides its handles - the rounding owns that corner now, and the
+  // stored (sharp) handles would read as a stale, contradictory control. They
+  // come back when the radius is cleared (default).
   for (NSUInteger i = 0; i < count; i++) {
+    if ([path cornerRadiusAtIndex:i] > 0.0f)
+      continue;
     KKBezierPoint pt = [path pointAtIndex:i];
     CGPoint a = CGPointMake(aProj[i].x, aProj[i].y);
     if (fabsf(pt.outX) + fabsf(pt.outY) > 1e-6f) {
@@ -110,6 +122,21 @@ void CanvasDrawPathEditOSC(id<CanvasPenSurface> surface,
                       active:[selected containsIndex:i]];
   free(aLocal);
   free(aProj);
+
+  // Live-corner widgets: an accent handle just inside each interior corner
+  // (along the bisector), drawn on top of the anchors. Click-drag rounds that
+  // corner (CanvasPathEditController). Cursor tool only (not interactive while
+  // pen-drawing); hidden while this is a reveal ghost.
+  if (showCornerWidgets && !ghost) {
+    for (NSUInteger i = 0; i < count; i++) {
+      CanvasCornerWidget w =
+          CanvasCornerWidgetObj(layers, path, frac, aspect, i);
+      if (!w.valid)
+        continue;
+      [surface penDrawRingAtObj:CGPointMake(w.widgetObj.x, w.widgetObj.y)
+                          maxed:w.atMax];
+    }
+  }
 
   // Rubber-band on top of everything (surface points - no projection).
   if (marqueeActive)

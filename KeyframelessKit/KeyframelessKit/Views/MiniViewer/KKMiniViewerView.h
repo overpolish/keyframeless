@@ -447,6 +447,15 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 - (void)encodeToolLineStrip:(NSArray<NSValue *> *)viewPoints
                       color:(simd_float4)color
                 halfWidthPt:(CGFloat)halfWidthPt;
+/// Encode a ring handle via the shared KKRingOSC shader (crisp, matches the
+/// viewer ring). `radiusPt` is the mid-stroke radius; fill + outline widths in
+/// points. Used for small ring handles (e.g. the live-corner radius widget).
+- (void)encodeToolRingAtPoint:(CGPoint)viewPoint
+                     radiusPt:(CGFloat)radiusPt
+                         fill:(simd_float4)fill
+                  strokeColor:(simd_float4)strokeColor
+                  fillWidthPt:(CGFloat)fillWidthPt
+               outlineWidthPt:(CGFloat)outlineWidthPt;
 @end
 
 /// Pan/zoom + point/crop-handle screen geometry. Declared as a category so the

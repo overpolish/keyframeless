@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "CanvasLocalized.h"  // CLoc (default layer name)
 #import "CanvasPathMorph.h" // morphed-at-frac geometry + per-keypose write
 #import "CanvasPenController_Internal.h"
 #import <KeyframelessKit/KKBezierPath.h>
@@ -31,7 +32,7 @@ static void PenAddPoint(KKBezierPath *l, CGPoint pos, CGPoint o, CGPoint in) {
 
 static KKBezierPath *PenNewLayer(void) {
   KKBezierPath *layer = [[KKBezierPath alloc] init];
-  layer.name = @"Pen Path";
+  layer.name = CLoc(@"Pen Path", @"Default name for a new pen-drawn path layer");
   layer.isImage = NO;
   layer.isGroup = NO;
   layer.strokeEnabled = YES;

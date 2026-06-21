@@ -47,6 +47,8 @@ typedef NS_OPTIONS(NSUInteger, CanvasPenModifiers) {
 
 - (nullable KKBezierPath *)penLayerWithID:(NSString *)layerID;
 - (nullable NSString *)penSelectedLayerID;
+/// Identifies this surface for cross-process selection sync ("osc" / "mini").
+- (NSString *)penSurfaceTag;
 /// The full layer stack + the current edit fraction, so the path-edit
 /// controller can project the selected path's geometry through its transform +
 /// groups (pen CREATION is member-local, but EDITING a transformed/grouped path
@@ -79,6 +81,10 @@ typedef NS_OPTIONS(NSUInteger, CanvasPenModifiers) {
 /// An anchor dot in the WARNING colour (same glyph + shadow as the others) -
 /// used to flag the open endpoint the pen will continue from when hovered.
 - (void)penDrawWarnDotAtObj:(CGPoint)objYUp;
+/// A haloed accent RING centred at `objYUp` - the live-corner radius widget,
+/// drawn hollow so it reads as a distinct control vs the filled anchor dots.
+/// `maxed` tints it the error colour when the radius is at its clamp.
+- (void)penDrawRingAtObj:(CGPoint)objYUp maxed:(BOOL)maxed;
 - (void)penDrawCurveObjPoints:(const CGPoint *)objPts count:(NSUInteger)count;
 - (void)penDrawHandleFromObj:(CGPoint)aObj toObj:(CGPoint)bObj;
 /// Draw the marquee rubber-band. `surfaceRect` is in SURFACE points (not object

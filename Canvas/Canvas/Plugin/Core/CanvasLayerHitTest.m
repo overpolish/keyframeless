@@ -4,6 +4,7 @@
  */
 
 #import "CanvasLayerRender.h" // CanvasHitTestLayerID (public decl)
+#import "CanvasCornerFillet.h" // CanvasPathByExpandingCorners
 #import "CanvasLayerTimeline.h"
 #import "CanvasLayerTransform.h"
 #import <AppKit/AppKit.h>
@@ -362,8 +363,12 @@ static const float kHitStrokeSlopObj = 0.012f; // ~1.2% of canvas height
 static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
                                  simd_float2 q, float canvasHeightPx,
                                  const CanvasGroupXform *groups, NSInteger ng) {
+  // Hit-test the rounded geometry (what's actually rendered), not the stored
+  // sharp corners - else a click near a rounded-off corner misses.
+  KKBezierPath *geom =
+      path.hasCornerRadii ? CanvasPathByExpandingCorners(path, aspect) : path;
   simd_float2 norm[kHitPolyCap];
-  NSUInteger n = CanvasFlattenPathNormalized(path, norm, kHitPolyCap);
+  NSUInteger n = CanvasFlattenPathNormalized(geom, norm, kHitPolyCap);
   if (n < 2)
     return NO;
   CanvasLayerTransform t = (frac < 0.0)
@@ -376,7 +381,7 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
                                        aspect, groups, ng);
   float h = canvasHeightPx > 1.0f ? canvasHeightPx : 1000.0f;
   float tol = fmaxf(path.strokeWidth * 0.5f / h, kHitStrokeSlopObj);
-  float d = CanvasDistToProjectedPolyline(q, proj, n, path.closed, aspect);
+  float d = CanvasDistToProjectedPolyline(q, proj, n, geom.closed, aspect);
   return d <= tol;
 }
 

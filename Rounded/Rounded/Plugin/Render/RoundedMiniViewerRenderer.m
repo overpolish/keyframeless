@@ -34,6 +34,11 @@ static const CGFloat kHandleHitTolPt = 12.0;
 - (NSString *)pointLabel {
   return @"Radius";
 }
+- (KKMiniHandleStyle)pointHandleStyle {
+  // The radius handle draws as the shared ring glyph (matches the viewer OSC +
+  // Canvas's corner widget), not the default dot.
+  return KKMiniHandleStyleRing;
+}
 - (CGFloat)pointHandleSizeScale {
   // Match Magic Move's path-anchor KKPointOSC dot in the mini-viewer (0.6),
   // for both the radius handle and the crop corners.

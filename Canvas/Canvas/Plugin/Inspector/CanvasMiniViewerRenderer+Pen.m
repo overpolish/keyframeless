@@ -4,6 +4,7 @@
  */
 
 #import "CanvasMiniViewerRenderer_Internal.h"
+#import "CanvasAnchorSelectionSync.h" // cross-process selection sync
 #import "CanvasPathMorph.h"  // CanvasPathMorphedAtFraction
 #import "CanvasPathOSC.h"    // CanvasDrawPathEditOSC
 #import "CanvasPenCursors.h" // shared pen cursor set
@@ -154,9 +155,17 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
 - (void)_drawSelectedPathEditOSC {
   if (![self labelVisibleOrRevealing:@"Points"])
     return; // hidden and not being Opt-revealed
+  // Constants popover shows only constant lanes; keypose popover only the
+  // animated one (matches the transform OSCs via isConstantLabel + boundaryEditing).
+  if (![self isConstantLabel:@"Points"])
+    return;
   NSString *sel = self.selectedLayerID;
   if (!sel.length)
     return;
+  // Pick up an anchor selection published by the viewer (cross-process sync).
+  NSIndexSet *synced = CanvasConsumeAnchorSelection(@"mini", sel);
+  if (synced)
+    [self.pathEditController setSelectedAnchorIndexes:synced];
   KKBezierPath *path = nil;
   for (KKBezierPath *p in self.layers)
     if ([p.layerID isEqualToString:sel]) {
@@ -173,12 +182,13 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   // fully visible or in master-off peek-and-use - same rule as the transform
   // handles.
   BOOL ghost = [self ghostAlphaForLabel:@"Points"] < 1.0;
-  CanvasDrawPathEditOSC(self, self.layers ?: @[],
-                        CanvasPathMorphedAtFraction(path, self.editFraction),
-                        self.editFraction, (float)[self penCanvasAspect],
-                        self.pathEditController.selectedAnchors,
-                        self.pathEditController.marqueeActive,
-                        self.pathEditController.marqueeSurfaceRect, ghost);
+  CanvasDrawPathEditOSC(
+      self, self.layers ?: @[],
+      CanvasPathMorphedAtFraction(path, self.editFraction), self.editFraction,
+      (float)[self penCanvasAspect], self.pathEditController.selectedAnchors,
+      self.pathEditController.marqueeActive,
+      self.pathEditController.marqueeSurfaceRect, ghost,
+      (self.toolbarTool ?: CanvasToolbarToolCursor) == CanvasToolbarToolCursor);
 }
 
 #pragma mark - CanvasPenSurface (coords)
@@ -248,6 +258,10 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   return self.selectedLayerID;
 }
 
+- (NSString *)penSurfaceTag {
+  return @"mini";
+}
+
 - (void)penMutateBlob:(void (^)(NSMutableArray<KKBezierPath *> *paths))mutate
         selectLayerID:(NSString *)selectID {
   NSMutableArray<KKBezierPath *> *paths =
@@ -284,9 +298,10 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
 
 #pragma mark - CanvasPenSurface (draw primitives, Metal pass - match motion path)
 
-// Anchor dots: white glyphs at the motion-path's anchor size (0.6). The ghost
-// (next-point preview) is the same glyph dimmed. Uniform size - no grow on
-// hover/active, so it reads the same as the path OSC.
+// Anchor dots: white glyphs at the motion-path's anchor size (0.66 - a touch
+// bigger than the base 0.6 to read better in the mini). The ghost (next-point
+// preview) is the same glyph dimmed. Uniform size - no grow on hover/active, so
+// it reads the same as the path OSC.
 - (void)penDrawDotAtObj:(CGPoint)objYUp
                   ghost:(BOOL)ghost
                 hovered:(BOOL)hovered
@@ -296,7 +311,7 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
              : simd_make_float4(1.0f, 1.0f, 1.0f, ghost ? 0.4f : 1.0f);
   [self.penDrawCanvas encodeToolDotAtPoint:[self penSurfacePointFromObj:objYUp]
                                       fill:fill
-                                 sizeScale:0.6];
+                                 sizeScale:0.66];
 }
 
 - (void)penDrawWarnDotAtObj:(CGPoint)objYUp {
@@ -305,7 +320,28 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   [self.penDrawCanvas
       encodeToolDotAtPoint:[self penSurfacePointFromObj:objYUp]
                       fill:CanvasMiniColorRGBA([NSColor warning])
-                 sizeScale:0.6];
+                 sizeScale:0.66];
+}
+
+- (void)penDrawRingAtObj:(CGPoint)objYUp maxed:(BOOL)maxed {
+  KKMiniViewerView *canvas = self.penDrawCanvas;
+  if (!canvas)
+    return;
+  // The shared KKRingOSC shader (same as the viewer ring + Glow's radius ring),
+  // tinted accent / error. Scales with the popover via the OSC sizing ratio; the
+  // shader is crisp so no manual snap is needed.
+  CGFloat scale = canvas.oscSizingHeight / 230.0;
+  if (scale <= 0)
+    scale = 1.0;
+  simd_float4 fill = maxed ? CanvasMiniColorRGBA([NSColor error])
+                           : CanvasMiniAccentRGBA();
+  simd_float4 outline = {0.0f, 0.0f, 0.0f, 0.75f};
+  [canvas encodeToolRingAtPoint:[self penSurfacePointFromObj:objYUp]
+                       radiusPt:2.3 * scale
+                           fill:fill
+                    strokeColor:outline
+                    fillWidthPt:1.0 * scale
+                 outlineWidthPt:0.5 * scale];
 }
 
 // Marquee rubber-band. `r` is in SURFACE points (view points) - drawn directly,

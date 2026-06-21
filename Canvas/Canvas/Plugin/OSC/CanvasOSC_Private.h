@@ -22,6 +22,7 @@
 @class KKAnchorOSC;
 @class KKToolbar;
 @class KKPointOSC;
+@class KKRingOSC;
 @class CanvasPenController;
 @class CanvasPathEditController;
 
@@ -100,6 +101,9 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 // Position path OSC's look (shared KKPointOSC, not hand-drawn squares).
 @property(nonatomic, strong) KKPointOSC *penAnchorOSC;
 @property(nonatomic, strong) KKPointOSC *penHandleOSC;
+// Live-corner radius widget glyph: the shared KKRingOSC, tinted accent (or error
+// at max), so it matches the Glow radius ring + Rounded's handle.
+@property(nonatomic, strong) KKRingOSC *penCornerRingOSC;
 @end
 
 // Canvas-space geometry + sub-control feeding.

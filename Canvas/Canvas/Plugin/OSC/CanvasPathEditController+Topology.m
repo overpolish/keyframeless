@@ -134,6 +134,7 @@
   }
 
   [_selectedAnchors removeAllIndexes];
+  [self _publishSelection]; // anchors removed - sync the now-empty selection
   [_surface
       penMutateBlob:^(NSMutableArray<KKBezierPath *> *paths) {
         for (NSUInteger i = 0; i < paths.count; i++)

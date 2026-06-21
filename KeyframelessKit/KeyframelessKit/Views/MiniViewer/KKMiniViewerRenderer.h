@@ -176,6 +176,8 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
                               ///< (e.g. Glow's radius ring) but still exposes a
                               ///< point-handle anchor for guides / programmatic
                               ///< drag.
+  KKMiniHandleStyleRing = 3,  ///< Haloed ring (matches KKRingOSC): the shared
+                              ///< radius-widget glyph (Canvas corners, Rounded).
 };
 
 #pragma mark - Subclass effect + point handle (override)

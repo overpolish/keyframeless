@@ -235,15 +235,20 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
                                        return nil;
                                      return e;
                                    }];
+  // Global monitor = events delivered to OTHER apps (the local monitor above
+  // covers our own process). It exists only because FCP handles its Cmd-key
+  // equivalents in the host process and doesn't forward them across ViewBridge -
+  // so it's limited to those equivalents (reset / toolbar). The tool keys, which
+  // include the DESTRUCTIVE Delete, are NOT handled here: a key typed into
+  // another app (e.g. backspace in an editor) must never delete a layer. Those
+  // go through the local monitor only (i.e. when FCP itself has the event).
   _keyGlobalMon =
       [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskKeyDown
                                              handler:^(NSEvent *e) {
                                                __strong typeof(self) s = weak;
                                                if ([s _handleResetKeyEvent:e])
                                                  return;
-                                               if ([s _handleToolbarKeyEvent:e])
-                                                 return;
-                                               [s _handleToolKeyEvent:e];
+                                               [s _handleToolbarKeyEvent:e];
                                              }];
 }
 

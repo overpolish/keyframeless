@@ -340,6 +340,20 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setType:(KKBezierPointType)type atIndex:(NSUInteger)index;
 - (void)translateBy:(simd_float2)delta;
 
+/// Per-anchor corner radius (0 = sharp). The stored path keeps a rounded corner
+/// as a single anchor carrying this radius; the actual fillet geometry is
+/// generated for rendering / display by the corner expander (see KKCornerFillet)
+/// - so point counts stay stable across keyposes and the radius interpolates
+/// cleanly in a morph. Units are aspect-corrected object units (object Y units;
+/// X is scaled by the canvas aspect when the fillet is expanded). Stored lazily:
+/// a path with no rounded corners carries nothing extra. Index-synced through
+/// insert / remove; a bulk geometry replace (setBezierPoints / setLinearPositions)
+/// clears all radii.
+- (float)cornerRadiusAtIndex:(NSUInteger)index;
+- (void)setCornerRadius:(float)radius atIndex:(NSUInteger)index;
+/// YES if any anchor carries a nonzero corner radius (fast skip for the expander).
+- (BOOL)hasCornerRadii;
+
 /// Rebuild this path as a rounded rectangle with per-corner fractions.
 /// Each fraction 0–1: 0 = sharp, 1 = max radius for that corner.
 - (void)setRoundedRectWithMin:(simd_float2)min

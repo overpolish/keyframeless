@@ -29,6 +29,9 @@ typedef NS_ENUM(NSInteger, CanvasPathEditHit) {
 /// Drop the anchor selection (e.g. when switching to the pen tool, where a
 /// multi-point selection is meaningless and the lingering accent is confusing).
 - (void)clearSelection;
+/// Apply a selection received from the OTHER surface (cross-process sync). Sets
+/// the indices WITHOUT re-publishing, so it can't feed back into a loop.
+- (void)setSelectedAnchorIndexes:(NSIndexSet *)indexes;
 /// YES while a marquee rubber-band is being dragged.
 @property(nonatomic, readonly) BOOL marqueeActive;
 /// The marquee rectangle in SURFACE points (valid while marqueeActive).
@@ -43,6 +46,8 @@ typedef NS_ENUM(NSInteger, CanvasPathEditHit) {
 /// anchors), clear of any anchor / handle. Used to show the pen's "add point"
 /// cursor.
 - (BOOL)segmentHitAtX:(double)x y:(double)y;
+/// YES if a live-corner radius widget is under the point (for the hover cursor).
+- (BOOL)cornerWidgetHitAtX:(double)x y:(double)y;
 /// Pen tool: if the point is over a segment, insert an anchor there preserving
 /// the curve (de Casteljau split) and begin dragging the new anchor
 /// (press-insert-drag; mouseUp commits one undo). Returns YES if it consumed

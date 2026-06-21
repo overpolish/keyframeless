@@ -397,6 +397,21 @@
                              isActive:isActive
                            ghostAlpha:ghostAlpha
                               encoder:enc];
+      } else if (style == KKMiniHandleStyleRing) {
+        // Haloed KKRingOSC ring (the shared radius-widget glyph). Accent fill +
+        // dark outline, scaled with the OSC sizing ratio like the dot.
+        CGFloat cs = [self _canvasScale];
+        simd_float4 f = accentFill;
+        f.w *= (float)ghostAlpha;
+        simd_float4 outline = {0.0f, 0.0f, 0.0f, 0.75f * (float)ghostAlpha};
+        [self _encodeRingOSCAt:handleCenterPts
+                     radiusXPt:3.5 * cs
+                     radiusYPt:3.5 * cs
+                     fillColor:f
+                   strokeColor:outline
+                   fillWidthPt:1.5 * cs
+                outlineWidthPt:0.75 * cs
+                       encoder:enc];
       } else {
         // Point-style handles dim via the fill alpha (no ghostAlpha param).
         simd_float4 f = accentFill;
@@ -487,6 +502,14 @@
   [self setNeedsDisplay:YES];
 }
 
+@end
+
+// The public tool-draw surface. Implemented in its own (ToolDraw) category so it
+// matches the public (ToolDraw) interface (the internal (Draw) category is
+// declared in the private header) - otherwise clang rolls these onto the primary
+// class and warns about the category implementing the primary's methods.
+@implementation KKMiniViewerView (ToolDraw)
+
 - (void)encodeToolDotAtPoint:(CGPoint)viewPoint
                         fill:(simd_float4)fill
                    sizeScale:(CGFloat)sizeScale {
@@ -507,6 +530,24 @@
                          color:color
                    halfWidthPt:halfWidthPt
                        encoder:_toolEncoder];
+}
+
+- (void)encodeToolRingAtPoint:(CGPoint)viewPoint
+                     radiusPt:(CGFloat)radiusPt
+                         fill:(simd_float4)fill
+                  strokeColor:(simd_float4)strokeColor
+                  fillWidthPt:(CGFloat)fillWidthPt
+               outlineWidthPt:(CGFloat)outlineWidthPt {
+  if (!_toolEncoder || !_ringPipeline)
+    return;
+  [self _encodeRingOSCAt:viewPoint
+               radiusXPt:radiusPt
+               radiusYPt:radiusPt
+               fillColor:fill
+             strokeColor:strokeColor
+             fillWidthPt:fillWidthPt
+          outlineWidthPt:outlineWidthPt
+                 encoder:_toolEncoder];
 }
 
 @end

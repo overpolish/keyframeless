@@ -44,6 +44,12 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
 - (BOOL)_pathEditContext {
   if ((self.toolbarTool ?: CanvasToolbarToolCursor) != CanvasToolbarToolCursor)
     return NO;
+  // Match the transform OSCs: a constants popover only edits CONSTANT lanes; a
+  // keypose (boundary) popover only the ANIMATED one it's editing. Without this
+  // the Points OSC + corner widgets show / edit on an animated layer's constants
+  // popover, unlike every other plugin's lanes.
+  if (![self isConstantLabel:@"Points"])
+    return NO;
   return [self labelVisibleOrRevealing:@"Points"];
 }
 
@@ -235,9 +241,18 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
   if ([self _pathEditContext]) {
     if ([self.pathEditController hitTestAtX:p.x y:p.y] != CanvasPathEditHitNone)
       return YES;
+    if ([self.pathEditController cornerWidgetHitAtX:p.x y:p.y])
+      return YES; // the corner widget claims the click (sits in empty area)
     if (CGRectContainsPoint(cr, p) &&
-        [self.pathEditController canMarqueeAtX:p.x y:p.y])
+        [self.pathEditController canMarqueeAtX:p.x y:p.y]) {
+      // An empty click yields to auto-select when it's over a DIFFERENT layer
+      // (the viewer prioritises layer-pick over the marquee, which is why it
+      // works there); otherwise start a marquee on the selected path's anchors.
+      NSString *pick = [self _autoSelectLayerAtPoint:p contentRect:cr];
+      if (pick.length && ![pick isEqualToString:self.selectedLayerID])
+        return NO;
       return YES;
+    }
   }
   if ([self.anchorMini squareHitAtPoint:p contentRect:cr])
     return YES;
@@ -425,6 +440,11 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
   if ([self _pathEditContext] &&
       [self.pathEditController hitTestAtX:p.x y:p.y] != CanvasPathEditHitNone)
     return [self kkVisibilityCursorForLabel:@"Points"] ?: KKPointMoveCursor();
+  // Live-corner radius widget: crosshair, matching the viewer (which crosshairs
+  // the path-edit empty area the widget sits in).
+  if ([self _pathEditContext] &&
+      [self.pathEditController cornerWidgetHitAtX:p.x y:p.y])
+    return [NSCursor crosshairCursor];
   if ([self.anchorMini squareHitAtPoint:p contentRect:cr])
     return [self kkVisibilityCursorForLabel:@"Anchor"] ?: KKPointMoveCursor();
   if ([self pointHandleHitAtPoint:p contentRect:cr])
