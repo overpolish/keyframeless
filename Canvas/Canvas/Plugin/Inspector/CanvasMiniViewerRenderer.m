@@ -9,10 +9,10 @@
 #import "CanvasMiniViewerRenderer_Internal.h"
 #import "CanvasToolbar.h"
 #import <KeyframelessKit/KKLog.h>
-#import <KeyframelessKit/KKToolbar.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KKShaderTypes.h>
+#import <KeyframelessKit/KKToolbar.h>
 #import <Metal/Metal.h>
 
 NSString *const CanvasMiniViewerDescriptorPath = @"/tmp/canvas-miniviewer.json";
@@ -55,16 +55,17 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     _scaleMini = [[KKScaleMiniController alloc] initWithRenderer:self
                                                        laneLabel:@"Scale"];
     _anchorMini = [[KKAnchorMiniController alloc]
-        initWithRenderer:self
-               laneLabel:@"Anchor"
-       positionLaneLabel:@"Position"
-              snapEngine:_positionMini.snapEngine];
-    // The anchor pivot can sit dead-centre on the Position arc (default anchor),
-    // so keep its grab zone tight - the larger Position handle around it stays
-    // clickable, and the anchor square is still grabbable at its centre.
+         initWithRenderer:self
+                laneLabel:@"Anchor"
+        positionLaneLabel:@"Position"
+               snapEngine:_positionMini.snapEngine];
+    // The anchor pivot can sit dead-centre on the Position arc (default
+    // anchor), so keep its grab zone tight - the larger Position handle around
+    // it stays clickable, and the anchor square is still grabbable at its
+    // centre.
     _anchorMini.hitRadiusPt = 3.0;
-    // Keep the anchor square on the same member-local pivot the rings/box use, so
-    // the gizmo cluster stays coincident.
+    // Keep the anchor square on the same member-local pivot the rings/box use,
+    // so the gizmo cluster stays coincident.
     __weak CanvasMiniViewerRenderer *weakSelf = self;
     _anchorMini.centerOverride = ^CGPoint(CGRect cr) {
       return [weakSelf _anchorPivotForContentRect:cr];
@@ -87,15 +88,33 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     _anchorMini.viewToValue = ^simd_float2(CGPoint vp, CGRect cr) {
       return [weakSelf _memberValueForViewPoint:vp contentRect:cr];
     };
-    // The same toolbar as the viewer (shared builder), scaled down for the small
-    // mini surface. apiManager nil is fine (KKToolbar only stores it).
-    _toolbar = CanvasMakeToolbar(nil); // uiScale + flip set per-draw in the hook
+    // The same toolbar as the viewer (shared builder), scaled down for the
+    // small mini surface. apiManager nil is fine (KKToolbar only stores it).
+    _toolbar =
+        CanvasMakeToolbar(nil); // uiScale + flip set per-draw in the hook
     _toolbarNormPos = CGPointMake(-1, -1); // default anchor until dragged
     _penController = [[CanvasPenController alloc] initWithSurface:self];
     _pathEditController =
         [[CanvasPathEditController alloc] initWithSurface:self];
   }
   return self;
+}
+
+- (void)setToolbarTool:(NSInteger)toolbarTool {
+  // Switching INTO the pen tool drops any lingering cursor-mode point selection
+  // (matches the viewer; a multi-point selection means nothing to the pen).
+  if (toolbarTool == CanvasToolbarToolPen &&
+      _toolbarTool != CanvasToolbarToolPen)
+    [self.pathEditController clearSelection];
+  _toolbarTool = toolbarTool;
+  // The transform gizmo is for the cursor tool only (see
+  // -_transformHandlesActive, which gates the scale / anchor / position
+  // delegates). The rotation rings are drawn + hit-tested by the kit renderer
+  // keyed on rotationLabel, bypassing that gate, so an Opt-peek would reveal
+  // them under the pen. Suppress the Rotation handle while the pen owns the
+  // canvas - matching the viewer's pen branch, which skips the whole gizmo.
+  BOOL pen = (toolbarTool == CanvasToolbarToolPen);
+  self.suppressedHandleLabels = pen ? @[ @"Rotation" ] : @[];
 }
 
 // Toolbar chrome: drive the per-draw state from the shared kParamUIState the
@@ -145,7 +164,7 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 }
 
 - (NSInteger)miniViewer:(KKMiniViewerView *)canvas
-       toolbarTagAtPoint:(CGPoint)viewPoint {
+      toolbarTagAtPoint:(CGPoint)viewPoint {
   if (!self.toolbar)
     return 0;
   CGPoint p = [self _toolbarPointForViewPoint:viewPoint canvas:canvas];
@@ -207,12 +226,12 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 // Control+letter tool shortcuts, mirroring the viewer (V=cursor, X=pen,
 // B=rect, G=ellipse). charactersIgnoringModifiers gives the plain letter.
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
-       toolbarKeyDownChars:(NSString *)chars
-                 modifiers:(NSEventModifierFlags)modifiers {
+    toolbarKeyDownChars:(NSString *)chars
+              modifiers:(NSEventModifierFlags)modifiers {
   if (!(modifiers & NSEventModifierFlagControl) || chars.length == 0)
     return NO;
-  NSInteger tag = CanvasToolbarToolTagForLetter(
-      [chars.lowercaseString characterAtIndex:0]);
+  NSInteger tag =
+      CanvasToolbarToolTagForLetter([chars.lowercaseString characterAtIndex:0]);
   if (tag == 0)
     return NO;
   self.toolbarTool = tag;
@@ -234,8 +253,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   CGFloat ay = self.toolbarPressAnchor.y + (p.y - self.toolbarPressMouse.y);
   // Clamp to [0,1]: a normalised component must stay >= 0 (the draw hook reads
   // {-1,-1} as "unset -> default anchor", so a negative value when the mouse
-  // leaves the bottom/left edge would snap the bar back to its default). KKToolbar
-  // still does the fine on-screen clamp of the centre.
+  // leaves the bottom/left edge would snap the bar back to its default).
+  // KKToolbar still does the fine on-screen clamp of the centre.
   double nx = fmax(0.0, fmin(1.0, ax / d.width));
   double ny = fmax(0.0, fmin(1.0, ay / d.height));
   self.toolbarNormPos = CGPointMake(nx, ny);
@@ -284,8 +303,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 // path, anchor pivot and the scale-box / rotation centre through the same
 // ancestor-group composition so the controls land on the member where it's
 // actually drawn, matching the viewer. Identity for an ungrouped layer / group
-// selection (so those are unchanged). `position` is Position space (Y-down); the
-// composition runs in object space (Y-up), hence the flips.
+// selection (so those are unchanged). `position` is Position space (Y-down);
+// the composition runs in object space (Y-up), hence the flips.
 - (CGPoint)handlePointForContentRect:(CGRect)cr
                             position:(NSArray<NSNumber *> *)pos {
   double mx = pos.count > 0 ? pos[0].doubleValue : 0.5;
@@ -295,13 +314,14 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   if (sel && cr.size.height > 0) {
     float aspect = (float)(cr.size.width / cr.size.height);
     // Centre the gizmo on the layer's GEOMETRY (bbox centre), so Position=0.5
-    // lands on a path drawn off-centre - the same (objectCentre-0.5) member-local
-    // pre-translation the viewer folds into parentObjectTransform. No-op for a
-    // full-frame image / group (centre 0.5). Object centre is render Y-UP. This
-    // is the GIZMO mapping; the pen/path-edit OSC use the raw base map (their
-    // points are already in - or being defined in - geometry space).
+    // lands on a path drawn off-centre - the same (objectCentre-0.5)
+    // member-local pre-translation the viewer folds into parentObjectTransform.
+    // No-op for a full-frame image / group (centre 0.5). Object centre is
+    // render Y-UP. This is the GIZMO mapping; the pen/path-edit OSC use the raw
+    // base map (their points are already in - or being defined in - geometry
+    // space).
     simd_float2 gc = CanvasLayerObjectCenter(sel);
-    float lx = (float)mx + (gc.x - 0.5f);             // Y-up member-local
+    float lx = (float)mx + (gc.x - 0.5f); // Y-up member-local
     float lyUp = (float)(1.0 - my) + (gc.y - 0.5f);
     float gx = lx, gy = lyUp;
     CanvasComposedGroupPointObj(self.layers, sel, self.editFraction, aspect, lx,
@@ -344,7 +364,7 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 // (or Height)). Auto doubles it while the on-screen cell gets too small. Does
 // NOT gate on gridEnabled - callers (draw vs snap) apply their own gate.
 - (BOOL)_effectiveGridNX:(double *)outNX
-                     nY:(double *)outNY
+                      nY:(double *)outNY
           forContentRect:(CGRect)cr {
   if (self.renderWidth <= 0 || self.renderHeight <= 0 || cr.size.width <= 0)
     return NO;
@@ -365,11 +385,13 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 }
 
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
-      gridSpacingX:(CGFloat *)outSpacingX
-          spacingY:(CGFloat *)outSpacingY
+      gridSpacingX:(out CGFloat *)outSpacingX
+          spacingY:(out CGFloat *)outSpacingY
        contentRect:(CGRect)cr {
   double nx = 0, ny = 0;
-  if (!self.gridEnabled || ![self _effectiveGridNX:&nx nY:&ny forContentRect:cr])
+  if (!self.gridEnabled || ![self _effectiveGridNX:&nx
+                                                nY:&ny
+                                    forContentRect:cr])
     return NO;
   // Cache for the snap so it pins to exactly these lines (no recompute drift).
   self.drawnGridNX = nx;
@@ -386,7 +408,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 // normalized point to its drawn (group-composed) view point. Built from the 4
 // corners via handlePointForContentRect (identity for an ungrouped layer). Its
 // inverse maps a view point back to the member value - used by the drag (follow
-// the cursor under a group transform) and the snap (snap where it visually sits).
+// the cursor under a group transform) and the snap (snap where it visually
+// sits).
 - (simd_float3x3)_homographyForContentRect:(CGRect)cr {
   CGPoint q0 = [self handlePointForContentRect:cr position:@[ @0, @0 ]];
   CGPoint q1 = [self handlePointForContentRect:cr position:@[ @1, @0 ]];
@@ -414,11 +437,10 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   double cellX = nx * cr.size.width, cellY = ny * cr.size.height;
   if (cellX <= 0 || cellY <= 0)
     return p;
-  // Snap where the handle VISUALLY sits (group-composed), then invert back to the
-  // member value, so a grouped member lands on the visible grid lines.
+  // Snap where the handle VISUALLY sits (group-composed), then invert back to
+  // the member value, so a grouped member lands on the visible grid lines.
   simd_float3x3 A = [self _homographyForContentRect:cr];
-  CGPoint cv = [self handlePointForContentRect:cr
-                                      position:@[ @(p.x), @(p.y) ]];
+  CGPoint cv = [self handlePointForContentRect:cr position:@[ @(p.x), @(p.y) ]];
   double gx = cr.origin.x + round((cv.x - cr.origin.x) / cellX) * cellX;
   double gy = cr.origin.y + round((cv.y - cr.origin.y) / cellY) * cellY;
   simd_float3 v =

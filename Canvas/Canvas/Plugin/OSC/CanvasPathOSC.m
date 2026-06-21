@@ -38,8 +38,9 @@ static NSUInteger CanvasPathOSCFlatten(KKBezierPath *path, simd_float2 *out,
     if (n > 0 && n < cap)
       out[n++] = out[0]; // close the loop back to the start
   } else {
-    simd_float2 p =
-        [path evaluatePointAtIndex:segs - 1 nextIndex:segs atT:1.0f];
+    simd_float2 p = [path evaluatePointAtIndex:segs - 1
+                                     nextIndex:segs
+                                           atT:1.0f];
     if ((n == 0 || simd_distance_squared(p, out[n - 1]) > 1e-9f) && n < cap)
       out[n++] = p; // open path's terminal anchor (the loop stops before t=1)
   }
@@ -48,7 +49,9 @@ static NSUInteger CanvasPathOSCFlatten(KKBezierPath *path, simd_float2 *out,
 
 void CanvasDrawPathEditOSC(id<CanvasPenSurface> surface,
                            NSArray<KKBezierPath *> *layers, KKBezierPath *path,
-                           double frac, float aspect) {
+                           double frac, float aspect, NSIndexSet *selected,
+                           BOOL marqueeActive, CGRect marqueeSurfaceRect,
+                           BOOL ghost) {
   NSUInteger count = path.count;
   if (!surface || count < 1)
     return;
@@ -87,8 +90,8 @@ void CanvasDrawPathEditOSC(id<CanvasPenSurface> surface,
     KKBezierPoint pt = [path pointAtIndex:i];
     CGPoint a = CGPointMake(aProj[i].x, aProj[i].y);
     if (fabsf(pt.outX) + fabsf(pt.outY) > 1e-6f) {
-      simd_float2 b = CanvasProjectLayerPointObj(layers, path, frac, aspect,
-                                                 pt.x + pt.outX, pt.y + pt.outY);
+      simd_float2 b = CanvasProjectLayerPointObj(
+          layers, path, frac, aspect, pt.x + pt.outX, pt.y + pt.outY);
       [surface penDrawHandleFromObj:a toObj:CGPointMake(b.x, b.y)];
     }
     if (fabsf(pt.inX) + fabsf(pt.inY) > 1e-6f) {
@@ -98,12 +101,17 @@ void CanvasDrawPathEditOSC(id<CanvasPenSurface> surface,
     }
   }
 
-  // Anchor dots on top.
+  // Anchor dots on top - selected ones draw active (host accent); all dimmed
+  // when this is a hidden-Points reveal ghost.
   for (NSUInteger i = 0; i < count; i++)
     [surface penDrawDotAtObj:CGPointMake(aProj[i].x, aProj[i].y)
-                       ghost:NO
+                       ghost:ghost
                      hovered:NO
-                      active:NO];
+                      active:[selected containsIndex:i]];
   free(aLocal);
   free(aProj);
+
+  // Rubber-band on top of everything (surface points - no projection).
+  if (marqueeActive)
+    [surface penDrawMarqueeRect:marqueeSurfaceRect];
 }

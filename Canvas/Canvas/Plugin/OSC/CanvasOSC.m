@@ -13,8 +13,8 @@
 // of any image layer. The control's responsibilities are split across category
 // files: +Geometry (canvas-space math + sub-control feeding), +State (snapshot
 // reads / UIState writes / per-layer persist), +AutoSelect (click-to-select),
-// +Input (hit-test + mouse handling). This file owns the lifecycle, drawing, and
-// the OSC-element key mapping.
+// +Input (hit-test + mouse handling). This file owns the lifecycle, drawing,
+// and the OSC-element key mapping.
 @implementation CanvasOSC
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -108,8 +108,18 @@
                                        }];
   // A tool / layer switch while drawing confirms the in-progress path as-is.
   [self _penConfirmIfContextLost];
+  // Switching INTO the pen tool drops any lingering cursor-mode point selection
+  // (a multi-point selection means nothing to the pen; the accent just
+  // confuses).
+  NSInteger curTool = [self _activeTool];
+  if (curTool == CanvasToolbarToolPen &&
+      self.lastDrawnTool != CanvasToolbarToolPen)
+    [self.pathEditController clearSelection];
+  self.lastDrawnTool = curTool;
   // Grid overlay (under the gizmo + toolbar), independent of selection / lock.
-  [self _drawGridWithWidth:width height:height destinationImage:destinationImage];
+  [self _drawGridWithWidth:width
+                    height:height
+          destinationImage:destinationImage];
   // Locked layer: cleared surface only, no handles (and no Opt-reveal) - the
   // toolbar (global chrome) still draws on top.
   if ([self _selectedLayerLocked]) {
@@ -121,6 +131,12 @@
   // Pen tool: no transform gizmo (matches photo-editor pen UX) - only the grid,
   // the in-progress path preview, and the toolbar draw.
   if ([self _penToolActive]) {
+    // While NOT mid-drawing a new path, show the selected path's anchors +
+    // curve FIRST (so the pen can target a segment to insert on) - then the pen
+    // overlay on top, so its endpoint-continue highlight sits over the normal
+    // anchors.
+    if (!self.penController.active)
+      [self _drawSelectedPathEditOSCInDestination:destinationImage atTime:time];
     [self _drawPenInProgressWithWidth:width
                                height:height
                      destinationImage:destinationImage
@@ -163,18 +179,19 @@
                                   atTime:time
                               activePart:activePart];
   // Anchor pivot square, drawn last so it sits on top of every other control.
-  // The control owns its own visibility + opt-reveal-ghost gating + snap guides.
+  // The control owns its own visibility + opt-reveal-ghost gating + snap
+  // guides.
   self.anchor.optRevealActive = self.optRevealActive;
   self.anchor.dragging = self.isDragging;
   [self.anchor drawInDestination:destinationImage
                           atTime:time
                       activePart:activePart];
-  // Selected drawn path's edit OSC (anchors + curve), always shown when a vector
-  // path is selected. The transform gizmo above is hidden by default via the OSC
-  // visibility system, so the two don't clutter each other.
+  // Selected drawn path's edit OSC (anchors + curve), always shown when a
+  // vector path is selected. The transform gizmo above is hidden by default via
+  // the OSC visibility system, so the two don't clutter each other.
   [self _drawSelectedPathEditOSCInDestination:destinationImage atTime:time];
-  // Toolbar (grid + drag handle), global screen chrome, drawn last so it sits on
-  // top of the gizmo.
+  // Toolbar (grid + drag handle), global screen chrome, drawn last so it sits
+  // on top of the gizmo.
   [self _drawToolbarWithWidth:width
                        height:height
              destinationImage:destinationImage];
@@ -188,6 +205,8 @@
 }
 
 - (NSString *)oscElementKeyForActivePart:(NSInteger)activePart {
+  if (activePart == CanvasOSCPartPathEdit)
+    return @"Points";
   if (activePart == CanvasOSCPartPath)
     return @"Path";
   if (activePart == CanvasOSCPartScale)

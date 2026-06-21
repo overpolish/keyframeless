@@ -44,16 +44,43 @@ BOOL KKAdvValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
 
 // A geometry lane (oscEditedOnly, e.g. a path's Points) carries no scalar of
 // its own - just a per-keypose shape snapshot. Rewrite it to a single 0..1
-// component whose value at each keypose is that snapshot's signature, so the
-// generic curve drawing plots a line that moves between distinct shapes. Same
-// idea as the gradient lane's derived line. Curve/easing state is preserved
-// (KKKeyPose copy keeps `outgoing`), so the plotted line eases like the morph.
+// component so the generic curve drawing plots a line that holds flat across
+// equal shapes and slopes between distinct ones.
+//
+// The plotted value is a DUMMY normalized level, not the raw signature: the
+// signature is an FNV hash, so two different shapes can hash to nearby values
+// (0.51 vs 0.52) and their transition would draw almost flat - looking like a
+// hold. We use the hash only to decide EQUALITY (group identical shapes), then
+// spread the distinct shapes evenly over [0,1] by first-appearance order, so
+// every real transition reads as a clear slope and holds stay flat.
+// Curve/easing state is preserved (KKKeyPose copy keeps `outgoing`), so the
+// line eases like the morph.
 static KKLane *KKAdvGeometryLaneForPlot(KKLane *lane) {
-  NSMutableArray<KKKeyPose *> *kps =
-      [NSMutableArray arrayWithCapacity:lane.keyposes.count];
+  NSUInteger n = lane.keyposes.count;
+  NSMutableArray<NSNumber *> *distinctSigs = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *rankForKp = [NSMutableArray arrayWithCapacity:n];
   for (KKKeyPose *kp in lane.keyposes) {
-    KKKeyPose *c = [kp copy];
-    c.values = @[ @(KKMorphSnapshotSignature(kp.geometrySnapshot)) ];
+    double sig = KKMorphSnapshotSignature(kp.geometrySnapshot);
+    NSInteger rank = -1;
+    for (NSUInteger j = 0; j < distinctSigs.count; j++)
+      if (fabs(distinctSigs[j].doubleValue - sig) < 1e-9) {
+        rank = (NSInteger)j;
+        break;
+      }
+    if (rank < 0) {
+      rank = (NSInteger)distinctSigs.count;
+      [distinctSigs addObject:@(sig)];
+    }
+    [rankForKp addObject:@(rank)];
+  }
+  double maxRank =
+      distinctSigs.count > 1 ? (double)(distinctSigs.count - 1) : 1.0;
+  NSMutableArray<KKKeyPose *> *kps = [NSMutableArray arrayWithCapacity:n];
+  for (NSUInteger i = 0; i < n; i++) {
+    KKKeyPose *c = [lane.keyposes[i] copy];
+    double v =
+        distinctSigs.count > 1 ? rankForKp[i].doubleValue / maxRank : 0.5;
+    c.values = @[ @(v) ];
     [kps addObject:c];
   }
   KKLane *out = [lane copy];
@@ -609,9 +636,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   // signature is already in [0,1) and must stay on that fixed scale (expanding
   // it to the sampled hash range makes the line fill the row and read as if
   // un-normalised). Non-gradient lanes expand all components as before.
-  NSUInteger expandCount = (gradComposite || lane.oscEditedOnly)
-                               ? (gradLinear ? 1 : 0)
-                               : compCount;
+  NSUInteger expandCount =
+      (gradComposite || lane.oscEditedOnly) ? (gradLinear ? 1 : 0) : compCount;
   for (NSInteger i = 0; expandCount > 0 && i + 1 < (NSInteger)kps.count; i++) {
     KKKeyPose *ka = kps[i];
     KKKeyPose *kb = kps[i + 1];

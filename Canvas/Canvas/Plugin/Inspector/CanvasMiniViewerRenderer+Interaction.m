@@ -16,7 +16,8 @@
 // visibility - incl. the gizmo being hidden by default - is governed separately
 // by the OSC visibility system.)
 - (BOOL)_transformHandlesActive {
-  return (self.toolbarTool ?: CanvasToolbarToolCursor) == CanvasToolbarToolCursor;
+  return (self.toolbarTool ?: CanvasToolbarToolCursor) ==
+         CanvasToolbarToolCursor;
 }
 
 // NS modifiers -> the shared controller's surface-neutral flags.
@@ -28,16 +29,22 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
     o |= CanvasPenModCmd;
   if (m & NSEventModifierFlagControl)
     o |= CanvasPenModCtrl;
+  if (m & NSEventModifierFlagOption)
+    o |= CanvasPenModOpt;
   return o;
 }
 
 // Path point editing is live when the cursor tool is active and the Points
-// anchors OSC is shown (master on + not individually hidden).
+// anchors OSC is shown OR being revealed - labelVisibleOrRevealing: folds in
+// the master tick, the per-element pill, and the Opt-peek/reveal exactly like
+// the transform handles (master-on reveal = dim re-show ghost; master-off =
+// peek and use). Editing only actually starts when it resolves to an
+// interactive state: a master-on reveal click is routed to the opt-click
+// re-show, not a drag.
 - (BOOL)_pathEditContext {
   if ((self.toolbarTool ?: CanvasToolbarToolCursor) != CanvasToolbarToolCursor)
     return NO;
-  return !self.handlesHidden &&
-         ![self.hiddenHandleLabels containsObject:@"Points"];
+  return [self labelVisibleOrRevealing:@"Points"];
 }
 
 // Auto-select hit-test in the mini. The content rect maps object X directly and
@@ -59,8 +66,8 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
                               (float)self.renderHeight);
 }
 
-// A click on the preview body (no handle hit) picks the topmost selectable image
-// layer under the cursor, like the viewer OSC; editing then follows via
+// A click on the preview body (no handle hit) picks the topmost selectable
+// image layer under the cursor, like the viewer OSC; editing then follows via
 // onSelectLayer -> the inspector's _selectLayer.
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     backgroundClickAtPoint:(CGPoint)p
@@ -197,9 +204,9 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
                  boxesForContentRect:(CGRect)cr {
   NSMutableArray<KKMiniBox *> *boxes = [[super miniViewer:canvas
                                       boxesForContentRect:cr] mutableCopy];
-  CGRect sb;
-  if ([self _transformHandlesActive] &&
-      [self.scaleMini boxRect:&sb forContentRect:cr]) {
+  CGRect sb = CGRectZero;
+  if ([self _transformHandlesActive] && [self.scaleMini boxRect:&sb
+                                                 forContentRect:cr]) {
     [boxes addObject:[KKMiniBox boxWithRect:sb
                               handleCenters:[self.scaleMini
                                                 handleCentersForContentRect:cr]
@@ -213,21 +220,30 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
     handleHitAtPoint:(CGPoint)p
          contentRect:(CGRect)cr {
   // Anchor square is topmost so its TIGHT central grab zone (hitRadiusPt = 3)
-  // wins, but the larger Position handle around it stays clickable - so clicking
-  // the centre square grabs the anchor while the Position arc/ring grabs Position.
-  // The anchor is also grabbable wherever it's offset (e.g. a group, whose pivot
-  // is its content centre).
+  // wins, but the larger Position handle around it stays clickable - so
+  // clicking the centre square grabs the anchor while the Position arc/ring
+  // grabs Position. The anchor is also grabbable wherever it's offset (e.g. a
+  // group, whose pivot is its content centre).
   self.canvas = canvas;
   self.penContentRect = cr;
   // Path point editing claims first (so the overlay grabs the click for an
   // anchor/handle instead of letting it fall through to a view pan).
-  if ([self _pathEditContext] &&
-      [self.pathEditController hitTestAtX:p.x y:p.y] != CanvasPathEditHitNone)
-    return YES;
+  // A marquee is only claimed INSIDE the active content rect: in filmstrip mode
+  // the active cell == cr and the inactive cells fan out beyond it, so a click
+  // on an inactive cell stays unclaimed here and falls through to the view's
+  // mouseDown filmstrip cell-switch.
+  if ([self _pathEditContext]) {
+    if ([self.pathEditController hitTestAtX:p.x y:p.y] != CanvasPathEditHitNone)
+      return YES;
+    if (CGRectContainsPoint(cr, p) &&
+        [self.pathEditController canMarqueeAtX:p.x y:p.y])
+      return YES;
+  }
   if ([self.anchorMini squareHitAtPoint:p contentRect:cr])
     return YES;
   // The active keypose's Position handle wins where it coincides with a path
-  // anchor/tangent (handles sit offset from the anchor, so they stay grabbable).
+  // anchor/tangent (handles sit offset from the anchor, so they stay
+  // grabbable).
   if ([self pointHandleHitAtPoint:p contentRect:cr])
     return YES;
   if ([self.positionMini pathHandleHitAtPoint:p contentRect:cr])
@@ -244,12 +260,18 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
                contentRect:(CGRect)cr {
   self.canvas = canvas;
   self.penContentRect = cr;
-  // Path point editing grabs an anchor / handle first (the gizmo is hidden for a
-  // selected path, so this is the primary interaction).
+  // Path point editing grabs an anchor / handle first (the gizmo is hidden for
+  // a selected path, so this is the primary interaction). Pass the live
+  // modifier state so Shift/Opt at marquee/selection START is seen (the
+  // overlay's beginHandleDrag carries no modifiers of its own).
   if ([self _pathEditContext] &&
-      [self.pathEditController mouseDownAtX:p.x y:p.y modifiers:CanvasPenModNone])
+      [self.pathEditController
+          mouseDownAtX:p.x
+                     y:p.y
+             modifiers:CanvasEditModsFromNS(NSEvent.modifierFlags)])
     return;
-  // Anchor square grabs first (tight central zone, matches the hit-test priority).
+  // Anchor square grabs first (tight central zone, matches the hit-test
+  // priority).
   if ([self.anchorMini beginDragAtPoint:p contentRect:cr])
     return;
   // Position handle next (the base re-checks it and drives the point grab
@@ -276,8 +298,8 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
   self.penContentRect = cr;
   if (self.pathEditController.dragging) {
     [self.pathEditController mouseDraggedAtX:p.x
-                                          y:p.y
-                                  modifiers:CanvasEditModsFromNS(modifiers)];
+                                           y:p.y
+                                   modifiers:CanvasEditModsFromNS(modifiers)];
     [canvas setNeedsDisplay:YES];
     return;
   }
@@ -340,6 +362,12 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
     doubleClickAtPoint:(CGPoint)p
            contentRect:(CGRect)cr {
   self.canvas = canvas;
+  self.penContentRect = cr;
+  // A path anchor under the double-click converts corner<->smooth first; else
+  // the Position motion-path anchor's smooth toggle.
+  if ([self _pathEditContext] && [self.pathEditController toggleSmoothAtX:p.x
+                                                                        y:p.y])
+    return YES;
   return [self.positionMini toggleSmoothAtPoint:p contentRect:cr];
 }
 
@@ -348,8 +376,8 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
               contentRect:(CGRect)cr {
   // Anchor square (tight central zone) claims the opt-click first.
   self.canvas = canvas;
-  if (self.onHandleVisibilityToggled &&
-      [self.anchorMini squareHitAtPoint:p contentRect:cr]) {
+  if (self.onHandleVisibilityToggled && [self.anchorMini squareHitAtPoint:p
+                                                              contentRect:cr]) {
     self.onHandleVisibilityToggled(@"Anchor");
     [canvas setNeedsDisplay:YES];
     [canvas setHandlesNeedDisplay];
@@ -375,6 +403,15 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
     [canvas setHandlesNeedDisplay];
     return YES;
   }
+  // Path anchors catch the opt-click last (transform handles win a coincident
+  // hit, matching the viewer). Toggles the Points OSC's visibility.
+  if (self.onHandleVisibilityToggled && [self _pathEditContext] &&
+      [self.pathEditController hitTestAtX:p.x y:p.y] != CanvasPathEditHitNone) {
+    self.onHandleVisibilityToggled(@"Points");
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return YES;
+  }
   return NO;
 }
 
@@ -387,7 +424,7 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
   self.penContentRect = cr;
   if ([self _pathEditContext] &&
       [self.pathEditController hitTestAtX:p.x y:p.y] != CanvasPathEditHitNone)
-    return KKPointMoveCursor();
+    return [self kkVisibilityCursorForLabel:@"Points"] ?: KKPointMoveCursor();
   if ([self.anchorMini squareHitAtPoint:p contentRect:cr])
     return [self kkVisibilityCursorForLabel:@"Anchor"] ?: KKPointMoveCursor();
   if ([self pointHandleHitAtPoint:p contentRect:cr])

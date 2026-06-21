@@ -93,9 +93,9 @@ NS_ASSUME_NONNULL_BEGIN
     doubleClickAtPoint:(CGPoint)point
            contentRect:(CGRect)contentRect;
 /// A single click landed on the preview body, missing every handle (the overlay
-/// only swallows handle hits) and not on a filmstrip cell. `point` is in overlay
-/// points (y-up). Lets a delegate pick whatever object is under the cursor (e.g.
-/// click-to-select a layer). Return YES if handled.
+/// only swallows handle hits) and not on a filmstrip cell. `point` is in
+/// overlay points (y-up). Lets a delegate pick whatever object is under the
+/// cursor (e.g. click-to-select a layer). Return YES if handled.
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     backgroundClickAtPoint:(CGPoint)point
                contentRect:(CGRect)contentRect;
@@ -124,17 +124,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// An optional alignment grid to draw UNDER the OSC handles, matching the in-
 /// viewer grid. Return NO for no grid. `outSpacingX`/`outSpacingY` are the cell
 /// size as a FRACTION of the content rect (already adaptively adjusted by the
-/// delegate); the canvas tiles the lines across the whole view (so they fill the
-/// letterbox margins too), two-tone like the viewer so they read on any footage.
+/// delegate); the canvas tiles the lines across the whole view (so they fill
+/// the letterbox margins too), two-tone like the viewer so they read on any
+/// footage.
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
-       gridSpacingX:(out CGFloat *)outSpacingX
+      gridSpacingX:(out CGFloat *)outSpacingX
           spacingY:(out CGFloat *)outSpacingY
        contentRect:(CGRect)contentRect;
-/// Draw floating toolbar chrome on TOP of everything, into the mini's Metal pass.
-/// The canvas supplies a KKVertexShader/KKLabelFragment `pipeline` (premultiplied
-/// alpha) for the drawable's pixel format and the viewport size in drawable px;
-/// the delegate renders its KKToolbar via -drawInEncoder:device:pipeline:...,
-/// so the mini shows the same bar as the viewer.
+/// Draw floating toolbar chrome on TOP of everything, into the mini's Metal
+/// pass. The canvas supplies a KKVertexShader/KKLabelFragment `pipeline`
+/// (premultiplied alpha) for the drawable's pixel format and the viewport size
+/// in drawable px; the delegate renders its KKToolbar via
+/// -drawInEncoder:device:pipeline:..., so the mini shows the same bar as the
+/// viewer.
 - (void)miniViewer:(KKMiniViewerView *)canvas
     drawToolbarInEncoder:(id<MTLRenderCommandEncoder>)encoder
                   device:(id<MTLDevice>)device
@@ -144,44 +146,44 @@ NS_ASSUME_NONNULL_BEGIN
 // Toolbar input. All points are overlay view points (y-up); the delegate
 // converts to its toolbar's space + hit-tests. `toolbarTagAtPoint:` returns the
 // item tag (0 = none, <0 = bar body, >0 = an item) so the canvas can claim the
-// click. `toolbarMouseDownAtPoint:` performs the press action and returns YES if
-// it began a drag (the handle), so the canvas routes the following dragged/up to
-// the toolbar. `toolbarHoverTag:` drives the tooltip + cursor.
+// click. `toolbarMouseDownAtPoint:` performs the press action and returns YES
+// if it began a drag (the handle), so the canvas routes the following
+// dragged/up to the toolbar. `toolbarHoverTag:` drives the tooltip + cursor.
 - (NSInteger)miniViewer:(KKMiniViewerView *)canvas
-       toolbarTagAtPoint:(CGPoint)viewPoint;
+      toolbarTagAtPoint:(CGPoint)viewPoint;
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     toolbarMouseDownAtPoint:(CGPoint)viewPoint;
 - (void)miniViewer:(KKMiniViewerView *)canvas
     toolbarDraggedToPoint:(CGPoint)viewPoint;
 - (void)miniViewerToolbarMouseUp:(KKMiniViewerView *)canvas;
 - (void)miniViewer:(KKMiniViewerView *)canvas toolbarHoverTag:(NSInteger)tag;
-/// Cursor for a hovered toolbar tag (e.g. the move cursor over the drag handle),
-/// or nil for the default arrow. Lets the canvas show the right cursor over the
-/// bar instead of the handle-resize cursors.
+/// Cursor for a hovered toolbar tag (e.g. the move cursor over the drag
+/// handle), or nil for the default arrow. Lets the canvas show the right cursor
+/// over the bar instead of the handle-resize cursors.
 - (nullable NSCursor *)miniViewer:(KKMiniViewerView *)canvas
               toolbarCursorForTag:(NSInteger)tag;
 /// A key was pressed while the mini is the key window (the toolbar's tool
 /// shortcuts, e.g. Control+letter). `chars` is charactersIgnoringModifiers.
 /// Return YES to consume the event. Optional.
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
-       toolbarKeyDownChars:(NSString *)chars
-                 modifiers:(NSEventModifierFlags)modifiers;
+    toolbarKeyDownChars:(NSString *)chars
+              modifiers:(NSEventModifierFlags)modifiers;
 /// A free-drawing tool (e.g. the pen) is active: the overlay routes raw mouse
 /// events here instead of the handle-drag path (no onHandleDragBegin/End
 /// grouping, no auto-select). All points are overlay view points (y-up). The
 /// delegate draws the in-progress overlay via -drawToolOverlayInContentRect:.
 - (BOOL)miniViewerToolDrawingActive:(KKMiniViewerView *)canvas;
 - (void)miniViewer:(KKMiniViewerView *)canvas
-       toolDownAtPoint:(CGPoint)point
-           contentRect:(CGRect)contentRect
-             modifiers:(NSEventModifierFlags)modifiers;
+    toolDownAtPoint:(CGPoint)point
+        contentRect:(CGRect)contentRect
+          modifiers:(NSEventModifierFlags)modifiers;
 - (void)miniViewer:(KKMiniViewerView *)canvas
     toolDraggedToPoint:(CGPoint)point
            contentRect:(CGRect)contentRect
              modifiers:(NSEventModifierFlags)modifiers;
 - (void)miniViewer:(KKMiniViewerView *)canvas
-       toolUpAtPoint:(CGPoint)point
-         contentRect:(CGRect)contentRect;
+     toolUpAtPoint:(CGPoint)point
+       contentRect:(CGRect)contentRect;
 - (void)miniViewer:(KKMiniViewerView *)canvas
     toolMovedToPoint:(CGPoint)point
          contentRect:(CGRect)contentRect;
@@ -190,11 +192,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// The cursor the drawing tool wants at `point` (e.g. the pen / close-shape
 /// glyph), or nil for the default. Driven from the overlay's mouseMoved.
 - (nullable NSCursor *)miniViewer:(KKMiniViewerView *)canvas
-              toolCursorAtPoint:(CGPoint)point
-                    contentRect:(CGRect)contentRect;
+                toolCursorAtPoint:(CGPoint)point
+                      contentRect:(CGRect)contentRect;
 /// Draw the tool's in-progress overlay (pen anchors / handles / curve / ghost)
-/// in the Metal pass, on top of everything. The delegate encodes via the canvas's
-/// -encodeToolDotAtPoint:... / -encodeToolLineStrip:... so it uses the SAME glyph
+/// in the Metal pass, on top of everything. The delegate encodes via the
+/// canvas's -encodeToolDotAtPoint:... / -encodeToolLineStrip:... so it uses the
+/// SAME glyph
 /// + line look as the motion path. Called once per frame; the canvas has the
 /// encoder armed for the duration.
 - (void)miniViewerDrawToolOverlay:(KKMiniViewerView *)canvas
@@ -354,19 +357,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, weak, nullable) id<KKMiniViewerDelegate> canvasDelegate;
 
-/// Draw primitives for a tool overlay - ONLY valid inside the delegate's
-/// -miniViewerDrawToolOverlay: callback (the canvas has its render encoder +
-/// pipelines armed then; no-ops otherwise). They use the same glyph + line
-/// rendering as the motion path, so a tool's anchors / handles / curve match the
-/// rest of the OSC. Points are overlay view points (y-up); `sizeScale` is the
-/// fraction of the standard handle-glyph size (anchors ~0.6, handle dots ~0.5).
-- (void)encodeToolDotAtPoint:(CGPoint)viewPoint
-                        fill:(simd_float4)fill
-                   sizeScale:(CGFloat)sizeScale;
-- (void)encodeToolLineStrip:(NSArray<NSValue *> *)viewPoints
-                      color:(simd_float4)color
-                halfWidthPt:(CGFloat)halfWidthPt;
-
 /// Host sink for handle-driven value edits. The delegate computes the new
 /// lane values during a drag and calls `-reportHandleValueForLabel:values:`,
 /// which invokes this; the host applies the timeline mutation (opt-in +
@@ -438,6 +428,25 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 /// the popover so the canvas stays free of the lanes-view import cycle.
 @property(nonatomic) NSInteger renderMode;
 
+@end
+
+/// Tool-overlay draw primitives - ONLY valid inside the delegate's
+/// -miniViewerDrawToolOverlay: callback (the canvas has its render encoder +
+/// pipelines armed then; no-ops otherwise). They use the same glyph + line
+/// rendering as the motion path, so a tool's anchors / handles / curve match
+/// the rest of the OSC. Points are overlay view points (y-up); `sizeScale` is
+/// the fraction of the standard handle-glyph size (anchors ~0.6, handle dots
+/// ~0.5). Declared as a category (like -Interaction below) so the primary
+/// @implementation isn't expected to provide them; implemented in
+/// KKMiniViewerView+Draw.m (whose internal (Draw) category lives in the private
+/// header, so this public surface uses a distinct name).
+@interface KKMiniViewerView (ToolDraw)
+- (void)encodeToolDotAtPoint:(CGPoint)viewPoint
+                        fill:(simd_float4)fill
+                   sizeScale:(CGFloat)sizeScale;
+- (void)encodeToolLineStrip:(NSArray<NSValue *> *)viewPoints
+                      color:(simd_float4)color
+                halfWidthPt:(CGFloat)halfWidthPt;
 @end
 
 /// Pan/zoom + point/crop-handle screen geometry. Declared as a category so the

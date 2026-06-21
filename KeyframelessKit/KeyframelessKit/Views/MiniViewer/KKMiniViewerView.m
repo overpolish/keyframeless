@@ -182,37 +182,44 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   if ([self.window.firstResponder isKindOfClass:[NSText class]])
     return NO;
   if (![self.canvasDelegate
-          respondsToSelector:@selector(miniViewer:
-                                 toolbarKeyDownChars:modifiers:)])
+          respondsToSelector:@selector(
+                                 miniViewer:toolbarKeyDownChars:modifiers:)])
     return NO;
   NSString *chars = e.charactersIgnoringModifiers;
   if (chars.length == 0)
     return NO;
   return [self.canvasDelegate miniViewer:self
-                    toolbarKeyDownChars:chars
-                              modifiers:e.modifierFlags];
+                     toolbarKeyDownChars:chars
+                               modifiers:e.modifierFlags];
 }
 
 // Esc / Return etc. for an active drawing tool (pen), via the same monitor as
-// the reset + toolbar shortcuts. Gated on the mini being the key window + a
-// drawing tool active + not editing a field.
+// the reset + toolbar shortcuts. Gated on the mini being the key window + not
+// editing a field. Drawing-tool keys require a drawing tool active; Delete /
+// Backspace is forwarded in ANY tool so the cursor can remove a selection.
 - (BOOL)_handleToolKeyEvent:(NSEvent *)e {
   if (!self.window.isVisible || !self.window.isKeyWindow)
     return NO;
   if ([self.window.firstResponder isKindOfClass:[NSText class]])
     return NO;
-  if (![self.canvasDelegate respondsToSelector:@selector(miniViewerToolDrawingActive:)] ||
-      ![self.canvasDelegate miniViewerToolDrawingActive:self])
-    return NO;
-  if (![self.canvasDelegate respondsToSelector:@selector(miniViewer:toolKeyDown:)])
+  if (![self.canvasDelegate
+          respondsToSelector:@selector(miniViewer:toolKeyDown:)])
     return NO;
   NSString *chars = e.charactersIgnoringModifiers;
   if (chars.length == 0)
     return NO;
-  BOOL handled = [self.canvasDelegate miniViewer:self
-                                     toolKeyDown:[chars characterAtIndex:0]];
+  unichar ch = [chars characterAtIndex:0];
+  BOOL isDelete = (ch == NSDeleteCharacter || ch == NSBackspaceCharacter);
+  BOOL drawingActive =
+      [self.canvasDelegate
+          respondsToSelector:@selector(miniViewerToolDrawingActive:)] &&
+      [self.canvasDelegate miniViewerToolDrawingActive:self];
+  if (!drawingActive && !isDelete)
+    return NO;
+  BOOL handled = [self.canvasDelegate miniViewer:self toolKeyDown:ch];
   if (handled)
-    [self setNeedsDisplay:YES]; // redraw the tool overlay (Metal pass) after the key
+    [self setNeedsDisplay:YES]; // redraw the tool overlay (Metal pass) after
+                                // the key
   return handled;
 }
 

@@ -14,11 +14,12 @@
 #import <KeyframelessKit/KKTimingStage.h>
 #import <simd/simd.h>
 
-// A layer's on-screen quad corner in object space [0,1] (Y-up), through the SAME
-// pipeline the render uses (CanvasComposedModelMatrix + the perspective divide).
-// The pipeline is scale-invariant in object space, so we feed a nominal pixel
-// scale of (aspect, 1) - only the canvas aspect matters, not the render's true
-// pixel dims. tileShift is 0 (the viewer OSC isn't tiled like the render).
+// A layer's on-screen quad corner in object space [0,1] (Y-up), through the
+// SAME pipeline the render uses (CanvasComposedModelMatrix + the perspective
+// divide). The pipeline is scale-invariant in object space, so we feed a
+// nominal pixel scale of (aspect, 1) - only the canvas aspect matters, not the
+// render's true pixel dims. tileShift is 0 (the viewer OSC isn't tiled like the
+// render).
 static simd_float2 CanvasProjectedCornerObj(float nx, float ny,
                                             CanvasLayerTransform t, float cx,
                                             float cy, float aspect,
@@ -26,9 +27,8 @@ static simd_float2 CanvasProjectedCornerObj(float nx, float ny,
                                             NSInteger ng) {
   simd_float2 scl = simd_make_float2(aspect > 0.0f ? aspect : 1.0f, 1.0f);
   simd_float2 half = simd_make_float2(0.5f, 0.5f);
-  matrix_float4x4 m = CanvasComposedModelMatrix(t, simd_make_float2(cx, cy),
-                                                groups, ng, scl,
-                                                simd_make_float2(0, 0));
+  matrix_float4x4 m = CanvasComposedModelMatrix(
+      t, simd_make_float2(cx, cy), groups, ng, scl, simd_make_float2(0, 0));
   simd_float2 pPix = (simd_make_float2(nx, ny) - half) * scl;
   simd_float4 clip = simd_mul(m, simd_make_float4(pPix.x, pPix.y, 0.0f, 1.0f));
   if (clip.w == 0.0f)
@@ -44,8 +44,8 @@ static float CanvasCross2(simd_float2 a, simd_float2 b) {
 // Inverse bilinear: where is p inside the quad whose corners map to UV
 // a=(0,0) b=(1,0) c=(1,1) d=(0,1)? Returns NO when p is outside (u or v beyond
 // [0,1]). Standard Inigo-Quilez solution; handles the parallelogram (k2~0)
-// degenerate case linearly. Under perspective this is the bilinear approximation
-// of the projective UV - precise enough for alpha hit-testing.
+// degenerate case linearly. Under perspective this is the bilinear
+// approximation of the projective UV - precise enough for alpha hit-testing.
 static BOOL CanvasInvBilinear(simd_float2 p, simd_float2 a, simd_float2 b,
                               simd_float2 c, simd_float2 d,
                               simd_float2 *outUV) {
@@ -95,11 +95,11 @@ static BOOL CanvasInvBilinear(simd_float2 p, simd_float2 a, simd_float2 b,
 }
 
 // CPU alpha mask for an image path: an upright (row 0 = image TOP) 8-bit
-// alpha-only buffer, capped to keep memory + decode cheap. Cached per path (this
-// runs in the OSC process; a plain static is fine). u in [0,1] = left to right,
-// v in [0,1] = top to bottom (matching the render's UVs). Returns 1.0 (opaque)
-// when the image has no decodable alpha, so opaque formats (JPEG) hit across
-// their whole quad.
+// alpha-only buffer, capped to keep memory + decode cheap. Cached per path
+// (this runs in the OSC process; a plain static is fine). u in [0,1] = left to
+// right, v in [0,1] = top to bottom (matching the render's UVs). Returns 1.0
+// (opaque) when the image has no decodable alpha, so opaque formats (JPEG) hit
+// across their whole quad.
 @interface _CanvasAlphaMask : NSObject
 @property(nonatomic) NSInteger w;
 @property(nonatomic) NSInteger h;
@@ -154,10 +154,10 @@ static float CanvasSampleImageAlpha(NSString *imagePath, float u, float v) {
   return p[y * mask.w + x] / 255.0f;
 }
 
-// YES if `path` is editable at clip fraction `frac`: it has at least one constant
-// param (per `templates`) OR an animated lane visible at `frac` (at a keypose or
-// its lead-in/out hold). Gates the viewer auto-select so a fully-animated layer
-// with no keypose at the playhead isn't pickable.
+// YES if `path` is editable at clip fraction `frac`: it has at least one
+// constant param (per `templates`) OR an animated lane visible at `frac` (at a
+// keypose or its lead-in/out hold). Gates the viewer auto-select so a
+// fully-animated layer with no keypose at the playhead isn't pickable.
 static BOOL CanvasLayerEditableAtFraction(KKBezierPath *path, double frac,
                                           NSArray<KKLane *> *templates) {
   if (CanvasLayerHasConstant(path, templates))
@@ -173,7 +173,7 @@ static BOOL CanvasLayerEditableAtFraction(KKBezierPath *path, double frac,
 }
 
 static NSUInteger CanvasLayerIndexOf(NSArray<KKBezierPath *> *layers,
-                                    KKBezierPath *path) {
+                                     KKBezierPath *path) {
   NSUInteger idx = [layers indexOfObjectIdenticalTo:path];
   if (idx == NSNotFound)
     for (NSUInteger i = 0; i < layers.count; i++)
@@ -232,8 +232,9 @@ simd_float2 CanvasUnprojectLayerPointObj(NSArray<KKBezierPath *> *layers,
 }
 
 BOOL CanvasComposedGroupPointObj(NSArray<KKBezierPath *> *layers,
-                                 KKBezierPath *member, double frac, float aspect,
-                                 float inX, float inY, float *outX, float *outY) {
+                                 KKBezierPath *member, double frac,
+                                 float aspect, float inX, float inY,
+                                 float *outX, float *outY) {
   if (outX)
     *outX = inX;
   if (outY)
@@ -319,7 +320,9 @@ static NSUInteger CanvasFlattenPathNormalized(KKBezierPath *path,
     }
   }
   if (!path.closed) {
-    simd_float2 p = [path evaluatePointAtIndex:segs - 1 nextIndex:segs atT:1.0f];
+    simd_float2 p = [path evaluatePointAtIndex:segs - 1
+                                     nextIndex:segs
+                                           atT:1.0f];
     if ((n == 0 || simd_distance_squared(p, pts[n - 1]) > 1e-9f) && n < maxPts)
       pts[n++] = p;
   }
@@ -330,21 +333,20 @@ static NSUInteger CanvasFlattenPathNormalized(KKBezierPath *path,
 // object units (X scaled by aspect so a pixel-round tolerance stays round). The
 // polyline is in screen-object [0,1]; tolerance is compared in object-Y units.
 static float CanvasDistToProjectedPolyline(simd_float2 q,
-                                           const simd_float2 *proj, NSUInteger n,
-                                           BOOL closed, float aspect) {
+                                           const simd_float2 *proj,
+                                           NSUInteger n, BOOL closed,
+                                           float aspect) {
   simd_float2 qa = simd_make_float2(q.x * aspect, q.y);
   float best = FLT_MAX;
   NSUInteger segs = closed ? n : (n > 0 ? n - 1 : 0);
   for (NSUInteger i = 0; i < segs; i++) {
-    simd_float2 a =
-        simd_make_float2(proj[i].x * aspect, proj[i].y);
-    simd_float2 b = simd_make_float2(proj[(i + 1) % n].x * aspect,
-                                     proj[(i + 1) % n].y);
+    simd_float2 a = simd_make_float2(proj[i].x * aspect, proj[i].y);
+    simd_float2 b =
+        simd_make_float2(proj[(i + 1) % n].x * aspect, proj[(i + 1) % n].y);
     simd_float2 ab = b - a;
     float L2 = simd_length_squared(ab);
-    float t = L2 > 1e-12f
-                  ? simd_clamp(simd_dot(qa - a, ab) / L2, 0.0f, 1.0f)
-                  : 0.0f;
+    float t =
+        L2 > 1e-12f ? simd_clamp(simd_dot(qa - a, ab) / L2, 0.0f, 1.0f) : 0.0f;
     float d2 = simd_distance_squared(qa, a + t * ab);
     if (d2 < best)
       best = d2;
@@ -355,7 +357,7 @@ static float CanvasDistToProjectedPolyline(simd_float2 q,
 // YES if the query is within the (transformed) stroke of a vector layer. Tol is
 // the stroke half-width in object-Y units plus a screen-slop floor so clicking
 // near a thin stroke still selects it.
-static const NSUInteger kHitPolyCap = 2048;
+enum { kHitPolyCap = 2048 }; // true ICE so the on-stack arrays aren't VLAs
 static const float kHitStrokeSlopObj = 0.012f; // ~1.2% of canvas height
 static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
                                  simd_float2 q, float canvasHeightPx,
@@ -370,8 +372,8 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
   simd_float2 c = CanvasLayerObjectCenter(path);
   simd_float2 proj[kHitPolyCap];
   for (NSUInteger i = 0; i < n; i++)
-    proj[i] = CanvasProjectedCornerObj(norm[i].x, norm[i].y, t, c.x, c.y, aspect,
-                                       groups, ng);
+    proj[i] = CanvasProjectedCornerObj(norm[i].x, norm[i].y, t, c.x, c.y,
+                                       aspect, groups, ng);
   float h = canvasHeightPx > 1.0f ? canvasHeightPx : 1000.0f;
   float tol = fmaxf(path.strokeWidth * 0.5f / h, kHitStrokeSlopObj);
   float d = CanvasDistToProjectedPolyline(q, proj, n, path.closed, aspect);
@@ -412,7 +414,8 @@ NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
       // The stroke distance test IS the "what you see" test, so alphaAware
       // doesn't apply - a click in an open stroke's hollow interior simply
       // misses and falls through to the layer beneath.
-      if (CanvasVectorLayerHit(path, frac, aspect, q, canvasHeightPx, groups, ng))
+      if (CanvasVectorLayerHit(path, frac, aspect, q, canvasHeightPx, groups,
+                               ng))
         return path.layerID;
       continue;
     }

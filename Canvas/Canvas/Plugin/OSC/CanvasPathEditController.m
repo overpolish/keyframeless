@@ -3,32 +3,23 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "CanvasPathEditController.h"
 #import "CanvasLayerRender.h" // project / unproject
-#import "CanvasPathMorph.h"   // morphed-at-frac geometry + keypose snapshots
+#import "CanvasPathEditController_Internal.h"
+#import "CanvasPathMorph.h" // per-keypose geometry writes
 #import <KeyframelessKit/KKBezierPath.h>
+#import <QuartzCore/QuartzCore.h> // CACurrentMediaTime (double-click timing)
 
-// Surface-px grab radii. Handles checked first (they extend out from the anchor).
-static const double kAnchorGrabPx = 10.0;
-static const double kHandleGrabPx = 9.0;
+static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
 
-static inline double CanvasDist2(CGPoint s, double x, double y) {
-  return (s.x - x) * (s.x - x) + (s.y - y) * (s.y - y);
-}
-
-@implementation CanvasPathEditController {
-  __weak id<CanvasPenSurface> _surface;
-  BOOL _dragging;
-  NSInteger _grabAnchor; // index, -1 = none
-  BOOL _grabIsHandle;
-  BOOL _grabHandleIsOut; // which tangent handle of the anchor
-}
+@implementation CanvasPathEditController
 
 - (instancetype)initWithSurface:(id<CanvasPenSurface>)surface {
   self = [super init];
   if (self) {
     _surface = surface;
     _grabAnchor = -1;
+    _lastClickAnchor = -1;
+    _selectedAnchors = [NSMutableIndexSet indexSet];
   }
   return self;
 }
@@ -37,111 +28,110 @@ static inline double CanvasDist2(CGPoint s, double x, double y) {
   return _dragging;
 }
 
-// The selected layer if it's an editable vector path, else nil.
-- (KKBezierPath *)_path {
-  NSString *sel = [_surface penSelectedLayerID];
-  KKBezierPath *p = sel.length ? [_surface penLayerWithID:sel] : nil;
-  if (!p || p.isImage || p.isGroup || !p.strokeEnabled || p.count < 1)
-    return nil;
-  return p;
+- (NSIndexSet *)selectedAnchors {
+  return _selectedAnchors;
 }
 
-// The geometry shown / edited at the current fraction: the base for a constant
-// path, or the interpolated shape for an animated one. nil if no editable path.
-- (KKBezierPath *)_workingPath {
-  KKBezierPath *p = [self _path];
-  if (!p)
-    return nil;
-  return CanvasPathMorphedAtFraction(p, [_surface penEditFraction]);
+- (void)clearSelection {
+  [_selectedAnchors removeAllIndexes];
 }
 
-// YES when the path is animated but the playhead is NOT parked on a Points
-// keypose - geometry isn't editable there (add a keypose to edit that moment).
-- (BOOL)_animatedOffKeypose {
-  KKBezierPath *p = [self _path];
-  if (!p)
-    return NO;
-  return !CanvasPathGeometryEditableAtFraction(p, [_surface penEditFraction]);
+- (BOOL)marqueeActive {
+  return _marqueeActive;
 }
 
-// Local (Y-up) -> surface point, through the layer transform + groups.
-- (CGPoint)_surfaceForLocalX:(float)lx y:(float)ly path:(KKBezierPath *)path {
-  simd_float2 so = CanvasProjectLayerPointObj(
-      [_surface penAllLayers], path, [_surface penEditFraction],
-      (float)[_surface penCanvasAspect], lx, ly);
-  return [_surface penSurfacePointFromObj:CGPointMake(so.x, so.y)];
-}
-
-- (CanvasPathEditHit)_hitAtX:(double)x
-                           y:(double)y
-                   outAnchor:(NSInteger *)outAnchor
-                outHandleOut:(BOOL *)outHandleOut {
-  if ([self _animatedOffKeypose])
-    return CanvasPathEditHitNone; // between keyposes: read-only
-  KKBezierPath *path = [self _workingPath];
-  if (!path)
-    return CanvasPathEditHitNone;
-  double rh2 = kHandleGrabPx * kHandleGrabPx, ra2 = kAnchorGrabPx * kAnchorGrabPx;
-  for (NSUInteger i = 0; i < path.count; i++) {
-    KKBezierPoint pt = [path pointAtIndex:i];
-    if (fabsf(pt.outX) + fabsf(pt.outY) > 1e-6f) {
-      CGPoint s = [self _surfaceForLocalX:pt.x + pt.outX y:pt.y + pt.outY
-                                     path:path];
-      if (CanvasDist2(s, x, y) <= rh2) {
-        *outAnchor = (NSInteger)i;
-        *outHandleOut = YES;
-        return CanvasPathEditHitHandle;
-      }
-    }
-    if (fabsf(pt.inX) + fabsf(pt.inY) > 1e-6f) {
-      CGPoint s = [self _surfaceForLocalX:pt.x + pt.inX y:pt.y + pt.inY
-                                     path:path];
-      if (CanvasDist2(s, x, y) <= rh2) {
-        *outAnchor = (NSInteger)i;
-        *outHandleOut = NO;
-        return CanvasPathEditHitHandle;
-      }
-    }
-  }
-  for (NSUInteger i = 0; i < path.count; i++) {
-    KKBezierPoint pt = [path pointAtIndex:i];
-    CGPoint s = [self _surfaceForLocalX:pt.x y:pt.y path:path];
-    if (CanvasDist2(s, x, y) <= ra2) {
-      *outAnchor = (NSInteger)i;
-      *outHandleOut = NO;
-      return CanvasPathEditHitAnchor;
-    }
-  }
-  return CanvasPathEditHitNone;
-}
-
-- (CanvasPathEditHit)hitTestAtX:(double)x y:(double)y {
-  NSInteger a = -1;
-  BOOL ho = NO;
-  return [self _hitAtX:x y:y outAnchor:&a outHandleOut:&ho];
+- (CGRect)marqueeSurfaceRect {
+  return CGRectMake(MIN(_marqueeStart.x, _marqueeEnd.x),
+                    MIN(_marqueeStart.y, _marqueeEnd.y),
+                    fabs(_marqueeEnd.x - _marqueeStart.x),
+                    fabs(_marqueeEnd.y - _marqueeStart.y));
 }
 
 - (BOOL)mouseDownAtX:(double)x y:(double)y modifiers:(CanvasPenModifiers)mods {
+  _didDrag = NO;
+  _didEdit = NO;
+  _dragMods = mods;
   NSInteger a = -1;
   BOOL ho = NO;
   CanvasPathEditHit hit = [self _hitAtX:x y:y outAnchor:&a outHandleOut:&ho];
-  if (hit == CanvasPathEditHitNone)
+
+  if (hit == CanvasPathEditHitHandle) {
+    _lastClickAnchor = -1; // a handle click breaks a double-click-on-anchor run
+    _grabAnchor = a;
+    _grabIsHandle = YES;
+    _grabHandleIsOut = ho;
+    _dragStartGeom = [[self _workingPath] copy];
+    _dragging = YES;
+    return YES;
+  }
+
+  if (hit == CanvasPathEditHitAnchor) {
+    // Double-click the same anchor (within the window) toggles corner<->smooth.
+    // The mini diverts its 2nd click to its native doubleClickAtPoint, so this
+    // timing path only fires for the viewer (which sends every click here).
+    CFTimeInterval now = CACurrentMediaTime();
+    if (a == _lastClickAnchor && (now - _lastClickTime) < kDoubleClickSecs) {
+      _lastClickTime = 0;
+      _lastClickAnchor = -1;
+      _dragging = NO;
+      [self _toggleSmoothAtIndex:(NSUInteger)a];
+      return YES;
+    }
+    _lastClickTime = now;
+    _lastClickAnchor = a;
+    if (mods & CanvasPenModShift) {
+      // Shift toggles this anchor in/out of the selection.
+      if ([_selectedAnchors containsIndex:(NSUInteger)a])
+        [_selectedAnchors removeIndex:(NSUInteger)a];
+      else
+        [_selectedAnchors addIndex:(NSUInteger)a];
+    } else if (![_selectedAnchors containsIndex:(NSUInteger)a]) {
+      // Plain click on an unselected anchor: it becomes the sole selection.
+      // Clicking an already-selected anchor keeps the whole set (drag moves
+      // all).
+      [_selectedAnchors removeAllIndexes];
+      [_selectedAnchors addIndex:(NSUInteger)a];
+    }
+    _grabAnchor = a;
+    _grabIsHandle = NO;
+    _dragStartGeom = [[self _workingPath] copy];
+    // Only drag if the grabbed anchor ended up selected (a shift-deselect
+    // won't).
+    _dragging = [_selectedAnchors containsIndex:(NSUInteger)a];
+    return YES;
+  }
+
+  // Empty: start a marquee (only over an editable selected path).
+  _lastClickAnchor = -1; // an empty click breaks a double-click-on-anchor run
+  if (![self canMarqueeAtX:x y:y])
     return NO;
-  _grabAnchor = a;
-  _grabIsHandle = (hit == CanvasPathEditHitHandle);
-  _grabHandleIsOut = ho;
+  if (!(mods & (CanvasPenModShift | CanvasPenModOpt)))
+    [_selectedAnchors removeAllIndexes]; // plain marquee replaces the selection
+  _marqueeStart = _marqueeEnd = CGPointMake(x, y);
+  _marqueeActive = YES;
   _dragging = YES;
+  _grabAnchor = -1;
   return YES;
 }
 
 - (void)mouseDraggedAtX:(double)x
                       y:(double)y
               modifiers:(CanvasPenModifiers)mods {
-  if (!_dragging || _grabAnchor < 0)
+  if (!_dragging)
     return;
+  _didDrag = YES;
+  _dragMods = mods;
+  if (_marqueeActive) {
+    _marqueeEnd = CGPointMake(x, y);
+    return; // the surface redraws on drag; selection commits on mouseUp
+  }
+  if (_grabAnchor < 0 || !_dragStartGeom ||
+      _grabAnchor >= (NSInteger)_dragStartGeom.count)
+    return;
+  _didEdit = YES; // this gesture changes geometry -> commit on mouseUp
   KKBezierPath *base = [self _path];
-  KKBezierPath *work = [self _workingPath]; // morphed geometry at this fraction
-  if (!base || !work || _grabAnchor >= (NSInteger)work.count)
+  KKBezierPath *start = _dragStartGeom; // stable base so multi-move can't drift
+  if (!base)
     return;
   NSArray<KKBezierPath *> *layers = [_surface penAllLayers];
   double frac = [_surface penEditFraction];
@@ -151,15 +141,15 @@ static inline double CanvasDist2(CGPoint s, double x, double y) {
   NSString *targetID = base.layerID;
 
   // Handles drag free; anchors grid-snap (like the pen). Unproject through the
-  // WORKING geometry's transform so the cursor maps to its local point space.
+  // START geometry's transform so the cursor maps to a stable local space for
+  // the whole drag.
   CGPoint so = isHandle ? [_surface penObjFromSurfaceX:x y:y]
                         : [_surface penSnappedObjFromSurfaceX:x y:y];
-  simd_float2 local = CanvasUnprojectLayerPointObj(layers, work, frac, aspect,
+  simd_float2 local = CanvasUnprojectLayerPointObj(layers, start, frac, aspect,
                                                    (float)so.x, (float)so.y);
-  // Apply the move to a copy of the working geometry.
-  KKBezierPath *edited = [work copy];
+  KKBezierPath *edited = [start copy];
   if (isHandle) {
-    KKBezierPoint pt = [edited pointAtIndex:idx];
+    KKBezierPoint pt = [start pointAtIndex:idx];
     simd_float2 off = simd_make_float2(local.x - pt.x, local.y - pt.y);
     off = [self _constrain:off aspect:aspect modifiers:mods];
     [edited setType:KKBezierPointBezier atIndex:idx];
@@ -173,15 +163,24 @@ static inline double CanvasDist2(CGPoint s, double x, double y) {
         [edited setOutHandle:simd_make_float2(-off.x, -off.y) atIndex:idx];
     }
   } else {
-    [edited moveAtIndex:idx to:simd_make_float2(local.x, local.y)];
+    // Move every selected anchor by the same delta (the grabbed one lands on
+    // the grid-snapped cursor; the rest keep their relative offsets).
+    KKBezierPoint g = [start pointAtIndex:idx];
+    simd_float2 delta = simd_make_float2(local.x - g.x, local.y - g.y);
+    NSIndexSet *sel = _selectedAnchors.count
+                          ? _selectedAnchors
+                          : [NSIndexSet indexSetWithIndex:idx];
+    [sel enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
+      if (i >= start.count)
+        return;
+      KKBezierPoint p = [start pointAtIndex:i];
+      [edited moveAtIndex:i to:simd_make_float2(p.x + delta.x, p.y + delta.y)];
+    }];
   }
 
   // Write to the active keypose's snapshot when animated + parked at one, else
   // the base geometry. Live (no undo) for a smooth drag; mouseUp commits once.
-  NSInteger kp =
-      CanvasPathActiveKeyposeAtFraction(base, frac, kCanvasPathKeyposeEps);
-  KKBezierPath *result =
-      (kp >= 0) ? CanvasPathBySettingKeyposeGeometry(base, kp, edited) : edited;
+  KKBezierPath *result = CanvasPathByWritingWorkingGeometry(base, frac, edited);
   NSMutableArray<KKBezierPath *> *paths = [layers mutableCopy];
   for (NSUInteger i = 0; i < paths.count; i++)
     if ([paths[i].layerID isEqualToString:targetID]) {
@@ -192,10 +191,40 @@ static inline double CanvasDist2(CGPoint s, double x, double y) {
 }
 
 - (void)mouseUp {
-  if (_dragging)
-    [_surface penCommitLiveLayers];
+  if (_marqueeActive) {
+    [self _finalizeMarquee];
+    _marqueeActive = NO;
+    _dragging = NO;
+    _grabAnchor = -1;
+    _dragStartGeom = nil;
+    return; // selection-only: no geometry change to commit
+  }
+  if (_dragging && _didEdit)
+    [_surface penCommitLiveLayers]; // covers a pen-insert click with no drag
   _dragging = NO;
   _grabAnchor = -1;
+  _dragStartGeom = nil;
+}
+
+// Select every anchor whose projected position lands inside the marquee rect.
+// Opt subtracts, Shift/plain add (a plain marquee already cleared the set on
+// mouseDown). Selection only - no geometry write.
+- (void)_finalizeMarquee {
+  KKBezierPath *path = [self _workingPath];
+  if (!path)
+    return;
+  CGRect r = [self marqueeSurfaceRect];
+  BOOL subtract = (_dragMods & CanvasPenModOpt) != 0;
+  for (NSUInteger i = 0; i < path.count; i++) {
+    KKBezierPoint pt = [path pointAtIndex:i];
+    CGPoint s = [self _surfaceForLocalX:pt.x y:pt.y path:path];
+    if (!CGRectContainsPoint(r, s))
+      continue;
+    if (subtract)
+      [_selectedAnchors removeIndex:i];
+    else
+      [_selectedAnchors addIndex:i];
+  }
 }
 
 // Shift = axis-lock, Cmd = 45deg snap, computed in pixel space (object X scaled

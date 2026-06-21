@@ -5,10 +5,10 @@
 
 #pragma once
 
-// Shared internals of CanvasOSC, split across category files (+Geometry, +State,
-// +AutoSelect, +Input). Holds the controller properties + transient state and
-// declares the cross-category method surface so each category can call the
-// others without -Wundeclared-selector.
+// Shared internals of CanvasOSC, split across category files (+Geometry,
+// +State, +AutoSelect, +Input). Holds the controller properties + transient
+// state and declares the cross-category method surface so each category can
+// call the others without -Wundeclared-selector.
 
 #import "CanvasOSC.h"
 #import "CanvasPathEditController.h" // shared path anchor/handle editing
@@ -50,21 +50,23 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 @property(nonatomic, strong) KKPositionOSC *position;
 @property(nonatomic, strong) KKScaleOSC *scale;
 @property(nonatomic, strong) KKRotationOSC *rotation;
-// The anchor pivot square (topmost), concentric region with the Position handle.
+// The anchor pivot square (topmost), concentric region with the Position
+// handle.
 @property(nonatomic, strong) KKAnchorOSC *anchor;
 // Set while the hover hit-test forced a move/eye/hand cursor, so the next hover
 // can reset it to the arrow.
 @property(nonatomic) BOOL pointCursorSet;
 // Canvas-space centre the rotation rings + scale box sit on this tick: the
-// member-local ANCHOR pivot (where the layer rotates/scales from), recomputed by
+// member-local ANCHOR pivot (where the layer rotates/scales from), recomputed
+// by
 // -_applyGroupComposeOffsetAtTime: each draw / hit / mouse tick.
 @property(nonatomic) CGPoint gizmoPivotCanvas;
 // Layer the hover hit-test resolved for an auto-select pick; consumed by the
 // matching mouseDown.
 @property(nonatomic, copy, nullable) NSString *pendingPickLayerID;
 
-// The combined viewer toolbar (drag handle + grid/adaptive/spacing/snap), global
-// screen chrome whose state lives in kParamUIState (not parameters).
+// The combined viewer toolbar (drag handle + grid/adaptive/spacing/snap),
+// global screen chrome whose state lives in kParamUIState (not parameters).
 @property(nonatomic, strong) KKToolbar *toolbar;
 // While the drag handle is held: the mouse + toolbar centre at press (ioSurface
 // px), and the viewport size cached from the last draw (mouse callbacks don't
@@ -83,12 +85,19 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 // Shared anchor/handle editor for the selected path (CanvasOSC is its surface
 // via the same CanvasPenSurface the pen uses).
 @property(nonatomic, strong) CanvasPathEditController *pathEditController;
-// Set for the span of a pen overlay draw so the surface draw primitives know the
-// FxImageTile + time to encode into.
-@property(nonatomic, assign) FxImageTile *penDrawDest;
+// Set for the span of a pen overlay draw so the surface draw primitives know
+// the FxImageTile + time to encode into.
+@property(nonatomic, assign, nullable) FxImageTile *penDrawDest;
+// YES once a live param write happened during the current edit gesture, so the
+// mouseUp commit knows whether it still needs to write (a preview-only insert
+// with no drag) or the per-tick drag writes already covered it.
+@property(nonatomic) BOOL penLiveParamWritten;
+// The tool seen on the previous draw, to detect a switch INTO the pen tool (and
+// clear the lingering cursor-mode point selection then).
+@property(nonatomic) NSInteger lastDrawnTool;
 @property(nonatomic) CMTime penDrawTime;
-// Reusable dot controls for the anchors + tangent handles, matching the Position
-// path OSC's look (shared KKPointOSC, not hand-drawn squares).
+// Reusable dot controls for the anchors + tangent handles, matching the
+// Position path OSC's look (shared KKPointOSC, not hand-drawn squares).
 @property(nonatomic, strong) KKPointOSC *penAnchorOSC;
 @property(nonatomic, strong) KKPointOSC *penHandleOSC;
 @end
@@ -105,10 +114,10 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 - (CGPoint)_rawObjFromCanvasX:(double)cx y:(double)cy;
 - (void)_syncScaleControlAtTime:(CMTime)time;
 - (void)_syncRotationControlAtTime:(CMTime)time;
-// Reset the point controls' group hooks to identity (Position + Anchor stay 2D /
-// member-local - see the .m note) and recompute the member-local anchor pivot the
-// rotation rings + scale box centre on. Call at the top of draw / hit-test /
-// mouse.
+// Reset the point controls' group hooks to identity (Position + Anchor stay 2D
+// / member-local - see the .m note) and recompute the member-local anchor pivot
+// the rotation rings + scale box centre on. Call at the top of draw / hit-test
+// / mouse.
 - (void)_applyGroupComposeOffsetAtTime:(CMTime)time;
 @end
 
@@ -136,9 +145,12 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 - (void)_toolbarMouseDownTag:(NSInteger)tag atX:(double)x y:(double)y;
 - (void)_toolbarMouseDraggedAtX:(double)x y:(double)y;
 - (void)_toolbarMouseUp;
-// Control+letter tool shortcuts (^V/^X/^B/^G). Returns YES if it consumed the key.
-- (BOOL)_handleToolbarKey:(unsigned short)asciiKey modifiers:(NSUInteger)modifiers;
-// The active drawing tool from kParamUIState (CanvasToolbarTool*, default cursor).
+// Control+letter tool shortcuts (^V/^X/^B/^G). Returns YES if it consumed the
+// key.
+- (BOOL)_handleToolbarKey:(unsigned short)asciiKey
+                modifiers:(NSUInteger)modifiers;
+// The active drawing tool from kParamUIState (CanvasToolbarTool*, default
+// cursor).
 - (NSInteger)_activeTool;
 // Grid settings read from kParamUIState (defaults: off / Auto / 10 / off).
 - (BOOL)_gridEnabled;
@@ -153,14 +165,17 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
                     height:(NSInteger)height
           destinationImage:(FxImageTile *)destinationImage;
 // Generic grid snap: pin a canvas point to the nearest grid intersection (no-op
-// unless Snap is on). The Position / Anchor canvasSnapProvider blocks call this.
+// unless Snap is on). The Position / Anchor canvasSnapProvider blocks call
+// this.
 - (CGPoint)_snapCanvasPointToGrid:(CGPoint)cp;
 @end
 
 // Click-to-select: pick the layer under the cursor + commit the selection.
 @interface CanvasOSC (AutoSelect)
 - (BOOL)_autoSelectEnabled;
-- (nullable NSString *)_pickLayerIDAtX:(double)x y:(double)y atTime:(CMTime)time;
+- (nullable NSString *)_pickLayerIDAtX:(double)x
+                                     y:(double)y
+                                atTime:(CMTime)time;
 - (void)_commitPickSelection;
 @end
 
@@ -170,20 +185,25 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 // primitives) are implemented in CanvasOSC+Pen.m. Mouse coords are CANVAS px.
 @interface CanvasOSC (Pen) <CanvasPenSurface>
 - (BOOL)_penToolActive;
-// If a path is being drawn but the pen tool was deselected or the selection moved
-// to another layer, confirm (end) the in-progress path as-is (no close). Call at
-// the top of draw so a tool / layer switch finalises the current path.
+// If a path is being drawn but the pen tool was deselected or the selection
+// moved to another layer, confirm (end) the in-progress path as-is (no close).
+// Call at the top of draw so a tool / layer switch finalises the current path.
 - (void)_penConfirmIfContextLost;
 // Returns YES if the pen consumed the click (always, while active).
-- (BOOL)_penMouseDownAtX:(double)x y:(double)y modifiers:(NSUInteger)modifiers
+- (BOOL)_penMouseDownAtX:(double)x
+                       y:(double)y
+               modifiers:(NSUInteger)modifiers
                   atTime:(CMTime)time;
 - (void)_penMouseMovedAtX:(double)x y:(double)y;
 // Click-drag after placing an anchor pulls its bezier handles (modifiers match
 // the Position path OSC: Shift = axis-lock, Cmd = 45deg snap, Ctrl = cusp).
-- (void)_penMouseDraggedAtX:(double)x y:(double)y modifiers:(NSUInteger)modifiers;
+- (void)_penMouseDraggedAtX:(double)x
+                          y:(double)y
+                  modifiers:(NSUInteger)modifiers;
 - (void)_penMouseUp;
 // Return/Enter finishes an open path; Esc cancels. YES if consumed.
-- (BOOL)_penKeyDown:(unsigned short)asciiKey modifiers:(NSUInteger)modifiers
+- (BOOL)_penKeyDown:(unsigned short)asciiKey
+          modifiers:(NSUInteger)modifiers
              atTime:(CMTime)time;
 - (void)_drawPenInProgressWithWidth:(NSInteger)width
                              height:(NSInteger)height
@@ -201,7 +221,9 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 // + handles via the shared CanvasPathEditController. Coords are CANVAS px.
 - (CanvasPathEditHit)_pathEditHitAtX:(double)x y:(double)y;
 - (BOOL)_pathEditMouseDownAtX:(double)x y:(double)y modifiers:(NSUInteger)mods;
-- (void)_pathEditMouseDraggedAtX:(double)x y:(double)y modifiers:(NSUInteger)mods;
+- (void)_pathEditMouseDraggedAtX:(double)x
+                               y:(double)y
+                       modifiers:(NSUInteger)mods;
 - (void)_pathEditMouseUp;
 - (BOOL)_pathEditDragging;
 @end
