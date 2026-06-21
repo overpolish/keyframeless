@@ -129,13 +129,30 @@
   ];
 }
 
-+ (NSDictionary<NSString *, NSNumber *> *)defaultOSCElements {
-  // Transform OSCs start hidden so the viewer is clean; Opt-peek reveals them
-  // as ghosts to Opt-click on. Rotation hides its individual X/Y/Z RINGS rather
-  // than the group: Opt-peek only reveals individually-hidden elements, and a
-  // hidden GROUP wouldn't make its axes reveal-eligible (you could never
-  // Opt-click them back). Leaving the group on keeps the rings per-axis
-  // revealable + re-enableable.
++ (NSDictionary<NSString *, NSNumber *> *)defaultOSCElementsForVector:
+    (BOOL)vector {
+  if (!vector) {
+    // Image / group: no point/pen editing, so the transform gizmo shows by
+    // default (otherwise the layer would have NO visible control). The rings
+    // show per-axis; "Points" is off (it's not applicable and the path-edit OSC
+    // skips images anyway).
+    return @{
+      @"Points" : @NO,
+      @"Position" : @YES,
+      @"Path" : @YES,
+      @"Scale" : @YES,
+      @"Rotation.X" : @YES,
+      @"Rotation.Y" : @YES,
+      @"Rotation.Z" : @YES,
+      @"Anchor" : @YES
+    };
+  }
+  // Vector path: transform OSCs start hidden so the viewer is clean; Opt-peek
+  // reveals them as ghosts to Opt-click on. Rotation hides its individual X/Y/Z
+  // RINGS rather than the group: Opt-peek only reveals individually-hidden
+  // elements, and a hidden GROUP wouldn't make its axes reveal-eligible (you
+  // could never Opt-click them back). Leaving the group on keeps the rings
+  // per-axis revealable + re-enableable.
   return @{
     @"Points" : @YES, // the path-edit anchors show by default (point-editing is
                       // the obvious action); transform OSCs start hidden
@@ -154,23 +171,9 @@
   KKPluginInstanceState *ist = KKInstanceStateForAPI(self.apiManager);
   if (!ist)
     return;
-  NSDictionary *els = ist.oscElementsByOwner[layerID ?: @""];
-  if (![els isKindOfClass:[NSDictionary class]])
-    els = [CanvasPlugin defaultOSCElements]; // new / unseen layer -> default
-  // Refresh through the kit from a synthesized state (global master + THIS
-  // layer's element map); this sets the active hiddenOSCElements + view + mini.
-  NSDictionary *state =
-      @{@"oscMasterVisible" : @(ist.oscMasterVisible), @"oscElements" : els};
-  [self kkRefreshOSCVisibilityFromState:state
-                                   view:(KKTimelineInspectorView *)
-                                            self.inspectorView
-                               renderer:nil
-                            elementKeys:keys];
-  [(CanvasInspectorView *)self.inspectorView syncMiniHandleVisibility];
-  // Scope the OSC checklist's path-only "Points" element to vector-path layers:
-  // images / groups drop it so they don't list a control they can't use. The
-  // checklist + its states read this live property (see kkWire), so the next
-  // open rebuilds against the scoped set.
+  // Resolve the layer up front: its kind picks the default OSC seed AND scopes
+  // the checklist below (a vector path has point editing; an image / group only
+  // has the transform gizmo).
   KKBezierPath *layer = nil;
   NSString *b64 = CanvasLayerBlobSnapshot();
   if (b64.length) {
@@ -185,6 +188,25 @@
   }
   BOOL vector =
       layer && !layer.isImage && !layer.isGroup && layer.strokeEnabled;
+
+  NSDictionary *els = ist.oscElementsByOwner[layerID ?: @""];
+  if (![els isKindOfClass:[NSDictionary class]])
+    els = [CanvasPlugin
+        defaultOSCElementsForVector:vector]; // new / unseen layer -> default
+  // Refresh through the kit from a synthesized state (global master + THIS
+  // layer's element map); this sets the active hiddenOSCElements + view + mini.
+  NSDictionary *state =
+      @{@"oscMasterVisible" : @(ist.oscMasterVisible), @"oscElements" : els};
+  [self kkRefreshOSCVisibilityFromState:state
+                                   view:(KKTimelineInspectorView *)
+                                            self.inspectorView
+                               renderer:nil
+                            elementKeys:keys];
+  [(CanvasInspectorView *)self.inspectorView syncMiniHandleVisibility];
+  // Scope the OSC checklist's path-only "Points" element to vector-path layers:
+  // images / groups drop it so they don't list a control they can't use. The
+  // checklist + its states read this live property (see kkWire), so the next
+  // open rebuilds against the scoped set.
   NSMutableArray<NSArray<NSString *> *> *scoped = [NSMutableArray array];
   for (NSArray<NSString *> *c in [CanvasPlugin oscCompounds])
     if (vector || ![c containsObject:@"Points"])

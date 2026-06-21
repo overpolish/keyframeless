@@ -45,9 +45,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// wiring and the kParamUIState parameterChanged refresh, so the element-key
 /// list can't drift between them (a drift hid the Rotation toggle).
 + (NSArray<NSArray<NSString *> *> *)oscCompounds;
-/// Default per-element visibility seed (the transform OSCs start individually
-/// hidden so the viewer is clean but opt-peek reveals them).
-+ (NSDictionary<NSString *, NSNumber *> *)defaultOSCElements;
+/// Default per-element visibility seed, by layer kind. A vector path starts
+/// with just its point-edit anchors shown (the transform gizmo hidden, opt-peek
+/// reveals it). A non-vector layer (image / group) has no point/pen editing, so
+/// it starts with the transform gizmo SHOWN (otherwise it would have no visible
+/// control at all) and "Points" off.
++ (NSDictionary<NSString *, NSNumber *> *)defaultOSCElementsForVector:
+    (BOOL)vector;
 
 /// Load `layerID`'s per-layer OSC element set (or the default seed) into the
 /// ACTIVE per-instance state + refresh the inspector + mini. Called on open and
