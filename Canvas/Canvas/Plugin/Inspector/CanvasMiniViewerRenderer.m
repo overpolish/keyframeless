@@ -96,6 +96,7 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     _penController = [[CanvasPenController alloc] initWithSurface:self];
     _pathEditController =
         [[CanvasPathEditController alloc] initWithSurface:self];
+    _shapeController = [[CanvasShapeController alloc] initWithSurface:self];
   }
   return self;
 }
@@ -111,10 +112,13 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   // -_transformHandlesActive, which gates the scale / anchor / position
   // delegates). The rotation rings are drawn + hit-tested by the kit renderer
   // keyed on rotationLabel, bypassing that gate, so an Opt-peek would reveal
-  // them under the pen. Suppress the Rotation handle while the pen owns the
-  // canvas - matching the viewer's pen branch, which skips the whole gizmo.
-  BOOL pen = (toolbarTool == CanvasToolbarToolPen);
-  self.suppressedHandleLabels = pen ? @[ @"Rotation" ] : @[];
+  // them under a drawing tool. Suppress the Rotation handle whenever a drawing
+  // tool (pen / rect / ellipse) owns the canvas - matching the viewer, which
+  // skips the whole gizmo for those tools.
+  BOOL drawingTool = (toolbarTool == CanvasToolbarToolPen ||
+                      toolbarTool == CanvasToolbarToolRect ||
+                      toolbarTool == CanvasToolbarToolEllipse);
+  self.suppressedHandleLabels = drawingTool ? @[ @"Rotation" ] : @[];
 }
 
 // Toolbar chrome: drive the per-draw state from the shared kParamUIState the

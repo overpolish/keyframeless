@@ -7,7 +7,8 @@
 
 #import "CanvasMiniViewerRenderer.h"
 #import "CanvasPathEditController.h" // shared path anchor/handle editing
-#import "CanvasPenController.h" // CanvasPenSurface + shared pen state machine
+#import "CanvasPenController.h"   // CanvasPenSurface + shared pen state machine
+#import "CanvasShapeController.h" // shared rect/ellipse drag-create tool
 #import <KeyframelessKit/KeyframelessKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
@@ -15,34 +16,38 @@ NS_ASSUME_NONNULL_BEGIN
 @class KKToolbar;
 
 @interface CanvasMiniViewerRenderer ()
-// Shared pen state machine; this renderer is its surface (CanvasMiniViewerRenderer
-// +Pen.m implements CanvasPenSurface). Set in -init.
+// Shared pen state machine; this renderer is its surface
+// (CanvasMiniViewerRenderer +Pen.m implements CanvasPenSurface). Set in -init.
 @property(nonatomic, strong) CanvasPenController *penController;
 // Shared anchor/handle editor for the selected path (this renderer is its
 // surface via the same CanvasPenSurface the pen uses).
 @property(nonatomic, strong) CanvasPathEditController *pathEditController;
+// Shared rect/ellipse drag-create tool (same CanvasPenSurface).
+@property(nonatomic, strong) CanvasShapeController *shapeController;
 // The content rect (overlay view points) of the in-flight pen input / draw, so
 // the surface coordinate methods can convert without it being threaded through.
 @property(nonatomic) CGRect penContentRect;
-// The canvas during a pen overlay draw, so the surface draw primitives can encode
-// dots / lines via its armed Metal encoder. Set only inside the draw hook.
+// The canvas during a pen overlay draw, so the surface draw primitives can
+// encode dots / lines via its armed Metal encoder. Set only inside the draw
+// hook.
 @property(nonatomic, weak) KKMiniViewerView *penDrawCanvas;
-// View point (overlay y-up) -> normalized member value (Position space, Y-down),
-// through the inverse group homography. Used by the pen surface (it flips to the
-// Y-up KKBezierPath space).
+// View point (overlay y-up) -> normalized member value (Position space,
+// Y-down), through the inverse group homography. Used by the pen surface (it
+// flips to the Y-up KKBezierPath space).
 - (simd_float2)_memberValueForViewPoint:(CGPoint)vp contentRect:(CGRect)cr;
 // Output dims of the last composite (= the rendered frame size), captured in
 // -encodeEffectFromSource:. The grid spacing is in these output pixels, so the
 // mini grid lands on the same cells as the viewer.
 @property(nonatomic) CGFloat renderWidth;
 @property(nonatomic) CGFloat renderHeight;
-// The exact normalized cell size the grid LAST drew (after Auto). The snap reuses
-// it so it can't diverge from the drawn lines (0 = not drawn yet).
+// The exact normalized cell size the grid LAST drew (after Auto). The snap
+// reuses it so it can't diverge from the drawn lines (0 = not drawn yet).
 @property(nonatomic) double drawnGridNX;
 @property(nonatomic) double drawnGridNY;
 // The mini's own toolbar instance (the SAME bar as the viewer, built by the
-// shared CanvasMakeToolbar). State is driven per-draw from the shared kParamUIState
-// the inspector mirrors onto this renderer; it's drawn via the kit's toolbar hook.
+// shared CanvasMakeToolbar). State is driven per-draw from the shared
+// kParamUIState the inspector mirrors onto this renderer; it's drawn via the
+// kit's toolbar hook.
 @property(nonatomic, strong) KKToolbar *toolbar;
 // Drag-handle press state (drawable px, y-down layout space).
 @property(nonatomic) CGPoint toolbarPressMouse;
@@ -64,10 +69,9 @@ NS_ASSUME_NONNULL_BEGIN
 // Member-local ANCHOR pivot (Position + Anchor) in overlay points - the centre
 // the rotation rings / scale box / anchor square share.
 - (CGPoint)_anchorPivotForContentRect:(CGRect)cr;
-// Snap a normalized object point to the grid (no-op unless gridSnap). Used by the
-// Position/Anchor mini controllers' grid-snap blocks.
-- (simd_float2)_snapNormalizedPointToGrid:(simd_float2)p
-                              contentRect:(CGRect)cr;
+// Snap a normalized object point to the grid (no-op unless gridSnap). Used by
+// the Position/Anchor mini controllers' grid-snap blocks.
+- (simd_float2)_snapNormalizedPointToGrid:(simd_float2)p contentRect:(CGRect)cr;
 @end
 
 @interface CanvasMiniViewerRenderer (Interaction)
@@ -82,6 +86,14 @@ NS_ASSUME_NONNULL_BEGIN
 // the CanvasPenSurface coords/blob/draw primitives (CoreGraphics) and the kit's
 // tool-drawing delegate hooks (forwarding to the controller).
 @interface CanvasMiniViewerRenderer (Pen) <CanvasPenSurface>
+@end
+
+// Rect / ellipse drag-create on the mini: the tool-drawing delegate hooks (in
+// the Pen category) forward to the shared shape controller via these.
+@interface CanvasMiniViewerRenderer (Shape)
+- (BOOL)_shapeToolActive;
+// Sync the controller's kind to the live toolbar tool before each gesture.
+- (void)_syncShapeKind;
 @end
 
 NS_ASSUME_NONNULL_END

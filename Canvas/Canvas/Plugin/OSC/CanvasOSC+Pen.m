@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "CanvasLayerTimeline.h" // blob + UIState snapshots
+#import "CanvasAnchorSelectionSync.h" // cross-process selection sync
+#import "CanvasLayerTimeline.h"       // blob + UIState snapshots
 #import "CanvasOSC_Private.h"
 #import "CanvasPathMorph.h" // CanvasPathMorphedAtFraction
 #import "CanvasPathOSC.h"   // CanvasDrawPathEditOSC
-#import "CanvasAnchorSelectionSync.h" // cross-process selection sync
 #import "CanvasPenController.h"
 #import "CanvasPenCursors.h" // shared pen cursor set
 #import "CanvasPenMarquee.h" // shared dashed-marquee perimeter walk
@@ -24,7 +24,7 @@ static const simd_float4 kPenHandleLine = {1.0f, 1.0f, 1.0f, 0.85f};
 static const float kPenLineHaloHalfPx = 2.3f;
 static const float kPenLineCoreHalfPx = 1.2f;
 
-static CanvasPenModifiers PenModsFromFx(NSUInteger m) {
+CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m) {
   CanvasPenModifiers out = CanvasPenModNone;
   if (m & kFxModifierKey_SHIFT)
     out |= CanvasPenModShift;
@@ -36,6 +36,8 @@ static CanvasPenModifiers PenModsFromFx(NSUInteger m) {
     out |= CanvasPenModOpt;
   return out;
 }
+
+#define PenModsFromFx CanvasPenModsFromFxModifiers
 
 @implementation CanvasOSC (Pen)
 

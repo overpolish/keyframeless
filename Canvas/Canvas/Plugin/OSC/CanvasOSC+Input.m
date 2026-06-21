@@ -91,6 +91,17 @@
     self.pointCursorSet = YES;
     return;
   }
+  // Rect / ellipse tool: claim the whole canvas (below the toolbar) so the box
+  // drag routes to the OSC, and show the crosshair. Bypasses the gizmo +
+  // auto-select while drawing, like the pen.
+  if ([self _shapeToolActive]) {
+    *activePart = CanvasOSCPartShape;
+    id<FxOnScreenControlAPI_v4> shAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [shAPI setCursor:[NSCursor crosshairCursor]];
+    self.pointCursorSet = YES;
+    return;
+  }
   // Locked SELECTED layer: its own handles aren't grabbable (and Opt can't peek
   // them back). Auto-select still runs below, so you can click a different
   // layer to switch away from a locked one.
@@ -232,6 +243,13 @@
       *forceUpdate = YES;
     return;
   }
+  // Rect / ellipse tool: begin the drag-out box.
+  if ([self _shapeToolActive]) {
+    [self _shapeMouseDownAtX:positionX y:positionY modifiers:modifiers];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   // Path point editing: grab the anchor / handle the hover hit-test claimed.
   if (activePart == CanvasOSCPartPathEdit) {
     // Opt-click ON an anchor / handle toggles the Points OSC's visibility
@@ -348,6 +366,12 @@
       *forceUpdate = YES;
     return;
   }
+  if ([self _shapeToolActive]) {
+    [self _shapeMouseDraggedAtX:positionX y:positionY modifiers:modifiers];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   // Path point editing: drag the grabbed anchor / handle.
   if ([self _pathEditDragging]) {
     [self _pathEditMouseDraggedAtX:positionX y:positionY modifiers:modifiers];
@@ -420,6 +444,12 @@
       [self _pathEditMouseUp];
     else
       [self _penMouseUp];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
+  if ([self _shapeToolActive]) {
+    [self _shapeMouseUp];
     if (forceUpdate)
       *forceUpdate = YES;
     return;

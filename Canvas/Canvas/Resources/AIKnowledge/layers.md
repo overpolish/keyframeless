@@ -7,7 +7,7 @@ A layer is a `KKBezierPath`. The whole stack is serialized to a hidden `kParamLa
 ## Adding layers
 
 - **Drag image files** (png, jpg, jpeg, webp, heic, tiff, gif, bmp) from Finder onto the Layers panel to add them as image layers. A drop line shows where the new layers will be inserted in the stack. The panel stays open while you switch to Finder (an outside-click only dismisses it when it lands in the host app).
-- (SVG import, shape drawing: pending re-add.)
+- **Draw** a path with the **pen** tool, or drag out a **rectangle** / **ellipse** with the shape tools (see "Drawing with the pen tool" and "Creating shapes" below). (SVG import: pending re-add.)
 
 ## Per-layer controls (each row)
 
@@ -99,7 +99,7 @@ A small floating toolbar sits over the preview in **both** the FCP viewer and th
 
 A divider splits it into two groups. The buttons are icon-only; **hover any button for a localized tooltip** naming what it does.
 
-- **Tools** - cursor, pen, rectangle, ellipse, with keyboard shortcuts **^V / ^X / ^B / ^G** shown on the button. The shortcuts work whenever either surface is focused. Selecting a tool (by click or shortcut) highlights it and stores it as the active tool. The **pen** tool draws paths (see below); the rectangle / ellipse tools are pending re-add, so picking one only sets the selection for now.
+- **Tools** - cursor, pen, rectangle, ellipse, with keyboard shortcuts **^V / ^X / ^B / ^G** shown on the button. The shortcuts work whenever either surface is focused. Selecting a tool (by click or shortcut) highlights it and stores it as the active tool. The **pen** tool draws paths and the **rectangle** / **ellipse** tools drag out shapes (see below); both work in the FCP viewer and the inspector mini-viewer.
 - **Grid controls** - see below.
 
 ### Grid
@@ -132,6 +132,16 @@ The pen tool is also context-sensitive on an existing selected path: clicking a 
 
 Stroke style is a fixed 20px red for now; per-path stroke width / colour / fill are still to come.
 
+## Creating shapes (rectangle / ellipse tools)
+
+Pick the **rectangle** (**^B**) or **ellipse** (**^G**) tool and **drag a box** over the preview to drop a new closed shape layer; release to create it (one undo step) with the new layer selected. Like the pen, the transform gizmo hides while a shape tool is active, and shapes draw the same in the FCP viewer **and** the inspector mini-viewer. While dragging:
+
+- **Shift** constrains to a **square** / **circle** (equal on-screen width and height).
+- **Opt** draws from the **centre** out instead of corner to corner.
+- With **Snap to grid** on, the box corners snap to the grid.
+
+A new shape inherits the same default look as a pen path (a 20px red stroke). A rectangle is a plain four-corner path, so the **live corner widget** rounds it into a rounded rectangle with no extra steps (see below); because the radius is stored per corner, a rectangle can even animate from sharp to rounded across Points keyposes. Both shapes are fully editable afterwards with the cursor tool (move anchors, pull tangent handles, add/remove points) - they are ordinary paths.
+
 ## Editing a path (cursor tool)
 
 With the **cursor** tool and a vector path selected, its anchors and tangent handles are editable directly - in both the FCP viewer and the inspector mini-viewer (the selection stays in sync between the two):
@@ -147,6 +157,8 @@ Edits are per-keypose: on an animated path they change the keypose the playhead 
 
 Every interior corner of a selected path shows a small accent **ring** just inside it (cursor tool only) - the same control style as the radius handle in the Rounded plugin. Drag the ring inward to round that corner, back out to sharpen it; it turns **red** at the maximum radius (half the shorter adjacent edge). The rounding is **per corner** and fully re-editable - drag the same widget again any time, or drag it to zero to restore the sharp corner. While a corner is rounded its stored tangent handles are hidden (the rounding owns that corner); they return when you clear the radius.
 
+**Round several corners at once**: select multiple anchors first (Shift-click them, or marquee-drag over the path), then drag any one of the selected corners' rings - every selected corner takes the same radius together, in a single undo. Each corner still clamps to its own maximum, so a tighter corner rounds as far as it can (and turns red) while the others keep going; anchors that can't be rounded (open-path endpoints, near-straight joins) are left alone.
+
 Because the radius is stored on the anchor (not baked into extra points), it **animates**: a corner can morph smoothly from sharp to rounded across Points keyposes. Rounding doesn't require a closed path - it works on any join.
 
 ## Motion blur
@@ -157,5 +169,4 @@ The inspector's motion-blur control applies the shared sample-accumulate blur to
 
 - Per-layer **rotation** (lane + on-canvas gizmo).
 - Per-layer opacity in the render.
-- **Rectangle / ellipse** tools (the pen tool draws; these still only select).
 - Stroke **styling** (width / colour UI - currently a fixed 20px red) and **fill**, plus the sketch (hand-drawn) render style and SVG import.

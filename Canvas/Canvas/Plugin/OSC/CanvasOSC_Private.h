@@ -13,6 +13,7 @@
 #import "CanvasOSC.h"
 #import "CanvasPathEditController.h" // shared path anchor/handle editing
 #import "CanvasPenController.h" // CanvasPenSurface + the shared pen state machine
+#import "CanvasShapeController.h" // shared rect/ellipse drag-create tool
 #import "CanvasToolbar.h" // CanvasToolbarTag + CanvasMakeToolbar (shared w/ mini)
 #import <KeyframelessKit/KeyframelessKit.h>
 
@@ -25,6 +26,7 @@
 @class KKRingOSC;
 @class CanvasPenController;
 @class CanvasPathEditController;
+@class CanvasShapeController;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -44,7 +46,14 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
   CanvasOSCPartPen = 7,
   // An anchor / tangent handle of the selected path's point-edit OSC.
   CanvasOSCPartPathEdit = 8,
+  // The rect / ellipse tool claims the whole canvas (minus the toolbar) so FCP
+  // routes the box drag to the OSC, like the pen.
+  CanvasOSCPartShape = 9,
 };
+
+// FxModifierKeys -> the surface-neutral CanvasPenModifiers used by the shared
+// pen / shape / path-edit controllers. Defined once in CanvasOSC+Pen.m.
+CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 
 @interface CanvasOSC ()
 // The three reusable sub-controls, concentric on the layer's Position handle.
@@ -86,6 +95,8 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 // Shared anchor/handle editor for the selected path (CanvasOSC is its surface
 // via the same CanvasPenSurface the pen uses).
 @property(nonatomic, strong) CanvasPathEditController *pathEditController;
+// Shared rect/ellipse drag-create tool (same CanvasPenSurface).
+@property(nonatomic, strong) CanvasShapeController *shapeController;
 // Set for the span of a pen overlay draw so the surface draw primitives know
 // the FxImageTile + time to encode into.
 @property(nonatomic, assign, nullable) FxImageTile *penDrawDest;
@@ -101,8 +112,8 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
 // Position path OSC's look (shared KKPointOSC, not hand-drawn squares).
 @property(nonatomic, strong) KKPointOSC *penAnchorOSC;
 @property(nonatomic, strong) KKPointOSC *penHandleOSC;
-// Live-corner radius widget glyph: the shared KKRingOSC, tinted accent (or error
-// at max), so it matches the Glow radius ring + Rounded's handle.
+// Live-corner radius widget glyph: the shared KKRingOSC, tinted accent (or
+// error at max), so it matches the Glow radius ring + Rounded's handle.
 @property(nonatomic, strong) KKRingOSC *penCornerRingOSC;
 @end
 
@@ -230,6 +241,21 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
                        modifiers:(NSUInteger)mods;
 - (void)_pathEditMouseUp;
 - (BOOL)_pathEditDragging;
+@end
+
+// Rect / ellipse tool: this OSC is the drag-create SURFACE for the shared
+// CanvasShapeController. Mouse coords are CANVAS px.
+@interface CanvasOSC (Shape)
+- (BOOL)_shapeToolActive;
+- (void)_shapeMouseDownAtX:(double)x
+                         y:(double)y
+                 modifiers:(NSUInteger)modifiers;
+- (void)_shapeMouseDraggedAtX:(double)x
+                            y:(double)y
+                    modifiers:(NSUInteger)modifiers;
+- (void)_shapeMouseUp;
+- (void)_drawShapeInProgressInDestination:(FxImageTile *)destinationImage
+                                   atTime:(CMTime)time;
 @end
 
 NS_ASSUME_NONNULL_END

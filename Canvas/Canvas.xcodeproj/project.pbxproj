@@ -120,6 +120,7 @@
 				Plugin/Inspector/CanvasMiniViewerRenderer.m,
 				"Plugin/Inspector/CanvasMiniViewerRenderer+Interaction.m",
 				"Plugin/Inspector/CanvasMiniViewerRenderer+Pen.m",
+				"Plugin/Inspector/CanvasMiniViewerRenderer+Shape.m",
 				Plugin/main.m,
 				Plugin/OSC/CanvasOSC.m,
 				"Plugin/OSC/CanvasOSC+AutoSelect.m",
@@ -127,6 +128,7 @@
 				"Plugin/OSC/CanvasOSC+Grid.m",
 				"Plugin/OSC/CanvasOSC+Input.m",
 				"Plugin/OSC/CanvasOSC+Pen.m",
+				"Plugin/OSC/CanvasOSC+Shape.m",
 				"Plugin/OSC/CanvasOSC+State.m",
 				"Plugin/OSC/CanvasOSC+Toolbar.m",
 				Plugin/OSC/CanvasPathEditController.m,
@@ -139,6 +141,7 @@
 				"Plugin/OSC/CanvasPenController+Draw.m",
 				Plugin/OSC/CanvasPenCursors.m,
 				Plugin/OSC/CanvasPenMarquee.m,
+				Plugin/OSC/CanvasShapeController.m,
 				Plugin/OSC/CanvasToolbar.m,
 				"Wrapper Application/Info.plist",
 			);

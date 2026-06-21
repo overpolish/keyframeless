@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "CanvasMiniViewerRenderer_Internal.h"
 #import "CanvasAnchorSelectionSync.h" // cross-process selection sync
+#import "CanvasMiniViewerRenderer_Internal.h"
 #import "CanvasPathMorph.h"  // CanvasPathMorphedAtFraction
 #import "CanvasPathOSC.h"    // CanvasDrawPathEditOSC
 #import "CanvasPenCursors.h" // shared pen cursor set
@@ -45,7 +45,7 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
 #pragma mark - Tool-drawing delegate hooks (from KKMiniViewerOverlay)
 
 - (BOOL)miniViewerToolDrawingActive:(KKMiniViewerView *)canvas {
-  return self.toolbarTool == CanvasToolbarToolPen;
+  return self.toolbarTool == CanvasToolbarToolPen || [self _shapeToolActive];
 }
 
 - (void)miniViewer:(KKMiniViewerView *)canvas
@@ -53,6 +53,13 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
         contentRect:(CGRect)cr
           modifiers:(NSEventModifierFlags)mods {
   self.penContentRect = cr;
+  if ([self _shapeToolActive]) {
+    [self _syncShapeKind];
+    [self.shapeController mouseDownAtX:point.x
+                                     y:point.y
+                             modifiers:PenModsFromNS(mods)];
+    return;
+  }
   // Opt-click an existing anchor removes it (auto-delete cascade); only
   // consumes when an anchor was under it, so Opt elsewhere falls through to
   // normal pen.
@@ -74,6 +81,13 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
            contentRect:(CGRect)cr
              modifiers:(NSEventModifierFlags)mods {
   self.penContentRect = cr;
+  if ([self _shapeToolActive]) {
+    [self.shapeController mouseDraggedAtX:point.x
+                                        y:point.y
+                                modifiers:PenModsFromNS(mods)];
+    [canvas setNeedsDisplay:YES];
+    return;
+  }
   if (self.pathEditController
           .dragging) { // a pen-insert is dragging the new anchor
     [self.pathEditController mouseDraggedAtX:point.x
@@ -90,6 +104,10 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
      toolUpAtPoint:(CGPoint)point
        contentRect:(CGRect)cr {
   self.penContentRect = cr;
+  if ([self _shapeToolActive]) {
+    [self.shapeController mouseUp];
+    return;
+  }
   if (self.pathEditController
           .dragging) { // end the pen-insert (commit one undo)
     [self.pathEditController mouseUp];
@@ -102,6 +120,8 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
     toolMovedToPoint:(CGPoint)point
          contentRect:(CGRect)cr {
   self.penContentRect = cr;
+  if ([self _shapeToolActive])
+    return; // the shape tool has no hover state (box exists only mid-drag)
   [self.penController mouseMovedAtX:point.x y:point.y];
 }
 
@@ -110,7 +130,8 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   // matching the viewer's keyDown. Pen keys (Esc/Return) go to the pen
   // controller.
   if ((key == 127 || key == 8) &&
-      (self.toolbarTool ?: CanvasToolbarToolCursor) != CanvasToolbarToolPen &&
+      (self.toolbarTool ?: CanvasToolbarToolCursor) ==
+          CanvasToolbarToolCursor &&
       self.pathEditController.selectedAnchors.count > 0)
     return [self.pathEditController
         removeAnchorsAtIndexes:self.pathEditController.selectedAnchors
@@ -122,6 +143,8 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
        toolCursorAtPoint:(CGPoint)point
              contentRect:(CGRect)cr {
   self.penContentRect = cr;
+  if ([self _shapeToolActive])
+    return [NSCursor crosshairCursor]; // matches the viewer's shape cursor
   if (!self.penController.active) {
     // Opt over an existing anchor -> "remove point" (matches the Opt-click).
     if (([NSEvent modifierFlags] & NSEventModifierFlagOption) &&
@@ -142,6 +165,13 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
                       contentRect:(CGRect)cr {
   self.penContentRect = cr;
   self.penDrawCanvas = canvas;
+  if ([self _shapeToolActive]) {
+    // Like the viewer's shape branch: just the drag-out box preview, no gizmo
+    // or path-edit OSC.
+    [self.shapeController draw];
+    self.penDrawCanvas = nil;
+    return;
+  }
   [self.penController confirmIfContextLost]; // tool / layer switch finalises
   // Path-edit OSC FIRST (so the cursor tool edits it AND the pen can target a
   // segment), then the pen overlay on top so its endpoint highlight sits over
@@ -156,7 +186,8 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   if (![self labelVisibleOrRevealing:@"Points"])
     return; // hidden and not being Opt-revealed
   // Constants popover shows only constant lanes; keypose popover only the
-  // animated one (matches the transform OSCs via isConstantLabel + boundaryEditing).
+  // animated one (matches the transform OSCs via isConstantLabel +
+  // boundaryEditing).
   if (![self isConstantLabel:@"Points"])
     return;
   NSString *sel = self.selectedLayerID;
@@ -328,13 +359,13 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   if (!canvas)
     return;
   // The shared KKRingOSC shader (same as the viewer ring + Glow's radius ring),
-  // tinted accent / error. Scales with the popover via the OSC sizing ratio; the
-  // shader is crisp so no manual snap is needed.
+  // tinted accent / error. Scales with the popover via the OSC sizing ratio;
+  // the shader is crisp so no manual snap is needed.
   CGFloat scale = canvas.oscSizingHeight / 230.0;
   if (scale <= 0)
     scale = 1.0;
-  simd_float4 fill = maxed ? CanvasMiniColorRGBA([NSColor error])
-                           : CanvasMiniAccentRGBA();
+  simd_float4 fill =
+      maxed ? CanvasMiniColorRGBA([NSColor error]) : CanvasMiniAccentRGBA();
   simd_float4 outline = {0.0f, 0.0f, 0.0f, 0.75f};
   [canvas encodeToolRingAtPoint:[self penSurfacePointFromObj:objYUp]
                        radiusPt:2.3 * scale

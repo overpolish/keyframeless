@@ -92,6 +92,7 @@
     _penController = [[CanvasPenController alloc] initWithSurface:self];
     _pathEditController =
         [[CanvasPathEditController alloc] initWithSurface:self];
+    _shapeController = [[CanvasShapeController alloc] initWithSurface:self];
     [self _setupToolbar];
   }
   return self;
@@ -145,6 +146,15 @@
                                height:height
                      destinationImage:destinationImage
                                atTime:time];
+    [self _drawToolbarWithWidth:width
+                         height:height
+               destinationImage:destinationImage];
+    return;
+  }
+  // Rect / ellipse tool: like the pen, no transform gizmo - just the grid, the
+  // drag-out box preview, and the toolbar.
+  if ([self _shapeToolActive]) {
+    [self _drawShapeInProgressInDestination:destinationImage atTime:time];
     [self _drawToolbarWithWidth:width
                          height:height
                destinationImage:destinationImage];
