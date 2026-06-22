@@ -6,6 +6,7 @@
 #import "CanvasPathOSC.h"
 #import "CanvasCornerFillet.h" // corner widget geometry
 #import "CanvasLayerRender.h"  // CanvasProjectLayerPointsObj
+#import "CanvasPathEditController.h" // kCanvasMaxEditableAnchors
 #import "CanvasPenController.h" // CanvasPenSurface draw primitives
 #import <KeyframelessKit/KKBezierPath.h>
 #import <simd/simd.h>
@@ -15,19 +16,20 @@
 static const NSUInteger kPathOSCSteps = 16;
 
 // Flatten the path to a local normalized polyline (Y-up), the raw geometry
-// CanvasProjectLayerPointsObj then projects. Returns the sample count.
-static NSUInteger CanvasPathOSCFlatten(KKBezierPath *path, simd_float2 *out,
-                                       NSUInteger cap) {
+// CanvasProjectLayerPointsObj then projects. `steps` sub-samples per segment (a
+// huge path's segments are tiny, so it can drop to ~1). Returns the sample count.
+static NSUInteger CanvasPathOSCFlatten(KKBezierPath *path, NSUInteger steps,
+                                       simd_float2 *out, NSUInteger cap) {
   NSUInteger count = path.count;
-  if (count < 2)
+  if (count < 2 || steps < 1)
     return 0;
   BOOL closed = path.closed;
   NSUInteger segs = closed ? count : count - 1;
   NSUInteger n = 0;
   for (NSUInteger c = 0; c < segs; c++) {
     NSUInteger next = (c + 1) % count;
-    for (NSUInteger i = 0; i < kPathOSCSteps; i++) {
-      float t = (float)i / (float)kPathOSCSteps;
+    for (NSUInteger i = 0; i < steps; i++) {
+      float t = (float)i / (float)steps;
       simd_float2 p = [path evaluatePointAtIndex:c nextIndex:next atT:t];
       if (n > 0 && simd_distance_squared(p, out[n - 1]) < 1e-9f)
         continue;
@@ -65,9 +67,12 @@ void CanvasDrawPathEditOSC(id<CanvasPenSurface> surface,
   NSUInteger curveCount = curvePath.count;
   if (curveCount >= 2) {
     NSUInteger segs = curvePath.closed ? curveCount : curveCount - 1;
-    NSUInteger cap = segs * kPathOSCSteps + 2;
+    // A huge path's segments are sub-pixel, so 1-2 samples each trace it fine -
+    // 16 would mean tens of thousands of curve evaluations every OSC frame.
+    NSUInteger steps = curveCount > kCanvasMaxEditableAnchors ? 2 : kPathOSCSteps;
+    NSUInteger cap = segs * steps + 2;
     simd_float2 *local = malloc(sizeof(simd_float2) * cap);
-    NSUInteger n = CanvasPathOSCFlatten(curvePath, local, cap);
+    NSUInteger n = CanvasPathOSCFlatten(curvePath, steps, local, cap);
     if (n >= 2) {
       simd_float2 *proj = malloc(sizeof(simd_float2) * n);
       CanvasProjectLayerPointsObj(layers, curvePath, frac, aspect, local, proj,
@@ -80,6 +85,16 @@ void CanvasDrawPathEditOSC(id<CanvasPenSurface> surface,
       free(cg);
     }
     free(local);
+  }
+
+  // A path too large to edit per-anchor draws only its outline (above): drawing
+  // a dot + handles + corner ring for each of thousands of anchors would be
+  // thousands of draw calls every frame. The marquee still draws (selection is
+  // disabled for such a path, so it won't actually be active, but be safe).
+  if (count > kCanvasMaxEditableAnchors) {
+    if (marqueeActive)
+      [surface penDrawMarqueeRect:marqueeSurfaceRect];
+    return;
   }
 
   // Project the raw anchors once.

@@ -18,6 +18,11 @@ static const double kPenDoubleClickSlopPx = 6.0;
 // accident.
 static const double kPenHandleMinDragPx = 6.0;
 
+// The public -draw is implemented in the +Draw category (the intentional split),
+// not here, so the primary @implementation is deliberately "incomplete".
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wincomplete-implementation"
+
 @implementation CanvasPenController
 
 static void PenAddPoint(KKBezierPath *l, CGPoint pos, CGPoint o, CGPoint in) {
@@ -419,3 +424,5 @@ static KKBezierPath *PenNewLayer(void) {
 }
 
 @end
+
+#pragma clang diagnostic pop

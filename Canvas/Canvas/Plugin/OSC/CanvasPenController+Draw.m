@@ -23,6 +23,12 @@ static simd_float2 PenEvalCubic(simd_float2 p0, simd_float2 c0, simd_float2 c1,
          t * t * t * p1;
 }
 
+// The public -draw (declared in CanvasPenController.h) is implemented here as
+// part of the intentional category split - silence the warning that it's not in
+// the primary @implementation (which suppresses the matching -Wincomplete).
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
+
 @implementation CanvasPenController (Draw)
 
 - (void)draw {
@@ -168,3 +174,5 @@ static simd_float2 PenEvalCubic(simd_float2 p0, simd_float2 c0, simd_float2 c1,
 }
 
 @end
+
+#pragma clang diagnostic pop

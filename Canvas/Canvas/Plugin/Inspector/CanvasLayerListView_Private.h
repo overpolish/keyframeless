@@ -76,6 +76,11 @@ extern NSPasteboardType const kCanvasLayerRowDragType;
 // Layer blob IO + cache mutation, scroll shadows, rename (primary impl).
 - (void)_modifyPaths:(void (^)(NSMutableArray<KKBezierPath *> *paths))block;
 - (nullable KKBezierPath *)_imageLayerForURL:(NSURL *)url;
+// Parse an SVG file into ready-to-insert layers in top-to-bottom flat order:
+// index 0 is the root (a group when the SVG has several elements, else the
+// single path) with a nil parent; any following entries are the group's
+// children. Empty when the file can't be read / parsed. (Primary impl.)
+- (NSArray<KKBezierPath *> *)_svgLayersForURL:(NSURL *)url;
 - (nullable NSImage *)_thumbnailForPath:(NSString *)imagePath;
 - (void)_updateScrollShadows;
 - (void)beginRenameAtIndex:(NSUInteger)idx;
@@ -137,10 +142,11 @@ extern NSPasteboardType const kCanvasLayerRowDragType;
 - (void)performRowReorderFromIndices:(NSIndexSet *)indices
                          toFlatIndex:(NSInteger)dropIdx
                        parentGroupID:(nullable NSString *)parentGID;
-- (NSArray<NSURL *> *)imageURLsFromDraggingInfo:(id<NSDraggingInfo>)info;
-- (void)insertImageURLs:(NSArray<NSURL *> *)urls
-            atFlatIndex:(NSInteger)idx
-          parentGroupID:(nullable NSString *)parentGID;
+// Importable files in a drag: image (raster) + SVG (vector) URLs.
+- (NSArray<NSURL *> *)importableURLsFromDraggingInfo:(id<NSDraggingInfo>)info;
+- (void)insertFileURLs:(NSArray<NSURL *> *)urls
+           atFlatIndex:(NSInteger)idx
+         parentGroupID:(nullable NSString *)parentGID;
 - (BOOL)computeDropForDocPoint:(NSPoint)p
                       dragging:(nullable NSIndexSet *)dragged
                   outFlatIndex:(NSInteger *)outFlat

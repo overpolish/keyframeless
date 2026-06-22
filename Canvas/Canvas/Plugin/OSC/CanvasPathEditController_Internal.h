@@ -38,6 +38,17 @@ NS_ASSUME_NONNULL_BEGIN
   NSInteger _grabCorner; // corner-radius widget being dragged, -1 = none
 }
 
+/// Publish the current selection to the other surface (cross-process sync).
+/// (Implemented in the base @implementation.)
+- (void)_publishSelection;
+
+@end
+
+// The category-implemented helpers are declared on matching CATEGORY interfaces
+// (not the class extension above) so the compiler doesn't expect them in the
+// primary @implementation - matching the layer-list split.
+
+@interface CanvasPathEditController (Query)
 /// The selected layer if it's an editable vector path, else nil.
 - (nullable KKBezierPath *)_path;
 /// The geometry shown / edited at the current fraction: the base for a constant
@@ -57,15 +68,18 @@ NS_ASSUME_NONNULL_BEGIN
                      y:(double)y
                 outSeg:(NSUInteger *)outSeg
                   outT:(double *)outT;
+@end
+
+@interface CanvasPathEditController (Topology)
 /// Toggle anchor `idx` corner<->smooth (called by the base double-click path).
 - (BOOL)_toggleSmoothAtIndex:(NSUInteger)idx;
-/// Publish the current selection to the other surface (cross-process sync).
-- (void)_publishSelection;
-/// Corner-radius widget under a surface point, or -1 (implemented in +Corners).
-- (NSInteger)_cornerWidgetHitAtX:(double)x y:(double)y;
-/// Live corner-radius drag for the grabbed corner (implemented in +Corners).
-- (void)_dragCornerToX:(double)x y:(double)y modifiers:(CanvasPenModifiers)mods;
+@end
 
+@interface CanvasPathEditController (Corners)
+/// Corner-radius widget under a surface point, or -1.
+- (NSInteger)_cornerWidgetHitAtX:(double)x y:(double)y;
+/// Live corner-radius drag for the grabbed corner.
+- (void)_dragCornerToX:(double)x y:(double)y modifiers:(CanvasPenModifiers)mods;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -7,7 +7,8 @@ A layer is a `KKBezierPath`. The whole stack is serialized to a hidden `kParamLa
 ## Adding layers
 
 - **Drag image files** (png, jpg, jpeg, webp, heic, tiff, gif, bmp) from Finder onto the Layers panel to add them as image layers. A drop line shows where the new layers will be inserted in the stack. The panel stays open while you switch to Finder (an outside-click only dismisses it when it lands in the host app).
-- **Draw** a path with the **pen** tool, or drag out a **rectangle** / **ellipse** with the shape tools (see "Drawing with the pen tool" and "Creating shapes" below). (SVG import: pending re-add.)
+- **Draw** a path with the **pen** tool, or drag out a **rectangle** / **ellipse** with the shape tools (see "Drawing with the pen tool" and "Creating shapes" below).
+- **Drag SVG files** from Finder onto the Layers panel to import them as editable vector paths (see "Importing SVG" below).
 
 ## Per-layer controls (each row)
 
@@ -161,6 +162,12 @@ Every interior corner of a selected path shows a small accent **ring** just insi
 
 Because the radius is stored on the anchor (not baked into extra points), it **animates**: a corner can morph smoothly from sharp to rounded across Points keyposes. Rounding doesn't require a closed path - it works on any join.
 
+## Importing SVG
+
+Drag an **`.svg`** file from Finder onto the Layers panel (alongside images - the same drop line shows where it lands). Each shape in the file becomes a vector path layer: a single-shape SVG imports as one path named after the file; a multi-shape SVG imports as a **group** (named after the file) with one child path per shape, stacked to match the SVG's paint order. The art is fitted into the canvas, aspect-correct and centred. Supported elements: `<path>`, `<rect>`, `<circle>`, `<ellipse>`, `<line>`, `<polygon>`, `<polyline>`; anything else is skipped.
+
+Imported paths are ordinary editable paths. A small, simple SVG can be point-edited like a pen path. A **detailed** outline (over ~250 anchors) is flagged in the layer list with a distinct accent path glyph (hover it for the explanation) and behaves like an image: it shows the transform gizmo (move / scale / rotate) by default instead of the per-anchor controls, since hand-editing thousands of points isn't practical and performance would be slow.
+
 ## Motion blur
 
 The inspector's motion-blur control applies the shared sample-accumulate blur to the layer animation (and the underlying content), the same engine the other Keyframeless plugins use.
@@ -169,4 +176,4 @@ The inspector's motion-blur control applies the shared sample-accumulate blur to
 
 - Per-layer **rotation** (lane + on-canvas gizmo).
 - Per-layer opacity in the render.
-- Stroke **styling** (width / colour UI - currently a fixed 20px red) and **fill**, plus the sketch (hand-drawn) render style and SVG import.
+- Stroke **styling** (width / colour UI - currently a fixed 20px red) and **fill**, plus the sketch (hand-drawn) render style.

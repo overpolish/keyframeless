@@ -152,13 +152,16 @@ static float sRGBToLinear(float c) {
     for (NSUInteger i = 0; i < p.count; i++) {
       KKBezierPoint pt = [p pointAtIndex:i];
       float nx = pt.x * scaleX + offX;
-      float ny = 1.0f - (pt.y * scaleY + offY); // flip Y
+      // Map nanosvg's coords straight through. An explicit `1 - y` flip here
+      // came out vertically mirrored (upside down) in the consuming render, so
+      // the SVG-native Y is what the render expects - don't flip.
+      float ny = pt.y * scaleY + offY;
       [p moveAtIndex:i to:(simd_float2){nx, ny}];
 
       if (pt.type == KKBezierPointBezier) {
-        [p setInHandle:(simd_float2){pt.inX * scaleX, -pt.inY * scaleY}
+        [p setInHandle:(simd_float2){pt.inX * scaleX, pt.inY * scaleY}
                atIndex:i];
-        [p setOutHandle:(simd_float2){pt.outX * scaleX, -pt.outY * scaleY}
+        [p setOutHandle:(simd_float2){pt.outX * scaleX, pt.outY * scaleY}
                 atIndex:i];
       }
     }

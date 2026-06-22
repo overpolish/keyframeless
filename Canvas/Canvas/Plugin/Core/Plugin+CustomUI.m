@@ -5,6 +5,7 @@
 
 #import "CanvasInspectorView.h"
 #import "CanvasLayerTimeline.h"
+#import "CanvasPathEditController.h" // CanvasPathIsLargeVector
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
@@ -186,8 +187,11 @@
         break;
       }
   }
-  BOOL vector =
-      layer && !layer.isImage && !layer.isGroup && layer.strokeEnabled;
+  // A too-large path (e.g. a detailed imported SVG) isn't editable per-anchor,
+  // so it's treated like an image: the transform gizmo shows by default, not the
+  // point-edit OSC.
+  BOOL vector = layer && !layer.isImage && !layer.isGroup &&
+                layer.strokeEnabled && !CanvasPathIsLargeVector(layer);
 
   NSDictionary *els = ist.oscElementsByOwner[layerID ?: @""];
   if (![els isKindOfClass:[NSDictionary class]])

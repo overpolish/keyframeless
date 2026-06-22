@@ -14,6 +14,7 @@
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKCheckboxRowView.h>
 #import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKSVGParser.h>
 #import <KeyframelessKit/KKShape.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
@@ -483,6 +484,70 @@
   rect.max = simd_make_float2(x0 + w, y0 + h);
   p.shape = rect;
   return p;
+}
+
+- (NSArray<KKBezierPath *> *)_svgLayersForURL:(NSURL *)url {
+  NSString *svg = [NSString stringWithContentsOfURL:url
+                                           encoding:NSUTF8StringEncoding
+                                              error:nil];
+  if (!svg.length)
+    return @[];
+  // The parser normalises to 0-1 object space; it needs the canvas dimensions
+  // to compensate the aspect (same 1920x1080 reference the image insert uses).
+  NSArray<KKBezierPath *> *imported =
+      [KKSVGParser pathsFromSVGString:svg canvasWidth:1920.0f canvasHeight:1080.0f];
+  if (imported.count == 0)
+    return @[];
+  // SVG paints first-to-last (back-to-front); the layer list is top-to-bottom
+  // (topmost draws in front), so reverse to keep the stacking order.
+  imported = [[imported reverseObjectEnumerator] allObjects];
+
+  // TEMP: the v3 render strokes only (no vector FILL yet). So:
+  //  - FILLED shapes keep their parsed paint - they just won't show until fill
+  //    rendering is back (intended; their own thin stroke, if any, is all that
+  //    draws for now).
+  //  - LINE art (no fill) gets the pen-style placeholder stroke (20px red) so
+  //    it's visible, since its real stroke is often an unresolvable paint like
+  //    `currentColor`. Remove this once stroke styling is wired.
+  for (KKBezierPath *p in imported) {
+    if (p.fillEnabled)
+      continue;
+    p.strokeEnabled = YES;
+    p.strokeWidth = 20.0f;
+    p.strokeR = 1.0f;
+    p.strokeG = 0.0f;
+    p.strokeB = 0.0f;
+  }
+  NSString *base = url.lastPathComponent.stringByDeletingPathExtension;
+
+  if (imported.count == 1) {
+    KKBezierPath *single = imported.firstObject;
+    if (!single.name.length)
+      single.name = base;
+    single.parentGroupID = nil; // the caller sets the drop parent
+    return @[ single ];
+  }
+  // Several elements: wrap them in a group named after the file (matching how
+  // multi-path SVGs imported before the v3 rebuild).
+  KKBezierPath *group = [[KKBezierPath alloc] init];
+  group.isGroup = YES;
+  group.groupID = [[NSUUID UUID] UUIDString];
+  group.name = base;
+  group.strokeEnabled = NO;
+  group.fillEnabled = NO;
+  NSMutableArray<KKBezierPath *> *out = [NSMutableArray arrayWithObject:group];
+  for (NSUInteger i = 0; i < imported.count; i++) {
+    KKBezierPath *child = imported[i];
+    child.parentGroupID = group.groupID;
+    if (!child.name.length)
+      child.name = [NSString
+          stringWithFormat:CLoc(@"Path %lu",
+                                @"Fallback name for an unnamed SVG sub-path "
+                                @"(%lu = its number)"),
+                           (unsigned long)(i + 1)];
+    [out addObject:child];
+  }
+  return out;
 }
 
 - (nullable NSImage *)_thumbnailForPath:(NSString *)imagePath {

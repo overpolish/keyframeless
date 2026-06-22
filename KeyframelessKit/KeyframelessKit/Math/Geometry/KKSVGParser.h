@@ -12,7 +12,9 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// Parses an SVG string and returns an array of KKBezierPath objects.
-/// Coordinates are normalized to 0-1 object space with Y=0 at bottom.
+/// Coordinates are normalized to 0-1 object space, SVG-native (Y down, 0 at the
+/// top) to match the consuming render space (so the art isn't vertically
+/// mirrored).
 /// Supports: <path>, <rect>, <circle>, <ellipse>, <line>, <polygon>,
 /// <polyline>. Extracts fill/stroke colors. Unsupported elements are skipped.
 @interface KKSVGParser : NSObject

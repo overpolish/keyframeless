@@ -11,6 +11,13 @@
 
 static const double kCornerWidgetGrabPx = 9.0; // widget hit radius (surface px)
 
+// Some PUBLIC methods (declared in CanvasPathEditController.h) are implemented
+// here rather than in the primary @implementation - the intentional category
+// split. That trips the category-implements-primary-method warning, so silence
+// it for this file (the primary suppresses the matching -Wincomplete).
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
+
 @implementation CanvasPathEditController (Corners)
 
 // The corner-radius widget under a surface point, or -1. Widgets sit just
@@ -22,6 +29,8 @@ static const double kCornerWidgetGrabPx = 9.0; // widget hit radius (surface px)
   KKBezierPath *path = [self _workingPath];
   if (!path)
     return -1;
+  if (path.count > kCanvasMaxEditableAnchors)
+    return -1; // corner widgets aren't shown on a too-large path (perf)
   float aspect = (float)[_surface penCanvasAspect];
   NSArray<KKBezierPath *> *layers = [_surface penAllLayers];
   double frac = [_surface penEditFraction];
@@ -109,3 +118,5 @@ static const double kCornerWidgetGrabPx = 9.0; // widget hit radius (surface px)
 }
 
 @end
+
+#pragma clang diagnostic pop

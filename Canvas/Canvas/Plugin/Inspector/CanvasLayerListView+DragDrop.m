@@ -143,7 +143,7 @@ NSPasteboardType const kCanvasLayerRowDragType =
   NSIndexSet *dragged = [self _draggedRowsFrom:sender];
   BOOL isRow = dragged != nil;
   BOOL isFiles =
-      !isRow && [self.owner imageURLsFromDraggingInfo:sender].count > 0;
+      !isRow && [self.owner importableURLsFromDraggingInfo:sender].count > 0;
   if (!isRow && !isFiles) {
     _dropLine.hidden = YES;
     _dropIndex = -1;
@@ -189,12 +189,12 @@ NSPasteboardType const kCanvasLayerRowDragType =
     _dropIndex = -1;
     return YES;
   }
-  NSArray<NSURL *> *urls = [self.owner imageURLsFromDraggingInfo:sender];
+  NSArray<NSURL *> *urls = [self.owner importableURLsFromDraggingInfo:sender];
   if (urls.count == 0)
     return NO;
-  [self.owner insertImageURLs:urls
-                  atFlatIndex:_dropIndex
-                parentGroupID:_dropParent];
+  [self.owner insertFileURLs:urls
+                 atFlatIndex:_dropIndex
+               parentGroupID:_dropParent];
   _dropIndex = -1;
   return YES;
 }
@@ -364,23 +364,26 @@ NSPasteboardType const kCanvasLayerRowDragType =
   [self _notifyPrimaryLayerSelected];
 }
 
-// Image file drops are handled by the doc view (so they show the drop line and
-// insert at the indicated position); these helpers do the work it calls back.
-- (NSArray<NSURL *> *)imageURLsFromDraggingInfo:(id<NSDraggingInfo>)info {
+// File drops are handled by the doc view (so they show the drop line and insert
+// at the indicated position); these helpers do the work it calls back. Both
+// raster images and SVG vector files are importable.
+- (NSArray<NSURL *> *)importableURLsFromDraggingInfo:(id<NSDraggingInfo>)info {
   NSArray<NSURL *> *urls = [info.draggingPasteboard
       readObjectsForClasses:@[ [NSURL class] ]
                     options:@{NSPasteboardURLReadingFileURLsOnlyKey : @YES}];
-  NSMutableArray<NSURL *> *images = [NSMutableArray array];
-  for (NSURL *url in urls)
-    if ([CanvasLayerImageExtensions()
-            containsObject:url.pathExtension.lowercaseString])
-      [images addObject:url];
-  return images;
+  NSMutableArray<NSURL *> *files = [NSMutableArray array];
+  for (NSURL *url in urls) {
+    NSString *ext = url.pathExtension.lowercaseString;
+    if ([ext isEqualToString:@"svg"] ||
+        [CanvasLayerImageExtensions() containsObject:ext])
+      [files addObject:url];
+  }
+  return files;
 }
 
-- (void)insertImageURLs:(NSArray<NSURL *> *)urls
-            atFlatIndex:(NSInteger)idx
-          parentGroupID:(NSString *)parentGID {
+- (void)insertFileURLs:(NSArray<NSURL *> *)urls
+           atFlatIndex:(NSInteger)idx
+         parentGroupID:(NSString *)parentGID {
   if (urls.count == 0)
     return;
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
@@ -388,6 +391,17 @@ NSPasteboardType const kCanvasLayerRowDragType =
     NSUInteger pos = (NSUInteger)clamped;
     NSMutableIndexSet *newSel = [NSMutableIndexSet indexSet];
     for (NSURL *url in urls) {
+      if ([url.pathExtension.lowercaseString isEqualToString:@"svg"]) {
+        // SVG: parse to one path (single element) or a group + child paths.
+        NSArray<KKBezierPath *> *svg = [self _svgLayersForURL:url];
+        if (svg.count == 0)
+          continue;
+        svg.firstObject.parentGroupID = parentGID.length ? parentGID : nil;
+        [newSel addIndex:pos]; // select the root (group / single path)
+        for (KKBezierPath *l in svg)
+          [paths insertObject:l atIndex:pos++];
+        continue;
+      }
       KKBezierPath *layer = [self _imageLayerForURL:url];
       if (layer) {
         layer.parentGroupID = parentGID.length ? parentGID : nil;

@@ -296,9 +296,15 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
     [encoder setVertexBytes:&m
                      length:sizeof(m)
                     atIndex:KKVertexInputIndex_Transform];
-    [encoder setVertexBytes:verts
-                     length:sizeof(KKVertex2D) * vc
-                    atIndex:KKVertexInputIndex_Vertices];
+    // The vertex array goes through an MTLBuffer, not setVertexBytes: a complex
+    // path (e.g. an imported SVG) tessellates well past setVertexBytes' 4 KB
+    // inline cap, which aborts. (The original Canvas render used a buffer here
+    // too; the v3 rewrite regressed it to inline bytes.)
+    id<MTLBuffer> vbuf =
+        [device newBufferWithBytes:verts
+                            length:sizeof(KKVertex2D) * vc
+                           options:MTLResourceStorageModeShared];
+    [encoder setVertexBuffer:vbuf offset:0 atIndex:KKVertexInputIndex_Vertices];
     [encoder setFragmentBytes:&color length:sizeof(color) atIndex:0];
     [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                 vertexStart:0

@@ -11,6 +11,7 @@
 #import "CanvasLayerRowViews.h"
 #import "CanvasLayerTree.h"
 #import "CanvasLocalized.h"
+#import "CanvasPathEditController.h" // CanvasPathIsLargeVector
 
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKTokens.h>
@@ -111,6 +112,19 @@
                                     accessibilityDescription:nil];
     glyph = [CanvasLayerGlyphView imageViewWithImage:img];
     glyph.imageScaling = NSImageScaleProportionallyUpOrDown;
+  } else if (CanvasPathIsLargeVector(path)) {
+    // Too many points to edit per-anchor: flag it with a distinct bezier-path
+    // glyph (tinted accent) + a hover explainer, so it's clear why this path
+    // behaves like an image (transform only) rather than a normal editable path.
+    glyph = [CanvasLayerGlyphView
+        imageViewWithImage:[self _symbolGlyph:
+                                     @"point.topleft.down.curvedto.point."
+                                     @"bottomright.up"]];
+    glyph.contentTintColor = [NSColor accent];
+    glyph.toolTip =
+        CLoc(@"Complex path - too many points to edit by hand, so it moves and "
+             @"scales like an image.",
+             @"Layer-list tooltip for an oversized (non-point-editable) path");
   } else {
     glyph = [CanvasLayerGlyphView
         imageViewWithImage:[self _symbolGlyph:@"scribble"]];

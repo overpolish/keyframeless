@@ -15,6 +15,12 @@ static const double kAnchorGrabPx = 10.0;
 static const double kHandleGrabPx = 9.0;
 static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
 
+// PUBLIC methods (declared in CanvasPathEditController.h) implemented here as
+// part of the intentional category split - silence the warning that they're not
+// in the primary @implementation (which suppresses the matching -Wincomplete).
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
+
 @implementation CanvasPathEditController (Query)
 
 - (KKBezierPath *)_path {
@@ -55,6 +61,8 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
   KKBezierPath *path = [self _workingPath];
   if (!path)
     return CanvasPathEditHitNone;
+  if (path.count > kCanvasMaxEditableAnchors)
+    return CanvasPathEditHitNone; // too large to edit per-anchor (perf)
   double rh2 = kHandleGrabPx * kHandleGrabPx,
          ra2 = kAnchorGrabPx * kAnchorGrabPx;
   for (NSUInteger i = 0; i < path.count; i++) {
@@ -101,6 +109,9 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
 - (BOOL)canMarqueeAtX:(double)x y:(double)y {
   if ([self _animatedOffKeypose] || ![self _path])
     return NO;
+  KKBezierPath *p = [self _workingPath];
+  if (p.count > kCanvasMaxEditableAnchors)
+    return NO; // anchors aren't shown / selectable on a too-large path
   return [self hitTestAtX:x y:y] == CanvasPathEditHitNone;
 }
 
@@ -113,6 +124,8 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
   KKBezierPath *path = [self _workingPath];
   if (!path || path.count < 2)
     return NO;
+  if (path.count > kCanvasMaxEditableAnchors)
+    return NO; // not editable per-anchor: skip the O(N) segment scan
   NSUInteger segs = path.closed ? path.count : path.count - 1;
   const int kSteps = 24;
   double best = kSegmentGrabPx * kSegmentGrabPx;
@@ -159,3 +172,5 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
 }
 
 @end
+
+#pragma clang diagnostic pop

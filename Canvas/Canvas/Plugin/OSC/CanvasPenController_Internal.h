@@ -59,9 +59,15 @@ static const double kPenCloseRadiusPx = 10.0;
 - (nullable KKBezierPath *)_resumableBase;
 - (void)_appendPointToLayer:(CGPoint)pos out:(CGPoint)o in:(CGPoint)in;
 - (void)_mutateInProgress:(void (^)(KKBezierPath *layer))mutate;
-- (void)_drawHandleAtAnchor:(CGPoint)anchorObj offset:(CGPoint)offset;
 - (CGPoint)_constrainHandle:(CGPoint)h modifiers:(CanvasPenModifiers)mods;
 
+@end
+
+// The overlay-draw helper is declared on a CATEGORY interface (not the class
+// extension above) so the compiler doesn't expect it in the primary
+// @implementation - it lives in CanvasPenController+Draw.m.
+@interface CanvasPenController (Draw)
+- (void)_drawHandleAtAnchor:(CGPoint)anchorObj offset:(CGPoint)offset;
 @end
 
 NS_ASSUME_NONNULL_END

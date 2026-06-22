@@ -8,6 +8,12 @@
 #import "CanvasPathMorph.h"        // per-keypose geometry writes + keypose ops
 #import <KeyframelessKit/KKBezierPath.h>
 
+// PUBLIC methods (declared in CanvasPathEditController.h) implemented here as
+// part of the intentional category split - silence the warning that they're not
+// in the primary @implementation (which suppresses the matching -Wincomplete).
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
+
 @implementation CanvasPathEditController (Topology)
 
 - (BOOL)penInsertAtX:(double)x y:(double)y {
@@ -194,3 +200,5 @@
 }
 
 @end
+
+#pragma clang diagnostic pop
