@@ -29,7 +29,7 @@ The **Auto-select layers** checkbox at the top of the Layers panel (off by defau
 
 - It is **alpha-aware** for images: clicking a transparent part of a layer falls through and selects whatever opaque layer is beneath, so you select what you actually see.
 - For **drawn paths** it picks the layer whose **stroke** you click on (or near); clicking inside an open path's hollow interior falls through to whatever is behind it, since there's nothing there to hit. Images and paths share one front-to-back order, so you always get the topmost thing under the pointer.
-- It respects the layer's transform, so a moved / scaled / rotated layer is picked where it actually appears.
+- It respects the layer's transform, so a moved / scaled / rotated layer is picked where it actually appears - including **3D depth**: when a group's X/Y tilt swings a lower layer physically in front, clicking there selects that front layer (it picks in the same front-to-back order the layers are drawn, not raw list order).
 - Locked and hidden layers are skipped.
 - In the **main viewer** a layer is pickable only if there's something to edit at the current playhead: it has at least one constant (non-animated) value, or one of its animated lanes has a keypose at the playhead (including the held lead-in / lead-out before the first / after the last keypose). A fully-animated layer parked between its keyposes isn't pickable - and the hand cursor only appears over a layer you can actually select.
 - In the editing popover's **mini preview** the gating instead matches the layer rows for that popover - e.g. a keypose popover only lets you pick layers that have a keypose at that time.

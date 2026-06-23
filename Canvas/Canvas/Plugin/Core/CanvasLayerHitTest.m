@@ -411,6 +411,34 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
   return NO;
 }
 
+// A layer's 3D centre depth (raw view-space z), the SAME value the render sorts
+// by (CanvasEncodeImageLayers). Object-space dims (aspect, 1) - the perspective
+// is scale-invariant, so a uniform dims change preserves the depth ORDER, which
+// is all the hit-test needs. Lower z = nearer the camera (drawn on top).
+static float CanvasLayerCenterDepth(NSArray<KKBezierPath *> *layers,
+                                    NSUInteger i, KKBezierPath *path,
+                                    double frac, float aspect) {
+  CanvasLayerTransform t = (frac < 0.0)
+                               ? CanvasLayerTransformIdentity()
+                               : CanvasLayerTransformAtFraction(path, frac);
+  simd_float2 center = CanvasLayerObjectCenter(path);
+  CanvasGroupXform groups[kCanvasGroupXformCap];
+  NSInteger ng = CanvasBuildGroupXforms(layers, i, frac, nil, nil, groups,
+                                        kCanvasGroupXformCap);
+  simd_float2 scl = simd_make_float2(aspect > 0.0f ? aspect : 1.0f, 1.0f);
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+  matrix_float4x4 m = CanvasComposedModelMatrix(t, center, groups, ng, scl,
+                                                simd_make_float2(0, 0));
+  simd_float2 cPx = (center - half) * scl;
+  simd_float4 clip = simd_mul(m, simd_make_float4(cPx.x, cPx.y, 0.0f, 1.0f));
+  return clip.z;
+}
+
+typedef struct {
+  NSInteger index; // original layer-stack index (0 = topmost)
+  float depth;     // 3D centre depth (lower = nearer/front)
+} CanvasHitCandidate;
+
 NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
                                float aspect, float objX, float objY,
                                BOOL alphaAware,
@@ -419,7 +447,16 @@ NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
                                NSArray<KKLane *> *templates,
                                float canvasHeightPx) {
   simd_float2 q = simd_make_float2(objX, objY);
-  for (NSInteger i = 0; i < (NSInteger)layers.count; i++) { // 0 = topmost
+  // Pass 1: collect pickable candidates with their 3D depth, then test them
+  // front-to-back in the SAME order the render draws (nearer depth first, layer
+  // stack as the tiebreak). Without this a layer pushed visually in front by a
+  // 3D group tilt drew on top but couldn't be clicked - the old loop walked
+  // plain stack order, which no longer matches what you see.
+  NSUInteger n = layers.count;
+  CanvasHitCandidate *cand =
+      malloc(sizeof(CanvasHitCandidate) * MAX(n, (NSUInteger)1));
+  NSInteger candCount = 0;
+  for (NSInteger i = 0; i < (NSInteger)n; i++) {
     KKBezierPath *path = layers[i];
     if (path.hidden || path.isGroup || path.locked)
       continue;
@@ -428,13 +465,35 @@ NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
     if (requireEditableAtFrac && frac >= 0.0 &&
         !CanvasLayerEditableAtFraction(path, frac, templates))
       continue; // viewer: nothing to edit here (animated, off-keypose)
-
     BOOL isImage = path.isImage && path.imagePath.length &&
                    [path.shape isKindOfClass:[KKRectShape class]];
     BOOL isVector = !path.isImage && (path.strokeEnabled || path.fillEnabled) &&
                     path.count >= 2;
     if (!isImage && !isVector)
       continue;
+    cand[candCount].index = i;
+    cand[candCount].depth =
+        CanvasLayerCenterDepth(layers, (NSUInteger)i, path, frac, aspect);
+    candCount++;
+  }
+  // Nearer (lower z) first; equal depth keeps stack order (topmost = index 0).
+  qsort_b(cand, (size_t)candCount, sizeof(CanvasHitCandidate),
+          ^int(const void *a, const void *b) {
+            const CanvasHitCandidate *ca = a, *cb = b;
+            if (ca->depth < cb->depth)
+              return -1;
+            if (ca->depth > cb->depth)
+              return 1;
+            return ca->index < cb->index ? -1 : (ca->index > cb->index ? 1 : 0);
+          });
+
+  NSString *result = nil;
+  for (NSInteger c = 0; c < candCount; c++) {
+    NSInteger i = cand[c].index;
+    KKBezierPath *path = layers[i];
+    BOOL isImage = path.isImage && path.imagePath.length &&
+                   [path.shape isKindOfClass:[KKRectShape class]];
+    BOOL isVector = !isImage; // candidates are only image or vector (pass 1)
 
     // Compose ancestor group transforms so a member moved by its group is
     // hit-tested where it's actually drawn. ng==0 for an ungrouped layer.
@@ -447,8 +506,10 @@ NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
       // A click in a stroke-only path's hollow interior misses and falls
       // through to the layer beneath (alphaAware doesn't apply to vectors).
       if (CanvasVectorLayerHit(path, frac, aspect, q, canvasHeightPx, groups,
-                               ng))
-        return path.layerID;
+                               ng)) {
+        result = path.layerID;
+        break;
+      }
       continue;
     }
 
@@ -474,7 +535,9 @@ NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
     if (alphaAware &&
         CanvasSampleImageAlpha(path.imagePath, uv.x, uv.y) <= 0.04f)
       continue; // transparent here -> fall through to the layer beneath
-    return path.layerID;
+    result = path.layerID;
+    break;
   }
-  return nil;
+  free(cand);
+  return result;
 }
