@@ -46,6 +46,10 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// subclass) - supplies the effect render + point-handle vocabulary.
 @property(nonatomic, strong, nullable) id<KKMiniViewerDelegate>
     miniViewerDelegate;
+/// Forwarded to the lanes view (and on to the popover mini): when YES, clicking
+/// the mini makes it the key window so bare keys (e.g. Delete) are handled in the
+/// popover instead of reaching the host. Default NO.
+@property(nonatomic) BOOL miniGrabsKeyFocusOnClick;
 /// Lane label the "manage properties" popover highlights for the first-run
 /// spotlight (e.g. @"Radius"). nil = no spotlight.
 @property(nonatomic, copy, nullable) NSString *managePopoverSpotlightLabel;

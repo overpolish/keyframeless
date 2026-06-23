@@ -400,6 +400,11 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   _basicView.miniViewerDelegate = delegate;
 }
 
+- (void)setMiniGrabsKeyFocusOnClick:(BOOL)grabs {
+  _miniGrabsKeyFocusOnClick = grabs;
+  _basicView.miniGrabsKeyFocusOnClick = grabs;
+}
+
 - (void)setManagePopoverSpotlightLabel:(NSString *)label {
   _managePopoverSpotlightLabel = [label copy];
   _basicView.managePopoverSpotlightLabel = label;
@@ -584,6 +589,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   copy.miniViewerDescriptorPath = _miniViewerDescriptorPath;
   copy.miniViewerRequestPath = _miniViewerRequestPath;
   copy.miniViewerDelegate = _miniViewerDelegate;
+  copy.miniGrabsKeyFocusOnClick = _miniGrabsKeyFocusOnClick;
   copy.managePopoverSpotlightLabel = _managePopoverSpotlightLabel;
   copy.constantsButtonTitle = _constantsButtonTitle;
   copy.presetPluginKey = self.presetPluginKey;

@@ -6,8 +6,9 @@
 #pragma once
 
 #import <Foundation/Foundation.h>
+#import <simd/simd.h>
 
-@class KKBezierPath;
+@class KKBezierPath, KKLane;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -69,5 +70,20 @@ KKBezierPath *CanvasPathByReversingGeometry(KKBezierPath *path);
 ///  - 0 remain -> nil (the caller deletes the layer).
 KKBezierPath *_Nullable CanvasPathByRemovingKeypose(KKBezierPath *path,
                                                     NSUInteger keyposeIndex);
+
+/// Translate every selected layer by `objDelta` (object space, Y-up, normalized
+/// [0,1]), gated like the on-screen controls: a layer moves only when its lane
+/// is editable at `frac` - constant OR parked on a keypose - never between
+/// keyposes. Vector paths shift the shape shown at `frac` into the ACTIVE
+/// Points keypose (constant -> base); images / groups shift the ACTIVE Position
+/// keypose (constant -> its value), so a group's members follow. Editing the
+/// current point, not every keypose - exactly like dragging a single anchor /
+/// handle. `aspect` is the canvas pixel aspect (to unproject the delta through
+/// a path's transform); `templates` seed a missing Position lane. Mutates
+/// `paths` in place; a layer that isn't editable at `frac` is left untouched.
+void CanvasTranslateSelection(NSMutableArray<KKBezierPath *> *paths,
+                              NSArray<NSString *> *selectedLayerIDs,
+                              simd_float2 objDelta, double frac, float aspect,
+                              NSArray<KKLane *> *templates);
 
 NS_ASSUME_NONNULL_END

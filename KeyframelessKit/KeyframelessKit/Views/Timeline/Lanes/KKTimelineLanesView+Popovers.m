@@ -248,6 +248,18 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                 preferredEdge:NSRectEdgeMinY];
 
   NSWindow *popoverWindow = popover.contentViewController.view.window;
+  // Don't let the popover steal app focus from the host (FCP): without this the
+  // popover's window activates our ViewBridge process when it (or a click in it)
+  // becomes key, deactivating FCP so its cursors / Cmd-Z / shortcuts stop until
+  // the user clicks back. The companion layer-list panel avoids this by being a
+  // NONACTIVATING panel; NSPopover's backing window is an NSPanel subclass, so
+  // give it the same treatment - become key (for field editing / bare keys)
+  // WITHOUT activating the process.
+  if ([popoverWindow isKindOfClass:[NSPanel class]]) {
+    NSPanel *popoverPanel = (NSPanel *)popoverWindow;
+    popoverPanel.styleMask |= NSWindowStyleMaskNonactivatingPanel;
+    popoverPanel.becomesKeyOnlyIfNeeded = NO;
+  }
   CFTimeInterval shownAt = CACurrentMediaTime();
   // Host app (FCP) is frontmost when the popover opens. Captured so an
   // outside-click in another app doesn't dismiss it.
@@ -255,6 +267,9 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
       NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
   __weak NSPopover *weakPopover = popover;
   KKMiniViewerView *canvas = KKFindMiniViewer(content);
+  // Let the mini grab key focus on click (so bare keys are handled in the
+  // popover) when the plugin opted in.
+  canvas.grabsKeyFocusOnClick = self.miniGrabsKeyFocusOnClick;
   __block id localMon = nil;
   __block id globalMon = nil;
   __block id magnifyLocalMon = nil;

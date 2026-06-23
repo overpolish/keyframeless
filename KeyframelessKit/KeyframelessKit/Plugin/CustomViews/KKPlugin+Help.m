@@ -25,6 +25,11 @@
 - (void)patchUIStateKey:(NSString *)key
                   value:(id)value
                 paramID:(UInt32)paramID {
+  [self patchUIStateKeys:@{key : value} paramID:paramID];
+}
+
+- (void)patchUIStateKeys:(NSDictionary<NSString *, id> *)values
+                 paramID:(UInt32)paramID {
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!actionAPI)
@@ -45,7 +50,7 @@
            : nil)
           ?: @{};
   state = [state mutableCopy];
-  state[key] = value;
+  [state addEntriesFromDictionary:values];
   NSString *json = [[NSString alloc]
       initWithData:[NSJSONSerialization dataWithJSONObject:state
                                                    options:0

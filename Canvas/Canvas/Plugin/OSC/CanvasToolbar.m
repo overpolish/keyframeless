@@ -44,6 +44,36 @@ NSInteger CanvasToolbarNextGridSpacing(NSInteger current) {
   return kCanvasGridSpacingPresets[0];
 }
 
+BOOL CanvasToolbarTagToPathOp(NSInteger tag, BOOL *outOutline,
+                              KKBooleanOp *outOp) {
+  if (outOutline)
+    *outOutline = NO;
+  switch (tag) {
+  case CanvasToolbarPathOutline:
+    if (outOutline)
+      *outOutline = YES;
+    return YES;
+  case CanvasToolbarPathUnion:
+    if (outOp)
+      *outOp = KKBooleanOpUnion;
+    return YES;
+  case CanvasToolbarPathSubtract:
+    if (outOp)
+      *outOp = KKBooleanOpSubtract;
+    return YES;
+  case CanvasToolbarPathIntersect:
+    if (outOp)
+      *outOp = KKBooleanOpIntersect;
+    return YES;
+  case CanvasToolbarPathXOR:
+    if (outOp)
+      *outOp = KKBooleanOpXOR;
+    return YES;
+  default:
+    return NO;
+  }
+}
+
 CanvasToolbarTag CanvasToolbarToolTagForLetter(unichar letter) {
   switch (letter) {
   case 'v':
@@ -59,14 +89,15 @@ CanvasToolbarTag CanvasToolbarToolTagForLetter(unichar letter) {
   }
 }
 
-KKToolbar *CanvasMakeToolbar(id<PROAPIAccessing> apiManager) {
+KKToolbar *CanvasMakeToolbar(id<PROAPIAccessing> apiManager,
+                             BOOL includeOutline, BOOL includeBooleans) {
   // Drag handle on the left: a subtle full-size grip, dim tint, vertically
   // centred (no shortcut label).
   KKToolbarItem *handle = [KKToolbarItem itemWithIcon:@"line.3.horizontal"
                                                   tag:CanvasToolbarDragHandle
                                         shortcutLabel:nil];
   handle.iconColor = [NSColor colorWithWhite:1.0 alpha:0.4];
-  NSArray<KKToolbarItem *> *items = @[
+  NSMutableArray<KKToolbarItem *> *items = [NSMutableArray arrayWithArray:@[
     handle,
     [KKToolbarItem itemWithIcon:@"cursorarrow"
                             tag:CanvasToolbarToolCursor
@@ -80,23 +111,54 @@ KKToolbar *CanvasMakeToolbar(id<PROAPIAccessing> apiManager) {
     [KKToolbarItem itemWithIcon:@"circle.fill"
                             tag:CanvasToolbarToolEllipse
                   shortcutLabel:@"^G"],
-    [KKToolbarItem separator],
-    // Grid toggles are icon-only (state shown by highlight + the adaptive icon
-    // swap); meaning comes from the localized hover tooltips. Spacing keeps its
-    // NUMBER (data, not a translatable word).
-    [KKToolbarItem itemWithIcon:@"grid" tag:CanvasToolbarGrid shortcutLabel:nil],
-    [KKToolbarItem itemWithIcon:@"squareshape.split.2x2.dotted"
-                            tag:CanvasToolbarGridAdaptive
-                  shortcutLabel:nil],
-    [KKToolbarItem itemWithIcon:@"digitalcrown.arrow.clockwise.fill"
-                            tag:CanvasToolbarGridSpacing
-                  shortcutLabel:@"10"],
-    [KKToolbarItem itemWithIcon:@"dot.squareshape.split.2x2"
-                            tag:CanvasToolbarSnap
-                  shortcutLabel:nil],
-  ];
+  ]];
+
+  // Path operations: icon-only (meaning via tooltip), all in ONE cluster behind
+  // a single separator (outline + booleans read as one path-op group).
+  if (includeOutline || includeBooleans)
+    [items addObject:[KKToolbarItem separator]];
+  if (includeOutline) {
+    [items addObject:[KKToolbarItem itemWithIcon:@"square.dashed"
+                                             tag:CanvasToolbarPathOutline
+                                   shortcutLabel:nil]];
+  }
+  if (includeBooleans) {
+    [items addObject:[KKToolbarItem itemWithIcon:@"square.on.square"
+                                             tag:CanvasToolbarPathUnion
+                                   shortcutLabel:nil]];
+    [items addObject:[KKToolbarItem itemWithIcon:@"minus.square"
+                                             tag:CanvasToolbarPathSubtract
+                                   shortcutLabel:nil]];
+    [items addObject:[KKToolbarItem
+                         itemWithIcon:@"square.on.square.intersection.dashed"
+                                  tag:CanvasToolbarPathIntersect
+                        shortcutLabel:nil]];
+    [items addObject:[KKToolbarItem itemWithIcon:@"xmark.square"
+                                             tag:CanvasToolbarPathXOR
+                                   shortcutLabel:nil]];
+  }
+
+  [items addObject:[KKToolbarItem separator]];
+  // Grid toggles are icon-only (state shown by highlight + the adaptive icon
+  // swap); meaning comes from the localized hover tooltips. Spacing keeps its
+  // NUMBER (data, not a translatable word).
+  [items addObject:[KKToolbarItem itemWithIcon:@"grid"
+                                           tag:CanvasToolbarGrid
+                                 shortcutLabel:nil]];
+  [items addObject:[KKToolbarItem itemWithIcon:@"squareshape.split.2x2.dotted"
+                                           tag:CanvasToolbarGridAdaptive
+                                 shortcutLabel:nil]];
+  [items addObject:[KKToolbarItem itemWithIcon:@"digitalcrown.arrow.clockwise.fill"
+                                           tag:CanvasToolbarGridSpacing
+                                 shortcutLabel:@"10"]];
+  [items addObject:[KKToolbarItem itemWithIcon:@"dot.squareshape.split.2x2"
+                                           tag:CanvasToolbarSnap
+                                 shortcutLabel:nil]];
+
   KKToolbar *bar = [[KKToolbar alloc] initWithAPIManager:apiManager items:items];
   bar.activeTag = 0;
+  // Dividers match the drag-handle's dim white so they read as the same chrome.
+  bar.separatorColor = [NSColor colorWithWhite:1.0 alpha:0.4];
 
   // Localized hover tooltips carry each button's meaning (the icon-only grid
   // buttons have no inline word label). No width constraint, so any language fits.
@@ -117,5 +179,17 @@ KKToolbar *CanvasMakeToolbar(id<PROAPIAccessing> apiManager) {
       CLoc(@"Grid cell size", @"Toolbar tooltip: grid cell size");
   itemForTag(bar, CanvasToolbarSnap).tooltip =
       CLoc(@"Snap to grid", @"Toolbar tooltip: snap drags to the grid");
+
+  // Path-operation tooltips (no-ops when the conditional items aren't present).
+  itemForTag(bar, CanvasToolbarPathOutline).tooltip =
+      CLoc(@"Stroke to path", @"Toolbar tooltip: convert a stroke to a filled outline path");
+  itemForTag(bar, CanvasToolbarPathUnion).tooltip =
+      CLoc(@"Union", @"Toolbar tooltip: combine the selected paths into one");
+  itemForTag(bar, CanvasToolbarPathSubtract).tooltip =
+      CLoc(@"Subtract", @"Toolbar tooltip: subtract the upper paths from the bottom one");
+  itemForTag(bar, CanvasToolbarPathIntersect).tooltip =
+      CLoc(@"Intersect", @"Toolbar tooltip: keep only the overlap of the selected paths");
+  itemForTag(bar, CanvasToolbarPathXOR).tooltip =
+      CLoc(@"Exclude", @"Toolbar tooltip: keep only the non-overlapping regions");
   return bar;
 }

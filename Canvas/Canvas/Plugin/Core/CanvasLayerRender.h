@@ -85,14 +85,15 @@ void CanvasEncodeSourceTile(id<MTLRenderCommandEncoder> encoder,
 /// scales / tilts / groups exactly like an image layer. `frac`,
 /// `overrideLayerID` and `overrideTimeline` behave as in
 /// CanvasEncodeImageLayers. Stroke colour is the layer's `strokeR/G/B`; alpha
-/// folds in the layer + ancestor-group opacity.
-void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
-                              id<MTLRenderCommandEncoder> encoder,
-                              id<MTLDevice> device, float imageWidth,
-                              float imageHeight, float tileShiftX,
-                              float tileShiftY, double frac,
-                              NSString *_Nullable overrideLayerID,
-                              KKTimeline *_Nullable overrideTimeline);
+/// folds in the layer + ancestor-group opacity. `strokeScale` multiplies the
+/// stored (native-px) stroke width so a DOWNSCALED render (e.g. an FCP browser
+/// thumbnail) draws strokes at the right thickness; pass 1.0 for a full-res /
+/// native render.
+void CanvasEncodeVectorLayers(
+    NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
+    id<MTLDevice> device, float imageWidth, float imageHeight, float tileShiftX,
+    float tileShiftY, double frac, NSString *_Nullable overrideLayerID,
+    KKTimeline *_Nullable overrideTimeline, float strokeScale);
 
 /// Click-to-select hit-test: returns the `layerID` of the TOPMOST layer hit by
 /// the object-space point (`objX`,`objY`) in [0,1] (Y-up, the render's object
@@ -137,13 +138,14 @@ NSString *_Nullable CanvasHitTestLayerID(
 
 /// Project a layer-local normalized point (Y-up [0,1], the raw KKBezierPath
 /// space) through the layer's transform at `frac` + its ancestor groups +
-/// perspective into screen-object space (Y-up [0,1], the render's object space) -
-/// the SAME projection CanvasHitTestLayerID uses, so a path-edit OSC draws its
-/// anchors / segments exactly where the stroke renders. For many points prefer
-/// the batched form (it builds the transform once).
+/// perspective into screen-object space (Y-up [0,1], the render's object space)
+/// - the SAME projection CanvasHitTestLayerID uses, so a path-edit OSC draws
+/// its anchors / segments exactly where the stroke renders. For many points
+/// prefer the batched form (it builds the transform once).
 simd_float2 CanvasProjectLayerPointObj(NSArray<KKBezierPath *> *layers,
                                        KKBezierPath *path, double frac,
-                                       float aspect, float localX, float localY);
+                                       float aspect, float localX,
+                                       float localY);
 
 /// Batched CanvasProjectLayerPointObj: builds the layer transform + group
 /// composition ONCE, then projects `count` local points (`localPts`) into
@@ -153,9 +155,9 @@ void CanvasProjectLayerPointsObj(NSArray<KKBezierPath *> *layers,
                                  const simd_float2 *localPts,
                                  simd_float2 *outProj, NSUInteger count);
 
-/// Inverse of CanvasProjectLayerPointObj: map a screen-object point (Y-up [0,1],
-/// the render's object space) back to the layer's local normalized point (Y-up
-/// [0,1], the raw KKBezierPath space), through the inverse of the layer
+/// Inverse of CanvasProjectLayerPointObj: map a screen-object point (Y-up
+/// [0,1], the render's object space) back to the layer's local normalized point
+/// (Y-up [0,1], the raw KKBezierPath space), through the inverse of the layer
 /// transform + groups + perspective. Built by projecting the 4 unit-square
 /// corners and inverting the resulting homography. Used by path-anchor dragging
 /// to follow the cursor under any layer transform.

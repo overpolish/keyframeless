@@ -231,9 +231,11 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
                               float imageHeight, float tileShiftX,
                               float tileShiftY, double frac,
                               NSString *overrideLayerID,
-                              KKTimeline *overrideTimeline) {
+                              KKTimeline *overrideTimeline, float strokeScale) {
   if (!encoder || !device || layers.count == 0)
     return;
+  if (strokeScale <= 0.0f)
+    strokeScale = 1.0f;
   simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
   simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
 
@@ -264,8 +266,8 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
     if (cap == 0)
       continue;
     KKVertex2D *verts = malloc(sizeof(KKVertex2D) * cap);
-    NSUInteger vc = CanvasTessellateStroke(geom, path.strokeWidth, imageWidth,
-                                           imageHeight, verts, cap);
+    NSUInteger vc = CanvasTessellateStroke(geom, path.strokeWidth * strokeScale,
+                                           imageWidth, imageHeight, verts, cap);
     if (vc < 4) {
       free(verts);
       continue;

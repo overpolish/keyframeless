@@ -41,6 +41,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// inspector timeline edits.
 @property(nonatomic, copy, nullable) void (^onPrimaryLayerSelected)
     (NSString *_Nullable layerID);
+/// The layerIDs of every currently-selected row, top-to-bottom. Drives the
+/// viewer's path-operation buttons (which need the full multi-selection, not
+/// just the primary). Empty when nothing is selected.
+- (NSArray<NSString *> *)selectedLayerIDs;
+/// Set the multi-selection to exactly these layerIDs (unknown ids ignored),
+/// WITHOUT firing onPrimaryLayerSelected - used to mirror a mini-viewer multi
+/// select onto the panel rows.
+- (void)setSelectionToLayerIDs:(NSArray<NSString *> *)layerIDs;
 /// "Auto-select layers" toggle state (clicking a layer in the viewer selects
 /// it). Drives the checkbox above the list; setting it updates the checkbox
 /// without firing onAutoSelectToggled.

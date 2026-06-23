@@ -49,6 +49,9 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
   // The rect / ellipse tool claims the whole canvas (minus the toolbar) so FCP
   // routes the box drag to the OSC, like the pen.
   CanvasOSCPartShape = 9,
+  // The body of an already-SELECTED layer: a drag here moves the whole
+  // selection (paths shift points, images shift Position); a click selects it.
+  CanvasOSCPartLayerMove = 10,
 };
 
 // FxModifierKeys -> the surface-neutral CanvasPenModifiers used by the shared
@@ -74,6 +77,14 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 // Layer the hover hit-test resolved for an auto-select pick; consumed by the
 // matching mouseDown.
 @property(nonatomic, copy, nullable) NSString *pendingPickLayerID;
+// Body-drag move state (CanvasOSCPartLayerMove): the layer the press landed on,
+// the Y-up object point at press, the pre-drag layer blob (so each tick
+// translates from the original, not cumulatively), and whether a real drag
+// happened (else mouseUp is a plain click = select).
+@property(nonatomic, copy, nullable) NSString *layerMoveHitID;
+@property(nonatomic) CGPoint layerMoveStartObj;
+@property(nonatomic, copy, nullable) NSString *layerMoveStartBlob;
+@property(nonatomic) BOOL layerMoveDidMove;
 
 // The combined viewer toolbar (drag handle + grid/adaptive/spacing/snap),
 // global screen chrome whose state lives in kParamUIState (not parameters).
@@ -82,6 +93,11 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 // px), and the viewport size cached from the last draw (mouse callbacks don't
 // get it) so the drag can normalise the new position for UI-state storage.
 @property(nonatomic) BOOL toolbarDragging;
+// The conditional path-op groups the current toolbar was built with, so draw can
+// rebuild the bar only when the selection crosses the show/hide threshold (the
+// KKToolbar item list is fixed at init).
+@property(nonatomic) BOOL toolbarShowsBooleans;
+@property(nonatomic) BOOL toolbarShowsOutline;
 @property(nonatomic) CGPoint toolbarPressMouse;
 @property(nonatomic) CGPoint toolbarPressCenter;
 @property(nonatomic) CGSize toolbarIOSize;
@@ -100,6 +116,12 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 // Set for the span of a pen overlay draw so the surface draw primitives know
 // the FxImageTile + time to encode into.
 @property(nonatomic, assign, nullable) FxImageTile *penDrawDest;
+// Cached path-op fill preview: a CG-filled RGBA texture (red operands / green
+// result) blitted over the viewer while hovering a path-op button. Rebuilt only
+// when the signature (op + selection + playhead + dest size) changes, so a still
+// hover doesn't re-render the bitmap every frame.
+@property(nonatomic, strong, nullable) id<MTLTexture> pathOpFillTexture;
+@property(nonatomic, copy, nullable) NSString *pathOpFillSig;
 // YES once a live param write happened during the current edit gesture, so the
 // mouseUp commit knows whether it still needs to write (a preview-only insert
 // with no drag) or the per-tick drag writes already covered it.
@@ -142,7 +164,15 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 - (NSArray<KKBezierPath *> *)_snapshotPaths;
 - (nullable KKBezierPath *)_selectedLayer;
 - (nullable NSString *)_resolvedSelectedLayerID;
+// The full multi-selection set (layerIDs) + the boolean-op operands (selected
+// vector paths in stack order). Both read kParamUIState's selectedLayerIDs.
+- (NSArray<NSString *> *)_selectedLayerIDs;
+- (NSArray<KKBezierPath *> *)_selectedVectorLayers;
 - (BOOL)_selectedLayerLocked;
+// Lone selected layer (exactly one selected) + whether the transform gizmo
+// should show (lone image/group only). Drive the selection-type display rules.
+- (nullable KKBezierPath *)_loneSelectedLayer;
+- (BOOL)_showsTransformGizmo;
 - (NSDictionary *)_uiStateDict;
 - (void)_writeUIStateMerging:(void (^)(NSMutableDictionary *state))mutate;
 - (void)_persistSelectedLayerTimeline:(KKTimeline *)tl;
@@ -174,6 +204,20 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 - (BOOL)_gridSnap;
 @end
 
+// Path boolean operations on the multi-selection (union / subtract / intersect
+// / exclude). Reads the published blob, applies the op via the kit, writes the
+// new stack + selects the result - all in one undo action.
+@interface CanvasOSC (PathOps)
+- (void)_handlePathBooleanOp:(KKBooleanOp)op;
+- (void)_handleOutlineOp;
+// Delete the selected layer(s) from the stack (group-expanding), selecting a
+// survivor, in one undo action. Returns NO when nothing is selected so the key
+// handler can fall through.
+- (BOOL)_deleteSelectedLayers;
+- (void)_drawPathOpHoverPreviewInDestination:(FxImageTile *)dest
+                                      atTime:(CMTime)time;
+@end
+
 // Grid overlay (under the gizmo), gated on the UI-state grid settings.
 @interface CanvasOSC (Grid)
 - (void)_drawGridWithWidth:(NSInteger)width
@@ -191,7 +235,9 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 - (nullable NSString *)_pickLayerIDAtX:(double)x
                                      y:(double)y
                                 atTime:(CMTime)time;
-- (void)_commitPickSelection;
+- (void)_commitPickSelectionWithModifiers:(NSUInteger)modifiers;
+// Canvas point -> render OBJECT space (normalized, Y-UP), for body-drag deltas.
+- (CGPoint)_objYUpAtCanvasX:(double)x y:(double)y;
 @end
 
 // Pen tool: this OSC is the drawing + persistence SURFACE for the shared
@@ -229,6 +275,11 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 // drawn path. (Drawn alongside the gizmo for now; gated to enter-mode later.)
 - (void)_drawSelectedPathEditOSCInDestination:(FxImageTile *)destinationImage
                                        atTime:(CMTime)time;
+// Silhouette of the non-primary members of a viewer multi-selection.
+- (void)_drawMultiSelectHighlightInDestination:(FxImageTile *)destinationImage
+                                        atTime:(CMTime)time;
+// The marquee rubber-band, drawn independently of the selection count.
+- (void)_drawMarqueeInDestination:(FxImageTile *)destinationImage;
 // The cursor the pen tool shows at a CANVAS point: the close-shape glyph when
 // hovering the first anchor (with a loop placed), else the pen glyph.
 - (NSCursor *)_penCursorForCanvasX:(double)x y:(double)y;

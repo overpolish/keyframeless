@@ -25,4 +25,13 @@ extern NSIndexSet *CanvasLayerDescendantIndices(NSUInteger groupIdx,
 extern NSIndexSet *CanvasLayerAncestorIndices(NSUInteger idx,
                                               NSArray<KKBezierPath *> *paths);
 
+/// Remove the layers whose layerID is in `selIDs` (expanding any selected group
+/// to its descendants) from `paths` IN PLACE, mirroring the layer-list Delete.
+/// Returns the layerID that should be selected afterwards (the layer that fell
+/// into the first removed slot, or the new last layer), or nil when the stack is
+/// now empty / nothing matched. Shared by the canvas + mini Delete handlers so
+/// they delete a selection exactly like the panel does.
+extern NSString *_Nullable CanvasDeleteLayersByID(
+    NSMutableArray<KKBezierPath *> *paths, NSArray<NSString *> *selIDs);
+
 NS_ASSUME_NONNULL_END

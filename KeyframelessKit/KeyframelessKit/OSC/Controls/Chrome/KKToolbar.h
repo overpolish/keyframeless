@@ -56,6 +56,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// without moving the bar.
 @property(nonatomic, assign) BOOL flipVertical;
 
+/// Override the divider (separator) tint. Default nil = the built-in mid-grey.
+/// Set it to match a custom handle/icon tint so the dividers read as part of the
+/// same chrome.
+@property(nonatomic, strong, nullable) NSColor *separatorColor;
+
 /// Tag of the currently active item (0 = no highlight).
 @property(nonatomic, assign) NSInteger activeTag;
 

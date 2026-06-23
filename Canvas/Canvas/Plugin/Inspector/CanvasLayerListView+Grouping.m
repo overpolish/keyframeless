@@ -297,34 +297,44 @@
     [self->_selection removeAllIndexes];
     [self->_selection addIndex:insertAt];
   }];
+  // Persist the new group as the selection so the viewer OSC / mini reflect it
+  // immediately (show the group's gizmo) - _modifyPaths only writes the blob +
+  // rebuilds rows, it doesn't fire the selection change.
+  [self _notifyPrimaryLayerSelected];
 }
 
 // Dissolve a group: its direct children reparent to the group's parent, the
 // group entry is removed.
 - (void)ungroupRow:(NSMenuItem *)sender {
   NSUInteger idx = (NSUInteger)sender.tag;
+  // Layers selected BEFORE the ungroup, by id. Ungroup keeps whatever else was
+  // selected and DROPS the selection when only the group was selected (its id
+  // isn't in the stack afterwards) - it doesn't auto-select the freed children.
+  NSMutableSet<NSString *> *keepIDs = [NSMutableSet set];
+  [_selection enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
+    if (i < _paths.count && _paths[i].layerID.length)
+      [keepIDs addObject:_paths[i].layerID];
+  }];
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
     if (idx >= paths.count || !paths[idx].isGroup)
       return;
     NSString *gid = paths[idx].groupID ?: @"";
     NSString *parentGID = paths[idx].parentGroupID;
-    NSMutableIndexSet *childSel = [NSMutableIndexSet indexSet];
     for (NSUInteger i = 0; i < paths.count; i++) {
       if (i == idx)
         continue;
-      if ([paths[i].parentGroupID isEqualToString:gid]) {
+      if ([paths[i].parentGroupID isEqualToString:gid])
         paths[i].parentGroupID = parentGID;
-        [childSel addIndex:i];
-      }
     }
     [paths removeObjectAtIndex:idx];
-    NSMutableIndexSet *adjusted = [NSMutableIndexSet indexSet];
-    [childSel enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
-      [adjusted addIndex:i > idx ? i - 1 : i];
-    }];
+    // Reselect only the previously-selected layers that survive (the group's own
+    // id is gone now, so a group-only selection collapses to nothing).
     [self->_selection removeAllIndexes];
-    [self->_selection addIndexes:adjusted];
+    for (NSUInteger i = 0; i < paths.count; i++)
+      if (paths[i].layerID.length && [keepIDs containsObject:paths[i].layerID])
+        [self->_selection addIndex:i];
   }];
+  [self _notifyPrimaryLayerSelected];
 }
 
 // Lift an entry out of its group to the group's level. It pops out ABOVE the

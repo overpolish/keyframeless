@@ -4,6 +4,8 @@
  */
 
 #import "CanvasPathMorph.h"
+#import "CanvasLayerRender.h" // CanvasUnprojectLayerPointObj
+#import "CanvasLayerTimeline.h" // CanvasLayerTimelineForPath / CanvasApplyTimelineToPath
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKPathMorph.h>
@@ -163,8 +165,9 @@ static KKBezierPath *CanvasGeometryReversed(KKBezierPath *src) {
   }
   [out setBezierPoints:pts count:n closed:src.closed];
   free(pts);
-  // setBezierPoints clears the corner radii - re-apply them in reversed order so
-  // each radius stays with its anchor (else a pen prepend / reverse drops them).
+  // setBezierPoints clears the corner radii - re-apply them in reversed order
+  // so each radius stays with its anchor (else a pen prepend / reverse drops
+  // them).
   if (src.hasCornerRadii)
     for (NSUInteger i = 0; i < n; i++)
       [out setCornerRadius:[src cornerRadiusAtIndex:(n - 1 - i)] atIndex:i];
@@ -216,6 +219,97 @@ KKBezierPath *CanvasPathByRemovingKeypose(KKBezierPath *path,
   tl.lanes = lanes;
   out.animationJSON = [KKTimeline jsonFromTimeline:tl];
   return out;
+}
+
+// One geometry translated by `d` (local Y-up units): move every anchor; the
+// in/out handles are relative offsets so they ride along untouched.
+static KKBezierPath *CanvasGeometryTranslated(KKBezierPath *src,
+                                              simd_float2 d) {
+  KKBezierPath *out = [src copy];
+  for (NSUInteger i = 0; i < src.count; i++) {
+    KKBezierPoint p = [src pointAtIndex:i];
+    [out moveAtIndex:i to:simd_make_float2(p.x + d.x, p.y + d.y)];
+  }
+  return out;
+}
+
+// A COPY of `path` (an image / group) with its Position lane shifted by the
+// object-space delta on the ACTIVE keypose only (a constant Position -> its
+// single value). Returns `path` unchanged when Position is animated and the
+// playhead is BETWEEN keyposes - the same "constants OR on a keypose" gate the
+// transform OSC follows. Position is Y-DOWN normalized, so the Y-up object
+// delta is flipped; the lane is seeded from `templates` when absent.
+static KKBezierPath *
+CanvasPathByTranslatingPosition(KKBezierPath *path, simd_float2 objDelta,
+                                double frac, NSArray<KKLane *> *templates) {
+  simd_float2 d = simd_make_float2(objDelta.x, -objDelta.y);
+  KKTimeline *tl = CanvasLayerTimelineForPath(path, templates);
+  for (KKLane *l in tl.lanes) {
+    if (![l.label isEqualToString:@"Position"])
+      continue;
+    NSArray<KKKeyPose *> *kps = l.keyposes;
+    NSInteger idx = 0;
+    if (l.enabled && kps.count >= 2) { // animated: only the parked keypose
+      idx = -1;
+      for (NSUInteger i = 0; i < kps.count; i++)
+        if (fabs(kps[i].time - frac) <= kCanvasPathKeyposeEps) {
+          idx = (NSInteger)i;
+          break;
+        }
+      if (idx < 0)
+        return path; // between keyposes: gated out, no move
+    } else if (kps.count == 0) {
+      return path;
+    }
+    NSMutableArray<KKKeyPose *> *mk = [kps mutableCopy];
+    KKKeyPose *src = mk[idx];
+    double x = (src.values.count > 0 ? src.values[0].doubleValue : 0.5) + d.x;
+    double y = (src.values.count > 1 ? src.values[1].doubleValue : 0.5) + d.y;
+    KKKeyPose *kp = [src copy]; // preserve time / spatial / interval state
+    kp.values = @[ @(x), @(y) ];
+    mk[idx] = kp;
+    l.keyposes = mk;
+    break;
+  }
+  KKBezierPath *out = [path copy];
+  CanvasApplyTimelineToPath(tl, out);
+  return out;
+}
+
+void CanvasTranslateSelection(NSMutableArray<KKBezierPath *> *paths,
+                              NSArray<NSString *> *selectedLayerIDs,
+                              simd_float2 objDelta, double frac, float aspect,
+                              NSArray<KKLane *> *templates) {
+  if (!selectedLayerIDs.count)
+    return;
+  NSSet<NSString *> *sel = [NSSet setWithArray:selectedLayerIDs];
+  for (NSUInteger i = 0; i < paths.count; i++) {
+    KKBezierPath *p = paths[i];
+    if (!p.layerID.length || ![sel containsObject:p.layerID])
+      continue;
+    if (p.isImage || p.isGroup) {
+      paths[i] = CanvasPathByTranslatingPosition(p, objDelta, frac, templates);
+    } else {
+      // Gated like the point OSC: a path moves only when constant or parked on
+      // a Points keypose - never between keyposes (geometry isn't editable
+      // there).
+      if (!CanvasPathGeometryEditableAtFraction(p, frac))
+        continue;
+      // Object delta -> the path's LOCAL space (identity transform ->
+      // unchanged).
+      simd_float2 l0 =
+          CanvasUnprojectLayerPointObj(paths, p, frac, aspect, 0.0f, 0.0f);
+      simd_float2 l1 = CanvasUnprojectLayerPointObj(paths, p, frac, aspect,
+                                                    objDelta.x, objDelta.y);
+      simd_float2 ld = l1 - l0;
+      // Translate the shape SHOWN at `frac` and write it back to the ACTIVE
+      // keypose only (constant path -> the base). Editing the current point,
+      // not every keypose - same persistence as dragging a single anchor.
+      KKBezierPath *working = CanvasPathMorphedAtFraction(p, frac);
+      KKBezierPath *moved = CanvasGeometryTranslated(working, ld);
+      paths[i] = CanvasPathByWritingWorkingGeometry(p, frac, moved);
+    }
+  }
 }
 
 KKBezierPath *CanvasPathByReversingGeometry(KKBezierPath *path) {

@@ -4,7 +4,11 @@
  */
 
 #import "CanvasOSC_Private.h"
+#import "CanvasLayerTimeline.h" // CanvasLayerBlobSnapshot
+#import "CanvasPathMorph.h"     // CanvasTranslateSelection
+#import "Plugin_Private.h"      // [CanvasPlugin availableLanes]
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKBezierPath.h>
 
 // hitTest / mouse* / mouseMoved are FxOnScreenControl protocol methods; the
 // primary @implementation handles draw + the element-key mapping, so these live
@@ -13,202 +17,6 @@
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
 @implementation CanvasOSC (Input)
-
-// Track Option-hold (reveal) - local, modifier-only (no param read, which the
-// OSC context can't do anyway). On change it requests a redraw so the handle
-// appears/disappears as Option is pressed/released.
-- (void)mouseMovedAtPositionX:(double)positionX
-                    positionY:(double)positionY
-                   activePart:(NSInteger)activePart
-                    modifiers:(FxModifierKeys)modifiers
-                  forceUpdate:(BOOL *)forceUpdate
-                       atTime:(CMTime)time {
-  // FCP doesn't surface the held Option flag in mouseMoved for a hidden OSC
-  // (it draws nothing), so the passed `modifiers` come through as 0. Read the
-  // LIVE modifier state directly and OR it in (the bit constants differ:
-  // NSEventModifierFlagOption vs kFxModifierKey_OPTION) so opt-reveal works
-  // with the cursor anywhere, like the other plugins.
-  FxModifierKeys eff = modifiers;
-  if ([NSEvent modifierFlags] & NSEventModifierFlagOption)
-    eff |= kFxModifierKey_OPTION;
-  [self kkUpdateOptRevealWithModifiers:eff forceUpdate:forceUpdate];
-
-  // Toolbar hover tooltip: show the localized bubble for the button under the
-  // cursor (a real item tag > 0); clear it otherwise. Redraw only on a change.
-  NSInteger tbHit = [self _toolbarHitTestAtX:positionX y:positionY];
-  NSInteger newHover = (tbHit > 0 && !self.toolbarDragging) ? tbHit : 0;
-  if (newHover != self.toolbar.hoveredTag) {
-    self.toolbar.hoveredTag = newHover;
-    if (forceUpdate)
-      *forceUpdate = YES;
-  }
-  // Pen tool: track the cursor for the rubber-band + the grid-snap ghost (the
-  // latter shows before the first point too).
-  if ([self _penToolActive]) {
-    [self _penMouseMovedAtX:positionX y:positionY];
-    if (forceUpdate)
-      *forceUpdate = YES;
-  }
-}
-
-- (void)hitTestOSCAtMousePositionX:(double)positionX
-                    mousePositionY:(double)positionY
-                        activePart:(NSInteger *)activePart
-                            atTime:(CMTime)time {
-  *activePart = CanvasOSCPartNone;
-  // Clear a move cursor forced on the previous hover; the hit branch re-sets
-  // it.
-  if (self.pointCursorSet) {
-    id<FxOnScreenControlAPI_v4> resetAPI =
-        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-    [resetAPI setCursor:[NSCursor arrowCursor]];
-    self.pointCursorSet = NO;
-  }
-  // Toolbar (global chrome) sits on top: claim its hits before any handle or
-  // layer pick. A tag > 0 is an item; < 0 is the toolbar body (swallow).
-  NSInteger tbHit = [self _toolbarHitTestAtX:positionX y:positionY];
-  if (tbHit != 0) {
-    *activePart = (tbHit < 0) ? CanvasToolbarBackground : tbHit;
-    id<FxOnScreenControlAPI_v4> tbAPI =
-        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-    // Move cursor over the drag handle; plain arrow over the buttons / body.
-    if (tbHit == CanvasToolbarDragHandle) {
-      [tbAPI setCursor:KKPointMoveCursor()];
-      self.pointCursorSet = YES; // reset to arrow on the next hover off it
-    } else {
-      [tbAPI setCursor:[NSCursor arrowCursor]];
-    }
-    return;
-  }
-  // Pen tool: claim the whole canvas (below the toolbar) so every click routes
-  // to the OSC, and show the pen / close-shape cursor. Bypasses the gizmo
-  // handles + auto-select entirely while drawing.
-  if ([self _penToolActive]) {
-    *activePart = CanvasOSCPartPen;
-    id<FxOnScreenControlAPI_v4> penAPI =
-        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-    [penAPI setCursor:[self _penCursorForCanvasX:positionX y:positionY]];
-    self.pointCursorSet = YES;
-    return;
-  }
-  // Rect / ellipse tool: claim the whole canvas (below the toolbar) so the box
-  // drag routes to the OSC, and show the crosshair. Bypasses the gizmo +
-  // auto-select while drawing, like the pen.
-  if ([self _shapeToolActive]) {
-    *activePart = CanvasOSCPartShape;
-    id<FxOnScreenControlAPI_v4> shAPI =
-        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-    [shAPI setCursor:[NSCursor crosshairCursor]];
-    self.pointCursorSet = YES;
-    return;
-  }
-  // Locked SELECTED layer: its own handles aren't grabbable (and Opt can't peek
-  // them back). Auto-select still runs below, so you can click a different
-  // layer to switch away from a locked one.
-  [self _applyGroupComposeOffsetAtTime:time];
-  if (![self _selectedLayerLocked]) {
-    // Anchor pivot square is the topmost control: checked first so it stays
-    // grabbable / opt-hideable even when it coincides with the Position handle.
-    // The control owns reachability + the move/eye cursor.
-    self.anchor.optRevealActive = self.optRevealActive;
-    if ([self.anchor hitTestAtX:positionX y:positionY atTime:time] >= 0) {
-      *activePart = CanvasOSCPartAnchor;
-      self.pointCursorSet = YES;
-      return;
-    }
-    // The controller gates hit-testing on visibility + ITS optRevealActive, so
-    // a hidden handle isn't grabbable unless Opt-revealed - forward the reveal
-    // flag so a revealed ghost becomes hittable (opt-click re-shows it).
-    self.position.optRevealActive = self.optRevealActive;
-    KKPositionHit ph = [self.position hitTestAtX:positionX
-                                               y:positionY
-                                          atTime:time];
-    if (ph != KKPositionHitNone) {
-      *activePart = (ph == KKPositionHitTangentHandle) ? CanvasOSCPartPath
-                                                       : CanvasOSCPartPosition;
-      self.pointCursorSet = YES; // the controller set the move/eye cursor
-      // When an opt-click would toggle this element's visibility (master on),
-      // show the eye / eye.slash affordance over its handle instead.
-      NSCursor *eye = [self kkVisibilityCursorForLabel:
-                                [self oscElementKeyForActivePart:*activePart]];
-      if (eye) {
-        id<FxOnScreenControlAPI_v4> oscAPI =
-            [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-        [oscAPI setCursor:eye];
-      }
-      return;
-    }
-    // Scale box handles, checked after the Position handle/path miss (the
-    // control owns reachability + the opt-hover eye affordance + the resize
-    // cursor).
-    [self _syncScaleControlAtTime:time];
-    if ([self.scale hitTestHandleAtX:positionX y:positionY atTime:time] >= 0) {
-      *activePart = CanvasOSCPartScale;
-      self.pointCursorSet = YES; // the control set a resize / eye cursor: reset
-                                 // it on the next hover off
-      return;
-    }
-    // Rotation rings, checked last (they sit inside the scale box). The control
-    // owns reachability + the per-axis opt-hover eye + the rotate cursor.
-    [self _syncRotationControlAtTime:time];
-    if ([self.rotation hitTestRingAtX:positionX y:positionY atTime:time] >= 0) {
-      *activePart = CanvasOSCPartRotation;
-      self.pointCursorSet = YES; // the control set a rotate / eye cursor: reset
-                                 // it on the next hover off
-      return;
-    }
-  }
-
-  // Path point editing: a click on the selected path's anchor / tangent handle
-  // (cursor tool, Points OSC visible) grabs it. Checked before auto-select so a
-  // click on an anchor edits the path instead of re-picking a layer beneath.
-  // When Points is hidden, an Opt-peek still reveals + claims it (so an
-  // Opt-click can re-show), mirroring the transform handles.
-  BOOL pointsVisible = [self kkOSCElementVisible:@"Points"];
-  BOOL pointsReveal = !pointsVisible && self.optRevealActive &&
-                      [self kkOSCRevealEligible:@"Points"];
-  if ([self _activeTool] == CanvasToolbarToolCursor &&
-      (pointsVisible || pointsReveal) &&
-      [self _pathEditHitAtX:positionX y:positionY] != CanvasPathEditHitNone) {
-    *activePart = CanvasOSCPartPathEdit;
-    id<FxOnScreenControlAPI_v4> peAPI =
-        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-    // eye / eye.slash when an Opt-click would toggle visibility, else the move
-    // cursor for a normal edit.
-    [peAPI setCursor:[self kkVisibilityCursorForLabel:@"Points"]
-                         ?: KKPointMoveCursor()];
-    self.pointCursorSet = YES;
-    return;
-  }
-  // Auto-select: no handle was grabbed, so if the toggle is on, claim a click
-  // over the topmost (unselected) image layer to select it. Clicking the
-  // already-selected layer is a no-op (don't claim - leave the click to FCP).
-  self.pendingPickLayerID = nil;
-  if ([self _autoSelectEnabled]) {
-    NSString *hit = [self _pickLayerIDAtX:positionX y:positionY atTime:time];
-    if (hit.length && ![hit isEqualToString:[self _resolvedSelectedLayerID]]) {
-      self.pendingPickLayerID = hit;
-      *activePart = CanvasOSCPartLayerPick;
-      id<FxOnScreenControlAPI_v4> oscAPI =
-          [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-      [oscAPI setCursor:[NSCursor pointingHandCursor]];
-      self.pointCursorSet = YES;
-    }
-  }
-  // Empty area (no anchor/handle, nothing else claimed): a drag here marquees
-  // the selected path's points. Claimed after layer-pick so clicking another
-  // layer still selects it.
-  if (*activePart == CanvasOSCPartNone &&
-      [self _activeTool] == CanvasToolbarToolCursor &&
-      [self kkOSCElementVisible:@"Points"] &&
-      [self.pathEditController canMarqueeAtX:positionX y:positionY]) {
-    *activePart = CanvasOSCPartPathEdit;
-    id<FxOnScreenControlAPI_v4> mqAPI =
-        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-    [mqAPI setCursor:[NSCursor crosshairCursor]];
-    self.pointCursorSet = YES;
-  }
-}
 
 - (void)mouseDownAtPositionX:(double)positionX
                    positionY:(double)positionY
@@ -266,10 +74,14 @@
       return;
     }
     // Master-ON + individually hidden: the ghost is revealed only for the
-    // Opt-click re-show above, so a normal click on it is inert (don't edit a
-    // hidden path). Master-OFF is "peek and use" - Opt revealed it, so a drag
-    // proceeds to edit.
-    if (![self kkOSCMasterOff] && ![self kkOSCElementVisible:@"Points"]) {
+    // Opt-click re-show above, so a normal click ON the hidden path is inert
+    // (don't edit a hidden path). Gate on `onElement` (a hit on the path's
+    // anchor/handle) - NOT "any layer under the cursor", which wrongly swallowed
+    // the marquee whenever a layer (esp. an image, whose Points are always
+    // hidden) sat under the start point. A drag NOT on an element must still
+    // start a marquee. Master-OFF is "peek and use" - a drag proceeds to edit.
+    if (onElement && ![self kkOSCMasterOff] &&
+        ![self kkOSCElementVisible:@"Points"]) {
       if (forceUpdate)
         *forceUpdate = YES;
       return;
@@ -282,7 +94,20 @@
   // Auto-select pick: the hover hit-test claimed a click over an unselected
   // image layer - commit the selection and consume the click (no drag).
   if (activePart == CanvasOSCPartLayerPick) {
-    [self _commitPickSelection];
+    [self _commitPickSelectionWithModifiers:modifiers];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
+  // Body-drag move: press on a selected layer. Record the start (the per-tick
+  // translate works from this pre-drag blob, not cumulatively); the drag /
+  // up decide move-vs-select.
+  if (activePart == CanvasOSCPartLayerMove) {
+    self.layerMoveHitID = self.pendingPickLayerID;
+    self.layerMoveStartObj = [self _objYUpAtCanvasX:positionX y:positionY];
+    self.layerMoveStartBlob = CanvasLayerBlobSnapshot();
+    self.layerMoveDidMove = NO;
+    self.penLiveParamWritten = NO;
     if (forceUpdate)
       *forceUpdate = YES;
     return;
@@ -372,6 +197,36 @@
       *forceUpdate = YES;
     return;
   }
+  // Body-drag move: translate the whole selection live from the pre-drag blob.
+  if (activePart == CanvasOSCPartLayerMove) {
+    CGPoint cur = [self _objYUpAtCanvasX:positionX y:positionY];
+    simd_float2 d = simd_make_float2((float)(cur.x - self.layerMoveStartObj.x),
+                                     (float)(cur.y - self.layerMoveStartObj.y));
+    // A small dead-zone so a click with sub-pixel jitter stays a click (select),
+    // not a move. Once moving, keep moving.
+    if (!self.layerMoveDidMove && simd_length(d) < 0.003f) {
+      if (forceUpdate)
+        *forceUpdate = YES;
+      return;
+    }
+    self.layerMoveDidMove = YES;
+    NSString *b64 = self.layerMoveStartBlob;
+    NSMutableArray<KKBezierPath *> *paths =
+        b64.length
+            ? [KKBezierPath
+                  pathsFromBlob:[[NSData alloc]
+                                    initWithBase64EncodedString:b64
+                                                        options:0]]
+            : [NSMutableArray array];
+    CanvasTranslateSelection(paths, [self _selectedLayerIDs], d,
+                             [self fractionAtTime:time],
+                             (float)[self _canvasAspect],
+                             [CanvasPlugin availableLanes]);
+    [self penSetLiveLayers:paths];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   // Path point editing: drag the grabbed anchor / handle.
   if ([self _pathEditDragging]) {
     [self _pathEditMouseDraggedAtX:positionX y:positionY modifiers:modifiers];
@@ -454,6 +309,22 @@
       *forceUpdate = YES;
     return;
   }
+  // Body-drag move end: a real drag commits the move as one undo; a click (no
+  // drag) just (re)selects the layer (plain replace; Shift/Cmd toggles).
+  if (activePart == CanvasOSCPartLayerMove) {
+    if (self.layerMoveDidMove) {
+      [self penCommitLiveLayers];
+    } else {
+      self.pendingPickLayerID = self.layerMoveHitID;
+      [self _commitPickSelectionWithModifiers:modifiers];
+    }
+    self.layerMoveStartBlob = nil;
+    self.layerMoveHitID = nil;
+    self.layerMoveDidMove = NO;
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   if ([self _pathEditDragging]) {
     [self _pathEditMouseUp];
     [self kkResetOptHideArming]; // this branch returns before the shared reset
@@ -506,6 +377,20 @@
       [self.pathEditController
           removeAnchorsAtIndexes:self.pathEditController.selectedAnchors
                        breakPath:YES]) {
+    if (forceUpdate)
+      *forceUpdate = YES;
+    if (didHandle)
+      *didHandle = YES;
+    return;
+  }
+  // Delete / Backspace with a LAYER selected (no anchors) removes the selected
+  // layer(s). Consumed even on success/failure paths below so the key never
+  // reaches FCP, which would otherwise delete the whole effect.
+  if ((asciiKey == 127 || asciiKey == 8) &&
+      [self _activeTool] == CanvasToolbarToolCursor &&
+      self.pathEditController.selectedAnchors.count == 0 &&
+      [self _selectedLayerIDs].count > 0) {
+    [self _deleteSelectedLayers];
     if (forceUpdate)
       *forceUpdate = YES;
     if (didHandle)

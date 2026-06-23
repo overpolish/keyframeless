@@ -158,14 +158,14 @@
       NSPoint tp = [self convertPoint:e.locationInWindow fromView:nil];
       if ([td respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)] &&
           [td miniViewer:c toolbarTagAtPoint:tp] != 0) {
-        [self.window makeFirstResponder:nil];
+        [c endFieldEditingGrabbingFocusIfNeeded];
         _toolbarDragging =
             [td respondsToSelector:@selector(miniViewer:toolbarMouseDownAtPoint:)] &&
             [td miniViewer:c toolbarMouseDownAtPoint:tp];
         [self setNeedsDisplay:YES];
         return;
       }
-      [self.window makeFirstResponder:nil];
+      [c endFieldEditingGrabbingFocusIfNeeded];
       _toolDrawing = YES;
       if ([td respondsToSelector:@selector(miniViewer:
                                      toolDownAtPoint:contentRect:modifiers:)])
@@ -181,7 +181,7 @@
   // box / a handle (the overlay's hitTest swallows those clicks, so the
   // canvas's own -mouseDown: never sees them otherwise).
   if (e.clickCount == 2) {
-    [self.window makeFirstResponder:nil];
+    [c endFieldEditingGrabbingFocusIfNeeded];
     id<KKMiniViewerDelegate> dd = c.canvasDelegate;
     // A double-click on the toolbar (chrome) is the toolbar's - toggle once,
     // never reset the view's zoom/pan.
@@ -213,7 +213,7 @@
   if ([d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)]) {
     NSPoint tp = [self convertPoint:e.locationInWindow fromView:nil];
     if ([d miniViewer:c toolbarTagAtPoint:tp] != 0) {
-      [self.window makeFirstResponder:nil];
+      [c endFieldEditingGrabbingFocusIfNeeded];
       _toolbarDragging =
           [d respondsToSelector:@selector(miniViewer:toolbarMouseDownAtPoint:)] &&
           [d miniViewer:c toolbarMouseDownAtPoint:tp];
@@ -226,7 +226,7 @@
     return;
   // Interacting with the canvas commits/ends any focused value field so its
   // stale text can't clobber the drag's value on focus loss.
-  [self.window makeFirstResponder:nil];
+  [c endFieldEditingGrabbingFocusIfNeeded];
   // Opt-click toggles a handle's visibility (hide / re-show a ghost) instead of
   // dragging it - mirrors the viewer OSC.
   //

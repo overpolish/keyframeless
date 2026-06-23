@@ -87,7 +87,12 @@
       CanvasPathActiveKeyposeAtFraction(base, frac, kCanvasPathKeyposeEps);
 
   KKBezierPath *edited;
-  if (breakPath && working.closed && kp < 0 && working.count >= 2) {
+  // The "open at deletion" behavior only makes sense for a single closed loop; a
+  // multi-contour path (boolean result) falls through to removeAtIndex so its
+  // other subpaths stay intact.
+  BOOL singleContour = (working.contourCount <= 1);
+  if (breakPath && working.closed && kp < 0 && working.count >= 2 &&
+      singleContour) {
     // Destructive (cursor) delete on a CLOSED constant path: OPEN it at the
     // deletion - reorder the survivors to start just after the first deleted
     // anchor and drop the deleted ones, so the gap lands exactly where the
@@ -95,19 +100,29 @@
     NSUInteger n = working.count;
     NSUInteger brk = indexes.firstIndex;
     KKBezierPoint *pts = malloc(n * sizeof(KKBezierPoint));
+    NSUInteger *origIdx = malloc(n * sizeof(NSUInteger));
     NSUInteger m = 0;
     for (NSUInteger k = 1; k <= n; k++) {
       NSUInteger idx = (brk + k) % n;
       if ([indexes containsIndex:idx])
         continue;
+      origIdx[m] = idx;
       pts[m++] = [working pointAtIndex:idx];
     }
     edited = [working copy];
     [edited setBezierPoints:pts count:m closed:NO];
+    // setBezierPoints clears the per-anchor radii - re-apply each survivor's
+    // radius in the NEW order, else deleting one point drops every rounding.
+    if (working.hasCornerRadii)
+      for (NSUInteger j = 0; j < m; j++)
+        [edited setCornerRadius:[working cornerRadiusAtIndex:origIdx[j]]
+                        atIndex:j];
     free(pts);
+    free(origIdx);
   } else {
-    // Smart (pen) delete, or an open / animated path: remove the anchors and
-    // let the neighbours reconnect, preserving the closed flag.
+    // Smart (pen) delete, or an open / animated / multi-contour path: remove the
+    // anchors and let the neighbours reconnect, preserving the closed flag.
+    // removeAtIndex keeps the survivors' corner radii in step on its own.
     edited = [working copy];
     NSMutableArray<NSNumber *> *order = [NSMutableArray array];
     [indexes enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
@@ -122,6 +137,24 @@
       return NO;
     for (NSNumber *nn in order)
       [edited removeAtIndex:nn.unsignedIntegerValue];
+    // removeAtIndex doesn't shift the contour boundaries, so rebuild them for a
+    // multi-contour path - otherwise the survivors' subpaths render joined.
+    if (working.contourCount > 1) {
+      NSMutableArray<NSNumber *> *newStarts = [NSMutableArray array];
+      for (NSUInteger c = 0; c < working.contourCount; c++) {
+        NSRange r = [working contourRangeAtIndex:c];
+        __block NSUInteger removedBeforeStart = 0, removedInContour = 0;
+        [indexes enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
+          if (idx < r.location)
+            removedBeforeStart++;
+          else if (idx < NSMaxRange(r))
+            removedInContour++;
+        }];
+        if (c > 0 && (r.length - removedInContour) > 0)
+          [newStarts addObject:@(r.location - removedBeforeStart)];
+      }
+      [edited setContourStarts:newStarts];
+    }
   }
 
   NSString *targetID = base.layerID;

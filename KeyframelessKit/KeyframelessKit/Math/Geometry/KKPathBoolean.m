@@ -149,7 +149,8 @@ static void cgPathApplyCallback(void *info, const CGPathElement *element) {
       KKBezierPoint first = [path pointAtIndex:ctx->contourStartIdx];
       float dx = last.x - first.x;
       float dy = last.y - first.y;
-      if (fabsf(dx) < kMergeEpsilon && fabsf(dy) < kMergeEpsilon) {
+      BOOL merged = (fabsf(dx) < kMergeEpsilon && fabsf(dy) < kMergeEpsilon);
+      if (merged) {
         // Transfer inHandle from duplicate to contour start.
         if (last.type == KKBezierPointBezier) {
           [path setInHandle:(simd_float2){last.inX, last.inY}

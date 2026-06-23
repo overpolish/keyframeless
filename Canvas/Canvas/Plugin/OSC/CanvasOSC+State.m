@@ -47,8 +47,60 @@
   return [self _selectedLayer].layerID;
 }
 
+// The full multi-selection set (layerIDs) from kParamUIState, written by the
+// inspector list (panel multi-click) and the viewer cursor tool. Falls back to
+// the single resolved selection when the array key is absent (older projects /
+// a fresh single select).
+- (NSArray<NSString *> *)_selectedLayerIDs {
+  id v = [self _uiStateDict][@"selectedLayerIDs"];
+  // A present array is authoritative - including an EMPTY one (a real deselect).
+  // Only fall back to the resolved single when the key is absent (old projects /
+  // a selection that only persisted selectedLayerID) - else an explicit deselect
+  // would resolve back to the topmost layer and keep drawing its point OSC.
+  if ([v isKindOfClass:[NSArray class]])
+    return v;
+  NSString *single = [self _resolvedSelectedLayerID];
+  return single.length ? @[ single ] : @[];
+}
+
+// The selected vector layers (snapshot paths whose layerID is selected,
+// excluding images + groups, in stack order) - the candidates for the path-op
+// buttons. Booleans need 2+; stroke-to-outline needs 1+ with a stroke.
+- (NSArray<KKBezierPath *> *)_selectedVectorLayers {
+  NSArray<NSString *> *ids = [self _selectedLayerIDs];
+  if (ids.count == 0)
+    return @[];
+  NSMutableArray<KKBezierPath *> *ops = [NSMutableArray array];
+  for (KKBezierPath *p in [self _snapshotPaths])
+    if (!p.isImage && !p.isGroup && [ids containsObject:(p.layerID ?: @"")])
+      [ops addObject:p];
+  return ops;
+}
+
 - (BOOL)_selectedLayerLocked {
   return [self _selectedLayer].locked;
+}
+
+// The lone selected layer when EXACTLY one is selected, else nil. Drives the
+// selection-type display rules (gizmo vs points vs nothing).
+- (KKBezierPath *)_loneSelectedLayer {
+  NSArray<NSString *> *sel = [self _selectedLayerIDs];
+  if (sel.count != 1)
+    return nil;
+  NSString *lid = sel.firstObject;
+  for (KKBezierPath *p in [self _snapshotPaths])
+    if ([p.layerID isEqualToString:lid])
+      return p;
+  return nil;
+}
+
+// Show the transform gizmo (Position/Scale/Rotation/Anchor) ONLY for a lone
+// image or group - they move via their transform and have no editable points. A
+// lone vector path shows its point OSC + path-ops instead; 0 or 2+ selected show
+// no gizmo. (The OSC-visibility system still gates each control on top of this.)
+- (BOOL)_showsTransformGizmo {
+  KKBezierPath *lone = [self _loneSelectedLayer];
+  return lone && (lone.isImage || lone.isGroup);
 }
 
 // The current kParamUIState as a dictionary, parsed from the inspector-published

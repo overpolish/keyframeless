@@ -32,6 +32,10 @@ extern NSString *const CanvasMiniViewerRequestPath;
 /// the live `timeline` (the kit's in-memory edited copy) so a Position-handle
 /// drag previews immediately; the Position OSC also reads/writes this layer.
 @property(nonatomic, copy, nullable) NSString *selectedLayerID;
+/// The full multi-selection (every selected layer's id), mirrored from the host.
+/// Drives the mini toolbar's conditional path-operation buttons (which need the
+/// whole selection, not just the primary). Falls back to selectedLayerID.
+@property(nonatomic, copy, nullable) NSArray<NSString *> *selectedLayerIDs;
 /// The plugin's lane templates (`+[CanvasPlugin availableLanes]`), set by the
 /// inspector. Used by `-templateLaneForLabel:` so a created lane keeps its
 /// metadata (aspectLinked, units) and the scale-box drag reads the aspect-link
@@ -46,10 +50,20 @@ extern NSString *const CanvasMiniViewerRequestPath;
 /// non-selectable gating - e.g. a keypose popover only lets you pick layers with
 /// a keypose at that time). A click over one falls through to the layer beneath.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *nonSelectableLayerIDs;
+/// Stricter gating for the MARQUEE / body-drag (which select to MOVE): in the
+/// constants popover this excludes move-lane-animated layers (Points / Position),
+/// which a single click can still pick. Falls back to nonSelectableLayerIDs.
+@property(nonatomic, copy, nullable)
+    NSSet<NSString *> *marqueeNonSelectableLayerIDs;
 /// Fired with the picked layer's id when a background click auto-selects a layer
 /// (only when `autoSelectEnabled`). The inspector wires this to its layer
 /// selection so the timeline / OSC / Constants follow.
 @property(nonatomic, copy, nullable) void (^onSelectLayer)(NSString *layerID);
+/// Fired for a multi-selection change (Shift / Cmd-click in the mini): the full
+/// set of selected layer ids plus the primary edit target. The inspector mirrors
+/// the set onto the Layers panel + persists it. Falls back to onSelectLayer.
+@property(nonatomic, copy, nullable) void (^onSelectLayers)
+    (NSArray<NSString *> *layerIDs, NSString *primaryLayerID);
 
 /// Shared alignment-grid state, mirrored from the viewer's kParamUIState by the
 /// inspector so the mini grid matches the viewer's. The mini draws the grid (and
@@ -80,6 +94,13 @@ extern NSString *const CanvasMiniViewerRequestPath;
 /// already updated its own `layers` so the next draw/click sees the change.
 @property(nonatomic, copy, nullable) void (^onPersistLayers)
     (NSArray<KKBezierPath *> *paths, NSString *_Nullable selectLayerID);
+
+/// Fired when a delete removes layer(s): the host writes `paths` to
+/// kParamLayerData AND clears the selection in ONE undo action (so a single
+/// cmd-Z restores both the layer and the prior selection). The renderer has
+/// already cleared its own selection + updated `layers`.
+@property(nonatomic, copy, nullable) void (^onDeleteLayers)
+    (NSArray<KKBezierPath *> *paths);
 @end
 
 NS_ASSUME_NONNULL_END

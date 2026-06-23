@@ -256,14 +256,48 @@ BOOL CanvasPathIsLargeVector(KKBezierPath *path) {
   [self _publishSelection];
 }
 
-// Select every anchor whose projected position lands inside the marquee rect.
-// Opt subtracts, Shift/plain add (a plain marquee already cleared the set on
-// mouseDown). Selection only - no geometry write.
+// Marquee finalize. A box that FULLY encompasses one or more layers selects
+// those layers (plain replaces, Shift adds); otherwise it falls back to anchor
+// point-select within the active path. Selection only - no geometry write.
 - (void)_finalizeMarquee {
+  CGRect r = [self marqueeSurfaceRect];
+  // Exactly one editable path selected = the point-edit context (the surface
+  // draws its anchors). There a marquee that encloses ONLY that path selects its
+  // ANCHORS - all of them when it boxes the whole shape - rather than re-routing
+  // to layer-select (which made a full-shape marquee a visual no-op). But a
+  // marquee that reaches OTHER layers is still a layer multi-select, so you can
+  // grow the selection from a single path. Outside the point-edit context (0 /
+  // multi) any fully-enclosed layer is a layer-select.
+  BOOL singlePathEdit =
+      [_surface penSelectedLayerIDs].count == 1 && [self _path] != nil;
+  NSArray<NSString *> *enclosed = [self _layerIDsFullyInsideRect:r];
+  BOOL enclosesOthers = NO;
+  if (singlePathEdit) {
+    NSString *selID = [_surface penSelectedLayerID] ?: @"";
+    for (NSString *lid in enclosed)
+      if (![lid isEqualToString:selID]) {
+        enclosesOthers = YES;
+        break;
+      }
+  }
+  if ((!singlePathEdit && enclosed.count > 0) || enclosesOthers) {
+    BOOL additive = (_dragMods & CanvasPenModShift) != 0;
+    [_surface penSelectLayerIDs:enclosed additive:additive];
+    return;
+  }
+  // A plain click on empty canvas (no drag, nothing enclosed) deselects
+  // everything - the clear way to escape any selection.
+  if (!_didDrag) {
+    [_surface penDeselectAll];
+    return;
+  }
+  // Between keyposes an animated path is read-only, so there are no anchors to
+  // marquee (matches the hit-test gate).
+  if ([self _animatedOffKeypose])
+    return;
   KKBezierPath *path = [self _workingPath];
   if (!path)
     return;
-  CGRect r = [self marqueeSurfaceRect];
   BOOL subtract = (_dragMods & CanvasPenModOpt) != 0;
   for (NSUInteger i = 0; i < path.count; i++) {
     KKBezierPoint pt = [path pointAtIndex:i];

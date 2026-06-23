@@ -4,6 +4,7 @@
  */
 
 #import "CanvasInspectorView.h"
+#import "CanvasLayerRender.h" // CanvasReadLayerPaths (fresh, not the snapshot)
 #import "CanvasLayerTimeline.h"
 #import "CanvasPathEditController.h" // CanvasPathIsLargeVector
 #import "Constants.h"
@@ -175,23 +176,23 @@
   // Resolve the layer up front: its kind picks the default OSC seed AND scopes
   // the checklist below (a vector path has point editing; an image / group only
   // has the transform gizmo).
+  // Read the layer stack FRESH from the param (not the published snapshot): on a
+  // path-op undo both kParamLayerData + kParamUIState change, and this can run
+  // (from the UIState handler) before the blob snapshot is republished - the
+  // stale snapshot wouldn't contain the restored operand, so it'd resolve to nil
+  // and fall back to the image-like gizmo defaults until a reselect.
   KKBezierPath *layer = nil;
-  NSString *b64 = CanvasLayerBlobSnapshot();
-  if (b64.length) {
-    NSArray<KKBezierPath *> *paths = [KKBezierPath
-        pathsFromBlob:[[NSData alloc] initWithBase64EncodedString:b64
-                                                          options:0]];
-    for (KKBezierPath *p in paths)
-      if ([p.layerID isEqualToString:(layerID ?: @"")]) {
-        layer = p;
-        break;
-      }
-  }
+  for (KKBezierPath *p in CanvasReadLayerPaths(self.apiManager, self))
+    if ([p.layerID isEqualToString:(layerID ?: @"")]) {
+      layer = p;
+      break;
+    }
   // A too-large path (e.g. a detailed imported SVG) isn't editable per-anchor,
   // so it's treated like an image: the transform gizmo shows by default, not the
   // point-edit OSC.
   BOOL vector = layer && !layer.isImage && !layer.isGroup &&
-                layer.strokeEnabled && !CanvasPathIsLargeVector(layer);
+                (layer.strokeEnabled || layer.fillEnabled) &&
+                !CanvasPathIsLargeVector(layer);
 
   NSDictionary *els = ist.oscElementsByOwner[layerID ?: @""];
   if (![els isKindOfClass:[NSDictionary class]])
@@ -451,9 +452,14 @@
     // layer's. restoreSelectedLayerID self-guards no-ops; the persist-on-select
     // block isn't wired yet (so no churn), but flag restoringSelection anyway.
     NSString *savedSel = visState[@"selectedLayerID"];
-    if ([savedSel isKindOfClass:[NSString class]] && savedSel.length) {
+    NSArray<NSString *> *savedSelIDs =
+        [visState[@"selectedLayerIDs"] isKindOfClass:[NSArray class]]
+            ? visState[@"selectedLayerIDs"]
+            : nil;
+    if (([savedSel isKindOfClass:[NSString class]] && savedSel.length) ||
+        savedSelIDs.count) {
       self.restoringSelection = YES;
-      [view restoreSelectedLayerID:savedSel];
+      [view restoreSelectedLayerIDs:savedSelIDs primary:savedSel];
       self.restoringSelection = NO;
     }
     [self canvasApplyOSCForLayer:view.resolvedSelectedLayerID keys:oscKeys];
@@ -493,20 +499,25 @@
     // re-reads on its next drawOSC, and a selection isn't a param write, so
     // nudge a render to redraw it immediately (else it lags a few ticks).
     // Toggles already nudge via the kParamUIState write.
-    view.onSelectedLayerChanged = ^(NSString *resolvedLayerID) {
-      __strong CanvasPlugin *s = weakOSC;
-      [s canvasApplyOSCForLayer:resolvedLayerID keys:oscKeys];
-      // Persist the selection so it lands on the undo stack (like standard
-      // editors: changing the active layer is itself undoable). Skip while
-      // restoring from an undo/redo, else we'd push a duplicate entry. The
-      // kParamUIState write also forces the render round-trip that redraws the
-      // viewer OSC, so no separate kParamRenderNudge is needed (it would only
-      // add a phantom undo entry - the "takes two cmd-Z" problem).
-      if (!s.restoringSelection)
-        [s patchUIStateKey:@"selectedLayerID"
-                     value:(resolvedLayerID ?: @"")
-                   paramID:kParamUIState];
-    };
+    view.onSelectedLayerChanged =
+        ^(NSString *resolvedLayerID, NSArray<NSString *> *selectedLayerIDs) {
+          __strong CanvasPlugin *s = weakOSC;
+          [s canvasApplyOSCForLayer:resolvedLayerID keys:oscKeys];
+          // Persist the selection so it lands on the undo stack (like standard
+          // editors: changing the active layer is itself undoable). Skip while
+          // restoring from an undo/redo, else we'd push a duplicate entry. The
+          // primary id and the full multi-selection set go in ONE action
+          // (patchUIStateKeys) so they're a single undo entry. The kParamUIState
+          // write also forces the render round-trip that redraws the viewer OSC,
+          // so no separate kParamRenderNudge is needed (it would only add a
+          // phantom undo entry - the "takes two cmd-Z" problem).
+          if (!s.restoringSelection)
+            [s patchUIStateKeys:@{
+              @"selectedLayerID" : (resolvedLayerID ?: @""),
+              @"selectedLayerIDs" : (selectedLayerIDs ?: @[])
+            }
+                        paramID:kParamUIState];
+        };
 
     // "Auto-select layers" toggle: seed the checkbox from the persisted state
     // (OFF when absent) and persist flips to kParamUIState. The write triggers

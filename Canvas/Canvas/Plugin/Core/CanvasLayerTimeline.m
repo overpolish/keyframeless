@@ -30,6 +30,25 @@ void CanvasSetUIStateSnapshot(NSString *json) {
 
 NSString *CanvasUIStateSnapshot(void) { return sCanvasUIStateSnapshot; }
 
+// Process-wide real output-size snapshot for path ops (see header).
+static float sCanvasOutputWidth = 0.0f;
+static float sCanvasOutputHeight = 0.0f;
+
+void CanvasSetOutputSize(float width, float height) {
+  if (width > 0.0f && height > 0.0f) {
+    sCanvasOutputWidth = width;
+    sCanvasOutputHeight = height;
+  }
+}
+
+BOOL CanvasOutputSize(float *outWidth, float *outHeight) {
+  if (sCanvasOutputWidth <= 0.0f || sCanvasOutputHeight <= 0.0f)
+    return NO;
+  *outWidth = sCanvasOutputWidth;
+  *outHeight = sCanvasOutputHeight;
+  return YES;
+}
+
 KKBezierPath *CanvasSelectedLayerForPaths(NSArray<KKBezierPath *> *paths,
                                           NSString *selectedLayerID) {
   // Groups animate too (their own explicit transform; no propagation), so they
@@ -122,14 +141,14 @@ void CanvasSeedGroupAnchor(KKBezierPath *group, NSArray<KKBezierPath *> *paths,
   if (!CanvasGroupContentCenterObj(paths, group, &cx, &cy))
     return; // no measurable content: leave the anchor at the clip centre
   // Pivot = clip centre + Anchor offset. Seed the Anchor (Y-down) so the pivot
-  // lands on the content centre (Y-up cy -> 1-cy), matching where the group used
-  // to pivot - but STORED, so moving a member no longer drags the pivot.
+  // lands on the content centre (Y-up cy -> 1-cy), matching where the group
+  // used to pivot - but STORED, so moving a member no longer drags the pivot.
   KKTimeline *tl = CanvasLayerTimelineForPath(group, templates);
   for (KKLane *l in tl.lanes) {
     if (![l.label isEqualToString:@"Anchor"])
       continue;
-    l.keyposes =
-        @[ [KKKeyPose keyposeAtTime:0.0 values:@[ @(cx), @(1.0 - cy) ]] ];
+    l.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                      values:@[ @(cx), @(1.0 - cy) ]] ];
     break;
   }
   CanvasApplyTimelineToPath(tl, group);

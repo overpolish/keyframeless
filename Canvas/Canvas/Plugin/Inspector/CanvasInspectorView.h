@@ -21,6 +21,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// doesn't originate from one. Pass nil/empty for the topmost layer. The plugin
 /// guards its persist while this runs so it doesn't write a fresh undo step.
 - (void)restoreSelectedLayerID:(nullable NSString *)layerID;
+/// Restore the FULL multi-selection (highlights every selected row + drives the
+/// mini), with `primary` the edit target. An empty `layerIDs` is a real
+/// no-selection state (clears highlights, shows the no-layer timeline) - not a
+/// fallback to the topmost layer.
+- (void)restoreSelectedLayerIDs:(nullable NSArray<NSString *> *)layerIDs
+                        primary:(nullable NSString *)primary;
 /// Sync the popover mini-viewer handles to the OSC visibility (global toggle +
 /// per-element hidden set, from per-instance state) combined with the selected
 /// layer's lock. Call after the plugin applies/refreshes OSC visibility.
@@ -38,10 +44,12 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable, readonly)
     NSString *resolvedSelectedLayerID;
 /// Fired whenever the edited layer changes (panel click / constants fallback),
-/// with the resolved layer id. The plugin loads that layer's per-layer OSC
-/// visibility into the active instance state in response.
+/// with the resolved PRIMARY layer id plus the full multi-selection set (the
+/// layerIDs of every selected row; just the primary for non-panel selections).
+/// The plugin loads the primary layer's per-layer OSC visibility into the active
+/// instance state and persists both as the undoable selection.
 @property(nonatomic, copy, nullable) void (^onSelectedLayerChanged)
-    (NSString *resolvedLayerID);
+    (NSString *resolvedLayerID, NSArray<NSString *> *selectedLayerIDs);
 /// Reflect the persisted "Auto-select layers" toggle onto the Layers panel
 /// checkbox (seed from createView + on undo/redo). Does not fire
 /// onAutoSelectChanged.

@@ -71,7 +71,7 @@
 
 - (void)mouseDown:(NSEvent *)event {
   // End any focused value field (see _KKMiniViewerOverlay -mouseDown:).
-  [self.window makeFirstResponder:nil];
+  [self endFieldEditingGrabbingFocusIfNeeded];
   if (event.clickCount == 2) {
     [self resetView];
     return;
@@ -173,7 +173,7 @@
   if (![d respondsToSelector:
               @selector(miniViewer:beginHandleDragAtPoint:contentRect:)])
     return;
-  [self.window makeFirstResponder:nil];
+  [self endFieldEditingGrabbingFocusIfNeeded];
   if (self.onHandleDragBegin)
     self.onHandleDragBegin();
   [d miniViewer:self

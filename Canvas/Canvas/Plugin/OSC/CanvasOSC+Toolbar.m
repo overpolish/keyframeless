@@ -23,8 +23,11 @@ static NSString *const kCanvasUIGridSnap = @"gridSnap";
 
 - (void)_setupToolbar {
   // Shared builder (same bar in the viewer + mini); per-frame state is driven in
-  // _drawToolbarWithWidth:.
-  self.toolbar = CanvasMakeToolbar(self.apiManager);
+  // _drawToolbarWithWidth:, which also rebuilds the bar when the selection
+  // brings in / drops the conditional path-op groups.
+  self.toolbar = CanvasMakeToolbar(self.apiManager, NO, NO);
+  self.toolbarShowsBooleans = NO;
+  self.toolbarShowsOutline = NO;
 }
 
 - (NSInteger)_activeTool {
@@ -37,6 +40,24 @@ static NSString *const kCanvasUIGridSnap = @"gridSnap";
              destinationImage:(FxImageTile *)destinationImage {
   if (!self.toolbar)
     return;
+  // Rebuild the bar when the selection crosses a path-op threshold (the
+  // KKToolbar item list is fixed at init). Booleans show with 2+ vector paths
+  // selected; stroke-to-outline shows when any selected vector path has a stroke
+  // (its filled result is now visible via the temp fill).
+  NSArray<KKBezierPath *> *vsel = [self _selectedVectorLayers];
+  BOOL wantBooleans = (vsel.count >= 2);
+  BOOL wantOutline = NO;
+  for (KKBezierPath *p in vsel)
+    if (p.strokeEnabled) {
+      wantOutline = YES;
+      break;
+    }
+  if (wantBooleans != self.toolbarShowsBooleans ||
+      wantOutline != self.toolbarShowsOutline) {
+    self.toolbar = CanvasMakeToolbar(self.apiManager, wantOutline, wantBooleans);
+    self.toolbarShowsBooleans = wantBooleans;
+    self.toolbarShowsOutline = wantOutline;
+  }
   self.toolbarIOSize = CGSizeMake(width, height);
   NSDictionary *ui = [self _uiStateDict];
   NSInteger tool =
@@ -149,6 +170,21 @@ static NSString *const kCanvasUIGridSnap = @"gridSnap";
     break;
   case CanvasToolbarGridSpacing:
     [self _cycleGridSpacing];
+    break;
+  case CanvasToolbarPathUnion:
+    [self _handlePathBooleanOp:KKBooleanOpUnion];
+    break;
+  case CanvasToolbarPathSubtract:
+    [self _handlePathBooleanOp:KKBooleanOpSubtract];
+    break;
+  case CanvasToolbarPathIntersect:
+    [self _handlePathBooleanOp:KKBooleanOpIntersect];
+    break;
+  case CanvasToolbarPathXOR:
+    [self _handlePathBooleanOp:KKBooleanOpXOR];
+    break;
+  case CanvasToolbarPathOutline:
+    [self _handleOutlineOp];
     break;
   default:
     break;

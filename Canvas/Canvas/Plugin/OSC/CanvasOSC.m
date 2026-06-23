@@ -160,50 +160,68 @@
                destinationImage:destinationImage];
     return;
   }
-  // Re-centre the point controls on where a grouped member is actually drawn
-  // (no-op otherwise); the scale box + rotation rings follow via the Position
-  // handle they centre on.
-  [self _applyGroupComposeOffsetAtTime:time];
-  // The controller (KKPositionOSC) owns ALL the visibility + opt-reveal-ghost
-  // gating internally (it reads kkOSCElementVisible / kkOSCRevealEligible +
-  // ITS OWN optRevealActive). So just forward our reveal + drag state to it and
-  // draw unconditionally - it draws nothing when hidden, the dim ghost when
-  // Opt-revealed, full when shown. (Forwarding optRevealActive is the bit
-  // Canvas needs that MagicMove/Glow don't: their primary handle is always
-  // shown, so they never relied on the controller ghosting a hidden Position.)
-  self.position.optRevealActive = self.optRevealActive;
-  self.position.dragging = self.isDragging;
-  [self.position drawPathInDestination:destinationImage
-                                atTime:time
-                            activePart:activePart];
-  // Rotation rings, drawn under the scale box + Position handle. The control
-  // owns its own per-axis visibility + opt-reveal-ghost gating.
-  [self _syncRotationControlAtTime:time];
-  [self.rotation drawInDestination:destinationImage
-                            atTime:time
-                        activePart:activePart];
-  // Scale box, drawn over the motion path and under the Position handle (so the
-  // handle stays on top + grabbable). The control owns its own visibility +
-  // opt-reveal-ghost gating.
-  [self _syncScaleControlAtTime:time];
-  [self.scale drawInDestination:destinationImage
-                         atTime:time
-                     activePart:activePart];
-  [self.position drawHandleInDestination:destinationImage
+  // The transform gizmo (Position/Scale/Rotation/Anchor) is drawn ONLY for a
+  // lone image / group - a lone path shows its points + path-ops instead, and 0
+  // or 2+ selected show no gizmo. (Each control still gates itself on the
+  // OSC-visibility system; this is the outer selection-type gate.)
+  if ([self _showsTransformGizmo]) {
+    // Re-centre the point controls on where a grouped member is actually drawn
+    // (no-op otherwise); the scale box + rotation rings follow via the Position
+    // handle they centre on.
+    [self _applyGroupComposeOffsetAtTime:time];
+    // The controller (KKPositionOSC) owns ALL the visibility + opt-reveal-ghost
+    // gating internally (it reads kkOSCElementVisible / kkOSCRevealEligible +
+    // ITS OWN optRevealActive). So just forward our reveal + drag state to it
+    // and draw unconditionally - it draws nothing when hidden, the dim ghost
+    // when Opt-revealed, full when shown. (Forwarding optRevealActive is the bit
+    // Canvas needs that MagicMove/Glow don't: their primary handle is always
+    // shown, so they never relied on the controller ghosting a hidden Position.)
+    self.position.optRevealActive = self.optRevealActive;
+    self.position.dragging = self.isDragging;
+    [self.position drawPathInDestination:destinationImage
                                   atTime:time
                               activePart:activePart];
-  // Anchor pivot square, drawn last so it sits on top of every other control.
-  // The control owns its own visibility + opt-reveal-ghost gating + snap
-  // guides.
-  self.anchor.optRevealActive = self.optRevealActive;
-  self.anchor.dragging = self.isDragging;
-  [self.anchor drawInDestination:destinationImage
-                          atTime:time
-                      activePart:activePart];
-  // Selected drawn path's edit OSC (anchors + curve), always shown when a
-  // vector path is selected. The transform gizmo above is hidden by default via
-  // the OSC visibility system, so the two don't clutter each other.
-  [self _drawSelectedPathEditOSCInDestination:destinationImage atTime:time];
+    // Rotation rings, drawn under the scale box + Position handle. The control
+    // owns its own per-axis visibility + opt-reveal-ghost gating.
+    [self _syncRotationControlAtTime:time];
+    [self.rotation drawInDestination:destinationImage
+                              atTime:time
+                          activePart:activePart];
+    // Scale box, drawn over the motion path and under the Position handle (so
+    // the handle stays on top + grabbable). The control owns its own visibility
+    // + opt-reveal-ghost gating.
+    [self _syncScaleControlAtTime:time];
+    [self.scale drawInDestination:destinationImage
+                           atTime:time
+                       activePart:activePart];
+    [self.position drawHandleInDestination:destinationImage
+                                    atTime:time
+                                activePart:activePart];
+    // Anchor pivot square, drawn last so it sits on top of every other control.
+    // The control owns its own visibility + opt-reveal-ghost gating + snap
+    // guides.
+    self.anchor.optRevealActive = self.optRevealActive;
+    self.anchor.dragging = self.isDragging;
+    [self.anchor drawInDestination:destinationImage
+                            atTime:time
+                        activePart:activePart];
+  }
+  // Exactly one layer selected: its editable point OSC (anchors + curve), gated
+  // by the Points visibility toggle. Two or more: the dimmed, non-editable point
+  // OSC of every selected layer (shown regardless of the toggle) so the
+  // multi-selection reads at a glance. NONE selected: draw nothing (the gizmo
+  // above is already gated off). The transform gizmo is hidden by default via the
+  // OSC visibility system, so the two don't clutter each other.
+  NSUInteger nsel = [self _selectedLayerIDs].count;
+  if (nsel >= 2)
+    [self _drawMultiSelectHighlightInDestination:destinationImage atTime:time];
+  else if (nsel == 1)
+    [self _drawSelectedPathEditOSCInDestination:destinationImage atTime:time];
+  // The marquee rubber-band draws over any selection state (it can run with 0,
+  // 1, or 2+ selected), so draw it separately from the selection OSC above.
+  [self _drawMarqueeInDestination:destinationImage];
+  // Path-op hover preview (red operands / green result) under the toolbar.
+  [self _drawPathOpHoverPreviewInDestination:destinationImage atTime:time];
   // Toolbar (grid + drag handle), global screen chrome, drawn last so it sits
   // on top of the gizmo.
   [self _drawToolbarWithWidth:width

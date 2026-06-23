@@ -85,6 +85,10 @@
     // selection persisted). The view method self-guards no-ops, so it's safe to
     // run on every UIState change (OSC toggles preserve the key, so they no-op).
     NSString *restoredSel = state[@"selectedLayerID"];
+    NSArray<NSString *> *restoredSelIDs =
+        [state[@"selectedLayerIDs"] isKindOfClass:[NSArray class]]
+            ? state[@"selectedLayerIDs"]
+            : nil;
     BOOL autoSelect = [state[@"autoSelect"] boolValue];
     // Shared alignment-grid state - mirror onto the popover mini-viewer so its
     // grid matches the viewer's (same keys the OSC writes via _writeUIStateMerging).
@@ -120,7 +124,7 @@
           [byLayer isKindOfClass:[NSDictionary class]] ? byLayer : @{};
       CanvasInspectorView *view = (CanvasInspectorView *)self.inspectorView;
       self.restoringSelection = YES;
-      [view restoreSelectedLayerID:restoredSel];
+      [view restoreSelectedLayerIDs:restoredSelIDs primary:restoredSel];
       self.restoringSelection = NO;
       [self canvasApplyOSCForLayer:view.resolvedSelectedLayerID keys:oscKeys];
     });

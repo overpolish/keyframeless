@@ -292,6 +292,12 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 @property(nonatomic, weak, nullable) id<KKMiniViewerDelegate>
     miniViewerDelegate;
 
+/// Forwarded to the popover mini's -grabsKeyFocusOnClick: when YES, clicking the
+/// mini makes it the key window so bare keys (e.g. Delete) are handled inside the
+/// popover instead of reaching the host. Default NO. Opt in from a plugin whose
+/// mini handles keys (e.g. Canvas's delete-selected-layer).
+@property(nonatomic) BOOL miniGrabsKeyFocusOnClick;
+
 @end
 
 /// Popover presentation (manage + static-values). Split out of

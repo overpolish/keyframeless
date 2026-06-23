@@ -548,6 +548,13 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// registered as a custom-string parameter.
 - (void)patchUIStateKey:(NSString *)key value:(id)value paramID:(UInt32)paramID;
 
+/// Like `patchUIStateKey:value:paramID:` but patches several keys into the JSON
+/// dict in ONE action scope, so a set of related UI-state changes lands as a
+/// single undo entry (avoids the "takes two cmd-Z" problem of back-to-back
+/// single-key writes).
+- (void)patchUIStateKeys:(NSDictionary<NSString *, id> *)values
+                 paramID:(UInt32)paramID;
+
 /// Persists the "Maintain Timing" toggle into the UI-state blob at `paramID`.
 /// When enabling, captures the current source-media in-point + clip duration
 /// (read from FxTimingAPI inside the action scope) as the anchor the render

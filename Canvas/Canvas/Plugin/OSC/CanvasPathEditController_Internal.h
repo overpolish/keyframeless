@@ -68,6 +68,10 @@ NS_ASSUME_NONNULL_BEGIN
                      y:(double)y
                 outSeg:(NSUInteger *)outSeg
                   outT:(double *)outT;
+/// Stack-ordered (topmost first) IDs of every visible layer whose whole
+/// projected surface bbox lies inside `surfaceRect` - the marquee's
+/// fully-encompassed set. Empty when the rect encloses no layer.
+- (NSArray<NSString *> *)_layerIDsFullyInsideRect:(CGRect)surfaceRect;
 @end
 
 @interface CanvasPathEditController (Topology)

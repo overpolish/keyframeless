@@ -19,6 +19,26 @@ double CanvasCornerRadiusForInset(double d, double theta) {
   return d * tan(theta * 0.5);
 }
 
+// The [start, end) index range of the contour containing anchor `i`. A
+// multi-contour path (e.g. a boolean result) must wrap a corner's neighbours
+// WITHIN its own subpath - using the whole-path ends would build the corner
+// from a point in another subpath, mis-validating contour-boundary corners.
+static void CanvasContourBoundsForIndex(KKBezierPath *path, NSUInteger i,
+                                        NSUInteger *outStart,
+                                        NSUInteger *outEnd) {
+  NSUInteger nc = path.contourCount;
+  for (NSUInteger c = 0; c < nc; c++) {
+    NSRange r = [path contourRangeAtIndex:c];
+    if (i >= r.location && i < NSMaxRange(r)) {
+      *outStart = r.location;
+      *outEnd = NSMaxRange(r);
+      return;
+    }
+  }
+  *outStart = 0;
+  *outEnd = path.count;
+}
+
 // Object <-> pixel (aspect-corrected) space: arcs/angles are computed in pixel
 // space so they read circular on a non-square canvas; geometry is stored in
 // object space.
@@ -30,10 +50,10 @@ static inline simd_float2 ToObj(simd_float2 p, float aspect) {
 }
 
 // The geometry of a corner at P with neighbours A, B (all in the SAME pixel
-// space): the unit edge directions, the edge lengths, the interior angle and the
-// interior bisector. Shared by the fillet expander (local space) and the widget
-// (projected space) - they differ only in which points they feed in. `valid` is
-// NO for a degenerate / near-straight corner.
+// space): the unit edge directions, the edge lengths, the interior angle and
+// the interior bisector. Shared by the fillet expander (local space) and the
+// widget (projected space) - they differ only in which points they feed in.
+// `valid` is NO for a degenerate / near-straight corner.
 typedef struct {
   BOOL valid;
   simd_float2 u, v; // unit dirs P->A, P->B
@@ -72,6 +92,11 @@ static CanvasCornerBasis CanvasCornerBasisPx(simd_float2 Ppx, simd_float2 Apx,
 // canvas height (object pixel space). ~Rounded's minDim*0.05 inset - a fixed
 // canvas-relative gap, so the handle doesn't creep as the shape scales.
 static const float kCornerWidgetBaseOffsetObjPx = 0.05f;
+// A corner only surfaces a (resting) radius widget when it's a genuine sharp
+// corner: the turn must exceed this, and the anchor must not be a smooth bezier
+// point. A corner that already HAS a radius always shows (so it stays
+// adjustable / clearable).
+static const float kCornerMinTurnRad = 0.349f; // ~20 degrees off straight
 
 CanvasCornerWidget CanvasCornerWidgetObj(NSArray<KKBezierPath *> *layers,
                                          KKBezierPath *path, double frac,
@@ -84,11 +109,17 @@ CanvasCornerWidget CanvasCornerWidgetObj(NSArray<KKBezierPath *> *layers,
     return w; // need an interior corner (two neighbours)
   if (aspect <= 0)
     aspect = 1.0f;
-  BOOL closed = path.closed;
-  if (!(closed || i > 0) || !(closed || i + 1 < n))
+  NSUInteger cs, ce;
+  CanvasContourBoundsForIndex(path, i, &cs, &ce);
+  // A subpath of a multi-contour result is a closed loop; the whole-path closed
+  // flag governs a lone contour (e.g. an open pen path).
+  BOOL contourClosed = (path.contourCount > 1) ? YES : path.closed;
+  if (!(contourClosed || i > cs) || !(contourClosed || i + 1 < ce))
     return w;
-  NSUInteger pi = i > 0 ? i - 1 : n - 1;
-  NSUInteger ni = i + 1 < n ? i + 1 : 0;
+  if (ce - cs < 3)
+    return w; // a too-small contour has no interior corner
+  NSUInteger pi = (i > cs) ? i - 1 : ce - 1;
+  NSUInteger ni = (i + 1 < ce) ? i + 1 : cs;
   KKBezierPoint P = [path pointAtIndex:i];
   KKBezierPoint A = [path pointAtIndex:pi];
   KKBezierPoint B = [path pointAtIndex:ni];
@@ -103,15 +134,33 @@ CanvasCornerWidget CanvasCornerWidgetObj(NSArray<KKBezierPath *> *layers,
 
   // Project the corner + neighbours through the layer transform, then work in
   // object pixel space so the offset is canvas-relative.
-  simd_float2 Po = CanvasProjectLayerPointObj(layers, path, frac, aspect, P.x, P.y);
-  simd_float2 Ao = CanvasProjectLayerPointObj(layers, path, frac, aspect, A.x, A.y);
-  simd_float2 Bo = CanvasProjectLayerPointObj(layers, path, frac, aspect, B.x, B.y);
+  simd_float2 Po =
+      CanvasProjectLayerPointObj(layers, path, frac, aspect, P.x, P.y);
+  simd_float2 Ao =
+      CanvasProjectLayerPointObj(layers, path, frac, aspect, A.x, A.y);
+  simd_float2 Bo =
+      CanvasProjectLayerPointObj(layers, path, frac, aspect, B.x, B.y);
   simd_float2 Ppx = simd_make_float2(Po.x * aspect, Po.y);
   simd_float2 Apx = simd_make_float2(Ao.x * aspect, Ao.y);
   simd_float2 Bpx = simd_make_float2(Bo.x * aspect, Bo.y);
   CanvasCornerBasis basis = CanvasCornerBasisPx(Ppx, Apx, Bpx);
   if (!basis.valid)
     return w;
+
+  // Smart visibility: a corner with no radius yet only shows its widget when
+  // it's a real sharp corner - skip near-straight points and smooth bezier
+  // points (tangent-continuous), which clutter detailed imported paths. A
+  // corner that already has a radius set bypasses this so it stays adjustable.
+  if ([path cornerRadiusAtIndex:i] <= 1e-5f) {
+    if (basis.theta > (double)(M_PI - kCornerMinTurnRad))
+      return w; // too close to straight - nothing to round
+    simd_float2 hin = simd_make_float2(P.inX, P.inY);
+    simd_float2 hout = simd_make_float2(P.outX, P.outY);
+    float li = simd_length(hin), lo = simd_length(hout);
+    if (li > 1e-5f && lo > 1e-5f && simd_dot(hin / li, hout / lo) < -0.95f)
+      return w; // smooth tangent point - already a continuous curve
+  }
+
   simd_float2 bis = basis.bis;
 
   float maxRObj =
@@ -140,69 +189,96 @@ CanvasCornerWidget CanvasCornerWidgetObj(NSArray<KKBezierPath *> *layers,
 KKBezierPath *CanvasPathByExpandingCorners(KKBezierPath *path, float aspect) {
   KKBezierPath *out = [path copy];
   if (!path || !path.hasCornerRadii || path.count < 3)
-    return out; // nothing rounded (or too few points to have an interior corner)
+    return out; // nothing rounded (or too few points to have an interior
+                // corner)
   if (aspect <= 0)
     aspect = 1.0f;
   NSUInteger n = path.count;
   BOOL closed = path.closed;
+  NSUInteger nc = path.contourCount;
 
   // Worst case every anchor splits into two.
   KKBezierPoint *pts = malloc(2 * n * sizeof(KKBezierPoint));
   NSUInteger m = 0;
+  // New contour starts (in the EXPANDED index space), one per contour after the
+  // first - rounding adds points, so the original boundaries shift. Without
+  // this a multi-contour boolean result (e.g. an XOR of two rects) would
+  // collapse to a single contour and the renderer would join its subpaths with
+  // a stray seam.
+  NSMutableArray<NSNumber *> *newStarts = [NSMutableArray array];
 
-  for (NSUInteger i = 0; i < n; i++) {
-    KKBezierPoint cur = [path pointAtIndex:i];
-    float r = [path cornerRadiusAtIndex:i];
-    BOOL hasPrev = closed || i > 0;
-    BOOL hasNext = closed || i + 1 < n;
-    if (r <= 0 || !hasPrev || !hasNext) {
-      pts[m++] = cur; // sharp anchor (or an open-path endpoint) passes through
-      continue;
+  for (NSUInteger c = 0; c < nc; c++) {
+    NSRange range = [path contourRangeAtIndex:c];
+    NSUInteger cs = range.location, ce = NSMaxRange(range); // [cs, ce)
+    NSUInteger cn = range.length;
+    if (c > 0)
+      [newStarts addObject:@(m)]; // this contour begins here post-expansion
+    // A multi-contour path's subpaths are always closed loops (boolean
+    // results); the whole-path `closed` flag governs a lone contour (e.g. an
+    // open pen path).
+    BOOL contourClosed = (nc > 1) ? YES : closed;
+    for (NSUInteger i = cs; i < ce; i++) {
+      KKBezierPoint cur = [path pointAtIndex:i];
+      float r = [path cornerRadiusAtIndex:i];
+      BOOL hasPrev = contourClosed || i > cs;
+      BOOL hasNext = contourClosed || i + 1 < ce;
+      if (r <= 0 || !hasPrev || !hasNext || cn < 3) {
+        pts[m++] =
+            cur; // sharp anchor (or an open-contour endpoint) passes through
+        continue;
+      }
+      // Prev / next wrap WITHIN this contour, not across the whole path - else
+      // a contour-boundary corner would build its basis from a neighbour in
+      // another subpath and round wrong (or get skipped as degenerate).
+      NSUInteger pi = (i > cs) ? i - 1 : ce - 1;
+      NSUInteger ni = (i + 1 < ce) ? i + 1 : cs;
+      KKBezierPoint pp = [path pointAtIndex:pi], pn = [path pointAtIndex:ni];
+
+      simd_float2 P = ToPx(simd_make_float2(cur.x, cur.y), aspect);
+      simd_float2 A = ToPx(simd_make_float2(pp.x, pp.y), aspect);
+      simd_float2 B = ToPx(simd_make_float2(pn.x, pn.y), aspect);
+      CanvasCornerBasis basis = CanvasCornerBasisPx(P, A, B);
+      if (!basis.valid) {
+        pts[m++] = cur; // degenerate / straight: nothing to round
+        continue;
+      }
+      double d = CanvasCornerInsetForRadius(r, basis.theta);
+      // Clamp so the two tangent points stay on their edges and adjacent
+      // corners don't overlap (leave each edge half to its neighbour).
+      double dMax = 0.5 * fmin((double)basis.la, (double)basis.lb);
+      if (d > dMax)
+        d = dMax;
+      double rEff = CanvasCornerRadiusForInset(d, basis.theta);
+      double phi = M_PI - basis.theta;
+      double h = (4.0 / 3.0) * tan(phi * 0.25) * rEff;
+
+      simd_float2 T1px = P + basis.u * (float)d, T2px = P + basis.v * (float)d;
+      simd_float2 T1outPx = -basis.u * (float)h, T2inPx = -basis.v * (float)h;
+      simd_float2 T1 = ToObj(T1px, aspect), T2 = ToObj(T2px, aspect);
+      simd_float2 T1out = ToObj(T1outPx, aspect), T2in = ToObj(T2inPx, aspect);
+
+      pts[m++] = (KKBezierPoint){.x = T1.x,
+                                 .y = T1.y,
+                                 .inX = 0,
+                                 .inY = 0,
+                                 .outX = T1out.x,
+                                 .outY = T1out.y,
+                                 .type = KKBezierPointBezier};
+      pts[m++] = (KKBezierPoint){.x = T2.x,
+                                 .y = T2.y,
+                                 .inX = T2in.x,
+                                 .inY = T2in.y,
+                                 .outX = 0,
+                                 .outY = 0,
+                                 .type = KKBezierPointBezier};
     }
-    NSUInteger pi = i > 0 ? i - 1 : n - 1;
-    NSUInteger ni = i + 1 < n ? i + 1 : 0;
-    KKBezierPoint pp = [path pointAtIndex:pi], pn = [path pointAtIndex:ni];
-
-    simd_float2 P = ToPx(simd_make_float2(cur.x, cur.y), aspect);
-    simd_float2 A = ToPx(simd_make_float2(pp.x, pp.y), aspect);
-    simd_float2 B = ToPx(simd_make_float2(pn.x, pn.y), aspect);
-    CanvasCornerBasis basis = CanvasCornerBasisPx(P, A, B);
-    if (!basis.valid) {
-      pts[m++] = cur; // degenerate / straight: nothing to round
-      continue;
-    }
-    double d = CanvasCornerInsetForRadius(r, basis.theta);
-    // Clamp so the two tangent points stay on their edges and adjacent corners
-    // don't overlap (leave each edge half to its neighbour).
-    double dMax = 0.5 * fmin((double)basis.la, (double)basis.lb);
-    if (d > dMax)
-      d = dMax;
-    double rEff = CanvasCornerRadiusForInset(d, basis.theta);
-    double phi = M_PI - basis.theta;
-    double h = (4.0 / 3.0) * tan(phi * 0.25) * rEff;
-
-    simd_float2 T1px = P + basis.u * (float)d, T2px = P + basis.v * (float)d;
-    simd_float2 T1outPx = -basis.u * (float)h, T2inPx = -basis.v * (float)h;
-    simd_float2 T1 = ToObj(T1px, aspect), T2 = ToObj(T2px, aspect);
-    simd_float2 T1out = ToObj(T1outPx, aspect), T2in = ToObj(T2inPx, aspect);
-
-    pts[m++] = (KKBezierPoint){.x = T1.x,
-                               .y = T1.y,
-                               .inX = 0,
-                               .inY = 0,
-                               .outX = T1out.x,
-                               .outY = T1out.y,
-                               .type = KKBezierPointBezier};
-    pts[m++] = (KKBezierPoint){.x = T2.x,
-                               .y = T2.y,
-                               .inX = T2in.x,
-                               .inY = T2in.y,
-                               .outX = 0,
-                               .outY = 0,
-                               .type = KKBezierPointBezier};
   }
 
   [out setBezierPoints:pts count:m closed:closed];
+  // Re-establish the (shifted) contour boundaries; single-contour paths leave
+  // this empty so nothing changes for them.
+  if (newStarts.count > 0)
+    [out setContourStarts:newStarts];
   free(pts);
   return out;
 }

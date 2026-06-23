@@ -31,12 +31,12 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *_Nullable path,
 void CanvasApplyTimelineToPath(KKTimeline *timeline,
                                KKBezierPath *_Nullable path);
 
-/// Seeds a freshly-created GROUP's Anchor lane to its content-bbox centre, so the
-/// group's scale/rotation pivot starts where the members sit (matching the old
-/// derived-pivot behaviour) but is now STORED - moving a member no longer drags
-/// the pivot and swings its siblings. No-op for a non-group / unmeasurable group.
-/// `paths` is the layer stack (with the group's members already reparented);
-/// `templates` is CanvasPlugin.availableLanes.
+/// Seeds a freshly-created GROUP's Anchor lane to its content-bbox centre, so
+/// the group's scale/rotation pivot starts where the members sit (matching the
+/// old derived-pivot behaviour) but is now STORED - moving a member no longer
+/// drags the pivot and swings its siblings. No-op for a non-group /
+/// unmeasurable group. `paths` is the layer stack (with the group's members
+/// already reparented); `templates` is CanvasPlugin.availableLanes.
 void CanvasSeedGroupAnchor(KKBezierPath *_Nullable group,
                            NSArray<KKBezierPath *> *paths,
                            NSArray<KKLane *> *templates);
@@ -87,5 +87,15 @@ NSString *_Nullable CanvasLayerBlobSnapshot(void);
 /// the OSC read view-preference flags like "autoSelect".
 void CanvasSetUIStateSnapshot(NSString *_Nullable json);
 NSString *_Nullable CanvasUIStateSnapshot(void);
+
+/// Process-wide snapshot of the real render OUTPUT size in pixels, published by
+/// the render (which knows `destinationImage.imagePixelBounds`) and read by the
+/// viewer OSC. The OSC only knows zoom-dependent on-screen canvas px, but path
+/// ops that bake px-relative geometry (stroke-to-outline) need the true output
+/// pixels. Same process as render, so a plain static suffices. Returns NO (and
+/// leaves the out-params untouched) before the first render has published a
+/// size.
+void CanvasSetOutputSize(float width, float height);
+BOOL CanvasOutputSize(float *_Nonnull outWidth, float *_Nonnull outHeight);
 
 NS_ASSUME_NONNULL_END

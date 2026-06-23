@@ -47,6 +47,19 @@ typedef NS_OPTIONS(NSUInteger, CanvasPenModifiers) {
 
 - (nullable KKBezierPath *)penLayerWithID:(NSString *)layerID;
 - (nullable NSString *)penSelectedLayerID;
+/// The FULL selection set (stack order). The path-edit controller uses the count
+/// to tell the single-path point-edit context (one editable path -> a marquee
+/// selects its anchors) from the 0 / multi states (marquee selects layers).
+- (NSArray<NSString *> *)penSelectedLayerIDs;
+/// Clear the whole layer selection - a plain click on empty canvas. The viewer
+/// writes an empty selection; the mini is bounded by its popover context (it may
+/// only collapse to the primary, since the popover stays bound to a layer).
+- (void)penDeselectAll;
+/// Layers that must NOT be selectable in the current context (a popover scope -
+/// the constants popover greys out animated-only layers, a keypose popover greys
+/// out layers with no keypose at that time). The marquee excludes these so it
+/// can't select a layer a click can't. Empty / nil on the viewer (no scope).
+- (nullable NSSet<NSString *> *)penNonSelectableLayerIDs;
 /// Identifies this surface for cross-process selection sync ("osc" / "mini").
 - (NSString *)penSurfaceTag;
 /// The full layer stack + the current edit fraction, so the path-edit
@@ -86,10 +99,27 @@ typedef NS_OPTIONS(NSUInteger, CanvasPenModifiers) {
 /// `maxed` tints it the error colour when the radius is at its clamp.
 - (void)penDrawRingAtObj:(CGPoint)objYUp maxed:(BOOL)maxed;
 - (void)penDrawCurveObjPoints:(const CGPoint *)objPts count:(NSUInteger)count;
+/// Like penDrawCurveObjPoints but in an explicit RGBA colour - used by the
+/// path-operation hover preview (red = removed, green = result).
+- (void)penDrawColoredCurveObjPoints:(const CGPoint *)objPts
+                               count:(NSUInteger)count
+                               color:(simd_float4)color;
+/// Like penDrawColoredCurveObjPoints but each point is snapped to a whole
+/// surface pixel (floor + 0.5, like the grid) so the dimmed multi-select layer
+/// box reads crisp instead of soft on sub-pixels. For axis-aligned boxes only;
+/// a rotated box still snaps per corner (best effort).
+- (void)penDrawSnappedLoopObjPoints:(const CGPoint *)objPts
+                              count:(NSUInteger)count
+                              color:(simd_float4)color;
 - (void)penDrawHandleFromObj:(CGPoint)aObj toObj:(CGPoint)bObj;
 /// Draw the marquee rubber-band. `surfaceRect` is in SURFACE points (not object
 /// space - it's the raw drag rectangle). Stroked in the host accent.
 - (void)penDrawMarqueeRect:(CGRect)surfaceRect;
+/// Commit a LAYER selection from the marquee when it fully encompasses one or
+/// more layers. `additive` extends the current selection (Shift); otherwise it
+/// replaces it. `layerIDs` are stack-ordered (topmost first); the surface picks
+/// the primary edit target and routes through its own selection plumbing.
+- (void)penSelectLayerIDs:(NSArray<NSString *> *)layerIDs additive:(BOOL)additive;
 @end
 
 /// The surface-agnostic pen-drawing state machine: placing anchors, pulling

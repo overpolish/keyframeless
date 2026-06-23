@@ -522,6 +522,12 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
                                          constant:-KKPaddingLG],
       [msg.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
     ]];
+    // This branch returns BEFORE the shared applyLane: below, so apply the
+    // lock state here too - otherwise a freshly-built geometry row (e.g.
+    // Points created on a multi-select refresh) never reads `locked` and its
+    // gutter button stays clickable while every value row is read-only.
+    _locked = lane.locked;
+    self.alphaValue = _locked ? 0.5 : 1.0;
     return self;
   }
 

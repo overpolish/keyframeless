@@ -4,14 +4,17 @@
  */
 
 #import "CanvasAnchorSelectionSync.h" // cross-process selection sync
+#import "CanvasLayerTree.h"           // CanvasDeleteLayersByID
 #import "CanvasMiniViewerRenderer_Internal.h"
 #import "CanvasPathMorph.h"  // CanvasPathMorphedAtFraction
-#import "CanvasPathOSC.h"    // CanvasDrawPathEditOSC
+#import "CanvasPathOSC.h"    // CanvasDrawPathEditOSC / CanvasDrawPathOpPreview
+#import "CanvasPathOps.h"    // CanvasPathOpPreview
 #import "CanvasPenCursors.h" // shared pen cursor set
 #import "CanvasPenMarquee.h" // shared dashed-marquee perimeter walk
 #import "CanvasToolbar.h"    // CanvasToolbarToolPen
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKBezierPath.h>
+#import <Metal/Metal.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
 
 // An NSColor as straight sRGB RGBA.
@@ -41,8 +44,6 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
 }
 
 @implementation CanvasMiniViewerRenderer (Pen)
-
-#pragma mark - Tool-drawing delegate hooks (from KKMiniViewerOverlay)
 
 - (BOOL)miniViewerToolDrawingActive:(KKMiniViewerView *)canvas {
   return self.toolbarTool == CanvasToolbarToolPen || [self _shapeToolActive];
@@ -129,14 +130,43 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   // Delete / Backspace removes the selected path anchors (cursor tool),
   // matching the viewer's keyDown. Pen keys (Esc/Return) go to the pen
   // controller.
-  if ((key == 127 || key == 8) &&
-      (self.toolbarTool ?: CanvasToolbarToolCursor) ==
-          CanvasToolbarToolCursor &&
+  BOOL isDelete = (key == 127 || key == 8);
+  BOOL cursorTool =
+      (self.toolbarTool ?: CanvasToolbarToolCursor) == CanvasToolbarToolCursor;
+  if (isDelete && cursorTool &&
       self.pathEditController.selectedAnchors.count > 0)
     return [self.pathEditController
         removeAnchorsAtIndexes:self.pathEditController.selectedAnchors
                      breakPath:YES];
+  // Delete with a LAYER selected (no anchors) removes the selected layer(s).
+  // Returning YES consumes the key so it never reaches FCP (deleting the whole
+  // effect) - mirrors the viewer.
+  if (isDelete && cursorTool && self.pathEditController.selectedAnchors.count == 0 &&
+      [self _miniDeleteSelectedLayers])
+    return YES;
   return [self.penController keyDown:key];
+}
+
+- (BOOL)_miniDeleteSelectedLayers {
+  NSArray<NSString *> *sel = [self _miniSelectedIDs];
+  if (sel.count == 0)
+    return NO;
+  NSMutableArray<KKBezierPath *> *paths =
+      [self.layers mutableCopy] ?: [NSMutableArray array];
+  NSUInteger before = paths.count;
+  CanvasDeleteLayersByID(paths, sel);
+  if (paths.count == before)
+    return NO; // selection didn't match any layer - nothing removed
+  // Clear our own selection immediately for an instant redraw, then persist the
+  // blob + cleared selection as ONE undo action via onDeleteLayers (the param
+  // round-trip re-applies the empty selection inspector-wide). Leaving the
+  // selection EMPTY matches the canvas model.
+  self.layers = paths;
+  self.selectedLayerIDs = @[];
+  self.selectedLayerID = nil;
+  if (self.onDeleteLayers)
+    self.onDeleteLayers(paths);
+  return YES;
 }
 
 - (NSCursor *)miniViewer:(KKMiniViewerView *)canvas
@@ -160,69 +190,6 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
              ? CanvasPenCursorForRole(CanvasPenCursorRoleClose)
              : CanvasPenCursorForRole(CanvasPenCursorRolePen);
 }
-
-- (void)miniViewerDrawToolOverlay:(KKMiniViewerView *)canvas
-                      contentRect:(CGRect)cr {
-  self.penContentRect = cr;
-  self.penDrawCanvas = canvas;
-  if ([self _shapeToolActive]) {
-    // Like the viewer's shape branch: just the drag-out box preview, no gizmo
-    // or path-edit OSC.
-    [self.shapeController draw];
-    self.penDrawCanvas = nil;
-    return;
-  }
-  [self.penController confirmIfContextLost]; // tool / layer switch finalises
-  // Path-edit OSC FIRST (so the cursor tool edits it AND the pen can target a
-  // segment), then the pen overlay on top so its endpoint highlight sits over
-  // the normal anchors.
-  if (!self.penController.active)
-    [self _drawSelectedPathEditOSC];
-  [self.penController draw];
-  self.penDrawCanvas = nil;
-}
-
-- (void)_drawSelectedPathEditOSC {
-  if (![self labelVisibleOrRevealing:@"Points"])
-    return; // hidden and not being Opt-revealed
-  // Constants popover shows only constant lanes; keypose popover only the
-  // animated one (matches the transform OSCs via isConstantLabel +
-  // boundaryEditing).
-  if (![self isConstantLabel:@"Points"])
-    return;
-  NSString *sel = self.selectedLayerID;
-  if (!sel.length)
-    return;
-  // Pick up an anchor selection published by the viewer (cross-process sync).
-  NSIndexSet *synced = CanvasConsumeAnchorSelection(@"mini", sel);
-  if (synced)
-    [self.pathEditController setSelectedAnchorIndexes:synced];
-  KKBezierPath *path = nil;
-  for (KKBezierPath *p in self.layers)
-    if ([p.layerID isEqualToString:sel]) {
-      path = p;
-      break;
-    }
-  if (!path || path.isImage || path.isGroup || !path.strokeEnabled ||
-      path.count < 1)
-    return;
-  // OSC rule: anchors show only when constant or on a Points keypose.
-  if (!CanvasPathGeometryEditableAtFraction(path, self.editFraction))
-    return;
-  // Dim ghost for a master-on reveal (Opt-click re-shows); full alpha when
-  // fully visible or in master-off peek-and-use - same rule as the transform
-  // handles.
-  BOOL ghost = [self ghostAlphaForLabel:@"Points"] < 1.0;
-  CanvasDrawPathEditOSC(
-      self, self.layers ?: @[],
-      CanvasPathMorphedAtFraction(path, self.editFraction), self.editFraction,
-      (float)[self penCanvasAspect], self.pathEditController.selectedAnchors,
-      self.pathEditController.marqueeActive,
-      self.pathEditController.marqueeSurfaceRect, ghost,
-      (self.toolbarTool ?: CanvasToolbarToolCursor) == CanvasToolbarToolCursor);
-}
-
-#pragma mark - CanvasPenSurface (coords)
 
 // The pen + path-edit OSC use the RAW content-rect map (the base class linear
 // map), NOT the gizmo's handlePointForContentRect override: the gizmo folds in
@@ -276,8 +243,6 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   return self.toolbarTool == CanvasToolbarToolPen;
 }
 
-#pragma mark - CanvasPenSurface (blob)
-
 - (KKBezierPath *)penLayerWithID:(NSString *)layerID {
   for (KKBezierPath *p in self.layers)
     if ([p.layerID isEqualToString:layerID])
@@ -289,8 +254,19 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   return self.selectedLayerID;
 }
 
+- (NSArray<NSString *> *)penSelectedLayerIDs {
+  return [self _miniSelectedIDs];
+}
+
 - (NSString *)penSurfaceTag {
   return @"mini";
+}
+
+// The popover scope's non-selectable layers for the MARQUEE / body-drag. Uses
+// the stricter marquee set (constants: move-lane-animated) when present, else the
+// single-click set (keypose: no keypose at that time).
+- (NSSet<NSString *> *)penNonSelectableLayerIDs {
+  return self.marqueeNonSelectableLayerIDs ?: self.nonSelectableLayerIDs;
 }
 
 - (void)penMutateBlob:(void (^)(NSMutableArray<KKBezierPath *> *paths))mutate
@@ -326,8 +302,6 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   if (self.onPersistLayers)
     self.onPersistLayers(self.layers, nil);
 }
-
-#pragma mark - CanvasPenSurface (draw primitives, Metal pass - match motion path)
 
 // Anchor dots: white glyphs at the motion-path's anchor size (0.66 - a touch
 // bigger than the base 0.6 to read better in the mini). The ghost (next-point
@@ -396,6 +370,44 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   });
 }
 
+// CanvasPenSurface: a plain empty-canvas click clears the whole selection,
+// matching the main viewer. The inspector's onSelectLayers handler routes the
+// empty set to the no-layer state.
+- (void)penDeselectAll {
+  self.selectedLayerIDs = @[];
+  self.selectedLayerID = nil;
+  if (self.onSelectLayers)
+    self.onSelectLayers(@[], @"");
+}
+
+// CanvasPenSurface: commit a marquee layer selection. Plain replaces the set
+// with the enclosed layers (primary = topmost), Shift unions them into the
+// current selection. Routes through onSelectLayers so the inspector + viewer
+// follow, mirroring the mini's background-click multi-select.
+- (void)penSelectLayerIDs:(NSArray<NSString *> *)layerIDs
+                 additive:(BOOL)additive {
+  if (!layerIDs.count)
+    return;
+  NSMutableArray<NSString *> *set;
+  NSString *primary;
+  if (additive) {
+    set = [[self _miniSelectedIDs] mutableCopy] ?: [NSMutableArray array];
+    for (NSString *lid in layerIDs)
+      if (![set containsObject:lid])
+        [set addObject:lid];
+    primary = set.firstObject;
+  } else {
+    set = [layerIDs mutableCopy];
+    primary = layerIDs.firstObject;
+  }
+  self.selectedLayerIDs = set;
+  self.selectedLayerID = primary;
+  if (self.onSelectLayers)
+    self.onSelectLayers(set, primary);
+  else if (self.onSelectLayer)
+    self.onSelectLayer(primary);
+}
+
 - (void)penDrawCurveObjPoints:(const CGPoint *)objPts count:(NSUInteger)count {
   if (count < 2)
     return;
@@ -405,6 +417,39 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
                        valueWithPoint:[self penSurfacePointFromObj:objPts[i]]]];
   simd_float4 red = {1.0f, 0.25f, 0.25f, 0.9f}; // matches the motion path
   [self.penDrawCanvas encodeToolLineStrip:pts color:red halfWidthPt:1.0];
+}
+
+- (void)penDrawColoredCurveObjPoints:(const CGPoint *)objPts
+                               count:(NSUInteger)count
+                               color:(simd_float4)color {
+  if (count < 2)
+    return;
+  NSMutableArray<NSValue *> *pts = [NSMutableArray arrayWithCapacity:count];
+  for (NSUInteger i = 0; i < count; i++)
+    [pts addObject:[NSValue
+                       valueWithPoint:[self penSurfacePointFromObj:objPts[i]]]];
+  [self.penDrawCanvas encodeToolLineStrip:pts color:color halfWidthPt:1.0];
+}
+
+- (void)penDrawSnappedLoopObjPoints:(const CGPoint *)objPts
+                              count:(NSUInteger)count
+                              color:(simd_float4)color {
+  if (count < 2)
+    return;
+  KKMiniViewerView *canvas = self.penDrawCanvas;
+  CGFloat s = canvas.window.backingScaleFactor;
+  if (s <= 0)
+    s = 1.0;
+  NSMutableArray<NSValue *> *pts = [NSMutableArray arrayWithCapacity:count];
+  for (NSUInteger i = 0; i < count; i++) {
+    CGPoint p = [self penSurfacePointFromObj:objPts[i]];
+    // Snap to a whole DRAWABLE pixel centre (the mini works in points, so round
+    // in px = pt * backingScale, then convert back), matching the grid's crisp
+    // floor + 0.5 so the box edges aren't soft.
+    p = CGPointMake((floor(p.x * s) + 0.5) / s, (floor(p.y * s) + 0.5) / s);
+    [pts addObject:[NSValue valueWithPoint:p]];
+  }
+  [canvas encodeToolLineStrip:pts color:color halfWidthPt:1.0];
 }
 
 - (void)penDrawHandleFromObj:(CGPoint)aObj toObj:(CGPoint)bObj {

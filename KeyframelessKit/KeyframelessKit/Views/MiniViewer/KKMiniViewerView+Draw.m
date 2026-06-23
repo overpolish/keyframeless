@@ -550,4 +550,32 @@
                  encoder:_toolEncoder];
 }
 
+- (void)encodeToolFillTexture:(id<MTLTexture>)texture {
+  // Reuse the toolbar pipeline (KKVertexShader + KKLabelFragment, premultiplied-
+  // alpha blend) - the path-op fill texture is premultiplied RGBA, so it
+  // composites over the mini's content the same way the toolbar labels do. Drawn
+  // as a full-drawable quad (UV 0-1), so the caller-supplied texture must be
+  // drawable-sized.
+  if (!_toolEncoder || !_toolbarPipeline || !texture)
+    return;
+  CGSize d = self.drawableSize;
+  [_toolEncoder setRenderPipelineState:_toolbarPipeline];
+  simd_uint2 vp = {(unsigned int)d.width, (unsigned int)d.height};
+  [_toolEncoder setVertexBytes:&vp
+                        length:sizeof(vp)
+                       atIndex:KKVertexInputIndex_ViewportSize];
+  float hw = (float)d.width / 2.0f, hh = (float)d.height / 2.0f;
+  KKVertex2D verts[6] = {
+      {{-hw, -hh}, {0, 0}}, {{hw, -hh}, {1, 0}}, {{hw, hh}, {1, 1}},
+      {{-hw, -hh}, {0, 0}}, {{hw, hh}, {1, 1}},  {{-hw, hh}, {0, 1}},
+  };
+  [_toolEncoder setVertexBytes:verts
+                        length:sizeof(verts)
+                       atIndex:KKVertexInputIndex_Vertices];
+  [_toolEncoder setFragmentTexture:texture atIndex:0];
+  [_toolEncoder drawPrimitives:MTLPrimitiveTypeTriangle
+                   vertexStart:0
+                   vertexCount:6];
+}
+
 @end

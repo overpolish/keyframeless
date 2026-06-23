@@ -101,6 +101,26 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   [_overlay setNeedsDisplay:YES];
 }
 
+// Only accept first responder when a plugin opted in (so its NSPopover mini can
+// become key for bare-key handling). Default minis stay non-first-responder, so
+// host keyboard shortcuts keep working while interacting with them.
+- (BOOL)acceptsFirstResponder {
+  return _grabsKeyFocusOnClick;
+}
+
+// Interact on the FIRST click even when the popover window isn't key yet (it's a
+// nonactivating panel, so clicking in from the layer panel / FCP would otherwise
+// be swallowed just to make it key, needing a second click to actually drag an
+// OSC). The mini is a transient editing surface - a single click should act.
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
+- (void)endFieldEditingGrabbingFocusIfNeeded {
+  [self.window makeFirstResponder:(_grabsKeyFocusOnClick ? (NSResponder *)self
+                                                         : nil)];
+}
+
 - (void)reportHandleValueForLabel:(NSString *)laneLabel
                            values:(NSArray<NSNumber *> *)values {
   if (self.onHandleValue)

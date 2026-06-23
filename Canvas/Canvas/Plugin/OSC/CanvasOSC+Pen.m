@@ -4,10 +4,12 @@
  */
 
 #import "CanvasAnchorSelectionSync.h" // cross-process selection sync
+#import "CanvasLayerRender.h"         // CanvasProjectLayerPointsObj
 #import "CanvasLayerTimeline.h"       // blob + UIState snapshots
 #import "CanvasOSC_Private.h"
 #import "CanvasPathMorph.h" // CanvasPathMorphedAtFraction
 #import "CanvasPathOSC.h"   // CanvasDrawPathEditOSC
+#import <KeyframelessKit/KKShape.h> // KKRectShape (image extent)
 #import "CanvasPenController.h"
 #import "CanvasPenCursors.h" // shared pen cursor set
 #import "CanvasPenMarquee.h" // shared dashed-marquee perimeter walk
@@ -148,6 +150,52 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m) {
   self.penDrawDest = nil;
 }
 
+// Multi-selection display: the point OSC (anchors + curve) of EVERY selected
+// vector layer, drawn dimmed (ghost) so it reads as "selected, not editable" -
+// shown regardless of the Points OSC visibility toggle. Point editing is gated
+// off while more than one layer is selected (it's a layer-level selection). The
+// per-anchor display still follows the keypose rule (anchors only where the
+// geometry is editable at this fraction). No-op for a single selection.
+- (void)_drawMultiSelectHighlightInDestination:(FxImageTile *)destinationImage
+                                        atTime:(CMTime)time {
+  NSArray<NSString *> *sel = [self _selectedLayerIDs];
+  if (sel.count < 2)
+    return;
+  NSArray<KKBezierPath *> *paths = [self _snapshotPaths];
+  double frac = [self fractionAtTime:time];
+  float aspect = (float)[self _canvasAspect];
+  self.penDrawDest = destinationImage;
+  self.penDrawTime = time;
+  for (KKBezierPath *p in paths) {
+    if (![sel containsObject:(p.layerID ?: @"")])
+      continue;
+    // Images have no points to outline - draw a dimmed box as their indicator.
+    if (p.isImage) {
+      CanvasDrawLayerBoxOSC(self, paths, p, frac, aspect);
+      continue;
+    }
+    if (p.isGroup || p.count < 1)
+      continue;
+    if (!CanvasPathGeometryEditableAtFraction(p, frac))
+      continue;
+    CanvasDrawPathEditOSC(self, paths, CanvasPathMorphedAtFraction(p, frac),
+                          frac, aspect, /*selected=*/nil, /*marqueeActive=*/NO,
+                          CGRectZero, /*ghost=*/YES, /*showCornerWidgets=*/NO);
+  }
+  self.penDrawDest = nil;
+}
+
+// The marquee rubber-band, drawn independently of the selection (the marquee can
+// run with 0, 1, or 2+ layers selected, so it can't ride on the single-path
+// point OSC's draw - that's why it vanished while multi-selected).
+- (void)_drawMarqueeInDestination:(FxImageTile *)destinationImage {
+  if (!self.pathEditController.marqueeActive)
+    return;
+  self.penDrawDest = destinationImage;
+  [self penDrawMarqueeRect:self.pathEditController.marqueeSurfaceRect];
+  self.penDrawDest = nil;
+}
+
 - (void)_drawSelectedPathEditOSCInDestination:(FxImageTile *)destinationImage
                                        atTime:(CMTime)time {
   BOOL visible = [self kkOSCElementVisible:@"Points"];
@@ -175,8 +223,8 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m) {
       path = p;
       break;
     }
-  if (!path || path.isImage || path.isGroup || !path.strokeEnabled ||
-      path.count < 1)
+  if (!path || path.isImage || path.isGroup ||
+      (!path.strokeEnabled && !path.fillEnabled) || path.count < 1)
     return;
   double frac = [self fractionAtTime:time];
   // OSC rule: anchors show only when the path is constant or the playhead is on
@@ -188,8 +236,7 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m) {
   CanvasDrawPathEditOSC(self, paths, CanvasPathMorphedAtFraction(path, frac),
                         frac, (float)[self _canvasAspect],
                         self.pathEditController.selectedAnchors,
-                        self.pathEditController.marqueeActive,
-                        self.pathEditController.marqueeSurfaceRect, ghost,
+                        /*marqueeActive=*/NO, CGRectZero, ghost,
                         [self _activeTool] == CanvasToolbarToolCursor);
   self.penDrawDest = nil;
 }
@@ -243,8 +290,17 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m) {
   return [self _resolvedSelectedLayerID];
 }
 
+- (NSArray<NSString *> *)penSelectedLayerIDs {
+  return [self _selectedLayerIDs];
+}
+
 - (NSString *)penSurfaceTag {
   return @"osc";
+}
+
+// The viewer has no popover scope, so every layer is selectable.
+- (NSSet<NSString *> *)penNonSelectableLayerIDs {
+  return nil;
 }
 
 - (NSArray<KKBezierPath *> *)penAllLayers {
@@ -253,6 +309,39 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m) {
 
 - (double)penEditFraction {
   return [self fractionAtTime:self.penDrawTime];
+}
+
+// CanvasPenSurface: clear the whole selection (a plain click on empty canvas).
+- (void)penDeselectAll {
+  [self _writeUIStateMerging:^(NSMutableDictionary *state) {
+    state[@"selectedLayerID"] = @"";
+    state[@"selectedLayerIDs"] = @[];
+  }];
+}
+
+// CanvasPenSurface: commit a marquee layer selection. Plain replaces the set
+// with the enclosed layers (primary = topmost), Shift unions them into the
+// current selection. Routes through the same UIState write as a pick click.
+- (void)penSelectLayerIDs:(NSArray<NSString *> *)layerIDs
+                 additive:(BOOL)additive {
+  if (!layerIDs.count)
+    return;
+  NSMutableArray<NSString *> *sel;
+  NSString *primary;
+  if (additive) {
+    sel = [[self _selectedLayerIDs] mutableCopy] ?: [NSMutableArray array];
+    for (NSString *lid in layerIDs)
+      if (![sel containsObject:lid])
+        [sel addObject:lid];
+    primary = sel.firstObject ?: @"";
+  } else {
+    sel = [layerIDs mutableCopy];
+    primary = layerIDs.firstObject;
+  }
+  [self _writeUIStateMerging:^(NSMutableDictionary *state) {
+    state[@"selectedLayerID"] = primary ?: @"";
+    state[@"selectedLayerIDs"] = sel;
+  }];
 }
 
 // Action-scoped read-modify-write of the layer blob (the OSC can't READ the
@@ -282,6 +371,10 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m) {
   if (selectID.length) {
     NSMutableDictionary *state = [[self _uiStateDict] mutableCopy];
     state[@"selectedLayerID"] = selectID;
+    // Collapse the multi-set to the single result too, else a prior multi-
+    // selection's now-stale IDs linger (e.g. after deleting a multi-selection
+    // the deleted IDs would stay in selectedLayerIDs).
+    state[@"selectedLayerIDs"] = @[ selectID ];
     newState = [[NSString alloc]
         initWithData:[NSJSONSerialization dataWithJSONObject:state
                                                      options:0
@@ -459,6 +552,42 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m) {
   for (NSUInteger i = 0; i < count; i++)
     pts[i] = [self _penCanvasFromObj:objPts[i]];
   [self _penHaloStroke:pts count:count destinationImage:self.penDrawDest];
+  free(pts);
+}
+
+- (void)penDrawColoredCurveObjPoints:(const CGPoint *)objPts
+                               count:(NSUInteger)count
+                               color:(simd_float4)color {
+  if (!self.penDrawDest || count < 2)
+    return;
+  CGPoint *pts = malloc(sizeof(CGPoint) * count);
+  for (NSUInteger i = 0; i < count; i++)
+    pts[i] = [self _penCanvasFromObj:objPts[i]];
+  [self drawLineStripWithPoints:pts
+                          count:count
+                          color:color
+                      halfWidth:1.5f
+               destinationImage:self.penDrawDest];
+  free(pts);
+}
+
+- (void)penDrawSnappedLoopObjPoints:(const CGPoint *)objPts
+                              count:(NSUInteger)count
+                              color:(simd_float4)color {
+  if (!self.penDrawDest || count < 2)
+    return;
+  CGPoint *pts = malloc(sizeof(CGPoint) * count);
+  for (NSUInteger i = 0; i < count; i++) {
+    CGPoint c = [self _penCanvasFromObj:objPts[i]];
+    // Snap to a pixel centre (floor + 0.5), exactly like the grid lines, so the
+    // 1px box edges land crisp on the destination raster instead of soft.
+    pts[i] = CGPointMake(floor(c.x) + 0.5, floor(c.y) + 0.5);
+  }
+  [self drawLineStripWithPoints:pts
+                          count:count
+                          color:color
+                      halfWidth:1.5f
+               destinationImage:self.penDrawDest];
   free(pts);
 }
 

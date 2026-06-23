@@ -29,6 +29,31 @@ NSIndexSet *CanvasLayerDescendantIndices(NSUInteger groupIdx,
   return result;
 }
 
+NSString *CanvasDeleteLayersByID(NSMutableArray<KKBezierPath *> *paths,
+                                 NSArray<NSString *> *selIDs) {
+  if (paths.count == 0 || selIDs.count == 0)
+    return nil;
+  NSSet<NSString *> *want = [NSSet setWithArray:selIDs];
+  NSMutableIndexSet *kill = [NSMutableIndexSet indexSet];
+  for (NSUInteger i = 0; i < paths.count; i++)
+    if ([want containsObject:(paths[i].layerID ?: @"")]) {
+      [kill addIndex:i];
+      if (paths[i].isGroup)
+        [kill addIndexes:CanvasLayerDescendantIndices(i, paths)];
+    }
+  if (kill.count == 0)
+    return nil;
+  NSUInteger firstDeleted = kill.firstIndex;
+  [kill enumerateIndexesWithOptions:NSEnumerationReverse
+                         usingBlock:^(NSUInteger idx, BOOL *stop) {
+                           if (idx < paths.count)
+                             [paths removeObjectAtIndex:idx];
+                         }];
+  if (paths.count == 0)
+    return nil;
+  return paths[MIN(firstDeleted, paths.count - 1)].layerID;
+}
+
 NSIndexSet *CanvasLayerAncestorIndices(NSUInteger idx,
                                        NSArray<KKBezierPath *> *paths) {
   if (idx >= paths.count)

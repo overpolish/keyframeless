@@ -11,37 +11,62 @@ static const NSUInteger kStepsPerSegment = 32;
 static const float kAAPaddingPx = 0.75f; // solid core reaches the asked width
 static const float kMiterLimit = 4.0f;   // clamp spikes at very sharp corners
 
-static NSUInteger CanvasStrokeSegmentCount(KKBezierPath *path) {
-  if (path.count < 2)
+// Segments in one contour: a closed contour wraps (cLen segments), an open one
+// has cLen-1. A compound path's individual contours are each closed; a lone
+// contour follows the path's own closed flag (an open pen path stays open).
+static NSUInteger CanvasContourSegmentCount(NSUInteger cLen, BOOL closed) {
+  if (cLen < 2)
     return 0;
-  return path.closed ? path.count : path.count - 1;
+  return closed ? cLen : cLen - 1;
+}
+
+static BOOL CanvasContourClosed(KKBezierPath *path, NSUInteger contourCount) {
+  return (contourCount > 1) ? YES : path.closed;
 }
 
 NSUInteger CanvasStrokeVertexCapacity(KKBezierPath *path) {
-  NSUInteger segs = CanvasStrokeSegmentCount(path);
-  if (segs == 0)
+  if (path.count < 2)
     return 0;
-  // One polyline sample per step per segment, plus the open-path terminal
-  // point, plus the closing wrap. Two strip verts each, with headroom.
-  NSUInteger polyPts = segs * kStepsPerSegment + 2;
-  return polyPts * 2 + 8;
+  NSUInteger nc = path.contourCount;
+  NSUInteger total = 0;
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    NSRange r = [path contourRangeAtIndex:ci];
+    NSUInteger segs =
+        CanvasContourSegmentCount(r.length, CanvasContourClosed(path, nc));
+    if (segs == 0)
+      continue;
+    // One sample per step per segment, plus the open terminal + closing wrap.
+    // Two strip verts each.
+    total += (segs * kStepsPerSegment + 2) * 2;
+  }
+  if (total == 0)
+    return 0;
+  // Two degenerate bridge verts between each pair of contours, plus headroom.
+  return total + (nc > 1 ? (nc - 1) * 2 : 0) + 8;
 }
 
-// Sample the path into a centered-pixel polyline matching the image-quad space:
-// p_centered = (normalized - 0.5) * outputSize. Near-duplicate samples are
-// dropped so adjacent edges yield stable normals.
-static NSUInteger CanvasBuildPolyline(KKBezierPath *path, float outW,
-                                      float outH, simd_float2 *pts,
-                                      NSUInteger maxPts) {
-  NSUInteger segs = CanvasStrokeSegmentCount(path);
+// Sample ONE contour into a centered-pixel polyline matching the image-quad
+// space: p_centered = (normalized - 0.5) * outputSize. Near-duplicate samples
+// are dropped so adjacent edges yield stable normals.
+static NSUInteger CanvasBuildContourPolyline(KKBezierPath *path, NSRange r,
+                                             BOOL closed, float outW,
+                                             float outH, simd_float2 *pts,
+                                             NSUInteger maxPts) {
+  NSUInteger cLen = r.length;
+  NSUInteger segs = CanvasContourSegmentCount(cLen, closed);
+  if (segs == 0)
+    return 0;
   simd_float2 scale = simd_make_float2(outW, outH);
   simd_float2 half = simd_make_float2(0.5f, 0.5f);
   NSUInteger n = 0;
   for (NSUInteger c = 0; c < segs; c++) {
-    NSUInteger next = (c + 1) % path.count;
+    NSUInteger idx = r.location + c;
+    NSUInteger nextIdx = r.location + ((c + 1) % cLen);
     for (NSUInteger i = 0; i < kStepsPerSegment; i++) {
       float t = (float)i / (float)kStepsPerSegment;
-      simd_float2 norm = [path evaluatePointAtIndex:c nextIndex:next atT:t];
+      simd_float2 norm = [path evaluatePointAtIndex:idx
+                                          nextIndex:nextIdx
+                                                atT:t];
       simd_float2 p = (norm - half) * scale;
       if (n > 0 && simd_distance_squared(p, pts[n - 1]) < 1e-6f)
         continue;
@@ -49,11 +74,11 @@ static NSUInteger CanvasBuildPolyline(KKBezierPath *path, float outW,
         pts[n++] = p;
     }
   }
-  if (!path.closed) {
-    // Open paths need the final anchor (the segment loop stops before t=1).
-    NSUInteger lastSeg = segs - 1;
-    simd_float2 norm = [path evaluatePointAtIndex:lastSeg
-                                        nextIndex:lastSeg + 1
+  if (!closed) {
+    // Open contours need the final anchor (the segment loop stops before t=1).
+    NSUInteger lastIdx = r.location + segs - 1;
+    simd_float2 norm = [path evaluatePointAtIndex:lastIdx
+                                        nextIndex:lastIdx + 1
                                               atT:1.0f];
     simd_float2 p = (norm - half) * scale;
     if (n == 0 || simd_distance_squared(p, pts[n - 1]) > 1e-6f) {
@@ -111,31 +136,59 @@ static simd_float2 CanvasMiterOffset(const simd_float2 *pts, NSUInteger n,
 NSUInteger CanvasTessellateStroke(KKBezierPath *path, float strokeWidth,
                                   float outputWidth, float outputHeight,
                                   KKVertex2D *outVerts, NSUInteger maxVerts) {
-  NSUInteger segs = CanvasStrokeSegmentCount(path);
-  if (segs == 0 || !outVerts || maxVerts < 4)
+  if (path.count < 2 || !outVerts || maxVerts < 4)
     return 0;
 
-  NSUInteger polyCap = segs * kStepsPerSegment + 2;
-  simd_float2 *pts = malloc(sizeof(simd_float2) * polyCap);
-  NSUInteger n =
-      CanvasBuildPolyline(path, outputWidth, outputHeight, pts, polyCap);
-  if (n < 2) {
-    free(pts);
-    return 0;
+  NSUInteger nc = path.contourCount;
+  BOOL closed = CanvasContourClosed(path, nc);
+
+  // The polyline buffer is reused per contour, so size it for the largest one.
+  NSUInteger polyCap = 0;
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    NSRange r = [path contourRangeAtIndex:ci];
+    NSUInteger segs = CanvasContourSegmentCount(r.length, closed);
+    NSUInteger cap = segs * kStepsPerSegment + 2;
+    if (cap > polyCap)
+      polyCap = cap;
   }
+  if (polyCap == 0)
+    return 0;
+  simd_float2 *pts = malloc(sizeof(simd_float2) * polyCap);
 
   float hw = strokeWidth * 0.5f + kAAPaddingPx;
   NSUInteger vc = 0;
-  NSUInteger stop = path.closed ? n + 1 : n; // +1 wraps the closed loop
-  for (NSUInteger k = 0; k < stop && vc + 2 <= maxVerts; k++) {
-    NSUInteger i = k % n;
-    simd_float2 off = CanvasMiterOffset(pts, n, i, path.closed, hw);
-    outVerts[vc].position = pts[i] + off;
-    outVerts[vc].textureCoordinate = simd_make_float2(0.0f, 1.0f);
-    vc++;
-    outVerts[vc].position = pts[i] - off;
-    outVerts[vc].textureCoordinate = simd_make_float2(0.0f, -1.0f);
-    vc++;
+  BOOL anyEmitted = NO;
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    NSRange r = [path contourRangeAtIndex:ci];
+    NSUInteger n = CanvasBuildContourPolyline(path, r, closed, outputWidth,
+                                              outputHeight, pts, polyCap);
+    if (n < 2)
+      continue;
+
+    // Bridge from the previous contour with two degenerate verts (repeat the
+    // last emitted vertex, then this contour's first) so the single triangle
+    // strip carries no visible span across the gap.
+    if (anyEmitted && vc > 0 && vc + 4 <= maxVerts) {
+      simd_float2 firstOff = CanvasMiterOffset(pts, n, 0, closed, hw);
+      outVerts[vc] = outVerts[vc - 1];
+      vc++;
+      outVerts[vc].position = pts[0] + firstOff;
+      outVerts[vc].textureCoordinate = simd_make_float2(0.0f, 1.0f);
+      vc++;
+    }
+
+    NSUInteger stop = closed ? n + 1 : n; // +1 wraps the closed loop
+    for (NSUInteger k = 0; k < stop && vc + 2 <= maxVerts; k++) {
+      NSUInteger i = k % n;
+      simd_float2 off = CanvasMiterOffset(pts, n, i, closed, hw);
+      outVerts[vc].position = pts[i] + off;
+      outVerts[vc].textureCoordinate = simd_make_float2(0.0f, 1.0f);
+      vc++;
+      outVerts[vc].position = pts[i] - off;
+      outVerts[vc].textureCoordinate = simd_make_float2(0.0f, -1.0f);
+      vc++;
+    }
+    anyEmitted = YES;
   }
 
   free(pts);

@@ -84,8 +84,12 @@
     return NO;
   // Tight to the drawn square (Chebyshev), well under the Position handle's grab
   // so the arc ring around the small square still reaches Position - mirroring
-  // the viewer. Scales with the popover (canvas H / 230).
-  CGFloat h = self.renderer.canvas.bounds.size.height;
+  // the viewer. Scale by the OSC SIZING height (the constant-screen-size metric
+  // the square's DRAW + the Position arc use), NOT the live bounds: on an
+  // enlarged popover the live bounds grow but the drawn square stays a constant
+  // screen size, so a bounds-scaled hit zone would balloon past the square and
+  // into the Position ring - the intermittent "anchor steals Position" clash.
+  CGFloat h = self.renderer.canvas.oscSizingHeight;
   CGFloat scale = h > 0 ? h / 230.0 : 1.0;
   CGFloat r = self.hitRadiusPt * scale;
   return fmax(fabs(p.x - c.x), fabs(p.y - c.y)) < r;

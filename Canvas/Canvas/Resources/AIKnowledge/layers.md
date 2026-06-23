@@ -98,9 +98,10 @@ The inspector's **On-Screen Controls** toggle and its per-control pills (Positio
 
 A small floating toolbar sits over the preview in **both** the FCP viewer and the inspector mini-viewer - the same bar, the same buttons, and the same shared state, so a tool, grid toggle, or cell size set on one surface shows on the other. It is screen chrome: its settings are remembered but never change the render, only the editing overlay. Drag it anywhere by the **grip handle** on its left; the position survives zoom and size changes and is remembered separately per surface (the viewer and the mini each keep their own spot, since they differ in size and aspect).
 
-A divider splits it into two groups. The buttons are icon-only; **hover any button for a localized tooltip** naming what it does.
+Dividers split it into groups. The buttons are icon-only; **hover any button for a localized tooltip** naming what it does.
 
 - **Tools** - cursor, pen, rectangle, ellipse, with keyboard shortcuts **^V / ^X / ^B / ^G** shown on the button. The shortcuts work whenever either surface is focused. Selecting a tool (by click or shortcut) highlights it and stores it as the active tool. The **pen** tool draws paths and the **rectangle** / **ellipse** tools drag out shapes (see below); both work in the FCP viewer and the inspector mini-viewer.
+- **Path operations** - a group that appears only when the selection makes it relevant (see Path operations below).
 - **Grid controls** - see below.
 
 ### Grid
@@ -143,12 +144,23 @@ Pick the **rectangle** (**^B**) or **ellipse** (**^G**) tool and **drag a box** 
 
 A new shape inherits the same default look as a pen path (a 20px red stroke). A rectangle is a plain four-corner path, so the **live corner widget** rounds it into a rounded rectangle with no extra steps (see below); because the radius is stored per corner, a rectangle can even animate from sharp to rounded across Points keyposes. Both shapes are fully editable afterwards with the cursor tool (move anchors, pull tangent handles, add/remove points) - they are ordinary paths.
 
+## Selecting and moving on the canvas (cursor tool)
+
+With the **cursor** tool you can select and move layers directly on the canvas - in both the FCP viewer and the inspector mini-viewer (the selection stays in sync with the Layers panel). What the on-screen controls show follows the selection: nothing selected draws no controls; one **image** or **group** shows its transform gizmo (Position / Scale / Rotation / Anchor); one **path** shows its point-edit controls + the path-ops toolbar; **two or more** layers show a dimmed selection box around each (plus the path-ops toolbar when at least two are paths).
+
+- **Marquee-select layers** - drag a rubber-band over an empty part of the canvas; every layer it fully encloses is selected. **Shift**-drag adds to the current selection. (With **Auto-select** off you can also start the marquee over a layer's body.)
+- **Click to select** - click a layer (Auto-select on) to select it; **Shift / Cmd**-click adds or removes it from a multi-selection.
+- **Click empty space to deselect** - a plain click on empty canvas clears the selection (no controls shown).
+- **Drag a layer's body to move it** - drag the body of a selected layer to move the whole selection together; images shift their **Position**, paths shift their **points**. Like the on-screen handles, a move only applies where the layer is editable at the playhead (constant, or parked on a keypose). One drag is one undo step.
+
+When exactly one editable **path** is selected, a marquee instead selects that path's **anchors** (see below); it only routes to layer-select when the box encloses a _different_ layer.
+
 ## Editing a path (cursor tool)
 
 With the **cursor** tool and a vector path selected, its anchors and tangent handles are editable directly - in both the FCP viewer and the inspector mini-viewer (the selection stays in sync between the two):
 
 - **Move** - drag an anchor (grid-snaps like the pen) or drag a tangent handle (free; **Ctrl** breaks the handle into a cusp). Multiple selected anchors move together.
-- **Select** - click an anchor; **Shift**-click to add/remove; drag an empty area over the path to **marquee**-select a group of anchors (**Opt**-drag subtracts).
+- **Select** - click an anchor; **Shift**-click to add/remove; with that single path selected, drag an empty area over it to **marquee**-select a group of its anchors (**Opt**-drag subtracts). Enclosing the whole shape selects all its anchors.
 - **Delete** - press **Delete**/**Backspace** to remove the selected anchors. The cursor-tool delete is "destructive" like Illustrator's Direct-Selection: deleting an anchor from a **closed** path **opens** it at that gap. (The pen tool's Opt-delete is the "smart" delete - the neighbours reconnect and a closed path stays closed.) Removing the last viable anchor deletes the layer.
 - **Convert corner <-> smooth** - **double-click** an anchor to toggle it between a sharp corner (no handles) and a smooth point (auto-generated tangents).
 
@@ -156,11 +168,22 @@ Edits are per-keypose: on an animated path they change the keypose the playhead 
 
 ## Rounding corners (live corner widget)
 
-Every interior corner of a selected path shows a small accent **ring** just inside it (cursor tool only) - the same control style as the radius handle in the Rounded plugin. Drag the ring inward to round that corner, back out to sharpen it; it turns **red** at the maximum radius (half the shorter adjacent edge). The rounding is **per corner** and fully re-editable - drag the same widget again any time, or drag it to zero to restore the sharp corner. While a corner is rounded its stored tangent handles are hidden (the rounding owns that corner); they return when you clear the radius.
+A genuine sharp corner of a selected path shows a small accent **ring** just inside it (cursor tool only) - the same control style as the radius handle in the Rounded plugin. To keep detailed paths readable the ring is only offered where rounding makes sense: smooth (tangent-continuous) points and near-straight joins don't get one, but a corner that already has a radius set always shows its ring so you can still adjust or clear it. Drag the ring inward to round that corner, back out to sharpen it; it turns **red** at the maximum radius (half the shorter adjacent edge). The rounding is **per corner** and fully re-editable - drag the same widget again any time, or drag it to zero to restore the sharp corner. While a corner is rounded its stored tangent handles are hidden (the rounding owns that corner); they return when you clear the radius.
 
 **Round several corners at once**: select multiple anchors first (Shift-click them, or marquee-drag over the path), then drag any one of the selected corners' rings - every selected corner takes the same radius together, in a single undo. Each corner still clamps to its own maximum, so a tighter corner rounds as far as it can (and turns red) while the others keep going; anchors that can't be rounded (open-path endpoints, near-straight joins) are left alone.
 
 Because the radius is stored on the anchor (not baked into extra points), it **animates**: a corner can morph smoothly from sharp to rounded across Points keyposes. Rounding doesn't require a closed path - it works on any join.
+
+## Path operations
+
+When you select vector paths, extra buttons appear in the toolbar (in **both** the viewer and the mini-viewer) for combining or reshaping them. Select layers the usual way - in the Layers panel, or by clicking them in the viewer / mini with **Auto-select** on (Shift / Cmd-click to add more). The buttons only show when they apply:
+
+- **Stroke to path** - shows when a selected path has a stroke. Converts each selected stroke into a filled outline shape (the original stroke is turned off), so you can then fill or boolean it like any other shape.
+- **Union / Subtract / Intersect / Exclude** - show when **two or more** paths are selected. Union merges them into one; Subtract cuts the upper paths out of the bottom one; Intersect keeps only the overlap; Exclude keeps only the non-overlapping parts. The operands are replaced by a single result that inherits the bottom path's style.
+
+**Hover preview**: hovering a path-operation button previews the outcome directly on the canvas - the paths that will be **removed** are shown as a translucent **red** fill and the result that will **remain** as a translucent **green** fill (concave shapes and the holes from a boolean fill correctly), so you can see exactly what you'll get before committing. The preview shows in both the viewer and the mini-viewer and clears when you move off the button.
+
+The operations run on the paths' stored geometry, so a per-layer move / scale / rotate isn't baked into the result (matching how the pre-v3 version worked). A path with **rounded corners** is expanded to its rounded outline before the operation, so the rounding is honoured in the result. When a boolean produces several disconnected regions the result stays a single **multi-contour** layer - its subpaths render, edit, round and delete-points independently (they don't get joined together).
 
 ## Importing SVG
 

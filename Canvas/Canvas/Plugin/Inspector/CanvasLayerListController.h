@@ -36,9 +36,23 @@ NS_ASSUME_NONNULL_BEGIN
 /// The current decoded layer stack, read straight from the param (works even
 /// while the panel is closed). Used to feed the mini-viewer renderer.
 - (NSArray<KKBezierPath *> *)currentLayerPaths;
+/// The layerIDs of every selected row in the panel (the full multi-selection,
+/// top-to-bottom). Empty while the panel is closed. Drives the viewer's
+/// path-operation buttons.
+- (NSArray<NSString *> *)currentSelectionLayerIDs;
+/// Mirror a multi-selection (e.g. from a mini-viewer Shift-click) onto the panel
+/// rows. Does not fire onPrimaryLayerSelected.
+- (void)setSelectionLayerIDs:(NSArray<NSString *> *)layerIDs;
 /// Persist `paths` to kParamLayerData in one undo action (works whether or not
 /// the panel is open). Used by the mini-viewer pen tool to commit drawn layers.
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths;
+/// Like -writePaths: but, when `clear` is YES, ALSO clears the kParamUIState
+/// layer selection inside the SAME action - so a delete (blob change + deselect)
+/// is ONE undo entry and one cmd-Z restores both the layer AND the prior
+/// selection. Used by the mini-viewer delete (its blob + selection writes would
+/// otherwise be two separate undo steps).
+- (void)writePaths:(NSArray<KKBezierPath *> *)paths
+    clearingSelectionInSameAction:(BOOL)clear;
 /// Fired when the panel's primary selection changes (that layer's layerID, or
 /// nil). The host uses it to switch which layer the inspector timeline edits.
 @property(nonatomic, copy, nullable) void (^onPrimaryLayerSelected)
@@ -55,6 +69,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// its gating, or closed -> nil). Lets the host mirror the same gating onto the
 /// mini-viewer's auto-select. Same set passed to the panel's grayed rows.
 @property(nonatomic, copy, nullable) void (^onNonSelectableLayersChanged)
+    (NSSet<NSString *> *_Nullable layerIDs);
+/// Like onNonSelectableLayersChanged but for the MARQUEE / body-drag (which
+/// select to MOVE). In the constants popover this is stricter - move-lane-animated
+/// layers are excluded even though a single click can still pick them. nil on
+/// close.
+@property(nonatomic, copy, nullable) void (^onMarqueeNonSelectableLayersChanged)
     (NSSet<NSString *> *_Nullable layerIDs);
 @end
 

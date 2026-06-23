@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "CanvasLayerRender.h" // CanvasHitTestLayerID (public decl)
 #import "CanvasCornerFillet.h" // CanvasPathByExpandingCorners
+#import "CanvasLayerRender.h"  // CanvasHitTestLayerID (public decl)
 #import "CanvasLayerTimeline.h"
 #import "CanvasLayerTransform.h"
 #import <AppKit/AppKit.h>
@@ -355,9 +355,30 @@ static float CanvasDistToProjectedPolyline(simd_float2 q,
   return best == FLT_MAX ? FLT_MAX : sqrtf(best);
 }
 
-// YES if the query is within the (transformed) stroke of a vector layer. Tol is
-// the stroke half-width in object-Y units plus a screen-slop floor so clicking
-// near a thin stroke still selects it.
+// Even-odd point-in-polygon over a projected polyline (aspect-corrected, same
+// space the stroke distance uses). Lets a click INSIDE a filled shape select
+// it.
+static BOOL CanvasPointInProjectedPolygon(simd_float2 q,
+                                          const simd_float2 *proj, NSUInteger n,
+                                          float aspect) {
+  if (n < 3)
+    return NO;
+  float qx = q.x * aspect, qy = q.y;
+  BOOL inside = NO;
+  for (NSUInteger i = 0, j = n - 1; i < n; j = i++) {
+    float xi = proj[i].x * aspect, yi = proj[i].y;
+    float xj = proj[j].x * aspect, yj = proj[j].y;
+    if (((yi > qy) != (yj > qy)) &&
+        (qx < (xj - xi) * (qy - yi) / (yj - yi) + xi))
+      inside = !inside;
+  }
+  return inside;
+}
+
+// YES if the query hits a vector layer: within its (transformed) stroke, OR -
+// for a fill-enabled path - anywhere inside the filled region. Stroke tol is
+// the half-width in object-Y units plus a screen-slop floor so a thin stroke is
+// still grabbable.
 enum { kHitPolyCap = 2048 }; // true ICE so the on-stack arrays aren't VLAs
 static const float kHitStrokeSlopObj = 0.012f; // ~1.2% of canvas height
 static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
@@ -379,10 +400,15 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
   for (NSUInteger i = 0; i < n; i++)
     proj[i] = CanvasProjectedCornerObj(norm[i].x, norm[i].y, t, c.x, c.y,
                                        aspect, groups, ng);
-  float h = canvasHeightPx > 1.0f ? canvasHeightPx : 1000.0f;
-  float tol = fmaxf(path.strokeWidth * 0.5f / h, kHitStrokeSlopObj);
-  float d = CanvasDistToProjectedPolyline(q, proj, n, geom.closed, aspect);
-  return d <= tol;
+  if (path.strokeEnabled) {
+    float h = canvasHeightPx > 1.0f ? canvasHeightPx : 1000.0f;
+    float tol = fmaxf(path.strokeWidth * 0.5f / h, kHitStrokeSlopObj);
+    if (CanvasDistToProjectedPolyline(q, proj, n, geom.closed, aspect) <= tol)
+      return YES;
+  }
+  if (path.fillEnabled && CanvasPointInProjectedPolygon(q, proj, n, aspect))
+    return YES;
+  return NO;
 }
 
 NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
@@ -405,7 +431,8 @@ NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
 
     BOOL isImage = path.isImage && path.imagePath.length &&
                    [path.shape isKindOfClass:[KKRectShape class]];
-    BOOL isVector = !path.isImage && path.strokeEnabled && path.count >= 2;
+    BOOL isVector = !path.isImage && (path.strokeEnabled || path.fillEnabled) &&
+                    path.count >= 2;
     if (!isImage && !isVector)
       continue;
 
@@ -416,9 +443,9 @@ NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
                                           groups, kCanvasGroupXformCap);
 
     if (isVector) {
-      // The stroke distance test IS the "what you see" test, so alphaAware
-      // doesn't apply - a click in an open stroke's hollow interior simply
-      // misses and falls through to the layer beneath.
+      // "What you see" hit test: inside a filled region, or within a stroke.
+      // A click in a stroke-only path's hollow interior misses and falls
+      // through to the layer beneath (alphaAware doesn't apply to vectors).
       if (CanvasVectorLayerHit(path, frac, aspect, q, canvasHeightPx, groups,
                                ng))
         return path.layerID;

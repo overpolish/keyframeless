@@ -49,6 +49,10 @@ static const CGFloat kSlideDistance = 12.0;
   // so it survives the panel being created lazily AFTER the highlight is
   // requested.
   NSString *_highlightLayerID;
+  // The FULL multi-selection to highlight (every selected row), stored so it
+  // survives the lazily-built panel - the single _highlightLayerID is just its
+  // primary. Empty = no rows highlighted (a real deselect).
+  NSArray<NSString *> *_highlightLayerIDs;
 }
 
 - (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView
@@ -75,10 +79,19 @@ static const CGFloat kSlideDistance = 12.0;
 
 - (void)reload {
   [_listView reloadFromParam];
+  // Re-assert the authoritative selection by ID after the blob refresh. A
+  // structural change (path op, group) writes the new blob and the new selection
+  // as two separate params; if the selection (UIState) arrived BEFORE this blob
+  // reload, the list couldn't match the not-yet-present result row, so re-apply
+  // the stored highlight now that the new rows exist. Stale IDs (consumed
+  // operands) simply don't match and stay unselected.
+  if (_highlightLayerIDs)
+    [_listView setSelectionToLayerIDs:_highlightLayerIDs];
 }
 
 - (void)highlightLayerID:(NSString *)layerID {
   _highlightLayerID = [layerID copy];
+  _highlightLayerIDs = layerID.length ? @[ layerID ] : @[];
   [_listView highlightLayerID:layerID]; // no-op until the panel/list exists
 }
 
@@ -91,7 +104,24 @@ static const CGFloat kSlideDistance = 12.0;
   return CanvasReadLayerPaths(_apiManager, self.paramActionTarget ?: self);
 }
 
+- (NSArray<NSString *> *)currentSelectionLayerIDs {
+  return [_listView selectedLayerIDs] ?: @[]; // empty until the panel exists
+}
+
+- (void)setSelectionLayerIDs:(NSArray<NSString *> *)layerIDs {
+  // Store the full set so a panel built LATER (lazily, beside a popover)
+  // restores every highlighted row - not just the primary. Empty clears.
+  _highlightLayerIDs = [layerIDs copy] ?: @[];
+  _highlightLayerID = [layerIDs.firstObject copy];
+  [_listView setSelectionToLayerIDs:layerIDs]; // no-op until the panel exists
+}
+
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths {
+  [self writePaths:paths clearingSelectionInSameAction:NO];
+}
+
+- (void)writePaths:(NSArray<KKBezierPath *> *)paths
+    clearingSelectionInSameAction:(BOOL)clear {
   id<PROAPIAccessing> api = _apiManager;
   if (!api)
     return;
@@ -106,6 +136,31 @@ static const CGFloat kSlideDistance = 12.0;
   NSData *blob = [KKBezierPath blobFromPaths:paths];
   KKWriteCustomParamString(setAPI, [blob base64EncodedStringWithOptions:0],
                            kParamLayerData);
+  // Clear the selection in the SAME action so a delete undoes as one step. Read
+  // -> patch -> write kParamUIState (mirrors KKPlugin -patchUIStateKeys, but
+  // inside this action scope rather than its own).
+  if (clear) {
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    NSString *existing = KKReadCustomParamString(getAPI, kParamUIState);
+    NSMutableDictionary *state =
+        (existing.length
+             ? [[NSJSONSerialization
+                   JSONObjectWithData:[existing
+                                          dataUsingEncoding:NSUTF8StringEncoding]
+                              options:0
+                                error:nil] mutableCopy]
+             : nil)
+            ?: [NSMutableDictionary dictionary];
+    state[@"selectedLayerID"] = @"";
+    state[@"selectedLayerIDs"] = @[];
+    NSString *json = [[NSString alloc]
+        initWithData:[NSJSONSerialization dataWithJSONObject:state
+                                                     options:0
+                                                       error:nil]
+            encoding:NSUTF8StringEncoding];
+    KKWriteCustomParamString(setAPI, json, kParamUIState);
+  }
   [action endAction:target];
   // Rebuild the open panel from the just-written param (no-op when closed).
   [_listView reloadFromParam];
@@ -225,7 +280,8 @@ static const CGFloat kSlideDistance = 12.0;
   // leaves every layer selectable.
   // Gray the layers you can't act on for this popover kind:
   //  - keypose: layers with no keypose at this time;
-  //  - constants: fully-animated layers (no constant to edit);
+  //  - constants: layers whose MOVE lane (Points / Position) is animated - they
+  //    can't be positioned via constants (that lane isn't shown there);
   //  - manage (Animated dropdown): none - any layer's params can be animated.
   NSString *kind = note.userInfo[@"kind"] ?: @"constants";
   double frac = [note.userInfo[@"fraction"] doubleValue];
@@ -242,11 +298,23 @@ static const CGFloat kSlideDistance = 12.0;
   // keypose/constants rule as the layer list.
   if (self.onNonSelectableLayersChanged)
     self.onNonSelectableLayersChanged(nonSelectable);
+  // The MARQUEE / body-drag (which select to MOVE) use a stricter set in the
+  // constants popover: a move-lane-animated layer can't be positioned via
+  // constants, so it's excluded from multi-select even though a single click can
+  // still pick it to edit its other constants. Other kinds reuse the same set.
+  NSSet<NSString *> *marqueeNonSelectable =
+      [kind isEqualToString:@"constants"] ? [self _layersWithMoveLaneAnimated]
+                                          : nonSelectable;
+  if (self.onMarqueeNonSelectableLayersChanged)
+    self.onMarqueeNonSelectableLayersChanged(marqueeNonSelectable);
 
   // Pre-highlight the selected layer unless the popover already drove the
   // highlight itself (keypose/constants set it before this notification).
-  if (!_highlightLayerID && _selectedLayerID.length)
+  if (!_highlightLayerID && _selectedLayerID.length) {
     _highlightLayerID = [_selectedLayerID copy];
+    if (!_highlightLayerIDs)
+      _highlightLayerIDs = @[ _selectedLayerID ];
+  }
 
   // Mark this popover as the pending target, then show after a delay so the
   // popover's own entrance plays first.
@@ -345,6 +413,9 @@ static const CGFloat kSlideDistance = 12.0;
   return out;
 }
 
+// SINGLE-click / layer-list gating for the Constants popover: a layer is
+// non-selectable only when FULLY animated (no constant lane to edit at all). A
+// layer with any constant lane stays clickable - you can edit that constant.
 - (NSSet<NSString *> *)_layersWithoutConstant {
   NSMutableSet<NSString *> *out = [NSMutableSet set];
   for (KKBezierPath *p in [self currentLayerPaths]) {
@@ -357,6 +428,28 @@ static const CGFloat kSlideDistance = 12.0;
         animated++;
     if (animated >= _templateLaneCount)
       [out addObject:p.layerID]; // fully animated: no constants to edit
+  }
+  return out;
+}
+
+// STRICTER gating used only for the MARQUEE / body-drag in the Constants popover:
+// a layer is non-selectable when its MOVE lane is animated - Points for a vector
+// path, Position for an image / group. That lane is the ground truth for where
+// the layer sits, so when it's animated the layer can't be positioned via
+// constants (and a marquee selects to MOVE). Single-click stays lenient above.
+- (NSSet<NSString *> *)_layersWithMoveLaneAnimated {
+  NSMutableSet<NSString *> *out = [NSMutableSet set];
+  for (KKBezierPath *p in [self currentLayerPaths]) {
+    if (!p.layerID.length || p.animationJSON.length == 0)
+      continue;
+    NSString *moveLane = (p.isImage || p.isGroup) ? @"Position" : @"Points";
+    KKTimeline *tl = [KKTimeline timelineFromJSON:p.animationJSON];
+    for (KKLane *l in tl.lanes)
+      if ([l.label isEqualToString:moveLane]) {
+        if (l.enabled && l.keyposes.count >= 2)
+          [out addObject:p.layerID];
+        break;
+      }
   }
   return out;
 }
@@ -417,9 +510,12 @@ static const CGFloat kSlideDistance = 12.0;
   // Keypose popover: gray the layers with no keypose at its time (can't be
   // selected). Constants: nil = every layer selectable.
   [_listView setNonSelectableLayerIDs:nonSelectable];
-  // Apply any pending highlight (requested before the list view existed).
-  if (_highlightLayerID)
-    [_listView highlightLayerID:_highlightLayerID];
+  // Apply the pending FULL selection (requested before the list view existed) so
+  // every selected row highlights, not just the primary. Empty clears all.
+  NSArray<NSString *> *pending =
+      _highlightLayerIDs
+          ?: (_highlightLayerID.length ? @[ _highlightLayerID ] : @[]);
+  [_listView setSelectionToLayerIDs:pending];
   // Reflect the current toggle state (may have changed via undo/redo while the
   // panel was closed).
   [_listView setAutoSelect:_autoSelect];
@@ -499,6 +595,8 @@ static const CGFloat kSlideDistance = 12.0;
   [_listView setNonSelectableLayerIDs:nil];
   if (self.onNonSelectableLayersChanged)
     self.onNonSelectableLayersChanged(nil);
+  if (self.onMarqueeNonSelectableLayersChanged)
+    self.onMarqueeNonSelectableLayersChanged(nil);
   KKPopoverRemoveKeepAliveWindow(_panel);
   [parent removeChildWindow:_panel];
   [_panel orderOut:nil];

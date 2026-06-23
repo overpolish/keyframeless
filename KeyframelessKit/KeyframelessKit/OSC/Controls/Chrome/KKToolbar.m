@@ -384,6 +384,11 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
 // run the shared content draw. The mini-viewer reuses -drawInEncoder:... below
 // to render the SAME toolbar into its own MTKView pass (like the shared OSC
 // glyph pipelines), so there's one drawing path for both surfaces.
+- (void)setSeparatorColor:(NSColor *)separatorColor {
+  _separatorColor = separatorColor;
+  _separatorTexture = nil; // force a rebuild on the next draw
+}
+
 - (void)drawWithDestinationImage:(FxImageTile *)destinationImage {
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
   uint64_t registryID = destinationImage.deviceRegistryID;
@@ -514,10 +519,11 @@ static void drawTexturedQuadFlip(id<MTLRenderCommandEncoder> encoder,
     _highlightTexture = renderRoundedRect(
         device, kButtonSize * sc, kButtonHeight * sc, kHighlightCorner * sc,
         [NSColor colorWithRed:0.28 green:0.28 blue:0.28 alpha:0.95]);
-    // Same grey as the shortcut labels (drawn ON TOP of the bg below).
-    _separatorTexture =
-        renderRoundedRect(device, kSeparatorLineW * sc, kButtonHeight * 0.5 * sc,
-                          0.0, [NSColor colorWithWhite:0.5 alpha:1.0]);
+    // Same grey as the shortcut labels by default; a custom separatorColor lets
+    // a caller match the dividers to its handle/icon tint.
+    _separatorTexture = renderRoundedRect(
+        device, kSeparatorLineW * sc, kButtonHeight * 0.5 * sc, 0.0,
+        _separatorColor ?: [NSColor colorWithWhite:0.5 alpha:1.0]);
     _cachedToolbarW = toolbarW;
     _cachedToolbarH = toolbarH;
   }

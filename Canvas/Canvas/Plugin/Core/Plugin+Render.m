@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "CanvasFillRender.h" // TEMP solid fill for closed paths
 #import "CanvasLayerRender.h"
 #import "CanvasLayerTimeline.h" // CanvasSetUIStateSnapshot
 #import "CanvasMiniViewerRenderer.h"
@@ -229,6 +230,27 @@
   FxRect imgB = destinationImage.imagePixelBounds;
   float outputWidth = (float)(imgB.right - imgB.left);
   float outputHeight = (float)(imgB.top - imgB.bottom);
+  // Publish the true output size for the viewer OSC's path ops (stroke-to-outline
+  // bakes px-relative geometry and the OSC only knows zoom-dependent canvas px).
+  CanvasSetOutputSize(outputWidth, outputHeight);
+  // Render scale: stroke widths are authored in CANONICAL (canvas/100%) px, but
+  // a downscaled FCP browser/effect thumbnail renders fewer real pixels per
+  // canonical unit. Map the SOURCE image's pixel bounds back to canonical units
+  // via its inversePixelTransform (same idiom as Glow / the _Attic): resScale =
+  // srcPixelWidth / srcCanonicalWidth (1.0 at full res, < 1 for a thumbnail).
+  // Geometry is already correct (it scales with imageWidth); only the absolute
+  // stroke width needs this, else thumbnails draw strokes far too thick.
+  float strokeScale = 1.0f;
+  FxRect sp = sourceImages[0].imagePixelBounds;
+  FxMatrix44 *invXf = sourceImages[0].inversePixelTransform;
+  if (invXf) {
+    FxPoint2D sll = [invXf transform2DPoint:(FxPoint2D){sp.left, sp.bottom}];
+    FxPoint2D sur = [invXf transform2DPoint:(FxPoint2D){sp.right, sp.top}];
+    float canonW = (float)(sur.x - sll.x);
+    float pxW = (float)(sp.right - sp.left);
+    if (canonW > 0.0f)
+      strokeScale = pxW / canonW;
+  }
   float tileShiftX =
       outputWidth * 0.5f - ((tileB.left + tileB.right) * 0.5f - imgB.left);
   // Y measured from the image TOP (the vert/shader Y here runs opposite FCP's
@@ -268,8 +290,51 @@
     if (strokePS) {
       [enc setRenderPipelineState:strokePS];
       CanvasEncodeVectorLayers(layers, enc, device, outputWidth, outputHeight,
-                               tileShiftX, tileShiftY, f, nil, nil);
+                               tileShiftX, tileShiftY, f, nil, nil, strokeScale);
     }
+  };
+
+  // TEMP solid fill for closed filled paths (SVG fills, boolean / outline
+  // results), drawn in its own stencil + colour passes on a second command
+  // buffer AFTER the composite is committed - the kit's shared encoder has no
+  // stencil attachment. Z-order is therefore fill-over-stroke (acceptable for
+  // the temp: a path is filled OR stroked here, rarely both). Skipped entirely
+  // when nothing is filled.
+  FxRect tileBF = destinationImage.tilePixelBounds;
+  float tileW = (float)(tileBF.right - tileBF.left);
+  float tileH = (float)(tileBF.top - tileBF.bottom);
+  void (^runFills)(double) = ^(double f) {
+    BOOL anyFill = NO;
+    for (KKBezierPath *p in layers)
+      if (p.fillEnabled && !p.isImage && !p.isGroup && !p.hidden) {
+        anyFill = YES;
+        break;
+      }
+    if (!anyFill || !device)
+      return;
+    id<MTLRenderPipelineState> fStencilPS = nil, fColorPS = nil;
+    id<MTLDepthStencilState> fStencilDS = nil, fColorDS = nil;
+    CanvasFillBuildPipelines(device, regID, pf, &fStencilPS, &fColorPS,
+                             &fStencilDS, &fColorDS);
+    if (!fStencilPS || !fColorPS)
+      return;
+    id<MTLTexture> stencilTex = CanvasFillStencilTexture(
+        device, (NSUInteger)tileW, (NSUInteger)tileH);
+    id<MTLTexture> destTex = [destinationImage metalTextureForDevice:device];
+    if (!stencilTex || !destTex)
+      return;
+    id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:regID
+                                                      pixelFormat:pf];
+    if (!queue)
+      return;
+    id<MTLCommandBuffer> cb = [queue commandBuffer];
+    CanvasEncodeFilledLayers(layers, device, cb, destTex, stencilTex, fStencilPS,
+                             fColorPS, fStencilDS, fColorDS, outputWidth,
+                             outputHeight, tileW, tileH, tileShiftX, tileShiftY,
+                             f, nil, nil);
+    [cb commit];
+    [cb waitUntilCompleted];
+    [cache returnCommandQueueToCache:queue];
   };
 
   // Motion blur: accumulate the composite across sub-frame sample times (the
@@ -312,12 +377,14 @@
                                                    composite(enc, texs, f);
                                                  }];
                     }];
-    if (applied)
+    if (applied) {
+      runFills(frac); // fills aren't sample-accumulated (temp): drawn once
       return YES;
+    }
   }
 
   // No blur (or the accumulate bailed): single composite at the playhead frac.
-  return [self
+  BOOL ok = [self
       encodeRenderCommandsForDestinationImage:destinationImage
                                  sourceImages:sourceImages
                                      commands:^(
@@ -325,6 +392,9 @@
                                          NSArray<id<MTLTexture>> *inputs) {
                                        composite(enc, inputs, frac);
                                      }];
+  if (ok)
+    runFills(frac);
+  return ok;
 }
 
 @end

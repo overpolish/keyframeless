@@ -6,6 +6,7 @@
 #pragma once
 
 #import <Foundation/Foundation.h>
+#import <KeyframelessKit/KKPathBoolean.h> // KKBooleanOp
 
 @class KKToolbar;
 @protocol PROAPIAccessing;
@@ -29,14 +30,27 @@ typedef NS_ENUM(NSInteger, CanvasToolbarTag) {
   CanvasToolbarGridAdaptive = 111,
   CanvasToolbarGridSpacing = 112,
   CanvasToolbarSnap = 113,
+  // Path operations: conditional groups inserted between the tool radio and the
+  // grid group. Outline shows when one stroke-bearing path is selected; the
+  // booleans show when two or more paths are selected.
+  CanvasToolbarPathOutline = 120,
+  CanvasToolbarPathUnion = 121,
+  CanvasToolbarPathSubtract = 122,
+  CanvasToolbarPathIntersect = 123,
+  CanvasToolbarPathXOR = 124,
 };
 
-/// Builds the combined Canvas toolbar (drag handle | tool radio | separator |
-/// grid toggles) with localized hover tooltips. Shared so the viewer OSC and the
-/// inspector mini render an identical bar. `apiManager` may be nil (KKToolbar
-/// only stores it). The caller drives per-frame state (activeTags, the adaptive
-/// icon swap, the spacing number, position) on the returned bar.
-KKToolbar *CanvasMakeToolbar(id<PROAPIAccessing> _Nullable apiManager);
+/// Builds the combined Canvas toolbar (drag handle | tool radio |
+/// [outline] | [booleans] | separator | grid toggles) with localized hover
+/// tooltips. Shared so the viewer OSC and the inspector mini render an identical
+/// bar. `apiManager` may be nil (KKToolbar only stores it). `includeOutline`
+/// inserts the stroke-to-outline button (one stroke path selected);
+/// `includeBooleans` inserts the union/subtract/intersect/exclude group (two or
+/// more paths selected). The caller drives per-frame state (activeTags, the
+/// adaptive icon swap, the spacing number, position) on the returned bar and
+/// rebuilds it when the include flags change.
+KKToolbar *CanvasMakeToolbar(id<PROAPIAccessing> _Nullable apiManager,
+                             BOOL includeOutline, BOOL includeBooleans);
 
 /// Applies the per-frame toolbar state shared by the viewer OSC and the mini:
 /// the active-highlight set (the radio tool + whichever grid toggles are on),
@@ -52,5 +66,11 @@ NSInteger CanvasToolbarNextGridSpacing(NSInteger current);
 /// Maps a tool keyboard shortcut letter (lowercase v/x/b/g) to its toolbar tag,
 /// or 0 if the letter isn't a tool shortcut. One table for both surfaces.
 CanvasToolbarTag CanvasToolbarToolTagForLetter(unichar letter);
+
+/// Maps a path-operation toolbar tag to its operation. Returns NO for any other
+/// tag. For the stroke-to-outline tag `*outOutline` is YES (and `*outOp` is left
+/// untouched); for a boolean tag `*outOp` is set and `*outOutline` is NO.
+BOOL CanvasToolbarTagToPathOp(NSInteger tag, BOOL *_Nullable outOutline,
+                              KKBooleanOp *_Nullable outOp);
 
 NS_ASSUME_NONNULL_END

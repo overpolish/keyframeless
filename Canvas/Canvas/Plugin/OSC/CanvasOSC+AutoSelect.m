@@ -49,17 +49,59 @@
                               [CanvasPlugin availableLanes], (float)bh);
 }
 
+// The canvas point in render OBJECT space (normalized, Y-UP) - the same space as
+// KKBezierPath points + the layer transforms, so a drag delta computed from two
+// of these maps straight onto path points / the Position lane.
+- (CGPoint)_objYUpAtCanvasX:(double)x y:(double)y {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return CGPointMake(0.5, 0.5);
+  double ox = 0, oy = 0;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                          fromX:x
+                          fromY:y
+                        toSpace:kFxDrawingCoordinates_OBJECT
+                            toX:&ox
+                            toY:&oy];
+  return CGPointMake(ox, 1.0 - oy); // FCP OBJECT is Y-down; flip to render Y-up
+}
+
 // Merge the picked layer id into the current UIState (snapshot base, since the
 // OSC can't read the custom param) and write it back inside an action scope. The
 // write fires the effect's parameterChanged, which re-selects the layer in the
 // inspector + drives the per-layer OSC/mini state. Mirrors the kit's OSC opt-hide
 // write (kkToggleOSCElementHidden).
-- (void)_commitPickSelection {
+//
+// Shift / Cmd makes the click ADDITIVE (standard object-selection): toggle the
+// picked layer in the multi-selection set, keeping the picked layer (or the
+// first remaining) as the primary edit target. A plain click replaces the set
+// with just the picked layer. Both write selectedLayerID (primary) and
+// selectedLayerIDs (the full set) in one action so the path-op buttons + the
+// viewer multi-highlight follow.
+- (void)_commitPickSelectionWithModifiers:(NSUInteger)modifiers {
   NSString *layerID = self.pendingPickLayerID;
   if (!layerID.length)
     return;
+  BOOL additive =
+      (modifiers & (kFxModifierKey_SHIFT | kFxModifierKey_COMMAND)) != 0;
+  NSMutableArray<NSString *> *sel = [[self _selectedLayerIDs] mutableCopy];
+  NSString *primary;
+  if (additive) {
+    if ([sel containsObject:layerID]) {
+      [sel removeObject:layerID];
+      primary = sel.count ? sel.firstObject : @"";
+    } else {
+      [sel addObject:layerID];
+      primary = layerID;
+    }
+  } else {
+    sel = [@[ layerID ] mutableCopy];
+    primary = layerID;
+  }
   [self _writeUIStateMerging:^(NSMutableDictionary *state) {
-    state[@"selectedLayerID"] = layerID;
+    state[@"selectedLayerID"] = primary;
+    state[@"selectedLayerIDs"] = sel;
   }];
 }
 

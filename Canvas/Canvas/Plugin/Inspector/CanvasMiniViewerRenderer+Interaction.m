@@ -4,34 +4,37 @@
  */
 
 #import "CanvasLayerRender.h"
+#import "CanvasLayerTimeline.h" // CanvasLayerTimelineForPath (override resync)
 #import "CanvasMiniViewerRenderer_Internal.h"
-#import "CanvasToolbar.h" // CanvasToolbarToolCursor
+#import "CanvasPathMorph.h" // CanvasTranslateSelection (body-drag move)
+#import "CanvasToolbar.h"   // CanvasToolbarToolCursor
 #import <KeyframelessKit/KeyframelessKit.h>
 
 @implementation CanvasMiniViewerRenderer (Interaction)
 
-// Transform handles (Position / motion path / Scale box / Anchor square) only
-// show under the cursor tool; a drawing tool (pen, rect, ellipse) owns the
-// canvas and hides them, matching the viewer OSC's pen branch. (Per-element
-// visibility - incl. the gizmo being hidden by default - is governed separately
-// by the OSC visibility system.)
-- (BOOL)_transformHandlesActive {
-  return (self.toolbarTool ?: CanvasToolbarToolCursor) ==
-         CanvasToolbarToolCursor;
+// The lone selected layer when EXACTLY one is selected, else nil. Mirrors the
+// viewer's `_loneSelectedLayer`; drives the selection-type display rules.
+- (KKBezierPath *)_loneSelectedLayer {
+  NSArray<NSString *> *sel = [self _miniSelectedIDs];
+  if (sel.count != 1)
+    return nil;
+  NSString *lid = sel.firstObject;
+  for (KKBezierPath *p in self.layers)
+    if ([p.layerID isEqualToString:lid])
+      return p;
+  return nil;
 }
 
-// NS modifiers -> the shared controller's surface-neutral flags.
-static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
-  CanvasPenModifiers o = CanvasPenModNone;
-  if (m & NSEventModifierFlagShift)
-    o |= CanvasPenModShift;
-  if (m & NSEventModifierFlagCommand)
-    o |= CanvasPenModCmd;
-  if (m & NSEventModifierFlagControl)
-    o |= CanvasPenModCtrl;
-  if (m & NSEventModifierFlagOption)
-    o |= CanvasPenModOpt;
-  return o;
+// Transform handles (Position / motion path / Scale box / Anchor square) show
+// only under the cursor tool AND for a lone image / group - a drawing tool owns
+// the canvas, and a lone path / multi / empty selection shows points or nothing
+// instead (matching the viewer). Per-element visibility is still governed on top
+// by the OSC visibility system.
+- (BOOL)_transformHandlesActive {
+  if ((self.toolbarTool ?: CanvasToolbarToolCursor) != CanvasToolbarToolCursor)
+    return NO;
+  KKBezierPath *lone = [self _loneSelectedLayer];
+  return lone && (lone.isImage || lone.isGroup);
 }
 
 // Path point editing is live when the cursor tool is active and the Points
@@ -43,6 +46,10 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
 // re-show, not a drag.
 - (BOOL)_pathEditContext {
   if ((self.toolbarTool ?: CanvasToolbarToolCursor) != CanvasToolbarToolCursor)
+    return NO;
+  // Point editing is off while a multi-selection is active (layer-level
+  // selection - points show dimmed, non-editable), mirroring the viewer.
+  if ([self _miniSelectedIDs].count > 1)
     return NO;
   // Match the transform OSCs: a constants popover only edits CONSTANT lanes; a
   // keypose (boundary) popover only the ANIMATED one it's editing. Without this
@@ -72,6 +79,65 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
                               (float)self.renderHeight);
 }
 
+// Toggle-independent geometric layer hit: is ANY layer under this point? Used to
+// tell "empty canvas" (start a layer marquee) from "over a layer" (leave it for
+// pick / body-drag), regardless of the auto-select toggle or selectability.
+- (NSString *)_anyLayerAtPoint:(CGPoint)p contentRect:(CGRect)cr {
+  if (cr.size.width <= 0 || cr.size.height <= 0)
+    return nil;
+  float objX = (float)((p.x - CGRectGetMinX(cr)) / cr.size.width);
+  float objY = (float)(1.0 - (p.y - CGRectGetMinY(cr)) / cr.size.height);
+  float aspect = (float)(cr.size.width / cr.size.height);
+  return CanvasHitTestLayerID(self.layers ?: @[], self.editFraction, aspect, objX,
+                              objY, /*alphaAware=*/YES, /*excluded=*/nil,
+                              /*requireEditableAtFrac=*/NO, /*templates=*/nil,
+                              (float)self.renderHeight);
+}
+
+// The SELECTED layer under `p` (cursor tool, inside the rect), or nil - a drag
+// here moves the whole selection. Mirrors the viewer's hover claim.
+- (NSString *)_selectedLayerUnderPoint:(CGPoint)p contentRect:(CGRect)cr {
+  if ((self.toolbarTool ?: CanvasToolbarToolCursor) != CanvasToolbarToolCursor)
+    return nil;
+  // Only filmstrip mode (renderMode 1) fans cells out beyond the content rect, so
+  // only then is an outside-cr point another cell rather than off-frame canvas.
+  if (self.canvas.renderMode == 1 && !CGRectContainsPoint(cr, p))
+    return nil;
+  NSString *hit = [self _anyLayerAtPoint:p contentRect:cr];
+  NSSet<NSString *> *blocked =
+      self.marqueeNonSelectableLayerIDs ?: self.nonSelectableLayerIDs;
+  if (!hit.length || [blocked containsObject:hit])
+    return nil; // not movable in this popover scope
+  return [[self _miniSelectedIDs] containsObject:hit] ? hit : nil;
+}
+
+// Cursor-tool empty-canvas LAYER marquee allowed here? Inside the active rect,
+// not on a handle/anchor (canMarquee), and no layer under the cursor - so a drag
+// selects whole layers for ANY selection state (none / image / multi). The
+// single-editable-path case is handled by the _pathEditContext block instead.
+- (BOOL)_layerMarqueeAllowedAtPoint:(CGPoint)p contentRect:(CGRect)cr {
+  if ((self.toolbarTool ?: CanvasToolbarToolCursor) != CanvasToolbarToolCursor)
+    return NO;
+  // Restrict to the content rect ONLY in filmstrip mode (renderMode 1), where
+  // inactive cells fan out beyond cr and need their click to switch cells. In
+  // single-frame / onion mode the marquee may start anywhere, so a layer dragged
+  // OUTSIDE the frame (into the letterbox) can still be marqueed - matching the
+  // main viewer.
+  if (self.canvas.renderMode == 1 && !CGRectContainsPoint(cr, p))
+    return NO;
+  if (![self.pathEditController canMarqueeAtX:p.x y:p.y])
+    return NO;
+  // Empty area -> always marquee. Over a layer body -> only with auto-select OFF
+  // AND the layer not selected: with auto-select OFF nothing else claims an
+  // unselected layer body, so a drag must still rubber-band over an image (a
+  // SELECTED body is a move, claimed before this; with auto-select ON an
+  // unselected layer is a click-pick).
+  if ([self _anyLayerAtPoint:p contentRect:cr].length == 0)
+    return YES;
+  return !self.autoSelectEnabled &&
+         [self _selectedLayerUnderPoint:p contentRect:cr].length == 0;
+}
+
 // A click on the preview body (no handle hit) picks the topmost selectable
 // image layer under the cursor, like the viewer OSC; editing then follows via
 // onSelectLayer -> the inspector's _selectLayer.
@@ -79,9 +145,34 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
     backgroundClickAtPoint:(CGPoint)p
                contentRect:(CGRect)cr {
   NSString *hit = [self _autoSelectLayerAtPoint:p contentRect:cr];
-  if (!hit.length || [hit isEqualToString:self.selectedLayerID])
+  if (!hit.length)
     return NO;
-  if (self.onSelectLayer)
+  // Shift / Cmd makes the click additive (toggle into / out of the
+  // multi-selection); a plain click replaces it, or collapses a multi-selection
+  // to the clicked layer. Mirrors the viewer OSC.
+  BOOL additive = (NSEvent.modifierFlags & (NSEventModifierFlagShift |
+                                            NSEventModifierFlagCommand)) != 0;
+  NSArray<NSString *> *cur = [self _miniSelectedIDs];
+  BOOL alreadySel = [cur containsObject:hit];
+  if (!additive && alreadySel && cur.count <= 1)
+    return NO; // clicking the only-selected layer is a no-op
+  NSMutableArray<NSString *> *set = [cur mutableCopy];
+  NSString *primary;
+  if (additive) {
+    if (alreadySel) {
+      [set removeObject:hit];
+      primary = set.count ? set.firstObject : @"";
+    } else {
+      [set addObject:hit];
+      primary = hit;
+    }
+  } else {
+    set = [@[ hit ] mutableCopy];
+    primary = hit;
+  }
+  if (self.onSelectLayers)
+    self.onSelectLayers(set, primary);
+  else if (self.onSelectLayer)
     self.onSelectLayer(hit);
   return YES;
 }
@@ -223,157 +314,6 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
 }
 
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
-    handleHitAtPoint:(CGPoint)p
-         contentRect:(CGRect)cr {
-  // Anchor square is topmost so its TIGHT central grab zone (hitRadiusPt = 3)
-  // wins, but the larger Position handle around it stays clickable - so
-  // clicking the centre square grabs the anchor while the Position arc/ring
-  // grabs Position. The anchor is also grabbable wherever it's offset (e.g. a
-  // group, whose pivot is its content centre).
-  self.canvas = canvas;
-  self.penContentRect = cr;
-  // Path point editing claims first (so the overlay grabs the click for an
-  // anchor/handle instead of letting it fall through to a view pan).
-  // A marquee is only claimed INSIDE the active content rect: in filmstrip mode
-  // the active cell == cr and the inactive cells fan out beyond it, so a click
-  // on an inactive cell stays unclaimed here and falls through to the view's
-  // mouseDown filmstrip cell-switch.
-  if ([self _pathEditContext]) {
-    if ([self.pathEditController hitTestAtX:p.x y:p.y] != CanvasPathEditHitNone)
-      return YES;
-    if ([self.pathEditController cornerWidgetHitAtX:p.x y:p.y])
-      return YES; // the corner widget claims the click (sits in empty area)
-    if (CGRectContainsPoint(cr, p) &&
-        [self.pathEditController canMarqueeAtX:p.x y:p.y]) {
-      // An empty click yields to auto-select when it's over a DIFFERENT layer
-      // (the viewer prioritises layer-pick over the marquee, which is why it
-      // works there); otherwise start a marquee on the selected path's anchors.
-      NSString *pick = [self _autoSelectLayerAtPoint:p contentRect:cr];
-      if (pick.length && ![pick isEqualToString:self.selectedLayerID])
-        return NO;
-      return YES;
-    }
-  }
-  if ([self.anchorMini squareHitAtPoint:p contentRect:cr])
-    return YES;
-  // The active keypose's Position handle wins where it coincides with a path
-  // anchor/tangent (handles sit offset from the anchor, so they stay
-  // grabbable).
-  if ([self pointHandleHitAtPoint:p contentRect:cr])
-    return YES;
-  if ([self.positionMini pathHandleHitAtPoint:p contentRect:cr])
-    return YES;
-  if ([self.positionMini pathAnchorHitAtPoint:p contentRect:cr])
-    return YES;
-  if ([self.scaleMini handleHitAtPoint:p contentRect:cr outIndex:NULL])
-    return YES;
-  return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
-}
-
-- (void)miniViewer:(KKMiniViewerView *)canvas
-    beginHandleDragAtPoint:(CGPoint)p
-               contentRect:(CGRect)cr {
-  self.canvas = canvas;
-  self.penContentRect = cr;
-  // Path point editing grabs an anchor / handle first (the gizmo is hidden for
-  // a selected path, so this is the primary interaction). Pass the live
-  // modifier state so Shift/Opt at marquee/selection START is seen (the
-  // overlay's beginHandleDrag carries no modifiers of its own).
-  if ([self _pathEditContext] &&
-      [self.pathEditController
-          mouseDownAtX:p.x
-                     y:p.y
-             modifiers:CanvasEditModsFromNS(NSEvent.modifierFlags)])
-    return;
-  // Anchor square grabs first (tight central zone, matches the hit-test
-  // priority).
-  if ([self.anchorMini beginDragAtPoint:p contentRect:cr])
-    return;
-  // Position handle next (the base re-checks it and drives the point grab
-  // lifecycle), then the motion-path anchors / tangent handles (the controller
-  // owns those; the base doesn't know about them).
-  if ([self pointHandleHitAtPoint:p contentRect:cr]) {
-    [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
-    return;
-  }
-  self.canvas = canvas;
-  if ([self.positionMini beginPathDragAtPoint:p contentRect:cr])
-    return;
-  if ([self.scaleMini beginDragAtPoint:p contentRect:cr]) {
-    self.canvas = canvas;
-    return;
-  }
-  [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
-}
-
-- (void)miniViewer:(KKMiniViewerView *)canvas
-    dragHandleToPoint:(CGPoint)p
-          contentRect:(CGRect)cr
-            modifiers:(NSEventModifierFlags)modifiers {
-  self.penContentRect = cr;
-  if (self.pathEditController.dragging) {
-    [self.pathEditController mouseDraggedAtX:p.x
-                                           y:p.y
-                                   modifiers:CanvasEditModsFromNS(modifiers)];
-    [canvas setNeedsDisplay:YES];
-    return;
-  }
-  if (self.anchorMini.isDragging) {
-    [self.anchorMini applyDragToPoint:p
-                          contentRect:cr
-                            modifiers:modifiers
-                               canvas:canvas];
-    return;
-  }
-  if (self.positionMini.pathGrabbed) {
-    [self.positionMini applyPathDragToPoint:p
-                                contentRect:cr
-                                  modifiers:modifiers];
-    return;
-  }
-  if (self.scaleMini.isDragging) {
-    [self.scaleMini applyDragToPoint:p
-                         contentRect:cr
-                           modifiers:modifiers
-                              canvas:canvas];
-    return;
-  }
-  if (![self pointHandleIsActive]) {
-    [super miniViewer:canvas
-        dragHandleToPoint:p
-              contentRect:cr
-                modifiers:modifiers];
-    return;
-  }
-  [self applyPointDragToPoint:p
-                  contentRect:cr
-                       canvas:canvas
-                    modifiers:modifiers];
-}
-
-- (void)miniViewerEndHandleDrag:(KKMiniViewerView *)canvas {
-  if (self.pathEditController.dragging) {
-    [self.pathEditController mouseUp];
-    [canvas setNeedsDisplay:YES];
-    [canvas setHandlesNeedDisplay];
-    return;
-  }
-  [self.anchorMini endDrag];
-  [self.scaleMini endDrag];
-  // endDrag resets the shared snap engine and reports whether a motion-path
-  // drag was active (the only Position-side edit that persists the whole blob;
-  // a plain Position-handle drag persists through the popover's keypose write).
-  if ([self.positionMini endDrag]) {
-    if (self.onTimelinePersist)
-      self.onTimelinePersist(self.timeline);
-    [canvas setNeedsDisplay:YES];
-    [canvas setHandlesNeedDisplay];
-    return;
-  }
-  [super miniViewerEndHandleDrag:canvas];
-}
-
-- (BOOL)miniViewer:(KKMiniViewerView *)canvas
     doubleClickAtPoint:(CGPoint)p
            contentRect:(CGRect)cr {
   self.canvas = canvas;
@@ -458,11 +398,18 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
   if ([self.scaleMini handleHitAtPoint:p contentRect:cr outIndex:&idx])
     return [self kkVisibilityCursorForLabel:@"Scale"]
                ?: KKResizeCursorForBoxHandle(idx);
-  // Over a selectable layer body (auto-select would pick it): pointing hand,
-  // matching the viewer OSC's hover cursor.
+  // Over a SELECTED layer body: open hand (a drag moves the selection),
+  // matching the viewer OSC's body-drag cursor.
+  if ([self _selectedLayerUnderPoint:p contentRect:cr].length)
+    return [NSCursor openHandCursor];
+  // Over a selectable unselected layer body (auto-select would pick it):
+  // pointing hand, matching the viewer OSC's hover cursor.
   NSString *pick = [self _autoSelectLayerAtPoint:p contentRect:cr];
   if (pick.length && ![pick isEqualToString:self.selectedLayerID])
     return [NSCursor pointingHandCursor];
+  // Empty canvas: crosshair (a drag marquees), matching the viewer.
+  if ([self _layerMarqueeAllowedAtPoint:p contentRect:cr])
+    return [NSCursor crosshairCursor];
   return [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
 }
 

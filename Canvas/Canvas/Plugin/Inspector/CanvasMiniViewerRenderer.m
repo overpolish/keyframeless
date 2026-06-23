@@ -4,7 +4,9 @@
  */
 
 #import "CanvasMiniViewerRenderer.h"
+#import "CanvasFillRender.h" // TEMP solid fill for closed paths
 #import "CanvasLayerRender.h"
+#import "CanvasPathOps.h" // shared boolean / outline op cores
 #import "CanvasLayerTimeline.h"
 #import "CanvasMiniViewerRenderer_Internal.h"
 #import "CanvasToolbar.h"
@@ -90,8 +92,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     };
     // The same toolbar as the viewer (shared builder), scaled down for the
     // small mini surface. apiManager nil is fine (KKToolbar only stores it).
-    _toolbar =
-        CanvasMakeToolbar(nil); // uiScale + flip set per-draw in the hook
+    _toolbar = CanvasMakeToolbar(
+        nil, NO, NO); // uiScale + flip set per-draw in the hook (no path ops)
     _toolbarNormPos = CGPointMake(-1, -1); // default anchor until dragged
     _penController = [[CanvasPenController alloc] initWithSurface:self];
     _pathEditController =
@@ -132,6 +134,16 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
                   height:(float)height {
   if (!self.toolbar)
     return;
+  // Rebuild the bar when the selection brings in / drops the conditional path-op
+  // groups (mirrors the viewer; KKToolbar's items are fixed at init).
+  BOOL wantBooleans = NO, wantOutline = NO;
+  [self _miniPathOpFlagsBooleans:&wantBooleans outline:&wantOutline];
+  if (wantBooleans != self.toolbarShowsBooleans ||
+      wantOutline != self.toolbarShowsOutline) {
+    self.toolbar = CanvasMakeToolbar(nil, wantOutline, wantBooleans);
+    self.toolbarShowsBooleans = wantBooleans;
+    self.toolbarShowsOutline = wantOutline;
+  }
   // The mini's MTKView pass is Y-flipped vs the viewer's FxPlug surface.
   self.toolbar.flipVertical = YES;
   // Scale the bar with the popover like the OSC glyphs (baseline 230pt). The
@@ -220,11 +232,96 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
       patch(@"gridSpacing", @(next));
     break;
   }
+  case CanvasToolbarPathUnion:
+    [self _miniRunBooleanOp:KKBooleanOpUnion];
+    break;
+  case CanvasToolbarPathSubtract:
+    [self _miniRunBooleanOp:KKBooleanOpSubtract];
+    break;
+  case CanvasToolbarPathIntersect:
+    [self _miniRunBooleanOp:KKBooleanOpIntersect];
+    break;
+  case CanvasToolbarPathXOR:
+    [self _miniRunBooleanOp:KKBooleanOpXOR];
+    break;
+  case CanvasToolbarPathOutline:
+    [self _miniRunOutlineOp];
+    break;
   default:
     break;
   }
   [canvas setNeedsDisplay:YES];
   return NO;
+}
+
+// The full multi-selection (or the single primary as a fallback).
+- (NSArray<NSString *> *)_miniSelectedIDs {
+  if (self.selectedLayerIDs.count)
+    return self.selectedLayerIDs;
+  return self.selectedLayerID.length ? @[ self.selectedLayerID ] : @[];
+}
+
+- (void)_miniPathOpFlagsBooleans:(BOOL *)outBooleans
+                         outline:(BOOL *)outOutline {
+  NSArray<NSString *> *sel = [self _miniSelectedIDs];
+  NSUInteger vectorCount = 0;
+  BOOL anyStroke = NO;
+  for (KKBezierPath *p in self.layers)
+    if (!p.isImage && !p.isGroup && [sel containsObject:(p.layerID ?: @"")]) {
+      vectorCount++;
+      if (p.strokeEnabled)
+        anyStroke = YES;
+    }
+  *outBooleans = vectorCount >= 2;
+  *outOutline = anyStroke;
+}
+
+// Run an op core on a copy of the live layers and persist via onPersistLayers
+// (which writes the blob + selects the result). The result becomes the mini's
+// live selection so the next draw reflects it immediately.
+- (void)_miniRunPathOp:(NSArray<NSString *> *_Nullable (^)(
+                           NSMutableArray<KKBezierPath *> *paths,
+                           NSArray<NSString *> *sel))block {
+  NSMutableArray<KKBezierPath *> *paths =
+      [self.layers mutableCopy] ?: [NSMutableArray array];
+  NSArray<NSString *> *newSel = block(paths, [self _miniSelectedIDs]);
+  if (!newSel)
+    return;
+  self.layers = paths;
+  self.selectedLayerID = newSel.firstObject;
+  self.selectedLayerIDs = newSel;
+  if (self.onPersistLayers)
+    self.onPersistLayers(paths, newSel.firstObject);
+}
+
+- (void)_miniRunBooleanOp:(KKBooleanOp)op {
+  float aspect = (float)[self penCanvasAspect];
+  [self _miniRunPathOp:^NSArray<NSString *> *(
+            NSMutableArray<KKBezierPath *> *paths, NSArray<NSString *> *sel) {
+    return CanvasApplyBooleanOp(paths, sel, op, aspect);
+  }];
+}
+
+- (void)_miniRunOutlineOp {
+  // Stroke width is px relative to the render output. Use the TRUE output px
+  // captured from the full-frame feed source so the baked outline matches the
+  // main render at any resolution; fall back to a 1080-tall, aspect-correct
+  // reference before the first frame has been composited.
+  CGFloat refW, refH;
+  if (self.outputWidth > 0 && self.outputHeight > 0) {
+    refW = self.outputWidth;
+    refH = self.outputHeight;
+  } else {
+    CGFloat aspect = (self.renderHeight > 0 && self.renderWidth > 0)
+                         ? self.renderWidth / self.renderHeight
+                         : 16.0 / 9.0;
+    refH = 1080.0;
+    refW = 1080.0 * aspect;
+  }
+  [self _miniRunPathOp:^NSArray<NSString *> *(
+            NSMutableArray<KKBezierPath *> *paths, NSArray<NSString *> *sel) {
+    return CanvasApplyOutlineOp(paths, sel, refW, refH);
+  }];
 }
 
 // Control+letter tool shortcuts, mirroring the viewer (V=cursor, X=pen,
@@ -288,9 +385,14 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 }
 
 // Opt into the base renderer's 3-axis rotation rings (drawn + hit-tested +
-// dragged by KKMiniViewerRenderer), keyed on the "Rotation" lane.
+// dragged by KKMiniViewerRenderer), keyed on the "Rotation" lane - but ONLY for
+// a lone image/group under the cursor tool. The kit draws + hit-tests rings
+// purely on this opt-in (bypassing -_transformHandlesActive), and the
+// rotationCenter/baseMatrix overrides fall back to the topmost layer, so without
+// this gate a stale ring would draw on the top layer when nothing (or a path /
+// multi) is selected.
 - (NSString *)rotationLabel {
-  return @"Rotation";
+  return [self _transformHandlesActive] ? @"Rotation" : nil;
 }
 
 // The Position handle draws ON TOP of the rotation rings (matching the main
@@ -658,6 +760,10 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   float w = (float)dest.width, h = (float)dest.height;
   self.renderWidth = w;
   self.renderHeight = h;
+  // The feed source is the full project frame (render requests the full source
+  // tile), so its dims are the TRUE output px the outline op needs.
+  self.outputWidth = (CGFloat)source.width;
+  self.outputHeight = (CGFloat)source.height;
   MTLViewport vp = {0, 0, w, h, -1.0, 1.0};
   [enc setViewport:vp];
   simd_uint2 viewportSize = {(unsigned)w, (unsigned)h};
@@ -696,12 +802,33 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   // render.
   if (_strokePipeline) {
     [enc setRenderPipelineState:_strokePipeline];
+    // strokeScale 1.0: the mini already renders at the dest size; if its strokes
+    // also read too thick relative to the timeline, scale by w / self.outputWidth
+    // here too (same as the main render's thumbnail fix).
     CanvasEncodeVectorLayers(self.layers ?: @[], enc, cb.device, w, h, 0.0f,
                              0.0f, self.editFraction, self.selectedLayerID,
-                             self.timeline);
+                             self.timeline, 1.0f);
   }
 
   [enc endEncoding];
+
+  // TEMP solid fill for closed filled paths, mirroring the main render. The
+  // stencil even-odd needs its own passes (this MTKView pass has no stencil
+  // attachment), so run them after the encoder ends, over the same dest. flipY
+  // is NO here: the mini draws strokes in this same kind of own-encoder, so the
+  // fill matches without the main render's kit-encoder Y compensation.
+  id<MTLRenderPipelineState> fStencilPS = nil, fColorPS = nil;
+  id<MTLDepthStencilState> fStencilDS = nil, fColorDS = nil;
+  CanvasFillBuildPipelines(cb.device, cb.device.registryID, fmt, &fStencilPS,
+                           &fColorPS, &fStencilDS, &fColorDS);
+  id<MTLTexture> stencilTex =
+      CanvasFillStencilTexture(cb.device, (NSUInteger)w, (NSUInteger)h);
+  if (fStencilPS && fColorPS && stencilTex)
+    CanvasEncodeFilledLayers(self.layers ?: @[], cb.device, cb, dstSRGB,
+                             stencilTex, fStencilPS, fColorPS, fStencilDS,
+                             fColorDS, w, h, w, h, 0.0f, 0.0f,
+                             self.editFraction, self.selectedLayerID,
+                             self.timeline);
   return YES;
 }
 

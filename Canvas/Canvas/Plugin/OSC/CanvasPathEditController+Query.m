@@ -8,6 +8,7 @@
 #import "CanvasPathEditGeometry.h" // CanvasDist2 / CanvasDistPtToSeg
 #import "CanvasPathMorph.h" // morphed-at-frac geometry + keypose snapshots
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKShape.h> // KKRectShape (image extent)
 
 // Surface-px grab radii. Handles checked first (they extend out from the
 // anchor).
@@ -26,7 +27,8 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
 - (KKBezierPath *)_path {
   NSString *sel = [_surface penSelectedLayerID];
   KKBezierPath *p = sel.length ? [_surface penLayerWithID:sel] : nil;
-  if (!p || p.isImage || p.isGroup || !p.strokeEnabled || p.count < 1)
+  if (!p || p.isImage || p.isGroup ||
+      (!p.strokeEnabled && !p.fillEnabled) || p.count < 1)
     return nil;
   return p;
 }
@@ -106,12 +108,72 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
   return [self _hitAtX:x y:y outAnchor:&a outHandleOut:&ho];
 }
 
+- (NSArray<NSString *> *)_layerIDsFullyInsideRect:(CGRect)r {
+  if (CGRectIsEmpty(r))
+    return @[];
+  NSArray<KKBezierPath *> *layers = [_surface penAllLayers];
+  NSSet<NSString *> *nonSelectable =
+      [_surface respondsToSelector:@selector(penNonSelectableLayerIDs)]
+          ? [_surface penNonSelectableLayerIDs]
+          : nil;
+  NSMutableArray<NSString *> *out = [NSMutableArray array];
+  for (KKBezierPath *layer in layers) {
+    if (!layer.layerID.length || layer.hidden)
+      continue;
+    if ([nonSelectable containsObject:layer.layerID])
+      continue; // not selectable in this popover scope (matches a click)
+    CGFloat minX = CGFLOAT_MAX, minY = CGFLOAT_MAX;
+    CGFloat maxX = -CGFLOAT_MAX, maxY = -CGFLOAT_MAX;
+    // The layer's on-screen extent: a vector path's anchor bbox; an image's RECT
+    // SHAPE corners (its actual quad, like the hit-test - NOT the unit square,
+    // which is oversized so the image never enclosed); else the unit square.
+    if (!layer.isImage && layer.count >= 2) {
+      for (NSUInteger i = 0; i < layer.count; i++) {
+        KKBezierPoint pt = [layer pointAtIndex:i];
+        CGPoint s = [self _surfaceForLocalX:pt.x y:pt.y path:layer];
+        minX = MIN(minX, s.x);
+        minY = MIN(minY, s.y);
+        maxX = MAX(maxX, s.x);
+        maxY = MAX(maxY, s.y);
+      }
+    } else {
+      simd_float2 c[4];
+      if ([layer.shape isKindOfClass:[KKRectShape class]]) {
+        KKRectShape *r = (KKRectShape *)layer.shape;
+        c[0] = simd_make_float2(r.min.x, r.min.y);
+        c[1] = simd_make_float2(r.max.x, r.min.y);
+        c[2] = simd_make_float2(r.max.x, r.max.y);
+        c[3] = simd_make_float2(r.min.x, r.max.y);
+      } else {
+        c[0] = simd_make_float2(0, 0);
+        c[1] = simd_make_float2(1, 0);
+        c[2] = simd_make_float2(1, 1);
+        c[3] = simd_make_float2(0, 1);
+      }
+      for (int k = 0; k < 4; k++) {
+        CGPoint s = [self _surfaceForLocalX:c[k].x y:c[k].y path:layer];
+        minX = MIN(minX, s.x);
+        minY = MIN(minY, s.y);
+        maxX = MAX(maxX, s.x);
+        maxY = MAX(maxY, s.y);
+      }
+    }
+    if (maxX < minX)
+      continue;
+    CGRect bb = CGRectMake(minX, minY, maxX - minX, maxY - minY);
+    if (CGRectContainsRect(r, bb))
+      [out addObject:layer.layerID];
+  }
+  return out;
+}
+
 - (BOOL)canMarqueeAtX:(double)x y:(double)y {
-  if ([self _animatedOffKeypose] || ![self _path])
-    return NO;
-  KKBezierPath *p = [self _workingPath];
-  if (p.count > kCanvasMaxEditableAnchors)
-    return NO; // anchors aren't shown / selectable on a too-large path
+  // The marquee is now purely LAYER-level (it selects whole layers), so the
+  // selected path's keypose / size state is irrelevant - it must only NOT start
+  // on a live anchor / handle of the selected path (that's a point edit).
+  // hitTestAtX already returns None when off-keypose / too-large / no path, so
+  // this one check covers every case (and unblocks the marquee when an animated
+  // path is selected between keyposes - the cause of the mini panning).
   return [self hitTestAtX:x y:y] == CanvasPathEditHitNone;
 }
 

@@ -392,6 +392,24 @@
   [self _applySelectionStyling];
 }
 
+- (NSArray<NSString *> *)selectedLayerIDs {
+  NSMutableArray<NSString *> *ids = [NSMutableArray array];
+  [_selection enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
+    if (i < _paths.count && _paths[i].layerID.length)
+      [ids addObject:_paths[i].layerID];
+  }];
+  return ids;
+}
+
+- (void)setSelectionToLayerIDs:(NSArray<NSString *> *)layerIDs {
+  NSSet<NSString *> *want = [NSSet setWithArray:(layerIDs ?: @[])];
+  [_selection removeAllIndexes];
+  for (NSUInteger i = 0; i < _paths.count; i++)
+    if (_paths[i].layerID.length && [want containsObject:_paths[i].layerID])
+      [_selection addIndex:i];
+  [self _applySelectionStyling];
+}
+
 - (void)setNonSelectableLayerIDs:(NSSet<NSString *> *)layerIDs {
   NSSet<NSString *> *next = layerIDs.count ? [layerIDs copy] : nil;
   if (next == _nonSelectableLayerIDs ||
@@ -410,15 +428,20 @@
     return;
   }
   [self _commitRenameIfEditing];
+  // Remap the selection by layerID, not raw index: a structural change (path op,
+  // group, reorder, undo) reshuffles the stack, so keeping the old indices would
+  // re-highlight whatever now sits at those rows. Capture the selected IDs from
+  // the OLD paths first, then re-select the SAME layers in the new stack.
+  // Layers that no longer exist - e.g. the operands a boolean op consumed - drop
+  // out, so the selection collapses to the surviving result instead of clinging
+  // to a sibling at the freed index.
+  NSArray<NSString *> *prevSelIDs = [self selectedLayerIDs];
   _paths = [self _readPaths];
-  // Drop selection indices that no longer exist (undo may have removed rows).
-  NSMutableIndexSet *valid = [NSMutableIndexSet indexSet];
-  [_selection enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
-    if (i < _paths.count)
-      [valid addIndex:i];
-  }];
+  NSSet<NSString *> *want = [NSSet setWithArray:prevSelIDs];
   [_selection removeAllIndexes];
-  [_selection addIndexes:valid];
+  for (NSUInteger i = 0; i < _paths.count; i++)
+    if (_paths[i].layerID.length && [want containsObject:_paths[i].layerID])
+      [_selection addIndex:i];
   [self _rebuildRows];
 }
 
@@ -657,11 +680,10 @@
                                  if (idx < paths.count)
                                    [paths removeObjectAtIndex:idx];
                                }];
+    // Leave nothing selected after a delete (the canvas empty-selection model:
+    // Figma/Illustrator/AE-style), rather than picking a survivor row.
+    (void)firstDeleted;
     [self->_selection removeAllIndexes];
-    // A layer must always stay selected (unless the stack is now empty): pick
-    // the row that shifted into the deleted slot, or the new last row.
-    if (paths.count > 0)
-      [self->_selection addIndex:MIN(firstDeleted, paths.count - 1)];
   }];
   // Swap the inspector to the surviving layer (timeline, OSC set, reset-button
   // state, panel highlight) - see _notifyPrimaryLayerSelected.
