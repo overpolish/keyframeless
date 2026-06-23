@@ -34,9 +34,16 @@ typedef struct {
 } CanvasLayerTransform;
 
 /// One ancestor group's transform + its content-bbox pivot, in object space.
+/// `rest` is the group's FROZEN content-centre (normalised, Position-lane
+/// space, 0.5 = clip centre), seeded at creation and stored on the group (its
+/// repurposed translateX/Y). A group's Position is measured FROM rest
+/// (translation = Position
+/// - rest), so seeding Position to the content centre leaves members in place;
+/// the Anchor stays a free pan-behind pivot (changing it never moves rest).
 typedef struct {
   CanvasLayerTransform t;
   float cx, cy;
+  float restX, restY;
 } CanvasGroupXform;
 
 /// Stack capacity for an ancestor chain - a literal (not the const-typed

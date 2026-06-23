@@ -47,11 +47,16 @@
   // watch-back step can highlight the viewer.
   [self _ingestGuideDrawTickWithPosition:pos];
 
-  // Rotation sphere is centred on the same canvas point as Position (the
-  // image rotates around its centre, which is where Position translates it).
-  // The shared KKRotationOSC owns its own visibility gating, colour sync, pose
-  // read and draw; we just feed it this tick's centre + drag/reveal state.
-  self.rotationOSC.center = pos;
+  // The gizmo cluster (rotation rings + scale box) centres on the ANCHOR pivot
+  // (Position + Anchor offset), which is where the render actually rotates /
+  // scales the image - so a moved anchor swings/grows the gizmo from there, not
+  // from the bare Position handle.
+  CGPoint pivot = [self.anchorControl pivotCanvasAtTime:time];
+
+  // Rotation sphere, centred on the anchor pivot. The shared KKRotationOSC owns
+  // its own visibility gating, colour sync, pose read and draw; we just feed it
+  // this tick's centre + drag/reveal state.
+  self.rotationOSC.center = pivot;
   self.rotationOSC.dragging = self.isDragging;
   self.rotationOSC.optRevealActive = self.optRevealActive;
   [self.rotationOSC drawInDestination:destinationImage
@@ -59,8 +64,9 @@
                            activePart:activePart];
   // Scale transform box, drawn outside the rotation rings. The control owns its
   // own visibility gating (Scale lane shown here + element enabled + opt-reveal
-  // ghost); we just feed it this tick's centre, gizmo size and drag state.
-  self.scaleControl.center = pos;
+  // ghost); we just feed it this tick's centre, gizmo size and drag state. It
+  // scales from the anchor (opted in at init via anchorLaneLabel).
+  self.scaleControl.center = pivot;
   self.scaleControl.frameMin = [self _onScreenFrameMin];
   self.scaleControl.dragging = self.isDragging;
   self.scaleControl.optRevealActive = self.optRevealActive;

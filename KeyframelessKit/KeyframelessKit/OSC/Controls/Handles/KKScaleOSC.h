@@ -47,9 +47,31 @@ NS_ASSUME_NONNULL_BEGIN
 /// The host mirrors its FxPlug `isDragging` here each draw tick.
 @property(nonatomic) BOOL dragging;
 
-/// Canvas-space centre of the box (= the Position handle). The host sets this
-/// each draw / hit-test / mouse tick (the box is concentric with Position).
+/// Canvas-space centre of the box (= the gizmo pivot / anchor). The host sets
+/// this each draw / hit-test / mouse tick. Scaling keeps THIS point fixed.
 @property(nonatomic) CGPoint center;
+
+/// Scale-from-anchor: the box grows so the anchor (its `center`) stays the
+/// fixed point instead of always scaling symmetrically about the centre. The
+/// control derives the anchor's normalised position within the content from the
+/// `anchorLaneLabel` lane and these two references; a centred anchor is
+/// symmetric (unchanged), a corner anchor keeps that corner put. Any plugin
+/// with an Anchor lane gets this for free; set `anchorLaneLabel` to nil to
+/// disable.
+///
+/// `anchorLaneLabel` - the 2-component anchor lane; OPT-IN (default nil =
+///   classic symmetric scaling, so a plugin whose render does NOT scale about
+///   the anchor is unchanged). Set it (e.g. @"Anchor") to enable.
+/// `anchorReferenceCenter` - the anchor value that means "centred" (default
+///   {0.5,0.5}; a Canvas group uses its frozen content-centre rest).
+/// `contentHalfExtent` - the content's half-size in the same normalised units
+/// as
+///   the anchor lane (default {0.5,0.5} = a clip-filling layer; a group/path
+///   sets its own bbox half so the anchor reaches the box edge at the content
+///   edge).
+@property(nonatomic, copy, nullable) NSString *anchorLaneLabel;
+@property(nonatomic) CGPoint anchorReferenceCenter;
+@property(nonatomic) CGPoint contentHalfExtent;
 
 /// The surface's reference dimension (the viewer frame's min side, in canvas
 /// units) that sizes the gizmo. The host sets it each draw / hit-test / mouse

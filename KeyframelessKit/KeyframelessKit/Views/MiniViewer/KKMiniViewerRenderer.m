@@ -187,6 +187,13 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   return KKRotMatrixIdentity();
 }
 
+- (CGPoint)scaleAnchorFrac {
+  // OPT-IN: default symmetric (no scale-from-anchor). A plugin whose render
+  // scales about the anchor overrides this to map its Anchor lane to a
+  // fraction.
+  return CGPointZero;
+}
+
 - (NSArray<NSColor *> *)rotationRingColors {
   return @[
     [NSColor colorWithRed:1.00 green:0.30 blue:0.30 alpha:1.0],
@@ -208,9 +215,9 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 #pragma mark - Rotation gizmo: state machine (default impls)
 
 // The displayed world matrix = parent/group rotation · the object's own Euler.
-// Used for drawing the rings, hit-testing them, and the drag tangent, so a nested
-// object's rings show + drag in the parent's frame; the written value stays the
-// object's own Euler (the parent factors out of the compose).
+// Used for drawing the rings, hit-testing them, and the drag tangent, so a
+// nested object's rings show + drag in the parent's frame; the written value
+// stays the object's own Euler (the parent factors out of the compose).
 - (KKRotMatrix3)_currentRotationMatrix {
   NSArray<NSNumber *> *r = [self rotationEulerDegrees];
   double xDeg = r[0].doubleValue;

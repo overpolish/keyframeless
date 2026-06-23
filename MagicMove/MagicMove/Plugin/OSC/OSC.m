@@ -169,6 +169,11 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
     _scaleControl = [[KKScaleOSC alloc] initWithAPIManager:apiManager
                                                  laneLabel:@"Scale"];
     _scaleControl.scaleActivePart = kOSCScalePart;
+    // Scale from the anchor: the render scales about the anchor pivot (Position
+    // + Anchor offset), so the box should too. Content is clip-filling (the
+    // default ref 0.5 / half 0.5), so just opting in on the Anchor lane is
+    // enough - a centred anchor stays symmetric.
+    _scaleControl.anchorLaneLabel = @"Anchor";
     for (KKLane *l in [MagicMovePlugin availableLanes]) {
       if ([l.label isEqualToString:@"Scale"])
         _scaleControl.templateLane = l;

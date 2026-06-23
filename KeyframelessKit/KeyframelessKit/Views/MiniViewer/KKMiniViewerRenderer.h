@@ -177,7 +177,7 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
                               ///< point-handle anchor for guides / programmatic
                               ///< drag.
   KKMiniHandleStyleRing = 3,  ///< Haloed ring (matches KKRingOSC): the shared
-                              ///< radius-widget glyph (Canvas corners, Rounded).
+                             ///< radius-widget glyph (Canvas corners, Rounded).
 };
 
 #pragma mark - Subclass effect + point handle (override)
@@ -252,10 +252,18 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 /// uses the Position handle so the rings move with the translated image).
 - (CGPoint)rotationCenterForContentRect:(CGRect)contentRect;
 /// A parent/world rotation pre-applied to the DISPLAYED rings + drag tangent
-/// (not the written value), so a control on an object nested in a rotated parent
-/// (e.g. a Canvas member inside a rotated group) shows rings in the parent's
-/// frame. Default identity.
+/// (not the written value), so a control on an object nested in a rotated
+/// parent (e.g. a Canvas member inside a rotated group) shows rings in the
+/// parent's frame. Default identity.
 - (KKRotMatrix3)rotationBaseMatrix;
+/// The anchor's normalised position within the content box, per axis ([-1,1]; 0
+/// = centre, +-1 = an edge/corner), so the scale box keeps the anchor as the
+/// fixed point instead of scaling symmetrically about the centre. OPT-IN: the
+/// default returns {0,0} (symmetric), so a plugin is unchanged unless it
+/// overrides this. A plugin whose render scales about the anchor maps its
+/// Anchor lane to a fraction (relative to its rest, over its content bbox
+/// half).
+- (CGPoint)scaleAnchorFrac;
 /// Per-axis ring colours, [X, Y, Z]. Default = red / green / blue.
 - (NSArray<NSColor *> *)rotationRingColors;
 /// Per-axis drag direction sign (simd_double3). Default = `{+1, -1, +1}`,

@@ -19,6 +19,10 @@ NS_ASSUME_NONNULL_BEGIN
 // The full multi-selection (or the single primary as a fallback). Shared with
 // the +Interaction category for Shift / Cmd-click multi-select.
 - (NSArray<NSString *> *)_miniSelectedIDs;
+// The selected layers movable in this popover scope (selection minus the
+// marquee non-selectable set), so a manually multi-selected move-lane-animated
+// layer doesn't move or show the dimmed move indicator in the constants scope.
+- (NSArray<NSString *> *)_miniMovableSelectedIDs;
 // Shared pen state machine; this renderer is its surface
 // (CanvasMiniViewerRenderer +Pen.m implements CanvasPenSurface). Set in -init.
 @property(nonatomic, strong) CanvasPenController *penController;
@@ -58,9 +62,9 @@ NS_ASSUME_NONNULL_BEGIN
 // kParamUIState the inspector mirrors onto this renderer; it's drawn via the
 // kit's toolbar hook.
 @property(nonatomic, strong) KKToolbar *toolbar;
-// The conditional path-op groups the current bar was built with, so draw rebuilds
-// it only when the selection crosses the show/hide threshold (KKToolbar's items
-// are fixed at init - same as the viewer).
+// The conditional path-op groups the current bar was built with, so draw
+// rebuilds it only when the selection crosses the show/hide threshold
+// (KKToolbar's items are fixed at init - same as the viewer).
 @property(nonatomic) BOOL toolbarShowsBooleans;
 @property(nonatomic) BOOL toolbarShowsOutline;
 // Drag-handle press state (drawable px, y-down layout space).
@@ -68,13 +72,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) CGPoint toolbarPressAnchor;
 @property(nonatomic) BOOL toolbarDragging;
 // Body-drag move state (mirrors the viewer's): the selected layer the press
-// landed on, the Y-up object point at press, the pre-drag layer stack (each tick
-// translates from this, not cumulatively), and whether a real drag happened
-// (else the up is a plain click = select).
+// landed on, the Y-up object point at press, the pre-drag layer stack (each
+// tick translates from this, not cumulatively), and whether a real drag
+// happened (else the up is a plain click = select).
 @property(nonatomic) BOOL layerMoveActive;
 @property(nonatomic, copy, nullable) NSString *layerMoveHitID;
 @property(nonatomic) CGPoint layerMoveStartObj;
-@property(nonatomic, copy, nullable) NSArray<KKBezierPath *> *layerMoveStartLayers;
+@property(nonatomic, copy, nullable)
+    NSArray<KKBezierPath *> *layerMoveStartLayers;
 @property(nonatomic) BOOL layerMoveDidMove;
 // Reusable Position + motion-path controller (owns the shared snap engine and
 // the whole Position/Path drag-state machine). Canvas has no anchor / rotation

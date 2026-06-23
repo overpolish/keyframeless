@@ -32,13 +32,14 @@
     _laneLabel = [laneLabel copy];
     _positionLaneLabel = @"Position";
     _anchorActivePart = 5;
-    // Composed under a host OSC that clears the destination once at the start of
-    // its drawOSC tick, so it must not clear again.
+    // Composed under a host OSC that clears the destination once at the start
+    // of its drawOSC tick, so it must not clear again.
     self.clearsOnDraw = NO;
     _square = [[KKSquarePointOSC alloc] initWithAPIManager:apiManager];
     _square.clearsOnDraw = NO;
     _snap = [[KKSnapEngine alloc] init];
     _parentObjectTransform = matrix_identity_float3x3;
+    _anchorReferenceCenter = simd_make_float2(0.5f, 0.5f);
   }
   return self;
 }
@@ -56,9 +57,9 @@
 }
 
 // (anchorX, anchorY) in normalized content space (0.5,0.5 = centre), defaulting
-// to centre when the lane is absent or present-but-empty (an untouched Anchor on
-// a cold-boot snapshot - without the keypose-count guard the evaluator returns
-// [0,0] and the square jumps to the corner).
+// to centre when the lane is absent or present-but-empty (an untouched Anchor
+// on a cold-boot snapshot - without the keypose-count guard the evaluator
+// returns [0,0] and the square jumps to the corner).
 - (NSArray<NSNumber *> *)_anchorValuesAtFraction:(double)frac {
   KKLane *lane = [self _anchorLane];
   if (!lane || lane.keyposes.count == 0)
@@ -87,11 +88,14 @@
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   NSArray<NSNumber *> *pv = [self _positionValuesAtFraction:self.evalFraction];
-  // Pivot in the anchor's own clip space, then through the parent transform.
-  simd_float3 p = simd_mul(
-      self.parentObjectTransform,
-      simd_make_float3((float)(pv[0].doubleValue + ax - 0.5),
-                       (float)(pv[1].doubleValue + ay - 0.5), 1.0f));
+  // Pivot in the anchor's own clip space, then through the parent transform:
+  // Position + (Anchor - reference). reference defaults to the clip centre 0.5;
+  // a Canvas group sets it to its frozen content-centre rest so the pivot lands
+  // on the content while the Anchor stays a free pan-behind offset.
+  double lx = pv[0].doubleValue + ax - self.anchorReferenceCenter.x;
+  double ly = pv[1].doubleValue + ay - self.anchorReferenceCenter.y;
+  simd_float3 p = simd_mul(self.parentObjectTransform,
+                           simd_make_float3((float)lx, (float)ly, 1.0f));
   double objX = (p.z != 0.0f) ? p.x / p.z : p.x;
   double objY = (p.z != 0.0f) ? p.y / p.z : p.y;
   CGPoint c = CGPointZero;
@@ -126,10 +130,18 @@
   double objX = (l.z != 0.0f) ? l.x / l.z : l.x;
   double objY = (l.z != 0.0f) ? l.y / l.z : l.y;
   NSArray<NSNumber *> *pv = [self _positionValuesAtFraction:self.evalFraction];
+  // Inverse of the draw: anchor value = cursor - Position + reference, so the
+  // stored value is the offset from the (reference-relative) pivot.
   if (outAX)
-    *outAX = objX - pv[0].doubleValue + 0.5;
+    *outAX = objX - pv[0].doubleValue + self.anchorReferenceCenter.x;
   if (outAY)
-    *outAY = objY - pv[1].doubleValue + 0.5;
+    *outAY = objY - pv[1].doubleValue + self.anchorReferenceCenter.y;
+}
+
+- (CGPoint)pivotCanvasAtTime:(CMTime)time {
+  self.evalFraction = [self fractionAtTime:time];
+  NSArray<NSNumber *> *av = [self _anchorValuesAtFraction:self.evalFraction];
+  return [self _anchorToCanvasX:av[0].doubleValue y:av[1].doubleValue];
 }
 
 - (void)drawInDestination:(FxImageTile *)destinationImage
@@ -210,8 +222,8 @@
                  atTime:(CMTime)time {
   self.evalFraction = [self fractionAtTime:time];
   // Delta drag: the anchor value moves by the cursor's offset in anchor space
-  // from the grab point (1 anchor unit per content unit), so grabbing off-centre
-  // doesn't jump the pivot to the cursor.
+  // from the grab point (1 anchor unit per content unit), so grabbing
+  // off-centre doesn't jump the pivot to the cursor.
   double curAX = 0.5, curAY = 0.5;
   [self _canvasToAnchor:CGPointMake(x, y) outAX:&curAX outAY:&curAY];
   double newX = self.grabValX + (curAX - self.pressAnchorX);
@@ -231,7 +243,9 @@
       for (int j = 0; j < 5; j++)
         targets[n++] = [self _anchorToCanvasX:tg[i] y:tg[j]];
     CGPoint cand = [self _anchorToCanvasX:newX y:newY];
-    CGPoint snapped = [self.snap snapCanvasPoint:cand toTargets:targets count:n];
+    CGPoint snapped = [self.snap snapCanvasPoint:cand
+                                       toTargets:targets
+                                           count:n];
     [self _canvasToAnchor:snapped outAX:&newX outAY:&newY];
   } else if (self.canvasSnapProvider) {
     CGPoint cand = [self _anchorToCanvasX:newX y:newY];

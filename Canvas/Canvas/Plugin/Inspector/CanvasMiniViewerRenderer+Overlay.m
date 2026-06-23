@@ -6,18 +6,19 @@
 #import "CanvasAnchorSelectionSync.h" // CanvasConsumeAnchorSelection
 #import "CanvasMiniViewerRenderer_Internal.h"
 #import "CanvasPathMorph.h" // CanvasPathMorphedAtFraction / GeometryEditable
-#import "CanvasPathOSC.h"   // CanvasDrawPathEditOSC / CanvasDrawLayerBoxOSC / fill
-#import "CanvasPathOps.h"   // CanvasPathOpPreview
-#import "CanvasToolbar.h"   // CanvasToolbarTool*
+#import "CanvasPathOSC.h" // CanvasDrawPathEditOSC / CanvasDrawLayerBoxOSC / fill
+#import "CanvasPathOps.h" // CanvasPathOpPreview
+#import "CanvasToolbar.h" // CanvasToolbarTool*
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <Metal/Metal.h>
 
-// The mini's tool-overlay DRAW pass: the delegate entry (miniViewerDrawToolOverlay:)
-// and the overlay layers it composites - the path-op fill preview, the
-// multi-select highlight boxes, the rubber-band marquee, and the selected path's
-// edit OSC. Split from the pen-surface primitives + event hooks
-// (CanvasMiniViewerRenderer+Pen.m) so each file stays focused.
+// The mini's tool-overlay DRAW pass: the delegate entry
+// (miniViewerDrawToolOverlay:) and the overlay layers it composites - the
+// path-op fill preview, the multi-select highlight boxes, the rubber-band
+// marquee, and the selected path's edit OSC. Split from the pen-surface
+// primitives + event hooks (CanvasMiniViewerRenderer+Pen.m) so each file stays
+// focused.
 @implementation CanvasMiniViewerRenderer (Overlay)
 
 - (void)miniViewerDrawToolOverlay:(KKMiniViewerView *)canvas
@@ -41,7 +42,8 @@
       [self _drawMultiSelectHighlight];
     else if (nsel == 1)
       [self _drawSelectedPathEditOSC];
-    // The marquee draws over any selection state (0/1/2+), so draw it separately.
+    // The marquee draws over any selection state (0/1/2+), so draw it
+    // separately.
     [self _drawMarquee];
   }
   [self _drawPathOpHoverPreview];
@@ -50,9 +52,9 @@
 }
 
 // Path-op hover preview (operands red / result green, FILLED), mirroring the
-// viewer. The pointer is over a path-op toolbar button (hoveredTag). Renders the
-// shared CG fill to a drawable-sized texture (object -> drawable px via the mini
-// projection) and blits it through the kit's tool-overlay encoder.
+// viewer. The pointer is over a path-op toolbar button (hoveredTag). Renders
+// the shared CG fill to a drawable-sized texture (object -> drawable px via the
+// mini projection) and blits it through the kit's tool-overlay encoder.
 - (void)_drawPathOpHoverPreview {
   BOOL outline = NO;
   KKBooleanOp op = KKBooleanOpUnion;
@@ -82,10 +84,10 @@
   __weak typeof(self) weakSelf = self;
   CGFloat bmH = (CGFloat)h;
   CGContextRef ctx = CanvasRenderPathOpFillBitmap(
-      operands, results, paths, self.editFraction, (float)[self penCanvasAspect],
-      w, h, refW, ^CGPoint(simd_float2 objYUp) {
-        CGPoint pv = [weakSelf penSurfacePointFromObj:CGPointMake(objYUp.x,
-                                                                  objYUp.y)];
+      operands, results, paths, self.editFraction,
+      (float)[self penCanvasAspect], w, h, refW, ^CGPoint(simd_float2 objYUp) {
+        CGPoint pv =
+            [weakSelf penSurfacePointFromObj:CGPointMake(objYUp.x, objYUp.y)];
         // The mini's drawable Y runs opposite the CG-bitmap/quad orientation
         // used by the blit (unlike the viewer's projection), so flip Y here.
         return CGPointMake(pv.x * s, bmH - pv.y * s);
@@ -101,8 +103,14 @@
 // multi-selection), shown regardless of the Points visibility toggle - mirrors
 // the viewer OSC's multi-select highlight. No-op for a single selection.
 - (void)_drawMultiSelectHighlight {
-  NSArray<NSString *> *sel = [self _miniSelectedIDs];
-  if (sel.count < 2)
+  // The dimmed indicator marks layers that the body-drag will MOVE, so use the
+  // movable set (excludes the scope's non-selectable layers, e.g. constants
+  // move-lane-animated) - a manually multi-selected excluded layer stays
+  // selected in the list but shows no movable indicator here.
+  NSArray<NSString *> *sel = [self _miniMovableSelectedIDs];
+  // The caller already gates on the FULL selection being 2+; here just skip
+  // when nothing in it is movable (all excluded by the scope).
+  if (sel.count < 1)
     return;
   float aspect = (float)[self penCanvasAspect];
   for (KKBezierPath *p in self.layers) {

@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMiniViewerRenderer.h>
 #import <KeyframelessKit/KKMiniViewerView.h>
+#import <simd/simd.h>
 
 @class KKSnapEngine;
 
@@ -32,8 +33,8 @@ NS_ASSUME_NONNULL_BEGIN
 ///
 /// Drag is delta-based (the value moves by the cursor's normalised offset from
 /// the grab point). **Cmd** snaps the pivot to the content's centre / corners /
-/// edge-midpoints / thirds through the shared snap engine, so the canvas strokes
-/// the same yellow guide lines as a Position drag.
+/// edge-midpoints / thirds through the shared snap engine, so the canvas
+/// strokes the same yellow guide lines as a Position drag.
 @interface KKAnchorMiniController : NSObject
 
 - (instancetype)initWithRenderer:(KKMiniViewerRenderer *)renderer
@@ -49,16 +50,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// YES while the square is being dragged.
 @property(nonatomic, readonly) BOOL isDragging;
 
-/// Optional override for the square's overlay-point centre (e.g. a Canvas member
-/// inside a transformed group, where the pivot is the group-composed point).
-/// When set, it replaces the default content-space pivot for both drawing and
-/// hit-testing; the drag still writes the lane value in content space (flat).
-@property(nonatomic, copy, nullable) CGPoint (^centerOverride)(CGRect contentRect);
+/// Optional override for the square's overlay-point centre (e.g. a Canvas
+/// member inside a transformed group, where the pivot is the group-composed
+/// point). When set, it replaces the default content-space pivot for both
+/// drawing and hit-testing; the drag still writes the lane value in content
+/// space (flat).
+@property(nonatomic, copy, nullable) CGPoint (^centerOverride)
+    (CGRect contentRect);
 
 /// Optional grid snap applied when Cmd is NOT held (Cmd still snaps to the
-/// content's own centre/corners). The host snaps the anchor PIVOT - a normalized
-/// object point - to the grid; the controller converts it back to the anchor
-/// offset. nil = no grid snap. Mirrors the viewer Anchor OSC's canvasSnapProvider.
+/// content's own centre/corners). The host snaps the anchor PIVOT - a
+/// normalized object point - to the grid; the controller converts it back to
+/// the anchor offset. nil = no grid snap. Mirrors the viewer Anchor OSC's
+/// canvasSnapProvider.
 @property(nonatomic, copy, nullable) simd_float2 (^gridSnapPivot)
     (simd_float2 normalizedPivot, CGRect contentRect);
 
@@ -68,11 +72,17 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) simd_float2 (^viewToValue)
     (CGPoint viewPoint, CGRect contentRect);
 
+/// The neutral reference the Anchor offset is measured from: the pivot is
+/// Position + (value - reference). Default {0.5, 0.5} (clip centre). A Canvas
+/// group sets it to its frozen content-centre rest. Only affects the snap math
+/// (Cmd / grid); the delta drag is already value-relative, so it is unchanged.
+@property(nonatomic) simd_float2 anchorReferenceCenter;
+
 /// Hit-test half-extent for the square in points (Chebyshev), at the baseline
-/// popover size; scales with the popover. Default 5.0. A host whose anchor pivot
-/// can coincide with a larger Position handle (so the handle would otherwise
-/// swallow it) can shrink this so the anchor keeps a tight central grab zone and
-/// the Position ring around it stays clickable.
+/// popover size; scales with the popover. Default 5.0. A host whose anchor
+/// pivot can coincide with a larger Position handle (so the handle would
+/// otherwise swallow it) can shrink this so the anchor keeps a tight central
+/// grab zone and the Position ring around it stays clickable.
 @property(nonatomic) CGFloat hitRadiusPt;
 
 /// Whether the square is shown this tick: the Anchor lane is a constant in the

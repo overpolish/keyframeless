@@ -28,6 +28,9 @@ static const double kScaleFineFactor = 0.2;
 @property(nonatomic) double scalePressSclY;
 @property(nonatomic) CGPoint scaleEffCursor;
 @property(nonatomic) CGPoint scaleLastCursor;
+// Anchor frac captured at press (constant during a scale drag: only the Scale
+// lane changes), so the box keeps the anchor as the fixed point.
+@property(nonatomic) CGPoint scalePressFrac;
 @end
 
 @implementation KKScaleOSC
@@ -45,6 +48,12 @@ static const double kScaleFineFactor = 0.2;
     self.clearsOnDraw = NO;
     _box = [[KKBoxOSC alloc] initWithAPIManager:apiManager];
     _box.hitPadding = 6.0;
+    // Scale-from-anchor is OPT-IN: a plugin sets anchorLaneLabel to enable it
+    // (its render must actually scale about the anchor). nil = classic
+    // symmetric scaling about the centre, so existing plugins are unchanged.
+    _anchorLaneLabel = nil;
+    _anchorReferenceCenter = CGPointMake(0.5, 0.5);
+    _contentHalfExtent = CGPointMake(0.5, 0.5);
   }
   return self;
 }
@@ -91,6 +100,33 @@ static const double kScaleFineFactor = 0.2;
   *outSpan = self.frameMin * KKScaleGizmoSpanFrac;
 }
 
+// The anchor's normalised position within the content box (per axis, [-1,1]; 0
+// = centre), so the scale box can keep the anchor fixed. Read from the anchor
+// lane (default @"Anchor") relative to anchorReferenceCenter, scaled by
+// contentHalfExtent. The box offset is applied in the SAME (Y-down, lane-
+// aligned) space the gizmo pivot is mapped through, so NO Y flip - flipping put
+// the anchor on the wrong vertical side. Zero when there is no anchor lane -
+// i.e. the classic symmetric-about-centre behaviour.
+- (CGPoint)_anchorFracAtFraction:(double)frac {
+  if (!self.anchorLaneLabel)
+    return CGPointZero;
+  double ax = self.anchorReferenceCenter.x, ay = self.anchorReferenceCenter.y;
+  for (KKLane *l in KKProcessTimelineSnapshot().lanes)
+    if ([l.label isEqualToString:self.anchorLaneLabel]) {
+      if (l.keyposes.count > 0) {
+        NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(l, frac);
+        if (v.count >= 2) {
+          ax = v[0].doubleValue;
+          ay = v[1].doubleValue;
+        }
+      }
+      break;
+    }
+  return KKScaleGizmoAnchorFrac(
+      ax, ay, self.anchorReferenceCenter.x, self.anchorReferenceCenter.y,
+      self.contentHalfExtent.x, self.contentHalfExtent.y);
+}
+
 - (void)drawInDestination:(FxImageTile *)destinationImage
                    atTime:(CMTime)time
                activePart:(NSInteger)activePart {
@@ -112,7 +148,8 @@ static const double kScaleFineFactor = 0.2;
   double e0 = 0, span = 0;
   [self _e0:&e0 span:&span];
   CGPoint handles[8];
-  KKScaleHandlePositions(self.center, sclX, sclY, e0, span, handles);
+  KKScaleHandlePositions(self.center, sclX, sclY, e0, span,
+                         [self _anchorFracAtFraction:frac], handles);
 
   self.box.ghostAlpha = scaleGhost ? [self kkRevealGhostAlpha] : 1.0f;
   NSInteger activeHandle = scaleDragging ? self.scaleGrabHandle : -1;
@@ -150,7 +187,8 @@ static const double kScaleFineFactor = 0.2;
   double e0 = 0, span = 0;
   [self _e0:&e0 span:&span];
   CGPoint handles[8];
-  KKScaleHandlePositions(self.center, sclX, sclY, e0, span, handles);
+  KKScaleHandlePositions(self.center, sclX, sclY, e0, span,
+                         [self _anchorFracAtFraction:frac], handles);
   NSInteger part = [self.box hitTestAtX:x
                                       y:y
                                topRight:handles[2]
@@ -171,13 +209,15 @@ static const double kScaleFineFactor = 0.2;
       [self _scaleValuesAtFraction:[self fractionAtTime:time]];
   self.scalePressSclX = sv.count > 0 ? sv[0].doubleValue : 100.0;
   self.scalePressSclY = sv.count > 1 ? sv[1].doubleValue : 100.0;
+  self.scalePressFrac = [self _anchorFracAtFraction:[self fractionAtTime:time]];
   // Effective cursor starts at the grabbed handle (not the raw click point), so
   // the value begins exactly where it is - no press snap.
   double e0 = 0, span = 0;
   [self _e0:&e0 span:&span];
   CGPoint hp[8];
   KKScaleHandlePositions(self.scalePressCenter, self.scalePressSclX,
-                         self.scalePressSclY, e0, span, hp);
+                         self.scalePressSclY, e0, span, self.scalePressFrac,
+                         hp);
   self.scaleEffCursor = (self.scaleGrabHandle >= 0 && self.scaleGrabHandle < 8)
                             ? hp[self.scaleGrabHandle]
                             : CGPointMake(x, y);
@@ -208,9 +248,19 @@ static const double kScaleFineFactor = 0.2;
   double pX = self.scalePressSclX, pY = self.scalePressSclY;
   double e0 = 0, span = 0;
   [self _e0:&e0 span:&span];
-  // Candidate per-axis percents from the effective cursor's distance to centre.
-  double tX = KKScaleGizmoPercentForExtent(fabs(eff.x - c.x), e0, span);
-  double tY = KKScaleGizmoPercentForExtent(fabs(eff.y - c.y), e0, span);
+  // Candidate per-axis percents from the effective cursor's distance to the
+  // ANCHOR (c), divided by the handle's |sign - frac| so the anchor is the
+  // fixed point (frac 0 = symmetric). A degenerate axis (handle on the anchor)
+  // holds.
+  CGPoint f = self.scalePressFrac;
+  double tX = KKScaleGizmoPercentForHandle(eff.x, c.x, KKScaleHandleSignX(h),
+                                           f.x, e0, span);
+  double tY = KKScaleGizmoPercentForHandle(eff.y, c.y, KKScaleHandleSignY(h),
+                                           f.y, e0, span);
+  if (tX < 0)
+    tX = pX;
+  if (tY < 0)
+    tY = pY;
   // Link is global per-lane; Shift temporarily inverts it for this drag. The
   // corner/edge coupling itself is the shared kit rule.
   BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;

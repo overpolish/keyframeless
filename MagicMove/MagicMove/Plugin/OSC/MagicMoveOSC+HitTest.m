@@ -53,10 +53,13 @@
     self.pointCursorSet = YES;
     return;
   }
+  // The gizmo cluster centres on the anchor pivot (where the render rotates /
+  // scales), matching the draw.
+  CGPoint pivot = [self.anchorControl pivotCanvasAtTime:time];
   // Scale box handles sit just outside the rotation rings; check them before
   // rotation so an edge handle near the ring radius wins over the ring. The
   // control owns reachability + the opt-hover eye affordance internally.
-  self.scaleControl.center = [self oscPositionAtTime:time];
+  self.scaleControl.center = pivot;
   self.scaleControl.frameMin = [self _onScreenFrameMin];
   self.scaleControl.optRevealActive = self.optRevealActive;
   if ([self.scaleControl hitTestHandleAtX:positionX y:positionY
@@ -66,7 +69,7 @@
   }
   // Rotation rings: the shared KKRotationOSC owns ring config + pose + hit-test
   // + the per-axis opt-hover eye cursor. Feed it this tick's centre + reveal.
-  self.rotationOSC.center = [self oscPositionAtTime:time];
+  self.rotationOSC.center = pivot;
   self.rotationOSC.optRevealActive = self.optRevealActive;
   if ([self.rotationOSC hitTestRingAtX:positionX y:positionY atTime:time] >= 0)
     *activePart = kOSCRotationPart;

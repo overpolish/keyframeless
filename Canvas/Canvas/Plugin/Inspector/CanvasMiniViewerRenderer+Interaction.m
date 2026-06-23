@@ -28,8 +28,8 @@
 // Transform handles (Position / motion path / Scale box / Anchor square) show
 // only under the cursor tool AND for a lone image / group - a drawing tool owns
 // the canvas, and a lone path / multi / empty selection shows points or nothing
-// instead (matching the viewer). Per-element visibility is still governed on top
-// by the OSC visibility system.
+// instead (matching the viewer). Per-element visibility is still governed on
+// top by the OSC visibility system.
 - (BOOL)_transformHandlesActive {
   if ((self.toolbarTool ?: CanvasToolbarToolCursor) != CanvasToolbarToolCursor)
     return NO;
@@ -53,8 +53,8 @@
     return NO;
   // Match the transform OSCs: a constants popover only edits CONSTANT lanes; a
   // keypose (boundary) popover only the ANIMATED one it's editing. Without this
-  // the Points OSC + corner widgets show / edit on an animated layer's constants
-  // popover, unlike every other plugin's lanes.
+  // the Points OSC + corner widgets show / edit on an animated layer's
+  // constants popover, unlike every other plugin's lanes.
   if (![self isConstantLabel:@"Points"])
     return NO;
   return [self labelVisibleOrRevealing:@"Points"];
@@ -79,17 +79,17 @@
                               (float)self.renderHeight);
 }
 
-// Toggle-independent geometric layer hit: is ANY layer under this point? Used to
-// tell "empty canvas" (start a layer marquee) from "over a layer" (leave it for
-// pick / body-drag), regardless of the auto-select toggle or selectability.
+// Toggle-independent geometric layer hit: is ANY layer under this point? Used
+// to tell "empty canvas" (start a layer marquee) from "over a layer" (leave it
+// for pick / body-drag), regardless of the auto-select toggle or selectability.
 - (NSString *)_anyLayerAtPoint:(CGPoint)p contentRect:(CGRect)cr {
   if (cr.size.width <= 0 || cr.size.height <= 0)
     return nil;
   float objX = (float)((p.x - CGRectGetMinX(cr)) / cr.size.width);
   float objY = (float)(1.0 - (p.y - CGRectGetMinY(cr)) / cr.size.height);
   float aspect = (float)(cr.size.width / cr.size.height);
-  return CanvasHitTestLayerID(self.layers ?: @[], self.editFraction, aspect, objX,
-                              objY, /*alphaAware=*/YES, /*excluded=*/nil,
+  return CanvasHitTestLayerID(self.layers ?: @[], self.editFraction, aspect,
+                              objX, objY, /*alphaAware=*/YES, /*excluded=*/nil,
                               /*requireEditableAtFrac=*/NO, /*templates=*/nil,
                               (float)self.renderHeight);
 }
@@ -99,8 +99,9 @@
 - (NSString *)_selectedLayerUnderPoint:(CGPoint)p contentRect:(CGRect)cr {
   if ((self.toolbarTool ?: CanvasToolbarToolCursor) != CanvasToolbarToolCursor)
     return nil;
-  // Only filmstrip mode (renderMode 1) fans cells out beyond the content rect, so
-  // only then is an outside-cr point another cell rather than off-frame canvas.
+  // Only filmstrip mode (renderMode 1) fans cells out beyond the content rect,
+  // so only then is an outside-cr point another cell rather than off-frame
+  // canvas.
   if (self.canvas.renderMode == 1 && !CGRectContainsPoint(cr, p))
     return nil;
   NSString *hit = [self _anyLayerAtPoint:p contentRect:cr];
@@ -112,23 +113,23 @@
 }
 
 // Cursor-tool empty-canvas LAYER marquee allowed here? Inside the active rect,
-// not on a handle/anchor (canMarquee), and no layer under the cursor - so a drag
-// selects whole layers for ANY selection state (none / image / multi). The
+// not on a handle/anchor (canMarquee), and no layer under the cursor - so a
+// drag selects whole layers for ANY selection state (none / image / multi). The
 // single-editable-path case is handled by the _pathEditContext block instead.
 - (BOOL)_layerMarqueeAllowedAtPoint:(CGPoint)p contentRect:(CGRect)cr {
   if ((self.toolbarTool ?: CanvasToolbarToolCursor) != CanvasToolbarToolCursor)
     return NO;
   // Restrict to the content rect ONLY in filmstrip mode (renderMode 1), where
   // inactive cells fan out beyond cr and need their click to switch cells. In
-  // single-frame / onion mode the marquee may start anywhere, so a layer dragged
-  // OUTSIDE the frame (into the letterbox) can still be marqueed - matching the
-  // main viewer.
+  // single-frame / onion mode the marquee may start anywhere, so a layer
+  // dragged OUTSIDE the frame (into the letterbox) can still be marqueed -
+  // matching the main viewer.
   if (self.canvas.renderMode == 1 && !CGRectContainsPoint(cr, p))
     return NO;
   if (![self.pathEditController canMarqueeAtX:p.x y:p.y])
     return NO;
-  // Empty area -> always marquee. Over a layer body -> only with auto-select OFF
-  // AND the layer not selected: with auto-select OFF nothing else claims an
+  // Empty area -> always marquee. Over a layer body -> only with auto-select
+  // OFF AND the layer not selected: with auto-select OFF nothing else claims an
   // unselected layer body, so a drag must still rubber-band over an image (a
   // SELECTED body is a move, claimed before this; with auto-select ON an
   // unselected layer is a click-pick).
@@ -398,6 +399,12 @@
   if ([self.scaleMini handleHitAtPoint:p contentRect:cr outIndex:&idx])
     return [self kkVisibilityCursorForLabel:@"Scale"]
                ?: KKResizeCursorForBoxHandle(idx);
+  // Base transform handles (rotation rings) before the body / auto-select /
+  // marquee cursors, matching the hit-test order so a ring shows the rotate
+  // cursor instead of the move or marquee cursor.
+  NSCursor *base = [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
+  if (base)
+    return base;
   // Over a SELECTED layer body: open hand (a drag moves the selection),
   // matching the viewer OSC's body-drag cursor.
   if ([self _selectedLayerUnderPoint:p contentRect:cr].length)
@@ -410,7 +417,7 @@
   // Empty canvas: crosshair (a drag marquees), matching the viewer.
   if ([self _layerMarqueeAllowedAtPoint:p contentRect:cr])
     return [NSCursor crosshairCursor];
-  return [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
+  return nil;
 }
 
 - (void)miniViewer:(KKMiniViewerView *)canvas

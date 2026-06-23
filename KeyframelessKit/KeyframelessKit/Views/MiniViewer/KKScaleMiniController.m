@@ -18,6 +18,7 @@ static const double kMiniScaleFineFactor = 0.2;
   double _pressSclX, _pressSclY;
   CGPoint _effCursor; // starts at the grabbed handle (no press snap)
   CGPoint _lastCursor;
+  CGPoint _pressFrac; // anchor frac captured at press (scale fixed point)
 }
 
 - (instancetype)initWithRenderer:(KKMiniViewerRenderer *)renderer
@@ -95,9 +96,12 @@ static const double kMiniScaleFineFactor = 0.2;
   double sclY = sv.count > 1 ? fmax(0.0, sv[1].doubleValue) : 100.0;
   double halfW = KKScaleGizmoExtentForPercent(sclX, e0, span);
   double halfH = KKScaleGizmoExtentForPercent(sclY, e0, span);
+  // Offset the box so the anchor (center) is the fixed point: box centre =
+  // anchor - half*frac (frac 0 = symmetric, as before).
+  CGPoint f = [self.renderer scaleAnchorFrac];
+  double bcx = center.x - halfW * f.x, bcy = center.y - halfH * f.y;
   if (outRect)
-    *outRect =
-        CGRectMake(center.x - halfW, center.y - halfH, 2 * halfW, 2 * halfH);
+    *outRect = CGRectMake(bcx - halfW, bcy - halfH, 2 * halfW, 2 * halfH);
   return YES;
 }
 
@@ -142,7 +146,8 @@ static const double kMiniScaleFineFactor = 0.2;
   double crMin = MIN(cr.size.width, cr.size.height);
   double e0 = crMin * KKScaleGizmoE0Frac, span = crMin * KKScaleGizmoSpanFrac;
   CGPoint h[8];
-  KKScaleHandlePositions(center, sclX, sclY, e0, span, h);
+  KKScaleHandlePositions(center, sclX, sclY, e0, span,
+                         [self.renderer scaleAnchorFrac], h);
   NSMutableArray<NSValue *> *out = [NSMutableArray arrayWithCapacity:8];
   for (int i = 0; i < 8; i++)
     [out addObject:[NSValue valueWithPoint:NSPointFromCGPoint(h[i])]];
@@ -176,6 +181,7 @@ static const double kMiniScaleFineFactor = 0.2;
   NSArray<NSNumber *> *sv = [self.renderer valuesForLabel:self.laneLabel];
   _pressSclX = sv.count > 0 ? fmax(0.0, sv[0].doubleValue) : 100.0;
   _pressSclY = sv.count > 1 ? fmax(0.0, sv[1].doubleValue) : 100.0;
+  _pressFrac = [self.renderer scaleAnchorFrac];
   // Effective cursor starts at the grabbed handle (no press snap).
   CGPoint h[8];
   [self _handlePositions:h forContentRect:cr];
@@ -203,8 +209,16 @@ static const double kMiniScaleFineFactor = 0.2;
   CGPoint c = _pressCenter;
   double crMin = MIN(cr.size.width, cr.size.height);
   double e0 = crMin * KKScaleGizmoE0Frac, span = crMin * KKScaleGizmoSpanFrac;
-  double tX = KKScaleGizmoPercentForExtent(fabs(_effCursor.x - c.x), e0, span);
-  double tY = KKScaleGizmoPercentForExtent(fabs(_effCursor.y - c.y), e0, span);
+  // Distance from the ANCHOR (c) / |sign - frac| so the anchor is the fixed
+  // point (frac 0 = symmetric). A degenerate axis (handle on the anchor) holds.
+  double tX = KKScaleGizmoPercentForHandle(
+      _effCursor.x, c.x, KKScaleHandleSignX(h), _pressFrac.x, e0, span);
+  double tY = KKScaleGizmoPercentForHandle(
+      _effCursor.y, c.y, KKScaleHandleSignY(h), _pressFrac.y, e0, span);
+  if (tX < 0)
+    tX = _pressSclX;
+  if (tY < 0)
+    tY = _pressSclY;
   BOOL shift = (modifiers & NSEventModifierFlagShift) != 0;
   BOOL effLinked = [self _aspectLinked] ^ shift;
   double newX = 0, newY = 0;

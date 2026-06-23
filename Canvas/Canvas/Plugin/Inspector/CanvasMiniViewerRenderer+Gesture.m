@@ -66,6 +66,12 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
     return YES;
   if ([self.scaleMini handleHitAtPoint:p contentRect:cr outIndex:NULL])
     return YES;
+  // Base transform handles (the 3-axis rotation rings, drawn + hit-tested by
+  // KKMiniViewerRenderer via the rotationLabel opt-in) must be claimed BEFORE
+  // the body-move / marquee fallbacks, else a click on a ring is stolen by a
+  // layer move or a marquee. The OSC always wins over move/select.
+  if ([super miniViewer:canvas handleHitAtPoint:p contentRect:cr])
+    return YES;
   // Body of a SELECTED layer: a drag moves the whole selection (after every
   // handle, so handles keep priority; the path body is a move, not a marquee).
   if ([self _selectedLayerUnderPoint:p contentRect:cr].length)
@@ -73,7 +79,7 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
   // Empty-canvas layer marquee: claimed last so every handle keeps priority.
   if ([self _layerMarqueeAllowedAtPoint:p contentRect:cr])
     return YES;
-  return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
+  return NO;
 }
 
 - (void)miniViewer:(KKMiniViewerView *)canvas
@@ -82,15 +88,12 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
   self.canvas = canvas;
   self.penContentRect = cr;
   CanvasPenModifiers em = CanvasEditModsFromNS(NSEvent.modifierFlags);
-  // Empty-canvas marquee: the controller starts it (no layer under the cursor).
-  if ([self _layerMarqueeAllowedAtPoint:p contentRect:cr] &&
-      [self.pathEditController mouseDownAtX:p.x y:p.y modifiers:em])
-    return;
   // Path point editing: ONLY on an anchor / handle / corner of the selected
   // path - NOT its body (the body is a move, below). Pass the live modifiers so
   // Shift/Opt at selection START is seen.
   if ([self _pathEditContext] &&
-      ([self.pathEditController hitTestAtX:p.x y:p.y] != CanvasPathEditHitNone ||
+      ([self.pathEditController hitTestAtX:p.x
+                                         y:p.y] != CanvasPathEditHitNone ||
        [self.pathEditController cornerWidgetHitAtX:p.x y:p.y]) &&
       [self.pathEditController mouseDownAtX:p.x y:p.y modifiers:em])
     return;
@@ -112,7 +115,17 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
     self.canvas = canvas;
     return;
   }
-  // Body of a selected layer: begin a move (translate from this pre-drag stack).
+  // Base transform handles (rotation rings): if the base claims this point,
+  // delegate the drag to it before the body-move / marquee fallbacks so a ring
+  // grabs rotation. The point handle above already returned, so this resolves
+  // to a rotation-ring hit; the base's dragHandleToPoint / endDrag (reached via
+  // the !pointHandleIsActive branch below) then drive and commit the rotation.
+  if ([super miniViewer:canvas handleHitAtPoint:p contentRect:cr]) {
+    [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
+    return;
+  }
+  // Body of a selected layer: begin a move (translate from this pre-drag
+  // stack).
   NSString *moveHit = [self _selectedLayerUnderPoint:p contentRect:cr];
   if (moveHit.length) {
     self.layerMoveActive = YES;
@@ -122,6 +135,13 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
     self.layerMoveDidMove = NO;
     return;
   }
+  // Empty-canvas marquee: LAST, so every transform handle (incl. the rotation
+  // rings, which sit in empty space beyond a group's small content body) keeps
+  // priority. Mirrors the hit-test order; otherwise a click on a group's ring
+  // out over the empty canvas would start a marquee instead of rotating.
+  if ([self _layerMarqueeAllowedAtPoint:p contentRect:cr] &&
+      [self.pathEditController mouseDownAtX:p.x y:p.y modifiers:em])
+    return;
   [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
 }
 
@@ -135,19 +155,25 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
     CGPoint cur = [self penObjFromSurfaceX:p.x y:p.y];
     simd_float2 d = simd_make_float2((float)(cur.x - self.layerMoveStartObj.x),
                                      (float)(cur.y - self.layerMoveStartObj.y));
+    // Nothing in the selection is movable in this scope (all excluded, e.g.
+    // constants move-lane-animated): stay a click, never a no-op move/persist.
+    NSArray<NSString *> *movable = [self _miniMovableSelectedIDs];
+    if (movable.count == 0)
+      return;
     if (!self.layerMoveDidMove && simd_length(d) < 0.003f)
       return; // dead-zone: a click with jitter stays a click (select)
     self.layerMoveDidMove = YES;
     NSMutableArray<KKBezierPath *> *paths =
         [self.layerMoveStartLayers mutableCopy] ?: [NSMutableArray array];
-    CanvasTranslateSelection(paths, [self _miniSelectedIDs], d, self.editFraction,
+    CanvasTranslateSelection(paths, movable, d, self.editFraction,
                              (float)[self penCanvasAspect], self.laneTemplates);
     self.layers = paths;
     // The PRIMARY (selected) image reads its transform from the override
     // timeline (self.timeline) in CanvasEncodeImageLayers, NOT from its path -
     // so a body move that only rewrote the paths leaves the primary visually
-    // stuck (its box moves, its image doesn't; always the topmost/selected one).
-    // Resync the override from the translated primary so it moves with the rest.
+    // stuck (its box moves, its image doesn't; always the topmost/selected
+    // one). Resync the override from the translated primary so it moves with
+    // the rest.
     KKBezierPath *primary =
         CanvasSelectedLayerForPaths(paths, self.selectedLayerID);
     if (primary)
@@ -236,6 +262,5 @@ static CanvasPenModifiers CanvasEditModsFromNS(NSEventModifierFlags m) {
   }
   [super miniViewerEndHandleDrag:canvas];
 }
-
 
 @end

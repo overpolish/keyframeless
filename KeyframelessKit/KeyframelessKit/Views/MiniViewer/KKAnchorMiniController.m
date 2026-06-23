@@ -25,6 +25,7 @@
     _positionLaneLabel = [positionLaneLabel copy];
     _snap = snapEngine;
     _hitRadiusPt = 5.0;
+    _anchorReferenceCenter = simd_make_float2(0.5f, 0.5f);
   }
   return self;
 }
@@ -40,14 +41,15 @@
 }
 
 - (void)_positionX:(double *)outPX y:(double *)outPY {
-  NSArray<NSNumber *> *pos = [self.renderer valuesForLabel:self.positionLaneLabel];
+  NSArray<NSNumber *> *pos =
+      [self.renderer valuesForLabel:self.positionLaneLabel];
   *outPX = pos.count > 0 ? pos[0].doubleValue : 0.5;
   *outPY = pos.count > 1 ? pos[1].doubleValue : 0.5;
 }
 
-// The square shows when the Anchor lane is a constant (a single fixed pivot) and
-// not hidden - same convention as the other single-handle mini OSCs (animated
-// lanes draw keypose dots instead).
+// The square shows when the Anchor lane is a constant (a single fixed pivot)
+// and not hidden - same convention as the other single-handle mini OSCs
+// (animated lanes draw keypose dots instead).
 - (BOOL)squareShown {
   return [self.renderer isConstantLabel:self.laneLabel] &&
          [self.renderer labelVisibleOrRevealing:self.laneLabel];
@@ -70,9 +72,9 @@
   [self _anchorX:&ax y:&ay];
   // Pivot = content centre (Position) + Anchor offset, in the same normalised
   // clip space as the path anchors.
-  CGPoint c = [self.renderer handlePointForContentRect:cr
-                                              position:@[ @(px + ax - 0.5),
-                                                          @(py + ay - 0.5) ]];
+  CGPoint c = [self.renderer
+      handlePointForContentRect:cr
+                       position:@[ @(px + ax - 0.5), @(py + ay - 0.5) ]];
   if (outCenter)
     *outCenter = c;
   return YES;
@@ -82,13 +84,14 @@
   CGPoint c;
   if (![self squareCenter:&c forContentRect:cr])
     return NO;
-  // Tight to the drawn square (Chebyshev), well under the Position handle's grab
-  // so the arc ring around the small square still reaches Position - mirroring
-  // the viewer. Scale by the OSC SIZING height (the constant-screen-size metric
-  // the square's DRAW + the Position arc use), NOT the live bounds: on an
-  // enlarged popover the live bounds grow but the drawn square stays a constant
-  // screen size, so a bounds-scaled hit zone would balloon past the square and
-  // into the Position ring - the intermittent "anchor steals Position" clash.
+  // Tight to the drawn square (Chebyshev), well under the Position handle's
+  // grab so the arc ring around the small square still reaches Position -
+  // mirroring the viewer. Scale by the OSC SIZING height (the
+  // constant-screen-size metric the square's DRAW + the Position arc use), NOT
+  // the live bounds: on an enlarged popover the live bounds grow but the drawn
+  // square stays a constant screen size, so a bounds-scaled hit zone would
+  // balloon past the square and into the Position ring - the intermittent
+  // "anchor steals Position" clash.
   CGFloat h = self.renderer.canvas.oscSizingHeight;
   CGFloat scale = h > 0 ? h / 230.0 : 1.0;
   CGFloat r = self.hitRadiusPt * scale;
@@ -138,33 +141,43 @@
   if (modifiers & NSEventModifierFlagCommand) {
     double posX = 0.5, posY = 0.5;
     [self _positionX:&posX y:&posY];
+    double refX = self.anchorReferenceCenter.x,
+           refY = self.anchorReferenceCenter.y;
     static const double frac[] = {0.0, 1.0 / 3.0, 0.5, 2.0 / 3.0, 1.0};
     float ax[5], ay[5];
     for (int i = 0; i < 5; i++) {
-      ax[i] = (float)(posX + frac[i] - 0.5);
-      ay[i] = (float)(posY + frac[i] - 0.5);
+      // Snap targets are the clip's own centre / corners / thirds, expressed in
+      // the same pivot space (Position + value - reference).
+      ax[i] = (float)(posX + frac[i] - refX);
+      ay[i] = (float)(posY + frac[i] - refY);
     }
     float thrX = 6.0f / (float)cr.size.width;
     float thrY = 6.0f / (float)cr.size.height;
-    simd_float2 pivot = {(float)(posX + newX - 0.5), (float)(posY + newY - 0.5)};
+    // Pivot = Position + (value - reference); reference is the clip centre by
+    // default, or the group's frozen content-centre rest.
+    simd_float2 pivot = simd_make_float2((float)(posX + newX - refX),
+                                         (float)(posY + newY - refY));
     simd_float2 sn = [_snap snapPoint:pivot
-                      canvasAnchorsX:ax
-                              countX:5
-                      canvasAnchorsY:ay
-                              countY:5
-                       objectTargets:NULL
-                               count:0
-                          thresholdX:thrX
-                          thresholdY:thrY];
-    newX = sn.x - posX + 0.5;
-    newY = sn.y - posY + 0.5;
+                       canvasAnchorsX:ax
+                               countX:5
+                       canvasAnchorsY:ay
+                               countY:5
+                        objectTargets:NULL
+                                count:0
+                           thresholdX:thrX
+                           thresholdY:thrY];
+    newX = sn.x - posX + refX;
+    newY = sn.y - posY + refY;
   } else if (self.gridSnapPivot) {
     double posX = 0.5, posY = 0.5;
     [self _positionX:&posX y:&posY];
-    simd_float2 pivot = {(float)(posX + newX - 0.5), (float)(posY + newY - 0.5)};
+    double refX = self.anchorReferenceCenter.x,
+           refY = self.anchorReferenceCenter.y;
+    simd_float2 pivot = simd_make_float2((float)(posX + newX - refX),
+                                         (float)(posY + newY - refY));
     simd_float2 sn = self.gridSnapPivot(pivot, cr);
-    newX = sn.x - posX + 0.5;
-    newY = sn.y - posY + 0.5;
+    newX = sn.x - posX + refX;
+    newY = sn.y - posY + refY;
     [_snap reset];
   } else {
     [_snap reset];

@@ -41,10 +41,10 @@
 // Read a 2-component lane value from the published (selected-layer) snapshot at
 // `frac`, defaulting to `def` when the lane is absent / empty.
 - (void)_snapshotValuesForLabel:(NSString *)label
-                            frac:(double)frac
-                            outX:(double *)outX
-                            outY:(double *)outY
-                         default:(double)def {
+                           frac:(double)frac
+                           outX:(double *)outX
+                           outY:(double *)outY
+                        default:(double)def {
   *outX = def;
   *outY = def;
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
@@ -89,41 +89,80 @@
   // Anchor pivots, NEVER on the member value being dragged - the group pivot is
   // the stored Anchor lane now, not the live content centre - so there's no
   // feedback (the old content-centre pivot fed back and forced a freeze hack).
-  CGPoint p0 = [self _composedObjForObjX:0 y:0 member:sel paths:paths frac:frac aspect:aspect];
-  CGPoint p1 = [self _composedObjForObjX:1 y:0 member:sel paths:paths frac:frac aspect:aspect];
-  CGPoint p2 = [self _composedObjForObjX:1 y:1 member:sel paths:paths frac:frac aspect:aspect];
-  CGPoint p3 = [self _composedObjForObjX:0 y:1 member:sel paths:paths frac:frac aspect:aspect];
+  CGPoint p0 = [self _composedObjForObjX:0
+                                       y:0
+                                  member:sel
+                                   paths:paths
+                                    frac:frac
+                                  aspect:aspect];
+  CGPoint p1 = [self _composedObjForObjX:1
+                                       y:0
+                                  member:sel
+                                   paths:paths
+                                    frac:frac
+                                  aspect:aspect];
+  CGPoint p2 = [self _composedObjForObjX:1
+                                       y:1
+                                  member:sel
+                                   paths:paths
+                                    frac:frac
+                                  aspect:aspect];
+  CGPoint p3 = [self _composedObjForObjX:0
+                                       y:1
+                                  member:sel
+                                   paths:paths
+                                    frac:frac
+                                  aspect:aspect];
   simd_float3x3 A = CanvasSquareToQuadHomography(p0, p1, p2, p3);
-  // Centre the gizmo + Position/Anchor handles on the layer's GEOMETRY (its bbox
-  // centre), not the clip centre, by folding a member-local translation of
-  // (objectCenter - 0.5) into the parent transform. Then Position=0.5 maps to the
-  // geometry centre - the same pivot the render uses - so a path drawn off-centre
-  // gets its transform OSC on the path. A full-frame image (centre 0.5) is a
-  // no-op; a group stays 0.5 (it pivots on its stored Anchor). The object centre
-  // is render-space Y-UP; flip Y into the OSC's Y-DOWN object space.
+  // Centre the gizmo + Position/Anchor handles on the layer's GEOMETRY (its
+  // bbox centre), not the clip centre, by folding a member-local translation of
+  // (objectCenter - 0.5) into the parent transform. Then Position=0.5 maps to
+  // the geometry centre - the same pivot the render uses - so a path drawn
+  // off-centre gets its transform OSC on the path. A full-frame image (centre
+  // 0.5) is a no-op; a group stays 0.5 (it pivots on its stored Anchor). The
+  // object centre is render-space Y-UP; flip Y into the OSC's Y-DOWN object
+  // space.
   simd_float2 gc = CanvasLayerObjectCenter(sel);
   simd_float3x3 T =
       simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
                   simd_make_float3(gc.x - 0.5f, (1.0f - gc.y) - 0.5f, 1));
   A = simd_mul(A, T);
-  // The controls stay flat; their drawn position warps through A (the perspective
-  // divide happens in KKPositionOSC / the pivot; drag inverts A to the member's
-  // own value).
+  // The controls stay flat; their drawn position warps through A (the
+  // perspective divide happens in KKPositionOSC / the pivot; drag inverts A to
+  // the member's own value).
   self.position.parentObjectTransform = A;
   self.anchor.parentObjectTransform = A;
+  // A group's Anchor offset is measured from its FROZEN content-centre rest
+  // (group.translateX/Y), not the clip centre - so the pivot lands on the
+  // content while the Anchor stays a free pan-behind offset. An image/path uses
+  // the clip centre (CanvasLayerGroupRest falls back to it).
+  simd_float2 refCenter = CanvasLayerGroupRest(sel);
+  self.anchor.anchorReferenceCenter = refCenter;
 
   // Rotation rings additionally tilt with the group's rotation (member-local
   // drag - the group factors out).
   self.rotation.baseRotation = CanvasComposedGroupRotation(paths, sel, frac);
 
-  // The gizmo cluster (rings + scale box) centres on the composed ANCHOR pivot
-  // (AE-standard): (Position + Anchor offset) run through A.
+  // The gizmo cluster (rings + scale box) centres on the rotation pivot:
+  // Position + (Anchor - reference), run through A. At rest that is the content
+  // centre (Position == reference, Anchor == reference); it pans behind as the
+  // Anchor is dragged. For an image/path reference is the clip centre, so this
+  // is the usual Position + Anchor offset.
   double posX, posY, ax, ay;
-  [self _snapshotValuesForLabel:@"Position" frac:frac outX:&posX outY:&posY default:0.5];
-  [self _snapshotValuesForLabel:@"Anchor" frac:frac outX:&ax outY:&ay default:0.5];
+  [self _snapshotValuesForLabel:@"Position"
+                           frac:frac
+                           outX:&posX
+                           outY:&posY
+                        default:0.5];
+  [self _snapshotValuesForLabel:@"Anchor"
+                           frac:frac
+                           outX:&ax
+                           outY:&ay
+                        default:0.5];
+  double pivObjX = posX + ax - refCenter.x;
+  double pivObjY = posY + ay - refCenter.y;
   simd_float3 piv =
-      simd_mul(A, simd_make_float3((float)(posX + ax - 0.5),
-                                   (float)(posY + ay - 0.5), 1.0f));
+      simd_mul(A, simd_make_float3((float)pivObjX, (float)pivObjY, 1.0f));
   double pivX = (piv.z != 0.0f) ? piv.x / piv.z : piv.x;
   double pivY = (piv.z != 0.0f) ? piv.y / piv.z : piv.y;
   self.gizmoPivotCanvas = [self _rawCanvasFromObjX:pivX y:pivY];
@@ -162,9 +201,9 @@
   return YES;
 }
 
-// Min dimension of the canvas frame - the reference length the scale gizmo sizes
-// against, so the box tracks the clip with viewer zoom rather than being a fixed
-// screen size.
+// Min dimension of the canvas frame - the reference length the scale gizmo
+// sizes against, so the box tracks the clip with viewer zoom rather than being
+// a fixed screen size.
 - (double)_onScreenFrameMin {
   double w = 0, h = 0;
   if (![self _objectBasisWidth:&w height:&h])
@@ -184,12 +223,25 @@
 // Feed the scale control this tick's box centre (= the layer's Position handle)
 // + gizmo size + reveal/drag state. Shared by draw / hit-test / mouse.
 - (void)_syncScaleControlAtTime:(CMTime)time {
-  // Concentric with the anchor pivot (where the layer scales from), not the bare
-  // Position handle - the gizmo cluster (box + rings + anchor) shares one centre.
+  // Concentric with the anchor pivot (where the layer scales from), not the
+  // bare Position handle - the gizmo cluster (box + rings + anchor) shares one
+  // centre.
   self.scale.center = self.gizmoPivotCanvas;
   self.scale.frameMin = [self _onScreenFrameMin];
   self.scale.optRevealActive = self.optRevealActive;
   self.scale.dragging = self.isDragging;
+  // Scale-from-anchor: tell the box where the anchor sits within the content so
+  // it scales from there. Reference = the anchor's neutral (clip centre, or a
+  // group's frozen rest); content half = this layer's bbox half (0.5 for a
+  // clip-filling image). The box derives the fraction from the Anchor lane.
+  KKBezierPath *sel = [self _selectedLayer];
+  simd_float2 rest = CanvasLayerGroupRest(sel); // group rest, else clip centre
+  float hx = 0.5f, hy = 0.5f;
+  CanvasLayerContentHalfExtentObj([self _snapshotPaths], sel, &hx, &hy);
+  self.scale.anchorLaneLabel =
+      @"Anchor"; // opt in: Canvas render scales about it
+  self.scale.anchorReferenceCenter = CGPointMake(rest.x, rest.y);
+  self.scale.contentHalfExtent = CGPointMake(hx, hy);
 }
 
 // Feed the rotation control this tick's centre (= the layer's Position handle)

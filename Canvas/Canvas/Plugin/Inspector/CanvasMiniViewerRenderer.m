@@ -6,9 +6,9 @@
 #import "CanvasMiniViewerRenderer.h"
 #import "CanvasFillRender.h" // TEMP solid fill for closed paths
 #import "CanvasLayerRender.h"
-#import "CanvasPathOps.h" // shared boolean / outline op cores
 #import "CanvasLayerTimeline.h"
 #import "CanvasMiniViewerRenderer_Internal.h"
+#import "CanvasPathOps.h" // shared boolean / outline op cores
 #import "CanvasToolbar.h"
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
@@ -134,8 +134,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
                   height:(float)height {
   if (!self.toolbar)
     return;
-  // Rebuild the bar when the selection brings in / drops the conditional path-op
-  // groups (mirrors the viewer; KKToolbar's items are fixed at init).
+  // Rebuild the bar when the selection brings in / drops the conditional
+  // path-op groups (mirrors the viewer; KKToolbar's items are fixed at init).
   BOOL wantBooleans = NO, wantOutline = NO;
   [self _miniPathOpFlagsBooleans:&wantBooleans outline:&wantOutline];
   if (wantBooleans != self.toolbarShowsBooleans ||
@@ -261,6 +261,23 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   return self.selectedLayerID.length ? @[ self.selectedLayerID ] : @[];
 }
 
+// The selected layers that are actually MOVABLE in this popover scope: the
+// selection minus the scope's non-selectable set (constants:
+// move-lane-animated; keypose: no keypose at this time) - the SAME set the
+// marquee respects. A layer manually multi-selected in the list
+// (Cmd/Shift-click) is fine to keep selected but must not move or show the
+// dimmed move indicator if the scope excludes it.
+- (NSArray<NSString *> *)_miniMovableSelectedIDs {
+  NSSet<NSString *> *nonMovable = [self penNonSelectableLayerIDs];
+  if (!nonMovable.count)
+    return [self _miniSelectedIDs];
+  NSMutableArray<NSString *> *out = [NSMutableArray array];
+  for (NSString *lid in [self _miniSelectedIDs])
+    if (![nonMovable containsObject:lid])
+      [out addObject:lid];
+  return out;
+}
+
 - (void)_miniPathOpFlagsBooleans:(BOOL *)outBooleans
                          outline:(BOOL *)outOutline {
   NSArray<NSString *> *sel = [self _miniSelectedIDs];
@@ -279,9 +296,9 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 // Run an op core on a copy of the live layers and persist via onPersistLayers
 // (which writes the blob + selects the result). The result becomes the mini's
 // live selection so the next draw reflects it immediately.
-- (void)_miniRunPathOp:(NSArray<NSString *> *_Nullable (^)(
-                           NSMutableArray<KKBezierPath *> *paths,
-                           NSArray<NSString *> *sel))block {
+- (void)_miniRunPathOp:
+    (NSArray<NSString *> *_Nullable (^)(NSMutableArray<KKBezierPath *> *paths,
+                                        NSArray<NSString *> *sel))block {
   NSMutableArray<KKBezierPath *> *paths =
       [self.layers mutableCopy] ?: [NSMutableArray array];
   NSArray<NSString *> *newSel = block(paths, [self _miniSelectedIDs]);
@@ -388,9 +405,9 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 // dragged by KKMiniViewerRenderer), keyed on the "Rotation" lane - but ONLY for
 // a lone image/group under the cursor tool. The kit draws + hit-tests rings
 // purely on this opt-in (bypassing -_transformHandlesActive), and the
-// rotationCenter/baseMatrix overrides fall back to the topmost layer, so without
-// this gate a stale ring would draw on the top layer when nothing (or a path /
-// multi) is selected.
+// rotationCenter/baseMatrix overrides fall back to the topmost layer, so
+// without this gate a stale ring would draw on the top layer when nothing (or a
+// path / multi) is selected.
 - (NSString *)rotationLabel {
   return [self _transformHandlesActive] ? @"Rotation" : nil;
 }
@@ -442,6 +459,31 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 // space: Position + Anchor offset. handlePointForContentRect: applies the group
 // composition, so this stays member-local and the gizmo cluster (rings + box +
 // square) lands on the group-composed pivot, matching the viewer.
+// The group's frozen content-centre rest (the reference the Anchor offset is
+// measured from); clip centre for an image/path or an unseeded/legacy group.
+- (simd_float2)_anchorReferenceCenter {
+  return CanvasLayerGroupRest(
+      CanvasSelectedLayerForPaths(self.layers, self.selectedLayerID));
+}
+
+// Scale-from-anchor fraction for the mini scale box: the Anchor lane relative
+// to the layer's reference (clip centre, or a group's frozen rest) over its
+// content half-extent (0.5 for a clip-filling image, bbox half for a
+// group/path), so the box keeps the anchor as the fixed point. Mirrors the
+// viewer (CanvasOSC scale).
+- (CGPoint)scaleAnchorFrac {
+  KKBezierPath *sel =
+      CanvasSelectedLayerForPaths(self.layers, self.selectedLayerID);
+  NSArray<NSNumber *> *a = [self valuesForLabel:@"Anchor"];
+  if (!sel || a.count < 2)
+    return CGPointZero;
+  simd_float2 ref = [self _anchorReferenceCenter];
+  float hx = 0.5f, hy = 0.5f;
+  CanvasLayerContentHalfExtentObj(self.layers, sel, &hx, &hy);
+  return KKScaleGizmoAnchorFrac(a[0].doubleValue, a[1].doubleValue, ref.x,
+                                ref.y, hx, hy);
+}
+
 - (CGPoint)_anchorPivotForContentRect:(CGRect)cr {
   NSArray<NSNumber *> *pos = [self valuesForLabel:@"Position"];
   NSArray<NSNumber *> *anc = [self valuesForLabel:@"Anchor"];
@@ -449,7 +491,15 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   double py = pos.count > 1 ? pos[1].doubleValue : 0.5;
   double ax = anc.count > 0 ? anc[0].doubleValue : 0.5;
   double ay = anc.count > 1 ? anc[1].doubleValue : 0.5;
-  double pivX = px + ax - 0.5, pivY = py + ay - 0.5; // Position space (Y-down)
+  // Pivot = Position + (Anchor - reference). reference is the clip centre for
+  // an image/path, or the group's frozen content-centre rest, so the gizmo
+  // cluster
+  // + anchor square land on the content and pan behind as the Anchor is
+  // dragged.
+  simd_float2 ref = [self _anchorReferenceCenter];
+  self.anchorMini.anchorReferenceCenter = ref; // keep the snap math in sync
+  double pivX = px + ax - ref.x,
+         pivY = py + ay - ref.y; // Position space (Y-down)
   return [self _handlePointForContentRect:cr position:@[ @(pivX), @(pivY) ]];
 }
 
@@ -802,9 +852,9 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   // render.
   if (_strokePipeline) {
     [enc setRenderPipelineState:_strokePipeline];
-    // strokeScale 1.0: the mini already renders at the dest size; if its strokes
-    // also read too thick relative to the timeline, scale by w / self.outputWidth
-    // here too (same as the main render's thumbnail fix).
+    // strokeScale 1.0: the mini already renders at the dest size; if its
+    // strokes also read too thick relative to the timeline, scale by w /
+    // self.outputWidth here too (same as the main render's thumbnail fix).
     CanvasEncodeVectorLayers(self.layers ?: @[], enc, cb.device, w, h, 0.0f,
                              0.0f, self.editFraction, self.selectedLayerID,
                              self.timeline, 1.0f);
@@ -824,11 +874,10 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   id<MTLTexture> stencilTex =
       CanvasFillStencilTexture(cb.device, (NSUInteger)w, (NSUInteger)h);
   if (fStencilPS && fColorPS && stencilTex)
-    CanvasEncodeFilledLayers(self.layers ?: @[], cb.device, cb, dstSRGB,
-                             stencilTex, fStencilPS, fColorPS, fStencilDS,
-                             fColorDS, w, h, w, h, 0.0f, 0.0f,
-                             self.editFraction, self.selectedLayerID,
-                             self.timeline);
+    CanvasEncodeFilledLayers(
+        self.layers ?: @[], cb.device, cb, dstSRGB, stencilTex, fStencilPS,
+        fColorPS, fStencilDS, fColorDS, w, h, w, h, 0.0f, 0.0f,
+        self.editFraction, self.selectedLayerID, self.timeline);
   return YES;
 }
 

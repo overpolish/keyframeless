@@ -140,16 +140,24 @@ void CanvasSeedGroupAnchor(KKBezierPath *group, NSArray<KKBezierPath *> *paths,
   float cx = 0.5f, cy = 0.5f;
   if (!CanvasGroupContentCenterObj(paths, group, &cx, &cy))
     return; // no measurable content: leave the anchor at the clip centre
-  // Pivot = clip centre + Anchor offset. Seed the Anchor (Y-down) so the pivot
-  // lands on the content centre (Y-up cy -> 1-cy), matching where the group
-  // used to pivot - but STORED, so moving a member no longer drags the pivot.
+  // Seed the group onto its content centre (Y-down cy -> 1-cy):
+  //  - FROZEN rest (group.translateX/Y, repurposed): the reference the group's
+  //    Position is measured from. The render translation is Position - rest, so
+  //    seeding Position to the content centre leaves members in place.
+  //  - Position lane: the content centre, so the Position handle sits ON the
+  //    group, not alone at the clip centre.
+  //  - Anchor lane: the content centre too, so the rotation / scale pivot lands
+  //    on the content. The Anchor is a free pan-behind pivot afterwards (it
+  //    never feeds rest), so dragging it never moves the rendered content.
+  group.translateX = cx;
+  group.translateY = (float)(1.0 - cy);
   KKTimeline *tl = CanvasLayerTimelineForPath(group, templates);
   for (KKLane *l in tl.lanes) {
-    if (![l.label isEqualToString:@"Anchor"])
+    if (![l.label isEqualToString:@"Anchor"] &&
+        ![l.label isEqualToString:@"Position"])
       continue;
     l.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
                                       values:@[ @(cx), @(1.0 - cy) ]] ];
-    break;
   }
   CanvasApplyTimelineToPath(tl, group);
 }

@@ -18,8 +18,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// rotation and scale swing around, drawn over the other transform controls. It
 /// reads a 2-component anchor lane (normalized content space, 0.5,0.5 = content
 /// centre) from the process timeline snapshot, owns its draw / hit-test / delta
-/// drag / Cmd-snap / persist, and gates on the shared OSC-visibility state - the
-/// same self-contained shape as KKScaleOSC / KKRotationOSC.
+/// drag / Cmd-snap / persist, and gates on the shared OSC-visibility state -
+/// the same self-contained shape as KKScaleOSC / KKRotationOSC.
 ///
 /// By default the pivot is in CLIP space: the content centre is the sibling
 /// `positionLaneLabel` value (0.5,0.5 = clip centre), and the pivot is that
@@ -47,9 +47,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// lane keeps the plugin's exact metadata (units, scale-with-media, ...).
 @property(nonatomic, copy, nullable) KKLane *templateLane;
 
-/// The host's `activePart` number for "this is the anchor square". The host sets
-/// it once so the controller can gate its draw highlight + drag on the live
-/// activePart. Default 5.
+/// The host's `activePart` number for "this is the anchor square". The host
+/// sets it once so the controller can gate its draw highlight + drag on the
+/// live activePart. Default 5.
 @property(nonatomic) NSInteger anchorActivePart;
 
 /// The host mirrors its FxPlug `isDragging` here each draw tick.
@@ -60,17 +60,24 @@ NS_ASSUME_NONNULL_BEGIN
 /// `anchorToCanvas` / `canvasToAnchor` are set.
 @property(nonatomic, copy) NSString *positionLaneLabel;
 
+/// The neutral reference the Anchor offset is measured from in the default
+/// clip-space geometry: the pivot is `Position + (Anchor - reference)`. Default
+/// {0.5, 0.5} (the clip centre), so an Anchor of 0.5 means "pivot at Position".
+/// A Canvas group sets this to its FROZEN content-centre rest, so the pivot
+/// lands on the content (not the clip centre) while the Anchor stays a free
+/// pan-behind offset. Ignored when `anchorToCanvas` / `canvasToAnchor` are set.
+@property(nonatomic) simd_float2 anchorReferenceCenter;
+
 /// Override the default clip-space geometry: map an anchor value (lane
 /// components; 0.5,0.5 = content centre) to a canvas point. Set both this and
 /// `canvasToAnchor` together (a host with non-standard pivot geometry).
-@property(nonatomic, copy, nullable) CGPoint (^anchorToCanvas)(double ax,
-                                                               double ay);
+@property(nonatomic, copy, nullable) CGPoint (^anchorToCanvas)
+    (double ax, double ay);
 
 /// Inverse of `anchorToCanvas`: map a canvas point back to an anchor value (for
 /// the delta drag + snap). Set together with `anchorToCanvas`.
-@property(nonatomic, copy, nullable) void (^canvasToAnchor)(CGPoint canvasPoint,
-                                                            double *outAX,
-                                                            double *outAY);
+@property(nonatomic, copy, nullable) void (^canvasToAnchor)
+    (CGPoint canvasPoint, double *outAX, double *outAY);
 
 /// Optional persist override (see KKScaleOSC): when set, a drag writes via this
 /// block instead of the single `kKKParamTimelineData` param, so a multi-owner
@@ -88,10 +95,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// A 2D affine in OBJECT space (homogeneous 3x3) mapping the anchor's own clip
 /// space to an enclosing parent's space (e.g. a Canvas member's group). Applied
-/// forward to the default pivot before mapping to canvas, and INVERTED on a drag,
-/// so the square draws where the layer is rendered and dragging reacts to the
-/// parent's rotation/scale instead of skewing or feeding back. Ignored when the
-/// `anchorToCanvas` / `canvasToAnchor` blocks are set. Default identity.
+/// forward to the default pivot before mapping to canvas, and INVERTED on a
+/// drag, so the square draws where the layer is rendered and dragging reacts to
+/// the parent's rotation/scale instead of skewing or feeding back. Ignored when
+/// the `anchorToCanvas` / `canvasToAnchor` blocks are set. Default identity.
 @property(nonatomic) simd_float3x3 parentObjectTransform;
 
 /// The owned square (exposed so the host can tune size / hit radius).
@@ -99,14 +106,19 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// The clip-local fraction the control is currently evaluating. Set internally
 /// just before each `anchorToCanvas` / `canvasToAnchor` call, so a host whose
-/// geometry depends on the playhead (animated Position / transform) can read the
-/// matching fraction from inside its blocks.
+/// geometry depends on the playhead (animated Position / transform) can read
+/// the matching fraction from inside its blocks.
 @property(nonatomic, readonly) double evalFraction;
 
-/// Draw the anchor square, gated on the Anchor element's visibility (+ opt-reveal
-/// ghost) and the lane being visible at this fraction. Draws snap guides while
-/// dragging with Cmd. The host calls this in its drawOSC tick after setting
-/// `anchorToCanvas` + `dragging`.
+/// The anchor pivot's canvas point at `time` (where the square draws). A host
+/// can centre its scale box / rotation rings here so the gizmo cluster sits on
+/// the actual scale/rotate pivot, not the bare Position handle.
+- (CGPoint)pivotCanvasAtTime:(CMTime)time;
+
+/// Draw the anchor square, gated on the Anchor element's visibility (+
+/// opt-reveal ghost) and the lane being visible at this fraction. Draws snap
+/// guides while dragging with Cmd. The host calls this in its drawOSC tick
+/// after setting `anchorToCanvas` + `dragging`.
 - (void)drawInDestination:(FxImageTile *)destinationImage
                    atTime:(CMTime)time
                activePart:(NSInteger)activePart;

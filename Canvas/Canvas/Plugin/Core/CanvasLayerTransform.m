@@ -209,6 +209,66 @@ BOOL CanvasGroupContentCenterObj(NSArray<KKBezierPath *> *layers,
   return YES;
 }
 
+simd_float2 CanvasLayerGroupRest(KKBezierPath *group) {
+  // A group's frozen content-centre rest, stored in its repurposed translateX/Y
+  // (Position-lane space). 0,0 = unseeded / legacy / a non-group: fall back to
+  // the clip centre, so callers get the right Position reference
+  // unconditionally.
+  if (group.isGroup) {
+    float rx = group.translateX, ry = group.translateY;
+    if (rx != 0.0f || ry != 0.0f)
+      return simd_make_float2(rx, ry);
+  }
+  return simd_make_float2(0.5f, 0.5f);
+}
+
+BOOL CanvasLayerContentHalfExtentObj(NSArray<KKBezierPath *> *layers,
+                                     KKBezierPath *layer, float *outHx,
+                                     float *outHy) {
+  if (!layer)
+    return NO;
+  float hx = 0.5f, hy = 0.5f; // clip-filling default (image / fallback)
+  if (layer.isGroup) {
+    NSUInteger idx = [layers indexOfObjectIdenticalTo:layer];
+    simd_float2 mn, mx;
+    if (idx == NSNotFound ||
+        !CanvasGroupContentBoundsObj(layers, idx, &mn, &mx))
+      return NO;
+    hx = (mx.x - mn.x) * 0.5f;
+    hy = (mx.y - mn.y) * 0.5f;
+  } else if (layer.isImage) {
+    hx = hy = 0.5f;
+  } else if ([layer.shape isKindOfClass:[KKRectShape class]]) {
+    KKRectShape *r = (KKRectShape *)layer.shape;
+    hx = (r.max.x - r.min.x) * 0.5f;
+    hy = (r.max.y - r.min.y) * 0.5f;
+  } else if ([layer.shape isKindOfClass:[KKEllipseShape class]]) {
+    KKEllipseShape *e = (KKEllipseShape *)layer.shape;
+    hx = (e.max.x - e.min.x) * 0.5f;
+    hy = (e.max.y - e.min.y) * 0.5f;
+  } else if (layer.count >= 2) {
+    KKBezierPoint p0 = [layer pointAtIndex:0];
+    simd_float2 lo = simd_make_float2(p0.x, p0.y), hi = lo;
+    for (NSUInteger i = 1; i < layer.count; i++) {
+      KKBezierPoint p = [layer pointAtIndex:i];
+      lo = simd_min(lo, simd_make_float2(p.x, p.y));
+      hi = simd_max(hi, simd_make_float2(p.x, p.y));
+    }
+    hx = (hi.x - lo.x) * 0.5f;
+    hy = (hi.y - lo.y) * 0.5f;
+  }
+  // Degenerate (zero-size) axis: fall back to clip-filling so f stays finite.
+  if (hx < 1e-4f)
+    hx = 0.5f;
+  if (hy < 1e-4f)
+    hy = 0.5f;
+  if (outHx)
+    *outHx = hx;
+  if (outHy)
+    *outHy = hy;
+  return YES;
+}
+
 NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers,
                                  NSUInteger idx, double frac,
                                  NSString *overrideLayerID,
@@ -232,13 +292,20 @@ NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers,
                               overrideTimeline);
                           // Pivot base = the clip centre; the group's STORED
                           // Anchor lane (out[n].t.anchorX/Y) carries the real
-                          // pivot. Was the live content-bbox centre, which moved
-                          // whenever a member moved - so the group's scale /
-                          // rotation swung every sibling. The anchor is seeded to
-                          // the content centre at creation (CanvasSeedGroupAnchor)
-                          // so this is visually identical but now stable.
+                          // pivot. Was the live content-bbox centre, which
+                          // moved whenever a member moved - so the group's
+                          // scale / rotation swung every sibling. The anchor is
+                          // seeded to the content centre at creation
+                          // (CanvasSeedGroupAnchor) so this is visually
+                          // identical but now stable.
                           out[n].cx = 0.5f;
                           out[n].cy = 0.5f;
+                          // Frozen content-centre rest (Position-lane space),
+                          // stored on the group's repurposed translateX/Y at
+                          // creation (clip centre when unseeded).
+                          simd_float2 rest = CanvasLayerGroupRest(layers[gi]);
+                          out[n].restX = rest.x;
+                          out[n].restY = rest.y;
                           n++;
                         }];
   return n;
@@ -323,11 +390,22 @@ matrix_float4x4 CanvasComposedModelMatrix(CanvasLayerTransform memberT,
     simd_float2 gcPx =
         (simd_make_float2(groups[k].cx, groups[k].cy) - half) * dims;
     simd_float2 gPosPx = CanvasPosOffsetPx(groups[k].t, dims);
+    simd_float2 gAncPx = CanvasAnchorOffsetPx(groups[k].t, dims);
+    // A group's Position is measured from its FROZEN content-centre rest, not
+    // from the clip centre: translation = Position - rest. Both Position and
+    // rest are seeded to the content centre at creation, so this is zero and
+    // the members render in place; seeding Position to the content centre
+    // therefore does NOT shift them. The Anchor stays the rotation / scale
+    // pivot (gAncPx) and is free to pan-behind (it never feeds rest, so moving
+    // it leaves the content put).
+    simd_float2 gRestPx =
+        simd_make_float2(groups[k].restX - 0.5f, -(groups[k].restY - 0.5f)) *
+        dims;
     model = simd_mul(
-        CanvasLayerModelMatrix(groups[k].t, gcPx, gPosPx,
-                               CanvasAnchorOffsetPx(groups[k].t, dims)),
+        CanvasLayerModelMatrix(groups[k].t, gcPx, gPosPx - gRestPx, gAncPx),
         model);
-    pcPx = gcPx + gPosPx; // outermost group wins
+    pcPx = gcPx + (gPosPx - gRestPx) +
+           gAncPx; // outermost group wins (perspective centres on the pivot)
     camScale *= sqrtf(fmaxf(0.0f, groups[k].t.scaleX * groups[k].t.scaleY));
   }
   matrix_float4x4 P =

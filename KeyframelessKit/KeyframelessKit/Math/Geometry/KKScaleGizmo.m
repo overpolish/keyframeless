@@ -35,19 +35,43 @@ double KKScaleGizmoPercentForExtent(double extent, double e0, double span) {
 }
 
 void KKScaleHandlePositions(CGPoint center, double sclX, double sclY, double e0,
-                            double span, CGPoint out[8]) {
+                            double span, CGPoint anchorFrac, CGPoint out[8]) {
   double halfW = KKScaleGizmoExtentForPercent(sclX, e0, span);
   double halfH = KKScaleGizmoExtentForPercent(sclY, e0, span);
-  double l = center.x - halfW, r = center.x + halfW;
-  double b = center.y - halfH, t = center.y + halfH;
+  // Box centre = anchor - half*frac, so the anchor (center) stays fixed as the
+  // box grows: a centred anchor is symmetric, a corner anchor keeps that corner
+  // put and grows the opposite one.
+  double bcx = center.x - halfW * anchorFrac.x;
+  double bcy = center.y - halfH * anchorFrac.y;
+  double l = bcx - halfW, r = bcx + halfW;
+  double b = bcy - halfH, t = bcy + halfH;
   out[0] = CGPointMake(l, b);
   out[1] = CGPointMake(r, b);
   out[2] = CGPointMake(r, t);
   out[3] = CGPointMake(l, t);
-  out[4] = CGPointMake(center.x, b);
-  out[5] = CGPointMake(r, center.y);
-  out[6] = CGPointMake(center.x, t);
-  out[7] = CGPointMake(l, center.y);
+  out[4] = CGPointMake(bcx, b);
+  out[5] = CGPointMake(r, bcy);
+  out[6] = CGPointMake(bcx, t);
+  out[7] = CGPointMake(l, bcy);
+}
+
+double KKScaleGizmoPercentForHandle(double effCoord, double centerCoord,
+                                    double sign, double frac, double e0,
+                                    double span) {
+  double denom = fabs(sign - frac);
+  if (denom < 1e-4)
+    return -1.0; // handle coincides with the anchor on this axis: cannot scale
+  return KKScaleGizmoPercentForExtent(fabs(effCoord - centerCoord) / denom, e0,
+                                      span);
+}
+
+CGPoint KKScaleGizmoAnchorFrac(double ax, double ay, double refX, double refY,
+                               double halfX, double halfY) {
+  double fx = halfX > 1e-6 ? (ax - refX) / halfX : 0.0;
+  double fy = halfY > 1e-6 ? (ay - refY) / halfY : 0.0;
+  fx = fmax(-1.0, fmin(1.0, fx));
+  fy = fmax(-1.0, fmin(1.0, fy));
+  return CGPointMake(fx, fy);
 }
 
 void KKScaleValuesForHandleDrag(NSInteger h, double pX, double pY, double tX,

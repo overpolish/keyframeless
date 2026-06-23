@@ -213,4 +213,20 @@ BOOL CanvasGroupContentCenterObj(NSArray<KKBezierPath *> *layers,
                                  KKBezierPath *group, float *_Nullable outCx,
                                  float *_Nullable outCy);
 
+/// A group's frozen content-centre rest (its repurposed translateX/Y, Position-
+/// lane space; the reference its Position is measured from). Falls back to the
+/// clip centre {0.5,0.5} for an unseeded/legacy group or a non-group, so it can
+/// be called unconditionally to get the Position reference.
+simd_float2 CanvasLayerGroupRest(KKBezierPath *group);
+
+/// A layer's content HALF-extent in object space (normalised), per axis: 0.5
+/// for a clip-filling image, the shape/points bbox half for a
+/// rect/ellipse/path, the content bbox half for a group. Used to map the Anchor
+/// lane to the scale box's scale-from-anchor fraction. NO for a nil layer /
+/// unmeasurable group.
+BOOL CanvasLayerContentHalfExtentObj(NSArray<KKBezierPath *> *layers,
+                                     KKBezierPath *layer,
+                                     float *_Nullable outHx,
+                                     float *_Nullable outHy);
+
 NS_ASSUME_NONNULL_END

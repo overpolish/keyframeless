@@ -58,7 +58,7 @@
                   forceUpdate:forceUpdate
                        atTime:time];
   if (activePart == kOSCScalePart) {
-    self.scaleControl.center = [self oscPositionAtTime:time];
+    self.scaleControl.center = [self.anchorControl pivotCanvasAtTime:time];
     self.scaleControl.frameMin = [self _onScreenFrameMin];
     [self.scaleControl mouseDownAtX:positionX
                                   y:positionY
@@ -95,7 +95,7 @@
   if (activePart == kOSCRotationPart) {
     // The shared KKRotationOSC owns press capture (nearest keypose), the
     // smoothed-pose tangent sync, compose/decompose and persistence.
-    self.rotationOSC.center = [self oscPositionAtTime:time];
+    self.rotationOSC.center = [self.anchorControl pivotCanvasAtTime:time];
     self.rotationOSC.optRevealActive = self.optRevealActive;
     [self.rotationOSC mouseDownAtX:positionX
                                  y:positionY
@@ -135,7 +135,7 @@
     return;
   }
   if (activePart == kOSCScalePart) {
-    self.scaleControl.center = [self oscPositionAtTime:time];
+    self.scaleControl.center = [self.anchorControl pivotCanvasAtTime:time];
     self.scaleControl.frameMin = [self _onScreenFrameMin];
     [self.scaleControl mouseDraggedAtX:positionX
                                      y:positionY
