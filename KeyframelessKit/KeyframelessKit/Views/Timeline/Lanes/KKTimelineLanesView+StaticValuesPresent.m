@@ -324,6 +324,13 @@
                       excludedLabels:cfg.excludedLabels];
   }
 
+  // Clamp the initial popover height to the anchor's screen so a small /
+  // low-resolution display doesn't push the bottom rows off-screen. The view's
+  // internal rows scroller (under the sticky mini-viewer + category pill) takes
+  // up the overflow; the popover self-clamps on every later re-fit. On a tall
+  // screen this is a no-op (clamp == natural, no scroll).
+  [staticView clampContentToScreenOfView:anchor];
+
   NSPopover *popover = [self
       _showPopoverWithContent:staticView
                      fromView:anchor

@@ -6,6 +6,7 @@
 #import "KKLaneCategoryNav.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerView.h"
+#import "KKPaddedScrollView.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKSliderView.h"
@@ -19,6 +20,12 @@
 
 // Height of the category nav pill row (icon pills under the mini-viewer).
 static const CGFloat kKKCategoryPillH = 24.0;
+
+// Vertical breathing room kept around the popover when its natural height is
+// clamped to the screen (so the arrow + a small gap fit on a low-res display),
+// and the floor below which we never clamp.
+static const CGFloat kKKStaticPopoverScreenMargin = 48.0;
+static const CGFloat kKKStaticPopoverMinHeight = 160.0;
 
 // Global user preference (not per-clip): the mini-viewer size (0 = sm/default,
 // 1 = md, 2 = lg) is a viewing aid, so it persists across sessions and clips
@@ -42,6 +49,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 @implementation _KKStaticValuesPopoverView {
   NSMutableDictionary<NSString *, _KKStaticValueRow *> *_rowsByLabel;
   NSStackView *_stack;
+  // Vertical scroller (top/bottom fade shadows) hosting only the param-row
+  // stack, so the mini-viewer + header + category pill stay sticky above and a
+  // small / low-resolution display can scroll the rows instead of clipping them.
+  KKPaddedScrollView *_rowsScroll;
   KKMiniViewerView *_miniViewer;
   // Header-band 3-segment pill (sm/md/lg) that sets the global mini-viewer
   // size; the mini-viewer's height constraint is updated in place so the
@@ -278,7 +289,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
                                     contentWidth:cw
                                 labelColumnWidth:labelColumnWidth];
   }
-  CGFloat h = KKPaddingMD + rows + KKPaddingMD;
+  // No trailing bottom pad: the rows scroller is pinned flush to the popover's
+  // bottom edge (so its fade shadow sits at the absolute bottom). The leading
+  // KKPaddingMD is the top inset above the header/mini-viewer/pill chain.
+  CGFloat h = KKPaddingMD + rows;
   if (descriptorPath.length > 0)
     h += [self _canvasHeightForAspect:clipAspect
                                 width:[self _popoverWidthForDescriptor:
@@ -631,12 +645,21 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   _stack.translatesAutoresizingMaskIntoConstraints = NO;
   _stack.orientation = NSUserInterfaceLayoutOrientationVertical;
   _stack.spacing = 0;
-  [self addSubview:_stack];
+  // Only the rows scroll: the mini-viewer + header + category pill stay sticky
+  // above, the param-row stack lives in a vertical scroller (with top/bottom
+  // fade shadows). The stack self-sizes (intrinsic height); the scroller's
+  // flipped clip anchors the rows at top and absorbs any small-screen overflow.
+  _rowsScroll = [[KKPaddedScrollView alloc] initWithDocumentView:_stack
+                                                         padding:0];
+  _rowsScroll.translatesAutoresizingMaskIntoConstraints = NO;
+  [self addSubview:_rowsScroll];
   [NSLayoutConstraint activateConstraints:@[
-    [_stack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-    [_stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+    [_rowsScroll.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+    [_rowsScroll.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+    [_rowsScroll.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
   ]];
-  // Builds the category pill (when >1 category) and the stack's top constraint.
+  // Builds the category pill (when >1 category) and the rows scroller's top
+  // constraint.
   [self _rebuildCategoryNavForLanes:lanes initialCategory:initialCategory];
 
   _lanes = [lanes copy];
@@ -698,8 +721,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     _categoryKeys = nil;
     _selectedCategory = nil;
   }
-  _stackTopConstraint = [_stack.topAnchor constraintEqualToAnchor:top
-                                                         constant:inset];
+  _stackTopConstraint = [_rowsScroll.topAnchor constraintEqualToAnchor:top
+                                                              constant:inset];
   _stackTopConstraint.active = YES;
 }
 
@@ -742,14 +765,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     _excludedRowsByLabel[label].hidden = catHidden(label);
 }
 
-// Resize the popover to hug the currently selected category's page so an
-// uneven split (e.g. 1 Core row vs 3 Noise rows) doesn't leave empty space on
-// the shorter page, and so revealing/hiding a conditional lane re-fits. No-op
-// when there's no popover.
-- (void)_resizePopoverToSelectedCategory {
-  if (!_popover)
-    return;
-  _popover.contentSize = NSMakeSize(
+// The popover content's natural (unclamped) size for the current lanes /
+// category / live values.
+- (CGSize)_naturalContentSize {
+  return NSMakeSize(
       [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath],
       [_KKStaticValuesPopoverView _heightForLanes:_lanes
                                    descriptorPath:_descriptorPath
@@ -757,6 +776,44 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
                                     reserveHeader:_hasHeader
                                  selectedCategory:_selectedCategory
                                     valuesByLabel:_currentValuesByLabel]);
+}
+
+// Clamp a natural content height to what fits on `screen` (with a margin and a
+// sane floor). The overflow above the clamp is absorbed by the internal rows
+// scroller; on a tall screen this returns the natural height unchanged.
+- (CGFloat)_clampHeight:(CGFloat)naturalHeight toScreen:(NSScreen *)screen {
+  NSScreen *scr = screen ?: NSScreen.mainScreen;
+  CGFloat avail =
+      scr.visibleFrame.size.height - kKKStaticPopoverScreenMargin;
+  return MIN(naturalHeight, MAX(kKKStaticPopoverMinHeight, avail));
+}
+
+// Re-fit the popover to the current natural size, clamped to its screen so the
+// rows scroll rather than running off a small display. No-op before the popover
+// exists (initial sizing goes through -clampContentToScreenOfView:).
+- (void)_applyContentSize {
+  if (!_popover)
+    return;
+  CGSize s = [self _naturalContentSize];
+  s.height = [self _clampHeight:s.height
+                       toScreen:_popover.contentViewController.view.window.screen];
+  _popover.contentSize = s;
+}
+
+- (void)clampContentToScreenOfView:(NSView *)view {
+  CGSize s = [self _naturalContentSize];
+  s.height = [self _clampHeight:s.height toScreen:view.window.screen];
+  [self setFrameSize:s];
+}
+
+// Resize the popover to hug the currently selected category's page so an
+// uneven split (e.g. 1 Core row vs 3 Noise rows) doesn't leave empty space on
+// the shorter page, and so revealing/hiding a conditional lane re-fits. No-op
+// when there's no popover.
+- (void)_resizePopoverToSelectedCategory {
+  if (!_popover)
+    return;
+  [self _applyContentSize];
 }
 
 // While a colour swatch's shared panel is open, the panel is a separate window;
@@ -1133,13 +1190,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   if (lanes.count == 0 && _popover)
     [_popover close];
   else if (_popover)
-    _popover.contentSize = NSMakeSize(
-        [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath],
-        [_KKStaticValuesPopoverView heightForLanes:lanes
-                                    descriptorPath:_descriptorPath
-                                        clipAspect:_clipAspect
-                                     reserveHeader:_hasHeader
-                                  selectedCategory:_selectedCategory]);
+    [self _applyContentSize];
 
   // The shared mini-viewer renderer was updated externally (cmd-Z, or a new
   // layer's lanes arriving while the companion layer-list panel is open), but

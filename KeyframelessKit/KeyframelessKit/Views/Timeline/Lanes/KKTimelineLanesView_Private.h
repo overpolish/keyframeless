@@ -179,6 +179,12 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// path that wires onion-skin filmstrip clicks) can attach extra closures
 /// without threading another init parameter.
 @property(nonatomic, readonly, nullable) KKMiniViewerView *miniViewer;
+/// Size the view's frame to its natural content height clamped to `view`'s
+/// screen, before the popover is shown. On a small / low-resolution display the
+/// overflow goes to the internal rows scroller (the rows below the sticky
+/// mini-viewer + category pill); on a tall screen this is the natural height
+/// (no clamp, no scroll). Later re-fits self-clamp the same way.
+- (void)clampContentToScreenOfView:(NSView *)view;
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                descriptorPath:(nullable NSString *)descriptorPath
                    clipAspect:(CGFloat)clipAspect
