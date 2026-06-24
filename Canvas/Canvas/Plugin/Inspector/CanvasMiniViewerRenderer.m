@@ -41,6 +41,7 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   id<MTLRenderPipelineState> _pipeline;       // source passthrough (no blend)
   id<MTLRenderPipelineState> _imagePipeline;  // image overlay (premult alpha)
   id<MTLRenderPipelineState> _strokePipeline; // vector stroke (premult alpha)
+  id<MTLRenderPipelineState> _strokeGradientPipeline; // gradient-filled stroke
   MTLPixelFormat _pipelineFormat;
   // Image-layer textures, keyed by path. The renderer lives in the inspector
   // process (separate from the render XPC), so it can't share the plugin's
@@ -709,7 +710,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   // Vector strokes: transform vertex shader (compose like image layers) + the
   // antialiased line fragment, matching the main render's stroke pipeline.
   id<MTLFunction> lfn = [lib newFunctionWithName:@"KKLineFragment"];
-  if (!vfn || !tvfn || !ffn || !offn || !lfn) {
+  id<MTLFunction> glfn = [lib newFunctionWithName:@"KKGradientLineFragment"];
+  if (!vfn || !tvfn || !ffn || !offn || !lfn || !glfn) {
     KKLogError(@"CanvasMiniViewerRenderer: missing passthrough shaders");
     return NO;
   }
@@ -750,9 +752,23 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     return NO;
   }
 
+  MTLRenderPipelineDescriptor *strokeGrad = [KKRenderPrimitives
+      createPipelineDescriptorWithVertexFunction:tvfn
+                                fragmentFunction:glfn
+                                     pixelFormat:format
+                                       blendMode:KKBlendModePremultipliedAlpha];
+  id<MTLRenderPipelineState> strokeGradPS =
+      [device newRenderPipelineStateWithDescriptor:strokeGrad error:&err];
+  if (!strokeGradPS) {
+    KKLogError(@"CanvasMiniViewerRenderer: gradient stroke pipeline failed: %@",
+               err);
+    return NO;
+  }
+
   _pipeline = srcPS;
   _imagePipeline = imgPS;
   _strokePipeline = strokePS;
+  _strokeGradientPipeline = strokeGradPS;
   _pipelineFormat = format;
   return YES;
 }
@@ -857,7 +873,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     // self.outputWidth here too (same as the main render's thumbnail fix).
     CanvasEncodeVectorLayers(self.layers ?: @[], enc, cb.device, w, h, 0.0f,
                              0.0f, self.editFraction, self.selectedLayerID,
-                             self.timeline, 1.0f);
+                             self.timeline, 1.0f, _strokePipeline,
+                             _strokeGradientPipeline);
   }
 
   [enc endEncoding];

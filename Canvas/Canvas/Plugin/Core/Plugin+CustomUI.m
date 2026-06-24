@@ -11,6 +11,7 @@
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
 #import <KeyframelessKit/KKTimingStage.h>
@@ -171,8 +172,33 @@
   [strokeWidth insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                               values:@[ @20.0, @20.0 ]]];
 
+  // Stroke colour: the shared reusable colour group (Mode pill + solid swatch +
+  // composite gradient), the SAME helper Glow uses. No Dynamic mode - a vector
+  // stroke has no source pixels to sample - so the modes are Solid (default) +
+  // Gradient. Labels are prefixed ("Stroke Mode" / "Stroke Solid" / "Stroke
+  // Gradient") so a future Fill colour group can't collide. Seeded per-path from
+  // the flat strokeColorMode / strokeR,G,B in CanvasLayerTimelineForPath. The kit
+  // renders the swatch + gradient editor for KKLaneValueType Color/Gradient
+  // automatically.
+  NSArray<KKLane *> *strokeColor =
+      KKColorLanesMake(@"Stroke", /*includesDynamic=*/NO, /*animatable=*/YES);
+  for (KKLane *l in strokeColor) {
+    l.enabled = NO; // constant by default; animate per-layer via the dropdown
+    l.ownerScoped = YES; // vector paths only, like the rest of the group
+    l.categoryKey = @"Stroke";
+    l.categorySymbol = @"lineweight";
+  }
+  // Gate the whole colour sub-group with the same Enabled toggle. Only the Mode
+  // lane needs the gate: the Solid / Gradient lanes are visibleWhen the Mode lane
+  // (set by KKColorLanesMake), and the visibility cascade hides a lane when its
+  // controller is itself hidden - so Enabled=off hides Mode, which hides both.
+  KKLane *strokeMode = strokeColor[0];
+  strokeMode.visibleWhenLabel = @"Enabled";
+  strokeMode.visibleWhenValues = @[ @1 ];
+
   return @[
-    points, strokeOn, strokeWidth, scale, position, rotation, anchor, opacity
+    points, strokeOn, strokeWidth, strokeColor[0], strokeColor[1],
+    strokeColor[2], scale, position, rotation, anchor, opacity
   ];
 }
 

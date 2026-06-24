@@ -6,6 +6,7 @@
 #import "CanvasLayerTimeline.h"
 #import "CanvasLayerRender.h"
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
 // U+001F separator joining a context lane's short label to its layerID (unique
@@ -113,27 +114,70 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
   for (KKLane *t in templates) {
     // Points (path geometry) and the Stroke group apply to vector-path layers
     // only - images and groups have no editable anchors or stroke.
-    BOOL vectorOnly = [t.label isEqualToString:@"Points"] ||
-                      [t.label isEqualToString:@"Stroke Width"] ||
-                      [t.label isEqualToString:@"Enabled"];
+    BOOL vectorOnly =
+        [t.label isEqualToString:@"Points"] ||
+        [t.label isEqualToString:@"Stroke Width"] ||
+        [t.label isEqualToString:@"Enabled"] ||
+        [t.label isEqualToString:KKColorLanesModeLabel(@"Stroke")] ||
+        [t.label isEqualToString:KKColorLanesSolidLabel(@"Stroke")] ||
+        [t.label isEqualToString:KKColorLanesGradientLabel(@"Stroke")];
     if (vectorOnly && (path.isImage || path.isGroup))
       continue;
     KKLane *src = [(stored[t.label] ?: t) copy];
+    // Re-assert the template's canonical DISPLAY / picker metadata onto a
+    // stored (round-tripped) lane - the animationJSON drops non-codable props,
+    // notably componentLabelColors (the R/G/B/A graph-line tints), so an
+    // animated colour lane drew every channel in the default accent instead of
+    // red/green/blue. Mirrors the kit seeder (_timelineSeededFrom) that Glow
+    // goes through; user state (keyposes, enabled, aspectLinked) is untouched.
+    src.valueType = t.valueType;
+    src.componentMin = t.componentMin;
+    src.componentMax = t.componentMax;
+    src.componentUnits = t.componentUnits;
+    src.componentLabels = t.componentLabels;
+    src.componentLabelColors = t.componentLabelColors;
+    src.componentsScaleWithMedia = t.componentsScaleWithMedia;
+    [src kkApplyPickerMetadataFrom:t];
+    // A non-animatable param (a structural enum / toggle like the colour "Mode"
+    // or the stroke "Enabled") is ALWAYS constant - it can't be animated, so it
+    // must never read as enabled, whatever a stale animationJSON says. Without
+    // this an old blob (or a controller carried back by the merged-timeline
+    // split) could leave Mode enabled and wrongly show it as an animated row.
+    if (!t.animatable)
+      src.enabled = NO;
     // Stroke Width with no stored lane: seed from the layer's flat
-    // strokeWidth/endWidth so an existing path keeps its width (the render reads
-    // the lane). End falls back to Start when unset (no taper). A stored lane
-    // (already edited / animated) wins.
+    // strokeWidth/endWidth so an existing path keeps its width (the render
+    // reads the lane). End falls back to Start when unset (no taper). A stored
+    // lane (already edited / animated) wins.
     if (!stored[t.label] && [t.label isEqualToString:@"Stroke Width"]) {
       double sw = path.strokeWidth, ew = path.endWidth > 0 ? path.endWidth : sw;
-      src.keyposes =
-          @[ [KKKeyPose keyposeAtTime:0.0 values:@[ @(sw), @(ew) ]] ];
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(sw), @(ew) ]] ];
     }
     // Stroke "Enabled" with no stored lane: seed from the layer's flat
     // strokeEnabled (boolean-op results / explicit toggles start off).
     if (!stored[t.label] && [t.label isEqualToString:@"Enabled"]) {
-      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
-                                          values:@[ @(path.strokeEnabled ? 1.0
-                                                                         : 0.0) ]] ];
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.strokeEnabled ? 1.0 : 0.0) ]] ];
+    }
+    // Stroke colour Mode / Solid with no stored lane: seed from the flat
+    // strokeColorMode (0=Solid, 1=Gradient - same ordering, no Dynamic) and
+    // strokeR,G,B (alpha 1). Gradient lane keeps the template default for now;
+    // the gradient render increment seeds it from the flat gradient props.
+    if (!stored[t.label] &&
+        [t.label isEqualToString:KKColorLanesModeLabel(@"Stroke")]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.strokeColorMode) ]] ];
+    }
+    if (!stored[t.label] &&
+        [t.label isEqualToString:KKColorLanesSolidLabel(@"Stroke")]) {
+      src.keyposes = @[ [KKKeyPose
+          keyposeAtTime:0.0
+                 values:@[
+                   @(path.strokeR), @(path.strokeG), @(path.strokeB), @1.0
+                 ]] ];
     }
     // Tag with the layer for the Advanced view's layer header. The LABEL stays
     // plain ("Scale") so the kit's label-keyed edit surfaces are unaffected;
@@ -148,8 +192,9 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
       [order addObject:t.label];
   }
   // Stroke group gating is NOT done here: the "Enabled" toggle drives the
-  // shared visibleWhen cascade (set on the template lanes), so a disabled stroke
-  // drops its lanes out of every timeline surface uniformly - no per-build lock.
+  // shared visibleWhen cascade (set on the template lanes), so a disabled
+  // stroke drops its lanes out of every timeline surface uniformly - no
+  // per-build lock.
   tl.lanes = lanes;
   tl.paramOrder = order;
   return tl;
@@ -219,7 +264,8 @@ KKTimeline *CanvasMergedTimeline(NSArray<KKBezierPath *> *paths,
     // Source the layer's lanes from the SAME per-layer builder the rest of the
     // UI uses (not raw JSON), so a gated lane's CONSTANT controller (e.g. the
     // stroke "Enabled" toggle, whose value may live only in the flat prop) is
-    // present + seeded - otherwise the visibleWhen cascade can't resolve it here.
+    // present + seeded - otherwise the visibleWhen cascade can't resolve it
+    // here.
     KKTimeline *s = CanvasLayerTimelineForPath(p, templates);
     NSMutableDictionary<NSString *, KKLane *> *stored =
         [NSMutableDictionary dictionary];
@@ -228,8 +274,9 @@ KKTimeline *CanvasMergedTimeline(NSArray<KKBezierPath *> *paths,
         stored[l.label] = l;
     // Emit in TEMPLATE (parameter) order, only the layer's ANIMATED lanes, so
     // every layer's rows share one stable order and constant-only layers add
-    // nothing. Lane labels (and any visibleWhen controller reference) are tagged
-    // with the layer id so each layer's cascade resolves against ITS controller.
+    // nothing. Lane labels (and any visibleWhen controller reference) are
+    // tagged with the layer id so each layer's cascade resolves against ITS
+    // controller.
     NSMutableSet<NSString *> *emittedPlain = [NSMutableSet set];
     NSMutableSet<NSString *> *neededControllers = [NSMutableSet set];
     void (^tag)(KKLane *, NSString *) = ^(KKLane *c, NSString *plain) {
@@ -253,13 +300,21 @@ KKTimeline *CanvasMergedTimeline(NSArray<KKBezierPath *> *paths,
       if (st.visibleWhenLabel.length)
         [neededControllers addObject:st.visibleWhenLabel];
     }
-    // A gated animated lane (e.g. Stroke Width) is controlled by a CONSTANT lane
-    // (e.g. the "Enabled" toggle) that the animated-only emit above skips. Carry
-    // those controllers in (tagged) so the visibleWhen cascade can read their
-    // value here too - the graph/filter re-gate on `enabled`, so a constant
-    // controller never renders as a row, it only resolves the rule.
-    for (NSString *ctrlPlain in neededControllers) {
-      if ([emittedPlain containsObject:ctrlPlain])
+    // A gated animated lane (e.g. Stroke Width) is controlled by a CONSTANT
+    // lane (e.g. the "Enabled" toggle) that the animated-only emit above skips.
+    // Carry those controllers in (tagged) so the visibleWhen cascade can read
+    // their value here too - the graph/filter re-gate on `enabled`, so a
+    // constant controller never renders as a row, it only resolves the rule.
+    // TRANSITIVELY: a controller can itself be gated (Solid -> Mode ->
+    // Enabled), so carrying Mode must also carry its controller Enabled.
+    NSMutableArray<NSString *> *pending =
+        [neededControllers.allObjects mutableCopy];
+    NSMutableSet<NSString *> *carried = [NSMutableSet set];
+    while (pending.count) {
+      NSString *ctrlPlain = pending.lastObject;
+      [pending removeLastObject];
+      if ([emittedPlain containsObject:ctrlPlain] ||
+          [carried containsObject:ctrlPlain])
         continue;
       KKLane *cst = stored[ctrlPlain];
       if (!cst)
@@ -268,6 +323,9 @@ KKTimeline *CanvasMergedTimeline(NSArray<KKBezierPath *> *paths,
       tag(cc, ctrlPlain);
       [lanes addObject:cc];
       [order addObject:cc.label];
+      [carried addObject:ctrlPlain];
+      if (cst.visibleWhenLabel.length)
+        [pending addObject:cst.visibleWhenLabel]; // its own controller, in turn
     }
   }
   tl.lanes = lanes;
@@ -311,6 +369,13 @@ void CanvasApplyMergedTimelineToPaths(KKTimeline *merged,
     }
     KKLane *c = [l copy];
     c.label = CanvasPlainLabel(l.label);
+    // Strip the layer tag from the visibleWhen CONTROLLER reference too, not
+    // just the label - CanvasMergedTimeline tags both. If we persist a tagged
+    // controller ("Mode\x1f<lid>"), the next rebuild can't re-find the plain
+    // "Mode" lane to carry, the cascade's controller lookup fails, and a gated
+    // lane (Gradient when Mode=Solid) falls open and wrongly shows.
+    if (c.visibleWhenLabel.length)
+      c.visibleWhenLabel = CanvasPlainLabel(c.visibleWhenLabel);
     c.layerKey = nil;
     c.layerLabel = nil;
     c.layerSymbol = nil;

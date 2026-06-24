@@ -100,10 +100,13 @@ Vector paths have a **Stroke** group in the inspector (images and groups don't -
 
 - **Enabled** - a checkbox that turns the path's stroke on or off. When it's off the stroke stops rendering and the rest of the Stroke group's controls drop out of every timeline surface (the constants/keypose popovers, the Animated dropdown, the lane filter, and the Basic/Advanced graphs) until you turn it back on - the toggle is the single source of truth.
 - **Stroke Width** - a two-field width in pixels with a **Start** and an **End**, whole numbers, **aspect-linked by default**. Linked, the two move together and the stroke is a uniform width. **Unlink** them (the link glyph on the row) and set Start ≠ End to **taper** the stroke - it interpolates from the Start width at the beginning of the path to the End width at the end, along the path's length. The taper is computed per contour, so a boolean / multi-contour path tapers each subpath; on a closed shape the width steps from End back to Start at the point where it closes.
+- **Stroke colour** - a **Mode** pill (Solid / Gradient) plus the matching editor: a colour **swatch** for Solid, or a **gradient** editor (stops, Radial / Linear, angle) for Gradient. Solid colour and the gradient both **animate** (add them to the Animated dropdown); Mode itself is a structural choice, not animated. The whole colour sub-group is gated by the **Enabled** toggle, like the rest of the Stroke group.
 
-Stroke Width is an ordinary animatable lane: constant by default, or add it to the Animated dropdown to keypose the width (or the taper) over the clip with the usual Basic / Advanced timing. It edits whichever path is selected in the Layers panel, and the rendered width is resolution-correct (it scales down correctly in browser thumbnails). Hit-testing follows the actual drawn stroke, so a tapered stroke stays clickable along its real shape, fat end and thin end alike.
+Stroke Width and the colour are ordinary animatable lanes: constant by default, or add them to the Animated dropdown to keypose them over the clip with the usual Basic / Advanced timing. They edit whichever path is selected in the Layers panel, and the rendered width is resolution-correct (it scales down correctly in browser thumbnails). Hit-testing follows the actual drawn stroke, so a tapered stroke stays clickable along its real shape, fat end and thin end alike.
 
-Stroke **colour**, **fill**, dashes / caps and the sketch (hand-drawn) render style are still to come; for now a stroke renders in the default red.
+The **gradient** maps onto the stroke pivoting on the layer's centre: **Linear** runs along the angle (0° up, 90° right, 180° down) and spans the layer so it always reaches both end colours; **Radial** runs as a circle from the centre out to the ends. Colours are rendered colour-accurate against the editor swatch. In the Advanced graph an animated solid colour plots its **R / G / B** channels as separate red/green/blue lines (alpha is edited in the swatch, not graphed).
+
+**Fill**, dashes / caps and the sketch (hand-drawn) render style are still to come.
 
 ## Toolbar
 
@@ -143,7 +146,7 @@ Anchors show as dots and tangent handles as smaller dots on lines, the same look
 
 The pen tool is also context-sensitive on an existing selected path: clicking a **segment** inserts an anchor there (preserving the curve), and clicking either open **endpoint** continues drawing from that tip. Holding **Opt** over an anchor turns the cursor into a delete nib and removes that point.
 
-A new path starts with a 20px red stroke. Its **width** is now a per-path, animatable property (with an optional Start->End taper - see **Stroke** above); colour and fill are still to come.
+A new path starts with a 20px red stroke. Its **width** (with an optional Start->End taper) and **colour** (solid or gradient) are now per-path, animatable properties - see **Stroke** above; fill is still to come.
 
 ## Creating shapes (rectangle / ellipse tools)
 
@@ -210,4 +213,4 @@ The inspector's motion-blur control applies the shared sample-accumulate blur to
 
 - Per-layer **rotation** (lane + on-canvas gizmo).
 - Per-layer opacity in the render.
-- Stroke **colour** UI and **fill** (width is done - see **Stroke** above), plus the sketch (hand-drawn) render style.
+- Stroke **fill** (width + colour are done - see **Stroke** above), plus the sketch (hand-drawn) render style.

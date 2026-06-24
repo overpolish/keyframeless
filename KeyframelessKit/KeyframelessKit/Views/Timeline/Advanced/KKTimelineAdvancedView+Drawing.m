@@ -602,6 +602,11 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   CGFloat clampHi = NSMaxY(row);
 
   NSUInteger compCount = kps.firstObject.values.count;
+  // A colour lane is [R,G,B,A] but the graph plots only R/G/B - the alpha curve
+  // is near-always flat and just clutters the row (and read as a spurious extra
+  // line). Alpha stays editable via the swatch.
+  if (lane.valueType == KKLaneValueTypeColor && compCount > 3)
+    compCount = 3;
   // Composite gradient lanes don't plot their raw [type, angle, stops...] -
   // they plot 1-2 derived lines (a stops "signature", plus angle when linear),
   // all in 0..1, so the scale stays fixed and the raw sampling below is

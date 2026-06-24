@@ -203,6 +203,36 @@ BOOL CanvasStrokeEnabledAtFraction(KKBezierPath *path, double frac,
   return on;
 }
 
+KKColorLanesValue CanvasStrokeColorAtFraction(KKBezierPath *path, double frac,
+                                              NSString *overrideLayerID,
+                                              KKTimeline *overrideTimeline) {
+  KKTimeline *tl =
+      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+  // No colour lanes (a path whose animationJSON predates stroke colour): fall
+  // back to the flat solid colour so it renders exactly as before.
+  BOOL hasColorLanes = NO;
+  for (KKLane *lane in tl.lanes)
+    if ([lane.label isEqualToString:KKColorLanesModeLabel(@"Stroke")] ||
+        [lane.label isEqualToString:KKColorLanesSolidLabel(@"Stroke")]) {
+      hasColorLanes = YES;
+      break;
+    }
+  if (!hasColorLanes) {
+    KKColorLanesValue v;
+    memset(&v, 0, sizeof(v));
+    v.mode = path.strokeColorMode == 1 ? KKColorModeGradient : KKColorModeSolid;
+    v.solidColor = simd_make_float3(path.strokeR, path.strokeG, path.strokeB);
+    return v;
+  }
+  return KKColorLanesResolve(
+      @"Stroke", /*includesDynamic=*/NO, ^NSArray<NSNumber *> *(NSString *l) {
+        for (KKLane *lane in tl.lanes)
+          if ([lane.label isEqualToString:l])
+            return KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+        return nil;
+      });
+}
+
 #pragma mark - Group content bounds / centre
 
 // Bounds of where the image layers nested under the group at `groupIdx`

@@ -225,13 +225,58 @@ simd_float2 CanvasLayerObjectCenter(KKBezierPath *path) {
   return (lo + hi) * 0.5f;
 }
 
-void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
-                              id<MTLRenderCommandEncoder> encoder,
-                              id<MTLDevice> device, float imageWidth,
-                              float imageHeight, float tileShiftX,
-                              float tileShiftY, double frac,
-                              NSString *overrideLayerID,
-                              KKTimeline *overrideTimeline, float strokeScale) {
+// Bake the per-vertex gradient position (0..1) into each strip vertex's
+// textureCoordinate.x (unused by the solid path), so KKGradientLineFragment just
+// samples the LUT. Both modes pivot on the layer (bbox) centre, like a fill
+// gradient: LINEAR runs along the angle and is normalised by the bbox's extent
+// IN THAT DIRECTION (so it spans the layer and reaches both end colours at any
+// angle, instead of compressing); RADIAL is a circle from the centre out, sized
+// to the larger bbox dimension (per-axis d/bbSize collapses on a horizontal /
+// vertical line whose bbox is ~0 in one axis). Angle matches the circular knob:
+// 0 deg up, 90 right, 180 down -> object-space dir (sin, cos).
+static void CanvasBakeStrokeGradientCoords(KKVertex2D *verts, NSUInteger vc,
+                                           KKBezierPath *geom, float imageWidth,
+                                           float imageHeight, float strokeStart,
+                                           float strokeEnd, float strokeScale,
+                                           KKColorLanesValue cv) {
+  simd_float2 bbMin = simd_make_float2(FLT_MAX, FLT_MAX);
+  simd_float2 bbMax = simd_make_float2(-FLT_MAX, -FLT_MAX);
+  for (NSUInteger pi = 0; pi < geom.count; pi++) {
+    KKBezierPoint pt = [geom pointAtIndex:pi];
+    float px = (pt.x - 0.5f) * imageWidth;
+    float py = (pt.y - 0.5f) * imageHeight;
+    bbMin = simd_make_float2(fminf(bbMin.x, px), fminf(bbMin.y, py));
+    bbMax = simd_make_float2(fmaxf(bbMax.x, px), fmaxf(bbMax.y, py));
+  }
+  float pad = 0.5f * fmaxf(strokeStart, strokeEnd) * strokeScale;
+  bbMin -= pad;
+  bbMax += pad;
+  simd_float2 bbCenter = (bbMin + bbMax) * 0.5f;
+  simd_float2 bbSize = simd_make_float2(fmaxf(bbMax.x - bbMin.x, 1.0f),
+                                        fmaxf(bbMax.y - bbMin.y, 1.0f));
+  float th = cv.gradientAngle;
+  simd_float2 dir = simd_make_float2(sinf(th), cosf(th));
+  // Half the bbox extent measured along `dir` (its support function), so the
+  // gradient reaches t=0/1 at the bbox edge in the gradient direction.
+  float halfExtent = fmaxf(
+      0.5f * bbSize.x * fabsf(dir.x) + 0.5f * bbSize.y * fabsf(dir.y), 1.0e-3f);
+  float maxDim = fmaxf(bbSize.x, bbSize.y);
+  for (NSUInteger vi = 0; vi < vc; vi++) {
+    simd_float2 d = verts[vi].position - bbCenter;
+    float gt = (cv.gradientType == 1)
+                   ? simd_dot(d, dir) / (2.0f * halfExtent) + 0.5f // linear
+                   : 2.0f * simd_length(d) / fmaxf(maxDim, 1.0f);  // radial
+    gt = gt < 0.0f ? 0.0f : (gt > 1.0f ? 1.0f : gt);
+    verts[vi].textureCoordinate.x = gt;
+  }
+}
+
+void CanvasEncodeVectorLayers(
+    NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
+    id<MTLDevice> device, float imageWidth, float imageHeight, float tileShiftX,
+    float tileShiftY, double frac, NSString *overrideLayerID,
+    KKTimeline *overrideTimeline, float strokeScale,
+    id<MTLRenderPipelineState> solidPS, id<MTLRenderPipelineState> gradientPS) {
   if (!encoder || !device || layers.count == 0)
     return;
   if (strokeScale <= 0.0f)
@@ -250,7 +295,8 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
       continue;
     // Effective Start/End widths from the Stroke Width lane at this fraction
     // (px), falling back to the flat strokeWidth/endWidth. The stroke tapers
-    // Start -> End along each contour; a static preview (frac < 0) reads frac 0.
+    // Start -> End along each contour; a static preview (frac < 0) reads frac
+    // 0.
     float strokeStart = path.strokeWidth;
     float strokeEnd = path.strokeWidth;
     CanvasStrokeWidthAtFraction(path, frac < 0.0 ? 0.0 : frac, overrideLayerID,
@@ -303,9 +349,23 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
     float opacity = t.opacity * path.opacity;
     for (NSInteger k = 0; k < ng; k++)
       opacity *= groups[k].t.opacity;
-    simd_float4 color =
-        simd_make_float4(path.strokeR, path.strokeG, path.strokeB, opacity);
+    // Stroke colour from the shared colour lanes (Solid / Gradient, no
+    // Dynamic), falling back to the flat strokeR,G,B.
+    KKColorLanesValue cv = CanvasStrokeColorAtFraction(
+        path, frac < 0.0 ? 0.0 : frac, overrideLayerID, overrideTimeline);
+    BOOL useGradient = (cv.mode == KKColorModeGradient) && gradientPS != nil;
+    if (useGradient)
+      CanvasBakeStrokeGradientCoords(verts, vc, geom, imageWidth, imageHeight,
+                                     strokeStart, strokeEnd, strokeScale, cv);
+    // sRGB -> linear (the render's working space), matching the gradient
+    // fragment's pow(2.2). Pure-channel colours are unchanged; midtones darken
+    // to their correct linear value so a solid matches the editor + a gradient
+    // stop.
+    simd_float3 solid = cv.solidColor;
+    simd_float4 color = simd_make_float4(
+        powf(solid.x, 2.2f), powf(solid.y, 2.2f), powf(solid.z, 2.2f), opacity);
 
+    [encoder setRenderPipelineState:(useGradient ? gradientPS : solidPS)];
     [encoder setVertexBytes:&m
                      length:sizeof(m)
                     atIndex:KKVertexInputIndex_Transform];
@@ -318,7 +378,14 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
                             length:sizeof(KKVertex2D) * vc
                            options:MTLResourceStorageModeShared];
     [encoder setVertexBuffer:vbuf offset:0 atIndex:KKVertexInputIndex_Vertices];
-    [encoder setFragmentBytes:&color length:sizeof(color) atIndex:0];
+    if (useGradient) {
+      [encoder setFragmentBytes:cv.gradientLUT
+                         length:sizeof(cv.gradientLUT)
+                        atIndex:0];
+      [encoder setFragmentBytes:&opacity length:sizeof(opacity) atIndex:1];
+    } else {
+      [encoder setFragmentBytes:&color length:sizeof(color) atIndex:0];
+    }
     [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
                 vertexStart:0
                 vertexCount:vc];

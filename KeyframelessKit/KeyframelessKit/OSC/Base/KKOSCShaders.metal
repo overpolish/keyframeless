@@ -243,6 +243,31 @@ fragment float4 KKLineFragment(KKRasterizerData in [[stage_in]],
     return float4(color->rgb * a, a);
 }
 
+/// Like KKLineFragment but filled with a gradient instead of a solid colour.
+/// textureCoordinate.y is the signed edge distance (AA, same as KKLineFragment);
+/// textureCoordinate.x is the gradient position 0..1, which the caller bakes per
+/// vertex (so the gradient geometry - linear / radial across a bbox - is decided
+/// CPU-side and this shader just samples). buffer 0 = the gradient LUT
+/// (KK_GRADIENT_LUT_SIZE sRGB float3 samples, from KKColorLanesResolve); buffer
+/// 1 = opacity. Output is premultiplied to match the line pipeline's blend.
+fragment float4 KKGradientLineFragment(KKRasterizerData in [[stage_in]],
+                                       constant float3 *lut [[buffer(0)]],
+                                       constant float *opacity [[buffer(1)]]) {
+    float dist = abs(in.textureCoordinate.y);
+    float alpha = 1.0 - smoothstep(1.0 - fwidth(dist) * 2.0, 1.0, dist);
+    if (alpha < 0.001)
+        discard_fragment();
+    const int n = 64; // == KK_GRADIENT_LUT_SIZE (KKColor.h)
+    float lutPos = saturate(in.textureCoordinate.x) * float(n - 1);
+    int i0 = int(floor(lutPos));
+    int i1 = min(i0 + 1, n - 1);
+    // LUT is sRGB; the render works in linear space, so linearise before output
+    // (same pow(2.2) Glow applies to its gradient + solid colour).
+    float3 rgb = pow(mix(lut[i0], lut[i1], lutPos - float(i0)), 2.2);
+    float a = alpha * (*opacity);
+    return float4(rgb * a, a);
+}
+
 /// Fragment shader for rendering a text label texture.
 fragment float4 KKLabelFragment(KKRasterizerData in [[stage_in]], texture2d<float> labelTexture [[texture(0)]]) {
     constexpr sampler s(mag_filter::linear, min_filter::linear);

@@ -89,11 +89,17 @@ void CanvasEncodeSourceTile(id<MTLRenderCommandEncoder> encoder,
 /// stored (native-px) stroke width so a DOWNSCALED render (e.g. an FCP browser
 /// thumbnail) draws strokes at the right thickness; pass 1.0 for a full-res /
 /// native render.
+/// `solidPS` is the line pipeline (KKLineFragment); `gradientPS` is the
+/// gradient line pipeline (KKGradientLineFragment). The function sets the right
+/// one per layer from its stroke-colour Mode. Pass gradientPS = nil to force
+/// solid.
 void CanvasEncodeVectorLayers(
     NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
     id<MTLDevice> device, float imageWidth, float imageHeight, float tileShiftX,
     float tileShiftY, double frac, NSString *_Nullable overrideLayerID,
-    KKTimeline *_Nullable overrideTimeline, float strokeScale);
+    KKTimeline *_Nullable overrideTimeline, float strokeScale,
+    id<MTLRenderPipelineState> _Nullable solidPS,
+    id<MTLRenderPipelineState> _Nullable gradientPS);
 
 /// Click-to-select hit-test: returns the `layerID` of the TOPMOST layer hit by
 /// the object-space point (`objX`,`objY`) in [0,1] (Y-up, the render's object

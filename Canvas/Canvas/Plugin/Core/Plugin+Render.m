@@ -203,6 +203,16 @@
                                   vertexShader:@"KKTransformVertexShader"
                                 fragmentShader:@"KKLineFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];
+  // Gradient-stroke variant: same vertex pipeline, gradient-LUT fragment.
+  id<MTLRenderPipelineState> strokeGradientPS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Canvas.strokeGradient"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:kitBundleID
+                                  vertexShader:@"KKTransformVertexShader"
+                                fragmentShader:@"KKGradientLineFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
 
   // The state blob is [KKMotionBlurState][layer blob]; split off the MB prefix
   // before decoding the layer stack (bottom of the array draws in front, so
@@ -290,7 +300,8 @@
     if (strokePS) {
       [enc setRenderPipelineState:strokePS];
       CanvasEncodeVectorLayers(layers, enc, device, outputWidth, outputHeight,
-                               tileShiftX, tileShiftY, f, nil, nil, strokeScale);
+                               tileShiftX, tileShiftY, f, nil, nil, strokeScale,
+                               strokePS, strokeGradientPS);
     }
   };
 

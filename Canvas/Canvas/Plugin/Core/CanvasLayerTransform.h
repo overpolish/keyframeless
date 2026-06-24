@@ -12,6 +12,7 @@
 // here rather than as file-statics in one of them.
 
 #import <Foundation/Foundation.h>
+#import <KeyframelessKit/KKColorLanes.h> // KKColorLanesValue
 #import <simd/simd.h>
 
 @class KKBezierPath;
@@ -65,8 +66,9 @@ CanvasLayerTransform CanvasLayerTransformAtFraction(KKBezierPath *path,
 /// The effective stroke Start/End width (native px) at `frac` from the layer's
 /// "Stroke Width" lane, falling back to the flat `strokeWidth`/`endWidth` when
 /// there is no lane yet. `overrideLayerID`/`overrideTimeline` let the live
-/// inspector edit of the selected layer preview before it persists (pass nil/nil
-/// for the persisted state). Shared by the render and the OSC stroke draw.
+/// inspector edit of the selected layer preview before it persists (pass
+/// nil/nil for the persisted state). Shared by the render and the OSC stroke
+/// draw.
 void CanvasStrokeWidthAtFraction(KKBezierPath *path, double frac,
                                  NSString *_Nullable overrideLayerID,
                                  KKTimeline *_Nullable overrideTimeline,
@@ -74,11 +76,22 @@ void CanvasStrokeWidthAtFraction(KKBezierPath *path, double frac,
                                  float *_Nullable outEnd);
 
 /// Whether the stroke is ON at `frac` from the layer's "Enabled" toggle lane,
-/// falling back to the flat `strokeEnabled` when there is no lane. Shared by the
-/// render + hit-test so a lane-disabled stroke neither draws nor is pickable.
+/// falling back to the flat `strokeEnabled` when there is no lane. Shared by
+/// the render + hit-test so a lane-disabled stroke neither draws nor is
+/// pickable.
 BOOL CanvasStrokeEnabledAtFraction(KKBezierPath *path, double frac,
                                    NSString *_Nullable overrideLayerID,
                                    KKTimeline *_Nullable overrideTimeline);
+
+/// The resolved stroke colour at `frac` from the layer's "Stroke Mode/Solid/
+/// Gradient" lanes (the shared KKColorLanes group, no Dynamic), falling back to
+/// the flat strokeColorMode / strokeR,G,B when there is no lane yet. The result
+/// feeds the render + OSC: Solid uses `solidColor`; Gradient uses `gradientLUT`
+/// + type/angle. Same override hook as the other stroke evaluators.
+KKColorLanesValue
+CanvasStrokeColorAtFraction(KKBezierPath *path, double frac,
+                            NSString *_Nullable overrideLayerID,
+                            KKTimeline *_Nullable overrideTimeline);
 
 /// Legacy per-layer tilt+perspective+tile-shift matrix for 2D-baked verts. Now
 /// only used for the identity full-image source quad (CanvasEncodeSourceTile);
