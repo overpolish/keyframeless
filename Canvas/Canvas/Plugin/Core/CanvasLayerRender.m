@@ -318,13 +318,17 @@ void CanvasEncodeVectorLayers(
           geom,
           imageHeight > 0 ? (float)imageWidth / (float)imageHeight : 1.0f);
 
+    uint8_t lineCap = path.lineCap, lineJoin = path.lineJoin;
+    CanvasStrokeCapJoinAtFraction(path, frac < 0.0 ? 0.0 : frac, overrideLayerID,
+                                  overrideTimeline, &lineCap, &lineJoin);
     NSUInteger cap = CanvasStrokeVertexCapacity(geom);
     if (cap == 0)
       continue;
     KKVertex2D *verts = malloc(sizeof(KKVertex2D) * cap);
     NSUInteger vc = CanvasTessellateStroke(geom, strokeStart * strokeScale,
                                            strokeEnd * strokeScale, imageWidth,
-                                           imageHeight, verts, cap);
+                                           imageHeight, lineCap, lineJoin, verts,
+                                           cap);
     if (vc < 4) {
       free(verts);
       continue;

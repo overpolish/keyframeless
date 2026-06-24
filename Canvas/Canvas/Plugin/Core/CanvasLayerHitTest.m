@@ -355,7 +355,8 @@ static BOOL CanvasPointInTri(simd_float2 p, simd_float2 a, simd_float2 b,
 // bridge / collinear triangles are skipped so they can't false-hit. `startW` /
 // `endW` are canvas px, already floored to a minimum grab width by the caller.
 static BOOL CanvasStrokeStripHit(KKBezierPath *geom, float startW, float endW,
-                                 float outW, float outH, CanvasLayerTransform t,
+                                 float outW, float outH, uint8_t lineCap,
+                                 uint8_t lineJoin, CanvasLayerTransform t,
                                  simd_float2 c, float aspect,
                                  const CanvasGroupXform *groups, NSInteger ng,
                                  simd_float2 q) {
@@ -376,8 +377,8 @@ static BOOL CanvasStrokeStripHit(KKBezierPath *geom, float startW, float endW,
     sVertsCap = cap;
   }
   KKVertex2D *verts = sVerts;
-  NSUInteger vc = CanvasTessellateStrokeScratch(geom, startW, endW, outW, outH,
-                                                verts, cap, &sScratch);
+  NSUInteger vc = CanvasTessellateStrokeScratch(
+      geom, startW, endW, outW, outH, lineCap, lineJoin, verts, cap, &sScratch);
   BOOL hit = NO;
   if (vc >= 3) {
     simd_float2 qa = simd_make_float2(q.x * aspect, q.y);
@@ -463,8 +464,12 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
     // (a 2*slop-wide strip = slop half-width in object-Y, matching the old tol).
     float minPx = 2.0f * kHitStrokeSlopObj * h;
     float a = aspect > 0.0f ? aspect : 1.0f;
+    uint8_t lineCap = path.lineCap, lineJoin = path.lineJoin;
+    CanvasStrokeCapJoinAtFraction(path, frac < 0.0 ? 0.0 : frac, nil, nil,
+                                  &lineCap, &lineJoin);
     if (CanvasStrokeStripHit(geom, fmaxf(swStart, minPx), fmaxf(swEnd, minPx),
-                             a * h, h, t, c, aspect, groups, ng, q))
+                             a * h, h, lineCap, lineJoin, t, c, aspect, groups,
+                             ng, q))
       return YES;
   }
   if (path.fillEnabled && CanvasPointInProjectedPolygon(q, proj, n, aspect))

@@ -305,6 +305,14 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// = a normal numeric row. Build-time metadata.
 @property(nonatomic, copy, nullable) NSArray<NSString *> *choiceLabels;
 
+/// Optional per-choice GLYPH icons (one NSImage per `choiceLabels` entry). When
+/// set, the radio pill shows these icons instead of text (the labels stay as
+/// accessibility/tooltip names). Build-time DISPLAY metadata - NOT serialized
+/// (NSImage isn't codable), so a per-layer timeline builder must re-assert it
+/// from the template (carried by `kkApplyPickerMetadataFrom:`), like
+/// `componentLabelColors`. Use for icon enums (e.g. stroke Line Cap / Join).
+@property(nonatomic, copy, nullable) NSArray<NSImage *> *choiceIcons;
+
 /// When YES the value row presents a single right-aligned CHECKBOX instead of a
 /// number field; the lane's single value is 0 (off) or 1 (on). Pair with
 /// `animatable = NO` + `integerValued = YES` for a structural on/off (e.g. a

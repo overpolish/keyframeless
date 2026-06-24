@@ -118,10 +118,18 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
         [t.label isEqualToString:@"Points"] ||
         [t.label isEqualToString:@"Stroke Width"] ||
         [t.label isEqualToString:@"Enabled"] ||
+        [t.label isEqualToString:@"Line Cap"] ||
+        [t.label isEqualToString:@"Line Join"] ||
         [t.label isEqualToString:KKColorLanesModeLabel(@"Stroke")] ||
         [t.label isEqualToString:KKColorLanesSolidLabel(@"Stroke")] ||
         [t.label isEqualToString:KKColorLanesGradientLabel(@"Stroke")];
     if (vectorOnly && (path.isImage || path.isGroup))
+      continue;
+    // Line Cap only matters on an OPEN end: hide it for a closed single contour
+    // or any multi-contour path (the renderer treats those as closed, so no caps
+    // are drawn). Line Join still applies - closed shapes have corners too.
+    BOOL hasOpenEnd = path.contourCount <= 1 && !path.closed;
+    if ([t.label isEqualToString:@"Line Cap"] && !hasOpenEnd)
       continue;
     KKLane *src = [(stored[t.label] ?: t) copy];
     // Re-assert the template's canonical DISPLAY / picker metadata onto a
@@ -178,6 +186,16 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
                  values:@[
                    @(path.strokeR), @(path.strokeG), @(path.strokeB), @1.0
                  ]] ];
+    }
+    // Line Cap / Join with no stored lane: seed from the flat lineCap/lineJoin
+    // (same 0/1/2 ordering as the choice pills).
+    if (!stored[t.label] && [t.label isEqualToString:@"Line Cap"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0 values:@[ @(path.lineCap) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Line Join"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0 values:@[ @(path.lineJoin) ]] ];
     }
     // Tag with the layer for the Advanced view's layer header. The LABEL stays
     // plain ("Scale") so the kit's label-keyed edit surfaces are unaffected;

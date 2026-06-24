@@ -233,6 +233,32 @@ KKColorLanesValue CanvasStrokeColorAtFraction(KKBezierPath *path, double frac,
       });
 }
 
+void CanvasStrokeCapJoinAtFraction(KKBezierPath *path, double frac,
+                                   NSString *overrideLayerID,
+                                   KKTimeline *overrideTimeline, uint8_t *outCap,
+                                   uint8_t *outJoin) {
+  uint8_t cap = path.lineCap, join = path.lineJoin; // flat fallback
+  KKTimeline *tl =
+      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+  for (KKLane *lane in tl.lanes) {
+    if (lane.keyposes.count == 0)
+      continue;
+    if ([lane.label isEqualToString:@"Line Cap"]) {
+      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      if (v.count > 0)
+        cap = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
+    } else if ([lane.label isEqualToString:@"Line Join"]) {
+      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      if (v.count > 0)
+        join = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
+    }
+  }
+  if (outCap)
+    *outCap = cap;
+  if (outJoin)
+    *outJoin = join;
+}
+
 #pragma mark - Group content bounds / centre
 
 // Bounds of where the image layers nested under the group at `groupIdx`

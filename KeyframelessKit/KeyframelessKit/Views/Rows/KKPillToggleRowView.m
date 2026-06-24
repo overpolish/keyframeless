@@ -124,17 +124,27 @@ static const CGFloat kGroupPillPadX = 8.0;
   return [NSFont systemFontOfSize:KKFontSizeSM weight:NSFontWeightMedium];
 }
 
+// The icon to draw for segment `i`: an SF Symbol gets the pill's point-size /
+// weight applied; a custom-drawn (non-symbol) template image - e.g. the stroke
+// Line Cap / Join glyphs - returns nil from imageWithSymbolConfiguration:, so
+// fall back to the raw image at its own size.
+- (NSImage *)resolvedIconAtIndex:(NSInteger)i {
+  NSImage *raw = _icons[i];
+  NSImage *sym = [raw
+      imageWithSymbolConfiguration:[NSImageSymbolConfiguration
+                                       configurationWithPointSize:kPillIconSize
+                                                           weight:
+                                                               NSFontWeightMedium]];
+  return sym ?: raw;
+}
+
 - (CGFloat)pillWidthForIndex:(NSInteger)i {
   CGFloat padX = [self currentPillPadX];
   if (_iconAndLabel) {
     NSFont *font = [self pillFont];
     NSDictionary *attrs = @{NSFontAttributeName : font};
     CGFloat textW = ceil([_labels[i] sizeWithAttributes:attrs].width);
-    NSImage *icon =
-        [_icons[i] imageWithSymbolConfiguration:
-                       [NSImageSymbolConfiguration
-                           configurationWithPointSize:kPillIconSize
-                                               weight:NSFontWeightMedium]];
+    NSImage *icon = [self resolvedIconAtIndex:i];
     CGFloat iconW = ceil(icon.size.width);
     return padX + iconW + kPillIconGap + textW + padX;
   }
@@ -216,11 +226,7 @@ static const CGFloat kGroupPillPadX = 8.0;
         on ? onColor : [[NSColor inspectorLabel] colorWithAlphaComponent:0.6];
 
     if (_iconAndLabel) {
-      NSImage *icon =
-          [_icons[i] imageWithSymbolConfiguration:
-                         [NSImageSymbolConfiguration
-                             configurationWithPointSize:kPillIconSize
-                                                 weight:NSFontWeightMedium]];
+      NSImage *icon = [self resolvedIconAtIndex:i];
       NSImage *tinted = [icon copy];
       [tinted lockFocus];
       [tint set];
@@ -243,11 +249,7 @@ static const CGFloat kGroupPillPadX = 8.0;
       CGFloat textY = NSMidY(r) - textSize.height / 2.0;
       [_labels[i] drawAtPoint:NSMakePoint(textX, textY) withAttributes:attrs];
     } else if (_icons) {
-      NSImage *icon =
-          [_icons[i] imageWithSymbolConfiguration:
-                         [NSImageSymbolConfiguration
-                             configurationWithPointSize:kPillIconSize
-                                                 weight:NSFontWeightMedium]];
+      NSImage *icon = [self resolvedIconAtIndex:i];
       NSImage *tinted = [icon copy];
       [tinted lockFocus];
       [tint set];

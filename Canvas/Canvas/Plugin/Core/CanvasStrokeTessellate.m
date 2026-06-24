@@ -8,6 +8,8 @@
 #import <simd/simd.h>
 
 static const NSUInteger kStepsPerSegment = 32;
+static const NSUInteger kCapSegs = 24;     // semicircle segments for a round cap
+static const NSUInteger kMaxJoinSteps = 24; // max arc segments for a round join
 static const float kAAPaddingPx = 0.75f; // solid core reaches the asked width
 static const float kMiterLimit = 4.0f;   // clamp spikes at very sharp corners
 
@@ -36,13 +38,20 @@ NSUInteger CanvasStrokeVertexCapacity(KKBezierPath *path) {
     if (segs == 0)
       continue;
     // One sample per step per segment, plus the open terminal + closing wrap.
-    // Two strip verts each.
-    total += (segs * kStepsPerSegment + 2) * 2;
+    // Two strip verts each. Round/bevel joins emit extra cross-sections: budget
+    // 2 pairs per sample (a small-angle round join emits two) plus a full
+    // (kMaxJoinSteps+1)-pair fan per anchor corner. Over-budget truncates a
+    // pathological all-sharp path gracefully (the emit loop guards maxVerts).
+    NSUInteger samples = segs * kStepsPerSegment + 2;
+    total += samples * 2 * 2 + (segs + 2) * (kMaxJoinSteps + 1) * 2;
   }
   if (total == 0)
     return 0;
-  // Two degenerate bridge verts between each pair of contours, plus headroom.
-  return total + (nc > 1 ? (nc - 1) * 2 : 0) + 8;
+  // Two degenerate bridge verts between each pair of contours, plus headroom,
+  // plus a round-cap fan allowance at both ends of every contour (a fan is
+  // (kCapSegs+1) rim+centre pairs + a 2-vert bridge; budget generously).
+  NSUInteger capVerts = nc * 2 * ((kCapSegs + 1) * 2 + 2);
+  return total + (nc > 1 ? (nc - 1) * 2 : 0) + capVerts + 8;
 }
 
 // Sample ONE contour into a centered-pixel polyline matching the image-quad
@@ -133,6 +142,71 @@ static simd_float2 CanvasMiterOffset(const simd_float2 *pts, NSUInteger n,
   return miter * (hw * scale);
 }
 
+// The incoming and outgoing edge normals at polyline vertex `i` (the per-edge
+// perpendiculars CanvasMiterOffset bisects). At an open terminal the missing
+// side mirrors the present one. Used by the bevel / round joins, which keep each
+// edge at its own normal instead of bisecting to a single miter point.
+static void CanvasEdgeNormals(const simd_float2 *pts, NSUInteger n, NSUInteger i,
+                              BOOL closed, simd_float2 *outIn,
+                              simd_float2 *outOut) {
+  simd_float2 prev = pts[(i + n - 1) % n];
+  simd_float2 cur = pts[i];
+  simd_float2 next = pts[(i + 1) % n];
+  BOOL hasPrev = closed || i > 0;
+  BOOL hasNext = closed || i + 1 < n;
+  simd_float2 nIn = {0, 0}, nOut = {0, 0};
+  if (hasPrev) {
+    simd_float2 d = cur - prev;
+    if (simd_length_squared(d) > 1e-12f)
+      nIn = CanvasPerp(simd_normalize(d));
+  }
+  if (hasNext) {
+    simd_float2 d = next - cur;
+    if (simd_length_squared(d) > 1e-12f)
+      nOut = CanvasPerp(simd_normalize(d));
+  }
+  if (!hasPrev)
+    nIn = nOut;
+  if (!hasNext)
+    nOut = nIn;
+  *outIn = nIn;
+  *outOut = nOut;
+}
+
+// Emit one strip cross-section at `center` offset by ±normal*hw (the rail's two
+// AA edges, textureCoordinate.y = ±1).
+static NSUInteger CanvasEmitCross(KKVertex2D *v, NSUInteger vc, NSUInteger max,
+                                  simd_float2 center, simd_float2 normal,
+                                  float hw) {
+  if (vc + 2 > max)
+    return vc;
+  v[vc].position = center + normal * hw;
+  v[vc].textureCoordinate = simd_make_float2(0.0f, 1.0f);
+  vc++;
+  v[vc].position = center - normal * hw;
+  v[vc].textureCoordinate = simd_make_float2(0.0f, -1.0f);
+  vc++;
+  return vc;
+}
+
+// Emit a cross-section with explicit + (ty +1) and - (ty -1) positions - used by
+// the bevel / round joins, where one side is the shared inner miter point and
+// the other is the outer bevel / arc point (so the + / - rail sides stay
+// consistent with the straight segments and the strip joins seamlessly).
+static NSUInteger CanvasEmitCrossPts(KKVertex2D *v, NSUInteger vc,
+                                     NSUInteger max, simd_float2 plusPt,
+                                     simd_float2 minusPt) {
+  if (vc + 2 > max)
+    return vc;
+  v[vc].position = plusPt;
+  v[vc].textureCoordinate = simd_make_float2(0.0f, 1.0f);
+  vc++;
+  v[vc].position = minusPt;
+  v[vc].textureCoordinate = simd_make_float2(0.0f, -1.0f);
+  vc++;
+  return vc;
+}
+
 // Normalized cumulative arc length at each polyline vertex (frac[0] = 0, last
 // vertex = 1), so a per-vertex width can be lerped Start -> End along the
 // contour. A closed contour's total includes the closing edge back to pts[0].
@@ -159,6 +233,39 @@ static void CanvasContourArcFractions(const simd_float2 *pts, NSUInteger n,
     outFrac[i] /= total;
 }
 
+// Append a round cap (outward semicircle) at an open contour's end, bridged into
+// the running triangle strip. `center` is the terminal point, `railNormal` the
+// unit perpendicular of the terminal edge (the rail's offset direction), and
+// `outward` the unit tangent pointing away from the path. The arc rim carries
+// textureCoordinate.y = ±1 (so KKLineFragment AAs it ~1px in); the centre is
+// solid (y = 0) - same edge fade as the straight rail.
+static NSUInteger CanvasAppendRoundCap(KKVertex2D *outVerts, NSUInteger vc,
+                                       NSUInteger maxVerts, simd_float2 center,
+                                       simd_float2 railNormal,
+                                       simd_float2 outward, float hw) {
+  if (vc + (kCapSegs + 1) * 2 + 2 > maxVerts)
+    return vc;
+  simd_float2 rim0 = center + railNormal * hw;
+  if (vc > 0) {
+    outVerts[vc] = outVerts[vc - 1]; // degenerate bridge from the strip
+    vc++;
+    outVerts[vc].position = rim0;
+    outVerts[vc].textureCoordinate = simd_make_float2(0.0f, 1.0f);
+    vc++;
+  }
+  for (NSUInteger s = 0; s <= kCapSegs; s++) {
+    float a = (float)s / (float)kCapSegs * (float)M_PI;
+    simd_float2 dir = railNormal * cosf(a) + outward * sinf(a);
+    outVerts[vc].position = center + dir * hw;
+    outVerts[vc].textureCoordinate = simd_make_float2(0.0f, 1.0f);
+    vc++;
+    outVerts[vc].position = center;
+    outVerts[vc].textureCoordinate = simd_make_float2(0.0f, 0.0f);
+    vc++;
+  }
+  return vc;
+}
+
 void CanvasStrokeScratchFree(CanvasStrokeScratch *scratch) {
   if (!scratch)
     return;
@@ -171,16 +278,18 @@ void CanvasStrokeScratchFree(CanvasStrokeScratch *scratch) {
 
 NSUInteger CanvasTessellateStroke(KKBezierPath *path, float startWidth,
                                   float endWidth, float outputWidth,
-                                  float outputHeight, KKVertex2D *outVerts,
+                                  float outputHeight, uint8_t lineCap,
+                                  uint8_t lineJoin, KKVertex2D *outVerts,
                                   NSUInteger maxVerts) {
   return CanvasTessellateStrokeScratch(path, startWidth, endWidth, outputWidth,
-                                       outputHeight, outVerts, maxVerts, NULL);
+                                       outputHeight, lineCap, lineJoin, outVerts,
+                                       maxVerts, NULL);
 }
 
 NSUInteger CanvasTessellateStrokeScratch(KKBezierPath *path, float startWidth,
                                          float endWidth, float outputWidth,
-                                         float outputHeight,
-                                         KKVertex2D *outVerts,
+                                         float outputHeight, uint8_t lineCap,
+                                         uint8_t lineJoin, KKVertex2D *outVerts,
                                          NSUInteger maxVerts,
                                          CanvasStrokeScratch *scratch) {
   if (path.count < 2 || !outVerts || maxVerts < 4)
@@ -233,11 +342,30 @@ NSUInteger CanvasTessellateStrokeScratch(KKBezierPath *path, float startWidth,
     // last, lerped by normalized arc length (taper renders per contour).
     CanvasContourArcFractions(pts, n, closed, frac);
 
+    // Square cap: push the open terminals out by their half-width along the end
+    // tangent BEFORE stroking, so the butt rect extends into a square. (frac is
+    // already computed, so the taper distribution is unaffected.)
+    if (!closed && lineCap == 2) {
+      simd_float2 d0 = pts[0] - pts[1];
+      if (simd_length_squared(d0) > 1e-12f)
+        pts[0] += simd_normalize(d0) * startHW;
+      simd_float2 d1 = pts[n - 1] - pts[n - 2];
+      if (simd_length_squared(d1) > 1e-12f)
+        pts[n - 1] += simd_normalize(d1) * endHW;
+    }
+
     // Bridge from the previous contour with two degenerate verts (repeat the
     // last emitted vertex, then this contour's first) so the single triangle
     // strip carries no visible span across the gap.
     if (anyEmitted && vc > 0 && vc + 4 <= maxVerts) {
-      simd_float2 firstOff = CanvasMiterOffset(pts, n, 0, closed, startHW);
+      simd_float2 firstOff;
+      if (lineJoin == 0) {
+        firstOff = CanvasMiterOffset(pts, n, 0, closed, startHW);
+      } else {
+        simd_float2 nIn0, nOut0;
+        CanvasEdgeNormals(pts, n, 0, closed, &nIn0, &nOut0);
+        firstOff = nIn0 * startHW;
+      }
       outVerts[vc] = outVerts[vc - 1];
       vc++;
       outVerts[vc].position = pts[0] + firstOff;
@@ -251,13 +379,84 @@ NSUInteger CanvasTessellateStrokeScratch(KKBezierPath *path, float startWidth,
       // The closing wrap (k == n) sits at arc fraction 1 even though i == 0.
       float f = (closed && k == n) ? 1.0f : frac[i];
       float hw = startHW + (endHW - startHW) * f;
-      simd_float2 off = CanvasMiterOffset(pts, n, i, closed, hw);
-      outVerts[vc].position = pts[i] + off;
-      outVerts[vc].textureCoordinate = simd_make_float2(0.0f, 1.0f);
-      vc++;
-      outVerts[vc].position = pts[i] - off;
-      outVerts[vc].textureCoordinate = simd_make_float2(0.0f, -1.0f);
-      vc++;
+      if (lineJoin == 0) {
+        // Miter: one bisected cross-section (the original, clamped at the limit).
+        simd_float2 off = CanvasMiterOffset(pts, n, i, closed, hw);
+        outVerts[vc].position = pts[i] + off;
+        outVerts[vc].textureCoordinate = simd_make_float2(0.0f, 1.0f);
+        vc++;
+        outVerts[vc].position = pts[i] - off;
+        outVerts[vc].textureCoordinate = simd_make_float2(0.0f, -1.0f);
+        vc++;
+        continue;
+      }
+      // Bevel / round join. The CONCAVE (inner) side converges to one shared
+      // miter point so the two inner rails don't cross (that crossing left a
+      // rogue sliver at the bevel tips). The CONVEX (outer) side bevels (a chord
+      // between the two edge normals) or rounds (an even-angle arc). The +/-
+      // rail sides keep their ty so the join stitches into the straight segments.
+      simd_float2 nIn, nOut;
+      CanvasEdgeNormals(pts, n, i, closed, &nIn, &nOut);
+      float dn = simd_clamp(simd_dot(nIn, nOut), -1.0f, 1.0f);
+      if (dn > 0.9999f) { // collinear / terminal
+        vc = CanvasEmitCross(outVerts, vc, maxVerts, pts[i], nIn, hw);
+      } else {
+        float ncross = nIn.x * nOut.y - nIn.y * nOut.x;
+        BOOL innerIsPlus = ncross >= 0.0f; // concave side = + normals
+        float outerSign = innerIsPlus ? -1.0f : 1.0f;
+        simd_float2 bis = nIn + nOut;
+        float bl = simd_length(bis);
+        simd_float2 innerPt = pts[i];
+        if (bl > 1e-4f) {
+          simd_float2 bisN = bis / bl;
+          float cosHalf = fmaxf(simd_dot(bisN, nIn), 0.1f);
+          float d = fminf(hw / cosHalf, hw * kMiterLimit);
+          innerPt = pts[i] + (innerIsPlus ? bisN : -bisN) * d;
+        }
+        float ang = acosf(dn);
+        float dirSign = ncross >= 0.0f ? 1.0f : -1.0f;
+        NSUInteger steps = 1; // bevel = 2 cross-sections (nIn, nOut)
+        if (lineJoin == 1) {  // round: ~7.5 deg / step, capped
+          steps = (NSUInteger)ceilf(ang / (float)(M_PI / 24.0));
+          if (steps < 1)
+            steps = 1;
+          if (steps > kMaxJoinSteps)
+            steps = kMaxJoinSteps;
+        }
+        for (NSUInteger s = 0; s <= steps && vc + 2 <= maxVerts; s++) {
+          simd_float2 m;
+          if (lineJoin == 1) {
+            float a = dirSign * ang * ((float)s / (float)steps);
+            float ca = cosf(a), sa = sinf(a);
+            m = simd_make_float2(nIn.x * ca - nIn.y * sa,
+                                 nIn.x * sa + nIn.y * ca);
+          } else {
+            m = (s == 0) ? nIn : nOut;
+          }
+          simd_float2 outerPt = pts[i] + (outerSign * hw) * m;
+          if (innerIsPlus)
+            vc = CanvasEmitCrossPts(outVerts, vc, maxVerts, innerPt, outerPt);
+          else
+            vc = CanvasEmitCrossPts(outVerts, vc, maxVerts, outerPt, innerPt);
+        }
+      }
+    }
+
+    // Round cap: append an outward semicircle fan at each open terminal (the
+    // straight rail already covers up to the endpoint; the fan bulges past it).
+    if (!closed && lineCap == 1) {
+      simd_float2 d0 = pts[1] - pts[0];
+      if (simd_length_squared(d0) > 1e-12f) {
+        simd_float2 e = simd_normalize(d0);
+        vc = CanvasAppendRoundCap(outVerts, vc, maxVerts, pts[0], CanvasPerp(e),
+                                  -e, startHW);
+      }
+      simd_float2 d1 = pts[n - 1] - pts[n - 2];
+      if (simd_length_squared(d1) > 1e-12f) {
+        simd_float2 e = simd_normalize(d1);
+        vc = CanvasAppendRoundCap(outVerts, vc, maxVerts, pts[n - 1],
+                                  CanvasPerp(e), e, endHW);
+      }
     }
     anyEmitted = YES;
   }

@@ -93,6 +93,16 @@ CanvasStrokeColorAtFraction(KKBezierPath *path, double frac,
                             NSString *_Nullable overrideLayerID,
                             KKTimeline *_Nullable overrideTimeline);
 
+/// The stroke Line Cap (0=butt/1=round/2=square) + Line Join (0=miter/1=round/
+/// 2=bevel) from the layer's "Line Cap"/"Line Join" lanes, falling back to the
+/// flat lineCap/lineJoin. Non-animatable, but read via the lane so inspector
+/// edits apply. Shared by the render + hit-test.
+void CanvasStrokeCapJoinAtFraction(KKBezierPath *path, double frac,
+                                   NSString *_Nullable overrideLayerID,
+                                   KKTimeline *_Nullable overrideTimeline,
+                                   uint8_t *_Nullable outCap,
+                                   uint8_t *_Nullable outJoin);
+
 /// Legacy per-layer tilt+perspective+tile-shift matrix for 2D-baked verts. Now
 /// only used for the identity full-image source quad (CanvasEncodeSourceTile);
 /// the layer pipeline uses CanvasComposedModelMatrix on raw verts instead.

@@ -179,6 +179,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   BOOL _seedField;
   KKPillToggleRowView *_choicePill;    // grouped radio pill, choiceLabels only
   NSArray<NSString *> *_choiceLabels;  // English identifiers (count >= 2)
+  NSArray<NSImage *> *_choiceIcons;    // optional per-choice glyphs (display)
   KKCheckboxView *_toggleCheckbox;     // single on/off checkbox, isToggle only
   BOOL _isToggle;                      // value row is a single checkbox (0/1)
   BOOL _autoSizesComponentLabels;      // prefix captions hug text (Start/End)
@@ -470,6 +471,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   _laneScrubStep = lane.scrubStep;
   _seedField = lane.seedField;
   _choiceLabels = [lane.choiceLabels copy];
+  _choiceIcons = [lane.choiceIcons copy];
   _isToggle = lane.isToggle;
   _autoSizesComponentLabels = lane.autoSizesComponentLabels;
   _oscEditedOnly = lane.oscEditedOnly;
@@ -621,7 +623,14 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
         [NSMutableArray arrayWithCapacity:_choiceLabels.count];
     for (NSString *c in _choiceLabels)
       [locLabels addObject:KKLocalizedParamName(c)];
-    _choicePill = [[KKPillToggleRowView alloc] initWithLabels:locLabels];
+    // Glyph enum (e.g. Line Cap / Join): show the per-choice icons, with the
+    // localized labels kept as accessibility/tooltip names. Falls back to a
+    // text pill when no icons are supplied.
+    if (_choiceIcons.count == _choiceLabels.count)
+      _choicePill = [[KKPillToggleRowView alloc] initWithLabels:locLabels
+                                                          icons:_choiceIcons];
+    else
+      _choicePill = [[KKPillToggleRowView alloc] initWithLabels:locLabels];
     _choicePill.radioMode = YES;
     _choicePill.grouped = YES;
     _choicePill.hidesGroupTrack = YES; // inline selector, not a nav bar

@@ -101,12 +101,14 @@ Vector paths have a **Stroke** group in the inspector (images and groups don't -
 - **Enabled** - a checkbox that turns the path's stroke on or off. When it's off the stroke stops rendering and the rest of the Stroke group's controls drop out of every timeline surface (the constants/keypose popovers, the Animated dropdown, the lane filter, and the Basic/Advanced graphs) until you turn it back on - the toggle is the single source of truth.
 - **Stroke Width** - a two-field width in pixels with a **Start** and an **End**, whole numbers, **aspect-linked by default**. Linked, the two move together and the stroke is a uniform width. **Unlink** them (the link glyph on the row) and set Start ≠ End to **taper** the stroke - it interpolates from the Start width at the beginning of the path to the End width at the end, along the path's length. The taper is computed per contour, so a boolean / multi-contour path tapers each subpath; on a closed shape the width steps from End back to Start at the point where it closes.
 - **Stroke colour** - a **Mode** pill (Solid / Gradient) plus the matching editor: a colour **swatch** for Solid, or a **gradient** editor (stops, Radial / Linear, angle) for Gradient. Solid colour and the gradient both **animate** (add them to the Animated dropdown); Mode itself is a structural choice, not animated. The whole colour sub-group is gated by the **Enabled** toggle, like the rest of the Stroke group.
+- **Line Cap** - how an **open** path's ends are drawn, as a glyph pill: **Butt** (flat at the end), **Round** (semicircle), **Square** (extends half a stroke-width past the end). Only shown when the path actually has an open end (a closed shape has no caps).
+- **Line Join** - how corners are drawn, as a glyph pill: **Miter** (sharp point), **Round** (arc), **Bevel** (flat cut). Applies to every corner, open or closed. Both Cap and Join are structural choices (not animated).
 
 Stroke Width and the colour are ordinary animatable lanes: constant by default, or add them to the Animated dropdown to keypose them over the clip with the usual Basic / Advanced timing. They edit whichever path is selected in the Layers panel, and the rendered width is resolution-correct (it scales down correctly in browser thumbnails). Hit-testing follows the actual drawn stroke, so a tapered stroke stays clickable along its real shape, fat end and thin end alike.
 
 The **gradient** maps onto the stroke pivoting on the layer's centre: **Linear** runs along the angle (0° up, 90° right, 180° down) and spans the layer so it always reaches both end colours; **Radial** runs as a circle from the centre out to the ends. Colours are rendered colour-accurate against the editor swatch. In the Advanced graph an animated solid colour plots its **R / G / B** channels as separate red/green/blue lines (alpha is edited in the swatch, not graphed).
 
-**Fill**, dashes / caps and the sketch (hand-drawn) render style are still to come.
+**Fill**, dashes (dashed / dotted strokes) and the sketch (hand-drawn) render style are still to come.
 
 ## Toolbar
 

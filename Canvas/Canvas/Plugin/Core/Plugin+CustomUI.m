@@ -7,6 +7,7 @@
 #import "CanvasLayerRender.h" // CanvasReadLayerPaths (fresh, not the snapshot)
 #import "CanvasLayerTimeline.h"
 #import "CanvasPathEditController.h" // CanvasPathIsLargeVector
+#import "CanvasStrokeGlyphs.h"       // Line Cap / Join pill glyphs
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
@@ -196,9 +197,45 @@
   strokeMode.visibleWhenLabel = @"Enabled";
   strokeMode.visibleWhenValues = @[ @1 ];
 
+  // Line Cap (open-path ends) + Line Join (corners): NON-animatable structural
+  // enums shown as GLYPH radio pills (the choiceIcons; choiceLabels stay as the
+  // accessibility / value names). Seeded per-path from the flat lineCap/lineJoin
+  // in CanvasLayerTimelineForPath; gated by Enabled like the rest of the group.
+  KKLane *lineCap = [KKLane laneWithLabel:@"Line Cap"];
+  lineCap.valueType = KKLaneValueTypeFloat;
+  lineCap.choiceLabels = @[ @"Butt", @"Round", @"Square" ];
+  lineCap.choiceIcons = CanvasLineCapGlyphs();
+  lineCap.componentMin = @[ @0.0 ];
+  lineCap.componentMax = @[ @2.0 ];
+  lineCap.integerValued = YES;
+  lineCap.animatable = NO;
+  lineCap.enabled = NO;
+  lineCap.ownerScoped = YES;
+  lineCap.categoryKey = @"Stroke";
+  lineCap.categorySymbol = @"lineweight";
+  lineCap.visibleWhenLabel = @"Enabled";
+  lineCap.visibleWhenValues = @[ @1 ];
+  [lineCap insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
+
+  KKLane *lineJoin = [KKLane laneWithLabel:@"Line Join"];
+  lineJoin.valueType = KKLaneValueTypeFloat;
+  lineJoin.choiceLabels = @[ @"Miter", @"Round", @"Bevel" ];
+  lineJoin.choiceIcons = CanvasLineJoinGlyphs();
+  lineJoin.componentMin = @[ @0.0 ];
+  lineJoin.componentMax = @[ @2.0 ];
+  lineJoin.integerValued = YES;
+  lineJoin.animatable = NO;
+  lineJoin.enabled = NO;
+  lineJoin.ownerScoped = YES;
+  lineJoin.categoryKey = @"Stroke";
+  lineJoin.categorySymbol = @"lineweight";
+  lineJoin.visibleWhenLabel = @"Enabled";
+  lineJoin.visibleWhenValues = @[ @1 ];
+  [lineJoin insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
+
   return @[
     points, strokeOn, strokeWidth, strokeColor[0], strokeColor[1],
-    strokeColor[2], scale, position, rotation, anchor, opacity
+    strokeColor[2], lineCap, lineJoin, scale, position, rotation, anchor, opacity
   ];
 }
 

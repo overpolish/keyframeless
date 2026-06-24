@@ -46,20 +46,23 @@ void CanvasStrokeScratchFree(CanvasStrokeScratch *scratch);
 /// Pass startWidth == endWidth for a uniform stroke. The per-vertex offset
 /// normal is computed in pixel space (the tangent is scaled by
 /// outputWidth/Height before rotating, per the Y-axis convention) and mitred at
-/// corners. Open paths get butt ends; a closed contour wraps, so a taper there
-/// steps from end back to start at the closure. Returns the vertex count
-/// written (0 if the path is too short or the buffer is too small).
+/// corners. `lineCap` ends an OPEN contour: 0 = butt (flat), 1 = round
+/// (semicircle), 2 = square (extended by half-width). `lineJoin` (0 = miter,
+/// 1 = round, 2 = bevel) styles the corners. A closed contour wraps (no caps),
+/// so a taper there steps from end back to start at the closure. Returns the
+/// vertex count written (0 if the path is too short or the buffer is too small).
 NSUInteger CanvasTessellateStroke(KKBezierPath *path, float startWidth,
                                   float endWidth, float outputWidth,
-                                  float outputHeight, KKVertex2D *outVerts,
+                                  float outputHeight, uint8_t lineCap,
+                                  uint8_t lineJoin, KKVertex2D *outVerts,
                                   NSUInteger maxVerts);
 
 /// As CanvasTessellateStroke, but uses `scratch` for the internal buffers when
 /// non-NULL (see CanvasStrokeScratch). Pass NULL to malloc internally.
 NSUInteger CanvasTessellateStrokeScratch(KKBezierPath *path, float startWidth,
                                          float endWidth, float outputWidth,
-                                         float outputHeight,
-                                         KKVertex2D *outVerts,
+                                         float outputHeight, uint8_t lineCap,
+                                         uint8_t lineJoin, KKVertex2D *outVerts,
                                          NSUInteger maxVerts,
                                          CanvasStrokeScratch *_Nullable scratch);
 
