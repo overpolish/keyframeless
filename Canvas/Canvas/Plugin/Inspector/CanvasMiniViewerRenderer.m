@@ -42,6 +42,7 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   id<MTLRenderPipelineState> _imagePipeline;  // image overlay (premult alpha)
   id<MTLRenderPipelineState> _strokePipeline; // vector stroke (premult alpha)
   id<MTLRenderPipelineState> _strokeGradientPipeline; // gradient-filled stroke
+  id<MTLRenderPipelineState> _strokeDashPipeline;     // dashed stroke (arc mask)
   MTLPixelFormat _pipelineFormat;
   // Image-layer textures, keyed by path. The renderer lives in the inspector
   // process (separate from the render XPC), so it can't share the plugin's
@@ -711,7 +712,10 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   // antialiased line fragment, matching the main render's stroke pipeline.
   id<MTLFunction> lfn = [lib newFunctionWithName:@"KKLineFragment"];
   id<MTLFunction> glfn = [lib newFunctionWithName:@"KKGradientLineFragment"];
-  if (!vfn || !tvfn || !ffn || !offn || !lfn || !glfn) {
+  // Dashed stroke: arc-threading vertex shader + the dash-mask fragment.
+  id<MTLFunction> sdvfn = [lib newFunctionWithName:@"KKStrokeDashVertexShader"];
+  id<MTLFunction> sdffn = [lib newFunctionWithName:@"KKStrokeDashFragment"];
+  if (!vfn || !tvfn || !ffn || !offn || !lfn || !glfn || !sdvfn || !sdffn) {
     KKLogError(@"CanvasMiniViewerRenderer: missing passthrough shaders");
     return NO;
   }
@@ -765,10 +769,23 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     return NO;
   }
 
+  MTLRenderPipelineDescriptor *strokeDash = [KKRenderPrimitives
+      createPipelineDescriptorWithVertexFunction:sdvfn
+                                fragmentFunction:sdffn
+                                     pixelFormat:format
+                                       blendMode:KKBlendModePremultipliedAlpha];
+  id<MTLRenderPipelineState> strokeDashPS =
+      [device newRenderPipelineStateWithDescriptor:strokeDash error:&err];
+  if (!strokeDashPS) {
+    KKLogError(@"CanvasMiniViewerRenderer: dash stroke pipeline failed: %@", err);
+    return NO;
+  }
+
   _pipeline = srcPS;
   _imagePipeline = imgPS;
   _strokePipeline = strokePS;
   _strokeGradientPipeline = strokeGradPS;
+  _strokeDashPipeline = strokeDashPS;
   _pipelineFormat = format;
   return YES;
 }
@@ -871,10 +888,20 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     // strokeScale 1.0: the mini already renders at the dest size; if its
     // strokes also read too thick relative to the timeline, scale by w /
     // self.outputWidth here too (same as the main render's thumbnail fix).
+    // Marching-ants phase at the previewed frame: editFraction is the live
+    // playhead time, so map it to clip-local seconds (editFraction x clip
+    // duration) to match the main render's CMTimeGetSeconds-based phase - the
+    // same trick Glow's noise uses (KKLane.lastKnownClipDuration carries the
+    // duration into the timeline). 0 in the constants popover (editFraction 0).
+    double clipDur = self.clipDurationSeconds;
+    if (clipDur <= 0.0) // fall back to whatever the timeline carries
+      for (KKLane *l in self.timeline.lanes)
+        clipDur = MAX(clipDur, l.lastKnownClipDuration);
+    double miniElapsed = self.editFraction * clipDur;
     CanvasEncodeVectorLayers(self.layers ?: @[], enc, cb.device, w, h, 0.0f,
                              0.0f, self.editFraction, self.selectedLayerID,
-                             self.timeline, 1.0f, _strokePipeline,
-                             _strokeGradientPipeline);
+                             self.timeline, 1.0f, miniElapsed, _strokePipeline,
+                             _strokeGradientPipeline, _strokeDashPipeline);
   }
 
   [enc endEncoding];

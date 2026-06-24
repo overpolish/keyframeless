@@ -43,6 +43,7 @@
     _miniViewerRenderer = [[CanvasMiniViewerRenderer alloc] init];
     _miniViewerRenderer.timeline = timeline;
     _miniViewerRenderer.laneTemplates = availableLanes;
+    [self _retainMiniClipDurationFromTimeline:timeline];
     // Cold-boot seed for the viewer Position OSC (it reads the snapshot, not
     // the param). applyTimeline republishes on selection / edits.
     KKSetProcessTimelineSnapshot(timeline);
@@ -449,9 +450,19 @@
   _miniViewerRenderer.handlesLocked = sel.locked;
 }
 
+- (void)_retainMiniClipDurationFromTimeline:(KKTimeline *)timeline {
+  // Keep the largest clip duration the timeline has ever reported (a later
+  // gesture rebuild drops the lanes' lastKnownClipDuration); the mini uses it to
+  // place the marching-ants phase at the previewed frame.
+  for (KKLane *l in timeline.lanes)
+    if (l.lastKnownClipDuration > _miniViewerRenderer.clipDurationSeconds)
+      _miniViewerRenderer.clipDurationSeconds = l.lastKnownClipDuration;
+}
+
 - (void)applyTimeline:(KKTimeline *)timeline {
   [super applyTimeline:timeline];
   _miniViewerRenderer.timeline = timeline;
+  [self _retainMiniClipDurationFromTimeline:timeline];
   // Publish the SELECTED layer's timeline as the process snapshot so the viewer
   // Position OSC (same process) reads this layer. Its lanes carry layerKey, so
   // an OSC drag knows which layer's animationJSON to write. (drawOSC can't read

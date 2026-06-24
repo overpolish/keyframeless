@@ -11,8 +11,6 @@
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
-#pragma mark - Matrix primitives (column-major simd_matrix)
-
 static matrix_float4x4 CanvasTranslate4(float x, float y) {
   return simd_matrix(simd_make_float4(1, 0, 0, 0), simd_make_float4(0, 1, 0, 0),
                      simd_make_float4(0, 0, 1, 0),
@@ -57,8 +55,6 @@ static matrix_float4x4 CanvasPerspective4(float camD) {
       simd_make_float4(camD, 0, 0, 0), simd_make_float4(0, camD, 0, 0),
       simd_make_float4(0, 0, 1, 1), simd_make_float4(0, 0, 0, camD));
 }
-
-#pragma mark - Layer transform evaluation
 
 CanvasLayerTransform CanvasLayerTransformIdentity(void) {
   return (CanvasLayerTransform){1.0f, 1.0f, 0.0f, 0.5f, 0.5f,
@@ -139,8 +135,6 @@ CanvasGroupTransformAtFraction(KKBezierPath *group, double frac,
     return CanvasLayerTransformFromTimeline(overrideTimeline, frac);
   return CanvasLayerTransformAtFraction(group, frac);
 }
-
-#pragma mark - Stroke evaluation
 
 // The timeline driving `path` at edit time: the live inspector override when
 // this IS the selected layer being edited, else the layer's persisted
@@ -235,8 +229,8 @@ KKColorLanesValue CanvasStrokeColorAtFraction(KKBezierPath *path, double frac,
 
 void CanvasStrokeCapJoinAtFraction(KKBezierPath *path, double frac,
                                    NSString *overrideLayerID,
-                                   KKTimeline *overrideTimeline, uint8_t *outCap,
-                                   uint8_t *outJoin) {
+                                   KKTimeline *overrideTimeline,
+                                   uint8_t *outCap, uint8_t *outJoin) {
   uint8_t cap = path.lineCap, join = path.lineJoin; // flat fallback
   KKTimeline *tl =
       CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
@@ -259,7 +253,46 @@ void CanvasStrokeCapJoinAtFraction(KKBezierPath *path, double frac,
     *outJoin = join;
 }
 
-#pragma mark - Group content bounds / centre
+CanvasStrokeStyle CanvasStrokeStyleAtFraction(KKBezierPath *path, double frac,
+                                              NSString *overrideLayerID,
+                                              KKTimeline *overrideTimeline) {
+  CanvasStrokeStyle s;
+  s.style = path.strokeStyle; // flat fallback
+  s.dashLength = path.dashLength;
+  s.dashGap = path.dashGap;
+  s.dotGap = path.dotGap;
+  s.marchSpeed = path.marchingAntsSpeed;
+  KKTimeline *tl =
+      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+  for (KKLane *lane in tl.lanes) {
+    if (lane.keyposes.count == 0)
+      continue;
+    if ([lane.label isEqualToString:@"Stroke Style"]) {
+      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      if (v.count > 0)
+        s.style = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
+    } else if ([lane.label isEqualToString:@"Dash Length"]) {
+      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      if (v.count > 0)
+        s.dashLength = (float)fmax(0.0, v[0].doubleValue);
+    } else if ([lane.label isEqualToString:@"Dash Gap"]) {
+      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      if (v.count > 0)
+        s.dashGap = (float)fmax(0.0, v[0].doubleValue);
+    } else if ([lane.label isEqualToString:@"Dot Gap"]) {
+      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      if (v.count > 0)
+        s.dotGap = (float)fmax(0.0, v[0].doubleValue);
+    } else if ([lane.label isEqualToString:@"Marching Ants Speed"]) {
+      // Animatable: read the smoothed value so a keyframed speed eases.
+      NSArray<NSNumber *> *v =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      if (v.count > 0)
+        s.marchSpeed = (float)v[0].doubleValue;
+    }
+  }
+  return s;
+}
 
 // Bounds of where the image layers nested under the group at `groupIdx`
 // actually SIT, in object space (Y-up) - the bbox of each member's TRANSFORMED
@@ -429,8 +462,6 @@ NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers,
                         }];
   return n;
 }
-
-#pragma mark - Model matrices
 
 matrix_float4x4 CanvasLayerTiltMatrix(CanvasLayerTransform t,
                                       simd_float2 centerPx, float W, float H,

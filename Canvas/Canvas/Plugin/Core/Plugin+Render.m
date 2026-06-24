@@ -213,6 +213,18 @@
                                   vertexShader:@"KKTransformVertexShader"
                                 fragmentShader:@"KKGradientLineFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];
+  // Dashed-stroke variant: a vertex shader that also threads per-vertex arc
+  // length, + a fragment that masks the dash pattern by arc (solid OR gradient).
+  // Same solid stroke geometry, so dash corners == solid corners.
+  id<MTLRenderPipelineState> strokeDashPS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Canvas.strokeDash"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:kitBundleID
+                                  vertexShader:@"KKStrokeDashVertexShader"
+                                fragmentShader:@"KKStrokeDashFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
 
   // The state blob is [KKMotionBlurState][layer blob]; split off the MB prefix
   // before decoding the layer stack (bottom of the array draws in front, so
@@ -280,6 +292,10 @@
     return KKMaintainTimingRemappedFraction(f, self.renderCache);
   };
   double frac = fracForTime(renderTime);
+  // Media time since the effect start - drives the marching-ants dash animation
+  // (independent of the clip fraction, so it marches even on a constant stroke).
+  double marchElapsed =
+      fmax(0.0, CMTimeGetSeconds(renderTime) - self.renderCache.effectStartSec);
 
   // Source passthrough + the layer stack (evaluated at `f`) into one encoder.
   void (^composite)(id<MTLRenderCommandEncoder>, NSArray<id<MTLTexture>> *,
@@ -301,7 +317,8 @@
       [enc setRenderPipelineState:strokePS];
       CanvasEncodeVectorLayers(layers, enc, device, outputWidth, outputHeight,
                                tileShiftX, tileShiftY, f, nil, nil, strokeScale,
-                               strokePS, strokeGradientPS);
+                               marchElapsed, strokePS, strokeGradientPS,
+                               strokeDashPS);
     }
   };
 

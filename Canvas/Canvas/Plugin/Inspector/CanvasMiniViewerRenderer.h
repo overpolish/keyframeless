@@ -28,6 +28,12 @@ extern NSString *const CanvasMiniViewerRequestPath;
 @interface CanvasMiniViewerRenderer : KKMiniViewerRenderer
 /// The layer stack to composite, kept in sync by the host. Index 0 is topmost.
 @property(nonatomic, copy, nullable) NSArray<KKBezierPath *> *layers;
+/// The effect's clip duration in seconds, set by the inspector. Used to map the
+/// preview's `editFraction` to clip-local seconds for the marching-ants dash
+/// phase (editFraction x clipDurationSeconds), matching the main render's
+/// media-time phase. Retained across timeline rebuilds (a gesture rebuild drops
+/// the lanes' lastKnownClipDuration), so 0 only before the first stamp.
+@property(nonatomic) double clipDurationSeconds;
 /// The layer the open popover edits. Its transform in the composite comes from
 /// the live `timeline` (the kit's in-memory edited copy) so a Position-handle
 /// drag previews immediately; the Position OSC also reads/writes this layer.

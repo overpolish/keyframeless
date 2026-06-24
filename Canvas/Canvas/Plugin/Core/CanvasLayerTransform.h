@@ -103,6 +103,24 @@ void CanvasStrokeCapJoinAtFraction(KKBezierPath *path, double frac,
                                    uint8_t *_Nullable outCap,
                                    uint8_t *_Nullable outJoin);
 
+/// The stroke's dash pattern at a clip fraction. `style` is 0 = solid, 1 =
+/// dashed, 2 = dotted. `dashLength`/`dashGap` (px) size the dashes, `dotGap`
+/// (px) the spacing between dots, `marchSpeed` (cycles/sec) the marching-ants
+/// animation rate. Read from the "Stroke Style"/"Dash Length"/"Dash Gap"/"Dot
+/// Gap"/"Marching Ants Speed" lanes, falling back to the flat path props.
+typedef struct {
+  uint8_t style;    // 0 solid, 1 dashed, 2 dotted
+  float dashLength; // px
+  float dashGap;    // px
+  float dotGap;     // px
+  float marchSpeed; // cycles/sec
+} CanvasStrokeStyle;
+
+CanvasStrokeStyle
+CanvasStrokeStyleAtFraction(KKBezierPath *path, double frac,
+                            NSString *_Nullable overrideLayerID,
+                            KKTimeline *_Nullable overrideTimeline);
+
 /// Legacy per-layer tilt+perspective+tile-shift matrix for 2D-baked verts. Now
 /// only used for the identity full-image source quad (CanvasEncodeSourceTile);
 /// the layer pipeline uses CanvasComposedModelMatrix on raw verts instead.

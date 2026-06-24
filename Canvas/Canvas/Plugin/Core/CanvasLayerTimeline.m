@@ -120,14 +120,20 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
         [t.label isEqualToString:@"Enabled"] ||
         [t.label isEqualToString:@"Line Cap"] ||
         [t.label isEqualToString:@"Line Join"] ||
+        [t.label isEqualToString:@"Stroke Style"] ||
+        [t.label isEqualToString:@"Dash Length"] ||
+        [t.label isEqualToString:@"Dash Gap"] ||
+        [t.label isEqualToString:@"Dot Gap"] ||
+        [t.label isEqualToString:@"Marching Ants Speed"] ||
         [t.label isEqualToString:KKColorLanesModeLabel(@"Stroke")] ||
         [t.label isEqualToString:KKColorLanesSolidLabel(@"Stroke")] ||
         [t.label isEqualToString:KKColorLanesGradientLabel(@"Stroke")];
     if (vectorOnly && (path.isImage || path.isGroup))
       continue;
     // Line Cap only matters on an OPEN end: hide it for a closed single contour
-    // or any multi-contour path (the renderer treats those as closed, so no caps
-    // are drawn). Line Join still applies - closed shapes have corners too.
+    // or any multi-contour path (the renderer treats those as closed, so no
+    // caps are drawn). Line Join still applies - closed shapes have corners
+    // too.
     BOOL hasOpenEnd = path.contourCount <= 1 && !path.closed;
     if ([t.label isEqualToString:@"Line Cap"] && !hasOpenEnd)
       continue;
@@ -190,12 +196,35 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
     // Line Cap / Join with no stored lane: seed from the flat lineCap/lineJoin
     // (same 0/1/2 ordering as the choice pills).
     if (!stored[t.label] && [t.label isEqualToString:@"Line Cap"]) {
-      src.keyposes =
-          @[ [KKKeyPose keyposeAtTime:0.0 values:@[ @(path.lineCap) ]] ];
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(path.lineCap) ]] ];
     }
     if (!stored[t.label] && [t.label isEqualToString:@"Line Join"]) {
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(path.lineJoin) ]] ];
+    }
+    // Stroke Style / dash metrics / marching-ants speed: seed from the flat
+    // strokeStyle (0/1/2) + dashLength/dashGap/dotGap + marchingAntsSpeed.
+    if (!stored[t.label] && [t.label isEqualToString:@"Stroke Style"]) {
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(path.strokeStyle) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Dash Length"]) {
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(path.dashLength) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Dash Gap"]) {
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(path.dashGap) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Dot Gap"]) {
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(path.dotGap) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Marching Ants Speed"]) {
       src.keyposes =
-          @[ [KKKeyPose keyposeAtTime:0.0 values:@[ @(path.lineJoin) ]] ];
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.marchingAntsSpeed) ]] ];
     }
     // Tag with the layer for the Advanced view's layer header. The LABEL stays
     // plain ("Scale") so the kit's label-keyed edit surfaces are unaffected;

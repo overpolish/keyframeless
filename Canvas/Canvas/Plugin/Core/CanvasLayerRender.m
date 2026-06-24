@@ -226,14 +226,14 @@ simd_float2 CanvasLayerObjectCenter(KKBezierPath *path) {
 }
 
 // Bake the per-vertex gradient position (0..1) into each strip vertex's
-// textureCoordinate.x (unused by the solid path), so KKGradientLineFragment just
-// samples the LUT. Both modes pivot on the layer (bbox) centre, like a fill
-// gradient: LINEAR runs along the angle and is normalised by the bbox's extent
-// IN THAT DIRECTION (so it spans the layer and reaches both end colours at any
-// angle, instead of compressing); RADIAL is a circle from the centre out, sized
-// to the larger bbox dimension (per-axis d/bbSize collapses on a horizontal /
-// vertical line whose bbox is ~0 in one axis). Angle matches the circular knob:
-// 0 deg up, 90 right, 180 down -> object-space dir (sin, cos).
+// textureCoordinate.x (unused by the solid path), so KKGradientLineFragment
+// just samples the LUT. Both modes pivot on the layer (bbox) centre, like a
+// fill gradient: LINEAR runs along the angle and is normalised by the bbox's
+// extent IN THAT DIRECTION (so it spans the layer and reaches both end colours
+// at any angle, instead of compressing); RADIAL is a circle from the centre
+// out, sized to the larger bbox dimension (per-axis d/bbSize collapses on a
+// horizontal / vertical line whose bbox is ~0 in one axis). Angle matches the
+// circular knob: 0 deg up, 90 right, 180 down -> object-space dir (sin, cos).
 static void CanvasBakeStrokeGradientCoords(KKVertex2D *verts, NSUInteger vc,
                                            KKBezierPath *geom, float imageWidth,
                                            float imageHeight, float strokeStart,
@@ -271,12 +271,215 @@ static void CanvasBakeStrokeGradientCoords(KKVertex2D *verts, NSUInteger vc,
   }
 }
 
+// Encode ONE vector layer's stroke (skipping image / group / hidden /
+// stroke-off layers via early return). Pulled out of the per-layer loop so
+// CanvasEncodeVectorLayers stays a thin walk; the context bundles the shared
+// render inputs. The objects are __unsafe_unretained - the struct lives only
+// for the synchronous call and the caller retains them throughout.
+typedef struct {
+  __unsafe_unretained NSArray<KKBezierPath *> *layers;
+  __unsafe_unretained id<MTLRenderCommandEncoder> encoder;
+  __unsafe_unretained id<MTLDevice> device;
+  float imageWidth, imageHeight;
+  simd_float2 scale, tileShift;
+  double frac;
+  __unsafe_unretained NSString *overrideLayerID;
+  __unsafe_unretained KKTimeline *overrideTimeline;
+  float strokeScale;
+  double elapsedSec;
+  __unsafe_unretained id<MTLRenderPipelineState> solidPS, gradientPS, dashPS;
+} CanvasVectorEncodeCtx;
+
+static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
+                                       NSInteger i) {
+  NSArray<KKBezierPath *> *layers = ctx->layers;
+  id<MTLRenderCommandEncoder> encoder = ctx->encoder;
+  id<MTLDevice> device = ctx->device;
+  float imageWidth = ctx->imageWidth, imageHeight = ctx->imageHeight;
+  simd_float2 scale = ctx->scale, tileShift = ctx->tileShift;
+  double frac = ctx->frac;
+  NSString *overrideLayerID = ctx->overrideLayerID;
+  KKTimeline *overrideTimeline = ctx->overrideTimeline;
+  float strokeScale = ctx->strokeScale;
+  double elapsedSec = ctx->elapsedSec;
+  id<MTLRenderPipelineState> solidPS = ctx->solidPS,
+                             gradientPS = ctx->gradientPS, dashPS = ctx->dashPS;
+  KKBezierPath *path = layers[i];
+  if (path.isImage || path.isGroup || path.hidden)
+    return;
+  if (!CanvasStrokeEnabledAtFraction(path, frac < 0.0 ? 0.0 : frac,
+                                     overrideLayerID, overrideTimeline))
+    return;
+  // Effective Start/End widths from the Stroke Width lane at this fraction
+  // (px), falling back to the flat strokeWidth/endWidth. The stroke tapers
+  // Start -> End along each contour; a static preview (frac < 0) reads frac
+  // 0.
+  float strokeStart = path.strokeWidth;
+  float strokeEnd = path.strokeWidth;
+  CanvasStrokeWidthAtFraction(path, frac < 0.0 ? 0.0 : frac, overrideLayerID,
+                              overrideTimeline, &strokeStart, &strokeEnd);
+  if (path.count < 2 || (strokeStart <= 0.0f && strokeEnd <= 0.0f))
+    return;
+
+  // Geometry AT this fraction: the base points for a constant path, or the
+  // interpolated shape between the Points keyposes' snapshots for an animated
+  // one. (Static-rect preview, frac < 0, uses the base.)
+  KKBezierPath *geom =
+      (frac < 0.0) ? path : CanvasPathMorphedAtFraction(path, frac);
+  if (geom.count < 2)
+    return;
+  // Round any per-anchor corners into the display fillet before stroking
+  // (aspect-correct; no-op when nothing is rounded).
+  if (geom.hasCornerRadii)
+    geom = CanvasPathByExpandingCorners(
+        geom, imageHeight > 0 ? (float)imageWidth / (float)imageHeight : 1.0f);
+
+  uint8_t lineCap = path.lineCap, lineJoin = path.lineJoin;
+  CanvasStrokeCapJoinAtFraction(path, frac < 0.0 ? 0.0 : frac, overrideLayerID,
+                                overrideTimeline, &lineCap, &lineJoin);
+  // Dash pattern (Solid / Dashed / Dotted). The dash metrics are absolute px,
+  // so they scale with the render like the widths (strokeScale handles the
+  // thumbnail downscale).
+  CanvasStrokeStyle ss = CanvasStrokeStyleAtFraction(
+      path, frac < 0.0 ? 0.0 : frac, overrideLayerID, overrideTimeline);
+  float dashLen = ss.dashLength * strokeScale;
+  float dashGap = ss.dashGap * strokeScale;
+  float dotGap = ss.dotGap * strokeScale;
+  // Dashed (style 1) draws the SOLID stroke geometry (correct corners) and
+  // masks the dash pattern by per-vertex arc length in KKStrokeDashFragment, so
+  // it needs the dash pipeline + an arc buffer. Falls back to a plain solid
+  // stroke if the dash pipeline is unavailable.
+  BOOL dashed = (ss.style == 1) && dashPS != nil;
+  BOOL dotted = (ss.style == 2);
+  NSUInteger cap =
+      dotted ? CanvasDottedStrokeVertexCapacity(geom, strokeStart * strokeScale,
+                                                dotGap, imageWidth, imageHeight)
+             : CanvasStrokeVertexCapacity(geom);
+  if (cap == 0)
+    return;
+  KKVertex2D *verts = malloc(sizeof(KKVertex2D) * cap);
+  float *arc = dashed ? malloc(sizeof(float) * cap) : NULL;
+  NSUInteger vc;
+  // Marching-ants phase (px): elapsed seconds x speed (cycles/sec) x the
+  // pattern's pixel period, so speed = 1 advances one dash/dot per second. A
+  // static preview (frac < 0) and zero speed leave it at 0.
+  float dotsCycle = strokeStart * strokeScale + dotGap;
+  float dashCycle = fmaxf(dashLen + dashGap, 1.0f);
+  float dotPhase =
+      (frac < 0.0) ? 0.0f : (float)(elapsedSec * ss.marchSpeed) * dotsCycle;
+  float dashPhase =
+      (frac < 0.0) ? 0.0f : (float)(elapsedSec * ss.marchSpeed) * dashCycle;
+  if (dotted) {
+    vc = CanvasTessellateDottedStroke(
+        geom, strokeStart * strokeScale, strokeEnd * strokeScale, imageWidth,
+        imageHeight, dotGap, dotPhase, verts, cap);
+  } else {
+    vc = CanvasTessellateStrokeArc(
+        geom, strokeStart * strokeScale, strokeEnd * strokeScale, imageWidth,
+        imageHeight, lineCap, lineJoin, verts, cap, NULL, arc);
+  }
+  if (vc < 4) {
+    free(verts);
+    free(arc);
+    return;
+  }
+
+  CanvasLayerTransform t;
+  if (frac < 0.0)
+    t = CanvasLayerTransformIdentity();
+  else if (overrideTimeline && overrideLayerID.length &&
+           [path.layerID isEqualToString:overrideLayerID])
+    t = CanvasLayerTransformFromTimeline(overrideTimeline, frac);
+  else
+    t = CanvasLayerTransformAtFraction(path, frac);
+
+  CanvasGroupXform groups[kCanvasGroupXformCap];
+  NSInteger ng =
+      CanvasBuildGroupXforms(layers, (NSUInteger)i, frac, overrideLayerID,
+                             overrideTimeline, groups, kCanvasGroupXformCap);
+  matrix_float4x4 m = CanvasComposedModelMatrix(
+      t, CanvasLayerObjectCenter(geom), groups, ng, scale, tileShift);
+
+  float opacity = t.opacity * path.opacity;
+  for (NSInteger k = 0; k < ng; k++)
+    opacity *= groups[k].t.opacity;
+  // Stroke colour from the shared colour lanes (Solid / Gradient, no
+  // Dynamic), falling back to the flat strokeR,G,B.
+  KKColorLanesValue cv = CanvasStrokeColorAtFraction(
+      path, frac < 0.0 ? 0.0 : frac, overrideLayerID, overrideTimeline);
+  BOOL useGradient = (cv.mode == KKColorModeGradient) && gradientPS != nil;
+  if (useGradient)
+    CanvasBakeStrokeGradientCoords(verts, vc, geom, imageWidth, imageHeight,
+                                   strokeStart, strokeEnd, strokeScale, cv);
+  // sRGB -> linear (the render's working space), matching the gradient
+  // fragment's pow(2.2). Pure-channel colours are unchanged; midtones darken
+  // to their correct linear value so a solid matches the editor + a gradient
+  // stop.
+  simd_float3 solid = cv.solidColor;
+  simd_float4 color = simd_make_float4(powf(solid.x, 2.2f), powf(solid.y, 2.2f),
+                                       powf(solid.z, 2.2f), opacity);
+
+  id<MTLRenderPipelineState> ps =
+      dashed ? dashPS : (useGradient ? gradientPS : solidPS);
+  [encoder setRenderPipelineState:ps];
+  [encoder setVertexBytes:&m
+                   length:sizeof(m)
+                  atIndex:KKVertexInputIndex_Transform];
+  // The vertex array goes through an MTLBuffer, not setVertexBytes: a complex
+  // path (e.g. an imported SVG) tessellates well past setVertexBytes' 4 KB
+  // inline cap, which aborts. (The original Canvas render used a buffer here
+  // too; the v3 rewrite regressed it to inline bytes.)
+  id<MTLBuffer> vbuf = [device newBufferWithBytes:verts
+                                           length:sizeof(KKVertex2D) * vc
+                                          options:MTLResourceStorageModeShared];
+  [encoder setVertexBuffer:vbuf offset:0 atIndex:KKVertexInputIndex_Vertices];
+  if (dashed) {
+    // Per-vertex arc length for the dash mask + the dash uniforms (cycle, on
+    // length, phase) and the colour (solid or gradient LUT).
+    id<MTLBuffer> abuf =
+        [device newBufferWithBytes:arc
+                            length:sizeof(float) * vc
+                           options:MTLResourceStorageModeShared];
+    [encoder setVertexBuffer:abuf
+                      offset:0
+                     atIndex:KKVertexInputIndex_StrokeArc];
+    KKStrokeDashParams dp;
+    dp.solidColor = color;
+    dp.cycle = dashCycle;
+    dp.onLength = dashLen;
+    dp.phase = dashPhase; // marching-ants animation
+    dp.opacity = opacity;
+    dp.useGradient = useGradient ? 1 : 0;
+    [encoder setFragmentBytes:&dp length:sizeof(dp) atIndex:0];
+    if (useGradient)
+      [encoder setFragmentBytes:cv.gradientLUT
+                         length:sizeof(cv.gradientLUT)
+                        atIndex:1];
+  } else if (useGradient) {
+    [encoder setFragmentBytes:cv.gradientLUT
+                       length:sizeof(cv.gradientLUT)
+                      atIndex:0];
+    [encoder setFragmentBytes:&opacity length:sizeof(opacity) atIndex:1];
+  } else {
+    [encoder setFragmentBytes:&color length:sizeof(color) atIndex:0];
+  }
+  // The solid + dashed strokes are one triangle strip (the dash is masked in
+  // the fragment); a dotted stroke is a triangle LIST of independent discs.
+  [encoder drawPrimitives:(dotted ? MTLPrimitiveTypeTriangle
+                                  : MTLPrimitiveTypeTriangleStrip)
+              vertexStart:0
+              vertexCount:vc];
+  free(verts);
+  free(arc);
+}
+
 void CanvasEncodeVectorLayers(
     NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
     id<MTLDevice> device, float imageWidth, float imageHeight, float tileShiftX,
     float tileShiftY, double frac, NSString *overrideLayerID,
-    KKTimeline *overrideTimeline, float strokeScale,
-    id<MTLRenderPipelineState> solidPS, id<MTLRenderPipelineState> gradientPS) {
+    KKTimeline *overrideTimeline, float strokeScale, double elapsedSec,
+    id<MTLRenderPipelineState> solidPS, id<MTLRenderPipelineState> gradientPS,
+    id<MTLRenderPipelineState> dashPS) {
   if (!encoder || !device || layers.count == 0)
     return;
   if (strokeScale <= 0.0f)
@@ -286,115 +489,25 @@ void CanvasEncodeVectorLayers(
 
   // Bottom-first (array index 0 = topmost, drawn last) so vector layers stack
   // like the image pass. No depth sort yet - strokes draw after the images.
-  for (NSInteger i = (NSInteger)layers.count - 1; i >= 0; i--) {
-    KKBezierPath *path = layers[i];
-    if (path.isImage || path.isGroup || path.hidden)
-      continue;
-    if (!CanvasStrokeEnabledAtFraction(path, frac < 0.0 ? 0.0 : frac,
-                                       overrideLayerID, overrideTimeline))
-      continue;
-    // Effective Start/End widths from the Stroke Width lane at this fraction
-    // (px), falling back to the flat strokeWidth/endWidth. The stroke tapers
-    // Start -> End along each contour; a static preview (frac < 0) reads frac
-    // 0.
-    float strokeStart = path.strokeWidth;
-    float strokeEnd = path.strokeWidth;
-    CanvasStrokeWidthAtFraction(path, frac < 0.0 ? 0.0 : frac, overrideLayerID,
-                                overrideTimeline, &strokeStart, &strokeEnd);
-    if (path.count < 2 || (strokeStart <= 0.0f && strokeEnd <= 0.0f))
-      continue;
-
-    // Geometry AT this fraction: the base points for a constant path, or the
-    // interpolated shape between the Points keyposes' snapshots for an animated
-    // one. (Static-rect preview, frac < 0, uses the base.)
-    KKBezierPath *geom =
-        (frac < 0.0) ? path : CanvasPathMorphedAtFraction(path, frac);
-    if (geom.count < 2)
-      continue;
-    // Round any per-anchor corners into the display fillet before stroking
-    // (aspect-correct; no-op when nothing is rounded).
-    if (geom.hasCornerRadii)
-      geom = CanvasPathByExpandingCorners(
-          geom,
-          imageHeight > 0 ? (float)imageWidth / (float)imageHeight : 1.0f);
-
-    uint8_t lineCap = path.lineCap, lineJoin = path.lineJoin;
-    CanvasStrokeCapJoinAtFraction(path, frac < 0.0 ? 0.0 : frac, overrideLayerID,
-                                  overrideTimeline, &lineCap, &lineJoin);
-    NSUInteger cap = CanvasStrokeVertexCapacity(geom);
-    if (cap == 0)
-      continue;
-    KKVertex2D *verts = malloc(sizeof(KKVertex2D) * cap);
-    NSUInteger vc = CanvasTessellateStroke(geom, strokeStart * strokeScale,
-                                           strokeEnd * strokeScale, imageWidth,
-                                           imageHeight, lineCap, lineJoin, verts,
-                                           cap);
-    if (vc < 4) {
-      free(verts);
-      continue;
-    }
-
-    CanvasLayerTransform t;
-    if (frac < 0.0)
-      t = CanvasLayerTransformIdentity();
-    else if (overrideTimeline && overrideLayerID.length &&
-             [path.layerID isEqualToString:overrideLayerID])
-      t = CanvasLayerTransformFromTimeline(overrideTimeline, frac);
-    else
-      t = CanvasLayerTransformAtFraction(path, frac);
-
-    CanvasGroupXform groups[kCanvasGroupXformCap];
-    NSInteger ng =
-        CanvasBuildGroupXforms(layers, (NSUInteger)i, frac, overrideLayerID,
-                               overrideTimeline, groups, kCanvasGroupXformCap);
-    matrix_float4x4 m = CanvasComposedModelMatrix(
-        t, CanvasLayerObjectCenter(geom), groups, ng, scale, tileShift);
-
-    float opacity = t.opacity * path.opacity;
-    for (NSInteger k = 0; k < ng; k++)
-      opacity *= groups[k].t.opacity;
-    // Stroke colour from the shared colour lanes (Solid / Gradient, no
-    // Dynamic), falling back to the flat strokeR,G,B.
-    KKColorLanesValue cv = CanvasStrokeColorAtFraction(
-        path, frac < 0.0 ? 0.0 : frac, overrideLayerID, overrideTimeline);
-    BOOL useGradient = (cv.mode == KKColorModeGradient) && gradientPS != nil;
-    if (useGradient)
-      CanvasBakeStrokeGradientCoords(verts, vc, geom, imageWidth, imageHeight,
-                                     strokeStart, strokeEnd, strokeScale, cv);
-    // sRGB -> linear (the render's working space), matching the gradient
-    // fragment's pow(2.2). Pure-channel colours are unchanged; midtones darken
-    // to their correct linear value so a solid matches the editor + a gradient
-    // stop.
-    simd_float3 solid = cv.solidColor;
-    simd_float4 color = simd_make_float4(
-        powf(solid.x, 2.2f), powf(solid.y, 2.2f), powf(solid.z, 2.2f), opacity);
-
-    [encoder setRenderPipelineState:(useGradient ? gradientPS : solidPS)];
-    [encoder setVertexBytes:&m
-                     length:sizeof(m)
-                    atIndex:KKVertexInputIndex_Transform];
-    // The vertex array goes through an MTLBuffer, not setVertexBytes: a complex
-    // path (e.g. an imported SVG) tessellates well past setVertexBytes' 4 KB
-    // inline cap, which aborts. (The original Canvas render used a buffer here
-    // too; the v3 rewrite regressed it to inline bytes.)
-    id<MTLBuffer> vbuf =
-        [device newBufferWithBytes:verts
-                            length:sizeof(KKVertex2D) * vc
-                           options:MTLResourceStorageModeShared];
-    [encoder setVertexBuffer:vbuf offset:0 atIndex:KKVertexInputIndex_Vertices];
-    if (useGradient) {
-      [encoder setFragmentBytes:cv.gradientLUT
-                         length:sizeof(cv.gradientLUT)
-                        atIndex:0];
-      [encoder setFragmentBytes:&opacity length:sizeof(opacity) atIndex:1];
-    } else {
-      [encoder setFragmentBytes:&color length:sizeof(color) atIndex:0];
-    }
-    [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                vertexStart:0
-                vertexCount:vc];
-    free(verts);
-  }
+  CanvasVectorEncodeCtx ctx = {
+      .layers = layers,
+      .encoder = encoder,
+      .device = device,
+      .imageWidth = imageWidth,
+      .imageHeight = imageHeight,
+      .scale = scale,
+      .tileShift = tileShift,
+      .frac = frac,
+      .overrideLayerID = overrideLayerID,
+      .overrideTimeline = overrideTimeline,
+      .strokeScale = strokeScale,
+      .elapsedSec = elapsedSec,
+      .solidPS = solidPS,
+      .gradientPS = gradientPS,
+      .dashPS = dashPS,
+  };
+  for (NSInteger i = (NSInteger)layers.count - 1; i >= 0; i--)
+    CanvasEncodeOneVectorLayer(&ctx, i);
 }
 
 simd_float3x3 CanvasSquareToQuadHomography(CGPoint p0, CGPoint p1, CGPoint p2,

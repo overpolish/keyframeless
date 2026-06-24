@@ -29,7 +29,7 @@ static const CGFloat kStaticFieldW = 40.0;
 // Cap on the (uniform) label column so a long localized name (e.g. German
 // "Geschwindigkeit") can't push the value controls off the popover's right
 // edge. Longer names truncate with an ellipsis; the full name shows on hover.
-static const CGFloat kMaxLabelColW = 86.0;
+static const CGFloat kMaxLabelColW = 140.0;
 
 static NSTextField *_KKMakeNumberField(void) {
   return [KKValueTextField valueField];

@@ -92,14 +92,21 @@ void CanvasEncodeSourceTile(id<MTLRenderCommandEncoder> encoder,
 /// `solidPS` is the line pipeline (KKLineFragment); `gradientPS` is the
 /// gradient line pipeline (KKGradientLineFragment). The function sets the right
 /// one per layer from its stroke-colour Mode. Pass gradientPS = nil to force
-/// solid.
+/// solid. `dashPS` is the dashed-stroke pipeline (KKStrokeDashVertexShader +
+/// KKStrokeDashFragment): a dashed layer draws the solid stroke geometry and
+/// masks the dash pattern by arc length in the fragment (so corners match the
+/// solid stroke). Pass dashPS = nil to render dashed strokes as solid.
+/// `elapsedSec` is the media time since the effect start; it drives the
+/// marching-ants animation (phase = elapsedSec x Speed x pattern period). Pass
+/// 0 for a static preview.
 void CanvasEncodeVectorLayers(
     NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
     id<MTLDevice> device, float imageWidth, float imageHeight, float tileShiftX,
     float tileShiftY, double frac, NSString *_Nullable overrideLayerID,
     KKTimeline *_Nullable overrideTimeline, float strokeScale,
-    id<MTLRenderPipelineState> _Nullable solidPS,
-    id<MTLRenderPipelineState> _Nullable gradientPS);
+    double elapsedSec, id<MTLRenderPipelineState> _Nullable solidPS,
+    id<MTLRenderPipelineState> _Nullable gradientPS,
+    id<MTLRenderPipelineState> _Nullable dashPS);
 
 /// Click-to-select hit-test: returns the `layerID` of the TOPMOST layer hit by
 /// the object-space point (`objX`,`objY`) in [0,1] (Y-up, the render's object

@@ -233,9 +233,59 @@
   lineJoin.visibleWhenValues = @[ @1 ];
   [lineJoin insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
 
+  // Stroke Style: solid / dashed / dotted (structural enum, gated by Enabled).
+  // Dashed shows Dash Length + Gap; dotted shows Dot Gap; both show Marching
+  // Ants Speed - via the visibleWhen cascade keyed on this lane (which is itself
+  // gated by Enabled, so the whole sub-group hides when the stroke is off).
+  KKLane *strokeStyle = [KKLane laneWithLabel:@"Stroke Style"];
+  strokeStyle.valueType = KKLaneValueTypeFloat;
+  strokeStyle.choiceLabels = @[ @"Solid", @"Dashed", @"Dotted" ];
+  strokeStyle.componentMin = @[ @0.0 ];
+  strokeStyle.componentMax = @[ @2.0 ];
+  strokeStyle.integerValued = YES;
+  strokeStyle.animatable = NO;
+  strokeStyle.enabled = NO;
+  strokeStyle.ownerScoped = YES;
+  strokeStyle.categoryKey = @"Stroke";
+  strokeStyle.categorySymbol = @"lineweight";
+  strokeStyle.visibleWhenLabel = @"Enabled";
+  strokeStyle.visibleWhenValues = @[ @1 ];
+  [strokeStyle insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
+
+  // Dash Length / Dash Gap / Dot Gap: animatable px scalars, each shown only for
+  // the matching style. Marching Ants Speed (cycles/sec) shown for either dashed
+  // or dotted; the renderer advances the pattern by speed x playhead time, and
+  // animating this lane keyframes the rate.
+  // max is the slider's upper bound: a single-component lane builds a slider that
+  // defaults its max to 1.0 when componentMax is empty, so every scalar must set
+  // a real ceiling or the slider snaps between 0 and 1.
+  KKLane *(^strokeScalar)(NSString *, double, double, NSArray *) =
+      ^KKLane *(NSString *label, double seed, double max, NSArray *visVals) {
+    KKLane *l = [KKLane laneWithLabel:label];
+    l.valueType = KKLaneValueTypeFloat;
+    l.componentMin = @[ @0.0 ];
+    l.componentMax = @[ @(max) ];
+    l.componentUnits = @[ @"px" ];
+    l.integerValued = YES;
+    l.enabled = NO;
+    l.ownerScoped = YES;
+    l.categoryKey = @"Stroke";
+    l.categorySymbol = @"lineweight";
+    l.visibleWhenLabel = @"Stroke Style";
+    l.visibleWhenValues = visVals;
+    [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @(seed) ]]];
+    return l;
+  };
+  KKLane *dashLength = strokeScalar(@"Dash Length", 20.0, 200.0, @[ @1 ]);
+  KKLane *dashGap = strokeScalar(@"Dash Gap", 10.0, 200.0, @[ @1 ]);
+  KKLane *dotGap = strokeScalar(@"Dot Gap", 10.0, 200.0, @[ @2 ]);
+  KKLane *marchSpeed = strokeScalar(@"Marching Ants Speed", 0.0, 10.0, @[ @1, @2 ]);
+  marchSpeed.componentUnits = @[ @"" ]; // cycles/sec, not pixels
+
   return @[
     points, strokeOn, strokeWidth, strokeColor[0], strokeColor[1],
-    strokeColor[2], lineCap, lineJoin, scale, position, rotation, anchor, opacity
+    strokeColor[2], lineCap, lineJoin, strokeStyle, dashLength, dashGap, dotGap,
+    marchSpeed, scale, position, rotation, anchor, opacity
   ];
 }
 
