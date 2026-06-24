@@ -134,10 +134,21 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
                  showsRemove:(BOOL)showsRemove
           showsAddToAnimated:(BOOL)showsAddToAnimated
                  showsSmooth:(BOOL)showsSmooth
-            labelColumnWidth:(CGFloat)labelColumnWidth;
+            labelColumnWidth:(CGFloat)labelColumnWidth
+                contentWidth:(CGFloat)contentWidth;
 /// Width to pin every row's label column to, so the value controls line up
 /// regardless of label length (the widest localized param name). 0 = natural.
 + (CGFloat)labelColumnWidthForLanes:(NSArray<KKLane *> *)lanes;
+/// Width-aware row height: a wrapping choice-pill lane (a `wrapsChoicePills`
+/// marker type) grows per wrapped line for the popover content width; every
+/// other lane is width-independent. The popover height calc and the row layout
+/// both use this so they agree.
++ (CGFloat)heightForLane:(KKLane *)lane
+            contentWidth:(CGFloat)contentWidth
+        labelColumnWidth:(CGFloat)labelColumnWidth;
+/// Re-derive a wrapping pill row's block width + height for a new popover content
+/// width (the size pill resizes without rebuilding rows). No-op otherwise.
+- (void)updateContentWidth:(CGFloat)contentWidth;
 /// The KKSliderView (Float rows), for a guide that drives the slider.
 - (nullable NSView *)guideSliderView;
 /// The number field for component `i` (Float: 0; Crop: 0..3 = W,H,X,Y), for

@@ -249,6 +249,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // height, so the page hugs only what is shown for the current Mode/Type.
   NSSet<NSString *> *condVisible =
       KKConditionalVisibleLaneLabels(lanes, valuesByLabel);
+  // Wrapping pill rows (markers) grow per wrapped line, so the per-row height is
+  // width-dependent: feed the popover width + label column to heightForLane.
+  CGFloat cw = [self _popoverWidthForDescriptor:descriptorPath];
+  CGFloat labelColumnWidth = [_KKStaticValueRow labelColumnWidthForLanes:lanes];
   CGFloat rows = 0;
   NSArray<NSArray<NSString *> *> *cats = KKOrderedLaneCategories(lanes);
   if (cats.count > 0) {
@@ -263,12 +267,16 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       if ([condVisible containsObject:lane.label] &&
           (lane.categoryKey.length == 0 ||
            [lane.categoryKey isEqualToString:sel]))
-        page += [_KKStaticValueRow heightForLane:lane];
+        page += [_KKStaticValueRow heightForLane:lane
+                                    contentWidth:cw
+                                labelColumnWidth:labelColumnWidth];
     rows = page + kKKCategoryPillH + KKPaddingMD;
   } else {
     for (KKLane *lane in lanes)
       if ([condVisible containsObject:lane.label])
-        rows += [_KKStaticValueRow heightForLane:lane];
+        rows += [_KKStaticValueRow heightForLane:lane
+                                    contentWidth:cw
+                                labelColumnWidth:labelColumnWidth];
   }
   CGFloat h = KKPaddingMD + rows + KKPaddingMD;
   if (descriptorPath.length > 0)
@@ -376,6 +384,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath];
   _miniViewerHeightConstraint.constant =
       [_KKStaticValuesPopoverView _canvasHeightForAspect:_clipAspect width:W];
+  // Wrapping pill rows (markers) don't rebuild on resize, so re-derive their
+  // block width + row height for the new content width before refitting.
+  for (NSString *label in _rowsByLabel)
+    [_rowsByLabel[label] updateContentWidth:W];
   [self _resizePopoverToSelectedCategory];
   if (_onSizeChanged)
     _onSizeChanged(idx);
@@ -773,7 +785,11 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
                                   showsRemove:showsRemove
                            showsAddToAnimated:showsAdd
                                   showsSmooth:showsSmooth
-                             labelColumnWidth:_labelColumnWidth];
+                             labelColumnWidth:_labelColumnWidth
+                                 contentWidth:
+                                     [_KKStaticValuesPopoverView
+                                         _popoverWidthForDescriptor:
+                                             _descriptorPath]];
   row.translatesAutoresizingMaskIntoConstraints = NO;
   NSString *label = lane.label;
   __weak typeof(self) weak = self;

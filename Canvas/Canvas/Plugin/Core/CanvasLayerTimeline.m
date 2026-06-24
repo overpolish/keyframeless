@@ -120,6 +120,10 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
         [t.label isEqualToString:@"Enabled"] ||
         [t.label isEqualToString:@"Line Cap"] ||
         [t.label isEqualToString:@"Line Join"] ||
+        [t.label isEqualToString:@"Start Marker"] ||
+        [t.label isEqualToString:@"End Marker"] ||
+        [t.label isEqualToString:@"Start Marker Width"] ||
+        [t.label isEqualToString:@"End Marker Width"] ||
         [t.label isEqualToString:@"Stroke Style"] ||
         [t.label isEqualToString:@"Dash Length"] ||
         [t.label isEqualToString:@"Dash Gap"] ||
@@ -135,7 +139,11 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
     // caps are drawn). Line Join still applies - closed shapes have corners
     // too.
     BOOL hasOpenEnd = path.contourCount <= 1 && !path.closed;
-    if ([t.label isEqualToString:@"Line Cap"] && !hasOpenEnd)
+    BOOL isMarkerLane = [t.label isEqualToString:@"Start Marker"] ||
+                        [t.label isEqualToString:@"End Marker"] ||
+                        [t.label isEqualToString:@"Start Marker Width"] ||
+                        [t.label isEqualToString:@"End Marker Width"];
+    if (([t.label isEqualToString:@"Line Cap"] || isMarkerLane) && !hasOpenEnd)
       continue;
     KKLane *src = [(stored[t.label] ?: t) copy];
     // Re-assert the template's canonical DISPLAY / picker metadata onto a
@@ -147,6 +155,7 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
     src.valueType = t.valueType;
     src.componentMin = t.componentMin;
     src.componentMax = t.componentMax;
+    src.sliderMax = t.sliderMax;
     src.componentUnits = t.componentUnits;
     src.componentLabels = t.componentLabels;
     src.componentLabelColors = t.componentLabelColors;
@@ -202,6 +211,27 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
     if (!stored[t.label] && [t.label isEqualToString:@"Line Join"]) {
       src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
                                           values:@[ @(path.lineJoin) ]] ];
+    }
+    // Markers with no stored lane: seed types from the flat start/end marker
+    // (6-value pill order) and sizes from the flat multiplier as a percentage
+    // (startMarkerSize 3.0 -> 300 %).
+    if (!stored[t.label] && [t.label isEqualToString:@"Start Marker"]) {
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(path.startMarker) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"End Marker"]) {
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(path.endMarker) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Start Marker Width"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.startMarkerSize * 100.0) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"End Marker Width"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.endMarkerSize * 100.0) ]] ];
     }
     // Stroke Style / dash metrics / marching-ants speed: seed from the flat
     // strokeStyle (0/1/2) + dashLength/dashGap/dotGap + marchingAntsSpeed.

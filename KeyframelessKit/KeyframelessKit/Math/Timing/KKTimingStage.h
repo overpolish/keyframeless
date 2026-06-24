@@ -168,6 +168,12 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
     *componentMin; // one per component, empty = unconstrained
 @property(nonatomic, copy) NSArray<NSNumber *>
     *componentMax; // one per component, empty = unconstrained
+/// Optional upper bound for the single-component SLIDER only, decoupled from the
+/// value clamp (`componentMax`). When set, the slider tops out here while the
+/// field still accepts (and clamps to) the larger `componentMax` - so a value
+/// can be typed past the slider's end. nil = slider uses componentMax. Used for
+/// the marker width (slider 0..500 %, field pushable further). Build-time.
+@property(nonatomic, copy, nullable) NSNumber *sliderMax;
 @property(nonatomic, copy) NSArray<NSString *>
     *componentUnits; // one per component (e.g. @"px", @"%"); empty = unitless
 /// Plugin-supplied display captions for each component (e.g. @[@"X",@"Y",@"Z"])
@@ -312,6 +318,13 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// from the template (carried by `kkApplyPickerMetadataFrom:`), like
 /// `componentLabelColors`. Use for icon enums (e.g. stroke Line Cap / Join).
 @property(nonatomic, copy, nullable) NSArray<NSImage *> *choiceIcons;
+
+/// When YES a choice-pill row lets its pills WRAP onto multiple right-aligned
+/// lines if they don't fit the row width (and the row grows in height), instead
+/// of overflowing. Use for a wide glyph set like the 6 stroke-marker types; a
+/// short set (Line Cap / Join) leaves it NO and stays single-line. Build-time
+/// metadata; re-asserted via `kkApplyPickerMetadataFrom:`.
+@property(nonatomic) BOOL wrapsChoicePills;
 
 /// When YES the value row presents a single right-aligned CHECKBOX instead of a
 /// number field; the lane's single value is 0 (off) or 1 (on). Pair with

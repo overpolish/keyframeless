@@ -253,6 +253,47 @@ void CanvasStrokeCapJoinAtFraction(KKBezierPath *path, double frac,
     *outJoin = join;
 }
 
+void CanvasStrokeMarkersAtFraction(KKBezierPath *path, double frac,
+                                   NSString *overrideLayerID,
+                                   KKTimeline *overrideTimeline,
+                                   uint8_t *outStart, uint8_t *outEnd,
+                                   float *outStartMul, float *outEndMul) {
+  uint8_t startM = path.startMarker, endM = path.endMarker; // flat fallback
+  float startMul = path.startMarkerSize, endMul = path.endMarkerSize;
+  KKTimeline *tl =
+      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+  for (KKLane *lane in tl.lanes) {
+    if (lane.keyposes.count == 0)
+      continue;
+    if ([lane.label isEqualToString:@"Start Marker"]) {
+      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      if (v.count > 0)
+        startM = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
+    } else if ([lane.label isEqualToString:@"End Marker"]) {
+      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      if (v.count > 0)
+        endM = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
+    } else if ([lane.label isEqualToString:@"Start Marker Width"]) {
+      // Percentage of the local stroke width; converted to a multiplier.
+      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      if (v.count > 0)
+        startMul = (float)(fmax(0.0, v[0].doubleValue) / 100.0);
+    } else if ([lane.label isEqualToString:@"End Marker Width"]) {
+      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      if (v.count > 0)
+        endMul = (float)(fmax(0.0, v[0].doubleValue) / 100.0);
+    }
+  }
+  if (outStart)
+    *outStart = startM;
+  if (outEnd)
+    *outEnd = endM;
+  if (outStartMul)
+    *outStartMul = startMul;
+  if (outEndMul)
+    *outEndMul = endMul;
+}
+
 CanvasStrokeStyle CanvasStrokeStyleAtFraction(KKBezierPath *path, double frac,
                                               NSString *overrideLayerID,
                                               KKTimeline *overrideTimeline) {

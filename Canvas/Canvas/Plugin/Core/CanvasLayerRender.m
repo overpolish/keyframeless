@@ -7,6 +7,7 @@
 #import "CanvasCornerFillet.h"
 #import "CanvasImageTexture.h"
 #import "CanvasLayerTransform.h"
+#import "CanvasMarkerTessellate.h"
 #import "CanvasPathMorph.h"
 #import "CanvasStrokeTessellate.h"
 #import "Constants.h"
@@ -234,11 +235,23 @@ simd_float2 CanvasLayerObjectCenter(KKBezierPath *path) {
 // out, sized to the larger bbox dimension (per-axis d/bbSize collapses on a
 // horizontal / vertical line whose bbox is ~0 in one axis). Angle matches the
 // circular knob: 0 deg up, 90 right, 180 down -> object-space dir (sin, cos).
-static void CanvasBakeStrokeGradientCoords(KKVertex2D *verts, NSUInteger vc,
-                                           KKBezierPath *geom, float imageWidth,
-                                           float imageHeight, float strokeStart,
-                                           float strokeEnd, float strokeScale,
-                                           KKColorLanesValue cv) {
+// The bbox+angle gradient fill, computed once from the stroke geometry (and,
+// when present, the marker geometry so the gradient spans the WHOLE drawn
+// shape) and then applied to both the stroke and the marker verts so they share
+// one continuous gradient.
+typedef struct {
+  simd_float2 center, dir;
+  float halfExtent, maxDim;
+  int type; // cv.gradientType
+} CanvasGradientFill;
+
+// `extra` (optional, e.g. the marker verts) extends the bbox so the gradient
+// reaches t=0/1 at the outermost drawn point, not just the stroke path's.
+static CanvasGradientFill
+CanvasComputeGradientFill(KKBezierPath *geom, float imageWidth,
+                          float imageHeight, float strokeStart, float strokeEnd,
+                          float strokeScale, KKColorLanesValue cv,
+                          const KKVertex2D *extra, NSUInteger extraCount) {
   simd_float2 bbMin = simd_make_float2(FLT_MAX, FLT_MAX);
   simd_float2 bbMax = simd_make_float2(-FLT_MAX, -FLT_MAX);
   for (NSUInteger pi = 0; pi < geom.count; pi++) {
@@ -251,21 +264,35 @@ static void CanvasBakeStrokeGradientCoords(KKVertex2D *verts, NSUInteger vc,
   float pad = 0.5f * fmaxf(strokeStart, strokeEnd) * strokeScale;
   bbMin -= pad;
   bbMax += pad;
+  for (NSUInteger i = 0; i < extraCount; i++) {
+    simd_float2 p = extra[i].position;
+    bbMin = simd_make_float2(fminf(bbMin.x, p.x), fminf(bbMin.y, p.y));
+    bbMax = simd_make_float2(fmaxf(bbMax.x, p.x), fmaxf(bbMax.y, p.y));
+  }
   simd_float2 bbCenter = (bbMin + bbMax) * 0.5f;
   simd_float2 bbSize = simd_make_float2(fmaxf(bbMax.x - bbMin.x, 1.0f),
                                         fmaxf(bbMax.y - bbMin.y, 1.0f));
   float th = cv.gradientAngle;
   simd_float2 dir = simd_make_float2(sinf(th), cosf(th));
+  CanvasGradientFill g;
+  g.center = bbCenter;
+  g.dir = dir;
   // Half the bbox extent measured along `dir` (its support function), so the
   // gradient reaches t=0/1 at the bbox edge in the gradient direction.
-  float halfExtent = fmaxf(
+  g.halfExtent = fmaxf(
       0.5f * bbSize.x * fabsf(dir.x) + 0.5f * bbSize.y * fabsf(dir.y), 1.0e-3f);
-  float maxDim = fmaxf(bbSize.x, bbSize.y);
+  g.maxDim = fmaxf(bbSize.x, bbSize.y);
+  g.type = cv.gradientType;
+  return g;
+}
+
+static void CanvasApplyGradientFill(KKVertex2D *verts, NSUInteger vc,
+                                    CanvasGradientFill g) {
   for (NSUInteger vi = 0; vi < vc; vi++) {
-    simd_float2 d = verts[vi].position - bbCenter;
-    float gt = (cv.gradientType == 1)
-                   ? simd_dot(d, dir) / (2.0f * halfExtent) + 0.5f // linear
-                   : 2.0f * simd_length(d) / fmaxf(maxDim, 1.0f);  // radial
+    simd_float2 d = verts[vi].position - g.center;
+    float gt = (g.type == 1)
+                   ? simd_dot(d, g.dir) / (2.0f * g.halfExtent) + 0.5f // linear
+                   : 2.0f * simd_length(d) / fmaxf(g.maxDim, 1.0f);    // radial
     gt = gt < 0.0f ? 0.0f : (gt > 1.0f ? 1.0f : gt);
     verts[vi].textureCoordinate.x = gt;
   }
@@ -337,6 +364,20 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
   uint8_t lineCap = path.lineCap, lineJoin = path.lineJoin;
   CanvasStrokeCapJoinAtFraction(path, frac < 0.0 ? 0.0 : frac, overrideLayerID,
                                 overrideTimeline, &lineCap, &lineJoin);
+  // Endpoint marker types + per-end size (scaled px). Read here because a
+  // filled Arrow trims the stroke end back (pullback) so the marker covers it;
+  // the marker geometry itself is tessellated later (from the untrimmed
+  // `geom`).
+  uint8_t startMarker = 0, endMarker = 0;
+  float startMul = path.startMarkerSize, endMul = path.endMarkerSize;
+  CanvasStrokeMarkersAtFraction(path, frac < 0.0 ? 0.0 : frac, overrideLayerID,
+                                overrideTimeline, &startMarker, &endMarker,
+                                &startMul, &endMul);
+  float sMarkerPx = strokeStart * strokeScale * startMul;
+  float eMarkerPx = strokeEnd * strokeScale * endMul;
+  float startTrim =
+      startMarker ? CanvasMarkerPullback(startMarker, sMarkerPx) : 0.0f;
+  float endTrim = endMarker ? CanvasMarkerPullback(endMarker, eMarkerPx) : 0.0f;
   // Dash pattern (Solid / Dashed / Dotted). The dash metrics are absolute px,
   // so they scale with the render like the widths (strokeScale handles the
   // thumbnail downscale).
@@ -374,9 +415,10 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
         geom, strokeStart * strokeScale, strokeEnd * strokeScale, imageWidth,
         imageHeight, dotGap, dotPhase, verts, cap);
   } else {
-    vc = CanvasTessellateStrokeArc(
-        geom, strokeStart * strokeScale, strokeEnd * strokeScale, imageWidth,
-        imageHeight, lineCap, lineJoin, verts, cap, NULL, arc);
+    vc = CanvasTessellateStrokeArc(geom, strokeStart * strokeScale,
+                                   strokeEnd * strokeScale, imageWidth,
+                                   imageHeight, lineCap, lineJoin, verts, cap,
+                                   startTrim, endTrim, NULL, arc);
   }
   if (vc < 4) {
     free(verts);
@@ -408,9 +450,31 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
   KKColorLanesValue cv = CanvasStrokeColorAtFraction(
       path, frac < 0.0 ? 0.0 : frac, overrideLayerID, overrideTimeline);
   BOOL useGradient = (cv.mode == KKColorModeGradient) && gradientPS != nil;
-  if (useGradient)
-    CanvasBakeStrokeGradientCoords(verts, vc, geom, imageWidth, imageHeight,
-                                   strokeStart, strokeEnd, strokeScale, cv);
+
+  // Tessellate the endpoint markers (from the untrimmed `geom`): they share the
+  // stroke's colour + gradient, so they're part of the gradient bbox and baked
+  // with the same fill. Open-marker bar thickness = the local stroke width.
+  KKVertex2D *mverts = NULL;
+  NSUInteger mvc = 0;
+  if (startMarker != 0 || endMarker != 0) {
+    NSUInteger mcap = CanvasMarkerVertexCapacity();
+    mverts = malloc(sizeof(KKVertex2D) * mcap);
+    mvc = CanvasTessellateMarkers(geom, imageWidth, imageHeight, startMarker,
+                                  endMarker, sMarkerPx, eMarkerPx,
+                                  strokeStart * strokeScale,
+                                  strokeEnd * strokeScale, mverts, mcap);
+  }
+
+  // One continuous gradient over the stroke + markers: compute the fill from
+  // both, then bake the stroke and marker verts with it.
+  if (useGradient) {
+    CanvasGradientFill gfill =
+        CanvasComputeGradientFill(geom, imageWidth, imageHeight, strokeStart,
+                                  strokeEnd, strokeScale, cv, mverts, mvc);
+    CanvasApplyGradientFill(verts, vc, gfill);
+    if (mvc >= 3)
+      CanvasApplyGradientFill(mverts, mvc, gfill);
+  }
   // sRGB -> linear (the render's working space), matching the gradient
   // fragment's pow(2.2). Pure-channel colours are unchanged; midtones darken
   // to their correct linear value so a solid matches the editor + a gradient
@@ -471,6 +535,31 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
               vertexCount:vc];
   free(verts);
   free(arc);
+
+  // Draw the markers (triangle list, on top of the stroke) with the SAME colour
+  // treatment as the stroke - the gradient LUT when the stroke is a gradient
+  // (coords baked above), else the solid colour. Never dashed. The transform
+  // matrix `m` set above is still bound on the encoder.
+  if (mvc >= 3) {
+    [encoder setRenderPipelineState:(useGradient ? gradientPS : solidPS)];
+    id<MTLBuffer> mbuf =
+        [device newBufferWithBytes:mverts
+                            length:sizeof(KKVertex2D) * mvc
+                           options:MTLResourceStorageModeShared];
+    [encoder setVertexBuffer:mbuf offset:0 atIndex:KKVertexInputIndex_Vertices];
+    if (useGradient) {
+      [encoder setFragmentBytes:cv.gradientLUT
+                         length:sizeof(cv.gradientLUT)
+                        atIndex:0];
+      [encoder setFragmentBytes:&opacity length:sizeof(opacity) atIndex:1];
+    } else {
+      [encoder setFragmentBytes:&color length:sizeof(color) atIndex:0];
+    }
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangle
+                vertexStart:0
+                vertexCount:mvc];
+  }
+  free(mverts);
 }
 
 void CanvasEncodeVectorLayers(

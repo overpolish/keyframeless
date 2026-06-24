@@ -103,6 +103,20 @@ void CanvasStrokeCapJoinAtFraction(KKBezierPath *path, double frac,
                                    uint8_t *_Nullable outCap,
                                    uint8_t *_Nullable outJoin);
 
+/// The stroke's start/end marker types (0=none/1=arrow/2=circle/3=square/
+/// 4=arrowhead/5=line) from the non-animatable "Markers" lane (component 0/1),
+/// plus the marker size as a stroke-width MULTIPLIER from the animatable
+/// "Marker Size" lane (its value is a percentage; converted /100 here). One
+/// size drives both ends. Falls back to the flat startMarker/endMarker +
+/// startMarkerSize/endMarkerSize. Shared by the render + OSC.
+void CanvasStrokeMarkersAtFraction(KKBezierPath *path, double frac,
+                                   NSString *_Nullable overrideLayerID,
+                                   KKTimeline *_Nullable overrideTimeline,
+                                   uint8_t *_Nullable outStart,
+                                   uint8_t *_Nullable outEnd,
+                                   float *_Nullable outStartMul,
+                                   float *_Nullable outEndMul);
+
 /// The stroke's dash pattern at a clip fraction. `style` is 0 = solid, 1 =
 /// dashed, 2 = dotted. `dashLength`/`dashGap` (px) size the dashes, `dotGap`
 /// (px) the spacing between dots, `marchSpeed` (cycles/sec) the marching-ants

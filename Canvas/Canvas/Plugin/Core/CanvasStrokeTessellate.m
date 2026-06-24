@@ -474,7 +474,7 @@ NSUInteger CanvasTessellateStroke(KKBezierPath *path, float startWidth,
                                   NSUInteger maxVerts) {
   return CanvasTessellateStrokeArc(path, startWidth, endWidth, outputWidth,
                                    outputHeight, lineCap, lineJoin, outVerts,
-                                   maxVerts, NULL, NULL);
+                                   maxVerts, 0.0f, 0.0f, NULL, NULL);
 }
 
 NSUInteger CanvasTessellateStrokeScratch(KKBezierPath *path, float startWidth,
@@ -485,13 +485,64 @@ NSUInteger CanvasTessellateStrokeScratch(KKBezierPath *path, float startWidth,
                                          CanvasStrokeScratch *scratch) {
   return CanvasTessellateStrokeArc(path, startWidth, endWidth, outputWidth,
                                    outputHeight, lineCap, lineJoin, outVerts,
-                                   maxVerts, scratch, NULL);
+                                   maxVerts, 0.0f, 0.0f, scratch, NULL);
+}
+
+// Trim `trimStart`/`trimEnd` px (arc length) off the ends of an OPEN polyline
+// pts[0..n) in place, so an endpoint marker covers the stroke end instead of the
+// stroke poking out past it. Walks in from each end, dropping fully-trimmed
+// points and moving the boundary point to the trim distance. Returns the new
+// vertex count (0 if trimmed away entirely).
+static NSUInteger CanvasTrimOpenPolyline(simd_float2 *pts, NSUInteger n,
+                                         float trimStart, float trimEnd) {
+  if (n < 2)
+    return n;
+  if (trimEnd > 0.0f) {
+    float rem = trimEnd;
+    NSUInteger k = n - 1;
+    while (k > 0) {
+      float seg = simd_distance(pts[k], pts[k - 1]);
+      if (seg >= rem) {
+        float t = (seg > 1e-6f) ? rem / seg : 0.0f;
+        pts[k] = pts[k] + (pts[k - 1] - pts[k]) * t;
+        n = k + 1;
+        break;
+      }
+      rem -= seg;
+      k--;
+    }
+    if (k == 0)
+      return 0;
+  }
+  if (trimStart > 0.0f) {
+    float rem = trimStart;
+    NSUInteger k = 0;
+    while (k + 1 < n) {
+      float seg = simd_distance(pts[k], pts[k + 1]);
+      if (seg >= rem) {
+        float t = (seg > 1e-6f) ? rem / seg : 0.0f;
+        pts[k] = pts[k] + (pts[k + 1] - pts[k]) * t;
+        if (k > 0) {
+          for (NSUInteger j = 0; j + k < n; j++)
+            pts[j] = pts[k + j];
+          n -= k;
+        }
+        break;
+      }
+      rem -= seg;
+      k++;
+    }
+    if (k + 1 >= n)
+      return 0;
+  }
+  return n;
 }
 
 NSUInteger CanvasTessellateStrokeArc(
     KKBezierPath *path, float startWidth, float endWidth, float outputWidth,
     float outputHeight, uint8_t lineCap, uint8_t lineJoin, KKVertex2D *outVerts,
-    NSUInteger maxVerts, CanvasStrokeScratch *scratch, float *outArc) {
+    NSUInteger maxVerts, float trimStartPx, float trimEndPx,
+    CanvasStrokeScratch *scratch, float *outArc) {
   if (path.count < 2 || !outVerts || maxVerts < 4)
     return 0;
 
@@ -540,6 +591,13 @@ NSUInteger CanvasTessellateStrokeArc(
                                               outputHeight, pts, polyCap);
     if (n < 2)
       continue;
+    // An open single contour with an endpoint marker: trim the ends back so the
+    // marker covers the stroke end (no poke-through).
+    if (!closed && nc == 1 && (trimStartPx > 0.0f || trimEndPx > 0.0f)) {
+      n = CanvasTrimOpenPolyline(pts, n, trimStartPx, trimEndPx);
+      if (n < 2)
+        continue;
+    }
     // Per-vertex half-width: Start at the contour's first vertex, End at its
     // last, lerped by normalized arc length (taper renders per contour). The
     // closing wrap (hw[n], closed only) sits at arc fraction 1.

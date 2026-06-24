@@ -26,6 +26,7 @@ const CGFloat kFloatRowH = 30.0;
 static const CGFloat kCropRowH = 30.0;     // single-line W/H/X/Y hstack
 static const CGFloat kGradientRowH = 42.0; // 36pt gradient control + padding
 static const CGFloat kStaticFieldW = 40.0;
+static const CGFloat kWrapLineExtra = 25.0; // +height per extra wrapped pill line
 // Cap on the (uniform) label column so a long localized name (e.g. German
 // "Geschwindigkeit") can't push the value controls off the popover's right
 // edge. Longer names truncate with an ellipsis; the full name shows on hover.
@@ -180,6 +181,10 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   KKPillToggleRowView *_choicePill;    // grouped radio pill, choiceLabels only
   NSArray<NSString *> *_choiceLabels;  // English identifiers (count >= 2)
   NSArray<NSImage *> *_choiceIcons;    // optional per-choice glyphs (display)
+  BOOL _wrapsChoicePills;              // pill wraps to multiple lines
+  NSLayoutConstraint *_pillWidthConstraint; // wrapping pill width (= wrapW)
+  CGFloat _rowHeight;                  // resolved height (wrapping pill rows)
+  CGFloat _contentWidth;               // popover content width (for pill wrap)
   KKCheckboxView *_toggleCheckbox;     // single on/off checkbox, isToggle only
   BOOL _isToggle;                      // value row is a single checkbox (0/1)
   BOOL _autoSizesComponentLabels;      // prefix captions hug text (Start/End)
@@ -406,12 +411,74 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return KKLaneComponentLabels(lane).count >= 2 ? kCropRowH : kFloatRowH;
 }
 
+// A choice-pill lane flagged `wrapsChoicePills` (the stroke marker types) wraps
+// its pills to the row width and grows in height; everything else is one line.
+static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
+  return lane.wrapsChoicePills && lane.choiceLabels.count >= 2;
+}
+
+// Width a wrapping pill block flows within (and right-aligns to): the row
+// content width minus the label column, the reset slot and the paddings. MUST
+// match the choice-branch constraint chain so the popover height calc agrees
+// with the laid-out wrap.
++ (CGFloat)pillWrapWidthForContentWidth:(CGFloat)cw
+                       labelColumnWidth:(CGFloat)lw {
+  CGFloat labelCol = (lw > 0 ? lw : 54.0);
+  // title-lead LG + labelCol + pill-gap MD + pill-to-reset LG + reset 15 +
+  // reset-inset LG  ==  3*LG + MD + labelCol + 15.
+  CGFloat w = cw - (3 * KKPaddingLG + KKPaddingMD + 15.0) - labelCol;
+  return w > 60.0 ? w : 60.0;
+}
+
+// Width-aware height: a wrapping pill lane grows per wrapped line for the given
+// content width; everything else is width-independent.
++ (CGFloat)heightForLane:(KKLane *)lane
+            contentWidth:(CGFloat)contentWidth
+        labelColumnWidth:(CGFloat)labelColumnWidth {
+  if (!KKLaneWrapsChoicePills(lane))
+    return [self heightForLane:lane];
+  CGFloat wrapW = [self pillWrapWidthForContentWidth:contentWidth
+                                    labelColumnWidth:labelColumnWidth];
+  NSMutableArray<NSString *> *loc =
+      [NSMutableArray arrayWithCapacity:lane.choiceLabels.count];
+  for (NSString *c in lane.choiceLabels)
+    [loc addObject:KKLocalizedParamName(c)];
+  KKPillToggleRowView *probe =
+      [[KKPillToggleRowView alloc] initWithLabels:loc icons:lane.choiceIcons];
+  probe.grouped = YES;
+  probe.wraps = YES;
+  probe.preferredMaxLayoutWidth = wrapW;
+  NSInteger lines = [probe lineCountForWidth:wrapW];
+  return kFloatRowH + (lines - 1) * kWrapLineExtra; // 22pt pill + 3pt line gap
+}
+
 // NSStackView sizes arranged rows by their intrinsic height; without this
 // the rows collapse on top of each other (no height constraint otherwise).
 - (NSSize)intrinsicContentSize {
+  if (_rowHeight > 0)
+    return NSMakeSize(NSViewNoIntrinsicMetric, _rowHeight);
   CGFloat h = _gradientControl ? kGradientRowH
                                : (_fields.count >= 2 ? kCropRowH : kFloatRowH);
   return NSMakeSize(NSViewNoIntrinsicMetric, h);
+}
+
+// A popover resize (sm/md/lg) changes the content width without rebuilding rows,
+// so the host calls this to re-derive a wrapping pill row's block width + height
+// for the new width. No-op for a non-wrapping row.
+- (void)updateContentWidth:(CGFloat)contentWidth {
+  if (!_wrapsChoicePills || !_pillWidthConstraint || contentWidth <= 0)
+    return;
+  _contentWidth = contentWidth;
+  CGFloat wrapW = [_KKStaticValueRow pillWrapWidthForContentWidth:contentWidth
+                                                 labelColumnWidth:_labelColumnW];
+  _pillWidthConstraint.constant = wrapW;
+  _choicePill.preferredMaxLayoutWidth = wrapW; // invalidates + redraws the pill
+  CGFloat newH =
+      kFloatRowH + ([_choicePill lineCountForWidth:wrapW] - 1) * kWrapLineExtra;
+  if (fabs(newH - _rowHeight) > 0.5) {
+    _rowHeight = newH;
+    [self invalidateIntrinsicContentSize];
+  }
 }
 
 - (double)_clamp:(double)v index:(NSInteger)i {
@@ -456,11 +523,18 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
                  showsRemove:(BOOL)showsRemove
           showsAddToAnimated:(BOOL)showsAddToAnimated
                  showsSmooth:(BOOL)showsSmooth
-            labelColumnWidth:(CGFloat)labelColumnWidth {
-  CGFloat h = [_KKStaticValueRow heightForLane:lane];
-  self = [super initWithFrame:NSMakeRect(0, 0, kCanvasPopoverW, h)];
+            labelColumnWidth:(CGFloat)labelColumnWidth
+                contentWidth:(CGFloat)contentWidth {
+  CGFloat cw = contentWidth > 0 ? contentWidth : kCanvasPopoverW;
+  CGFloat h = [_KKStaticValueRow heightForLane:lane
+                                  contentWidth:cw
+                              labelColumnWidth:labelColumnWidth];
+  self = [super initWithFrame:NSMakeRect(0, 0, cw, h)];
   if (!self)
     return nil;
+  _rowHeight = h;
+  _contentWidth = cw;
+  _wrapsChoicePills = KKLaneWrapsChoicePills(lane);
   _laneLabel = [lane.label copy];
   _valueType = lane.valueType;
   _cmin = lane.componentMin ?: @[];
@@ -647,11 +721,27 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
       [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       [_choicePill.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
                                                  constant:-KKPaddingLG],
-      [_choicePill.leadingAnchor
-          constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
-                                      constant:KKPaddingMD],
       [_choicePill.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
     ]];
+    if (_wrapsChoicePills) {
+      // Wide glyph set (stroke markers): a fixed-width block = wrapW, anchored at
+      // the right (trailing at reset), whose pills wrap onto right-aligned lines.
+      // -updateContentWidth: re-derives wrapW + the row height on a popover
+      // resize. Otherwise the pill stays content-sized, right-aligned, one line.
+      CGFloat wrapW =
+          [_KKStaticValueRow pillWrapWidthForContentWidth:_contentWidth
+                                         labelColumnWidth:_labelColumnW];
+      _choicePill.wraps = YES;
+      _choicePill.preferredMaxLayoutWidth = wrapW;
+      _pillWidthConstraint =
+          [_choicePill.widthAnchor constraintEqualToConstant:wrapW];
+      _pillWidthConstraint.active = YES;
+    } else {
+      [_choicePill.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
+                                      constant:KKPaddingMD]
+          .active = YES;
+    }
   } else if (_valueType == KKLaneValueTypeColor) {
     // A solid colour: a swatch that opens the system colour panel. Stored as
     // [r, g, b, a] in sRGB 0..1 (the shader linearises). KKColorWellView is a
@@ -966,7 +1056,10 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     _slider = [KKSliderView styledSlider];
     _slider.translatesAutoresizingMaskIntoConstraints = NO;
     _slider.minValue = _cmin.count ? _cmin[0].doubleValue : 0.0;
-    _slider.maxValue = _cmax.count ? _cmax[0].doubleValue : 1.0;
+    // The slider can top out below the field's hard max (componentMax) so a
+    // value is typeable past the slider's end (marker width: slider 0..500 %).
+    _slider.maxValue = lane.sliderMax ? lane.sliderMax.doubleValue
+                                      : (_cmax.count ? _cmax[0].doubleValue : 1.0);
     _slider.continuous = YES;
     _slider.trackFillColor = [NSColor accentMatchingHost];
     _slider.target = self;

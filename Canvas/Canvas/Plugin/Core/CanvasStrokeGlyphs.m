@@ -100,39 +100,173 @@ static void CanvasDrawJoinGlyph(CGFloat k, NSInteger join) {
 // join's content a touch, centred, so the two pills look the same size.
 static const CGFloat kJoinContentScale = 0.84f;
 
-static NSImage *CanvasGlyphImage(CGFloat contentScale, void (^draw)(CGFloat k)) {
+static NSImage *CanvasGlyphImage(CGFloat contentScale,
+                                 void (^draw)(CGFloat k)) {
   NSImage *img = [NSImage
-        imageWithSize:NSMakeSize(kGlyphSize, kGlyphSize)
-              flipped:NO
-       drawingHandler:^BOOL(NSRect dstRect) {
-         [[NSColor blackColor] set]; // template image: tinted by the control
-         if (contentScale != 1.0f) {
-           CGFloat c = kGlyphSize * 0.5f;
-           NSAffineTransform *tx = [NSAffineTransform transform];
-           [tx translateXBy:c yBy:c];
-           [tx scaleBy:contentScale];
-           [tx translateXBy:-c yBy:-c];
-           [tx concat];
-         }
-         draw(kGlyphSize / 24.0f);
-         return YES;
-       }];
+       imageWithSize:NSMakeSize(kGlyphSize, kGlyphSize)
+             flipped:NO
+      drawingHandler:^BOOL(NSRect dstRect) {
+        [[NSColor blackColor] set]; // template image: tinted by the control
+        if (contentScale != 1.0f) {
+          CGFloat c = kGlyphSize * 0.5f;
+          NSAffineTransform *tx = [NSAffineTransform transform];
+          [tx translateXBy:c yBy:c];
+          [tx scaleBy:contentScale];
+          [tx translateXBy:-c yBy:-c];
+          [tx concat];
+        }
+        draw(kGlyphSize / 24.0f);
+        return YES;
+      }];
   img.template = YES; // adopts the pill's foreground colour
   return img;
 }
 
 NSArray<NSImage *> *CanvasLineCapGlyphs(void) {
   return @[
-    CanvasGlyphImage(1.0f, ^(CGFloat k) { CanvasDrawCapGlyph(k, 0); }),
-    CanvasGlyphImage(1.0f, ^(CGFloat k) { CanvasDrawCapGlyph(k, 1); }),
-    CanvasGlyphImage(1.0f, ^(CGFloat k) { CanvasDrawCapGlyph(k, 2); }),
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawCapGlyph(k, 0);
+                     }),
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawCapGlyph(k, 1);
+                     }),
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawCapGlyph(k, 2);
+                     }),
   ];
 }
 
 NSArray<NSImage *> *CanvasLineJoinGlyphs(void) {
   return @[
-    CanvasGlyphImage(kJoinContentScale, ^(CGFloat k) { CanvasDrawJoinGlyph(k, 0); }),
-    CanvasGlyphImage(kJoinContentScale, ^(CGFloat k) { CanvasDrawJoinGlyph(k, 1); }),
-    CanvasGlyphImage(kJoinContentScale, ^(CGFloat k) { CanvasDrawJoinGlyph(k, 2); }),
+    CanvasGlyphImage(kJoinContentScale,
+                     ^(CGFloat k) {
+                       CanvasDrawJoinGlyph(k, 0);
+                     }),
+    CanvasGlyphImage(kJoinContentScale,
+                     ^(CGFloat k) {
+                       CanvasDrawJoinGlyph(k, 1);
+                     }),
+    CanvasGlyphImage(kJoinContentScale,
+                     ^(CGFloat k) {
+                       CanvasDrawJoinGlyph(k, 2);
+                     }),
+  ];
+}
+
+// Marker glyphs: a baseline stroke (y = 12 on the 24-grid) with the decoration
+// at the matching end (right for End, mirrored left for Start). Ported from
+// _Attic/UI/MarkerStyleView.m, retuned to the cap/join glyph weight + bounds.
+static const CGFloat kMarkerLineW = 2.0f; // 24-grid units, scaled by k
+
+static void CanvasMarkerBaseline(CGFloat k, CGFloat x0, CGFloat x1) {
+  NSBezierPath *p = [NSBezierPath bezierPath];
+  [p moveToPoint:NSMakePoint(x0 * k, 12 * k)];
+  [p lineToPoint:NSMakePoint(x1 * k, 12 * k)];
+  p.lineWidth = kMarkerLineW * k;
+  p.lineCapStyle = NSLineCapStyleRound;
+  [p stroke];
+}
+
+static void CanvasDrawMarkerNone(CGFloat k, BOOL isStart) {
+  (void)isStart;
+  CanvasMarkerBaseline(k, 3, 21);
+}
+
+static void CanvasDrawMarkerArrow(CGFloat k, BOOL isStart) {
+  CanvasMarkerBaseline(k, 3, 21);
+  NSBezierPath *tri = [NSBezierPath bezierPath];
+  if (isStart) {
+    [tri moveToPoint:NSMakePoint(10 * k, 6 * k)];
+    [tri lineToPoint:NSMakePoint(3 * k, 12 * k)];
+    [tri lineToPoint:NSMakePoint(10 * k, 18 * k)];
+  } else {
+    [tri moveToPoint:NSMakePoint(14 * k, 6 * k)];
+    [tri lineToPoint:NSMakePoint(21 * k, 12 * k)];
+    [tri lineToPoint:NSMakePoint(14 * k, 18 * k)];
+  }
+  [tri closePath];
+  [tri fill];
+}
+
+static void CanvasDrawMarkerCircle(CGFloat k, BOOL isStart) {
+  CGFloat r = 4.5f;
+  CGFloat cx = isStart ? 7.5f : 16.5f;
+  if (isStart)
+    CanvasMarkerBaseline(k, cx + r, 21);
+  else
+    CanvasMarkerBaseline(k, 3, cx - r);
+  NSRect rr = NSMakeRect((cx - r) * k, (12 - r) * k, 2 * r * k, 2 * r * k);
+  [[NSBezierPath bezierPathWithOvalInRect:rr] fill];
+}
+
+static void CanvasDrawMarkerSquare(CGFloat k, BOOL isStart) {
+  CGFloat h = 4.5f;
+  CGFloat cx = isStart ? 7.5f : 16.5f;
+  if (isStart)
+    CanvasMarkerBaseline(k, cx + h, 21);
+  else
+    CanvasMarkerBaseline(k, 3, cx - h);
+  NSRect rr = NSMakeRect((cx - h) * k, (12 - h) * k, 2 * h * k, 2 * h * k);
+  [[NSBezierPath bezierPathWithRect:rr] fill];
+}
+
+static void CanvasDrawMarkerArrowhead(CGFloat k, BOOL isStart) {
+  CanvasMarkerBaseline(k, 3, 21);
+  NSBezierPath *chev = [NSBezierPath bezierPath];
+  chev.lineWidth = kMarkerLineW * k;
+  chev.lineCapStyle = NSLineCapStyleRound;
+  chev.lineJoinStyle = NSLineJoinStyleRound;
+  if (isStart) {
+    [chev moveToPoint:NSMakePoint(10 * k, 6 * k)];
+    [chev lineToPoint:NSMakePoint(4 * k, 12 * k)];
+    [chev lineToPoint:NSMakePoint(10 * k, 18 * k)];
+  } else {
+    [chev moveToPoint:NSMakePoint(14 * k, 6 * k)];
+    [chev lineToPoint:NSMakePoint(20 * k, 12 * k)];
+    [chev lineToPoint:NSMakePoint(14 * k, 18 * k)];
+  }
+  [chev stroke];
+}
+
+static void CanvasDrawMarkerLine(CGFloat k, BOOL isStart) {
+  CanvasMarkerBaseline(k, 3, 21);
+  NSBezierPath *bar = [NSBezierPath bezierPath];
+  bar.lineWidth = kMarkerLineW * k;
+  bar.lineCapStyle = NSLineCapStyleRound;
+  CGFloat bx = isStart ? 4 : 20;
+  [bar moveToPoint:NSMakePoint(bx * k, 6 * k)];
+  [bar lineToPoint:NSMakePoint(bx * k, 18 * k)];
+  [bar stroke];
+}
+
+NSArray<NSImage *> *CanvasMarkerGlyphs(BOOL isStart) {
+  return @[
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawMarkerNone(k, isStart);
+                     }),
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawMarkerArrow(k, isStart);
+                     }),
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawMarkerCircle(k, isStart);
+                     }),
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawMarkerSquare(k, isStart);
+                     }),
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawMarkerArrowhead(k, isStart);
+                     }),
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawMarkerLine(k, isStart);
+                     }),
   ];
 }

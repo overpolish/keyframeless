@@ -57,6 +57,21 @@ NS_ASSUME_NONNULL_BEGIN
 /// `grouped`.
 @property(nonatomic) BOOL hidesGroupTrack;
 
+/// When YES the pills flow onto multiple lines if they don't fit within
+/// `preferredMaxLayoutWidth`, each line RIGHT-aligned to that width, and the
+/// intrinsic height grows per line. Use for a wide set (the 6 stroke-marker
+/// types) so the row wraps instead of overflowing. Default NO (single line).
+/// Needs a positive `preferredMaxLayoutWidth` to wrap.
+@property(nonatomic) BOOL wraps;
+
+/// The width the wrapping layout flows within (and right-aligns to). 0 = no wrap
+/// even when `wraps` is YES. Set by the hosting row from the popover width.
+@property(nonatomic) CGFloat preferredMaxLayoutWidth;
+
+/// Number of lines the pills wrap onto for `width` (1 when not wrapping). Lets a
+/// row size its height to match the wrapped layout.
+- (NSInteger)lineCountForWidth:(CGFloat)width;
+
 - (instancetype)initWithLabels:(NSArray<NSString *> *)labels;
 - (instancetype)initWithIcons:(NSArray<NSImage *> *)icons;
 - (instancetype)initWithLabels:(NSArray<NSString *> *)labels

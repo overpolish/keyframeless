@@ -16,6 +16,7 @@ static const CGFloat kPillIconGap = 4.0;
 static const CGFloat kGroupTrackInset = 2.0;
 static const CGFloat kGroupPillHeight = 22.0;
 static const CGFloat kGroupPillPadX = 8.0;
+static const CGFloat kPillLineSpacing = 3.0; // gap between wrapped pill lines
 
 @implementation KKPillToggleRowView {
   NSArray<NSString *> *_labels;
@@ -83,12 +84,50 @@ static const CGFloat kGroupPillPadX = 8.0;
   return _grouped ? kGroupPillPadX : kPillPadX;
 }
 
-- (NSSize)intrinsicContentSize {
-  CGFloat w = 0;
+- (CGFloat)wrapWidth {
+  return (_wraps && _preferredMaxLayoutWidth > 0) ? _preferredMaxLayoutWidth : 0;
+}
+
+- (void)setPreferredMaxLayoutWidth:(CGFloat)w {
+  if (fabs(_preferredMaxLayoutWidth - w) < 0.5)
+    return;
+  _preferredMaxLayoutWidth = w;
+  [self invalidateIntrinsicContentSize]; // re-flow lines for the new width
+  [self setNeedsDisplay:YES];
+}
+
+- (NSInteger)lineCountForWidth:(CGFloat)width {
+  if (!(_wraps && width > 0) || _count == 0)
+    return 1;
   CGFloat spacing = [self pillSpacing];
+  NSInteger lines = 0, i = 0;
+  while (i < _count) {
+    NSInteger start = i;
+    CGFloat lineW = 0;
+    while (i < _count) {
+      CGFloat add = [self pillWidthForIndex:i] + (i > start ? spacing : 0);
+      if (i > start && lineW + add > width)
+        break;
+      lineW += add;
+      i++;
+    }
+    lines++;
+  }
+  return lines > 0 ? lines : 1;
+}
+
+- (NSSize)intrinsicContentSize {
+  CGFloat spacing = [self pillSpacing];
+  CGFloat h = [self currentPillHeight];
+  CGFloat wrap = [self wrapWidth];
+  if (wrap > 0) {
+    NSInteger lines = [self lineCountForWidth:wrap];
+    return NSMakeSize(wrap, lines * h + (lines - 1) * kPillLineSpacing);
+  }
+  CGFloat w = 0;
   for (NSInteger i = 0; i < _count; i++)
     w += [self pillWidthForIndex:i] + (i > 0 ? spacing : 0);
-  return NSMakeSize(w, [self currentPillHeight]);
+  return NSMakeSize(w, h);
 }
 
 - (void)setState:(BOOL)on atIndex:(NSInteger)index {
@@ -158,17 +197,46 @@ static const CGFloat kGroupPillPadX = 8.0;
 }
 
 - (NSArray<NSValue *> *)pillRects {
-  NSMutableArray<NSValue *> *rects = [NSMutableArray array];
-
+  NSMutableArray<NSValue *> *rects = [NSMutableArray arrayWithCapacity:_count];
   CGFloat spacing = [self pillSpacing];
   CGFloat h = [self currentPillHeight];
-  CGFloat x = 0;
-  for (NSInteger i = 0; i < _count; i++) {
-    CGFloat w = [self pillWidthForIndex:i];
-    [rects addObject:[NSValue valueWithRect:NSMakeRect(x, 0, w, h)]];
-    x += w + spacing;
+  CGFloat wrap = [self wrapWidth];
+
+  if (wrap <= 0) { // single line, left-to-right
+    CGFloat x = 0;
+    for (NSInteger i = 0; i < _count; i++) {
+      CGFloat w = [self pillWidthForIndex:i];
+      [rects addObject:[NSValue valueWithRect:NSMakeRect(x, 0, w, h)]];
+      x += w + spacing;
+    }
+    return rects;
   }
 
+  // Wrapped: greedy line breaks, each line RIGHT-aligned to `wrap`.
+  for (NSInteger i = 0; i < _count; i++)
+    [rects addObject:[NSValue valueWithRect:NSZeroRect]];
+  CGFloat y = 0;
+  NSInteger i = 0;
+  while (i < _count) {
+    NSInteger start = i;
+    CGFloat lineW = 0;
+    while (i < _count) {
+      CGFloat add = [self pillWidthForIndex:i] + (i > start ? spacing : 0);
+      if (i > start && lineW + add > wrap)
+        break;
+      lineW += add;
+      i++;
+    }
+    CGFloat x = wrap - lineW; // push the line to the right edge
+    if (x < 0)
+      x = 0;
+    for (NSInteger k = start; k < i; k++) {
+      CGFloat w = [self pillWidthForIndex:k];
+      rects[k] = [NSValue valueWithRect:NSMakeRect(x, y, w, h)];
+      x += w + spacing;
+    }
+    y += h + kPillLineSpacing;
+  }
   return rects;
 }
 
@@ -177,14 +245,30 @@ static const CGFloat kGroupPillPadX = 8.0;
 
   if (_grouped && !_hidesGroupTrack) {
     CGFloat h = [self currentPillHeight];
-    CGFloat totalW = NSMaxX(rects.lastObject.rectValue);
-    NSRect trackRect = NSMakeRect(0, 0, totalW, h);
     CGFloat trackRadius = h / 2.0;
-    NSBezierPath *track = [NSBezierPath bezierPathWithRoundedRect:trackRect
-                                                          xRadius:trackRadius
-                                                          yRadius:trackRadius];
     [[[NSColor inspectorLabel] colorWithAlphaComponent:0.06] setFill];
-    [track fill];
+    // One rounded track per (wrapped) line, spanning that line's pills.
+    CGFloat lineY = NSNotFound, lineMinX = 0, lineMaxX = 0;
+    for (NSValue *rv in rects) {
+      NSRect r = rv.rectValue;
+      if (lineY == NSNotFound || fabs(r.origin.y - lineY) > 0.5) {
+        if (lineY != NSNotFound)
+          [[NSBezierPath
+              bezierPathWithRoundedRect:NSMakeRect(lineMinX, lineY,
+                                                   lineMaxX - lineMinX, h)
+                                xRadius:trackRadius
+                                yRadius:trackRadius] fill];
+        lineY = r.origin.y;
+        lineMinX = NSMinX(r);
+      }
+      lineMaxX = NSMaxX(r);
+    }
+    if (lineY != NSNotFound)
+      [[NSBezierPath
+          bezierPathWithRoundedRect:NSMakeRect(lineMinX, lineY,
+                                               lineMaxX - lineMinX, h)
+                            xRadius:trackRadius
+                            yRadius:trackRadius] fill];
   }
 
   for (NSInteger i = 0; i < _count; i++) {

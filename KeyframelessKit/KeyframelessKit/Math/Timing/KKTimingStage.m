@@ -328,6 +328,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   _ownerScoped = tmpl.ownerScoped;
   _choiceLabels = [tmpl.choiceLabels copy];
   _choiceIcons = [tmpl.choiceIcons copy];
+  _wrapsChoicePills = tmpl.wrapsChoicePills;
   _isToggle = tmpl.isToggle;
   _autoSizesComponentLabels = tmpl.autoSizesComponentLabels;
   _visibleWhenLabel = [tmpl.visibleWhenLabel copy];
@@ -369,6 +370,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.valueType = _valueType;
   c.componentMin = [_componentMin copy];
   c.componentMax = [_componentMax copy];
+  c.sliderMax = [_sliderMax copy];
   c.componentUnits = [_componentUnits copy];
   c.componentLabels = [_componentLabels copy];
   c.componentLabelColors = [_componentLabelColors copy];
@@ -395,6 +397,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.ownerScoped = _ownerScoped;
   c.choiceLabels = [_choiceLabels copy];
   c.choiceIcons = [_choiceIcons copy];
+  c.wrapsChoicePills = _wrapsChoicePills;
   c.isToggle = _isToggle;
   c.autoSizesComponentLabels = _autoSizesComponentLabels;
   c.visibleWhenLabel = [_visibleWhenLabel copy];

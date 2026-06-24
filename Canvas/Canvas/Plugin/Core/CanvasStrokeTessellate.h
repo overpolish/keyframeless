@@ -80,13 +80,14 @@ NSUInteger CanvasTessellateStrokeScratch(
 /// corners. Each contour restarts the arc at 0. Pass `scratch` for the buffer
 /// reuse (see CanvasStrokeScratch) or NULL. `outArc` must be at least as large
 /// as the returned vertex count (size it the same as `outVerts`).
-NSUInteger CanvasTessellateStrokeArc(KKBezierPath *path, float startWidth,
-                                     float endWidth, float outputWidth,
-                                     float outputHeight, uint8_t lineCap,
-                                     uint8_t lineJoin, KKVertex2D *outVerts,
-                                     NSUInteger maxVerts,
-                                     CanvasStrokeScratch *_Nullable scratch,
-                                     float *_Nullable outArc);
+/// `trimStartPx` / `trimEndPx` shorten the (single open) contour by that arc
+/// length at each end so an endpoint marker can cover the stroke end (0 = no
+/// trim). Ignored for closed / compound paths.
+NSUInteger CanvasTessellateStrokeArc(
+    KKBezierPath *path, float startWidth, float endWidth, float outputWidth,
+    float outputHeight, uint8_t lineCap, uint8_t lineJoin, KKVertex2D *outVerts,
+    NSUInteger maxVerts, float trimStartPx, float trimEndPx,
+    CanvasStrokeScratch *_Nullable scratch, float *_Nullable outArc);
 
 /// Tessellates a DOTTED stroke of `path` (one filled disc per dot, placed by
 /// PIXEL arc length so it survives the layer transform + the gradient bake).

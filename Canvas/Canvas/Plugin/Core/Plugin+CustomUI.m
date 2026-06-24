@@ -282,10 +282,59 @@
   KKLane *marchSpeed = strokeScalar(@"Marching Ants Speed", 0.0, 10.0, @[ @1, @2 ]);
   marchSpeed.componentUnits = @[ @"" ]; // cycles/sec, not pixels
 
+  // Start / end endpoint markers: FOUR independent rows - a NON-animatable glyph
+  // pill (the marker TYPE, 6-value order) and an animatable WIDTH field (% of
+  // stroke width) for each end, ordered Start / Start Width / End / End Width.
+  // Open-path ends only (scoped in the timeline builder); gated by Enabled like
+  // the rest of the group.
+  KKLane *(^markerType)(NSString *, BOOL) = ^KKLane *(NSString *label,
+                                                      BOOL isStart) {
+    KKLane *l = [KKLane laneWithLabel:label];
+    l.valueType = KKLaneValueTypeFloat;
+    l.choiceLabels =
+        @[ @"None", @"Arrow", @"Circle", @"Square", @"Arrowhead", @"Line" ];
+    l.choiceIcons = CanvasMarkerGlyphs(isStart);
+    l.wrapsChoicePills = YES; // 6 icon+label pills wrap instead of overflowing
+    l.componentMin = @[ @0.0 ];
+    l.componentMax = @[ @5.0 ];
+    l.integerValued = YES;
+    l.animatable = NO;
+    l.enabled = NO;
+    l.ownerScoped = YES;
+    l.categoryKey = @"Stroke";
+    l.categorySymbol = @"lineweight";
+    l.visibleWhenLabel = @"Enabled";
+    l.visibleWhenValues = @[ @1 ];
+    [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
+    return l;
+  };
+  KKLane *(^markerWidth)(NSString *) = ^KKLane *(NSString *label) {
+    KKLane *l = [KKLane laneWithLabel:label];
+    l.valueType = KKLaneValueTypeFloat;
+    l.componentMin = @[ @0.0 ];
+    l.componentMax = @[ @2000.0 ]; // field hard cap (% of stroke width)
+    l.sliderMax = @500.0;          // slider tops out at 500 %, field pushes past
+    l.componentUnits = @[ @"%" ];
+    l.integerValued = YES;
+    l.enabled = NO;
+    l.ownerScoped = YES;
+    l.categoryKey = @"Stroke";
+    l.categorySymbol = @"lineweight";
+    l.visibleWhenLabel = @"Enabled";
+    l.visibleWhenValues = @[ @1 ];
+    [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @300.0 ]]];
+    return l;
+  };
+  KKLane *startMarker = markerType(@"Start Marker", YES);
+  KKLane *startMarkerWidth = markerWidth(@"Start Marker Width");
+  KKLane *endMarker = markerType(@"End Marker", NO);
+  KKLane *endMarkerWidth = markerWidth(@"End Marker Width");
+
   return @[
     points, strokeOn, strokeWidth, strokeColor[0], strokeColor[1],
-    strokeColor[2], lineCap, lineJoin, strokeStyle, dashLength, dashGap, dotGap,
-    marchSpeed, scale, position, rotation, anchor, opacity
+    strokeColor[2], lineCap, lineJoin, startMarker, startMarkerWidth, endMarker,
+    endMarkerWidth, strokeStyle, dashLength, dashGap, dotGap, marchSpeed, scale,
+    position, rotation, anchor, opacity
   ];
 }
 

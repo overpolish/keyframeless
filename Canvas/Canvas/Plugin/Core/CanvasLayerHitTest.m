@@ -7,6 +7,7 @@
 #import "CanvasLayerRender.h"  // CanvasHitTestLayerID (public decl)
 #import "CanvasLayerTimeline.h"
 #import "CanvasLayerTransform.h"
+#import "CanvasMarkerTessellate.h" // marker triangle-list hit-test
 #import "CanvasStrokeTessellate.h" // CanvasTessellateStroke (strip hit-test)
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKBezierPath.h>
@@ -344,16 +345,32 @@ static BOOL CanvasPointInTri(simd_float2 p, simd_float2 a, simd_float2 b,
   return !(neg && pos);
 }
 
+// Project a tessellated stroke / marker vertex (centered-pixel object space) to
+// the aspect-corrected space the hit-test compares in: pixel -> path-normalized
+// (inverse of the tessellator's (norm-0.5)*outputSize) -> the same pipeline as
+// the centerline -> x scaled by aspect. `inv` = 1/outputSize, `half` =
+// (0.5,0.5).
+static simd_float2
+CanvasHitProjectVert(KKVertex2D v, simd_float2 inv, simd_float2 half,
+                     CanvasLayerTransform t, simd_float2 c, float aspect,
+                     const CanvasGroupXform *groups, NSInteger ng) {
+  simd_float2 nm = v.position * inv + half;
+  simd_float2 pr =
+      CanvasProjectedCornerObj(nm.x, nm.y, t, c.x, c.y, aspect, groups, ng);
+  return simd_make_float2(pr.x * aspect, pr.y);
+}
+
 // Hit a stroke by testing the point against the SAME tessellated triangle-strip
 // the render draws (not a centerline + tolerance). This is the general stroke
 // hit primitive: it follows whatever geometry the tessellator emits, so it
 // already handles the taper and will extend to wavy / multi-stroke sketch and
 // arrow markers (they just add triangles) with no hit-test change. Each strip
-// vertex is converted pixel -> path-normalized (the inverse of the tessellator's
-// (norm-0.5)*outputSize) and projected through the same pipeline as the
-// centerline; every consecutive vertex triple is one triangle. Degenerate
-// bridge / collinear triangles are skipped so they can't false-hit. `startW` /
-// `endW` are canvas px, already floored to a minimum grab width by the caller.
+// vertex is converted pixel -> path-normalized (the inverse of the
+// tessellator's (norm-0.5)*outputSize) and projected through the same pipeline
+// as the centerline; every consecutive vertex triple is one triangle.
+// Degenerate bridge / collinear triangles are skipped so they can't false-hit.
+// `startW` / `endW` are canvas px, already floored to a minimum grab width by
+// the caller.
 static BOOL CanvasStrokeStripHit(KKBezierPath *geom, float startW, float endW,
                                  float outW, float outH, uint8_t lineCap,
                                  uint8_t lineJoin, CanvasLayerTransform t,
@@ -367,7 +384,8 @@ static BOOL CanvasStrokeStripHit(KKBezierPath *geom, float startW, float endW,
   // malloc per layer per move. Safe as a static here: the hit-test runs only on
   // the main/event thread (viewer OSC + mini interaction), and each FxPlug
   // instance is its own XPC process, so this is effectively per-instance and
-  // never shared/concurrent (unlike the render path, which passes NULL scratch).
+  // never shared/concurrent (unlike the render path, which passes NULL
+  // scratch).
   static KKVertex2D *sVerts = NULL;
   static NSUInteger sVertsCap = 0;
   static CanvasStrokeScratch sScratch;
@@ -387,10 +405,8 @@ static BOOL CanvasStrokeStripHit(KKBezierPath *geom, float startW, float endW,
     simd_float2 half = simd_make_float2(0.5f, 0.5f);
     simd_float2 p0 = {0, 0}, p1 = {0, 0};
     for (NSUInteger i = 0; i < vc; i++) {
-      simd_float2 nm = verts[i].position * inv + half;
-      simd_float2 pr =
-          CanvasProjectedCornerObj(nm.x, nm.y, t, c.x, c.y, aspect, groups, ng);
-      simd_float2 pa = simd_make_float2(pr.x * aspect, pr.y);
+      simd_float2 pa =
+          CanvasHitProjectVert(verts[i], inv, half, t, c, aspect, groups, ng);
       if (i >= 2) {
         float area2 =
             (p1.x - p0.x) * (pa.y - p0.y) - (pa.x - p0.x) * (p1.y - p0.y);
@@ -404,6 +420,51 @@ static BOOL CanvasStrokeStripHit(KKBezierPath *geom, float startW, float endW,
     }
   }
   return hit;
+}
+
+// Hit the endpoint markers (arrow / circle / square / arrowhead / tick) the
+// same way as the stroke - test the point against the SAME tessellated geometry
+// the render draws, so a click anywhere on a marker selects the path. Markers
+// are a triangle LIST (independent triples), unlike the stroke strip.
+// `startW`/`endW` are the effective stroke widths (px) - the marker size is
+// width x the lane multiplier, matching CanvasTessellateMarkers in the render.
+static BOOL CanvasStrokeMarkersHit(KKBezierPath *geom, float startW, float endW,
+                                   uint8_t startMarker, uint8_t endMarker,
+                                   float startMul, float endMul, float outW,
+                                   float outH, CanvasLayerTransform t,
+                                   simd_float2 c, float aspect,
+                                   const CanvasGroupXform *groups, NSInteger ng,
+                                   simd_float2 q) {
+  if (startMarker == 0 && endMarker == 0)
+    return NO;
+  NSUInteger cap = CanvasMarkerVertexCapacity();
+  static KKVertex2D *sMVerts = NULL;
+  static NSUInteger sMCap = 0;
+  if (sMCap < cap) {
+    free(sMVerts);
+    sMVerts = malloc(sizeof(KKVertex2D) * cap);
+    sMCap = cap;
+  }
+  NSUInteger vc = CanvasTessellateMarkers(
+      geom, outW, outH, startMarker, endMarker, startW * startMul,
+      endW * endMul, startW, endW, sMVerts, cap);
+  if (vc < 3)
+    return NO;
+  simd_float2 qa = simd_make_float2(q.x * aspect, q.y);
+  simd_float2 inv = simd_make_float2(outW != 0.0f ? 1.0f / outW : 0.0f,
+                                     outH != 0.0f ? 1.0f / outH : 0.0f);
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+  for (NSUInteger i = 0; i + 2 < vc; i += 3) { // triangle LIST: triples
+    simd_float2 p[3];
+    for (int k = 0; k < 3; k++)
+      p[k] = CanvasHitProjectVert(sMVerts[i + k], inv, half, t, c, aspect,
+                                  groups, ng);
+    float area2 = (p[1].x - p[0].x) * (p[2].y - p[0].y) -
+                  (p[2].x - p[0].x) * (p[1].y - p[0].y);
+    if (fabsf(area2) > 1e-9f && CanvasPointInTri(qa, p[0], p[1], p[2]))
+      return YES;
+  }
+  return NO;
 }
 
 // Even-odd point-in-polygon over a projected polyline (aspect-corrected, same
@@ -460,8 +521,9 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
     float swStart = path.strokeWidth, swEnd = path.strokeWidth;
     CanvasStrokeWidthAtFraction(path, frac < 0.0 ? 0.0 : frac, nil, nil,
                                 &swStart, &swEnd);
-    // Floor the clickable width to the screen slop so a hairline stays grabbable
-    // (a 2*slop-wide strip = slop half-width in object-Y, matching the old tol).
+    // Floor the clickable width to the screen slop so a hairline stays
+    // grabbable (a 2*slop-wide strip = slop half-width in object-Y, matching
+    // the old tol).
     float minPx = 2.0f * kHitStrokeSlopObj * h;
     float a = aspect > 0.0f ? aspect : 1.0f;
     uint8_t lineCap = path.lineCap, lineJoin = path.lineJoin;
@@ -470,6 +532,16 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
     if (CanvasStrokeStripHit(geom, fmaxf(swStart, minPx), fmaxf(swEnd, minPx),
                              a * h, h, lineCap, lineJoin, t, c, aspect, groups,
                              ng, q))
+      return YES;
+    // Endpoint markers are drawn on top of the stroke, so they're clickable too
+    // (use the real stroke widths so the marker size matches what's drawn).
+    uint8_t startMarker = 0, endMarker = 0;
+    float startMul = path.startMarkerSize, endMul = path.endMarkerSize;
+    CanvasStrokeMarkersAtFraction(path, frac < 0.0 ? 0.0 : frac, nil, nil,
+                                  &startMarker, &endMarker, &startMul, &endMul);
+    if (CanvasStrokeMarkersHit(geom, swStart, swEnd, startMarker, endMarker,
+                               startMul, endMul, a * h, h, t, c, aspect, groups,
+                               ng, q))
       return YES;
   }
   if (path.fillEnabled && CanvasPointInProjectedPolygon(q, proj, n, aspect))
