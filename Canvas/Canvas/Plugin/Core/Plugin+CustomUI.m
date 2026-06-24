@@ -308,7 +308,12 @@
     [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
     return l;
   };
-  KKLane *(^markerWidth)(NSString *) = ^KKLane *(NSString *label) {
+  // Width only applies when its marker is something other than "None". Gate it
+  // on the corresponding type lane (non-None = indices 1..5); the type lane is
+  // itself gated on "Enabled", so the visibleWhen cascade hides the width when
+  // the stroke is off too (transitive controller carry).
+  KKLane *(^markerWidth)(NSString *, NSString *) =
+      ^KKLane *(NSString *label, NSString *typeLabel) {
     KKLane *l = [KKLane laneWithLabel:label];
     l.valueType = KKLaneValueTypeFloat;
     l.componentMin = @[ @0.0 ];
@@ -320,15 +325,15 @@
     l.ownerScoped = YES;
     l.categoryKey = @"Stroke";
     l.categorySymbol = @"lineweight";
-    l.visibleWhenLabel = @"Enabled";
-    l.visibleWhenValues = @[ @1 ];
+    l.visibleWhenLabel = typeLabel;
+    l.visibleWhenValues = @[ @1, @2, @3, @4, @5 ];
     [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @300.0 ]]];
     return l;
   };
   KKLane *startMarker = markerType(@"Start Marker", YES);
-  KKLane *startMarkerWidth = markerWidth(@"Start Marker Width");
+  KKLane *startMarkerWidth = markerWidth(@"Start Marker Width", @"Start Marker");
   KKLane *endMarker = markerType(@"End Marker", NO);
-  KKLane *endMarkerWidth = markerWidth(@"End Marker Width");
+  KKLane *endMarkerWidth = markerWidth(@"End Marker Width", @"End Marker");
 
   return @[
     points, strokeOn, strokeWidth, strokeColor[0], strokeColor[1],
