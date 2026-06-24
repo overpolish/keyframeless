@@ -53,6 +53,12 @@ static const CGFloat kSlideDistance = 12.0;
   // survives the lazily-built panel - the single _highlightLayerID is just its
   // primary. Empty = no rows highlighted (a real deselect).
   NSArray<NSString *> *_highlightLayerIDs;
+  // The currently-open popover's kind + fraction, so a reload (e.g. a path drawn
+  // while a keypose popover is open) can re-derive the non-selectable set
+  // against the NEW layer stack - otherwise a freshly-added layer stays
+  // selectable. Cleared on close.
+  NSString *_openPopoverKind;
+  double _openPopoverFraction;
 }
 
 - (instancetype)initWithLanesView:(KKTimelineLanesView *)lanesView
@@ -87,6 +93,10 @@ static const CGFloat kSlideDistance = 12.0;
   // operands) simply don't match and stay unselected.
   if (_highlightLayerIDs)
     [_listView setSelectionToLayerIDs:_highlightLayerIDs];
+  // A reload can change the layer stack while a popover is open (e.g. a path
+  // drawn during a keypose popover): re-grey the layers it can't act on against
+  // the new stack so the freshly-added layer isn't clickable.
+  [self _refreshNonSelectableForOpenPopover];
 }
 
 - (void)highlightLayerID:(NSString *)layerID {
@@ -285,13 +295,10 @@ static const CGFloat kSlideDistance = 12.0;
   //  - manage (Animated dropdown): none - any layer's params can be animated.
   NSString *kind = note.userInfo[@"kind"] ?: @"constants";
   double frac = [note.userInfo[@"fraction"] doubleValue];
-  NSSet<NSString *> *nonSelectable = nil;
-  if ([kind isEqualToString:@"keypose"])
-    nonSelectable = [self _layersWithoutKeyposeAtFraction:frac];
-  else if ([kind isEqualToString:@"constants"])
-    nonSelectable = [self _layersWithoutConstant];
-  else if ([kind isEqualToString:@"appliesTo"])
-    nonSelectable = [self _layersWithoutAnimation];
+  _openPopoverKind = [kind copy];
+  _openPopoverFraction = frac;
+  NSSet<NSString *> *nonSelectable = [self _nonSelectableForKind:kind
+                                                        fraction:frac];
 
   // Mirror the gating onto the mini-viewer's auto-select (and anything else the
   // host wires) so clicking a layer in the popover preview honors the same
@@ -330,6 +337,50 @@ static const CGFloat kSlideDistance = 12.0;
                   ofWindow:popoverWindow
              nonSelectable:nonSelectable];
       });
+}
+
+// NO when a popover is open AND `layerID` is non-selectable in it (e.g. a new
+// constant path has no keypose for a keypose popover) - so the host doesn't
+// adopt it as the selection. YES when no popover is open (no scope).
+- (BOOL)isLayerSelectableInOpenPopover:(NSString *)layerID {
+  if (_openPopoverKind.length == 0 || layerID.length == 0)
+    return YES;
+  NSSet<NSString *> *ns = [self _nonSelectableForKind:_openPopoverKind
+                                             fraction:_openPopoverFraction];
+  return ![ns containsObject:layerID];
+}
+
+// The non-selectable layer set for a popover `kind` at `frac` (keypose: no
+// keypose there; constants: move-lane animated; appliesTo: not animated).
+- (nullable NSSet<NSString *> *)_nonSelectableForKind:(NSString *)kind
+                                             fraction:(double)frac {
+  if ([kind isEqualToString:@"keypose"])
+    return [self _layersWithoutKeyposeAtFraction:frac];
+  if ([kind isEqualToString:@"constants"])
+    return [self _layersWithoutConstant];
+  if ([kind isEqualToString:@"appliesTo"])
+    return [self _layersWithoutAnimation];
+  return nil;
+}
+
+// Re-derive + push the open popover's non-selectable set against the CURRENT
+// layer stack. Called on reload so a layer added/removed while a popover is open
+// (e.g. a path drawn during a keypose popover) is greyed immediately, without a
+// reopen. No-op when no popover is open.
+- (void)_refreshNonSelectableForOpenPopover {
+  if (!_openPopoverKind.length)
+    return;
+  NSSet<NSString *> *ns = [self _nonSelectableForKind:_openPopoverKind
+                                             fraction:_openPopoverFraction];
+  if (self.onNonSelectableLayersChanged)
+    self.onNonSelectableLayersChanged(ns);
+  NSSet<NSString *> *mq =
+      [_openPopoverKind isEqualToString:@"constants"]
+          ? [self _layersWithMoveLaneAnimated]
+          : ns;
+  if (self.onMarqueeNonSelectableLayersChanged)
+    self.onMarqueeNonSelectableLayersChanged(mq);
+  [_listView setNonSelectableLayerIDs:ns];
 }
 
 // Layers (by layerID) that have NO keypose at clip fraction `frac` in any of
@@ -584,6 +635,7 @@ static const CGFloat kSlideDistance = 12.0;
 - (void)_hide {
   NSWindow *parent = _parentWindow;
   _parentWindow = nil;
+  _openPopoverKind = nil; // popover gone: stop re-deriving its non-selectable set
   if (!_visible)
     return;
   _visible = NO;

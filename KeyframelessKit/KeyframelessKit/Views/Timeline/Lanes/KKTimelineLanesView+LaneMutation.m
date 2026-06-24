@@ -207,4 +207,20 @@
   [self _replaceLane:lane forLabel:label];
 }
 
+- (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label {
+  // The CONSTANTS popover edits the lanes view's own _timeline, not a graph, so
+  // its aspect-link toggle persists here (the keypose popover routes to the
+  // active graph instead). Reuse the same helper the graphs use so the behaviour
+  // matches, then persist through onTimelineMutated like a value edit - without
+  // this the toggle only updated the row, so the next constant scrub's _refresh
+  // re-read the stale (template-default linked) lane and relocked it.
+  KKTimeline *t = KKTimelineSettingAspectLinked(_timeline, label, on);
+  if (!t)
+    return;
+  _timeline = t;
+  [self _refresh];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
 @end

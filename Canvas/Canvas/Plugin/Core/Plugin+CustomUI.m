@@ -121,7 +121,59 @@
   points.categorySymbol = @"scribble.variable";
   [points insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[]]];
 
-  return @[ points, scale, position, rotation, anchor, opacity ];
+  // Stroke group (between Core and Transform). "Enabled": a structural on/off
+  // CHECKBOX (isToggle) - the group's master switch. Value 1 = on. When off,
+  // toggles the rest of the Stroke group via the visibleWhen cascade. Not
+  // animatable; vector paths only (ownerScoped, so images / groups don't get it
+  // re-seeded). Seeded per-path from the layer's flat strokeEnabled. Listed
+  // FIRST so it heads the group.
+  KKLane *strokeOn = [KKLane laneWithLabel:@"Enabled"];
+  strokeOn.valueType = KKLaneValueTypeFloat;
+  strokeOn.isToggle = YES;
+  strokeOn.animatable = NO;
+  strokeOn.integerValued = YES;
+  strokeOn.componentLabels = @[];
+  strokeOn.componentUnits = @[];
+  strokeOn.enabled = NO;
+  strokeOn.ownerScoped = YES;
+  strokeOn.categoryKey = @"Stroke";
+  strokeOn.categorySymbol = @"lineweight";
+  [strokeOn insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @1.0 ]]];
+
+  // Stroke group (between Core and Transform). Stroke Width: 2-component
+  // aspect-linked float in NATIVE pixels (Start / End), LINKED by default so one
+  // box drives both - the classic linked-field pattern (like a radius). The
+  // render is constant-width today (uses Start; End taper renders later), and
+  // links to End so the linked default is exact. Vector paths only (scoped in
+  // CanvasLayerTimelineForPath; images / groups have no stroke). Seeded per-path
+  // from the layer's flat strokeWidth/endWidth there, so existing paths are
+  // unchanged; the template default matches a freshly-drawn path (20px).
+  KKLane *strokeWidth = [KKLane laneWithLabel:@"Stroke Width"];
+  strokeWidth.valueType = KKLaneValueTypeFloat;
+  strokeWidth.componentMin = @[ @0.0, @0.0 ]; // no negative width
+  strokeWidth.componentUnits = @[ @"px", @"px" ];
+  strokeWidth.componentLabels = @[ @"Start", @"End" ];
+  strokeWidth.autoSizesComponentLabels = YES; // "Start"/"End" don't fit 1-char slot
+  strokeWidth.integerValued = YES; // whole px (sub-pixel widths don't help)
+  strokeWidth.aspectLinkable = YES;
+  strokeWidth.aspectLinked = YES;
+  strokeWidth.enabled = NO; // constant by default; animate per-layer via dropdown
+  strokeWidth.ownerScoped = YES; // vector paths only (not re-seeded for images)
+  strokeWidth.categoryKey = @"Stroke";
+  strokeWidth.categorySymbol = @"lineweight";
+  // Gated by the "Enabled" toggle via the shared visibleWhen cascade: when the
+  // stroke is off this lane drops out of EVERY surface (constants/keypose
+  // popover, animated dropdown, lane filter, Advanced graph) - the one source of
+  // truth being the toggle's value. Every later Stroke lane (color, dash, ...)
+  // wires the same rule, so the whole group hides as one.
+  strokeWidth.visibleWhenLabel = @"Enabled";
+  strokeWidth.visibleWhenValues = @[ @1 ];
+  [strokeWidth insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                              values:@[ @20.0, @20.0 ]]];
+
+  return @[
+    points, strokeOn, strokeWidth, scale, position, rotation, anchor, opacity
+  ];
 }
 
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {

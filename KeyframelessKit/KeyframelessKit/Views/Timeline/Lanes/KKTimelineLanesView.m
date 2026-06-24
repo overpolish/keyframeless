@@ -592,7 +592,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   }
 
   NSMutableArray<NSString *> *opted = [NSMutableArray array];
-  for (KKLane *tmpl in _availableLanes)
+  for (KKLane *tmpl in [self _ownerScopedAvailableLanes])
     if ([self _isAnimatableLabel:tmpl.label] &&
         [condVisible containsObject:tmpl.label])
       [opted addObject:tmpl.label];
@@ -612,13 +612,30 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
           : KKHierarchicalLaneSummary(optedIn);
   [_dropdownTrigger setNeedsDisplay:YES];
 
-  if (_openManageView)
+  if (_openManageView) {
+    // Re-scope the open dropdown ONLY when the lane set actually changed (a
+    // companion-panel layer switch image<->path, or a mode-gate). Rebuilding
+    // every refresh would flicker rows mid-toggle and is pure overhead for
+    // single-owner plugins. The checked boxes always re-sync (cheap).
+    NSArray<KKLane *> *scoped = [self _manageVisibleLanes];
+    NSArray<NSString *> *newLabels = [scoped valueForKey:@"label"];
+    if (![newLabels isEqualToArray:[_openManageView currentLaneLabels]])
+      [_openManageView setLanes:scoped];
     [_openManageView updateCheckedLabels:[self _optedInLabelsSet]];
+  }
   // Only the constants popover tracks the un-opted set. A boundary-value
   // popover has caller-supplied display lanes; clobbering them here is what
   // made Radius (the un-opted lane) replace Crop after a crop edit.
-  if (_openStaticView && !_openStaticIsBoundary)
+  if (_openStaticView && !_openStaticIsBoundary) {
     [_openStaticView updateUnoptedLanes:[self _unoptedLanes]];
+    // Re-apply per-lane state (values + smooth + LINK) to the existing constants
+    // rows from the current selected-layer timeline. A same-structure selection
+    // change (e.g. drawing another constant-stroke path) reuses the rows and
+    // previously never re-read aspectLinked, so the link toggle + its coupling
+    // stayed stale from the prior layer. applyValues is focus-safe (skips an
+    // in-progress field edit), so this won't clobber active editing.
+    [_openStaticView rebindLanes:_timeline.lanes];
+  }
 
   // A boundary/value popover is built from a snapshot at open; an external
   // timeline change (cmd-Z / redo) reaches the graphs but not the popover, so
@@ -644,6 +661,20 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     if ([lane.label isEqualToString:label])
       return lane;
   return nil;
+}
+
+- (NSArray<KKLane *> *)_ownerScopedAvailableLanes {
+  NSMutableSet<NSString *> *present =
+      [NSMutableSet setWithCapacity:_timeline.lanes.count];
+  for (KKLane *l in _timeline.lanes)
+    if (l.label)
+      [present addObject:l.label];
+  NSMutableArray<KKLane *> *out =
+      [NSMutableArray arrayWithCapacity:_availableLanes.count];
+  for (KKLane *t in _availableLanes)
+    if ([present containsObject:t.label])
+      [out addObject:t];
+  return out;
 }
 
 - (nullable KKLane *)_templateForLabel:(NSString *)label {
@@ -685,12 +716,13 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       lanes[presentIdx] = fixed;
       continue;
     }
-    // Geometry lanes (oscEditedOnly, e.g. a path's Points) are opt-in per layer:
-    // the plugin includes them in the applied timeline only for layers that
-    // support them (a vector path, not an image/group). Don't re-seed one the
-    // source timeline deliberately omitted - otherwise its category (e.g.
-    // "Core") shows as a constant for every layer.
-    if (tmpl.oscEditedOnly)
+    // Per-owner opt-in lanes are included in the applied timeline only for the
+    // layers that support them (a vector path's Points / stroke, not an image or
+    // group). Don't re-seed one the source timeline deliberately omitted -
+    // otherwise its whole category (e.g. "Core" / "Stroke") shows as a constant
+    // for every owner. Geometry lanes get this via `oscEditedOnly`; other lanes
+    // declare it explicitly with `ownerScoped`.
+    if (tmpl.oscEditedOnly || tmpl.ownerScoped)
       continue;
     KKLane *lane = [KKLane laneWithLabel:tmpl.label];
     lane.valueType = tmpl.valueType;
@@ -708,6 +740,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.aspectLinked = tmpl.aspectLinked;
     lane.spatialCurvable = tmpl.spatialCurvable;
     lane.integerValued = tmpl.integerValued;
+    lane.isToggle = tmpl.isToggle;
     [lane kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     lane.enabled = NO; // constant until the dropdown makes it animatable
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
@@ -907,6 +940,10 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   _activeLayerKey = [activeLayerKey copy];
   _basicGraph.activeLayerKey =
       activeLayerKey; // scopes the Basic keypose popover
+  // Keep the Advanced graph's active layer in sync too, so its "opened a keypose
+  // for a different layer" test compares against the CURRENT selection (stale
+  // here meant the keypose-owner highlight/selection sync silently skipped).
+  _advancedGraph.activeLayerKey = activeLayerKey;
   // Re-scope an open lane-filter checklist to the newly-selected layer (the
   // companion layer list drove the switch), like the Animated dropdown.
   _laneFilterBar.activeLayerKey = activeLayerKey;

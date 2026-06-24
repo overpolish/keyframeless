@@ -100,19 +100,28 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
 
 @implementation KKTimelineLanesView (PopoversInternal)
 
+// The lanes the Animated dropdown offers for the CURRENT owner: scoped to this
+// layer's applicable params (a path's Points/Stroke aren't offered for an image
+// / group) and with mode-gated lanes dropped (the whole "Color" group when Mode
+// = Dynamic, the "Stroke" group when the stroke is off) via the visibleWhen
+// cascade over the timeline so each controller resolves to its current value.
+- (NSArray<KKLane *> *)_manageVisibleLanes {
+  NSSet<NSString *> *condVisible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+  NSMutableArray<KKLane *> *visibleLanes = [NSMutableArray array];
+  for (KKLane *l in [self _ownerScopedAvailableLanes])
+    // Only animatable lanes are offered (a structural toggle / enum can't be
+    // animated), matching the manage view's own init filter.
+    if (l.animatable && [condVisible containsObject:l.label])
+      [visibleLanes addObject:l];
+  return visibleLanes;
+}
+
 - (void)_showManagePopoverFromView:(NSView *)anchorView {
   NSSet<NSString *> *checked = [self _optedInLabelsSet];
   __weak typeof(self) weak = self;
 
-  // Mode-gated lanes drop out of the manage list (and their category, e.g. the
-  // whole "Color" group when Mode = Dynamic) - computed over the timeline so
-  // the controller Mode resolves to its current value.
-  NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
-  NSMutableArray<KKLane *> *visibleLanes = [NSMutableArray array];
-  for (KKLane *l in _availableLanes)
-    if ([condVisible containsObject:l.label])
-      [visibleLanes addObject:l];
+  NSArray<KKLane *> *visibleLanes = [self _manageVisibleLanes];
 
   __block _KKManagePopoverView *manageView = nil;
   manageView = [[_KKManagePopoverView alloc]
@@ -158,7 +167,8 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
 
   if (self.onManagePopoverWillOpen) {
     NSString *targetLabel =
-        self.managePopoverSpotlightLabel ?: _availableLanes.firstObject.label;
+        self.managePopoverSpotlightLabel
+            ?: [self _ownerScopedAvailableLanes].firstObject.label;
     __weak _KKManagePopoverView *weakManage = _openManageView;
     dispatch_after(
         dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),

@@ -252,8 +252,44 @@ static const CGFloat kChecklistPillH = 24.0;
 }
 
 - (void)setLanes:(NSArray<KKLane *> *)lanes {
+  NSArray<NSString *> *oldKeys = KKLaneCategoryKeys(_lanes);
+  NSArray<NSString *> *newKeys = KKLaneCategoryKeys(lanes);
   _lanes = [lanes copy];
+  // Common case (filter refresh, same owner): the category nav is unchanged, so
+  // just refresh the rows - cheap, keeps the pill/search/scroll intact.
+  if ([oldKeys isEqualToArray:newKeys]) {
+    [self rebuildRows];
+    return;
+  }
+  // A multi-owner re-scope changed the category set (e.g. an image's
+  // Transform-only list -> a path's Core/Stroke/Transform): _hasPill + the pill
+  // segments must change, so tear down and rebuild the chrome, then the rows.
+  _hasPill = newKeys.count > 0;
+  _selectedCategory = !_hasPill ? nil
+                      : [newKeys containsObject:_selectedCategory]
+                          ? _selectedCategory
+                          : newKeys.firstObject;
+  _heightConstraint.active = NO;
+  _bodyHeightConstraint.active = NO;
+  _heightConstraint = nil;
+  _bodyHeightConstraint = nil;
+  for (NSView *sub in [self.subviews copy])
+    [sub removeFromSuperview];
+  _categoryPill = nil;
+  _searchField = nil;
+  _rowStack = nil;
+  _bodyScroll = nil;
+  [self _buildChromeForLanes:lanes];
   [self rebuildRows];
+}
+
+- (NSArray<NSString *> *)currentLaneLabels {
+  NSMutableArray<NSString *> *out =
+      [NSMutableArray arrayWithCapacity:_lanes.count];
+  for (KKLane *l in _lanes)
+    if (l.label)
+      [out addObject:l.label];
+  return out;
 }
 
 - (void)rebuildRows {

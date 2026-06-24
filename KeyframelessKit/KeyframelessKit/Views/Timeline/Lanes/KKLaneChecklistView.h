@@ -83,6 +83,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)rebuildRows;
 /// Replace the lane set (e.g. a multi-owner re-scope) and rebuild.
 - (void)setLanes:(NSArray<KKLane *> *)lanes;
+/// The labels of the current lane set, in order (cheap change-detection so a
+/// host only re-pushes lanes when the set actually changed).
+- (NSArray<NSString *> *)currentLaneLabels;
 
 /// The row view for `label`, or nil (guide spotlight anchor).
 - (nullable NSView *)rowViewForLabel:(NSString *)label;

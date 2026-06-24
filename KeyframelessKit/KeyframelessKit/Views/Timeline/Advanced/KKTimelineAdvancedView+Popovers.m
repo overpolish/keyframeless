@@ -57,9 +57,14 @@
   double frac = kp.time;
 
   // The keypose popover scopes to this lane's layer (multi-owner timelines).
-  // Tell the host so it highlights that layer in its layer list.
-  if (lane.layerKey.length &&
-      ![lane.layerKey isEqualToString:_activeLayerKey]) {
+  // Tell the host so it selects/highlights that layer. Fire EVERY open (not only
+  // when _activeLayerKey changes): the host selection can diverge from the
+  // keypose owner via an external change (drawing a new path, picking a
+  // no-keypose layer in Constants) while _activeLayerKey already equals the
+  // owner - a change-gated fire would never correct it. Set _activeLayerKey
+  // FIRST so the host's retarget (which compares against it) early-returns - no
+  // re-entrancy; the host handler also no-ops when already on that layer.
+  if (lane.layerKey.length) {
     _activeLayerKey = [lane.layerKey copy];
     if (self.onKeyposeLayerActivated)
       self.onKeyposeLayerActivated(_activeLayerKey);
@@ -136,9 +141,14 @@
     // spatialCurvable is lane metadata, not per-project state, so source it
     // from the template - an older blob (saved before the flag existed) would
     // otherwise leave it off and hide the curve toggle.
+    // Multi-owner lanes are layer-tagged ("Stroke Width\x1f<id>"); match the
+    // template on the PLAIN label or the metadata lookup fails for every tagged
+    // lane (integerValued / autoSizesComponentLabels / scaleWithMedia lost, so
+    // the keypose popover diverged from constants).
+    NSString *plain = KKPlainLaneLabel(l.label);
     KKLane *tmpl = nil;
     for (KKLane *t in _availableLanes)
-      if ([t.label isEqualToString:l.label]) {
+      if ([t.label isEqualToString:plain]) {
         tmpl = t;
         break;
       }
@@ -259,6 +269,27 @@
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
       KKLane *l = lanes[i];
       if (![self _laneEligibleForValuePopover:l])
+        continue;
+      for (NSInteger k = 0; k < (NSInteger)l.keyposes.count; k++) {
+        if (fabs(l.keyposes[k].time - fraction) < kEps) {
+          foundLane = i;
+          foundKP = k;
+          break;
+        }
+      }
+      if (foundLane >= 0)
+        break;
+    }
+  }
+  if (foundLane < 0) {
+    // The active layer has no keypose at this time (e.g. it's constant, or a new
+    // path was just drawn and stole the selection). Fall through to ANY layer
+    // with a keypose here - mirrors Basic - so the popover, and the selection it
+    // drives via onKeyposeLayerActivated, move to a real keypose owner instead
+    // of leaving the popover (and the layer-list highlight) stranded.
+    for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+      KKLane *l = lanes[i];
+      if (l.headerPlaceholder)
         continue;
       for (NSInteger k = 0; k < (NSInteger)l.keyposes.count; k++) {
         if (fabs(l.keyposes[k].time - fraction) < kEps) {

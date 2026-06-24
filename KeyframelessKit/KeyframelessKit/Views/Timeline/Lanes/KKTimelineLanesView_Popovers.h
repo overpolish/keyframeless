@@ -137,6 +137,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable KKLane *)_laneForLabel:(NSString *)label;
 - (NSSet<NSString *> *)_optedInLabelsSet;
 - (NSArray<KKLane *> *)_unoptedLanes;
+// `_availableLanes` scoped to the CURRENT owner: only the templates whose label
+// is present in `_timeline.lanes` (which a multi-owner plugin scopes per layer,
+// dropping owner-inapplicable lanes like a path's Points/Stroke for an image).
+// Single-owner plugins seed every available lane into `_timeline`, so this is
+// the full `_availableLanes` for them.
+- (NSArray<KKLane *> *)_ownerScopedAvailableLanes;
 - (nullable KKLane *)_templateForLabel:(NSString *)label;
 - (BOOL)_isAnimatableLabel:(NSString *)label;
 - (void)_refresh;
@@ -151,6 +157,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSArray<NSNumber *> *)_defaultValuesForLabel:(NSString *)label;
 - (void)_setLaneAnimatable:(BOOL)animatable forLabel:(NSString *)label;
 - (void)_setLaneValues:(NSArray<NSNumber *> *)values forLabel:(NSString *)label;
+- (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label;
 @end
 
 /// Internal popover plumbing - the manage-popover presenter and the generic
@@ -160,6 +167,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// KKTimelineLanesView+Popovers.m.
 @interface KKTimelineLanesView (PopoversInternal)
 - (void)_showManagePopoverFromView:(NSView *)anchorView;
+/// The owner-scoped, mode-gated lane set the Animated dropdown shows; re-pulled
+/// on refresh so a companion-panel layer switch re-scopes the open dropdown.
+- (NSArray<KKLane *> *)_manageVisibleLanes;
 /// Boundary value popover (Basic step 27): reuses the static-values popover
 /// machinery but with caller-supplied display lanes (one synthetic
 /// single-keypose lane per animatable property = its value at the boundary),

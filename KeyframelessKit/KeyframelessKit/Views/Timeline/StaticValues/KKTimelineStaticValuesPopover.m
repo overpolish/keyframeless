@@ -949,6 +949,12 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   if (_defaultsProvider)
     for (NSString *label in _rowsByLabel)
       _rowsByLabel[label].defaultValues = _defaultsProvider(label);
+  // Rebuild the category nav too (not just the rows): a re-target to a different
+  // layer can change the whole category SET (e.g. a Core/Points layer -> a
+  // Stroke layer), so the pills must follow - otherwise the old tabs persist and
+  // the category filter hides every row of the new layer. Re-resolves
+  // _selectedCategory to a surviving tab. Mirrors updateUnoptedLanes (constants).
+  [self _rebuildCategoryNavForLanes:lanes initialCategory:_selectedCategory];
   [self _applyCategoryFilter];
   [self applyExcludedLabels:excluded
                     message:_excludedMessage

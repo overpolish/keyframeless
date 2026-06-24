@@ -288,6 +288,15 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// points). Default NO. Build-time metadata.
 @property(nonatomic) BOOL oscEditedOnly;
 
+/// When YES this property applies to SOME owners only (multi-owner plugins): the
+/// plugin includes the lane in the applied timeline just for the layers that
+/// support it (e.g. a vector path's stroke, not an image / group). The kit must
+/// NOT re-seed it as a constant default when the applied timeline omits it -
+/// otherwise its whole category shows (greyed) for every owner. Same per-owner
+/// opt-in the geometry lanes get for free via `oscEditedOnly`, but without that
+/// flag's OSC-only editing behaviour. Default NO. Build-time metadata.
+@property(nonatomic) BOOL ownerScoped;
+
 /// When set (count >= 2) the value row presents a grouped radio pill (one
 /// segment per label) instead of a number field, and the lane's single value is
 /// the selected index (0-based). Labels are English identifiers, localized for
@@ -295,6 +304,20 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// `integerValued = YES` for a structural enum (e.g. a colour mode). nil/empty
 /// = a normal numeric row. Build-time metadata.
 @property(nonatomic, copy, nullable) NSArray<NSString *> *choiceLabels;
+
+/// When YES the value row presents a single right-aligned CHECKBOX instead of a
+/// number field; the lane's single value is 0 (off) or 1 (on). Pair with
+/// `animatable = NO` + `integerValued = YES` for a structural on/off (e.g. a
+/// Stroke "enabled" toggle). A plugin can gate its other lanes (lock/grey) on
+/// this value. nil/NO = a normal numeric row. Build-time metadata.
+@property(nonatomic) BOOL isToggle;
+
+/// When YES the per-component prefix caption (e.g. "Start" / "End") sizes to fit
+/// its text instead of the fixed one-character slot. Use for multi-word
+/// component labels (single-char W/H/X/Y keep the default fixed slot so columns
+/// align across rows). Widens the row, so opt in only where needed. Default NO.
+/// Build-time metadata.
+@property(nonatomic) BOOL autoSizesComponentLabels;
 
 /// Conditional visibility (static-values / constants popover only): this lane's
 /// row shows only when the lane named `visibleWhenLabel` has a component-0

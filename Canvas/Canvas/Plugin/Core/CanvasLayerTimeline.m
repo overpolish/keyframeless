@@ -111,11 +111,30 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
   NSMutableArray<NSString *> *order =
       [NSMutableArray arrayWithCapacity:templates.count];
   for (KKLane *t in templates) {
-    // Points (path geometry) applies to vector-path layers only - images and
-    // groups have no editable anchors.
-    if ([t.label isEqualToString:@"Points"] && (path.isImage || path.isGroup))
+    // Points (path geometry) and the Stroke group apply to vector-path layers
+    // only - images and groups have no editable anchors or stroke.
+    BOOL vectorOnly = [t.label isEqualToString:@"Points"] ||
+                      [t.label isEqualToString:@"Stroke Width"] ||
+                      [t.label isEqualToString:@"Enabled"];
+    if (vectorOnly && (path.isImage || path.isGroup))
       continue;
     KKLane *src = [(stored[t.label] ?: t) copy];
+    // Stroke Width with no stored lane: seed from the layer's flat
+    // strokeWidth/endWidth so an existing path keeps its width (the render reads
+    // the lane). End falls back to Start when unset (no taper). A stored lane
+    // (already edited / animated) wins.
+    if (!stored[t.label] && [t.label isEqualToString:@"Stroke Width"]) {
+      double sw = path.strokeWidth, ew = path.endWidth > 0 ? path.endWidth : sw;
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0 values:@[ @(sw), @(ew) ]] ];
+    }
+    // Stroke "Enabled" with no stored lane: seed from the layer's flat
+    // strokeEnabled (boolean-op results / explicit toggles start off).
+    if (!stored[t.label] && [t.label isEqualToString:@"Enabled"]) {
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(path.strokeEnabled ? 1.0
+                                                                         : 0.0) ]] ];
+    }
     // Tag with the layer for the Advanced view's layer header. The LABEL stays
     // plain ("Scale") so the kit's label-keyed edit surfaces are unaffected;
     // only layerKey/layerLabel drive the header. Group layers get a folder
@@ -128,6 +147,9 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
     if (t.label)
       [order addObject:t.label];
   }
+  // Stroke group gating is NOT done here: the "Enabled" toggle drives the
+  // shared visibleWhen cascade (set on the template lanes), so a disabled stroke
+  // drops its lanes out of every timeline surface uniformly - no per-build lock.
   tl.lanes = lanes;
   tl.paramOrder = order;
   return tl;
@@ -194,7 +216,11 @@ KKTimeline *CanvasMergedTimeline(NSArray<KKBezierPath *> *paths,
       continue;
     NSString *lid = p.layerID.length ? p.layerID : @"";
     NSString *name = p.name.length ? p.name : @"Layer";
-    KKTimeline *s = [KKTimeline timelineFromJSON:p.animationJSON];
+    // Source the layer's lanes from the SAME per-layer builder the rest of the
+    // UI uses (not raw JSON), so a gated lane's CONSTANT controller (e.g. the
+    // stroke "Enabled" toggle, whose value may live only in the flat prop) is
+    // present + seeded - otherwise the visibleWhen cascade can't resolve it here.
+    KKTimeline *s = CanvasLayerTimelineForPath(p, templates);
     NSMutableDictionary<NSString *, KKLane *> *stored =
         [NSMutableDictionary dictionary];
     for (KKLane *l in s.lanes)
@@ -202,19 +228,46 @@ KKTimeline *CanvasMergedTimeline(NSArray<KKBezierPath *> *paths,
         stored[l.label] = l;
     // Emit in TEMPLATE (parameter) order, only the layer's ANIMATED lanes, so
     // every layer's rows share one stable order and constant-only layers add
-    // nothing.
+    // nothing. Lane labels (and any visibleWhen controller reference) are tagged
+    // with the layer id so each layer's cascade resolves against ITS controller.
+    NSMutableSet<NSString *> *emittedPlain = [NSMutableSet set];
+    NSMutableSet<NSString *> *neededControllers = [NSMutableSet set];
+    void (^tag)(KKLane *, NSString *) = ^(KKLane *c, NSString *plain) {
+      c.label = CanvasTaggedLabel(plain, lid);
+      if (c.visibleWhenLabel.length)
+        c.visibleWhenLabel = CanvasTaggedLabel(c.visibleWhenLabel, lid);
+      c.layerKey = lid;
+      c.layerLabel = name;
+      c.layerSymbol = p.isGroup ? @"folder" : nil;
+      c.locked = p.locked;
+    };
     for (KKLane *t in templates) {
       KKLane *st = stored[t.label];
       if (!st || !st.enabled)
         continue;
       KKLane *c = [st copy];
-      c.label = CanvasTaggedLabel(t.label, lid);
-      c.layerKey = lid;
-      c.layerLabel = name;
-      c.layerSymbol = p.isGroup ? @"folder" : nil;
-      c.locked = p.locked;
+      tag(c, t.label);
       [lanes addObject:c];
       [order addObject:c.label];
+      [emittedPlain addObject:t.label];
+      if (st.visibleWhenLabel.length)
+        [neededControllers addObject:st.visibleWhenLabel];
+    }
+    // A gated animated lane (e.g. Stroke Width) is controlled by a CONSTANT lane
+    // (e.g. the "Enabled" toggle) that the animated-only emit above skips. Carry
+    // those controllers in (tagged) so the visibleWhen cascade can read their
+    // value here too - the graph/filter re-gate on `enabled`, so a constant
+    // controller never renders as a row, it only resolves the rule.
+    for (NSString *ctrlPlain in neededControllers) {
+      if ([emittedPlain containsObject:ctrlPlain])
+        continue;
+      KKLane *cst = stored[ctrlPlain];
+      if (!cst)
+        continue;
+      KKLane *cc = [cst copy];
+      tag(cc, ctrlPlain);
+      [lanes addObject:cc];
+      [order addObject:cc.label];
     }
   }
   tl.lanes = lanes;

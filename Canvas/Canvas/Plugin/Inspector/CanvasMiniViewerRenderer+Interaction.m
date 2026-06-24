@@ -109,6 +109,21 @@
       self.marqueeNonSelectableLayerIDs ?: self.nonSelectableLayerIDs;
   if (!hit.length || [blocked containsObject:hit])
     return nil; // not movable in this popover scope
+  // The body-drag move writes the move-target lane (Points for a path, Position
+  // for an image/group). Only allow it when that lane is actually editable in
+  // THIS popover scope: any constant in the constants popover, or the animated
+  // lane in a keypose popover. So a keypose popover for some other lane (e.g.
+  // Stroke Width) - where Points isn't a keypose - can't move the path; the
+  // constants popover still can.
+  KKBezierPath *hp = nil;
+  for (KKBezierPath *pth in self.layers)
+    if ([pth.layerID isEqualToString:hit]) {
+      hp = pth;
+      break;
+    }
+  NSString *moveTarget = (hp.isImage || hp.isGroup) ? @"Position" : @"Points";
+  if (![self isConstantLabel:moveTarget])
+    return nil;
   return [[self _miniSelectedIDs] containsObject:hit] ? hit : nil;
 }
 

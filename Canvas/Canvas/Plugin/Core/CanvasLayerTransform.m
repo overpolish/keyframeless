@@ -140,6 +140,69 @@ CanvasGroupTransformAtFraction(KKBezierPath *group, double frac,
   return CanvasLayerTransformAtFraction(group, frac);
 }
 
+#pragma mark - Stroke evaluation
+
+// The timeline driving `path` at edit time: the live inspector override when
+// this IS the selected layer being edited, else the layer's persisted
+// animationJSON. nil when neither exists (the caller falls back to flat props).
+static KKTimeline *CanvasEffectiveTimeline(KKBezierPath *path,
+                                           NSString *overrideLayerID,
+                                           KKTimeline *overrideTimeline) {
+  if (overrideTimeline && overrideLayerID.length &&
+      [path.layerID isEqualToString:overrideLayerID])
+    return overrideTimeline;
+  return path.animationJSON.length
+             ? [KKTimeline timelineFromJSON:path.animationJSON]
+             : nil;
+}
+
+void CanvasStrokeWidthAtFraction(KKBezierPath *path, double frac,
+                                 NSString *overrideLayerID,
+                                 KKTimeline *overrideTimeline, float *outStart,
+                                 float *outEnd) {
+  // Default to the layer's flat width (existing paths with no Stroke Width lane
+  // yet); End falls back to Start when unset (no taper).
+  float sw = path.strokeWidth;
+  float ew = path.endWidth > 0.0f ? path.endWidth : sw;
+  KKTimeline *tl =
+      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+  for (KKLane *lane in tl.lanes) {
+    if (![lane.label isEqualToString:@"Stroke Width"])
+      continue;
+    if (lane.keyposes.count > 0) {
+      NSArray<NSNumber *> *v =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      if (v.count > 0)
+        sw = (float)fmax(0.0, v[0].doubleValue);
+      ew = (v.count > 1) ? (float)fmax(0.0, v[1].doubleValue) : sw;
+    }
+    break;
+  }
+  if (outStart)
+    *outStart = sw;
+  if (outEnd)
+    *outEnd = ew;
+}
+
+BOOL CanvasStrokeEnabledAtFraction(KKBezierPath *path, double frac,
+                                   NSString *overrideLayerID,
+                                   KKTimeline *overrideTimeline) {
+  BOOL on = path.strokeEnabled; // flat fallback (no "Enabled" lane yet)
+  KKTimeline *tl =
+      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+  for (KKLane *lane in tl.lanes) {
+    if (![lane.label isEqualToString:@"Enabled"])
+      continue;
+    if (lane.keyposes.count > 0) {
+      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      if (v.count > 0)
+        on = v[0].doubleValue >= 0.5;
+    }
+    break;
+  }
+  return on;
+}
+
 #pragma mark - Group content bounds / centre
 
 // Bounds of where the image layers nested under the group at `groupIdx`

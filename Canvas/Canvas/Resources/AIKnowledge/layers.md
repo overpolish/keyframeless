@@ -94,6 +94,17 @@ Set it three ways: drag the square on the viewer, drag it on the inspector mini-
 
 The inspector's **On-Screen Controls** toggle and its per-control pills (Position, Path, Scale, Rotation, Anchor) drive visibility. Canvas defaults the global toggle **on** but the Transform controls **hidden**, so the viewer stays clean; **Option-hold** reveals hidden controls as dimmed ghosts and **Option-click** toggles one. A **locked** layer hides its controls.
 
+## Stroke
+
+Vector paths have a **Stroke** group in the inspector (images and groups don't - they have no stroke). It holds:
+
+- **Enabled** - a checkbox that turns the path's stroke on or off. When it's off the stroke stops rendering and the rest of the Stroke group's controls drop out of every timeline surface (the constants/keypose popovers, the Animated dropdown, the lane filter, and the Basic/Advanced graphs) until you turn it back on - the toggle is the single source of truth.
+- **Stroke Width** - a two-field width in pixels with a **Start** and an **End**, whole numbers, **aspect-linked by default**. Linked, the two move together and the stroke is a uniform width. **Unlink** them (the link glyph on the row) and set Start ≠ End to **taper** the stroke - it interpolates from the Start width at the beginning of the path to the End width at the end, along the path's length. The taper is computed per contour, so a boolean / multi-contour path tapers each subpath; on a closed shape the width steps from End back to Start at the point where it closes.
+
+Stroke Width is an ordinary animatable lane: constant by default, or add it to the Animated dropdown to keypose the width (or the taper) over the clip with the usual Basic / Advanced timing. It edits whichever path is selected in the Layers panel, and the rendered width is resolution-correct (it scales down correctly in browser thumbnails). Hit-testing follows the actual drawn stroke, so a tapered stroke stays clickable along its real shape, fat end and thin end alike.
+
+Stroke **colour**, **fill**, dashes / caps and the sketch (hand-drawn) render style are still to come; for now a stroke renders in the default red.
+
 ## Toolbar
 
 A small floating toolbar sits over the preview in **both** the FCP viewer and the inspector mini-viewer - the same bar, the same buttons, and the same shared state, so a tool, grid toggle, or cell size set on one surface shows on the other. It is screen chrome: its settings are remembered but never change the render, only the editing overlay. Drag it anywhere by the **grip handle** on its left; the position survives zoom and size changes and is remembered separately per surface (the viewer and the mini each keep their own spot, since they differ in size and aspect).
@@ -132,7 +143,7 @@ Anchors show as dots and tangent handles as smaller dots on lines, the same look
 
 The pen tool is also context-sensitive on an existing selected path: clicking a **segment** inserts an anchor there (preserving the curve), and clicking either open **endpoint** continues drawing from that tip. Holding **Opt** over an anchor turns the cursor into a delete nib and removes that point.
 
-Stroke style is a fixed 20px red for now; per-path stroke width / colour / fill are still to come.
+A new path starts with a 20px red stroke. Its **width** is now a per-path, animatable property (with an optional Start->End taper - see **Stroke** above); colour and fill are still to come.
 
 ## Creating shapes (rectangle / ellipse tools)
 
@@ -199,4 +210,4 @@ The inspector's motion-blur control applies the shared sample-accumulate blur to
 
 - Per-layer **rotation** (lane + on-canvas gizmo).
 - Per-layer opacity in the render.
-- Stroke **styling** (width / colour UI - currently a fixed 20px red) and **fill**, plus the sketch (hand-drawn) render style.
+- Stroke **colour** UI and **fill** (width is done - see **Stroke** above), plus the sketch (hand-drawn) render style.

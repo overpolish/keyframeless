@@ -436,7 +436,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     if (_pressKPIdx > 0) {
       KKKeyPose *prev = lane.keyposes[_pressKPIdx - 1];
       NSColor *tint =
-          KKAdvValuesEqual(prev.values, lane.keyposes[_pressKPIdx].values)
+          KKLaneKeyposeValuesEqual(lane, prev, lane.keyposes[_pressKPIdx])
               ? neutral
               : warn;
       [self _drawDurationPillInRect:g
@@ -450,7 +450,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     if (_pressKPIdx + 1 < (NSInteger)lane.keyposes.count) {
       KKKeyPose *next = lane.keyposes[_pressKPIdx + 1];
       NSColor *tint =
-          KKAdvValuesEqual(lane.keyposes[_pressKPIdx].values, next.values)
+          KKLaneKeyposeValuesEqual(lane, lane.keyposes[_pressKPIdx], next)
               ? neutral
               : warn;
       [self _drawDurationPillInRect:g
@@ -477,7 +477,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       return;
     KKKeyPose *a = lane.keyposes[_hoverGapAIdx];
     KKKeyPose *b = lane.keyposes[_hoverGapAIdx + 1];
-    NSColor *tint = KKAdvValuesEqual(a.values, b.values) ? neutral : warn;
+    NSColor *tint = KKLaneKeyposeValuesEqual(lane, a, b) ? neutral : warn;
     [self _drawDurationPillInRect:g
                            tracks:tracks
                              lane:lane

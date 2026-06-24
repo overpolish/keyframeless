@@ -7,6 +7,7 @@
 #import "CanvasLayerRender.h"  // CanvasHitTestLayerID (public decl)
 #import "CanvasLayerTimeline.h"
 #import "CanvasLayerTransform.h"
+#import "CanvasStrokeTessellate.h" // CanvasTessellateStroke (strip hit-test)
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKPluginHost.h>
@@ -330,29 +331,78 @@ static NSUInteger CanvasFlattenPathNormalized(KKBezierPath *path,
   return n;
 }
 
-// Nearest distance from `q` to the projected polyline, in ASPECT-CORRECTED
-// object units (X scaled by aspect so a pixel-round tolerance stays round). The
-// polyline is in screen-object [0,1]; tolerance is compared in object-Y units.
-static float CanvasDistToProjectedPolyline(simd_float2 q,
-                                           const simd_float2 *proj,
-                                           NSUInteger n, BOOL closed,
-                                           float aspect) {
-  simd_float2 qa = simd_make_float2(q.x * aspect, q.y);
-  float best = FLT_MAX;
-  NSUInteger segs = closed ? n : (n > 0 ? n - 1 : 0);
-  for (NSUInteger i = 0; i < segs; i++) {
-    simd_float2 a = simd_make_float2(proj[i].x * aspect, proj[i].y);
-    simd_float2 b =
-        simd_make_float2(proj[(i + 1) % n].x * aspect, proj[(i + 1) % n].y);
-    simd_float2 ab = b - a;
-    float L2 = simd_length_squared(ab);
-    float t =
-        L2 > 1e-12f ? simd_clamp(simd_dot(qa - a, ab) / L2, 0.0f, 1.0f) : 0.0f;
-    float d2 = simd_distance_squared(qa, a + t * ab);
-    if (d2 < best)
-      best = d2;
+// Point in triangle (aspect-corrected screen space) via consistent edge signs.
+// A point on an edge counts as inside. Callers must skip degenerate (zero-area)
+// triangles first - those report every point as inside.
+static BOOL CanvasPointInTri(simd_float2 p, simd_float2 a, simd_float2 b,
+                             simd_float2 c) {
+  float d1 = (p.x - b.x) * (a.y - b.y) - (a.x - b.x) * (p.y - b.y);
+  float d2 = (p.x - c.x) * (b.y - c.y) - (b.x - c.x) * (p.y - c.y);
+  float d3 = (p.x - a.x) * (c.y - a.y) - (c.x - a.x) * (p.y - a.y);
+  BOOL neg = (d1 < 0.0f) || (d2 < 0.0f) || (d3 < 0.0f);
+  BOOL pos = (d1 > 0.0f) || (d2 > 0.0f) || (d3 > 0.0f);
+  return !(neg && pos);
+}
+
+// Hit a stroke by testing the point against the SAME tessellated triangle-strip
+// the render draws (not a centerline + tolerance). This is the general stroke
+// hit primitive: it follows whatever geometry the tessellator emits, so it
+// already handles the taper and will extend to wavy / multi-stroke sketch and
+// arrow markers (they just add triangles) with no hit-test change. Each strip
+// vertex is converted pixel -> path-normalized (the inverse of the tessellator's
+// (norm-0.5)*outputSize) and projected through the same pipeline as the
+// centerline; every consecutive vertex triple is one triangle. Degenerate
+// bridge / collinear triangles are skipped so they can't false-hit. `startW` /
+// `endW` are canvas px, already floored to a minimum grab width by the caller.
+static BOOL CanvasStrokeStripHit(KKBezierPath *geom, float startW, float endW,
+                                 float outW, float outH, CanvasLayerTransform t,
+                                 simd_float2 c, float aspect,
+                                 const CanvasGroupXform *groups, NSInteger ng,
+                                 simd_float2 q) {
+  NSUInteger cap = CanvasStrokeVertexCapacity(geom);
+  if (cap < 3)
+    return NO;
+  // Per-process scratch reused across the mouse-move hit-test so hover doesn't
+  // malloc per layer per move. Safe as a static here: the hit-test runs only on
+  // the main/event thread (viewer OSC + mini interaction), and each FxPlug
+  // instance is its own XPC process, so this is effectively per-instance and
+  // never shared/concurrent (unlike the render path, which passes NULL scratch).
+  static KKVertex2D *sVerts = NULL;
+  static NSUInteger sVertsCap = 0;
+  static CanvasStrokeScratch sScratch;
+  if (sVertsCap < cap) {
+    free(sVerts);
+    sVerts = malloc(sizeof(KKVertex2D) * cap);
+    sVertsCap = cap;
   }
-  return best == FLT_MAX ? FLT_MAX : sqrtf(best);
+  KKVertex2D *verts = sVerts;
+  NSUInteger vc = CanvasTessellateStrokeScratch(geom, startW, endW, outW, outH,
+                                                verts, cap, &sScratch);
+  BOOL hit = NO;
+  if (vc >= 3) {
+    simd_float2 qa = simd_make_float2(q.x * aspect, q.y);
+    simd_float2 inv = simd_make_float2(outW != 0.0f ? 1.0f / outW : 0.0f,
+                                       outH != 0.0f ? 1.0f / outH : 0.0f);
+    simd_float2 half = simd_make_float2(0.5f, 0.5f);
+    simd_float2 p0 = {0, 0}, p1 = {0, 0};
+    for (NSUInteger i = 0; i < vc; i++) {
+      simd_float2 nm = verts[i].position * inv + half;
+      simd_float2 pr =
+          CanvasProjectedCornerObj(nm.x, nm.y, t, c.x, c.y, aspect, groups, ng);
+      simd_float2 pa = simd_make_float2(pr.x * aspect, pr.y);
+      if (i >= 2) {
+        float area2 =
+            (p1.x - p0.x) * (pa.y - p0.y) - (pa.x - p0.x) * (p1.y - p0.y);
+        if (fabsf(area2) > 1e-9f && CanvasPointInTri(qa, p0, p1, pa)) {
+          hit = YES;
+          break;
+        }
+      }
+      p0 = p1;
+      p1 = pa;
+    }
+  }
+  return hit;
 }
 
 // Even-odd point-in-polygon over a projected polyline (aspect-corrected, same
@@ -400,10 +450,21 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
   for (NSUInteger i = 0; i < n; i++)
     proj[i] = CanvasProjectedCornerObj(norm[i].x, norm[i].y, t, c.x, c.y,
                                        aspect, groups, ng);
-  if (path.strokeEnabled) {
+  if (CanvasStrokeEnabledAtFraction(path, frac < 0.0 ? 0.0 : frac, nil, nil)) {
     float h = canvasHeightPx > 1.0f ? canvasHeightPx : 1000.0f;
-    float tol = fmaxf(path.strokeWidth * 0.5f / h, kHitStrokeSlopObj);
-    if (CanvasDistToProjectedPolyline(q, proj, n, geom.closed, aspect) <= tol)
+    // Effective Start/End widths from the Stroke Width lane (the flat
+    // strokeWidth is stale once the lane drives the render). Test against the
+    // actual tessellated strip so a tapered (and later wavy / multi) stroke is
+    // clickable exactly where it's drawn.
+    float swStart = path.strokeWidth, swEnd = path.strokeWidth;
+    CanvasStrokeWidthAtFraction(path, frac < 0.0 ? 0.0 : frac, nil, nil,
+                                &swStart, &swEnd);
+    // Floor the clickable width to the screen slop so a hairline stays grabbable
+    // (a 2*slop-wide strip = slop half-width in object-Y, matching the old tol).
+    float minPx = 2.0f * kHitStrokeSlopObj * h;
+    float a = aspect > 0.0f ? aspect : 1.0f;
+    if (CanvasStrokeStripHit(geom, fmaxf(swStart, minPx), fmaxf(swEnd, minPx),
+                             a * h, h, t, c, aspect, groups, ng, q))
       return YES;
   }
   if (path.fillEnabled && CanvasPointInProjectedPolygon(q, proj, n, aspect))

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKCheckboxView.h"
 #import "KKColorWellView.h"
 #import "KKGradientBarView.h"
 #import "KKGradientControl.h"
@@ -58,11 +59,16 @@ static const CGFloat kSuffixSlotW = 17.0;
 - (void)setPrefix:(nullable NSString *)prefix;
 - (void)setPrefixColor:(nullable NSColor *)color;
 - (void)setSuffix:(nullable NSString *)suffix;
+// When YES the prefix slot hugs its text (multi-word captions like "Start" /
+// "End") instead of the fixed one-character slot. Default NO.
+- (void)setPrefixAutoSizes:(BOOL)autoSizes;
 @end
 
 @implementation _KKValueField {
   NSTextField *_prefix;
   NSTextField *_suffix;
+  NSLayoutConstraint *_prefixWidth;
+  BOOL _prefixAutoSizes;
 }
 - (instancetype)init {
   self = [super initWithFrame:NSZeroRect];
@@ -81,7 +87,8 @@ static const CGFloat kSuffixSlotW = 17.0;
   [NSLayoutConstraint activateConstraints:@[
     [_prefix.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [_prefix.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-    [_prefix.widthAnchor constraintEqualToConstant:kPrefixSlotW],
+    (_prefixWidth =
+         [_prefix.widthAnchor constraintEqualToConstant:kPrefixSlotW]),
     [_field.leadingAnchor constraintEqualToAnchor:_prefix.trailingAnchor
                                          constant:KKPaddingXS],
     [_field.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
@@ -96,6 +103,28 @@ static const CGFloat kSuffixSlotW = 17.0;
 }
 - (void)setPrefix:(NSString *)prefix {
   _prefix.stringValue = prefix ?: @"";
+  [self _updatePrefixWidth];
+}
+- (void)setPrefixAutoSizes:(BOOL)autoSizes {
+  _prefixAutoSizes = autoSizes;
+  [self _updatePrefixWidth];
+}
+- (void)_updatePrefixWidth {
+  // Hug the caption text when auto-sizing (multi-word labels); else the fixed
+  // one-character slot that keeps value columns aligned across rows. Measure the
+  // string against its font directly - `fittingSize` would just echo the active
+  // width constraint (the fixed slot) and never grow.
+  if (!_prefixAutoSizes) {
+    _prefixWidth.constant = kPrefixSlotW;
+    return;
+  }
+  NSFont *font =
+      _prefix.font ?: [NSFont systemFontOfSize:KKFontSizeSM
+                                         weight:NSFontWeightRegular];
+  CGFloat textW =
+      [_prefix.stringValue sizeWithAttributes:@{NSFontAttributeName : font}]
+          .width;
+  _prefixWidth.constant = MAX(kPrefixSlotW, ceil(textW) + 2.0);
 }
 - (void)setPrefixColor:(NSColor *)color {
   _prefix.textColor = color ?: [NSColor inspectorLabel];
@@ -150,6 +179,9 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   BOOL _seedField;
   KKPillToggleRowView *_choicePill;    // grouped radio pill, choiceLabels only
   NSArray<NSString *> *_choiceLabels;  // English identifiers (count >= 2)
+  KKCheckboxView *_toggleCheckbox;     // single on/off checkbox, isToggle only
+  BOOL _isToggle;                      // value row is a single checkbox (0/1)
+  BOOL _autoSizesComponentLabels;      // prefix captions hug text (Start/End)
   BOOL _oscEditedOnly; // geometry-style lane: message instead of value fields
   KKColorWellView *_colorWell;         // swatch, KKLaneValueTypeColor only
   KKGradientControl *_gradientControl; // KKLaneValueTypeGradient only
@@ -303,6 +335,24 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   [self _updateLinkTint];
 }
 
+// A toggle row is one big click target (like KKCheckboxRowView): the inner
+// KKCheckboxView's NSClickGestureRecognizer doesn't fire reliably inside FCP's
+// ApplicationDefined popovers, so handle the click at the row level. Non-toggle
+// rows fall through to AppKit so their fields/pills keep working.
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return _isToggle ? YES : [super acceptsFirstMouse:event];
+}
+
+- (void)mouseDown:(NSEvent *)event {
+  if (!_isToggle || _locked) {
+    [super mouseDown:event];
+    return;
+  }
+  BOOL newState = !(_values.count && llround(_values[0].doubleValue) != 0);
+  _toggleCheckbox.isChecked = newState;
+  [self _setValues:@[ @(newState ? 1.0 : 0.0) ] emit:YES];
+}
+
 // Display = stored(normalized) × scale; stored = entered ÷ scale. Lets the
 // crop fields show pixels while the model stays 0–1. 1.0 == show raw.
 - (double)_scaleAt:(NSInteger)i {
@@ -420,6 +470,8 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   _laneScrubStep = lane.scrubStep;
   _seedField = lane.seedField;
   _choiceLabels = [lane.choiceLabels copy];
+  _isToggle = lane.isToggle;
+  _autoSizesComponentLabels = lane.autoSizesComponentLabels;
   _oscEditedOnly = lane.oscEditedOnly;
   _labelColumnW = labelColumnWidth;
 
@@ -533,7 +585,35 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 
   NSArray<NSString *> *caps = KKLaneComponentLabels(lane);
   NSArray<NSColor *> *capColors = lane.componentLabelColors;
-  if (_choiceLabels.count >= 2) {
+  if (_isToggle) {
+    // A structural on/off: a single right-aligned checkbox (the shared
+    // KKCheckboxView, same glyph as the global-settings / motion-blur rows -
+    // not a raw AppKit checkbox). The lane's single value is 0 (off) or 1 (on);
+    // refreshDisplay re-syncs isChecked, the shared applyLane tail below sets
+    // the initial value + lock state.
+    _toggleCheckbox = [[KKCheckboxView alloc] initWithFrame:NSZeroRect];
+    _toggleCheckbox.translatesAutoresizingMaskIntoConstraints = NO;
+    __weak typeof(self) weakSelf = self;
+    _toggleCheckbox.onToggle = ^(BOOL isOn) {
+      [weakSelf _setValues:@[ @(isOn ? 1.0 : 0.0) ] emit:YES];
+    };
+    [self addSubview:_toggleCheckbox];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_toggleCheckbox.trailingAnchor
+          constraintEqualToAnchor:_reset.leadingAnchor
+                         constant:-KKPaddingLG],
+      [_toggleCheckbox.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
+                                      constant:KKPaddingMD],
+      [_toggleCheckbox.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_toggleCheckbox.widthAnchor constraintEqualToConstant:12.0],
+      [_toggleCheckbox.heightAnchor constraintEqualToConstant:12.0],
+    ]];
+    _reset.hidden = YES; // a toggle resets via the checkbox itself
+  } else if (_choiceLabels.count >= 2) {
     // A structural enum (e.g. a colour mode): a grouped radio pill, one segment
     // per choice, instead of a number field. The lane's single value is the
     // selected index. Labels localize at display time like any param name.
@@ -764,7 +844,8 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     NSMutableArray<NSSlider *> *knobs = [NSMutableArray array];
     for (NSInteger i = 0; i < n; i++) {
       _KKValueField *cell = [[_KKValueField alloc] init];
-      NSString *prefix = caps[i].length ? caps[i] : nil;
+      [cell setPrefixAutoSizes:_autoSizesComponentLabels];
+      NSString *prefix = caps[i].length ? KKLocalizedParamName(caps[i]) : nil;
       if (prefix)
         [cell setPrefix:prefix];
       [cell setSuffix:(i < (NSInteger)_cunits.count ? _cunits[i] : nil)];
@@ -1000,6 +1081,8 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
     for (NSInteger i = 0; i < (NSInteger)_choiceLabels.count; i++)
       [_choicePill setState:(i == sel) atIndex:i];
   }
+  if (_toggleCheckbox && _values.count)
+    _toggleCheckbox.isChecked = llround(_values[0].doubleValue) != 0;
   if (_colorWell && _values.count >= 3) {
     CGFloat a = _values.count >= 4 ? _values[3].doubleValue : 1.0;
     _colorWell.color = [NSColor colorWithSRGBRed:_values[0].doubleValue

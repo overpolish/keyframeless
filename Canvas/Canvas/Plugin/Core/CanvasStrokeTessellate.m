@@ -133,9 +133,56 @@ static simd_float2 CanvasMiterOffset(const simd_float2 *pts, NSUInteger n,
   return miter * (hw * scale);
 }
 
-NSUInteger CanvasTessellateStroke(KKBezierPath *path, float strokeWidth,
-                                  float outputWidth, float outputHeight,
-                                  KKVertex2D *outVerts, NSUInteger maxVerts) {
+// Normalized cumulative arc length at each polyline vertex (frac[0] = 0, last
+// vertex = 1), so a per-vertex width can be lerped Start -> End along the
+// contour. A closed contour's total includes the closing edge back to pts[0].
+// Degenerate (zero-length) contours collapse to all-zero (uniform Start).
+static void CanvasContourArcFractions(const simd_float2 *pts, NSUInteger n,
+                                      BOOL closed, float *outFrac) {
+  if (n == 0)
+    return;
+  outFrac[0] = 0.0f;
+  float cum = 0.0f;
+  for (NSUInteger i = 1; i < n; i++) {
+    cum += simd_distance(pts[i], pts[i - 1]);
+    outFrac[i] = cum;
+  }
+  float total = cum;
+  if (closed && n > 1)
+    total += simd_distance(pts[0], pts[n - 1]);
+  if (total < 1e-6f) {
+    for (NSUInteger i = 0; i < n; i++)
+      outFrac[i] = 0.0f;
+    return;
+  }
+  for (NSUInteger i = 1; i < n; i++)
+    outFrac[i] /= total;
+}
+
+void CanvasStrokeScratchFree(CanvasStrokeScratch *scratch) {
+  if (!scratch)
+    return;
+  free(scratch->pts);
+  free(scratch->frac);
+  scratch->pts = NULL;
+  scratch->frac = NULL;
+  scratch->cap = 0;
+}
+
+NSUInteger CanvasTessellateStroke(KKBezierPath *path, float startWidth,
+                                  float endWidth, float outputWidth,
+                                  float outputHeight, KKVertex2D *outVerts,
+                                  NSUInteger maxVerts) {
+  return CanvasTessellateStrokeScratch(path, startWidth, endWidth, outputWidth,
+                                       outputHeight, outVerts, maxVerts, NULL);
+}
+
+NSUInteger CanvasTessellateStrokeScratch(KKBezierPath *path, float startWidth,
+                                         float endWidth, float outputWidth,
+                                         float outputHeight,
+                                         KKVertex2D *outVerts,
+                                         NSUInteger maxVerts,
+                                         CanvasStrokeScratch *scratch) {
   if (path.count < 2 || !outVerts || maxVerts < 4)
     return 0;
 
@@ -153,9 +200,27 @@ NSUInteger CanvasTessellateStroke(KKBezierPath *path, float strokeWidth,
   }
   if (polyCap == 0)
     return 0;
-  simd_float2 *pts = malloc(sizeof(simd_float2) * polyCap);
+  // Caller-provided scratch (grown on demand) on a hot single-threaded path, or
+  // a local malloc/free otherwise.
+  simd_float2 *pts;
+  float *frac;
+  if (scratch) {
+    if (scratch->cap < polyCap) {
+      free(scratch->pts);
+      free(scratch->frac);
+      scratch->pts = malloc(sizeof(simd_float2) * polyCap);
+      scratch->frac = malloc(sizeof(float) * polyCap);
+      scratch->cap = polyCap;
+    }
+    pts = scratch->pts;
+    frac = scratch->frac;
+  } else {
+    pts = malloc(sizeof(simd_float2) * polyCap);
+    frac = malloc(sizeof(float) * polyCap);
+  }
 
-  float hw = strokeWidth * 0.5f + kAAPaddingPx;
+  float startHW = startWidth * 0.5f + kAAPaddingPx;
+  float endHW = endWidth * 0.5f + kAAPaddingPx;
   NSUInteger vc = 0;
   BOOL anyEmitted = NO;
   for (NSUInteger ci = 0; ci < nc; ci++) {
@@ -164,12 +229,15 @@ NSUInteger CanvasTessellateStroke(KKBezierPath *path, float strokeWidth,
                                               outputHeight, pts, polyCap);
     if (n < 2)
       continue;
+    // Per-vertex half-width: Start at the contour's first vertex, End at its
+    // last, lerped by normalized arc length (taper renders per contour).
+    CanvasContourArcFractions(pts, n, closed, frac);
 
     // Bridge from the previous contour with two degenerate verts (repeat the
     // last emitted vertex, then this contour's first) so the single triangle
     // strip carries no visible span across the gap.
     if (anyEmitted && vc > 0 && vc + 4 <= maxVerts) {
-      simd_float2 firstOff = CanvasMiterOffset(pts, n, 0, closed, hw);
+      simd_float2 firstOff = CanvasMiterOffset(pts, n, 0, closed, startHW);
       outVerts[vc] = outVerts[vc - 1];
       vc++;
       outVerts[vc].position = pts[0] + firstOff;
@@ -180,6 +248,9 @@ NSUInteger CanvasTessellateStroke(KKBezierPath *path, float strokeWidth,
     NSUInteger stop = closed ? n + 1 : n; // +1 wraps the closed loop
     for (NSUInteger k = 0; k < stop && vc + 2 <= maxVerts; k++) {
       NSUInteger i = k % n;
+      // The closing wrap (k == n) sits at arc fraction 1 even though i == 0.
+      float f = (closed && k == n) ? 1.0f : frac[i];
+      float hw = startHW + (endHW - startHW) * f;
       simd_float2 off = CanvasMiterOffset(pts, n, i, closed, hw);
       outVerts[vc].position = pts[i] + off;
       outVerts[vc].textureCoordinate = simd_make_float2(0.0f, 1.0f);
@@ -191,6 +262,9 @@ NSUInteger CanvasTessellateStroke(KKBezierPath *path, float strokeWidth,
     anyEmitted = YES;
   }
 
-  free(pts);
+  if (!scratch) {
+    free(pts);
+    free(frac);
+  }
   return vc;
 }

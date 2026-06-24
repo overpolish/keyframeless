@@ -60,6 +60,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Highlight `layerID` in the panel's list WITHOUT firing onPrimaryLayerSelected
 /// (mirrors a keypose popover's active layer into the list).
 - (void)highlightLayerID:(nullable NSString *)layerID;
+/// NO when a popover is open and `layerID` can't be acted on in it (e.g. a new
+/// constant path has no keypose for a keypose popover); YES when none is open.
+/// The host uses this to avoid adopting a just-drawn layer as the selection.
+- (BOOL)isLayerSelectableInOpenPopover:(NSString *)layerID;
 /// "Auto-select layers" toggle state, mirrored onto the panel's checkbox when it
 /// (re)opens. Setting it does NOT fire onAutoSelectToggled.
 @property(nonatomic) BOOL autoSelect;

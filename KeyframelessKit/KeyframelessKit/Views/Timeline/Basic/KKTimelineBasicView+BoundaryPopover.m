@@ -135,9 +135,14 @@
     }
     NSArray<NSNumber *> *vals = KKTimelineLaneValueAtFraction(lane, frac)
                                     ?: lane.keyposes.firstObject.values;
+    // Multi-owner lanes are layer-tagged ("Stroke Width\x1f<id>"); match the
+    // template on the PLAIN label or it's nil for every tagged lane, losing its
+    // metadata (integerValued / autoSizesComponentLabels / scaleWithMedia) so
+    // the Basic keypose popover diverged from Constants.
+    NSString *plain = KKPlainLaneLabel(lane.label);
     KKLane *tmpl = nil;
     for (KKLane *t in _availableLanes)
-      if ([t.label isEqualToString:lane.label]) {
+      if ([t.label isEqualToString:plain]) {
         tmpl = t;
         break;
       }

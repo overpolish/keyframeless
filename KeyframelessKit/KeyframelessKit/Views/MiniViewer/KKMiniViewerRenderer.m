@@ -7,6 +7,7 @@
 
 #import "KKMiniViewerCropEditor.h"
 #import "KKResizeCursor.h"
+#import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimingStage.h>
@@ -523,6 +524,13 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 
 - (KKTimeline *)_timelineBySettingValues:(NSArray<NSNumber *> *)values
                                 forLabel:(NSString *)label {
+  // The boundary (keypose) popover in a multi-owner timeline passes a
+  // LAYER-TAGGED label ("Stroke Width\x1f<id>"), but this renderer's timeline is
+  // single-owner with PLAIN labels - so match on the plain label or the live
+  // value edit finds no lane and the mini never re-renders (it worked in
+  // Constants only because that popover is single-owner / plain). No-op for
+  // single-owner plugins (plain == plain).
+  NSString *plain = KKPlainLaneLabel(label);
   if (self.boundaryEditing) {
     // Replace the keypose nearest editFraction, preserving the lane's
     // structure (times, intervals, enabled).
@@ -535,7 +543,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     KKTimeline *updated = [self.timeline copy] ?: [KKTimeline timeline];
     NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-      if (![lanes[i].label isEqualToString:label])
+      if (![KKPlainLaneLabel(lanes[i].label) isEqualToString:plain])
         continue;
       if (lanes[i].keyposes.count)
         lanes[i] = KKLaneBySettingValuesNearestFraction(
@@ -549,7 +557,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
   BOOL replaced = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if ([lanes[i].label isEqualToString:label]) {
+    if ([KKPlainLaneLabel(lanes[i].label) isEqualToString:plain]) {
       // Copy the existing lane so EVERY property survives a constant value edit
       // - aspectLinked especially. A fresh lane that only carried
       // valueType/enabled/min/max dropped aspectLinked, so the first scale-box

@@ -243,9 +243,19 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
   // like the image pass. No depth sort yet - strokes draw after the images.
   for (NSInteger i = (NSInteger)layers.count - 1; i >= 0; i--) {
     KKBezierPath *path = layers[i];
-    if (path.isImage || path.isGroup || path.hidden || !path.strokeEnabled)
+    if (path.isImage || path.isGroup || path.hidden)
       continue;
-    if (path.count < 2 || path.strokeWidth <= 0.0f)
+    if (!CanvasStrokeEnabledAtFraction(path, frac < 0.0 ? 0.0 : frac,
+                                       overrideLayerID, overrideTimeline))
+      continue;
+    // Effective Start/End widths from the Stroke Width lane at this fraction
+    // (px), falling back to the flat strokeWidth/endWidth. The stroke tapers
+    // Start -> End along each contour; a static preview (frac < 0) reads frac 0.
+    float strokeStart = path.strokeWidth;
+    float strokeEnd = path.strokeWidth;
+    CanvasStrokeWidthAtFraction(path, frac < 0.0 ? 0.0 : frac, overrideLayerID,
+                                overrideTimeline, &strokeStart, &strokeEnd);
+    if (path.count < 2 || (strokeStart <= 0.0f && strokeEnd <= 0.0f))
       continue;
 
     // Geometry AT this fraction: the base points for a constant path, or the
@@ -266,8 +276,9 @@ void CanvasEncodeVectorLayers(NSArray<KKBezierPath *> *layers,
     if (cap == 0)
       continue;
     KKVertex2D *verts = malloc(sizeof(KKVertex2D) * cap);
-    NSUInteger vc = CanvasTessellateStroke(geom, path.strokeWidth * strokeScale,
-                                           imageWidth, imageHeight, verts, cap);
+    NSUInteger vc = CanvasTessellateStroke(geom, strokeStart * strokeScale,
+                                           strokeEnd * strokeScale, imageWidth,
+                                           imageHeight, verts, cap);
     if (vc < 4) {
       free(verts);
       continue;

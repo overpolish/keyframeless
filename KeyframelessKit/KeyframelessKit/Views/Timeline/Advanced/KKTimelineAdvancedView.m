@@ -36,6 +36,14 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
   return self;
 }
 
+- (void)setActiveLayerKey:(NSString *)activeLayerKey {
+  _activeLayerKey = [activeLayerKey copy];
+}
+
+- (NSString *)activeLayerKey {
+  return _activeLayerKey;
+}
+
 - (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey {
   if (layerKey == _activeLayerKey || [layerKey isEqualToString:_activeLayerKey])
     return;

@@ -217,13 +217,20 @@
       [s->_basicGraph writeSpatialSmoothForLabel:label atFrac:frac isOn:on];
   }];
 
-  // Aspect link is a global per-lane toggle (no fraction), routed to whichever
-  // graph owns the open popover.
+  // Aspect link is a global per-lane toggle (no fraction). The keypose popover
+  // routes it to whichever graph owns the open keypose; the constants popover
+  // edits the lanes view's own _timeline, so it persists there instead (else the
+  // toggle never reached _timeline and the next constant scrub's _refresh
+  // re-read the stale linked lane and relocked it).
   __weak typeof(self) weakLink = self;
   [staticView setOnLinkToggled:^(NSString *label, BOOL on) {
     __strong typeof(weakLink) s = weakLink;
     if (!s)
       return;
+    if (!isBoundary) {
+      [s _setLaneAspectLinked:on forLabel:label];
+      return;
+    }
     s->_boundaryRedriveSuppressUntil =
         [NSDate timeIntervalSinceReferenceDate] + 0.4;
     if (s->_activeTab == 1)

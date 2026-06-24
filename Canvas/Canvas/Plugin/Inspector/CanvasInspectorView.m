@@ -94,7 +94,12 @@
             return;
           [s->_layerListController writePaths:paths];
           [s _syncLayersToRenderer];
-          if (selectID.length)
+          // Don't adopt a just-drawn path as the selection if it can't be acted
+          // on in the open popover (a new constant path has no keypose, so a
+          // keypose popover must stay on its owner - otherwise the new path is
+          // persisted as the selection and ping-pongs with the keypose re-drive).
+          if (selectID.length &&
+              [s->_layerListController isLayerSelectableInOpenPopover:selectID])
             [s _selectAndHighlightLayer:selectID];
         };
     // Delete: persist the new stack AND clear the selection in ONE action (one
@@ -164,7 +169,11 @@
     // scoped itself before firing this), so there's no loop; also move the list
     // highlight since this didn't originate from a panel click.
     self.basicLanesView.onKeyposeLayerActivated = ^(NSString *layerKey) {
-      [weak _selectAndHighlightLayer:layerKey];
+      __strong typeof(weak) s = weak;
+      if (!s || layerKey.length == 0 ||
+          [layerKey isEqualToString:s->_selectedLayerID])
+        return; // already on the keypose owner - avoid churn / loops
+      [s _selectAndHighlightLayer:layerKey];
     };
     // Opening Constants: if the selected layer has no constants, land on the
     // first layer that does (the popover shows the selected owner's constants).

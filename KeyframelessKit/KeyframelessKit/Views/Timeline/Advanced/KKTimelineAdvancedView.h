@@ -55,6 +55,15 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onKeyposeLayerActivated)
     (NSString *layerKey);
 
+/// The layer the keypose popover is currently scoped to. Kept in sync with the
+/// host's selection (like the Basic graph) so the "opened a keypose for a
+/// DIFFERENT layer" test (which fires onKeyposeLayerActivated) compares against
+/// the CURRENT selection - otherwise it goes stale and a keypose whose layer
+/// matches the stale value silently skips the highlight/selection sync. A plain
+/// store (no popover side effects); use retargetKeyposePopoverToLayerKey: to
+/// re-point an OPEN popover.
+@property(nonatomic, copy, nullable) NSString *activeLayerKey;
+
 /// Re-point an OPEN keypose popover at a different layer's keypose at the same
 /// time (driven by the host's layer-list selection). No-op if that layer is
 /// already active or has no keypose at the current time.

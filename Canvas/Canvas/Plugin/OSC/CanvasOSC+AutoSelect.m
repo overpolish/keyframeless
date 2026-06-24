@@ -5,6 +5,7 @@
 
 #import "CanvasOSC_Private.h"
 #import "CanvasLayerRender.h"
+#import "CanvasLayerTimeline.h" // CanvasOutputSize (zoom-invariant stroke tol)
 #import "Plugin_Private.h"
 #import <FxPlug/FxPlugSDK.h>
 
@@ -40,13 +41,18 @@
   NSArray<KKBezierPath *> *paths = [self _snapshotPaths];
   if (!paths.count)
     return nil;
-  double bw = 0, bh = 0;
-  [self _objectBasisWidth:&bw height:&bh]; // canvas px height for stroke pick tol
+  // Stroke pick tolerance is px relative to the render OUTPUT, so use the true
+  // output height (zoom-INVARIANT), not the on-screen canvas px the OSC sees
+  // (which scales with viewer zoom and made the tolerance balloon when zoomed
+  // out). Matches the mini, which passes its renderHeight. 1080 fallback before
+  // the first render publishes a size.
+  float ow = 0.0f, oh = 0.0f;
+  float refH = CanvasOutputSize(&ow, &oh) ? oh : 1080.0f;
   return CanvasHitTestLayerID(paths, [self fractionAtTime:time],
                               (float)[self _canvasAspect], (float)ox, (float)oy,
                               /*alphaAware=*/YES, /*excluded=*/nil,
                               /*requireEditableAtFrac=*/YES,
-                              [CanvasPlugin availableLanes], (float)bh);
+                              [CanvasPlugin availableLanes], refH);
 }
 
 // The canvas point in render OBJECT space (normalized, Y-UP) - the same space as

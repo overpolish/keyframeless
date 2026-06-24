@@ -325,7 +325,10 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   _animatable = tmpl.animatable;
   _seedField = tmpl.seedField;
   _oscEditedOnly = tmpl.oscEditedOnly;
+  _ownerScoped = tmpl.ownerScoped;
   _choiceLabels = [tmpl.choiceLabels copy];
+  _isToggle = tmpl.isToggle;
+  _autoSizesComponentLabels = tmpl.autoSizesComponentLabels;
   _visibleWhenLabel = [tmpl.visibleWhenLabel copy];
   _visibleWhenValues = [tmpl.visibleWhenValues copy];
   _gradientShowsTypeAngle = tmpl.gradientShowsTypeAngle;
@@ -388,7 +391,10 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.animatable = _animatable;
   c.seedField = _seedField;
   c.oscEditedOnly = _oscEditedOnly;
+  c.ownerScoped = _ownerScoped;
   c.choiceLabels = [_choiceLabels copy];
+  c.isToggle = _isToggle;
+  c.autoSizesComponentLabels = _autoSizesComponentLabels;
   c.visibleWhenLabel = [_visibleWhenLabel copy];
   c.visibleWhenValues = [_visibleWhenValues copy];
   c.gradientShowsTypeAngle = _gradientShowsTypeAngle;
@@ -443,8 +449,14 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
     d[@"seed_field"] = @YES;
   if (_oscEditedOnly)
     d[@"osc_edited_only"] = @YES;
+  if (_ownerScoped)
+    d[@"owner_scoped"] = @YES;
   if (_choiceLabels)
     d[@"choice_labels"] = _choiceLabels;
+  if (_isToggle)
+    d[@"is_toggle"] = @YES;
+  if (_autoSizesComponentLabels)
+    d[@"autosize_component_labels"] = @YES;
   if (_visibleWhenLabel) {
     d[@"visible_when_label"] = _visibleWhenLabel;
     d[@"visible_when_values"] = _visibleWhenValues ?: @[];
@@ -491,8 +503,11 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   l.animatable = d[@"animatable"] ? [d[@"animatable"] boolValue] : YES;
   l.seedField = [d[@"seed_field"] boolValue];
   l.oscEditedOnly = [d[@"osc_edited_only"] boolValue];
+  l.ownerScoped = [d[@"owner_scoped"] boolValue];
   if ([d[@"choice_labels"] isKindOfClass:[NSArray class]])
     l.choiceLabels = d[@"choice_labels"];
+  l.isToggle = [d[@"is_toggle"] boolValue];
+  l.autoSizesComponentLabels = [d[@"autosize_component_labels"] boolValue];
   l.visibleWhenLabel = d[@"visible_when_label"];
   if ([d[@"visible_when_values"] isKindOfClass:[NSArray class]])
     l.visibleWhenValues = d[@"visible_when_values"];
