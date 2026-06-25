@@ -10,30 +10,17 @@
 // layer preview before it persists.
 
 #import "CanvasFillProperties.h"
+#import "CanvasLayerTransform.h" // CanvasLayerEffectiveTimeline (shared)
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimingStage.h>
-
-// The timeline driving `path` at edit time: the live inspector override when
-// this IS the selected layer being edited, else the layer's persisted
-// animationJSON. nil when neither exists (the caller falls back to flat props).
-static KKTimeline *CanvasFillEffectiveTimeline(KKBezierPath *path,
-                                               NSString *overrideLayerID,
-                                               KKTimeline *overrideTimeline) {
-  if (overrideTimeline && overrideLayerID.length &&
-      [path.layerID isEqualToString:overrideLayerID])
-    return overrideTimeline;
-  return path.animationJSON.length
-             ? [KKTimeline timelineFromJSON:path.animationJSON]
-             : nil;
-}
 
 BOOL CanvasFillEnabledAtFraction(KKBezierPath *path, double frac,
                                  NSString *overrideLayerID,
                                  KKTimeline *overrideTimeline) {
   BOOL on = path.fillEnabled; // flat fallback (no "Fill Enabled" lane yet)
   KKTimeline *tl =
-      CanvasFillEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+      CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
     if (![lane.label isEqualToString:@"Fill Enabled"])
       continue;
@@ -51,7 +38,7 @@ KKColorLanesValue CanvasFillColorAtFraction(KKBezierPath *path, double frac,
                                             NSString *overrideLayerID,
                                             KKTimeline *overrideTimeline) {
   KKTimeline *tl =
-      CanvasFillEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+      CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   // No colour lanes (a path whose animationJSON predates fill colour): fall
   // back to the flat solid colour so it renders exactly as before.
   BOOL hasColorLanes = NO;
@@ -82,7 +69,7 @@ float CanvasFillTintAtFraction(KKBezierPath *path, double frac,
                                KKTimeline *overrideTimeline) {
   float tint = path.fillTint; // flat fallback (no "Fill Amount" lane yet)
   KKTimeline *tl =
-      CanvasFillEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+      CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
     if (![lane.label isEqualToString:@"Fill Amount"])
       continue;
@@ -107,7 +94,7 @@ CanvasFillStyle CanvasFillStyleAtFraction(KKBezierPath *path, double frac,
   s.angle = (float)(path.sketchFillAngle * kDegToRad);
   s.weight = path.sketchFillWeight;
   KKTimeline *tl =
-      CanvasFillEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+      CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
     if (lane.keyposes.count == 0)
       continue;

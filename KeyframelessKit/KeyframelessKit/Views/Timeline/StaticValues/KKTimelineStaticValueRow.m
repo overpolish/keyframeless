@@ -26,7 +26,8 @@ const CGFloat kFloatRowH = 30.0;
 static const CGFloat kCropRowH = 30.0;     // single-line W/H/X/Y hstack
 static const CGFloat kGradientRowH = 42.0; // 36pt gradient control + padding
 static const CGFloat kStaticFieldW = 40.0;
-static const CGFloat kWrapLineExtra = 25.0; // +height per extra wrapped pill line
+static const CGFloat kWrapLineExtra =
+    25.0; // +height per extra wrapped pill line
 // Cap on the (uniform) label column so a long localized name (e.g. German
 // "Geschwindigkeit") can't push the value controls off the popover's right
 // edge. Longer names truncate with an ellipsis; the full name shows on hover.
@@ -112,16 +113,16 @@ static const CGFloat kSuffixSlotW = 17.0;
 }
 - (void)_updatePrefixWidth {
   // Hug the caption text when auto-sizing (multi-word labels); else the fixed
-  // one-character slot that keeps value columns aligned across rows. Measure the
-  // string against its font directly - `fittingSize` would just echo the active
-  // width constraint (the fixed slot) and never grow.
+  // one-character slot that keeps value columns aligned across rows. Measure
+  // the string against its font directly - `fittingSize` would just echo the
+  // active width constraint (the fixed slot) and never grow.
   if (!_prefixAutoSizes) {
     _prefixWidth.constant = kPrefixSlotW;
     return;
   }
-  NSFont *font =
-      _prefix.font ?: [NSFont systemFontOfSize:KKFontSizeSM
-                                         weight:NSFontWeightRegular];
+  NSFont *font = _prefix.font
+                     ?: [NSFont systemFontOfSize:KKFontSizeSM
+                                          weight:NSFontWeightRegular];
   CGFloat textW =
       [_prefix.stringValue sizeWithAttributes:@{NSFontAttributeName : font}]
           .width;
@@ -178,16 +179,16 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   double _laneScrubStep;          // lane's explicit scrub increment (0 = auto)
   KKSeedView *_seedView; // seed control (value + re-roll), seedField lanes only
   BOOL _seedField;
-  KKPillToggleRowView *_choicePill;    // grouped radio pill, choiceLabels only
-  NSArray<NSString *> *_choiceLabels;  // English identifiers (count >= 2)
-  NSArray<NSImage *> *_choiceIcons;    // optional per-choice glyphs (display)
-  BOOL _wrapsChoicePills;              // pill wraps to multiple lines
+  KKPillToggleRowView *_choicePill;   // grouped radio pill, choiceLabels only
+  NSArray<NSString *> *_choiceLabels; // English identifiers (count >= 2)
+  NSArray<NSImage *> *_choiceIcons;   // optional per-choice glyphs (display)
+  BOOL _wrapsChoicePills;             // pill wraps to multiple lines
   NSLayoutConstraint *_pillWidthConstraint; // wrapping pill width (= wrapW)
-  CGFloat _rowHeight;                  // resolved height (wrapping pill rows)
-  CGFloat _contentWidth;               // popover content width (for pill wrap)
-  KKCheckboxView *_toggleCheckbox;     // single on/off checkbox, isToggle only
-  BOOL _isToggle;                      // value row is a single checkbox (0/1)
-  BOOL _autoSizesComponentLabels;      // prefix captions hug text (Start/End)
+  CGFloat _rowHeight;              // resolved height (wrapping pill rows)
+  CGFloat _contentWidth;           // popover content width (for pill wrap)
+  KKCheckboxView *_toggleCheckbox; // single on/off checkbox, isToggle only
+  BOOL _isToggle;                  // value row is a single checkbox (0/1)
+  BOOL _autoSizesComponentLabels;  // prefix captions hug text (Start/End)
   BOOL _oscEditedOnly; // geometry-style lane: message instead of value fields
   KKColorWellView *_colorWell;         // swatch, KKLaneValueTypeColor only
   KKGradientControl *_gradientControl; // KKLaneValueTypeGradient only
@@ -462,15 +463,16 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   return NSMakeSize(NSViewNoIntrinsicMetric, h);
 }
 
-// A popover resize (sm/md/lg) changes the content width without rebuilding rows,
-// so the host calls this to re-derive a wrapping pill row's block width + height
-// for the new width. No-op for a non-wrapping row.
+// A popover resize (sm/md/lg) changes the content width without rebuilding
+// rows, so the host calls this to re-derive a wrapping pill row's block width +
+// height for the new width. No-op for a non-wrapping row.
 - (void)updateContentWidth:(CGFloat)contentWidth {
   if (!_wrapsChoicePills || !_pillWidthConstraint || contentWidth <= 0)
     return;
   _contentWidth = contentWidth;
-  CGFloat wrapW = [_KKStaticValueRow pillWrapWidthForContentWidth:contentWidth
-                                                 labelColumnWidth:_labelColumnW];
+  CGFloat wrapW =
+      [_KKStaticValueRow pillWrapWidthForContentWidth:contentWidth
+                                     labelColumnWidth:_labelColumnW];
   _pillWidthConstraint.constant = wrapW;
   _choicePill.preferredMaxLayoutWidth = wrapW; // invalidates + redraws the pill
   CGFloat newH =
@@ -523,6 +525,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
                  showsRemove:(BOOL)showsRemove
           showsAddToAnimated:(BOOL)showsAddToAnimated
                  showsSmooth:(BOOL)showsSmooth
+              reservesGutter:(BOOL)reservesGutter
             labelColumnWidth:(CGFloat)labelColumnWidth
                 contentWidth:(CGFloat)contentWidth {
   CGFloat cw = contentWidth > 0 ? contentWidth : kCanvasPopoverW;
@@ -610,6 +613,12 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     ]];
     titleLead = gutterBtn.trailingAnchor;
     titleLeadInset = KKPaddingSM;
+  } else if (reservesGutter) {
+    // A constant (non-animatable) row in a popover whose animatable rows carry
+    // a leading gutter button: reserve that button's column so this label + its
+    // value control line up with the animatable rows instead of starting ~15pt
+    // further left (matches the gutter geometry above: MD + 15 + SM).
+    titleLeadInset = KKPaddingMD + 15.0 + KKPaddingSM;
   }
 
   _reset = KKResetToDefaultButton(self, @selector(_resetTapped:));
@@ -629,11 +638,11 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   // show an "edit on canvas" message where the value fields would be.
   if (_oscEditedOnly) {
     _reset.hidden = YES; // no scalar value to reset for a geometry lane
-    NSTextField *msg = _KKMakeCaption(
-        KKLoc(@"Edit on canvas",
-              @"OSC-only lane: edit via the on-screen control."));
+    NSTextField *msg = _KKMakeCaption(KKLoc(
+        @"Edit on canvas", @"OSC-only lane: edit via the on-screen control."));
     msg.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
-    msg.alignment = NSTextAlignmentRight; // sits where the value fields would be
+    msg.alignment =
+        NSTextAlignmentRight; // sits where the value fields would be
     msg.lineBreakMode = NSLineBreakByTruncatingTail;
     msg.usesSingleLineMode = YES;
     [self addSubview:msg];
@@ -684,7 +693,8 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
       [_toggleCheckbox.leadingAnchor
           constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
                                       constant:KKPaddingMD],
-      [_toggleCheckbox.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_toggleCheckbox.centerYAnchor
+          constraintEqualToAnchor:self.centerYAnchor],
       [_toggleCheckbox.widthAnchor constraintEqualToConstant:12.0],
       [_toggleCheckbox.heightAnchor constraintEqualToConstant:12.0],
     ]];
@@ -724,10 +734,11 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
       [_choicePill.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
     ]];
     if (_wrapsChoicePills) {
-      // Wide glyph set (stroke markers): a fixed-width block = wrapW, anchored at
-      // the right (trailing at reset), whose pills wrap onto right-aligned lines.
-      // -updateContentWidth: re-derives wrapW + the row height on a popover
-      // resize. Otherwise the pill stays content-sized, right-aligned, one line.
+      // Wide glyph set (stroke markers): a fixed-width block = wrapW, anchored
+      // at the right (trailing at reset), whose pills wrap onto right-aligned
+      // lines. -updateContentWidth: re-derives wrapW + the row height on a
+      // popover resize. Otherwise the pill stays content-sized, right-aligned,
+      // one line.
       CGFloat wrapW =
           [_KKStaticValueRow pillWrapWidthForContentWidth:_contentWidth
                                          labelColumnWidth:_labelColumnW];
@@ -1057,11 +1068,14 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     _slider.translatesAutoresizingMaskIntoConstraints = NO;
     // The slider can stop short of the field's hard min/max (componentMin/Max)
     // so a value is typeable past the slider's ends (marker width: slider
-    // 0..500 %; draw-on Offset: slider 0..100 %, field unbounded to spin round).
-    _slider.minValue = lane.sliderMin ? lane.sliderMin.doubleValue
-                                      : (_cmin.count ? _cmin[0].doubleValue : 0.0);
-    _slider.maxValue = lane.sliderMax ? lane.sliderMax.doubleValue
-                                      : (_cmax.count ? _cmax[0].doubleValue : 1.0);
+    // 0..500 %; draw-on Offset: slider 0..100 %, field unbounded to spin
+    // round).
+    _slider.minValue = lane.sliderMin
+                           ? lane.sliderMin.doubleValue
+                           : (_cmin.count ? _cmin[0].doubleValue : 0.0);
+    _slider.maxValue = lane.sliderMax
+                           ? lane.sliderMax.doubleValue
+                           : (_cmax.count ? _cmax[0].doubleValue : 1.0);
     _slider.continuous = YES;
     _slider.trackFillColor = [NSColor accentMatchingHost];
     _slider.target = self;

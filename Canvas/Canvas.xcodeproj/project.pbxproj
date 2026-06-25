@@ -110,6 +110,8 @@
 				Plugin/Core/CanvasLocalized.m,
 				Plugin/Core/CanvasPathMorph.m,
 				Plugin/Core/CanvasPathOps.m,
+				Plugin/Core/CanvasSketchPath.m,
+				Plugin/Core/CanvasSketchProperties.m,
 				Plugin/Core/CanvasStrokeProperties.m,
 				Plugin/Core/CanvasTimelineMerge.m,
 				Plugin/Core/CanvasVectorGradient.m,

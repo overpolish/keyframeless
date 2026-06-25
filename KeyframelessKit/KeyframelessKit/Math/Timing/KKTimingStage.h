@@ -137,9 +137,10 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 
 /// Opaque per-keypose geometry payload for OSC-edited geometry lanes (e.g. a
 /// path's Points): the shape AT this keypose, captured via KKMorphSnapshot. The
-/// renderer interpolates between adjacent keyposes' snapshots. Storing it on the
-/// keypose means it travels with the keypose through copy / move / remove, so no
-/// parallel array needs syncing. nil for ordinary scalar lanes. Default nil.
+/// renderer interpolates between adjacent keyposes' snapshots. Storing it on
+/// the keypose means it travels with the keypose through copy / move / remove,
+/// so no parallel array needs syncing. nil for ordinary scalar lanes. Default
+/// nil.
 @property(nonatomic, copy, nullable) NSData *geometrySnapshot;
 
 + (instancetype)keyposeAtTime:(double)time values:(NSArray<NSNumber *> *)values;
@@ -168,18 +169,19 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
     *componentMin; // one per component, empty = unconstrained
 @property(nonatomic, copy) NSArray<NSNumber *>
     *componentMax; // one per component, empty = unconstrained
-/// Optional upper bound for the single-component SLIDER only, decoupled from the
-/// value clamp (`componentMax`). When set, the slider tops out here while the
-/// field still accepts (and clamps to) the larger `componentMax` - so a value
-/// can be typed past the slider's end. nil = slider uses componentMax. Used for
-/// the marker width (slider 0..500 %, field pushable further). Build-time.
+/// Optional upper bound for the single-component SLIDER only, decoupled from
+/// the value clamp (`componentMax`). When set, the slider tops out here while
+/// the field still accepts (and clamps to) the larger `componentMax` - so a
+/// value can be typed past the slider's end. nil = slider uses componentMax.
+/// Used for the marker width (slider 0..500 %, field pushable further).
+/// Build-time.
 @property(nonatomic, copy, nullable) NSNumber *sliderMax;
-/// Optional lower bound for the single-component SLIDER only, decoupled from the
-/// value clamp (`componentMin`). When set, the slider stops here while the field
-/// still accepts (and clamps to) the wider `componentMin` - so a value can be
-/// typed past the slider's start. nil = slider uses componentMin (or 0). Used
-/// for the draw-on Offset (slider 0..100 %, field unbounded so it can spin the
-/// reveal round and round). Build-time.
+/// Optional lower bound for the single-component SLIDER only, decoupled from
+/// the value clamp (`componentMin`). When set, the slider stops here while the
+/// field still accepts (and clamps to) the wider `componentMin` - so a value
+/// can be typed past the slider's start. nil = slider uses componentMin (or 0).
+/// Used for the draw-on Offset (slider 0..100 %, field unbounded so it can spin
+/// the reveal round and round). Build-time.
 @property(nonatomic, copy, nullable) NSNumber *sliderMin;
 @property(nonatomic, copy) NSArray<NSString *>
     *componentUnits; // one per component (e.g. @"px", @"%"); empty = unitless
@@ -301,13 +303,14 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// points). Default NO. Build-time metadata.
 @property(nonatomic) BOOL oscEditedOnly;
 
-/// When YES this property applies to SOME owners only (multi-owner plugins): the
-/// plugin includes the lane in the applied timeline just for the layers that
-/// support it (e.g. a vector path's stroke, not an image / group). The kit must
-/// NOT re-seed it as a constant default when the applied timeline omits it -
-/// otherwise its whole category shows (greyed) for every owner. Same per-owner
-/// opt-in the geometry lanes get for free via `oscEditedOnly`, but without that
-/// flag's OSC-only editing behaviour. Default NO. Build-time metadata.
+/// When YES this property applies to SOME owners only (multi-owner plugins):
+/// the plugin includes the lane in the applied timeline just for the layers
+/// that support it (e.g. a vector path's stroke, not an image / group). The kit
+/// must NOT re-seed it as a constant default when the applied timeline omits it
+/// - otherwise its whole category shows (greyed) for every owner. Same
+/// per-owner opt-in the geometry lanes get for free via `oscEditedOnly`, but
+/// without that flag's OSC-only editing behaviour. Default NO. Build-time
+/// metadata.
 @property(nonatomic) BOOL ownerScoped;
 
 /// When set (count >= 2) the value row presents a grouped radio pill (one
@@ -340,8 +343,8 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// this value. nil/NO = a normal numeric row. Build-time metadata.
 @property(nonatomic) BOOL isToggle;
 
-/// When YES the per-component prefix caption (e.g. "Start" / "End") sizes to fit
-/// its text instead of the fixed one-character slot. Use for multi-word
+/// When YES the per-component prefix caption (e.g. "Start" / "End") sizes to
+/// fit its text instead of the fixed one-character slot. Use for multi-word
 /// component labels (single-char W/H/X/Y keep the default fixed slot so columns
 /// align across rows). Widens the row, so opt in only where needed. Default NO.
 /// Build-time metadata.
@@ -355,6 +358,15 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// serialized so a rebuilt display lane keeps the rule.
 @property(nonatomic, copy, nullable) NSString *visibleWhenLabel;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *visibleWhenValues;
+
+/// Optional OR alternative to `visibleWhenLabel`: when set, the lane is visible
+/// if EITHER the primary rule (visibleWhenLabel/Values) OR this one holds (the
+/// named lane's component-0 value is in `visibleWhenOrValues`). With this set,
+/// an ABSENT controller counts as that side being false (not "always visible"),
+/// so a lane gated on "A OR B" hides when only one of A/B is present and off.
+/// Used for Sketch (visible when Stroke OR Fill is enabled). Serialized.
+@property(nonatomic, copy, nullable) NSString *visibleWhenOrLabel;
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *visibleWhenOrValues;
 
 /// For a KKLaneValueTypeGradient lane: when YES the row also shows an inline
 /// radial/linear type toggle and (for linear) an angle knob, all in one row,

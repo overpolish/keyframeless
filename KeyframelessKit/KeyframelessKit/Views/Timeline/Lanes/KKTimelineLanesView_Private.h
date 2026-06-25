@@ -134,6 +134,7 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
                  showsRemove:(BOOL)showsRemove
           showsAddToAnimated:(BOOL)showsAddToAnimated
                  showsSmooth:(BOOL)showsSmooth
+              reservesGutter:(BOOL)reservesGutter
             labelColumnWidth:(CGFloat)labelColumnWidth
                 contentWidth:(CGFloat)contentWidth;
 /// Width to pin every row's label column to, so the value controls line up
@@ -146,8 +147,9 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 + (CGFloat)heightForLane:(KKLane *)lane
             contentWidth:(CGFloat)contentWidth
         labelColumnWidth:(CGFloat)labelColumnWidth;
-/// Re-derive a wrapping pill row's block width + height for a new popover content
-/// width (the size pill resizes without rebuilding rows). No-op otherwise.
+/// Re-derive a wrapping pill row's block width + height for a new popover
+/// content width (the size pill resizes without rebuilding rows). No-op
+/// otherwise.
 - (void)updateContentWidth:(CGFloat)contentWidth;
 /// The KKSliderView (Float rows), for a guide that drives the slider.
 - (nullable NSView *)guideSliderView;

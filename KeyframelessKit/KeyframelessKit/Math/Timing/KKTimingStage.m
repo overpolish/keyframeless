@@ -39,10 +39,10 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
       return sa ?: sb; // partial / un-snapshotted: fall back to the base shape
     double span = b.time - a.time;
     double t = span > 1e-9 ? (frac - a.time) / span : 0.0;
-    double e = a.outgoing ? KKApplyEasing(t, (KKEasingCurve)a.outgoing.curve,
-                                          a.outgoing.intensity,
-                                          a.outgoing.frequency)
-                          : t;
+    double e = a.outgoing
+                   ? KKApplyEasing(t, (KKEasingCurve)a.outgoing.curve,
+                                   a.outgoing.intensity, a.outgoing.frequency)
+                   : t;
     KKBezierPath *p = [[KKBezierPath alloc] init];
     KKMorphInterpolateApply(sa, sb, (float)e, p);
     return KKMorphSnapshotCapture(p);
@@ -333,11 +333,13 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   _autoSizesComponentLabels = tmpl.autoSizesComponentLabels;
   _visibleWhenLabel = [tmpl.visibleWhenLabel copy];
   _visibleWhenValues = [tmpl.visibleWhenValues copy];
+  _visibleWhenOrLabel = [tmpl.visibleWhenOrLabel copy];
+  _visibleWhenOrValues = [tmpl.visibleWhenOrValues copy];
   _gradientShowsTypeAngle = tmpl.gradientShowsTypeAngle;
-  // Slider-only bounds (decoupled from the value clamp) are display metadata too:
-  // a rebuilt keypose / boundary lane must carry them or its slider falls back to
-  // the wide componentMin/Max (e.g. draw-on Offset's unbounded field -> a slider
-  // with a useless million-wide range).
+  // Slider-only bounds (decoupled from the value clamp) are display metadata
+  // too: a rebuilt keypose / boundary lane must carry them or its slider falls
+  // back to the wide componentMin/Max (e.g. draw-on Offset's unbounded field ->
+  // a slider with a useless million-wide range).
   _sliderMax = [tmpl.sliderMax copy];
   _sliderMin = [tmpl.sliderMin copy];
   // Pixel-display flag is template metadata too: keypose/boundary popovers
@@ -409,6 +411,8 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.autoSizesComponentLabels = _autoSizesComponentLabels;
   c.visibleWhenLabel = [_visibleWhenLabel copy];
   c.visibleWhenValues = [_visibleWhenValues copy];
+  c.visibleWhenOrLabel = [_visibleWhenOrLabel copy];
+  c.visibleWhenOrValues = [_visibleWhenOrValues copy];
   c.gradientShowsTypeAngle = _gradientShowsTypeAngle;
   return c;
 }
@@ -473,6 +477,10 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
     d[@"visible_when_label"] = _visibleWhenLabel;
     d[@"visible_when_values"] = _visibleWhenValues ?: @[];
   }
+  if (_visibleWhenOrLabel) {
+    d[@"visible_when_or_label"] = _visibleWhenOrLabel;
+    d[@"visible_when_or_values"] = _visibleWhenOrValues ?: @[];
+  }
   if (_gradientShowsTypeAngle)
     d[@"gradient_type_angle"] = @YES;
   return d;
@@ -523,6 +531,9 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   l.visibleWhenLabel = d[@"visible_when_label"];
   if ([d[@"visible_when_values"] isKindOfClass:[NSArray class]])
     l.visibleWhenValues = d[@"visible_when_values"];
+  l.visibleWhenOrLabel = d[@"visible_when_or_label"];
+  if ([d[@"visible_when_or_values"] isKindOfClass:[NSArray class]])
+    l.visibleWhenOrValues = d[@"visible_when_or_values"];
   l.gradientShowsTypeAngle = [d[@"gradient_type_angle"] boolValue];
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {
@@ -1070,8 +1081,8 @@ NSArray<NSString *> *KKLaneComponentLabels(KKLane *lane) {
     // A multi-axis angle (e.g. Rotation X/Y/Z) carries explicit labels and
     // returned above; a lone angle (Fill Angle, a gradient direction) has none,
     // so hand back a single empty label. The static-value row keys its circular
-    // knob off a >= 1 component count, so without this a 1-axis angle would fall
-    // through to a plain field instead of the dial.
+    // knob off a >= 1 component count, so without this a 1-axis angle would
+    // fall through to a plain field instead of the dial.
     NSUInteger n = lane.keyposes.firstObject.values.count;
     if (n <= 1)
       return @[ @"" ];
@@ -1110,28 +1121,60 @@ static NSArray<NSNumber *> *_KKLaneCondValues(
 static BOOL _KKLaneCondVisible(
     KKLane *lane, NSDictionary<NSString *, KKLane *> *byLabel,
     NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel,
+    NSMutableDictionary<NSString *, NSNumber *> *memo);
+
+// One visibility clause: does `ctrlLabel`'s component-0 value match `values`,
+// and is the controller itself visible? An absent controller / empty label =
+// NO (the clause doesn't hold) - the OR caller treats that as "this side off".
+static BOOL _KKLaneCondClause(
+    NSString *ctrlLabel, NSArray<NSNumber *> *values, KKLane *lane,
+    NSDictionary<NSString *, KKLane *> *byLabel,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel,
     NSMutableDictionary<NSString *, NSNumber *> *memo) {
-  if (lane.visibleWhenLabel.length == 0)
-    return YES;
-  // Controller not in this set - the rule can't be evaluated, so don't filter.
-  KKLane *ctrl = byLabel[lane.visibleWhenLabel];
+  if (ctrlLabel.length == 0)
+    return NO;
+  KKLane *ctrl = byLabel[ctrlLabel];
   if (!ctrl)
+    return NO;
+  NSArray<NSNumber *> *cv = _KKLaneCondValues(ctrl, valuesByLabel);
+  NSInteger idx = cv.count ? (NSInteger)llround(cv[0].doubleValue) : 0;
+  BOOL match = NO;
+  for (NSNumber *n in values)
+    if ((NSInteger)llround(n.doubleValue) == idx) {
+      match = YES;
+      break;
+    }
+  if (!match)
+    return NO;
+  if (ctrl == lane)
+    return YES;
+  return _KKLaneCondVisible(ctrl, byLabel, valuesByLabel, memo);
+}
+
+static BOOL _KKLaneCondVisible(
+    KKLane *lane, NSDictionary<NSString *, KKLane *> *byLabel,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel,
+    NSMutableDictionary<NSString *, NSNumber *> *memo) {
+  if (lane.visibleWhenLabel.length == 0 && lane.visibleWhenOrLabel.length == 0)
     return YES;
   NSNumber *cached = memo[lane.label];
   if (cached)
     return cached.boolValue;
   memo[lane.label] = @NO; // cycle guard
-  NSArray<NSNumber *> *cv = _KKLaneCondValues(ctrl, valuesByLabel);
-  NSInteger idx = cv.count ? (NSInteger)llround(cv[0].doubleValue) : 0;
-  BOOL pass = NO;
-  for (NSNumber *n in lane.visibleWhenValues)
-    if ((NSInteger)llround(n.doubleValue) == idx) {
-      pass = YES;
-      break;
-    }
-  BOOL vis = pass;
-  if (vis && ctrl != lane)
-    vis = _KKLaneCondVisible(ctrl, byLabel, valuesByLabel, memo);
+  BOOL vis;
+  if (lane.visibleWhenOrLabel.length > 0) {
+    // OR mode: visible if either clause holds (absent controller = clause off).
+    vis = _KKLaneCondClause(lane.visibleWhenLabel, lane.visibleWhenValues, lane,
+                            byLabel, valuesByLabel, memo) ||
+          _KKLaneCondClause(lane.visibleWhenOrLabel, lane.visibleWhenOrValues,
+                            lane, byLabel, valuesByLabel, memo);
+  } else if (!byLabel[lane.visibleWhenLabel]) {
+    // Single rule, controller absent: can't evaluate, so don't filter.
+    vis = YES;
+  } else {
+    vis = _KKLaneCondClause(lane.visibleWhenLabel, lane.visibleWhenValues, lane,
+                            byLabel, valuesByLabel, memo);
+  }
   memo[lane.label] = @(vis);
   return vis;
 }

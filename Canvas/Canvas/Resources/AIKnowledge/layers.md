@@ -130,7 +130,17 @@ Vector paths and images have a **Fill** group in the inspector (groups don't - t
 
 On an **image**, a non-Solid Fill Style **replaces** the picture with the hatch pattern, clipped to the image's own **silhouette** (its alpha) rather than its bounding box - so a hachured cut-out keeps its shape and reads as the pattern in the fill colour. A Solid image fill tints instead (see Fill Amount).
 
-The sketch (hand-drawn, rough) render style is still to come.
+## Sketch
+
+The **Sketch** group renders a layer's stroke and fill in a **hand-drawn** style (the rough.js look): the geometry is wobbled and the line bowed as if sketched by hand. It appears where there's something to roughen - on a **vector path** when its **Stroke OR Fill** is enabled, and on an **image** only when its (hachure) **Fill** is enabled; never on a group. It holds:
+
+- **Enabled** - the master checkbox. Off (the default) leaves everything crisp and hides the rest of the group; on, it roughens the layer and reveals the controls. Like Stroke/Fill, when it's off the rest of the group drops out of every timeline surface.
+- **Sketch Roughness** - how far the line jitters from true, 0-3 (default 1). 0 is effectively crisp; higher is scratchier. **Animates** (add it to the Animated dropdown) so a shape can settle from rough to clean over the clip.
+- **Sketch Bowing** - how much each straight segment **bows** (curves) between its ends, 0-3 (default 1). 0 keeps segments straight (just jittered); higher makes them visibly arc. Animates.
+- **Sketch Strokes** - a **Single** / **Double** pill: Single draws the line once; Double (default) draws a second lighter pass slightly offset, for the doubled, sketched-over look.
+- **Sketch Seed** - the random seed, a value with a **re-roll** (dice) button rather than a slider. The jitter is otherwise **stable across frames** (it won't crawl or flicker during playback); re-roll the seed to get a different hand-drawn variation of the same shape.
+
+The roughness scales with the stroke width, and the look is resolution-correct (it matches in browser thumbnails). A hand-drawn **fill** wobbles its outline; a **hachure** fill draws each hatch line as a hand-drawn stroke; on an image, the hachure lines roughen while the picture's silhouette stays put.
 
 ## Toolbar
 
@@ -237,4 +247,3 @@ The inspector's motion-blur control applies the shared sample-accumulate blur to
 
 - Per-layer **rotation** (lane + on-canvas gizmo).
 - Per-layer opacity in the render.
-- The sketch (hand-drawn, rough) render style. Stroke and Fill are done - see **Stroke** and **Fill** above.

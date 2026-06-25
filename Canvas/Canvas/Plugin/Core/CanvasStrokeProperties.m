@@ -9,28 +9,14 @@
 // props when a lane is absent. Split out of CanvasLayerTransform.m (which keeps
 // the 3D matrix math) - these share the same CanvasLayerTransform.h
 // declarations but are a distinct "evaluate stroke lanes" concern. The
-// live-edit override hook (CanvasEffectiveTimeline) lets the selected layer
-// preview before it persists.
+// live-edit override hook (CanvasLayerEffectiveTimeline, shared in
+// CanvasLayerTransform) lets the selected layer preview before it persists.
 
-#import "CanvasLayerTransform.h"
+#import "CanvasLayerTransform.h" // CanvasLayerEffectiveTimeline (shared)
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimingStage.h>
-
-// The timeline driving `path` at edit time: the live inspector override when
-// this IS the selected layer being edited, else the layer's persisted
-// animationJSON. nil when neither exists (the caller falls back to flat props).
-static KKTimeline *CanvasEffectiveTimeline(KKBezierPath *path,
-                                           NSString *overrideLayerID,
-                                           KKTimeline *overrideTimeline) {
-  if (overrideTimeline && overrideLayerID.length &&
-      [path.layerID isEqualToString:overrideLayerID])
-    return overrideTimeline;
-  return path.animationJSON.length
-             ? [KKTimeline timelineFromJSON:path.animationJSON]
-             : nil;
-}
 
 void CanvasStrokeWidthAtFraction(KKBezierPath *path, double frac,
                                  NSString *overrideLayerID,
@@ -41,7 +27,7 @@ void CanvasStrokeWidthAtFraction(KKBezierPath *path, double frac,
   float sw = path.strokeWidth;
   float ew = path.endWidth > 0.0f ? path.endWidth : sw;
   KKTimeline *tl =
-      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+      CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
     if (![lane.label isEqualToString:@"Stroke Width"])
       continue;
@@ -65,7 +51,7 @@ BOOL CanvasStrokeEnabledAtFraction(KKBezierPath *path, double frac,
                                    KKTimeline *overrideTimeline) {
   BOOL on = path.strokeEnabled; // flat fallback (no "Enabled" lane yet)
   KKTimeline *tl =
-      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+      CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
     if (![lane.label isEqualToString:@"Enabled"])
       continue;
@@ -83,7 +69,7 @@ KKColorLanesValue CanvasStrokeColorAtFraction(KKBezierPath *path, double frac,
                                               NSString *overrideLayerID,
                                               KKTimeline *overrideTimeline) {
   KKTimeline *tl =
-      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+      CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   // No colour lanes (a path whose animationJSON predates stroke colour): fall
   // back to the flat solid colour so it renders exactly as before.
   BOOL hasColorLanes = NO;
@@ -115,7 +101,7 @@ void CanvasStrokeCapJoinAtFraction(KKBezierPath *path, double frac,
                                    uint8_t *outCap, uint8_t *outJoin) {
   uint8_t cap = path.lineCap, join = path.lineJoin; // flat fallback
   KKTimeline *tl =
-      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+      CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
     if (lane.keyposes.count == 0)
       continue;
@@ -143,7 +129,7 @@ void CanvasStrokeMarkersAtFraction(KKBezierPath *path, double frac,
   uint8_t startM = path.startMarker, endM = path.endMarker; // flat fallback
   float startMul = path.startMarkerSize, endMul = path.endMarkerSize;
   KKTimeline *tl =
-      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+      CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
     if (lane.keyposes.count == 0)
       continue;
@@ -186,7 +172,7 @@ CanvasStrokeStyle CanvasStrokeStyleAtFraction(KKBezierPath *path, double frac,
   s.dotGap = path.dotGap;
   s.marchSpeed = path.marchingAntsSpeed;
   KKTimeline *tl =
-      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+      CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
     if (lane.keyposes.count == 0)
       continue;
@@ -229,7 +215,7 @@ CanvasStrokeDrawOn CanvasStrokeDrawOnAtFraction(KKBezierPath *path, double frac,
   d.offset = o0 - floorf(o0);
   d.offsetEngaged = d.offset > 1e-6f;
   KKTimeline *tl =
-      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+      CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
     if (lane.keyposes.count == 0)
       continue;

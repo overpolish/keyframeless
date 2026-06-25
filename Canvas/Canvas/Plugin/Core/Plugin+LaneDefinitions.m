@@ -503,19 +503,97 @@
   fillAngle.visibleWhenValues = @[ @1, @2, @3, @4 ];
   [fillAngle insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @(-41.0) ]]];
 
+  // Sketch group: a hand-drawn (rough.js-style) render of the stroke and fill -
+  // the path geometry is jittered/bowed and optionally over-drawn. Applies to
+  // whatever the layer actually draws, so the timeline builder shows the group
+  // for a vector path when its Stroke OR Fill is enabled, and for an image only
+  // when its Fill (a hachure) is enabled. "Sketch Enabled" is the structural
+  // master checkbox; it gates the rest via the visibleWhen cascade. The OR rule
+  // (Fill Enabled OR the Stroke "Enabled" toggle) uses the kit's visibleWhenOr:
+  // on an image the absent Stroke toggle counts as off, so it reduces to "Fill
+  // Enabled". Seeded per-path from the flat sketch* props.
+  KKLane *sketchOn = [KKLane laneWithLabel:@"Sketch Enabled"];
+  sketchOn.valueType = KKLaneValueTypeFloat;
+  sketchOn.isToggle = YES;
+  sketchOn.animatable = NO;
+  sketchOn.integerValued = YES;
+  sketchOn.componentLabels = @[];
+  sketchOn.componentUnits = @[];
+  sketchOn.enabled = NO;
+  sketchOn.ownerScoped = YES;
+  sketchOn.categoryKey = @"Sketch";
+  sketchOn.categorySymbol = @"scribble.variable";
+  sketchOn.visibleWhenLabel = @"Fill Enabled";
+  sketchOn.visibleWhenValues = @[ @1 ];
+  sketchOn.visibleWhenOrLabel = @"Enabled"; // the Stroke group's toggle
+  sketchOn.visibleWhenOrValues = @[ @1 ];
+  [sketchOn insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
+
+  // Roughness / Bowing / Strokes / Seed, all gated by Sketch Enabled. Roughness
+  // + Bowing are animatable 0-3 floats (rough.js norms, default 1); Strokes is
+  // the over-draw pass count (1 single, 2 double-drawn); Seed varies the random
+  // jitter. Seeded from the flat sketch* props.
+  KKLane * (^sketchScalar)(NSString *, double, double, double, BOOL,
+                           NSString *) =
+      ^KKLane *(NSString *label, double seed, double mn, double mx,
+                BOOL animatable, NSString *unit) {
+        KKLane *l = [KKLane laneWithLabel:label];
+        l.valueType = KKLaneValueTypeFloat;
+        l.componentMin = @[ @(mn) ];
+        l.componentMax = @[ @(mx) ];
+        l.componentUnits = @[ unit ];
+        l.animatable = animatable;
+        l.enabled = NO;
+        l.ownerScoped = YES;
+        l.categoryKey = @"Sketch";
+        l.categorySymbol = @"scribble.variable";
+        l.visibleWhenLabel = @"Sketch Enabled";
+        l.visibleWhenValues = @[ @1 ];
+        [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @(seed) ]]];
+        return l;
+      };
+  KKLane *sketchRoughness =
+      sketchScalar(@"Sketch Roughness", 1.0, 0.0, 3.0, YES, @"");
+  KKLane *sketchBowing =
+      sketchScalar(@"Sketch Bowing", 1.0, 0.0, 3.0, YES, @"");
+  // Strokes is a structural 2-way choice (over-draw once or twice), not a
+  // range, so it's a radio pill (Single / Double) like Fill Style / Line Cap -
+  // value 0 = Single (1 pass), 1 = Double (2 passes). A constant slider for a
+  // 1-2 range sat oddly among the animatable Roughness/Bowing sliders; the pill
+  // is right-aligned chrome, so it also keeps those two sliders the only bars.
+  KKLane *sketchStrokes = [KKLane laneWithLabel:@"Sketch Strokes"];
+  sketchStrokes.valueType = KKLaneValueTypeFloat;
+  sketchStrokes.choiceLabels = @[ @"Single", @"Double" ];
+  sketchStrokes.componentMin = @[ @0.0 ];
+  sketchStrokes.componentMax = @[ @1.0 ];
+  sketchStrokes.integerValued = YES;
+  sketchStrokes.animatable = NO;
+  sketchStrokes.enabled = NO;
+  sketchStrokes.ownerScoped = YES;
+  sketchStrokes.categoryKey = @"Sketch";
+  sketchStrokes.categorySymbol = @"scribble.variable";
+  sketchStrokes.visibleWhenLabel = @"Sketch Enabled";
+  sketchStrokes.visibleWhenValues = @[ @1 ];
+  [sketchStrokes insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @1.0 ]]];
+  // Seed: a value-only random integer with a re-roll dice (KKSeedView), never a
+  // lane - the same control Glow's noise seed uses. integerValued + animatable
+  // NO + seedField YES.
+  KKLane *sketchSeed =
+      sketchScalar(@"Sketch Seed", 1.0, 0.0, 999999.0, NO, @"");
+  sketchSeed.integerValued = YES;
+  sketchSeed.seedField = YES;
+
   return @[
-    points,           strokeOn,       strokeWidth,
-    strokeColor[0],   strokeColor[1], strokeColor[2],
-    lineCap,          lineJoin,       startMarker,
-    startMarkerWidth, endMarker,      endMarkerWidth,
-    drawOnStart,      drawOnEnd,      drawOnOffset,
-    strokeStyle,      dashLength,     dashGap,
-    dotGap,           marchSpeed,     fillOn,
-    fillColor[0],     fillColor[1],   fillColor[2],
-    fillAmount,       fillStyle,      fillGap,
-    fillAngle,        fillWeight,     scale,
-    position,         rotation,       anchor,
-    opacity
+    points,         strokeOn,         strokeWidth,     strokeColor[0],
+    strokeColor[1], strokeColor[2],   lineCap,         lineJoin,
+    startMarker,    startMarkerWidth, endMarker,       endMarkerWidth,
+    drawOnStart,    drawOnEnd,        drawOnOffset,    strokeStyle,
+    dashLength,     dashGap,          dotGap,          marchSpeed,
+    fillOn,         fillColor[0],     fillColor[1],    fillColor[2],
+    fillAmount,     fillStyle,        fillGap,         fillAngle,
+    fillWeight,     sketchOn,         sketchRoughness, sketchBowing,
+    sketchStrokes,  sketchSeed,       scale,           position,
+    rotation,       anchor,           opacity
   ];
 }
 

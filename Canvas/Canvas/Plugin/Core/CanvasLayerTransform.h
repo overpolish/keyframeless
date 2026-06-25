@@ -140,9 +140,9 @@ CanvasStrokeStyleAtFraction(KKBezierPath *path, double frac,
 /// stroke) and `offset` rotates where the visible window begins around the path
 /// (0..1, default 0). Animatable, read smoothed so a keyframed reveal eases.
 /// From the "Draw On Start"/"Draw On End"/"Draw On Offset" lanes (percent, /100
-/// here), falling back to the flat drawOnStart/drawOnEnd/drawOnOrigin. Applies to
-/// a single open OR closed contour (a closed shape reveals around its loop); a
-/// no-op on compound/multi-contour paths.
+/// here), falling back to the flat drawOnStart/drawOnEnd/drawOnOrigin. Applies
+/// to a single open OR closed contour (a closed shape reveals around its loop);
+/// a no-op on compound/multi-contour paths.
 typedef struct {
   float start;  // 0..1 arc fraction (visible span lower bound)
   float end;    // 0..1 arc fraction (visible span upper bound)
@@ -187,5 +187,14 @@ matrix_float4x4 CanvasComposedModelMatrix(CanvasLayerTransform memberT,
                                           const CanvasGroupXform *groups,
                                           NSInteger ng, simd_float2 dims,
                                           simd_float2 tileShift);
+
+/// The timeline driving `path` at edit time: the live inspector override when
+/// this IS the selected layer being edited, else the layer's persisted
+/// animationJSON (nil when neither exists, so the caller falls back to flat
+/// props). Shared by the per-fraction property evaluators (stroke / fill /
+/// sketch) so the live-edit preview hook is defined once.
+KKTimeline *_Nullable CanvasLayerEffectiveTimeline(
+    KKBezierPath *path, NSString *_Nullable overrideLayerID,
+    KKTimeline *_Nullable overrideTimeline);
 
 NS_ASSUME_NONNULL_END

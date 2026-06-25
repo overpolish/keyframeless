@@ -145,11 +145,21 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
         [t.label isEqualToString:@"Fill Angle"] ||
         [t.label isEqualToString:@"Fill Weight"];
     BOOL fillAmountLane = [t.label isEqualToString:@"Fill Amount"];
+    // Sketch (hand-drawn roughness) applies to a vector path OR an image (never
+    // a group); its own visibleWhen cascade (Stroke OR Fill enabled) hides the
+    // group when there's nothing to roughen.
+    BOOL sketchLane = [t.label isEqualToString:@"Sketch Enabled"] ||
+                      [t.label isEqualToString:@"Sketch Roughness"] ||
+                      [t.label isEqualToString:@"Sketch Bowing"] ||
+                      [t.label isEqualToString:@"Sketch Strokes"] ||
+                      [t.label isEqualToString:@"Sketch Seed"];
     if (vectorOnly && (path.isImage || path.isGroup))
       continue;
     if (fillLane && path.isGroup)
       continue;
     if (fillAmountLane && !path.isImage)
+      continue;
+    if (sketchLane && path.isGroup)
       continue;
     // Line Cap only matters on an OPEN end: hide it for a closed single contour
     // or any multi-contour path (the renderer treats those as closed, so no
@@ -260,6 +270,34 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
       src.keyposes =
           @[ [KKKeyPose keyposeAtTime:0.0
                                values:@[ @(path.sketchFillWeight) ]] ];
+    }
+    // Sketch group with no stored lane: seed from the flat sketch* props
+    // (sketchEnabled toggle, roughness/bowing/strokes/seed). A fresh path
+    // starts with sketch off, so the group hides until enabled.
+    if (!stored[t.label] && [t.label isEqualToString:@"Sketch Enabled"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.sketchEnabled ? 1.0 : 0.0) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Sketch Roughness"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.sketchRoughness) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Sketch Bowing"]) {
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(path.sketchBowing) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Sketch Strokes"]) {
+      // Pill index: flat sketchStrokes 2 (or default) -> Double (1), 1 ->
+      // Single (0).
+      double idx = (path.sketchStrokes >= 2 || path.sketchStrokes == 0) ? 1 : 0;
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:@[ @(idx) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Sketch Seed"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.sketchSeed ?: 1) ]] ];
     }
     // Stroke colour Mode / Solid with no stored lane: seed from the flat
     // strokeColorMode (0=Solid, 1=Gradient - same ordering, no Dynamic) and

@@ -11,6 +11,17 @@
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
+KKTimeline *CanvasLayerEffectiveTimeline(KKBezierPath *path,
+                                         NSString *overrideLayerID,
+                                         KKTimeline *overrideTimeline) {
+  if (overrideTimeline && overrideLayerID.length &&
+      [path.layerID isEqualToString:overrideLayerID])
+    return overrideTimeline;
+  return path.animationJSON.length
+             ? [KKTimeline timelineFromJSON:path.animationJSON]
+             : nil;
+}
+
 static matrix_float4x4 CanvasTranslate4(float x, float y) {
   return simd_matrix(simd_make_float4(1, 0, 0, 0), simd_make_float4(0, 1, 0, 0),
                      simd_make_float4(0, 0, 1, 0),

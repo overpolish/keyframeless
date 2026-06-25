@@ -51,7 +51,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   NSStackView *_stack;
   // Vertical scroller (top/bottom fade shadows) hosting only the param-row
   // stack, so the mini-viewer + header + category pill stay sticky above and a
-  // small / low-resolution display can scroll the rows instead of clipping them.
+  // small / low-resolution display can scroll the rows instead of clipping
+  // them.
   KKPaddedScrollView *_rowsScroll;
   KKMiniViewerView *_miniViewer;
   // Header-band 3-segment pill (sm/md/lg) that sets the global mini-viewer
@@ -260,8 +261,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // height, so the page hugs only what is shown for the current Mode/Type.
   NSSet<NSString *> *condVisible =
       KKConditionalVisibleLaneLabels(lanes, valuesByLabel);
-  // Wrapping pill rows (markers) grow per wrapped line, so the per-row height is
-  // width-dependent: feed the popover width + label column to heightForLane.
+  // Wrapping pill rows (markers) grow per wrapped line, so the per-row height
+  // is width-dependent: feed the popover width + label column to heightForLane.
   CGFloat cw = [self _popoverWidthForDescriptor:descriptorPath];
   CGFloat labelColumnWidth = [_KKStaticValueRow labelColumnWidthForLanes:lanes];
   CGFloat rows = 0;
@@ -783,8 +784,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // scroller; on a tall screen this returns the natural height unchanged.
 - (CGFloat)_clampHeight:(CGFloat)naturalHeight toScreen:(NSScreen *)screen {
   NSScreen *scr = screen ?: NSScreen.mainScreen;
-  CGFloat avail =
-      scr.visibleFrame.size.height - kKKStaticPopoverScreenMargin;
+  CGFloat avail = scr.visibleFrame.size.height - kKKStaticPopoverScreenMargin;
   return MIN(naturalHeight, MAX(kKKStaticPopoverMinHeight, avail));
 }
 
@@ -795,8 +795,9 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   if (!_popover)
     return;
   CGSize s = [self _naturalContentSize];
-  s.height = [self _clampHeight:s.height
-                       toScreen:_popover.contentViewController.view.window.screen];
+  s.height =
+      [self _clampHeight:s.height
+                toScreen:_popover.contentViewController.view.window.screen];
   _popover.contentSize = s;
 }
 
@@ -837,16 +838,21 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // Non-animatable lanes are value-only: no "make animatable" gutter button.
   BOOL showsAdd = (_rowAddToAnimatedHandler != nil && lane.animatable);
   BOOL showsSmooth = (lane.spatialCurvable && _editsKeypose);
-  _KKStaticValueRow *row =
-      [[_KKStaticValueRow alloc] initWithLane:lane
-                                  showsRemove:showsRemove
-                           showsAddToAnimated:showsAdd
-                                  showsSmooth:showsSmooth
-                             labelColumnWidth:_labelColumnWidth
-                                 contentWidth:
-                                     [_KKStaticValuesPopoverView
-                                         _popoverWidthForDescriptor:
-                                             _descriptorPath]];
+  // A constant row in the add-to-animated (constants) popover has no gutter
+  // button, but the animatable rows do - reserve the column so all labels +
+  // value controls line up (e.g. a Sketch group's constant Strokes/Seed rows
+  // align with the animatable Roughness/Bowing rows).
+  BOOL reservesGutter =
+      (_rowAddToAnimatedHandler != nil) && !showsAdd && !showsRemove;
+  _KKStaticValueRow *row = [[_KKStaticValueRow alloc]
+            initWithLane:lane
+             showsRemove:showsRemove
+      showsAddToAnimated:showsAdd
+             showsSmooth:showsSmooth
+          reservesGutter:reservesGutter
+        labelColumnWidth:_labelColumnWidth
+            contentWidth:[_KKStaticValuesPopoverView
+                             _popoverWidthForDescriptor:_descriptorPath]];
   row.translatesAutoresizingMaskIntoConstraints = NO;
   NSString *label = lane.label;
   __weak typeof(self) weak = self;
@@ -1022,11 +1028,12 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   if (_defaultsProvider)
     for (NSString *label in _rowsByLabel)
       _rowsByLabel[label].defaultValues = _defaultsProvider(label);
-  // Rebuild the category nav too (not just the rows): a re-target to a different
-  // layer can change the whole category SET (e.g. a Core/Points layer -> a
-  // Stroke layer), so the pills must follow - otherwise the old tabs persist and
-  // the category filter hides every row of the new layer. Re-resolves
-  // _selectedCategory to a surviving tab. Mirrors updateUnoptedLanes (constants).
+  // Rebuild the category nav too (not just the rows): a re-target to a
+  // different layer can change the whole category SET (e.g. a Core/Points layer
+  // -> a Stroke layer), so the pills must follow - otherwise the old tabs
+  // persist and the category filter hides every row of the new layer.
+  // Re-resolves _selectedCategory to a surviving tab. Mirrors
+  // updateUnoptedLanes (constants).
   [self _rebuildCategoryNavForLanes:lanes initialCategory:_selectedCategory];
   [self _applyCategoryFilter];
   [self applyExcludedLabels:excluded

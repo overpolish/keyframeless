@@ -11,7 +11,9 @@
 #import "CanvasLayerRender.h"    // CanvasLayerObjectCenter
 #import "CanvasLayerRenderInternal.h" // CanvasComputeGradientFill (shared w/ stroke)
 #import "CanvasLayerTransform.h"
-#import "CanvasPathMorph.h" // CanvasPathMorphedAtFraction
+#import "CanvasPathMorph.h"  // CanvasPathMorphedAtFraction
+#import "CanvasSketchPath.h" // CanvasSketchPath / CanvasSketchifyHachureLines
+#import "CanvasSketchProperties.h" // CanvasSketchEnabledAtFraction + params
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
@@ -397,13 +399,19 @@ typedef struct {
   KKHachureMaskParams mparams;
   float imageWidth;
   float imageHeight;
+  // Sketch (hand-drawn) jitter for the hachure lines.
+  BOOL sketchHachure;
+  float sketchRoughness;
+  float sketchBowing;
+  uint32_t sketchSeed;
 } CanvasFillColorInputs;
 
 // Stencil pass: clear the MSAA colour + stencil, then toggle (Invert) the
 // even-odd stencil for each fan triangle. No colour is written.
 static void CanvasFillEncodeStencilPass(const CanvasFillPassCtx *c,
                                         const CanvasFillPipelines *pl,
-                                        id<MTLBuffer> fanBuf, NSUInteger triCount,
+                                        id<MTLBuffer> fanBuf,
+                                        NSUInteger triCount,
                                         const matrix_float4x4 *m) {
   MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
   rpd.colorAttachments[0].texture = c->msaaColor;
@@ -432,14 +440,15 @@ static void CanvasFillEncodeStencilPass(const CanvasFillPassCtx *c,
 }
 
 // Colour pass: draw the fill into the MSAA target where the stencil is odd,
-// resolving to the 1x resolve texture. Solid/gradient covers a single bbox quad;
-// a hachure style draws its line pattern (optionally clipped to an image alpha).
+// resolving to the 1x resolve texture. Solid/gradient covers a single bbox
+// quad; a hachure style draws its line pattern (optionally clipped to an image
+// alpha).
 static void CanvasFillEncodeColorPass(const CanvasFillPassCtx *c,
                                       const CanvasFillPipelines *pl,
                                       const matrix_float4x4 *m,
                                       const CanvasFillColorInputs *in) {
-  // Hachure geometry built up front (clipped by the shape stencil); empty -> the
-  // pass just resolves transparent.
+  // Hachure geometry built up front (clipped by the shape stencil); empty ->
+  // the pass just resolves transparent.
   id<MTLBuffer> hBuf = nil;
   NSUInteger hvc = 0;
   if (in->hachure) {
@@ -447,6 +456,11 @@ static void CanvasFillEncodeColorPass(const CanvasFillPassCtx *c,
     NSUInteger lc =
         CanvasGenerateHachureLines(in->geom, in->imageWidth, in->imageHeight,
                                    in->fs.style, in->fs.gap, in->fs.angle, &hl);
+    // Sketch: wobble the straight hachure lines into hand-drawn strokes.
+    if (lc > 0 && in->sketchHachure)
+      CanvasSketchifyHachureLines(&hl, &lc, in->sketchRoughness,
+                                  in->sketchBowing, in->sketchSeed,
+                                  in->imageWidth, in->imageHeight);
     KKVertex2D *hv = NULL;
     if (lc > 0)
       hvc = CanvasHachureTriangles(hl, lc, in->fs.style, in->fs.gap,
@@ -460,9 +474,9 @@ static void CanvasFillEncodeColorPass(const CanvasFillPassCtx *c,
   }
   simd_float2 pad = {1.0f, 1.0f};
   simd_float2 q0 = in->bbMin - pad, q1 = in->bbMax + pad;
-  // textureCoordinate carries each corner's OBJECT-SPACE position so the gradient
-  // fragment gets the per-pixel position (perspective-correct); the solid
-  // fragment ignores it.
+  // textureCoordinate carries each corner's OBJECT-SPACE position so the
+  // gradient fragment gets the per-pixel position (perspective-correct); the
+  // solid fragment ignores it.
   KKVertex2D quad[6] = {
       {.position = {q0.x, q0.y}, .textureCoordinate = {q0.x, q0.y}},
       {.position = {q1.x, q0.y}, .textureCoordinate = {q1.x, q0.y}},
@@ -503,7 +517,9 @@ static void CanvasFillEncodeColorPass(const CanvasFillPassCtx *c,
         [enc setFragmentBytes:in->cv->gradientLUT
                        length:sizeof(in->cv->gradientLUT)
                       atIndex:0];
-        [enc setFragmentBytes:&in->gparams length:sizeof(in->gparams) atIndex:1];
+        [enc setFragmentBytes:&in->gparams
+                       length:sizeof(in->gparams)
+                      atIndex:1];
         if (in->maskHachure)
           [enc setFragmentBytes:&in->mparams
                          length:sizeof(in->mparams)
@@ -515,7 +531,9 @@ static void CanvasFillEncodeColorPass(const CanvasFillPassCtx *c,
                          length:sizeof(in->mparams)
                         atIndex:1];
       }
-      [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:hvc];
+      [enc drawPrimitives:MTLPrimitiveTypeTriangle
+              vertexStart:0
+              vertexCount:hvc];
     }
   } else {
     [enc setRenderPipelineState:(in->useGradient ? pl->gradient : pl->color)];
@@ -555,12 +573,16 @@ static void CanvasFillEncodeCompositePass(const CanvasFillPassCtx *c,
       [c->commandBuffer renderCommandEncoderWithDescriptor:rpd];
   [enc setViewport:(MTLViewport){0, 0, tw, th, -1, 1}];
   [enc setRenderPipelineState:pl->composite];
-  [enc setVertexBytes:blit length:sizeof(blit) atIndex:KKVertexInputIndex_Vertices];
+  [enc setVertexBytes:blit
+               length:sizeof(blit)
+              atIndex:KKVertexInputIndex_Vertices];
   [enc setVertexBytes:&c->viewport
                length:sizeof(c->viewport)
               atIndex:KKVertexInputIndex_ViewportSize];
   [enc setFragmentTexture:c->resolveTex atIndex:KKTextureIndex_InputImage];
-  [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+          vertexStart:0
+          vertexCount:4];
   [enc endEncoding];
 }
 
@@ -644,6 +666,27 @@ void CanvasEncodeFilledLayers(
         continue;
       if (geom.hasCornerRadii)
         geom = CanvasPathByExpandingCorners(geom, aspect);
+    }
+
+    // Sketch (hand-drawn): roughen the fill. For a VECTOR shape the silhouette
+    // fan is built from a jittered copy of the outline (strokes=1 - a fill
+    // wants one wobbly border, not a disjoint double-draw); for an IMAGE the
+    // rect stays put (its silhouette comes from the alpha mask) and only the
+    // hachure lines wobble. The hachure lines are jittered in the colour pass.
+    CanvasSketchParams sp = {0};
+    BOOL sketchOn = CanvasSketchEnabledAtFraction(
+        path, evalFrac, overrideLayerID, overrideTimeline);
+    if (sketchOn) {
+      sp = CanvasSketchParamsAtFraction(path, evalFrac, overrideLayerID,
+                                        overrideTimeline);
+      if (sp.roughness > 0.0001f && !path.isImage) {
+        float ss = path.strokeWidth, se = path.strokeWidth;
+        CanvasStrokeWidthAtFraction(path, evalFrac, overrideLayerID,
+                                    overrideTimeline, &ss, &se);
+        geom = CanvasSketchPath(geom, sp.roughness, sp.bowing, sp.seed,
+                                /*strokes=*/1, fmaxf(ss, se), imageWidth,
+                                imageHeight);
+      }
     }
 
     KKVertex2D *fan = NULL;
@@ -744,6 +787,10 @@ void CanvasEncodeFilledLayers(
         .mparams = mparams,
         .imageWidth = imageWidth,
         .imageHeight = imageHeight,
+        .sketchHachure = sketchOn && sp.roughness > 0.0001f,
+        .sketchRoughness = sp.roughness,
+        .sketchBowing = sp.bowing,
+        .sketchSeed = sp.seed,
     };
     CanvasFillEncodeColorPass(&passCtx, pipelines, &m, &colorIn);
 

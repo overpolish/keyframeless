@@ -11,6 +11,8 @@
 #import "CanvasLayerTransform.h"
 #import "CanvasMarkerTessellate.h"
 #import "CanvasPathMorph.h"
+#import "CanvasSketchPath.h"       // CanvasSketchPath (hand-drawn jitter)
+#import "CanvasSketchProperties.h" // CanvasSketchEnabledAtFraction + params
 #import "CanvasStrokeTessellate.h"
 #import "Constants.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -363,6 +365,21 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
   if (geom.hasCornerRadii)
     geom = CanvasPathByExpandingCorners(
         geom, imageHeight > 0 ? (float)imageWidth / (float)imageHeight : 1.0f);
+
+  // Sketch (hand-drawn) jitter: replace the geometry with a roughened copy so
+  // the stroke wobbles like a pen drawing. Driven by the Sketch lanes; the seed
+  // is constant so the wobble is stable across frames. Applied AFTER the corner
+  // fillet so rounded corners roughen too. Uses the effective stroke width to
+  // scale the jitter.
+  if (CanvasSketchEnabledAtFraction(path, evalFrac, overrideLayerID,
+                                    overrideTimeline)) {
+    CanvasSketchParams sp = CanvasSketchParamsAtFraction(
+        path, evalFrac, overrideLayerID, overrideTimeline);
+    if (sp.roughness > 0.0001f)
+      geom = CanvasSketchPath(geom, sp.roughness, sp.bowing, sp.seed,
+                              sp.strokes, fmaxf(strokeStart, strokeEnd),
+                              imageWidth, imageHeight);
+  }
 
   uint8_t lineCap = path.lineCap, lineJoin = path.lineJoin;
   CanvasStrokeCapJoinAtFraction(path, evalFrac, overrideLayerID,
