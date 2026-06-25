@@ -37,8 +37,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)addParametersWithError:(NSError **)error;
 @end
 
-@interface CanvasPlugin (CustomUI)
-- (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED;
+/// The declarative lane + OSC definitions (implemented in
+/// Plugin+LaneDefinitions.m). Pure data factories, no instance state.
+@interface CanvasPlugin (LaneDefinitions)
 + (NSArray<KKLane *> *)availableLanes;
 /// The viewer-OSC visibility pill compounds (each array = one pill: primary +
 /// members toggled together). Single source of truth shared by createView's
@@ -52,7 +53,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// control at all) and "Points" off.
 + (NSDictionary<NSString *, NSNumber *> *)defaultOSCElementsForVector:
     (BOOL)vector;
+@end
 
+@interface CanvasPlugin (CustomUI)
+- (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED;
 /// Load `layerID`'s per-layer OSC element set (or the default seed) into the
 /// ACTIVE per-instance state + refresh the inspector + mini. Called on open and
 /// on every layer-selection change so the viewer OSC / mini reflect the

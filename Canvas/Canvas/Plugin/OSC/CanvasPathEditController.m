@@ -5,6 +5,7 @@
 
 #import "CanvasLayerRender.h" // project / unproject
 #import "CanvasAnchorSelectionSync.h" // cross-process selection sync
+#import "CanvasOSCConstraint.h" // shared handle Shift/Cmd constraint math
 #import "CanvasPathEditController_Internal.h"
 #import "CanvasPathMorph.h" // per-keypose geometry writes
 #import <KeyframelessKit/KKBezierPath.h>
@@ -312,25 +313,12 @@ BOOL CanvasPathIsLargeVector(KKBezierPath *path) {
 }
 
 // Shift = axis-lock, Cmd = 45deg snap, computed in pixel space (object X scaled
-// by the canvas aspect) so the constraint is visual - same as the pen.
+// by the canvas aspect) so the constraint is visual - same as the pen. The math
+// is the shared CanvasConstrainHandleDelta (DRY with the pen controller).
 - (simd_float2)_constrain:(simd_float2)h
                    aspect:(float)aspect
                 modifiers:(CanvasPenModifiers)mods {
-  if (aspect <= 0)
-    aspect = 1.0f;
-  double px = h.x * aspect, py = h.y;
-  if (mods & CanvasPenModShift) {
-    if (fabs(px) >= fabs(py))
-      py = 0;
-    else
-      px = 0;
-  } else if (mods & CanvasPenModCmd) {
-    double mag = hypot(px, py), step = M_PI / 4.0;
-    double ang = round(atan2(py, px) / step) * step;
-    px = mag * cos(ang);
-    py = mag * sin(ang);
-  }
-  return simd_make_float2((float)(px / aspect), (float)py);
+  return CanvasConstrainHandleDelta(h, aspect, mods);
 }
 
 @end

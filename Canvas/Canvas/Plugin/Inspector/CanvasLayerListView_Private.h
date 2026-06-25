@@ -73,24 +73,39 @@ extern NSPasteboardType const kCanvasLayerRowDragType;
   NSInteger _selfWritePending; // skip our own writes echoing back as reloads
 }
 
-// Layer blob IO + cache mutation, scroll shadows, rename (primary impl).
+// Scroll shadows (primary impl).
+- (void)_updateScrollShadows;
+@end
+
+// Methods are declared on matching CATEGORY interfaces (not the extension) so
+// the compiler doesn't expect them in the primary @implementation.
+
+// Layer blob IO (KKBezierPath <-> kParamLayerData string) + cache mutation +
+// image / SVG import.
+@interface CanvasLayerListView (IO)
+- (NSMutableArray<KKBezierPath *> *)_readPaths;
+- (void)_writePaths:(NSArray<KKBezierPath *> *)paths;
 - (void)_modifyPaths:(void (^)(NSMutableArray<KKBezierPath *> *paths))block;
 - (nullable KKBezierPath *)_imageLayerForURL:(NSURL *)url;
 // Parse an SVG file into ready-to-insert layers in top-to-bottom flat order:
 // index 0 is the root (a group when the SVG has several elements, else the
 // single path) with a nil parent; any following entries are the group's
-// children. Empty when the file can't be read / parsed. (Primary impl.)
+// children. Empty when the file can't be read / parsed.
 - (NSArray<KKBezierPath *> *)_svgLayersForURL:(NSURL *)url;
 - (nullable NSImage *)_thumbnailForPath:(NSString *)imagePath;
-- (void)_updateScrollShadows;
-- (void)beginRenameAtIndex:(NSUInteger)idx;
-- (void)commitRenameIfEditing;
-- (void)_commitRenameIfEditing;
-- (void)renameRow:(NSMenuItem *)sender; // menu/button action target
 @end
 
-// Methods are declared on matching CATEGORY interfaces (not the extension) so
-// the compiler doesn't expect them in the primary @implementation.
+// Inline-rename lifecycle: begin / commit, the field's end-of-edit delegate,
+// and the context-menu rename action target.
+@interface CanvasLayerListView (Rename)
+- (void)beginRenameAtIndex:(NSUInteger)idx;
+- (void)commitRenameIfEditing;
+- (void)_beginRenameAtIndex:(NSUInteger)idx;
+- (void)_commitRename;
+- (void)_commitRenameIfEditing;
+- (void)_resetCursorAfterEditing;
+- (void)renameRow:(NSMenuItem *)sender; // menu/button action target
+@end
 
 @interface CanvasLayerListView (Rows)
 - (void)_rebuildRows;

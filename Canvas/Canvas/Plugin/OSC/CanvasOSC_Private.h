@@ -266,6 +266,27 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 - (BOOL)_penKeyDown:(unsigned short)asciiKey
           modifiers:(NSUInteger)modifiers
              atTime:(CMTime)time;
+// render-object (Y-up) <-> CANVAS px (Y flipped at the boundary). Implemented in
+// +Pen.m; called by the +PenSurface protocol methods + the +PenDraw overlay.
+- (CGPoint)_penCanvasFromObj:(CGPoint)objYUp;
+// The cursor the pen tool shows at a CANVAS point: the close-shape glyph when
+// hovering the first anchor (with a loop placed), else the pen glyph.
+- (NSCursor *)_penCursorForCanvasX:(double)x y:(double)y;
+// Path point editing (cursor tool): hit-test / drag the selected path's anchors
+// + handles via the shared CanvasPathEditController. Coords are CANVAS px.
+- (CanvasPathEditHit)_pathEditHitAtX:(double)x y:(double)y;
+- (BOOL)_pathEditMouseDownAtX:(double)x y:(double)y modifiers:(NSUInteger)mods;
+- (void)_pathEditMouseDraggedAtX:(double)x
+                               y:(double)y
+                       modifiers:(NSUInteger)mods;
+- (void)_pathEditMouseUp;
+- (BOOL)_pathEditDragging;
+@end
+
+// Pen / path-edit OVERLAY draw orchestration (implemented in +PenDraw.m). These
+// compose the +Pen.m surface draw primitives into the per-tick overlay and are
+// called from CanvasOSC's draw pass.
+@interface CanvasOSC (PenDraw)
 - (void)_drawPenInProgressWithWidth:(NSInteger)width
                              height:(NSInteger)height
                    destinationImage:(FxImageTile *)destinationImage
@@ -280,18 +301,6 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
                                         atTime:(CMTime)time;
 // The marquee rubber-band, drawn independently of the selection count.
 - (void)_drawMarqueeInDestination:(FxImageTile *)destinationImage;
-// The cursor the pen tool shows at a CANVAS point: the close-shape glyph when
-// hovering the first anchor (with a loop placed), else the pen glyph.
-- (NSCursor *)_penCursorForCanvasX:(double)x y:(double)y;
-// Path point editing (cursor tool): hit-test / drag the selected path's anchors
-// + handles via the shared CanvasPathEditController. Coords are CANVAS px.
-- (CanvasPathEditHit)_pathEditHitAtX:(double)x y:(double)y;
-- (BOOL)_pathEditMouseDownAtX:(double)x y:(double)y modifiers:(NSUInteger)mods;
-- (void)_pathEditMouseDraggedAtX:(double)x
-                               y:(double)y
-                       modifiers:(NSUInteger)mods;
-- (void)_pathEditMouseUp;
-- (BOOL)_pathEditDragging;
 @end
 
 // Rect / ellipse tool: this OSC is the drag-create SURFACE for the shared

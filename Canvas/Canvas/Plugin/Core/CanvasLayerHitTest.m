@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "CanvasCornerFillet.h" // CanvasPathByExpandingCorners
-#import "CanvasLayerRender.h"  // CanvasHitTestLayerID (public decl)
+#import "CanvasCornerFillet.h"    // CanvasPathByExpandingCorners
+#import "CanvasHitTestGeometry.h" // CanvasInvBilinear + CanvasSampleImageAlpha
+#import "CanvasLayerRender.h"     // CanvasHitTestLayerID (public decl)
 #import "CanvasLayerTimeline.h"
 #import "CanvasLayerTransform.h"
 #import "CanvasMarkerTessellate.h" // marker triangle-list hit-test
@@ -38,123 +39,6 @@ static simd_float2 CanvasProjectedCornerObj(float nx, float ny,
     return simd_make_float2(nx, ny);
   simd_float2 screen = simd_make_float2(clip.x / clip.w, clip.y / clip.w);
   return screen / scl + half;
-}
-
-static float CanvasCross2(simd_float2 a, simd_float2 b) {
-  return a.x * b.y - a.y * b.x;
-}
-
-// Inverse bilinear: where is p inside the quad whose corners map to UV
-// a=(0,0) b=(1,0) c=(1,1) d=(0,1)? Returns NO when p is outside (u or v beyond
-// [0,1]). Standard Inigo-Quilez solution; handles the parallelogram (k2~0)
-// degenerate case linearly. Under perspective this is the bilinear
-// approximation of the projective UV - precise enough for alpha hit-testing.
-static BOOL CanvasInvBilinear(simd_float2 p, simd_float2 a, simd_float2 b,
-                              simd_float2 c, simd_float2 d,
-                              simd_float2 *outUV) {
-  simd_float2 e = b - a;
-  simd_float2 f = d - a;
-  simd_float2 g = (a - b) + (c - d);
-  simd_float2 h = p - a;
-  float k2 = CanvasCross2(g, f);
-  float k1 = CanvasCross2(e, f) + CanvasCross2(h, g);
-  float k0 = CanvasCross2(h, e);
-  float u, v;
-  // Solve e.x+g.x*v (or the y row if that's degenerate) for u given v.
-  float (^uForV)(float) = ^float(float vv) {
-    float dux = e.x + g.x * vv;
-    if (fabsf(dux) > 1e-9f)
-      return (h.x - f.x * vv) / dux;
-    float duy = e.y + g.y * vv;
-    if (fabsf(duy) > 1e-9f)
-      return (h.y - f.y * vv) / duy;
-    return -1.0f;
-  };
-  if (fabsf(k2) < 1e-9f) {
-    if (fabsf(k1) < 1e-12f)
-      return NO;
-    v = -k0 / k1;
-    u = uForV(v);
-  } else {
-    float w = k1 * k1 - 4.0f * k0 * k2;
-    if (w < 0.0f)
-      return NO;
-    w = sqrtf(w);
-    float vA = (-k1 - w) / (2.0f * k2);
-    float uA = uForV(vA);
-    if (vA < 0.0f || vA > 1.0f || uA < 0.0f || uA > 1.0f) {
-      float vB = (-k1 + w) / (2.0f * k2);
-      v = vB;
-      u = uForV(vB);
-    } else {
-      v = vA;
-      u = uA;
-    }
-  }
-  if (u < 0.0f || u > 1.0f || v < 0.0f || v > 1.0f)
-    return NO;
-  *outUV = simd_make_float2(u, v);
-  return YES;
-}
-
-// CPU alpha mask for an image path: an upright (row 0 = image TOP) 8-bit
-// alpha-only buffer, capped to keep memory + decode cheap. Cached per path
-// (this runs in the OSC process; a plain static is fine). u in [0,1] = left to
-// right, v in [0,1] = top to bottom (matching the render's UVs). Returns 1.0
-// (opaque) when the image has no decodable alpha, so opaque formats (JPEG) hit
-// across their whole quad.
-@interface _CanvasAlphaMask : NSObject
-@property(nonatomic) NSInteger w;
-@property(nonatomic) NSInteger h;
-@property(nonatomic, strong) NSData *bytes;
-@end
-@implementation _CanvasAlphaMask
-@end
-
-static float CanvasSampleImageAlpha(NSString *imagePath, float u, float v) {
-  static NSMutableDictionary<NSString *, _CanvasAlphaMask *> *cache;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    cache = [NSMutableDictionary dictionary];
-  });
-  _CanvasAlphaMask *mask = cache[imagePath];
-  if (!mask) {
-    mask =
-        [_CanvasAlphaMask new]; // cache misses too (w=0) so we don't re-decode
-    cache[imagePath] = mask;
-    NSImage *img = [[NSImage alloc] initWithContentsOfFile:imagePath];
-    CGImageRef cg =
-        img ? [img CGImageForProposedRect:NULL context:nil hints:nil] : NULL;
-    if (cg) {
-      NSInteger iw = (NSInteger)CGImageGetWidth(cg);
-      NSInteger ih = (NSInteger)CGImageGetHeight(cg);
-      const NSInteger cap = 512;
-      double s = fmin(1.0, (double)cap / (double)MAX(MAX(iw, ih), 1));
-      NSInteger w = MAX(1, (NSInteger)(iw * s));
-      NSInteger h = MAX(1, (NSInteger)(ih * s));
-      NSMutableData *buf = [NSMutableData dataWithLength:(NSUInteger)(w * h)];
-      CGContextRef ctx = CGBitmapContextCreate(
-          buf.mutableBytes, w, h, 8, w, NULL, (CGBitmapInfo)kCGImageAlphaOnly);
-      if (ctx) {
-        // Flip so byte row 0 = image TOP (v=0), matching the render's UV.
-        CGContextTranslateCTM(ctx, 0, h);
-        CGContextScaleCTM(ctx, 1, -1);
-        CGContextDrawImage(ctx, CGRectMake(0, 0, w, h), cg);
-        CGContextRelease(ctx);
-        mask.w = w;
-        mask.h = h;
-        mask.bytes = buf;
-      }
-    }
-  }
-  if (mask.w == 0 || !mask.bytes)
-    return 1.0f;
-  float uu = fminf(fmaxf(u, 0.0f), 1.0f);
-  float vv = fminf(fmaxf(v, 0.0f), 1.0f);
-  NSInteger x = (NSInteger)(uu * (mask.w - 1));
-  NSInteger y = (NSInteger)(vv * (mask.h - 1));
-  const uint8_t *p = (const uint8_t *)mask.bytes.bytes;
-  return p[y * mask.w + x] / 255.0f;
 }
 
 // YES if `path` is editable at clip fraction `frac`: it has at least one

@@ -4,6 +4,7 @@
  */
 
 #import "CanvasLocalized.h"  // CLoc (default layer name)
+#import "CanvasOSCConstraint.h" // shared handle Shift/Cmd constraint math
 #import "CanvasPathMorph.h" // morphed-at-frac geometry + per-keypose write
 #import "CanvasPenController_Internal.h"
 #import <KeyframelessKit/KKBezierPath.h>
@@ -402,25 +403,14 @@ static KKBezierPath *PenNewLayer(void) {
 }
 
 // Shift = axis-lock, Cmd = 45deg snap, in pixel space (object X scaled by the
-// canvas aspect) so the constraint is visual, not skewed.
+// canvas aspect) so the constraint is visual, not skewed. The math is the shared
+// CanvasConstrainHandleDelta (DRY with the path-edit controller); this wrapper
+// only reads the surface aspect + bridges CGPoint <-> simd_float2.
 - (CGPoint)_constrainHandle:(CGPoint)h modifiers:(CanvasPenModifiers)mods {
-  double aspect = [_surface penCanvasAspect];
-  if (aspect <= 0)
-    aspect = 1.0;
-  double px = h.x * aspect, py = h.y;
-  if (mods & CanvasPenModShift) {
-    if (fabs(px) >= fabs(py))
-      py = 0;
-    else
-      px = 0;
-  } else if (mods & CanvasPenModCmd) {
-    double mag = hypot(px, py);
-    double step = M_PI / 4.0;
-    double ang = round(atan2(py, px) / step) * step;
-    px = mag * cos(ang);
-    py = mag * sin(ang);
-  }
-  return CGPointMake(px / aspect, py);
+  simd_float2 out = CanvasConstrainHandleDelta(
+      simd_make_float2((float)h.x, (float)h.y),
+      (float)[_surface penCanvasAspect], mods);
+  return CGPointMake(out.x, out.y);
 }
 
 @end

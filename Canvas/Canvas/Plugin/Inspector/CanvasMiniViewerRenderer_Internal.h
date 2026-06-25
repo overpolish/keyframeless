@@ -9,20 +9,32 @@
 #import "CanvasPathEditController.h" // shared path anchor/handle editing
 #import "CanvasPenController.h"   // CanvasPenSurface + shared pen state machine
 #import "CanvasShapeController.h" // shared rect/ellipse drag-create tool
+#import <Metal/Metal.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
 @class KKToolbar;
 
-@interface CanvasMiniViewerRenderer ()
-// The full multi-selection (or the single primary as a fallback). Shared with
-// the +Interaction category for Shift / Cmd-click multi-select.
-- (NSArray<NSString *> *)_miniSelectedIDs;
-// The selected layers movable in this popover scope (selection minus the
-// marquee non-selectable set), so a manually multi-selected move-lane-animated
-// layer doesn't move or show the dimmed move indicator in the constants scope.
-- (NSArray<NSString *> *)_miniMovableSelectedIDs;
+@interface CanvasMiniViewerRenderer () {
+@protected
+  id<MTLRenderPipelineState> _pipeline;       // source passthrough (no blend)
+  id<MTLRenderPipelineState> _imagePipeline;  // image overlay (premult alpha)
+  id<MTLRenderPipelineState> _strokePipeline; // vector stroke (premult alpha)
+  id<MTLRenderPipelineState> _strokeGradientPipeline; // gradient-filled stroke
+  id<MTLRenderPipelineState> _strokeDashPipeline;     // dashed stroke (arc mask)
+  MTLPixelFormat _pipelineFormat;
+  // Image-layer textures, keyed by path. The renderer lives in the inspector
+  // process (separate from the render XPC), so it can't share the plugin's
+  // cache - it keeps its own.
+  NSMutableDictionary<NSString *, id<MTLTexture>> *_imageTextureCache;
+  // Backs the public toolbarTool property (custom setter in +Toolbar); declared
+  // here so the category setter can touch it.
+  NSInteger _toolbarTool;
+}
+// The lazily-built image texture cache, used by the composite pass.
+@property(nonatomic, readonly)
+    NSMutableDictionary<NSString *, id<MTLTexture>> *imageTextureCache;
 // Shared pen state machine; this renderer is its surface
 // (CanvasMiniViewerRenderer +Pen.m implements CanvasPenSurface). Set in -init.
 @property(nonatomic, strong) CanvasPenController *penController;
@@ -100,6 +112,38 @@ NS_ASSUME_NONNULL_BEGIN
 // Snap a normalized object point to the grid (no-op unless gridSnap). Used by
 // the Position/Anchor mini controllers' grid-snap blocks.
 - (simd_float2)_snapNormalizedPointToGrid:(simd_float2)p contentRect:(CGRect)cr;
+@end
+
+// Toolbar chrome: tool switching, the shared bar's per-draw state + Metal draw,
+// hit / mouse / drag / keyboard / hover / cursor delegate hooks, and the
+// path-op (boolean / outline) runners those buttons trigger.
+@interface CanvasMiniViewerRenderer (Toolbar)
+// The full multi-selection (or the single primary as a fallback). Shared with
+// the +Interaction category for Shift / Cmd-click multi-select.
+- (NSArray<NSString *> *)_miniSelectedIDs;
+// The selected layers movable in this popover scope (selection minus the
+// marquee non-selectable set), so a manually multi-selected move-lane-animated
+// layer doesn't move or show the dimmed move indicator in the constants scope.
+- (NSArray<NSString *> *)_miniMovableSelectedIDs;
+- (void)_miniPathOpFlagsBooleans:(BOOL *)outBooleans outline:(BOOL *)outOutline;
+- (void)_miniRunPathOp:
+    (NSArray<NSString *> *_Nullable (^)(NSMutableArray<KKBezierPath *> *paths,
+                                        NSArray<NSString *> *sel))block;
+- (void)_miniRunBooleanOp:(KKBooleanOp)op;
+- (void)_miniRunOutlineOp;
+@end
+
+// Metal pipeline-state creation for the composite pass (source passthrough,
+// image overlay, vector / gradient / dashed stroke), cached per pixel format.
+@interface CanvasMiniViewerRenderer (Pipeline)
+- (BOOL)_ensurePipelinesForDevice:(id<MTLDevice>)device
+                      pixelFormat:(MTLPixelFormat)format;
+@end
+
+// The encode-effect render pass: composites the source frame + image / vector /
+// fill layers into the preview dest (the inspector-process twin of the main
+// render).
+@interface CanvasMiniViewerRenderer (Composite)
 @end
 
 @interface CanvasMiniViewerRenderer (Interaction)

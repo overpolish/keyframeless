@@ -49,7 +49,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// The plugin loads the primary layer's per-layer OSC visibility into the active
 /// instance state and persists both as the undoable selection.
 @property(nonatomic, copy, nullable) void (^onSelectedLayerChanged)
-    (NSString *resolvedLayerID, NSArray<NSString *> *selectedLayerIDs);
+    (NSString *_Nullable resolvedLayerID, NSArray<NSString *> *selectedLayerIDs);
 /// Reflect the persisted "Auto-select layers" toggle onto the Layers panel
 /// checkbox (seed from createView + on undo/redo). Does not fire
 /// onAutoSelectChanged.
