@@ -335,11 +335,47 @@
   KKLane *endMarker = markerType(@"End Marker", NO);
   KKLane *endMarkerWidth = markerWidth(@"End Marker Width", @"End Marker");
 
+  // Draw On: a progressive "write-on" reveal trimming the stroke by arc length.
+  // Start/End are the visible span fractions (0..100 %, the stroke spans
+  // [Start, End]); animating End 0 -> 100 draws the line on. Caps + endpoint
+  // markers ride the revealed tips (the render trims them together). Open-path
+  // only (scoped in the timeline builder), like caps/markers. Stored as a
+  // percentage like Opacity; the render reads /100.
+  KKLane *(^drawOn)(NSString *, double) =
+      ^KKLane *(NSString *label, double seed) {
+    KKLane *l = [KKLane laneWithLabel:label];
+    l.valueType = KKLaneValueTypeFloat;
+    l.componentMin = @[ @0.0 ];
+    l.componentMax = @[ @100.0 ];
+    l.componentUnits = @[ @"%" ];
+    l.integerValued = YES;
+    l.enabled = NO; // animate per-layer via the dropdown
+    l.ownerScoped = YES;
+    l.categoryKey = @"Stroke";
+    l.categorySymbol = @"lineweight";
+    l.visibleWhenLabel = @"Enabled";
+    l.visibleWhenValues = @[ @1 ];
+    [l insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @(seed) ]]];
+    return l;
+  };
+  KKLane *drawOnStart = drawOn(@"Draw On Start", 0.0);
+  KKLane *drawOnEnd = drawOn(@"Draw On End", 100.0);
+  // Offset rotates where the visible window begins around the path (a closed
+  // shape reveals from a chosen point; an open path's window wraps past the
+  // ends). 0 % = no shift. The SLIDER stays 0..100 % but the field is unbounded
+  // (the render wraps it mod 1), so you can keep cranking it to spin the reveal
+  // round and round - forwards (>100 %) or backwards (<0 %).
+  KKLane *drawOnOffset = drawOn(@"Draw On Offset", 0.0);
+  drawOnOffset.sliderMin = @0.0;
+  drawOnOffset.sliderMax = @100.0;
+  drawOnOffset.componentMin = @[ @-1000000.0 ];
+  drawOnOffset.componentMax = @[ @1000000.0 ];
+
   return @[
     points, strokeOn, strokeWidth, strokeColor[0], strokeColor[1],
     strokeColor[2], lineCap, lineJoin, startMarker, startMarkerWidth, endMarker,
-    endMarkerWidth, strokeStyle, dashLength, dashGap, dotGap, marchSpeed, scale,
-    position, rotation, anchor, opacity
+    endMarkerWidth, drawOnStart, drawOnEnd, drawOnOffset, strokeStyle, dashLength,
+    dashGap, dotGap, marchSpeed, scale, position, rotation, anchor, opacity
   ];
 }
 

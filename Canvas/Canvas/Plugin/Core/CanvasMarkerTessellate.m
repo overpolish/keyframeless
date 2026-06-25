@@ -175,48 +175,73 @@ float CanvasMarkerPullback(uint8_t markerType, float markerSizePx) {
   return (markerType == CanvasMarkerArrow) ? markerSizePx * 0.88f : 0.0f;
 }
 
-// Outward unit tangent at an open polyline end, measured over `window` px of
-// arc length rather than the single end segment (which is unreliable at a sharp
-// curve / cusp, mis-orienting an arrow). Walks inward accumulating distance
-// until it covers `window` (or runs out), then points from there back to the
-// endpoint. `fromStart` walks pts[0..]; else pts[n-1..]. Falls back to the end
-// segment.
-static simd_float2 CanvasMkEndTangent(const simd_float2 *pts, NSUInteger n,
-                                      BOOL fromStart, float window) {
-  if (n < 2)
-    return simd_make_float2(0.0f, 0.0f);
-  simd_float2 endp = fromStart ? pts[0] : pts[n - 1];
-  simd_float2 prev = endp, far = fromStart ? pts[1] : pts[n - 2];
+// The point at arc length `target` measured inward from an end of the polyline
+// (`fromStart`: from pts[0]; else from pts[n-1]). Clamps to the far end when
+// `target` runs past the polyline.
+static void CanvasMkPointAtArcFromEnd(const simd_float2 *pts, NSUInteger n,
+                                      BOOL fromStart, float target,
+                                      simd_float2 *out) {
+  if (target <= 0.0f) {
+    *out = fromStart ? pts[0] : pts[n - 1];
+    return;
+  }
   float acc = 0.0f;
   if (fromStart) {
-    for (NSUInteger i = 1; i < n; i++) {
-      acc += simd_distance(pts[i], prev);
-      prev = pts[i];
-      far = pts[i];
-      if (acc >= window)
-        break;
+    for (NSUInteger i = 0; i + 1 < n; i++) {
+      float seg = simd_distance(pts[i + 1], pts[i]);
+      if (acc + seg >= target) {
+        float t = seg > 1e-6f ? (target - acc) / seg : 0.0f;
+        *out = pts[i] + (pts[i + 1] - pts[i]) * t;
+        return;
+      }
+      acc += seg;
     }
+    *out = pts[n - 1];
   } else {
-    for (NSInteger i = (NSInteger)n - 2; i >= 0; i--) {
-      acc += simd_distance(pts[i], prev);
-      prev = pts[i];
-      far = pts[i];
-      if (acc >= window)
-        break;
+    for (NSInteger i = (NSInteger)n - 1; i > 0; i--) {
+      float seg = simd_distance(pts[i - 1], pts[i]);
+      if (acc + seg >= target) {
+        float t = seg > 1e-6f ? (target - acc) / seg : 0.0f;
+        *out = pts[i] + (pts[i - 1] - pts[i]) * t;
+        return;
+      }
+      acc += seg;
     }
+    *out = pts[0];
   }
-  simd_float2 d = endp - far; // outward (away from the path)
+}
+
+// Anchor point + outward unit tangent at arc `offset` inward from an end, on
+// the FULL polyline. Each marker anchors INDEPENDENTLY (no shared trim), so two
+// markers riding toward each other (both Arrows on a shrinking draw-on span)
+// can't collapse the polyline and vanish - they just shrink past each other.
+// The tangent is measured over `window` px (robust on curves) and points from
+// the far sample toward the anchor (i.e. outward, toward that end). `offset`
+// past the polyline clamps to the far end. NO if degenerate.
+static BOOL CanvasMkAnchorAtArc(const simd_float2 *pts, NSUInteger n,
+                                BOOL fromStart, float offset, float window,
+                                simd_float2 *outPoint,
+                                simd_float2 *outTangent) {
+  if (n < 2)
+    return NO;
+  float off = fmaxf(0.0f, offset);
+  simd_float2 anchor, far;
+  CanvasMkPointAtArcFromEnd(pts, n, fromStart, off, &anchor);
+  CanvasMkPointAtArcFromEnd(pts, n, fromStart, off + window, &far);
+  simd_float2 d = anchor - far; // outward (away from the path interior)
   if (simd_length_squared(d) < 1e-10f)
-    d = endp - (fromStart ? pts[1] : pts[n - 2]); // degenerate window: end seg
-  return (simd_length_squared(d) > 1e-10f) ? simd_normalize(d)
-                                           : simd_make_float2(0.0f, 0.0f);
+    return NO;
+  *outPoint = anchor;
+  *outTangent = simd_normalize(d);
+  return YES;
 }
 
 NSUInteger CanvasTessellateMarkers(KKBezierPath *path, float outputWidth,
                                    float outputHeight, uint8_t startMarker,
                                    uint8_t endMarker, float startSizePx,
                                    float endSizePx, float startStrokePx,
-                                   float endStrokePx, KKVertex2D *outVerts,
+                                   float endStrokePx, float trimStartPx,
+                                   float trimEndPx, KKVertex2D *outVerts,
                                    NSUInteger maxVerts) {
   if (!outVerts || maxVerts < 3 || path.count < 2)
     return 0;
@@ -237,29 +262,30 @@ NSUInteger CanvasTessellateMarkers(KKBezierPath *path, float outputWidth,
     free(pts);
     return 0;
   }
-
-  // Tangent window per type. Only the big FILLED arrow reads best aligned with
-  // the path over its whole FOOTPRINT (the marker size = a chord). The centred
-  // square, the tick and the open arrowhead must align with the LINE's LOCAL
-  // direction (the stroke-width scale) - the marker-size chord rotates them off
-  // the way the line actually enters (a tilted square / tick, a merged arm).
-  // The circle is rotation-free either way.
+  // Anchor each marker INDEPENDENTLY at its arc offset (trimStartPx /
+  // trimEndPx) on the full polyline so a marker riding a draw-on tip (the
+  // Arrow) doesn't disturb the other end. Tangent window per type: only the big
+  // FILLED arrow reads best aligned over its whole FOOTPRINT (the marker size =
+  // a chord); the centred square, the tick and the open arrowhead align with
+  // the LINE's LOCAL direction (the stroke-width scale), and the circle is
+  // rotation-free either way.
   NSUInteger vc = 0;
   if (startMarker != CanvasMarkerNone) {
     float window = (startMarker == CanvasMarkerArrow)
                        ? fmaxf(startSizePx, 4.0f)
                        : fmaxf(startStrokePx, 6.0f);
-    simd_float2 tangent = CanvasMkEndTangent(pts, n, YES, window);
-    if (simd_length_squared(tangent) > 0.5f)
-      vc = CanvasMkOne(outVerts, vc, maxVerts, startMarker, pts[0], tangent,
+    simd_float2 anchor, tangent;
+    if (CanvasMkAnchorAtArc(pts, n, YES, trimStartPx, window, &anchor,
+                            &tangent))
+      vc = CanvasMkOne(outVerts, vc, maxVerts, startMarker, anchor, tangent,
                        CanvasMkPerp(tangent), startSizePx, startStrokePx);
   }
   if (endMarker != CanvasMarkerNone) {
     float window = (endMarker == CanvasMarkerArrow) ? fmaxf(endSizePx, 4.0f)
                                                     : fmaxf(endStrokePx, 6.0f);
-    simd_float2 tangent = CanvasMkEndTangent(pts, n, NO, window);
-    if (simd_length_squared(tangent) > 0.5f)
-      vc = CanvasMkOne(outVerts, vc, maxVerts, endMarker, pts[n - 1], tangent,
+    simd_float2 anchor, tangent;
+    if (CanvasMkAnchorAtArc(pts, n, NO, trimEndPx, window, &anchor, &tangent))
+      vc = CanvasMkOne(outVerts, vc, maxVerts, endMarker, anchor, tangent,
                        CanvasMkPerp(tangent), endSizePx, endStrokePx);
   }
 

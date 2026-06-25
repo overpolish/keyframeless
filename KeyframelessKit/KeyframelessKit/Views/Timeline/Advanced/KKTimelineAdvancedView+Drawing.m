@@ -621,16 +621,21 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   };
   if (gradComposite)
     compCount = gradLinear ? 2 : 1;
-  // Plot range = union of the lane's declared componentMin/Max and the
-  // *actual* per-component min/max sampled across all intervals (so
-  // modulation overshoot or out-of-range edits expand the visual scale
-  // instead of clipping into the row edges).
-  NSMutableArray<NSNumber *> *plotMin = lane.componentMin
-                                            ? [lane.componentMin mutableCopy]
-                                            : [NSMutableArray array];
-  NSMutableArray<NSNumber *> *plotMax = lane.componentMax
-                                            ? [lane.componentMax mutableCopy]
-                                            : [NSMutableArray array];
+  // Plot range = union of the lane's declared range and the *actual* per-
+  // component min/max sampled across all intervals (so modulation overshoot or
+  // out-of-range edits expand the visual scale instead of clipping into the row
+  // edges). Prefer the SLIDER bounds when set: they're the intended display
+  // range, decoupled from a deliberately huge value clamp (draw-on Offset's
+  // field is ~unbounded so it can spin past 100 %, but the curve must plot on the
+  // 0..100 % scale, not a million-wide one that renders every transition flat).
+  NSMutableArray<NSNumber *> *plotMin =
+      lane.sliderMin ? [@[ lane.sliderMin ] mutableCopy]
+                     : (lane.componentMin ? [lane.componentMin mutableCopy]
+                                          : [NSMutableArray array]);
+  NSMutableArray<NSNumber *> *plotMax =
+      lane.sliderMax ? [@[ lane.sliderMax ] mutableCopy]
+                     : (lane.componentMax ? [lane.componentMax mutableCopy]
+                                          : [NSMutableArray array]);
   while (plotMin.count < compCount)
     [plotMin addObject:@0.0];
   while (plotMax.count < compCount)

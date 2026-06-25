@@ -334,6 +334,12 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   _visibleWhenLabel = [tmpl.visibleWhenLabel copy];
   _visibleWhenValues = [tmpl.visibleWhenValues copy];
   _gradientShowsTypeAngle = tmpl.gradientShowsTypeAngle;
+  // Slider-only bounds (decoupled from the value clamp) are display metadata too:
+  // a rebuilt keypose / boundary lane must carry them or its slider falls back to
+  // the wide componentMin/Max (e.g. draw-on Offset's unbounded field -> a slider
+  // with a useless million-wide range).
+  _sliderMax = [tmpl.sliderMax copy];
+  _sliderMin = [tmpl.sliderMin copy];
   // Pixel-display flag is template metadata too: keypose/boundary popovers
   // rebuild a display lane and must carry it, or a normalised 0..1 spatial lane
   // (Position / Crop / Anchor) shows raw fractions instead of pixels.
@@ -371,6 +377,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.componentMin = [_componentMin copy];
   c.componentMax = [_componentMax copy];
   c.sliderMax = [_sliderMax copy];
+  c.sliderMin = [_sliderMin copy];
   c.componentUnits = [_componentUnits copy];
   c.componentLabels = [_componentLabels copy];
   c.componentLabelColors = [_componentLabelColors copy];

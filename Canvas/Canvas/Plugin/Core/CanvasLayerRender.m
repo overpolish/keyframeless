@@ -317,6 +317,164 @@ typedef struct {
   __unsafe_unretained id<MTLRenderPipelineState> solidPS, gradientPS, dashPS;
 } CanvasVectorEncodeCtx;
 
+// One end's resolved marker animation for a NON-offset draw-on reveal. `reveal`
+// is how far THIS end is drawn (end side: drawOn.end; start side: 1-drawOn.start
+// - so both ends share one symmetric formula). Arrow / Arrowhead (marker 1 / 4)
+// RIDE the visible tip pointing in the drawing direction, growing in over their
+// footprint as the line leaves the start; the others sit FIXED at the true end
+// and animate in from one stroke-width over the reveal tail. `lineBound` is the
+// (possibly ramped-to-complete-early) reveal to feed the line for this end (end
+// side -> lineEnd; start side -> 1-lineBound).
+typedef struct {
+  uint8_t marker; // 0 = suppressed
+  float sizePx;
+  float pullback;
+  float trim;      // marker anchor: arc trimmed from this end (0 = true end)
+  float lineBound; // reveal to render the line to for this end
+} CanvasEndMarkerAnim;
+
+static CanvasEndMarkerAnim CanvasResolveEndMarker(uint8_t marker, float fullPx,
+                                                  float fullPullback,
+                                                  float reveal, float totalArc,
+                                                  float strokeWidthPx,
+                                                  float visibleLen) {
+  const float kMarkerReveal = 0.15f; // reveal tail a fixed marker grows in over
+  CanvasEndMarkerAnim r = {marker, fullPx, fullPullback, 0.0f, reveal};
+  if (marker == 0)
+    return r;
+  if (marker == 1 || marker == 4) { // Arrow / Arrowhead: ride the visible tip
+    float window = fmaxf(fullPullback, fullPx);
+    float p = window > 0.0f ? fminf(1.0f, visibleLen / window) : 1.0f;
+    r.sizePx = fullPx * p;
+    r.pullback = fullPullback * p;
+    r.trim = (1.0f - reveal) * totalArc; // ride the tip
+    if (p <= 0.001f)
+      r.marker = 0;
+    return r;
+  }
+  // Circle / Square / Line: fixed at the true end, grow in from 100%.
+  float p = fminf(
+      1.0f, fmaxf(0.0f, (reveal - (1.0f - kMarkerReveal)) / kMarkerReveal));
+  if (p <= 0.001f) {
+    r.marker = 0;
+    return r;
+  }
+  r.sizePx = strokeWidthPx + (fullPx - strokeWidthPx) * p; // 100% -> configured
+  // Complete the line to the true end over the first half of the tail so the
+  // fixed marker sits on the finished tip (identity below the tail = no over-draw).
+  r.lineBound = fminf(1.0f, (1.0f - kMarkerReveal) +
+                                (reveal - (1.0f - kMarkerReveal)) * 2.0f);
+  return r;
+}
+
+// Resolved draw-on + endpoint-marker render state for one stroked layer, lifted
+// out of CanvasEncodeOneVectorLayer (the most-iterated logic, behind one
+// boundary). The line is fed [lineStart, lineEnd] rotated by `offset`; the
+// markers their animated size / pullback / trim. `active` gates the dashed/dotted
+// draw-on + the cap-headroom bump; `collapsed` (raw span empty) means skip the
+// stroke entirely.
+typedef struct {
+  float lineStart, lineEnd, offset;
+  uint8_t startMarker, endMarker;
+  float sMarkerPx, eMarkerPx;
+  float startPullback, endPullback;
+  float markerStartTrim, markerEndTrim;
+  BOOL active;
+  BOOL collapsed;
+} CanvasDrawOnRender;
+
+static CanvasDrawOnRender CanvasResolveStrokeDrawOn(
+    KKBezierPath *path, KKBezierPath *geom, double evalFrac,
+    NSString *overrideLayerID, KKTimeline *overrideTimeline, float strokeStart,
+    float strokeEnd, float strokeScale, float imageWidth, float imageHeight) {
+  uint8_t startMarker = 0, endMarker = 0;
+  float startMul = path.startMarkerSize, endMul = path.endMarkerSize;
+  CanvasStrokeMarkersAtFraction(path, evalFrac, overrideLayerID, overrideTimeline,
+                                &startMarker, &endMarker, &startMul, &endMul);
+  float sMarkerPxFull = strokeStart * strokeScale * startMul;
+  float eMarkerPxFull = strokeEnd * strokeScale * endMul;
+  float startPullbackFull =
+      startMarker ? CanvasMarkerPullback(startMarker, sMarkerPxFull) : 0.0f;
+  float endPullbackFull =
+      endMarker ? CanvasMarkerPullback(endMarker, eMarkerPxFull) : 0.0f;
+  CanvasStrokeDrawOn drawOn =
+      CanvasStrokeDrawOnAtFraction(path, evalFrac, overrideLayerID, overrideTimeline);
+  float totalArc = CanvasContourTotalArc(geom, imageWidth, imageHeight);
+
+  CanvasDrawOnRender r = {drawOn.start,    drawOn.end,       drawOn.offset,
+                          startMarker,     endMarker,        sMarkerPxFull,
+                          eMarkerPxFull,   startPullbackFull, endPullbackFull,
+                          0.0f,            0.0f,             NO,
+                          NO};
+  r.active = totalArc > 0.0f &&
+             (drawOn.start > 0.0f || drawOn.end < 1.0f || drawOn.offsetEngaged);
+  r.collapsed = totalArc > 0.0f &&
+                (drawOn.start + (1.0f - drawOn.end)) * totalArc >= totalArc - 0.5f;
+
+  if (drawOn.offsetEngaged) {
+    // An OFFSET spin rotates the visible window around the path: keep the markers
+    // on its (shifted) ends, full size, riding the spin - at full reveal too (the
+    // cut/seam stays where the offset puts it).
+    float L = totalArc;
+    float a = drawOn.start * L;
+    float visLen = (drawOn.end - drawOn.start) * L;
+    if (L > 0.0f && visLen > 0.5f) {
+      float winStart = fmodf(drawOn.offset * L + a, L);
+      if (winStart < 0.0f)
+        winStart += L;
+      // endPos uses the SAME wrap decision the stroke tessellator does, so the
+      // markers land on the rendered window ends (no mismatch at the wrap or a
+      // wrapped-0 full reveal).
+      float w1 = winStart + visLen;
+      float endPos = (w1 > L + 0.5f) ? (w1 - L) : w1;
+      r.markerStartTrim = winStart;
+      r.markerEndTrim = fmaxf(0.0f, L - endPos);
+      float wsS = fmaxf(sMarkerPxFull, 1.0f);
+      float wsE = fmaxf(eMarkerPxFull, 1.0f);
+      // GROW-IN as the visible span opens (animate in, not pop) + SEAM smoothing
+      // on PARTIAL reveals only (a full reveal's ends sit AT the natural endpoints
+      // and must not shrink - that was the flash-disappear).
+      float sf = fminf(1.0f, visLen / wsS);
+      float ef = fminf(1.0f, visLen / wsE);
+      if (visLen < L - 0.5f) {
+        sf *= fminf(1.0f, fminf(winStart, L - winStart) / wsS);
+        ef *= fminf(1.0f, fminf(endPos, L - endPos) / wsE);
+      }
+      r.sMarkerPx = sMarkerPxFull * sf;
+      r.eMarkerPx = eMarkerPxFull * ef;
+      r.startPullback = startPullbackFull * sf;
+      r.endPullback = endPullbackFull * ef;
+      if (sf <= 0.001f)
+        r.startMarker = 0;
+      if (ef <= 0.001f)
+        r.endMarker = 0;
+    } else {
+      r.startMarker = 0;
+      r.endMarker = 0;
+    }
+  } else if (r.active) {
+    float visibleLen = fmaxf(0.0f, (drawOn.end - drawOn.start) * totalArc);
+    CanvasEndMarkerAnim e =
+        CanvasResolveEndMarker(endMarker, eMarkerPxFull, endPullbackFull,
+                               drawOn.end, totalArc, strokeEnd * strokeScale,
+                               visibleLen);
+    r.endMarker = e.marker;
+    r.eMarkerPx = e.sizePx;
+    r.endPullback = e.pullback;
+    r.markerEndTrim = e.trim;
+    r.lineEnd = e.lineBound;
+    CanvasEndMarkerAnim s = CanvasResolveEndMarker(
+        startMarker, sMarkerPxFull, startPullbackFull, 1.0f - drawOn.start,
+        totalArc, strokeStart * strokeScale, visibleLen);
+    r.startMarker = s.marker;
+    r.sMarkerPx = s.sizePx;
+    r.startPullback = s.pullback;
+    r.markerStartTrim = s.trim;
+    r.lineStart = 1.0f - s.lineBound;
+  }
+  return r;
+}
+
 static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
                                        NSInteger i) {
   NSArray<KKBezierPath *> *layers = ctx->layers;
@@ -325,6 +483,9 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
   float imageWidth = ctx->imageWidth, imageHeight = ctx->imageHeight;
   simd_float2 scale = ctx->scale, tileShift = ctx->tileShift;
   double frac = ctx->frac;
+  // Fraction to EVALUATE lanes at (a static preview, frac < 0, reads frame 0).
+  // `frac < 0.0` itself stays the static-preview branch test elsewhere.
+  double evalFrac = frac < 0.0 ? 0.0 : frac;
   NSString *overrideLayerID = ctx->overrideLayerID;
   KKTimeline *overrideTimeline = ctx->overrideTimeline;
   float strokeScale = ctx->strokeScale;
@@ -334,8 +495,8 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
   KKBezierPath *path = layers[i];
   if (path.isImage || path.isGroup || path.hidden)
     return;
-  if (!CanvasStrokeEnabledAtFraction(path, frac < 0.0 ? 0.0 : frac,
-                                     overrideLayerID, overrideTimeline))
+  if (!CanvasStrokeEnabledAtFraction(path, evalFrac, overrideLayerID,
+                                     overrideTimeline))
     return;
   // Effective Start/End widths from the Stroke Width lane at this fraction
   // (px), falling back to the flat strokeWidth/endWidth. The stroke tapers
@@ -343,8 +504,8 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
   // 0.
   float strokeStart = path.strokeWidth;
   float strokeEnd = path.strokeWidth;
-  CanvasStrokeWidthAtFraction(path, frac < 0.0 ? 0.0 : frac, overrideLayerID,
-                              overrideTimeline, &strokeStart, &strokeEnd);
+  CanvasStrokeWidthAtFraction(path, evalFrac, overrideLayerID, overrideTimeline,
+                              &strokeStart, &strokeEnd);
   if (path.count < 2 || (strokeStart <= 0.0f && strokeEnd <= 0.0f))
     return;
 
@@ -362,27 +523,22 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
         geom, imageHeight > 0 ? (float)imageWidth / (float)imageHeight : 1.0f);
 
   uint8_t lineCap = path.lineCap, lineJoin = path.lineJoin;
-  CanvasStrokeCapJoinAtFraction(path, frac < 0.0 ? 0.0 : frac, overrideLayerID,
+  CanvasStrokeCapJoinAtFraction(path, evalFrac, overrideLayerID,
                                 overrideTimeline, &lineCap, &lineJoin);
-  // Endpoint marker types + per-end size (scaled px). Read here because a
-  // filled Arrow trims the stroke end back (pullback) so the marker covers it;
-  // the marker geometry itself is tessellated later (from the untrimmed
-  // `geom`).
-  uint8_t startMarker = 0, endMarker = 0;
-  float startMul = path.startMarkerSize, endMul = path.endMarkerSize;
-  CanvasStrokeMarkersAtFraction(path, frac < 0.0 ? 0.0 : frac, overrideLayerID,
-                                overrideTimeline, &startMarker, &endMarker,
-                                &startMul, &endMul);
-  float sMarkerPx = strokeStart * strokeScale * startMul;
-  float eMarkerPx = strokeEnd * strokeScale * endMul;
-  float startTrim =
-      startMarker ? CanvasMarkerPullback(startMarker, sMarkerPx) : 0.0f;
-  float endTrim = endMarker ? CanvasMarkerPullback(endMarker, eMarkerPx) : 0.0f;
+  // Draw-on reveal + endpoint-marker animation (the line shows [lineStart,
+  // lineEnd] rotated by offset; the markers ride / grow per type). Nothing
+  // visible at this fraction (raw span empty) -> skip the stroke.
+  CanvasDrawOnRender dor = CanvasResolveStrokeDrawOn(
+      path, geom, evalFrac, overrideLayerID, overrideTimeline, strokeStart,
+      strokeEnd, strokeScale, imageWidth, imageHeight);
+  if (dor.collapsed)
+    return;
   // Dash pattern (Solid / Dashed / Dotted). The dash metrics are absolute px,
   // so they scale with the render like the widths (strokeScale handles the
   // thumbnail downscale).
-  CanvasStrokeStyle ss = CanvasStrokeStyleAtFraction(
-      path, frac < 0.0 ? 0.0 : frac, overrideLayerID, overrideTimeline);
+  CanvasStrokeStyle ss = CanvasStrokeStyleAtFraction(path, evalFrac,
+                                                     overrideLayerID,
+                                                     overrideTimeline);
   float dashLen = ss.dashLength * strokeScale;
   float dashGap = ss.dashGap * strokeScale;
   float dotGap = ss.dotGap * strokeScale;
@@ -396,6 +552,11 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
       dotted ? CanvasDottedStrokeVertexCapacity(geom, strokeStart * strokeScale,
                                                 dotGap, imageWidth, imageHeight)
              : CanvasStrokeVertexCapacity(geom);
+  // A draw-on reveal can cut the contour into two pieces (an offset wrap), each
+  // with its own pair of caps - budget two extra round-cap fans beyond the
+  // base.
+  if (dor.active && !dotted)
+    cap += 128;
   if (cap == 0)
     return;
   KKVertex2D *verts = malloc(sizeof(KKVertex2D) * cap);
@@ -411,14 +572,21 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
   float dashPhase =
       (frac < 0.0) ? 0.0f : (float)(elapsedSec * ss.marchSpeed) * dashCycle;
   if (dotted) {
-    vc = CanvasTessellateDottedStroke(
-        geom, strokeStart * strokeScale, strokeEnd * strokeScale, imageWidth,
-        imageHeight, dotGap, dotPhase, verts, cap);
+    vc = CanvasTessellateDottedStroke(geom, strokeStart * strokeScale,
+                                      strokeEnd * strokeScale, imageWidth,
+                                      imageHeight, dotGap, dotPhase,
+                                      dor.lineStart, dor.lineEnd, dor.offset,
+                                      verts, cap);
   } else {
-    vc = CanvasTessellateStrokeArc(geom, strokeStart * strokeScale,
-                                   strokeEnd * strokeScale, imageWidth,
-                                   imageHeight, lineCap, lineJoin, verts, cap,
-                                   startTrim, endTrim, NULL, arc);
+    // Solid + dashed share this strip (dashed masks the pattern in the
+    // fragment). Draw-on extracts the visible arc window [Start, End] rotated
+    // by Offset for an open OR closed contour, pulling the stroke back behind
+    // any endpoint markers. With the defaults (0 / 100 / 0) it emits the whole
+    // stroke unchanged.
+    vc = CanvasTessellateStrokeDrawOn(
+        geom, strokeStart * strokeScale, strokeEnd * strokeScale, imageWidth,
+        imageHeight, lineCap, lineJoin, dor.lineStart, dor.lineEnd, dor.offset,
+        dor.startPullback, dor.endPullback, verts, cap, arc);
   }
   if (vc < 4) {
     free(verts);
@@ -448,7 +616,7 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
   // Stroke colour from the shared colour lanes (Solid / Gradient, no
   // Dynamic), falling back to the flat strokeR,G,B.
   KKColorLanesValue cv = CanvasStrokeColorAtFraction(
-      path, frac < 0.0 ? 0.0 : frac, overrideLayerID, overrideTimeline);
+      path, evalFrac, overrideLayerID, overrideTimeline);
   BOOL useGradient = (cv.mode == KKColorModeGradient) && gradientPS != nil;
 
   // Tessellate the endpoint markers (from the untrimmed `geom`): they share the
@@ -456,13 +624,17 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
   // with the same fill. Open-marker bar thickness = the local stroke width.
   KKVertex2D *mverts = NULL;
   NSUInteger mvc = 0;
-  if (startMarker != 0 || endMarker != 0) {
+  if (dor.startMarker != 0 || dor.endMarker != 0) {
     NSUInteger mcap = CanvasMarkerVertexCapacity();
     mverts = malloc(sizeof(KKVertex2D) * mcap);
-    mvc = CanvasTessellateMarkers(geom, imageWidth, imageHeight, startMarker,
-                                  endMarker, sMarkerPx, eMarkerPx,
-                                  strokeStart * strokeScale,
-                                  strokeEnd * strokeScale, mverts, mcap);
+    // An Arrow rides its draw-on tip (markerStartTrim / markerEndTrim); other
+    // markers stay at the true end (trim 0). Size grows via sMarkerPx /
+    // eMarkerPx and the draw-on stroke pulls back under the marker.
+    mvc = CanvasTessellateMarkers(
+        geom, imageWidth, imageHeight, dor.startMarker, dor.endMarker,
+        dor.sMarkerPx, dor.eMarkerPx, strokeStart * strokeScale,
+        strokeEnd * strokeScale, dor.markerStartTrim, dor.markerEndTrim, mverts,
+        mcap);
   }
 
   // One continuous gradient over the stroke + markers: compute the fill from

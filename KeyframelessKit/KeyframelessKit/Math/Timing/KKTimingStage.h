@@ -174,6 +174,13 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// can be typed past the slider's end. nil = slider uses componentMax. Used for
 /// the marker width (slider 0..500 %, field pushable further). Build-time.
 @property(nonatomic, copy, nullable) NSNumber *sliderMax;
+/// Optional lower bound for the single-component SLIDER only, decoupled from the
+/// value clamp (`componentMin`). When set, the slider stops here while the field
+/// still accepts (and clamps to) the wider `componentMin` - so a value can be
+/// typed past the slider's start. nil = slider uses componentMin (or 0). Used
+/// for the draw-on Offset (slider 0..100 %, field unbounded so it can spin the
+/// reveal round and round). Build-time.
+@property(nonatomic, copy, nullable) NSNumber *sliderMin;
 @property(nonatomic, copy) NSArray<NSString *>
     *componentUnits; // one per component (e.g. @"px", @"%"); empty = unitless
 /// Plugin-supplied display captions for each component (e.g. @[@"X",@"Y",@"Z"])

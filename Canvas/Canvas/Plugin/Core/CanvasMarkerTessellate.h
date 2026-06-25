@@ -47,12 +47,19 @@ float CanvasMarkerPullback(uint8_t markerType, float markerSizePx);
 /// compound paths as having no free ends); the function returns 0 otherwise.
 /// `startSizePx` / `endSizePx` are the marker extents and `startStrokePx` /
 /// `endStrokePx` the open-marker bar thicknesses, all in SCALED pixels (already
-/// multiplied by the render's strokeScale). Returns the vertex count written.
+/// multiplied by the render's strokeScale). A draw-on reveal grows the markers
+/// in by scaling `startSizePx` / `endSizePx` (the render does this).
+///
+/// `trimStartPx` / `trimEndPx` (px, arc length) trim the polyline ends before
+/// placing the markers, so a marker can RIDE a draw-on tip (the Arrow does, to
+/// point in the drawing direction) instead of sitting at the path's true end.
+/// Pass 0 to keep a marker at its true end. Returns the vertex count written.
 NSUInteger CanvasTessellateMarkers(KKBezierPath *path, float outputWidth,
                                    float outputHeight, uint8_t startMarker,
                                    uint8_t endMarker, float startSizePx,
                                    float endSizePx, float startStrokePx,
-                                   float endStrokePx, KKVertex2D *outVerts,
+                                   float endStrokePx, float trimStartPx,
+                                   float trimEndPx, KKVertex2D *outVerts,
                                    NSUInteger maxVerts);
 
 NS_ASSUME_NONNULL_END

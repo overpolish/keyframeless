@@ -103,13 +103,19 @@ NSUInteger CanvasDottedStrokeVertexCapacity(KKBezierPath *path, float dotWidth,
 NSUInteger CanvasTessellateDottedStroke(KKBezierPath *path, float startWidth,
                                         float endWidth, float outputWidth,
                                         float outputHeight, float dotGap,
-                                        float phase, KKVertex2D *outVerts,
+                                        float phase, float drawStart01,
+                                        float drawEnd01, float offset01,
+                                        KKVertex2D *outVerts,
                                         NSUInteger maxVerts) {
   if (path.count < 2 || !outVerts || maxVerts < 4)
     return 0;
 
   NSUInteger nc = path.contourCount;
   BOOL closed = CanvasContourClosed(path, nc);
+  // Draw-on only reveals a single contour's arc (open or closed); a compound
+  // path emits every dot.
+  BOOL drawOn =
+      (nc == 1) && (drawStart01 > 0.0f || drawEnd01 < 1.0f || offset01 > 0.0f);
   NSUInteger polyCap = CanvasMaxContourPolyCap(path, closed);
   if (polyCap == 0)
     return 0;
@@ -145,6 +151,23 @@ NSUInteger CanvasTessellateDottedStroke(KKBezierPath *path, float startWidth,
     if (totalArc < 1e-3f)
       continue;
 
+    // Draw-on visible window in this contour's cyclic arc space. A dot is shown
+    // when its arc position is within `visLen` of `winStart` (cyclically) -
+    // which also gives the offset wrap for free (an open path's window past the
+    // end selects low-arc dots = the path's start, the two-piece reveal).
+    float winStart = 0.0f, visLen = totalArc;
+    if (drawOn) {
+      float aDso = fmaxf(0.0f, fminf(1.0f, drawStart01)) * totalArc;
+      float bDso = (1.0f - fmaxf(0.0f, fminf(1.0f, drawEnd01))) * totalArc;
+      visLen = totalArc - aDso - bDso;
+      if (visLen <= 0.5f)
+        continue;
+      winStart =
+          fmodf(fmaxf(0.0f, fminf(1.0f, offset01)) * totalArc + aDso, totalArc);
+      if (winStart < 0.0f)
+        winStart += totalArc;
+    }
+
     // A disc every `spacing` along the arc, shifted forward by `phase`.
     float spacing = startWidth + dotGap;
     if (spacing < 1.0f)
@@ -153,6 +176,11 @@ NSUInteger CanvasTessellateDottedStroke(KKBezierPath *path, float startWidth,
     if (pshift < 0.0f)
       pshift += spacing;
     for (float a = pshift; a <= totalArc + 1e-3f; a += spacing) {
+      if (drawOn) {
+        float d = fmodf(a - winStart + totalArc, totalArc);
+        if (d > visLen + 1e-3f)
+          continue; // dot outside the revealed window
+      }
       simd_float2 c = CanvasSampleArc(wp, arc, m, a);
       float f = a / totalArc;
       if (f > 1.0f)

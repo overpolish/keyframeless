@@ -17,6 +17,33 @@ NS_ASSUME_NONNULL_BEGIN
 /// so the caller can size the buffer. Safe to over-allocate against.
 NSUInteger CanvasStrokeVertexCapacity(KKBezierPath *path);
 
+/// Total arc length (pixels) of `path`'s single contour - open OR closed (a
+/// closed loop's length includes the closing edge back to its start) - sampled
+/// the same way the stroke is tessellated. Returns 0 for a compound /
+/// multi-contour or degenerate path (draw-on is a no-op there). The render uses
+/// this to convert draw-on fractions to absolute arc distances.
+float CanvasContourTotalArc(KKBezierPath *path, float outputWidth,
+                            float outputHeight);
+
+/// Tessellates the VISIBLE portion of a draw-on stroke for a single contour
+/// (open or closed) into a triangle strip - the same KKVertex2D centered-pixel
+/// space + edge-distance texcoord as CanvasTessellateStroke. The visible span
+/// is arc fractions `[drawStart01, drawEnd01]` rotated by `offset01` around the
+/// path: a closed loop reveals a single arc from a chosen point; an open path's
+/// window wraps past its ends into up to two pieces. `startPullbackPx` /
+/// `endPullbackPx` trim a little extra behind an endpoint marker (open, no
+/// offset) so a filled marker covers the tip. Caps (`lineCap`) close each cut
+/// end; width tapers by GLOBAL arc fraction so a partial reveal keeps the full
+/// path's Start->End taper. `outArc` (when non-NULL) receives per-vertex arc
+/// length for the dash fragment. Falls back to the whole stroke when the span
+/// is full, and to a plain (untrimmed) tessellation on compound paths. Returns
+/// the vertex count (0 if nothing is revealed).
+NSUInteger CanvasTessellateStrokeDrawOn(
+    KKBezierPath *path, float startWidth, float endWidth, float outputWidth,
+    float outputHeight, uint8_t lineCap, uint8_t lineJoin, float drawStart01,
+    float drawEnd01, float offset01, float startPullbackPx, float endPullbackPx,
+    KKVertex2D *outVerts, NSUInteger maxVerts, float *_Nullable outArc);
+
 /// Upper bound on the vertex count CanvasTessellateDottedStroke can emit for
 /// `path` (one filled disc per dot). `dotWidth` / `dotGap` are in the same
 /// scaled pixel units passed to the tessellator. Safe to over-allocate against.
@@ -95,10 +122,16 @@ NSUInteger CanvasTessellateStrokeArc(
 /// dots (scaled by the render's strokeScale, like the widths); `phase` (px)
 /// slides the pattern for the marching-ants animation. Returns the vertex count
 /// written (draw as a TRIANGLE LIST).
-NSUInteger CanvasTessellateDottedStroke(KKBezierPath *path, float startWidth,
-                                        float endWidth, float outputWidth,
-                                        float outputHeight, float dotGap,
-                                        float phase, KKVertex2D *outVerts,
-                                        NSUInteger maxVerts);
+///
+/// `drawStart01`/`drawEnd01`/`offset01` are the draw-on reveal (arc fractions
+/// 0..1 + offset, like CanvasTessellateStrokeDrawOn): only dots whose arc
+/// position falls in the visible window are emitted, so the dotted pattern
+/// draws on with the same window (and wraps on an offset, like the solid
+/// stroke). Pass 0/1/0 for the whole pattern. Draw-on applies to a single
+/// contour (open or closed); a compound path emits every dot.
+NSUInteger CanvasTessellateDottedStroke(
+    KKBezierPath *path, float startWidth, float endWidth, float outputWidth,
+    float outputHeight, float dotGap, float phase, float drawStart01,
+    float drawEnd01, float offset01, KKVertex2D *outVerts, NSUInteger maxVerts);
 
 NS_ASSUME_NONNULL_END

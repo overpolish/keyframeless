@@ -335,6 +335,51 @@ CanvasStrokeStyle CanvasStrokeStyleAtFraction(KKBezierPath *path, double frac,
   return s;
 }
 
+CanvasStrokeDrawOn CanvasStrokeDrawOnAtFraction(KKBezierPath *path, double frac,
+                                                NSString *overrideLayerID,
+                                                KKTimeline *overrideTimeline) {
+  CanvasStrokeDrawOn d;
+  d.start = fmaxf(0.0f, fminf(1.0f, path.drawOnStart)); // flat fallback
+  d.end = fmaxf(0.0f, fminf(1.0f, path.drawOnEnd));
+  // Offset wraps to [0,1) for ANY value (the field is unbounded so it can spin
+  // round and round, forwards or backwards): x - floor(x).
+  float o0 = path.drawOnOrigin;
+  d.offset = o0 - floorf(o0);
+  d.offsetEngaged = d.offset > 1e-6f;
+  KKTimeline *tl =
+      CanvasEffectiveTimeline(path, overrideLayerID, overrideTimeline);
+  for (KKLane *lane in tl.lanes) {
+    if (lane.keyposes.count == 0)
+      continue;
+    if ([lane.label isEqualToString:@"Draw On Start"]) {
+      NSArray<NSNumber *> *v =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      if (v.count > 0)
+        d.start = (float)fmax(0.0, fmin(1.0, v[0].doubleValue / 100.0));
+    } else if ([lane.label isEqualToString:@"Draw On End"]) {
+      NSArray<NSNumber *> *v =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      if (v.count > 0)
+        d.end = (float)fmax(0.0, fmin(1.0, v[0].doubleValue / 100.0));
+    } else if ([lane.label isEqualToString:@"Draw On Offset"]) {
+      NSArray<NSNumber *> *v =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      if (v.count > 0) {
+        double o = v[0].doubleValue / 100.0; // unbounded; wrap to [0,1)
+        d.offset = (float)(o - floor(o));
+        // Engaged when the offset is ANIMATED (lane.enabled) - so a spin stays
+        // in offset mode CONSISTENTLY through every 0/100/200 % wrap (no mode
+        // flip / flash where the value momentarily hits 0) - or when a static
+        // value is non-zero (a fixed shifted reveal). A static 0 that isn't
+        // animated is a genuine no-shift, so it falls back to the normal
+        // draw-on markers.
+        d.offsetEngaged = lane.enabled || fabs(o) > 1e-6;
+      }
+    }
+  }
+  return d;
+}
+
 // Bounds of where the image layers nested under the group at `groupIdx`
 // actually SIT, in object space (Y-up) - the bbox of each member's TRANSFORMED
 // centre (rect centre + its Position offset), not the raw shape rect. Images

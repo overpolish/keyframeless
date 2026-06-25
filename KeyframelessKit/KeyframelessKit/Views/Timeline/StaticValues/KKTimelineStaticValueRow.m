@@ -1055,9 +1055,11 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     _fields = @[ fld ];
     _slider = [KKSliderView styledSlider];
     _slider.translatesAutoresizingMaskIntoConstraints = NO;
-    _slider.minValue = _cmin.count ? _cmin[0].doubleValue : 0.0;
-    // The slider can top out below the field's hard max (componentMax) so a
-    // value is typeable past the slider's end (marker width: slider 0..500 %).
+    // The slider can stop short of the field's hard min/max (componentMin/Max)
+    // so a value is typeable past the slider's ends (marker width: slider
+    // 0..500 %; draw-on Offset: slider 0..100 %, field unbounded to spin round).
+    _slider.minValue = lane.sliderMin ? lane.sliderMin.doubleValue
+                                      : (_cmin.count ? _cmin[0].doubleValue : 0.0);
     _slider.maxValue = lane.sliderMax ? lane.sliderMax.doubleValue
                                       : (_cmax.count ? _cmax[0].doubleValue : 1.0);
     _slider.continuous = YES;

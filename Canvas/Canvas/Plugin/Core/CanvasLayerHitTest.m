@@ -445,9 +445,13 @@ static BOOL CanvasStrokeMarkersHit(KKBezierPath *geom, float startW, float endW,
     sMVerts = malloc(sizeof(KKVertex2D) * cap);
     sMCap = cap;
   }
+  // The hit-test selects the whole layer from its full stroke + markers
+  // (CanvasStrokeStripHit likewise ignores draw-on), so a partly-revealed
+  // draw-on path stays grabbable where it's drawn (no draw-on trim, 0/0).
   NSUInteger vc = CanvasTessellateMarkers(
       geom, outW, outH, startMarker, endMarker, startW * startMul,
-      endW * endMul, startW, endW, sMVerts, cap);
+      endW * endMul, startW, endW, /*trimStartPx=*/0.0f, /*trimEndPx=*/0.0f,
+      sMVerts, cap);
   if (vc < 3)
     return NO;
   simd_float2 qa = simd_make_float2(q.x * aspect, q.y);

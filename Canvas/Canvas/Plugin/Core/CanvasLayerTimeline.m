@@ -124,6 +124,9 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
         [t.label isEqualToString:@"End Marker"] ||
         [t.label isEqualToString:@"Start Marker Width"] ||
         [t.label isEqualToString:@"End Marker Width"] ||
+        [t.label isEqualToString:@"Draw On Start"] ||
+        [t.label isEqualToString:@"Draw On End"] ||
+        [t.label isEqualToString:@"Draw On Offset"] ||
         [t.label isEqualToString:@"Stroke Style"] ||
         [t.label isEqualToString:@"Dash Length"] ||
         [t.label isEqualToString:@"Dash Gap"] ||
@@ -145,6 +148,14 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
                         [t.label isEqualToString:@"End Marker Width"];
     if (([t.label isEqualToString:@"Line Cap"] || isMarkerLane) && !hasOpenEnd)
       continue;
+    // Draw-on reveals a single contour's arc - open OR closed (a closed shape
+    // draws on around its loop). Only a compound / multi-contour path has no
+    // single arc to reveal, so hide the lanes only there.
+    BOOL isDrawOnLane = [t.label isEqualToString:@"Draw On Start"] ||
+                        [t.label isEqualToString:@"Draw On End"] ||
+                        [t.label isEqualToString:@"Draw On Offset"];
+    if (isDrawOnLane && path.contourCount > 1)
+      continue;
     KKLane *src = [(stored[t.label] ?: t) copy];
     // Re-assert the template's canonical DISPLAY / picker metadata onto a
     // stored (round-tripped) lane - the animationJSON drops non-codable props,
@@ -156,6 +167,7 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
     src.componentMin = t.componentMin;
     src.componentMax = t.componentMax;
     src.sliderMax = t.sliderMax;
+    src.sliderMin = t.sliderMin;
     src.componentUnits = t.componentUnits;
     src.componentLabels = t.componentLabels;
     src.componentLabelColors = t.componentLabelColors;
@@ -232,6 +244,23 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
       src.keyposes =
           @[ [KKKeyPose keyposeAtTime:0.0
                                values:@[ @(path.endMarkerSize * 100.0) ]] ];
+    }
+    // Draw-on reveal: seed from the flat drawOnStart/drawOnEnd (0..1) as a
+    // percentage (0 / 100 = whole stroke shown).
+    if (!stored[t.label] && [t.label isEqualToString:@"Draw On Start"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.drawOnStart * 100.0) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Draw On End"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.drawOnEnd * 100.0) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Draw On Offset"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.drawOnOrigin * 100.0) ]] ];
     }
     // Stroke Style / dash metrics / marching-ants speed: seed from the flat
     // strokeStyle (0/1/2) + dashLength/dashGap/dotGap + marchingAntsSpeed.

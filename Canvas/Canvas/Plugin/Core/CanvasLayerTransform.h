@@ -135,6 +135,29 @@ CanvasStrokeStyleAtFraction(KKBezierPath *path, double frac,
                             NSString *_Nullable overrideLayerID,
                             KKTimeline *_Nullable overrideTimeline);
 
+/// The stroke's draw-on reveal at a clip fraction: `start`/`end` are arc-length
+/// fractions 0..1 (the visible stroke spans [start, end]; default 0..1 = whole
+/// stroke) and `offset` rotates where the visible window begins around the path
+/// (0..1, default 0). Animatable, read smoothed so a keyframed reveal eases.
+/// From the "Draw On Start"/"Draw On End"/"Draw On Offset" lanes (percent, /100
+/// here), falling back to the flat drawOnStart/drawOnEnd/drawOnOrigin. Applies to
+/// a single open OR closed contour (a closed shape reveals around its loop); a
+/// no-op on compound/multi-contour paths.
+typedef struct {
+  float start;  // 0..1 arc fraction (visible span lower bound)
+  float end;    // 0..1 arc fraction (visible span upper bound)
+  float offset; // 0..1 rotation of the window's start around the path (wrapped)
+  // YES when offset is in use (the lane is animated, or its wrapped value is
+  // non-zero) - so endpoint markers stay suppressed across the 0/100/200 % wrap
+  // points of a spin instead of flashing back at each turn.
+  bool offsetEngaged;
+} CanvasStrokeDrawOn;
+
+CanvasStrokeDrawOn
+CanvasStrokeDrawOnAtFraction(KKBezierPath *path, double frac,
+                             NSString *_Nullable overrideLayerID,
+                             KKTimeline *_Nullable overrideTimeline);
+
 /// Legacy per-layer tilt+perspective+tile-shift matrix for 2D-baked verts. Now
 /// only used for the identity full-image source quad (CanvasEncodeSourceTile);
 /// the layer pipeline uses CanvasComposedModelMatrix on raw verts instead.

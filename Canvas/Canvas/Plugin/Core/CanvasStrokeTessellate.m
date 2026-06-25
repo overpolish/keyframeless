@@ -330,12 +330,12 @@ void CanvasStrokeScratchFree(CanvasStrokeScratch *scratch) {
 // dashes). `arcv` (length n, plus arcv[n] = the closing arc) is the per-vertex
 // arc length (pixels) recorded into `outArc` for the dash fragment; pass both
 // NULL for a solid stroke (no arc needed).
-static NSUInteger CanvasEmitContourStrip(KKVertex2D *outVerts, NSUInteger vc,
-                                         NSUInteger maxVerts, simd_float2 *pts,
-                                         NSUInteger n, BOOL closed,
-                                         const float *hw, const float *arcv,
-                                         uint8_t lineCap, uint8_t lineJoin,
-                                         BOOL bridgeFromPrev, float *outArc) {
+NSUInteger CanvasEmitContourStrip(KKVertex2D *outVerts, NSUInteger vc,
+                                  NSUInteger maxVerts, simd_float2 *pts,
+                                  NSUInteger n, BOOL closed, const float *hw,
+                                  const float *arcv, uint8_t lineCap,
+                                  uint8_t lineJoin, BOOL bridgeFromPrev,
+                                  float *outArc) {
   if (n < 2)
     return vc;
   float startHW = hw[0];
@@ -489,12 +489,13 @@ NSUInteger CanvasTessellateStrokeScratch(KKBezierPath *path, float startWidth,
 }
 
 // Trim `trimStart`/`trimEnd` px (arc length) off the ends of an OPEN polyline
-// pts[0..n) in place, so an endpoint marker covers the stroke end instead of the
-// stroke poking out past it. Walks in from each end, dropping fully-trimmed
-// points and moving the boundary point to the trim distance. Returns the new
-// vertex count (0 if trimmed away entirely).
-static NSUInteger CanvasTrimOpenPolyline(simd_float2 *pts, NSUInteger n,
-                                         float trimStart, float trimEnd) {
+// pts[0..n) in place, so an endpoint marker covers the stroke end (or rides a
+// draw-on tip) instead of the stroke poking out past it. Walks in from each
+// end, dropping fully-trimmed points and moving the boundary point to the trim
+// distance. Returns the new vertex count (0 if trimmed away entirely). Declared
+// in CanvasStrokeTessellateInternal.h - shared with the marker tessellator.
+NSUInteger CanvasTrimOpenPolyline(simd_float2 *pts, NSUInteger n,
+                                  float trimStart, float trimEnd) {
   if (n < 2)
     return n;
   if (trimEnd > 0.0f) {
@@ -627,3 +628,4 @@ NSUInteger CanvasTessellateStrokeArc(
   free(arcv);
   return vc;
 }
+
