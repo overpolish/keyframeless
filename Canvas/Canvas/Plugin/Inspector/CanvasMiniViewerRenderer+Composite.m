@@ -123,49 +123,55 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
   // dest dims and the tile shift is zero.
   CanvasEncodeImageLayers(
       self.layers ?: @[], enc, cb.device, self.imageTextureCache, w, h, 0.0f,
-      0.0f, self.editFraction, self.selectedLayerID, self.timeline);
+      0.0f, self.editFraction, self.selectedLayerID, self.timeline,
+      _imagePipeline, _imageTintPipeline, _imageGradTintPipeline);
 
-  // 3) Vector strokes over the images, same pipeline + transform as the main
-  // render.
+  [enc endEncoding];
+
+  // 3) TEMP solid fill for closed filled paths, mirroring the main render. The
+  // stencil even-odd needs its own passes (this MTKView pass has no stencil
+  // attachment), so run them after the encoder ends, over the same dest. Drawn
+  // BEFORE the strokes so a fill sits under its stroke.
+  CanvasFillPipelines fillPipes = {0};
+  CanvasFillBuildPipelines(cb.device, cb.device.registryID, fmt, &fillPipes);
+  if (fillPipes.stencil && fillPipes.color && fillPipes.composite)
+    CanvasEncodeFilledLayers(self.layers ?: @[], cb.device,
+                             self.imageTextureCache, cb, dstSRGB, &fillPipes, w, h,
+                             w, h, 0.0f, 0.0f, self.editFraction,
+                             self.selectedLayerID, self.timeline);
+
+  // 4) Vector strokes LAST, in their own LOAD pass over the same dest, so a fill
+  // sits UNDER its stroke (mirrors the main render's stroke-after-fill order).
+  // Same viewport / viewport-size as the source + image pass.
   if (_strokePipeline) {
-    [enc setRenderPipelineState:_strokePipeline];
-    // strokeScale 1.0: the mini already renders at the dest size; if its
-    // strokes also read too thick relative to the timeline, scale by w /
-    // self.outputWidth here too (same as the main render's thumbnail fix).
-    // Marching-ants phase at the previewed frame: editFraction is the live
-    // playhead time, so map it to clip-local seconds (editFraction x clip
-    // duration) to match the main render's CMTimeGetSeconds-based phase - the
-    // same trick Glow's noise uses (KKLane.lastKnownClipDuration carries the
-    // duration into the timeline). 0 in the constants popover (editFraction 0).
+    MTLRenderPassDescriptor *srpd =
+        [MTLRenderPassDescriptor renderPassDescriptor];
+    srpd.colorAttachments[0].texture = dstSRGB;
+    srpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+    srpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+    id<MTLRenderCommandEncoder> senc =
+        [cb renderCommandEncoderWithDescriptor:srpd];
+    [senc setViewport:vp];
+    [senc setVertexBytes:&viewportSize
+                  length:sizeof(viewportSize)
+                 atIndex:KKVertexInputIndex_ViewportSize];
+    [senc setRenderPipelineState:_strokePipeline];
+    // strokeScale 1.0: the mini already renders at the dest size. Marching-ants
+    // phase at the previewed frame: editFraction is the live playhead time, so
+    // map it to clip-local seconds (editFraction x clip duration) to match the
+    // main render's CMTimeGetSeconds-based phase (KKLane.lastKnownClipDuration
+    // carries the duration into the timeline). 0 in the constants popover.
     double clipDur = self.clipDurationSeconds;
     if (clipDur <= 0.0) // fall back to whatever the timeline carries
       for (KKLane *l in self.timeline.lanes)
         clipDur = MAX(clipDur, l.lastKnownClipDuration);
     double miniElapsed = self.editFraction * clipDur;
-    CanvasEncodeVectorLayers(self.layers ?: @[], enc, cb.device, w, h, 0.0f,
+    CanvasEncodeVectorLayers(self.layers ?: @[], senc, cb.device, w, h, 0.0f,
                              0.0f, self.editFraction, self.selectedLayerID,
                              self.timeline, 1.0f, miniElapsed, _strokePipeline,
                              _strokeGradientPipeline, _strokeDashPipeline);
+    [senc endEncoding];
   }
-
-  [enc endEncoding];
-
-  // TEMP solid fill for closed filled paths, mirroring the main render. The
-  // stencil even-odd needs its own passes (this MTKView pass has no stencil
-  // attachment), so run them after the encoder ends, over the same dest. flipY
-  // is NO here: the mini draws strokes in this same kind of own-encoder, so the
-  // fill matches without the main render's kit-encoder Y compensation.
-  id<MTLRenderPipelineState> fStencilPS = nil, fColorPS = nil;
-  id<MTLDepthStencilState> fStencilDS = nil, fColorDS = nil;
-  CanvasFillBuildPipelines(cb.device, cb.device.registryID, fmt, &fStencilPS,
-                           &fColorPS, &fStencilDS, &fColorDS);
-  id<MTLTexture> stencilTex =
-      CanvasFillStencilTexture(cb.device, (NSUInteger)w, (NSUInteger)h);
-  if (fStencilPS && fColorPS && stencilTex)
-    CanvasEncodeFilledLayers(
-        self.layers ?: @[], cb.device, cb, dstSRGB, stencilTex, fStencilPS,
-        fColorPS, fStencilDS, fColorDS, w, h, w, h, 0.0f, 0.0f,
-        self.editFraction, self.selectedLayerID, self.timeline);
   return YES;
 }
 

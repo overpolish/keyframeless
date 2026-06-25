@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "CanvasFillRender.h" // TEMP solid fill for closed paths
+#import "CanvasFillProperties.h" // CanvasFillEnabledAtFraction (lane gate)
+#import "CanvasFillRender.h"     // TEMP solid fill for closed paths
 #import "CanvasLayerRender.h"
 #import "CanvasLayerTimeline.h" // CanvasSetUIStateSnapshot
 #import "CanvasMiniViewerRenderer.h"
@@ -188,6 +189,28 @@
                                   userInfo:nil];
     return NO;
   }
+  // Image-tint pipeline: same transform vertex shader, the kit tint fragment
+  // (lerp the sampled image toward the fill colour by the amount). Used for a
+  // fill-enabled image layer; nil-tolerant (the image just renders plain).
+  id<MTLRenderPipelineState> imageTintPS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Canvas.imageTint"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:kitBundleID
+                                  vertexShader:@"KKTransformVertexShader"
+                                fragmentShader:@"KKTextureTintFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+  // Gradient-tint variant: tint the image toward the gradient (UV space).
+  id<MTLRenderPipelineState> imageGradTintPS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Canvas.imageGradTint"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:kitBundleID
+                                  vertexShader:@"KKTransformVertexShader"
+                                fragmentShader:@"KKTextureGradientTintFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
 
   // Stroke pipeline: the SAME transform vertex shader (so vector strokes compose
   // with CanvasComposedModelMatrix exactly like image quads) + the kit's
@@ -298,9 +321,13 @@
       fmax(0.0, CMTimeGetSeconds(renderTime) - self.renderCache.effectStartSec);
 
   // Source passthrough + the layer stack (evaluated at `f`) into one encoder.
+  // `withStrokes` keeps the strokes IN this accumulated composite (the
+  // motion-blur path, so strokes smear); the non-blur path passes NO and draws
+  // strokes in their own pass AFTER the fills (so a fill sits UNDER its stroke).
   void (^composite)(id<MTLRenderCommandEncoder>, NSArray<id<MTLTexture>> *,
-                    double) = ^(id<MTLRenderCommandEncoder> enc,
-                                NSArray<id<MTLTexture>> *inputs, double f) {
+                    double, BOOL) = ^(id<MTLRenderCommandEncoder> enc,
+                                      NSArray<id<MTLTexture>> *inputs, double f,
+                                      BOOL withStrokes) {
     if (!inputs.count || !imagePS || !device)
       return;
     // Source + layers both go through the image pipeline (transform shader +
@@ -311,9 +338,10 @@
     CanvasEncodeSourceTile(enc, inputs[0], outputWidth, outputHeight,
                            tileShiftX, tileShiftY);
     CanvasEncodeImageLayers(layers, enc, device, texCache, outputWidth,
-                            outputHeight, tileShiftX, tileShiftY, f, nil, nil);
+                            outputHeight, tileShiftX, tileShiftY, f, nil, nil,
+                            imagePS, imageTintPS, imageGradTintPS);
     // Vector strokes (pen / shape layers) over the images, same tile transform.
-    if (strokePS) {
+    if (withStrokes && strokePS) {
       [enc setRenderPipelineState:strokePS];
       CanvasEncodeVectorLayers(layers, enc, device, outputWidth, outputHeight,
                                tileShiftX, tileShiftY, f, nil, nil, strokeScale,
@@ -333,33 +361,75 @@
   float tileH = (float)(tileBF.top - tileBF.bottom);
   void (^runFills)(double) = ^(double f) {
     BOOL anyFill = NO;
-    for (KKBezierPath *p in layers)
-      if (p.fillEnabled && !p.isImage && !p.isGroup && !p.hidden) {
+    double efill = f < 0.0 ? 0.0 : f;
+    for (KKBezierPath *p in layers) {
+      if (p.isGroup || p.hidden ||
+          !CanvasFillEnabledAtFraction(p, efill, nil, nil))
+        continue;
+      // A vector shape fills; an image only contributes a fill pass when its
+      // Fill Style is a (non-Solid) hachure overlay.
+      if (!p.isImage || CanvasFillStyleAtFraction(p, efill, nil, nil).style != 0) {
         anyFill = YES;
         break;
       }
+    }
     if (!anyFill || !device)
       return;
-    id<MTLRenderPipelineState> fStencilPS = nil, fColorPS = nil;
-    id<MTLDepthStencilState> fStencilDS = nil, fColorDS = nil;
-    CanvasFillBuildPipelines(device, regID, pf, &fStencilPS, &fColorPS,
-                             &fStencilDS, &fColorDS);
-    if (!fStencilPS || !fColorPS)
+    CanvasFillPipelines fillPipes = {0};
+    CanvasFillBuildPipelines(device, regID, pf, &fillPipes);
+    if (!fillPipes.stencil || !fillPipes.color || !fillPipes.composite)
       return;
-    id<MTLTexture> stencilTex = CanvasFillStencilTexture(
-        device, (NSUInteger)tileW, (NSUInteger)tileH);
     id<MTLTexture> destTex = [destinationImage metalTextureForDevice:device];
-    if (!stencilTex || !destTex)
+    if (!destTex)
       return;
     id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:regID
                                                       pixelFormat:pf];
     if (!queue)
       return;
     id<MTLCommandBuffer> cb = [queue commandBuffer];
-    CanvasEncodeFilledLayers(layers, device, cb, destTex, stencilTex, fStencilPS,
-                             fColorPS, fStencilDS, fColorDS, outputWidth,
-                             outputHeight, tileW, tileH, tileShiftX, tileShiftY,
-                             f, nil, nil);
+    CanvasEncodeFilledLayers(layers, device, texCache, cb, destTex, &fillPipes,
+                             outputWidth, outputHeight, tileW, tileH, tileShiftX,
+                             tileShiftY, f, nil, nil);
+    [cb commit];
+    [cb waitUntilCompleted];
+    [cache returnCommandQueueToCache:queue];
+  };
+
+  // Strokes drawn in their OWN pass AFTER the fills (non-blur path), so a
+  // filled-and-stroked shape shows its stroke ON TOP of its fill. Mirrors the
+  // fill pass: own command buffer + an encoder that LOADS the dest, with the
+  // SAME viewport + viewport-size buffer the kit composite encoder sets (tile
+  // dims), so the KKTransformVertexShader places strokes in the identical space
+  // as the images / fills.
+  void (^runStrokes)(double) = ^(double f) {
+    if (!device || !strokePS)
+      return;
+    id<MTLTexture> destTex = [destinationImage metalTextureForDevice:device];
+    if (!destTex)
+      return;
+    id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:regID
+                                                      pixelFormat:pf];
+    if (!queue)
+      return;
+    id<MTLCommandBuffer> cb = [queue commandBuffer];
+    MTLRenderPassDescriptor *rpd =
+        [MTLRenderPassDescriptor renderPassDescriptor];
+    rpd.colorAttachments[0].texture = destTex;
+    rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+    rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+    id<MTLRenderCommandEncoder> enc =
+        [cb renderCommandEncoderWithDescriptor:rpd];
+    [enc setViewport:(MTLViewport){0, 0, tileW, tileH, -1, 1}];
+    simd_uint2 vpSize = {(unsigned int)tileW, (unsigned int)tileH};
+    [enc setVertexBytes:&vpSize
+                 length:sizeof(vpSize)
+                atIndex:KKVertexInputIndex_ViewportSize];
+    [enc setRenderPipelineState:strokePS];
+    CanvasEncodeVectorLayers(layers, enc, device, outputWidth, outputHeight,
+                             tileShiftX, tileShiftY, f, nil, nil, strokeScale,
+                             marchElapsed, strokePS, strokeGradientPS,
+                             strokeDashPS);
+    [enc endEncoding];
     [cb commit];
     [cb waitUntilCompleted];
     [cache returnCommandQueueToCache:queue];
@@ -402,7 +472,13 @@
                                                          enc,
                                                      NSArray<id<MTLTexture>>
                                                          *texs) {
-                                                   composite(enc, texs, f);
+                                                   // Blur path keeps strokes in
+                                                   // the accumulated composite
+                                                   // so they smear; fill stays a
+                                                   // single post-pass (temp), so
+                                                   // it sits over the blurred
+                                                   // stroke here.
+                                                   composite(enc, texs, f, YES);
                                                  }];
                     }];
     if (applied) {
@@ -418,10 +494,15 @@
                                      commands:^(
                                          id<MTLRenderCommandEncoder> enc,
                                          NSArray<id<MTLTexture>> *inputs) {
-                                       composite(enc, inputs, frac);
+                                       // No strokes here: they draw in their own
+                                       // pass after the fills, so a fill sits
+                                       // under its stroke.
+                                       composite(enc, inputs, frac, NO);
                                      }];
-  if (ok)
+  if (ok) {
     runFills(frac);
+    runStrokes(frac);
+  }
   return ok;
 }
 

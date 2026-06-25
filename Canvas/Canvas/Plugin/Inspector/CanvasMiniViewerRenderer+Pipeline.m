@@ -21,7 +21,8 @@
 // metallib of its own. Cached per format.
 - (BOOL)_ensurePipelinesForDevice:(id<MTLDevice>)device
                       pixelFormat:(MTLPixelFormat)format {
-  if (_pipeline && _imagePipeline && _pipelineFormat == format)
+  if (_pipeline && _imagePipeline && _imageTintPipeline &&
+      _imageGradTintPipeline && _pipelineFormat == format)
     return YES;
   NSError *err = nil;
   id<MTLLibrary> lib = [device
@@ -41,6 +42,11 @@
       [lib newFunctionWithName:@"KKTexturePassthroughFragment"];
   // Image layers fade by a per-layer Opacity uniform (premultiplied multiply).
   id<MTLFunction> offn = [lib newFunctionWithName:@"KKTextureOpacityFragment"];
+  // Fill-tinted image layers: lerp the sampled image toward the fill colour /
+  // (gradient variant) toward a UV-space gradient.
+  id<MTLFunction> tffn = [lib newFunctionWithName:@"KKTextureTintFragment"];
+  id<MTLFunction> gtffn =
+      [lib newFunctionWithName:@"KKTextureGradientTintFragment"];
   // Vector strokes: transform vertex shader (compose like image layers) + the
   // antialiased line fragment, matching the main render's stroke pipeline.
   id<MTLFunction> lfn = [lib newFunctionWithName:@"KKLineFragment"];
@@ -48,7 +54,8 @@
   // Dashed stroke: arc-threading vertex shader + the dash-mask fragment.
   id<MTLFunction> sdvfn = [lib newFunctionWithName:@"KKStrokeDashVertexShader"];
   id<MTLFunction> sdffn = [lib newFunctionWithName:@"KKStrokeDashFragment"];
-  if (!vfn || !tvfn || !ffn || !offn || !lfn || !glfn || !sdvfn || !sdffn) {
+  if (!vfn || !tvfn || !ffn || !offn || !tffn || !gtffn || !lfn || !glfn ||
+      !sdvfn || !sdffn) {
     KKLogError(@"CanvasMiniViewerRenderer: missing passthrough shaders");
     return NO;
   }
@@ -74,6 +81,31 @@
       [device newRenderPipelineStateWithDescriptor:img error:&err];
   if (!imgPS) {
     KKLogError(@"CanvasMiniViewerRenderer: image pipeline failed: %@", err);
+    return NO;
+  }
+
+  MTLRenderPipelineDescriptor *imgTint = [KKRenderPrimitives
+      createPipelineDescriptorWithVertexFunction:tvfn
+                                fragmentFunction:tffn
+                                     pixelFormat:format
+                                       blendMode:KKBlendModePremultipliedAlpha];
+  id<MTLRenderPipelineState> imgTintPS =
+      [device newRenderPipelineStateWithDescriptor:imgTint error:&err];
+  if (!imgTintPS) {
+    KKLogError(@"CanvasMiniViewerRenderer: image-tint pipeline failed: %@", err);
+    return NO;
+  }
+
+  MTLRenderPipelineDescriptor *imgGradTint = [KKRenderPrimitives
+      createPipelineDescriptorWithVertexFunction:tvfn
+                                fragmentFunction:gtffn
+                                     pixelFormat:format
+                                       blendMode:KKBlendModePremultipliedAlpha];
+  id<MTLRenderPipelineState> imgGradTintPS =
+      [device newRenderPipelineStateWithDescriptor:imgGradTint error:&err];
+  if (!imgGradTintPS) {
+    KKLogError(@"CanvasMiniViewerRenderer: image-grad-tint pipeline failed: %@",
+               err);
     return NO;
   }
 
@@ -116,6 +148,8 @@
 
   _pipeline = srcPS;
   _imagePipeline = imgPS;
+  _imageTintPipeline = imgTintPS;
+  _imageGradTintPipeline = imgGradTintPS;
   _strokePipeline = strokePS;
   _strokeGradientPipeline = strokeGradPS;
   _strokeDashPipeline = strokeDashPS;

@@ -4,8 +4,12 @@
  */
 
 #import "CanvasFillRender.h"
-#import "CanvasCornerFillet.h" // CanvasPathByExpandingCorners
-#import "CanvasLayerRender.h"  // CanvasLayerObjectCenter
+#import "CanvasCornerFillet.h"   // CanvasPathByExpandingCorners
+#import "CanvasFillProperties.h" // CanvasFillEnabledAtFraction + colour
+#import "CanvasHachure.h"        // hachure / cross-hatch / zigzag / dots lines
+#import "CanvasImageTexture.h"   // CanvasImageTextureForPath (image-mask alpha)
+#import "CanvasLayerRender.h"    // CanvasLayerObjectCenter
+#import "CanvasLayerRenderInternal.h" // CanvasComputeGradientFill (shared w/ stroke)
 #import "CanvasLayerTransform.h"
 #import "CanvasPathMorph.h" // CanvasPathMorphedAtFraction
 #import <KeyframelessKit/KKShaderTypes.h>
@@ -15,6 +19,19 @@ static NSString *const kFillStencilKey =
     @"co.overpolish.keyframeless.Canvas.fillStencil";
 static NSString *const kFillColorKey =
     @"co.overpolish.keyframeless.Canvas.fillColor";
+static NSString *const kFillGradientKey =
+    @"co.overpolish.keyframeless.Canvas.fillGradient";
+static NSString *const kFillCompositeKey =
+    @"co.overpolish.keyframeless.Canvas.fillComposite";
+static NSString *const kFillColorMaskKey =
+    @"co.overpolish.keyframeless.Canvas.fillColorMask";
+static NSString *const kFillGradientMaskKey =
+    @"co.overpolish.keyframeless.Canvas.fillGradientMask";
+
+// MSAA sample count for the fill pass: the fan is rasterised multisampled and
+// resolved so the silhouette antialiases (coverage-based, crisp - unlike the
+// old hairline outline ribbon). 4x is universally supported on Metal Macs.
+static const NSUInteger kFillSampleCount = 4;
 
 // Flatten every contour of `geom` into a triangle fan (one fan per contour,
 // each from its own centroid) in CENTERED-PIXEL object space - the same space
@@ -24,9 +41,9 @@ static NSString *const kFillColorKey =
 // bounding box so the colour pass can cover the shape with a single quad (no
 // self-overlap, unlike re-drawing the fan, so premultiplied blend stays correct
 // at opacity < 1). Caller frees *outVerts.
-static NSUInteger CanvasBuildFillFan(KKBezierPath *geom, float w, float h,
-                                     KKVertex2D **outVerts, simd_float2 *outMin,
-                                     simd_float2 *outMax) {
+NSUInteger CanvasBuildFillFan(KKBezierPath *geom, float w, float h,
+                              KKVertex2D **outVerts, simd_float2 *outMin,
+                              simd_float2 *outMax) {
   const NSUInteger segsPerCurve = 32;
   NSUInteger nc = geom.contourCount;
   NSUInteger totalMax = 0;
@@ -102,39 +119,70 @@ static NSUInteger CanvasBuildFillFan(KKBezierPath *geom, float w, float h,
   return ti;
 }
 
-id<MTLTexture> CanvasFillStencilTexture(id<MTLDevice> device, NSUInteger width,
-                                        NSUInteger height) {
-  if (!device || width == 0 || height == 0)
-    return nil;
+// Ensure (and cache per process) the fill pass's MSAA render targets sized to
+// the tile: a 4x multisample colour + stencil to rasterise the fan into, and a
+// 1x resolve texture the multisample colour resolves to (then composited onto
+// the dest). Returns NO on failure. `pf` is the dest colour format.
+static BOOL CanvasFillEnsureMSAA(id<MTLDevice> device, NSUInteger width,
+                                 NSUInteger height, MTLPixelFormat pf,
+                                 id<MTLTexture> *outColor,
+                                 id<MTLTexture> *outStencil,
+                                 id<MTLTexture> *outResolve) {
+  if (!device || width == 0 || height == 0 ||
+      ![device supportsTextureSampleCount:kFillSampleCount])
+    return NO;
   static id<MTLDevice> sDevice = nil;
-  static id<MTLTexture> sTex = nil;
+  static id<MTLTexture> sColor = nil, sStencil = nil, sResolve = nil;
   static NSUInteger sW = 0, sH = 0;
-  if (sTex && sDevice == device && sW == width && sH == height)
-    return sTex;
-  MTLTextureDescriptor *desc = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:MTLPixelFormatStencil8
-                                   width:width
-                                  height:height
-                               mipmapped:NO];
-  desc.usage = MTLTextureUsageRenderTarget;
-  desc.storageMode = MTLStorageModePrivate;
-  sTex = [device newTextureWithDescriptor:desc];
-  sDevice = device;
-  sW = width;
-  sH = height;
-  return sTex;
+  static MTLPixelFormat sPF = MTLPixelFormatInvalid;
+  if (!(sColor && sStencil && sResolve && sDevice == device && sW == width &&
+        sH == height && sPF == pf)) {
+    MTLTextureDescriptor *cd =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pf
+                                                           width:width
+                                                          height:height
+                                                       mipmapped:NO];
+    cd.textureType = MTLTextureType2DMultisample;
+    cd.sampleCount = kFillSampleCount;
+    cd.usage = MTLTextureUsageRenderTarget;
+    cd.storageMode = MTLStorageModePrivate;
+    sColor = [device newTextureWithDescriptor:cd];
+
+    MTLTextureDescriptor *sd = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatStencil8
+                                     width:width
+                                    height:height
+                                 mipmapped:NO];
+    sd.textureType = MTLTextureType2DMultisample;
+    sd.sampleCount = kFillSampleCount;
+    sd.usage = MTLTextureUsageRenderTarget;
+    sd.storageMode = MTLStorageModePrivate;
+    sStencil = [device newTextureWithDescriptor:sd];
+
+    MTLTextureDescriptor *rd =
+        [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pf
+                                                           width:width
+                                                          height:height
+                                                       mipmapped:NO];
+    rd.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    rd.storageMode = MTLStorageModePrivate;
+    sResolve = [device newTextureWithDescriptor:rd];
+
+    sDevice = device;
+    sW = width;
+    sH = height;
+    sPF = pf;
+  }
+  *outColor = sColor;
+  *outStencil = sStencil;
+  *outResolve = sResolve;
+  return sColor && sStencil && sResolve;
 }
 
 void CanvasFillBuildPipelines(id<MTLDevice> device, uint64_t registryID,
                               MTLPixelFormat pixelFormat,
-                              id<MTLRenderPipelineState> *outStencilPS,
-                              id<MTLRenderPipelineState> *outColorPS,
-                              id<MTLDepthStencilState> *outStencilDS,
-                              id<MTLDepthStencilState> *outColorDS) {
-  *outStencilPS = nil;
-  *outColorPS = nil;
-  *outStencilDS = nil;
-  *outColorDS = nil;
+                              CanvasFillPipelines *outPipelines) {
+  *outPipelines = (CanvasFillPipelines){0};
   if (!device)
     return;
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
@@ -147,35 +195,67 @@ void CanvasFillBuildPipelines(id<MTLDevice> device, uint64_t registryID,
       [cache pipelineStateForPluginID:kFillColorKey
                            registryID:registryID
                           pixelFormat:pixelFormat];
+  id<MTLRenderPipelineState> gradientPS =
+      [cache pipelineStateForPluginID:kFillGradientKey
+                           registryID:registryID
+                          pixelFormat:pixelFormat];
+  id<MTLRenderPipelineState> compositePS =
+      [cache pipelineStateForPluginID:kFillCompositeKey
+                           registryID:registryID
+                          pixelFormat:pixelFormat];
+  id<MTLRenderPipelineState> colorMaskPS =
+      [cache pipelineStateForPluginID:kFillColorMaskKey
+                           registryID:registryID
+                          pixelFormat:pixelFormat];
+  id<MTLRenderPipelineState> gradientMaskPS =
+      [cache pipelineStateForPluginID:kFillGradientMaskKey
+                           registryID:registryID
+                          pixelFormat:pixelFormat];
 
-  if (!stencilPS || !colorPS) {
+  if (!stencilPS || !colorPS || !gradientPS || !compositePS || !colorMaskPS ||
+      !gradientMaskPS) {
     NSBundle *kitBundle = [NSBundle bundleForClass:[KKPlugin class]];
     NSError *err = nil;
     id<MTLLibrary> lib = [device newDefaultLibraryWithBundle:kitBundle
                                                        error:&err];
     id<MTLFunction> vfn = [lib newFunctionWithName:@"KKTransformVertexShader"];
     id<MTLFunction> ffn = [lib newFunctionWithName:@"KKSolidColorFragment"];
-    if (!vfn || !ffn) {
+    id<MTLFunction> gffn = [lib newFunctionWithName:@"KKGradientFillFragment"];
+    // Masked variants (image-layer hachure): the same solid / gradient colour,
+    // multiplied by the image's own alpha so the pattern keeps the picture's
+    // silhouette instead of filling its bounding rect.
+    id<MTLFunction> mffn =
+        [lib newFunctionWithName:@"KKHachureMaskSolidFragment"];
+    id<MTLFunction> mgffn =
+        [lib newFunctionWithName:@"KKHachureMaskGradientFragment"];
+    // Composite (resolve -> dest): a plain fullscreen blit of the resolved
+    // fill.
+    id<MTLFunction> cvfn = [lib newFunctionWithName:@"KKVertexShader"];
+    id<MTLFunction> cffn =
+        [lib newFunctionWithName:@"KKTexturePassthroughFragment"];
+    if (!vfn || !ffn || !gffn || !mffn || !mgffn || !cvfn || !cffn) {
       KKLogError(@"Canvas fill: missing kit shader functions (%@)", err);
       return;
     }
 
     // Stencil pass: write stencil only, no colour (even-odd toggle via the DS
-    // state's Invert op).
+    // state's Invert op). Multisampled (the fan is rasterised at 4x).
     MTLRenderPipelineDescriptor *sd =
         [[MTLRenderPipelineDescriptor alloc] init];
     sd.vertexFunction = vfn;
     sd.fragmentFunction = ffn;
+    sd.rasterSampleCount = kFillSampleCount;
     sd.colorAttachments[0].pixelFormat = pixelFormat;
     sd.colorAttachments[0].writeMask = MTLColorWriteMaskNone;
     sd.stencilAttachmentPixelFormat = MTLPixelFormatStencil8;
     stencilPS = [device newRenderPipelineStateWithDescriptor:sd error:&err];
 
-    // Colour pass: premultiplied "over" where the stencil is odd.
+    // Colour pass: premultiplied "over" where the stencil is odd. Multisampled.
     MTLRenderPipelineDescriptor *cd =
         [[MTLRenderPipelineDescriptor alloc] init];
     cd.vertexFunction = vfn;
     cd.fragmentFunction = ffn;
+    cd.rasterSampleCount = kFillSampleCount;
     cd.colorAttachments[0].pixelFormat = pixelFormat;
     cd.colorAttachments[0].blendingEnabled = YES;
     cd.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
@@ -187,16 +267,60 @@ void CanvasFillBuildPipelines(id<MTLDevice> device, uint64_t registryID,
     cd.stencilAttachmentPixelFormat = MTLPixelFormatStencil8;
     colorPS = [device newRenderPipelineStateWithDescriptor:cd error:&err];
 
-    if (!stencilPS || !colorPS) {
+    // Gradient colour pass: same premultiplied "over" blend + stencil as the
+    // solid pass, but the per-pixel bbox-gradient fragment.
+    cd.fragmentFunction = gffn;
+    gradientPS = [device newRenderPipelineStateWithDescriptor:cd error:&err];
+
+    // Image-hachure masked passes: solid + gradient clipped to the image alpha.
+    cd.fragmentFunction = mffn;
+    colorMaskPS = [device newRenderPipelineStateWithDescriptor:cd error:&err];
+    cd.fragmentFunction = mgffn;
+    gradientMaskPS = [device newRenderPipelineStateWithDescriptor:cd
+                                                            error:&err];
+
+    // Composite pass (1x): blit the resolved fill over the dest, premult over.
+    MTLRenderPipelineDescriptor *pd =
+        [[MTLRenderPipelineDescriptor alloc] init];
+    pd.vertexFunction = cvfn;
+    pd.fragmentFunction = cffn;
+    pd.colorAttachments[0].pixelFormat = pixelFormat;
+    pd.colorAttachments[0].blendingEnabled = YES;
+    pd.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
+    pd.colorAttachments[0].destinationRGBBlendFactor =
+        MTLBlendFactorOneMinusSourceAlpha;
+    pd.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+    pd.colorAttachments[0].destinationAlphaBlendFactor =
+        MTLBlendFactorOneMinusSourceAlpha;
+    compositePS = [device newRenderPipelineStateWithDescriptor:pd error:&err];
+
+    if (!stencilPS || !colorPS || !gradientPS || !compositePS || !colorMaskPS ||
+        !gradientMaskPS) {
       KKLogError(@"Canvas fill: pipeline build failed (%@)", err);
       return;
     }
+    [cache registerPipelineState:colorMaskPS
+                     forPluginID:kFillColorMaskKey
+                      registryID:registryID
+                     pixelFormat:pixelFormat];
+    [cache registerPipelineState:gradientMaskPS
+                     forPluginID:kFillGradientMaskKey
+                      registryID:registryID
+                     pixelFormat:pixelFormat];
     [cache registerPipelineState:stencilPS
                      forPluginID:kFillStencilKey
                       registryID:registryID
                      pixelFormat:pixelFormat];
     [cache registerPipelineState:colorPS
                      forPluginID:kFillColorKey
+                      registryID:registryID
+                     pixelFormat:pixelFormat];
+    [cache registerPipelineState:gradientPS
+                     forPluginID:kFillGradientKey
+                      registryID:registryID
+                     pixelFormat:pixelFormat];
+    [cache registerPipelineState:compositePS
+                     forPluginID:kFillCompositeKey
                       registryID:registryID
                      pixelFormat:pixelFormat];
   }
@@ -219,7 +343,10 @@ void CanvasFillBuildPipelines(id<MTLDevice> device, uint64_t registryID,
     test.stencilCompareFunction = MTLCompareFunctionNotEqual; // odd -> inside
     test.readMask = 0xFF;
     test.stencilFailureOperation = MTLStencilOperationKeep;
-    test.depthStencilPassOperation = MTLStencilOperationZero; // reset for next
+    // Keep (not Zero): the MSAA stencil is cleared per layer, so no reset is
+    // needed - and Zero would self-mask overlapping hachure lines (cross-hatch
+    // crossings, zigzag, dots) after the first draw at a pixel.
+    test.depthStencilPassOperation = MTLStencilOperationKeep;
     MTLDepthStencilDescriptor *cDesc = [[MTLDepthStencilDescriptor alloc] init];
     cDesc.frontFaceStencil = test;
     cDesc.backFaceStencil = test;
@@ -227,44 +354,297 @@ void CanvasFillBuildPipelines(id<MTLDevice> device, uint64_t registryID,
     sDSDevice = device;
   }
 
-  *outStencilPS = stencilPS;
-  *outColorPS = colorPS;
-  *outStencilDS = sStencilDS;
-  *outColorDS = sColorDS;
+  outPipelines->stencil = stencilPS;
+  outPipelines->color = colorPS;
+  outPipelines->gradient = gradientPS;
+  outPipelines->composite = compositePS;
+  outPipelines->colorMask = colorMaskPS;
+  outPipelines->gradientMask = gradientMaskPS;
+  outPipelines->stencilDS = sStencilDS;
+  outPipelines->colorDS = sColorDS;
+}
+
+// Per-layer shared render state for the three fill passes - the MSAA targets +
+// tile viewport, constant across a CanvasEncodeFilledLayers call. Object
+// pointers are unretained (the caller holds them for the synchronous encode).
+typedef struct {
+  __unsafe_unretained id<MTLDevice> device;
+  __unsafe_unretained id<MTLCommandBuffer> commandBuffer;
+  __unsafe_unretained id<MTLTexture> msaaColor;
+  __unsafe_unretained id<MTLTexture> msaaStencil;
+  __unsafe_unretained id<MTLTexture> resolveTex;
+  __unsafe_unretained id<MTLTexture> outputTexture;
+  simd_uint2 viewport;
+  float tileWidth;
+  float tileHeight;
+} CanvasFillPassCtx;
+
+// The colour pass's per-layer inputs: the fill style + geometry (so it builds
+// its own hachure line buffer), the bbox + resolved solid/gradient colour, and
+// the optional image-alpha mask (image-layer hachure).
+typedef struct {
+  __unsafe_unretained KKBezierPath *geom;
+  CanvasFillStyle fs;
+  BOOL hachure;
+  simd_float2 bbMin;
+  simd_float2 bbMax;
+  BOOL useGradient;
+  simd_float4 color;
+  KKGradientFillParams gparams;
+  const KKColorLanesValue *cv; // gradient LUT source
+  BOOL maskHachure;
+  __unsafe_unretained id<MTLTexture> maskTex;
+  KKHachureMaskParams mparams;
+  float imageWidth;
+  float imageHeight;
+} CanvasFillColorInputs;
+
+// Stencil pass: clear the MSAA colour + stencil, then toggle (Invert) the
+// even-odd stencil for each fan triangle. No colour is written.
+static void CanvasFillEncodeStencilPass(const CanvasFillPassCtx *c,
+                                        const CanvasFillPipelines *pl,
+                                        id<MTLBuffer> fanBuf, NSUInteger triCount,
+                                        const matrix_float4x4 *m) {
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0].texture = c->msaaColor;
+  rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+  rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+  rpd.stencilAttachment.texture = c->msaaStencil;
+  rpd.stencilAttachment.loadAction = MTLLoadActionClear;
+  rpd.stencilAttachment.storeAction = MTLStoreActionStore;
+  rpd.stencilAttachment.clearStencil = 0;
+  id<MTLRenderCommandEncoder> enc =
+      [c->commandBuffer renderCommandEncoderWithDescriptor:rpd];
+  [enc setViewport:(MTLViewport){0, 0, c->tileWidth, c->tileHeight, -1, 1}];
+  [enc setRenderPipelineState:pl->stencil];
+  [enc setDepthStencilState:pl->stencilDS];
+  [enc setStencilReferenceValue:0];
+  [enc setVertexBuffer:fanBuf offset:0 atIndex:KKVertexInputIndex_Vertices];
+  [enc setVertexBytes:&c->viewport
+               length:sizeof(c->viewport)
+              atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setVertexBytes:m length:sizeof(*m) atIndex:KKVertexInputIndex_Transform];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangle
+          vertexStart:0
+          vertexCount:triCount * 3];
+  [enc endEncoding];
+}
+
+// Colour pass: draw the fill into the MSAA target where the stencil is odd,
+// resolving to the 1x resolve texture. Solid/gradient covers a single bbox quad;
+// a hachure style draws its line pattern (optionally clipped to an image alpha).
+static void CanvasFillEncodeColorPass(const CanvasFillPassCtx *c,
+                                      const CanvasFillPipelines *pl,
+                                      const matrix_float4x4 *m,
+                                      const CanvasFillColorInputs *in) {
+  // Hachure geometry built up front (clipped by the shape stencil); empty -> the
+  // pass just resolves transparent.
+  id<MTLBuffer> hBuf = nil;
+  NSUInteger hvc = 0;
+  if (in->hachure) {
+    CanvasHachureLine *hl = NULL;
+    NSUInteger lc =
+        CanvasGenerateHachureLines(in->geom, in->imageWidth, in->imageHeight,
+                                   in->fs.style, in->fs.gap, in->fs.angle, &hl);
+    KKVertex2D *hv = NULL;
+    if (lc > 0)
+      hvc = CanvasHachureTriangles(hl, lc, in->fs.style, in->fs.gap,
+                                   in->fs.weight, &hv);
+    free(hl);
+    if (hvc >= 3)
+      hBuf = [c->device newBufferWithBytes:hv
+                                    length:sizeof(KKVertex2D) * hvc
+                                   options:MTLResourceStorageModeShared];
+    free(hv);
+  }
+  simd_float2 pad = {1.0f, 1.0f};
+  simd_float2 q0 = in->bbMin - pad, q1 = in->bbMax + pad;
+  // textureCoordinate carries each corner's OBJECT-SPACE position so the gradient
+  // fragment gets the per-pixel position (perspective-correct); the solid
+  // fragment ignores it.
+  KKVertex2D quad[6] = {
+      {.position = {q0.x, q0.y}, .textureCoordinate = {q0.x, q0.y}},
+      {.position = {q1.x, q0.y}, .textureCoordinate = {q1.x, q0.y}},
+      {.position = {q0.x, q1.y}, .textureCoordinate = {q0.x, q1.y}},
+      {.position = {q1.x, q0.y}, .textureCoordinate = {q1.x, q0.y}},
+      {.position = {q1.x, q1.y}, .textureCoordinate = {q1.x, q1.y}},
+      {.position = {q0.x, q1.y}, .textureCoordinate = {q0.x, q1.y}},
+  };
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0].texture = c->msaaColor;
+  rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+  rpd.colorAttachments[0].storeAction = MTLStoreActionMultisampleResolve;
+  rpd.colorAttachments[0].resolveTexture = c->resolveTex;
+  rpd.stencilAttachment.texture = c->msaaStencil;
+  rpd.stencilAttachment.loadAction = MTLLoadActionLoad;
+  rpd.stencilAttachment.storeAction = MTLStoreActionDontCare;
+  id<MTLRenderCommandEncoder> enc =
+      [c->commandBuffer renderCommandEncoderWithDescriptor:rpd];
+  [enc setViewport:(MTLViewport){0, 0, c->tileWidth, c->tileHeight, -1, 1}];
+  [enc setDepthStencilState:pl->colorDS];
+  [enc setStencilReferenceValue:0];
+  [enc setVertexBytes:&c->viewport
+               length:sizeof(c->viewport)
+              atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setVertexBytes:m length:sizeof(*m) atIndex:KKVertexInputIndex_Transform];
+  if (in->hachure) {
+    if (hBuf) {
+      if (in->maskHachure) {
+        [enc setRenderPipelineState:(in->useGradient ? pl->gradientMask
+                                                     : pl->colorMask)];
+        [enc setFragmentTexture:in->maskTex atIndex:KKTextureIndex_InputImage];
+      } else {
+        [enc setRenderPipelineState:(in->useGradient ? pl->gradient
+                                                     : pl->color)];
+      }
+      [enc setVertexBuffer:hBuf offset:0 atIndex:KKVertexInputIndex_Vertices];
+      if (in->useGradient) {
+        [enc setFragmentBytes:in->cv->gradientLUT
+                       length:sizeof(in->cv->gradientLUT)
+                      atIndex:0];
+        [enc setFragmentBytes:&in->gparams length:sizeof(in->gparams) atIndex:1];
+        if (in->maskHachure)
+          [enc setFragmentBytes:&in->mparams
+                         length:sizeof(in->mparams)
+                        atIndex:2];
+      } else {
+        [enc setFragmentBytes:&in->color length:sizeof(in->color) atIndex:0];
+        if (in->maskHachure)
+          [enc setFragmentBytes:&in->mparams
+                         length:sizeof(in->mparams)
+                        atIndex:1];
+      }
+      [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:hvc];
+    }
+  } else {
+    [enc setRenderPipelineState:(in->useGradient ? pl->gradient : pl->color)];
+    [enc setVertexBytes:quad
+                 length:sizeof(quad)
+                atIndex:KKVertexInputIndex_Vertices];
+    if (in->useGradient) {
+      [enc setFragmentBytes:in->cv->gradientLUT
+                     length:sizeof(in->cv->gradientLUT)
+                    atIndex:0];
+      [enc setFragmentBytes:&in->gparams length:sizeof(in->gparams) atIndex:1];
+    } else {
+      [enc setFragmentBytes:&in->color length:sizeof(in->color) atIndex:0];
+    }
+    [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+  }
+  [enc endEncoding];
+}
+
+// Composite pass: blit the resolved (antialiased) fill over the dest with
+// premultiplied "over" - a full-tile quad sampling the resolve 1:1 (same
+// top-left UV convention as the source / image blit).
+static void CanvasFillEncodeCompositePass(const CanvasFillPassCtx *c,
+                                          const CanvasFillPipelines *pl) {
+  float tw = c->tileWidth, th = c->tileHeight;
+  KKVertex2D blit[4] = {
+      {{tw / 2.0f, -th / 2.0f}, {1, 1}},
+      {{-tw / 2.0f, -th / 2.0f}, {0, 1}},
+      {{tw / 2.0f, th / 2.0f}, {1, 0}},
+      {{-tw / 2.0f, th / 2.0f}, {0, 0}},
+  };
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0].texture = c->outputTexture;
+  rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+  id<MTLRenderCommandEncoder> enc =
+      [c->commandBuffer renderCommandEncoderWithDescriptor:rpd];
+  [enc setViewport:(MTLViewport){0, 0, tw, th, -1, 1}];
+  [enc setRenderPipelineState:pl->composite];
+  [enc setVertexBytes:blit length:sizeof(blit) atIndex:KKVertexInputIndex_Vertices];
+  [enc setVertexBytes:&c->viewport
+               length:sizeof(c->viewport)
+              atIndex:KKVertexInputIndex_ViewportSize];
+  [enc setFragmentTexture:c->resolveTex atIndex:KKTextureIndex_InputImage];
+  [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+  [enc endEncoding];
 }
 
 void CanvasEncodeFilledLayers(
     NSArray<KKBezierPath *> *layers, id<MTLDevice> device,
+    NSMutableDictionary<NSString *, id<MTLTexture>> *textureCache,
     id<MTLCommandBuffer> commandBuffer, id<MTLTexture> outputTexture,
-    id<MTLTexture> stencilTexture, id<MTLRenderPipelineState> fillStencilPS,
-    id<MTLRenderPipelineState> fillColorPS,
-    id<MTLDepthStencilState> fillStencilDS,
-    id<MTLDepthStencilState> fillColorDS, float imageWidth, float imageHeight,
+    const CanvasFillPipelines *pipelines, float imageWidth, float imageHeight,
     float tileWidth, float tileHeight, float tileShiftX, float tileShiftY,
     double frac, NSString *overrideLayerID, KKTimeline *overrideTimeline) {
-  if (!commandBuffer || !outputTexture || !stencilTexture || !fillStencilPS ||
-      !fillColorPS || layers.count == 0)
+  if (!commandBuffer || !outputTexture || !pipelines || !pipelines->stencil ||
+      !pipelines->color || !pipelines->composite || device == nil ||
+      layers.count == 0)
+    return;
+  // The fill rasterises into a 4x multisample colour + stencil, resolves to a
+  // 1x texture (coverage AA), then composites that over the dest.
+  id<MTLTexture> msaaColor = nil, msaaStencil = nil, resolveTex = nil;
+  if (!CanvasFillEnsureMSAA(device, (NSUInteger)tileWidth,
+                            (NSUInteger)tileHeight, outputTexture.pixelFormat,
+                            &msaaColor, &msaaStencil, &resolveTex))
     return;
   simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
   simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
   simd_uint2 viewport = {(unsigned int)tileWidth, (unsigned int)tileHeight};
   float aspect = imageHeight > 0 ? imageWidth / imageHeight : 1.0f;
+  // Shared render state for the three per-layer passes (MSAA targets + tile).
+  CanvasFillPassCtx passCtx = {
+      .device = device,
+      .commandBuffer = commandBuffer,
+      .msaaColor = msaaColor,
+      .msaaStencil = msaaStencil,
+      .resolveTex = resolveTex,
+      .outputTexture = outputTexture,
+      .viewport = viewport,
+      .tileWidth = tileWidth,
+      .tileHeight = tileHeight,
+  };
 
   // Bottom-first (index 0 = topmost, drawn last), same stack order as the image
   // + stroke passes.
   for (NSInteger i = (NSInteger)layers.count - 1; i >= 0; i--) {
     KKBezierPath *path = layers[i];
-    if (path.isImage || path.isGroup || path.hidden || !path.fillEnabled)
+    if (path.isGroup || path.hidden)
       continue;
-    if (path.count < 3)
+    // Fraction to EVALUATE lanes at (a static preview, frac < 0, reads frame
+    // 0).
+    double evalFrac = frac < 0.0 ? 0.0 : frac;
+    if (!CanvasFillEnabledAtFraction(path, evalFrac, overrideLayerID,
+                                     overrideTimeline))
       continue;
 
-    KKBezierPath *geom =
-        (frac < 0.0) ? path : CanvasPathMorphedAtFraction(path, frac);
-    if (geom.count < 3)
-      continue;
-    if (geom.hasCornerRadii)
-      geom = CanvasPathByExpandingCorners(geom, aspect);
+    KKBezierPath *geom;
+    // Image-layer hachure clips to the picture's alpha (the masked color pass
+    // samples this rect's UV); a vector fill leaves it at the unit rect
+    // (unused).
+    BOOL isImageHachure = NO;
+    simd_float2 imgRectMin = {0, 0}, imgRectMax = {1, 1};
+    if (path.isImage) {
+      // Image fill: only a HACHURE pattern is drawn here (a Solid image fill is
+      // a tint, handled in the image pass). The shape is the image's rect; the
+      // pattern is then masked to the image's own alpha in the colour pass so
+      // it keeps the picture's silhouette rather than its bounding box.
+      CanvasFillStyle ifs = CanvasFillStyleAtFraction(
+          path, evalFrac, overrideLayerID, overrideTimeline);
+      if (ifs.style == 0 || ![path.shape isKindOfClass:[KKRectShape class]])
+        continue;
+      KKRectShape *r = (KKRectShape *)path.shape;
+      simd_float2 corners[4] = {r.min, simd_make_float2(r.max.x, r.min.y),
+                                r.max, simd_make_float2(r.min.x, r.max.y)};
+      KKBezierPath *rect = [[KKBezierPath alloc] init];
+      [rect setLinearPositions:corners count:4 closed:YES];
+      geom = rect;
+      isImageHachure = YES;
+      imgRectMin = r.min;
+      imgRectMax = r.max;
+    } else {
+      if (path.count < 3)
+        continue;
+      geom = (frac < 0.0) ? path : CanvasPathMorphedAtFraction(path, frac);
+      if (geom.count < 3)
+        continue;
+      if (geom.hasCornerRadii)
+        geom = CanvasPathByExpandingCorners(geom, aspect);
+    }
 
     KKVertex2D *fan = NULL;
     simd_float2 bbMin = {0, 0}, bbMax = {0, 0};
@@ -294,9 +674,52 @@ void CanvasEncodeFilledLayers(
     float opacity = t.opacity * path.opacity;
     for (NSInteger k = 0; k < ng; k++)
       opacity *= groups[k].t.opacity;
-    // TEMP white fill (premultiplied). Swap to (fillR,fillG,fillB) here for the
-    // path's actual colour once real fill styling lands.
-    simd_float4 color = simd_make_float4(opacity, opacity, opacity, opacity);
+    // Resolved fill colour from the shared Fill colour lanes. Solid: sRGB ->
+    // linear (the render working space, like the stroke), premultiplied by the
+    // composed layer/group opacity. Gradient: a per-pixel bbox fill (same
+    // CanvasComputeGradientFill the stroke uses) in the gradient colour pass.
+    KKColorLanesValue cv = CanvasFillColorAtFraction(
+        path, evalFrac, overrideLayerID, overrideTimeline);
+    BOOL useGradient =
+        (cv.mode == KKColorModeGradient) && pipelines->gradient != nil;
+    simd_float3 fc = cv.solidColor;
+    simd_float4 color =
+        simd_make_float4(powf(fc.x, 2.2f) * opacity, powf(fc.y, 2.2f) * opacity,
+                         powf(fc.z, 2.2f) * opacity, opacity);
+    KKGradientFillParams gparams;
+    CanvasGradientFill gfill = {0};
+    if (useGradient) {
+      gfill = CanvasComputeGradientFill(geom, imageWidth, imageHeight, 0.0f,
+                                        0.0f, 1.0f, cv, NULL, 0);
+      gparams.center = gfill.center;
+      gparams.dir = gfill.dir;
+      gparams.halfExtent = gfill.halfExtent;
+      gparams.maxDim = gfill.maxDim;
+      gparams.type = gfill.type;
+      gparams.opacity = opacity;
+    }
+    // Fill style: Solid (the bbox quad), or a hachure line pattern (clipped by
+    // the shape stencil). The pattern carries the solid OR gradient fill colour
+    // (its verts bake the object-space position for the gradient fragment).
+    CanvasFillStyle fs = CanvasFillStyleAtFraction(
+        path, evalFrac, overrideLayerID, overrideTimeline);
+    BOOL hachure = fs.style != 0;
+    // Image-layer hachure: clip the pattern to the image's alpha (its
+    // silhouette) via the masked colour pass, which samples the image at the
+    // rect's UV.
+    KKHachureMaskParams mparams = {0};
+    id<MTLTexture> maskTex = nil;
+    BOOL maskHachure = isImageHachure && hachure && textureCache != nil &&
+                       path.imagePath.length > 0;
+    if (maskHachure) {
+      maskTex = CanvasImageTextureForPath(path.imagePath, device, textureCache);
+      maskHachure =
+          (maskTex != nil) && (useGradient ? pipelines->gradientMask != nil
+                                           : pipelines->colorMask != nil);
+      mparams.scale = scale;
+      mparams.rectMin = imgRectMin;
+      mparams.rectMax = imgRectMax;
+    }
 
     id<MTLBuffer> fanBuf =
         [device newBufferWithBytes:fan
@@ -304,76 +727,26 @@ void CanvasEncodeFilledLayers(
                            options:MTLResourceStorageModeShared];
     free(fan);
 
-    // Stencil pass: clear to 0, toggle (Invert) for each covered fan triangle.
-    {
-      MTLRenderPassDescriptor *rpd =
-          [MTLRenderPassDescriptor renderPassDescriptor];
-      rpd.colorAttachments[0].texture = outputTexture;
-      rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
-      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-      rpd.stencilAttachment.texture = stencilTexture;
-      rpd.stencilAttachment.loadAction = MTLLoadActionClear;
-      rpd.stencilAttachment.storeAction = MTLStoreActionStore;
-      rpd.stencilAttachment.clearStencil = 0;
-      id<MTLRenderCommandEncoder> enc =
-          [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-      [enc setViewport:(MTLViewport){0, 0, tileWidth, tileHeight, -1, 1}];
-      [enc setRenderPipelineState:fillStencilPS];
-      [enc setDepthStencilState:fillStencilDS];
-      [enc setStencilReferenceValue:0];
-      [enc setVertexBuffer:fanBuf offset:0 atIndex:KKVertexInputIndex_Vertices];
-      [enc setVertexBytes:&viewport
-                   length:sizeof(viewport)
-                  atIndex:KKVertexInputIndex_ViewportSize];
-      [enc setVertexBytes:&m
-                   length:sizeof(m)
-                  atIndex:KKVertexInputIndex_Transform];
-      [enc drawPrimitives:MTLPrimitiveTypeTriangle
-              vertexStart:0
-              vertexCount:triCount * 3];
-      [enc endEncoding];
-    }
+    CanvasFillEncodeStencilPass(&passCtx, pipelines, fanBuf, triCount, &m);
 
-    // Colour pass: a single bbox quad (no self-overlap) masked to the odd
-    // stencil region, zeroing the stencil as it goes so the next path starts
-    // clean.
-    {
-      simd_float2 pad = {1.0f, 1.0f};
-      simd_float2 q0 = bbMin - pad, q1 = bbMax + pad;
-      KKVertex2D quad[6] = {
-          {.position = {q0.x, q0.y}, .textureCoordinate = {0, 0}},
-          {.position = {q1.x, q0.y}, .textureCoordinate = {0, 0}},
-          {.position = {q0.x, q1.y}, .textureCoordinate = {0, 0}},
-          {.position = {q1.x, q0.y}, .textureCoordinate = {0, 0}},
-          {.position = {q1.x, q1.y}, .textureCoordinate = {0, 0}},
-          {.position = {q0.x, q1.y}, .textureCoordinate = {0, 0}},
-      };
-      MTLRenderPassDescriptor *rpd =
-          [MTLRenderPassDescriptor renderPassDescriptor];
-      rpd.colorAttachments[0].texture = outputTexture;
-      rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
-      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-      rpd.stencilAttachment.texture = stencilTexture;
-      rpd.stencilAttachment.loadAction = MTLLoadActionLoad;
-      rpd.stencilAttachment.storeAction = MTLStoreActionDontCare;
-      id<MTLRenderCommandEncoder> enc =
-          [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-      [enc setViewport:(MTLViewport){0, 0, tileWidth, tileHeight, -1, 1}];
-      [enc setRenderPipelineState:fillColorPS];
-      [enc setDepthStencilState:fillColorDS];
-      [enc setStencilReferenceValue:0];
-      [enc setVertexBytes:quad
-                   length:sizeof(quad)
-                  atIndex:KKVertexInputIndex_Vertices];
-      [enc setVertexBytes:&viewport
-                   length:sizeof(viewport)
-                  atIndex:KKVertexInputIndex_ViewportSize];
-      [enc setVertexBytes:&m
-                   length:sizeof(m)
-                  atIndex:KKVertexInputIndex_Transform];
-      [enc setFragmentBytes:&color length:sizeof(color) atIndex:0];
-      [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
-      [enc endEncoding];
-    }
+    CanvasFillColorInputs colorIn = {
+        .geom = geom,
+        .fs = fs,
+        .hachure = hachure,
+        .bbMin = bbMin,
+        .bbMax = bbMax,
+        .useGradient = useGradient,
+        .color = color,
+        .gparams = gparams,
+        .cv = &cv,
+        .maskHachure = maskHachure,
+        .maskTex = maskTex,
+        .mparams = mparams,
+        .imageWidth = imageWidth,
+        .imageHeight = imageHeight,
+    };
+    CanvasFillEncodeColorPass(&passCtx, pipelines, &m, &colorIn);
+
+    CanvasFillEncodeCompositePass(&passCtx, pipelines);
   }
 }

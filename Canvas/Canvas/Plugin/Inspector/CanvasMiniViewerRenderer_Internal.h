@@ -20,6 +20,8 @@ NS_ASSUME_NONNULL_BEGIN
 @protected
   id<MTLRenderPipelineState> _pipeline;       // source passthrough (no blend)
   id<MTLRenderPipelineState> _imagePipeline;  // image overlay (premult alpha)
+  id<MTLRenderPipelineState> _imageTintPipeline; // fill-tinted image (premult)
+  id<MTLRenderPipelineState> _imageGradTintPipeline; // gradient-tinted image
   id<MTLRenderPipelineState> _strokePipeline; // vector stroke (premult alpha)
   id<MTLRenderPipelineState> _strokeGradientPipeline; // gradient-filled stroke
   id<MTLRenderPipelineState> _strokeDashPipeline;     // dashed stroke (arc mask)

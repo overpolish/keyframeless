@@ -54,13 +54,21 @@ NSMutableArray<KKBezierPath *> *
 /// divides by). For a full-frame render tile==image so shift is 0; FCP's tiled
 /// previews pass a non-zero shift so each tile shows only its slice instead of
 /// redrawing the whole composite.
+/// `imagePS` is the plain image pipeline (KKTransformVertexShader +
+/// KKTextureOpacityFragment); `tintPS` (optional) the solid-tint pipeline
+/// (KKTextureTintFragment) and `gradTintPS` (optional) the gradient-tint
+/// pipeline (KKTextureGradientTintFragment) used for a fill-enabled image
+/// layer, which colorizes the image toward its fill colour / gradient by the
+/// Fill Amount. Pass a nil tint pipeline to render that mode plain.
 void CanvasEncodeImageLayers(
     NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
     id<MTLDevice> device,
     NSMutableDictionary<NSString *, id<MTLTexture>> *cache, float imageWidth,
     float imageHeight, float tileShiftX, float tileShiftY, double frac,
-    NSString *_Nullable overrideLayerID,
-    KKTimeline *_Nullable overrideTimeline);
+    NSString *_Nullable overrideLayerID, KKTimeline *_Nullable overrideTimeline,
+    id<MTLRenderPipelineState> imagePS,
+    id<MTLRenderPipelineState> _Nullable tintPS,
+    id<MTLRenderPipelineState> _Nullable gradTintPS);
 
 /// Draw the source frame as a full-image quad through the SAME tile transform
 /// (KKTransformVertexShader + the tile-shift matrix) the layers use, so it

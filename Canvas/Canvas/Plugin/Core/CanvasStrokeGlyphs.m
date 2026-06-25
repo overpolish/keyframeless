@@ -270,3 +270,104 @@ NSArray<NSImage *> *CanvasMarkerGlyphs(BOOL isStart) {
                      }),
   ];
 }
+
+// Fill style glyph on the 24-grid (the helper sets the template colour +
+// origin). 0 = Solid (filled rounded rect), 1 = Hachure (diagonals clipped to
+// the box), 2 = Cross-hatch (two diagonal sets), 3 = Zigzag, 4 = Dots (3x3).
+// Ported from _Attic/UI/FillStyleView.m.
+static void CanvasDrawFillStyleGlyph(CGFloat k, NSInteger style) {
+  CGFloat inset = 5.0 * k, size = 14.0 * k;
+  NSRect box = NSMakeRect(inset, inset, size, size);
+  switch (style) {
+  case 0: {
+    [[NSBezierPath bezierPathWithRoundedRect:box xRadius:2 * k
+                                     yRadius:2 * k] fill];
+    break;
+  }
+  case 1: {
+    [NSGraphicsContext saveGraphicsState];
+    [[NSBezierPath bezierPathWithRoundedRect:box xRadius:2 * k
+                                     yRadius:2 * k] addClip];
+    for (CGFloat o = -size; o <= size * 2; o += 4.5 * k) {
+      NSBezierPath *l = [NSBezierPath bezierPath];
+      [l moveToPoint:NSMakePoint(inset + o, inset + size)];
+      [l lineToPoint:NSMakePoint(inset + o + size, inset)];
+      [l setLineWidth:1.0 * k];
+      [l stroke];
+    }
+    [NSGraphicsContext restoreGraphicsState];
+    break;
+  }
+  case 2: {
+    [NSGraphicsContext saveGraphicsState];
+    [[NSBezierPath bezierPathWithRoundedRect:box xRadius:2 * k
+                                     yRadius:2 * k] addClip];
+    for (CGFloat o = -size; o <= size * 2; o += 5.0 * k) {
+      NSBezierPath *l = [NSBezierPath bezierPath];
+      [l moveToPoint:NSMakePoint(inset + o, inset + size)];
+      [l lineToPoint:NSMakePoint(inset + o + size, inset)];
+      [l setLineWidth:1.0 * k];
+      [l stroke];
+      NSBezierPath *l2 = [NSBezierPath bezierPath];
+      [l2 moveToPoint:NSMakePoint(inset + o, inset)];
+      [l2 lineToPoint:NSMakePoint(inset + o + size, inset + size)];
+      [l2 setLineWidth:1.0 * k];
+      [l2 stroke];
+    }
+    [NSGraphicsContext restoreGraphicsState];
+    break;
+  }
+  case 3: {
+    [NSGraphicsContext saveGraphicsState];
+    [[NSBezierPath bezierPathWithRoundedRect:box xRadius:2 * k
+                                     yRadius:2 * k] addClip];
+    CGFloat zigH = 3.0 * k, zigW = 2.5 * k, midY = inset + (size - zigH) / 2.0;
+    NSBezierPath *zig = [NSBezierPath bezierPath];
+    [zig moveToPoint:NSMakePoint(inset, midY)];
+    for (CGFloat x = 0; x < size; x += zigW * 2) {
+      [zig lineToPoint:NSMakePoint(inset + x + zigW, midY + zigH)];
+      [zig lineToPoint:NSMakePoint(inset + x + zigW * 2, midY)];
+    }
+    [zig setLineWidth:1.2 * k];
+    [zig stroke];
+    [NSGraphicsContext restoreGraphicsState];
+    break;
+  }
+  default: {
+    CGFloat dotR = 1.0 * k, step = size / 4.0;
+    for (NSInteger row = 0; row < 3; row++)
+      for (NSInteger col = 0; col < 3; col++) {
+        CGFloat cx = inset + step * (col + 1), cy = inset + step * (row + 1);
+        [[NSBezierPath bezierPathWithOvalInRect:NSMakeRect(cx - dotR, cy - dotR,
+                                                           dotR * 2, dotR * 2)]
+            fill];
+      }
+    break;
+  }
+  }
+}
+
+NSArray<NSImage *> *CanvasFillStyleGlyphs(void) {
+  return @[
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawFillStyleGlyph(k, 0);
+                     }),
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawFillStyleGlyph(k, 1);
+                     }),
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawFillStyleGlyph(k, 2);
+                     }),
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawFillStyleGlyph(k, 3);
+                     }),
+    CanvasGlyphImage(1.0f,
+                     ^(CGFloat k) {
+                       CanvasDrawFillStyleGlyph(k, 4);
+                     }),
+  ];
+}

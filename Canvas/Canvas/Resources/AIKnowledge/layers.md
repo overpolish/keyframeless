@@ -116,7 +116,21 @@ Stroke Width and the colour are ordinary animatable lanes: constant by default, 
 
 The **gradient** maps onto the stroke pivoting on the layer's centre: **Linear** runs along the angle (0° up, 90° right, 180° down) and spans the layer so it always reaches both end colours; **Radial** runs as a circle from the centre out to the ends. Colours are rendered colour-accurate against the editor swatch. In the Advanced graph an animated solid colour plots its **R / G / B** channels as separate red/green/blue lines (alpha is edited in the swatch, not graphed).
 
-**Fill**, dashes (dashed / dotted strokes) and the sketch (hand-drawn) render style are still to come.
+## Fill
+
+Vector paths and images have a **Fill** group in the inspector (groups don't - they only transform their members). Fill suits **closed** shapes (a rectangle, ellipse, or any path you've closed); an open path's fill closes the gap implicitly. A path's fill is drawn **under its stroke**, so a filled-and-stroked shape shows the stroke sitting on top of the fill. It holds:
+
+- **Enabled** - a checkbox that turns the fill on or off. Like the Stroke group, when it's off the rest of the Fill controls drop out of every timeline surface (constants/keypose popovers, the Animated dropdown, the lane filter, the Basic/Advanced graphs) until you turn it back on.
+- **Fill colour** - a **Mode** pill (Solid / Gradient) plus the matching editor: a colour **swatch** for Solid, or a **gradient** editor (stops, Radial / Linear, angle) for Gradient. Both **animate** (add them to the Animated dropdown); Mode is a structural choice, not animated. The gradient maps the same way the stroke's does - Linear runs along the angle and spans the layer, Radial runs as a circle from the centre out. The fill silhouette is **antialiased** (multisampled), and a filled shape is **hit-testable**: click anywhere inside it (not just on the stroke) to select the layer, matching the actual drawn fill including concave shapes and the holes of a compound path.
+- **Fill Style** - a glyph pill choosing how the area is filled: **Solid** (a flat filled shape), or one of four hatch patterns - **Hachure** (parallel diagonal lines), **Cross** (cross-hatch, two crossing sets), **Zigzag** (a single zigzag line per row), **Dots** (a grid of dots). It's a structural choice (not animated). The hatch patterns are drawn in the fill colour - **including the gradient**, which runs across the lines just as it would across a solid fill. Picking any non-Solid style reveals the pattern controls:
+  - **Fill Gap** - the spacing between hatch lines (or dots), in pixels.
+  - **Fill Angle** - the hatch direction in degrees, edited with a **dial** (the same circular knob as the Transform Rotation).
+  - **Fill Weight** - the thickness of the hatch lines (or the dot size), in pixels.
+- **Fill Amount** (images only, Solid style) - **images** get the Fill group too, where a **Solid** fill acts as a **tint**: this 0-100% amount colourises the picture toward the fill colour (or gradient), 0% leaving it untouched. It only appears for an image with a Solid Fill Style.
+
+On an **image**, a non-Solid Fill Style **replaces** the picture with the hatch pattern, clipped to the image's own **silhouette** (its alpha) rather than its bounding box - so a hachured cut-out keeps its shape and reads as the pattern in the fill colour. A Solid image fill tints instead (see Fill Amount).
+
+The sketch (hand-drawn, rough) render style is still to come.
 
 ## Toolbar
 
@@ -156,7 +170,7 @@ Anchors show as dots and tangent handles as smaller dots on lines, the same look
 
 The pen tool is also context-sensitive on an existing selected path: clicking a **segment** inserts an anchor there (preserving the curve), and clicking either open **endpoint** continues drawing from that tip. Holding **Opt** over an anchor turns the cursor into a delete nib and removes that point.
 
-A new path starts with a 20px red stroke. Its **width** (with an optional Start->End taper) and **colour** (solid or gradient) are now per-path, animatable properties - see **Stroke** above; fill is still to come.
+A new path starts with a 20px red stroke. Its **width** (with an optional Start->End taper) and **colour** (solid or gradient) are now per-path, animatable properties - see **Stroke** above; close the path and it can take a **Fill** too (see **Fill** above).
 
 ## Creating shapes (rectangle / ellipse tools)
 
@@ -223,4 +237,4 @@ The inspector's motion-blur control applies the shared sample-accumulate blur to
 
 - Per-layer **rotation** (lane + on-canvas gizmo).
 - Per-layer opacity in the render.
-- Stroke **fill** (width + colour are done - see **Stroke** above), plus the sketch (hand-drawn) render style.
+- The sketch (hand-drawn, rough) render style. Stroke and Fill are done - see **Stroke** and **Fill** above.

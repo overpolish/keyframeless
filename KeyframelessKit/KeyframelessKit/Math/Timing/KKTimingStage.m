@@ -1066,6 +1066,20 @@ NSArray<NSString *> *KKLaneComponentLabels(KKLane *lane) {
     return @[ @"W", @"H", @"X", @"Y" ];
   case KKLaneValueTypeColor:
     return @[ @"R", @"G", @"B", @"A" ];
+  case KKLaneValueTypeAngle: {
+    // A multi-axis angle (e.g. Rotation X/Y/Z) carries explicit labels and
+    // returned above; a lone angle (Fill Angle, a gradient direction) has none,
+    // so hand back a single empty label. The static-value row keys its circular
+    // knob off a >= 1 component count, so without this a 1-axis angle would fall
+    // through to a plain field instead of the dial.
+    NSUInteger n = lane.keyposes.firstObject.values.count;
+    if (n <= 1)
+      return @[ @"" ];
+    NSMutableArray<NSString *> *out = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++)
+      [out addObject:@""];
+    return out;
+  }
   case KKLaneValueTypeFloat:
   case KKLaneValueTypeNormalized:
     return nil;

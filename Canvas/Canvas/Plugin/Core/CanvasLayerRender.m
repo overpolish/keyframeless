@@ -5,6 +5,7 @@
 
 #import "CanvasLayerRender.h"
 #import "CanvasCornerFillet.h"
+#import "CanvasFillProperties.h" // CanvasFillEnabledAtFraction + tint/colour
 #import "CanvasImageTexture.h"
 #import "CanvasLayerRenderInternal.h"
 #import "CanvasLayerTransform.h"
@@ -86,6 +87,10 @@ typedef struct {
   __unsafe_unretained id<MTLTexture> tex;
   float depth;
   NSInteger order;
+  uint8_t tintMode;     // 0 none, 1 solid fill tint, 2 gradient fill tint
+  simd_float4 tintRGBA; // solid: linear fill RGB + amount (0..1) in .a
+  KKGradientTintParams gradTint; // gradient: UV-space params + amount
+  simd_float3 gradLUT[KK_GRADIENT_LUT_SIZE]; // gradient: sRGB colour ramp
 } CanvasDrawItem;
 
 void CanvasEncodeImageLayers(
@@ -93,7 +98,9 @@ void CanvasEncodeImageLayers(
     id<MTLDevice> device,
     NSMutableDictionary<NSString *, id<MTLTexture>> *cache, float imageWidth,
     float imageHeight, float tileShiftX, float tileShiftY, double frac,
-    NSString *overrideLayerID, KKTimeline *overrideTimeline) {
+    NSString *overrideLayerID, KKTimeline *overrideTimeline,
+    id<MTLRenderPipelineState> imagePS, id<MTLRenderPipelineState> tintPS,
+    id<MTLRenderPipelineState> gradTintPS) {
   if (!encoder || !device || layers.count == 0)
     return;
   simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
@@ -166,6 +173,47 @@ void CanvasEncodeImageLayers(
     items[count].tex = tex;
     items[count].depth = depth;
     items[count].order = count;
+    // Fill on an IMAGE layer = tint: colorize the image toward the fill colour
+    // by the Fill Amount (lane-gated like the render's fill). frac < 0 (static
+    // preview) reads frame 0. Solid mode tints toward the flat colour; Gradient
+    // mode tints toward the gradient sampled in the image's UV space.
+    items[count].tintMode = 0;
+    items[count].tintRGBA = simd_make_float4(0, 0, 0, 0);
+    double efrac = frac < 0.0 ? 0.0 : frac;
+    if (CanvasFillEnabledAtFraction(path, efrac, overrideLayerID,
+                                    overrideTimeline)) {
+      // A non-Solid Fill Style on an image REPLACES it with the hachure pattern
+      // (drawn in the fill pass, like a shape fill) - so skip drawing the
+      // image. A Solid fill tints the image here.
+      CanvasFillStyle ifs = CanvasFillStyleAtFraction(
+          path, efrac, overrideLayerID, overrideTimeline);
+      if (ifs.style != 0)
+        continue;
+      float amt = CanvasFillTintAtFraction(path, efrac, overrideLayerID,
+                                           overrideTimeline);
+      if (amt > 0.001f) {
+        KKColorLanesValue cv = CanvasFillColorAtFraction(
+            path, efrac, overrideLayerID, overrideTimeline);
+        if (cv.mode == KKColorModeGradient) {
+          simd_float2 dir =
+              simd_make_float2(sinf(cv.gradientAngle), cosf(cv.gradientAngle));
+          items[count].gradTint.dir = dir;
+          // UV-space half extent along `dir` (the 0..1 UV box, half 0.5/axis).
+          items[count].gradTint.halfExtent =
+              fmaxf(0.5f * fabsf(dir.x) + 0.5f * fabsf(dir.y), 1.0e-3f);
+          items[count].gradTint.type = cv.gradientType;
+          items[count].gradTint.amount = amt;
+          items[count].gradTint.opacity = opacity;
+          memcpy(items[count].gradLUT, cv.gradientLUT, sizeof(cv.gradientLUT));
+          items[count].tintMode = 2;
+        } else {
+          simd_float3 fc = cv.solidColor;
+          items[count].tintRGBA = simd_make_float4(
+              powf(fc.x, 2.2f), powf(fc.y, 2.2f), powf(fc.z, 2.2f), amt);
+          items[count].tintMode = 1;
+        }
+      }
+    }
     count++;
   }
 
@@ -187,12 +235,35 @@ void CanvasEncodeImageLayers(
 
   for (NSInteger j = 0; j < count; j++) {
     CanvasDrawItem *it = &items[j];
+    // A tinted image uses a tint fragment (lerp toward the fill colour /
+    // gradient by the amount); a plain image the opacity fragment. Set the
+    // pipeline per item so they interleave by depth. A missing tint pipeline ->
+    // render plain.
+    if (it->tintMode == 2 && gradTintPS) {
+      [encoder setRenderPipelineState:gradTintPS];
+      [encoder setFragmentBytes:it->gradLUT
+                         length:sizeof(it->gradLUT)
+                        atIndex:0];
+      [encoder setFragmentBytes:&it->gradTint
+                         length:sizeof(it->gradTint)
+                        atIndex:1];
+    } else if (it->tintMode == 1 && tintPS) {
+      [encoder setRenderPipelineState:tintPS];
+      [encoder setFragmentBytes:&it->tintRGBA
+                         length:sizeof(it->tintRGBA)
+                        atIndex:0];
+      [encoder setFragmentBytes:&it->opacity
+                         length:sizeof(it->opacity)
+                        atIndex:1];
+    } else {
+      [encoder setRenderPipelineState:imagePS];
+      [encoder setFragmentBytes:&it->opacity
+                         length:sizeof(it->opacity)
+                        atIndex:0];
+    }
     [encoder setVertexBytes:&it->matrix
                      length:sizeof(it->matrix)
                     atIndex:KKVertexInputIndex_Transform];
-    [encoder setFragmentBytes:&it->opacity
-                       length:sizeof(it->opacity)
-                      atIndex:0];
     [encoder setVertexBytes:it->quad
                      length:sizeof(it->quad)
                     atIndex:KKVertexInputIndex_Vertices];

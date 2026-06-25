@@ -131,7 +131,25 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
         [t.label isEqualToString:KKColorLanesModeLabel(@"Stroke")] ||
         [t.label isEqualToString:KKColorLanesSolidLabel(@"Stroke")] ||
         [t.label isEqualToString:KKColorLanesGradientLabel(@"Stroke")];
+    // Fill (enabled + colour + style/hachure) applies to vector paths AND image
+    // layers (a shape fill / an image tint or hachure overlay), but never to
+    // groups. Fill Amount is the image-tint strength only (a vector fill is the
+    // whole shape), so it's image-only.
+    BOOL fillLane =
+        [t.label isEqualToString:@"Fill Enabled"] ||
+        [t.label isEqualToString:KKColorLanesModeLabel(@"Fill")] ||
+        [t.label isEqualToString:KKColorLanesSolidLabel(@"Fill")] ||
+        [t.label isEqualToString:KKColorLanesGradientLabel(@"Fill")] ||
+        [t.label isEqualToString:@"Fill Style"] ||
+        [t.label isEqualToString:@"Fill Gap"] ||
+        [t.label isEqualToString:@"Fill Angle"] ||
+        [t.label isEqualToString:@"Fill Weight"];
+    BOOL fillAmountLane = [t.label isEqualToString:@"Fill Amount"];
     if (vectorOnly && (path.isImage || path.isGroup))
+      continue;
+    if (fillLane && path.isGroup)
+      continue;
+    if (fillAmountLane && !path.isImage)
       continue;
     // Line Cap only matters on an OPEN end: hide it for a closed single contour
     // or any multi-contour path (the renderer treats those as closed, so no
@@ -191,6 +209,57 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
       src.keyposes =
           @[ [KKKeyPose keyposeAtTime:0.0
                                values:@[ @(path.strokeEnabled ? 1.0 : 0.0) ]] ];
+    }
+    // Fill "Enabled" with no stored lane: seed from the flat fillEnabled.
+    if (!stored[t.label] && [t.label isEqualToString:@"Fill Enabled"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.fillEnabled ? 1.0 : 0.0) ]] ];
+    }
+    // Fill colour Mode / Solid with no stored lane: seed from the flat
+    // fillColorMode (0=Solid, 1=Gradient) and fillR,G,B (alpha 1). The Gradient
+    // lane keeps the template default for now (gradient fill render is a
+    // follow-up).
+    if (!stored[t.label] &&
+        [t.label isEqualToString:KKColorLanesModeLabel(@"Fill")]) {
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(path.fillColorMode) ]] ];
+    }
+    if (!stored[t.label] &&
+        [t.label isEqualToString:KKColorLanesSolidLabel(@"Fill")]) {
+      src.keyposes = @[ [KKKeyPose
+          keyposeAtTime:0.0
+                 values:@[
+                   @(path.fillR), @(path.fillG), @(path.fillB), @1.0
+                 ]] ];
+    }
+    // Fill Amount (image tint strength) with no stored lane: seed from the flat
+    // fillTint (0..1) as a percentage.
+    if (!stored[t.label] && [t.label isEqualToString:@"Fill Amount"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.fillTint * 100.0) ]] ];
+    }
+    // Fill Style + hachure controls with no stored lane: seed from the flat
+    // sketchFillStyle / sketchFillGap / sketchFillAngle / sketchFillWeight.
+    if (!stored[t.label] && [t.label isEqualToString:@"Fill Style"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.sketchFillStyle) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Fill Gap"]) {
+      src.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(path.sketchFillGap) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Fill Angle"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.sketchFillAngle) ]] ];
+    }
+    if (!stored[t.label] && [t.label isEqualToString:@"Fill Weight"]) {
+      src.keyposes =
+          @[ [KKKeyPose keyposeAtTime:0.0
+                               values:@[ @(path.sketchFillWeight) ]] ];
     }
     // Stroke colour Mode / Solid with no stored lane: seed from the flat
     // strokeColorMode (0=Solid, 1=Gradient - same ordering, no Dynamic) and

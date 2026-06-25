@@ -24,4 +24,9 @@ NSArray<NSImage *> *CanvasLineJoinGlyphs(void);
 /// forward. Ported from the pre-v3 _Attic marker glyphs.
 NSArray<NSImage *> *CanvasMarkerGlyphs(BOOL isStart);
 
+/// Template glyph icons for the Fill Style pill, in lane-value order: 0 =
+/// Solid, 1 = Hachure, 2 = Cross-hatch, 3 = Zigzag, 4 = Dots. Ported from the
+/// pre-v3 _Attic FillStyleView.
+NSArray<NSImage *> *CanvasFillStyleGlyphs(void);
+
 NS_ASSUME_NONNULL_END

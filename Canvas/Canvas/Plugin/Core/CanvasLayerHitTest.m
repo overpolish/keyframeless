@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "CanvasCornerFillet.h"    // CanvasPathByExpandingCorners
+#import "CanvasCornerFillet.h"   // CanvasPathByExpandingCorners
+#import "CanvasFillProperties.h" // CanvasFillEnabledAtFraction (lane gate)
+#import "CanvasFillRender.h" // CanvasBuildFillFan (same fan the render fills)
 #import "CanvasHitTestGeometry.h" // CanvasInvBilinear + CanvasSampleImageAlpha
 #import "CanvasLayerRender.h"     // CanvasHitTestLayerID (public decl)
 #import "CanvasLayerTimeline.h"
@@ -183,39 +185,6 @@ KKRotMatrix3 CanvasComposedGroupRotation(NSArray<KKBezierPath *> *layers,
   return base;
 }
 
-// Flatten a vector path to a normalized [0,1] (Y-up) polyline, the raw geometry
-// CanvasProjectedCornerObj then projects through the layer transform. Coarser
-// than the render tessellation (selection doesn't need 32 steps/segment).
-static const NSUInteger kHitFlattenSteps = 16;
-static NSUInteger CanvasFlattenPathNormalized(KKBezierPath *path,
-                                              simd_float2 *pts,
-                                              NSUInteger maxPts) {
-  NSUInteger count = path.count;
-  if (count < 2)
-    return 0;
-  NSUInteger segs = path.closed ? count : count - 1;
-  NSUInteger n = 0;
-  for (NSUInteger c = 0; c < segs; c++) {
-    NSUInteger next = (c + 1) % count;
-    for (NSUInteger i = 0; i < kHitFlattenSteps; i++) {
-      float t = (float)i / (float)kHitFlattenSteps;
-      simd_float2 p = [path evaluatePointAtIndex:c nextIndex:next atT:t];
-      if (n > 0 && simd_distance_squared(p, pts[n - 1]) < 1e-9f)
-        continue;
-      if (n < maxPts)
-        pts[n++] = p;
-    }
-  }
-  if (!path.closed) {
-    simd_float2 p = [path evaluatePointAtIndex:segs - 1
-                                     nextIndex:segs
-                                           atT:1.0f];
-    if ((n == 0 || simd_distance_squared(p, pts[n - 1]) > 1e-9f) && n < maxPts)
-      pts[n++] = p;
-  }
-  return n;
-}
-
 // Point in triangle (aspect-corrected screen space) via consistent edge signs.
 // A point on an edge counts as inside. Callers must skip degenerate (zero-area)
 // triangles first - those report every point as inside.
@@ -355,31 +324,47 @@ static BOOL CanvasStrokeMarkersHit(KKBezierPath *geom, float startW, float endW,
   return NO;
 }
 
-// Even-odd point-in-polygon over a projected polyline (aspect-corrected, same
-// space the stroke distance uses). Lets a click INSIDE a filled shape select
-// it.
-static BOOL CanvasPointInProjectedPolygon(simd_float2 q,
-                                          const simd_float2 *proj, NSUInteger n,
-                                          float aspect) {
-  if (n < 3)
+// Hit the FILL the same way as the stroke: test the point against the SAME
+// triangle fan the render fills (CanvasBuildFillFan), projected through the
+// layer transform. The render's stencil INVERTS per fan triangle, so a pixel
+// covered by an ODD number of triangles is filled - so we count containing
+// triangles and report inside on odd parity. That matches the rendered fill
+// exactly, including holes / compound paths (one fan per contour).
+static BOOL CanvasFillFanHit(KKBezierPath *geom, float outW, float outH,
+                             CanvasLayerTransform t, simd_float2 c,
+                             float aspect, const CanvasGroupXform *groups,
+                             NSInteger ng, simd_float2 q) {
+  KKVertex2D *fan = NULL;
+  simd_float2 bbMin, bbMax;
+  NSUInteger triCount =
+      CanvasBuildFillFan(geom, outW, outH, &fan, &bbMin, &bbMax);
+  if (triCount == 0) {
+    free(fan);
     return NO;
-  float qx = q.x * aspect, qy = q.y;
-  BOOL inside = NO;
-  for (NSUInteger i = 0, j = n - 1; i < n; j = i++) {
-    float xi = proj[i].x * aspect, yi = proj[i].y;
-    float xj = proj[j].x * aspect, yj = proj[j].y;
-    if (((yi > qy) != (yj > qy)) &&
-        (qx < (xj - xi) * (qy - yi) / (yj - yi) + xi))
-      inside = !inside;
   }
-  return inside;
+  simd_float2 qa = simd_make_float2(q.x * aspect, q.y);
+  simd_float2 inv = simd_make_float2(outW != 0.0f ? 1.0f / outW : 0.0f,
+                                     outH != 0.0f ? 1.0f / outH : 0.0f);
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+  NSUInteger covered = 0;
+  for (NSUInteger ti = 0; ti < triCount; ti++) {
+    simd_float2 p[3];
+    for (int k = 0; k < 3; k++)
+      p[k] = CanvasHitProjectVert(fan[ti * 3 + k], inv, half, t, c, aspect,
+                                  groups, ng);
+    float area2 = (p[1].x - p[0].x) * (p[2].y - p[0].y) -
+                  (p[2].x - p[0].x) * (p[1].y - p[0].y);
+    if (fabsf(area2) > 1e-9f && CanvasPointInTri(qa, p[0], p[1], p[2]))
+      covered++;
+  }
+  free(fan);
+  return (covered & 1) != 0; // even-odd: odd coverage = inside (stencil invert)
 }
 
 // YES if the query hits a vector layer: within its (transformed) stroke, OR -
 // for a fill-enabled path - anywhere inside the filled region. Stroke tol is
 // the half-width in object-Y units plus a screen-slop floor so a thin stroke is
 // still grabbable.
-enum { kHitPolyCap = 2048 }; // true ICE so the on-stack arrays aren't VLAs
 static const float kHitStrokeSlopObj = 0.012f; // ~1.2% of canvas height
 static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
                                  simd_float2 q, float canvasHeightPx,
@@ -388,35 +373,31 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
   // sharp corners - else a click near a rounded-off corner misses.
   KKBezierPath *geom =
       path.hasCornerRadii ? CanvasPathByExpandingCorners(path, aspect) : path;
-  simd_float2 norm[kHitPolyCap];
-  NSUInteger n = CanvasFlattenPathNormalized(geom, norm, kHitPolyCap);
-  if (n < 2)
+  if (geom.count < 2)
     return NO;
   CanvasLayerTransform t = (frac < 0.0)
                                ? CanvasLayerTransformIdentity()
                                : CanvasLayerTransformAtFraction(path, frac);
   simd_float2 c = CanvasLayerObjectCenter(path);
-  simd_float2 proj[kHitPolyCap];
-  for (NSUInteger i = 0; i < n; i++)
-    proj[i] = CanvasProjectedCornerObj(norm[i].x, norm[i].y, t, c.x, c.y,
-                                       aspect, groups, ng);
-  if (CanvasStrokeEnabledAtFraction(path, frac < 0.0 ? 0.0 : frac, nil, nil)) {
-    float h = canvasHeightPx > 1.0f ? canvasHeightPx : 1000.0f;
+  // Shared pixel space for every tessellation-derived test (stroke strip,
+  // markers, fill fan): the aspect-corrected canvas height. The scale cancels
+  // in the project-back, so any consistent value works.
+  float h = canvasHeightPx > 1.0f ? canvasHeightPx : 1000.0f;
+  float a = aspect > 0.0f ? aspect : 1.0f;
+  double efrac = frac < 0.0 ? 0.0 : frac;
+  if (CanvasStrokeEnabledAtFraction(path, efrac, nil, nil)) {
     // Effective Start/End widths from the Stroke Width lane (the flat
     // strokeWidth is stale once the lane drives the render). Test against the
     // actual tessellated strip so a tapered (and later wavy / multi) stroke is
     // clickable exactly where it's drawn.
     float swStart = path.strokeWidth, swEnd = path.strokeWidth;
-    CanvasStrokeWidthAtFraction(path, frac < 0.0 ? 0.0 : frac, nil, nil,
-                                &swStart, &swEnd);
+    CanvasStrokeWidthAtFraction(path, efrac, nil, nil, &swStart, &swEnd);
     // Floor the clickable width to the screen slop so a hairline stays
     // grabbable (a 2*slop-wide strip = slop half-width in object-Y, matching
     // the old tol).
     float minPx = 2.0f * kHitStrokeSlopObj * h;
-    float a = aspect > 0.0f ? aspect : 1.0f;
     uint8_t lineCap = path.lineCap, lineJoin = path.lineJoin;
-    CanvasStrokeCapJoinAtFraction(path, frac < 0.0 ? 0.0 : frac, nil, nil,
-                                  &lineCap, &lineJoin);
+    CanvasStrokeCapJoinAtFraction(path, efrac, nil, nil, &lineCap, &lineJoin);
     if (CanvasStrokeStripHit(geom, fmaxf(swStart, minPx), fmaxf(swEnd, minPx),
                              a * h, h, lineCap, lineJoin, t, c, aspect, groups,
                              ng, q))
@@ -425,14 +406,18 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
     // (use the real stroke widths so the marker size matches what's drawn).
     uint8_t startMarker = 0, endMarker = 0;
     float startMul = path.startMarkerSize, endMul = path.endMarkerSize;
-    CanvasStrokeMarkersAtFraction(path, frac < 0.0 ? 0.0 : frac, nil, nil,
-                                  &startMarker, &endMarker, &startMul, &endMul);
+    CanvasStrokeMarkersAtFraction(path, efrac, nil, nil, &startMarker,
+                                  &endMarker, &startMul, &endMul);
     if (CanvasStrokeMarkersHit(geom, swStart, swEnd, startMarker, endMarker,
                                startMul, endMul, a * h, h, t, c, aspect, groups,
                                ng, q))
       return YES;
   }
-  if (path.fillEnabled && CanvasPointInProjectedPolygon(q, proj, n, aspect))
+  // Fill: test the SAME triangle fan the render fills (odd coverage = inside),
+  // lane-gated like the render so a lane-toggled fill is clickable even when
+  // the flat fillEnabled is NO.
+  if (CanvasFillEnabledAtFraction(path, efrac, nil, nil) &&
+      CanvasFillFanHit(geom, a * h, h, t, c, aspect, groups, ng, q))
     return YES;
   return NO;
 }
@@ -493,8 +478,13 @@ NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
       continue; // viewer: nothing to edit here (animated, off-keypose)
     BOOL isImage = path.isImage && path.imagePath.length &&
                    [path.shape isKindOfClass:[KKRectShape class]];
-    BOOL isVector = !path.isImage && (path.strokeEnabled || path.fillEnabled) &&
-                    path.count >= 2;
+    // Candidate if it draws anything pickable at this frac: stroke OR fill,
+    // read from the lanes (not the flat props) so a lane-toggled
+    // stroke/fill-only shape is selectable - matching what the render draws.
+    double efrac = frac < 0.0 ? 0.0 : frac;
+    BOOL isVector = !path.isImage && path.count >= 2 &&
+                    (CanvasStrokeEnabledAtFraction(path, efrac, nil, nil) ||
+                     CanvasFillEnabledAtFraction(path, efrac, nil, nil));
     if (!isImage && !isVector)
       continue;
     cand[candCount].index = i;
