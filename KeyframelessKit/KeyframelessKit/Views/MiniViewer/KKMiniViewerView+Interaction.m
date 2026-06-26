@@ -69,14 +69,12 @@
   [self _didChangeViewTransformOfKind:KKMiniViewerTransformKindZoom];
 }
 
-// Exact mechanism copied from the old KKStageSequencerView+InteractionZoomPan
-// (which had working pinch/pan): plain responder overrides, scrollWheel:
-// forwards to super first for a coherent NSScrollView event stream.
-- (void)magnifyWithEvent:(NSEvent *)event {
-  NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
-  [self _zoomTo:_zoom * (1.0 + event.magnification) aboutViewPoint:p];
-}
-
+// Pinch-to-zoom is routed through a LOCAL magnify monitor
+// (-_installKeyMonitor), NOT a magnifyWithEvent: responder: AppKit delivers
+// magnify gestures only to the key window, so the responder never fires while
+// the companion layer list holds key (popover non-key). The monitor works in
+// both states. Pan keeps the scrollWheel: responder below - AppKit delivers
+// scroll to inactive windows, so it already works non-key.
 - (void)scrollWheel:(NSEvent *)event {
   [super scrollWheel:event];
   NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
@@ -444,7 +442,13 @@
   NSPoint p;
   if (![self _pointFromGlobalEvent:&p])
     return NO;
+  _lastPanZoomTime = CACurrentMediaTime();
   [self _zoomTo:_zoom * (1.0 + event.magnification) aboutViewPoint:p];
+  // A pinch runs in a tracking run-loop mode where setNeedsDisplay (what
+  // _zoomTo requests) starves the MTKView's on-demand draw - so the zoom is
+  // applied but never rendered until the gesture ends. Force the synchronous
+  // draw the pan path already uses for the same reason.
+  [self _drawNowForInteraction];
   return YES;
 }
 

@@ -5,22 +5,7 @@
 
 #import "KKPathBoolean.h"
 #import <CoreGraphics/CoreGraphics.h>
-#import <KeyframelessKit/KKLog.h> // pathopdbg TEMP
 #import <Metal/Metal.h>
-
-// pathopdbg TEMP: normalized point bbox of a KKBezierPath (anchors only).
-static void KKDbgBBox(KKBezierPath *p, float *minX, float *minY, float *maxX,
-                      float *maxY) {
-  *minX = *minY = 1e9f;
-  *maxX = *maxY = -1e9f;
-  for (NSUInteger i = 0; i < p.count; i++) {
-    KKBezierPoint pt = [p pointAtIndex:i];
-    *minX = fminf(*minX, pt.x);
-    *minY = fminf(*minY, pt.y);
-    *maxX = fmaxf(*maxX, pt.x);
-    *maxY = fmaxf(*maxY, pt.y);
-  }
-}
 
 static CGMutablePathRef CGPathCreateFromKKBezierPath(KKBezierPath *path) {
   CGMutablePathRef cgPath = CGPathCreateMutable();
@@ -1193,24 +1178,6 @@ NSArray<KKBezierPath *> *KKPathStrokeToOutline(NSArray<KKBezierPath *> *paths,
     if (outline.count == 0)
       continue;
 
-    { // pathopdbg TEMP
-      float sX0, sY0, sX1, sY1, oX0, oY0, oX1, oY1;
-      KKDbgBBox(src, &sX0, &sY0, &sX1, &sY1);
-      KKDbgBBox(outline, &oX0, &oY0, &oX1, &oY1);
-      // Expected band half-width in NORMALIZED x/y = (sw/2)/refW, (sw/2)/refH.
-      KKLogInfo(
-          @"pathopdbg OUTLINE sw=%.2f ew=%.2f closed=%d refW=%.0f refH=%.0f "
-          @"| src bbox=[%.4f,%.4f .. %.4f,%.4f] cx=%.4f cy=%.4f "
-          @"| out bbox=[%.4f,%.4f .. %.4f,%.4f] cx=%.4f cy=%.4f "
-          @"| expandX=%.4f (expect ~%.4f) centerShiftX=%.4f shiftY=%.4f",
-          sw, ew, (int)src.closed, (double)referenceWidth,
-          (double)referenceHeight, sX0, sY0, sX1, sY1, (sX0 + sX1) * 0.5f,
-          (sY0 + sY1) * 0.5f, oX0, oY0, oX1, oY1, (oX0 + oX1) * 0.5f,
-          (oY0 + oY1) * 0.5f, (sX0 - oX0), (double)(sw * 0.5 / referenceWidth),
-          ((oX0 + oX1) * 0.5f - (sX0 + sX1) * 0.5f),
-          ((oY0 + oY1) * 0.5f - (sY0 + sY1) * 0.5f));
-    }
-
     // The outline becomes a filled path using the source stroke color.
     outline.fillEnabled = YES;
     outline.fillR = src.strokeR;
@@ -1267,17 +1234,6 @@ KKBezierPath *KKPathBooleanApply(NSArray<KKBezierPath *> *paths,
 
   if (output.count == 0)
     return nil;
-
-  { // pathopdbg TEMP
-    NSMutableString *opc = [NSMutableString string];
-    for (KKBezierPath *p in paths)
-      [opc appendFormat:@"%lu(c%lu) ", (unsigned long)p.count,
-                        (unsigned long)p.contourCount];
-    KKLogInfo(@"pathopdbg BOOLEAN op=%ld operands=%lu [%@] -> result count=%lu "
-              @"contours=%lu",
-              (long)op, (unsigned long)paths.count, opc,
-              (unsigned long)output.count, (unsigned long)output.contourCount);
-  }
 
   copyStyleProperties(output, paths[0]);
   copyPlacementProperties(output, paths[0]); // stay in the base operand's group

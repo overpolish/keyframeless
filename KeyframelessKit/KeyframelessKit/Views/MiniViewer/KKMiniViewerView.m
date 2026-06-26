@@ -108,17 +108,18 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   return _grabsKeyFocusOnClick;
 }
 
-// Interact on the FIRST click even when the popover window isn't key yet (it's a
-// nonactivating panel, so clicking in from the layer panel / FCP would otherwise
-// be swallowed just to make it key, needing a second click to actually drag an
-// OSC). The mini is a transient editing surface - a single click should act.
+// Interact on the FIRST click even when the popover window isn't key yet (it's
+// a nonactivating panel, so clicking in from the layer panel / FCP would
+// otherwise be swallowed just to make it key, needing a second click to
+// actually drag an OSC). The mini is a transient editing surface - a single
+// click should act.
 - (BOOL)acceptsFirstMouse:(NSEvent *)event {
   return YES;
 }
 
 - (void)endFieldEditingGrabbingFocusIfNeeded {
-  [self.window makeFirstResponder:(_grabsKeyFocusOnClick ? (NSResponder *)self
-                                                         : nil)];
+  [self.window
+      makeFirstResponder:(_grabsKeyFocusOnClick ? (NSResponder *)self : nil)];
 }
 
 - (void)reportHandleValueForLabel:(NSString *)laneLabel
@@ -142,6 +143,10 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   if (_keyGlobalMon) {
     [NSEvent removeMonitor:_keyGlobalMon];
     _keyGlobalMon = nil;
+  }
+  if (_magnifyMon) {
+    [NSEvent removeMonitor:_magnifyMon];
+    _magnifyMon = nil;
   }
 }
 
@@ -257,11 +262,12 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
                                    }];
   // Global monitor = events delivered to OTHER apps (the local monitor above
   // covers our own process). It exists only because FCP handles its Cmd-key
-  // equivalents in the host process and doesn't forward them across ViewBridge -
-  // so it's limited to those equivalents (reset / toolbar). The tool keys, which
-  // include the DESTRUCTIVE Delete, are NOT handled here: a key typed into
-  // another app (e.g. backspace in an editor) must never delete a layer. Those
-  // go through the local monitor only (i.e. when FCP itself has the event).
+  // equivalents in the host process and doesn't forward them across ViewBridge
+  // - so it's limited to those equivalents (reset / toolbar). The tool keys,
+  // which include the DESTRUCTIVE Delete, are NOT handled here: a key typed
+  // into another app (e.g. backspace in an editor) must never delete a layer.
+  // Those go through the local monitor only (i.e. when FCP itself has the
+  // event).
   _keyGlobalMon =
       [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskKeyDown
                                              handler:^(NSEvent *e) {
@@ -270,6 +276,24 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
                                                  return;
                                                [s _handleToolbarKeyEvent:e];
                                              }];
+  // Pinch-to-zoom via a LOCAL magnify monitor instead of the magnifyWithEvent:
+  // responder (which AppKit only calls on the key window - so a pinch over the
+  // mini does nothing while the companion layer list holds key). The monitor
+  // fires for the app's magnify events regardless of key window and routes by
+  // pointer location; applyMagnifyEvent: reads the global mouse position. Gated
+  // on pointerOverCanvas so it ignores pinches over other views (e.g. the
+  // timeline graph keeps its own zoom). Swallow when handled so no other
+  // responder double-zooms.
+  _magnifyMon =
+      [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMagnify
+                                            handler:^NSEvent *(NSEvent *e) {
+                                              __strong typeof(self) s = weak;
+                                              if ([s pointerOverCanvas]) {
+                                                [s applyMagnifyEvent:e];
+                                                return nil;
+                                              }
+                                              return e;
+                                            }];
 }
 
 - (BOOL)_resolveSlot:(_KKMiniFilmSlot *)slot

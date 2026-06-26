@@ -69,6 +69,14 @@ NS_ASSUME_NONNULL_BEGIN
   id _keyMon;       // Cmd-0 reset-zoom local keyDown monitor
   id _keyGlobalMon; // Cmd-0 reset-zoom global keyDown monitor (XPC: events
                     // arrive global, like scroll/magnify)
+  id _magnifyMon;   // pinch-to-zoom local magnify monitor: AppKit delivers
+                    // magnify gestures ONLY to the key window, so when the
+                    // companion layer list holds key (popover non-key) a pinch
+                  // over the mini never reaches magnifyWithEvent:. The monitor
+                  // catches the app's magnify events regardless of which
+                  // window is key and routes by pointer location. (Pan needs
+                  // no monitor: AppKit delivers scrollWheel: to inactive
+                  // windows already.)
   _KKMiniViewerOverlay *_overlay;
   CGFloat _zoom;           // 1 == aspect-fit
   CGPoint _panPixels;      // drawable-space pan offset
