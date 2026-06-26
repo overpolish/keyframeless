@@ -628,12 +628,12 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   // made Radius (the un-opted lane) replace Crop after a crop edit.
   if (_openStaticView && !_openStaticIsBoundary) {
     [_openStaticView updateUnoptedLanes:[self _unoptedLanes]];
-    // Re-apply per-lane state (values + smooth + LINK) to the existing constants
-    // rows from the current selected-layer timeline. A same-structure selection
-    // change (e.g. drawing another constant-stroke path) reuses the rows and
-    // previously never re-read aspectLinked, so the link toggle + its coupling
-    // stayed stale from the prior layer. applyValues is focus-safe (skips an
-    // in-progress field edit), so this won't clobber active editing.
+    // Re-apply per-lane state (values + smooth + LINK) to the existing
+    // constants rows from the current selected-layer timeline. A same-structure
+    // selection change (e.g. drawing another constant-stroke path) reuses the
+    // rows and previously never re-read aspectLinked, so the link toggle + its
+    // coupling stayed stale from the prior layer. applyValues is focus-safe
+    // (skips an in-progress field edit), so this won't clobber active editing.
     [_openStaticView rebindLanes:_timeline.lanes];
   }
 
@@ -649,10 +649,14 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       [NSDate timeIntervalSinceReferenceDate] >=
           _boundaryRedriveSuppressUntil) {
     double f = _openStaticBoundaryFraction;
+    // A timeline re-feed re-scopes the open popover to the SAME layer it's
+    // already on - it must not fire the activation callback (which would drive
+    // the host selection back to that layer, ping-ponging against a selection
+    // the user just changed). Only a user graph-click/nav moves selection.
     if (_activeTab == 1)
-      [_advancedGraph requestValuePopoverAtFraction:f];
+      [_advancedGraph requestValuePopoverAtFraction:f fireActivation:NO];
     else
-      [_basicGraph requestValuePopoverAtFraction:f];
+      [_basicGraph requestValuePopoverAtFraction:f fireActivation:NO];
   }
 }
 
@@ -717,8 +721,8 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       continue;
     }
     // Per-owner opt-in lanes are included in the applied timeline only for the
-    // layers that support them (a vector path's Points / stroke, not an image or
-    // group). Don't re-seed one the source timeline deliberately omitted -
+    // layers that support them (a vector path's Points / stroke, not an image
+    // or group). Don't re-seed one the source timeline deliberately omitted -
     // otherwise its whole category (e.g. "Core" / "Stroke") shows as a constant
     // for every owner. Geometry lanes get this via `oscEditedOnly`; other lanes
     // declare it explicitly with `ownerScoped`.
@@ -940,9 +944,10 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   _activeLayerKey = [activeLayerKey copy];
   _basicGraph.activeLayerKey =
       activeLayerKey; // scopes the Basic keypose popover
-  // Keep the Advanced graph's active layer in sync too, so its "opened a keypose
-  // for a different layer" test compares against the CURRENT selection (stale
-  // here meant the keypose-owner highlight/selection sync silently skipped).
+  // Keep the Advanced graph's active layer in sync too, so its "opened a
+  // keypose for a different layer" test compares against the CURRENT selection
+  // (stale here meant the keypose-owner highlight/selection sync silently
+  // skipped).
   _advancedGraph.activeLayerKey = activeLayerKey;
   // Re-scope an open lane-filter checklist to the newly-selected layer (the
   // companion layer list drove the switch), like the Animated dropdown.

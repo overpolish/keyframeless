@@ -44,8 +44,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Owner (layer) keys in display order, so the lanes of a multi-layer timeline
 /// render grouped in the layer-list's stack order. Every lane is editable; the
-/// layer is just a display grouping (drawn via layerKey/layerLabel/layerSymbol).
-/// nil = no ordering (single-owner plugins).
+/// layer is just a display grouping (drawn via
+/// layerKey/layerLabel/layerSymbol). nil = no ordering (single-owner plugins).
 @property(nonatomic, copy, nullable) NSArray<NSString *> *layerOrder;
 
 /// Multi-owner only: the keypose popover scopes to ONE layer's params (not
@@ -202,6 +202,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// opened against; falls back to any animatable lane that has a KP at
 /// `fraction`. No-op if no matching KP exists.
 - (void)requestValuePopoverAtFraction:(double)fraction;
+/// As above, but `fireActivation` NO suppresses the onKeyposeLayerActivated
+/// callback. Pass NO for SELECTION-DRIVEN re-drives (the popover re-scoping
+/// after the host changed the selected layer, or a timeline re-feed) - firing
+/// the callback there drives selection back to the popover's old owner, a
+/// ping-pong loop. Pass YES (the default the no-flag form uses) for user
+/// navigation, where landing on a keypose SHOULD move selection to its owner.
+- (void)requestValuePopoverAtFraction:(double)fraction
+                       fireActivation:(BOOL)fireActivation;
 /// Flip the Position keypose nearest `frac` between corner and smooth (bezier)
 /// spatial interpolation. Routed from the keypose popover's curve toggle.
 - (void)writeSpatialSmoothForLabel:(NSString *)label

@@ -49,7 +49,9 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
     return;
   _activeLayerKey = [layerKey copy];
   // Re-point the open keypose popover at this layer's keypose at the same time.
-  [self requestValuePopoverAtFraction:_currentPopoverFrac];
+  // Selection already moved here (this IS the response to it), so don't fire
+  // the activation callback back at the host - that's the ping-pong.
+  [self requestValuePopoverAtFraction:_currentPopoverFrac fireActivation:NO];
 }
 
 - (void)setDynamicDisplay:(BOOL)dynamicDisplay {

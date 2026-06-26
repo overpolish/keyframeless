@@ -275,11 +275,16 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
 - (nullable NSString *)_representativeLaneLabelForSection:
     (KKBasicSection)section;
 - (void)_openBoundaryPopoverForDiamond:(NSInteger)d;
+- (void)_openBoundaryPopoverForDiamond:(NSInteger)d
+                        fireActivation:(BOOL)fireActivation;
 // The layer the keypose popover scopes to: the host-selected `_activeLayerKey`
 // if it has an animated lane, else the first animated layer. nil for
 // single-owner timelines (no scoping). Updates `_activeLayerKey` + fires
-// onKeyposeLayerActivated when it resolves to a different layer.
+// onKeyposeLayerActivated when it resolves to a different layer (unless
+// fireActivation is NO - a selection-driven re-drive must not fire back).
 - (nullable NSString *)_resolveBasicActiveLayerKey;
+- (nullable NSString *)_resolveBasicActiveLayerKeyFiringActivation:
+    (BOOL)fireActivation;
 - (void)_writeBoundary:(KKBasicBoundary)boundary
                 values:(NSArray<NSNumber *> *)values
               forLabel:(NSString *)label

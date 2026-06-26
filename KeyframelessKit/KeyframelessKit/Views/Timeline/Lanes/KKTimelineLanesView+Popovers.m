@@ -144,6 +144,7 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   NSPopover *pop =
       [self _showPopoverWithContent:manageView
                            fromView:anchorView
+                      preferredEdge:NSRectEdgeMinX
                             onClose:^{
                               __strong typeof(weak) s = weak;
                               if (!s)
@@ -224,6 +225,7 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
 
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
+                         preferredEdge:(NSRectEdge)preferredEdge
                                onClose:(void (^)(void))onClose {
   // Dismiss any popover from a previous call first - the ApplicationDefined
   // outside-click monitors don't fire click-to-click between two gaps in the
@@ -255,16 +257,16 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
 
   [popover showRelativeToRect:anchor.bounds
                        ofView:anchor
-                preferredEdge:NSRectEdgeMinY];
+                preferredEdge:preferredEdge];
 
   NSWindow *popoverWindow = popover.contentViewController.view.window;
   // Don't let the popover steal app focus from the host (FCP): without this the
-  // popover's window activates our ViewBridge process when it (or a click in it)
-  // becomes key, deactivating FCP so its cursors / Cmd-Z / shortcuts stop until
-  // the user clicks back. The companion layer-list panel avoids this by being a
-  // NONACTIVATING panel; NSPopover's backing window is an NSPanel subclass, so
-  // give it the same treatment - become key (for field editing / bare keys)
-  // WITHOUT activating the process.
+  // popover's window activates our ViewBridge process when it (or a click in
+  // it) becomes key, deactivating FCP so its cursors / Cmd-Z / shortcuts stop
+  // until the user clicks back. The companion layer-list panel avoids this by
+  // being a NONACTIVATING panel; NSPopover's backing window is an NSPanel
+  // subclass, so give it the same treatment - become key (for field editing /
+  // bare keys) WITHOUT activating the process.
   if ([popoverWindow isKindOfClass:[NSPanel class]]) {
     NSPanel *popoverPanel = (NSPanel *)popoverWindow;
     popoverPanel.styleMask |= NSWindowStyleMaskNonactivatingPanel;
@@ -686,6 +688,7 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   NSPopover *popover =
       [self _showPopoverWithContent:content
                            fromView:anchor
+                      preferredEdge:NSRectEdgeMinX
                             onClose:^{
                               __strong typeof(weak) s = weak;
                               [NSNotificationCenter.defaultCenter

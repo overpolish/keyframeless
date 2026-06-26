@@ -334,6 +334,9 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 
 // Popovers - value / gap / link.
 - (void)_openValuePopoverForLane:(NSInteger)laneIdx kp:(NSInteger)kpIdx;
+- (void)_openValuePopoverForLane:(NSInteger)laneIdx
+                              kp:(NSInteger)kpIdx
+                  fireActivation:(BOOL)fireActivation;
 - (void)_openGapPopoverForLabel:(NSString *)label kpIdx:(NSInteger)aIdx;
 - (void)_toggleLinkForLabel:(NSString *)label kpIdx:(NSInteger)aIdx;
 - (void)_mutateIntervalInLaneLabel:(NSString *)label

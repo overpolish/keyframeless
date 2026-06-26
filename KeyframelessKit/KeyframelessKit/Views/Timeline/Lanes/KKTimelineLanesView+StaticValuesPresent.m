@@ -219,8 +219,8 @@
 
   // Aspect link is a global per-lane toggle (no fraction). The keypose popover
   // routes it to whichever graph owns the open keypose; the constants popover
-  // edits the lanes view's own _timeline, so it persists there instead (else the
-  // toggle never reached _timeline and the next constant scrub's _refresh
+  // edits the lanes view's own _timeline, so it persists there instead (else
+  // the toggle never reached _timeline and the next constant scrub's _refresh
   // re-read the stale linked lane and relocked it).
   __weak typeof(self) weakLink = self;
   [staticView setOnLinkToggled:^(NSString *label, BOOL on) {
@@ -334,6 +334,7 @@
   NSPopover *popover = [self
       _showPopoverWithContent:staticView
                      fromView:anchor
+                preferredEdge:NSRectEdgeMinX
                       onClose:^{
                         __strong typeof(weak) s = weak;
                         if (!s)

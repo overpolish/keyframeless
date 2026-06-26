@@ -193,6 +193,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
+                         preferredEdge:(NSRectEdge)preferredEdge
                                onClose:(void (^)(void))onClose;
 // Defined in +Popovers.m (PopoversInternal @implementation); called back from
 // the +BoundaryNav navigation methods.

@@ -225,8 +225,12 @@
 
   _openExtraRows = extras;
   __weak typeof(self) weak = self;
+  // Boundary/segment popovers anchor to a point IN the timeline lane, so they
+  // open BELOW the boundary handle (not to the side like the inspector-button
+  // popovers).
   NSPopover *pop = [self _showPopoverWithContent:container
                                         fromView:anchor
+                                   preferredEdge:NSRectEdgeMinY
                                          onClose:^{
                                            if (onClose)
                                              onClose();

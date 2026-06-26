@@ -45,6 +45,12 @@
 }
 
 - (void)_openValuePopoverForLane:(NSInteger)laneIdx kp:(NSInteger)kpIdx {
+  [self _openValuePopoverForLane:laneIdx kp:kpIdx fireActivation:YES];
+}
+
+- (void)_openValuePopoverForLane:(NSInteger)laneIdx
+                              kp:(NSInteger)kpIdx
+                  fireActivation:(BOOL)fireActivation {
   if (!self.onValuePopover)
     return;
   NSArray<KKLane *> *lanes = [self _animatableLanes];
@@ -57,8 +63,8 @@
   double frac = kp.time;
 
   // The keypose popover scopes to this lane's layer (multi-owner timelines).
-  // Tell the host so it selects/highlights that layer. Fire EVERY open (not only
-  // when _activeLayerKey changes): the host selection can diverge from the
+  // Tell the host so it selects/highlights that layer. Fire EVERY open (not
+  // only when _activeLayerKey changes): the host selection can diverge from the
   // keypose owner via an external change (drawing a new path, picking a
   // no-keypose layer in Constants) while _activeLayerKey already equals the
   // owner - a change-gated fire would never correct it. Set _activeLayerKey
@@ -66,7 +72,12 @@
   // re-entrancy; the host handler also no-ops when already on that layer.
   if (lane.layerKey.length) {
     _activeLayerKey = [lane.layerKey copy];
-    if (self.onKeyposeLayerActivated)
+    // Only a USER landing on this keypose (a graph click / nav) moves the host
+    // selection to its owner. A selection-DRIVEN re-drive (retarget after the
+    // host already changed layers, or a timeline re-feed) passes NO - firing
+    // here would drive selection back to the popover's stale owner, the
+    // ping-pong.
+    if (fireActivation && self.onKeyposeLayerActivated)
       self.onKeyposeLayerActivated(_activeLayerKey);
   }
 
@@ -243,6 +254,11 @@
 }
 
 - (void)requestValuePopoverAtFraction:(double)fraction {
+  [self requestValuePopoverAtFraction:fraction fireActivation:YES];
+}
+
+- (void)requestValuePopoverAtFraction:(double)fraction
+                       fireActivation:(BOOL)fireActivation {
   NSArray<KKLane *> *lanes = [self _animatableLanes];
   NSInteger preferredLane = -1;
   if (_topLaneLabel) {
@@ -282,11 +298,12 @@
     }
   }
   if (foundLane < 0) {
-    // The active layer has no keypose at this time (e.g. it's constant, or a new
-    // path was just drawn and stole the selection). Fall through to ANY layer
-    // with a keypose here - mirrors Basic - so the popover, and the selection it
-    // drives via onKeyposeLayerActivated, move to a real keypose owner instead
-    // of leaving the popover (and the layer-list highlight) stranded.
+    // The active layer has no keypose at this time (e.g. it's constant, or a
+    // new path was just drawn and stole the selection). Fall through to ANY
+    // layer with a keypose here - mirrors Basic - so the popover, and the
+    // selection it drives via onKeyposeLayerActivated, move to a real keypose
+    // owner instead of leaving the popover (and the layer-list highlight)
+    // stranded.
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
       KKLane *l = lanes[i];
       if (l.headerPlaceholder)
@@ -306,7 +323,9 @@
     return;
   _topLaneLabel = [lanes[foundLane].label copy];
   _topKPIdx = foundKP;
-  [self _openValuePopoverForLane:foundLane kp:foundKP];
+  [self _openValuePopoverForLane:foundLane
+                              kp:foundKP
+                  fireActivation:fireActivation];
 }
 
 // Equal endpoints → modulation pills (Wiggle / Oscillate / Handheld) - curve
@@ -343,9 +362,8 @@
   // to ease or modulate, so close any open popover rather than show dead
   // controls. A transition (different shapes) falls through to the curve pills
   // below (endpointsEqual is forced NO for geometry).
-  if (lane.oscEditedOnly &&
-      KKMorphSnapshotSignature(a.geometrySnapshot) ==
-          KKMorphSnapshotSignature(b.geometrySnapshot)) {
+  if (lane.oscEditedOnly && KKMorphSnapshotSignature(a.geometrySnapshot) ==
+                                KKMorphSnapshotSignature(b.geometrySnapshot)) {
     if (self.onRequestClosePopover)
       self.onRequestClosePopover();
     return;
@@ -732,7 +750,8 @@
       // Copy-preserve: keyposeAtTime:values: would drop the keypose's spatial
       // state (spatialSmooth / in-out handles) AND its geometrySnapshot, so a
       // curve change would silently reset a Points keypose's shape to the base
-      // (i.e. the last-edited keypose's). See [[project_keypose_copy_preserve_spatial]].
+      // (i.e. the last-edited keypose's). See
+      // [[project_keypose_copy_preserve_spatial]].
       KKKeyPose *newKP = [src copy];
       KKInterval *iv = [src.outgoing copy] ?: [[KKInterval alloc] init];
       mut(iv);

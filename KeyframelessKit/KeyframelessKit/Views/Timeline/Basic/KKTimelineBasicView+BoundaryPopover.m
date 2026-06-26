@@ -18,6 +18,10 @@
 @implementation KKTimelineBasicView (BoundaryPopover)
 
 - (NSString *)_resolveBasicActiveLayerKey {
+  return [self _resolveBasicActiveLayerKeyFiringActivation:YES];
+}
+
+- (NSString *)_resolveBasicActiveLayerKeyFiringActivation:(BOOL)fireActivation {
   BOOL hasLayers = NO;
   for (KKLane *l in _timeline.lanes)
     if (l.enabled && l.layerKey.length) {
@@ -50,7 +54,10 @@
       }
   if (resolved && ![resolved isEqualToString:_activeLayerKey]) {
     _activeLayerKey = [resolved copy];
-    if (self.onKeyposeLayerActivated)
+    // Only fire on a USER-driven open (graph click / nav). A selection-driven
+    // re-drive (retarget / timeline re-feed) passes NO, else activation drives
+    // the host selection back to the popover's old owner - the ping-pong.
+    if (fireActivation && self.onKeyposeLayerActivated)
       self.onKeyposeLayerActivated(resolved);
   }
   return resolved;
@@ -66,10 +73,17 @@
   if (!eligible || [layerKey isEqualToString:_activeLayerKey])
     return;
   _activeLayerKey = [layerKey copy];
-  [self _openBoundaryPopoverForDiamond:_curDiamond]; // re-drive scoped to it
+  // Selection already moved here; re-scope the popover without firing
+  // activation back at the host (the ping-pong).
+  [self _openBoundaryPopoverForDiamond:_curDiamond fireActivation:NO];
 }
 
 - (void)_openBoundaryPopoverForDiamond:(NSInteger)d {
+  [self _openBoundaryPopoverForDiamond:d fireActivation:YES];
+}
+
+- (void)_openBoundaryPopoverForDiamond:(NSInteger)d
+                        fireActivation:(BOOL)fireActivation {
   if (_onDiamondTapped)
     _onDiamondTapped(d);
   if (!self.onBoundaryValuePopover)
@@ -106,7 +120,8 @@
   // Multi-owner timelines: scope the popover's params to ONE layer (the
   // host-selected one, or the first animated layer), so it doesn't list every
   // layer's values. nil for single-owner plugins (shows all, as before).
-  NSString *activeLayer = [self _resolveBasicActiveLayerKey];
+  NSString *activeLayer =
+      [self _resolveBasicActiveLayerKeyFiringActivation:fireActivation];
 
   NSMutableArray<KKLane *> *displayLanes = [NSMutableArray array];
   NSMutableArray<NSString *> *excludedLabels = [NSMutableArray array];
@@ -279,6 +294,11 @@
 }
 
 - (void)requestValuePopoverAtFraction:(double)fraction {
+  [self requestValuePopoverAtFraction:fraction fireActivation:YES];
+}
+
+- (void)requestValuePopoverAtFraction:(double)fraction
+                       fireActivation:(BOOL)fireActivation {
   // Map the requested fraction to whichever of the 4 boundary diamonds is
   // closest, then re-open at that diamond. Reuses the lanes-view in-place
   // rebind path for an already-open popover.
@@ -295,7 +315,8 @@
     }
   // Diamond IDs are 1-indexed (1=InStart, 2=Hold-start, 3=Hold-end,
   // 4=OutEnd); array index `best` maps directly to (best + 1).
-  [self _openBoundaryPopoverForDiamond:(best + 1)];
+  [self _openBoundaryPopoverForDiamond:(best + 1)
+                        fireActivation:fireActivation];
 }
 
 - (void)writeSpatialSmoothForLabel:(NSString *)label

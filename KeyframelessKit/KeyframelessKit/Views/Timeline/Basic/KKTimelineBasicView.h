@@ -166,6 +166,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// inactive cell swaps the popover to the corresponding boundary diamond
 /// (Basic's filmstrip cells correspond to the 4 boundary times).
 - (void)requestValuePopoverAtFraction:(double)fraction;
+/// As above, but `fireActivation` NO suppresses the onKeyposeLayerActivated
+/// callback - pass NO for selection-driven re-drives (retarget / timeline
+/// re-feed) so the popover re-scope doesn't drive selection back (ping-pong).
+- (void)requestValuePopoverAtFraction:(double)fraction
+                       fireActivation:(BOOL)fireActivation;
 /// Re-point an OPEN keypose popover at a different layer (host's layer-list
 /// selection). No-op if that layer has no animated lane.
 - (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey;
