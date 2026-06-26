@@ -54,9 +54,14 @@ static void CanvasDrawProjectedContours(id<CanvasPenSurface> surface,
     NSUInteger cLen = r.length;
     if (cLen < 2)
       continue;
-    // A compound path's individual contours are each closed; a lone contour
-    // follows the path's own closed flag (an open pen path stays open).
-    BOOL closed = (nc > 1) ? YES : cp.closed;
+    // Per-contour open/closed must mirror the RENDER exactly
+    // (CanvasContourClosed = path.closed for every contour) - else the guide
+    // disagrees with what's drawn. Forcing closed whenever nc>1 looped each
+    // contour of an OPEN multi-contour path (a multi-branch centerline: 77 open
+    // contours, closed=NO) back on itself, adding stray connecting segments the
+    // stroke never renders. A filled compound path carries closed=YES, so its
+    // contours still close.
+    BOOL closed = cp.closed;
     NSUInteger segs = closed ? cLen : cLen - 1;
     NSUInteger cap = segs * steps + 2;
     simd_float2 *local = malloc(sizeof(simd_float2) * cap);
@@ -132,7 +137,11 @@ CanvasOpFillCGPath(NSArray<KKBezierPath *> *layers, KKBezierPath *path,
     NSUInteger cLen = r.length;
     if (cLen < 2)
       continue;
-    BOOL closed = (nc > 1) ? YES : cp.closed;
+    // Match the render's per-contour open/closed (path.closed for every
+    // contour) so an open multi-contour stroke preview doesn't get a stray
+    // closing segment per contour. The fill path is unaffected: CGContextEOFill
+    // implicitly closes any open subpath.
+    BOOL closed = cp.closed;
     NSUInteger segs = closed ? cLen : cLen - 1;
     BOOL first = YES;
     for (NSUInteger c = 0; c < segs; c++) {
