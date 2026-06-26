@@ -47,27 +47,43 @@
   float aspect = (float)[self _canvasAspect];
   self.penDrawDest = destinationImage;
   self.penDrawTime = time;
-  for (KKBezierPath *p in paths) {
-    if (![sel containsObject:(p.layerID ?: @"")])
-      continue;
-    // Images have no points to outline - draw a dimmed box as their indicator.
-    if (p.isImage) {
-      CanvasDrawLayerBoxOSC(self, paths, p, frac, aspect);
-      continue;
-    }
-    if (p.isGroup || p.count < 1)
-      continue;
-    if (!CanvasPathGeometryEditableAtFraction(p, frac))
-      continue;
-    CanvasDrawPathEditOSC(self, paths, CanvasPathMorphedAtFraction(p, frac),
-                          frac, aspect, /*selected=*/nil, /*marqueeActive=*/NO,
-                          CGRectZero, /*ghost=*/YES, /*showCornerWidgets=*/NO);
-  }
+  // One batch for every selected layer's outline (clear:NO, over the grid) -
+  // several dense paths at once would otherwise multiply the per-primitive
+  // commit cost.
+  [self
+      drawOSCBatchedForDestinationImage:destinationImage
+                       clearDestination:NO
+                                  block:^{
+                                    for (KKBezierPath *p in paths) {
+                                      if (![sel containsObject:(p.layerID
+                                                                    ?: @"")])
+                                        continue;
+                                      // Images have no points to outline -
+                                      // draw a dimmed box indicator.
+                                      if (p.isImage) {
+                                        CanvasDrawLayerBoxOSC(self, paths, p,
+                                                              frac, aspect);
+                                        continue;
+                                      }
+                                      if (p.isGroup || p.count < 1)
+                                        continue;
+                                      if (!CanvasPathGeometryEditableAtFraction(
+                                              p, frac))
+                                        continue;
+                                      CanvasDrawPathEditOSC(
+                                          self, paths,
+                                          CanvasPathMorphedAtFraction(p, frac),
+                                          frac, aspect, /*selected=*/nil,
+                                          /*marqueeActive=*/NO, CGRectZero,
+                                          /*ghost=*/YES,
+                                          /*showCornerWidgets=*/NO);
+                                    }
+                                  }];
   self.penDrawDest = nil;
 }
 
-// The marquee rubber-band, drawn independently of the selection (the marquee can
-// run with 0, 1, or 2+ layers selected, so it can't ride on the single-path
+// The marquee rubber-band, drawn independently of the selection (the marquee
+// can run with 0, 1, or 2+ layers selected, so it can't ride on the single-path
 // point OSC's draw - that's why it vanished while multi-selected).
 - (void)_drawMarqueeInDestination:(FxImageTile *)destinationImage {
   if (!self.pathEditController.marqueeActive)
@@ -114,11 +130,26 @@
     return;
   self.penDrawDest = destinationImage;
   self.penDrawTime = time;
-  CanvasDrawPathEditOSC(self, paths, CanvasPathMorphedAtFraction(path, frac),
-                        frac, (float)[self _canvasAspect],
-                        self.pathEditController.selectedAnchors,
-                        /*marqueeActive=*/NO, CGRectZero, ghost,
-                        [self _activeTool] == CanvasToolbarToolCursor);
+  // Batch every anchor dot / tangent line / contour-halo segment into ONE
+  // command buffer (clear:NO, so it composes over the already-drawn grid). A
+  // dense path issues hundreds of primitives; unbatched, each was its own
+  // commit
+  // + waitUntilScheduled sync (~68ms on the main thread, stalling the drag).
+  // The batch is process-global, so it also captures the anchor / handle glyph
+  // controls' draws, not just self's lines.
+  [self
+      drawOSCBatchedForDestinationImage:destinationImage
+                       clearDestination:NO
+                                  block:^{
+                                    CanvasDrawPathEditOSC(
+                                        self, paths,
+                                        CanvasPathMorphedAtFraction(path, frac),
+                                        frac, (float)[self _canvasAspect],
+                                        self.pathEditController.selectedAnchors,
+                                        /*marqueeActive=*/NO, CGRectZero, ghost,
+                                        [self _activeTool] ==
+                                            CanvasToolbarToolCursor);
+                                  }];
   self.penDrawDest = nil;
 }
 
