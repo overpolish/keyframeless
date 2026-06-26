@@ -175,6 +175,15 @@ NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers,
                                  KKTimeline *_Nullable overrideTimeline,
                                  CanvasGroupXform *out, NSInteger maxN);
 
+/// Like CanvasBuildGroupXforms but keyed by `parentGroupID` instead of a layer
+/// index, so it resolves the ancestor groups of a path that ISN'T in `layers`
+/// (a transient path-op preview result carrying its source's parentGroupID).
+NSInteger CanvasBuildGroupXformsForParentID(
+    NSArray<KKBezierPath *> *layers, NSString *_Nullable parentGroupID,
+    double frac, NSString *_Nullable overrideLayerID,
+    KKTimeline *_Nullable overrideTimeline, CanvasGroupXform *out,
+    NSInteger maxN);
+
 /// The full per-member transform fed to the vertex shader: the member's 3D
 /// model matrix composed with each ancestor group's (member first, innermost
 /// group … outermost), then ONE perspective centred on the outermost element's

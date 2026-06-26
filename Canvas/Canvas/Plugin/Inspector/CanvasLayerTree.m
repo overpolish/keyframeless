@@ -58,8 +58,14 @@ NSIndexSet *CanvasLayerAncestorIndices(NSUInteger idx,
                                        NSArray<KKBezierPath *> *paths) {
   if (idx >= paths.count)
     return [NSIndexSet indexSet];
+  return CanvasLayerAncestorIndicesForParentID(paths[idx].parentGroupID, paths);
+}
+
+NSIndexSet *
+CanvasLayerAncestorIndicesForParentID(NSString *parentGroupID,
+                                      NSArray<KKBezierPath *> *paths) {
   NSMutableIndexSet *result = [NSMutableIndexSet indexSet];
-  NSString *pid = paths[idx].parentGroupID;
+  NSString *pid = parentGroupID;
   NSUInteger guard = 0;
   while (pid.length > 0 && guard++ < CanvasLayerGroupDepthGuard) {
     BOOL found = NO;

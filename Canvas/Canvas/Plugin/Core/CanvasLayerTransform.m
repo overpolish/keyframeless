@@ -274,17 +274,17 @@ BOOL CanvasLayerContentHalfExtentObj(NSArray<KKBezierPath *> *layers,
   return YES;
 }
 
-NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers,
-                                 NSUInteger idx, double frac,
-                                 NSString *overrideLayerID,
-                                 KKTimeline *overrideTimeline,
-                                 CanvasGroupXform *out, NSInteger maxN) {
-  // A group sits before its members in the flat stack, so a nested group has a
-  // higher index than its parent - reverse index order gives innermost-first,
-  // matching the parentGroupID chain (the index set loses the order). Composing
-  // innermost-first means each outer group transforms the already-placed
-  // result.
-  NSIndexSet *anc = CanvasLayerAncestorIndices(idx, layers);
+// Shared core: build group xforms from a precomputed ancestor index set. A
+// group sits before its members in the flat stack, so a nested group has a
+// higher index than its parent - reverse index order gives innermost-first,
+// matching the parentGroupID chain. Composing innermost-first means each outer
+// group transforms the already-placed result.
+static NSInteger CanvasGroupXformsFromAncestors(NSArray<KKBezierPath *> *layers,
+                                                NSIndexSet *anc, double frac,
+                                                NSString *overrideLayerID,
+                                                KKTimeline *overrideTimeline,
+                                                CanvasGroupXform *out,
+                                                NSInteger maxN) {
   __block NSInteger n = 0;
   [anc enumerateIndexesWithOptions:NSEnumerationReverse
                         usingBlock:^(NSUInteger gi, BOOL *stop) {
@@ -314,6 +314,25 @@ NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers,
                           n++;
                         }];
   return n;
+}
+
+NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers,
+                                 NSUInteger idx, double frac,
+                                 NSString *overrideLayerID,
+                                 KKTimeline *overrideTimeline,
+                                 CanvasGroupXform *out, NSInteger maxN) {
+  return CanvasGroupXformsFromAncestors(
+      layers, CanvasLayerAncestorIndices(idx, layers), frac, overrideLayerID,
+      overrideTimeline, out, maxN);
+}
+
+NSInteger CanvasBuildGroupXformsForParentID(
+    NSArray<KKBezierPath *> *layers, NSString *parentGroupID, double frac,
+    NSString *overrideLayerID, KKTimeline *overrideTimeline,
+    CanvasGroupXform *out, NSInteger maxN) {
+  return CanvasGroupXformsFromAncestors(
+      layers, CanvasLayerAncestorIndicesForParentID(parentGroupID, layers),
+      frac, overrideLayerID, overrideTimeline, out, maxN);
 }
 
 matrix_float4x4 CanvasLayerTiltMatrix(CanvasLayerTransform t,

@@ -110,10 +110,21 @@ CanvasProjCtx CanvasProjCtxMake(NSArray<KKBezierPath *> *layers,
                        : CanvasLayerTransformAtFraction(path, frac);
   ctx.center = CanvasLayerObjectCenter(path);
   NSUInteger idx = CanvasLayerIndexOf(layers, path);
-  ctx.ng = (idx == NSNotFound)
-               ? 0
-               : CanvasBuildGroupXforms(layers, idx, frac, nil, nil, ctx.groups,
-                                        kCanvasGroupXformCap);
+  if (idx == NSNotFound) {
+    // Not in the layer stack (a transient path-op preview result), but if it
+    // carries a parentGroupID resolve its ancestor groups by ID so it projects
+    // through the SAME group transform its committed form will - otherwise the
+    // green preview sits where the un-grouped geometry is, offset from the red
+    // operand by the group transform.
+    ctx.ng = path.parentGroupID.length
+                 ? CanvasBuildGroupXformsForParentID(layers, path.parentGroupID,
+                                                     frac, nil, nil, ctx.groups,
+                                                     kCanvasGroupXformCap)
+                 : 0;
+  } else {
+    ctx.ng = CanvasBuildGroupXforms(layers, idx, frac, nil, nil, ctx.groups,
+                                    kCanvasGroupXformCap);
+  }
   ctx.scl = CanvasHitScaleForAspect(aspect);
   ctx.m =
       CanvasComposedHitMatrix(ctx.t, ctx.center, aspect, ctx.groups, ctx.ng);

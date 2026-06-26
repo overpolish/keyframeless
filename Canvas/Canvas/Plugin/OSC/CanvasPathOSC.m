@@ -9,6 +9,7 @@
 #import "CanvasPathEditController.h" // kCanvasMaxEditableAnchors
 #import "CanvasPenController.h"      // CanvasPenSurface draw primitives
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKLog.h>   // pathopdbg TEMP
 #import <KeyframelessKit/KKShape.h> // KKRectShape (image extent)
 #import <simd/simd.h>
 
@@ -130,6 +131,27 @@ CanvasOpFillCGPath(NSArray<KKBezierPath *> *layers, KKBezierPath *path,
   KKBezierPath *cp =
       path.hasCornerRadii ? CanvasPathByExpandingCorners(path, aspect) : path;
   CanvasProjCtx ctx = CanvasProjCtxMake(layers, cp, frac, aspect);
+  { // pathopdbg TEMP
+    simd_float2 c = CanvasLayerObjectCenter(cp);
+    simd_float2 pj = CanvasProjectWithCtx(&ctx, c.x, c.y);
+    NSUInteger idx = NSNotFound;
+    for (NSUInteger i = 0; i < layers.count; i++)
+      if (layers[i] == cp || (cp.layerID.length &&
+                              [layers[i].layerID isEqualToString:cp.layerID])) {
+        idx = i;
+        break;
+      }
+    CanvasLayerTransform _ot = CanvasLayerTransformAtFraction(cp, frac);
+    KKLogInfo(@"pathopdbg FILLPATH layerID=%@ inLayers=%@ frac=%.3f count=%lu "
+              @"projShift=(%.4f,%.4f) | parentGroup=%@ animJSON=%lu "
+              @"| OWNxform pos=(%.4f,%.4f) sc=(%.3f,%.3f) rot=%.3f "
+              @"anchor=(%.3f,%.3f)",
+              cp.layerID ?: @"<none>", idx == NSNotFound ? @"NO" : @"YES", frac,
+              (unsigned long)cp.count, pj.x - c.x, pj.y - c.y,
+              cp.parentGroupID.length ? @"YES" : @"<none>",
+              (unsigned long)cp.animationJSON.length, _ot.posX, _ot.posY,
+              _ot.scaleX, _ot.scaleY, _ot.rotation, _ot.anchorX, _ot.anchorY);
+  }
   NSUInteger nc = cp.contourCount;
   const NSUInteger steps = 16;
   for (NSUInteger ci = 0; ci < nc; ci++) {
