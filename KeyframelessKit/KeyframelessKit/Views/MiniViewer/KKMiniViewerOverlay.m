@@ -19,6 +19,16 @@
   return NO;
 }
 
+// Act on the FIRST click even when the popover window isn't key yet (same
+// reason KKMiniViewerView does). This overlay sits on top and receives the
+// toolbar / OSC-handle presses, so without this a click coming in from the
+// layer list - which has stolen first responder, leaving the nonactivating
+// popover non-key - is swallowed just to make the window key, needing a second
+// click to actually trigger the path-op button or grab a handle.
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
 // Fill attributes for OSC size readouts: 9pt monospaced-medium, light-gray
 // (0xC1) fill - the same color the viewer's KKOSCLabel uses. Used both for
 // measuring the text and as the fill pass in -drawReadout:.
