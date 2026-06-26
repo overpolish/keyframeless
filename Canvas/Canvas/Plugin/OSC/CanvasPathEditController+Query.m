@@ -87,13 +87,21 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
                                         (float)[_surface penCanvasAspect]);
   double rh2 = kHandleGrabPx * kHandleGrabPx,
          ra2 = kAnchorGrabPx * kAnchorGrabPx;
+  // Prioritise the ANCHOR: a handle dot whose SURFACE position lands within the
+  // anchor's grab disc is visually coincident with the anchor (e.g. a near-zero
+  // tangent - nonzero in local coords but drawn right on top of the point), so
+  // there's no distinct region to aim at. Skip it here and let the anchor loop
+  // below win; only a handle extended clear of the anchor stays its own target.
+  // (The local-coord 1e-6 skip alone missed this - a tiny tangent passes it but
+  // still sits under the anchor, making the point impossible to grab.)
   for (NSUInteger i = 0; i < path.count; i++) {
     KKBezierPoint pt = [path pointAtIndex:i];
+    CGPoint sa = [self _surfaceForLocalX:pt.x y:pt.y ctx:&ctx];
     if (fabsf(pt.outX) + fabsf(pt.outY) > 1e-6f) {
       CGPoint s = [self _surfaceForLocalX:pt.x + pt.outX
                                         y:pt.y + pt.outY
                                       ctx:&ctx];
-      if (CanvasDist2(s, x, y) <= rh2) {
+      if (CanvasDist2(s, sa.x, sa.y) > ra2 && CanvasDist2(s, x, y) <= rh2) {
         *outAnchor = (NSInteger)i;
         *outHandleOut = YES;
         return CanvasPathEditHitHandle;
@@ -103,7 +111,7 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
       CGPoint s = [self _surfaceForLocalX:pt.x + pt.inX
                                         y:pt.y + pt.inY
                                       ctx:&ctx];
-      if (CanvasDist2(s, x, y) <= rh2) {
+      if (CanvasDist2(s, sa.x, sa.y) > ra2 && CanvasDist2(s, x, y) <= rh2) {
         *outAnchor = (NSInteger)i;
         *outHandleOut = NO;
         return CanvasPathEditHitHandle;
