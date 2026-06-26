@@ -410,11 +410,11 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
       dotted ? CanvasDottedStrokeVertexCapacity(geom, strokeStart * strokeScale,
                                                 dotGap, imageWidth, imageHeight)
              : CanvasStrokeVertexCapacity(geom);
-  // A draw-on reveal can cut the contour into two pieces (an offset wrap), each
-  // with its own pair of caps - budget two extra round-cap fans beyond the
-  // base.
+  // A draw-on reveal can cut each contour into two pieces (an offset wrap),
+  // each with its own pair of caps - budget two extra round-cap fans per
+  // contour (multi-contour draw-on reveals every branch).
   if (dor.active && !dotted)
-    cap += 128;
+    cap += 128 * geom.contourCount;
   if (cap == 0)
     return;
   KKVertex2D *verts = malloc(sizeof(KKVertex2D) * cap);
@@ -481,7 +481,9 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
   // with the same fill. Open-marker bar thickness = the local stroke width.
   KKVertex2D *mverts = NULL;
   NSUInteger mvc = 0;
-  if (dor.startMarker != 0 || dor.endMarker != 0) {
+  // Endpoint markers only make sense on a single open contour - a multi-contour
+  // path (e.g. a branchy centerline) has no single pair of ends, so skip them.
+  if ((dor.startMarker != 0 || dor.endMarker != 0) && geom.contourCount == 1) {
     NSUInteger mcap = CanvasMarkerVertexCapacity();
     mverts = malloc(sizeof(KKVertex2D) * mcap);
     // An Arrow rides its draw-on tip (markerStartTrim / markerEndTrim); other

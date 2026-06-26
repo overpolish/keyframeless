@@ -20,20 +20,24 @@ float CanvasContourTotalArc(KKBezierPath *path, float outputWidth,
   if (path.count < 2)
     return 0.0f;
   NSUInteger nc = path.contourCount;
-  if (nc != 1)
-    return 0.0f; // draw-on is a no-op on compound / multi-contour paths
   BOOL closed = CanvasContourClosed(path, nc);
   NSUInteger polyCap = CanvasMaxContourPolyCap(path, closed);
   if (polyCap == 0)
     return 0.0f;
+  // Sum every contour's length so draw-on activates on multi-contour paths too
+  // (each contour reveals per-contour in the tessellator). Single contour is
+  // the contour-0 length as before.
   simd_float2 *pts = malloc(sizeof(simd_float2) * polyCap);
-  NSRange r = [path contourRangeAtIndex:0];
-  NSUInteger n = CanvasBuildContourPolyline(path, r, closed, outputWidth,
-                                            outputHeight, pts, polyCap);
-  // Closed includes the closing edge back to pts[0] (the loop's full length).
-  float len = (n >= 2) ? CanvasContourArcLength(pts, n, closed) : 0.0f;
+  float total = 0.0f;
+  for (NSUInteger ci = 0; ci < nc; ci++) {
+    NSRange r = [path contourRangeAtIndex:ci];
+    NSUInteger n = CanvasBuildContourPolyline(path, r, closed, outputWidth,
+                                              outputHeight, pts, polyCap);
+    if (n >= 2)
+      total += CanvasContourArcLength(pts, n, closed);
+  }
   free(pts);
-  return len;
+  return total;
 }
 
 // Extract the sub-polyline of a point sequence (seq[0..sn), cumulative arc
@@ -111,6 +115,120 @@ static NSUInteger CanvasEmitDrawOnPiece(KKVertex2D *outVerts, NSUInteger vc,
                                 lineCap, lineJoin, bridge, outArc);
 }
 
+// Emit ONE contour's visible draw-on window (the [Start,End] arc rotated by
+// Offset, pulled back behind end markers) into outVerts at vc. `bridgeFirst`
+// stitches the first piece onto a prior strip (multi-contour loop). Buffers are
+// local. Returns the running vertex count.
+static NSUInteger CanvasEmitDrawOnWindow(const simd_float2 *pts, NSUInteger n,
+                                         BOOL closed, float L, float a, float b,
+                                         float off, float visLen, float startHW,
+                                         float endHW, float startPullbackPx,
+                                         float endPullbackPx, uint8_t lineCap,
+                                         uint8_t lineJoin, BOOL bridgeFirst,
+                                         KKVertex2D *outVerts, NSUInteger vc,
+                                         NSUInteger maxVerts, float *outArc) {
+  NSUInteger subCap = (closed ? 2 * n : n) + 4;
+  simd_float2 *sub = malloc(sizeof(simd_float2) * subCap);
+  float *gfrac = malloc(sizeof(float) * subCap);
+  float *larc = malloc(sizeof(float) * subCap);
+  float *hw = malloc(sizeof(float) * subCap);
+  float *arcv = outArc ? malloc(sizeof(float) * subCap) : NULL;
+
+  if (closed) {
+    NSUInteger sn = 2 * n + 1;
+    simd_float2 *seq = malloc(sizeof(simd_float2) * sn);
+    float *cum = malloc(sizeof(float) * sn);
+    for (NSUInteger k = 0; k < sn; k++)
+      seq[k] = pts[k % n];
+    cum[0] = 0.0f;
+    for (NSUInteger k = 1; k < sn; k++)
+      cum[k] = cum[k - 1] + simd_distance(seq[k], seq[k - 1]);
+    float winStart = fmodf(off + a, L);
+    if (winStart < 0.0f)
+      winStart += L;
+    NSUInteger m = CanvasExtractSubArc(seq, cum, sn, winStart + startPullbackPx,
+                                       winStart + visLen - endPullbackPx, L,
+                                       YES, sub, gfrac, larc, subCap);
+    vc = CanvasEmitDrawOnPiece(outVerts, vc, maxVerts, sub, gfrac, larc, m,
+                               startHW, endHW, hw, arcv, lineCap, lineJoin,
+                               bridgeFirst, outArc);
+    free(seq);
+    free(cum);
+  } else {
+    float *cum = malloc(sizeof(float) * n);
+    cum[0] = 0.0f;
+    for (NSUInteger k = 1; k < n; k++)
+      cum[k] = cum[k - 1] + simd_distance(pts[k], pts[k - 1]);
+    if (off <= 0.5f) {
+      float lo = a + startPullbackPx;
+      float hi = (L - b) - endPullbackPx;
+      NSUInteger m = CanvasExtractSubArc(pts, cum, n, lo, hi, L, NO, sub, gfrac,
+                                         larc, subCap);
+      vc = CanvasEmitDrawOnPiece(outVerts, vc, maxVerts, sub, gfrac, larc, m,
+                                 startHW, endHW, hw, arcv, lineCap, lineJoin,
+                                 bridgeFirst, outArc);
+    } else {
+      float w0 = fmodf(off + a, L);
+      if (w0 < 0.0f)
+        w0 += L;
+      float w1 = w0 + visLen;
+      BOOL wraps = w1 > L + 0.5f;
+      float aHi = wraps ? L : (w1 - endPullbackPx);
+      NSUInteger mA = CanvasExtractSubArc(pts, cum, n, w0 + startPullbackPx,
+                                          aHi, L, NO, sub, gfrac, larc, subCap);
+      vc = CanvasEmitDrawOnPiece(outVerts, vc, maxVerts, sub, gfrac, larc, mA,
+                                 startHW, endHW, hw, arcv, lineCap, lineJoin,
+                                 bridgeFirst, outArc);
+      if (wraps) {
+        NSUInteger mB =
+            CanvasExtractSubArc(pts, cum, n, 0.0f, (w1 - L) - endPullbackPx, L,
+                                NO, sub, gfrac, larc, subCap);
+        vc = CanvasEmitDrawOnPiece(outVerts, vc, maxVerts, sub, gfrac, larc, mB,
+                                   startHW, endHW, hw, arcv, lineCap, lineJoin,
+                                   vc > 0, outArc);
+      }
+    }
+    free(cum);
+  }
+  free(sub);
+  free(gfrac);
+  free(larc);
+  free(hw);
+  free(arcv);
+  return vc;
+}
+
+// Emit a FULLY-revealed contour's strip with the global-arc width taper (used
+// by the multi-contour draw-on when one branch is wholly visible).
+static NSUInteger CanvasEmitFullContour(simd_float2 *pts, NSUInteger n,
+                                        BOOL closed, float L, float startHW,
+                                        float endHW, uint8_t lineCap,
+                                        uint8_t lineJoin, BOOL bridge,
+                                        KKVertex2D *outVerts, NSUInteger vc,
+                                        NSUInteger maxVerts, float *outArc) {
+  float *cum = malloc(sizeof(float) * n);
+  float *hw = malloc(sizeof(float) * (n + 1));
+  float *arcv = outArc ? malloc(sizeof(float) * (n + 1)) : NULL;
+  cum[0] = 0.0f;
+  for (NSUInteger k = 1; k < n; k++)
+    cum[k] = cum[k - 1] + simd_distance(pts[k], pts[k - 1]);
+  for (NSUInteger i = 0; i < n; i++) {
+    float f = L > 1e-6f ? cum[i] / L : 0.0f;
+    hw[i] = startHW + (endHW - startHW) * fminf(1.0f, f);
+    if (arcv)
+      arcv[i] = cum[i];
+  }
+  hw[n] = hw[n - 1];
+  if (arcv)
+    arcv[n] = cum[n - 1];
+  vc = CanvasEmitContourStrip(outVerts, vc, maxVerts, pts, n, closed, hw, arcv,
+                              lineCap, lineJoin, bridge, outArc);
+  free(cum);
+  free(hw);
+  free(arcv);
+  return vc;
+}
+
 NSUInteger CanvasTessellateStrokeDrawOn(
     KKBezierPath *path, float startWidth, float endWidth, float outputWidth,
     float outputHeight, uint8_t lineCap, uint8_t lineJoin, float drawStart01,
@@ -119,12 +237,45 @@ NSUInteger CanvasTessellateStrokeDrawOn(
   if (path.count < 2 || !outVerts || maxVerts < 4)
     return 0;
   NSUInteger nc = path.contourCount;
-  // Compound / multi-contour: no draw-on; tessellate the whole stroke.
-  if (nc != 1)
-    return CanvasTessellateStrokeArc(path, startWidth, endWidth, outputWidth,
-                                     outputHeight, lineCap, lineJoin, outVerts,
-                                     maxVerts, 0.0f, 0.0f, NULL, outArc);
   BOOL closed = CanvasContourClosed(path, nc);
+
+  // Multi-contour: draw EACH contour (branch) independently with the same
+  // Start/End/Offset. No end markers on a multi-contour path -> no pullback.
+  if (nc != 1) {
+    NSUInteger polyCap = CanvasMaxContourPolyCap(path, closed);
+    if (polyCap == 0)
+      return 0;
+    simd_float2 *pts = malloc(sizeof(simd_float2) * polyCap);
+    NSUInteger vc = 0;
+    for (NSUInteger ci = 0; ci < nc; ci++) {
+      NSRange r = [path contourRangeAtIndex:ci];
+      NSUInteger n = CanvasBuildContourPolyline(path, r, closed, outputWidth,
+                                                outputHeight, pts, polyCap);
+      if (n < 2)
+        continue;
+      float L = CanvasContourArcLength(pts, n, closed);
+      if (L < 1e-3f)
+        continue;
+      float a = fmaxf(0.0f, fminf(1.0f, drawStart01)) * L;
+      float b = (1.0f - fmaxf(0.0f, fminf(1.0f, drawEnd01))) * L;
+      float off = fmaxf(0.0f, fminf(1.0f, offset01)) * L;
+      float visLen = L - a - b;
+      if (visLen <= 0.5f)
+        continue;
+      float startHW = startWidth * 0.5f + kCanvasAAPaddingPx;
+      float endHW = endWidth * 0.5f + kCanvasAAPaddingPx;
+      if (visLen >= L - 0.5f && (closed || off <= 0.5f))
+        vc = CanvasEmitFullContour(pts, n, closed, L, startHW, endHW, lineCap,
+                                   lineJoin, vc > 0, outVerts, vc, maxVerts,
+                                   outArc);
+      else
+        vc = CanvasEmitDrawOnWindow(
+            pts, n, closed, L, a, b, off, visLen, startHW, endHW, 0.0f, 0.0f,
+            lineCap, lineJoin, vc > 0, outVerts, vc, maxVerts, outArc);
+    }
+    free(pts);
+    return vc;
+  }
   NSUInteger polyCap = CanvasMaxContourPolyCap(path, closed);
   if (polyCap == 0)
     return 0;
@@ -165,88 +316,9 @@ NSUInteger CanvasTessellateStrokeDrawOn(
 
   float startHW = startWidth * 0.5f + kCanvasAAPaddingPx;
   float endHW = endWidth * 0.5f + kCanvasAAPaddingPx;
-  NSUInteger subCap = (closed ? 2 * n : n) + 4;
-  simd_float2 *sub = malloc(sizeof(simd_float2) * subCap);
-  float *gfrac = malloc(sizeof(float) * subCap);
-  float *larc = malloc(sizeof(float) * subCap);
-  float *hw = malloc(sizeof(float) * subCap);
-  float *arcv = outArc ? malloc(sizeof(float) * subCap) : NULL;
-  NSUInteger vc = 0;
-
-  if (closed) {
-    // Doubled-loop sequence so a window crossing the start seam stays a single
-    // contiguous arc (the closing edge is real geometry on a closed path).
-    NSUInteger sn = 2 * n + 1;
-    simd_float2 *seq = malloc(sizeof(simd_float2) * sn);
-    float *cum = malloc(sizeof(float) * sn);
-    for (NSUInteger k = 0; k < sn; k++)
-      seq[k] = pts[k % n];
-    cum[0] = 0.0f;
-    for (NSUInteger k = 1; k < sn; k++)
-      cum[k] = cum[k - 1] + simd_distance(seq[k], seq[k - 1]);
-    float winStart = fmodf(off + a, L);
-    if (winStart < 0.0f)
-      winStart += L;
-    // Pull the arc back behind the markers at the two window ends.
-    NSUInteger m =
-        CanvasExtractSubArc(seq, cum, sn, winStart + startPullbackPx,
-                            winStart + visLen - endPullbackPx, L,
-                            /*wrapFrac=*/YES, sub, gfrac, larc, subCap);
-    vc = CanvasEmitDrawOnPiece(outVerts, vc, maxVerts, sub, gfrac, larc, m,
-                               startHW, endHW, hw, arcv, lineCap, lineJoin, NO,
-                               outArc);
-    free(seq);
-    free(cum);
-  } else {
-    // Open: arc space is linear [0, L]. Without an offset the visible piece is
-    // [a, L-b] (pulled back behind any markers). With an offset the cyclic
-    // window can wrap past an end, which has no geometry, so it splits into two
-    // pieces.
-    float *cum = malloc(sizeof(float) * n);
-    cum[0] = 0.0f;
-    for (NSUInteger k = 1; k < n; k++)
-      cum[k] = cum[k - 1] + simd_distance(pts[k], pts[k - 1]);
-    if (off <= 0.5f) {
-      float lo = a + startPullbackPx;
-      float hi = (L - b) - endPullbackPx;
-      NSUInteger m = CanvasExtractSubArc(pts, cum, n, lo, hi, L, NO, sub, gfrac,
-                                         larc, subCap);
-      vc = CanvasEmitDrawOnPiece(outVerts, vc, maxVerts, sub, gfrac, larc, m,
-                                 startHW, endHW, hw, arcv, lineCap, lineJoin,
-                                 NO, outArc);
-    } else {
-      float w0 = fmodf(off + a, L);
-      if (w0 < 0.0f)
-        w0 += L;
-      float w1 = w0 + visLen;
-      BOOL wraps = w1 > L + 0.5f;
-      // The START marker sits at w0; the END marker at the window end (piece
-      // A's hi when there's no wrap, else piece B's hi). Pull back only at
-      // those marker ends - the seam ends (L / 0) are a continuation, not a
-      // tip.
-      float aHi = wraps ? L : (w1 - endPullbackPx);
-      NSUInteger mA = CanvasExtractSubArc(pts, cum, n, w0 + startPullbackPx,
-                                          aHi, L, NO, sub, gfrac, larc, subCap);
-      vc = CanvasEmitDrawOnPiece(outVerts, vc, maxVerts, sub, gfrac, larc, mA,
-                                 startHW, endHW, hw, arcv, lineCap, lineJoin,
-                                 NO, outArc);
-      if (wraps) {
-        NSUInteger mB =
-            CanvasExtractSubArc(pts, cum, n, 0.0f, (w1 - L) - endPullbackPx, L,
-                                NO, sub, gfrac, larc, subCap);
-        vc = CanvasEmitDrawOnPiece(outVerts, vc, maxVerts, sub, gfrac, larc, mB,
-                                   startHW, endHW, hw, arcv, lineCap, lineJoin,
-                                   vc > 0, outArc);
-      }
-    }
-    free(cum);
-  }
-
-  free(sub);
-  free(gfrac);
-  free(larc);
-  free(hw);
-  free(arcv);
+  NSUInteger vc = CanvasEmitDrawOnWindow(
+      pts, n, closed, L, a, b, off, visLen, startHW, endHW, startPullbackPx,
+      endPullbackPx, lineCap, lineJoin, NO, outVerts, 0, maxVerts, outArc);
   free(pts);
   return vc;
 }

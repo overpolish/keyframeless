@@ -729,7 +729,7 @@ void CanvasEncodeFilledLayers(
     simd_float4 color =
         simd_make_float4(powf(fc.x, 2.2f) * opacity, powf(fc.y, 2.2f) * opacity,
                          powf(fc.z, 2.2f) * opacity, opacity);
-    KKGradientFillParams gparams;
+    KKGradientFillParams gparams = {0};
     CanvasGradientFill gfill = {0};
     if (useGradient) {
       gfill = CanvasComputeGradientFill(geom, imageWidth, imageHeight, 0.0f,

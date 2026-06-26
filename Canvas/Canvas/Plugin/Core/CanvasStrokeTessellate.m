@@ -22,7 +22,11 @@ static NSUInteger CanvasContourSegmentCount(NSUInteger cLen, BOOL closed) {
 }
 
 BOOL CanvasContourClosed(KKBezierPath *path, NSUInteger contourCount) {
-  return (contourCount > 1) ? YES : path.closed;
+  // Honour the path's own flag. Compound FILLS (SVG / boolean / outline) set
+  // closed=YES, so they're unaffected; an open multi-contour path (e.g. a
+  // multi-branch centerline) must stroke each contour open, not loop it shut.
+  (void)contourCount;
+  return path.closed;
 }
 
 // The largest per-contour polyline vertex count across `path`, used to size the
@@ -628,4 +632,3 @@ NSUInteger CanvasTessellateStrokeArc(
   free(arcv);
   return vc;
 }
-

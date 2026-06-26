@@ -6,14 +6,14 @@
 #import "CanvasLocalized.h"
 #import "CanvasOSC_Private.h"
 #import <FxPlug/FxPlugSDK.h>
-#import <KeyframelessKit/KeyframelessKit.h>
 #import <KeyframelessKit/KKToolbar.h>
+#import <KeyframelessKit/KeyframelessKit.h>
 
-// kParamUIState keys for the toolbar + grid. These are SCREEN CHROME, not plugin
-// parameters - they live in the UI-state dict (so they're remembered) and never
-// affect the render output, only the editing overlay.
+// kParamUIState keys for the toolbar + grid. These are SCREEN CHROME, not
+// plugin parameters - they live in the UI-state dict (so they're remembered)
+// and never affect the render output, only the editing overlay.
 static NSString *const kCanvasUIToolbarPos = @"toolbarPos"; // @[nx, ny] (0..1)
-static NSString *const kCanvasUITool = @"tool";             // active drawing tool
+static NSString *const kCanvasUITool = @"tool"; // active drawing tool
 static NSString *const kCanvasUIGridEnabled = @"gridEnabled";
 static NSString *const kCanvasUIGridAdaptive = @"gridAdaptive";
 static NSString *const kCanvasUIGridSpacing = @"gridSpacing";
@@ -22,12 +22,13 @@ static NSString *const kCanvasUIGridSnap = @"gridSnap";
 @implementation CanvasOSC (Toolbar)
 
 - (void)_setupToolbar {
-  // Shared builder (same bar in the viewer + mini); per-frame state is driven in
-  // _drawToolbarWithWidth:, which also rebuilds the bar when the selection
+  // Shared builder (same bar in the viewer + mini); per-frame state is driven
+  // in _drawToolbarWithWidth:, which also rebuilds the bar when the selection
   // brings in / drops the conditional path-op groups.
-  self.toolbar = CanvasMakeToolbar(self.apiManager, NO, NO);
+  self.toolbar = CanvasMakeToolbar(self.apiManager, NO, NO, NO);
   self.toolbarShowsBooleans = NO;
   self.toolbarShowsOutline = NO;
+  self.toolbarShowsCenterline = NO;
 }
 
 - (NSInteger)_activeTool {
@@ -42,26 +43,41 @@ static NSString *const kCanvasUIGridSnap = @"gridSnap";
     return;
   // Rebuild the bar when the selection crosses a path-op threshold (the
   // KKToolbar item list is fixed at init). Booleans show with 2+ vector paths
-  // selected; stroke-to-outline shows when any selected vector path has a stroke
-  // (its filled result is now visible via the temp fill).
+  // selected; stroke-to-outline shows when any selected vector path has a
+  // stroke (its filled result is now visible via the temp fill).
   NSArray<KKBezierPath *> *vsel = [self _selectedVectorLayers];
   BOOL wantBooleans = (vsel.count >= 2);
   BOOL wantOutline = NO;
-  for (KKBezierPath *p in vsel)
-    if (p.strokeEnabled) {
+  BOOL wantCenterline = NO;
+  for (KKBezierPath *p in vsel) {
+    if (p.strokeEnabled)
       wantOutline = YES;
-      break;
-    }
+    if (p.fillEnabled)
+      wantCenterline = YES;
+  }
+  // Centerline also traces an image's silhouette (vsel excludes images).
+  if (!wantCenterline) {
+    NSArray<NSString *> *selIDs = [self _selectedLayerIDs];
+    for (KKBezierPath *p in [self _snapshotPaths])
+      if (p.isImage && p.imagePath.length &&
+          [selIDs containsObject:(p.layerID ?: @"")]) {
+        wantCenterline = YES;
+        break;
+      }
+  }
   if (wantBooleans != self.toolbarShowsBooleans ||
-      wantOutline != self.toolbarShowsOutline) {
-    self.toolbar = CanvasMakeToolbar(self.apiManager, wantOutline, wantBooleans);
+      wantOutline != self.toolbarShowsOutline ||
+      wantCenterline != self.toolbarShowsCenterline) {
+    self.toolbar = CanvasMakeToolbar(self.apiManager, wantOutline, wantBooleans,
+                                     wantCenterline);
     self.toolbarShowsBooleans = wantBooleans;
     self.toolbarShowsOutline = wantOutline;
+    self.toolbarShowsCenterline = wantCenterline;
   }
   self.toolbarIOSize = CGSizeMake(width, height);
   NSDictionary *ui = [self _uiStateDict];
-  NSInteger tool =
-      ui[kCanvasUITool] ? [ui[kCanvasUITool] integerValue] : CanvasToolbarToolCursor;
+  NSInteger tool = ui[kCanvasUITool] ? [ui[kCanvasUITool] integerValue]
+                                     : CanvasToolbarToolCursor;
   BOOL gridOn = [ui[kCanvasUIGridEnabled] boolValue];
   BOOL adaptive =
       ui[kCanvasUIGridAdaptive] ? [ui[kCanvasUIGridAdaptive] boolValue] : YES;
@@ -110,8 +126,8 @@ static NSString *const kCanvasUIGridSnap = @"gridSnap";
 }
 
 - (void)_toggleUIBool:(NSString *)key default:(BOOL)def {
-  BOOL cur = [self _uiStateDict][key] ? [[self _uiStateDict][key] boolValue]
-                                      : def;
+  BOOL cur =
+      [self _uiStateDict][key] ? [[self _uiStateDict][key] boolValue] : def;
   [self _writeUIStateMerging:^(NSMutableDictionary *state) {
     state[key] = @(!cur);
   }];
@@ -186,6 +202,9 @@ static NSString *const kCanvasUIGridSnap = @"gridSnap";
   case CanvasToolbarPathOutline:
     [self _handleOutlineOp];
     break;
+  case CanvasToolbarPathCenterline:
+    [self _handleCenterlineOp];
+    break;
   default:
     break;
   }
@@ -194,8 +213,8 @@ static NSString *const kCanvasUIGridSnap = @"gridSnap";
 - (void)_toolbarMouseDraggedAtX:(double)x y:(double)y {
   if (!self.toolbarDragging)
     return;
-  // Live (no persist - draw keeps anchorCenter while dragging); the host redraws
-  // because the caller sets forceUpdate.
+  // Live (no persist - draw keeps anchorCenter while dragging); the host
+  // redraws because the caller sets forceUpdate.
   self.toolbar.usesAnchorCenter = YES;
   self.toolbar.anchorCenter =
       CGPointMake(self.toolbarPressCenter.x + (x - self.toolbarPressMouse.x),

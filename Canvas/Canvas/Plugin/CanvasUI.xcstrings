@@ -1,6 +1,48 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "%@ Centerline": {
+      "comment": "Layer name for a centerline-traced stroke (%@ = source layer name)",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Mittellinie"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Línea central"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ Ligne médiane"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 中心線"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 중心線"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 中心线"
+          }
+        }
+      }
+    },
     "Auto grid spacing": {
       "comment": "Toolbar tooltip: automatic grid spacing",
       "extractionState": "manual",
@@ -81,6 +123,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "自动选择图层"
+          }
+        }
+      }
+    },
+    "Centerline": {
+      "comment": "Toolbar tooltip: trace a filled shape down to its centerline stroke",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mittellinie"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Línea central"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ligne médiane"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中心線"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "중심선"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中心线"
           }
         }
       }

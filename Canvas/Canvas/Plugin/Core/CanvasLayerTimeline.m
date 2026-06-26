@@ -172,14 +172,8 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
                         [t.label isEqualToString:@"End Marker Width"];
     if (([t.label isEqualToString:@"Line Cap"] || isMarkerLane) && !hasOpenEnd)
       continue;
-    // Draw-on reveals a single contour's arc - open OR closed (a closed shape
-    // draws on around its loop). Only a compound / multi-contour path has no
-    // single arc to reveal, so hide the lanes only there.
-    BOOL isDrawOnLane = [t.label isEqualToString:@"Draw On Start"] ||
-                        [t.label isEqualToString:@"Draw On End"] ||
-                        [t.label isEqualToString:@"Draw On Offset"];
-    if (isDrawOnLane && path.contourCount > 1)
-      continue;
+    // Draw-on reveals each contour's arc (open OR closed); a multi-contour path
+    // reveals every branch per-contour, so the lanes apply there too.
     KKLane *src = [(stored[t.label] ?: t) copy];
     // Re-assert the template's canonical DISPLAY / picker metadata onto a
     // stored (round-tripped) lane - the animationJSON drops non-codable props,

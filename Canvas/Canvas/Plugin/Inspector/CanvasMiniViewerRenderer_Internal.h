@@ -9,8 +9,8 @@
 #import "CanvasPathEditController.h" // shared path anchor/handle editing
 #import "CanvasPenController.h"   // CanvasPenSurface + shared pen state machine
 #import "CanvasShapeController.h" // shared rect/ellipse drag-create tool
-#import <Metal/Metal.h>
 #import <KeyframelessKit/KeyframelessKit.h>
+#import <Metal/Metal.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -18,13 +18,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface CanvasMiniViewerRenderer () {
 @protected
-  id<MTLRenderPipelineState> _pipeline;       // source passthrough (no blend)
-  id<MTLRenderPipelineState> _imagePipeline;  // image overlay (premult alpha)
+  id<MTLRenderPipelineState> _pipeline;      // source passthrough (no blend)
+  id<MTLRenderPipelineState> _imagePipeline; // image overlay (premult alpha)
   id<MTLRenderPipelineState> _imageTintPipeline; // fill-tinted image (premult)
   id<MTLRenderPipelineState> _imageGradTintPipeline; // gradient-tinted image
   id<MTLRenderPipelineState> _strokePipeline; // vector stroke (premult alpha)
   id<MTLRenderPipelineState> _strokeGradientPipeline; // gradient-filled stroke
-  id<MTLRenderPipelineState> _strokeDashPipeline;     // dashed stroke (arc mask)
+  id<MTLRenderPipelineState> _strokeDashPipeline; // dashed stroke (arc mask)
   MTLPixelFormat _pipelineFormat;
   // Image-layer textures, keyed by path. The renderer lives in the inspector
   // process (separate from the render XPC), so it can't share the plugin's
@@ -81,6 +81,7 @@ NS_ASSUME_NONNULL_BEGIN
 // (KKToolbar's items are fixed at init - same as the viewer).
 @property(nonatomic) BOOL toolbarShowsBooleans;
 @property(nonatomic) BOOL toolbarShowsOutline;
+@property(nonatomic) BOOL toolbarShowsCenterline;
 // Drag-handle press state (drawable px, y-down layout space).
 @property(nonatomic) CGPoint toolbarPressMouse;
 @property(nonatomic) CGPoint toolbarPressAnchor;
@@ -127,7 +128,9 @@ NS_ASSUME_NONNULL_BEGIN
 // marquee non-selectable set), so a manually multi-selected move-lane-animated
 // layer doesn't move or show the dimmed move indicator in the constants scope.
 - (NSArray<NSString *> *)_miniMovableSelectedIDs;
-- (void)_miniPathOpFlagsBooleans:(BOOL *)outBooleans outline:(BOOL *)outOutline;
+- (void)_miniPathOpFlagsBooleans:(BOOL *)outBooleans
+                         outline:(BOOL *)outOutline
+                      centerline:(BOOL *)outCenterline;
 - (void)_miniRunPathOp:
     (NSArray<NSString *> *_Nullable (^)(NSMutableArray<KKBezierPath *> *paths,
                                         NSArray<NSString *> *sel))block;

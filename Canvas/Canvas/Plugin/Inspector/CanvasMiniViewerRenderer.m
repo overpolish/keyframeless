@@ -68,7 +68,8 @@ NSString *const CanvasMiniViewerRequestPath =
     // The same toolbar as the viewer (shared builder), scaled down for the
     // small mini surface. apiManager nil is fine (KKToolbar only stores it).
     _toolbar = CanvasMakeToolbar(
-        nil, NO, NO); // uiScale + flip set per-draw in the hook (no path ops)
+        nil, NO, NO,
+        NO); // uiScale + flip set per-draw in the hook (no path ops)
     _toolbarNormPos = CGPointMake(-1, -1); // default anchor until dragged
     _penController = [[CanvasPenController alloc] initWithSurface:self];
     _pathEditController =

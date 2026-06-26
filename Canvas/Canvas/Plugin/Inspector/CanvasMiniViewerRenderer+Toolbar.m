@@ -10,7 +10,8 @@
 
 #import "CanvasMiniViewerRenderer_Internal.h"
 
-#import "CanvasPathOps.h" // shared boolean / outline op cores
+#import "CanvasCenterline.h" // CanvasApplyCenterlineOp
+#import "CanvasPathOps.h"    // shared boolean / outline op cores
 #import "CanvasToolbar.h"
 #import <KeyframelessKit/KKToolbar.h>
 #import <Metal/Metal.h>
@@ -50,13 +51,18 @@
     return;
   // Rebuild the bar when the selection brings in / drops the conditional
   // path-op groups (mirrors the viewer; KKToolbar's items are fixed at init).
-  BOOL wantBooleans = NO, wantOutline = NO;
-  [self _miniPathOpFlagsBooleans:&wantBooleans outline:&wantOutline];
+  BOOL wantBooleans = NO, wantOutline = NO, wantCenterline = NO;
+  [self _miniPathOpFlagsBooleans:&wantBooleans
+                         outline:&wantOutline
+                      centerline:&wantCenterline];
   if (wantBooleans != self.toolbarShowsBooleans ||
-      wantOutline != self.toolbarShowsOutline) {
-    self.toolbar = CanvasMakeToolbar(nil, wantOutline, wantBooleans);
+      wantOutline != self.toolbarShowsOutline ||
+      wantCenterline != self.toolbarShowsCenterline) {
+    self.toolbar =
+        CanvasMakeToolbar(nil, wantOutline, wantBooleans, wantCenterline);
     self.toolbarShowsBooleans = wantBooleans;
     self.toolbarShowsOutline = wantOutline;
+    self.toolbarShowsCenterline = wantCenterline;
   }
   // The mini's MTKView pass is Y-flipped vs the viewer's FxPlug surface.
   self.toolbar.flipVertical = YES;
@@ -161,6 +167,9 @@
   case CanvasToolbarPathOutline:
     [self _miniRunOutlineOp];
     break;
+  case CanvasToolbarPathCenterline:
+    [self _miniRunCenterlineOp];
+    break;
   default:
     break;
   }
@@ -193,18 +202,27 @@
 }
 
 - (void)_miniPathOpFlagsBooleans:(BOOL *)outBooleans
-                         outline:(BOOL *)outOutline {
+                         outline:(BOOL *)outOutline
+                      centerline:(BOOL *)outCenterline {
   NSArray<NSString *> *sel = [self _miniSelectedIDs];
   NSUInteger vectorCount = 0;
-  BOOL anyStroke = NO;
-  for (KKBezierPath *p in self.layers)
-    if (!p.isImage && !p.isGroup && [sel containsObject:(p.layerID ?: @"")]) {
+  BOOL anyStroke = NO, anyFill = NO, anyImage = NO;
+  for (KKBezierPath *p in self.layers) {
+    if (![sel containsObject:(p.layerID ?: @"")])
+      continue;
+    if (p.isImage && p.imagePath.length)
+      anyImage = YES; // centerline traces an image's silhouette too
+    if (!p.isImage && !p.isGroup) {
       vectorCount++;
       if (p.strokeEnabled)
         anyStroke = YES;
+      if (p.fillEnabled)
+        anyFill = YES;
     }
+  }
   *outBooleans = vectorCount >= 2;
   *outOutline = anyStroke;
+  *outCenterline = anyFill || anyImage;
 }
 
 // Run an op core on a copy of the live layers and persist via onPersistLayers
@@ -252,6 +270,24 @@
   [self _miniRunPathOp:^NSArray<NSString *> *(
             NSMutableArray<KKBezierPath *> *paths, NSArray<NSString *> *sel) {
     return CanvasApplyOutlineOp(paths, sel, refW, refH);
+  }];
+}
+
+- (void)_miniRunCenterlineOp {
+  CGFloat refW, refH;
+  if (self.outputWidth > 0 && self.outputHeight > 0) {
+    refW = self.outputWidth;
+    refH = self.outputHeight;
+  } else {
+    CGFloat aspect = (self.renderHeight > 0 && self.renderWidth > 0)
+                         ? self.renderWidth / self.renderHeight
+                         : 16.0 / 9.0;
+    refH = 1080.0;
+    refW = 1080.0 * aspect;
+  }
+  [self _miniRunPathOp:^NSArray<NSString *> *(
+            NSMutableArray<KKBezierPath *> *paths, NSArray<NSString *> *sel) {
+    return CanvasApplyCenterlineOp(paths, sel, refW, refH);
   }];
 }
 

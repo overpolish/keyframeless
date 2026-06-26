@@ -3,8 +3,9 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "CanvasCornerFillet.h" // CanvasPathByExpandingCorners
-#import "CanvasLayerRender.h"  // CanvasProjectLayerPointObj
+#import "CanvasCenterline.h"    // CanvasApplyCenterlineOp
+#import "CanvasCornerFillet.h"  // CanvasPathByExpandingCorners
+#import "CanvasLayerRender.h"   // CanvasProjectLayerPointObj
 #import "CanvasLayerTimeline.h" // blob/UIState snapshot get + set
 #import "CanvasLayerTree.h"     // CanvasDeleteLayersByID
 #import "CanvasOSC_Private.h"
@@ -35,8 +36,8 @@
   CGContextRef ctx = CanvasRenderPathOpFillBitmap(
       operands, results, [self _snapshotPaths], frac, aspect, w, h, refW,
       ^CGPoint(simd_float2 objYUp) {
-        return [weakSelf canvasPointFromObjectPoint:simd_make_float2(
-                                                        objYUp.x,
+        return [weakSelf
+            canvasPointFromObjectPoint:simd_make_float2(objYUp.x,
                                                         1.0f - objYUp.y)];
       });
   if (!ctx)
@@ -48,9 +49,9 @@
   return tex;
 }
 
-// Blit the cached fill texture over the destination (preserve existing content).
-- (void)_blitPathOpFillTexture:(id<MTLTexture>)tex
-                        toDest:(FxImageTile *)dest {
+// Blit the cached fill texture over the destination (preserve existing
+// content).
+- (void)_blitPathOpFillTexture:(id<MTLTexture>)tex toDest:(FxImageTile *)dest {
   if (!tex)
     return;
   float ioW = [dest.ioSurface width];
@@ -70,7 +71,8 @@
                                      blendMode:KKBlendModePremultipliedAlpha];
   if (!ps)
     return;
-  id<MTLCommandQueue> q = [cache commandQueueWithRegistryID:reg pixelFormat:fmt];
+  id<MTLCommandQueue> q = [cache commandQueueWithRegistryID:reg
+                                                pixelFormat:fmt];
   if (!q)
     return;
   id<MTLTexture> outTex =
@@ -106,16 +108,20 @@
   [cache returnCommandQueueToCache:q];
 }
 
-// Hover preview: while the pointer is over a path-op toolbar button (cursor tool
-// only), fill the operands red + the would-be result green (translucent) so the
-// outcome is visible before committing. The fill is a CG-rendered texture
-// (handles concave / holed boolean results), cached + blitted over the viewer.
+// Hover preview: while the pointer is over a path-op toolbar button (cursor
+// tool only), fill the operands red + the would-be result green (translucent)
+// so the outcome is visible before committing. The fill is a CG-rendered
+// texture (handles concave / holed boolean results), cached + blitted over the
+// viewer.
 - (void)_drawPathOpHoverPreviewInDestination:(FxImageTile *)dest
                                       atTime:(CMTime)time {
-  BOOL outline = NO;
+  BOOL outline = NO, centerline = NO;
   KKBooleanOp op = KKBooleanOpUnion;
   if ([self _activeTool] != CanvasToolbarToolCursor ||
-      !CanvasToolbarTagToPathOp(self.toolbar.hoveredTag, &outline, &op)) {
+      !CanvasToolbarTagToPathOp(self.toolbar.hoveredTag, &outline, &op,
+                                &centerline) ||
+      centerline) {
+    // Centerline has no fill preview (its result is a stroke, not a fill).
     self.pathOpFillTexture = nil;
     self.pathOpFillSig = nil;
     return;
@@ -161,9 +167,9 @@
 // selection IDs (or nil for a no-op). The boolean / outline cores run on the
 // STORED path geometry (per-layer transform animation isn't baked in - a known
 // limitation matching the pre-v3 behaviour).
-- (void)_runPathOp:(NSArray<NSString *> *_Nullable (^)(
-                       NSMutableArray<KKBezierPath *> *paths,
-                       NSArray<NSString *> *selIDs))block {
+- (void)_runPathOp:
+    (NSArray<NSString *> *_Nullable (^)(NSMutableArray<KKBezierPath *> *paths,
+                                        NSArray<NSString *> *selIDs))block {
   NSString *b64 = CanvasLayerBlobSnapshot();
   NSMutableArray<KKBezierPath *> *paths =
       b64.length
@@ -186,9 +192,9 @@
 }
 
 // Stroke width is px relative to the render output; the on-screen canvas px the
-// OSC knows is zoom-dependent, so resolve the TRUE output px the render published
-// (CanvasOutputSize). Falls back to a 1080-tall, aspect-correct reference before
-// the first render has published a size.
+// OSC knows is zoom-dependent, so resolve the TRUE output px the render
+// published (CanvasOutputSize). Falls back to a 1080-tall, aspect-correct
+// reference before the first render has published a size.
 - (void)_outlineRefWidth:(CGFloat *)outW height:(CGFloat *)outH {
   float ow = 0.0f, oh = 0.0f;
   if (CanvasOutputSize(&ow, &oh)) {
@@ -215,8 +221,9 @@
   CanvasDeleteLayersByID(paths, sel);
   if (paths.count == before)
     return NO; // selection didn't match any layer - nothing removed
-  // Leave the selection EMPTY after a delete (matches the canvas empty-selection
-  // model: Figma/Illustrator/AE-style), rather than picking a survivor.
+  // Leave the selection EMPTY after a delete (matches the canvas
+  // empty-selection model: Figma/Illustrator/AE-style), rather than picking a
+  // survivor.
   [self _commitPathOpPaths:paths selectLayerIDs:@[]];
   return YES;
 }
@@ -230,11 +237,20 @@
   }];
 }
 
+- (void)_handleCenterlineOp {
+  CGFloat refW = 0, refH = 0;
+  [self _outlineRefWidth:&refW height:&refH];
+  [self _runPathOp:^NSArray<NSString *> *(NSMutableArray<KKBezierPath *> *paths,
+                                          NSArray<NSString *> *selIDs) {
+    return CanvasApplyCenterlineOp(paths, selIDs, refW, refH);
+  }];
+}
+
 // Write the new layer stack + select the result (single selection) in ONE undo
-// action: both the blob and the UIState selection keys go inside the same action
-// scope so an undo restores the operands AND the prior selection together. Keep
-// the snapshots in step so the next OSC draw + the inspector reload see the new
-// values before the param round-trip republishes them.
+// action: both the blob and the UIState selection keys go inside the same
+// action scope so an undo restores the operands AND the prior selection
+// together. Keep the snapshots in step so the next OSC draw + the inspector
+// reload see the new values before the param round-trip republishes them.
 - (void)_commitPathOpPaths:(NSArray<KKBezierPath *> *)paths
             selectLayerIDs:(NSArray<NSString *> *)ids {
   id<FxCustomParameterActionAPI_v4> actionAPI =

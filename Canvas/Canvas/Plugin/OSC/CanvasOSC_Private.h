@@ -93,11 +93,12 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 // px), and the viewport size cached from the last draw (mouse callbacks don't
 // get it) so the drag can normalise the new position for UI-state storage.
 @property(nonatomic) BOOL toolbarDragging;
-// The conditional path-op groups the current toolbar was built with, so draw can
-// rebuild the bar only when the selection crosses the show/hide threshold (the
-// KKToolbar item list is fixed at init).
+// The conditional path-op groups the current toolbar was built with, so draw
+// can rebuild the bar only when the selection crosses the show/hide threshold
+// (the KKToolbar item list is fixed at init).
 @property(nonatomic) BOOL toolbarShowsBooleans;
 @property(nonatomic) BOOL toolbarShowsOutline;
+@property(nonatomic) BOOL toolbarShowsCenterline;
 @property(nonatomic) CGPoint toolbarPressMouse;
 @property(nonatomic) CGPoint toolbarPressCenter;
 @property(nonatomic) CGSize toolbarIOSize;
@@ -118,8 +119,8 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 @property(nonatomic, assign, nullable) FxImageTile *penDrawDest;
 // Cached path-op fill preview: a CG-filled RGBA texture (red operands / green
 // result) blitted over the viewer while hovering a path-op button. Rebuilt only
-// when the signature (op + selection + playhead + dest size) changes, so a still
-// hover doesn't re-render the bitmap every frame.
+// when the signature (op + selection + playhead + dest size) changes, so a
+// still hover doesn't re-render the bitmap every frame.
 @property(nonatomic, strong, nullable) id<MTLTexture> pathOpFillTexture;
 @property(nonatomic, copy, nullable) NSString *pathOpFillSig;
 // YES once a live param write happened during the current edit gesture, so the
@@ -210,6 +211,7 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 @interface CanvasOSC (PathOps)
 - (void)_handlePathBooleanOp:(KKBooleanOp)op;
 - (void)_handleOutlineOp;
+- (void)_handleCenterlineOp;
 // Delete the selected layer(s) from the stack (group-expanding), selecting a
 // survivor, in one undo action. Returns NO when nothing is selected so the key
 // handler can fall through.
@@ -266,8 +268,8 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 - (BOOL)_penKeyDown:(unsigned short)asciiKey
           modifiers:(NSUInteger)modifiers
              atTime:(CMTime)time;
-// render-object (Y-up) <-> CANVAS px (Y flipped at the boundary). Implemented in
-// +Pen.m; called by the +PenSurface protocol methods + the +PenDraw overlay.
+// render-object (Y-up) <-> CANVAS px (Y flipped at the boundary). Implemented
+// in +Pen.m; called by the +PenSurface protocol methods + the +PenDraw overlay.
 - (CGPoint)_penCanvasFromObj:(CGPoint)objYUp;
 // The cursor the pen tool shows at a CANVAS point: the close-shape glyph when
 // hovering the first anchor (with a loop placed), else the pen glyph.

@@ -56,10 +56,12 @@
 // the shared CG fill to a drawable-sized texture (object -> drawable px via the
 // mini projection) and blits it through the kit's tool-overlay encoder.
 - (void)_drawPathOpHoverPreview {
-  BOOL outline = NO;
+  BOOL outline = NO, centerline = NO;
   KKBooleanOp op = KKBooleanOpUnion;
-  if (!CanvasToolbarTagToPathOp(self.toolbar.hoveredTag, &outline, &op))
-    return;
+  if (!CanvasToolbarTagToPathOp(self.toolbar.hoveredTag, &outline, &op,
+                                &centerline) ||
+      centerline)
+    return; // centerline has no fill preview (its result is a stroke)
   CGFloat aspect = (self.renderHeight > 0 && self.renderWidth > 0)
                        ? self.renderWidth / self.renderHeight
                        : 16.0 / 9.0;
