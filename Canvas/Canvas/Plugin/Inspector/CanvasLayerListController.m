@@ -106,11 +106,16 @@ static const CGFloat kSlideDistance = 12.0;
 }
 
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths {
-  [self writePaths:paths clearingSelectionInSameAction:NO];
+  [self writePaths:paths selectingLayerIDs:nil];
 }
 
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths
     clearingSelectionInSameAction:(BOOL)clear {
+  [self writePaths:paths selectingLayerIDs:(clear ? @[] : nil)];
+}
+
+- (void)writePaths:(NSArray<KKBezierPath *> *)paths
+    selectingLayerIDs:(NSArray<NSString *> *)ids {
   id<PROAPIAccessing> api = _apiManager;
   if (!api)
     return;
@@ -125,10 +130,11 @@ static const CGFloat kSlideDistance = 12.0;
   NSData *blob = [KKBezierPath blobFromPaths:paths];
   KKWriteCustomParamString(setAPI, [blob base64EncodedStringWithOptions:0],
                            kParamLayerData);
-  // Clear the selection in the SAME action so a delete undoes as one step. Read
-  // -> patch -> write kParamUIState (mirrors KKPlugin -patchUIStateKeys, but
-  // inside this action scope rather than its own).
-  if (clear) {
+  // Set the selection in the SAME action so a blob+selection change undoes as
+  // one step. Read -> patch -> write kParamUIState (mirrors KKPlugin
+  // -patchUIStateKeys, but inside this action scope rather than its own). nil
+  // ids = leave selection untouched (blob-only write).
+  if (ids) {
     id<FxParameterRetrievalAPI_v6> getAPI =
         [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
     NSString *existing = KKReadCustomParamString(getAPI, kParamUIState);
@@ -141,8 +147,8 @@ static const CGFloat kSlideDistance = 12.0;
                                 error:nil] mutableCopy]
              : nil)
             ?: [NSMutableDictionary dictionary];
-    state[@"selectedLayerID"] = @"";
-    state[@"selectedLayerIDs"] = @[];
+    state[@"selectedLayerID"] = ids.firstObject ?: @"";
+    state[@"selectedLayerIDs"] = ids;
     NSString *json = [[NSString alloc]
         initWithData:[NSJSONSerialization dataWithJSONObject:state
                                                      options:0

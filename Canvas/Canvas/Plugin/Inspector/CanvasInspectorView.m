@@ -93,15 +93,23 @@
           typeof(self) s = weakInit;
           if (!s)
             return;
-          [s->_layerListController writePaths:paths];
-          [s _syncLayersToRenderer];
           // Don't adopt a just-drawn path as the selection if it can't be acted
           // on in the open popover (a new constant path has no keypose, so a
           // keypose popover must stay on its owner - otherwise the new path is
           // persisted as the selection and ping-pongs with the keypose re-drive).
-          if (selectID.length &&
-              [s->_layerListController isLayerSelectableInOpenPopover:selectID])
-            [s _selectAndHighlightLayer:selectID];
+          BOOL adopt =
+              selectID.length &&
+              [s->_layerListController isLayerSelectableInOpenPopover:selectID];
+          // Write the blob AND (when adopting) the new selection in ONE action.
+          // Two separate actions (blob, then a patchUIState selection write) made
+          // path-op commits take TWO cmd-Z, and the undo reverted the selection
+          // against the still-mutated blob - so the restored layerID no longer
+          // existed and resolved to the wrong layer. One action reverts both
+          // together; the kParamUIState round-trip then drives the in-memory
+          // selection (highlight + timeline) against the reverted blob.
+          [s->_layerListController writePaths:paths
+                            selectingLayerIDs:(adopt ? @[ selectID ] : nil)];
+          [s _syncLayersToRenderer];
         };
     // Delete: persist the new stack AND clear the selection in ONE action (one
     // undo restores both). The cleared kParamUIState round-trips back through

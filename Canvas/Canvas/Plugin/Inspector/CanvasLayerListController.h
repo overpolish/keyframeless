@@ -53,6 +53,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// otherwise be two separate undo steps).
 - (void)writePaths:(NSArray<KKBezierPath *> *)paths
     clearingSelectionInSameAction:(BOOL)clear;
+/// Persist `paths` AND set the kParamUIState layer selection to `ids` (primary =
+/// first) inside ONE action, so a blob+selection change (path-op result, drawn
+/// layer) is a SINGLE undo entry. Pass nil to leave the selection untouched (blob
+/// only); pass @[] to clear it. Critically, folding both into one action means
+/// undo reverts the blob and selection together - so the kParamUIState round-trip
+/// resolves the restored selection against the reverted blob, not a stale one.
+- (void)writePaths:(NSArray<KKBezierPath *> *)paths
+    selectingLayerIDs:(nullable NSArray<NSString *> *)ids;
 /// Fired when the panel's primary selection changes (that layer's layerID, or
 /// nil). The host uses it to switch which layer the inspector timeline edits.
 @property(nonatomic, copy, nullable) void (^onPrimaryLayerSelected)
