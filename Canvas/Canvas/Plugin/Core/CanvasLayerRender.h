@@ -192,6 +192,13 @@ typedef struct {
   float aspect;
   NSInteger ng;
   CanvasGroupXform groups[kCanvasGroupXformCap];
+  // The composed model matrix + pixel scale built ONCE from the fields above.
+  // CanvasComposedModelMatrix is invariant across a path's points, so
+  // projecting every anchor/handle reuses `m` directly instead of recomposing
+  // the 4x4 per point (the second O(N^2) layer under the per-point
+  // object-centre rebuild).
+  matrix_float4x4 m;
+  simd_float2 scl;
 } CanvasProjCtx;
 
 CanvasProjCtx CanvasProjCtxMake(NSArray<KKBezierPath *> *layers,

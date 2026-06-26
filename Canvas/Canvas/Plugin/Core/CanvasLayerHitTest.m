@@ -20,27 +20,55 @@
 #import <KeyframelessKit/KKTimingStage.h>
 #import <simd/simd.h>
 
-// A layer's on-screen quad corner in object space [0,1] (Y-up), through the
-// SAME pipeline the render uses (CanvasComposedModelMatrix + the perspective
-// divide). The pipeline is scale-invariant in object space, so we feed a
-// nominal pixel scale of (aspect, 1) - only the canvas aspect matters, not the
-// render's true pixel dims. tileShift is 0 (the viewer OSC isn't tiled like the
-// render).
-static simd_float2 CanvasProjectedCornerObj(float nx, float ny,
-                                            CanvasLayerTransform t, float cx,
-                                            float cy, float aspect,
-                                            const CanvasGroupXform *groups,
-                                            NSInteger ng) {
-  simd_float2 scl = simd_make_float2(aspect > 0.0f ? aspect : 1.0f, 1.0f);
+// The pixel scale every object-space projection feeds
+// CanvasComposedModelMatrix: (aspect, 1). The pipeline is scale-invariant in
+// object space, so only the canvas aspect matters, not the render's true pixel
+// dims.
+static inline simd_float2 CanvasHitScaleForAspect(float aspect) {
+  return simd_make_float2(aspect > 0.0f ? aspect : 1.0f, 1.0f);
+}
+
+// The composed model matrix for one (transform, centre, groups) - INVARIANT
+// across a layer's points. Build once, then project every point with
+// CanvasProjectNormWithMatrix instead of recomposing the 4x4 per point.
+// tileShift is 0 (the viewer OSC isn't tiled like the render).
+static matrix_float4x4 CanvasComposedHitMatrix(CanvasLayerTransform t,
+                                               simd_float2 c, float aspect,
+                                               const CanvasGroupXform *groups,
+                                               NSInteger ng) {
+  return CanvasComposedModelMatrix(t, c, groups, ng,
+                                   CanvasHitScaleForAspect(aspect),
+                                   simd_make_float2(0, 0));
+}
+
+// Project a normalized layer-local point (Y-up [0,1]) through a PREBUILT model
+// matrix + pixel scale - the per-vertex/anchor hot path. Same perspective
+// divide the render uses.
+static simd_float2 CanvasProjectNormWithMatrix(matrix_float4x4 m,
+                                               simd_float2 scl, float nx,
+                                               float ny) {
   simd_float2 half = simd_make_float2(0.5f, 0.5f);
-  matrix_float4x4 m = CanvasComposedModelMatrix(
-      t, simd_make_float2(cx, cy), groups, ng, scl, simd_make_float2(0, 0));
   simd_float2 pPix = (simd_make_float2(nx, ny) - half) * scl;
   simd_float4 clip = simd_mul(m, simd_make_float4(pPix.x, pPix.y, 0.0f, 1.0f));
   if (clip.w == 0.0f)
     return simd_make_float2(nx, ny);
   simd_float2 screen = simd_make_float2(clip.x / clip.w, clip.y / clip.w);
   return screen / scl + half;
+}
+
+// A layer's on-screen quad corner in object space [0,1] (Y-up). One-off form
+// (image corners, group compose): builds the matrix then projects. For many
+// points of the same layer build the matrix once and call
+// CanvasProjectNormWithMatrix directly.
+static simd_float2 CanvasProjectedCornerObj(float nx, float ny,
+                                            CanvasLayerTransform t, float cx,
+                                            float cy, float aspect,
+                                            const CanvasGroupXform *groups,
+                                            NSInteger ng) {
+  matrix_float4x4 m =
+      CanvasComposedHitMatrix(t, simd_make_float2(cx, cy), aspect, groups, ng);
+  return CanvasProjectNormWithMatrix(m, CanvasHitScaleForAspect(aspect), nx,
+                                     ny);
 }
 
 // YES if `path` is editable at clip fraction `frac`: it has at least one
@@ -86,6 +114,9 @@ CanvasProjCtx CanvasProjCtxMake(NSArray<KKBezierPath *> *layers,
                ? 0
                : CanvasBuildGroupXforms(layers, idx, frac, nil, nil, ctx.groups,
                                         kCanvasGroupXformCap);
+  ctx.scl = CanvasHitScaleForAspect(aspect);
+  ctx.m =
+      CanvasComposedHitMatrix(ctx.t, ctx.center, aspect, ctx.groups, ctx.ng);
   return ctx;
 }
 
@@ -93,9 +124,7 @@ simd_float2 CanvasProjectWithCtx(const CanvasProjCtx *ctx, float localX,
                                  float localY) {
   if (!ctx)
     return simd_make_float2(localX, localY);
-  return CanvasProjectedCornerObj(localX, localY, ctx->t, ctx->center.x,
-                                  ctx->center.y, ctx->aspect, ctx->groups,
-                                  ctx->ng);
+  return CanvasProjectNormWithMatrix(ctx->m, ctx->scl, localX, localY);
 }
 
 void CanvasProjectLayerPointsObj(NSArray<KKBezierPath *> *layers,
@@ -217,15 +246,15 @@ static BOOL CanvasPointInTri(simd_float2 p, simd_float2 a, simd_float2 b,
 // Project a tessellated stroke / marker vertex (centered-pixel object space) to
 // the aspect-corrected space the hit-test compares in: pixel -> path-normalized
 // (inverse of the tessellator's (norm-0.5)*outputSize) -> the same pipeline as
-// the centerline -> x scaled by aspect. `inv` = 1/outputSize, `half` =
-// (0.5,0.5).
-static simd_float2
-CanvasHitProjectVert(KKVertex2D v, simd_float2 inv, simd_float2 half,
-                     CanvasLayerTransform t, simd_float2 c, float aspect,
-                     const CanvasGroupXform *groups, NSInteger ng) {
-  simd_float2 nm = v.position * inv + half;
-  simd_float2 pr =
-      CanvasProjectedCornerObj(nm.x, nm.y, t, c.x, c.y, aspect, groups, ng);
+// the centerline -> x scaled by aspect. `inv` = 1/outputSize. `m`/`scl` are the
+// layer's prebuilt model matrix + pixel scale (CanvasComposedHitMatrix), so a
+// dense stroke's thousands of strip vertices reuse one matrix instead of
+// recomposing the 4x4 per vertex - the dense-path hit-test cost.
+static simd_float2 CanvasHitProjectVert(KKVertex2D v, simd_float2 inv,
+                                        matrix_float4x4 m, simd_float2 scl,
+                                        float aspect) {
+  simd_float2 nm = v.position * inv + simd_make_float2(0.5f, 0.5f);
+  simd_float2 pr = CanvasProjectNormWithMatrix(m, scl, nm.x, nm.y);
   return simd_make_float2(pr.x * aspect, pr.y);
 }
 
@@ -242,10 +271,8 @@ CanvasHitProjectVert(KKVertex2D v, simd_float2 inv, simd_float2 half,
 // the caller.
 static BOOL CanvasStrokeStripHit(KKBezierPath *geom, float startW, float endW,
                                  float outW, float outH, uint8_t lineCap,
-                                 uint8_t lineJoin, CanvasLayerTransform t,
-                                 simd_float2 c, float aspect,
-                                 const CanvasGroupXform *groups, NSInteger ng,
-                                 simd_float2 q) {
+                                 uint8_t lineJoin, matrix_float4x4 m,
+                                 simd_float2 scl, float aspect, simd_float2 q) {
   NSUInteger cap = CanvasStrokeVertexCapacity(geom);
   if (cap < 3)
     return NO;
@@ -271,11 +298,9 @@ static BOOL CanvasStrokeStripHit(KKBezierPath *geom, float startW, float endW,
     simd_float2 qa = simd_make_float2(q.x * aspect, q.y);
     simd_float2 inv = simd_make_float2(outW != 0.0f ? 1.0f / outW : 0.0f,
                                        outH != 0.0f ? 1.0f / outH : 0.0f);
-    simd_float2 half = simd_make_float2(0.5f, 0.5f);
     simd_float2 p0 = {0, 0}, p1 = {0, 0};
     for (NSUInteger i = 0; i < vc; i++) {
-      simd_float2 pa =
-          CanvasHitProjectVert(verts[i], inv, half, t, c, aspect, groups, ng);
+      simd_float2 pa = CanvasHitProjectVert(verts[i], inv, m, scl, aspect);
       if (i >= 2) {
         float area2 =
             (p1.x - p0.x) * (pa.y - p0.y) - (pa.x - p0.x) * (p1.y - p0.y);
@@ -300,9 +325,8 @@ static BOOL CanvasStrokeStripHit(KKBezierPath *geom, float startW, float endW,
 static BOOL CanvasStrokeMarkersHit(KKBezierPath *geom, float startW, float endW,
                                    uint8_t startMarker, uint8_t endMarker,
                                    float startMul, float endMul, float outW,
-                                   float outH, CanvasLayerTransform t,
-                                   simd_float2 c, float aspect,
-                                   const CanvasGroupXform *groups, NSInteger ng,
+                                   float outH, matrix_float4x4 m,
+                                   simd_float2 scl, float aspect,
                                    simd_float2 q) {
   if (startMarker == 0 && endMarker == 0)
     return NO;
@@ -326,12 +350,10 @@ static BOOL CanvasStrokeMarkersHit(KKBezierPath *geom, float startW, float endW,
   simd_float2 qa = simd_make_float2(q.x * aspect, q.y);
   simd_float2 inv = simd_make_float2(outW != 0.0f ? 1.0f / outW : 0.0f,
                                      outH != 0.0f ? 1.0f / outH : 0.0f);
-  simd_float2 half = simd_make_float2(0.5f, 0.5f);
   for (NSUInteger i = 0; i + 2 < vc; i += 3) { // triangle LIST: triples
     simd_float2 p[3];
     for (int k = 0; k < 3; k++)
-      p[k] = CanvasHitProjectVert(sMVerts[i + k], inv, half, t, c, aspect,
-                                  groups, ng);
+      p[k] = CanvasHitProjectVert(sMVerts[i + k], inv, m, scl, aspect);
     float area2 = (p[1].x - p[0].x) * (p[2].y - p[0].y) -
                   (p[2].x - p[0].x) * (p[1].y - p[0].y);
     if (fabsf(area2) > 1e-9f && CanvasPointInTri(qa, p[0], p[1], p[2]))
@@ -347,9 +369,8 @@ static BOOL CanvasStrokeMarkersHit(KKBezierPath *geom, float startW, float endW,
 // triangles and report inside on odd parity. That matches the rendered fill
 // exactly, including holes / compound paths (one fan per contour).
 static BOOL CanvasFillFanHit(KKBezierPath *geom, float outW, float outH,
-                             CanvasLayerTransform t, simd_float2 c,
-                             float aspect, const CanvasGroupXform *groups,
-                             NSInteger ng, simd_float2 q) {
+                             matrix_float4x4 m, simd_float2 scl, float aspect,
+                             simd_float2 q) {
   KKVertex2D *fan = NULL;
   simd_float2 bbMin, bbMax;
   NSUInteger triCount =
@@ -361,13 +382,11 @@ static BOOL CanvasFillFanHit(KKBezierPath *geom, float outW, float outH,
   simd_float2 qa = simd_make_float2(q.x * aspect, q.y);
   simd_float2 inv = simd_make_float2(outW != 0.0f ? 1.0f / outW : 0.0f,
                                      outH != 0.0f ? 1.0f / outH : 0.0f);
-  simd_float2 half = simd_make_float2(0.5f, 0.5f);
   NSUInteger covered = 0;
   for (NSUInteger ti = 0; ti < triCount; ti++) {
     simd_float2 p[3];
     for (int k = 0; k < 3; k++)
-      p[k] = CanvasHitProjectVert(fan[ti * 3 + k], inv, half, t, c, aspect,
-                                  groups, ng);
+      p[k] = CanvasHitProjectVert(fan[ti * 3 + k], inv, m, scl, aspect);
     float area2 = (p[1].x - p[0].x) * (p[2].y - p[0].y) -
                   (p[2].x - p[0].x) * (p[1].y - p[0].y);
     if (fabsf(area2) > 1e-9f && CanvasPointInTri(qa, p[0], p[1], p[2]))
@@ -395,6 +414,12 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
                                ? CanvasLayerTransformIdentity()
                                : CanvasLayerTransformAtFraction(path, frac);
   simd_float2 c = CanvasLayerObjectCenter(path);
+  // Build the composed model matrix ONCE - every tessellated vertex of the
+  // stroke strip / markers / fill fan reuses it instead of recomposing the 4x4
+  // per vertex (a dense path emits thousands of verts, so the per-vertex
+  // rebuild was the bulk of the busy-path hit-test cost).
+  simd_float2 scl = CanvasHitScaleForAspect(aspect);
+  matrix_float4x4 m = CanvasComposedHitMatrix(t, c, aspect, groups, ng);
   // Shared pixel space for every tessellation-derived test (stroke strip,
   // markers, fill fan): the aspect-corrected canvas height. The scale cancels
   // in the project-back, so any consistent value works.
@@ -415,8 +440,7 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
     uint8_t lineCap = path.lineCap, lineJoin = path.lineJoin;
     CanvasStrokeCapJoinAtFraction(path, efrac, nil, nil, &lineCap, &lineJoin);
     if (CanvasStrokeStripHit(geom, fmaxf(swStart, minPx), fmaxf(swEnd, minPx),
-                             a * h, h, lineCap, lineJoin, t, c, aspect, groups,
-                             ng, q))
+                             a * h, h, lineCap, lineJoin, m, scl, aspect, q))
       return YES;
     // Endpoint markers are drawn on top of the stroke, so they're clickable too
     // (use the real stroke widths so the marker size matches what's drawn).
@@ -425,15 +449,14 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
     CanvasStrokeMarkersAtFraction(path, efrac, nil, nil, &startMarker,
                                   &endMarker, &startMul, &endMul);
     if (CanvasStrokeMarkersHit(geom, swStart, swEnd, startMarker, endMarker,
-                               startMul, endMul, a * h, h, t, c, aspect, groups,
-                               ng, q))
+                               startMul, endMul, a * h, h, m, scl, aspect, q))
       return YES;
   }
   // Fill: test the SAME triangle fan the render fills (odd coverage = inside),
   // lane-gated like the render so a lane-toggled fill is clickable even when
   // the flat fillEnabled is NO.
   if (CanvasFillEnabledAtFraction(path, efrac, nil, nil) &&
-      CanvasFillFanHit(geom, a * h, h, t, c, aspect, groups, ng, q))
+      CanvasFillFanHit(geom, a * h, h, m, scl, aspect, q))
     return YES;
   return NO;
 }
