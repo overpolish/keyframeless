@@ -353,7 +353,10 @@ static const CGFloat kSlideDistance = 12.0;
   }
   NSRect finalFrame = [self _panelFrameForCard:card];
   NSRect startFrame = finalFrame;
-  startFrame.origin.x += kSlideDistance; // slide in toward the popover
+  // Emerge from UNDER the popover: a left-placed panel starts to its right (the
+  // popover side) and slides left into place; a right-placed panel mirrors it.
+  BOOL panelOnLeft = NSMidX(finalFrame) < NSMidX(card);
+  startFrame.origin.x += panelOnLeft ? kSlideDistance : -kSlideDistance;
 
   // Follow the popover if it later resizes or flips edge (e.g. switching layers
   // retargets the popover above<->below the anchor). The card is recomputed
@@ -413,11 +416,31 @@ static const CGFloat kSlideDistance = 12.0;
   });
 }
 
-// Panel frame for a popover card: pinned to the card's left edge with a gap,
-// matching the card's top and height (so the arrow above/below is excluded).
+// Panel frame for a popover card: pinned beside the card, matching its top and
+// height (so the arrow above/below is excluded). Prefers the LEFT of the card,
+// but flips to the RIGHT when the left placement would run off the screen (a
+// narrow FCP window puts the popover near the left edge, so the companion would
+// otherwise clip). Clamps into the visible frame as a last resort.
 - (NSRect)_panelFrameForCard:(NSRect)card {
-  return NSMakeRect(card.origin.x - kPanelWidth - kPanelGap, card.origin.y,
-                    kPanelWidth, card.size.height);
+  NSRect vis = [self _screenVisibleFrameForCard:card];
+  CGFloat left = card.origin.x - kPanelWidth - kPanelGap;
+  CGFloat right = NSMaxX(card) + kPanelGap;
+  CGFloat x = left;
+  if (left < NSMinX(vis) && right + kPanelWidth <= NSMaxX(vis))
+    x = right; // left clips but the right side has room - flip beside the card
+  x = MAX(NSMinX(vis), MIN(x, NSMaxX(vis) - kPanelWidth)); // last-resort clamp
+  return NSMakeRect(x, card.origin.y, kPanelWidth, card.size.height);
+}
+
+// Visible frame of the screen the popover card sits on (so flip/clamp respects
+// the Dock/menu-bar insets). Falls back to the main screen.
+- (NSRect)_screenVisibleFrameForCard:(NSRect)card {
+  NSPoint center = NSMakePoint(NSMidX(card), NSMidY(card));
+  for (NSScreen *s in NSScreen.screens)
+    if (NSPointInRect(center, s.frame))
+      return s.visibleFrame;
+  NSScreen *fallback = _popoverContentView.window.screen ?: NSScreen.mainScreen;
+  return fallback.visibleFrame;
 }
 
 // Snap the panel to the popover's current card (live content view -> screen, so
