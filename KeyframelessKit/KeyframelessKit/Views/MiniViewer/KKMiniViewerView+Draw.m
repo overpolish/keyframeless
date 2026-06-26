@@ -57,6 +57,12 @@
       [self _ensureProcessedTextureForSlot:slot];
       if (!slot.processedTexture)
         continue;
+      // Interaction frame: the content can't have changed (only the view
+      // transform), so skip the plugin effect re-render and reuse last frame's
+      // processed texture. This is the big pan win - it nearly halves the frame
+      // and lets macOS deliver scroll events at full rate.
+      if (_reuseProcessedTexture)
+        continue;
       if (n > 1) {
         @try {
           [(NSObject *)del setValue:@(slot.tag) forKey:@"editFraction"];
@@ -169,8 +175,8 @@
   // Alignment grid - drawn first (under the box borders + glyphs), tiled across
   // the whole view to match the in-viewer grid. Two-tone for legibility.
   if (_linePipeline && del &&
-      [del respondsToSelector:@selector(miniViewer:gridSpacingX:spacingY:
-                                        contentRect:)]) {
+      [del respondsToSelector:
+               @selector(miniViewer:gridSpacingX:spacingY:contentRect:)]) {
     CGFloat gnx = 0, gny = 0;
     CGRect gcr = [self contentRectInViewPoints];
     if ([del miniViewer:self gridSpacingX:&gnx spacingY:&gny contentRect:gcr] &&
@@ -469,15 +475,18 @@
   // -encodeToolLineStrip:, which use this armed encoder + the glyph/line
   // pipelines (same look as the motion path).
   if ((_pointPipeline || _linePipeline) && del &&
-      [del respondsToSelector:@selector(miniViewerDrawToolOverlay:contentRect:)]) {
+      [del respondsToSelector:@selector(
+                                  miniViewerDrawToolOverlay:contentRect:)]) {
     _toolEncoder = enc;
+    [self _beginToolBatch];
     [del miniViewerDrawToolOverlay:self
                        contentRect:[self contentRectInViewPoints]];
+    [self _endToolBatch];
     _toolEncoder = nil;
   }
 
-  // viewer draws it over the gizmo. The delegate renders its KKToolbar into this
-  // pass via the shared -drawInEncoder: path, using the toolbar pipeline.
+  // viewer draws it over the gizmo. The delegate renders its KKToolbar into
+  // this pass via the shared -drawInEncoder: path, using the toolbar pipeline.
   if (_toolbarPipeline && del &&
       [del respondsToSelector:@selector(miniViewer:drawToolbarInEncoder:device:
                                         pipeline:viewportWidth:height:)]) {
@@ -500,82 +509,6 @@
 
 - (void)mtkView:(MTKView *)view drawableSizeWillChange:(CGSize)size {
   [self setNeedsDisplay:YES];
-}
-
-@end
-
-// The public tool-draw surface. Implemented in its own (ToolDraw) category so it
-// matches the public (ToolDraw) interface (the internal (Draw) category is
-// declared in the private header) - otherwise clang rolls these onto the primary
-// class and warns about the category implementing the primary's methods.
-@implementation KKMiniViewerView (ToolDraw)
-
-- (void)encodeToolDotAtPoint:(CGPoint)viewPoint
-                        fill:(simd_float4)fill
-                   sizeScale:(CGFloat)sizeScale {
-  if (!_toolEncoder || !_pointPipeline)
-    return;
-  [self _encodeHandleGlyphAt:viewPoint
-                   fillColor:fill
-                   sizeScale:sizeScale
-                     encoder:_toolEncoder];
-}
-
-- (void)encodeToolLineStrip:(NSArray<NSValue *> *)viewPoints
-                      color:(simd_float4)color
-                halfWidthPt:(CGFloat)halfWidthPt {
-  if (!_toolEncoder || !_linePipeline || viewPoints.count < 2)
-    return;
-  [self _encodeMotionLineStrip:viewPoints
-                         color:color
-                   halfWidthPt:halfWidthPt
-                       encoder:_toolEncoder];
-}
-
-- (void)encodeToolRingAtPoint:(CGPoint)viewPoint
-                     radiusPt:(CGFloat)radiusPt
-                         fill:(simd_float4)fill
-                  strokeColor:(simd_float4)strokeColor
-                  fillWidthPt:(CGFloat)fillWidthPt
-               outlineWidthPt:(CGFloat)outlineWidthPt {
-  if (!_toolEncoder || !_ringPipeline)
-    return;
-  [self _encodeRingOSCAt:viewPoint
-               radiusXPt:radiusPt
-               radiusYPt:radiusPt
-               fillColor:fill
-             strokeColor:strokeColor
-             fillWidthPt:fillWidthPt
-          outlineWidthPt:outlineWidthPt
-                 encoder:_toolEncoder];
-}
-
-- (void)encodeToolFillTexture:(id<MTLTexture>)texture {
-  // Reuse the toolbar pipeline (KKVertexShader + KKLabelFragment, premultiplied-
-  // alpha blend) - the path-op fill texture is premultiplied RGBA, so it
-  // composites over the mini's content the same way the toolbar labels do. Drawn
-  // as a full-drawable quad (UV 0-1), so the caller-supplied texture must be
-  // drawable-sized.
-  if (!_toolEncoder || !_toolbarPipeline || !texture)
-    return;
-  CGSize d = self.drawableSize;
-  [_toolEncoder setRenderPipelineState:_toolbarPipeline];
-  simd_uint2 vp = {(unsigned int)d.width, (unsigned int)d.height};
-  [_toolEncoder setVertexBytes:&vp
-                        length:sizeof(vp)
-                       atIndex:KKVertexInputIndex_ViewportSize];
-  float hw = (float)d.width / 2.0f, hh = (float)d.height / 2.0f;
-  KKVertex2D verts[6] = {
-      {{-hw, -hh}, {0, 0}}, {{hw, -hh}, {1, 0}}, {{hw, hh}, {1, 1}},
-      {{-hw, -hh}, {0, 0}}, {{hw, hh}, {1, 1}},  {{-hw, hh}, {0, 1}},
-  };
-  [_toolEncoder setVertexBytes:verts
-                        length:sizeof(verts)
-                       atIndex:KKVertexInputIndex_Vertices];
-  [_toolEncoder setFragmentTexture:texture atIndex:0];
-  [_toolEncoder drawPrimitives:MTLPrimitiveTypeTriangle
-                   vertexStart:0
-                   vertexCount:6];
 }
 
 @end

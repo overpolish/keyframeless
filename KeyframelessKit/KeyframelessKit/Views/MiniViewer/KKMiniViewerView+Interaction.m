@@ -7,6 +7,7 @@
 #import "KKMiniViewerView_Private.h"
 #import "KKTokens.h"
 #import <KeyframelessKit/KKLog.h>
+#import <QuartzCore/QuartzCore.h> // CACurrentMediaTime (gesture-active timing)
 
 // View transform (zoom / pan), pointer-handle dragging, and screen-rect
 // geometry. The canvas's interactive surface, kept apart from the render path.
@@ -17,9 +18,33 @@
   return s > 0 ? s : 2.0;
 }
 
+// A two-finger scroll runs the main thread in NSEventTrackingRunLoopMode, and
+// the MTKView's draw (display-link callback AND on-demand setNeedsDisplay) is
+// only serviced in the default mode - so during a pan the view starved to
+// ~3-4fps even though each frame is ~7ms and setNeedsDisplay fired every event.
+// (Magnify/zoom gestures don't trip this, which is why zoom was always smooth.)
+// Rendering synchronously here forces the frame immediately, in whatever mode
+// the runloop is in, so a pan repaints once per scroll event regardless.
+- (void)_drawNowForInteraction {
+  // Reuse the already-rendered effect texture for this frame - a pan/zoom only
+  // moves the view over unchanged content, so re-running the plugin effect is
+  // wasted work, and that waste throttles how fast macOS delivers scroll events
+  // (a cheaper frame -> more events/sec -> smoother). Scoped to just this draw.
+  _reuseProcessedTexture = YES;
+  [self draw]; // MTKView: render one frame synchronously, now
+  _reuseProcessedTexture = NO;
+}
+
 // Cursor-anchored zoom: keep the image point under `viewPt` (view points,
 // y-up) fixed while scaling to `newZoom`.
+- (BOOL)_isPanZoomGestureActive {
+  // Scroll/pinch events arrive ~every 40ms or faster; 120ms covers the gap
+  // between events (and a brief tail) without lingering once the gesture stops.
+  return (CACurrentMediaTime() - _lastPanZoomTime) < 0.12;
+}
+
 - (void)_zoomTo:(CGFloat)newZoom aboutViewPoint:(NSPoint)viewPt {
+  _lastPanZoomTime = CACurrentMediaTime();
   newZoom = MAX(0.2, MIN(8.0, newZoom));
   CGFloat s = [self _backingScale];
   CGPoint c = CGPointMake(viewPt.x * s, viewPt.y * s);
@@ -57,10 +82,12 @@
   NSPoint p = [self convertPoint:event.locationInWindow fromView:nil];
   if (event.hasPreciseScrollingDeltas) {
     // Trackpad two-finger → pan.
+    _lastPanZoomTime = CACurrentMediaTime();
     CGFloat s = [self _backingScale];
     _panPixels.x += event.scrollingDeltaX * s;
     _panPixels.y -= event.scrollingDeltaY * s; // drawable y is up; delta y-down
-    [self setNeedsDisplay:YES];
+    [self _drawNowForInteraction]; // sync draw - setNeedsDisplay starves in
+                                   // scroll tracking mode (see above)
     [self _didChangeViewTransformOfKind:KKMiniViewerTransformKindPan];
   } else {
     // Mouse wheel → zoom toward cursor.
@@ -115,8 +142,8 @@
   // No handle (the overlay swallows those) and no filmstrip cell: offer the
   // click to the delegate as a background pick (e.g. click-to-select a layer).
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
-  if ([d respondsToSelector:@selector(miniViewer:
-                                backgroundClickAtPoint:contentRect:)]) {
+  if ([d respondsToSelector:
+              @selector(miniViewer:backgroundClickAtPoint:contentRect:)]) {
     [d miniViewer:self
         backgroundClickAtPoint:[self convertPoint:event.locationInWindow
                                          fromView:nil]
@@ -373,7 +400,7 @@
     if (_filmstripDragDistance > kKKMiniFilmstripClickSlopPt)
       _hasPendingFilmstripActivation = NO;
   }
-  [self setNeedsDisplay:YES];
+  [self _drawNowForInteraction]; // mouse-drag also runs in tracking mode
   [self _didChangeViewTransformOfKind:KKMiniViewerTransformKindPan];
 }
 
@@ -399,10 +426,12 @@
   if (![self _pointFromGlobalEvent:&p])
     return NO;
   if (event.hasPreciseScrollingDeltas) {
+    _lastPanZoomTime = CACurrentMediaTime();
     CGFloat s = [self _backingScale];
     _panPixels.x += event.scrollingDeltaX * s;
     _panPixels.y -= event.scrollingDeltaY * s;
-    [self setNeedsDisplay:YES];
+    [self
+        _drawNowForInteraction]; // sync draw - starves in scroll tracking mode
     [self _didChangeViewTransformOfKind:KKMiniViewerTransformKindPan];
   } else {
     [self _zoomTo:_zoom * (1.0 - event.scrollingDeltaY * 0.05)

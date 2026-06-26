@@ -68,6 +68,13 @@
   if (![d respondsToSelector:@selector(
                                  miniViewer:handleHitAtPoint:contentRect:)])
     return nil;
+  // While a pan/zoom gesture is live, skip the per-anchor handle hit-test - a
+  // two-finger scroll / pinch never targets a handle, and on a dense path this
+  // call costs ~35ms, which AppKit invokes once per scroll event and was the
+  // real throttle that dropped panning to ~24fps. Let the point fall through to
+  // the canvas (which drives the pan) for the duration of the gesture.
+  if ([c _isPanZoomGestureActive])
+    return nil;
   return [d miniViewer:c
              handleHitAtPoint:p
                   contentRect:[c contentRectInViewPoints]]
@@ -160,19 +167,20 @@
           [td miniViewer:c toolbarTagAtPoint:tp] != 0) {
         [c endFieldEditingGrabbingFocusIfNeeded];
         _toolbarDragging =
-            [td respondsToSelector:@selector(miniViewer:toolbarMouseDownAtPoint:)] &&
+            [td respondsToSelector:@selector(
+                                       miniViewer:toolbarMouseDownAtPoint:)] &&
             [td miniViewer:c toolbarMouseDownAtPoint:tp];
         [self setNeedsDisplay:YES];
         return;
       }
       [c endFieldEditingGrabbingFocusIfNeeded];
       _toolDrawing = YES;
-      if ([td respondsToSelector:@selector(miniViewer:
-                                     toolDownAtPoint:contentRect:modifiers:)])
+      if ([td respondsToSelector:
+                  @selector(miniViewer:toolDownAtPoint:contentRect:modifiers:)])
         [td miniViewer:c
-              toolDownAtPoint:tp
-                  contentRect:[c contentRectInViewPoints]
-                    modifiers:e.modifierFlags];
+            toolDownAtPoint:tp
+                contentRect:[c contentRectInViewPoints]
+                  modifiers:e.modifierFlags];
       [c setNeedsDisplay:YES]; // tool overlay draws in the Metal pass
       return;
     }
@@ -188,7 +196,8 @@
     if ([dd respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)]) {
       NSPoint tp = [self convertPoint:e.locationInWindow fromView:nil];
       if ([dd miniViewer:c toolbarTagAtPoint:tp] != 0) {
-        if ([dd respondsToSelector:@selector(miniViewer:toolbarMouseDownAtPoint:)])
+        if ([dd respondsToSelector:@selector(
+                                       miniViewer:toolbarMouseDownAtPoint:)])
           [dd miniViewer:c toolbarMouseDownAtPoint:tp];
         [self setNeedsDisplay:YES];
         return;
@@ -215,7 +224,8 @@
     if ([d miniViewer:c toolbarTagAtPoint:tp] != 0) {
       [c endFieldEditingGrabbingFocusIfNeeded];
       _toolbarDragging =
-          [d respondsToSelector:@selector(miniViewer:toolbarMouseDownAtPoint:)] &&
+          [d respondsToSelector:@selector(
+                                    miniViewer:toolbarMouseDownAtPoint:)] &&
           [d miniViewer:c toolbarMouseDownAtPoint:tp];
       [self setNeedsDisplay:YES];
       return;
@@ -262,8 +272,8 @@
   KKMiniViewerView *c = self.canvas;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
   if (_toolDrawing) {
-    if ([d respondsToSelector:@selector(miniViewer:
-                                   toolDraggedToPoint:contentRect:modifiers:)])
+    if ([d respondsToSelector:@selector(miniViewer:toolDraggedToPoint:
+                                        contentRect:modifiers:)])
       [d miniViewer:c
           toolDraggedToPoint:[self convertPoint:e.locationInWindow fromView:nil]
                  contentRect:[c contentRectInViewPoints]
@@ -302,8 +312,8 @@
     _toolDrawing = NO;
     if ([d respondsToSelector:@selector(miniViewer:toolUpAtPoint:contentRect:)])
       [d miniViewer:c
-            toolUpAtPoint:[self convertPoint:e.locationInWindow fromView:nil]
-              contentRect:[c contentRectInViewPoints]];
+          toolUpAtPoint:[self convertPoint:e.locationInWindow fromView:nil]
+            contentRect:[c contentRectInViewPoints]];
     [c setNeedsDisplay:YES];
     return;
   }
@@ -385,16 +395,16 @@
         [d miniViewer:c toolbarTagAtPoint:p] != 0;
     if (!overToolbar) {
       CGRect cr = [c contentRectInViewPoints];
-      if ([d respondsToSelector:@selector(miniViewer:
-                                     toolMovedToPoint:contentRect:)]) {
+      if ([d respondsToSelector:
+                  @selector(miniViewer:toolMovedToPoint:contentRect:)]) {
         [d miniViewer:c toolMovedToPoint:p contentRect:cr];
         [c setNeedsDisplay:YES];
       }
       // The tool owns the cursor (pen / close glyph) over the canvas; skip the
       // handle-resize hover logic below.
       NSCursor *cur = nil;
-      if ([d respondsToSelector:@selector(miniViewer:
-                                     toolCursorAtPoint:contentRect:)])
+      if ([d respondsToSelector:@selector(
+                                    miniViewer:toolCursorAtPoint:contentRect:)])
         cur = [d miniViewer:c toolCursorAtPoint:p contentRect:cr];
       [(cur ?: [NSCursor arrowCursor]) set];
       return;

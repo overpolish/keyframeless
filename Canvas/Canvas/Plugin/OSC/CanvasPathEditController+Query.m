@@ -27,8 +27,8 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
 - (KKBezierPath *)_path {
   NSString *sel = [_surface penSelectedLayerID];
   KKBezierPath *p = sel.length ? [_surface penLayerWithID:sel] : nil;
-  if (!p || p.isImage || p.isGroup ||
-      (!p.strokeEnabled && !p.fillEnabled) || p.count < 1)
+  if (!p || p.isImage || p.isGroup || (!p.strokeEnabled && !p.fillEnabled) ||
+      p.count < 1)
     return nil;
   return p;
 }
@@ -54,6 +54,20 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
   return [_surface penSurfacePointFromObj:CGPointMake(so.x, so.y)];
 }
 
+// Context-reusing variant: the caller builds the projection context ONCE
+// (CanvasProjCtxMake) and passes it in, so a whole-path hit-test loop is O(N)
+// not O(N^2). The context is invariant under view pan/zoom (it is the LAYER
+// transform, not the view's), so it stays valid across a pan gesture - and the
+// per-anchor hit-test (_hitAtX / _cornerWidgetHitAtX) is what AppKit's
+// -hitTest: hammers on every mouse/scroll event, so its O(N^2) form was what
+// jammed the main thread (the cursor couldn't even move) on a busy path.
+- (CGPoint)_surfaceForLocalX:(float)lx
+                           y:(float)ly
+                         ctx:(const CanvasProjCtx *)ctx {
+  simd_float2 so = CanvasProjectWithCtx(ctx, lx, ly);
+  return [_surface penSurfacePointFromObj:CGPointMake(so.x, so.y)];
+}
+
 - (CanvasPathEditHit)_hitAtX:(double)x
                            y:(double)y
                    outAnchor:(NSInteger *)outAnchor
@@ -65,6 +79,12 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
     return CanvasPathEditHitNone;
   if (path.count > kCanvasMaxEditableAnchors)
     return CanvasPathEditHitNone; // too large to edit per-anchor (perf)
+  // Build the projection context ONCE - this loop runs on every AppKit
+  // -hitTest:, so the old per-point rebuild made panning a busy path O(N^2) per
+  // mouse event and jammed the main thread.
+  CanvasProjCtx ctx = CanvasProjCtxMake([_surface penAllLayers], path,
+                                        [_surface penEditFraction],
+                                        (float)[_surface penCanvasAspect]);
   double rh2 = kHandleGrabPx * kHandleGrabPx,
          ra2 = kAnchorGrabPx * kAnchorGrabPx;
   for (NSUInteger i = 0; i < path.count; i++) {
@@ -72,7 +92,7 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
     if (fabsf(pt.outX) + fabsf(pt.outY) > 1e-6f) {
       CGPoint s = [self _surfaceForLocalX:pt.x + pt.outX
                                         y:pt.y + pt.outY
-                                     path:path];
+                                      ctx:&ctx];
       if (CanvasDist2(s, x, y) <= rh2) {
         *outAnchor = (NSInteger)i;
         *outHandleOut = YES;
@@ -82,7 +102,7 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
     if (fabsf(pt.inX) + fabsf(pt.inY) > 1e-6f) {
       CGPoint s = [self _surfaceForLocalX:pt.x + pt.inX
                                         y:pt.y + pt.inY
-                                     path:path];
+                                      ctx:&ctx];
       if (CanvasDist2(s, x, y) <= rh2) {
         *outAnchor = (NSInteger)i;
         *outHandleOut = NO;
@@ -92,7 +112,7 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
   }
   for (NSUInteger i = 0; i < path.count; i++) {
     KKBezierPoint pt = [path pointAtIndex:i];
-    CGPoint s = [self _surfaceForLocalX:pt.x y:pt.y path:path];
+    CGPoint s = [self _surfaceForLocalX:pt.x y:pt.y ctx:&ctx];
     if (CanvasDist2(s, x, y) <= ra2) {
       *outAnchor = (NSInteger)i;
       *outHandleOut = NO;
@@ -124,9 +144,10 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
       continue; // not selectable in this popover scope (matches a click)
     CGFloat minX = CGFLOAT_MAX, minY = CGFLOAT_MAX;
     CGFloat maxX = -CGFLOAT_MAX, maxY = -CGFLOAT_MAX;
-    // The layer's on-screen extent: a vector path's anchor bbox; an image's RECT
-    // SHAPE corners (its actual quad, like the hit-test - NOT the unit square,
-    // which is oversized so the image never enclosed); else the unit square.
+    // The layer's on-screen extent: a vector path's anchor bbox; an image's
+    // RECT SHAPE corners (its actual quad, like the hit-test - NOT the unit
+    // square, which is oversized so the image never enclosed); else the unit
+    // square.
     if (!layer.isImage && layer.count >= 2) {
       for (NSUInteger i = 0; i < layer.count; i++) {
         KKBezierPoint pt = [layer pointAtIndex:i];

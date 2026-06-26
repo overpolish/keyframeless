@@ -431,17 +431,19 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 /// When YES, a click in the mini makes the mini the window's first responder
 /// (instead of resigning to nil), so an NSPopover-hosted mini becomes the key
 /// window and its local keyDown monitor fires - letting bare keys (e.g. Delete
-/// to remove the selected layer) be handled + consumed inside the popover rather
-/// than falling through to the host (FCP), which would act on them. Default NO so
-/// other plugins' minis keep resigning focus on click (host shortcuts stay live
-/// while interacting). The mini only holds focus while you're in it; clicking
-/// back into the host releases it. Pair with -acceptsFirstResponder (gated on
-/// this flag). Opt in from a plugin that handles keys in its mini popover.
+/// to remove the selected layer) be handled + consumed inside the popover
+/// rather than falling through to the host (FCP), which would act on them.
+/// Default NO so other plugins' minis keep resigning focus on click (host
+/// shortcuts stay live while interacting). The mini only holds focus while
+/// you're in it; clicking back into the host releases it. Pair with
+/// -acceptsFirstResponder (gated on this flag). Opt in from a plugin that
+/// handles keys in its mini popover.
 @property(nonatomic) BOOL grabsKeyFocusOnClick;
 
 /// End any focused value field on a mini click: resigns first responder to nil,
-/// or - when grabsKeyFocusOnClick is set - makes the mini itself first responder
-/// (so the popover becomes key). Called by the canvas + overlay mouseDown paths.
+/// or - when grabsKeyFocusOnClick is set - makes the mini itself first
+/// responder (so the popover becomes key). Called by the canvas + overlay
+/// mouseDown paths.
 - (void)endFieldEditingGrabbingFocusIfNeeded;
 
 @end
@@ -463,6 +465,13 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 - (void)encodeToolLineStrip:(NSArray<NSValue *> *)viewPoints
                       color:(simd_float4)color
                 halfWidthPt:(CGFloat)halfWidthPt;
+/// C-array variant of the above - avoids boxing the points into NSValues, which
+/// matters for a busy path-edit OSC (a long flattened-curve strip re-encoded
+/// every redraw). `points` are view points; the caller keeps ownership.
+- (void)encodeToolLineStripPoints:(const CGPoint *)points
+                            count:(NSUInteger)count
+                            color:(simd_float4)color
+                      halfWidthPt:(CGFloat)halfWidthPt;
 /// Encode a ring handle via the shared KKRingOSC shader (crisp, matches the
 /// viewer ring). `radiusPt` is the mid-stroke radius; fill + outline widths in
 /// points. Used for small ring handles (e.g. the live-corner radius widget).
@@ -472,11 +481,11 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
                   strokeColor:(simd_float4)strokeColor
                   fillWidthPt:(CGFloat)fillWidthPt
                outlineWidthPt:(CGFloat)outlineWidthPt;
-/// Draw a premultiplied-RGBA texture as a full-drawable quad in the tool-overlay
-/// pass (e.g. a CG-rendered path-op fill preview). Valid ONLY inside the
-/// delegate's -miniViewerDrawToolOverlay: callback. The texture must be sized to
-/// the drawable (-drawableSize), pixel (0,0) at the same corner the line/glyph
-/// primitives use, so it lands aligned with them.
+/// Draw a premultiplied-RGBA texture as a full-drawable quad in the
+/// tool-overlay pass (e.g. a CG-rendered path-op fill preview). Valid ONLY
+/// inside the delegate's -miniViewerDrawToolOverlay: callback. The texture must
+/// be sized to the drawable (-drawableSize), pixel (0,0) at the same corner the
+/// line/glyph primitives use, so it lands aligned with them.
 - (void)encodeToolFillTexture:(id<MTLTexture>)texture;
 @end
 

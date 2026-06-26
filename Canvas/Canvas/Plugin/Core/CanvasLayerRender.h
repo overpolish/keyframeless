@@ -5,6 +5,7 @@
 
 #pragma once
 
+#import "CanvasLayerTransform.h" // CanvasLayerTransform, CanvasGroupXform
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>
 #import <Metal/Metal.h>
@@ -175,6 +176,28 @@ void CanvasProjectLayerPointsObj(NSArray<KKBezierPath *> *layers,
                                  KKBezierPath *path, double frac, float aspect,
                                  const simd_float2 *localPts,
                                  simd_float2 *outProj, NSUInteger count);
+
+/// Reusable projection context for one (path, frac, aspect): the layer
+/// transform, the path's object centre, and its ancestor group composition -
+/// all INVARIANT across the path's points. Build ONCE with CanvasProjCtxMake,
+/// then project every anchor / handle / corner-widget point with
+/// CanvasProjectWithCtx. This is the cure for the O(N^2) trap: the per-point
+/// CanvasProjectLayerPointObj rebuilds the object centre (an O(N) bbox loop) +
+/// layer index + group xforms on EVERY call, and a path-edit OSC projects ~5N
+/// points per frame (anchors + 2 handles + 3 corner-widget neighbours), so a
+/// busy path spent hundreds of ms per frame rebuilding the same context.
+typedef struct {
+  CanvasLayerTransform t;
+  simd_float2 center;
+  float aspect;
+  NSInteger ng;
+  CanvasGroupXform groups[kCanvasGroupXformCap];
+} CanvasProjCtx;
+
+CanvasProjCtx CanvasProjCtxMake(NSArray<KKBezierPath *> *layers,
+                                KKBezierPath *path, double frac, float aspect);
+simd_float2 CanvasProjectWithCtx(const CanvasProjCtx *ctx, float localX,
+                                 float localY);
 
 /// Inverse of CanvasProjectLayerPointObj: map a screen-object point (Y-up
 /// [0,1], the render's object space) back to the layer's local normalized point

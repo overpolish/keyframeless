@@ -72,25 +72,41 @@ static NSUInteger CanvasLayerIndexOf(NSArray<KKBezierPath *> *layers,
   return idx;
 }
 
+CanvasProjCtx CanvasProjCtxMake(NSArray<KKBezierPath *> *layers,
+                                KKBezierPath *path, double frac, float aspect) {
+  CanvasProjCtx ctx = {0};
+  ctx.aspect = aspect;
+  if (!path)
+    return ctx;
+  ctx.t = (frac < 0.0) ? CanvasLayerTransformIdentity()
+                       : CanvasLayerTransformAtFraction(path, frac);
+  ctx.center = CanvasLayerObjectCenter(path);
+  NSUInteger idx = CanvasLayerIndexOf(layers, path);
+  ctx.ng = (idx == NSNotFound)
+               ? 0
+               : CanvasBuildGroupXforms(layers, idx, frac, nil, nil, ctx.groups,
+                                        kCanvasGroupXformCap);
+  return ctx;
+}
+
+simd_float2 CanvasProjectWithCtx(const CanvasProjCtx *ctx, float localX,
+                                 float localY) {
+  if (!ctx)
+    return simd_make_float2(localX, localY);
+  return CanvasProjectedCornerObj(localX, localY, ctx->t, ctx->center.x,
+                                  ctx->center.y, ctx->aspect, ctx->groups,
+                                  ctx->ng);
+}
+
 void CanvasProjectLayerPointsObj(NSArray<KKBezierPath *> *layers,
                                  KKBezierPath *path, double frac, float aspect,
                                  const simd_float2 *localPts,
                                  simd_float2 *outProj, NSUInteger count) {
   if (!path || count == 0)
     return;
-  CanvasLayerTransform t = (frac < 0.0)
-                               ? CanvasLayerTransformIdentity()
-                               : CanvasLayerTransformAtFraction(path, frac);
-  simd_float2 c = CanvasLayerObjectCenter(path);
-  NSUInteger idx = CanvasLayerIndexOf(layers, path);
-  CanvasGroupXform groups[kCanvasGroupXformCap];
-  NSInteger ng = (idx == NSNotFound)
-                     ? 0
-                     : CanvasBuildGroupXforms(layers, idx, frac, nil, nil,
-                                              groups, kCanvasGroupXformCap);
+  CanvasProjCtx ctx = CanvasProjCtxMake(layers, path, frac, aspect);
   for (NSUInteger i = 0; i < count; i++)
-    outProj[i] = CanvasProjectedCornerObj(localPts[i].x, localPts[i].y, t, c.x,
-                                          c.y, aspect, groups, ng);
+    outProj[i] = CanvasProjectWithCtx(&ctx, localPts[i].x, localPts[i].y);
 }
 
 simd_float2 CanvasProjectLayerPointObj(NSArray<KKBezierPath *> *layers,

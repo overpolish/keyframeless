@@ -92,7 +92,8 @@ static const BOOL kPointShadingLighterTop = YES;
       MTLBlendFactorOneMinusSourceAlpha;
   tb.colorAttachments[0].destinationAlphaBlendFactor =
       MTLBlendFactorOneMinusSourceAlpha;
-  _toolbarPipeline = [device newRenderPipelineStateWithDescriptor:tb error:&err];
+  _toolbarPipeline = [device newRenderPipelineStateWithDescriptor:tb
+                                                            error:&err];
   if (!_toolbarPipeline)
     KKLogError(@"KKMiniViewerView: toolbar pipeline failed: %@", err);
 
@@ -387,8 +388,8 @@ static const BOOL kPointShadingLighterTop = YES;
 // Thin rectangle outline (view-point rect) drawn as four filled edge quads via
 // the flat-colour line pipeline. Shared by the crop border + the scale box.
 // Tiles an alignment grid across the whole view, positioned by the content rect
-// and the per-axis spacing (a fraction of the content rect). Two opaque passes -
-// a wider dark halo under a thin light core - so the lines read on both light
+// and the per-axis spacing (a fraction of the content rect). Two opaque passes
+// - a wider dark halo under a thin light core - so the lines read on both light
 // and dark footage, matching the in-viewer grid. Lines are thin filled quads
 // drawn through the flat-colour _linePipeline (same path as the box borders).
 - (void)_encodeGridWithSpacingX:(CGFloat)nx
@@ -421,7 +422,9 @@ static const BOOL kPointShadingLighterTop = YES;
     KKVertex2D q[4] = {
         {{L, T}, {0, 0}}, {{L, B}, {0, 0}}, {{R, T}, {0, 0}}, {{R, B}, {0, 0}}};
     [enc setVertexBytes:q length:sizeof(q) atIndex:KKVertexInputIndex_Vertices];
-    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+    [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
+            vertexStart:0
+            vertexCount:4];
   };
 
   // halfPx = half line width in DRAWABLE pixels (dark halo just wider than the
@@ -504,21 +507,8 @@ static const BOOL kPointShadingLighterTop = YES;
                    sizeScale:(CGFloat)sizeScale
                      encoder:(id<MTLRenderCommandEncoder>)enc {
   CGSize d = self.drawableSize;
-  CGFloat s = self.window.backingScaleFactor;
-  if (s <= 0)
-    s = 2.0;
-  CGPoint centered = CGPointMake(centerPts.x * s - d.width / 2.0,
-                                 centerPts.y * s - d.height / 2.0);
-  float sizePx =
-      (float)(kKKMiniHandleOuterPt * sizeScale * [self _canvasScale] * s);
   KKVertex2D quad[6];
-  [KKRenderPrimitives generateQuadVertices:quad center:centered size:sizePx];
-  // generateQuadVertices puts tc.y=+1 on the higher-position (screen-top)
-  // vertices; KKPointOSCFragment is lighter at tc.y<0. Negating tc.y →
-  // lighter at the top of the dot. Gated by the explicit knob.
-  if (kPointShadingLighterTop)
-    for (int i = 0; i < 6; i++)
-      quad[i].textureCoordinate.y = -quad[i].textureCoordinate.y;
+  [self _toolDotQuad:quad atCenter:centerPts sizeScale:sizeScale];
   simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
   KKPointOSCParams params = {
       .outlineWidth = (float)(KKBorderWidthXS / kKKMiniHandleOuterPt),
@@ -536,6 +526,29 @@ static const BOOL kPointShadingLighterTop = YES;
                  length:sizeof(params)
                 atIndex:KKOSCFragmentIndex_DrawColor];
   [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:6];
+}
+
+// Fills `out` with the 6 handle-glyph quad verts (drawable px, origin-centred)
+// for a dot at `centerPts` (overlay points). Shared by the immediate encoder
+// above and the batched tool overlay so both stay pixel-identical.
+- (void)_toolDotQuad:(KKVertex2D *)out
+            atCenter:(CGPoint)centerPts
+           sizeScale:(CGFloat)sizeScale {
+  CGSize d = self.drawableSize;
+  CGFloat s = self.window.backingScaleFactor;
+  if (s <= 0)
+    s = 2.0;
+  CGPoint centered = CGPointMake(centerPts.x * s - d.width / 2.0,
+                                 centerPts.y * s - d.height / 2.0);
+  float sizePx =
+      (float)(kKKMiniHandleOuterPt * sizeScale * [self _canvasScale] * s);
+  [KKRenderPrimitives generateQuadVertices:out center:centered size:sizePx];
+  // generateQuadVertices puts tc.y=+1 on the higher-position (screen-top)
+  // vertices; KKPointOSCFragment is lighter at tc.y<0. Negating tc.y →
+  // lighter at the top of the dot. Gated by the explicit knob.
+  if (kPointShadingLighterTop)
+    for (int i = 0; i < 6; i++)
+      out[i].textureCoordinate.y = -out[i].textureCoordinate.y;
 }
 
 // Encodes one shared KKSquarePointOSC glyph centered at `centerPts` (overlay
@@ -602,46 +615,21 @@ static const BOOL kPointShadingLighterTop = YES;
                          color:(simd_float4)color
                    halfWidthPt:(CGFloat)halfWidthPt
                        encoder:(id<MTLRenderCommandEncoder>)enc {
-  if (pointsPts.count < 2 || !_aaLinePipeline)
+  NSUInteger n = pointsPts.count;
+  if (n < 2 || !_aaLinePipeline)
     return;
-  CGSize d = self.drawableSize;
-  CGFloat s = self.window.backingScaleFactor;
-  if (s <= 0)
-    s = 2.0;
-  // Proportional to the canvas, then a 1px AA pad. tc.y carries the signed
-  // cross-line distance for KKLineFragment (edge value > 1 so the fade lands
-  // inside the geometric edge). Mirrors the viewer's drawLineStripWithPoints.
-  float hw = (float)(halfWidthPt * [self _canvasScale] * s);
-  if (hw < 0.5f)
-    hw = 0.5f;
-  float pad = hw + 1.0f;
-  float edge = pad / hw;
-  simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
-  NSUInteger segCount = pointsPts.count - 1;
-  KKVertex2D *verts = malloc(sizeof(KKVertex2D) * segCount * 6);
-  NSUInteger vi = 0;
-  for (NSUInteger i = 0; i < segCount; i++) {
-    CGPoint pa = pointsPts[i].pointValue, pb = pointsPts[i + 1].pointValue;
-    simd_float2 mA = {(float)(pa.x * s - d.width / 2.0),
-                      (float)(pa.y * s - d.height / 2.0)};
-    simd_float2 mB = {(float)(pb.x * s - d.width / 2.0),
-                      (float)(pb.y * s - d.height / 2.0)};
-    simd_float2 dd = mB - mA;
-    float len = simd_length(dd);
-    if (len < 0.001f)
-      continue;
-    simd_float2 dir = dd / len;
-    simd_float2 perp = {-dir.y, dir.x};
-    simd_float2 v0 = mA + perp * pad, v1 = mA - perp * pad;
-    simd_float2 v2 = mB + perp * pad, v3 = mB - perp * pad;
-    verts[vi++] = (KKVertex2D){v0, {0, edge}};
-    verts[vi++] = (KKVertex2D){v1, {0, -edge}};
-    verts[vi++] = (KKVertex2D){v2, {0, edge}};
-    verts[vi++] = (KKVertex2D){v1, {0, -edge}};
-    verts[vi++] = (KKVertex2D){v3, {0, -edge}};
-    verts[vi++] = (KKVertex2D){v2, {0, edge}};
-  }
+  CGPoint *pts = malloc(sizeof(CGPoint) * n);
+  for (NSUInteger i = 0; i < n; i++)
+    pts[i] = pointsPts[i].pointValue;
+  KKVertex2D *verts = malloc(sizeof(KKVertex2D) * (n - 1) * 6);
+  NSUInteger vi = [self _toolLineVerts:verts
+                                points:pts
+                                 count:n
+                           halfWidthPt:halfWidthPt];
+  free(pts);
   if (vi > 0) {
+    CGSize d = self.drawableSize;
+    simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
     NSUInteger byteLen = sizeof(KKVertex2D) * vi;
     [enc setRenderPipelineState:_aaLinePipeline];
     if (byteLen <= 4096) {
@@ -662,6 +650,52 @@ static const BOOL kPointShadingLighterTop = YES;
     [enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:vi];
   }
   free(verts);
+}
+
+// Fills `out` (capacity (count-1)*6) with oriented thin-quad verts for the
+// polyline `pts` (overlay points, y-up), returning the vert count. tc.y carries
+// the signed cross-line distance for KKLineFragment (edge > 1 so the AA fade
+// lands inside the geometric edge). Mirrors the viewer's
+// drawLineStripWithPoints and is shared by the immediate encoder above and the
+// batched tool overlay.
+- (NSUInteger)_toolLineVerts:(KKVertex2D *)out
+                      points:(const CGPoint *)pts
+                       count:(NSUInteger)count
+                 halfWidthPt:(CGFloat)halfWidthPt {
+  if (count < 2)
+    return 0;
+  CGSize d = self.drawableSize;
+  CGFloat s = self.window.backingScaleFactor;
+  if (s <= 0)
+    s = 2.0;
+  float hw = (float)(halfWidthPt * [self _canvasScale] * s);
+  if (hw < 0.5f)
+    hw = 0.5f;
+  float pad = hw + 1.0f;
+  float edge = pad / hw;
+  NSUInteger vi = 0;
+  for (NSUInteger i = 0; i + 1 < count; i++) {
+    CGPoint pa = pts[i], pb = pts[i + 1];
+    simd_float2 mA = {(float)(pa.x * s - d.width / 2.0),
+                      (float)(pa.y * s - d.height / 2.0)};
+    simd_float2 mB = {(float)(pb.x * s - d.width / 2.0),
+                      (float)(pb.y * s - d.height / 2.0)};
+    simd_float2 dd = mB - mA;
+    float len = simd_length(dd);
+    if (len < 0.001f)
+      continue;
+    simd_float2 dir = dd / len;
+    simd_float2 perp = {-dir.y, dir.x};
+    simd_float2 v0 = mA + perp * pad, v1 = mA - perp * pad;
+    simd_float2 v2 = mB + perp * pad, v3 = mB - perp * pad;
+    out[vi++] = (KKVertex2D){v0, {0, edge}};
+    out[vi++] = (KKVertex2D){v1, {0, -edge}};
+    out[vi++] = (KKVertex2D){v2, {0, edge}};
+    out[vi++] = (KKVertex2D){v1, {0, -edge}};
+    out[vi++] = (KKVertex2D){v3, {0, -edge}};
+    out[vi++] = (KKVertex2D){v2, {0, edge}};
+  }
+  return vi;
 }
 
 @end

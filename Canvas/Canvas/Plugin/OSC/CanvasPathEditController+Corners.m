@@ -34,9 +34,12 @@ static const double kCornerWidgetGrabPx = 9.0; // widget hit radius (surface px)
   float aspect = (float)[_surface penCanvasAspect];
   NSArray<KKBezierPath *> *layers = [_surface penAllLayers];
   double frac = [_surface penEditFraction];
+  // Build the projection context ONCE - this runs on every AppKit -hitTest:, so
+  // the per-corner CanvasProjCtxMake rebuild was O(N^2) per mouse event.
+  CanvasProjCtx ctx = CanvasProjCtxMake(layers, path, frac, aspect);
   double grab2 = kCornerWidgetGrabPx * kCornerWidgetGrabPx;
   for (NSUInteger i = 0; i < path.count; i++) {
-    CanvasCornerWidget w = CanvasCornerWidgetObj(layers, path, frac, aspect, i);
+    CanvasCornerWidget w = CanvasCornerWidgetObjCtx(path, i, &ctx);
     if (!w.valid)
       continue;
     CGPoint s = [_surface

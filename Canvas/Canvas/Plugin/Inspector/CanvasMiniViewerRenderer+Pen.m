@@ -14,8 +14,8 @@
 #import "CanvasToolbar.h"    // CanvasToolbarToolPen
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKBezierPath.h>
-#import <Metal/Metal.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
+#import <Metal/Metal.h>
 
 // An NSColor as straight sRGB RGBA.
 static simd_float4 CanvasMiniColorRGBA(NSColor *color) {
@@ -141,7 +141,8 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   // Delete with a LAYER selected (no anchors) removes the selected layer(s).
   // Returning YES consumes the key so it never reaches FCP (deleting the whole
   // effect) - mirrors the viewer.
-  if (isDelete && cursorTool && self.pathEditController.selectedAnchors.count == 0 &&
+  if (isDelete && cursorTool &&
+      self.pathEditController.selectedAnchors.count == 0 &&
       [self _miniDeleteSelectedLayers])
     return YES;
   return [self.penController keyDown:key];
@@ -215,8 +216,14 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
 }
 
 - (CGPoint)penSurfacePointFromObj:(CGPoint)objYUp {
-  return [super handlePointForContentRect:self.penContentRect
-                                 position:@[ @(objYUp.x), @(1.0 - objYUp.y) ]];
+  // The kit base map (NOT the gizmo override - see penObjFromSurface above),
+  // inlined: a busy path-edit OSC projects this once per anchor + handle +
+  // curve sample every redraw, so the per-call NSArray/NSNumber boxing of the
+  // super-send showed up as allocation churn while panning. This is the exact
+  // affine -[KKMiniViewerRenderer handlePointForContentRect:position:] applies.
+  CGRect cr = self.penContentRect;
+  return CGPointMake(CGRectGetMinX(cr) + objYUp.x * cr.size.width,
+                     CGRectGetMinY(cr) + (1.0 - objYUp.y) * cr.size.height);
 }
 
 // Raw grid snap for the pen: snap a Y-down normalized point to the drawn grid
@@ -263,8 +270,8 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
 }
 
 // The popover scope's non-selectable layers for the MARQUEE / body-drag. Uses
-// the stricter marquee set (constants: move-lane-animated) when present, else the
-// single-click set (keypose: no keypose at that time).
+// the stricter marquee set (constants: move-lane-animated) when present, else
+// the single-click set (keypose: no keypose at that time).
 - (NSSet<NSString *> *)penNonSelectableLayerIDs {
   return self.marqueeNonSelectableLayerIDs ?: self.nonSelectableLayerIDs;
 }
@@ -362,11 +369,11 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   // shared (CanvasPenMarqueeWalk); the mini draws each dash as its own strip.
   KKMiniViewerView *canvas = self.penDrawCanvas;
   CanvasPenMarqueeWalk(r, 4.0, 2.5, ^(CGPoint from, CGPoint to, BOOL light) {
-    [canvas
-        encodeToolLineStrip:@[
-          [NSValue valueWithPoint:from], [NSValue valueWithPoint:to]
-        ]
-                      color:(light ? lightColor : darkColor)halfWidthPt:0.75];
+    CGPoint seg[2] = {from, to};
+    [canvas encodeToolLineStripPoints:seg
+                                count:2
+                                color:(light ? lightColor
+                                             : darkColor)halfWidthPt:0.75];
   });
 }
 
@@ -411,12 +418,15 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
 - (void)penDrawCurveObjPoints:(const CGPoint *)objPts count:(NSUInteger)count {
   if (count < 2)
     return;
-  NSMutableArray<NSValue *> *pts = [NSMutableArray arrayWithCapacity:count];
+  CGPoint *sp = malloc(sizeof(CGPoint) * count);
   for (NSUInteger i = 0; i < count; i++)
-    [pts addObject:[NSValue
-                       valueWithPoint:[self penSurfacePointFromObj:objPts[i]]]];
+    sp[i] = [self penSurfacePointFromObj:objPts[i]];
   simd_float4 red = {1.0f, 0.25f, 0.25f, 0.9f}; // matches the motion path
-  [self.penDrawCanvas encodeToolLineStrip:pts color:red halfWidthPt:1.0];
+  [self.penDrawCanvas encodeToolLineStripPoints:sp
+                                          count:count
+                                          color:red
+                                    halfWidthPt:1.0];
+  free(sp);
 }
 
 - (void)penDrawColoredCurveObjPoints:(const CGPoint *)objPts
@@ -424,11 +434,14 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
                                color:(simd_float4)color {
   if (count < 2)
     return;
-  NSMutableArray<NSValue *> *pts = [NSMutableArray arrayWithCapacity:count];
+  CGPoint *sp = malloc(sizeof(CGPoint) * count);
   for (NSUInteger i = 0; i < count; i++)
-    [pts addObject:[NSValue
-                       valueWithPoint:[self penSurfacePointFromObj:objPts[i]]]];
-  [self.penDrawCanvas encodeToolLineStrip:pts color:color halfWidthPt:1.0];
+    sp[i] = [self penSurfacePointFromObj:objPts[i]];
+  [self.penDrawCanvas encodeToolLineStripPoints:sp
+                                          count:count
+                                          color:color
+                                    halfWidthPt:1.0];
+  free(sp);
 }
 
 - (void)penDrawSnappedLoopObjPoints:(const CGPoint *)objPts
@@ -440,30 +453,29 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   CGFloat s = canvas.window.backingScaleFactor;
   if (s <= 0)
     s = 1.0;
-  NSMutableArray<NSValue *> *pts = [NSMutableArray arrayWithCapacity:count];
+  CGPoint *sp = malloc(sizeof(CGPoint) * count);
   for (NSUInteger i = 0; i < count; i++) {
     CGPoint p = [self penSurfacePointFromObj:objPts[i]];
     // Snap to a whole DRAWABLE pixel centre (the mini works in points, so round
     // in px = pt * backingScale, then convert back), matching the grid's crisp
     // floor + 0.5 so the box edges aren't soft.
-    p = CGPointMake((floor(p.x * s) + 0.5) / s, (floor(p.y * s) + 0.5) / s);
-    [pts addObject:[NSValue valueWithPoint:p]];
+    sp[i] = CGPointMake((floor(p.x * s) + 0.5) / s, (floor(p.y * s) + 0.5) / s);
   }
-  [canvas encodeToolLineStrip:pts color:color halfWidthPt:1.0];
+  [canvas encodeToolLineStripPoints:sp count:count color:color halfWidthPt:1.0];
+  free(sp);
 }
 
 - (void)penDrawHandleFromObj:(CGPoint)aObj toObj:(CGPoint)bObj {
-  CGPoint a = [self penSurfacePointFromObj:aObj];
-  CGPoint b = [self penSurfacePointFromObj:bObj];
+  CGPoint seg[2] = {[self penSurfacePointFromObj:aObj],
+                    [self penSurfacePointFromObj:bObj]};
   simd_float4 white = {1.0f, 1.0f, 1.0f, 0.85f};
-  [self.penDrawCanvas
-      encodeToolLineStrip:@[
-        [NSValue valueWithPoint:a], [NSValue valueWithPoint:b]
-      ]
-                    color:white
-              halfWidthPt:0.75]; // matches the motion path's tangent segments
+  // matches the motion path's tangent segments
+  [self.penDrawCanvas encodeToolLineStripPoints:seg
+                                          count:2
+                                          color:white
+                                    halfWidthPt:0.75];
   simd_float4 dot = {1.0f, 1.0f, 1.0f, 1.0f};
-  [self.penDrawCanvas encodeToolDotAtPoint:b fill:dot sizeScale:0.5];
+  [self.penDrawCanvas encodeToolDotAtPoint:seg[1] fill:dot sizeScale:0.5];
 }
 
 @end

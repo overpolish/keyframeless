@@ -5,6 +5,7 @@
 
 #pragma once
 
+#import "CanvasLayerRender.h" // CanvasProjCtx
 #import "CanvasPathEditController.h"
 #import <KeyframelessKit/KKBezierPath.h>
 
@@ -59,6 +60,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)_animatedOffKeypose;
 /// Local (Y-up) -> surface point, through the layer transform + groups.
 - (CGPoint)_surfaceForLocalX:(float)lx y:(float)ly path:(KKBezierPath *)path;
+/// Context-reusing variant for hit-test loops (O(N) not O(N^2)); caller builds
+/// the CanvasProjCtx once with CanvasProjCtxMake.
+- (CGPoint)_surfaceForLocalX:(float)lx
+                           y:(float)ly
+                         ctx:(const CanvasProjCtx *)ctx;
 - (CanvasPathEditHit)_hitAtX:(double)x
                            y:(double)y
                    outAnchor:(NSInteger *)outAnchor

@@ -4,10 +4,10 @@
  */
 
 #import "CanvasPathOSC.h"
-#import "CanvasCornerFillet.h" // corner widget geometry
-#import "CanvasLayerRender.h"  // CanvasProjectLayerPointsObj
+#import "CanvasCornerFillet.h"       // corner widget geometry
+#import "CanvasLayerRender.h"        // CanvasProjectLayerPointsObj
 #import "CanvasPathEditController.h" // kCanvasMaxEditableAnchors
-#import "CanvasPenController.h" // CanvasPenSurface draw primitives
+#import "CanvasPenController.h"      // CanvasPenSurface draw primitives
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKShape.h> // KKRectShape (image extent)
 #import <simd/simd.h>
@@ -20,7 +20,8 @@ static const NSUInteger kPathOSCSteps = 16;
 // (SVG subpaths, a boolean result with several regions) isn't joined by a stray
 // segment from one contour's end to the next's start. `colored` uses the
 // surface's coloured primitive (path-op preview) vs the halo curve (path-edit
-// OSC). A fresh result path with no layer transform projects to stored geometry.
+// OSC). A fresh result path with no layer transform projects to stored
+// geometry.
 static void CanvasDrawProjectedContours(id<CanvasPenSurface> surface,
                                         NSArray<KKBezierPath *> *layers,
                                         KKBezierPath *path, double frac,
@@ -31,7 +32,23 @@ static void CanvasDrawProjectedContours(id<CanvasPenSurface> surface,
   KKBezierPath *cp =
       path.hasCornerRadii ? CanvasPathByExpandingCorners(path, aspect) : path;
   NSUInteger nc = cp.contourCount;
-  NSUInteger steps = cp.count > kCanvasMaxEditableAnchors ? 2 : kPathOSCSteps;
+  // Adaptive sampling: cap the TOTAL curve samples so a dense path (many short
+  // segments, e.g. a centerline trace with hundreds of anchors) doesn't
+  // re-evaluate ~N*16 bezier points every single redraw - that dominated the
+  // mini's per-frame cost and made panning stutter. The halo only needs to read
+  // as the shape, and dense paths are already finely subdivided, so a few steps
+  // per segment is plenty. Sparse paths (few long curves) keep the full count
+  // for smoothness.
+  NSUInteger steps =
+      cp.count > kCanvasMaxEditableAnchors
+          ? 2
+          : (NSUInteger)fmax(3.0,
+                             fmin((double)kPathOSCSteps,
+                                  round(1200.0 / fmax(1.0, (double)cp.count))));
+  // Build the projection context ONCE for the whole path - it was rebuilt per
+  // contour (each an O(N) object-centre bbox loop), so a multi-contour path was
+  // O(contours*N) per frame regardless of sample count.
+  CanvasProjCtx ctx = CanvasProjCtxMake(layers, cp, frac, aspect);
   for (NSUInteger ci = 0; ci < nc; ci++) {
     NSRange r = [cp contourRangeAtIndex:ci];
     NSUInteger cLen = r.length;
@@ -67,16 +84,15 @@ static void CanvasDrawProjectedContours(id<CanvasPenSurface> surface,
         local[n++] = p;
     }
     if (n >= 2) {
-      simd_float2 *proj = malloc(sizeof(simd_float2) * n);
-      CanvasProjectLayerPointsObj(layers, cp, frac, aspect, local, proj, n);
       CGPoint *cg = malloc(sizeof(CGPoint) * n);
-      for (NSUInteger i = 0; i < n; i++)
-        cg[i] = CGPointMake(proj[i].x, proj[i].y);
+      for (NSUInteger i = 0; i < n; i++) {
+        simd_float2 pj = CanvasProjectWithCtx(&ctx, local[i].x, local[i].y);
+        cg[i] = CGPointMake(pj.x, pj.y);
+      }
       if (colored)
         [surface penDrawColoredCurveObjPoints:cg count:n color:color];
       else
         [surface penDrawCurveObjPoints:cg count:n];
-      free(proj);
       free(cg);
     }
     free(local);
@@ -99,16 +115,16 @@ void CanvasDrawPathOpPreview(id<CanvasPenSurface> surface,
 // A CG path (bitmap px via objToPx) for a path-op preview shape, sampling each
 // contour like the stroke OSC so the FILL lands where the shape renders. Open
 // contours stay open (no stray closing segment for a stroke pass).
-static CGMutablePathRef CanvasOpFillCGPath(NSArray<KKBezierPath *> *layers,
-                                           KKBezierPath *path, double frac,
-                                           float aspect,
-                                           CGPoint (^objToPx)(simd_float2))
-    CF_RETURNS_RETAINED {
+static CGMutablePathRef
+CanvasOpFillCGPath(NSArray<KKBezierPath *> *layers, KKBezierPath *path,
+                   double frac, float aspect,
+                   CGPoint (^objToPx)(simd_float2)) CF_RETURNS_RETAINED {
   CGMutablePathRef cgp = CGPathCreateMutable();
   if (!path || path.count < 2)
     return cgp;
   KKBezierPath *cp =
       path.hasCornerRadii ? CanvasPathByExpandingCorners(path, aspect) : path;
+  CanvasProjCtx ctx = CanvasProjCtxMake(layers, cp, frac, aspect);
   NSUInteger nc = cp.contourCount;
   const NSUInteger steps = 16;
   for (NSUInteger ci = 0; ci < nc; ci++) {
@@ -125,8 +141,7 @@ static CGMutablePathRef CanvasOpFillCGPath(NSArray<KKBezierPath *> *layers,
       for (NSUInteger s = 0; s < steps; s++) {
         float t = (float)s / (float)steps;
         simd_float2 o = [cp evaluatePointAtIndex:idx nextIndex:nextIdx atT:t];
-        simd_float2 pj =
-            CanvasProjectLayerPointObj(layers, cp, frac, aspect, o.x, o.y);
+        simd_float2 pj = CanvasProjectWithCtx(&ctx, o.x, o.y);
         CGPoint cv = objToPx(pj);
         if (first) {
           CGPathMoveToPoint(cgp, NULL, cv.x, cv.y);
@@ -142,8 +157,7 @@ static CGMutablePathRef CanvasOpFillCGPath(NSArray<KKBezierPath *> *layers,
       simd_float2 o = [cp evaluatePointAtIndex:r.location + segs - 1
                                      nextIndex:r.location + segs
                                            atT:1.0f];
-      simd_float2 pj =
-          CanvasProjectLayerPointObj(layers, cp, frac, aspect, o.x, o.y);
+      simd_float2 pj = CanvasProjectWithCtx(&ctx, o.x, o.y);
       CGPoint cv = objToPx(pj);
       CGPathAddLineToPoint(cgp, NULL, cv.x, cv.y);
     }
@@ -180,29 +194,29 @@ static void CanvasFillOpShape(CGContextRef ctx, NSArray<KKBezierPath *> *layers,
   CGPathRelease(cgp);
 }
 
-CGContextRef CanvasRenderPathOpFillBitmap(NSArray<KKBezierPath *> *operands,
-                                          NSArray<KKBezierPath *> *results,
-                                          NSArray<KKBezierPath *> *layers,
-                                          double frac, float aspect, NSInteger w,
-                                          NSInteger h, CGFloat refW,
-                                          CGPoint (^objToPx)(simd_float2)) {
+CGContextRef CanvasRenderPathOpFillBitmap(
+    NSArray<KKBezierPath *> *operands, NSArray<KKBezierPath *> *results,
+    NSArray<KKBezierPath *> *layers, double frac, float aspect, NSInteger w,
+    NSInteger h, CGFloat refW, CGPoint (^objToPx)(simd_float2)) {
   if (w <= 0 || h <= 0 || !objToPx)
     return NULL;
   CGColorSpaceRef cs = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
   CGContextRef ctx = CGBitmapContextCreate(
       NULL, w, h, 8, w * 4, cs,
-      (CGBitmapInfo)kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+      (CGBitmapInfo)((uint32_t)kCGImageAlphaPremultipliedLast |
+                     (uint32_t)kCGBitmapByteOrder32Big));
   CGColorSpaceRelease(cs);
   if (!ctx)
     return NULL;
-  // strokeWidth is OUTPUT px; convert to bitmap px via the projection (on-screen
-  // px for one object-X unit / output width). Measured so it follows zoom + pan.
+  // strokeWidth is OUTPUT px; convert to bitmap px via the projection
+  // (on-screen px for one object-X unit / output width). Measured so it follows
+  // zoom + pan.
   CGPoint x0 = objToPx(simd_make_float2(0.0f, 0.5f));
   CGPoint x1 = objToPx(simd_make_float2(1.0f, 0.5f));
   CGFloat strokeScale = (refW > 0) ? (CGFloat)fabs(x1.x - x0.x) / refW : 1.0;
   for (KKBezierPath *p in operands)
-    CanvasFillOpShape(ctx, layers, p, frac, aspect, strokeScale, 1.0, 0.20, 0.20,
-                      objToPx);
+    CanvasFillOpShape(ctx, layers, p, frac, aspect, strokeScale, 1.0, 0.20,
+                      0.20, objToPx);
   for (KKBezierPath *p in results)
     CanvasFillOpShape(ctx, layers, p, frac, aspect, strokeScale, 0.16, 0.85,
                       0.30, objToPx);
@@ -220,10 +234,11 @@ id<MTLTexture> CanvasFillBitmapToTexture(CGContextRef ctx, id<MTLDevice> device,
                                mipmapped:NO];
   desc.usage = MTLTextureUsageShaderRead;
   id<MTLTexture> tex = [device newTextureWithDescriptor:desc];
-  [tex replaceRegion:MTLRegionMake2D(0, 0, (NSUInteger)width, (NSUInteger)height)
-         mipmapLevel:0
-           withBytes:CGBitmapContextGetData(ctx)
-         bytesPerRow:(NSUInteger)width * 4];
+  [tex
+      replaceRegion:MTLRegionMake2D(0, 0, (NSUInteger)width, (NSUInteger)height)
+        mipmapLevel:0
+          withBytes:CGBitmapContextGetData(ctx)
+        bytesPerRow:(NSUInteger)width * 4];
   return tex;
 }
 
@@ -250,7 +265,7 @@ void CanvasDrawLayerBoxOSC(id<CanvasPenSurface> surface,
   CGPoint loop[5];
   for (int i = 0; i < 4; i++)
     loop[i] = CGPointMake(proj[i].x, proj[i].y);
-  loop[4] = loop[0]; // close the box
+  loop[4] = loop[0];                          // close the box
   simd_float4 dim = {1.0f, 1.0f, 1.0f, 0.5f}; // dimmed white selection outline
   [surface penDrawSnappedLoopObjPoints:loop count:5 color:dim];
 }
@@ -286,12 +301,19 @@ void CanvasDrawPathEditOSC(id<CanvasPenSurface> surface,
     KKBezierPoint pt = [path pointAtIndex:i];
     aLocal[i] = simd_make_float2(pt.x, pt.y);
   }
+  // Build the projection context ONCE and reuse it for every anchor, tangent
+  // handle, and corner widget below. The per-point CanvasProjectLayerPointObj
+  // rebuilt this context (object-centre bbox loop + group xforms) on each call,
+  // and this function projects ~5N points/frame, so a busy path was O(N^2) and
+  // spent hundreds of ms per redraw.
+  CanvasProjCtx ctx = CanvasProjCtxMake(layers, path, frac, aspect);
   simd_float2 *aProj = malloc(sizeof(simd_float2) * count);
-  CanvasProjectLayerPointsObj(layers, path, frac, aspect, aLocal, aProj, count);
+  for (NSUInteger i = 0; i < count; i++)
+    aProj[i] = CanvasProjectWithCtx(&ctx, aLocal[i].x, aLocal[i].y);
 
   // Tangent handles (under the anchor dots): a line from the anchor to each
-  // non-zero handle end, with the surface's handle endpoint dot. A corner with a
-  // radius set hides its handles - the rounding owns that corner now, and the
+  // non-zero handle end, with the surface's handle endpoint dot. A corner with
+  // a radius set hides its handles - the rounding owns that corner now, and the
   // stored (sharp) handles would read as a stale, contradictory control. They
   // come back when the radius is cleared (default).
   for (NSUInteger i = 0; i < count; i++) {
@@ -300,13 +322,12 @@ void CanvasDrawPathEditOSC(id<CanvasPenSurface> surface,
     KKBezierPoint pt = [path pointAtIndex:i];
     CGPoint a = CGPointMake(aProj[i].x, aProj[i].y);
     if (fabsf(pt.outX) + fabsf(pt.outY) > 1e-6f) {
-      simd_float2 b = CanvasProjectLayerPointObj(
-          layers, path, frac, aspect, pt.x + pt.outX, pt.y + pt.outY);
+      simd_float2 b =
+          CanvasProjectWithCtx(&ctx, pt.x + pt.outX, pt.y + pt.outY);
       [surface penDrawHandleFromObj:a toObj:CGPointMake(b.x, b.y)];
     }
     if (fabsf(pt.inX) + fabsf(pt.inY) > 1e-6f) {
-      simd_float2 b = CanvasProjectLayerPointObj(layers, path, frac, aspect,
-                                                 pt.x + pt.inX, pt.y + pt.inY);
+      simd_float2 b = CanvasProjectWithCtx(&ctx, pt.x + pt.inX, pt.y + pt.inY);
       [surface penDrawHandleFromObj:a toObj:CGPointMake(b.x, b.y)];
     }
   }
@@ -327,8 +348,7 @@ void CanvasDrawPathEditOSC(id<CanvasPenSurface> surface,
   // pen-drawing); hidden while this is a reveal ghost.
   if (showCornerWidgets && !ghost) {
     for (NSUInteger i = 0; i < count; i++) {
-      CanvasCornerWidget w =
-          CanvasCornerWidgetObj(layers, path, frac, aspect, i);
+      CanvasCornerWidget w = CanvasCornerWidgetObjCtx(path, i, &ctx);
       if (!w.valid)
         continue;
       [surface penDrawRingAtObj:CGPointMake(w.widgetObj.x, w.widgetObj.y)

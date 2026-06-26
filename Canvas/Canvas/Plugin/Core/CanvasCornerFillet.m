@@ -101,12 +101,23 @@ static const float kCornerMinTurnRad = 0.349f; // ~20 degrees off straight
 CanvasCornerWidget CanvasCornerWidgetObj(NSArray<KKBezierPath *> *layers,
                                          KKBezierPath *path, double frac,
                                          float aspect, NSUInteger i) {
+  CanvasProjCtx ctx = CanvasProjCtxMake(layers, path, frac, aspect);
+  return CanvasCornerWidgetObjCtx(path, i, &ctx);
+}
+
+// Context-reusing variant: the caller builds the projection context ONCE (it is
+// invariant across the path) and passes it in, so a per-anchor corner-widget
+// pass is O(N) instead of O(N^2) - the old form rebuilt the layer transform +
+// object centre + group xforms on each of the 3 per-corner projections.
+CanvasCornerWidget CanvasCornerWidgetObjCtx(KKBezierPath *path, NSUInteger i,
+                                            const CanvasProjCtx *ctx) {
   CanvasCornerWidget w = {0};
-  if (!path)
+  if (!path || !ctx)
     return w;
   NSUInteger n = path.count;
   if (n < 3)
     return w; // need an interior corner (two neighbours)
+  float aspect = ctx->aspect;
   if (aspect <= 0)
     aspect = 1.0f;
   NSUInteger cs, ce;
@@ -134,12 +145,9 @@ CanvasCornerWidget CanvasCornerWidgetObj(NSArray<KKBezierPath *> *layers,
 
   // Project the corner + neighbours through the layer transform, then work in
   // object pixel space so the offset is canvas-relative.
-  simd_float2 Po =
-      CanvasProjectLayerPointObj(layers, path, frac, aspect, P.x, P.y);
-  simd_float2 Ao =
-      CanvasProjectLayerPointObj(layers, path, frac, aspect, A.x, A.y);
-  simd_float2 Bo =
-      CanvasProjectLayerPointObj(layers, path, frac, aspect, B.x, B.y);
+  simd_float2 Po = CanvasProjectWithCtx(ctx, P.x, P.y);
+  simd_float2 Ao = CanvasProjectWithCtx(ctx, A.x, A.y);
+  simd_float2 Bo = CanvasProjectWithCtx(ctx, B.x, B.y);
   simd_float2 Ppx = simd_make_float2(Po.x * aspect, Po.y);
   simd_float2 Apx = simd_make_float2(Ao.x * aspect, Ao.y);
   simd_float2 Bpx = simd_make_float2(Bo.x * aspect, Bo.y);

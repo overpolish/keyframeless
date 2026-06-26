@@ -140,7 +140,8 @@ uint8_t *CenterlineBuildImageMask(KKBezierPath *src, CGFloat aspect,
   CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
   CGContextRef ctx = CGBitmapContextCreate(
       rgba, contentW, contentH, 8, (size_t)contentW * 4, cs,
-      (CGBitmapInfo)(kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big));
+      (CGBitmapInfo)((uint32_t)kCGImageAlphaPremultipliedLast |
+                     (uint32_t)kCGBitmapByteOrder32Big));
   CGColorSpaceRelease(cs);
   if (!ctx) {
     free(rgba);
