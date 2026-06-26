@@ -43,6 +43,48 @@
         }
       }
     },
+    "All layer's values animated": {
+      "comment": "Tooltip on a grayed layer-list row in the constants popover.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Ebenenwerte sind animiert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos los valores de la capa están animados"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toutes les valeurs du calque sont animées"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レイヤーのすべての値がアニメートされています"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "레이어의 모든 값이 애니메이션됨"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图层的所有值均已添加动画"
+          }
+        }
+      }
+    },
     "Auto grid spacing": {
       "comment": "Toolbar tooltip: automatic grid spacing",
       "extractionState": "manual",
@@ -715,6 +757,48 @@
         }
       }
     },
+    "No keypose at the current frame": {
+      "comment": "Tooltip on a grayed layer-list row in the keypose popover.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Keypose im aktuellen Frame"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin keypose en el fotograma actual"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucune keypose sur l’image actuelle"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在のフレームにキーポーズがありません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현재 프레임에 키포즈가 없음"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前帧没有关键姿势"
+          }
+        }
+      }
+    },
     "No shapes": {
       "comment": "Layers panel empty state.",
       "extractionState": "manual",
@@ -1257,6 +1341,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "减去"
+          }
+        }
+      }
+    },
+    "This layer isn't animated": {
+      "comment": "Tooltip on a grayed layer-list row in the applies-to popover.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Ebene ist nicht animiert"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Esta capa no está animada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce calque n’est pas animé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このレイヤーはアニメートされていません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 레이어는 애니메이션되지 않음"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此图层未添加动画"
           }
         }
       }

@@ -12,6 +12,7 @@
 #import "CanvasLayerListController_Private.h"
 
 #import "CanvasLayerListView.h"
+#import "CanvasLocalized.h"
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
@@ -30,10 +31,23 @@
   return nil;
 }
 
+- (NSString *)_nonSelectableReasonForKind:(NSString *)kind {
+  if ([kind isEqualToString:@"keypose"])
+    return CLoc(@"No keypose at the current frame",
+                @"Tooltip on a grayed layer-list row in the keypose popover.");
+  if ([kind isEqualToString:@"constants"])
+    return CLoc(@"All layer's values animated",
+                @"Tooltip on a grayed layer-list row in the constants popover.");
+  if ([kind isEqualToString:@"appliesTo"])
+    return CLoc(@"This layer isn't animated",
+                @"Tooltip on a grayed layer-list row in the applies-to popover.");
+  return nil;
+}
+
 // Re-derive + push the open popover's non-selectable set against the CURRENT
-// layer stack. Called on reload so a layer added/removed while a popover is open
-// (e.g. a path drawn during a keypose popover) is greyed immediately, without a
-// reopen. No-op when no popover is open.
+// layer stack. Called on reload so a layer added/removed while a popover is
+// open (e.g. a path drawn during a keypose popover) is greyed immediately,
+// without a reopen. No-op when no popover is open.
 - (void)_refreshNonSelectableForOpenPopover {
   if (!_openPopoverKind.length)
     return;
@@ -41,12 +55,13 @@
                                              fraction:_openPopoverFraction];
   if (self.onNonSelectableLayersChanged)
     self.onNonSelectableLayersChanged(ns);
-  NSSet<NSString *> *mq =
-      [_openPopoverKind isEqualToString:@"constants"]
-          ? [self _layersWithMoveLaneAnimated]
-          : ns;
+  NSSet<NSString *> *mq = [_openPopoverKind isEqualToString:@"constants"]
+                              ? [self _layersWithMoveLaneAnimated]
+                              : ns;
   if (self.onMarqueeNonSelectableLayersChanged)
     self.onMarqueeNonSelectableLayersChanged(mq);
+  _listView.nonSelectableReason =
+      [self _nonSelectableReasonForKind:_openPopoverKind];
   [_listView setNonSelectableLayerIDs:ns];
 }
 
@@ -150,11 +165,12 @@
   return out;
 }
 
-// STRICTER gating used only for the MARQUEE / body-drag in the Constants popover:
-// a layer is non-selectable when its MOVE lane is animated - Points for a vector
-// path, Position for an image / group. That lane is the ground truth for where
-// the layer sits, so when it's animated the layer can't be positioned via
-// constants (and a marquee selects to MOVE). Single-click stays lenient above.
+// STRICTER gating used only for the MARQUEE / body-drag in the Constants
+// popover: a layer is non-selectable when its MOVE lane is animated - Points
+// for a vector path, Position for an image / group. That lane is the ground
+// truth for where the layer sits, so when it's animated the layer can't be
+// positioned via constants (and a marquee selects to MOVE). Single-click stays
+// lenient above.
 - (NSSet<NSString *> *)_layersWithMoveLaneAnimated {
   NSMutableSet<NSString *> *out = [NSMutableSet set];
   for (KKBezierPath *p in [self currentLayerPaths]) {

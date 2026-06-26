@@ -28,8 +28,8 @@ NS_ASSUME_NONNULL_BEGIN
   // survives the lazily-built panel - the single _highlightLayerID is just its
   // primary. Empty = no rows highlighted (a real deselect).
   NSArray<NSString *> *_highlightLayerIDs;
-  // The currently-open popover's kind + fraction, so a reload (e.g. a path drawn
-  // while a keypose popover is open) can re-derive the non-selectable set
+  // The currently-open popover's kind + fraction, so a reload (e.g. a path
+  // drawn while a keypose popover is open) can re-derive the non-selectable set
   // against the NEW layer stack - otherwise a freshly-added layer stays
   // selectable. Cleared on close.
   NSString *_openPopoverKind;
@@ -46,6 +46,9 @@ NS_ASSUME_NONNULL_BEGIN
 @interface CanvasLayerListController (NonSelectable)
 - (nullable NSSet<NSString *> *)_nonSelectableForKind:(NSString *)kind
                                              fraction:(double)frac;
+/// Tooltip explaining WHY a row is grayed for the given popover `kind`. nil for
+/// kinds with no gating.
+- (nullable NSString *)_nonSelectableReasonForKind:(NSString *)kind;
 - (void)_refreshNonSelectableForOpenPopover;
 - (NSSet<NSString *> *)_layersWithoutKeyposeAtFraction:(double)frac;
 - (NSSet<NSString *> *)_layersWithoutAnimation;

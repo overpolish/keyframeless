@@ -65,11 +65,11 @@ static const CGFloat kSlideDistance = 12.0;
 - (void)reload {
   [_listView reloadFromParam];
   // Re-assert the authoritative selection by ID after the blob refresh. A
-  // structural change (path op, group) writes the new blob and the new selection
-  // as two separate params; if the selection (UIState) arrived BEFORE this blob
-  // reload, the list couldn't match the not-yet-present result row, so re-apply
-  // the stored highlight now that the new rows exist. Stale IDs (consumed
-  // operands) simply don't match and stay unselected.
+  // structural change (path op, group) writes the new blob and the new
+  // selection as two separate params; if the selection (UIState) arrived BEFORE
+  // this blob reload, the list couldn't match the not-yet-present result row,
+  // so re-apply the stored highlight now that the new rows exist. Stale IDs
+  // (consumed operands) simply don't match and stay unselected.
   if (_highlightLayerIDs)
     [_listView setSelectionToLayerIDs:_highlightLayerIDs];
   // A reload can change the layer stack while a popover is open (e.g. a path
@@ -135,8 +135,8 @@ static const CGFloat kSlideDistance = 12.0;
     NSMutableDictionary *state =
         (existing.length
              ? [[NSJSONSerialization
-                   JSONObjectWithData:[existing
-                                          dataUsingEncoding:NSUTF8StringEncoding]
+                   JSONObjectWithData:
+                       [existing dataUsingEncoding:NSUTF8StringEncoding]
                               options:0
                                 error:nil] mutableCopy]
              : nil)
@@ -286,8 +286,9 @@ static const CGFloat kSlideDistance = 12.0;
     self.onNonSelectableLayersChanged(nonSelectable);
   // The MARQUEE / body-drag (which select to MOVE) use a stricter set in the
   // constants popover: a move-lane-animated layer can't be positioned via
-  // constants, so it's excluded from multi-select even though a single click can
-  // still pick it to edit its other constants. Other kinds reuse the same set.
+  // constants, so it's excluded from multi-select even though a single click
+  // can still pick it to edit its other constants. Other kinds reuse the same
+  // set.
   NSSet<NSString *> *marqueeNonSelectable =
       [kind isEqualToString:@"constants"] ? [self _layersWithMoveLaneAnimated]
                                           : nonSelectable;
@@ -384,9 +385,11 @@ static const CGFloat kSlideDistance = 12.0;
   KKPopoverAddKeepAliveWindow(panel);
   // Keypose popover: gray the layers with no keypose at its time (can't be
   // selected). Constants: nil = every layer selectable.
+  _listView.nonSelectableReason =
+      [self _nonSelectableReasonForKind:_openPopoverKind];
   [_listView setNonSelectableLayerIDs:nonSelectable];
-  // Apply the pending FULL selection (requested before the list view existed) so
-  // every selected row highlights, not just the primary. Empty clears all.
+  // Apply the pending FULL selection (requested before the list view existed)
+  // so every selected row highlights, not just the primary. Empty clears all.
   NSArray<NSString *> *pending =
       _highlightLayerIDs
           ?: (_highlightLayerID.length ? @[ _highlightLayerID ] : @[]);
@@ -459,7 +462,8 @@ static const CGFloat kSlideDistance = 12.0;
 - (void)_hide {
   NSWindow *parent = _parentWindow;
   _parentWindow = nil;
-  _openPopoverKind = nil; // popover gone: stop re-deriving its non-selectable set
+  _openPopoverKind =
+      nil; // popover gone: stop re-deriving its non-selectable set
   if (!_visible)
     return;
   _visible = NO;

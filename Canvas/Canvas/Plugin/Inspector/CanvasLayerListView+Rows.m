@@ -65,8 +65,11 @@
             : NSColor.clearColor.CGColor;
     // Gray a row that can't be selected right now (e.g. no keypose at the
     // keypose popover's time). Purely visual - drag/visibility/lock/rename
-    // still work since alpha doesn't disable hit-testing.
-    row.alphaValue = [self _rowNonSelectable:row.rowIndex] ? 0.4 : 1.0;
+    // still work since alpha doesn't disable hit-testing. A tooltip explains
+    // the gray (the dim alone reads as ambiguous "off").
+    BOOL nonSel = [self _rowNonSelectable:row.rowIndex];
+    row.alphaValue = nonSel ? 0.4 : 1.0;
+    row.toolTip = nonSel ? self.nonSelectableReason : nil;
   }
 }
 
@@ -115,11 +118,12 @@
   } else if (CanvasPathIsLargeVector(path)) {
     // Too many points to edit per-anchor: flag it with a distinct bezier-path
     // glyph (tinted accent) + a hover explainer, so it's clear why this path
-    // behaves like an image (transform only) rather than a normal editable path.
+    // behaves like an image (transform only) rather than a normal editable
+    // path.
     glyph = [CanvasLayerGlyphView
-        imageViewWithImage:[self _symbolGlyph:
-                                     @"point.topleft.down.curvedto.point."
-                                     @"bottomright.up"]];
+        imageViewWithImage:
+            [self _symbolGlyph:@"point.topleft.down.curvedto.point."
+                               @"bottomright.up"]];
     glyph.contentTintColor = [NSColor accent];
     glyph.toolTip =
         CLoc(@"Complex path - too many points to edit by hand, so it moves and "
@@ -184,8 +188,10 @@
 - (NSView *)_rowViewForPath:(KKBezierPath *)path
                       index:(NSUInteger)idx
                    selected:(BOOL)selected {
+  // Hidden uses the warning tint (not a dim gray) so a disabled layer reads at
+  // a glance instead of looking like a slightly-faded normal row.
   NSColor *eyeColor =
-      path.hidden ? NSColor.tertiaryLabelColor : NSColor.secondaryLabelColor;
+      path.hidden ? [NSColor warning] : NSColor.secondaryLabelColor;
   NSColor *lockColor =
       path.locked ? NSColor.secondaryLabelColor : NSColor.tertiaryLabelColor;
   NSArray<NSView *> *views = @[

@@ -32,6 +32,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// interaction stays live. Pass nil/empty to make all layers selectable (the
 /// Constants popover, or no popover open).
 - (void)setNonSelectableLayerIDs:(nullable NSSet<NSString *> *)layerIDs;
+
+/// Tooltip shown on a grayed (non-selectable) row, explaining WHY it can't be
+/// edited here (e.g. "no keypose at the current frame"). Reason depends on the
+/// open popover's kind, so the controller sets it alongside the set above.
+@property(nonatomic, copy, nullable) NSString *nonSelectableReason;
 /// Highlight the row for `layerID` as the selection WITHOUT firing
 /// onPrimaryLayerSelected (used to mirror a keypose popover's active layer into
 /// the list). nil clears the selection.
