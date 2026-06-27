@@ -10,7 +10,8 @@
 
 #import "CanvasMiniViewerRenderer_Internal.h"
 
-#import "CanvasFillRender.h" // TEMP solid fill for closed paths
+#import "CanvasFillProperties.h" // CanvasFillEnabledAtFraction / StyleAtFraction
+#import "CanvasFillRender.h"      // TEMP solid fill for closed paths
 #import "CanvasLayerRender.h"
 #import "CanvasLayerTimeline.h"
 #import <KeyframelessKit/KKShaderTypes.h>
@@ -114,63 +115,83 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
           vertexStart:0
           vertexCount:4];
 
-  // 2) Image layers over the source (shared with the main render), each
-  // transformed at the renderer's current time. editFraction is the keypose /
-  // boundary time when a popover is editing one (so the preview matches the
-  // edited pose) and 0 otherwise (constants resolve correctly there).
-  [enc setRenderPipelineState:_imagePipeline];
-  // The mini renders the whole frame into one dest (no tiling), so image dims =
-  // dest dims and the tile shift is zero.
-  CanvasEncodeImageLayers(
-      self.layers ?: @[], enc, cb.device, self.imageTextureCache, w, h, 0.0f,
-      0.0f, self.editFraction, self.selectedLayerID, self.timeline,
-      _imagePipeline, _imageTintPipeline, _imageGradTintPipeline);
+  [enc endEncoding]; // source base only; the layers overlay per layer below
 
-  [enc endEncoding];
-
-  // 3) TEMP solid fill for closed filled paths, mirroring the main render. The
-  // stencil even-odd needs its own passes (this MTKView pass has no stencil
-  // attachment), so run them after the encoder ends, over the same dest. Drawn
-  // BEFORE the strokes so a fill sits under its stroke.
+  // 2) The layer stack PER LAYER, back-to-front (array[0] = topmost, drawn LAST),
+  // each layer's image -> fill -> stroke together so z-order is correct ACROSS
+  // layers (a higher layer covers a lower one) - the inspector twin of the main
+  // render's runLayersOrdered. The mini dest is hazard-TRACKED, so sequential
+  // render passes in this ONE command buffer serialize correctly; no separate
+  // buffers / waits are needed (unlike the main render's untracked FCP dest).
+  // editFraction is the keypose / boundary time when a popover edits one layer
+  // (selectedLayerID + timeline override it) and 0 otherwise.
   CanvasFillPipelines fillPipes = {0};
   CanvasFillBuildPipelines(cb.device, cb.device.registryID, fmt, &fillPipes);
-  if (fillPipes.stencil && fillPipes.color && fillPipes.composite)
-    CanvasEncodeFilledLayers(self.layers ?: @[], cb.device,
-                             self.imageTextureCache, cb, dstSRGB, &fillPipes, w, h,
-                             w, h, 0.0f, 0.0f, self.editFraction,
-                             self.selectedLayerID, self.timeline);
-
-  // 4) Vector strokes LAST, in their own LOAD pass over the same dest, so a fill
-  // sits UNDER its stroke (mirrors the main render's stroke-after-fill order).
-  // Same viewport / viewport-size as the source + image pass.
-  if (_strokePipeline) {
-    MTLRenderPassDescriptor *srpd =
-        [MTLRenderPassDescriptor renderPassDescriptor];
-    srpd.colorAttachments[0].texture = dstSRGB;
-    srpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
-    srpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-    id<MTLRenderCommandEncoder> senc =
-        [cb renderCommandEncoderWithDescriptor:srpd];
-    [senc setViewport:vp];
-    [senc setVertexBytes:&viewportSize
-                  length:sizeof(viewportSize)
-                 atIndex:KKVertexInputIndex_ViewportSize];
-    [senc setRenderPipelineState:_strokePipeline];
-    // strokeScale 1.0: the mini already renders at the dest size. Marching-ants
-    // phase at the previewed frame: editFraction is the live playhead time, so
-    // map it to clip-local seconds (editFraction x clip duration) to match the
-    // main render's CMTimeGetSeconds-based phase (KKLane.lastKnownClipDuration
-    // carries the duration into the timeline). 0 in the constants popover.
-    double clipDur = self.clipDurationSeconds;
-    if (clipDur <= 0.0) // fall back to whatever the timeline carries
-      for (KKLane *l in self.timeline.lanes)
-        clipDur = MAX(clipDur, l.lastKnownClipDuration);
-    double miniElapsed = self.editFraction * clipDur;
-    CanvasEncodeVectorLayers(self.layers ?: @[], senc, cb.device, w, h, 0.0f,
-                             0.0f, self.editFraction, self.selectedLayerID,
-                             self.timeline, 1.0f, miniElapsed, _strokePipeline,
-                             _strokeGradientPipeline, _strokeDashPipeline);
-    [senc endEncoding];
+  BOOL miniCanFill =
+      fillPipes.stencil && fillPipes.color && fillPipes.composite;
+  double ef = self.editFraction < 0.0 ? 0.0 : self.editFraction;
+  // Marching-ants phase: editFraction (live playhead) -> clip-local seconds, to
+  // match the main render's CMTimeGetSeconds-based phase (lastKnownClipDuration
+  // carries the duration into the timeline). 0 in the constants popover.
+  double clipDur = self.clipDurationSeconds;
+  if (clipDur <= 0.0)
+    for (KKLane *l in self.timeline.lanes)
+      clipDur = MAX(clipDur, l.lastKnownClipDuration);
+  double miniElapsed = self.editFraction * clipDur;
+  NSArray<KKBezierPath *> *mlayers = self.layers ?: @[];
+  // A load-pass encoder over the dest, set up like the source pass (viewport +
+  // viewport-size + the given pipeline). The mini renders the whole frame into
+  // one dest (no tiling), so image dims = dest dims and the tile shift is zero.
+  id<MTLRenderCommandEncoder> (^miniLoadEnc)(id<MTLRenderPipelineState>) =
+      ^(id<MTLRenderPipelineState> ps) {
+        MTLRenderPassDescriptor *lrpd =
+            [MTLRenderPassDescriptor renderPassDescriptor];
+        lrpd.colorAttachments[0].texture = dstSRGB;
+        lrpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+        lrpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+        id<MTLRenderCommandEncoder> e =
+            [cb renderCommandEncoderWithDescriptor:lrpd];
+        [e setViewport:vp];
+        [e setVertexBytes:&viewportSize
+                   length:sizeof(viewportSize)
+                  atIndex:KKVertexInputIndex_ViewportSize];
+        [e setRenderPipelineState:ps];
+        return e;
+      };
+  for (NSInteger i = (NSInteger)mlayers.count - 1; i >= 0; i--) {
+    KKBezierPath *p = mlayers[i];
+    if (p.isGroup || p.hidden)
+      continue;
+    NSArray<KKBezierPath *> *one = @[ p ];
+    if (p.isImage && _imagePipeline) {
+      id<MTLRenderCommandEncoder> ienc = miniLoadEnc(_imagePipeline);
+      CanvasEncodeImageLayers(one, ienc, cb.device, self.imageTextureCache, w, h,
+                              0.0f, 0.0f, self.editFraction, self.selectedLayerID,
+                              self.timeline, _imagePipeline, _imageTintPipeline,
+                              _imageGradTintPipeline);
+      [ienc endEncoding];
+    }
+    // A vector shape fills; an image contributes a fill only via a (non-Solid)
+    // hachure overlay (Fill Style != 0).
+    if (miniCanFill &&
+        CanvasFillEnabledAtFraction(p, ef, self.selectedLayerID,
+                                    self.timeline) &&
+        (!p.isImage || CanvasFillStyleAtFraction(p, ef, self.selectedLayerID,
+                                                 self.timeline)
+                               .style != 0)) {
+      CanvasEncodeFilledLayers(one, cb.device, self.imageTextureCache, cb,
+                               dstSRGB, &fillPipes, w, h, w, h, 0.0f, 0.0f,
+                               self.editFraction, self.selectedLayerID,
+                               self.timeline);
+    }
+    if (!p.isImage && p.strokeEnabled && _strokePipeline) {
+      id<MTLRenderCommandEncoder> senc = miniLoadEnc(_strokePipeline);
+      CanvasEncodeVectorLayers(one, senc, cb.device, w, h, 0.0f, 0.0f,
+                               self.editFraction, self.selectedLayerID,
+                               self.timeline, 1.0f, miniElapsed, _strokePipeline,
+                               _strokeGradientPipeline, _strokeDashPipeline);
+      [senc endEncoding];
+    }
   }
   return YES;
 }

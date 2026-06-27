@@ -324,114 +324,196 @@
   // `withStrokes` keeps the strokes IN this accumulated composite (the
   // motion-blur path, so strokes smear); the non-blur path passes NO and draws
   // strokes in their own pass AFTER the fills (so a fill sits UNDER its stroke).
-  void (^composite)(id<MTLRenderCommandEncoder>, NSArray<id<MTLTexture>> *,
-                    double, BOOL) = ^(id<MTLRenderCommandEncoder> enc,
-                                      NSArray<id<MTLTexture>> *inputs, double f,
-                                      BOOL withStrokes) {
-    if (!inputs.count || !imagePS || !device)
-      return;
-    // Source + layers both go through the image pipeline (transform shader +
-    // tile shift) so they tile identically in FCP's sub-tiled / reverse-Y
-    // library preview. The source is a full-image quad drawn first (over the
-    // cleared target = the source), then the layers composite on top.
-    [enc setRenderPipelineState:imagePS];
-    CanvasEncodeSourceTile(enc, inputs[0], outputWidth, outputHeight,
-                           tileShiftX, tileShiftY);
-    CanvasEncodeImageLayers(layers, enc, device, texCache, outputWidth,
-                            outputHeight, tileShiftX, tileShiftY, f, nil, nil,
-                            imagePS, imageTintPS, imageGradTintPS);
-    // Vector strokes (pen / shape layers) over the images, same tile transform.
-    if (withStrokes && strokePS) {
-      [enc setRenderPipelineState:strokePS];
-      CanvasEncodeVectorLayers(layers, enc, device, outputWidth, outputHeight,
-                               tileShiftX, tileShiftY, f, nil, nil, strokeScale,
-                               marchElapsed, strokePS, strokeGradientPS,
-                               strokeDashPS);
-    }
-  };
+  // Motion-blur sample: render the layer stack PER LAYER (image -> fill ->
+  // stroke, back-to-front, array[0] = topmost drawn last) into one blur SAMPLE
+  // texture over its time-matched source, so every accumulated sample carries the
+  // SAME correct cross-layer z-order as the non-blur path (fills now smear with
+  // the rest instead of the old single post-pass). `sdest` is a tracked scratch
+  // texture owned by KKMotionBlur (it commits `scb` and averages the samples), so
+  // sequential render passes in that one command buffer serialize correctly - no
+  // separate buffers / waits (unlike the untracked FCP dest).
+  void (^renderSampleOrdered)(id<MTLTexture>, id<MTLCommandBuffer>,
+                              id<MTLTexture>, double) =
+      ^(id<MTLTexture> sdest, id<MTLCommandBuffer> scb, id<MTLTexture> srcTex,
+        double f) {
+        if (!device || !sdest || !imagePS)
+          return;
+        float sw = (float)sdest.width, sh = (float)sdest.height;
+        MTLViewport svp = (MTLViewport){0, 0, sw, sh, -1, 1};
+        simd_uint2 svpSize = {(unsigned int)sw, (unsigned int)sh};
+        id<MTLRenderCommandEncoder> (^sEnc)(id<MTLRenderPipelineState>,
+                                            MTLLoadAction) =
+            ^(id<MTLRenderPipelineState> ps, MTLLoadAction load) {
+              MTLRenderPassDescriptor *rpd =
+                  [MTLRenderPassDescriptor renderPassDescriptor];
+              rpd.colorAttachments[0].texture = sdest;
+              rpd.colorAttachments[0].loadAction = load;
+              rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+              if (load == MTLLoadActionClear)
+                rpd.colorAttachments[0].clearColor =
+                    MTLClearColorMake(0, 0, 0, 0);
+              id<MTLRenderCommandEncoder> e =
+                  [scb renderCommandEncoderWithDescriptor:rpd];
+              [e setViewport:svp];
+              [e setVertexBytes:&svpSize
+                         length:sizeof(svpSize)
+                        atIndex:KKVertexInputIndex_ViewportSize];
+              [e setRenderPipelineState:ps];
+              return e;
+            };
+        // Source base: clear the sample + draw its time-matched source frame.
+        id<MTLRenderCommandEncoder> base = sEnc(imagePS, MTLLoadActionClear);
+        if (srcTex)
+          CanvasEncodeSourceTile(base, srcTex, outputWidth, outputHeight,
+                                 tileShiftX, tileShiftY);
+        [base endEncoding];
+        CanvasFillPipelines fillPipes = {0};
+        CanvasFillBuildPipelines(device, regID, pf, &fillPipes);
+        BOOL canFill =
+            fillPipes.stencil && fillPipes.color && fillPipes.composite;
+        double ef = f < 0.0 ? 0.0 : f;
+        for (NSInteger i = (NSInteger)layers.count - 1; i >= 0; i--) {
+          KKBezierPath *p = layers[i];
+          if (p.isGroup || p.hidden)
+            continue;
+          NSArray<KKBezierPath *> *one = @[ p ];
+          if (p.isImage) {
+            id<MTLRenderCommandEncoder> e = sEnc(imagePS, MTLLoadActionLoad);
+            CanvasEncodeImageLayers(one, e, device, texCache, outputWidth,
+                                    outputHeight, tileShiftX, tileShiftY, f, nil,
+                                    nil, imagePS, imageTintPS, imageGradTintPS);
+            [e endEncoding];
+          }
+          if (canFill && CanvasFillEnabledAtFraction(p, ef, nil, nil) &&
+              (!p.isImage ||
+               CanvasFillStyleAtFraction(p, ef, nil, nil).style != 0)) {
+            CanvasEncodeFilledLayers(one, device, texCache, scb, sdest,
+                                     &fillPipes, outputWidth, outputHeight, sw, sh,
+                                     tileShiftX, tileShiftY, f, nil, nil);
+          }
+          if (!p.isImage && p.strokeEnabled && strokePS) {
+            id<MTLRenderCommandEncoder> e = sEnc(strokePS, MTLLoadActionLoad);
+            CanvasEncodeVectorLayers(one, e, device, outputWidth, outputHeight,
+                                     tileShiftX, tileShiftY, f, nil, nil,
+                                     strokeScale, marchElapsed, strokePS,
+                                     strokeGradientPS, strokeDashPS);
+            [e endEncoding];
+          }
+        }
+      };
 
-  // TEMP solid fill for closed filled paths (SVG fills, boolean / outline
-  // results), drawn in its own stencil + colour passes on a second command
-  // buffer AFTER the composite is committed - the kit's shared encoder has no
-  // stencil attachment. Z-order is therefore fill-over-stroke (acceptable for
-  // the temp: a path is filled OR stroked here, rarely both). Skipped entirely
-  // when nothing is filled.
+  // Destination tile dims: the non-blur per-layer loop's viewport + the fill
+  // MSAA target size. (The blur path reads its sample texture's own dims.)
   FxRect tileBF = destinationImage.tilePixelBounds;
   float tileW = (float)(tileBF.right - tileBF.left);
   float tileH = (float)(tileBF.top - tileBF.bottom);
-  void (^runFills)(double) = ^(double f) {
-    BOOL anyFill = NO;
-    double efill = f < 0.0 ? 0.0 : f;
-    for (KKBezierPath *p in layers) {
-      if (p.isGroup || p.hidden ||
-          !CanvasFillEnabledAtFraction(p, efill, nil, nil))
-        continue;
-      // A vector shape fills; an image only contributes a fill pass when its
-      // Fill Style is a (non-Solid) hachure overlay.
-      if (!p.isImage || CanvasFillStyleAtFraction(p, efill, nil, nil).style != 0) {
-        anyFill = YES;
-        break;
-      }
-    }
-    if (!anyFill || !device)
+
+  // Non-blur path: draw the layer stack PER LAYER, back-to-front, each layer's
+  // image -> fill -> stroke together, so z-order is correct ACROSS layers (a
+  // higher image/fill occludes a lower layer's stroke) and a stroke still sits
+  // over its OWN fill. Replaces the old type-batched passes (all images, then
+  // all fills, then all strokes) whose global ordering let any stroke paint over
+  // any image. The caller draws the source base first (the kit composite
+  // encoder), then this loads that dest and overlays the layers. Each sub-draw
+  // rides its OWN command buffer on one queue (they serialize in commit order
+  // against the hazard-untracked FCP dest); the image / stroke draws use load
+  // encoders set up exactly like the kit composite (viewport + viewport-size
+  // buffer) so KKTransformVertexShader matches.
+  // NOTE (increment 1): layers draw in array stack order; the cross-layer 3D
+  // depth sort the batched image pass did (for physically tilted layers) isn't
+  // applied here yet - flat 2D stacking, the common case, is identical.
+  void (^runLayersOrdered)(double) = ^(double f) {
+    if (!device || !layers.count)
+      return;
+    id<MTLTexture> destTex = [destinationImage metalTextureForDevice:device];
+    if (!destTex)
       return;
     CanvasFillPipelines fillPipes = {0};
     CanvasFillBuildPipelines(device, regID, pf, &fillPipes);
-    if (!fillPipes.stencil || !fillPipes.color || !fillPipes.composite)
-      return;
-    id<MTLTexture> destTex = [destinationImage metalTextureForDevice:device];
-    if (!destTex)
-      return;
+    BOOL canFill =
+        fillPipes.stencil && fillPipes.color && fillPipes.composite;
     id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:regID
                                                       pixelFormat:pf];
     if (!queue)
       return;
-    id<MTLCommandBuffer> cb = [queue commandBuffer];
-    CanvasEncodeFilledLayers(layers, device, texCache, cb, destTex, &fillPipes,
-                             outputWidth, outputHeight, tileW, tileH, tileShiftX,
-                             tileShiftY, f, nil, nil);
-    [cb commit];
-    [cb waitUntilCompleted];
-    [cache returnCommandQueueToCache:queue];
-  };
-
-  // Strokes drawn in their OWN pass AFTER the fills (non-blur path), so a
-  // filled-and-stroked shape shows its stroke ON TOP of its fill. Mirrors the
-  // fill pass: own command buffer + an encoder that LOADS the dest, with the
-  // SAME viewport + viewport-size buffer the kit composite encoder sets (tile
-  // dims), so the KKTransformVertexShader places strokes in the identical space
-  // as the images / fills.
-  void (^runStrokes)(double) = ^(double f) {
-    if (!device || !strokePS)
-      return;
-    id<MTLTexture> destTex = [destinationImage metalTextureForDevice:device];
-    if (!destTex)
-      return;
-    id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:regID
-                                                      pixelFormat:pf];
-    if (!queue)
-      return;
-    id<MTLCommandBuffer> cb = [queue commandBuffer];
-    MTLRenderPassDescriptor *rpd =
-        [MTLRenderPassDescriptor renderPassDescriptor];
-    rpd.colorAttachments[0].texture = destTex;
-    rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
-    rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-    id<MTLRenderCommandEncoder> enc =
-        [cb renderCommandEncoderWithDescriptor:rpd];
-    [enc setViewport:(MTLViewport){0, 0, tileW, tileH, -1, 1}];
+    double ef = f < 0.0 ? 0.0 : f;
+    MTLViewport vp = (MTLViewport){0, 0, tileW, tileH, -1, 1};
     simd_uint2 vpSize = {(unsigned int)tileW, (unsigned int)tileH};
-    [enc setVertexBytes:&vpSize
-                 length:sizeof(vpSize)
-                atIndex:KKVertexInputIndex_ViewportSize];
-    [enc setRenderPipelineState:strokePS];
-    CanvasEncodeVectorLayers(layers, enc, device, outputWidth, outputHeight,
-                             tileShiftX, tileShiftY, f, nil, nil, strokeScale,
-                             marchElapsed, strokePS, strokeGradientPS,
-                             strokeDashPS);
-    [enc endEncoding];
-    [cb commit];
-    [cb waitUntilCompleted];
+    // Each draw rides its OWN command buffer on this one queue. Buffers on a
+    // single queue execute strictly in commit order, so the per-layer image /
+    // fill / stroke serialize correctly even though FCP's IOSurface dest is
+    // hazard-UNTRACKED (many render passes in ONE command buffer do NOT serialize
+    // against it - that was the wrong-z-order cause). No per-draw CPU wait: the
+    // queue orders them; `lastCB` is waited once at the end so the whole stack
+    // lands before FCP reads the dest.
+    __block id<MTLCommandBuffer> lastCB = nil;
+    // One load-pass command buffer running `body` on an encoder set up like the
+    // kit composite encoder (viewport + viewport-size buffer) so the transform
+    // shader lands identically.
+    void (^drawPass)(id<MTLRenderPipelineState>,
+                     void (^)(id<MTLRenderCommandEncoder>)) =
+        ^(id<MTLRenderPipelineState> ps,
+          void (^body)(id<MTLRenderCommandEncoder>)) {
+          id<MTLCommandBuffer> pcb = [queue commandBuffer];
+          MTLRenderPassDescriptor *rpd =
+              [MTLRenderPassDescriptor renderPassDescriptor];
+          rpd.colorAttachments[0].texture = destTex;
+          rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+          rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+          id<MTLRenderCommandEncoder> e =
+              [pcb renderCommandEncoderWithDescriptor:rpd];
+          [e setViewport:vp];
+          [e setVertexBytes:&vpSize
+                     length:sizeof(vpSize)
+                    atIndex:KKVertexInputIndex_ViewportSize];
+          [e setRenderPipelineState:ps];
+          body(e);
+          [e endEncoding];
+          [pcb commit];
+          [pcb waitUntilCompleted]; // force serialize vs the untracked FCP dest
+          lastCB = pcb;
+        };
+    // array[0] = TOPMOST (front), array[last] = bottom (back) - the documented
+    // convention the kit image / vector passes use (CanvasLayerRender.m: "array
+    // index 0 = topmost, drawn last"). Iterate DESCENDING so the bottom layer
+    // draws first and the top-of-list layer draws last (on top).
+    for (NSInteger i = (NSInteger)layers.count - 1; i >= 0; i--) {
+      KKBezierPath *p = layers[i];
+      if (p.isGroup || p.hidden)
+        continue;
+      BOOL willFill = canFill && CanvasFillEnabledAtFraction(p, ef, nil, nil) &&
+                      (!p.isImage ||
+                       CanvasFillStyleAtFraction(p, ef, nil, nil).style != 0);
+      NSArray<KKBezierPath *> *one = @[ p ];
+      if (p.isImage && imagePS) {
+        drawPass(imagePS, ^(id<MTLRenderCommandEncoder> enc) {
+          CanvasEncodeImageLayers(one, enc, device, texCache, outputWidth,
+                                  outputHeight, tileShiftX, tileShiftY, f, nil,
+                                  nil, imagePS, imageTintPS, imageGradTintPS);
+        });
+      }
+      // A vector shape fills; an image contributes a fill only via a (non-Solid)
+      // hachure overlay (Fill Style != 0). The fill helper opens its own stencil
+      // encoder, so give it its own command buffer too (same serialization).
+      if (willFill) {
+        id<MTLCommandBuffer> fcb = [queue commandBuffer];
+        CanvasEncodeFilledLayers(one, device, texCache, fcb, destTex, &fillPipes,
+                                 outputWidth, outputHeight, tileW, tileH,
+                                 tileShiftX, tileShiftY, f, nil, nil);
+        [fcb commit];
+        [fcb waitUntilCompleted]; // force serialize vs the untracked FCP dest
+        lastCB = fcb;
+      }
+      if (!p.isImage && p.strokeEnabled && strokePS) {
+        drawPass(strokePS, ^(id<MTLRenderCommandEncoder> enc) {
+          CanvasEncodeVectorLayers(one, enc, device, outputWidth, outputHeight,
+                                   tileShiftX, tileShiftY, f, nil, nil,
+                                   strokeScale, marchElapsed, strokePS,
+                                   strokeGradientPS, strokeDashPS);
+        });
+      }
+    }
+    [lastCB waitUntilCompleted]; // whole stack lands before FCP reads the dest
     [cache returnCommandQueueToCache:queue];
   };
 
@@ -462,47 +544,36 @@
                           (sampleIndex >= 0 && sampleIndex < (int)fracs.count)
                               ? fracs[sampleIndex].doubleValue
                               : frac;
-                      return [self
-                          encodeFullScreenQuadIntoTexture:sampleDest
-                                         destinationImage:destinationImage
-                                            commandBuffer:commandBuffer
-                                           sourceTextures:inputTextures
-                                                 commands:^(
-                                                     id<MTLRenderCommandEncoder>
-                                                         enc,
-                                                     NSArray<id<MTLTexture>>
-                                                         *texs) {
-                                                   // Blur path keeps strokes in
-                                                   // the accumulated composite
-                                                   // so they smear; fill stays a
-                                                   // single post-pass (temp), so
-                                                   // it sits over the blurred
-                                                   // stroke here.
-                                                   composite(enc, texs, f, YES);
-                                                 }];
+                      // Each sample renders the full per-layer-ordered stack
+                      // (image/fill/stroke) over its time-matched source into the
+                      // sample texture; KKMotionBlur averages the samples.
+                      renderSampleOrdered(sampleDest, commandBuffer,
+                                          inputTextures.firstObject, f);
+                      return YES;
                     }];
-    if (applied) {
-      runFills(frac); // fills aren't sample-accumulated (temp): drawn once
+    if (applied)
       return YES;
-    }
   }
 
-  // No blur (or the accumulate bailed): single composite at the playhead frac.
+  // No blur (or the accumulate bailed): draw the SOURCE base (cleared target +
+  // the source frame through the tile transform), then overlay the layer stack
+  // per layer in z-order. Images move out of this base into runLayersOrdered so
+  // each layer's image / fill / stroke stay together back-to-front.
   BOOL ok = [self
       encodeRenderCommandsForDestinationImage:destinationImage
                                  sourceImages:sourceImages
                                      commands:^(
                                          id<MTLRenderCommandEncoder> enc,
                                          NSArray<id<MTLTexture>> *inputs) {
-                                       // No strokes here: they draw in their own
-                                       // pass after the fills, so a fill sits
-                                       // under its stroke.
-                                       composite(enc, inputs, frac, NO);
+                                       if (!inputs.count || !imagePS)
+                                         return;
+                                       [enc setRenderPipelineState:imagePS];
+                                       CanvasEncodeSourceTile(
+                                           enc, inputs[0], outputWidth,
+                                           outputHeight, tileShiftX, tileShiftY);
                                      }];
-  if (ok) {
-    runFills(frac);
-    runStrokes(frac);
-  }
+  if (ok)
+    runLayersOrdered(frac);
   return ok;
 }
 
