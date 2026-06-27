@@ -174,66 +174,100 @@
 #pragma mark - Group / ungroup / remove (context menu)
 
 - (void)duplicateRow:(NSMenuItem *)sender {
-  NSUInteger tag = (NSUInteger)sender.tag;
-  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
-    NSIndexSet *targets = [self _targetsWithDescendantsForTag:tag paths:paths];
-    if (targets.count == 0)
-      return;
-    // Map every duplicated group's id to a fresh one first, so cloned children
-    // re-link to the cloned parent (not the original).
-    NSMutableDictionary<NSString *, NSString *> *groupIDMap =
-        [NSMutableDictionary dictionary];
-    [targets enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-      if (idx < paths.count && paths[idx].isGroup && paths[idx].groupID.length)
-        groupIDMap[paths[idx].groupID] = [[NSUUID UUID] UUIDString];
-    }];
-    // Build the clones in tree order, then insert them as ONE contiguous block
-    // after the originals - keeping each cloned group's descendants right
-    // behind it (the display relies on that contiguity).
-    NSMutableArray<KKBezierPath *> *clones = [NSMutableArray array];
-    [targets enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-      if (idx >= paths.count)
-        return;
-      KKBezierPath *clone =
-          [KKBezierPath pathWithData:[paths[idx] dataRepresentation]];
-      clone.layerID = [[NSUUID UUID] UUIDString];
-      if (clone.isGroup && groupIDMap[clone.groupID])
-        clone.groupID = groupIDMap[clone.groupID];
-      if (clone.parentGroupID && groupIDMap[clone.parentGroupID])
-        clone.parentGroupID = groupIDMap[clone.parentGroupID];
-      [clones addObject:clone];
-    }];
-    NSUInteger insertAt = MIN(targets.lastIndex + 1, paths.count);
-    NSIndexSet *insertSet = [NSIndexSet
-        indexSetWithIndexesInRange:NSMakeRange(insertAt, clones.count)];
-    [paths insertObjects:clones atIndexes:insertSet];
-    [self->_selection removeAllIndexes];
-    [self->_selection addIndexes:insertSet];
-  }];
+  [self _duplicateTargetsForTag:(NSUInteger)sender.tag];
+}
+
+// Shared duplicate core for both the context-menu action and Cmd-D. The blob
+// write and the clones-become-selection write are wrapped in one undo group so
+// a single cmd-Z removes the duplicates AND restores the prior selection.
+- (void)_duplicateTargetsForTag:(NSUInteger)tag {
+  [self
+      _runInUndoGroup:@"Duplicate Layer"
+                block:^{
+                  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+                    NSIndexSet *targets =
+                        [self _targetsWithDescendantsForTag:tag paths:paths];
+                    if (targets.count == 0)
+                      return;
+                    // Map every duplicated group's id to a fresh one first, so
+                    // cloned children re-link to the cloned parent (not the
+                    // original).
+                    NSMutableDictionary<NSString *, NSString *> *groupIDMap =
+                        [NSMutableDictionary dictionary];
+                    [targets enumerateIndexesUsingBlock:^(NSUInteger idx,
+                                                          BOOL *stop) {
+                      if (idx < paths.count && paths[idx].isGroup &&
+                          paths[idx].groupID.length)
+                        groupIDMap[paths[idx].groupID] =
+                            [[NSUUID UUID] UUIDString];
+                    }];
+                    // Build the clones in tree order, then insert them as ONE
+                    // contiguous block after the originals - keeping each
+                    // cloned group's descendants right behind it (the display
+                    // relies on that contiguity).
+                    NSMutableArray<KKBezierPath *> *clones =
+                        [NSMutableArray array];
+                    [targets enumerateIndexesUsingBlock:^(NSUInteger idx,
+                                                          BOOL *stop) {
+                      if (idx >= paths.count)
+                        return;
+                      KKBezierPath *clone = [KKBezierPath
+                          pathWithData:[paths[idx] dataRepresentation]];
+                      clone.layerID = [[NSUUID UUID] UUIDString];
+                      if (clone.isGroup && groupIDMap[clone.groupID])
+                        clone.groupID = groupIDMap[clone.groupID];
+                      if (clone.parentGroupID &&
+                          groupIDMap[clone.parentGroupID])
+                        clone.parentGroupID = groupIDMap[clone.parentGroupID];
+                      [clones addObject:clone];
+                    }];
+                    NSUInteger insertAt =
+                        MIN(targets.lastIndex + 1, paths.count);
+                    NSIndexSet *insertSet = [NSIndexSet
+                        indexSetWithIndexesInRange:NSMakeRange(insertAt,
+                                                               clones.count)];
+                    [paths insertObjects:clones atIndexes:insertSet];
+                    [self->_selection removeAllIndexes];
+                    [self->_selection addIndexes:insertSet];
+                  }];
+                  // Swap the inspector to the new clones (timeline, OSC set,
+                  // panel highlight).
+                  [self _notifyPrimaryLayerSelected];
+                }];
 }
 
 - (void)deleteRow:(NSMenuItem *)sender {
   NSUInteger tag = (NSUInteger)sender.tag;
-  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
-    NSIndexSet *targets = [self _targetsWithDescendantsForTag:tag paths:paths];
-    if (targets.count == 0)
-      return;
-    NSUInteger firstDeleted = targets.firstIndex;
-    [targets enumerateIndexesWithOptions:NSEnumerationReverse
-                              usingBlock:^(NSUInteger idx, BOOL *stop) {
-                                if (idx < paths.count)
-                                  [paths removeObjectAtIndex:idx];
-                              }];
-    [self->_selection removeAllIndexes];
-    // A layer must always stay selected (unless the stack is now empty): pick
-    // the row that shifted into the deleted slot, or the new last row.
-    if (paths.count > 0)
-      [self->_selection addIndex:MIN(firstDeleted, paths.count - 1)];
-  }];
-  // Drive the real selection-change so the inspector swaps to the surviving
-  // layer (timeline, OSC set, reset-button state, panel highlight) instead of
-  // leaving the deleted one active - see _notifyPrimaryLayerSelected.
-  [self _notifyPrimaryLayerSelected];
+  [self
+      _runInUndoGroup:@"Delete Layer"
+                block:^{
+                  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+                    NSIndexSet *targets =
+                        [self _targetsWithDescendantsForTag:tag paths:paths];
+                    if (targets.count == 0)
+                      return;
+                    NSUInteger firstDeleted = targets.firstIndex;
+                    [targets
+                        enumerateIndexesWithOptions:NSEnumerationReverse
+                                         usingBlock:^(NSUInteger idx,
+                                                      BOOL *stop) {
+                                           if (idx < paths.count)
+                                             [paths removeObjectAtIndex:idx];
+                                         }];
+                    [self->_selection removeAllIndexes];
+                    // A layer must always stay selected (unless the stack is
+                    // now empty): pick the row that shifted into the deleted
+                    // slot, or the new last row.
+                    if (paths.count > 0)
+                      [self->_selection
+                          addIndex:MIN(firstDeleted, paths.count - 1)];
+                  }];
+                  // Drive the real selection-change so the inspector swaps to
+                  // the surviving layer (timeline, OSC set, reset-button state,
+                  // panel highlight) instead of leaving the deleted one active
+                  // - see _notifyPrimaryLayerSelected.
+                  [self _notifyPrimaryLayerSelected];
+                }];
 }
 
 // Group the current selection (Cmd-G). Anchors on the topmost selected row so
@@ -251,56 +285,73 @@
 }
 
 - (void)_groupTargetsForTag:(NSUInteger)tag {
-  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
-    NSIndexSet *targets = [self _targetsWithDescendantsForTag:tag paths:paths];
-    if (targets.count == 0)
-      return;
-    NSUInteger insertAt = targets.firstIndex;
-    NSString *inheritedParent =
-        insertAt < paths.count ? paths[insertAt].parentGroupID : nil;
+  // One undo group: the blob write (new group + reparenting) and the
+  // group-becomes-selection write collapse into a single cmd-Z.
+  [self
+      _runInUndoGroup:@"Group Layers"
+                block:^{
+                  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+                    NSIndexSet *targets =
+                        [self _targetsWithDescendantsForTag:tag paths:paths];
+                    if (targets.count == 0)
+                      return;
+                    NSUInteger insertAt = targets.firstIndex;
+                    NSString *inheritedParent =
+                        insertAt < paths.count ? paths[insertAt].parentGroupID
+                                               : nil;
 
-    // Pull the targets out (top-to-bottom order preserved).
-    NSMutableArray<KKBezierPath *> *members = [NSMutableArray array];
-    [targets enumerateIndexesWithOptions:NSEnumerationReverse
-                              usingBlock:^(NSUInteger idx, BOOL *stop) {
-                                if (idx < paths.count) {
-                                  [members insertObject:paths[idx] atIndex:0];
-                                  [paths removeObjectAtIndex:idx];
-                                }
-                              }];
+                    // Pull the targets out (top-to-bottom order preserved).
+                    NSMutableArray<KKBezierPath *> *members =
+                        [NSMutableArray array];
+                    [targets
+                        enumerateIndexesWithOptions:NSEnumerationReverse
+                                         usingBlock:^(NSUInteger idx,
+                                                      BOOL *stop) {
+                                           if (idx < paths.count) {
+                                             [members insertObject:paths[idx]
+                                                           atIndex:0];
+                                             [paths removeObjectAtIndex:idx];
+                                           }
+                                         }];
 
-    KKBezierPath *group = [[KKBezierPath alloc] init];
-    group.isGroup = YES;
-    group.groupID = [[NSUUID UUID] UUIDString];
-    group.parentGroupID = inheritedParent;
-    group.name = @"Group";
-    group.strokeEnabled = NO;
-    group.fillEnabled = NO;
-    // Top-level members of the selection reparent to the new group; already
-    // nested members keep their (relative) parent.
-    for (KKBezierPath *m in members) {
-      BOOL topLevel = [m.parentGroupID isEqual:inheritedParent] ||
-                      (!m.parentGroupID && !inheritedParent);
-      if (topLevel)
-        m.parentGroupID = group.groupID;
-    }
+                    KKBezierPath *group = [[KKBezierPath alloc] init];
+                    group.isGroup = YES;
+                    group.groupID = [[NSUUID UUID] UUIDString];
+                    group.parentGroupID = inheritedParent;
+                    group.name = @"Group";
+                    group.strokeEnabled = NO;
+                    group.fillEnabled = NO;
+                    // Top-level members of the selection reparent to the new
+                    // group; already nested members keep their (relative)
+                    // parent.
+                    for (KKBezierPath *m in members) {
+                      BOOL topLevel =
+                          [m.parentGroupID isEqual:inheritedParent] ||
+                          (!m.parentGroupID && !inheritedParent);
+                      if (topLevel)
+                        m.parentGroupID = group.groupID;
+                    }
 
-    insertAt = MIN(insertAt, paths.count);
-    [paths insertObject:group atIndex:insertAt];
-    for (NSUInteger i = 0; i < members.count; i++)
-      [paths insertObject:members[i] atIndex:insertAt + 1 + i];
+                    insertAt = MIN(insertAt, paths.count);
+                    [paths insertObject:group atIndex:insertAt];
+                    for (NSUInteger i = 0; i < members.count; i++)
+                      [paths insertObject:members[i] atIndex:insertAt + 1 + i];
 
-    // Pin the group's pivot to its members' centre at creation (stored, so it
-    // won't drift as members move). Members are reparented + in `paths` now.
-    CanvasSeedGroupAnchor(group, paths, [CanvasPlugin availableLanes]);
+                    // Pin the group's pivot to its members' centre at creation
+                    // (stored, so it won't drift as members move). Members are
+                    // reparented + in `paths` now.
+                    CanvasSeedGroupAnchor(group, paths,
+                                          [CanvasPlugin availableLanes]);
 
-    [self->_selection removeAllIndexes];
-    [self->_selection addIndex:insertAt];
-  }];
-  // Persist the new group as the selection so the viewer OSC / mini reflect it
-  // immediately (show the group's gizmo) - _modifyPaths only writes the blob +
-  // rebuilds rows, it doesn't fire the selection change.
-  [self _notifyPrimaryLayerSelected];
+                    [self->_selection removeAllIndexes];
+                    [self->_selection addIndex:insertAt];
+                  }];
+                  // Persist the new group as the selection so the viewer OSC /
+                  // mini reflect it immediately (show the group's gizmo) -
+                  // _modifyPaths only writes the blob + rebuilds rows, it
+                  // doesn't fire the selection change.
+                  [self _notifyPrimaryLayerSelected];
+                }];
 }
 
 // Dissolve a group: its direct children reparent to the group's parent, the
@@ -327,8 +378,8 @@
         paths[i].parentGroupID = parentGID;
     }
     [paths removeObjectAtIndex:idx];
-    // Reselect only the previously-selected layers that survive (the group's own
-    // id is gone now, so a group-only selection collapses to nothing).
+    // Reselect only the previously-selected layers that survive (the group's
+    // own id is gone now, so a group-only selection collapses to nothing).
     [self->_selection removeAllIndexes];
     for (NSUInteger i = 0; i < paths.count; i++)
       if (paths[i].layerID.length && [keepIDs containsObject:paths[i].layerID])

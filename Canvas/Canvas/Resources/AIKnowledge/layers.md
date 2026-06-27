@@ -22,7 +22,10 @@ A layer is a `KKBezierPath`. The whole stack is serialized to a hidden `kParamLa
 - Click a row to select it. Cmd-click toggles a row in/out of the selection; Shift-click extends a range. The selected rows are highlighted; selection drives the context-menu actions.
 - **Hover to preview**: hovering a row (without clicking) highlights that layer with a translucent **amber** fill on the inspector mini-viewer, so you can see which layer a row is before selecting it - no need to toggle its visibility off and on. Hovering a **group** highlights all its members. The highlight clears the moment the pointer leaves the row. (Mini-viewer only - the main FCP viewer runs in a separate process reachable only through undoable param writes, so a transient hover preview there would pollute the undo history.)
 - **Delete / Backspace** removes the selected layers (and a selected group's contents). The key is handled by the panel and does not fall through to Final Cut.
-- **Undo / Redo** (Cmd-Z / Cmd-Shift-Z): layer edits go through Final Cut's normal undo, so the standard shortcuts step backward and forward through them (add, delete, rename, group/ungroup, reorder, visibility/lock); the panel refreshes to match. Changing the selected layer is itself undoable.
+- **Cmd-D** duplicates the selected layers (and a selected group's contents) in place, just like the context-menu **Duplicate**; the new copies become the selection. No-op when nothing is selected.
+- **Up / Down arrows** move the _selection_ to the adjacent layer (Up toward the front / top of the list, Down toward the back), skipping rows tucked inside a collapsed group. They change which layer is selected; they don't reorder anything.
+- **Cmd-] / Cmd-[** reorder the selected layer in the stack - the standard editor shortcut: **Cmd-]** moves it forward (up the list, toward the front), **Cmd-[** backward (down). It moves one slot among its same-level siblings, a group travels with its whole subtree, and it stays within its current group (it won't jump out of the nesting). No-op at the ends of its level or with nothing selected. All these act when the Layers panel is focused.
+- **Undo / Redo** (Cmd-Z / Cmd-Shift-Z): layer edits go through Final Cut's normal undo, so the standard shortcuts step backward and forward through them (add, delete, duplicate, rename, group/ungroup, reorder, visibility/lock); the panel refreshes to match. Each structural edit is **one** undo step - it bundles the change and the selection move it triggers into a single group, so a single cmd-Z reverts the whole thing (not one step for the selection and another for the change). Changing the selected layer on its own is also undoable.
 
 ### Auto-select layers
 
@@ -57,8 +60,8 @@ Layers can be nested in **groups** (folders). A group is a `KKBezierPath` with `
 ## Context menu (right-click a row)
 
 - **Rename**: edit the layer name inline (also: double-click the name/thumbnail).
-- **Duplicate**: copy the layer(s) (and a group's contents).
-- **Delete**: remove the layer(s) (and a group's contents).
+- **Duplicate**: copy the layer(s) (and a group's contents). Also **Cmd-D** when the panel is focused.
+- **Delete**: remove the layer(s) (and a group's contents). Also **Delete / Backspace**.
 - **Group / Ungroup / Remove from Group**: see Grouping above.
 - Actions act on the whole selection when you right-click a row that's part of a multi-selection; otherwise just that row.
 

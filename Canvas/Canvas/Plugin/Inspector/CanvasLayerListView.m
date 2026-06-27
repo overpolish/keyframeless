@@ -520,6 +520,45 @@
                                          [s groupSelectedRows];
                                          return nil;
                                        }
+                                       // Cmd-D duplicates the selection (no-op
+                                       // when nothing is selected).
+                                       if ((m & NSEventModifierFlagCommand) &&
+                                           !(m & NSEventModifierFlagShift) &&
+                                           [key isEqualToString:@"d"]) {
+                                         [s _duplicateSelectedRows];
+                                         return nil;
+                                       }
+                                       // Cmd-] / Cmd-[ reorder the selected
+                                       // layer in the stack - the standard
+                                       // editor shortcut. ] = forward (up the
+                                       // list / toward the front), [ = back.
+                                       if ((m & NSEventModifierFlagCommand) &&
+                                           !(m & NSEventModifierFlagShift) &&
+                                           ([key isEqualToString:@"]"] ||
+                                            [key isEqualToString:@"["])) {
+                                         [s _moveSelectedRowByOffset:
+                                                 [key isEqualToString:@"]"]
+                                                     ? -1
+                                                     : 1];
+                                         return nil;
+                                       }
+                                       // Bare Up / Down move the selection to
+                                       // the adjacent layer. Arrow keys carry
+                                       // the NumericPad/Function bits, so test
+                                       // only the real chord modifiers.
+                                       NSEventModifierFlags chord =
+                                           NSEventModifierFlagCommand |
+                                           NSEventModifierFlagShift |
+                                           NSEventModifierFlagOption |
+                                           NSEventModifierFlagControl;
+                                       if (!(m & chord) && (e.keyCode == 126 ||
+                                                            e.keyCode == 125)) {
+                                         [s _moveSelectionByOffset:e.keyCode ==
+                                                                           126
+                                                                       ? -1
+                                                                       : 1];
+                                         return nil;
+                                       }
                                        return e;
                                      }];
   } else if (!self.window && _keyMonitor) {
@@ -600,13 +639,12 @@
   [cmd performCommand:command error:nil];
   [act endAction:target];
 }
-- (void)_deleteSelectedRows {
-  if (_selection.count == 0)
-    return;
-  // The blob delete and the follow-up selection write are two separate param
-  // writes; wrap them in ONE host undo group so a single cmd-Z restores the
-  // layer AND its selection (without this it took two cmd-Z: first the
-  // selection moved to the survivor, then the layer came back).
+// Wrap a multi-write mutation (a _modifyPaths blob write plus the follow-up
+// _notifyPrimaryLayerSelected selection write) in ONE host undo group, so a
+// single cmd-Z reverts the whole edit. Without it the two param writes land as
+// separate undo steps (cmd-Z first moves the selection, then a second cmd-Z
+// undoes the structural change). Matches the kit's detached-window undo path.
+- (void)_runInUndoGroup:(NSString *)name block:(void (^)(void))block {
   id<PROAPIAccessing> api = self.apiManager;
   id<FxCustomParameterActionAPI_v4> act =
       api ? [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)] : nil;
@@ -614,34 +652,126 @@
   BOOL undoGroup = NO;
   if (act) {
     [act startAction:undoTarget];
-    undoGroup = KKBeginUndoGroup(api, @"Delete Layer");
+    undoGroup = KKBeginUndoGroup(api, name);
     [act endAction:undoTarget];
   }
-  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
-    NSMutableIndexSet *expanded = [self->_selection mutableCopy];
-    [self->_selection enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
-      if (idx < paths.count && paths[idx].isGroup)
-        [expanded addIndexes:CanvasLayerDescendantIndices(idx, paths)];
-    }];
-    NSUInteger firstDeleted = expanded.firstIndex;
-    [expanded enumerateIndexesWithOptions:NSEnumerationReverse
-                               usingBlock:^(NSUInteger idx, BOOL *stop) {
-                                 if (idx < paths.count)
-                                   [paths removeObjectAtIndex:idx];
-                               }];
-    // Leave nothing selected after a delete (the canvas empty-selection model:
-    // Figma/Illustrator/AE-style), rather than picking a survivor row.
-    (void)firstDeleted;
-    [self->_selection removeAllIndexes];
-  }];
-  // Swap the inspector to the surviving layer (timeline, OSC set, reset-button
-  // state, panel highlight) - see _notifyPrimaryLayerSelected.
-  [self _notifyPrimaryLayerSelected];
+  block();
   if (act) {
     [act startAction:undoTarget];
     KKEndUndoGroup(api, undoGroup);
     [act endAction:undoTarget];
   }
+}
+
+- (void)_deleteSelectedRows {
+  if (_selection.count == 0)
+    return;
+  [self
+      _runInUndoGroup:@"Delete Layer"
+                block:^{
+                  [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
+                    NSMutableIndexSet *expanded =
+                        [self->_selection mutableCopy];
+                    [self->_selection enumerateIndexesUsingBlock:^(
+                                          NSUInteger idx, BOOL *stop) {
+                      if (idx < paths.count && paths[idx].isGroup)
+                        [expanded addIndexes:CanvasLayerDescendantIndices(
+                                                 idx, paths)];
+                    }];
+                    [expanded
+                        enumerateIndexesWithOptions:NSEnumerationReverse
+                                         usingBlock:^(NSUInteger idx,
+                                                      BOOL *stop) {
+                                           if (idx < paths.count)
+                                             [paths removeObjectAtIndex:idx];
+                                         }];
+                    // Leave nothing selected after a delete (the canvas
+                    // empty-selection model: Figma/Illustrator/AE-style),
+                    // rather than picking a survivor row.
+                    [self->_selection removeAllIndexes];
+                  }];
+                  // Swap the inspector to the surviving layer (timeline, OSC
+                  // set, reset-button state, panel highlight).
+                  [self _notifyPrimaryLayerSelected];
+                }];
+}
+
+// Cmd-D: duplicate the current selection. Routes through the same core the
+// context-menu "Duplicate" uses (anchored on the topmost selected row, which
+// _actionTargetsForTag: expands to the whole selection). No-op with no layer.
+- (void)_duplicateSelectedRows {
+  if (_selection.count == 0)
+    return;
+  [self _duplicateTargetsForTag:_selection.firstIndex];
+}
+
+// Cmd-] / Cmd-[: move the primary selected row (and, if it's a group, its
+// whole subtree) one slot among its same-parent siblings. delta -1 moves it
+// toward the front (smaller index / visually up), +1 toward the back. No-op at
+// the ends of its level or when nothing is selected - it stays inside its
+// current group rather than escaping the nesting.
+- (void)_moveSelectedRowByOffset:(NSInteger)delta {
+  if (_selection.count == 0)
+    return;
+  NSUInteger idx = _selection.firstIndex;
+  if (idx >= _paths.count)
+    return;
+  NSString *parent = _paths[idx].parentGroupID;
+  BOOL (^sameParent)(NSString *) = ^BOOL(NSString *p) {
+    return (p == parent) || (p && parent && [p isEqualToString:parent]);
+  };
+  NSInteger dropIdx = -1;
+  if (delta < 0) {
+    // Nearest preceding sibling (entries between are a prior sibling group's
+    // descendants - different parent - so they're skipped). Land on its slot.
+    for (NSInteger j = (NSInteger)idx - 1; j >= 0; j--)
+      if (sameParent(_paths[(NSUInteger)j].parentGroupID)) {
+        dropIdx = j;
+        break;
+      }
+  } else {
+    // Nearest following sibling past our own subtree; land just after it (and
+    // its subtree, if it's a group).
+    NSUInteger end = (NSUInteger)[self subtreeEndFlatIndex:idx];
+    for (NSUInteger j = end; j < _paths.count; j++)
+      if (sameParent(_paths[j].parentGroupID)) {
+        dropIdx = [self subtreeEndFlatIndex:j];
+        break;
+      }
+  }
+  if (dropIdx < 0)
+    return; // already at the end of its level
+  [self
+      _runInUndoGroup:delta < 0 ? @"Move Layer Up" : @"Move Layer Down"
+                block:^{
+                  [self
+                      performRowReorderFromIndices:[self dragIndicesForRow:idx]
+                                       toFlatIndex:dropIdx
+                                     parentGroupID:parent];
+                }];
+}
+
+// Up / Down arrows: step the selection to the adjacent row, skipping rows
+// hidden inside a collapsed group and rows that aren't selectable right now (a
+// keypose popover grays layers with no keypose at its time). delta -1 moves up
+// the list (toward the front), +1 down. Routes through selectIndex: so it fires
+// the same primary-layer-selected path a click does. No-op past either end.
+- (void)_moveSelectionByOffset:(NSInteger)delta {
+  if (_paths.count == 0)
+    return;
+  NSInteger i = _selection.count ? (NSInteger)_selection.firstIndex
+                                 : (delta > 0 ? -1 : (NSInteger)_paths.count);
+  while (1) {
+    i += delta;
+    if (i < 0 || i >= (NSInteger)_paths.count)
+      return; // off the end: keep the current selection
+    if ([self _isRowHiddenByCollapse:(NSUInteger)i])
+      continue;
+    if ([self _rowNonSelectable:i])
+      continue;
+    break;
+  }
+  [self selectIndex:(NSUInteger)i modifiers:0 clickCount:1];
 }
 
 @end

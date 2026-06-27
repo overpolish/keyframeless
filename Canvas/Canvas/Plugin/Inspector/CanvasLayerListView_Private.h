@@ -85,6 +85,19 @@ extern NSPasteboardType const kCanvasLayerRowDragType;
 - (void)_updateScrollShadows;
 // Row-hover hit-test driven by the mouse-moved monitors (primary impl).
 - (void)_updateHoverFromMouse;
+// Wrap a multi-write mutation (blob + selection) in ONE host undo group so a
+// single cmd-Z reverts the whole thing - without it the blob write and the
+// follow-up selection write land as two separate undo steps. Used by every
+// keyboard / menu structural edit (delete, duplicate, group, move).
+- (void)_runInUndoGroup:(NSString *)name block:(void (^)(void))block;
+// Keyboard structural edits on the current selection (primary impl): duplicate
+// (Cmd-D) and reorder the primary row among its siblings (Cmd-] / Cmd-[;
+// delta -1 = forward / toward the front, +1 = backward).
+- (void)_duplicateSelectedRows;
+- (void)_moveSelectedRowByOffset:(NSInteger)delta;
+// Move the selection to the adjacent selectable, non-collapsed row (Up / Down
+// arrows; delta -1 = up / toward the front, +1 = down). No reorder.
+- (void)_moveSelectionByOffset:(NSInteger)delta;
 @end
 
 // Methods are declared on matching CATEGORY interfaces (not the extension) so
@@ -153,6 +166,9 @@ extern NSPasteboardType const kCanvasLayerRowDragType;
 - (void)toggleVisibility:(NSButton *)sender;
 - (void)toggleLock:(NSButton *)sender;
 - (void)duplicateRow:(NSMenuItem *)sender;
+// Shared duplicate core (menu tag + keyboard both route here): clone the action
+// targets for `tag` and select the clones. Wrapped in a single undo group.
+- (void)_duplicateTargetsForTag:(NSUInteger)tag;
 - (void)deleteRow:(NSMenuItem *)sender;
 - (void)groupSelection:(NSMenuItem *)sender;
 - (void)ungroupRow:(NSMenuItem *)sender;
