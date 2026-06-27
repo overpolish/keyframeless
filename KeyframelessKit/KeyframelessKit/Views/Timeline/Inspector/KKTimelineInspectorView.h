@@ -47,8 +47,8 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 @property(nonatomic, strong, nullable) id<KKMiniViewerDelegate>
     miniViewerDelegate;
 /// Forwarded to the lanes view (and on to the popover mini): when YES, clicking
-/// the mini makes it the key window so bare keys (e.g. Delete) are handled in the
-/// popover instead of reaching the host. Default NO.
+/// the mini makes it the key window so bare keys (e.g. Delete) are handled in
+/// the popover instead of reaching the host. Default NO.
 @property(nonatomic) BOOL miniGrabsKeyFocusOnClick;
 /// Lane label the "manage properties" popover highlights for the first-run
 /// spotlight (e.g. @"Radius"). nil = no spotlight.
@@ -183,6 +183,11 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// Live clip duration (seconds) for the Basic ruler, pushed from the
 /// render tick (clip trims never fire `parameterChanged:`).
 - (void)setClipDurationSeconds:(double)seconds;
+/// The clip duration last set (seconds), 0 if never. Subclasses use it to stamp
+/// `lastKnownClipDuration` onto a freshly-built per-layer timeline before
+/// publishing it as the viewer-OSC snapshot, so keypose-proximity visibility
+/// uses a one-frame epsilon instead of a blind fallback.
+- (double)clipDurationSeconds;
 /// Live frame duration (seconds) - bounds the scrubber to the last frame.
 - (void)setFrameDurationSeconds:(double)seconds;
 /// Live playhead position (clip fraction 0–1; < 0 hides) for the scrubber.

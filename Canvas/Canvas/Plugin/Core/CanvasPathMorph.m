@@ -72,11 +72,16 @@ KKBezierPath *CanvasPathMorphedAtFraction(KKBezierPath *path, double frac) {
 // the controller's edit routing.
 const double kCanvasPathKeyposeEps = 0.01;
 
-BOOL CanvasPathGeometryEditableAtFraction(KKBezierPath *path, double frac) {
+BOOL CanvasPathGeometryEditableAtFractionEps(KKBezierPath *path, double frac,
+                                             double eps) {
   if (CanvasPathMorphedAtFraction(path, frac) == path)
     return YES; // constant path: always editable
-  return CanvasPathActiveKeyposeAtFraction(path, frac, kCanvasPathKeyposeEps) >=
-         0;
+  return CanvasPathActiveKeyposeAtFraction(path, frac, eps) >= 0;
+}
+
+BOOL CanvasPathGeometryEditableAtFraction(KKBezierPath *path, double frac) {
+  return CanvasPathGeometryEditableAtFractionEps(path, frac,
+                                                 kCanvasPathKeyposeEps);
 }
 
 NSInteger CanvasPathActiveKeyposeAtFraction(KKBezierPath *path, double frac,

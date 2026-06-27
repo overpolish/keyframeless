@@ -36,6 +36,13 @@ NSInteger CanvasPathActiveKeyposeAtFraction(KKBezierPath *path, double frac,
 /// (anchors show only when constant or on a keypose).
 BOOL CanvasPathGeometryEditableAtFraction(KKBezierPath *path, double frac);
 
+/// Like CanvasPathGeometryEditableAtFraction but with a caller-supplied keypose
+/// proximity `eps` - the viewer OSC passes a HALF-frame eps so the anchors show
+/// only on the keypose's own frame, not the neighbours (the default uses the
+/// looser `kCanvasPathKeyposeEps`).
+BOOL CanvasPathGeometryEditableAtFractionEps(KKBezierPath *path, double frac,
+                                             double eps);
+
 /// Write `geometry`'s points (captured as a morph snapshot) into the Points
 /// keypose at `keyposeIndex`, returning a COPY of `path` with the updated
 /// `animationJSON`. The base `points` are also set to `geometry` (so the last-

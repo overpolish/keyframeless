@@ -526,12 +526,15 @@ BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
   NSInteger holdStart = inEnabled ? 1 : 0;
   NSInteger holdEnd = n - (outEnabled ? 2 : 1);
 
-  // Frame-aware snap tolerance - FCP's playhead is frame-quantized, so
-  // the readback frac is up to one frame off the kp's stored time.
+  // Frame-aware snap tolerance: HALF a frame, so the kp reads "present" only on
+  // its OWN frame, not the two neighbours. The playhead is frame-quantized and
+  // keyposes are created at a quantized playhead, so on the kp's frame the diff
+  // is ~0; the adjacent frames sit a full frame away and are correctly
+  // excluded.
   double clipDur = lane.lastKnownClipDuration;
   double epsilon;
   if (clipDur > 0.0 && frameDurSec > 0.0)
-    epsilon = frameDurSec / clipDur;
+    epsilon = 0.5 * frameDurSec / clipDur;
   else
     epsilon = 0.05;
   static const double kMinEps = 1e-4;
@@ -562,8 +565,7 @@ BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
   // starts/ends mid-clip stays editable across its holds, not only at the
   // projected timeline ends. The interior transition (between first and last)
   // stays hidden - only the on-keypose checks above light it up there.
-  if (n >= 2 &&
-      (frac <= kps.firstObject.time || frac >= kps.lastObject.time))
+  if (n >= 2 && (frac <= kps.firstObject.time || frac >= kps.lastObject.time))
     return YES;
   return NO;
 }

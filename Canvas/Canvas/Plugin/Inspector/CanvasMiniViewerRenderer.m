@@ -23,6 +23,45 @@ NSString *const CanvasMiniViewerRequestPath =
 
 @implementation CanvasMiniViewerRenderer
 
+// The kit boundary popover owns suppressedHandleLabels (per-phase: lanes with
+// no keypose at this fraction). Canvas ALSO suppresses Rotation under a drawing
+// tool. Both must hold at once, so store each source separately and publish the
+// UNION to the base property the kit reads - otherwise the toolbar's write
+// would clobber the popover's per-phase suppression (the mini would show every
+// OSC at every keypose, unlike the viewer).
+- (void)setSuppressedHandleLabels:(NSArray<NSString *> *)labels {
+  _phaseSuppressedLabels = [labels copy];
+  [self _applyHandleSuppressionUnion];
+}
+
+- (void)setToolSuppressedHandleLabels:(NSArray<NSString *> *)labels {
+  _toolSuppressedLabels = [labels copy];
+  [self _applyHandleSuppressionUnion];
+}
+
+- (void)_applyHandleSuppressionUnion {
+  // Canvas lanes are OWNER-SCOPED, so the popover's excluded labels are
+  // base+owner (e.g. "RotationE49E..."); the kit gates handles on PLAIN base
+  // labels (rotationLabel="Rotation"). Map each scoped label back to its base
+  // by prefix so the gate's containsObject: matches. Tool suppression is
+  // already a base label. (Path/Points geometry anchors gate separately on
+  // editFraction in +Overlay, so they're not part of this handle set.)
+  NSArray<NSString *> *bases = @[
+    _positionMini.laneLabel ?: @"", _scaleMini.laneLabel ?: @"",
+    _anchorMini.laneLabel ?: @"", self.rotationLabel ?: @"",
+    self.pointLabel ?: @"", self.cropLabel ?: @""
+  ];
+  NSMutableSet<NSString *> *u = [NSMutableSet set];
+  for (NSString *scoped in _phaseSuppressedLabels)
+    for (NSString *base in bases)
+      if (base.length && [scoped hasPrefix:base]) {
+        [u addObject:base];
+        break;
+      }
+  [u addObjectsFromArray:_toolSuppressedLabels ?: @[]];
+  [super setSuppressedHandleLabels:u.allObjects];
+}
+
 - (instancetype)init {
   if ((self = [super init])) {
     _positionMini =

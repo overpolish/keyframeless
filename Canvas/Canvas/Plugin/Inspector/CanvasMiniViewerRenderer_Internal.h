@@ -33,7 +33,17 @@ NS_ASSUME_NONNULL_BEGIN
   // Backs the public toolbarTool property (custom setter in +Toolbar); declared
   // here so the category setter can touch it.
   NSInteger _toolbarTool;
+  // Two independent suppression sources UNIONED into the base
+  // suppressedHandleLabels (which the kit reads): the boundary popover's
+  // per-phase exclusions (lanes with no keypose at this fraction, set via the
+  // overridden setSuppressedHandleLabels:) and the toolbar's tool-based hide
+  // (Rotation under a drawing tool). Kept apart so neither clobbers the other.
+  NSArray<NSString *> *_phaseSuppressedLabels;
+  NSArray<NSString *> *_toolSuppressedLabels;
 }
+// Set the toolbar's tool-based handle suppression; unioned with the boundary
+// popover's per-phase suppression instead of overwriting it.
+- (void)setToolSuppressedHandleLabels:(nullable NSArray<NSString *> *)labels;
 // The lazily-built image texture cache, used by the composite pass.
 @property(nonatomic, readonly)
     NSMutableDictionary<NSString *, id<MTLTexture>> *imageTextureCache;

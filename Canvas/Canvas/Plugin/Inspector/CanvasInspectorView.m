@@ -71,8 +71,9 @@
         ^(NSArray<NSString *> *layerIDs, NSString *primaryLayerID) {
           typeof(self) s = weakInit;
           [s->_layerListController setSelectionLayerIDs:layerIDs];
-          // An empty set is a real deselect (mini click on empty canvas) - go to
-          // the no-layer state, not the topmost-fallback _selectLayer:nil gives.
+          // An empty set is a real deselect (mini click on empty canvas) - go
+          // to the no-layer state, not the topmost-fallback _selectLayer:nil
+          // gives.
           if (layerIDs.count == 0)
             [s _selectNoLayer];
           else
@@ -96,17 +97,19 @@
           // Don't adopt a just-drawn path as the selection if it can't be acted
           // on in the open popover (a new constant path has no keypose, so a
           // keypose popover must stay on its owner - otherwise the new path is
-          // persisted as the selection and ping-pongs with the keypose re-drive).
+          // persisted as the selection and ping-pongs with the keypose
+          // re-drive).
           BOOL adopt =
               selectID.length &&
               [s->_layerListController isLayerSelectableInOpenPopover:selectID];
           // Write the blob AND (when adopting) the new selection in ONE action.
-          // Two separate actions (blob, then a patchUIState selection write) made
-          // path-op commits take TWO cmd-Z, and the undo reverted the selection
-          // against the still-mutated blob - so the restored layerID no longer
-          // existed and resolved to the wrong layer. One action reverts both
-          // together; the kParamUIState round-trip then drives the in-memory
-          // selection (highlight + timeline) against the reverted blob.
+          // Two separate actions (blob, then a patchUIState selection write)
+          // made path-op commits take TWO cmd-Z, and the undo reverted the
+          // selection against the still-mutated blob - so the restored layerID
+          // no longer existed and resolved to the wrong layer. One action
+          // reverts both together; the kParamUIState round-trip then drives the
+          // in-memory selection (highlight + timeline) against the reverted
+          // blob.
           [s->_layerListController writePaths:paths
                             selectingLayerIDs:(adopt ? @[ selectID ] : nil)];
           [s _syncLayersToRenderer];
@@ -119,14 +122,15 @@
       typeof(self) s = weakInit;
       if (!s)
         return;
-      [s->_layerListController writePaths:paths clearingSelectionInSameAction:YES];
+      [s->_layerListController writePaths:paths
+            clearingSelectionInSameAction:YES];
       [s _syncLayersToRenderer];
     };
     self.miniViewerDelegate = _miniViewerRenderer;
     // Let the popover mini take key focus on click so a bare Delete is handled
-    // there (delete the selected layer) instead of falling through to FCP (which
-    // would delete the whole effect). Focus is held only while in the mini;
-    // clicking back into FCP releases it, so host shortcuts keep working.
+    // there (delete the selected layer) instead of falling through to FCP
+    // (which would delete the whole effect). Focus is held only while in the
+    // mini; clicking back into FCP releases it, so host shortcuts keep working.
     self.miniGrabsKeyFocusOnClick = YES;
     self.miniViewerDescriptorPath = CanvasMiniViewerDescriptorPath;
     self.miniViewerRequestPath = CanvasMiniViewerRequestPath;
@@ -155,9 +159,10 @@
         s.onAutoSelectChanged(on);
     };
     // Hovering a row highlights that layer (amber) on the adjacent mini-viewer,
-    // so it's clear which layer it is without toggling its visibility. In-process
-    // (mini only); the main viewer's OSC lives in another process and would need
-    // a transient param round-trip, which isn't worth the undo/perf cost.
+    // so it's clear which layer it is without toggling its visibility.
+    // In-process (mini only); the main viewer's OSC lives in another process
+    // and would need a transient param round-trip, which isn't worth the
+    // undo/perf cost.
     _layerListController.onLayerHovered = ^(NSString *layerID) {
       typeof(self) s = weak;
       s->_miniViewerRenderer.hoveredLayerID = layerID;
@@ -166,10 +171,11 @@
     // rule as the layer rows). The MAIN VIEWER gates itself by the playhead in
     // the OSC (a layer is clickable there if it has a constant or a keypose at
     // the playhead), so it needs nothing pushed here.
-    _layerListController.onNonSelectableLayersChanged = ^(NSSet<NSString *> *s) {
-      typeof(self) ss = weak;
-      ss->_miniViewerRenderer.nonSelectableLayerIDs = s;
-    };
+    _layerListController.onNonSelectableLayersChanged =
+        ^(NSSet<NSString *> *s) {
+          typeof(self) ss = weak;
+          ss->_miniViewerRenderer.nonSelectableLayerIDs = s;
+        };
     // The marquee / body-drag use a stricter set in the constants popover (see
     // the controller): move-lane-animated layers can't be moved via constants.
     _layerListController.onMarqueeNonSelectableLayersChanged =
@@ -179,12 +185,13 @@
         };
     // A keypose popover scoped itself to a layer (clicked a keypose in that
     // layer's lane) -> make it the SELECTED layer, not just a highlight, so the
-    // viewer OSC / mini / Constants all follow the layer being edited. Without a
-    // real selection change the viewer OSC kept reading the previously-selected
-    // layer (it reads the process-snapshot timeline, which only applyTimeline
-    // republishes). _selectLayer no-ops the popover retarget (the graph already
-    // scoped itself before firing this), so there's no loop; also move the list
-    // highlight since this didn't originate from a panel click.
+    // viewer OSC / mini / Constants all follow the layer being edited. Without
+    // a real selection change the viewer OSC kept reading the
+    // previously-selected layer (it reads the process-snapshot timeline, which
+    // only applyTimeline republishes). _selectLayer no-ops the popover retarget
+    // (the graph already scoped itself before firing this), so there's no loop;
+    // also move the list highlight since this didn't originate from a panel
+    // click.
     self.basicLanesView.onKeyposeLayerActivated = ^(NSString *layerKey) {
       __strong typeof(weak) s = weak;
       if (!s || layerKey.length == 0 ||
@@ -224,9 +231,10 @@
 
 // When 2+ layers are selected the single-owner inspector timeline shows the
 // PRIMARY layer's params, but editing a value would only touch that one layer
-// (misleading). Lock every lane so the Constants popover + Advanced graph render
-// read-only until a single layer is selected again. Per-field propagation
-// (stroke width, colours) can relax this for those fields when they return.
+// (misleading). Lock every lane so the Constants popover + Advanced graph
+// render read-only until a single layer is selected again. Per-field
+// propagation (stroke width, colours) can relax this for those fields when they
+// return.
 - (void)_applyMultiSelectLock:(KKTimeline *)timeline count:(NSUInteger)count {
   if (count <= 1)
     return;
@@ -263,8 +271,9 @@
   // timeline (now applied above), mirroring the keypose-popover retarget.
   [self.basicLanesView reopenOpenAppliesToPopover];
   // Keep the controller's stored highlight set in step with the live selection,
-  // so a later lazily-built popover companion restores THIS selection rather than
-  // a stale one (e.g. after ungroup the freed layer stays selected on reopen).
+  // so a later lazily-built popover companion restores THIS selection rather
+  // than a stale one (e.g. after ungroup the freed layer stays selected on
+  // reopen).
   [_layerListController setSelectionLayerIDs:selSet];
   // Mirror the full selection onto the mini so its toolbar's path-op buttons
   // follow (it needs the whole set, not just the primary).
@@ -273,10 +282,11 @@
     _onSelectedLayerChanged(sel.layerID, selSet);
 }
 
-// Select a layer AND move the list highlight. Used when the selection originates
-// somewhere other than a panel row click (a keypose-lane click, a mini-viewer
-// auto-select) - those don't set the row highlight themselves, unlike
-// onPrimaryLayerSelected which fires from the row click that already highlights.
+// Select a layer AND move the list highlight. Used when the selection
+// originates somewhere other than a panel row click (a keypose-lane click, a
+// mini-viewer auto-select) - those don't set the row highlight themselves,
+// unlike onPrimaryLayerSelected which fires from the row click that already
+// highlights.
 - (void)_selectAndHighlightLayer:(NSString *)layerID {
   [self _selectLayer:layerID];
   [_layerListController highlightLayerID:layerID];
@@ -326,8 +336,9 @@
                         primary:(NSString *)primary {
   NSArray<NSString *> *selIDs =
       [layerIDs isKindOfClass:[NSArray class]] ? layerIDs : @[];
-  // No-op guard: skip when the list already shows exactly this set + primary, so
-  // unrelated UIState writes (OSC toggles, grid, etc.) don't churn the timeline.
+  // No-op guard: skip when the list already shows exactly this set + primary,
+  // so unrelated UIState writes (OSC toggles, grid, etc.) don't churn the
+  // timeline.
   NSSet *curSet =
       [NSSet setWithArray:[_layerListController currentSelectionLayerIDs]];
   NSSet *wantSet = [NSSet setWithArray:selIDs];
@@ -357,7 +368,8 @@
 // empty. Leaves the selection alone when it already has constants.
 - (void)_ensureConstantsLayerSelected {
   // Multi-select shows the primary's constants READ-ONLY (lanes locked); don't
-  // reassign to a different layer here - that would collapse the multi-selection.
+  // reassign to a different layer here - that would collapse the
+  // multi-selection.
   if ([_layerListController currentSelectionLayerIDs].count > 1)
     return;
   NSArray<KKBezierPath *> *paths = [_layerListController currentLayerPaths];
@@ -415,10 +427,10 @@
   [self syncMiniHandleVisibility]; // OSC visibility + lock
   _layerListController.selectedLayerID = sel.layerID;
   // The kit re-evaluates the Constants button only in applyTimeline (a
-  // selection/edit). _feedGraph also runs on cold boot + reload (parameterChanged
-  // load), where it just updated ownerConstantsAvailable - so refresh the button
-  // here too, else it stays hidden until the first layer selection even when a
-  // layer has constants.
+  // selection/edit). _feedGraph also runs on cold boot + reload
+  // (parameterChanged load), where it just updated ownerConstantsAvailable - so
+  // refresh the button here too, else it stays hidden until the first layer
+  // selection even when a layer has constants.
   self.constantsButton.hidden = !self.basicLanesView.hasUnoptedLanes;
 }
 
@@ -468,11 +480,25 @@
 
 - (void)_retainMiniClipDurationFromTimeline:(KKTimeline *)timeline {
   // Keep the largest clip duration the timeline has ever reported (a later
-  // gesture rebuild drops the lanes' lastKnownClipDuration); the mini uses it to
-  // place the marching-ants phase at the previewed frame.
+  // gesture rebuild drops the lanes' lastKnownClipDuration); the mini uses it
+  // to place the marching-ants phase at the previewed frame.
   for (KKLane *l in timeline.lanes)
     if (l.lastKnownClipDuration > _miniViewerRenderer.clipDurationSeconds)
       _miniViewerRenderer.clipDurationSeconds = l.lastKnownClipDuration;
+}
+
+// A freshly-built per-layer timeline (CanvasLayerTimelineForPath) has no
+// lastKnownClipDuration on its lanes, so KKLaneVisibleAtFraction would fall
+// back to a blind 0.05 (5% of clip) keypose-proximity epsilon - making the
+// viewer Position OSC appear ~9 frames off the keypose instead of within one
+// frame. Stamp the seeded clip duration before publishing so the epsilon is one
+// frame.
+- (void)_publishViewerSnapshot:(KKTimeline *)timeline {
+  double dur = self.clipDurationSeconds;
+  if (dur > 0.0)
+    for (KKLane *l in timeline.lanes)
+      l.lastKnownClipDuration = dur;
+  KKSetProcessTimelineSnapshot(timeline);
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {
@@ -485,7 +511,7 @@
   // the param - FxParameterRetrievalAPI is nil there - so the snapshot is its
   // only source.) Groups publish like layers: their pivot lives in the stored
   // Anchor lane now, so no Position re-anchor shift is needed.
-  KKSetProcessTimelineSnapshot(timeline);
+  [self _publishViewerSnapshot:timeline];
 }
 
 // Track a live keypose drag so reloadLayerList knows the per-frame write echoes
@@ -528,9 +554,9 @@
 - (void)_refeedTimelineIfStructureChanged {
   NSArray<KKBezierPath *> *paths = [_layerListController currentLayerPaths];
   // Respect a real no-selection state - don't fall back to the topmost layer
-  // (CanvasSelectedLayerForPaths does on nil), which would re-apply that layer's
-  // timeline after a deselect and leave the open popover editing it (this runs
-  // from the blob reload after ungroup).
+  // (CanvasSelectedLayerForPaths does on nil), which would re-apply that
+  // layer's timeline after a deselect and leave the open popover editing it
+  // (this runs from the blob reload after ungroup).
   KKBezierPath *sel = _selectedLayerID.length
                           ? CanvasSelectedLayerForPaths(paths, _selectedLayerID)
                           : nil;
@@ -540,12 +566,12 @@
                                   .count];
   // Always refresh the viewer OSC's process snapshot with the selected layer's
   // CURRENT keyposes - even mid-drag. The snapshot only feeds the viewer
-  // control's draw + visibility (which must track a just-added/moved keypose, so
-  // its lead-in/out hold visibility recomputes against the new first/last
+  // control's draw + visibility (which must track a just-added/moved keypose,
+  // so its lead-in/out hold visibility recomputes against the new first/last
   // keypose times); it doesn't reset any inspector-side popover/mini edit. The
   // gated applyTimeline below also sets it, but is skipped on a value-only
   // change during a drag - which is exactly when the snapshot went stale.
-  KKSetProcessTimelineSnapshot(layerTL);
+  [self _publishViewerSnapshot:layerTL];
   // Always rebuild the all-layers graph (any layer may have gained/lost an
   // animated lane).
   [self _feedGraph];

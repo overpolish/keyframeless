@@ -35,7 +35,11 @@
   BOOL drawingTool = (toolbarTool == CanvasToolbarToolPen ||
                       toolbarTool == CanvasToolbarToolRect ||
                       toolbarTool == CanvasToolbarToolEllipse);
-  self.suppressedHandleLabels = drawingTool ? @[ @"Rotation" ] : @[];
+  // Tool-based suppression is UNIONED with the boundary popover's per-phase
+  // suppression (not written straight to suppressedHandleLabels, which the kit
+  // popover owns) - else this would wipe the keypose-visibility the popover
+  // set.
+  [self setToolSuppressedHandleLabels:drawingTool ? @[ @"Rotation" ] : @[]];
 }
 
 // Toolbar chrome: drive the per-draw state from the shared kParamUIState the

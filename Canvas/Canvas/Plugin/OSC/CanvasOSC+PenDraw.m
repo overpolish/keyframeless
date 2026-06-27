@@ -17,7 +17,23 @@
 #import "CanvasPenController.h"
 #import <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKPluginHost.h> // process snapshot + frame duration
 #import <KeyframelessKit/NSColor+KKColors.h>
+
+// Half-frame keypose-proximity epsilon (frac space) so the anchors / point OSC
+// show only on a keypose's OWN frame, not the neighbours. clipDur comes from
+// the published snapshot's lanes (stamped lastKnownClipDuration); falls back to
+// the looser fixed eps if the duration isn't known yet.
+static double CanvasOSCKeyposeFrameEps(void) {
+  double frameDur = KKProcessFrameDurationSeconds();
+  double clipDur = 0.0;
+  for (KKLane *l in KKProcessTimelineSnapshot().lanes)
+    if (l.lastKnownClipDuration > clipDur)
+      clipDur = l.lastKnownClipDuration;
+  if (frameDur > 0.0 && clipDur > 0.0)
+    return 0.5 * frameDur / clipDur;
+  return kCanvasPathKeyposeEps;
+}
 
 @implementation CanvasOSC (PenDraw)
 
@@ -67,8 +83,9 @@
                                       }
                                       if (p.isGroup || p.count < 1)
                                         continue;
-                                      if (!CanvasPathGeometryEditableAtFraction(
-                                              p, frac))
+                                      if (!CanvasPathGeometryEditableAtFractionEps(
+                                              p, frac,
+                                              CanvasOSCKeyposeFrameEps()))
                                         continue;
                                       CanvasDrawPathEditOSC(
                                           self, paths,
@@ -125,15 +142,17 @@
     return;
   double frac = [self fractionAtTime:time];
   // OSC rule: anchors show only when the path is constant or the playhead is on
-  // a Points keypose - hidden between keyposes (the stroke still morphs).
-  if (!CanvasPathGeometryEditableAtFraction(path, frac))
+  // a Points keypose - hidden between keyposes (the stroke still morphs). Half-
+  // frame eps so it shows on the keypose's own frame only, not the neighbours.
+  if (!CanvasPathGeometryEditableAtFractionEps(path, frac,
+                                               CanvasOSCKeyposeFrameEps()))
     return;
   self.penDrawDest = destinationImage;
   self.penDrawTime = time;
   // Corner-radius widgets are their own OSC element ("Corners", default on),
   // toggleable separately from the anchors so a busy path can hide them. Shown
-  // when visible OR opt-peeked; the controller's hit-test reads the same gate so
-  // a hidden widget isn't grabbable.
+  // when visible OR opt-peeked; the controller's hit-test reads the same gate
+  // so a hidden widget isn't grabbable.
   BOOL cornersShown =
       [self kkOSCElementVisible:@"Corners"] ||
       (self.optRevealActive && [self kkOSCRevealEligible:@"Corners"]);

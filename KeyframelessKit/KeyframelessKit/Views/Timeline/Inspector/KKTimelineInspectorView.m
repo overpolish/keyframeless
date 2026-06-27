@@ -90,8 +90,8 @@ const CGFloat kMBCheckboxTrailing = 23.0;
       NSViewWidthSizable | NSViewHeightSizable | NSViewMinYMargin;
 
   // Subdue the host popover's Liquid Glass: over bright viewer backgrounds the
-  // bare glass washes out the timeline UI. A dark backing wash behind everything
-  // (matching the layer-list body's 0.2 black) restores contrast.
+  // bare glass washes out the timeline UI. A dark backing wash behind
+  // everything (matching the layer-list body's 0.2 black) restores contrast.
   self.wantsLayer = YES;
   self.layer.backgroundColor = [NSColor colorWithWhite:0.0 alpha:0.2].CGColor;
 
@@ -544,6 +544,10 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   _clipDurationSeconds = seconds;
   [_basicView setClipDurationSeconds:seconds];
   [_detachedView setClipDurationSeconds:seconds];
+}
+
+- (double)clipDurationSeconds {
+  return _clipDurationSeconds;
 }
 
 - (void)setFrameDurationSeconds:(double)seconds {
