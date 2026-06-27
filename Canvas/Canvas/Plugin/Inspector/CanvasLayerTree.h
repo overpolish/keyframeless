@@ -33,6 +33,15 @@ extern NSIndexSet *
 CanvasLayerAncestorIndicesForParentID(NSString *_Nullable parentGroupID,
                                       NSArray<KKBezierPath *> *paths);
 
+/// `path` preceded by its ancestor group rows (resolved from the full `stack` by
+/// parentGroupID). The per-layer render encoders skip group rows but compose a
+/// drawable's ancestor groups onto it - so handing them a single-layer array
+/// drops the group transform. This bundles the groups back in (just `@[path]`
+/// when it has no parent), keeping the renderer's group compose working.
+extern NSArray<KKBezierPath *> *
+CanvasLayerPathWithAncestors(KKBezierPath *path,
+                             NSArray<KKBezierPath *> *stack);
+
 /// Remove the layers whose layerID is in `selIDs` (expanding any selected group
 /// to its descendants) from `paths` IN PLACE, mirroring the layer-list Delete.
 /// Returns the layerID that should be selected afterwards (the layer that fell

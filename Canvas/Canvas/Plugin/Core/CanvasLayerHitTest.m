@@ -472,32 +472,9 @@ static BOOL CanvasVectorLayerHit(KKBezierPath *path, double frac, float aspect,
   return NO;
 }
 
-// A layer's 3D centre depth (raw view-space z), the SAME value the render sorts
-// by (CanvasEncodeImageLayers). Object-space dims (aspect, 1) - the perspective
-// is scale-invariant, so a uniform dims change preserves the depth ORDER, which
-// is all the hit-test needs. Lower z = nearer the camera (drawn on top).
-static float CanvasLayerCenterDepth(NSArray<KKBezierPath *> *layers,
-                                    NSUInteger i, KKBezierPath *path,
-                                    double frac, float aspect) {
-  CanvasLayerTransform t = (frac < 0.0)
-                               ? CanvasLayerTransformIdentity()
-                               : CanvasLayerTransformAtFraction(path, frac);
-  simd_float2 center = CanvasLayerObjectCenter(path);
-  CanvasGroupXform groups[kCanvasGroupXformCap];
-  NSInteger ng = CanvasBuildGroupXforms(layers, i, frac, nil, nil, groups,
-                                        kCanvasGroupXformCap);
-  simd_float2 scl = simd_make_float2(aspect > 0.0f ? aspect : 1.0f, 1.0f);
-  simd_float2 half = simd_make_float2(0.5f, 0.5f);
-  matrix_float4x4 m = CanvasComposedModelMatrix(t, center, groups, ng, scl,
-                                                simd_make_float2(0, 0));
-  simd_float2 cPx = (center - half) * scl;
-  simd_float4 clip = simd_mul(m, simd_make_float4(cPx.x, cPx.y, 0.0f, 1.0f));
-  return clip.z;
-}
-
 typedef struct {
-  NSInteger index; // original layer-stack index (0 = topmost)
-  float depth;     // 3D centre depth (lower = nearer/front)
+  NSInteger index;          // original layer-stack index (0 = topmost)
+  CanvasLayerDrawKey key;   // depth + facing, the SAME key the render sorts by
 } CanvasHitCandidate;
 
 NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
@@ -538,24 +515,32 @@ NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
     if (!isImage && !isVector)
       continue;
     cand[candCount].index = i;
-    cand[candCount].depth =
-        CanvasLayerCenterDepth(layers, (NSUInteger)i, path, frac, aspect);
+    // Object-space dims (aspect, 1) - the pipeline is scale-invariant, so this
+    // yields the SAME order the render's (W, H) key does.
+    cand[candCount].key = CanvasLayerComposedDrawKey(
+        layers, i, frac, aspect > 0.0f ? aspect : 1.0f, 1.0f, 0.0f, 0.0f, nil,
+        nil);
     candCount++;
   }
-  // Nearer (lower z) first; equal depth keeps stack order (topmost = index 0).
-  qsort_b(cand, (size_t)candCount, sizeof(CanvasHitCandidate),
-          ^int(const void *a, const void *b) {
-            const CanvasHitCandidate *ca = a, *cb = b;
-            if (ca->depth < cb->depth)
-              return -1;
-            if (ca->depth > cb->depth)
-              return 1;
-            return ca->index < cb->index ? -1 : (ca->index > cb->index ? 1 : 0);
-          });
+  // Order back-to-front with the SAME key + ordering as the render (incl. the
+  // deck-facing flip for coincident layers), then walk it REVERSED below so the
+  // layer drawn on top is hit first.
+  float hitTol = 0.02f * fmaxf(aspect > 0.0f ? aspect : 1.0f, 1.0f);
+  NSInteger *hitIdx = malloc(sizeof(NSInteger) * (size_t)MAX(candCount, 1));
+  CanvasLayerDrawKey *hitKeys =
+      malloc(sizeof(CanvasLayerDrawKey) * (size_t)MAX(candCount, 1));
+  for (NSInteger c = 0; c < candCount; c++) {
+    hitIdx[c] = cand[c].index;
+    hitKeys[c] = cand[c].key;
+  }
+  NSInteger *hitOrder = malloc(sizeof(NSInteger) * (size_t)MAX(candCount, 1));
+  CanvasOrderDrawablesBackToFront(hitIdx, hitKeys, candCount, hitTol, hitOrder);
+  free(hitIdx);
+  free(hitKeys);
 
   NSString *result = nil;
   for (NSInteger c = 0; c < candCount; c++) {
-    NSInteger i = cand[c].index;
+    NSInteger i = hitOrder[candCount - 1 - c]; // front-to-back
     KKBezierPath *path = layers[i];
     BOOL isImage = path.isImage && path.imagePath.length &&
                    [path.shape isKindOfClass:[KKRectShape class]];
@@ -605,5 +590,6 @@ NSString *CanvasHitTestLayerID(NSArray<KKBezierPath *> *layers, double frac,
     break;
   }
   free(cand);
+  free(hitOrder);
   return result;
 }

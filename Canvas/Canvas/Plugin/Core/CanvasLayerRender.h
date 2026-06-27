@@ -247,6 +247,38 @@ KKRotMatrix3 CanvasComposedGroupRotation(NSArray<KKBezierPath *> *layers,
 /// agree.
 simd_float2 CanvasLayerObjectCenter(KKBezierPath *path);
 
+/// Back-to-front ordering key for a layer under its full composed transform
+/// (member + ancestor groups + perspective). `depth` is the view-space Z of the
+/// centre (higher = further back), the same metric the image pass sorts by.
+/// `facing` is the sign of the deck's normal vs the camera: > 0 front-facing,
+/// < 0 back-facing (the layer has tilted past edge-on). Used to flip the order
+/// of near-coincident layers as a tilted "deck" rotates through the horizon.
+typedef struct {
+  float depth;
+  float facing;
+} CanvasLayerDrawKey;
+
+/// The draw key for layer `i`. `tileShift` matches the render tile.
+CanvasLayerDrawKey CanvasLayerComposedDrawKey(
+    NSArray<KKBezierPath *> *layers, NSInteger i, double frac, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY,
+    NSString *_Nullable overrideLayerID, KKTimeline *_Nullable overrideTimeline);
+
+/// Orders `count` drawables back-to-front into `outOrder` (caller-allocated,
+/// `count` entries), given their stack `indices` and draw `keys`. Layers sort by
+/// real depth; any run closer than `tol` in depth is one near-coincident "deck"
+/// reordered by stack position - REVERSED when the deck is back-facing - so a
+/// stack of coincident layers flips front/back cleanly as it rotates past
+/// edge-on, instead of an unstable depth tie. Relative gaps (not absolute
+/// buckets) keep a drifting deck from straddling a boundary (no flicker). `tol`
+/// is in the same units as depth (a few % of the working dimension). The
+/// hit-test reverses `outOrder` for front-to-back. `outOrder` may alias neither
+/// `indices` nor `keys`.
+void CanvasOrderDrawablesBackToFront(const NSInteger *indices,
+                                     const CanvasLayerDrawKey *keys,
+                                     NSInteger count, float tol,
+                                     NSInteger *outOrder);
+
 /// Heckbert square->quad homography: maps the unit square
 /// (0,0),(1,0),(1,1),(0,1) onto the four given quad corners. Column-major (M *
 /// (u,v,1) -> (X,Y,W); divide by W). A planar member projected through its

@@ -7,6 +7,7 @@
 #import "CanvasFillRender.h"     // TEMP solid fill for closed paths
 #import "CanvasLayerRender.h"
 #import "CanvasLayerTimeline.h" // CanvasSetUIStateSnapshot
+#import "CanvasLayerTree.h"     // CanvasLayerPathWithAncestors
 #import "CanvasMiniViewerRenderer.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
@@ -332,6 +333,41 @@
   // texture owned by KKMotionBlur (it commits `scb` and averages the samples), so
   // sequential render passes in that one command buffer serialize correctly - no
   // separate buffers / waits (unlike the untracked FCP dest).
+  // Depth-order the drawables ONCE per render (back-to-front) so a layer tilted
+  // physically in front draws on top, instead of strict list order. The order is
+  // stable across motion-blur sub-frame samples, so it's computed here at the
+  // frame `frac` and reused for every sample - NOT rebuilt inside
+  // renderSampleOrdered (that re-evaluated every layer's transform N times and
+  // stalled the viewer during a rotation drag). Near-coincident layers flip
+  // front/back by deck facing (see CanvasOrderDrawablesBackToFront); flat keep
+  // stack order.
+  NSInteger total = (NSInteger)layers.count;
+  NSInteger *idxBuf = malloc(sizeof(NSInteger) * (size_t)MAX(total, 1));
+  CanvasLayerDrawKey *keyBuf =
+      malloc(sizeof(CanvasLayerDrawKey) * (size_t)MAX(total, 1));
+  NSInteger nDraw = 0;
+  for (NSInteger i = 0; i < total; i++) {
+    KKBezierPath *lp = layers[i];
+    if (lp.isGroup || lp.hidden)
+      continue;
+    idxBuf[nDraw] = i;
+    keyBuf[nDraw] = CanvasLayerComposedDrawKey(
+        layers, i, frac, outputWidth, outputHeight, tileShiftX, tileShiftY, nil,
+        nil);
+    nDraw++;
+  }
+  NSInteger *ordBuf = malloc(sizeof(NSInteger) * (size_t)MAX(nDraw, 1));
+  CanvasOrderDrawablesBackToFront(idxBuf, keyBuf, nDraw,
+                                  0.02f * fmaxf(outputWidth, outputHeight),
+                                  ordBuf);
+  NSMutableArray<NSNumber *> *drawOrder =
+      [NSMutableArray arrayWithCapacity:(NSUInteger)nDraw];
+  for (NSInteger k = 0; k < nDraw; k++)
+    [drawOrder addObject:@(ordBuf[k])];
+  free(idxBuf);
+  free(keyBuf);
+  free(ordBuf);
+
   void (^renderSampleOrdered)(id<MTLTexture>, id<MTLCommandBuffer>,
                               id<MTLTexture>, double) =
       ^(id<MTLTexture> sdest, id<MTLCommandBuffer> scb, id<MTLTexture> srcTex,
@@ -372,11 +408,15 @@
         BOOL canFill =
             fillPipes.stencil && fillPipes.color && fillPipes.composite;
         double ef = f < 0.0 ? 0.0 : f;
-        for (NSInteger i = (NSInteger)layers.count - 1; i >= 0; i--) {
+        for (NSNumber *idxN in drawOrder) {
+          NSInteger i = idxN.integerValue;
           KKBezierPath *p = layers[i];
-          if (p.isGroup || p.hidden)
-            continue;
-          NSArray<KKBezierPath *> *one = @[ p ];
+          // Bundle p's ancestor groups in so the per-layer encoders still
+          // compose the group transform (they skip group rows but read them for
+          // the compose); a bare @[p] drops it and a grouped layer renders
+          // untransformed while its OSC/highlight follow the group.
+          NSArray<KKBezierPath *> *one =
+              CanvasLayerPathWithAncestors(p, layers);
           if (p.isImage) {
             id<MTLRenderCommandEncoder> e = sEnc(imagePS, MTLLoadActionLoad);
             CanvasEncodeImageLayers(one, e, device, texCache, outputWidth,

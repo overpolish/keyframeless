@@ -14,6 +14,7 @@
 #import "CanvasFillRender.h"      // TEMP solid fill for closed paths
 #import "CanvasLayerRender.h"
 #import "CanvasLayerTimeline.h"
+#import "CanvasLayerTree.h" // CanvasLayerPathWithAncestors
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <Metal/Metal.h>
 
@@ -158,11 +159,39 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
         [e setRenderPipelineState:ps];
         return e;
       };
-  for (NSInteger i = (NSInteger)mlayers.count - 1; i >= 0; i--) {
-    KKBezierPath *p = mlayers[i];
-    if (p.isGroup || p.hidden)
+  // Order back-to-front (same as the main render's per-layer composite): real 3D
+  // depth for separated layers, deck-facing flip for near-coincident ones.
+  NSInteger miniTotal = (NSInteger)mlayers.count;
+  NSInteger *miniIdx = malloc(sizeof(NSInteger) * (size_t)MAX(miniTotal, 1));
+  CanvasLayerDrawKey *miniKeys =
+      malloc(sizeof(CanvasLayerDrawKey) * (size_t)MAX(miniTotal, 1));
+  NSInteger miniN = 0;
+  for (NSInteger i = 0; i < miniTotal; i++) {
+    KKBezierPath *lp = mlayers[i];
+    if (lp.isGroup || lp.hidden)
       continue;
-    NSArray<KKBezierPath *> *one = @[ p ];
+    miniIdx[miniN] = i;
+    miniKeys[miniN] = CanvasLayerComposedDrawKey(
+        mlayers, i, self.editFraction, w, h, 0.0f, 0.0f, self.selectedLayerID,
+        self.timeline);
+    miniN++;
+  }
+  NSInteger *miniOrdBuf = malloc(sizeof(NSInteger) * (size_t)MAX(miniN, 1));
+  CanvasOrderDrawablesBackToFront(miniIdx, miniKeys, miniN,
+                                  0.02f * fmaxf(w, h), miniOrdBuf);
+  NSMutableArray<NSNumber *> *miniOrder =
+      [NSMutableArray arrayWithCapacity:(NSUInteger)miniN];
+  for (NSInteger k = 0; k < miniN; k++)
+    [miniOrder addObject:@(miniOrdBuf[k])];
+  free(miniIdx);
+  free(miniKeys);
+  free(miniOrdBuf);
+  for (NSNumber *idxN in miniOrder) {
+    NSInteger i = idxN.integerValue;
+    KKBezierPath *p = mlayers[i];
+    // Bundle p's ancestor groups so the per-layer encoders compose the group
+    // transform (they skip group rows but read them); a bare @[p] drops it.
+    NSArray<KKBezierPath *> *one = CanvasLayerPathWithAncestors(p, mlayers);
     if (p.isImage && _imagePipeline) {
       id<MTLRenderCommandEncoder> ienc = miniLoadEnc(_imagePipeline);
       CanvasEncodeImageLayers(one, ienc, cb.device, self.imageTextureCache, w, h,

@@ -329,6 +329,109 @@ simd_float2 CanvasLayerObjectCenter(KKBezierPath *path) {
   return (lo + hi) * 0.5f;
 }
 
+CanvasLayerDrawKey CanvasLayerComposedDrawKey(
+    NSArray<KKBezierPath *> *layers, NSInteger i, double frac, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY,
+    NSString *overrideLayerID, KKTimeline *overrideTimeline) {
+  CanvasLayerDrawKey key = {0.0f, 1.0f};
+  if (i < 0 || i >= (NSInteger)layers.count)
+    return key;
+  KKBezierPath *path = layers[i];
+  CanvasLayerTransform t;
+  if (frac < 0.0)
+    t = CanvasLayerTransformIdentity();
+  else if (overrideTimeline && overrideLayerID.length &&
+           [path.layerID isEqualToString:overrideLayerID])
+    t = CanvasLayerTransformFromTimeline(overrideTimeline, frac);
+  else
+    t = CanvasLayerTransformAtFraction(path, frac);
+  simd_float2 center = CanvasLayerObjectCenter(path);
+  CanvasGroupXform groups[kCanvasGroupXformCap];
+  NSInteger ng = CanvasBuildGroupXforms(layers, (NSUInteger)i, frac,
+                                        overrideLayerID, overrideTimeline,
+                                        groups, kCanvasGroupXformCap);
+  simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
+  matrix_float4x4 m =
+      CanvasComposedModelMatrix(t, center, groups, ng, scale, tileShift);
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+  simd_float2 cPx = (center - half) * scale;
+  // Depth = view-space z of the centre (camD passes it through), comparable
+  // across layers - same metric the image pass sorts by.
+  float z0 = simd_mul(m, simd_make_float4(cPx.x, cPx.y, 0.0f, 1.0f)).z;
+  // Facing = how depth changes when the centre is pushed +1 along the layer's
+  // own normal. Front-facing decks push further BACK (z increases); once tilted
+  // past edge-on the normal points away, so +normal pulls FORWARD (z drops) -
+  // the sign is exactly cos(tilt). Lets near-coincident layers flip front/back
+  // at the horizon without depending on their hair's-width depth gap.
+  float z1 = simd_mul(m, simd_make_float4(cPx.x, cPx.y, 1.0f, 1.0f)).z;
+  key.depth = z0;
+  key.facing = z1 - z0;
+  return key;
+}
+
+void CanvasOrderDrawablesBackToFront(const NSInteger *indices,
+                                    const CanvasLayerDrawKey *keys,
+                                    NSInteger count, float tol,
+                                    NSInteger *outOrder) {
+  if (count <= 0)
+    return;
+  float t = tol > 1e-4f ? tol : 1e-4f;
+  // `outOrder` works as POSITIONS (0..count-1 into indices/keys) until the final
+  // pass maps them back to layer indices.
+  for (NSInteger k = 0; k < count; k++)
+    outOrder[k] = k;
+  // Base order: real depth, back (higher z) first; stable tie-break by stack
+  // index so a deck's members start in list order before the facing reorder.
+  qsort_b(outOrder, (size_t)count, sizeof(NSInteger),
+          ^int(const void *a, const void *b) {
+            NSInteger pa = *(const NSInteger *)a, pb = *(const NSInteger *)b;
+            if (keys[pa].depth > keys[pb].depth)
+              return -1;
+            if (keys[pa].depth < keys[pb].depth)
+              return 1;
+            NSInteger ia = indices[pa], ib = indices[pb];
+            return ia < ib ? -1 : (ia > ib ? 1 : 0);
+          });
+  // Walk the depth-sorted list; any run of consecutive layers closer than `tol`
+  // to their neighbour is one near-coincident "deck". Relative gaps (not absolute
+  // buckets) so a deck drifting in depth never straddles a boundary -> no
+  // flicker. Reorder each deck by stack position, REVERSED when it's back-facing
+  // (tilted past edge-on) - the clean two-sided front/back flip at the horizon.
+  NSInteger s = 0;
+  while (s < count) {
+    NSInteger e = s + 1;
+    while (e < count &&
+           fabsf(keys[outOrder[e]].depth - keys[outOrder[e - 1]].depth) < t)
+      e++;
+    if (e - s > 1) {
+      // Each layer ordered by ITS OWN facing, as a stable total order: the
+      // back-facing block first (drawn behind), then the front-facing block;
+      // within each, facing-flipped stack. A deck of all-one-facing (the normal
+      // rotation case) is unchanged; a MIXED-facing deck - which only happens
+      // transiently when a tilted deck goes coplanar with other flat layers at
+      // ~180 - can't flicker, because the order no longer depends on which
+      // member happened to sort first.
+      qsort_b(outOrder + s, (size_t)(e - s), sizeof(NSInteger),
+              ^int(const void *a, const void *b) {
+                NSInteger pa = *(const NSInteger *)a, pb = *(const NSInteger *)b;
+                BOOL backA = keys[pa].facing < 0.0f;
+                BOOL backB = keys[pb].facing < 0.0f;
+                if (backA != backB)
+                  return backA ? -1 : 1; // back-facing block drawn first
+                NSInteger ia = indices[pa], ib = indices[pb];
+                if (ia == ib)
+                  return 0;
+                BOOL aFirst = backA ? (ia < ib) : (ia > ib);
+                return aFirst ? -1 : 1;
+              });
+    }
+    s = e;
+  }
+  for (NSInteger k = 0; k < count; k++)
+    outOrder[k] = indices[outOrder[k]];
+}
+
 // Encode ONE vector layer's stroke (skipping image / group / hidden /
 // stroke-off layers via early return). Pulled out of the per-layer loop so
 // CanvasEncodeVectorLayers stays a thin walk; the context bundles the shared

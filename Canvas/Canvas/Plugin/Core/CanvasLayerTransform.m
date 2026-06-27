@@ -444,11 +444,22 @@ matrix_float4x4 CanvasComposedModelMatrix(CanvasLayerTransform memberT,
     simd_float2 gRestPx =
         simd_make_float2(groups[k].restX - 0.5f, -(groups[k].restY - 0.5f)) *
         dims;
-    model = simd_mul(
-        CanvasLayerModelMatrix(groups[k].t, gcPx, gPosPx - gRestPx, gAncPx),
-        model);
-    pcPx = gcPx + (gPosPx - gRestPx) +
-           gAncPx; // outermost group wins (perspective centres on the pivot)
+    matrix_float4x4 gm =
+        CanvasLayerModelMatrix(groups[k].t, gcPx, gPosPx - gRestPx, gAncPx);
+    model = simd_mul(gm, model);
+    // The perspective centres on the OUTERMOST element that actually TILTS: a
+    // group's 3D tilt foreshortens its members about the group's pivot. A group
+    // with NO tilt (including an identity group) must stay a no-op for the
+    // member's own perspective, so track the member's centre THROUGH the group's
+    // 2D transform instead of snapping the pivot onto the group - otherwise an
+    // untilted group re-shears a self-tilted member about the clip centre.
+    if (groups[k].t.rotX != 0.0f || groups[k].t.rotY != 0.0f) {
+      pcPx = gcPx + (gPosPx - gRestPx) + gAncPx;
+    } else {
+      simd_float4 pc4 =
+          simd_mul(gm, simd_make_float4(pcPx.x, pcPx.y, 0.0f, 1.0f));
+      pcPx = simd_make_float2(pc4.x, pc4.y);
+    }
     camScale *= sqrtf(fmaxf(0.0f, groups[k].t.scaleX * groups[k].t.scaleY));
   }
   matrix_float4x4 P =

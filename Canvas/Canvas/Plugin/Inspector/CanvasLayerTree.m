@@ -82,3 +82,26 @@ CanvasLayerAncestorIndicesForParentID(NSString *parentGroupID,
   }
   return result;
 }
+
+NSArray<KKBezierPath *> *
+CanvasLayerPathWithAncestors(KKBezierPath *path,
+                             NSArray<KKBezierPath *> *stack) {
+  if (!path)
+    return @[];
+  if (!path.parentGroupID.length)
+    return @[ path ];
+  NSIndexSet *anc =
+      CanvasLayerAncestorIndicesForParentID(path.parentGroupID, stack);
+  if (anc.count == 0)
+    return @[ path ];
+  NSMutableArray<KKBezierPath *> *out =
+      [NSMutableArray arrayWithCapacity:anc.count + 1];
+  [anc enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
+    [out addObject:stack[i]];
+  }];
+  // Drawable LAST so the encoders' reverse walk renders it after skipping the
+  // (group) ancestors; the index-based group resolver finds the groups by
+  // searching the bundle, so relative order otherwise doesn't matter.
+  [out addObject:path];
+  return out;
+}
