@@ -276,6 +276,47 @@ CanvasPathByTranslatingPosition(KKBezierPath *path, simd_float2 objDelta,
   return out;
 }
 
+// Map a canvas-object drag DELTA into a path's GEOMETRY-space delta. Only the
+// ancestor-GROUP transform is inverted: the path's own rotation/scale pivots on
+// the geometry-bbox centre, which moves WITH the drag, so it contributes
+// identity to the delta. The group projection includes perspective (it's a
+// PROJECTIVE map), so the inverse must be evaluated AT THE PATH'S canvas
+// position - an equal canvas displacement maps to a different local delta
+// depending on where it's taken. Returns objDelta unchanged for an ungrouped
+// path (the group homography is identity).
+static simd_float2
+CanvasGroupInverseDeltaAtPath(NSArray<KKBezierPath *> *layers,
+                              KKBezierPath *path, double frac, float aspect,
+                              simd_float2 objDelta) {
+  simd_float2 unit[4] = {simd_make_float2(0, 0), simd_make_float2(1, 0),
+                         simd_make_float2(1, 1), simd_make_float2(0, 1)};
+  CGPoint quad[4];
+  BOOL grouped = NO;
+  for (int i = 0; i < 4; i++) {
+    float rx = unit[i].x, ry = unit[i].y;
+    CanvasComposedGroupPointObj(layers, path, frac, aspect, unit[i].x,
+                                unit[i].y, &rx, &ry);
+    quad[i] = CGPointMake(rx, ry);
+    if (rx != unit[i].x || ry != unit[i].y)
+      grouped = YES;
+  }
+  if (!grouped)
+    return objDelta;
+  // The path's CURRENT canvas position (full transform: member + group), so the
+  // projective group inverse is taken right where the path sits.
+  simd_float2 center = CanvasLayerObjectCenter(path);
+  CanvasProjCtx ctx = CanvasProjCtxMake(layers, path, frac, aspect);
+  simd_float2 canvasC = CanvasProjectWithCtx(&ctx, center.x, center.y);
+  simd_float3x3 Hi = simd_inverse(
+      CanvasSquareToQuadHomography(quad[0], quad[1], quad[2], quad[3]));
+  simd_float3 a = simd_mul(Hi, simd_make_float3(canvasC.x, canvasC.y, 1.0f));
+  simd_float3 b = simd_mul(Hi, simd_make_float3(canvasC.x + objDelta.x,
+                                                canvasC.y + objDelta.y, 1.0f));
+  if (fabsf(a.z) < 1e-9f || fabsf(b.z) < 1e-9f)
+    return objDelta;
+  return simd_make_float2(b.x / b.z - a.x / a.z, b.y / b.z - a.y / a.z);
+}
+
 void CanvasTranslateSelection(NSMutableArray<KKBezierPath *> *paths,
                               NSArray<NSString *> *selectedLayerIDs,
                               simd_float2 objDelta, double frac, float aspect,
@@ -287,24 +328,23 @@ void CanvasTranslateSelection(NSMutableArray<KKBezierPath *> *paths,
     KKBezierPath *p = paths[i];
     if (!p.layerID.length || ![sel containsObject:p.layerID])
       continue;
+    // Map the canvas delta into the layer's own edit space through the GROUP
+    // transform's inverse at the layer's position (identity when ungrouped).
+    // Both an image's Position lane and a path's geometry are applied AFTER the
+    // member's own rotation but BEFORE the group, so both need the SAME group
+    // inverse - and only the group (the member's own rotation pivots on the
+    // moving content, contributing identity). See
+    // CanvasGroupInverseDeltaAtPath.
+    simd_float2 ld =
+        CanvasGroupInverseDeltaAtPath(paths, p, frac, aspect, objDelta);
     if (p.isImage || p.isGroup) {
-      paths[i] = CanvasPathByTranslatingPosition(p, objDelta, frac, templates);
+      paths[i] = CanvasPathByTranslatingPosition(p, ld, frac, templates);
     } else {
       // Gated like the point OSC: a path moves only when constant or parked on
       // a Points keypose - never between keyposes (geometry isn't editable
       // there).
       if (!CanvasPathGeometryEditableAtFraction(p, frac))
         continue;
-      // Object delta -> the path's LOCAL space (identity transform ->
-      // unchanged).
-      simd_float2 l0 =
-          CanvasUnprojectLayerPointObj(paths, p, frac, aspect, 0.0f, 0.0f);
-      simd_float2 l1 = CanvasUnprojectLayerPointObj(paths, p, frac, aspect,
-                                                    objDelta.x, objDelta.y);
-      simd_float2 ld = l1 - l0;
-      // Translate the shape SHOWN at `frac` and write it back to the ACTIVE
-      // keypose only (constant path -> the base). Editing the current point,
-      // not every keypose - same persistence as dragging a single anchor.
       KKBezierPath *working = CanvasPathMorphedAtFraction(p, frac);
       KKBezierPath *moved = CanvasGeometryTranslated(working, ld);
       paths[i] = CanvasPathByWritingWorkingGeometry(p, frac, moved);
