@@ -26,15 +26,16 @@
 }
 
 // Transform handles (Position / motion path / Scale box / Anchor square) show
-// only under the cursor tool AND for a lone image / group - a drawing tool owns
-// the canvas, and a lone path / multi / empty selection shows points or nothing
-// instead (matching the viewer). Per-element visibility is still governed on
-// top by the OSC visibility system.
+// under the cursor tool for ANY lone selection - image, group, OR vector path -
+// matching the viewer's _showsTransformGizmo. A drawing tool owns the canvas,
+// and a multi / empty selection shows nothing. A path defaults to its points
+// shown + the gizmo hidden, but the gizmo must be ALLOWED so
+// enabling/Opt-peeking it on a path reveals it. Per-element visibility is still
+// governed by the OSC system.
 - (BOOL)_transformHandlesActive {
   if ((self.toolbarTool ?: CanvasToolbarToolCursor) != CanvasToolbarToolCursor)
     return NO;
-  KKBezierPath *lone = [self _loneSelectedLayer];
-  return lone && (lone.isImage || lone.isGroup);
+  return [self _loneSelectedLayer] != nil;
 }
 
 // Path point editing is live when the cursor tool is active and the Points

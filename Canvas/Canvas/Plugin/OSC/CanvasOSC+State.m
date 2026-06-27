@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "CanvasOSC_Private.h"
 #import "CanvasLayerTimeline.h"
+#import "CanvasOSC_Private.h"
 #import "Constants.h"
 #import <FxPlug/FxPlugSDK.h>
 
@@ -12,8 +12,8 @@
 
 // The current layer stack, decoded from the inspector-published blob snapshot
 // (the OSC can't read kParamLayerData directly). Cached by the blob string so a
-// hover (which hit-tests every mouse-move) doesn't re-decode the blob each tick;
-// re-decodes only when the blob actually changes. Read-only callers - the
+// hover (which hit-tests every mouse-move) doesn't re-decode the blob each
+// tick; re-decodes only when the blob actually changes. Read-only callers - the
 // persist path decodes its own fresh copy before mutating.
 - (NSArray<KKBezierPath *> *)_snapshotPaths {
   NSString *b64 = CanvasLayerBlobSnapshot();
@@ -53,10 +53,11 @@
 // a fresh single select).
 - (NSArray<NSString *> *)_selectedLayerIDs {
   id v = [self _uiStateDict][@"selectedLayerIDs"];
-  // A present array is authoritative - including an EMPTY one (a real deselect).
-  // Only fall back to the resolved single when the key is absent (old projects /
-  // a selection that only persisted selectedLayerID) - else an explicit deselect
-  // would resolve back to the topmost layer and keep drawing its point OSC.
+  // A present array is authoritative - including an EMPTY one (a real
+  // deselect). Only fall back to the resolved single when the key is absent
+  // (old projects / a selection that only persisted selectedLayerID) - else an
+  // explicit deselect would resolve back to the topmost layer and keep drawing
+  // its point OSC.
   if ([v isKindOfClass:[NSArray class]])
     return v;
   NSString *single = [self _resolvedSelectedLayerID];
@@ -94,17 +95,20 @@
   return nil;
 }
 
-// Show the transform gizmo (Position/Scale/Rotation/Anchor) ONLY for a lone
-// image or group - they move via their transform and have no editable points. A
-// lone vector path shows its point OSC + path-ops instead; 0 or 2+ selected show
-// no gizmo. (The OSC-visibility system still gates each control on top of this.)
+// Enable the transform gizmo (Position/Scale/Rotation/Anchor) block for ANY
+// lone selected layer - image, group, OR vector path. Each control still gates
+// itself on the OSC-visibility system, so this is just the outer "exactly one
+// selected" gate. A vector path defaults to its point OSC shown + the gizmo
+// hidden, but the gizmo must be ALLOWED to draw so enabling
+// Scale/Rotation/Position on a path (or Opt-peeking them) actually reveals it.
+// 0 or 2+ selected: no gizmo.
 - (BOOL)_showsTransformGizmo {
-  KKBezierPath *lone = [self _loneSelectedLayer];
-  return lone && (lone.isImage || lone.isGroup);
+  return [self _loneSelectedLayer] != nil;
 }
 
-// The current kParamUIState as a dictionary, parsed from the inspector-published
-// snapshot (the OSC can't read the custom param itself). Empty dict when absent.
+// The current kParamUIState as a dictionary, parsed from the
+// inspector-published snapshot (the OSC can't read the custom param itself).
+// Empty dict when absent.
 - (NSDictionary *)_uiStateDict {
   NSString *json = CanvasUIStateSnapshot();
   NSDictionary *st =
@@ -146,8 +150,8 @@
 // Master-on opt-click over a handle toggles that element's visibility. The kit
 // base rebuilds kParamUIState from `st.lastUIState` and writes the GLOBAL
 // "oscElements" key - but Canvas keeps visibility PER LAYER
-// ("oscElementsByLayer") and overwrites lastUIState with a partial 2-key dict on
-// every layer switch (canvasApplyOSCForLayer), so the kit write (a) doesn't
+// ("oscElementsByLayer") and overwrites lastUIState with a partial 2-key dict
+// on every layer switch (canvasApplyOSCForLayer), so the kit write (a) doesn't
 // persist for Canvas's per-layer read and (b) DROPS selectedLayerID/activeTab,
 // resetting selection to topmost + the tab to Basic. Override to flip the
 // SELECTED layer's set and write the FULL state, merged into the snapshot base
@@ -215,9 +219,9 @@
   NSString *newB64 = [blob base64EncodedStringWithOptions:0];
   KKWriteCustomParamString(setAPI, newB64, kParamLayerData);
   // Keep both snapshots in step so the control's next draw + the next drag tick
-  // read the new value before the param round-trip republishes them. The process
-  // timeline stays in the SHIFTED space the control reads (tl); the blob holds
-  // the un-shifted stored values.
+  // read the new value before the param round-trip republishes them. The
+  // process timeline stays in the SHIFTED space the control reads (tl); the
+  // blob holds the un-shifted stored values.
   KKSetProcessTimelineSnapshot(tl);
   CanvasSetLayerBlobSnapshot(newB64);
 }
