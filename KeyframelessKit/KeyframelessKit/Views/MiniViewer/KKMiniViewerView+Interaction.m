@@ -410,6 +410,15 @@
   NSWindow *w = self.window;
   if (!w)
     return NO;
+  // The magnify/scroll monitors are app-wide LOCAL monitors, and the inspector
+  // ViewBridge process is shared across plugin instances - so a pinch fires
+  // every mini-view's monitor in this process, including stale ones kept alive
+  // after their popover closed and other instances' hidden minis. A hidden
+  // window still reports a frame at its old screen location, so its bounds can
+  // contain the cursor and it would claim (and swallow) the gesture before the
+  // visible mini sees it. Only the on-screen mini may handle the event.
+  if (!w.isVisible)
+    return NO;
   NSPoint winPt = [w convertPointFromScreen:NSEvent.mouseLocation];
   NSPoint p = [self convertPoint:winPt fromView:nil];
   if (!NSPointInRect(p, self.bounds))
