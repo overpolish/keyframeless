@@ -24,6 +24,12 @@
 /// process.)
 @property(nonatomic, strong, nonnull)
     NSMutableDictionary<NSString *, id<MTLTexture>> *imageTextureCache;
+/// Per-instance tracked scratch texture the non-blur render composites the whole
+/// layer stack into (one command buffer, intra-buffer hazard tracking serialises
+/// the per-layer passes), then blits to FCP's untracked dest - so the per-layer
+/// ordering needs NO per-draw waitUntilCompleted. Rebuilt on tile-size / format
+/// change. (Instance-scoped, not a static - separate XPC process per instance.)
+@property(nonatomic, strong, nullable) id<MTLTexture> renderIntermediateTex;
 /// Returns a copy of `timeline` with every lane's lastKnownClipDuration set to
 /// the current effect duration (seconds). Must be called inside an action
 /// scope (FxTimingAPI resolves there).

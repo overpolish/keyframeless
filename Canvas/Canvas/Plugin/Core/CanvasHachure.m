@@ -313,6 +313,32 @@ static NSUInteger CanvasHachureQuad(KKVertex2D *v, NSUInteger n, NSUInteger cap,
   return n;
 }
 
+// Segments per Dots-style disc (the dot pattern draws round dots, not square
+// quads).
+static const int kCanvasDotSegments = 14;
+
+// Emit a filled disc (triangle-list, `kCanvasDotSegments` wedges) of `radius`
+// centred at `c` into `v` at `n`, guarded by `cap`. Object-space texcoords so a
+// gradient-mode dot fill still samples the gradient per pixel.
+static NSUInteger CanvasHachureDisc(KKVertex2D *v, NSUInteger n, NSUInteger cap,
+                                    simd_float2 c, float radius) {
+  if (n + (NSUInteger)kCanvasDotSegments * 3 > cap)
+    return n;
+  for (int k = 0; k < kCanvasDotSegments; k++) {
+    float a0 = (float)k / kCanvasDotSegments * 2.0f * (float)M_PI;
+    float a1 = (float)(k + 1) / kCanvasDotSegments * 2.0f * (float)M_PI;
+    simd_float2 tri[3] = {
+        c, c + simd_make_float2(cosf(a0), sinf(a0)) * radius,
+        c + simd_make_float2(cosf(a1), sinf(a1)) * radius};
+    for (int j = 0; j < 3; j++) {
+      v[n].position = tri[j];
+      v[n].textureCoordinate = tri[j];
+      n++;
+    }
+  }
+  return n;
+}
+
 NSUInteger CanvasHachureTriangles(const CanvasHachureLine *lines,
                                   NSUInteger lineCount, uint8_t style, float gap,
                                   float weight, KKVertex2D **outVerts) {
@@ -322,7 +348,7 @@ NSUInteger CanvasHachureTriangles(const CanvasHachureLine *lines,
     float step = fmaxf(gap, 1.0f);
     for (NSUInteger i = 0; i < lineCount; i++) {
       float len = simd_length(lines[i].b - lines[i].a);
-      cap += ((NSUInteger)(len / step) + 2) * 6;
+      cap += ((NSUInteger)(len / step) + 2) * (NSUInteger)(kCanvasDotSegments * 3);
     }
   } else {
     cap = lineCount * 6;
@@ -342,12 +368,9 @@ NSUInteger CanvasHachureTriangles(const CanvasHachureLine *lines,
       continue;
     simd_float2 dir = d / len;
     if (style == 4) {
-      simd_float2 ex = simd_make_float2(dotHw, 0.0f);
-      simd_float2 ey = simd_make_float2(0.0f, dotHw);
       for (float s = 0.0f; s <= len; s += gap) {
         simd_float2 c = a + dir * s;
-        n = CanvasHachureQuad(v, n, cap, c - ex - ey, c + ex - ey, c - ex + ey,
-                              c + ex + ey);
+        n = CanvasHachureDisc(v, n, cap, c, dotHw);
       }
     } else {
       simd_float2 perp = simd_make_float2(-dir.y, dir.x) * hw;

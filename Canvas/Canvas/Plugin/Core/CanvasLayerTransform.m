@@ -17,9 +17,30 @@ KKTimeline *CanvasLayerEffectiveTimeline(KKBezierPath *path,
   if (overrideTimeline && overrideLayerID.length &&
       [path.layerID isEqualToString:overrideLayerID])
     return overrideTimeline;
-  return path.animationJSON.length
-             ? [KKTimeline timelineFromJSON:path.animationJSON]
-             : nil;
+  NSString *json = path.animationJSON;
+  if (!json.length)
+    return nil;
+  // Memoize the parse: every lane evaluation (stroke width/colour/draw-on, fill
+  // style/colour, the per-layer fill gate, ...) calls this, so one render would
+  // otherwise deserialize a layer's animationJSON dozens of times - and motion
+  // blur multiplies that by the sample count (~1000 parses/frame). The result is
+  // read-only, so a content-addressed cache (keyed by the JSON text) is safe and
+  // reused across calls AND frames. Per-process (separate XPC process per
+  // instance); content-addressed so sharing across instances in one process is
+  // harmless. NSCache is thread-safe for FCP's render threads.
+  static NSCache<NSString *, KKTimeline *> *sCache;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    sCache = [[NSCache alloc] init];
+    sCache.countLimit = 512;
+  });
+  KKTimeline *cached = [sCache objectForKey:json];
+  if (cached)
+    return cached;
+  KKTimeline *parsed = [KKTimeline timelineFromJSON:json];
+  if (parsed)
+    [sCache setObject:parsed forKey:json];
+  return parsed;
 }
 
 static matrix_float4x4 CanvasTranslate4(float x, float y) {

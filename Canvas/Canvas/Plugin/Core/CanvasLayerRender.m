@@ -18,6 +18,35 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h>
+
+// Cached tessellated stroke geometry for one layer: the vertex strip (+ the dash
+// arc-length buffer + endpoint markers), all on the GPU. Keyed by the layer's
+// tessellation INPUTS (geometry bytes + widths + cap/join + dash/draw-on +
+// gradient direction), which are invariant to the layer's transform / opacity /
+// solid colour. So a layer that is static OR merely moving/scaling/rotating/
+// fading tessellates ONCE and reuses the buffers across every motion-blur sample
+// and frame - only re-tessellating when the geometry itself changes (points
+// morph, draw-on reveal). Per-process cache (separate XPC process per instance);
+// content-addressed, so sharing across instances in one process is harmless.
+@interface CanvasStrokeTess : NSObject
+@property(nonatomic, strong) id<MTLBuffer> vbuf;
+@property(nonatomic) NSUInteger vc;
+@property(nonatomic, strong, nullable) id<MTLBuffer> arcBuf;
+@property(nonatomic, strong, nullable) id<MTLBuffer> mbuf;
+@property(nonatomic) NSUInteger mvc;
+@end
+@implementation CanvasStrokeTess
+@end
+
+static NSCache<NSData *, CanvasStrokeTess *> *CanvasStrokeTessCache(void) {
+  static NSCache *c;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    c = [[NSCache alloc] init];
+    c.countLimit = 256;
+  });
+  return c;
+}
 #import <KeyframelessKit/KKPluginHost.h>
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KKShape.h>
@@ -417,40 +446,8 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
     cap += 128 * geom.contourCount;
   if (cap == 0)
     return;
-  KKVertex2D *verts = malloc(sizeof(KKVertex2D) * cap);
-  float *arc = dashed ? malloc(sizeof(float) * cap) : NULL;
-  NSUInteger vc;
-  // Marching-ants phase (px): elapsed seconds x speed (cycles/sec) x the
-  // pattern's pixel period, so speed = 1 advances one dash/dot per second. A
-  // static preview (frac < 0) and zero speed leave it at 0.
-  float dotsCycle = strokeStart * strokeScale + dotGap;
-  float dashCycle = fmaxf(dashLen + dashGap, 1.0f);
-  float dotPhase =
-      (frac < 0.0) ? 0.0f : (float)(elapsedSec * ss.marchSpeed) * dotsCycle;
-  float dashPhase =
-      (frac < 0.0) ? 0.0f : (float)(elapsedSec * ss.marchSpeed) * dashCycle;
-  if (dotted) {
-    vc = CanvasTessellateDottedStroke(
-        geom, strokeStart * strokeScale, strokeEnd * strokeScale, imageWidth,
-        imageHeight, dotGap, dotPhase, dor.lineStart, dor.lineEnd, dor.offset,
-        verts, cap);
-  } else {
-    // Solid + dashed share this strip (dashed masks the pattern in the
-    // fragment). Draw-on extracts the visible arc window [Start, End] rotated
-    // by Offset for an open OR closed contour, pulling the stroke back behind
-    // any endpoint markers. With the defaults (0 / 100 / 0) it emits the whole
-    // stroke unchanged.
-    vc = CanvasTessellateStrokeDrawOn(
-        geom, strokeStart * strokeScale, strokeEnd * strokeScale, imageWidth,
-        imageHeight, lineCap, lineJoin, dor.lineStart, dor.lineEnd, dor.offset,
-        dor.startPullback, dor.endPullback, verts, cap, arc);
-  }
-  if (vc < 4) {
-    free(verts);
-    free(arc);
-    return;
-  }
-
+  // Per-call transform + opacity + colour (cheap; NOT part of the cached
+  // tessellation, which is invariant to them).
   CanvasLayerTransform t;
   if (frac < 0.0)
     t = CanvasLayerTransformIdentity();
@@ -459,83 +456,159 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
     t = CanvasLayerTransformFromTimeline(overrideTimeline, frac);
   else
     t = CanvasLayerTransformAtFraction(path, frac);
-
   CanvasGroupXform groups[kCanvasGroupXformCap];
   NSInteger ng =
       CanvasBuildGroupXforms(layers, (NSUInteger)i, frac, overrideLayerID,
                              overrideTimeline, groups, kCanvasGroupXformCap);
   matrix_float4x4 m = CanvasComposedModelMatrix(
       t, CanvasLayerObjectCenter(geom), groups, ng, scale, tileShift);
-
   float opacity = t.opacity * path.opacity;
   for (NSInteger k = 0; k < ng; k++)
     opacity *= groups[k].t.opacity;
-  // Stroke colour from the shared colour lanes (Solid / Gradient, no
-  // Dynamic), falling back to the flat strokeR,G,B.
-  KKColorLanesValue cv = CanvasStrokeColorAtFraction(
-      path, evalFrac, overrideLayerID, overrideTimeline);
+  KKColorLanesValue cv = CanvasStrokeColorAtFraction(path, evalFrac,
+                                                     overrideLayerID,
+                                                     overrideTimeline);
   BOOL useGradient = (cv.mode == KKColorModeGradient) && gradientPS != nil;
-
-  // Tessellate the endpoint markers (from the untrimmed `geom`): they share the
-  // stroke's colour + gradient, so they're part of the gradient bbox and baked
-  // with the same fill. Open-marker bar thickness = the local stroke width.
-  KKVertex2D *mverts = NULL;
-  NSUInteger mvc = 0;
-  // Endpoint markers only make sense on a single open contour - a multi-contour
-  // path (e.g. a branchy centerline) has no single pair of ends, so skip them.
-  if ((dor.startMarker != 0 || dor.endMarker != 0) && geom.contourCount == 1) {
-    NSUInteger mcap = CanvasMarkerVertexCapacity();
-    mverts = malloc(sizeof(KKVertex2D) * mcap);
-    // An Arrow rides its draw-on tip (markerStartTrim / markerEndTrim); other
-    // markers stay at the true end (trim 0). Size grows via sMarkerPx /
-    // eMarkerPx and the draw-on stroke pulls back under the marker.
-    mvc = CanvasTessellateMarkers(geom, imageWidth, imageHeight,
-                                  dor.startMarker, dor.endMarker, dor.sMarkerPx,
-                                  dor.eMarkerPx, strokeStart * strokeScale,
-                                  strokeEnd * strokeScale, dor.markerStartTrim,
-                                  dor.markerEndTrim, mverts, mcap);
-  }
-
-  // One continuous gradient over the stroke + markers: compute the fill from
-  // both, then bake the stroke and marker verts with it.
-  if (useGradient) {
-    CanvasGradientFill gfill =
-        CanvasComputeGradientFill(geom, imageWidth, imageHeight, strokeStart,
-                                  strokeEnd, strokeScale, cv, mverts, mvc);
-    CanvasApplyGradientFill(verts, vc, gfill);
-    if (mvc >= 3)
-      CanvasApplyGradientFill(mverts, mvc, gfill);
-  }
-  // sRGB -> linear (the render's working space), matching the gradient
-  // fragment's pow(2.2). Pure-channel colours are unchanged; midtones darken
-  // to their correct linear value so a solid matches the editor + a gradient
-  // stop.
   simd_float3 solid = cv.solidColor;
   simd_float4 color = simd_make_float4(powf(solid.x, 2.2f), powf(solid.y, 2.2f),
                                        powf(solid.z, 2.2f), opacity);
 
+  // Marching-ants phase (px): elapsed seconds x speed (cycles/sec) x the
+  // pattern's pixel period. Dash phase is a fragment uniform (the strip is the
+  // same), so it stays OUT of the cache key; dotted phase moves the discs, so it
+  // is keyed below.
+  float dotsCycle = strokeStart * strokeScale + dotGap;
+  float dashCycle = fmaxf(dashLen + dashGap, 1.0f);
+  float dotPhase =
+      (frac < 0.0) ? 0.0f : (float)(elapsedSec * ss.marchSpeed) * dotsCycle;
+  float dashPhase =
+      (frac < 0.0) ? 0.0f : (float)(elapsedSec * ss.marchSpeed) * dashCycle;
+
+  // Cache key: the geometry bytes + every scalar that affects the tessellated
+  // verts / arc / markers. Excludes the transform, opacity, solid colour and
+  // dash phase (applied per-call as uniforms), so a moving / static / solid
+  // layer reuses the tessellation across MB samples + frames.
+  NSMutableData *keyData = [[geom dataRepresentation] mutableCopy];
+  struct {
+    float strokeStart, strokeEnd, strokeScale, imageWidth, imageHeight;
+    uint32_t lineCap, lineJoin, dotted, dashed, useGradient, contourCount;
+    float lineStart, lineEnd, offset, startPullback, endPullback;
+    uint32_t startMarker, endMarker;
+    float sMarkerPx, eMarkerPx, markerStartTrim, markerEndTrim;
+    float dotGap, dotPhase, gradAngle;
+    uint32_t gradType;
+  } key = {0};
+  key.strokeStart = strokeStart;
+  key.strokeEnd = strokeEnd;
+  key.strokeScale = strokeScale;
+  key.imageWidth = imageWidth;
+  key.imageHeight = imageHeight;
+  key.lineCap = lineCap;
+  key.lineJoin = lineJoin;
+  key.dotted = dotted ? 1 : 0;
+  key.dashed = dashed ? 1 : 0;
+  key.useGradient = useGradient ? 1 : 0;
+  key.contourCount = (uint32_t)geom.contourCount;
+  key.lineStart = dor.lineStart;
+  key.lineEnd = dor.lineEnd;
+  key.offset = dor.offset;
+  key.startPullback = dor.startPullback;
+  key.endPullback = dor.endPullback;
+  key.startMarker = dor.startMarker;
+  key.endMarker = dor.endMarker;
+  key.sMarkerPx = dor.sMarkerPx;
+  key.eMarkerPx = dor.eMarkerPx;
+  key.markerStartTrim = dor.markerStartTrim;
+  key.markerEndTrim = dor.markerEndTrim;
+  key.dotGap = dotGap;
+  key.dotPhase = dotted ? dotPhase : 0.0f;
+  key.gradAngle = useGradient ? cv.gradientAngle : 0.0f;
+  key.gradType = useGradient ? (uint32_t)cv.gradientType : 0u;
+  [keyData appendBytes:&key length:sizeof(key)];
+
+  NSCache<NSData *, CanvasStrokeTess *> *tessCache = CanvasStrokeTessCache();
+  CanvasStrokeTess *entry = [tessCache objectForKey:keyData];
+  if (!entry) {
+    // MISS: tessellate the strip (+ dash arc + markers), bake the gradient
+    // coordinates, upload to GPU buffers, then cache for reuse across samples.
+    KKVertex2D *verts = malloc(sizeof(KKVertex2D) * cap);
+    float *arc = dashed ? malloc(sizeof(float) * cap) : NULL;
+    NSUInteger vc;
+    if (dotted) {
+      vc = CanvasTessellateDottedStroke(
+          geom, strokeStart * strokeScale, strokeEnd * strokeScale, imageWidth,
+          imageHeight, dotGap, dotPhase, dor.lineStart, dor.lineEnd, dor.offset,
+          verts, cap);
+    } else {
+      // Solid + dashed share this strip (dashed masks the pattern in the
+      // fragment). Draw-on extracts the visible arc window, pulling the stroke
+      // back behind any endpoint markers.
+      vc = CanvasTessellateStrokeDrawOn(
+          geom, strokeStart * strokeScale, strokeEnd * strokeScale, imageWidth,
+          imageHeight, lineCap, lineJoin, dor.lineStart, dor.lineEnd, dor.offset,
+          dor.startPullback, dor.endPullback, verts, cap, arc);
+    }
+    if (vc < 4) {
+      free(verts);
+      free(arc);
+      return;
+    }
+    // Endpoint markers (single open contour only): share the stroke's colour +
+    // gradient, baked with the same fill.
+    KKVertex2D *mverts = NULL;
+    NSUInteger mvc = 0;
+    if ((dor.startMarker != 0 || dor.endMarker != 0) && geom.contourCount == 1) {
+      NSUInteger mcap = CanvasMarkerVertexCapacity();
+      mverts = malloc(sizeof(KKVertex2D) * mcap);
+      mvc = CanvasTessellateMarkers(
+          geom, imageWidth, imageHeight, dor.startMarker, dor.endMarker,
+          dor.sMarkerPx, dor.eMarkerPx, strokeStart * strokeScale,
+          strokeEnd * strokeScale, dor.markerStartTrim, dor.markerEndTrim, mverts,
+          mcap);
+    }
+    if (useGradient) {
+      CanvasGradientFill gfill =
+          CanvasComputeGradientFill(geom, imageWidth, imageHeight, strokeStart,
+                                    strokeEnd, strokeScale, cv, mverts, mvc);
+      CanvasApplyGradientFill(verts, vc, gfill);
+      if (mvc >= 3)
+        CanvasApplyGradientFill(mverts, mvc, gfill);
+    }
+    entry = [CanvasStrokeTess new];
+    entry.vc = vc;
+    entry.vbuf = [device newBufferWithBytes:verts
+                                     length:sizeof(KKVertex2D) * vc
+                                    options:MTLResourceStorageModeShared];
+    if (dashed)
+      entry.arcBuf =
+          [device newBufferWithBytes:arc
+                              length:sizeof(float) * vc
+                             options:MTLResourceStorageModeShared];
+    entry.mvc = mvc;
+    if (mvc >= 3)
+      entry.mbuf =
+          [device newBufferWithBytes:mverts
+                              length:sizeof(KKVertex2D) * mvc
+                             options:MTLResourceStorageModeShared];
+    free(verts);
+    free(arc);
+    free(mverts);
+    [tessCache setObject:entry forKey:keyData];
+  }
+
+  // Per-call draw using the (possibly cached) buffers. The transform matrix +
+  // colour/dash uniforms are set here, so only the GEOMETRY is reused.
   id<MTLRenderPipelineState> ps =
       dashed ? dashPS : (useGradient ? gradientPS : solidPS);
   [encoder setRenderPipelineState:ps];
   [encoder setVertexBytes:&m
                    length:sizeof(m)
                   atIndex:KKVertexInputIndex_Transform];
-  // The vertex array goes through an MTLBuffer, not setVertexBytes: a complex
-  // path (e.g. an imported SVG) tessellates well past setVertexBytes' 4 KB
-  // inline cap, which aborts. (The original Canvas render used a buffer here
-  // too; the v3 rewrite regressed it to inline bytes.)
-  id<MTLBuffer> vbuf = [device newBufferWithBytes:verts
-                                           length:sizeof(KKVertex2D) * vc
-                                          options:MTLResourceStorageModeShared];
-  [encoder setVertexBuffer:vbuf offset:0 atIndex:KKVertexInputIndex_Vertices];
+  [encoder setVertexBuffer:entry.vbuf
+                    offset:0
+                   atIndex:KKVertexInputIndex_Vertices];
   if (dashed) {
-    // Per-vertex arc length for the dash mask + the dash uniforms (cycle, on
-    // length, phase) and the colour (solid or gradient LUT).
-    id<MTLBuffer> abuf =
-        [device newBufferWithBytes:arc
-                            length:sizeof(float) * vc
-                           options:MTLResourceStorageModeShared];
-    [encoder setVertexBuffer:abuf
+    [encoder setVertexBuffer:entry.arcBuf
                       offset:0
                      atIndex:KKVertexInputIndex_StrokeArc];
     KKStrokeDashParams dp;
@@ -558,26 +631,16 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
   } else {
     [encoder setFragmentBytes:&color length:sizeof(color) atIndex:0];
   }
-  // The solid + dashed strokes are one triangle strip (the dash is masked in
-  // the fragment); a dotted stroke is a triangle LIST of independent discs.
   [encoder drawPrimitives:(dotted ? MTLPrimitiveTypeTriangle
                                   : MTLPrimitiveTypeTriangleStrip)
               vertexStart:0
-              vertexCount:vc];
-  free(verts);
-  free(arc);
+              vertexCount:entry.vc];
 
-  // Draw the markers (triangle list, on top of the stroke) with the SAME colour
-  // treatment as the stroke - the gradient LUT when the stroke is a gradient
-  // (coords baked above), else the solid colour. Never dashed. The transform
-  // matrix `m` set above is still bound on the encoder.
-  if (mvc >= 3) {
+  if (entry.mvc >= 3 && entry.mbuf) {
     [encoder setRenderPipelineState:(useGradient ? gradientPS : solidPS)];
-    id<MTLBuffer> mbuf =
-        [device newBufferWithBytes:mverts
-                            length:sizeof(KKVertex2D) * mvc
-                           options:MTLResourceStorageModeShared];
-    [encoder setVertexBuffer:mbuf offset:0 atIndex:KKVertexInputIndex_Vertices];
+    [encoder setVertexBuffer:entry.mbuf
+                      offset:0
+                     atIndex:KKVertexInputIndex_Vertices];
     if (useGradient) {
       [encoder setFragmentBytes:cv.gradientLUT
                          length:sizeof(cv.gradientLUT)
@@ -588,9 +651,8 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
     }
     [encoder drawPrimitives:MTLPrimitiveTypeTriangle
                 vertexStart:0
-                vertexCount:mvc];
+                vertexCount:entry.mvc];
   }
-  free(mverts);
 }
 
 void CanvasEncodeVectorLayers(

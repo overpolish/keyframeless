@@ -408,113 +408,65 @@
   float tileW = (float)(tileBF.right - tileBF.left);
   float tileH = (float)(tileBF.top - tileBF.bottom);
 
-  // Non-blur path: draw the layer stack PER LAYER, back-to-front, each layer's
-  // image -> fill -> stroke together, so z-order is correct ACROSS layers (a
-  // higher image/fill occludes a lower layer's stroke) and a stroke still sits
-  // over its OWN fill. Replaces the old type-batched passes (all images, then
-  // all fills, then all strokes) whose global ordering let any stroke paint over
-  // any image. The caller draws the source base first (the kit composite
-  // encoder), then this loads that dest and overlays the layers. Each sub-draw
-  // rides its OWN command buffer on one queue (they serialize in commit order
-  // against the hazard-untracked FCP dest); the image / stroke draws use load
-  // encoders set up exactly like the kit composite (viewport + viewport-size
-  // buffer) so KKTransformVertexShader matches.
-  // NOTE (increment 1): layers draw in array stack order; the cross-layer 3D
-  // depth sort the batched image pass did (for physically tilted layers) isn't
-  // applied here yet - flat 2D stacking, the common case, is identical.
-  void (^runLayersOrdered)(double) = ^(double f) {
-    if (!device || !layers.count)
-      return;
+  // Non-blur path: composite the whole per-layer-ordered stack (source +
+  // image/fill/stroke, top-of-list LAST) into a TRACKED per-instance intermediate
+  // via renderSampleOrdered - ONE command buffer, whose intra-buffer hazard
+  // tracking serialises the passes correctly - then a single blit copies that to
+  // FCP's untracked dest tile. This replaces the old per-draw waitUntilCompleted
+  // (one command buffer + CPU stall PER image/fill/stroke), which crushed
+  // playback on busy / multi-instance setups (dozens of GPU round-trips a frame).
+  BOOL (^runLayersOrdered)(double) = ^BOOL(double f) {
+    if (!device)
+      return NO;
     id<MTLTexture> destTex = [destinationImage metalTextureForDevice:device];
     if (!destTex)
-      return;
-    CanvasFillPipelines fillPipes = {0};
-    CanvasFillBuildPipelines(device, regID, pf, &fillPipes);
-    BOOL canFill =
-        fillPipes.stencil && fillPipes.color && fillPipes.composite;
+      return NO;
+    NSInteger iw = (NSInteger)tileW, ih = (NSInteger)tileH;
+    if (iw <= 0 || ih <= 0)
+      return NO;
+    // Reuse the cached intermediate when its size / format still match.
+    id<MTLTexture> interm = self.renderIntermediateTex;
+    if (!interm || (NSInteger)interm.width != iw ||
+        (NSInteger)interm.height != ih || interm.pixelFormat != pf) {
+      MTLTextureDescriptor *td = [MTLTextureDescriptor
+          texture2DDescriptorWithPixelFormat:pf
+                                       width:(NSUInteger)iw
+                                      height:(NSUInteger)ih
+                                   mipmapped:NO];
+      td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+      td.storageMode = MTLStorageModePrivate;
+      interm = [device newTextureWithDescriptor:td];
+      self.renderIntermediateTex = interm;
+    }
+    if (!interm)
+      return NO;
     id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:regID
                                                       pixelFormat:pf];
     if (!queue)
-      return;
-    double ef = f < 0.0 ? 0.0 : f;
-    MTLViewport vp = (MTLViewport){0, 0, tileW, tileH, -1, 1};
-    simd_uint2 vpSize = {(unsigned int)tileW, (unsigned int)tileH};
-    // Each draw rides its OWN command buffer on this one queue. Buffers on a
-    // single queue execute strictly in commit order, so the per-layer image /
-    // fill / stroke serialize correctly even though FCP's IOSurface dest is
-    // hazard-UNTRACKED (many render passes in ONE command buffer do NOT serialize
-    // against it - that was the wrong-z-order cause). No per-draw CPU wait: the
-    // queue orders them; `lastCB` is waited once at the end so the whole stack
-    // lands before FCP reads the dest.
-    __block id<MTLCommandBuffer> lastCB = nil;
-    // One load-pass command buffer running `body` on an encoder set up like the
-    // kit composite encoder (viewport + viewport-size buffer) so the transform
-    // shader lands identically.
-    void (^drawPass)(id<MTLRenderPipelineState>,
-                     void (^)(id<MTLRenderCommandEncoder>)) =
-        ^(id<MTLRenderPipelineState> ps,
-          void (^body)(id<MTLRenderCommandEncoder>)) {
-          id<MTLCommandBuffer> pcb = [queue commandBuffer];
-          MTLRenderPassDescriptor *rpd =
-              [MTLRenderPassDescriptor renderPassDescriptor];
-          rpd.colorAttachments[0].texture = destTex;
-          rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
-          rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-          id<MTLRenderCommandEncoder> e =
-              [pcb renderCommandEncoderWithDescriptor:rpd];
-          [e setViewport:vp];
-          [e setVertexBytes:&vpSize
-                     length:sizeof(vpSize)
-                    atIndex:KKVertexInputIndex_ViewportSize];
-          [e setRenderPipelineState:ps];
-          body(e);
-          [e endEncoding];
-          [pcb commit];
-          [pcb waitUntilCompleted]; // force serialize vs the untracked FCP dest
-          lastCB = pcb;
-        };
-    // array[0] = TOPMOST (front), array[last] = bottom (back) - the documented
-    // convention the kit image / vector passes use (CanvasLayerRender.m: "array
-    // index 0 = topmost, drawn last"). Iterate DESCENDING so the bottom layer
-    // draws first and the top-of-list layer draws last (on top).
-    for (NSInteger i = (NSInteger)layers.count - 1; i >= 0; i--) {
-      KKBezierPath *p = layers[i];
-      if (p.isGroup || p.hidden)
-        continue;
-      BOOL willFill = canFill && CanvasFillEnabledAtFraction(p, ef, nil, nil) &&
-                      (!p.isImage ||
-                       CanvasFillStyleAtFraction(p, ef, nil, nil).style != 0);
-      NSArray<KKBezierPath *> *one = @[ p ];
-      if (p.isImage && imagePS) {
-        drawPass(imagePS, ^(id<MTLRenderCommandEncoder> enc) {
-          CanvasEncodeImageLayers(one, enc, device, texCache, outputWidth,
-                                  outputHeight, tileShiftX, tileShiftY, f, nil,
-                                  nil, imagePS, imageTintPS, imageGradTintPS);
-        });
-      }
-      // A vector shape fills; an image contributes a fill only via a (non-Solid)
-      // hachure overlay (Fill Style != 0). The fill helper opens its own stencil
-      // encoder, so give it its own command buffer too (same serialization).
-      if (willFill) {
-        id<MTLCommandBuffer> fcb = [queue commandBuffer];
-        CanvasEncodeFilledLayers(one, device, texCache, fcb, destTex, &fillPipes,
-                                 outputWidth, outputHeight, tileW, tileH,
-                                 tileShiftX, tileShiftY, f, nil, nil);
-        [fcb commit];
-        [fcb waitUntilCompleted]; // force serialize vs the untracked FCP dest
-        lastCB = fcb;
-      }
-      if (!p.isImage && p.strokeEnabled && strokePS) {
-        drawPass(strokePS, ^(id<MTLRenderCommandEncoder> enc) {
-          CanvasEncodeVectorLayers(one, enc, device, outputWidth, outputHeight,
-                                   tileShiftX, tileShiftY, f, nil, nil,
-                                   strokeScale, marchElapsed, strokePS,
-                                   strokeGradientPS, strokeDashPS);
-        });
-      }
-    }
-    [lastCB waitUntilCompleted]; // whole stack lands before FCP reads the dest
+      return NO;
+    id<MTLCommandBuffer> cb = [queue commandBuffer];
+    id<MTLTexture> srcTex =
+        sourceImages.firstObject
+            ? [sourceImages.firstObject metalTextureForDevice:device]
+            : nil;
+    renderSampleOrdered(interm, cb, srcTex, f);
+    // Copy the finished composite onto the dest tile. The intermediate is tracked
+    // so the blit waits for the render passes; the dest is the lone write here.
+    id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
+    [blit copyFromTexture:interm
+                sourceSlice:0
+                sourceLevel:0
+               sourceOrigin:MTLOriginMake(0, 0, 0)
+                 sourceSize:MTLSizeMake((NSUInteger)iw, (NSUInteger)ih, 1)
+                  toTexture:destTex
+           destinationSlice:0
+           destinationLevel:0
+          destinationOrigin:MTLOriginMake(0, 0, 0)];
+    [blit endEncoding];
+    [cb commit];
+    [cb waitUntilCompleted];
     [cache returnCommandQueueToCache:queue];
+    return YES;
   };
 
   // Motion blur: accumulate the composite across sub-frame sample times (the
@@ -555,11 +507,12 @@
       return YES;
   }
 
-  // No blur (or the accumulate bailed): draw the SOURCE base (cleared target +
-  // the source frame through the tile transform), then overlay the layer stack
-  // per layer in z-order. Images move out of this base into runLayersOrdered so
-  // each layer's image / fill / stroke stay together back-to-front.
-  BOOL ok = [self
+  // No blur (or the accumulate bailed): composite the per-layer-ordered stack
+  // into the tracked intermediate and blit it to the dest (one command buffer).
+  if (runLayersOrdered(frac))
+    return YES;
+  // Degenerate fallback (no device / texture / queue): pass the source through.
+  return [self
       encodeRenderCommandsForDestinationImage:destinationImage
                                  sourceImages:sourceImages
                                      commands:^(
@@ -572,9 +525,6 @@
                                            enc, inputs[0], outputWidth,
                                            outputHeight, tileShiftX, tileShiftY);
                                      }];
-  if (ok)
-    runLayersOrdered(frac);
-  return ok;
 }
 
 @end
