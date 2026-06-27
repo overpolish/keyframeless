@@ -12,6 +12,7 @@
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
+#import <KeyframelessKit/KKPluginHost.h> // KKSetProcessTimelineSnapshot
 #import <KeyframelessKit/KKTimingStage.h>
 
 @implementation CanvasPlugin (CustomUI)
@@ -214,6 +215,13 @@
       NSData *blob = [KKBezierPath blobFromPaths:cur];
       KKWriteCustomParamString(set, [blob base64EncodedStringWithOptions:0],
                                kParamLayerData);
+      // Republish the process snapshot so the viewer OSC recomputes visibility
+      // on the drawOSC the param write forces - moving a lane into/out of
+      // Animated flips its OSC's keypose-gated visibility, but the OSC reads the
+      // snapshot (not the param), so without this it keeps the pre-toggle
+      // visibility until the next selection/edit republishes it.
+      KKTimeline *stamped = [s timelineStampedWithClipDuration:updated];
+      KKSetProcessTimelineSnapshot(stamped ?: updated);
       [act endAction:s];
     };
 
