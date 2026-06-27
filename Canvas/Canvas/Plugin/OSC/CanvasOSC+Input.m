@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "CanvasOSC_Private.h"
 #import "CanvasLayerTimeline.h" // CanvasLayerBlobSnapshot
-#import "CanvasPathMorph.h"     // CanvasTranslateSelection
-#import "Plugin_Private.h"      // [CanvasPlugin availableLanes]
+#import "CanvasOSC_Private.h"
+#import "CanvasPathMorph.h" // CanvasTranslateSelection
+#import "Plugin_Private.h"  // [CanvasPlugin availableLanes]
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
 
@@ -35,7 +35,10 @@
     return;
   }
   if (activePart >= CanvasToolbarDragHandle) {
-    [self _toolbarMouseDownTag:activePart atX:positionX y:positionY];
+    [self _toolbarMouseDownTag:activePart
+                           atX:positionX
+                             y:positionY
+                        atTime:time];
     if (forceUpdate)
       *forceUpdate = YES;
     return;
@@ -76,10 +79,11 @@
     // Master-ON + individually hidden: the ghost is revealed only for the
     // Opt-click re-show above, so a normal click ON the hidden path is inert
     // (don't edit a hidden path). Gate on `onElement` (a hit on the path's
-    // anchor/handle) - NOT "any layer under the cursor", which wrongly swallowed
-    // the marquee whenever a layer (esp. an image, whose Points are always
-    // hidden) sat under the start point. A drag NOT on an element must still
-    // start a marquee. Master-OFF is "peek and use" - a drag proceeds to edit.
+    // anchor/handle) - NOT "any layer under the cursor", which wrongly
+    // swallowed the marquee whenever a layer (esp. an image, whose Points are
+    // always hidden) sat under the start point. A drag NOT on an element must
+    // still start a marquee. Master-OFF is "peek and use" - a drag proceeds to
+    // edit.
     if (onElement && ![self kkOSCMasterOff] &&
         ![self kkOSCElementVisible:@"Points"]) {
       if (forceUpdate)
@@ -202,8 +206,8 @@
     CGPoint cur = [self _objYUpAtCanvasX:positionX y:positionY];
     simd_float2 d = simd_make_float2((float)(cur.x - self.layerMoveStartObj.x),
                                      (float)(cur.y - self.layerMoveStartObj.y));
-    // A small dead-zone so a click with sub-pixel jitter stays a click (select),
-    // not a move. Once moving, keep moving.
+    // A small dead-zone so a click with sub-pixel jitter stays a click
+    // (select), not a move. Once moving, keep moving.
     if (!self.layerMoveDidMove && simd_length(d) < 0.003f) {
       if (forceUpdate)
         *forceUpdate = YES;
@@ -214,14 +218,12 @@
     NSMutableArray<KKBezierPath *> *paths =
         b64.length
             ? [KKBezierPath
-                  pathsFromBlob:[[NSData alloc]
-                                    initWithBase64EncodedString:b64
-                                                        options:0]]
+                  pathsFromBlob:[[NSData alloc] initWithBase64EncodedString:b64
+                                                                    options:0]]
             : [NSMutableArray array];
-    CanvasTranslateSelection(paths, [self _selectedLayerIDs], d,
-                             [self fractionAtTime:time],
-                             (float)[self _canvasAspect],
-                             [CanvasPlugin availableLanes]);
+    CanvasTranslateSelection(
+        paths, [self _selectedLayerIDs], d, [self fractionAtTime:time],
+        (float)[self _canvasAspect], [CanvasPlugin availableLanes]);
     [self penSetLiveLayers:paths];
     if (forceUpdate)
       *forceUpdate = YES;

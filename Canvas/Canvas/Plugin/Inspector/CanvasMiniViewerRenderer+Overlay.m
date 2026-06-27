@@ -71,7 +71,7 @@
   NSArray<KKBezierPath *> *paths = self.layers ?: @[];
   NSArray<KKBezierPath *> *operands = nil, *results = nil;
   if (!CanvasPathOpPreview(paths, [self _miniSelectedIDs], outline, op, refW,
-                           refH, &operands, &results))
+                           refH, self.editFraction, &operands, &results))
     return;
   KKMiniViewerView *canvas = self.penDrawCanvas;
   if (!canvas)

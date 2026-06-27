@@ -245,9 +245,10 @@
 
 - (void)_miniRunBooleanOp:(KKBooleanOp)op {
   float aspect = (float)[self penCanvasAspect];
+  double frac = self.editFraction;
   [self _miniRunPathOp:^NSArray<NSString *> *(
             NSMutableArray<KKBezierPath *> *paths, NSArray<NSString *> *sel) {
-    return CanvasApplyBooleanOp(paths, sel, op, aspect);
+    return CanvasApplyBooleanOp(paths, sel, op, aspect, frac);
   }];
 }
 

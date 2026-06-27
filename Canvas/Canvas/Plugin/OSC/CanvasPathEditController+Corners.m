@@ -29,8 +29,6 @@ static const double kCornerWidgetGrabPx = 9.0; // widget hit radius (surface px)
   KKBezierPath *path = [self _workingPath];
   if (!path)
     return -1;
-  if (path.count > kCanvasMaxEditableAnchors)
-    return -1; // corner widgets aren't shown on a too-large path (perf)
   float aspect = (float)[_surface penCanvasAspect];
   NSArray<KKBezierPath *> *layers = [_surface penAllLayers];
   double frac = [_surface penEditFraction];

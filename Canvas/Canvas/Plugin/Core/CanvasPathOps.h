@@ -19,11 +19,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// changed).
 
 /// Boolean op (union / subtract / intersect / exclude) on the selected vector
-/// layers. Needs two or more selected non-image/non-group paths; they're
-/// replaced by a single result inheriting the bottom operand's style + name.
+/// layers. Needs two or more selected non-image/non-group CLOSED paths (open
+/// strokes have no area and are excluded). Each operand is baked into the
+/// TOP-most operand's space at clip fraction `frac` (so shapes combine where
+/// they appear, regardless of differing group transforms), then replaced by a
+/// single result inheriting the top operand's placement + name.
 NSArray<NSString *> *_Nullable CanvasApplyBooleanOp(
     NSMutableArray<KKBezierPath *> *paths,
-    NSArray<NSString *> *selectedLayerIDs, KKBooleanOp op, float aspect);
+    NSArray<NSString *> *selectedLayerIDs, KKBooleanOp op, float aspect,
+    double frac);
 
 /// Stroke-to-outline on every selected stroke-bearing vector layer: the source
 /// stroke is turned off and a filled outline inserted just above it. refWidth/
@@ -41,7 +45,7 @@ NSArray<NSString *> *_Nullable CanvasApplyOutlineOp(
 BOOL CanvasPathOpPreview(
     NSArray<KKBezierPath *> *paths, NSArray<NSString *> *selectedLayerIDs,
     BOOL outline, KKBooleanOp op, CGFloat refWidth, CGFloat refHeight,
-    NSArray<KKBezierPath *> *_Nullable *_Nonnull outOperands,
+    double frac, NSArray<KKBezierPath *> *_Nullable *_Nonnull outOperands,
     NSArray<KKBezierPath *> *_Nullable *_Nonnull outResults);
 
 NS_ASSUME_NONNULL_END

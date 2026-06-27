@@ -13,11 +13,6 @@
 
 static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
 
-BOOL CanvasPathIsLargeVector(KKBezierPath *path) {
-  return path && !path.isImage && !path.isGroup &&
-         path.count > kCanvasMaxEditableAnchors;
-}
-
 // Several PUBLIC methods are implemented in the +Query / +Topology / +Corners
 // categories (the intentional split), not here - so the primary @implementation
 // is deliberately "incomplete". Silence that (each category silences the

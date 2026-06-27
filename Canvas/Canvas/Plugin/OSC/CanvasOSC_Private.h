@@ -188,7 +188,10 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
              destinationImage:(FxImageTile *)destinationImage;
 // Raw KKToolbar hit result: an item tag, 0 (miss), or -1 (toolbar body).
 - (NSInteger)_toolbarHitTestAtX:(double)x y:(double)y;
-- (void)_toolbarMouseDownTag:(NSInteger)tag atX:(double)x y:(double)y;
+- (void)_toolbarMouseDownTag:(NSInteger)tag
+                         atX:(double)x
+                           y:(double)y
+                      atTime:(CMTime)time;
 - (void)_toolbarMouseDraggedAtX:(double)x y:(double)y;
 - (void)_toolbarMouseUp;
 // Control+letter tool shortcuts (^V/^X/^B/^G). Returns YES if it consumed the
@@ -209,7 +212,7 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 // / exclude). Reads the published blob, applies the op via the kit, writes the
 // new stack + selects the result - all in one undo action.
 @interface CanvasOSC (PathOps)
-- (void)_handlePathBooleanOp:(KKBooleanOp)op;
+- (void)_handlePathBooleanOp:(KKBooleanOp)op atTime:(CMTime)time;
 - (void)_handleOutlineOp;
 - (void)_handleCenterlineOp;
 // Delete the selected layer(s) from the stack (group-expanding), selecting a

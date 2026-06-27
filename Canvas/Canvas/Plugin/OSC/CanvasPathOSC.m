@@ -6,7 +6,6 @@
 #import "CanvasPathOSC.h"
 #import "CanvasCornerFillet.h"       // corner widget geometry
 #import "CanvasLayerRender.h"        // CanvasProjectLayerPointsObj
-#import "CanvasPathEditController.h" // kCanvasMaxEditableAnchors
 #import "CanvasPenController.h"      // CanvasPenSurface draw primitives
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKShape.h> // KKRectShape (image extent)
@@ -15,6 +14,12 @@
 // Coarser than the render tessellation - the OSC line only needs to read as the
 // path's shape, not be pixel-exact.
 static const NSUInteger kPathOSCSteps = 16;
+
+// Above this anchor count the guide curve drops to 2 samples per segment: a
+// dense path (e.g. a centerline trace) is already finely subdivided, so the halo
+// reads fine while avoiding ~N*16 bezier re-evaluations per redraw. Purely a
+// draw-cost knob - it gates nothing about editability.
+static const NSUInteger kPathOSCDenseAnchors = 250;
 
 // Draw EACH contour of `path` as its own projected polyline, so a compound path
 // (SVG subpaths, a boolean result with several regions) isn't joined by a stray
@@ -40,7 +45,7 @@ static void CanvasDrawProjectedContours(id<CanvasPenSurface> surface,
   // per segment is plenty. Sparse paths (few long curves) keep the full count
   // for smoothness.
   NSUInteger steps =
-      cp.count > kCanvasMaxEditableAnchors
+      cp.count > kPathOSCDenseAnchors
           ? 2
           : (NSUInteger)fmax(3.0,
                              fmin((double)kPathOSCSteps,
@@ -293,16 +298,6 @@ void CanvasDrawPathEditOSC(id<CanvasPenSurface> surface,
   // per contour so a compound path's subpaths aren't joined by a stray segment.
   CanvasDrawProjectedContours(surface, layers, path, frac, aspect, NO,
                               simd_make_float4(0, 0, 0, 0));
-
-  // A path too large to edit per-anchor draws only its outline (above): drawing
-  // a dot + handles + corner ring for each of thousands of anchors would be
-  // thousands of draw calls every frame. The marquee still draws (selection is
-  // disabled for such a path, so it won't actually be active, but be safe).
-  if (count > kCanvasMaxEditableAnchors) {
-    if (marqueeActive)
-      [surface penDrawMarqueeRect:marqueeSurfaceRect];
-    return;
-  }
 
   // Project the raw anchors once.
   simd_float2 *aLocal = malloc(sizeof(simd_float2) * count);

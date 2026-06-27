@@ -77,8 +77,6 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
   KKBezierPath *path = [self _workingPath];
   if (!path)
     return CanvasPathEditHitNone;
-  if (path.count > kCanvasMaxEditableAnchors)
-    return CanvasPathEditHitNone; // too large to edit per-anchor (perf)
   // Build the projection context ONCE - this loop runs on every AppKit
   // -hitTest:, so the old per-point rebuild made panning a busy path O(N^2) per
   // mouse event and jammed the main thread.
@@ -215,8 +213,6 @@ static const double kSegmentGrabPx = 6.0; // pen "add point" reach to the curve
   KKBezierPath *path = [self _workingPath];
   if (!path || path.count < 2)
     return NO;
-  if (path.count > kCanvasMaxEditableAnchors)
-    return NO; // not editable per-anchor: skip the O(N) segment scan
   NSUInteger segs = path.closed ? path.count : path.count - 1;
   const int kSteps = 24;
   double best = kSegmentGrabPx * kSegmentGrabPx;

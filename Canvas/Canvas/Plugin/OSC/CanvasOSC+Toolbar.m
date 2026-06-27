@@ -157,7 +157,10 @@ static NSString *const kCanvasUIGridSnap = @"gridSnap";
   return YES;
 }
 
-- (void)_toolbarMouseDownTag:(NSInteger)tag atX:(double)x y:(double)y {
+- (void)_toolbarMouseDownTag:(NSInteger)tag
+                         atX:(double)x
+                           y:(double)y
+                      atTime:(CMTime)time {
   switch (tag) {
   case CanvasToolbarDragHandle: {
     self.toolbarDragging = YES;
@@ -188,16 +191,16 @@ static NSString *const kCanvasUIGridSnap = @"gridSnap";
     [self _cycleGridSpacing];
     break;
   case CanvasToolbarPathUnion:
-    [self _handlePathBooleanOp:KKBooleanOpUnion];
+    [self _handlePathBooleanOp:KKBooleanOpUnion atTime:time];
     break;
   case CanvasToolbarPathSubtract:
-    [self _handlePathBooleanOp:KKBooleanOpSubtract];
+    [self _handlePathBooleanOp:KKBooleanOpSubtract atTime:time];
     break;
   case CanvasToolbarPathIntersect:
-    [self _handlePathBooleanOp:KKBooleanOpIntersect];
+    [self _handlePathBooleanOp:KKBooleanOpIntersect atTime:time];
     break;
   case CanvasToolbarPathXOR:
-    [self _handlePathBooleanOp:KKBooleanOpXOR];
+    [self _handlePathBooleanOp:KKBooleanOpXOR atTime:time];
     break;
   case CanvasToolbarPathOutline:
     [self _handleOutlineOp];

@@ -12,21 +12,6 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-// Above this many anchors a path is treated as non-editable: a per-anchor
-// control (dot + tangent handles + corner widget) for each would mean thousands
-// of OSC draw calls and projections every frame, plus an O(N) hit-test on every
-// mouse move - which makes a complex imported SVG (a many-thousand-point outline)
-// crawl. Such a path still draws its selection OUTLINE; only the per-anchor
-// editing is suppressed (you don't hand-edit a path that large anyway).
-#define kCanvasMaxEditableAnchors 250
-
-/// YES for a vector path with too many anchors to edit per-anchor (over
-/// kCanvasMaxEditableAnchors) - e.g. a detailed imported SVG outline. Such a
-/// path is treated like an image: the transform gizmo shows by default instead
-/// of the point-edit OSC, and the layer list flags it. NO for images / groups /
-/// normal-sized paths.
-BOOL CanvasPathIsLargeVector(KKBezierPath *_Nullable path);
-
 typedef NS_ENUM(NSInteger, CanvasPathEditHit) {
   CanvasPathEditHitNone = 0,
   CanvasPathEditHitAnchor,

@@ -129,14 +129,14 @@
   CGFloat rw = 0, rh = 0;
   [self _outlineRefWidth:&rw height:&rh];
   NSArray<KKBezierPath *> *paths = [self _snapshotPaths];
+  double frac = [self fractionAtTime:time];
   NSArray<KKBezierPath *> *operands = nil, *results = nil;
   if (!CanvasPathOpPreview(paths, [self _selectedLayerIDs], outline, op, rw, rh,
-                           &operands, &results)) {
+                           frac, &operands, &results)) {
     self.pathOpFillTexture = nil;
     self.pathOpFillSig = nil;
     return;
   }
-  double frac = [self fractionAtTime:time];
   float aspect = (float)[self _canvasAspect];
   NSInteger w = (NSInteger)[dest.ioSurface width];
   NSInteger h = (NSInteger)[dest.ioSurface height];
@@ -183,11 +183,12 @@
   [self _commitPathOpPaths:paths selectLayerIDs:newSel];
 }
 
-- (void)_handlePathBooleanOp:(KKBooleanOp)op {
+- (void)_handlePathBooleanOp:(KKBooleanOp)op atTime:(CMTime)time {
   float aspect = (float)[self _canvasAspect];
+  double frac = [self fractionAtTime:time];
   [self _runPathOp:^NSArray<NSString *> *(NSMutableArray<KKBezierPath *> *paths,
                                           NSArray<NSString *> *selIDs) {
-    return CanvasApplyBooleanOp(paths, selIDs, op, aspect);
+    return CanvasApplyBooleanOp(paths, selIDs, op, aspect, frac);
   }];
 }
 

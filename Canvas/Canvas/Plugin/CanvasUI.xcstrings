@@ -253,48 +253,6 @@
         }
       }
     },
-    "Complex path - too many points to edit by hand, so it moves and scales like an image.": {
-      "comment": "Layer-list tooltip for an oversized (non-point-editable) path",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Komplexer Pfad - zu viele Punkte zum manuellen Bearbeiten, daher wird er wie ein Bild bewegt und skaliert."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Trazado complejo: demasiados puntos para editarlo a mano, así que se mueve y escala como una imagen."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tracé complexe - trop de points pour une édition manuelle, il se déplace et se redimensionne donc comme une image."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "複雑なパス - 手作業で編集するには点が多すぎるため、画像のように移動・拡大縮小します。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "복잡한 패스 - 손으로 편집하기에 점이 너무 많아 이미지처럼 이동하고 크기를 조절합니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "复杂路径 - 锚点过多无法手动编辑，因此像图像一样移动和缩放。"
-          }
-        }
-      }
-    },
     "Delete": {
       "comment": "Layer context menu.",
       "extractionState": "manual",
