@@ -4,6 +4,7 @@
  */
 
 #import "CanvasLayerListView_Private.h"
+#import <KeyframelessKit/KKPlugin.h> // KKBeginUndoGroup / KKEndUndoGroup
 
 #import "CanvasLayerRender.h"
 #import "CanvasLayerRowViews.h"
@@ -90,21 +91,21 @@
       initWithTitle:CLoc(@"Auto-select layers",
                          @"Companion-panel toggle: click a layer in the "
                          @"viewer to select it.")
-            tooltip:CLoc(@"Click a layer in the viewer to select it.",
-                         @"Tooltip for the Auto-select layers toggle.")
-            binding:^BOOL {
-              __strong typeof(weakSelf) s = weakSelf;
-              return s ? s->_autoSelectState : NO;
-            }
-    disabledBinding:nil
-           onToggle:^(BOOL on) {
-             __strong typeof(weakSelf) s = weakSelf;
-             if (!s)
-               return;
-             s->_autoSelectState = on;
-             if (s.onAutoSelectToggled)
-               s.onAutoSelectToggled(on);
-           }];
+      tooltip:CLoc(@"Click a layer in the viewer to select it.",
+                   @"Tooltip for the Auto-select layers toggle.")
+      binding:^BOOL {
+        __strong typeof(weakSelf) s = weakSelf;
+        return s ? s->_autoSelectState : NO;
+      }
+      disabledBinding:nil
+      onToggle:^(BOOL on) {
+        __strong typeof(weakSelf) s = weakSelf;
+        if (!s)
+          return;
+        s->_autoSelectState = on;
+        if (s.onAutoSelectToggled)
+          s.onAutoSelectToggled(on);
+      }];
   row.translatesAutoresizingMaskIntoConstraints = NO;
   [self addSubview:row];
   _autoSelectRow = row;
@@ -433,13 +434,13 @@
     return;
   }
   [self _commitRenameIfEditing];
-  // Remap the selection by layerID, not raw index: a structural change (path op,
-  // group, reorder, undo) reshuffles the stack, so keeping the old indices would
-  // re-highlight whatever now sits at those rows. Capture the selected IDs from
-  // the OLD paths first, then re-select the SAME layers in the new stack.
-  // Layers that no longer exist - e.g. the operands a boolean op consumed - drop
-  // out, so the selection collapses to the surviving result instead of clinging
-  // to a sibling at the freed index.
+  // Remap the selection by layerID, not raw index: a structural change (path
+  // op, group, reorder, undo) reshuffles the stack, so keeping the old indices
+  // would re-highlight whatever now sits at those rows. Capture the selected
+  // IDs from the OLD paths first, then re-select the SAME layers in the new
+  // stack. Layers that no longer exist - e.g. the operands a boolean op
+  // consumed - drop out, so the selection collapses to the surviving result
+  // instead of clinging to a sibling at the freed index.
   NSArray<NSString *> *prevSelIDs = [self selectedLayerIDs];
   _paths = [self _readPaths];
   NSSet<NSString *> *want = [NSSet setWithArray:prevSelIDs];
@@ -467,9 +468,30 @@
         addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
                                      handler:^NSEvent *(NSEvent *e) {
                                        __strong typeof(weak) s = weak;
-                                       if (!s || e.window != s.window ||
-                                           s->_editingIndex >= 0)
-                                         return e; // let the rename field type
+                                       if (!s || e.window != s.window)
+                                         return e;
+                                       if (s->_editingIndex >= 0) {
+                                         // ViewBridge: the rename field editor
+                                         // doesn't receive bare
+                                         // Delete/Backspace on its own (letters
+                                         // arrive via the row's
+                                         // performKeyEquivalent, these don't),
+                                         // so they'd fall through and delete
+                                         // the LAYER. Forward them to the field
+                                         // editor and consume.
+                                         if (e.keyCode == 51 ||
+                                             e.keyCode == 117) {
+                                           NSText *editor =
+                                               s->_editingField.currentEditor;
+                                           if (editor) {
+                                             [editor keyDown:e];
+                                             return nil;
+                                           }
+                                         }
+                                         return e; // other keys: let the field
+                                                   // type (via the row's
+                                                   // performKeyEquivalent)
+                                       }
                                        NSEventModifierFlags m =
                                            e.modifierFlags &
                                            NSEventModifierFlagDeviceIndependentFlagsMask;
@@ -506,17 +528,17 @@
   }
   if (self.window && !_hoverMonitorLocal) {
     __weak typeof(self) weak = self;
-    _hoverMonitorLocal = [NSEvent
-        addLocalMonitorForEventsMatchingMask:NSEventMaskMouseMoved
-                                     handler:^NSEvent *(NSEvent *e) {
-                                       [weak _updateHoverFromMouse];
-                                       return e;
-                                     }];
-    _hoverMonitorGlobal = [NSEvent
-        addGlobalMonitorForEventsMatchingMask:NSEventMaskMouseMoved
-                                      handler:^(NSEvent *e) {
-                                        [weak _updateHoverFromMouse];
-                                      }];
+    _hoverMonitorLocal =
+        [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMouseMoved
+                                              handler:^NSEvent *(NSEvent *e) {
+                                                [weak _updateHoverFromMouse];
+                                                return e;
+                                              }];
+    _hoverMonitorGlobal =
+        [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskMouseMoved
+                                               handler:^(NSEvent *e) {
+                                                 [weak _updateHoverFromMouse];
+                                               }];
   } else if (!self.window && _hoverMonitorLocal) {
     [NSEvent removeMonitor:_hoverMonitorLocal];
     [NSEvent removeMonitor:_hoverMonitorGlobal];
@@ -527,10 +549,10 @@
   }
 }
 
-// Hover highlight (mini-viewer): hit-test the live row frames against the current
-// pointer and report the row under it (or -1). Driven by mouse-moved monitors
-// rather than tracking areas - see the ivar note. Dedup so onLayerHovered fires
-// only on a real change, not every move.
+// Hover highlight (mini-viewer): hit-test the live row frames against the
+// current pointer and report the row under it (or -1). Driven by mouse-moved
+// monitors rather than tracking areas - see the ivar note. Dedup so
+// onLayerHovered fires only on a real change, not every move.
 - (void)_updateHoverFromMouse {
   if (!self.window) {
     if (_hoveredRowIndex != -1) {
@@ -581,6 +603,20 @@
 - (void)_deleteSelectedRows {
   if (_selection.count == 0)
     return;
+  // The blob delete and the follow-up selection write are two separate param
+  // writes; wrap them in ONE host undo group so a single cmd-Z restores the
+  // layer AND its selection (without this it took two cmd-Z: first the
+  // selection moved to the survivor, then the layer came back).
+  id<PROAPIAccessing> api = self.apiManager;
+  id<FxCustomParameterActionAPI_v4> act =
+      api ? [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)] : nil;
+  id undoTarget = self.paramActionTarget ?: self;
+  BOOL undoGroup = NO;
+  if (act) {
+    [act startAction:undoTarget];
+    undoGroup = KKBeginUndoGroup(api, @"Delete Layer");
+    [act endAction:undoTarget];
+  }
   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
     NSMutableIndexSet *expanded = [self->_selection mutableCopy];
     [self->_selection enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
@@ -601,6 +637,11 @@
   // Swap the inspector to the surviving layer (timeline, OSC set, reset-button
   // state, panel highlight) - see _notifyPrimaryLayerSelected.
   [self _notifyPrimaryLayerSelected];
+  if (act) {
+    [act startAction:undoTarget];
+    KKEndUndoGroup(api, undoGroup);
+    [act endAction:undoTarget];
+  }
 }
 
 @end
