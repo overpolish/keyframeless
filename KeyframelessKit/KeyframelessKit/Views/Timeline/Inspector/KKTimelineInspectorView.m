@@ -89,6 +89,12 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   self.autoresizingMask =
       NSViewWidthSizable | NSViewHeightSizable | NSViewMinYMargin;
 
+  // Subdue the host popover's Liquid Glass: over bright viewer backgrounds the
+  // bare glass washes out the timeline UI. A dark backing wash behind everything
+  // (matching the layer-list body's 0.2 black) restores contrast.
+  self.wantsLayer = YES;
+  self.layer.backgroundColor = [NSColor colorWithWhite:0.0 alpha:0.2].CGColor;
+
   NSView *box = [self _buildBox];
   [self _buildTabBar];
   [self _buildHeaderButtons:loopEnabled maintainTiming:maintainTimingEnabled];
