@@ -46,6 +46,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// inspector timeline edits.
 @property(nonatomic, copy, nullable) void (^onPrimaryLayerSelected)
     (NSString *_Nullable layerID);
+/// Fired as the pointer enters / leaves a row, with that row's layerID (nil on
+/// exit). Drives the mini-viewer's transient hover highlight so it's clear which
+/// layer a row is. Pure UI state - never persisted.
+@property(nonatomic, copy, nullable) void (^onLayerHovered)
+    (NSString *_Nullable layerID);
 /// The layerIDs of every currently-selected row, top-to-bottom. Drives the
 /// viewer's path-operation buttons (which need the full multi-selection, not
 /// just the primary). Empty when nothing is selected.

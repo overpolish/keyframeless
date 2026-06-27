@@ -4,6 +4,7 @@
  */
 
 #import "CanvasAnchorSelectionSync.h" // CanvasConsumeAnchorSelection
+#import "CanvasLayerTree.h"           // CanvasLayerDescendantIndices
 #import "CanvasMiniViewerRenderer_Internal.h"
 #import "CanvasPathMorph.h" // CanvasPathMorphedAtFraction / GeometryEditable
 #import "CanvasPathOSC.h" // CanvasDrawPathEditOSC / CanvasDrawLayerBoxOSC / fill
@@ -47,8 +48,77 @@
     [self _drawMarquee];
   }
   [self _drawPathOpHoverPreview];
+  [self _drawLayerHoverHighlight];
   [self.penController draw];
   self.penDrawCanvas = nil;
+}
+
+// The layers to highlight for the hovered row: the hovered layer itself, or -
+// when it's a group - every layer nested under it (a group has no geometry of
+// its own). Empty when nothing is hovered or the id isn't found. The selected
+// layer highlights too while hovered - the monitor clears the highlight the
+// moment the pointer leaves the row, so there's no stale-on-selection problem.
+- (NSArray<KKBezierPath *> *)_hoverHighlightLayers {
+  NSString *hid = self.hoveredLayerID;
+  if (!hid.length)
+    return @[];
+  NSArray<KKBezierPath *> *layers = self.layers ?: @[];
+  NSUInteger idx = NSNotFound;
+  for (NSUInteger i = 0; i < layers.count; i++)
+    if ([layers[i].layerID isEqualToString:hid]) {
+      idx = i;
+      break;
+    }
+  if (idx == NSNotFound)
+    return @[];
+  if (!layers[idx].isGroup)
+    return @[ layers[idx] ];
+  NSMutableArray<KKBezierPath *> *members = [NSMutableArray array];
+  [CanvasLayerDescendantIndices(idx, layers)
+      enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
+        if (!layers[i].isGroup)
+          [members addObject:layers[i]];
+      }];
+  return members;
+}
+
+// Layer-list hover highlight: a translucent amber fill over the hovered layer
+// (or all members of a hovered group) so it's clear which layer a row is without
+// hiding/showing it. Reuses the path-op fill renderer (same projection + blit as
+// -_drawPathOpHoverPreview) with a single highlight colour.
+- (void)_drawLayerHoverHighlight {
+  NSArray<KKBezierPath *> *highlight = [self _hoverHighlightLayers];
+  if (!highlight.count)
+    return;
+  KKMiniViewerView *canvas = self.penDrawCanvas;
+  if (!canvas)
+    return;
+  CGSize d = canvas.drawableSize;
+  NSInteger w = (NSInteger)d.width, h = (NSInteger)d.height;
+  if (w <= 0 || h <= 0)
+    return;
+  CGFloat aspect = (self.renderHeight > 0 && self.renderWidth > 0)
+                       ? self.renderWidth / self.renderHeight
+                       : 16.0 / 9.0;
+  CGFloat refW = self.outputWidth > 0 ? self.outputWidth : 1080.0 * aspect;
+  CGFloat s = canvas.window.backingScaleFactor;
+  if (s <= 0)
+    s = 2.0;
+  __weak typeof(self) weakSelf = self;
+  CGFloat bmH = (CGFloat)h;
+  CGContextRef ctx = CanvasRenderLayerHighlightBitmap(
+      highlight, self.layers ?: @[], self.editFraction,
+      (float)[self penCanvasAspect], w, h, refW, /*amber*/ 1.0, 0.72, 0.10,
+      ^CGPoint(simd_float2 objYUp) {
+        CGPoint pv =
+            [weakSelf penSurfacePointFromObj:CGPointMake(objYUp.x, objYUp.y)];
+        return CGPointMake(pv.x * s, bmH - pv.y * s);
+      });
+  if (!ctx)
+    return;
+  id<MTLTexture> tex = CanvasFillBitmapToTexture(ctx, canvas.device, w, h);
+  CGContextRelease(ctx);
+  [canvas encodeToolFillTexture:tex];
 }
 
 // Path-op hover preview (operands red / result green, FILLED), mirroring the

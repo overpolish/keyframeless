@@ -65,6 +65,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// nil). The host uses it to switch which layer the inspector timeline edits.
 @property(nonatomic, copy, nullable) void (^onPrimaryLayerSelected)
     (NSString *_Nullable layerID);
+/// Fired as the pointer enters / leaves a row (that layer's layerID, or nil on
+/// exit). The host drives the mini-viewer's transient hover highlight from it so
+/// it's clear which layer a row is. Pure UI state - never persisted.
+@property(nonatomic, copy, nullable) void (^onLayerHovered)
+    (NSString *_Nullable layerID);
 /// Highlight `layerID` in the panel's list WITHOUT firing onPrimaryLayerSelected
 /// (mirrors a keypose popover's active layer into the list).
 - (void)highlightLayerID:(nullable NSString *)layerID;

@@ -352,6 +352,20 @@ NSString *const CanvasMiniViewerRequestPath =
   [self.canvas setHandlesNeedDisplay];
 }
 
+// Layer-list hover: only the tool-overlay pass draws the highlight, so repaint
+// the handles (not the full composite) when the hovered layer changes.
+- (void)setHoveredLayerID:(NSString *)hoveredLayerID {
+  if (hoveredLayerID == _hoveredLayerID ||
+      [hoveredLayerID isEqualToString:_hoveredLayerID])
+    return;
+  _hoveredLayerID = [hoveredLayerID copy];
+  // The hover highlight draws in the tool-overlay pass, which is driven by
+  // -setNeedsDisplay: (like the path-op preview's -toolbarHoverTag:), NOT
+  // -setHandlesNeedDisplay - that only repaints the handles layer and skips the
+  // overlay pass.
+  [self.canvas setNeedsDisplay:YES];
+}
+
 - (NSMutableDictionary<NSString *, id<MTLTexture>> *)imageTextureCache {
   if (!_imageTextureCache)
     _imageTextureCache = [NSMutableDictionary dictionary];

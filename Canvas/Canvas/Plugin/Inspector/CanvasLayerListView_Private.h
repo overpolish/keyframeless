@@ -70,11 +70,21 @@ extern NSPasteboardType const kCanvasLayerRowDragType;
   __weak NSTextField *_editingField;
   NSMutableSet<NSString *> *_collapsedGroups; // UI-only collapsed group IDs
   id _keyMonitor;                             // local keyDown monitor
+  // Mouse-moved monitors for the row-hover highlight. Tracking areas are
+  // unreliable in the inspector's ViewBridge process (need a key window, and
+  // a row rebuild on selection destroys them without firing exit), so hit-test
+  // live row frames on every move instead. Local fires when the view-service
+  // window is key; global fires when the host (FCP) has focus.
+  id _hoverMonitorLocal;
+  id _hoverMonitorGlobal;
+  NSInteger _hoveredRowIndex; // last row reported to onLayerHovered (-1 = none)
   NSInteger _selfWritePending; // skip our own writes echoing back as reloads
 }
 
 // Scroll shadows (primary impl).
 - (void)_updateScrollShadows;
+// Row-hover hit-test driven by the mouse-moved monitors (primary impl).
+- (void)_updateHoverFromMouse;
 @end
 
 // Methods are declared on matching CATEGORY interfaces (not the extension) so
@@ -124,6 +134,9 @@ extern NSPasteboardType const kCanvasLayerRowDragType;
 // selection paths that set _selection directly (drop / reorder) rather than
 // through selectIndex:, so the inspector swaps its per-layer state to match.
 - (void)_notifyPrimaryLayerSelected;
+// Row tracking-area enter (its index) / exit (-1); resolves the layerID and
+// fires onLayerHovered for the mini-viewer's transient hover highlight.
+- (void)hoverRowAtIndex:(NSInteger)rowIndex;
 @end
 
 @interface CanvasLayerListView (Grouping)

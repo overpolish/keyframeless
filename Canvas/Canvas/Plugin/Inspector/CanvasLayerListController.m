@@ -217,6 +217,11 @@ static const CGFloat kSlideDistance = 12.0;
     if (s.onPrimaryLayerSelected)
       s.onPrimaryLayerSelected(layerID);
   };
+  content.onLayerHovered = ^(NSString *layerID) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (s.onLayerHovered)
+      s.onLayerHovered(layerID);
+  };
   content.onAutoSelectToggled = ^(BOOL on) {
     __strong typeof(weakSelf) s = weakSelf;
     if (!s)

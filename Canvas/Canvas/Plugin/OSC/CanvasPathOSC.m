@@ -208,32 +208,60 @@ static void CanvasFillOpShape(CGContextRef ctx, NSArray<KKBezierPath *> *layers,
   CGPathRelease(cgp);
 }
 
-CGContextRef CanvasRenderPathOpFillBitmap(
-    NSArray<KKBezierPath *> *operands, NSArray<KKBezierPath *> *results,
-    NSArray<KKBezierPath *> *layers, double frac, float aspect, NSInteger w,
-    NSInteger h, CGFloat refW, CGPoint (^objToPx)(simd_float2)) {
-  if (w <= 0 || h <= 0 || !objToPx)
-    return NULL;
+// A fresh sRGB-premultiplied bitmap context of w x h px, or NULL. Shared by the
+// path-op preview and the layer-hover highlight (both fill translucent shapes).
+static CGContextRef CanvasNewFillBitmapContext(NSInteger w, NSInteger h)
+    CF_RETURNS_RETAINED {
   CGColorSpaceRef cs = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
   CGContextRef ctx = CGBitmapContextCreate(
       NULL, w, h, 8, w * 4, cs,
       (CGBitmapInfo)((uint32_t)kCGImageAlphaPremultipliedLast |
                      (uint32_t)kCGBitmapByteOrder32Big));
   CGColorSpaceRelease(cs);
-  if (!ctx)
-    return NULL;
-  // strokeWidth is OUTPUT px; convert to bitmap px via the projection
-  // (on-screen px for one object-X unit / output width). Measured so it follows
-  // zoom + pan.
+  return ctx;
+}
+
+// strokeWidth is OUTPUT px; convert to bitmap px via the projection (on-screen
+// px for one object-X unit / output width). Measured so it follows zoom + pan.
+static CGFloat CanvasFillStrokeScale(CGFloat refW,
+                                     CGPoint (^objToPx)(simd_float2)) {
   CGPoint x0 = objToPx(simd_make_float2(0.0f, 0.5f));
   CGPoint x1 = objToPx(simd_make_float2(1.0f, 0.5f));
-  CGFloat strokeScale = (refW > 0) ? (CGFloat)fabs(x1.x - x0.x) / refW : 1.0;
+  return (refW > 0) ? (CGFloat)fabs(x1.x - x0.x) / refW : 1.0;
+}
+
+CGContextRef CanvasRenderPathOpFillBitmap(
+    NSArray<KKBezierPath *> *operands, NSArray<KKBezierPath *> *results,
+    NSArray<KKBezierPath *> *layers, double frac, float aspect, NSInteger w,
+    NSInteger h, CGFloat refW, CGPoint (^objToPx)(simd_float2)) {
+  if (w <= 0 || h <= 0 || !objToPx)
+    return NULL;
+  CGContextRef ctx = CanvasNewFillBitmapContext(w, h);
+  if (!ctx)
+    return NULL;
+  CGFloat strokeScale = CanvasFillStrokeScale(refW, objToPx);
   for (KKBezierPath *p in operands)
     CanvasFillOpShape(ctx, layers, p, frac, aspect, strokeScale, 1.0, 0.20,
                       0.20, objToPx);
   for (KKBezierPath *p in results)
     CanvasFillOpShape(ctx, layers, p, frac, aspect, strokeScale, 0.16, 0.85,
                       0.30, objToPx);
+  return ctx;
+}
+
+CGContextRef CanvasRenderLayerHighlightBitmap(
+    NSArray<KKBezierPath *> *highlight, NSArray<KKBezierPath *> *layers,
+    double frac, float aspect, NSInteger w, NSInteger h, CGFloat refW, CGFloat r,
+    CGFloat g, CGFloat b, CGPoint (^objToPx)(simd_float2)) {
+  if (w <= 0 || h <= 0 || !objToPx)
+    return NULL;
+  CGContextRef ctx = CanvasNewFillBitmapContext(w, h);
+  if (!ctx)
+    return NULL;
+  CGFloat strokeScale = CanvasFillStrokeScale(refW, objToPx);
+  for (KKBezierPath *p in highlight)
+    CanvasFillOpShape(ctx, layers, p, frac, aspect, strokeScale, r, g, b,
+                      objToPx);
   return ctx;
 }
 

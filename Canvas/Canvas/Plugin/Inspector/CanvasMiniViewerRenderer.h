@@ -42,6 +42,11 @@ extern NSString *const CanvasMiniViewerRequestPath;
 /// Drives the mini toolbar's conditional path-operation buttons (which need the
 /// whole selection, not just the primary). Falls back to selectedLayerID.
 @property(nonatomic, copy, nullable) NSArray<NSString *> *selectedLayerIDs;
+/// The layer the pointer is over in the Layers panel (or nil). When set, the
+/// mini-viewer draws a translucent amber highlight over that layer (a group
+/// highlights all its members) so it's clear which layer a row is, without
+/// toggling its visibility. Transient hover state - never persisted.
+@property(nonatomic, copy, nullable) NSString *hoveredLayerID;
 /// The plugin's lane templates (`+[CanvasPlugin availableLanes]`), set by the
 /// inspector. Used by `-templateLaneForLabel:` so a created lane keeps its
 /// metadata (aspectLinked, units) and the scale-box drag reads the aspect-link

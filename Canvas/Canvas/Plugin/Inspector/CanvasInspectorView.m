@@ -154,6 +154,14 @@
       if (s.onAutoSelectChanged)
         s.onAutoSelectChanged(on);
     };
+    // Hovering a row highlights that layer (amber) on the adjacent mini-viewer,
+    // so it's clear which layer it is without toggling its visibility. In-process
+    // (mini only); the main viewer's OSC lives in another process and would need
+    // a transient param round-trip, which isn't worth the undo/perf cost.
+    _layerListController.onLayerHovered = ^(NSString *layerID) {
+      typeof(self) s = weak;
+      s->_miniViewerRenderer.hoveredLayerID = layerID;
+    };
     // Mirror the popover's non-selectable gating onto the MINI preview (same
     // rule as the layer rows). The MAIN VIEWER gates itself by the playhead in
     // the OSC (a layer is clickable there if it has a constant or a keypose at

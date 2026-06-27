@@ -71,6 +71,16 @@ CGContextRef _Nullable CanvasRenderPathOpFillBitmap(
     NSArray<KKBezierPath *> *layers, double frac, float aspect, NSInteger w,
     NSInteger h, CGFloat refW, CGPoint (^objToPx)(simd_float2 objYUp));
 
+/// Render a translucent HIGHLIGHT fill (single colour `r`/`g`/`b`) for the given
+/// `highlight` layers into a fresh bitmap, same fill + stroke compositing as the
+/// path-op preview. Used by the layer-list hover overlay so hovering a row shows
+/// which layer it is on the mini-viewer. Returns a context the CALLER must
+/// CGContextRelease after uploading to a texture, or NULL on failure.
+CGContextRef _Nullable CanvasRenderLayerHighlightBitmap(
+    NSArray<KKBezierPath *> *highlight, NSArray<KKBezierPath *> *layers,
+    double frac, float aspect, NSInteger w, NSInteger h, CGFloat refW, CGFloat r,
+    CGFloat g, CGFloat b, CGPoint (^objToPx)(simd_float2));
+
 /// Upload a CG fill bitmap (from CanvasRenderPathOpFillBitmap) into a fresh
 /// RGBA8 shader-read MTLTexture of `width`x`height` px. The CALLER still owns the
 /// CGContext (release it after). Shared by the viewer + mini path-op previews so

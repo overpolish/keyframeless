@@ -20,6 +20,7 @@ A layer is a `KKBezierPath`. The whole stack is serialized to a hidden `kParamLa
 ## Selection
 
 - Click a row to select it. Cmd-click toggles a row in/out of the selection; Shift-click extends a range. The selected rows are highlighted; selection drives the context-menu actions.
+- **Hover to preview**: hovering a row (without clicking) highlights that layer with a translucent **amber** fill on the inspector mini-viewer, so you can see which layer a row is before selecting it - no need to toggle its visibility off and on. Hovering a **group** highlights all its members. The highlight clears the moment the pointer leaves the row. (Mini-viewer only - the main FCP viewer runs in a separate process reachable only through undoable param writes, so a transient hover preview there would pollute the undo history.)
 - **Delete / Backspace** removes the selected layers (and a selected group's contents). The key is handled by the panel and does not fall through to Final Cut.
 - **Undo / Redo** (Cmd-Z / Cmd-Shift-Z): layer edits go through Final Cut's normal undo, so the standard shortcuts step backward and forward through them (add, delete, rename, group/ungroup, reorder, visibility/lock); the panel refreshes to match. Changing the selected layer is itself undoable.
 

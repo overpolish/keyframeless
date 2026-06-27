@@ -330,6 +330,15 @@
   }
 }
 
+- (void)hoverRowAtIndex:(NSInteger)rowIndex {
+  if (!self.onLayerHovered)
+    return;
+  NSString *layerID = (rowIndex >= 0 && (NSUInteger)rowIndex < _paths.count)
+                          ? _paths[(NSUInteger)rowIndex].layerID
+                          : nil;
+  self.onLayerHovered(layerID);
+}
+
 - (void)_notifyPrimaryLayerSelected {
   if (!self.onPrimaryLayerSelected)
     return;

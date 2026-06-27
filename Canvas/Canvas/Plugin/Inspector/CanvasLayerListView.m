@@ -39,6 +39,7 @@
   if ((self = [super initWithFrame:frame])) {
     _selection = [NSMutableIndexSet indexSet];
     _editingIndex = -1;
+    _hoveredRowIndex = -1;
     _paths = [NSMutableArray array];
     _rowViews = [NSMutableArray array];
     _collapsedGroups = [NSMutableSet set];
@@ -309,6 +310,10 @@
   [NSNotificationCenter.defaultCenter removeObserver:self];
   if (_keyMonitor)
     [NSEvent removeMonitor:_keyMonitor];
+  if (_hoverMonitorLocal)
+    [NSEvent removeMonitor:_hoverMonitorLocal];
+  if (_hoverMonitorGlobal)
+    [NSEvent removeMonitor:_hoverMonitorGlobal];
 }
 
 #pragma mark - Scroll-edge shadows
@@ -499,6 +504,64 @@
     [NSEvent removeMonitor:_keyMonitor];
     _keyMonitor = nil;
   }
+  if (self.window && !_hoverMonitorLocal) {
+    __weak typeof(self) weak = self;
+    _hoverMonitorLocal = [NSEvent
+        addLocalMonitorForEventsMatchingMask:NSEventMaskMouseMoved
+                                     handler:^NSEvent *(NSEvent *e) {
+                                       [weak _updateHoverFromMouse];
+                                       return e;
+                                     }];
+    _hoverMonitorGlobal = [NSEvent
+        addGlobalMonitorForEventsMatchingMask:NSEventMaskMouseMoved
+                                      handler:^(NSEvent *e) {
+                                        [weak _updateHoverFromMouse];
+                                      }];
+  } else if (!self.window && _hoverMonitorLocal) {
+    [NSEvent removeMonitor:_hoverMonitorLocal];
+    [NSEvent removeMonitor:_hoverMonitorGlobal];
+    _hoverMonitorLocal = nil;
+    _hoverMonitorGlobal = nil;
+    [self hoverRowAtIndex:-1]; // clear any stuck highlight when detached
+    _hoveredRowIndex = -1;
+  }
+}
+
+// Hover highlight (mini-viewer): hit-test the live row frames against the current
+// pointer and report the row under it (or -1). Driven by mouse-moved monitors
+// rather than tracking areas - see the ivar note. Dedup so onLayerHovered fires
+// only on a real change, not every move.
+- (void)_updateHoverFromMouse {
+  if (!self.window) {
+    if (_hoveredRowIndex != -1) {
+      _hoveredRowIndex = -1;
+      [self hoverRowAtIndex:-1];
+    }
+    return;
+  }
+  NSPoint screen = [NSEvent mouseLocation];
+  NSPoint win = [self.window convertPointFromScreen:screen];
+  NSInteger idx = -1;
+  // Only inside the scrolled, visible list area - not the header / margins, and
+  // not rows clipped out of view.
+  if (_scroll) {
+    NSRect clip = [_scroll convertRect:_scroll.contentView.bounds toView:nil];
+    if (NSPointInRect(win, clip)) {
+      for (NSView *v in _rowViews) {
+        if (![v isKindOfClass:[CanvasLayerRow class]] || v.isHidden)
+          continue;
+        NSRect f = [v convertRect:v.bounds toView:nil];
+        if (NSPointInRect(win, f)) {
+          idx = ((CanvasLayerRow *)v).rowIndex;
+          break;
+        }
+      }
+    }
+  }
+  if (idx == _hoveredRowIndex)
+    return;
+  _hoveredRowIndex = idx;
+  [self hoverRowAtIndex:idx];
 }
 
 // Trigger a host command (undo/redo) from the panel. Must run inside an action
