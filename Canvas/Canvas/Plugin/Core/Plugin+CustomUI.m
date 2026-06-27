@@ -6,6 +6,7 @@
 #import "CanvasInspectorView.h"
 #import "CanvasLayerRender.h" // CanvasReadLayerPaths (fresh, not the snapshot)
 #import "CanvasLayerTimeline.h"
+#import "CanvasPresets.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
@@ -13,6 +14,7 @@
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
 #import <KeyframelessKit/KKPluginHost.h> // KKSetProcessTimelineSnapshot
+#import <KeyframelessKit/KKPresets.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
 @implementation CanvasPlugin (CustomUI)
@@ -181,6 +183,12 @@
                                renderNudgeParamID:kParamRenderNudge
                                     dragUndoLabel:@"Adjust Canvas"
                                detachedWindowSize:CGSizeMake(720.0, 460.0)];
+
+    // Canvas's annotation presets (Arrow, etc.) live in the shared Presets
+    // popover as content presets - register them under this plugin's preset key
+    // (set by kkWire above, the key the popover queries). Idempotent.
+    [[KKPresets shared] registerBuiltinPresets:CanvasBuiltinPresets()
+                                  forPluginKey:[self presetPluginKey]];
 
     // Persist timeline edits PER LAYER instead of to the global timeline param:
     // decompose the edited merged timeline by layerKey and write each layer's
@@ -376,7 +384,9 @@
     // (OFF when absent) and persist flips to kParamUIState. The write triggers
     // parameterChanged, which re-publishes the UIState snapshot the viewer OSC
     // reads.
-    [view setAutoSelect:[visState[@"autoSelect"] boolValue]];
+    [view setAutoSelect:(visState[@"autoSelect"] ? [visState[@"autoSelect"]
+                                                       boolValue]
+                                                 : YES)]; // default ON
     // Seed the mini's grid + toolbar state on cold load too (pluginState only
     // fires on a change, so without this the mini grid / toolbar position would
     // sit at defaults until the user interacts).

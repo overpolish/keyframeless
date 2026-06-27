@@ -74,14 +74,19 @@
     return NO;
   }
 
-  // Motion-blur settings blob (enabled / shutter / samples / mode), written by
-  // the inspector toolbar's MB toggle via the shared inspector callbacks and
-  // read back in -pluginState: to drive the render's sample-accumulate. HIDDEN
-  // + NOT_ANIMATABLE, matching MagicMove. MUST be registered or flipping the
-  // toggle crashes FCP's parameter transaction (it writes this custom param).
+  // Motion-blur settings blob (enabled / shutter / samples / technique), written
+  // by the inspector toolbar's MB toggle via the shared inspector callbacks and
+  // read back in -pluginState: to drive the render. HIDDEN + NOT_ANIMATABLE.
+  // MUST be registered or flipping the toggle crashes FCP's parameter
+  // transaction. Default is motion-blur ON (Fast technique, samples 6) - it's
+  // cheap on Canvas and motion reads more naturally with blur; a fresh instance
+  // reads this default everywhere (inspector + render), existing projects keep
+  // their saved value.
+  NSString *mbDefault =
+      @"{\"enabled\":true,\"shutterAngle\":180,\"samples\":6,\"technique\":0}";
   if (![paramAPI addCustomParameterWithName:@""
                                 parameterID:kKKParamMotionBlurData
-                               defaultValue:[KKDataBlob blobWithData:nil]
+                               defaultValue:[KKDataBlob blobWithString:mbDefault]
                              parameterFlags:kFxParameterFlag_HIDDEN |
                                             kFxParameterFlag_NOT_ANIMATABLE]) {
     return NO;

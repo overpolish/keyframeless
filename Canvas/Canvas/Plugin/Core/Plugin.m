@@ -89,7 +89,10 @@
         [state[@"selectedLayerIDs"] isKindOfClass:[NSArray class]]
             ? state[@"selectedLayerIDs"]
             : nil;
-    BOOL autoSelect = [state[@"autoSelect"] boolValue];
+    // Auto-select defaults ON (absent key) - the common case is clicking layers
+    // on the canvas; persisted NO is respected once the user toggles it off.
+    BOOL autoSelect =
+        state[@"autoSelect"] ? [state[@"autoSelect"] boolValue] : YES;
     // Shared alignment-grid state - mirror onto the popover mini-viewer so its
     // grid matches the viewer's (same keys the OSC writes via _writeUIStateMerging).
     BOOL gridEnabled = [state[@"gridEnabled"] boolValue];

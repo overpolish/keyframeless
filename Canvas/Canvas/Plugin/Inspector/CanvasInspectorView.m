@@ -7,6 +7,7 @@
 #import "CanvasLayerListController.h"
 #import "CanvasLayerTimeline.h"
 #import "CanvasMiniViewerRenderer.h"
+#import "CanvasPresets.h"
 #import <KeyframelessKit/KKBezierPath.h>
 
 @implementation CanvasInspectorView {
@@ -204,6 +205,11 @@
     self.onConstantsWillShow = ^{
       [weak _ensureConstantsLayerSelected];
     };
+    // Annotation presets: a content preset (payloadKind "canvasLayers") inserts
+    // its pre-built layer(s) into the stack rather than applying a timeline.
+    self.onApplyPresetPayload = ^(NSString *kind, NSString *json, BOOL atPlayhead) {
+      [weak _applyCanvasLayerPresetPayload:kind json:json];
+    };
     _layerListController.templateLaneCount = availableLanes.count;
     // Canvas's property list is short (Scale, Position), so the Animated
     // popover - and the layer panel beside it, which matches its height - would
@@ -214,6 +220,54 @@
     [self _feedGraph];
   }
   return self;
+}
+
+// Insert an annotation preset's pre-built layer(s) on TOP of the stack (array
+// index 0 = front), with fresh layer IDs so re-applying the same preset never
+// collides, then select them - all in one undo (writePaths:selectingLayerIDs:).
+- (void)_applyCanvasLayerPresetPayload:(NSString *)kind json:(NSString *)json {
+  BOOL aspectX = [kind isEqualToString:kCanvasPresetPayloadKindAspectX];
+  if (!aspectX && ![kind isEqualToString:kCanvasPresetPayloadKind])
+    return;
+  if (json.length == 0)
+    return;
+  NSData *blob = [[NSData alloc] initWithBase64EncodedString:json options:0];
+  NSMutableArray<KKBezierPath *> *preset =
+      blob.length ? [KKBezierPath pathsFromBlob:blob] : nil;
+  if (preset.count == 0)
+    return;
+  // Aspect-sensitive geometry (the checkmark) is authored square; compress X
+  // about the canvas centre by the live aspect (outH/outW) so 45-degree art stays
+  // square on any canvas shape. Falls back to 16:9 if the output size is unknown.
+  if (aspectX) {
+    float ow = 0.0f, oh = 0.0f;
+    float f = (CanvasOutputSize(&ow, &oh) && ow > 0.0f) ? (oh / ow)
+                                                        : (9.0f / 16.0f);
+    for (KKBezierPath *p in preset) {
+      NSUInteger n = p.count;
+      if (n == 0)
+        continue;
+      simd_float2 *pts = malloc(sizeof(simd_float2) * n);
+      for (NSUInteger i = 0; i < n; i++) {
+        KKBezierPoint bp = [p pointAtIndex:i];
+        pts[i] = simd_make_float2(0.5f + (bp.x - 0.5f) * f, bp.y);
+      }
+      [p setLinearPositions:pts count:n closed:p.closed];
+      free(pts);
+    }
+  }
+  NSMutableArray<NSString *> *newIDs =
+      [NSMutableArray arrayWithCapacity:preset.count];
+  for (KKBezierPath *p in preset) {
+    p.layerID = [[NSUUID UUID] UUIDString];
+    [newIDs addObject:p.layerID];
+  }
+  NSArray<KKBezierPath *> *existing =
+      [_layerListController currentLayerPaths] ?: @[];
+  NSMutableArray<KKBezierPath *> *merged = [preset mutableCopy];
+  [merged addObjectsFromArray:existing];
+  [_layerListController writePaths:merged selectingLayerIDs:newIDs];
+  [self _syncLayersToRenderer];
 }
 
 // The effective selection set for a primary layer about to be edited: the

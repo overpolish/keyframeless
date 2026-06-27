@@ -12,9 +12,10 @@
 @implementation CanvasOSC (AutoSelect)
 
 // "Auto-select layers" toggle, read from the UIState snapshot (the OSC can't
-// read the custom param). Default OFF when absent.
+// read the custom param). Default ON when absent.
 - (BOOL)_autoSelectEnabled {
-  return [[self _uiStateDict][@"autoSelect"] boolValue];
+  id v = [self _uiStateDict][@"autoSelect"];
+  return v ? [v boolValue] : YES;
 }
 
 // Topmost image layer under the cursor (alpha-aware), or nil. Converts the

@@ -20,6 +20,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy) NSString *pluginKey;
 @property(nonatomic, copy) NSString *timelineJSON;
 @property(nonatomic, assign) BOOL builtin;
+/// Optional plugin-defined content payload. When `payloadKind` is non-empty the
+/// preset INSERTS content (the plugin decodes `payloadJSON` for that kind) rather
+/// than applying a timeline curve - e.g. Canvas's `"canvasLayers"` kind whose
+/// payload is a layer blob. A timeline-only preset leaves both nil. `timelineJSON`
+/// may be empty for a content preset.
+@property(nonatomic, copy, nullable) NSString *payloadKind;
+@property(nonatomic, copy, nullable) NSString *payloadJSON;
 /// Display name: built-ins resolve `name` through the localization table;
 /// user presets return `name` verbatim.
 @property(nonatomic, readonly) NSString *displayName;
@@ -35,6 +42,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// Built-ins first (each tagged `builtin`), then user presets; each group
 /// sorted case-insensitively by display name.
 - (NSArray<KKPreset *> *)presetsForPluginKey:(NSString *)pluginKey;
+
+/// Register code-built built-in presets for `pluginKey`, merged with any from
+/// `builtin_presets.json`. For presets whose payload is built programmatically
+/// (e.g. Canvas layer blobs constructed from KKBezierPath) rather than authored
+/// as JSON. Each preset is forced `builtin = YES`. Re-registering the same key
+/// replaces the previous set. Call once before the presets popover is shown
+/// (e.g. at inspector init).
+- (void)registerBuiltinPresets:(NSArray<KKPreset *> *)presets
+                  forPluginKey:(NSString *)pluginKey;
 
 - (KKPreset *)addPresetWithName:(NSString *)name
                       pluginKey:(NSString *)pluginKey

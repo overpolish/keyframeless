@@ -44,6 +44,8 @@ static NSURL *_presetsFileURL(void) {
   NSMutableArray<KKPreset *> *_userItems;
   // Built-ins are loaded once per plugin key and cached.
   NSMutableDictionary<NSString *, NSArray<KKPreset *> *> *_builtinsByPlugin;
+  // Code-registered built-ins per plugin key (payloads built programmatically).
+  NSMutableDictionary<NSString *, NSArray<KKPreset *> *> *_codeBuiltinsByPlugin;
   // The parsed builtin_presets.json root (pluginKey -> array of entries),
   // loaded lazily once.
   NSDictionary *_builtinRoot;
@@ -64,6 +66,7 @@ static NSURL *_presetsFileURL(void) {
   if (self) {
     _userItems = [NSMutableArray new];
     _builtinsByPlugin = [NSMutableDictionary new];
+    _codeBuiltinsByPlugin = [NSMutableDictionary new];
     [self _load];
   }
   return self;
@@ -74,8 +77,13 @@ static NSURL *_presetsFileURL(void) {
     return [a.displayName localizedCaseInsensitiveCompare:b.displayName];
   };
 
-  NSArray<KKPreset *> *builtins = [[self _builtinsForPluginKey:pluginKey]
-      sortedArrayUsingComparator:byName];
+  NSMutableArray<KKPreset *> *builtinUnion =
+      [[self _builtinsForPluginKey:pluginKey] mutableCopy];
+  NSArray<KKPreset *> *codeBuiltins = _codeBuiltinsByPlugin[pluginKey];
+  if (codeBuiltins.count)
+    [builtinUnion addObjectsFromArray:codeBuiltins];
+  NSArray<KKPreset *> *builtins =
+      [builtinUnion sortedArrayUsingComparator:byName];
 
   NSMutableArray<KKPreset *> *userMatches = [NSMutableArray new];
   for (KKPreset *p in _userItems)
@@ -87,6 +95,18 @@ static NSURL *_presetsFileURL(void) {
   [all addObjectsFromArray:builtins];
   [all addObjectsFromArray:userMatches];
   return all;
+}
+
+- (void)registerBuiltinPresets:(NSArray<KKPreset *> *)presets
+                  forPluginKey:(NSString *)pluginKey {
+  if (!pluginKey.length)
+    return;
+  for (KKPreset *p in presets) {
+    p.builtin = YES;
+    if (!p.pluginKey.length)
+      p.pluginKey = pluginKey;
+  }
+  _codeBuiltinsByPlugin[pluginKey] = [presets copy];
 }
 
 - (KKPreset *)addPresetWithName:(NSString *)name
@@ -176,13 +196,32 @@ static NSURL *_presetsFileURL(void) {
                                               encoding:NSUTF8StringEncoding]
                       : nil;
       }
-      if (!identifier.length || !name.length || !timeline.length)
+      // Optional content payload (a layer blob, etc.). `payload` may be an
+      // embedded JSON object/array (authorable) or an already-serialized string.
+      NSString *payloadKind = d[@"payloadKind"];
+      NSString *payload = nil;
+      id payloadVal = d[@"payload"];
+      if ([payloadVal isKindOfClass:[NSString class]]) {
+        payload = payloadVal;
+      } else if (payloadVal) {
+        NSData *pd = [NSJSONSerialization dataWithJSONObject:payloadVal
+                                                     options:0
+                                                       error:nil];
+        payload = pd ? [[NSString alloc] initWithData:pd
+                                             encoding:NSUTF8StringEncoding]
+                     : nil;
+      }
+      // A preset needs an id, a name, and either a timeline OR a content payload.
+      if (!identifier.length || !name.length ||
+          (!timeline.length && !payload.length))
         continue;
       KKPreset *p = [[KKPreset alloc] init];
       p.identifier = identifier;
       p.name = name;
       p.pluginKey = pluginKey;
       p.timelineJSON = timeline;
+      p.payloadKind = payloadKind.length ? payloadKind : nil;
+      p.payloadJSON = payload.length ? payload : nil;
       p.builtin = YES;
       [items addObject:p];
     }
@@ -210,14 +249,18 @@ static NSURL *_presetsFileURL(void) {
     NSString *name = d[@"name"];
     NSString *pluginKey = d[@"pluginKey"];
     NSString *timeline = d[@"timeline"];
+    NSString *payloadKind = d[@"payloadKind"];
+    NSString *payload = d[@"payload"];
     if (!identifier.length || !name.length || !pluginKey.length ||
-        !timeline.length)
+        (!timeline.length && !payload.length))
       continue;
     KKPreset *p = [[KKPreset alloc] init];
     p.identifier = identifier;
     p.name = name;
     p.pluginKey = pluginKey;
     p.timelineJSON = timeline;
+    p.payloadKind = payloadKind.length ? payloadKind : nil;
+    p.payloadJSON = payload.length ? payload : nil;
     p.builtin = NO;
     [_userItems addObject:p];
   }
@@ -229,12 +272,17 @@ static NSURL *_presetsFileURL(void) {
     return;
   NSMutableArray *arr = [NSMutableArray new];
   for (KKPreset *p in _userItems) {
-    [arr addObject:@{
+    NSMutableDictionary *d = [@{
       @"id" : p.identifier,
       @"name" : p.name,
       @"pluginKey" : p.pluginKey,
-      @"timeline" : p.timelineJSON
-    }];
+      @"timeline" : p.timelineJSON ?: @""
+    } mutableCopy];
+    if (p.payloadKind.length)
+      d[@"payloadKind"] = p.payloadKind;
+    if (p.payloadJSON.length)
+      d[@"payload"] = p.payloadJSON;
+    [arr addObject:d];
   }
   NSData *data = [NSJSONSerialization dataWithJSONObject:arr
                                                  options:0

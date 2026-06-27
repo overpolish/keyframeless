@@ -253,8 +253,15 @@ static void _clearPopoverBackground(NSView *view) {
         return;
       // Defer the close: closing an NSPopover from inside its own click handler
       // in an XPC view service crashes via ViewBridge re-entrancy.
-      if (strongSelf.onApplyPreset && p.timelineJSON.length)
+      // A content preset (payloadKind set) inserts plugin content; otherwise it's
+      // a timeline-curve preset.
+      if (p.payloadKind.length) {
+        if (strongSelf.onApplyPresetPayload && p.payloadJSON.length)
+          strongSelf.onApplyPresetPayload(p.payloadKind, p.payloadJSON,
+                                          atPlayhead);
+      } else if (strongSelf.onApplyPreset && p.timelineJSON.length) {
         strongSelf.onApplyPreset(p.timelineJSON, atPlayhead);
+      }
       if (strongSelf.onDidApplyPreset)
         strongSelf.onDidApplyPreset();
       // A guide keeps the popover open to chain apply -> insert -> save; it

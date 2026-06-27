@@ -74,6 +74,14 @@
         return;
       [strong _applyPresetJSON:timelineJSON atPlayhead:atPlayhead];
     };
+    // Content presets (a payloadKind) are inserted by the plugin, not applied as
+    // a timeline curve - forward to the host's hook.
+    popover.onApplyPresetPayload =
+        ^(NSString *kind, NSString *json, BOOL atPlayhead) {
+          KKTimelineInspectorView *strong = weak;
+          if (strong.onApplyPresetPayload)
+            strong.onApplyPresetPayload(kind, json, atPlayhead);
+        };
   }
   popover.pluginKey = self.presetPluginKey;
   return popover;
