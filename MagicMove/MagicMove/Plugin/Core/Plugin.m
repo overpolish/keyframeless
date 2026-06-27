@@ -104,12 +104,19 @@
     double mbShutterAngle =
         mb[@"shutterAngle"] ? [mb[@"shutterAngle"] doubleValue] : 180.0;
     NSInteger mbSamples = mb[@"samples"] ? [mb[@"samples"] integerValue] : 16;
-    NSInteger mbMode = mb[@"mode"] ? [mb[@"mode"] integerValue] : 0;
+    // Technique (Fast=0/Accurate=1); migrate a legacy "mode"-only blob.
+    NSInteger mbTechnique =
+        mb[@"technique"]
+            ? [mb[@"technique"] integerValue]
+            : (mb[@"mode"] && [mb[@"mode"] integerValue] == KKMotionBlurModeAlways
+                   ? KKMotionBlurTechniqueAccurate
+                   : KKMotionBlurTechniqueFast);
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setMotionBlurEnabled:mbEnabled];
       [self.inspectorView setMotionBlurShutterAngle:mbShutterAngle
                                             samples:mbSamples];
-      [self.inspectorView setMotionBlurMode:(KKMotionBlurMode)mbMode];
+      [self.inspectorView
+          setMotionBlurTechnique:(KKMotionBlurTechnique)mbTechnique];
     });
   }
 

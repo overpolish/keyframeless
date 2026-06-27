@@ -30,6 +30,14 @@
 /// ordering needs NO per-draw waitUntilCompleted. Rebuilt on tile-size / format
 /// change. (Instance-scoped, not a static - separate XPC process per instance.)
 @property(nonatomic, strong, nullable) id<MTLTexture> renderIntermediateTex;
+/// Per-layer "Fast" (velocity-reconstruction) motion-blur scratch textures,
+/// reused across layers and frames (rebuilt on size / format change). `mbColorTex`
+/// holds one layer rendered alone over transparent; `mbVelocityTex` (RG16Float)
+/// its analytic screen-space velocity; `mbBlurredTex` the reconstruction result
+/// composited over the dest. Instance-scoped (separate XPC process per instance).
+@property(nonatomic, strong, nullable) id<MTLTexture> mbColorTex;
+@property(nonatomic, strong, nullable) id<MTLTexture> mbVelocityTex;
+@property(nonatomic, strong, nullable) id<MTLTexture> mbBlurredTex;
 /// Returns a copy of `timeline` with every lane's lastKnownClipDuration set to
 /// the current effect duration (seconds). Must be called inside an action
 /// scope (FxTimingAPI resolves there).

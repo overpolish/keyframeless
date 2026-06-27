@@ -200,10 +200,28 @@ static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
   int samples = dict[@"samples"] ? [dict[@"samples"] intValue] : 16;
   KKMotionBlurState state =
       _kkMBState(shutterAngle / 360.0, samples, timingAPI);
-  int mode = dict[@"mode"] ? [dict[@"mode"] intValue] : 0;
-  if (mode < KKMotionBlurModeTransitionsOnly || mode > KKMotionBlurModeAlways)
-    mode = KKMotionBlurModeTransitionsOnly;
-  state.mode = (KKMotionBlurMode)mode;
+
+  // Technique (Fast/Accurate). Migrate a legacy blob that only has the old
+  // when-to-fire `mode`: the old "Always" (2) was the footage-smear case, which
+  // is Accurate; everything else maps to Fast.
+  KKMotionBlurTechnique technique = KKMotionBlurTechniqueFast;
+  if (dict[@"technique"]) {
+    int t = [dict[@"technique"] intValue];
+    technique = (t == KKMotionBlurTechniqueAccurate)
+                    ? KKMotionBlurTechniqueAccurate
+                    : KKMotionBlurTechniqueFast;
+  } else if (dict[@"mode"]) {
+    technique = ([dict[@"mode"] intValue] == KKMotionBlurModeAlways)
+                    ? KKMotionBlurTechniqueAccurate
+                    : KKMotionBlurTechniqueFast;
+  }
+  state.technique = technique;
+  // Derive the internal when-to-fire gate from the technique: Fast skips fully
+  // static frames (per-layer still-skip handles the rest); Accurate blurs every
+  // frame so moving footage smears (and requests sub-frame source frames).
+  state.mode = (technique == KKMotionBlurTechniqueAccurate)
+                   ? KKMotionBlurModeAlways
+                   : KKMotionBlurModeValueChanging;
   return state;
 }
 

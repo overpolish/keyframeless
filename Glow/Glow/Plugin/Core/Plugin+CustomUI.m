@@ -289,7 +289,7 @@ static NSString *_GlowAILaneSchemaText(void) {
     BOOL motionBlurEnabled = st.motionBlurEnabled;
     double motionBlurShutterAngle = st.motionBlurShutterAngle;
     NSInteger motionBlurSamples = st.motionBlurSamples;
-    NSInteger motionBlurMode = st.motionBlurMode;
+    NSInteger motionBlurTechnique = st.motionBlurTechnique;
     BOOL oscMasterVisible = st.oscMasterVisible;
     NSDictionary *uiState = st.uiState;
     KKTimeline *timeline = [self timelineStampedWithClipDuration:st.timeline];
@@ -339,7 +339,7 @@ static NSString *_GlowAILaneSchemaText(void) {
     [view setMotionBlurEnabled:motionBlurEnabled];
     [view setMotionBlurShutterAngle:motionBlurShutterAngle
                             samples:motionBlurSamples];
-    [view setMotionBlurMode:(KKMotionBlurMode)motionBlurMode];
+    [view setMotionBlurTechnique:(KKMotionBlurTechnique)motionBlurTechnique];
 
     // On-screen-control visibility: master tick + the single Radius pill +
     // opt-click-hide + opt-reveal. Shared glue in KKPlugin (OSCVisibility); the

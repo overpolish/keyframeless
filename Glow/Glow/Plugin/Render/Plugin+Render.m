@@ -366,11 +366,10 @@ static void _texPairReturn(NSInteger idx) {
        withPluginState:(NSData *)pluginState
                 atTime:(CMTime)renderTime
                  error:(NSError **)error {
-  KKMotionBlurState mbState = {0};
-  if (pluginState.length >= sizeof(KKMotionBlurState))
-    [pluginState getBytes:&mbState length:sizeof(mbState)];
+  // Motion blur averages Glow's per-sample params over a single source frame
+  // (see KKBuildSourceRequests' header); no sub-frame source requests.
   NSArray *reqs = KKBuildSourceRequests(
-      renderTime, mbState, GlowMiniViewerRequestPath, self.renderCache,
+      renderTime, GlowMiniViewerRequestPath, self.renderCache,
       ^id(CMTime t) {
         return [[FxImageTileRequest alloc]
             initWithSource:kFxImageTileRequestSourceEffectClip

@@ -174,7 +174,7 @@
     [view setMotionBlurEnabled:st.motionBlurEnabled];
     [view setMotionBlurShutterAngle:st.motionBlurShutterAngle
                             samples:st.motionBlurSamples];
-    [view setMotionBlurMode:(KKMotionBlurMode)st.motionBlurMode];
+    [view setMotionBlurTechnique:(KKMotionBlurTechnique)st.motionBlurTechnique];
 
     [self kkWireStandardInspectorCallbacksForView:view
                                    uiStateParamID:kParamUIState

@@ -18,7 +18,13 @@ typedef enum KKVertexInputIndex {
     // A parallel float-per-vertex buffer of arc length (pixels along the
     // contour), consumed by KKStrokeDashVertexShader so the fragment can mask a
     // dash pattern by distance along the stroke. Unused by the other shaders.
-    KKVertexInputIndex_StrokeArc = 3
+    KKVertexInputIndex_StrokeArc = 3,
+    // A second float4x4 forward transform: the PREVIOUS-frame (shutter-start)
+    // model + perspective, consumed by KKVelocityVertexShader alongside the
+    // current Transform so it can emit each vertex's screen-space displacement
+    // over the shutter (the velocity buffer the reconstruction filter blurs
+    // along). Unused by the other shaders.
+    KKVertexInputIndex_TransformPrev = 4
 } KKVertexInputIndex;
 
 typedef enum KKTextureIndex { KKTextureIndex_InputImage = 0 } KKTextureIndex;
@@ -86,6 +92,16 @@ typedef struct KKHachureMaskParams {
     vector_float2 rectMin; // image placement rect (object-normalised)
     vector_float2 rectMax;
 } KKHachureMaskParams;
+
+/// Uniforms for the velocity-buffer reconstruction passes
+/// (KKMotionBlurReconstruct): `tileSize` is the TileMax/NeighborMax tile edge in
+/// px (also the max blur reach - a velocity longer than one tile is clamped),
+/// `sampleCount` the reconstruction gather tap count. Shared by all three
+/// passes; the tile passes ignore `sampleCount`.
+typedef struct KKMBReconstructParams {
+    int tileSize;
+    int sampleCount;
+} KKMBReconstructParams;
 
 #ifdef __METAL_VERSION__
 typedef struct {

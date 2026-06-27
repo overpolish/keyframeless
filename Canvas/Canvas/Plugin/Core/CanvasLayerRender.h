@@ -71,6 +71,43 @@ void CanvasEncodeImageLayers(
     id<MTLRenderPipelineState> _Nullable tintPS,
     id<MTLRenderPipelineState> _Nullable gradTintPS);
 
+/// The peak screen-space displacement (px) the layer's bbox centre + corners
+/// travel between the shutter-start fraction `fracPrev` and the current `frac`,
+/// under its full composed transform - i.e. how long the motion-blur trail should
+/// be. The caller sizes the reconstruction tile (= max blur reach) to this so a
+/// faster layer gets a longer trail. Returns 0 for a static / hidden / group
+/// layer or an unknown time (negative frac). Same projection as the velocity
+/// shader, so the estimate matches what gets rendered.
+float CanvasLayerMaxVelocityPx(NSArray<KKBezierPath *> *layers,
+                               NSInteger layerIndex, double frac,
+                               double fracPrev, float imageWidth,
+                               float imageHeight, float tileShiftX,
+                               float tileShiftY,
+                               NSString *_Nullable overrideLayerID,
+                               KKTimeline *_Nullable overrideTimeline);
+
+/// Emits one layer's analytic screen-space VELOCITY (for the "Fast"
+/// reconstruction motion blur) by drawing its bounding quad - expanded by
+/// `marginPx` so the layer's stroke width AND its blur smear fall inside - through
+/// the kit `KKVelocityVertexShader`. The caller must have set the velocity
+/// pipeline (`KKVelocityVertexShader` + `KKVelocityFragment`, no blend) and the
+/// viewport-size buffer on `encoder`. The quad is drawn through the layer's
+/// composed model matrix at `frac` (current, bound at KKVertexInputIndex_Transform)
+/// AND `fracPrev` (shutter start, at KKVertexInputIndex_TransformPrev), so the
+/// shader emits each pixel's displacement over the shutter. Velocity is a smooth
+/// analytic field, so the bounding quad (not the exact tessellation) is enough -
+/// the colour pass's exact geometry masks the over-coverage. Group ancestors
+/// compose exactly as in the colour encoders. `overrideLayerID`/`overrideTimeline`
+/// behave as elsewhere. A negative `frac`/`fracPrev` skips (no motion to emit).
+void CanvasEncodeLayerVelocityQuad(NSArray<KKBezierPath *> *layers,
+                                   id<MTLRenderCommandEncoder> encoder,
+                                   NSInteger layerIndex, double frac,
+                                   double fracPrev, float imageWidth,
+                                   float imageHeight, float tileShiftX,
+                                   float tileShiftY, float marginPx,
+                                   NSString *_Nullable overrideLayerID,
+                                   KKTimeline *_Nullable overrideTimeline);
+
 /// Draw the source frame as a full-image quad through the SAME tile transform
 /// (KKTransformVertexShader + the tile-shift matrix) the layers use, so it
 /// tiles identically in FCP's sub-tiled / reverse-Y library preview instead of

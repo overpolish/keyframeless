@@ -15,11 +15,31 @@
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMotionBlur.h>
+#import <KeyframelessKit/KKMotionBlurReconstruct.h>
 #import <KeyframelessKit/KKPlugin+MiniViewerFeed.h>
 #import <KeyframelessKit/KKShaderTypes.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
+
+// Returns `existing` if it already matches (w,h,format), else allocates a fresh
+// private render-target+shader-read texture. Used for the "Fast" motion-blur
+// per-layer scratch textures, reused across frames.
+static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
+                                             id<MTLDevice> device, NSInteger w,
+                                             NSInteger h, MTLPixelFormat fmt) {
+  if (existing && (NSInteger)existing.width == w &&
+      (NSInteger)existing.height == h && existing.pixelFormat == fmt)
+    return existing;
+  MTLTextureDescriptor *td =
+      [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:fmt
+                                                         width:(NSUInteger)w
+                                                        height:(NSUInteger)h
+                                                     mipmapped:NO];
+  td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  td.storageMode = MTLStorageModePrivate;
+  return [device newTextureWithDescriptor:td];
+}
 
 @implementation CanvasPlugin (Render)
 
@@ -33,11 +53,8 @@
   // the reverse-channel path, plus motion-blur sub-frame samples. The MB state
   // is snapshotted into -pluginState: (prefix of the blob); read it back so
   // KKBuildSourceRequests appends the sub-frame source requests.
-  KKMotionBlurState mbState = {0};
-  if (pluginState.length >= sizeof(KKMotionBlurState))
-    [pluginState getBytes:&mbState length:sizeof(mbState)];
   NSArray *reqs = KKBuildSourceRequests(
-      renderTime, mbState, CanvasMiniViewerRequestPath, self.renderCache,
+      renderTime, CanvasMiniViewerRequestPath, self.renderCache,
       ^id(CMTime t) {
         return [[FxImageTileRequest alloc]
             initWithSource:kFxImageTileRequestSourceEffectClip
@@ -369,9 +386,9 @@
   free(ordBuf);
 
   void (^renderSampleOrdered)(id<MTLTexture>, id<MTLCommandBuffer>,
-                              id<MTLTexture>, double) =
+                              id<MTLTexture>, double, NSArray<NSNumber *> *) =
       ^(id<MTLTexture> sdest, id<MTLCommandBuffer> scb, id<MTLTexture> srcTex,
-        double f) {
+        double f, NSArray<NSNumber *> *order) {
         if (!device || !sdest || !imagePS)
           return;
         float sw = (float)sdest.width, sh = (float)sdest.height;
@@ -408,7 +425,7 @@
         BOOL canFill =
             fillPipes.stencil && fillPipes.color && fillPipes.composite;
         double ef = f < 0.0 ? 0.0 : f;
-        for (NSNumber *idxN in drawOrder) {
+        for (NSNumber *idxN in order) {
           NSInteger i = idxN.integerValue;
           KKBezierPath *p = layers[i];
           // Bundle p's ancestor groups in so the per-layer encoders still
@@ -489,7 +506,7 @@
         sourceImages.firstObject
             ? [sourceImages.firstObject metalTextureForDevice:device]
             : nil;
-    renderSampleOrdered(interm, cb, srcTex, f);
+    renderSampleOrdered(interm, cb, srcTex, f, drawOrder);
     // Copy the finished composite onto the dest tile. The intermediate is tracked
     // so the blit waits for the render passes; the dest is the lone write here.
     id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
@@ -509,11 +526,200 @@
     return YES;
   };
 
+  // "Fast" motion blur: per-layer velocity-buffer reconstruction (McGuire/
+  // Guertin via the shared KKMotionBlurReconstruct). For each layer: render it
+  // ALONE over transparent (mbColorTex), emit its analytic screen-space velocity
+  // (mbVelocityTex) from the composed matrix at the current frac AND the shutter
+  // start, reconstruct into mbBlurredTex, then composite that over the dest. Cost
+  // is fixed in the tap count - independent of blur length - unlike the N-sample
+  // accumulate path below. The source frame is the un-blurred base (footage
+  // smear stays on the Accurate path). Returns NO on any setup failure so the
+  // caller falls through to accumulate.
+  BOOL (^runFastBlur)(void) = ^BOOL {
+    if (!device)
+      return NO;
+    id<MTLTexture> destTex = [destinationImage metalTextureForDevice:device];
+    if (!destTex)
+      return NO;
+    NSInteger iw = (NSInteger)tileW, ih = (NSInteger)tileH;
+    if (iw <= 0 || ih <= 0 || drawOrder.count == 0)
+      return NO;
+
+    id<MTLRenderPipelineState> velPS = [cache
+        buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                                 @".Canvas.velocity"
+                                      registryID:regID
+                                     pixelFormat:MTLPixelFormatRG16Float
+                                        bundleID:kitBundleID
+                                    vertexShader:@"KKVelocityVertexShader"
+                                  fragmentShader:@"KKVelocityFragment"
+                                       blendMode:KKBlendModeNone];
+    id<MTLRenderPipelineState> compositePS = [cache
+        buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                                 @".Canvas.mbcomposite"
+                                      registryID:regID
+                                     pixelFormat:pf
+                                        bundleID:kitBundleID
+                                    vertexShader:@"KKVertexShader"
+                                  fragmentShader:@"KKTexturePassthroughFragment"
+                                       blendMode:KKBlendModePremultipliedAlpha];
+    if (!velPS || !compositePS)
+      return NO;
+
+    self.mbColorTex = CanvasEnsureScratchTex(self.mbColorTex, device, iw, ih, pf);
+    self.mbVelocityTex = CanvasEnsureScratchTex(self.mbVelocityTex, device, iw,
+                                                ih, MTLPixelFormatRG16Float);
+    self.mbBlurredTex =
+        CanvasEnsureScratchTex(self.mbBlurredTex, device, iw, ih, pf);
+    if (!self.mbColorTex || !self.mbVelocityTex || !self.mbBlurredTex)
+      return NO;
+
+    id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:regID
+                                                      pixelFormat:pf];
+    if (!queue)
+      return NO;
+    id<MTLTexture> srcTex =
+        sourceImages.firstObject
+            ? [sourceImages.firstObject metalTextureForDevice:device]
+            : nil;
+
+    // Shutter-start clip fraction (the velocity is the displacement from here to
+    // `frac`). Fixed 90000 timescale so a sub-frame offset survives FCP's low
+    // playback timescales (same reason as KKMotionBlur sampleTimes).
+    double fPrev = fracForTime(
+        CMTimeSubtract(renderTime, CMTimeMakeWithSeconds(mbState.shutterSec,
+                                                         90000)));
+    const float marginPx = 64.0f; // cover stroke width; smear handled by tiles
+    simd_uint2 vp = {(unsigned int)iw, (unsigned int)ih};
+
+    // Base: clear the dest + draw the un-blurred source frame.
+    {
+      id<MTLCommandBuffer> cb = [queue commandBuffer];
+      MTLRenderPassDescriptor *rpd =
+          [MTLRenderPassDescriptor renderPassDescriptor];
+      rpd.colorAttachments[0].texture = destTex;
+      rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+      rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+      id<MTLRenderCommandEncoder> e =
+          [cb renderCommandEncoderWithDescriptor:rpd];
+      [e setViewport:(MTLViewport){0, 0, (double)iw, (double)ih, -1, 1}];
+      [e setVertexBytes:&vp
+                 length:sizeof(vp)
+                atIndex:KKVertexInputIndex_ViewportSize];
+      [e setRenderPipelineState:imagePS];
+      if (srcTex)
+        CanvasEncodeSourceTile(e, srcTex, outputWidth, outputHeight, tileShiftX,
+                               tileShiftY);
+      [e endEncoding];
+      [cb commit];
+      [cb waitUntilCompleted];
+    }
+
+    KKVertex2D fsQuad[4] = {
+        {{iw / 2.0f, -ih / 2.0f}, {1, 1}},
+        {{-iw / 2.0f, -ih / 2.0f}, {0, 1}},
+        {{iw / 2.0f, ih / 2.0f}, {1, 0}},
+        {{-iw / 2.0f, ih / 2.0f}, {0, 0}},
+    };
+
+    for (NSNumber *idxN in drawOrder) {
+      NSInteger i = idxN.integerValue;
+      id<MTLCommandBuffer> cb = [queue commandBuffer];
+
+      // Size this layer's blur reach (= tile size) to its actual screen-space
+      // motion, so a faster layer gets a longer trail instead of clamping at a
+      // fixed radius. Sample count scales with trail length so a long blur stays
+      // smooth (no ghosting between taps). A still layer (vel ~0) reconstructs to
+      // a no-op, so the tile floor keeps it cheap.
+      float maxVel = CanvasLayerMaxVelocityPx(layers, i, frac, fPrev, outputWidth,
+                                              outputHeight, tileShiftX,
+                                              tileShiftY, nil, nil);
+      int tileSize = (int)fmaxf(16.0f, fminf(256.0f, ceilf(maxVel)));
+      int taps = (int)fmaxf(9.0f, fminf(25.0f, ceilf((float)tileSize / 6.0f)));
+
+      // 1. Colour: the layer alone over transparent (clears, no source).
+      renderSampleOrdered(self.mbColorTex, cb, nil, frac, @[ idxN ]);
+
+      // 2. Velocity: the layer's analytic screen-space displacement.
+      {
+        MTLRenderPassDescriptor *rpd =
+            [MTLRenderPassDescriptor renderPassDescriptor];
+        rpd.colorAttachments[0].texture = self.mbVelocityTex;
+        rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+        rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+        rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+        id<MTLRenderCommandEncoder> e =
+            [cb renderCommandEncoderWithDescriptor:rpd];
+        [e setViewport:(MTLViewport){0, 0, (double)iw, (double)ih, -1, 1}];
+        [e setVertexBytes:&vp
+                   length:sizeof(vp)
+                  atIndex:KKVertexInputIndex_ViewportSize];
+        [e setRenderPipelineState:velPS];
+        CanvasEncodeLayerVelocityQuad(layers, e, i, frac, fPrev, outputWidth,
+                                      outputHeight, tileShiftX, tileShiftY,
+                                      marginPx, nil, nil);
+        [e endEncoding];
+      }
+
+      // 3. Reconstruct the blurred layer from colour + velocity.
+      if (![KKMotionBlurReconstruct
+              encodeReconstructionToTexture:self.mbBlurredTex
+                               colorTexture:self.mbColorTex
+                            velocityTexture:self.mbVelocityTex
+                                   tileSize:tileSize
+                                sampleCount:taps
+                                 registryID:regID
+                                     device:device
+                              commandBuffer:cb]) {
+        [cb commit];
+        [cb waitUntilCompleted];
+        [cache returnCommandQueueToCache:queue];
+        return NO;
+      }
+
+      // 4. Composite the blurred layer over the dest (premultiplied "over").
+      {
+        MTLRenderPassDescriptor *rpd =
+            [MTLRenderPassDescriptor renderPassDescriptor];
+        rpd.colorAttachments[0].texture = destTex;
+        rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+        rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+        id<MTLRenderCommandEncoder> e =
+            [cb renderCommandEncoderWithDescriptor:rpd];
+        [e setViewport:(MTLViewport){0, 0, (double)iw, (double)ih, -1, 1}];
+        [e setVertexBytes:fsQuad
+                   length:sizeof(fsQuad)
+                  atIndex:KKVertexInputIndex_Vertices];
+        [e setVertexBytes:&vp
+                   length:sizeof(vp)
+                  atIndex:KKVertexInputIndex_ViewportSize];
+        [e setRenderPipelineState:compositePS];
+        [e setFragmentTexture:self.mbBlurredTex
+                      atIndex:KKTextureIndex_InputImage];
+        [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                vertexStart:0
+                vertexCount:4];
+        [e endEncoding];
+      }
+
+      [cb commit];
+      [cb waitUntilCompleted];
+    }
+    [cache returnCommandQueueToCache:queue];
+    return YES;
+  };
+
   // Motion blur: accumulate the composite across sub-frame sample times (the
   // shared KKMotionBlur infra averages N passes). Each pass composites the
   // layer stack at that sample's clip fraction over its time-matched source
   // frame, so both the layer animation and the underlying content smear.
   if (mbState.enabled) {
+    // Fast technique = per-layer velocity reconstruction (fixed cost). If it
+    // bails (setup failure), fall through to accumulate. Accurate technique skips
+    // straight to the accumulate path below (footage smear / heavy correctness).
+    if (mbState.technique == KKMotionBlurTechniqueFast && runFastBlur())
+      return YES;
     NSArray<NSValue *> *times = [KKMotionBlur sampleTimesForState:mbState
                                                        renderTime:renderTime];
     NSMutableArray<NSNumber *> *fracs =
@@ -540,7 +746,8 @@
                       // (image/fill/stroke) over its time-matched source into the
                       // sample texture; KKMotionBlur averages the samples.
                       renderSampleOrdered(sampleDest, commandBuffer,
-                                          inputTextures.firstObject, f);
+                                          inputTextures.firstObject, f,
+                                          drawOrder);
                       return YES;
                     }];
     if (applied)

@@ -108,7 +108,7 @@ static NSString *_RoundedAILaneSchemaText(void) {
     BOOL motionBlurEnabled = st.motionBlurEnabled;
     double motionBlurShutterAngle = st.motionBlurShutterAngle;
     NSInteger motionBlurSamples = st.motionBlurSamples;
-    NSInteger motionBlurMode = st.motionBlurMode;
+    NSInteger motionBlurTechnique = st.motionBlurTechnique;
     NSDictionary *uiState = st.uiState;
     KKTimeline *timeline = [self timelineStampedWithClipDuration:st.timeline];
 
@@ -166,7 +166,7 @@ static NSString *_RoundedAILaneSchemaText(void) {
     [view setMotionBlurEnabled:motionBlurEnabled];
     [view setMotionBlurShutterAngle:motionBlurShutterAngle
                             samples:motionBlurSamples];
-    [view setMotionBlurMode:(KKMotionBlurMode)motionBlurMode];
+    [view setMotionBlurTechnique:(KKMotionBlurTechnique)motionBlurTechnique];
 
     // On-screen-control visibility: master tick + per-element pills (Radius,
     // Crop) + opt-click-hide + opt-reveal. Shared glue in KKPlugin

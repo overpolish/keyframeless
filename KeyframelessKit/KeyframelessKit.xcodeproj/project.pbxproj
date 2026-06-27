@@ -44,6 +44,7 @@
 				Math/Timing/KKTimingStage.h,
 				Metal/KKMetalDeviceCache.h,
 				Metal/KKMotionBlur.h,
+				Metal/KKMotionBlurReconstruct.h,
 				Metal/KKRenderPrimitives.h,
 				Metal/KKShaderTypes.h,
 				OSC/Base/KKOnScreenControl.h,

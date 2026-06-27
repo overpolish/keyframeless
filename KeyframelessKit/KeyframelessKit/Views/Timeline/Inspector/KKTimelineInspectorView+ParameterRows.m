@@ -137,7 +137,7 @@
     strong->_mbSettingsButton.enabled = isChecked;
     if (strong.onMotionBlurChanged)
       strong.onMotionBlurChanged(isChecked, strong->_mbShutterAngle,
-                                 strong->_mbSamples, strong->_mbMode);
+                                 strong->_mbSamples, strong->_mbTechnique);
   };
 
   [self addSubview:_mbRow];
@@ -471,14 +471,19 @@
                           samples:(NSInteger)samples {
   _mbShutterAngle = shutterAngle;
   _mbSamples = samples;
-  [_mbSettingsView applyShutterAngle:shutterAngle samples:samples mode:_mbMode];
+  [_mbSettingsView applyShutterAngle:shutterAngle
+                            samples:samples
+                          technique:_mbTechnique];
 }
 
-- (void)setMotionBlurMode:(KKMotionBlurMode)mode {
-  _mbMode = mode;
+- (void)setMotionBlurTechnique:(KKMotionBlurTechnique)technique {
+  // A host with no Fast support is always Accurate, whatever the blob says.
+  _mbTechnique = [self motionBlurSupportsFastTechnique]
+                     ? technique
+                     : KKMotionBlurTechniqueAccurate;
   [_mbSettingsView applyShutterAngle:_mbShutterAngle
-                             samples:_mbSamples
-                                mode:mode];
+                            samples:_mbSamples
+                          technique:_mbTechnique];
 }
 
 - (void)_mbSettingsClicked:(id)sender {
@@ -486,22 +491,24 @@
     [_mbPopover close];
     return;
   }
-  _KKMotionBlurSettingsView *content =
-      [[_KKMotionBlurSettingsView alloc] initWithShutterAngle:_mbShutterAngle
-                                                      samples:_mbSamples
-                                                         mode:_mbMode];
+  _KKMotionBlurSettingsView *content = [[_KKMotionBlurSettingsView alloc]
+      initWithShutterAngle:_mbShutterAngle
+                   samples:_mbSamples
+                 technique:_mbTechnique
+              supportsFast:[self motionBlurSupportsFastTechnique]
+            defaultSamples:[self motionBlurDefaultSamples]];
   __weak typeof(self) weak = self;
   content.onChanged =
-      ^(double shutterAngle, NSInteger samples, KKMotionBlurMode mode) {
+      ^(double shutterAngle, NSInteger samples, KKMotionBlurTechnique technique) {
         KKTimelineInspectorView *strong = weak;
         if (!strong)
           return;
         strong->_mbShutterAngle = shutterAngle;
         strong->_mbSamples = samples;
-        strong->_mbMode = mode;
+        strong->_mbTechnique = technique;
         if (strong.onMotionBlurChanged)
           strong.onMotionBlurChanged(strong->_mbCheckbox.isChecked,
-                                     shutterAngle, samples, mode);
+                                     shutterAngle, samples, technique);
       };
   content.onDragBegin = ^{
     if (weak.onDragBegin)
@@ -510,6 +517,13 @@
   content.onDragEnd = ^{
     if (weak.onDragEnd)
       weak.onDragEnd();
+  };
+  // The Samples row is removed in Fast, so the content height changes - resize
+  // the open popover to match.
+  content.onLayoutChanged = ^{
+    KKTimelineInspectorView *strong = weak;
+    if (strong && strong->_mbPopover.isShown)
+      strong->_mbPopover.contentSize = strong->_mbSettingsView.frame.size;
   };
   _mbSettingsView = content;
 

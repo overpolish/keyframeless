@@ -459,6 +459,18 @@
   return YES;
 }
 
+// Canvas renders each layer through KKTransformVertexShader, so it can emit a
+// per-layer velocity buffer for the Fast (reconstruction) motion-blur technique.
+- (BOOL)motionBlurSupportsFastTechnique {
+  return YES;
+}
+
+// Canvas defaults to Fast, where Samples is unused; if the user switches to the
+// Accurate path, its per-layer content is heavy, so default to a low count.
+- (NSInteger)motionBlurDefaultSamples {
+  return 6;
+}
+
 // The popover mini handles follow the SAME OSC visibility as the viewer OSC
 // (global toggle + per-element hidden set, read from per-instance state),
 // plus the selected layer's lock (locked => no handles). Canvas owns this so it

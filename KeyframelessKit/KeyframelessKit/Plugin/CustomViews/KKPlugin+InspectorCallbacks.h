@@ -30,7 +30,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) BOOL motionBlurEnabled;
 @property(nonatomic) double motionBlurShutterAngle;
 @property(nonatomic) NSInteger motionBlurSamples;
-@property(nonatomic) NSInteger motionBlurMode;
+@property(nonatomic) NSInteger motionBlurTechnique;
 @property(nonatomic, copy) NSDictionary *uiState;
 @property(nonatomic, strong, nullable) KKTimeline *timeline;
 @end

@@ -628,7 +628,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   BOOL motionBlurEnabled = st.motionBlurEnabled;
   double motionBlurShutterAngle = st.motionBlurShutterAngle;
   NSInteger motionBlurSamples = st.motionBlurSamples;
-  NSInteger motionBlurMode = st.motionBlurMode;
+  NSInteger motionBlurTechnique = st.motionBlurTechnique;
   NSDictionary *uiState = st.uiState;
   KKTimeline *timeline = [self timelineStampedWithClipDuration:st.timeline];
 
@@ -706,7 +706,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   [view setMotionBlurEnabled:motionBlurEnabled];
   [view setMotionBlurShutterAngle:motionBlurShutterAngle
                           samples:motionBlurSamples];
-  [view setMotionBlurMode:(KKMotionBlurMode)motionBlurMode];
+  [view setMotionBlurTechnique:(KKMotionBlurTechnique)motionBlurTechnique];
   [view setRenderMode:renderMode];
   [view setOSCVisible:oscMasterVisible];
 

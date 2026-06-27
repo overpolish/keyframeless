@@ -52,6 +52,52 @@ vertex KKRasterizerData KKTransformVertexShader(
     return out;
 }
 
+/// Rasterizer payload for the velocity pass: only the clip position (for
+/// rasterization) and the per-vertex screen-space displacement over the shutter.
+struct KKVelocityRasterData {
+    float4 clipSpacePosition [[position]];
+    float2 velocity; // screen px displacement (curr - prev), +x right / +y down
+};
+
+/// Emits a per-pixel VELOCITY buffer for the "Fast" reconstruction motion blur,
+/// paired with KKTransformVertexShader. Draw the SAME geometry (image quad,
+/// tessellated stroke, …) through this shader, binding the CURRENT-frame composed
+/// matrix at KKVertexInputIndex_Transform and the SHUTTER-START matrix at
+/// KKVertexInputIndex_TransformPrev. Each vertex is projected through both
+/// matrices (perspective divide included), converted to top-left texture pixels
+/// (+y down, matching the reconstruction sampling space), and the difference is
+/// interpolated across the primitive. Uncovered pixels keep the cleared 0 -
+/// correct (still = no motion). The current clip position drives rasterization so
+/// the velocity lands exactly where the colour pass drew.
+vertex KKVelocityRasterData KKVelocityVertexShader(
+    uint vertexID [[vertex_id]], constant KKVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
+    constant vector_uint2 *viewportSizePointer [[buffer(KKVertexInputIndex_ViewportSize)]],
+    constant matrix_float4x4 *transform [[buffer(KKVertexInputIndex_Transform)]],
+    constant matrix_float4x4 *transformPrev [[buffer(KKVertexInputIndex_TransformPrev)]]) {
+    KKVelocityRasterData out;
+    float2 localPos = vertexArray[vertexID].position.xy;
+    float2 viewportSize = float2(*viewportSizePointer);
+
+    float4 wNow = (*transform) * float4(localPos, 0.0, 1.0);
+    float4 wPrev = (*transformPrev) * float4(localPos, 0.0, 1.0);
+
+    out.clipSpacePosition = float4(wNow.xy / (viewportSize / 2.0), 0.0, wNow.w);
+
+    // Screen pixels after perspective divide, top-left origin / +y down (the
+    // KKTransformVertexShader's world.xy/world.w is centered-pixel, +y up):
+    // px = (world.x, -world.y)/world.w + viewport/2.
+    float2 pxNow = float2(wNow.x, -wNow.y) / wNow.w + viewportSize * 0.5;
+    float2 pxPrev = float2(wPrev.x, -wPrev.y) / wPrev.w + viewportSize * 0.5;
+    out.velocity = pxNow - pxPrev;
+    return out;
+}
+
+/// Writes the interpolated screen-space velocity into the RG16Float velocity
+/// buffer the reconstruction filter samples.
+fragment half2 KKVelocityFragment(KKVelocityRasterData in [[stage_in]]) {
+    return half2(in.velocity);
+}
+
 /// Rasterizer payload for the dashed stroke: the usual edge-distance + gradient
 /// texture coordinate plus the per-vertex arc length the fragment masks against.
 struct KKStrokeRasterData {

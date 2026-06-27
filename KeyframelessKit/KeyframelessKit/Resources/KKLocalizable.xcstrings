@@ -1,132 +1,6 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "Shimmer": {
-      "comment": "Built-in preset name: drifting noise grain + radial gradient shimmer.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schimmern"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Centelleo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Scintillement"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "シマー"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "반짝임"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "微光闪烁"
-          }
-        }
-      }
-    },
-    "Pulsing Glow": {
-      "comment": "Built-in preset name: the glow radius pulses in and out.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pulsierendes Leuchten"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Resplandor pulsante"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lueur pulsée"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "脈動するグロー"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "맥동하는 글로우"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "脉动辉光"
-          }
-        }
-      }
-    },
-    "Glow In": {
-      "comment": "Built-in preset name: the glow grows in from nothing.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Leuchten ein"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Resplandor entrante"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lueur entrante"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "グローイン"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "글로우 인"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "辉光渐入"
-          }
-        }
-      }
-    },
     "<accent>Advanced</accent> - the full keyposes + intervals model: any number of keyposes, each interval with its own curve and modulation. Use it for multi-step motion or custom holds.": {
       "comment": "Help text.",
       "extractionState": "manual",
@@ -841,6 +715,48 @@
         }
       }
     },
+    "<accent>Maintain Timing</accent> locks the animation to absolute time - trimming or splitting the clip then retimes the keyposes to hold their position.": {
+      "comment": "Advanced timing guide: the Maintain Timing lock toggle.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Timing beibehalten</accent> sperrt die Animation auf absolute Zeit - beim Trimmen oder Teilen des Clips werden die Keyposes neu getimt, damit sie ihre Position halten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Mantener tiempo</accent> bloquea la animación en tiempo absoluto: al recortar o dividir el clip, los keyposes se vuelven a temporizar para mantener su posición."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Conserver le minutage</accent> verrouille l'animation sur le temps absolu : rogner ou diviser le plan recale alors les keyposes pour conserver leur position."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>タイミングを維持</accent>はアニメーションを絶対時間に固定します。クリップをトリミングまたは分割すると、キーポーズが位置を保つように再タイミングされます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>타이밍 유지</accent>는 애니메이션을 절대 시간에 고정합니다. 클립을 트리밍하거나 분할하면 키포즈가 위치를 유지하도록 다시 타이밍됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>保持时间</accent>将动画锁定到绝对时间：修剪或拆分片段时，关键姿势会重新计时以保持其位置。"
+          }
+        }
+      }
+    },
     "<accent>Manage</accent> - rename, overwrite with the current animation, or delete your own presets (built-ins can't be changed).": {
       "comment": "Help text.",
       "extractionState": "manual",
@@ -1429,6 +1345,48 @@
         }
       }
     },
+    "<kbd>⌥</kbd> + click a filter row": {
+      "comment": "Shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + Klick auf eine Filterzeile"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + clic en una fila del filtro"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + clic sur une ligne du filtre"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + フィルター行をクリック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + 필터 행 클릭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌥</kbd> + 点击筛选行"
+          }
+        }
+      }
+    },
     "<kbd>⌥</kbd> + click a keypose": {
       "comment": "Shortcut keys.",
       "extractionState": "manual",
@@ -1593,6 +1551,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "<red>红色</red>帧在此关键姿势之前，<blue>蓝色</blue>帧在之后。"
+          }
+        }
+      }
+    },
+    "Accurate": {
+      "comment": "Motion blur technique: sample accumulation.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genau"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preciso"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Précis"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高精度"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정밀"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "精确"
           }
         }
       }
@@ -1933,6 +1933,48 @@
       },
       "comment": "Help guide title: advanced timing walkthrough."
     },
+    "Advanced timeline only:": {
+      "comment": "Help tip: header grouping the Advanced-only toolbar toggles.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur erweiterte Timeline:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo línea de tiempo avanzada:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timeline avancée uniquement :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細タイムラインのみ："
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "고급 타임라인 전용:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅高级时间线："
+          }
+        }
+      }
+    },
     "All": {
       "comment": "Preset filter: show all presets.",
       "extractionState": "manual",
@@ -2013,48 +2055,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "已隐藏所有轨道"
-          }
-        }
-      }
-    },
-    "Always": {
-      "comment": "Motion blur mode option.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Immer"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Siempre"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toujours"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "常に"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "항상"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "始终"
           }
         }
       }
@@ -4411,6 +4411,48 @@
       },
       "comment": "Advanced timing guide: edit keypose values."
     },
+    "Edit on canvas": {
+      "comment": "OSC-only lane: edit via the on-screen control.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf der Leinwand bearbeiten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar en el lienzo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifier sur le canevas"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンバスで編集"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "캔버스에서 편집"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在画布上编辑"
+          }
+        }
+      }
+    },
     "Elastic": {
       "comment": "Easing curve name.",
       "extractionState": "manual",
@@ -4579,6 +4621,48 @@
         }
       }
     },
+    "Fast": {
+      "comment": "Motion blur technique: velocity reconstruction.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schnell"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rápido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rapide"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高速"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "빠름"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速"
+          }
+        }
+      }
+    },
     "Filter or name": {
       "comment": "Placeholder: type to filter the preset list, or to name a new preset.",
       "extractionState": "manual",
@@ -4621,6 +4705,48 @@
         }
       }
     },
+    "Filter properties": {
+      "comment": "Tooltip: filter which lanes (properties) are shown in the timeline.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigenschaften filtern"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtrar propiedades"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtrer les propriétés"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロパティをフィルタ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "속성 필터링"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筛选属性"
+          }
+        }
+      }
+    },
     "Filtering lanes": {
       "comment": "Help section title.",
       "extractionState": "manual",
@@ -4659,6 +4785,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "筛选轨道"
+          }
+        }
+      }
+    },
+    "Glow In": {
+      "comment": "Built-in preset name: the glow grows in from nothing.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leuchten ein"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resplandor entrante"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lueur entrante"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グローイン"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "글로우 인"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辉光渐入"
           }
         }
       }
@@ -5671,6 +5839,48 @@
         }
       }
     },
+    "Maintain Timing": {
+      "comment": "Toolbar toggle: pin the animation to absolute time so trimming or splitting the clip keeps each keypose where it is.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timing beibehalten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener tiempo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conserver le minutage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タイミングを維持"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "타이밍 유지"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保持时间"
+          }
+        }
+      }
+    },
     "Maintain proportions across components (e.g. keep Radius X/Y aspect-locked through wobble)": {
       "comment": "Tooltip for the Linked toggle.",
       "extractionState": "manual",
@@ -6637,6 +6847,48 @@
         }
       }
     },
+    "Open the <accent>filter</accent> to show or hide properties on the timeline.": {
+      "comment": "Advanced timing guide: open the lane-visibility filter.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne den <accent>Filter</accent>, um Eigenschaften in der Timeline ein- oder auszublenden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre el <accent>filtro</accent> para mostrar u ocultar propiedades en la línea de tiempo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrez le <accent>filtre</accent> pour afficher ou masquer des propriétés sur la timeline."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>フィルター</accent>を開いて、タイムラインのプロパティを表示・非表示にします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>필터</accent>를 열어 타임라인에서 속성을 표시하거나 숨깁니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开<accent>筛选</accent>以在时间线上显示或隐藏属性。"
+          }
+        }
+      }
+    },
     "Open the keypose again.": {
       "extractionState": "manual",
       "localizations": {
@@ -7392,6 +7644,90 @@
         }
       },
       "comment": "Help guide subtitle: Mini Viewer."
+    },
+    "Pulsing Glow": {
+      "comment": "Built-in preset name: the glow radius pulses in and out.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pulsierendes Leuchten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resplandor pulsante"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lueur pulsée"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "脈動するグロー"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "맥동하는 글로우"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "脉动辉光"
+          }
+        }
+      }
+    },
+    "Quality": {
+      "comment": "Label: motion blur quality/technique.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qualität"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calidad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qualité"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "品質"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "품질"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "质量"
+          }
+        }
+      }
     },
     "Randomize": {
       "comment": "Button: randomize the seed.",
@@ -8275,6 +8611,48 @@
         }
       }
     },
+    "Shimmer": {
+      "comment": "Built-in preset name: drifting noise grain + radial gradient shimmer.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schimmern"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Centelleo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scintillement"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シマー"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "반짝임"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "微光闪烁"
+          }
+        }
+      }
+    },
     "Shortcuts": {
       "comment": "Help section title: keyboard shortcuts.",
       "extractionState": "manual",
@@ -8611,6 +8989,48 @@
         }
       }
     },
+    "Solo that property": {
+      "comment": "Help shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur diese Eigenschaft anzeigen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar solo esa propiedad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afficher uniquement cette propriété"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのプロパティのみ表示"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "해당 속성만 표시"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅显示该属性"
+          }
+        }
+      }
+    },
     "Some plugins group their properties into categories (for example Glow's <accent>Core</accent> and <accent>Noise</accent>). When there is more than one category, <accent>category pills</accent> let you switch between groups in the value-editor popover, the Animated dropdown, and the parameter list, and a <accent>filter bar</accent> above the Advanced timeline lets you show, hide, or solo lanes so you can focus on a few at a time. Categories are optional - a plugin with no categories just lists its properties flat.": {
       "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
@@ -8649,6 +9069,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "某些插件会将其属性归入类别（例如 Glow 的<accent>核心</accent>和<accent>噪点</accent>）。当类别多于一个时，<accent>类别药丸</accent>可在值编辑器弹出窗口、“已添加动画”菜单和属性列表中切换组，而“高级”时间线上方的<accent>筛选栏</accent>可显示、隐藏或独显轨道，让你专注于少数几个。类别是可选的--没有类别的插件只是平铺列出其属性。"
+          }
+        }
+      }
+    },
+    "Some plugins group their properties into categories (for example Glow's <accent>Core</accent> and <accent>Noise</accent>). When there is more than one category, <accent>category pills</accent> let you switch between groups in the value-editor popover, the Animated dropdown, and the parameter list, and a <accent>lane filter</accent> on the Advanced timeline lets you show or hide individual properties so you can focus on a few at a time. Categories are optional - a plugin with no categories just lists its properties flat.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manche Plug-ins gruppieren ihre Eigenschaften in Kategorien (zum Beispiel <accent>Kern</accent> und <accent>Rauschen</accent> bei Glow). Bei mehr als einer Kategorie können Sie mit <accent>Kategorie-Pills</accent> zwischen Gruppen im Werte-Editor-Popover, im Animiert-Menü und in der Eigenschaftenliste wechseln, und ein <accent>Spurenfilter</accent> auf der erweiterten Timeline blendet einzelne Eigenschaften ein oder aus, damit Sie sich auf wenige konzentrieren können. Kategorien sind optional - ein Plug-in ohne Kategorien listet seine Eigenschaften einfach flach auf."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algunos plugins agrupan sus propiedades en categorías (por ejemplo <accent>Núcleo</accent> y <accent>Ruido</accent> en Glow). Cuando hay más de una categoría, las <accent>píldoras de categoría</accent> permiten cambiar entre grupos en el popover del editor de valores, el menú Animado y la lista de propiedades, y un <accent>filtro de carriles</accent> en la línea de tiempo Avanzada permite mostrar u ocultar propiedades concretas para centrarte en unas pocas. Las categorías son opcionales: un plugin sin categorías simplemente lista sus propiedades de forma plana."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Certains plug-ins regroupent leurs propriétés en catégories (par exemple <accent>Noyau</accent> et <accent>Bruit</accent> dans Glow). Quand il y a plus d’une catégorie, les <accent>pastilles de catégorie</accent> permettent de basculer entre les groupes dans le popover de l’éditeur de valeurs, le menu Animé et la liste des propriétés, et un <accent>filtre de pistes</accent> sur la timeline Avancée permet d’afficher ou masquer des propriétés individuelles pour vous concentrer sur quelques-unes. Les catégories sont facultatives - un plug-in sans catégories liste simplement ses propriétés à plat."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一部のプラグインはプロパティをカテゴリにまとめます(例: Glowの<accent>コア</accent>と<accent>ノイズ</accent>)。カテゴリが複数ある場合、<accent>カテゴリピル</accent>で値エディタのポップオーバー、アニメーションメニュー、プロパティリストのグループを切り替えられます。また、詳細タイムラインの<accent>レーンフィルター</accent>で個々のプロパティを表示・非表示にして、いくつかに集中できます。カテゴリは任意です。カテゴリのないプラグインはプロパティをフラットに並べるだけです。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "일부 플러그인은 속성을 카테고리로 묶습니다(예: Glow의 <accent>코어</accent>와 <accent>노이즈</accent>). 카테고리가 둘 이상이면 <accent>카테고리 알약</accent>으로 값 편집기 팝오버, 애니메이션 메뉴, 속성 목록에서 그룹을 전환할 수 있고, 고급 타임라인의 <accent>레인 필터</accent>로 개별 속성을 표시하거나 숨겨 몇 개에만 집중할 수 있습니다. 카테고리는 선택 사항입니다. 카테고리가 없는 플러그인은 속성을 평면으로 나열합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "某些插件会将其属性归入类别（例如 Glow 的<accent>核心</accent>和<accent>噪点</accent>）。当类别多于一个时，<accent>类别药丸</accent>可在值编辑器弹出窗口、“已添加动画”菜单和属性列表中切换组，而“高级”时间线上的<accent>轨道筛选器</accent>可显示或隐藏单个属性，让你专注于少数几个。类别是可选的--没有类别的插件只是平铺列出其属性。"
           }
         }
       }
@@ -9115,6 +9577,90 @@
       },
       "comment": "Timing guide: closing step."
     },
+    "The <accent>Dynamic</accent> toolbar toggle widens short transitions so they stay easy to grab on a long clip; each lane then shows its own playback line. It's display-only, off by default, and never changes the animation.": {
+      "comment": "Help tip: the Dynamic toolbar toggle (nested under Advanced).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Schalter <accent>Dynamisch</accent> in der Symbolleiste verbreitert kurze Übergänge, damit sie auf einem langen Clip leicht zu greifen bleiben; jede Spur zeigt dann ihre eigene Abspiellinie. Er dient nur der Anzeige, ist standardmäßig aus und ändert nie die Animation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El conmutador <accent>Dinámico</accent> de la barra de herramientas ensancha las transiciones cortas para que sigan siendo fáciles de agarrar en un clip largo; entonces cada pista muestra su propia línea de reproducción. Es solo de visualización, está desactivado por omisión y nunca cambia la animación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bouton <accent>Dynamique</accent> de la barre d'outils élargit les transitions courtes pour qu'elles restent faciles à saisir sur un plan long ; chaque piste affiche alors sa propre ligne de lecture. Il sert uniquement à l'affichage, est désactivé par défaut et ne modifie jamais l'animation."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ツールバーの<accent>ダイナミック</accent>スイッチは、短いトランジションを広げて長いクリップでもつかみやすくします。各レーンはそれぞれの再生ラインを表示します。表示専用で、デフォルトはオフ、アニメーションを変更することはありません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "툴바의 <accent>다이내믹</accent> 토글은 짧은 트랜지션을 넓혀 긴 클립에서도 쉽게 잡을 수 있게 합니다. 그러면 각 레인이 자체 재생 라인을 표시합니다. 보기 전용이고 기본값은 꺼짐이며 애니메이션을 변경하지 않습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具栏中的<accent>动态</accent>开关会加宽短转场，使其在长片段上也易于抓取；此时每条轨道都会显示各自的播放线。它仅用于显示，默认关闭，且绝不更改动画。"
+          }
+        }
+      }
+    },
+    "The <accent>Maintain Timing</accent> toolbar toggle is a lock that pins the animation to absolute time: trimming, growing, or splitting the clip then retimes the keyposes to hold their position instead of stretching with the clip, and a split stays continuous across the cut. It bakes the retime into the data, so it persists when you turn the lock off.": {
+      "comment": "Help tip: the Maintain Timing toolbar toggle (nested under Advanced).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Werkzeugleisten-Umschalter <accent>Timing beibehalten</accent> ist eine Sperre, die die Animation auf absolute Zeit fixiert: Trimmen, Verlängern oder Teilen des Clips timt die Keyposes dann neu, damit sie ihre Position halten, statt sich mit dem Clip zu dehnen, und eine Teilung bleibt über den Schnitt hinweg durchgehend. Die Neutaktung wird in die Daten eingebrannt und bleibt erhalten, wenn du die Sperre ausschaltest."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El conmutador <accent>Mantener tiempo</accent> de la barra de herramientas es un bloqueo que fija la animación en tiempo absoluto: recortar, alargar o dividir el clip vuelve a temporizar los keyposes para que mantengan su posición en lugar de estirarse con el clip, y una división se mantiene continua a través del corte. Integra la nueva temporización en los datos, por lo que persiste al desactivar el bloqueo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bouton <accent>Conserver le minutage</accent> de la barre d'outils est un verrou qui fixe l'animation sur le temps absolu : rogner, allonger ou diviser le plan recale alors les keyposes pour conserver leur position au lieu de s'étirer avec le plan, et une division reste continue de part et d'autre de la coupe. Le recalage est intégré aux données et persiste lorsque vous désactivez le verrou."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ツールバーの<accent>タイミングを維持</accent>トグルは、アニメーションを絶対時間に固定するロックです。オンにすると、クリップのトリミング・延長・分割でキーポーズが再タイミングされ、クリップに合わせて伸びるのではなく位置を保ちます。分割しても切れ目で連続します。再タイミングはデータに焼き込まれるため、ロックを解除しても保持されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "툴바의 <accent>타이밍 유지</accent> 토글은 애니메이션을 절대 시간에 고정하는 잠금입니다. 켜면 클립을 트리밍, 확장 또는 분할할 때 키포즈가 클립에 따라 늘어나는 대신 위치를 유지하도록 다시 타이밍되며, 분할해도 잘린 지점에서 연속됩니다. 재타이밍은 데이터에 적용되어 잠금을 꺼도 유지됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具栏的<accent>保持时间</accent>开关是一个锁，可将动画固定到绝对时间：修剪、延长或拆分片段时，关键姿势会重新计时以保持其位置，而不是随片段拉伸，并且拆分在剪切处保持连续。重新计时会写入数据，因此关闭锁后仍会保留。"
+          }
+        }
+      }
+    },
     "The <accent>graph</accent> updates to show the movement.": {
       "extractionState": "manual",
       "localizations": {
@@ -9535,48 +10081,6 @@
         }
       }
     },
-    "Transitions only": {
-      "comment": "Motion blur mode option.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nur Übergänge"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Solo transiciones"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Transitions uniquement"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "トランジションのみ"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "전환만"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅过渡"
-          }
-        }
-      }
-    },
     "Turn <accent>In</accent> on to ease into the value from the start.": {
       "extractionState": "manual",
       "localizations": {
@@ -9660,6 +10164,48 @@
         }
       },
       "comment": "OSC guide: master toggle off."
+    },
+    "Uncheck a <accent>property</accent> to hide its lane and focus the timeline.": {
+      "comment": "Advanced timing guide: toggle a property in the filter checklist.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deaktiviere eine <accent>Eigenschaft</accent>, um ihre Spur auszublenden und die Timeline zu fokussieren."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desmarca una <accent>propiedad</accent> para ocultar su carril y centrar la línea de tiempo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Décochez une <accent>propriété</accent> pour masquer sa piste et recentrer la timeline."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>プロパティ</accent>のチェックを外すと、そのレーンを非表示にしてタイムラインを整理できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>속성</accent>의 체크를 해제하면 해당 레인을 숨겨 타임라인에 집중할 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消勾选某个<accent>属性</accent>，即可隐藏其轨道并让时间线更聚焦。"
+          }
+        }
+      }
     },
     "Undo / redo, including inside popovers": {
       "comment": "Help text.",
@@ -9829,48 +10375,6 @@
         }
       }
     },
-    "Value changes": {
-      "comment": "Motion blur mode option.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wertänderungen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cambios de valor"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Changements de valeur"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "値の変化"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "값 변경"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "值变化"
-          }
-        }
-      }
-    },
     "Values you don't animate stay <accent>constant</accent>. Open the <accent>Constants</accent> panel to edit them.": {
       "extractionState": "manual",
       "localizations": {
@@ -9993,48 +10497,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "新功能"
-          }
-        }
-      }
-    },
-    "When": {
-      "comment": "Label: when a setting applies.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wann"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cuándo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quand"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "タイミング"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "시점"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "何时"
           }
         }
       }
@@ -10413,510 +10875,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "v%@ 可用"
-          }
-        }
-      }
-    },
-    "Maintain Timing": {
-      "comment": "Toolbar toggle: pin the animation to absolute time so trimming or splitting the clip keeps each keypose where it is.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Timing beibehalten"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mantener tiempo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conserver le minutage"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "タイミングを維持"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "타이밍 유지"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保持时间"
-          }
-        }
-      }
-    },
-    "<accent>Maintain Timing</accent> locks the animation to absolute time - trimming or splitting the clip then retimes the keyposes to hold their position.": {
-      "comment": "Advanced timing guide: the Maintain Timing lock toggle.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Timing beibehalten</accent> sperrt die Animation auf absolute Zeit - beim Trimmen oder Teilen des Clips werden die Keyposes neu getimt, damit sie ihre Position halten."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Mantener tiempo</accent> bloquea la animación en tiempo absoluto: al recortar o dividir el clip, los keyposes se vuelven a temporizar para mantener su posición."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Conserver le minutage</accent> verrouille l'animation sur le temps absolu : rogner ou diviser le plan recale alors les keyposes pour conserver leur position."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>タイミングを維持</accent>はアニメーションを絶対時間に固定します。クリップをトリミングまたは分割すると、キーポーズが位置を保つように再タイミングされます。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>타이밍 유지</accent>는 애니메이션을 절대 시간에 고정합니다. 클립을 트리밍하거나 분할하면 키포즈가 위치를 유지하도록 다시 타이밍됩니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>保持时间</accent>将动画锁定到绝对时间：修剪或拆分片段时，关键姿势会重新计时以保持其位置。"
-          }
-        }
-      }
-    },
-    "Advanced timeline only:": {
-      "comment": "Help tip: header grouping the Advanced-only toolbar toggles.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nur erweiterte Timeline:"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Solo línea de tiempo avanzada:"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Timeline avancée uniquement :"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "詳細タイムラインのみ："
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "고급 타임라인 전용:"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅高级时间线："
-          }
-        }
-      }
-    },
-    "The <accent>Dynamic</accent> toolbar toggle widens short transitions so they stay easy to grab on a long clip; each lane then shows its own playback line. It's display-only, off by default, and never changes the animation.": {
-      "comment": "Help tip: the Dynamic toolbar toggle (nested under Advanced).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Schalter <accent>Dynamisch</accent> in der Symbolleiste verbreitert kurze Übergänge, damit sie auf einem langen Clip leicht zu greifen bleiben; jede Spur zeigt dann ihre eigene Abspiellinie. Er dient nur der Anzeige, ist standardmäßig aus und ändert nie die Animation."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El conmutador <accent>Dinámico</accent> de la barra de herramientas ensancha las transiciones cortas para que sigan siendo fáciles de agarrar en un clip largo; entonces cada pista muestra su propia línea de reproducción. Es solo de visualización, está desactivado por omisión y nunca cambia la animación."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le bouton <accent>Dynamique</accent> de la barre d'outils élargit les transitions courtes pour qu'elles restent faciles à saisir sur un plan long ; chaque piste affiche alors sa propre ligne de lecture. Il sert uniquement à l'affichage, est désactivé par défaut et ne modifie jamais l'animation."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ツールバーの<accent>ダイナミック</accent>スイッチは、短いトランジションを広げて長いクリップでもつかみやすくします。各レーンはそれぞれの再生ラインを表示します。表示専用で、デフォルトはオフ、アニメーションを変更することはありません。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "툴바의 <accent>다이내믹</accent> 토글은 짧은 트랜지션을 넓혀 긴 클립에서도 쉽게 잡을 수 있게 합니다. 그러면 각 레인이 자체 재생 라인을 표시합니다. 보기 전용이고 기본값은 꺼짐이며 애니메이션을 변경하지 않습니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "工具栏中的<accent>动态</accent>开关会加宽短转场，使其在长片段上也易于抓取；此时每条轨道都会显示各自的播放线。它仅用于显示，默认关闭，且绝不更改动画。"
-          }
-        }
-      }
-    },
-    "The <accent>Maintain Timing</accent> toolbar toggle is a lock that pins the animation to absolute time: trimming, growing, or splitting the clip then retimes the keyposes to hold their position instead of stretching with the clip, and a split stays continuous across the cut. It bakes the retime into the data, so it persists when you turn the lock off.": {
-      "comment": "Help tip: the Maintain Timing toolbar toggle (nested under Advanced).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Werkzeugleisten-Umschalter <accent>Timing beibehalten</accent> ist eine Sperre, die die Animation auf absolute Zeit fixiert: Trimmen, Verlängern oder Teilen des Clips timt die Keyposes dann neu, damit sie ihre Position halten, statt sich mit dem Clip zu dehnen, und eine Teilung bleibt über den Schnitt hinweg durchgehend. Die Neutaktung wird in die Daten eingebrannt und bleibt erhalten, wenn du die Sperre ausschaltest."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "El conmutador <accent>Mantener tiempo</accent> de la barra de herramientas es un bloqueo que fija la animación en tiempo absoluto: recortar, alargar o dividir el clip vuelve a temporizar los keyposes para que mantengan su posición en lugar de estirarse con el clip, y una división se mantiene continua a través del corte. Integra la nueva temporización en los datos, por lo que persiste al desactivar el bloqueo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le bouton <accent>Conserver le minutage</accent> de la barre d'outils est un verrou qui fixe l'animation sur le temps absolu : rogner, allonger ou diviser le plan recale alors les keyposes pour conserver leur position au lieu de s'étirer avec le plan, et une division reste continue de part et d'autre de la coupe. Le recalage est intégré aux données et persiste lorsque vous désactivez le verrou."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ツールバーの<accent>タイミングを維持</accent>トグルは、アニメーションを絶対時間に固定するロックです。オンにすると、クリップのトリミング・延長・分割でキーポーズが再タイミングされ、クリップに合わせて伸びるのではなく位置を保ちます。分割しても切れ目で連続します。再タイミングはデータに焼き込まれるため、ロックを解除しても保持されます。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "툴바의 <accent>타이밍 유지</accent> 토글은 애니메이션을 절대 시간에 고정하는 잠금입니다. 켜면 클립을 트리밍, 확장 또는 분할할 때 키포즈가 클립에 따라 늘어나는 대신 위치를 유지하도록 다시 타이밍되며, 분할해도 잘린 지점에서 연속됩니다. 재타이밍은 데이터에 적용되어 잠금을 꺼도 유지됩니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "工具栏的<accent>保持时间</accent>开关是一个锁，可将动画固定到绝对时间：修剪、延长或拆分片段时，关键姿势会重新计时以保持其位置，而不是随片段拉伸，并且拆分在剪切处保持连续。重新计时会写入数据，因此关闭锁后仍会保留。"
-          }
-        }
-      }
-    },
-    "Filter properties": {
-      "comment": "Tooltip: filter which lanes (properties) are shown in the timeline.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eigenschaften filtern"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filtrar propiedades"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Filtrer les propriétés"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "プロパティをフィルタ"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "속성 필터링"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "筛选属性"
-          }
-        }
-      }
-    },
-    "Open the <accent>filter</accent> to show or hide properties on the timeline.": {
-      "comment": "Advanced timing guide: open the lane-visibility filter.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Öffne den <accent>Filter</accent>, um Eigenschaften in der Timeline ein- oder auszublenden."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Abre el <accent>filtro</accent> para mostrar u ocultar propiedades en la línea de tiempo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrez le <accent>filtre</accent> pour afficher ou masquer des propriétés sur la timeline."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>フィルター</accent>を開いて、タイムラインのプロパティを表示・非表示にします。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>필터</accent>를 열어 타임라인에서 속성을 표시하거나 숨깁니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打开<accent>筛选</accent>以在时间线上显示或隐藏属性。"
-          }
-        }
-      }
-    },
-    "Uncheck a <accent>property</accent> to hide its lane and focus the timeline.": {
-      "comment": "Advanced timing guide: toggle a property in the filter checklist.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deaktiviere eine <accent>Eigenschaft</accent>, um ihre Spur auszublenden und die Timeline zu fokussieren."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desmarca una <accent>propiedad</accent> para ocultar su carril y centrar la línea de tiempo."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Décochez une <accent>propriété</accent> pour masquer sa piste et recentrer la timeline."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>プロパティ</accent>のチェックを外すと、そのレーンを非表示にしてタイムラインを整理できます。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>속성</accent>의 체크를 해제하면 해당 레인을 숨겨 타임라인에 집중할 수 있습니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消勾选某个<accent>属性</accent>，即可隐藏其轨道并让时间线更聚焦。"
-          }
-        }
-      }
-    },
-    "Some plugins group their properties into categories (for example Glow's <accent>Core</accent> and <accent>Noise</accent>). When there is more than one category, <accent>category pills</accent> let you switch between groups in the value-editor popover, the Animated dropdown, and the parameter list, and a <accent>lane filter</accent> on the Advanced timeline lets you show or hide individual properties so you can focus on a few at a time. Categories are optional - a plugin with no categories just lists its properties flat.": {
-      "comment": "Help tip rendered from a timeline knowledge doc.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Manche Plug-ins gruppieren ihre Eigenschaften in Kategorien (zum Beispiel <accent>Kern</accent> und <accent>Rauschen</accent> bei Glow). Bei mehr als einer Kategorie können Sie mit <accent>Kategorie-Pills</accent> zwischen Gruppen im Werte-Editor-Popover, im Animiert-Menü und in der Eigenschaftenliste wechseln, und ein <accent>Spurenfilter</accent> auf der erweiterten Timeline blendet einzelne Eigenschaften ein oder aus, damit Sie sich auf wenige konzentrieren können. Kategorien sind optional - ein Plug-in ohne Kategorien listet seine Eigenschaften einfach flach auf."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Algunos plugins agrupan sus propiedades en categorías (por ejemplo <accent>Núcleo</accent> y <accent>Ruido</accent> en Glow). Cuando hay más de una categoría, las <accent>píldoras de categoría</accent> permiten cambiar entre grupos en el popover del editor de valores, el menú Animado y la lista de propiedades, y un <accent>filtro de carriles</accent> en la línea de tiempo Avanzada permite mostrar u ocultar propiedades concretas para centrarte en unas pocas. Las categorías son opcionales: un plugin sin categorías simplemente lista sus propiedades de forma plana."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Certains plug-ins regroupent leurs propriétés en catégories (par exemple <accent>Noyau</accent> et <accent>Bruit</accent> dans Glow). Quand il y a plus d’une catégorie, les <accent>pastilles de catégorie</accent> permettent de basculer entre les groupes dans le popover de l’éditeur de valeurs, le menu Animé et la liste des propriétés, et un <accent>filtre de pistes</accent> sur la timeline Avancée permet d’afficher ou masquer des propriétés individuelles pour vous concentrer sur quelques-unes. Les catégories sont facultatives - un plug-in sans catégories liste simplement ses propriétés à plat."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一部のプラグインはプロパティをカテゴリにまとめます(例: Glowの<accent>コア</accent>と<accent>ノイズ</accent>)。カテゴリが複数ある場合、<accent>カテゴリピル</accent>で値エディタのポップオーバー、アニメーションメニュー、プロパティリストのグループを切り替えられます。また、詳細タイムラインの<accent>レーンフィルター</accent>で個々のプロパティを表示・非表示にして、いくつかに集中できます。カテゴリは任意です。カテゴリのないプラグインはプロパティをフラットに並べるだけです。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "일부 플러그인은 속성을 카테고리로 묶습니다(예: Glow의 <accent>코어</accent>와 <accent>노이즈</accent>). 카테고리가 둘 이상이면 <accent>카테고리 알약</accent>으로 값 편집기 팝오버, 애니메이션 메뉴, 속성 목록에서 그룹을 전환할 수 있고, 고급 타임라인의 <accent>레인 필터</accent>로 개별 속성을 표시하거나 숨겨 몇 개에만 집중할 수 있습니다. 카테고리는 선택 사항입니다. 카테고리가 없는 플러그인은 속성을 평면으로 나열합니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "某些插件会将其属性归入类别（例如 Glow 的<accent>核心</accent>和<accent>噪点</accent>）。当类别多于一个时，<accent>类别药丸</accent>可在值编辑器弹出窗口、“已添加动画”菜单和属性列表中切换组，而“高级”时间线上的<accent>轨道筛选器</accent>可显示或隐藏单个属性，让你专注于少数几个。类别是可选的--没有类别的插件只是平铺列出其属性。"
-          }
-        }
-      }
-    },
-    "<kbd>⌥</kbd> + click a filter row": {
-      "comment": "Shortcut keys.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<kbd>⌥</kbd> + Klick auf eine Filterzeile"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<kbd>⌥</kbd> + clic en una fila del filtro"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<kbd>⌥</kbd> + clic sur une ligne du filtre"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<kbd>⌥</kbd> + フィルター行をクリック"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<kbd>⌥</kbd> + 필터 행 클릭"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<kbd>⌥</kbd> + 点击筛选行"
-          }
-        }
-      }
-    },
-    "Solo that property": {
-      "comment": "Help shortcut.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nur diese Eigenschaft anzeigen"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar solo esa propiedad"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Afficher uniquement cette propriété"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "そのプロパティのみ表示"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "해당 속성만 표시"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅显示该属性"
-          }
-        }
-      }
-    },
-    "Edit on canvas": {
-      "comment": "OSC-only lane: edit via the on-screen control.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auf der Leinwand bearbeiten"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Editar en el lienzo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modifier sur le canevas"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "キャンバスで編集"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "캔버스에서 편집"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在画布上编辑"
           }
         }
       }

@@ -85,17 +85,24 @@ void KKHandleTimelineParamChanged(
     KKMiniViewerRenderer *_Nullable miniViewerRenderer,
     KKTimelineInspectorView *_Nullable inspectorView);
 
-/// Builds the FxImageTileRequest list for one render: current frame +
-/// motion-blur sub-frames + boundary-preview frames. Caches the boundary
-/// state into `cache` so the render-output side can pair delivered tiles
-/// to slots. `mbState.enabled == NO` produces no MB sub-frames.
+/// Builds the FxImageTileRequest list for one render: the current frame +
+/// boundary-preview frames. Caches the boundary state into `cache` so the
+/// render-output side can pair delivered tiles to slots.
+///
+/// Motion blur does NOT request sub-frame source frames here: every built-in
+/// plugin blurs its OWN animation (per-sample params / transforms, or velocity
+/// reconstruction) over a single source frame, so requesting N sub-frame sources
+/// would only re-render the upstream effect N times for no benefit (footage
+/// smear needs Frame Blending / Optical Flow to differ at all). An effect that
+/// genuinely wants footage content-smear calls `+[KKMotionBlur
+/// appendSourceRequestsForState:...]` explicitly.
 ///
 /// `requestBuilder` returns an FxImageTileRequest for the given CMTime.
 /// Passed as a block to keep FxPlug out of KeyframelessKit's link surface
 /// (workflow-extension targets use this framework too). Each plugin's
 /// `scheduleInputs:` wraps `[[FxImageTileRequest alloc] initWith…]` in a
 /// one-line block.
-NSArray *KKBuildSourceRequests(CMTime renderTime, KKMotionBlurState mbState,
+NSArray *KKBuildSourceRequests(CMTime renderTime,
                                NSString *_Nullable boundaryRequestPath,
                                KKRenderCache *cache,
                                id _Nonnull (^requestBuilder)(CMTime t));

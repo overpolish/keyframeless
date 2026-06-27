@@ -123,7 +123,7 @@ NS_ASSUME_NONNULL_BEGIN
   BOOL _showsPresetsRow;
   double _mbShutterAngle;
   NSInteger _mbSamples;
-  KKMotionBlurMode _mbMode;
+  KKMotionBlurTechnique _mbTechnique;
   NSArray<KKLane *> *_availableLanes;
   BOOL _isDetachedCopy;
   BOOL _detachedAttached;

@@ -107,6 +107,145 @@ void CanvasEncodeSourceTile(id<MTLRenderCommandEncoder> encoder,
               vertexCount:4];
 }
 
+// The layer's composed model matrix (member + ancestor groups + perspective) at
+// clip fraction `f`, in the render's centered-pixel space. Shared by the velocity
+// quad encode and the CPU velocity measure so both project identically.
+static matrix_float4x4 CanvasLayerComposedMatAt(
+    NSArray<KKBezierPath *> *layers, NSInteger layerIndex, KKBezierPath *path,
+    simd_float2 center, double f, simd_float2 scale, simd_float2 tileShift,
+    NSString *overrideLayerID, KKTimeline *overrideTimeline) {
+  BOOL ov = overrideTimeline && overrideLayerID.length &&
+            [path.layerID isEqualToString:overrideLayerID];
+  CanvasLayerTransform t =
+      ov ? CanvasLayerTransformFromTimeline(overrideTimeline, f)
+         : CanvasLayerTransformAtFraction(path, f);
+  CanvasGroupXform groups[kCanvasGroupXformCap];
+  NSInteger ng = CanvasBuildGroupXforms(layers, (NSUInteger)layerIndex, f,
+                                        overrideLayerID, overrideTimeline, groups,
+                                        kCanvasGroupXformCap);
+  return CanvasComposedModelMatrix(t, center, groups, ng, scale, tileShift);
+}
+
+// Project a centered-pixel local point through `m` to screen pixels (top-left
+// origin, +y down), the SAME mapping KKVelocityVertexShader emits.
+static simd_float2 CanvasProjectToScreenPx(matrix_float4x4 m, simd_float2 localPx,
+                                           simd_float2 viewportHalf) {
+  simd_float4 w = simd_mul(m, simd_make_float4(localPx.x, localPx.y, 0.0f, 1.0f));
+  if (fabsf(w.w) < 1e-5f)
+    return simd_make_float2(0.0f, 0.0f);
+  return simd_make_float2(w.x, -w.y) / w.w + viewportHalf;
+}
+
+float CanvasLayerMaxVelocityPx(NSArray<KKBezierPath *> *layers,
+                               NSInteger layerIndex, double frac,
+                               double fracPrev, float imageWidth,
+                               float imageHeight, float tileShiftX,
+                               float tileShiftY, NSString *overrideLayerID,
+                               KKTimeline *overrideTimeline) {
+  if (layerIndex < 0 || layerIndex >= (NSInteger)layers.count)
+    return 0.0f;
+  if (frac < 0.0 || fracPrev < 0.0)
+    return 0.0f;
+  KKBezierPath *path = layers[(NSUInteger)layerIndex];
+  if (path.isGroup || path.hidden)
+    return 0.0f;
+
+  simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+  simd_float2 vpHalf = simd_make_float2(imageWidth * 0.5f, imageHeight * 0.5f);
+  simd_float2 center = CanvasLayerObjectCenter(path);
+  matrix_float4x4 mNow =
+      CanvasLayerComposedMatAt(layers, layerIndex, path, center, frac, scale,
+                               tileShift, overrideLayerID, overrideTimeline);
+  matrix_float4x4 mPrev =
+      CanvasLayerComposedMatAt(layers, layerIndex, path, center, fracPrev, scale,
+                               tileShift, overrideLayerID, overrideTimeline);
+
+  float hx = 0.5f, hy = 0.5f;
+  CanvasLayerContentHalfExtentObj(layers, path, &hx, &hy);
+  // Sample the bbox centre + corners; rotation/scale move the corners further
+  // than the centre, so the corners capture the true peak velocity.
+  simd_float2 pts[5] = {
+      center,
+      center + simd_make_float2(hx, hy),
+      center + simd_make_float2(-hx, hy),
+      center + simd_make_float2(hx, -hy),
+      center + simd_make_float2(-hx, -hy),
+  };
+  float maxd = 0.0f;
+  for (int k = 0; k < 5; k++) {
+    simd_float2 lp = (pts[k] - half) * scale;
+    simd_float2 pn = CanvasProjectToScreenPx(mNow, lp, vpHalf);
+    simd_float2 pp = CanvasProjectToScreenPx(mPrev, lp, vpHalf);
+    float d = simd_length(pn - pp);
+    if (d > maxd)
+      maxd = d;
+  }
+  return maxd;
+}
+
+void CanvasEncodeLayerVelocityQuad(NSArray<KKBezierPath *> *layers,
+                                   id<MTLRenderCommandEncoder> encoder,
+                                   NSInteger layerIndex, double frac,
+                                   double fracPrev, float imageWidth,
+                                   float imageHeight, float tileShiftX,
+                                   float tileShiftY, float marginPx,
+                                   NSString *overrideLayerID,
+                                   KKTimeline *overrideTimeline) {
+  if (!encoder || layerIndex < 0 || layerIndex >= (NSInteger)layers.count)
+    return;
+  if (frac < 0.0 || fracPrev < 0.0)
+    return; // no time known -> leave velocity cleared (no blur)
+  KKBezierPath *path = layers[(NSUInteger)layerIndex];
+  if (path.isGroup || path.hidden)
+    return;
+
+  simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+  simd_float2 center = CanvasLayerObjectCenter(path);
+
+  // Composed model matrix at the two shutter endpoints (current + start), so a
+  // parent group's own animation contributes to the velocity too.
+  matrix_float4x4 mNow =
+      CanvasLayerComposedMatAt(layers, layerIndex, path, center, frac, scale,
+                               tileShift, overrideLayerID, overrideTimeline);
+  matrix_float4x4 mPrev =
+      CanvasLayerComposedMatAt(layers, layerIndex, path, center, fracPrev, scale,
+                               tileShift, overrideLayerID, overrideTimeline);
+
+  // Bounding quad in object-normalised space, expanded by the margin (stroke
+  // width + blur reach) so the stroke and its smear fall inside the field. The
+  // colour pass's exact geometry masks the over-coverage.
+  float hx = 0.5f, hy = 0.5f;
+  CanvasLayerContentHalfExtentObj(layers, path, &hx, &hy);
+  simd_float2 marginNorm = simd_make_float2(marginPx / fmaxf(imageWidth, 1.0f),
+                                            marginPx / fmaxf(imageHeight, 1.0f));
+  simd_float2 he = simd_make_float2(hx, hy) + marginNorm;
+  simd_float2 lo = center - he;
+  simd_float2 hiC = center + he;
+
+  KKVertex2D quad[4] = {
+      {(simd_make_float2(hiC.x, lo.y) - half) * scale, {1, 1}},
+      {(simd_make_float2(lo.x, lo.y) - half) * scale, {0, 1}},
+      {(simd_make_float2(hiC.x, hiC.y) - half) * scale, {1, 0}},
+      {(simd_make_float2(lo.x, hiC.y) - half) * scale, {0, 0}},
+  };
+  [encoder setVertexBytes:&mNow
+                   length:sizeof(mNow)
+                  atIndex:KKVertexInputIndex_Transform];
+  [encoder setVertexBytes:&mPrev
+                   length:sizeof(mPrev)
+                  atIndex:KKVertexInputIndex_TransformPrev];
+  [encoder setVertexBytes:quad
+                   length:sizeof(quad)
+                  atIndex:KKVertexInputIndex_Vertices];
+  [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+              vertexStart:0
+              vertexCount:4];
+}
+
 // One ready-to-draw image layer: its full transform, verts, opacity, texture,
 // and its 3D centre depth (for back-to-front sorting). `order` is the original
 // layer-stack draw order (bottom-first), the tiebreak for equal depth so flat /

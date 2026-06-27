@@ -83,8 +83,12 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   _showsParamOrderRow = (_availableLanes.count >= 2);
   _showsPresetsRow = [self showsPresetsRow];
   _mbShutterAngle = 180.0; // the natural shutter
-  _mbSamples = 16;
-  _mbMode = KKMotionBlurModeTransitionsOnly; // default; cheapest
+  _mbSamples = [self motionBlurDefaultSamples];
+  // Default to Fast (fixed-cost reconstruction) when the host supports it, else
+  // Accurate - a host with no velocity buffer only has the accumulate path.
+  _mbTechnique = [self motionBlurSupportsFastTechnique]
+                     ? KKMotionBlurTechniqueFast
+                     : KKMotionBlurTechniqueAccurate;
   [self setFrameSize:NSMakeSize(0, [self _totalHeight])];
   self.autoresizingMask =
       NSViewWidthSizable | NSViewHeightSizable | NSViewMinYMargin;
@@ -368,6 +372,14 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   return YES;
 }
 
+- (BOOL)motionBlurSupportsFastTechnique {
+  return NO;
+}
+
+- (NSInteger)motionBlurDefaultSamples {
+  return 16;
+}
+
 - (BOOL)showsOSCVisibilityRow {
   return NO;
 }
@@ -611,7 +623,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   copy.onMotionBlurChanged = _onMotionBlurChanged;
   [copy setMotionBlurEnabled:_mbCheckbox.isChecked];
   [copy setMotionBlurShutterAngle:_mbShutterAngle samples:_mbSamples];
-  [copy setMotionBlurMode:_mbMode];
+  [copy setMotionBlurTechnique:_mbTechnique];
   copy.onRenderModeChanged = _onRenderModeChanged;
   copy.renderMode = _basicView.renderMode;
   copy.onTimelineMutated = _onTimelineMutated;

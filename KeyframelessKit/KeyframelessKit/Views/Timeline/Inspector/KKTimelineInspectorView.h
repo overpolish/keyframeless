@@ -94,16 +94,16 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 @property(nonatomic, copy, nullable) void (^oscVisibilityElementToggled)
     (NSInteger compoundIndex, NSInteger segmentIndex, BOOL isOn);
 /// Any motion-blur edit (enable toggle, a Shutter/Samples slider/field, or the
-/// When dropdown in the settings popover). `shutterAngle` is degrees (0–360);
-/// `samples` is the sample count (2–128); `mode` is when blur fires (see
-/// `KKMotionBlurMode`). The host writes the full
-/// `{enabled,shutterAngle,samples,mode}` blob. Only fired when
+/// Quality pill in the settings popover). `shutterAngle` is degrees (0–360);
+/// `samples` is the sample count (2–128, Accurate only); `technique` is how the
+/// blur is computed (see `KKMotionBlurTechnique`). The host writes the full
+/// `{enabled,shutterAngle,samples,technique}` blob. Only fired when
 /// `showsMotionBlurRow` is YES. Wrap continuous slider drags with
 /// `onDragBegin`/`onDragEnd` for undo coalescing (same chain the mini-viewer
 /// handles use).
 @property(nonatomic, copy, nullable) void (^onMotionBlurChanged)
     (BOOL enabled, double shutterAngle, NSInteger samples,
-     KKMotionBlurMode mode);
+     KKMotionBlurTechnique technique);
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
 /// Fired right before the Constants popover opens (button tap), so a
@@ -213,6 +213,20 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// motion blur. Read once during init.
 - (BOOL)showsMotionBlurRow;
 
+/// Whether the host plugin can render the Fast (velocity-reconstruction)
+/// technique. Default NO (only the universal Accurate accumulate path). Override
+/// to YES in a plugin that emits a velocity buffer (per-object analytic motion,
+/// e.g. Canvas / MagicMove); the settings popover then shows the Fast/Accurate
+/// Quality pill. A NO host always runs Accurate and hides the pill.
+- (BOOL)motionBlurSupportsFastTechnique;
+
+/// The default Accurate-path sample count (2–128) for this plugin - the initial
+/// value, the reset target, and what a fresh enable persists. Default 16.
+/// Override to tune per plugin (e.g. fewer for heavy per-layer content). Only
+/// relevant on the Accurate path (Fast hides the Samples row). Read at init and
+/// when the settings popover opens.
+- (NSInteger)motionBlurDefaultSamples;
+
 /// Whether to build the "On-Screen Controls" visibility row below the box
 /// (and reserve height for it). Default NO. Override to YES in a plugin whose
 /// effect draws on-screen controls the user should be able to hide. Read once
@@ -238,9 +252,9 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// from the host's MB blob. No-op when `showsMotionBlurRow` is NO.
 - (void)setMotionBlurShutterAngle:(double)shutterAngle
                           samples:(NSInteger)samples;
-/// Push the persisted motion-blur fire mode from the host's MB blob. No-op
+/// Push the persisted motion-blur technique from the host's MB blob. No-op
 /// when `showsMotionBlurRow` is NO.
-- (void)setMotionBlurMode:(KKMotionBlurMode)mode;
+- (void)setMotionBlurTechnique:(KKMotionBlurTechnique)technique;
 /// Push the persisted "On-Screen Controls" master visibility into the tick.
 /// No-op when `showsOSCVisibilityRow` is NO.
 - (void)setOSCVisible:(BOOL)visible;

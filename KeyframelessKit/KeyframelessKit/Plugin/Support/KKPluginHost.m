@@ -85,8 +85,7 @@ void KKHandleTimelineParamChanged(id<PROAPIAccessing> apiManager,
   }
 }
 
-NSArray *KKBuildSourceRequests(CMTime renderTime, KKMotionBlurState mbState,
-                               NSString *boundaryRequestPath,
+NSArray *KKBuildSourceRequests(CMTime renderTime, NSString *boundaryRequestPath,
                                KKRenderCache *cache,
                                id (^requestBuilder)(CMTime t)) {
   NSMutableArray *reqs = [NSMutableArray array];
@@ -94,12 +93,9 @@ NSArray *KKBuildSourceRequests(CMTime renderTime, KKMotionBlurState mbState,
   if (cur)
     [reqs addObject:cur];
 
-  if (mbState.enabled) {
-    [KKMotionBlur appendSourceRequestsForState:mbState
-                                    renderTime:renderTime
-                                            to:reqs
-                                       builder:requestBuilder];
-  }
+  // No motion-blur sub-frame source requests: built-in plugins blur their own
+  // animation over a single source frame (see the header). A footage-smear
+  // effect would call +[KKMotionBlur appendSourceRequestsForState:...] itself.
 
   NSArray<NSNumber *> *fracs = KKReadBoundaryRequestFracs(boundaryRequestPath);
   BOOL boundaryActive = fracs.count > 0;

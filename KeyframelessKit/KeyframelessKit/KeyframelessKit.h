@@ -59,6 +59,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKMiniViewerRenderer.h>
 #import <KeyframelessKit/KKMiniViewerView.h>
 #import <KeyframelessKit/KKMotionBlur.h>
+#import <KeyframelessKit/KKMotionBlurReconstruct.h>
 #import <KeyframelessKit/KKMotionLean.h>
 #import <KeyframelessKit/KKOSCGuide.h>
 #import <KeyframelessKit/KKOSCGuideBridge.h>

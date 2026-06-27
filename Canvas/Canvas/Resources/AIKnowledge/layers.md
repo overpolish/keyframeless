@@ -246,7 +246,7 @@ Imported paths are ordinary editable paths. A small, simple SVG can be point-edi
 
 ## Motion blur
 
-The inspector's motion-blur control applies the shared sample-accumulate blur to the layer animation (and the underlying content), the same engine the other Keyframeless plugins use.
+The inspector's motion-blur control blurs the layer animation. Canvas offers two qualities (a Fast / Accurate pill in the settings popover): **Fast** (the default) is per-layer velocity-buffer reconstruction - real-time even with many layers, and only the moving layers cost anything, so the trail length follows each layer's motion. **Accurate** is sample-accumulation (the Samples slider applies) for maximum fidelity on extreme in-frame rotation. Shutter and Samples behave as in the shared timeline motion-blur docs.
 
 ## Pending re-add (tracked during the v3 rebuild)
 
