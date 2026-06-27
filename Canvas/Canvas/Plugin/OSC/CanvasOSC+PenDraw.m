@@ -130,6 +130,14 @@
     return;
   self.penDrawDest = destinationImage;
   self.penDrawTime = time;
+  // Corner-radius widgets are their own OSC element ("Corners", default on),
+  // toggleable separately from the anchors so a busy path can hide them. Shown
+  // when visible OR opt-peeked; the controller's hit-test reads the same gate so
+  // a hidden widget isn't grabbable.
+  BOOL cornersShown =
+      [self kkOSCElementVisible:@"Corners"] ||
+      (self.optRevealActive && [self kkOSCRevealEligible:@"Corners"]);
+  self.pathEditController.cornerWidgetsActive = cornersShown;
   // Batch every anchor dot / tangent line / contour-halo segment into ONE
   // command buffer (clear:NO, so it composes over the already-drawn grid). A
   // dense path issues hundreds of primitives; unbatched, each was its own
@@ -147,8 +155,9 @@
                                         frac, (float)[self _canvasAspect],
                                         self.pathEditController.selectedAnchors,
                                         /*marqueeActive=*/NO, CGRectZero, ghost,
-                                        [self _activeTool] ==
-                                            CanvasToolbarToolCursor);
+                                        cornersShown &&
+                                            [self _activeTool] ==
+                                                CanvasToolbarToolCursor);
                                   }];
   self.penDrawDest = nil;
 }

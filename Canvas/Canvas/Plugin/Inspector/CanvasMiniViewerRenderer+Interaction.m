@@ -375,6 +375,16 @@
     [canvas setHandlesNeedDisplay];
     return YES;
   }
+  // Corner-radius widget: opt-click toggles the "Corners" OSC element (separate
+  // from Points). Checked before the path anchors (the widget sits in the empty
+  // area inside a corner, clear of anchors).
+  if (self.onHandleVisibilityToggled && [self _pathEditContext] &&
+      [self.pathEditController cornerWidgetHitAtX:p.x y:p.y]) {
+    self.onHandleVisibilityToggled(@"Corners");
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return YES;
+  }
   // Path anchors catch the opt-click last (transform handles win a coincident
   // hit, matching the viewer). Toggles the Points OSC's visibility.
   if (self.onHandleVisibilityToggled && [self _pathEditContext] &&
@@ -397,11 +407,13 @@
   if ([self _pathEditContext] &&
       [self.pathEditController hitTestAtX:p.x y:p.y] != CanvasPathEditHitNone)
     return [self kkVisibilityCursorForLabel:@"Points"] ?: KKPointMoveCursor();
-  // Live-corner radius widget: crosshair, matching the viewer (which crosshairs
-  // the path-edit empty area the widget sits in).
+  // Live-corner radius widget: the eye / eye.slash when an Opt-click would
+  // toggle the "Corners" element, else the crosshair (the path-edit empty area
+  // the widget sits in).
   if ([self _pathEditContext] &&
       [self.pathEditController cornerWidgetHitAtX:p.x y:p.y])
-    return [NSCursor crosshairCursor];
+    return [self kkVisibilityCursorForLabel:@"Corners"]
+               ?: [NSCursor crosshairCursor];
   if ([self.anchorMini squareHitAtPoint:p contentRect:cr])
     return [self kkVisibilityCursorForLabel:@"Anchor"] ?: KKPointMoveCursor();
   if ([self pointHandleHitAtPoint:p contentRect:cr])

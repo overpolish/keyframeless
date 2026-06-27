@@ -61,6 +61,27 @@
       *forceUpdate = YES;
     return;
   }
+  // Corner-radius widget: Opt-click (master on) toggles the "Corners" element's
+  // visibility - hide a visible one, re-show an Opt-peeked ghost - exactly like a
+  // point/handle Opt-click. Otherwise fall through to the radius drag (the
+  // controller's mouseDown detects the corner). When the element is individually
+  // hidden under the master, a plain click is inert (don't edit a hidden widget).
+  if (activePart == CanvasOSCPartCorner) {
+    if ([self kkArmOptHideForActivePart:activePart modifiers:modifiers]) {
+      if (forceUpdate)
+        *forceUpdate = YES;
+      return;
+    }
+    if (![self kkOSCMasterOff] && ![self kkOSCElementVisible:@"Corners"]) {
+      if (forceUpdate)
+        *forceUpdate = YES;
+      return;
+    }
+    [self _pathEditMouseDownAtX:positionX y:positionY modifiers:modifiers];
+    if (forceUpdate)
+      *forceUpdate = YES;
+    return;
+  }
   // Path point editing: grab the anchor / handle the hover hit-test claimed.
   if (activePart == CanvasOSCPartPathEdit) {
     // Opt-click ON an anchor / handle toggles the Points OSC's visibility

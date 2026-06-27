@@ -52,6 +52,9 @@ typedef NS_ENUM(NSInteger, CanvasOSCPart) {
   // The body of an already-SELECTED layer: a drag here moves the whole
   // selection (paths shift points, images shift Position); a click selects it.
   CanvasOSCPartLayerMove = 10,
+  // A corner-radius widget (its own "Corners" OSC element): a drag rounds the
+  // corner; Opt-click toggles the element's visibility like any other handle.
+  CanvasOSCPartCorner = 11,
 };
 
 // FxModifierKeys -> the surface-neutral CanvasPenModifiers used by the shared

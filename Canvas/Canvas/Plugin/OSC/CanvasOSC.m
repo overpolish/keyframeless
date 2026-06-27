@@ -231,14 +231,16 @@
 
 - (NSArray<NSString *> *)oscElementKeys {
   return @[
-    @"Points", @"Position", @"Path", @"Scale", @"Rotation", @"Rotation.X",
-    @"Rotation.Y", @"Rotation.Z", @"Anchor"
+    @"Points", @"Corners", @"Position", @"Path", @"Scale", @"Rotation",
+    @"Rotation.X", @"Rotation.Y", @"Rotation.Z", @"Anchor"
   ];
 }
 
 - (NSString *)oscElementKeyForActivePart:(NSInteger)activePart {
   if (activePart == CanvasOSCPartPathEdit)
     return @"Points";
+  if (activePart == CanvasOSCPartCorner)
+    return @"Corners";
   if (activePart == CanvasOSCPartPath)
     return @"Path";
   if (activePart == CanvasOSCPartScale)

@@ -175,12 +175,19 @@
   // fully visible or in master-off peek-and-use - same rule as the transform
   // handles.
   BOOL ghost = [self ghostAlphaForLabel:@"Points"] < 1.0;
+  // Corner-radius widgets are their own OSC element ("Corners"), toggleable
+  // separately from the anchors. Gate the draw + the controller's hit-test on
+  // the same visibility so a hidden widget isn't grabbable.
+  BOOL cornersShown = [self labelVisibleOrRevealing:@"Corners"];
+  self.pathEditController.cornerWidgetsActive = cornersShown;
   CanvasDrawPathEditOSC(
       self, self.layers ?: @[],
       CanvasPathMorphedAtFraction(path, self.editFraction), self.editFraction,
       (float)[self penCanvasAspect], self.pathEditController.selectedAnchors,
       /*marqueeActive=*/NO, CGRectZero, ghost,
-      (self.toolbarTool ?: CanvasToolbarToolCursor) == CanvasToolbarToolCursor);
+      cornersShown &&
+          (self.toolbarTool ?: CanvasToolbarToolCursor) ==
+              CanvasToolbarToolCursor);
 }
 
 @end

@@ -348,6 +348,12 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   simd_float4 fill =
       maxed ? CanvasMiniColorRGBA([NSColor error]) : CanvasMiniAccentRGBA();
   simd_float4 outline = {0.0f, 0.0f, 0.0f, 0.75f};
+  // Dim to a ghost while "Corners" is individually hidden but Opt-peeked (master
+  // on) - the cue that an Opt-click re-shows it, like the other handles. Full
+  // alpha when visible or in master-off peek-and-use.
+  float ghostA = (float)[self ghostAlphaForLabel:@"Corners"];
+  fill.w *= ghostA;
+  outline.w *= ghostA;
   [canvas encodeToolRingAtPoint:[self penSurfacePointFromObj:objYUp]
                        radiusPt:2.3 * scale
                            fill:fill

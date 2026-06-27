@@ -92,7 +92,7 @@ Set it three ways: drag the square on the viewer, drag it on the inspector mini-
 
 ### Showing and hiding the controls
 
-The inspector's **On-Screen Controls** toggle and its per-control pills (Position, Path, Scale, Rotation, Anchor) drive visibility. Canvas defaults the global toggle **on** but the Transform controls **hidden**, so the viewer stays clean; **Option-hold** reveals hidden controls as dimmed ghosts and **Option-click** toggles one. A **locked** layer hides its controls.
+The inspector's **On-Screen Controls** toggle and its per-control pills (Position, Path, Scale, Rotation, Anchor, Corners) drive visibility. Canvas defaults the global toggle **on** but the Transform controls **hidden**, so the viewer stays clean; **Option-hold** reveals hidden controls as dimmed ghosts and **Option-click** toggles one. A **locked** layer hides its controls. **Corners** is a separate element covering just the corner-rounding rings on a selected path; it defaults **on** but can be toggled independently of Points (Option-click a ring to hide it, Option-hold to peek), so you can keep the anchor/handle controls while clearing the rings off a busy path.
 
 ## Stroke
 
@@ -218,7 +218,7 @@ Edits are per-keypose: on an animated path they change the keypose the playhead 
 
 A genuine sharp corner of a selected path shows a small accent **ring** just inside it (cursor tool only) - the same control style as the radius handle in the Rounded plugin. To keep detailed paths readable the ring is only offered where rounding makes sense: smooth (tangent-continuous) points and near-straight joins don't get one, but a corner that already has a radius set always shows its ring so you can still adjust or clear it. Drag the ring inward to round that corner, back out to sharpen it; it turns **red** at the maximum radius (half the shorter adjacent edge). The rounding is **per corner** and fully re-editable - drag the same widget again any time, or drag it to zero to restore the sharp corner. While a corner is rounded its stored tangent handles are hidden (the rounding owns that corner); they return when you clear the radius.
 
-**Round several corners at once**: select multiple anchors first (Shift-click them, or marquee-drag over the path), then drag any one of the selected corners' rings - every selected corner takes the same radius together, in a single undo. Each corner still clamps to its own maximum, so a tighter corner rounds as far as it can (and turns red) while the others keep going; anchors that can't be rounded (open-path endpoints, near-straight joins) are left alone.
+**Round several corners at once**: select multiple anchors first (Shift-click them, or marquee-drag over the path), then drag any one of the selected corners' rings - every selected corner takes the same radius together, in a single undo. Or, with nothing pre-selected, **hold Shift while dragging any ring** to round **every** corner of the path at once. Either way each corner still clamps to its own maximum, so a tighter corner rounds as far as it can (and turns red) while the others keep going; anchors that can't be rounded (open-path endpoints, near-straight joins) are left alone.
 
 Because the radius is stored on the anchor (not baked into extra points), it **animates**: a corner can morph smoothly from sharp to rounded across Points keyposes. Rounding doesn't require a closed path - it works on any join.
 

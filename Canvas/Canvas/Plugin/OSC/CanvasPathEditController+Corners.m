@@ -24,6 +24,8 @@ static const double kCornerWidgetGrabPx = 9.0; // widget hit radius (surface px)
 // inside each interior corner (offset along the bisector), so they live in the
 // path's empty area - checked after anchors / handles, before a marquee.
 - (NSInteger)_cornerWidgetHitAtX:(double)x y:(double)y {
+  if (!self.cornerWidgetsActive)
+    return -1; // "Corners" OSC element hidden: widgets aren't grabbable
   if ([self _animatedOffKeypose])
     return -1;
   KKBezierPath *path = [self _workingPath];
@@ -85,16 +87,20 @@ static const double kCornerWidgetGrabPx = 9.0; // widget hit radius (surface px)
     rObj = w.maxRadiusObjPx;
   float localRadius = rObj * w.localPerObjScale;
   KKBezierPath *edited = [start copy];
-  // Apply to every selected corner when the grabbed one is part of a
-  // multi-selection (so dragging one ring rounds them all); otherwise just the
-  // grabbed corner. Each corner clamps to ITS OWN max (a tighter corner can't
-  // round as far), and non-fillettable anchors (endpoints / near-straight) are
-  // skipped.
+  // Which corners receive the new radius:
+  //  - Shift held: ALL corners at once (no selection needed) - the "tweak every
+  //    corner" gesture.
+  //  - else grabbed one is in a multi-selection: every SELECTED corner.
+  //  - else: just the grabbed corner.
+  // Each corner clamps to ITS OWN max (a tighter corner can't round as far),
+  // and non-fillettable anchors (endpoints / near-straight) are skipped.
+  BOOL all = (mods & CanvasPenModShift) != 0;
   BOOL multi = _selectedAnchors.count > 1 &&
                [_selectedAnchors containsIndex:(NSUInteger)_grabCorner];
   NSIndexSet *targets =
-      multi ? _selectedAnchors
-            : [NSIndexSet indexSetWithIndex:(NSUInteger)_grabCorner];
+      all ? [NSIndexSet indexSetWithIndexesInRange:NSMakeRange(0, start.count)]
+          : (multi ? _selectedAnchors
+                   : [NSIndexSet indexSetWithIndex:(NSUInteger)_grabCorner]);
   [targets enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
     if (i >= start.count)
       return;

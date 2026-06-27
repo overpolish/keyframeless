@@ -38,6 +38,10 @@ typedef NS_ENUM(NSInteger, CanvasPathEditHit) {
 @property(nonatomic, readonly) BOOL marqueeActive;
 /// The marquee rectangle in SURFACE points (valid while marqueeActive).
 @property(nonatomic, readonly) CGRect marqueeSurfaceRect;
+/// Whether the corner-radius widgets are active (drawn + grabbable). Mirrors the
+/// "Corners" OSC element's visibility; the surface sets it each draw so a hidden
+/// widget can't be grabbed. Default YES.
+@property(nonatomic) BOOL cornerWidgetsActive;
 /// What's under a surface point (for the cursor + deciding whether to claim).
 - (CanvasPathEditHit)hitTestAtX:(double)x y:(double)y;
 /// YES if a marquee could start here: cursor over the editable selected path's

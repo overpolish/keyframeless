@@ -52,13 +52,14 @@
                                renderer:nil
                             elementKeys:keys];
   [(CanvasInspectorView *)self.inspectorView syncMiniHandleVisibility];
-  // Scope the OSC checklist's path-only "Points" element to vector-path layers:
-  // images / groups drop it so they don't list a control they can't use. The
-  // checklist + its states read this live property (see kkWire), so the next
-  // open rebuilds against the scoped set.
+  // Scope the OSC checklist's path-only elements ("Points", "Corners") to
+  // vector-path layers: images / groups drop them so they don't list controls
+  // they can't use. The checklist + its states read this live property (see
+  // kkWire), so the next open rebuilds against the scoped set.
   NSMutableArray<NSArray<NSString *> *> *scoped = [NSMutableArray array];
   for (NSArray<NSString *> *c in [CanvasPlugin oscCompounds])
-    if (vector || ![c containsObject:@"Points"])
+    if (vector ||
+        (![c containsObject:@"Points"] && ![c containsObject:@"Corners"]))
       [scoped addObject:c];
   ((KKTimelineInspectorView *)self.inspectorView).oscVisibilityCompounds =
       scoped;

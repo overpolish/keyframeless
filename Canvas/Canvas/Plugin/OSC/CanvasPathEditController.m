@@ -29,6 +29,7 @@ static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
     _grabAnchor = -1;
     _grabCorner = -1;
     _lastClickAnchor = -1;
+    _cornerWidgetsActive = YES;
     _selectedAnchors = [NSMutableIndexSet indexSet];
   }
   return self;

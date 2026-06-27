@@ -178,6 +178,26 @@
   // the fallback and the unselected top layer's anchors become grabbable though
   // none are drawn.
   BOOL singleSel = [self _selectedLayerIDs].count == 1;
+  // Corner-radius widgets are their own "Corners" element: claim a hover over one
+  // as CanvasOSCPartCorner so an Opt-click toggles "Corners" (not "Points") and
+  // the eye cursor reads the right element. Checked before the anchor/handle
+  // claim (the widgets sit in the empty area inside a corner, clear of anchors).
+  BOOL cornersVisible = [self kkOSCElementVisible:@"Corners"];
+  BOOL cornersReveal = !cornersVisible && self.optRevealActive &&
+                       [self kkOSCRevealEligible:@"Corners"];
+  if (singleSel && [self _activeTool] == CanvasToolbarToolCursor) {
+    self.pathEditController.cornerWidgetsActive = cornersVisible || cornersReveal;
+    if ((cornersVisible || cornersReveal) &&
+        [self.pathEditController cornerWidgetHitAtX:positionX y:positionY]) {
+      *activePart = CanvasOSCPartCorner;
+      id<FxOnScreenControlAPI_v4> cAPI =
+          [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+      [cAPI setCursor:[self kkVisibilityCursorForLabel:@"Corners"]
+                          ?: [NSCursor pointingHandCursor]];
+      self.pointCursorSet = YES;
+      return;
+    }
+  }
   if (singleSel && [self _activeTool] == CanvasToolbarToolCursor &&
       (pointsVisible || pointsReveal) &&
       [self _pathEditHitAtX:positionX y:positionY] != CanvasPathEditHitNone) {

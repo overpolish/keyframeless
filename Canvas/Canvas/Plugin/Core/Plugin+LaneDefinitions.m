@@ -599,7 +599,7 @@
 
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {
   return @[
-    @[ @"Points" ], @[ @"Position", @"Path" ], @[ @"Scale" ],
+    @[ @"Points" ], @[ @"Corners" ], @[ @"Position", @"Path" ], @[ @"Scale" ],
     @[ @"Rotation", @"Rotation.X", @"Rotation.Y", @"Rotation.Z" ],
     @[ @"Anchor" ]
   ];
@@ -614,6 +614,7 @@
     // skips images anyway).
     return @{
       @"Points" : @NO,
+      @"Corners" : @NO, // images / groups have no corner-radius widgets
       @"Position" : @YES,
       @"Path" : @YES,
       @"Scale" : @YES,
@@ -632,6 +633,8 @@
   return @{
     @"Points" : @YES, // the path-edit anchors show by default (point-editing is
                       // the obvious action); transform OSCs start hidden
+    @"Corners" : @YES, // corner-radius widgets show by default; toggle off to
+                       // declutter a busy path (separate from Points)
     @"Position" : @NO,
     @"Path" : @NO,
     @"Scale" : @NO,
