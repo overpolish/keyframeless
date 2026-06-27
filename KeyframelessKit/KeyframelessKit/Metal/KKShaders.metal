@@ -65,8 +65,7 @@ struct KKStrokeRasterData {
 /// be masked by distance rather than cut into geometry (robust around corners -
 /// the geometry is just the solid stroke).
 vertex KKStrokeRasterData KKStrokeDashVertexShader(
-    uint vertexID [[vertex_id]],
-    constant KKVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
+    uint vertexID [[vertex_id]], constant KKVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
     constant vector_uint2 *viewportSizePointer [[buffer(KKVertexInputIndex_ViewportSize)]],
     constant matrix_float4x4 *transform [[buffer(KKVertexInputIndex_Transform)]],
     constant float *arc [[buffer(KKVertexInputIndex_StrokeArc)]]) {
@@ -85,10 +84,8 @@ vertex KKStrokeRasterData KKStrokeDashVertexShader(
 /// the solid colour or the gradient LUT. The dash on/off and both AA edges use
 /// fwidth so the pattern stays crisp at any zoom. Output is premultiplied to
 /// match the stroke pipeline's blend.
-fragment float4 KKStrokeDashFragment(
-    KKStrokeRasterData in [[stage_in]],
-    constant KKStrokeDashParams &dp [[buffer(0)]],
-    constant float3 *lut [[buffer(1)]]) {
+fragment float4 KKStrokeDashFragment(KKStrokeRasterData in [[stage_in]], constant KKStrokeDashParams &dp [[buffer(0)]],
+                                     constant float3 *lut [[buffer(1)]]) {
     float dist = abs(in.textureCoordinate.y);
     float alpha = 1.0 - smoothstep(1.0 - fwidth(dist) * 2.0, 1.0, dist);
 
@@ -126,6 +123,16 @@ fragment float4 KKTexturePassthroughFragment(KKRasterizerData in [[stage_in]],
     return tex.sample(s, in.textureCoordinate);
 }
 
+/// Like the passthrough, but NEAREST magnification - so a zoomed-in mini-viewer
+/// shows crisp texel squares (pixel inspection) instead of bilinear blur. Min
+/// filter stays linear so a zoomed-OUT view still downscales cleanly; only the
+/// magnification (zoom-in) reads hard-edged.
+fragment float4 KKTextureNearestFragment(KKRasterizerData in [[stage_in]],
+                                         texture2d<float> tex [[texture(KKTextureIndex_InputImage)]]) {
+    constexpr sampler s(mag_filter::nearest, min_filter::linear, address::clamp_to_edge);
+    return tex.sample(s, in.textureCoordinate);
+}
+
 /// Like the passthrough, but scales the (premultiplied) sample by a uniform
 /// opacity 0..1 - multiplying all four channels keeps it premultiplied so the
 /// usual "over" blend fades the layer correctly. Used by layer-compositing
@@ -150,13 +157,10 @@ fragment float4 KKSolidColorFragment(KKRasterizerData in [[stage_in]], constant 
 /// CanvasApplyGradientFill: linear runs along `dir` normalised by `halfExtent`,
 /// radial is circular normalised by `maxDim`. LUT is sRGB -> linearised on output
 /// (same pow(2.2) as the stroke gradient + solid colour).
-fragment float4 KKGradientFillFragment(KKRasterizerData in [[stage_in]],
-                                       constant float3 *lut [[buffer(0)]],
+fragment float4 KKGradientFillFragment(KKRasterizerData in [[stage_in]], constant float3 *lut [[buffer(0)]],
                                        constant KKGradientFillParams *p [[buffer(1)]]) {
     float2 d = in.textureCoordinate - p->center;
-    float gt = (p->type == 1)
-                   ? dot(d, p->dir) / (2.0 * p->halfExtent) + 0.5
-                   : 2.0 * length(d) / max(p->maxDim, 1.0);
+    float gt = (p->type == 1) ? dot(d, p->dir) / (2.0 * p->halfExtent) + 0.5 : 2.0 * length(d) / max(p->maxDim, 1.0);
     gt = saturate(gt);
     const int n = 64; // == KK_GRADIENT_LUT_SIZE (KKColor.h)
     float lutPos = gt * float(n - 1);
@@ -173,9 +177,7 @@ fragment float4 KKGradientFillFragment(KKRasterizerData in [[stage_in]],
 /// vert's centered-pixel position (carried in textureCoordinate); un-scale to
 /// object-norm, then remap into the rect's UV (V flipped to the texture's
 /// top-left origin, matching the image quad).
-static inline float KKHachureImageMaskAlpha(float2 objPos,
-                                            constant KKHachureMaskParams *mp,
-                                            texture2d<float> img) {
+static inline float KKHachureImageMaskAlpha(float2 objPos, constant KKHachureMaskParams *mp, texture2d<float> img) {
     constexpr sampler s(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
     float2 objNorm = objPos / mp->scale + 0.5;
     float2 uv = (objNorm - mp->rectMin) / max(mp->rectMax - mp->rectMin, float2(1e-4));
@@ -184,8 +186,7 @@ static inline float KKHachureImageMaskAlpha(float2 objPos,
 }
 
 /// Solid-colour hachure fill clipped to an image's alpha (image-layer hachure).
-fragment float4 KKHachureMaskSolidFragment(KKRasterizerData in [[stage_in]],
-                                           constant float4 *color [[buffer(0)]],
+fragment float4 KKHachureMaskSolidFragment(KKRasterizerData in [[stage_in]], constant float4 *color [[buffer(0)]],
                                            constant KKHachureMaskParams *mp [[buffer(1)]],
                                            texture2d<float> img [[texture(KKTextureIndex_InputImage)]]) {
     return (*color) * KKHachureImageMaskAlpha(in.textureCoordinate, mp, img);
@@ -193,15 +194,12 @@ fragment float4 KKHachureMaskSolidFragment(KKRasterizerData in [[stage_in]],
 
 /// Gradient hachure fill clipped to an image's alpha. Same per-pixel bbox
 /// gradient as KKGradientFillFragment, then multiplied by the image silhouette.
-fragment float4 KKHachureMaskGradientFragment(KKRasterizerData in [[stage_in]],
-                                              constant float3 *lut [[buffer(0)]],
+fragment float4 KKHachureMaskGradientFragment(KKRasterizerData in [[stage_in]], constant float3 *lut [[buffer(0)]],
                                               constant KKGradientFillParams *p [[buffer(1)]],
                                               constant KKHachureMaskParams *mp [[buffer(2)]],
                                               texture2d<float> img [[texture(KKTextureIndex_InputImage)]]) {
     float2 d = in.textureCoordinate - p->center;
-    float gt = (p->type == 1)
-                   ? dot(d, p->dir) / (2.0 * p->halfExtent) + 0.5
-                   : 2.0 * length(d) / max(p->maxDim, 1.0);
+    float gt = (p->type == 1) ? dot(d, p->dir) / (2.0 * p->halfExtent) + 0.5 : 2.0 * length(d) / max(p->maxDim, 1.0);
     gt = saturate(gt);
     const int n = 64; // == KK_GRADIENT_LUT_SIZE (KKColor.h)
     float lutPos = gt * float(n - 1);
@@ -236,8 +234,7 @@ fragment float4 KKTextureGradientTintFragment(KKRasterizerData in [[stage_in]],
     constexpr sampler s(mag_filter::linear, min_filter::linear, address::clamp_to_edge);
     float4 c = tex.sample(s, in.textureCoordinate);
     float2 d = in.textureCoordinate - 0.5;
-    float gt = (p->type == 1) ? dot(d, p->dir) / (2.0 * p->halfExtent) + 0.5
-                              : 2.0 * length(d);
+    float gt = (p->type == 1) ? dot(d, p->dir) / (2.0 * p->halfExtent) + 0.5 : 2.0 * length(d);
     gt = saturate(gt);
     const int n = 64; // == KK_GRADIENT_LUT_SIZE
     float lutPos = gt * float(n - 1);

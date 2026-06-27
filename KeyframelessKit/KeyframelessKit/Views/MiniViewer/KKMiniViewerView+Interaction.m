@@ -45,7 +45,11 @@
 
 - (void)_zoomTo:(CGFloat)newZoom aboutViewPoint:(NSPoint)viewPt {
   _lastPanZoomTime = CACurrentMediaTime();
-  newZoom = MAX(0.2, MIN(8.0, newZoom));
+  // Generous upper bound so you can inspect down to the pixel even on a small
+  // source; the cap only exists to keep the pan math + float precision sane (an
+  // unbounded zoom from a fast pinch could blow up the content rect). Lower
+  // bound stays at fit-ish so zoom-out still frames the whole clip.
+  newZoom = MAX(0.2, MIN(64.0, newZoom));
   CGFloat s = [self _backingScale];
   CGPoint c = CGPointMake(viewPt.x * s, viewPt.y * s);
   CGRect r0 = [self _contentRectInDrawable];

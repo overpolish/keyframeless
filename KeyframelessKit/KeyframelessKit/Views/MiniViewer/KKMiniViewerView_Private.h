@@ -52,6 +52,10 @@ NS_ASSUME_NONNULL_BEGIN
 @interface KKMiniViewerView () {
 @package
   id<MTLRenderPipelineState> _pipeline;
+  // Same passthrough but NEAREST magnification, swapped in past a zoom
+  // threshold so a zoomed-in preview shows crisp texels instead of bilinear
+  // blur.
+  id<MTLRenderPipelineState> _pipelineNearest;
   id<MTLRenderPipelineState> _onionPipeline;
   id<MTLCommandQueue> _queue;
   // Slot 0 aliases - keep the existing names so the handle/border/OSC code
@@ -72,11 +76,11 @@ NS_ASSUME_NONNULL_BEGIN
   id _magnifyMon;   // pinch-to-zoom local magnify monitor: AppKit delivers
                     // magnify gestures ONLY to the key window, so when the
                     // companion layer list holds key (popover non-key) a pinch
-                  // over the mini never reaches magnifyWithEvent:. The monitor
-                  // catches the app's magnify events regardless of which
-                  // window is key and routes by pointer location. (Pan needs
-                  // no monitor: AppKit delivers scrollWheel: to inactive
-                  // windows already.)
+  // over the mini never reaches magnifyWithEvent:. The monitor
+  // catches the app's magnify events regardless of which
+  // window is key and routes by pointer location. (Pan needs
+  // no monitor: AppKit delivers scrollWheel: to inactive
+  // windows already.)
   _KKMiniViewerOverlay *_overlay;
   CGFloat _zoom;           // 1 == aspect-fit
   CGPoint _panPixels;      // drawable-space pan offset

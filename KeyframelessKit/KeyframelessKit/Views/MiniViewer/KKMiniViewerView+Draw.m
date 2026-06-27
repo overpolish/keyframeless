@@ -116,7 +116,12 @@
                   vertexCount:4];
         };
 
-    [enc setRenderPipelineState:_pipeline];
+    // Past a modest zoom, swap to NEAREST magnification so texels read as crisp
+    // squares (pixel inspection) instead of bilinear blur; normal/zoomed-out
+    // viewing keeps the smooth linear passthrough. Onion ghosts stay linear.
+    id<MTLRenderPipelineState> passthrough =
+        (_zoom > 3.0 && _pipelineNearest) ? _pipelineNearest : _pipeline;
+    [enc setRenderPipelineState:passthrough];
     [enc setVertexBytes:&vp
                  length:sizeof(vp)
                 atIndex:KKVertexInputIndex_ViewportSize];

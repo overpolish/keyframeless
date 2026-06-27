@@ -39,6 +39,14 @@ static const BOOL kPointShadingLighterTop = YES;
   if (!_pipeline)
     KKLogError(@"KKMiniViewerView: pipeline build failed: %@", err);
 
+  // Nearest-magnification variant of the passthrough, used when zoomed in so
+  // texels read as crisp squares (pixel inspection) instead of bilinear blur.
+  pd.fragmentFunction = [lib newFunctionWithName:@"KKTextureNearestFragment"];
+  _pipelineNearest = [device newRenderPipelineStateWithDescriptor:pd
+                                                            error:&err];
+  if (!_pipelineNearest)
+    KKLogError(@"KKMiniViewerView: nearest pipeline build failed: %@", err);
+
   // Onion-skin: tint+alpha texture pass, premultiplied alpha blending so
   // overlaid ghost frames composite over the active opaque base.
   MTLRenderPipelineDescriptor *op = [[MTLRenderPipelineDescriptor alloc] init];
