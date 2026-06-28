@@ -99,22 +99,10 @@
   // (topmost draws in front), so reverse to keep the stacking order.
   imported = [[imported reverseObjectEnumerator] allObjects];
 
-  // TEMP: the v3 render strokes only (no vector FILL yet). So:
-  //  - FILLED shapes keep their parsed paint - they just won't show until fill
-  //    rendering is back (intended; their own thin stroke, if any, is all that
-  //    draws for now).
-  //  - LINE art (no fill) gets the pen-style placeholder stroke (20px red) so
-  //    it's visible, since its real stroke is often an unresolvable paint like
-  //    `currentColor`. Remove this once stroke styling is wired.
-  for (KKBezierPath *p in imported) {
-    if (p.fillEnabled)
-      continue;
-    p.strokeEnabled = YES;
-    p.strokeWidth = 20.0f;
-    p.strokeR = 1.0f;
-    p.strokeG = 0.0f;
-    p.strokeB = 0.0f;
-  }
+  // Keep the parsed paint: fill (colour + shape) and stroke (colour + width)
+  // both render now, so trust what the SVG specified. `currentColor` is
+  // resolved to black up front by the parser (it isn't a real colour), so it
+  // arrives as a normal black stroke rather than a placeholder.
   NSString *base = url.lastPathComponent.stringByDeletingPathExtension;
 
   if (imported.count == 1) {

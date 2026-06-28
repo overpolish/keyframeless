@@ -29,15 +29,26 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 		case notConnected
 		case helperExited
 		case helperError(String)
+		case timedOut
 		public var errorDescription: String? {
 			switch self {
 			case .spawnFailed(let m): return "Couldn't start local AI helper: \(m)"
 			case .notConnected: return "Not connected to the local AI helper."
 			case .helperExited: return "Local AI helper exited unexpectedly."
 			case .helperError(let m): return m
+			case .timedOut:
+				return "The local AI didn't respond in time and was stopped. Try again."
 			}
 		}
 	}
+
+	/// Max silence (seconds) to wait for the next frame from the helper before
+	/// treating the connection as stuck. The helper emits status frames at the
+	/// start of generation and a result/chunk frame at the end, so the only long
+	/// silence is one model load or one pass (tens of seconds with the slim
+	/// prompt); this is well above that, but bounds a genuine hang so a dead
+	/// session can't freeze the inspector forever.
+	private static let idleTimeout: TimeInterval = 120
 
 	private let socketPath: String
 	private let helperLocator: @Sendable () -> URL?
@@ -90,7 +101,7 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 						jsonSchemaJSON: nil, enableThinking: false, stream: true)
 					try HelperFraming.write(try JSONEncoder().encode(req), to: conn)
 					while true {
-						guard let data = try HelperFraming.read(from: conn) else {
+						guard let data = try self.readFrame(from: conn) else {
 							throw HelperError.helperExited
 						}
 						let resp = try JSONDecoder().decode(HelperResponse.self, from: data)
@@ -120,6 +131,38 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 		}
 	}
 
+	/// Number of generations the helper is currently running (across every client),
+	/// or 0 if the helper isn't up. Uses a SEPARATE short-lived connection - the
+	/// main one may be blocked mid-generation on the serial queue - so it must NOT
+	/// run on `queue`. Call off the main thread (blocking socket I/O).
+	public func activeJobCount() -> Int {
+		(try? controlExchange("status"))?.activeJobs ?? 0
+	}
+
+	/// Cancel every in-flight generation on the helper (MLX stops between tokens,
+	/// so the stuck pass throws and its waiting client unblocks). Best-effort;
+	/// no-op if the helper isn't up. Off-main (blocking socket I/O).
+	public func cancelActiveJobs() {
+		_ = try? controlExchange("cancel")
+	}
+
+	/// Open a fresh connection, send one CONTROL request, read one reply, close.
+	/// Independent of the serial request queue so it works while a generation is
+	/// stuck. Returns nil-ish via throw when the helper isn't listening.
+	private func controlExchange(_ control: String) throws -> HelperResponse {
+		guard let fd = LocalAIHelperSocket.clientConnect(path: socketPath) else {
+			throw HelperError.notConnected  // helper not running - nothing to control
+		}
+		let h = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+		defer { try? h.close() }
+		let req = HelperRequest(
+			modelID: "", system: "", user: "", jsonSchemaJSON: nil,
+			enableThinking: false, control: control)
+		try HelperFraming.write(try JSONEncoder().encode(req), to: h)
+		guard let data = try readFrame(from: h) else { throw HelperError.helperExited }
+		return try JSONDecoder().decode(HelperResponse.self, from: data)
+	}
+
 	/// Queue-isolated: ensure connected, send one request, read one response. On a
 	/// transport failure (helper idle-exited / crashed) reconnect once and retry.
 	private func exchange(_ req: HelperRequest) throws -> String {
@@ -127,10 +170,18 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 		do {
 			return try roundtrip(req)
 		} catch let e as HelperError where isTransport(e) {
+			teardown()
+			// A timed-out (hung) helper won't recover by retrying into the same
+			// stall - surface the error now so the inspector unblocks. Dropping the
+			// connection lets the NEXT prompt reconnect (and respawn a fresh helper
+			// if this one has gone away).
+			if case .timedOut = e {
+				clientLog.notice("client: helper timed out; dropped connection")
+				throw e
+			}
 			clientLog.notice(
 				"client: transport lost (\(e.localizedDescription, privacy: .public)); reconnecting"
 			)
-			teardown()
 			try ensureConnected()
 			return try roundtrip(req)
 		}
@@ -138,9 +189,49 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 
 	private func isTransport(_ e: HelperError) -> Bool {
 		switch e {
-		case .helperExited, .notConnected: return true
+		case .helperExited, .notConnected, .timedOut: return true
 		default: return false
 		}
+	}
+
+	/// Read one length-prefixed frame with an IDLE timeout, so a hung helper can't
+	/// block this connection (and thus every queued pass) forever. Returns nil on
+	/// a clean EOF (peer closed); throws `.timedOut` if no bytes arrive within
+	/// `idleTimeout`. Client-only (the helper's own reads legitimately wait
+	/// forever for the next request, so HelperFraming.read stays untimed there).
+	private func readFrame(from h: FileHandle) throws -> Data? {
+		let fd = h.fileDescriptor
+		guard let header = try readN(4, fd: fd) else { return nil }
+		let len = UInt32(bigEndian: header.withUnsafeBytes { $0.load(as: UInt32.self) })
+		if len == 0 { return Data() }
+		guard let body = try readN(Int(len), fd: fd) else {
+			throw HelperError.helperExited  // header arrived, body truncated: peer died
+		}
+		return body
+	}
+
+	private func readN(_ n: Int, fd: Int32) throws -> Data? {
+		var buf = Data()
+		buf.reserveCapacity(n)
+		while buf.count < n {
+			var pfd = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+			let pr = poll(&pfd, 1, Int32(Self.idleTimeout * 1000))
+			if pr == 0 { throw HelperError.timedOut }
+			if pr < 0 {
+				if errno == EINTR { continue }
+				throw HelperError.helperExited
+			}
+			let want = n - buf.count
+			var tmp = [UInt8](repeating: 0, count: want)
+			let r = tmp.withUnsafeMutableBytes { Darwin.read(fd, $0.baseAddress, want) }
+			if r == 0 { return buf.isEmpty ? nil : buf }  // EOF
+			if r < 0 {
+				if errno == EINTR { continue }
+				throw HelperError.helperExited
+			}
+			buf.append(contentsOf: tmp[0..<r])
+		}
+		return buf
 	}
 
 	private func roundtrip(_ req: HelperRequest) throws -> String {
@@ -156,7 +247,9 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 		while true {
 			let respData: Data?
 			do {
-				respData = try HelperFraming.read(from: conn)
+				respData = try readFrame(from: conn)
+			} catch let e as HelperError {
+				throw e  // preserve .timedOut vs other transport errors
 			} catch {
 				throw HelperError.helperExited
 			}

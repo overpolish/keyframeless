@@ -92,6 +92,57 @@ vertex KKVelocityRasterData KKVelocityVertexShader(
     return out;
 }
 
+/// Like KKVelocityVertexShader, but the GEOMETRY itself moves over the shutter
+/// (point / morph animation), not only the transform. Each vertex carries its
+/// CURRENT-frame object position (KKVertexInputIndex_Vertices) AND its
+/// SHUTTER-START object position (KKVertexInputIndex_VerticesPrev), index-aligned
+/// by the morph's point correspondence. The now-position is projected through the
+/// current matrix (drives rasterization), the prev-position through the
+/// shutter-start matrix, and the screen-space difference is the per-pixel
+/// velocity. This captures non-uniform morphs (one edge extending while another
+/// stays put) that a single rigid quad cannot. Pair with KKVelocityFragment.
+vertex KKVelocityRasterData KKVelocityMorphVertexShader(
+    uint vertexID [[vertex_id]], constant KKVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
+    constant KKVertex2D *vertexArrayPrev [[buffer(KKVertexInputIndex_VerticesPrev)]],
+    constant vector_uint2 *viewportSizePointer [[buffer(KKVertexInputIndex_ViewportSize)]],
+    constant matrix_float4x4 *transform [[buffer(KKVertexInputIndex_Transform)]],
+    constant matrix_float4x4 *transformPrev [[buffer(KKVertexInputIndex_TransformPrev)]]) {
+    KKVelocityRasterData out;
+    float2 localNow = vertexArray[vertexID].position.xy;
+    float2 localPrev = vertexArrayPrev[vertexID].position.xy;
+    float2 viewportSize = float2(*viewportSizePointer);
+
+    float4 wNow = (*transform) * float4(localNow, 0.0, 1.0);
+    float4 wPrev = (*transformPrev) * float4(localPrev, 0.0, 1.0);
+
+    out.clipSpacePosition = float4(wNow.xy / (viewportSize / 2.0), 0.0, wNow.w);
+
+    float2 pxNow = float2(wNow.x, -wNow.y) / wNow.w + viewportSize * 0.5;
+    float2 pxPrev = float2(wPrev.x, -wPrev.y) / wPrev.w + viewportSize * 0.5;
+    out.velocity = pxNow - pxPrev;
+    return out;
+}
+
+/// Velocity pass for geometry whose per-vertex screen-space displacement is
+/// computed on the CPU and baked into each vertex's `textureCoordinate` (so the
+/// motion can't be expressed as a single matrix pair - e.g. a draw-on reveal
+/// front advancing along a path, where freshly-revealed pixels "move" at the
+/// tip's speed). The current-frame composed matrix (KKVertexInputIndex_Transform)
+/// only places the geometry for rasterization; the velocity is passed straight
+/// through. Pair with KKVelocityFragment.
+vertex KKVelocityRasterData KKVelocityDirectVertexShader(
+    uint vertexID [[vertex_id]], constant KKVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
+    constant vector_uint2 *viewportSizePointer [[buffer(KKVertexInputIndex_ViewportSize)]],
+    constant matrix_float4x4 *transform [[buffer(KKVertexInputIndex_Transform)]]) {
+    KKVelocityRasterData out;
+    float2 localPos = vertexArray[vertexID].position.xy;
+    float2 viewportSize = float2(*viewportSizePointer);
+    float4 world = (*transform) * float4(localPos, 0.0, 1.0);
+    out.clipSpacePosition = float4(world.xy / (viewportSize / 2.0), 0.0, world.w);
+    out.velocity = vertexArray[vertexID].textureCoordinate; // baked screen px/shutter
+    return out;
+}
+
 /// Writes the interpolated screen-space velocity into the RG16Float velocity
 /// buffer the reconstruction filter samples.
 fragment half2 KKVelocityFragment(KKVelocityRasterData in [[stage_in]]) {
@@ -144,6 +195,15 @@ fragment float4 KKStrokeDashFragment(KKStrokeRasterData in [[stage_in]], constan
     float fw = max(fwidth(in.arcLength), 1e-4);
     float on = smoothstep(-fw, fw, ph) * (1.0 - smoothstep(dp.onLength - fw, dp.onLength + fw, ph));
     alpha *= on;
+
+    // Draw-on motion-blur reveal: linearly fade the just-revealed segment toward
+    // each moving edge's tip (analytic time-integral of the reveal over the
+    // shutter - exact, and follows the curve since it rides the stroke geometry).
+    if (dp.revealLeadLen > 0.0)
+        alpha *= saturate((dp.revealLeadEnd - in.arcLength) / dp.revealLeadLen);
+    if (dp.revealTrailLen > 0.0)
+        alpha *= saturate(in.arcLength / dp.revealTrailLen);
+
     if (alpha < 0.001)
         discard_fragment();
 

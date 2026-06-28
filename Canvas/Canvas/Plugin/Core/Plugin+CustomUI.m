@@ -6,16 +6,302 @@
 #import "CanvasInspectorView.h"
 #import "CanvasLayerRender.h" // CanvasReadLayerPaths (fresh, not the snapshot)
 #import "CanvasLayerTimeline.h"
+#import "CanvasLocalized.h"
 #import "CanvasPresets.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKHelpSection.h>
+#import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKOnScreenControl.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
 #import <KeyframelessKit/KKPluginHost.h> // KKSetProcessTimelineSnapshot
 #import <KeyframelessKit/KKPresets.h>
+#import <KeyframelessKit/KKSVGParser.h>
+#import <KeyframelessKit/KKTimelineAIMerge.h>
+#import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
+#import <KeyframelessKit/KKTimingGuide.h>
 #import <KeyframelessKit/KKTimingStage.h>
+@import KeyframelessAI;
+
+// The coordinate-space description for Canvas's cross-layer transform lanes.
+// Forms the first half of the PROPERTY CATALOG handed to the targeted-routing
+// resolve pass (the layer list is supplied separately, per call).
+static NSString *_CanvasAITransformSchemaText(void) {
+  NSMutableString *s = [NSMutableString string];
+  [s appendString:@"Every layer shares these transform lanes (numeric "
+                  @"components):\n\n"];
+  [s appendString:
+          @"- \"Position\": [x, y]. Normalised clip space, 0..1, 0.5 = centre.\n"
+          @"    x: 0 = left edge, 1 = right edge.\n"
+          @"    y: 0 = bottom, 1 = top (Y points UP).\n"
+          @"    Off-frame values (< 0 or > 1) are allowed, so a layer can "
+          @"start or end fully outside the frame. Default: [0.5, 0.5].\n"
+          @"\n"
+          @"- \"Scale\": [x, y], whole percentages of the layer's own size. "
+          @"100 = original size. Floored at 0, no upper limit, never negative "
+          @"(use Rotation to flip). Default: [100, 100].\n"
+          @"\n"
+          @"- \"Rotation\": [x, y, z], in DEGREES. z = the in-plane spin "
+          @"(clockwise positive) - the usual rotation; x and y tilt in 3D. "
+          @"Values accumulate past 360 (720 = two turns). Default: [0, 0, 0].\n"
+          @"\n"
+          @"- \"Opacity\": one component, whole percentage 0..100. 100 = fully "
+          @"opaque, 0 = invisible. Default: 100.\n"
+          @"\n"
+          @"- \"Anchor\": [x, y], the pivot Rotation and Scale swing around, in "
+          @"the same normalised space as Position relative to the layer "
+          @"([0.5, 0.5] = centre). Default: [0.5, 0.5]. Only change it when the "
+          @"user wants rotation/scale to pivot off-centre.\n"];
+  return s;
+}
+
+// The non-transform properties the AI can also set or animate (the lanes are
+// already in the AI timeline; this just describes their value spaces + how to
+// set a constant). Appended after the transform schema.
+static NSString *_CanvasAIPropertySchemaText(void) {
+  return @"Other per-layer properties (numbers, same tagged-label scheme). To "
+         @"set one as a CONSTANT (no animation), emit a single keypose at time "
+         @"0; to animate it, emit two or more keyposes.\n"
+         @"- \"Enabled\" (stroke on/off), \"Fill Enabled\", \"Sketch Enabled\": "
+         @"1 = on, 0 = off.\n"
+         @"- \"Stroke Width\": one number, in pixels.\n"
+         @"- \"Stroke Solid\" / \"Fill Solid\": the colour, [r, g, b, a] each "
+         @"0..1 in sRGB (e.g. #f0ff00 = [0.941, 1.0, 0.0, 1.0]). An explicit hex "
+         @"the user gives ALWAYS wins. For a NAMED colour use these (convert the "
+         @"hex to [r,g,b,a] 0..1): red #e23b3b, orange #ff8c00, yellow #ffd400, "
+         @"green #2ecc40, teal #00b3a4, blue #2563eb, purple #9c27b0 (a red+blue "
+         @"violet - NOT plain blue), pink #ff5fa2, brown #8b5a2b, white #ffffff, "
+         @"black #111111, grey #888888. For a solid colour also set the matching "
+         @"\"Stroke Mode\" / \"Fill Mode\" to 0 (0 = Solid, 1 = Gradient; with a "
+         @"Dynamic option present 0 = Dynamic, 1 = Solid, 2 = Gradient).\n"
+         @"- \"Draw On Start\" / \"Draw On End\": the visible portion of the "
+         @"stroke, as a PERCENTAGE 0..100 (Start default 0, End default 100 = "
+         @"fully drawn). To draw a line on, animate ONLY \"Draw On End\" from 0 "
+         @"to 100; leave \"Draw On Start\" at 0 (do not animate it). \"Draw On "
+         @"Offset\" (0..100) slides the revealed window.\n"
+         @"- \"Fill Amount\": image tint strength, 0..100.\n"
+         @"- \"Marching Ants Speed\": dash scroll, cycles/sec.\n"
+         @"Only emit operations for properties the user asked to change.";
+}
+
+// sRGB component (0..1) -> linear, matching the stroke/fill colour space the
+// renderer stores (KKSVGParser uses the same curve). The AI is asked for sRGB.
+static double _CanvasSRGBToLinear(double c) {
+  if (c <= 0.0)
+    return 0.0;
+  if (c >= 1.0)
+    return 1.0;
+  return (c <= 0.04045) ? (c / 12.92) : pow((c + 0.055) / 1.055, 2.4);
+}
+
+// The exact set of (tagged) lane labels the AI's mutation touched, so only those
+// are written back - the rest of the AI timeline (every other layer/property,
+// seeded as a constant) must not be persisted.
+static NSSet<NSString *> *_CanvasMutationLaneLabels(NSString *mutationJSON) {
+  NSMutableSet<NSString *> *labels = [NSMutableSet set];
+  NSData *d = [mutationJSON dataUsingEncoding:NSUTF8StringEncoding];
+  if (!d)
+    return labels;
+  NSDictionary *obj = [NSJSONSerialization JSONObjectWithData:d
+                                                      options:0
+                                                        error:nil];
+  if (![obj isKindOfClass:[NSDictionary class]])
+    return labels;
+  NSArray *ops = obj[@"operations"];
+  if (![ops isKindOfClass:[NSArray class]])
+    return labels;
+  for (id op in ops) {
+    NSString *lane = [op isKindOfClass:[NSDictionary class]] ? op[@"lane"] : nil;
+    if ([lane isKindOfClass:[NSString class]] && lane.length)
+      [labels addObject:lane];
+  }
+  return labels;
+}
+
+// The plain lane labels worth showing the AI: the cross-layer transforms plus
+// the commonly directed stroke/fill/sketch properties. Rarely AI-targeted
+// detail (dashes, markers, line cap/join, gradients, fill style metrics, sketch
+// seed/bowing) is omitted to keep the prompt small; an already-ANIMATED lane is
+// always included regardless, so existing animations stay retimeable.
+static BOOL _CanvasAIRelevantLabel(NSString *plain) {
+  static NSSet<NSString *> *set;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    set = [NSSet setWithObjects:@"Scale", @"Position", @"Rotation", @"Anchor",
+                                @"Opacity", @"Enabled", @"Stroke Width",
+                                @"Stroke Mode", @"Stroke Solid", @"Draw On Start",
+                                @"Draw On End", @"Draw On Offset",
+                                @"Marching Ants Speed", @"Stroke Style",
+                                @"Fill Enabled", @"Fill Mode", @"Fill Solid",
+                                @"Fill Amount", @"Sketch Enabled",
+                                @"Sketch Roughness", nil];
+  });
+  return [set containsObject:plain];
+}
+
+// Turn the resolve pass's Canvas-format operations
+//   {"operations":[{"layer":"<name|selected|all>","lane":"<plain>",
+//                   "keyposes":[{"t":<seconds>,"v":[..]}]}]}
+// into the standard tagged-label mutation the merge + apply consume:
+//   {"operations":[{"lane":"<plain>\x1f<layerID>",
+//                   "keyposes":[{"time":<fraction>,"values":[..]}]}]}
+// Resolves the layer NAME to its id(s) in code (the model never sees ids),
+// expands "all"/"selected", and converts seconds -> clip fraction. Colour sRGB
+// -> linear and single-keypose-as-constant are handled later in the apply, as
+// for any mutation. Returns nil when nothing usable resolves.
+// Easing name from the resolve pass -> KKIntervalCurve index. Default EaseInOut
+// (3), matching the timeline's own default (smooth, not linear).
+static NSInteger _CanvasCurveInt(id raw) {
+  NSString *c = [raw isKindOfClass:[NSString class]] ? [raw lowercaseString] : @"";
+  if ([c isEqualToString:@"linear"])
+    return 0;
+  if ([c isEqualToString:@"easein"] || [c isEqualToString:@"in"])
+    return 1;
+  if ([c isEqualToString:@"easeout"] || [c isEqualToString:@"out"])
+    return 2;
+  if ([c isEqualToString:@"elastic"])
+    return 4;
+  if ([c isEqualToString:@"bounce"])
+    return 5;
+  return 3; // easeInOut (default / "ease" / "smooth" / unknown)
+}
+
+static NSString *_CanvasStandardMutationFromResolve(
+    NSString *opsJSON, NSArray<KKBezierPath *> *paths, double clipDurSec,
+    NSString *selectedLayerID) {
+  NSData *d = [opsJSON dataUsingEncoding:NSUTF8StringEncoding];
+  NSDictionary *obj = d ? [NSJSONSerialization JSONObjectWithData:d
+                                                          options:0
+                                                            error:nil]
+                        : nil;
+  NSArray *ops =
+      [obj isKindOfClass:[NSDictionary class]] ? obj[@"operations"] : nil;
+  if (![ops isKindOfClass:[NSArray class]])
+    return nil;
+
+  NSMutableDictionary<NSString *, NSString *> *byName =
+      [NSMutableDictionary dictionary];
+  NSMutableArray<NSString *> *allIDs = [NSMutableArray array];
+  for (KKBezierPath *p in paths) {
+    if (!p.layerID.length)
+      continue;
+    [allIDs addObject:p.layerID];
+    if (p.name.length)
+      byName[p.name.lowercaseString] = p.layerID;
+  }
+  NSString *selID =
+      selectedLayerID.length ? selectedLayerID : (allIDs.firstObject ?: @"");
+  double dur = (clipDurSec > 0.0 && !isnan(clipDurSec)) ? clipDurSec : 5.0;
+
+  NSMutableArray *stdOps = [NSMutableArray array];
+  for (id op in ops) {
+    if (![op isKindOfClass:[NSDictionary class]])
+      continue;
+    NSString *plain = op[@"lane"];
+    if (![plain isKindOfClass:[NSString class]] || !plain.length)
+      continue;
+    NSString *spec = [op[@"layer"] isKindOfClass:[NSString class]]
+                         ? [op[@"layer"] lowercaseString]
+                         : @"";
+    NSArray<NSString *> *targets;
+    if ([spec isEqualToString:@"all"])
+      targets = allIDs;
+    else if (spec.length == 0 || [spec isEqualToString:@"selected"])
+      targets = selID.length ? @[ selID ] : @[];
+    else {
+      NSString *lid = byName[spec];
+      targets = lid ? @[ lid ] : (selID.length ? @[ selID ] : @[]);
+    }
+    NSArray *kps = op[@"keyposes"];
+    if (![kps isKindOfClass:[NSArray class]] || kps.count == 0)
+      continue;
+    NSMutableArray<NSMutableDictionary *> *stdKps = [NSMutableArray array];
+    for (id kp in kps) {
+      if (![kp isKindOfClass:[NSDictionary class]])
+        continue;
+      NSArray *v = kp[@"v"];
+      if (![v isKindOfClass:[NSArray class]])
+        continue;
+      double frac = dur > 0.0 ? [kp[@"t"] doubleValue] / dur : 0.0;
+      frac = fmax(0.0, fmin(1.0, frac));
+      [stdKps addObject:[@{@"time" : @(frac), @"values" : v} mutableCopy]];
+    }
+    if (stdKps.count == 0)
+      continue;
+    // Easing rides on the interval LEAVING each keypose, so every keypose but
+    // the last gets an `outgoing` curve (smooth by default).
+    NSInteger curve = _CanvasCurveInt(op[@"curve"]);
+    for (NSUInteger i = 0; i + 1 < stdKps.count; i++)
+      stdKps[i][@"outgoing"] = @{@"curve" : @(curve)};
+    for (NSString *lid in targets) {
+      NSString *tagged = [NSString stringWithFormat:@"%@\x1f%@", plain, lid];
+      [stdOps addObject:@{@"lane" : tagged, @"keyposes" : stdKps}];
+    }
+  }
+  if (stdOps.count == 0)
+    return nil;
+  NSData *outD = [NSJSONSerialization dataWithJSONObject:@{@"operations" : stdOps}
+                                                options:0
+                                                  error:nil];
+  return outD ? [[NSString alloc] initWithData:outD encoding:NSUTF8StringEncoding]
+              : nil;
+}
+
+// Turn an AI-generated SVG document into ready-to-insert Canvas layers: parse it
+// (the parser keeps the SVG's stroke/fill + width), order it top-to-bottom, wrap
+// multiple shapes in a group, and assign each a fresh layerID + a name. Mirrors
+// the Finder-drop SVG import path. Returns nil when nothing parses.
+static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
+                                                            NSString *name) {
+  if (!svg.length)
+    return nil;
+  NSArray<KKBezierPath *> *imported =
+      [KKSVGParser pathsFromSVGString:svg canvasWidth:1920.0f canvasHeight:1080.0f];
+  if (imported.count == 0)
+    return nil;
+  // SVG paints back-to-front; the layer list is top-to-bottom (front first).
+  imported = [[imported reverseObjectEnumerator] allObjects];
+
+  // Safety net: a weak local model sometimes emits a hairline stroke-width
+  // relative to its viewBox (imports as ~1-2 canonical px). Floor a visible
+  // stroke so an AI annotation never lands invisibly thin. (Finder-drag SVG
+  // import keeps full fidelity - this is the AI-create path only.)
+  for (KKBezierPath *p in imported)
+    if (p.strokeEnabled && p.strokeWidth > 0.0f && p.strokeWidth < 8.0f)
+      p.strokeWidth = 8.0f;
+
+  NSMutableArray<KKBezierPath *> *out = [NSMutableArray array];
+  if (imported.count == 1) {
+    KKBezierPath *single = imported.firstObject;
+    single.name = name;
+    single.parentGroupID = nil;
+    single.layerID = [[NSUUID UUID] UUIDString];
+    [out addObject:single];
+    return out;
+  }
+  // Several shapes: wrap them in a group, like a multi-element SVG import.
+  KKBezierPath *group = [[KKBezierPath alloc] init];
+  group.isGroup = YES;
+  group.groupID = [[NSUUID UUID] UUIDString];
+  group.layerID = [[NSUUID UUID] UUIDString];
+  group.name = name;
+  group.strokeEnabled = NO;
+  group.fillEnabled = NO;
+  [out addObject:group];
+  for (NSUInteger i = 0; i < imported.count; i++) {
+    KKBezierPath *child = imported[i];
+    child.parentGroupID = group.groupID;
+    child.layerID = [[NSUUID UUID] UUIDString];
+    if (!child.name.length)
+      child.name = [NSString stringWithFormat:@"%@ %lu", name,
+                                              (unsigned long)(i + 1)];
+    [out addObject:child];
+  }
+  return out;
+}
 
 @implementation CanvasPlugin (CustomUI)
 
@@ -435,6 +721,487 @@
   typedef NSView *(*ViewIMP)(id, SEL, UInt32);
   ViewIMP imp = (ViewIMP)[KKPlugin instanceMethodForSelector:_cmd];
   return imp(self, _cmd, parameterID);
+}
+
+- (NSArray<KKHelpGuide *> *)helpGuides {
+  // The Introduction / Advanced Timing / Mini Viewer / On-Screen Controls /
+  // Presets walkthroughs are identical across plugins - the kit builds them
+  // from the live inspector. Always enabled (no canvas-reference gate).
+  __weak typeof(self) weak = self;
+  return [KKTimingGuide
+      standardHelpGuidesForInspectorProvider:^KKTimelineInspectorView * {
+        __strong typeof(weak) strong = weak;
+        return strong.inspectorView;
+      }
+      enabledProvider:^BOOL {
+        return YES;
+      }];
+}
+
+- (nullable NSImage *)helpHeaderIcon {
+  return [NSImage imageWithSystemSymbolName:@"pencil.and.outline"
+                   accessibilityDescription:nil];
+}
+
+// One help section per AIKnowledge topic, single-sourced from the markdown so
+// the help window and the AI read the same text. `symbol` is the section icon.
+- (KKHelpSection *)_canvasHelpSectionForTopic:(NSString *)topic
+                                        title:(NSString *)title
+                                       symbol:(NSString *)symbol {
+  return [self helpSectionFromKnowledgeTopic:topic
+                                       title:title
+                                      symbol:symbol
+                                   localizer:^NSString *(NSString *tip) {
+                                     return CLoc(tip,
+                                                 @"Canvas help tip (from "
+                                                 @"AIKnowledge markdown).");
+                                   }];
+}
+
+- (NSArray<KKHelpSection *> *)helpSections {
+  // A short overview, then one section per property group (Core / Transform /
+  // Stroke / Fill / Sketch - mirroring the inspector's lane groups), each
+  // single-sourced from its AIKnowledge markdown, then the shortcuts table.
+  KKHelpSection *overview =
+      [self _canvasHelpSectionForTopic:@"canvas"
+                                 title:CLoc(@"Canvas",
+                                            @"Help section title (plugin name).")
+                                symbol:@"pencil.and.outline"];
+  KKHelpSection *core =
+      [self _canvasHelpSectionForTopic:@"core"
+                                 title:CLoc(@"Core",
+                                            @"Help section title (geometry).")
+                                symbol:@"point.topleft.down.to.point.bottomright.curvepath"];
+  KKHelpSection *transform =
+      [self _canvasHelpSectionForTopic:@"transform"
+                                 title:CLoc(@"Transform",
+                                            @"Help section title (transform).")
+                                symbol:@"arrow.up.and.down.and.arrow.left.and.right"];
+  KKHelpSection *stroke =
+      [self _canvasHelpSectionForTopic:@"stroke"
+                                 title:CLoc(@"Stroke",
+                                            @"Help section title (stroke).")
+                                symbol:@"scribble"];
+  KKHelpSection *fill =
+      [self _canvasHelpSectionForTopic:@"fill"
+                                 title:CLoc(@"Fill",
+                                            @"Help section title (fill).")
+                                symbol:@"drop.fill"];
+  KKHelpSection *sketch =
+      [self _canvasHelpSectionForTopic:@"sketch"
+                                 title:CLoc(@"Sketch",
+                                            @"Help section title (sketch).")
+                                symbol:@"pencil.and.scribble"];
+
+  // Glyph-only keys carry nothing to translate (pure <kbd> symbols), so they
+  // stay literal - only the description is localized. Mirrors the kit's
+  // sharedOnScreenControlShortcuts ("<kbd>⌘ 0</kbd>" is a plain literal there).
+  KKHelpShortcut *(^g)(NSString *, NSString *) =
+      ^KKHelpShortcut *(NSString *keys, NSString *desc) {
+    return [KKHelpShortcut
+        shortcutWithKeysMarkup:keys
+                    descMarkup:CLoc(desc, @"Canvas keyboard shortcut.")];
+  };
+  // Keys that contain words (a gesture phrase) localize both sides.
+  KKHelpShortcut *(^kbd)(NSString *, NSString *) =
+      ^KKHelpShortcut *(NSString *keys, NSString *desc) {
+    return [KKHelpShortcut
+        shortcutWithKeysMarkup:CLoc(keys, @"Canvas keyboard shortcut keys.")
+                    descMarkup:CLoc(desc, @"Canvas keyboard shortcut.")];
+  };
+  NSMutableArray<KKHelpShortcut *> *rows = [@[
+    g(@"<kbd>⌃ V</kbd> / <kbd>⌃ X</kbd> / <kbd>⌃ B</kbd> / <kbd>⌃ G</kbd>",
+      @"Cursor / pen / rectangle / ellipse tool"),
+    g(@"<kbd>⌫</kbd>",
+      @"Delete the selected layers, or anchors of an edited path"),
+    g(@"<kbd>⌘ G</kbd>", @"Group the selected layers"),
+    g(@"<kbd>⌘ D</kbd>", @"Duplicate the selected layers"),
+    g(@"<kbd>⌘ ]</kbd> / <kbd>⌘ [</kbd>",
+      @"Bring the selected layers forward / send them backward"),
+    g(@"<kbd>⌘ Z</kbd> / <kbd>⇧ ⌘ Z</kbd>", @"Undo / redo"),
+    g(@"<kbd>↩</kbd> / <kbd>⎋</kbd>",
+      @"Finish / cancel the path you're drawing with the pen"),
+    kbd(@"Double-click a point", @"Toggle a smooth curve or a sharp corner"),
+    kbd(@"<kbd>⇧</kbd> + drag a point or handle",
+        @"Lock the move to horizontal / vertical"),
+    kbd(@"<kbd>⌘</kbd> + drag a point or handle",
+        @"Snap a point to align with others, or a handle to 45°"),
+    kbd(@"<kbd>⌃</kbd> + drag a handle", @"Break the curve handle's symmetry"),
+    kbd(@"Drag the Position handle", @"Move the selected layer on the canvas"),
+    kbd(@"Drag the Scale box", @"Resize the selected layer"),
+    kbd(@"Drag a Rotation ring", @"Spin the selected layer"),
+  ] mutableCopy];
+  [rows addObjectsFromArray:[KKPlugin sharedOnScreenControlShortcuts]];
+
+  KKHelpSection *shortcuts =
+      [KKHelpSection sectionWithTitle:CLoc(@"Shortcuts", @"Help section title.")
+                            tipMarkup:nil
+                            shortcuts:rows];
+  shortcuts.icon = [NSImage imageWithSystemSymbolName:@"keyboard"
+                             accessibilityDescription:nil];
+
+  return @[ overview, core, transform, stroke, fill, sketch, shortcuts ];
+}
+
+- (nullable NSView *)aiAccessoryView {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    // Shared timeline docs live in the kit framework bundle (so the kit help
+    // window renders the same source); register them from there.
+    [KKAIKnowledge registerSharedTimelineDocsWithBundle:
+                       [NSBundle bundleForClass:[KKOnScreenControl class]]];
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"Canvas"
+                            bundle:[NSBundle bundleForClass:[CanvasPlugin class]]
+                      subdirectory:@"AIKnowledge"];
+    // Shared on-screen-control docs live in the kit framework. Canvas uses the
+    // Position handle / motion path, the Rotation gizmo, and the visibility
+    // system, so expose those topics.
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"On-Screen Controls"
+                            bundle:[NSBundle
+                                       bundleForClass:[KKOnScreenControl class]]
+                      subdirectory:nil
+                      onlyTopicIDs:@[ @"visibility", @"rotation", @"position" ]];
+    // Color (Solid / Gradient) is a shared property whose doc lives in the kit
+    // framework. Canvas uses it for the stroke + fill colour, so opt in.
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"Color"
+                            bundle:[NSBundle
+                                       bundleForClass:[KKOnScreenControl class]]
+                      subdirectory:nil
+                      onlyTopicIDs:@[ @"color" ]];
+  });
+
+  NSString *productContext = CLoc(
+      @"Canvas, a Final Cut Pro plugin for drawing and animating a stack of "
+      @"layers (vector shapes, imported images and SVGs, and groups) over a "
+      @"clip, using the shared Keyframeless timeline system (Basic and "
+      @"Advanced timing, easing, motion blur). Every layer can animate its "
+      @"transform (position, scale, rotation, anchor, opacity); vector layers "
+      @"can also animate stroke, fill, sketch and draw-on. Always refer to "
+      @"yourself as Canvas. Detailed feature information is in the reference "
+      @"docs below.",
+      @"AI assistant product context for Canvas plugin.");
+
+  NSArray<NSArray<NSString *> *> *examples = @[
+    @[
+      CLoc(@"Slide the top layer in", @"AI example chip: slide a layer in."),
+      CLoc(@"Animate the topmost layer sliding in from off the left edge to "
+           @"its place over the first second.",
+           @"AI example value: slide a layer in.")
+    ],
+    @[
+      CLoc(@"Draw on the stroke", @"AI example chip: draw on the stroke."),
+      CLoc(@"Reveal the stroke of the selected path by animating its draw-on "
+           @"from nothing to fully drawn across the clip.",
+           @"AI example value: draw on the stroke.")
+    ],
+    @[
+      CLoc(@"Fade everything in", @"AI example chip: fade everything in."),
+      CLoc(@"Fade every layer's opacity up from 0 to 100 over the first half "
+           @"second.",
+           @"AI example value: fade everything in.")
+    ],
+    @[
+      CLoc(@"What's Basic vs Advanced?",
+           @"AI example chip: Basic vs Advanced timing question."),
+      CLoc(@"What's the difference between Basic and Advanced timing?",
+           @"AI example value: Basic vs Advanced timing question.")
+    ],
+  ];
+
+  NSString *placeholder = CLoc(@"Ask a question or describe an animation…",
+                               @"AI prompt field placeholder for Canvas.");
+
+  __weak typeof(self) weakSelf = self;
+  return [KKAIBannerHost
+      makePluginButtonWithProductContext:productContext
+                            examplePairs:examples
+                             placeholder:placeholder
+                                   onRun:^(NSString *prompt) {
+                                     __strong typeof(weakSelf) strong = weakSelf;
+                                     if (!strong)
+                                       return;
+                                     [strong _runAIPrompt:prompt
+                                           productContext:productContext
+                                              allowCreate:YES];
+                                   }];
+}
+
+- (void)_runAIPrompt:(NSString *)prompt
+      productContext:(NSString *)productContext
+         allowCreate:(BOOL)allowCreate {
+  [KKAIDraft setRouting:YES];
+  [KKAIDraft setError:nil];
+
+  id<FxCustomParameterActionAPI_v4> readAct =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!readAct) {
+    [KKAIDraft setRouting:NO];
+    [KKAIDraft setError:@"Couldn't open the FCP action scope."];
+    return;
+  }
+  [readAct startAction:self];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  NSArray<KKLane *> *templates = [CanvasPlugin availableLanes];
+  NSString *b64 = KKReadCustomParamString(getAPI, kParamLayerData);
+  NSArray<KKBezierPath *> *paths =
+      b64.length
+          ? [KKBezierPath pathsFromBlob:[[NSData alloc]
+                                            initWithBase64EncodedString:b64
+                                                                options:0]]
+          : @[];
+  // The all-layers AI timeline: every layer's transform lanes (seeded) plus any
+  // lane it already animates, each label tagged "<property>\x1f<layerID>" so a
+  // mutation can target a specific layer and the result feeds straight back
+  // through CanvasApplyMergedTimelineToPaths.
+  NSString *currentJSON =
+      [KKTimeline jsonFromTimeline:CanvasAITimeline(paths, templates)];
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  CMTime clipDur = kCMTimeZero;
+  if (timingAPI)
+    [timingAPI durationTimeForEffect:&clipDur];
+  double clipDurSec = CMTimeGetSeconds(clipDur);
+  if (clipDurSec <= 0 || isnan(clipDurSec))
+    clipDurSec = 5.0;
+  NSString *selectedLayerID =
+      ((CanvasInspectorView *)self.inspectorView).resolvedSelectedLayerID;
+  [readAct endAction:self];
+
+  // Targeted routing: the model gets a compact PROPERTY CATALOG + the layer
+  // NAMES (never the whole timeline, never layer ids), then resolves the edit
+  // directly. Tiny prompt - fast, especially on local. `currentJSON` (the full
+  // timeline) is kept only for the merge in the completion below.
+  NSMutableString *propertyCatalog = [NSMutableString string];
+  [propertyCatalog appendString:_CanvasAITransformSchemaText()];
+  [propertyCatalog appendString:@"\n"];
+  [propertyCatalog appendString:_CanvasAIPropertySchemaText()];
+
+  NSMutableString *layerCatalog = [NSMutableString string];
+  for (KKBezierPath *p in paths) {
+    NSString *type = p.isGroup ? @"group" : (p.isImage ? @"image" : @"shape");
+    BOOL sel =
+        selectedLayerID.length && [p.layerID isEqualToString:selectedLayerID];
+    [layerCatalog appendFormat:@"  - \"%@\" (%@%@)\n",
+                               p.name.length ? p.name : @"Layer", type,
+                               sel ? @", selected" : @""];
+  }
+  if (layerCatalog.length == 0)
+    [layerCatalog appendString:@"  (no layers yet)\n"];
+
+  NSMutableArray<NSString *> *laneLabels = [NSMutableArray array];
+  for (KKLane *t in templates)
+    if (t.label && _CanvasAIRelevantLabel(t.label))
+      [laneLabels addObject:t.label];
+
+  __weak typeof(self) weakSelf = self;
+  [KKAIPluginAgent
+      runCanvasTargetedWithPrompt:prompt
+                   productContext:productContext
+                       laneLabels:laneLabels
+                  propertyCatalog:propertyCatalog
+                     layerCatalog:layerCatalog
+              clipDurationSeconds:clipDurSec
+            supportsLayerCreation:allowCreate
+                       completion:^(KKAIPluginResult *result, NSError *err) {
+                  dispatch_async(dispatch_get_main_queue(), ^{
+                    __strong typeof(weakSelf) strong = weakSelf;
+                    if (!strong)
+                      return;
+                    [KKAIDraft setRouting:NO];
+                    if (err) {
+                      KKLogError(@"AI[err] %@", err.localizedDescription);
+                      [KKAIDraft setError:err.localizedDescription];
+                      return;
+                    }
+                    if (!result) {
+                      KKLogError(@"AI[err] empty result");
+                      [KKAIDraft setError:@"Empty AI response."];
+                      return;
+                    }
+                    if (result.kind == KKAIPluginResultKindAnswer) {
+                      [KKAIDraft setAnswer:result.answer];
+                      return;
+                    }
+                    if (result.kind == KKAIPluginResultKindCreateLayers) {
+                      [strong _canvasCreateLayersFromSVG:result.createSVG
+                                          animatePrompt:result.createAnimatePrompt
+                                         productContext:productContext];
+                      return;
+                    }
+                    // The resolve pass returns Canvas-format operations (layer
+                    // NAME, plain lane, keyposes in seconds). Turn them into the
+                    // standard tagged-label mutation (resolve names -> layerIDs,
+                    // seconds -> clip fractions) that the merge + apply expect.
+                    NSString *stdMutation = _CanvasStandardMutationFromResolve(
+                        result.mutationJSON, paths, clipDurSec, selectedLayerID);
+                    if (!stdMutation) {
+                      KKLogError(@"AI[err] resolve produced no usable operations");
+                      [KKAIDraft setError:@"The AI couldn't resolve that to an "
+                                          @"editable property."];
+                      return;
+                    }
+                    // Snap each lane's final keypose to the last renderable
+                    // frame (FCP's last frame is one before the out-point).
+                    NSString *merged = KKTimelineAIMergeMutationJSON(
+                        currentJSON, stdMutation, clipDurSec,
+                        KKProcessFrameDurationSeconds());
+                    if (!merged) {
+                      KKLogError(@"AI[err] merge returned nil");
+                      [KKAIDraft
+                          setError:@"AI returned an invalid timeline mutation."];
+                      return;
+                    }
+                    KKTimeline *mergedTL = [KKTimeline timelineFromJSON:merged];
+                    if (!mergedTL) {
+                      [KKAIDraft
+                          setError:@"AI returned an invalid timeline mutation."];
+                      return;
+                    }
+                    // Write back ONLY the lanes the mutation named - the rest of
+                    // the AI timeline (every other layer/property, seeded as a
+                    // constant) must not be persisted. A single-keypose change
+                    // (e.g. "set stroke to red") is applied as a constant too,
+                    // not just multi-keypose animations.
+                    NSSet<NSString *> *touched =
+                        _CanvasMutationLaneLabels(stdMutation);
+                    NSMutableArray<KKLane *> *changed = [NSMutableArray array];
+                    BOOL anyAnimated = NO;
+                    for (KKLane *l in mergedTL.lanes) {
+                      if (![touched containsObject:l.label])
+                        continue;
+                      // The AI gives colours in sRGB; the renderer stores linear
+                      // RGB (alpha untouched). Convert each keypose's first three
+                      // components on a colour lane.
+                      if (l.valueType == KKLaneValueTypeColor) {
+                        for (KKKeyPose *kp in l.keyposes) {
+                          NSMutableArray<NSNumber *> *v = [kp.values mutableCopy];
+                          for (NSUInteger i = 0; i < 3 && i < v.count; i++)
+                            v[i] = @(_CanvasSRGBToLinear(v[i].doubleValue));
+                          kp.values = v;
+                        }
+                      }
+                      // One keypose = a constant set, not an animation: mark it
+                      // constant so it lands in Constants, not the Animated set.
+                      // Two or more = a real animation.
+                      l.enabled = (l.keyposes.count > 1);
+                      if (l.enabled)
+                        anyAnimated = YES;
+                      [changed addObject:l];
+                    }
+                    if (changed.count == 0) {
+                      KKLogError(@"AI[err] mutation named no known lanes");
+                      [KKAIDraft setError:@"AI returned changes for properties "
+                                          @"that aren't available here."];
+                      return;
+                    }
+                    mergedTL.lanes = changed;
+
+                    id<FxCustomParameterActionAPI_v4> writeAct =
+                        [strong.apiManager
+                            apiForProtocol:@protocol(
+                                               FxCustomParameterActionAPI_v4)];
+                    if (!writeAct) {
+                      [KKAIDraft setError:@"Couldn't open the FCP action scope "
+                                          @"to apply the mutation."];
+                      return;
+                    }
+                    [writeAct startAction:strong];
+                    id<FxParameterRetrievalAPI_v6> get = [strong.apiManager
+                        apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+                    id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
+                        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+                    NSString *freshB64 = KKReadCustomParamString(get,
+                                                                 kParamLayerData);
+                    NSMutableArray<KKBezierPath *> *cur =
+                        freshB64.length
+                            ? [KKBezierPath
+                                  pathsFromBlob:[[NSData alloc]
+                                                    initWithBase64EncodedString:
+                                                        freshB64
+                                                                        options:
+                                                                            0]]
+                            : [NSMutableArray array];
+                    CanvasApplyMergedTimelineToPaths(mergedTL, cur, templates);
+                    NSData *blob = [KKBezierPath blobFromPaths:cur];
+                    KKWriteCustomParamString(
+                        setAPI, [blob base64EncodedStringWithOptions:0],
+                        kParamLayerData);
+                    // A cross-layer AI ANIMATION isn't Basic-representable
+                    // (Basic shares timings across layers), so show Advanced so
+                    // the user sees the real per-layer structure. A pure
+                    // constant change leaves the tab alone.
+                    if (anyAnimated)
+                      [strong patchUIStateKey:@"activeTab"
+                                        value:@(1)
+                                      paramID:kParamUIState];
+                    [writeAct endAction:strong];
+                    [KKAIDraft setAnswer:nil];
+                    [KKAIDraft clearPrompt];
+                    [KKAIDraft setCompleted:YES];
+                  });
+                }];
+}
+
+- (void)_canvasCreateLayersFromSVG:(NSString *)svg
+                     animatePrompt:(nullable NSString *)animatePrompt
+                    productContext:(NSString *)productContext {
+  NSMutableArray<KKBezierPath *> *newLayers =
+      _CanvasLayersFromSVG(svg, CLoc(@"Drawing", @"Default name for an "
+                                               @"AI-created Canvas layer."));
+  if (newLayers.count == 0) {
+    KKLogError(@"AI[err] create returned no parseable SVG layers");
+    [KKAIDraft setError:@"The AI couldn't produce a drawable shape."];
+    return;
+  }
+
+  id<FxCustomParameterActionAPI_v4> act =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!act) {
+    [KKAIDraft setError:@"Couldn't open the FCP action scope to add the layer."];
+    return;
+  }
+  [act startAction:self];
+  id<FxParameterRetrievalAPI_v6> get =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> set =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  NSString *b64 = KKReadCustomParamString(get, kParamLayerData);
+  NSMutableArray<KKBezierPath *> *cur =
+      b64.length ? [KKBezierPath pathsFromBlob:[[NSData alloc]
+                                                   initWithBase64EncodedString:b64
+                                                                       options:0]]
+                 : [NSMutableArray array];
+  // New layers go on top (front), matching preset insertion.
+  NSMutableArray<KKBezierPath *> *merged = [newLayers mutableCopy];
+  [merged addObjectsFromArray:cur];
+  NSData *blob = [KKBezierPath blobFromPaths:merged];
+  KKWriteCustomParamString(set, [blob base64EncodedStringWithOptions:0],
+                           kParamLayerData);
+  [act endAction:self];
+
+  // If the user also asked to animate / reveal the shape, run that now that the
+  // layer exists - the second pass classifies as a mutation and targets the new
+  // layer (it's front-most in the roster). Defer so the param write settles
+  // before the next read.
+  if (animatePrompt.length) {
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      // allowCreate:NO - this pass animates the just-created layer; it must
+      // never re-enter creation (a create-flavoured prompt would otherwise draw
+      // another shape and loop forever).
+      [weakSelf _runAIPrompt:animatePrompt
+              productContext:productContext
+                 allowCreate:NO];
+    });
+    return;
+  }
+  [KKAIDraft setAnswer:nil];
+  [KKAIDraft clearPrompt];
+  [KKAIDraft setCompleted:YES];
 }
 
 @end

@@ -69,6 +69,28 @@ public enum LocalLLM {
 	/// Name of the helper executable, embedded in each client's bundle.
 	private static let helperName = "kk-ai-helper"
 
+	/// Poll how many local generations the shared helper is running (0 when local
+	/// isn't the shared helper, or the helper is down). The socket I/O is done off
+	/// the main thread; the result is delivered back on the main actor. Drives the
+	/// popover's job/queue indicator.
+	@MainActor public static func activeJobCount(_ completion: @escaping @MainActor (Int) -> Void) {
+		guard let shared = runner as? SharedHelperRunner else {
+			completion(0)
+			return
+		}
+		DispatchQueue.global(qos: .utility).async {
+			let n = shared.activeJobCount()
+			DispatchQueue.main.async { completion(n) }
+		}
+	}
+
+	/// Cancel every in-flight local generation (the popover's Stop button). No-op
+	/// unless the shared helper is the active runner.
+	@MainActor public static func cancelActiveJobs() {
+		guard let shared = runner as? SharedHelperRunner else { return }
+		DispatchQueue.global(qos: .userInitiated).async { shared.cancelActiveJobs() }
+	}
+
 	/// Pick the right engine for the current host:
 	/// - If the app-group socket is reachable (the `group.co.overpolish.keyframeless`
 	///   entitlement is present), use the SHARED out-of-process helper for EVERY

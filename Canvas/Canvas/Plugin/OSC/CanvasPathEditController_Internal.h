@@ -37,6 +37,11 @@ NS_ASSUME_NONNULL_BEGIN
   CFTimeInterval _lastClickTime;      // for the viewer's timing double-click
   NSInteger _lastClickAnchor;         // anchor of the last click, -1 = none
   NSInteger _grabCorner; // corner-radius widget being dragged, -1 = none
+  // Transient Cmd-snap alignment-guide state (live only during an anchor drag).
+  // Set when the grabbed anchor snaps to align with another anchor on that axis;
+  // read by the draw code to paint the accent guide line; cleared every tick.
+  BOOL _snapGuideShowX, _snapGuideShowY;
+  double _snapGuideObjX, _snapGuideObjY; // object-space (Y-up [0,1]) guide coord
 }
 
 /// Publish the current selection to the other surface (cross-process sync).

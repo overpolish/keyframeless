@@ -38,6 +38,14 @@ typedef NS_ENUM(NSInteger, CanvasPathEditHit) {
 @property(nonatomic, readonly) BOOL marqueeActive;
 /// The marquee rectangle in SURFACE points (valid while marqueeActive).
 @property(nonatomic, readonly) CGRect marqueeSurfaceRect;
+/// Cmd-snap alignment guides (live only during an anchor drag): YES when the
+/// grabbed anchor is aligned to another anchor on that axis, with the guide's
+/// object-space (Y-up [0,1]) coordinate. The draw code paints an accent line at
+/// `snapGuideObjX` (vertical) / `snapGuideObjY` (horizontal) when set.
+@property(nonatomic, readonly) BOOL snapGuideShowX;
+@property(nonatomic, readonly) BOOL snapGuideShowY;
+@property(nonatomic, readonly) double snapGuideObjX;
+@property(nonatomic, readonly) double snapGuideObjY;
 /// Whether the corner-radius widgets are active (drawn + grabbable). Mirrors the
 /// "Corners" OSC element's visibility; the surface sets it each draw so a hidden
 /// widget can't be grabbed. Default YES.

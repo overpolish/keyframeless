@@ -12,7 +12,8 @@
 #import "CanvasLayerRender.h"         // CanvasProjectLayerPointsObj
 #import "CanvasLayerTimeline.h"       // blob + UIState snapshots
 #import "CanvasOSC_Private.h"
-#import "CanvasPathMorph.h" // CanvasPathMorphedAtFraction
+#import "CanvasPathEditController.h" // snap-guide state
+#import "CanvasPathMorph.h"          // CanvasPathMorphedAtFraction
 #import "CanvasPathOSC.h"   // CanvasDrawPathEditOSC
 #import "CanvasPenController.h"
 #import <AppKit/AppKit.h>
@@ -110,6 +111,28 @@ static double CanvasOSCKeyposeFrameEps(void) {
   self.penDrawDest = nil;
 }
 
+// The accent Cmd-snap alignment guide: a thin host-accent line through the
+// grabbed anchor's snapped axis, spanning the whole canvas (object space, with a
+// margin past the [0,1] edges so it reaches into the letterbox). Drawn under the
+// anchors, only while a Cmd-snap is live. Mirrors the Position / Anchor OSC
+// snap-guide look. Caller has already set penDrawDest + opened the batch.
+- (void)_drawAnchorSnapGuides {
+  CanvasPathEditController *pe = self.pathEditController;
+  if (!pe.snapGuideShowX && !pe.snapGuideShowY)
+    return;
+  simd_float4 accent = [NSColor accentMatchingHost].simdFloat4;
+  if (pe.snapGuideShowX) {
+    CGPoint v[2] = {CGPointMake(pe.snapGuideObjX, -0.5),
+                    CGPointMake(pe.snapGuideObjX, 1.5)};
+    [self penDrawColoredCurveObjPoints:v count:2 color:accent];
+  }
+  if (pe.snapGuideShowY) {
+    CGPoint h[2] = {CGPointMake(-0.5, pe.snapGuideObjY),
+                    CGPointMake(1.5, pe.snapGuideObjY)};
+    [self penDrawColoredCurveObjPoints:h count:2 color:accent];
+  }
+}
+
 - (void)_drawSelectedPathEditOSCInDestination:(FxImageTile *)destinationImage
                                        atTime:(CMTime)time {
   BOOL visible = [self kkOSCElementVisible:@"Points"];
@@ -168,6 +191,7 @@ static double CanvasOSCKeyposeFrameEps(void) {
       drawOSCBatchedForDestinationImage:destinationImage
                        clearDestination:NO
                                   block:^{
+                                    [self _drawAnchorSnapGuides];
                                     CanvasDrawPathEditOSC(
                                         self, paths,
                                         CanvasPathMorphedAtFraction(path, frac),

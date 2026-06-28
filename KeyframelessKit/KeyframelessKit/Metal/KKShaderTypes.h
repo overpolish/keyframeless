@@ -24,7 +24,15 @@ typedef enum KKVertexInputIndex {
     // current Transform so it can emit each vertex's screen-space displacement
     // over the shutter (the velocity buffer the reconstruction filter blurs
     // along). Unused by the other shaders.
-    KKVertexInputIndex_TransformPrev = 4
+    KKVertexInputIndex_TransformPrev = 4,
+    // A second KKVertex2D buffer of PREVIOUS-frame (shutter-start) vertex
+    // positions, index-aligned with KKVertexInputIndex_Vertices, consumed by
+    // KKVelocityMorphVertexShader. Lets the velocity pass emit per-vertex
+    // displacement when the GEOMETRY itself morphs over the shutter (point
+    // animation), not just when the transform changes - the now-vertex goes
+    // through Transform, its prev counterpart through TransformPrev. Unused by
+    // the other shaders.
+    KKVertexInputIndex_VerticesPrev = 5
 } KKVertexInputIndex;
 
 typedef enum KKTextureIndex { KKTextureIndex_InputImage = 0 } KKTextureIndex;
@@ -49,6 +57,15 @@ typedef struct KKStrokeDashParams {
     float phase;
     float opacity;
     int useGradient; // 0 = solid, 1 = sample the gradient LUT
+    // Draw-on motion-blur reveal fade (arc length px, local to the stroke window).
+    // The time-integral of a linear reveal over the shutter is a LINEAR alpha
+    // ramp on the just-revealed segment, so a moving edge fades to 0 at its tip.
+    // `revealLeadLen` > 0 fades the last `revealLeadLen` px up to `revealLeadEnd`
+    // (the leading edge); `revealTrailLen` > 0 fades the first `revealTrailLen` px
+    // (the trailing edge). 0 = no fade (normal stroke).
+    float revealLeadEnd;
+    float revealLeadLen;
+    float revealTrailLen;
 } KKStrokeDashParams;
 
 /// Fragment uniforms for KKGradientFillFragment: a per-pixel bbox gradient for a

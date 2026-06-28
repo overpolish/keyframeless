@@ -73,11 +73,11 @@ void CanvasEncodeImageLayers(
 
 /// The peak screen-space displacement (px) the layer's bbox centre + corners
 /// travel between the shutter-start fraction `fracPrev` and the current `frac`,
-/// under its full composed transform - i.e. how long the motion-blur trail should
-/// be. The caller sizes the reconstruction tile (= max blur reach) to this so a
-/// faster layer gets a longer trail. Returns 0 for a static / hidden / group
-/// layer or an unknown time (negative frac). Same projection as the velocity
-/// shader, so the estimate matches what gets rendered.
+/// under its full composed transform - i.e. how long the motion-blur trail
+/// should be. The caller sizes the reconstruction tile (= max blur reach) to
+/// this so a faster layer gets a longer trail. Returns 0 for a static / hidden
+/// / group layer or an unknown time (negative frac). Same projection as the
+/// velocity shader, so the estimate matches what gets rendered.
 float CanvasLayerMaxVelocityPx(NSArray<KKBezierPath *> *layers,
                                NSInteger layerIndex, double frac,
                                double fracPrev, float imageWidth,
@@ -87,26 +87,91 @@ float CanvasLayerMaxVelocityPx(NSArray<KKBezierPath *> *layers,
                                KKTimeline *_Nullable overrideTimeline);
 
 /// Emits one layer's analytic screen-space VELOCITY (for the "Fast"
-/// reconstruction motion blur) by drawing its bounding quad - expanded by
-/// `marginPx` so the layer's stroke width AND its blur smear fall inside - through
-/// the kit `KKVelocityVertexShader`. The caller must have set the velocity
+/// reconstruction motion blur). The caller must have set the rigid velocity
 /// pipeline (`KKVelocityVertexShader` + `KKVelocityFragment`, no blend) and the
-/// viewport-size buffer on `encoder`. The quad is drawn through the layer's
-/// composed model matrix at `frac` (current, bound at KKVertexInputIndex_Transform)
-/// AND `fracPrev` (shutter start, at KKVertexInputIndex_TransformPrev), so the
-/// shader emits each pixel's displacement over the shutter. Velocity is a smooth
-/// analytic field, so the bounding quad (not the exact tessellation) is enough -
-/// the colour pass's exact geometry masks the over-coverage. Group ancestors
-/// compose exactly as in the colour encoders. `overrideLayerID`/`overrideTimeline`
-/// behave as elsewhere. A negative `frac`/`fracPrev` skips (no motion to emit).
-void CanvasEncodeLayerVelocityQuad(NSArray<KKBezierPath *> *layers,
-                                   id<MTLRenderCommandEncoder> encoder,
-                                   NSInteger layerIndex, double frac,
-                                   double fracPrev, float imageWidth,
-                                   float imageHeight, float tileShiftX,
-                                   float tileShiftY, float marginPx,
-                                   NSString *_Nullable overrideLayerID,
-                                   KKTimeline *_Nullable overrideTimeline);
+/// viewport-size buffer on `encoder`.
+///
+/// When the layer animates its OUTLINE per-point (a Points morph, e.g. a shape
+/// growing) and `morphVelPS` is non-nil (the `KKVelocityMorphVertexShader` +
+/// `KKVelocityFragment` pipeline), a centroid-fan velocity mesh of the morphed
+/// outline at `frac` / `fracPrev` is drawn through `morphVelPS` so each
+/// vertex's displacement is independent - a growing edge blurs while a held
+/// edge stays sharp. Otherwise (shape-based layer, no morph correspondence, or
+/// no `morphVelPS`) the layer's bounding quad - expanded by `marginPx` so the
+/// stroke width AND blur smear fall inside - is drawn through the caller-set
+/// rigid pipeline. Either way the quad/fan goes through the layer's composed
+/// model matrix at `frac` (current, KKVertexInputIndex_Transform) AND
+/// `fracPrev` (shutter start, KKVertexInputIndex_TransformPrev), pivoting
+/// exactly as the colour pass. The colour pass's exact geometry masks any
+/// over-coverage. Group ancestors compose as in the colour encoders.
+/// `overrideLayerID`/ `overrideTimeline` behave as elsewhere. A negative
+/// `frac`/`fracPrev` skips.
+void CanvasEncodeLayerVelocityQuad(
+    NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
+    NSInteger layerIndex, double frac, double fracPrev, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY, float marginPx,
+    id<MTLRenderPipelineState> _Nullable morphVelPS,
+    NSString *_Nullable overrideLayerID,
+    KKTimeline *_Nullable overrideTimeline);
+
+/// Emits the VELOCITY for a stroked layer whose STROKE WIDTH is animating (for
+/// the "Fast" reconstruction motion blur) so a thickening / thinning line blurs
+/// its moving edges - which the transform/morph passes miss (the centreline
+/// doesn't move; the edges do). A two-edge triangle strip is drawn through the
+/// morph pipeline `morphVelPS` (`KKVelocityMorphVertexShader`): each edge
+/// vertex carries its NOW position (centreline ± ⊥·halfWidth@frac) and its PREV
+/// position (± ⊥·halfWidth@fracPrev), so the per-vertex displacement = the
+/// edge's ⊥ travel PLUS any transform / morph motion. No-op when the width
+/// isn't changing (the other passes handle a moving stroke), for non-stroked /
+/// multi-contour layers, or with no `morphVelPS`. Call on the velocity encoder
+/// after CanvasEncodeLayerVelocityQuad; the caller must have set the
+/// viewport-size buffer. The DRAW-ON front (if any) should be emitted AFTER
+/// this.
+void CanvasEncodeStrokeWidthVelocity(
+    NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
+    NSInteger layerIndex, double frac, double fracPrev, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY,
+    id<MTLRenderPipelineState> _Nullable morphVelPS,
+    NSString *_Nullable overrideLayerID,
+    KKTimeline *_Nullable overrideTimeline);
+
+/// Emits the VELOCITY for a layer's animating ROUNDED CORNERS (for the "Fast"
+/// reconstruction motion blur). The morph fan samples straight chords between
+/// anchors, so the fillet arc that bulges between them - exactly where a
+/// rounding / unrounding corner's pixels move - gets no velocity. This draws a
+/// thin strip along each corner's fillet arc through the morph pipeline
+/// `morphVelPS`: each vertex carries its NOW arc position and its PREV
+/// counterpart (same arc parameter), so the per-vertex displacement = the
+/// corner's radius change + transform + morph. No-op for layers with no rounded
+/// corners, a static (non-morphing) outline, or when the set of rounded corners
+/// changes across the shutter. Call on the velocity encoder after the other
+/// passes (it overwrites the corner regions); the caller must have set the
+/// viewport-size buffer.
+void CanvasEncodeCornerFilletVelocity(
+    NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
+    NSInteger layerIndex, double frac, double fracPrev, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY,
+    id<MTLRenderPipelineState> _Nullable morphVelPS,
+    NSString *_Nullable overrideLayerID,
+    KKTimeline *_Nullable overrideTimeline);
+
+/// Emits the VELOCITY for a draw-on endpoint MARKER (arrowhead / dot) riding
+/// the advancing reveal tip (for the "Fast" motion blur). The stroke reveal
+/// blurs via the analytic alpha fade, but a marker is a compact shape that
+/// TRANSLATES with the tip, so it blurs by velocity reconstruction: a box at
+/// the marker's now-tip (now positions) + the same box at its shutter-start tip
+/// (prev positions), drawn through `morphVelPS`, yields the tip's translation.
+/// No-op for a layer with no moving draw-on marker. Call on the velocity
+/// encoder; the caller must have set the viewport-size buffer.
+void CanvasEncodeMarkerVelocity(NSArray<KKBezierPath *> *layers,
+                                id<MTLRenderCommandEncoder> encoder,
+                                NSInteger layerIndex, double frac,
+                                double fracPrev, float imageWidth,
+                                float imageHeight, float tileShiftX,
+                                float tileShiftY,
+                                id<MTLRenderPipelineState> _Nullable morphVelPS,
+                                NSString *_Nullable overrideLayerID,
+                                KKTimeline *_Nullable overrideTimeline);
 
 /// Draw the source frame as a full-image quad through the SAME tile transform
 /// (KKTransformVertexShader + the tile-shift matrix) the layers use, so it
@@ -145,12 +210,18 @@ void CanvasEncodeSourceTile(id<MTLRenderCommandEncoder> encoder,
 /// `elapsedSec` is the media time since the effect start; it drives the
 /// marching-ants animation (phase = elapsedSec x Speed x pattern period). Pass
 /// 0 for a static preview.
+/// `mbPrevFrac` >= 0 enables the "Fast" motion-blur DRAW-ON REVEAL FADE: a
+/// stroked layer whose draw-on reveal moved between `mbPrevFrac` (shutter
+/// start) and `frac` fades the just-revealed segment to its moving tip - the
+/// analytic time-integral of the reveal, so a curving draw-on blurs correctly
+/// in ONE render (no gather). Pass -1 for a normal render (no fade).
 void CanvasEncodeVectorLayers(
     NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
     id<MTLDevice> device, float imageWidth, float imageHeight, float tileShiftX,
     float tileShiftY, double frac, NSString *_Nullable overrideLayerID,
     KKTimeline *_Nullable overrideTimeline, float strokeScale,
-    double elapsedSec, id<MTLRenderPipelineState> _Nullable solidPS,
+    double elapsedSec, double mbPrevFrac,
+    id<MTLRenderPipelineState> _Nullable solidPS,
     id<MTLRenderPipelineState> _Nullable gradientPS,
     id<MTLRenderPipelineState> _Nullable dashPS);
 
@@ -296,16 +367,18 @@ typedef struct {
 } CanvasLayerDrawKey;
 
 /// The draw key for layer `i`. `tileShift` matches the render tile.
-CanvasLayerDrawKey CanvasLayerComposedDrawKey(
-    NSArray<KKBezierPath *> *layers, NSInteger i, double frac, float imageWidth,
-    float imageHeight, float tileShiftX, float tileShiftY,
-    NSString *_Nullable overrideLayerID, KKTimeline *_Nullable overrideTimeline);
+CanvasLayerDrawKey
+CanvasLayerComposedDrawKey(NSArray<KKBezierPath *> *layers, NSInteger i,
+                           double frac, float imageWidth, float imageHeight,
+                           float tileShiftX, float tileShiftY,
+                           NSString *_Nullable overrideLayerID,
+                           KKTimeline *_Nullable overrideTimeline);
 
 /// Orders `count` drawables back-to-front into `outOrder` (caller-allocated,
-/// `count` entries), given their stack `indices` and draw `keys`. Layers sort by
-/// real depth; any run closer than `tol` in depth is one near-coincident "deck"
-/// reordered by stack position - REVERSED when the deck is back-facing - so a
-/// stack of coincident layers flips front/back cleanly as it rotates past
+/// `count` entries), given their stack `indices` and draw `keys`. Layers sort
+/// by real depth; any run closer than `tol` in depth is one near-coincident
+/// "deck" reordered by stack position - REVERSED when the deck is back-facing -
+/// so a stack of coincident layers flips front/back cleanly as it rotates past
 /// edge-on, instead of an unstable depth tie. Relative gaps (not absolute
 /// buckets) keep a drifting deck from straddling a boundary (no flicker). `tol`
 /// is in the same units as depth (a few % of the working dimension). The

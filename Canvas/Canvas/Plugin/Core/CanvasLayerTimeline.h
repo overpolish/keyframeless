@@ -58,6 +58,19 @@ void CanvasApplyMergedTimelineToPaths(KKTimeline *merged,
                                       NSArray<KKBezierPath *> *paths,
                                       NSArray<KKLane *> *templates);
 
+/// The all-layers AI timeline handed to the AI agent as "current timeline":
+/// like CanvasMergedTimeline but ALSO seeds every layer's cross-layer transform
+/// lanes (Scale, Position, Rotation, Opacity, Anchor) even when they're still
+/// constant, so the agent can animate movement on ANY layer (the kit merge
+/// drops mutation operations whose lane label isn't already present). Already
+/// -animated non-transform lanes (Stroke Width, Fill Amount, Draw On...) are
+/// carried in too so they can be retimed. Same tagged-label scheme
+/// ("<short>\x1f<layerID>") as CanvasMergedTimeline, so the merged result feeds
+/// straight back through CanvasApplyMergedTimelineToPaths. Per-layer
+/// applicability is respected (image/group layers omit vector-only lanes).
+KKTimeline *CanvasAITimeline(NSArray<KKBezierPath *> *paths,
+                             NSArray<KKLane *> *templates);
+
 /// YES if `path` has at least one constant (non-animated) param - i.e. fewer
 /// animated lanes than `templates` (or no animationJSON at all).
 BOOL CanvasLayerHasConstant(KKBezierPath *_Nullable path,

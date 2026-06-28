@@ -1,6 +1,9 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%lld running" : {
+
+    },
     "%lld selected · transforms apply here" : {
       "comment" : "Steno selection line when one or more transcriptions are selected.",
       "extractionState" : "manual",
@@ -675,6 +678,9 @@
           }
         }
       }
+    },
+    "Drawing" : {
+
     },
     "Examples" : {
       "comment" : "Section header above the example prompt chips.",
@@ -1514,6 +1520,9 @@
         }
       }
     },
+    "Planning edit" : {
+
+    },
     "Planning timing" : {
       "comment" : "AI routing status: planning the timing pass.",
       "extractionState" : "manual",
@@ -2060,6 +2069,9 @@
           }
         }
       }
+    },
+    "Stop" : {
+
     },
     "Strip filler words" : {
       "comment" : "Example prompt label: strip filler words.",

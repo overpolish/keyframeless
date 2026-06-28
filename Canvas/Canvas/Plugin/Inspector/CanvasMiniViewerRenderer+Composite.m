@@ -217,8 +217,9 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
       id<MTLRenderCommandEncoder> senc = miniLoadEnc(_strokePipeline);
       CanvasEncodeVectorLayers(one, senc, cb.device, w, h, 0.0f, 0.0f,
                                self.editFraction, self.selectedLayerID,
-                               self.timeline, 1.0f, miniElapsed, _strokePipeline,
-                               _strokeGradientPipeline, _strokeDashPipeline);
+                               self.timeline, 1.0f, miniElapsed, -1.0,
+                               _strokePipeline, _strokeGradientPipeline,
+                               _strokeDashPipeline);
       [senc endEncoding];
     }
   }

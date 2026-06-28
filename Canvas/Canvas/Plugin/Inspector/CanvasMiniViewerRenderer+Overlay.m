@@ -12,6 +12,7 @@
 #import "CanvasToolbar.h" // CanvasToolbarTool*
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/NSColor+KKColors.h> // accent snap guide
 #import <Metal/Metal.h>
 
 // The mini's tool-overlay DRAW pass: the delegate entry
@@ -250,6 +251,22 @@
   // the same visibility so a hidden widget isn't grabbable.
   BOOL cornersShown = [self labelVisibleOrRevealing:@"Corners"];
   self.pathEditController.cornerWidgetsActive = cornersShown;
+  // Accent Cmd-snap alignment guides under the anchors (viewer parity), spanning
+  // the canvas with a margin past the [0,1] edges.
+  CanvasPathEditController *pe = self.pathEditController;
+  if (pe.snapGuideShowX || pe.snapGuideShowY) {
+    simd_float4 accent = [NSColor accentMatchingHost].simdFloat4;
+    if (pe.snapGuideShowX) {
+      CGPoint v[2] = {CGPointMake(pe.snapGuideObjX, -0.5),
+                      CGPointMake(pe.snapGuideObjX, 1.5)};
+      [self penDrawColoredCurveObjPoints:v count:2 color:accent];
+    }
+    if (pe.snapGuideShowY) {
+      CGPoint h[2] = {CGPointMake(-0.5, pe.snapGuideObjY),
+                      CGPointMake(1.5, pe.snapGuideObjY)};
+      [self penDrawColoredCurveObjPoints:h count:2 color:accent];
+    }
+  }
   CanvasDrawPathEditOSC(
       self, self.layers ?: @[],
       CanvasPathMorphedAtFraction(path, self.editFraction), self.editFraction,

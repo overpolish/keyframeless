@@ -106,6 +106,42 @@ NSArray *KKTimelineAIPreserveModulation(NSArray *newKps, NSArray *oldKps) {
   return out;
 }
 
+// If every keypose in `kps` carries the same `values`, return that common
+// array (so the run is a constant, not an animation); otherwise nil. Used to
+// strip lanes the AI "animated" without actually varying - it generates what it
+// thinks it needs and we demote anything whose value never changes.
+static NSArray *KKKeyposesConstantValue(NSArray *kps) {
+  if (![kps isKindOfClass:[NSArray class]] || kps.count == 0)
+    return nil;
+  NSDictionary *f = kps.firstObject;
+  if (![f isKindOfClass:[NSDictionary class]])
+    return nil;
+  NSArray *first = f[@"values"];
+  if (![first isKindOfClass:[NSArray class]])
+    return nil;
+  for (NSDictionary *kp in kps) {
+    if (![kp isKindOfClass:[NSDictionary class]])
+      return nil;
+    NSArray *v = kp[@"values"];
+    if (![v isKindOfClass:[NSArray class]] || v.count != first.count)
+      return nil;
+    for (NSUInteger k = 0; k < v.count; k++)
+      if (fabs([v[k] doubleValue] - [first[k] doubleValue]) > 1e-6)
+        return nil;
+  }
+  return first;
+}
+
+static BOOL KKValuesEqual(NSArray *a, NSArray *b) {
+  if (![a isKindOfClass:[NSArray class]] || ![b isKindOfClass:[NSArray class]] ||
+      a.count != b.count)
+    return NO;
+  for (NSUInteger k = 0; k < a.count; k++)
+    if (fabs([a[k] doubleValue] - [b[k] doubleValue]) > 1e-6)
+      return NO;
+  return YES;
+}
+
 NSString *KKTimelineAIMergeMutationJSON(NSString *currentTimelineJSON,
                                         NSString *mutationJSON,
                                         double clipDurSec, double frameDurSec) {
@@ -152,14 +188,35 @@ NSString *KKTimelineAIMergeMutationJSON(NSString *currentTimelineJSON,
     }
     NSMutableDictionary *target =
         [curLanes[idxN.unsignedIntegerValue] mutableCopy];
+    NSArray *oldKps = curLanes[idxN.unsignedIntegerValue][@"keyposes"];
     if (op[@"keyposes"]) {
       NSArray *newKps = op[@"keyposes"];
-      NSArray *oldKps = curLanes[idxN.unsignedIntegerValue][@"keyposes"];
       target[@"keyposes"] = KKTimelineAIPreserveModulation(newKps, oldKps);
     }
     if (op[@"hold_shape"])
       target[@"hold_shape"] = op[@"hold_shape"];
-    target[@"enabled"] = @YES;
+
+    // Demote a "non-animation" the AI emitted: if every keypose holds the same
+    // value it's a constant, not an animation. Drop it entirely when it matches
+    // the lane's existing value (the AI animated a property it never actually
+    // changed - e.g. Draw On Start held at 0); otherwise keep it as a single
+    // constant keypose with enabled = NO, so it lands in the constants, not the
+    // animated timeline. A genuine multi-value animation stays enabled. This is
+    // shared, so every plugin's AI path stops polluting its timeline.
+    NSArray *constVal = KKKeyposesConstantValue(target[@"keyposes"]);
+    if (constVal) {
+      NSArray *oldConst = KKKeyposesConstantValue(oldKps);
+      if (oldConst && KKValuesEqual(oldConst, constVal))
+        continue; // no real change - leave the lane untouched
+      NSDictionary *firstKp = [target[@"keyposes"] firstObject];
+      NSMutableDictionary *kp0 = [firstKp mutableCopy];
+      [kp0 removeObjectForKey:@"outgoing"]; // single keypose = no interval
+      kp0[@"time"] = @0.0;                  // a constant lives at the start
+      target[@"keyposes"] = @[ kp0 ];
+      target[@"enabled"] = @NO;
+    } else {
+      target[@"enabled"] = @YES;
+    }
     curLanes[idxN.unsignedIntegerValue] = target;
   }
 

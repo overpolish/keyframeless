@@ -41,6 +41,20 @@ struct AIActionTab: View {
 			footer
 		}
 		.animation(.easeInOut(duration: 0.18), value: draft.pendingAnswer != nil)
+		// While a LOCAL request is in flight, poll the shared helper for how many
+		// generations it's running, so the footer can show the count + a Stop
+		// button. Restarts whenever isRouting flips; resets to 0 when idle.
+		.task(id: draft.isRouting) {
+			guard draft.isRouting, keyState.activeProvider == .local else {
+				draft.localJobCount = 0
+				return
+			}
+			while !Task.isCancelled && draft.isRouting {
+				LocalLLM.activeJobCount { draft.localJobCount = $0 }
+				try? await Task.sleep(nanoseconds: 1_500_000_000)
+			}
+			draft.localJobCount = 0
+		}
 		.onChange(of: draft.prompt) { _, newValue in
 			// Only a real edit (typing) clears the done state - not the
 			// programmatic clearPrompt() that fires when a mutation completes,
@@ -198,6 +212,30 @@ struct AIActionTab: View {
 				.foregroundStyle(.orange)
 			}
 			Spacer()
+			// Local request in flight: show how many jobs the helper is running and
+			// a Stop button to cancel them (recovers a stuck/slow local session
+			// without waiting out the timeout). Cloud has no helper queue.
+			if draft.isRouting && keyState.activeProvider == .local {
+				if draft.localJobCount > 0 {
+					Text(AILoc("\(draft.localJobCount) running"))
+						.font(.system(size: 10))
+						.foregroundStyle(.secondary)
+						.monospacedDigit()
+				}
+				Button(role: .destructive) {
+					// Mark as a deliberate cancel so the resulting error is swallowed,
+					// stop the spinner immediately, and cancel the helper's job (which
+					// also reclaims its GPU memory once it drains).
+					draft.cancelRequested = true
+					draft.isRouting = false
+					draft.routingStatus = nil
+					LocalLLM.cancelActiveJobs()
+				} label: {
+					Label(AILoc("Stop"), systemImage: "stop.fill")
+				}
+				.buttonStyle(.bordered)
+				.controlSize(.small)
+			}
 			Button {
 				runIfPossible()
 			} label: {
@@ -225,6 +263,7 @@ struct AIActionTab: View {
 		draft.routingError = nil
 		draft.didCompleteMutation = false
 		draft.didAnswerQuestion = false
+		draft.cancelRequested = false  // new run: don't swallow its errors
 
 		if isPluginMode {
 			// Plugin host owns routing: it has live timeline state and a custom
@@ -269,7 +308,12 @@ struct AIActionTab: View {
 				}
 			} catch {
 				draft.isRouting = false
-				draft.routingError = error.localizedDescription
+				// A deliberate Stop reports back as an error; don't show it as one.
+				if draft.cancelRequested {
+					draft.cancelRequested = false
+				} else {
+					draft.routingError = error.localizedDescription
+				}
 			}
 		}
 	}

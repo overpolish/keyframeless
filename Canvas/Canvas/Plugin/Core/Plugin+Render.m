@@ -386,9 +386,10 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
   free(ordBuf);
 
   void (^renderSampleOrdered)(id<MTLTexture>, id<MTLCommandBuffer>,
-                              id<MTLTexture>, double, NSArray<NSNumber *> *) =
+                              id<MTLTexture>, double, double,
+                              NSArray<NSNumber *> *) =
       ^(id<MTLTexture> sdest, id<MTLCommandBuffer> scb, id<MTLTexture> srcTex,
-        double f, NSArray<NSNumber *> *order) {
+        double f, double mbPrevFrac, NSArray<NSNumber *> *order) {
         if (!device || !sdest || !imagePS)
           return;
         float sw = (float)sdest.width, sh = (float)sdest.height;
@@ -452,8 +453,8 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
             id<MTLRenderCommandEncoder> e = sEnc(strokePS, MTLLoadActionLoad);
             CanvasEncodeVectorLayers(one, e, device, outputWidth, outputHeight,
                                      tileShiftX, tileShiftY, f, nil, nil,
-                                     strokeScale, marchElapsed, strokePS,
-                                     strokeGradientPS, strokeDashPS);
+                                     strokeScale, marchElapsed, mbPrevFrac,
+                                     strokePS, strokeGradientPS, strokeDashPS);
             [e endEncoding];
           }
         }
@@ -506,7 +507,7 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
         sourceImages.firstObject
             ? [sourceImages.firstObject metalTextureForDevice:device]
             : nil;
-    renderSampleOrdered(interm, cb, srcTex, f, drawOrder);
+    renderSampleOrdered(interm, cb, srcTex, f, -1.0, drawOrder);
     // Copy the finished composite onto the dest tile. The intermediate is tracked
     // so the blit waits for the render passes; the dest is the lone write here.
     id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
@@ -554,6 +555,19 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
                                     vertexShader:@"KKVelocityVertexShader"
                                   fragmentShader:@"KKVelocityFragment"
                                        blendMode:KKBlendModeNone];
+    id<MTLRenderPipelineState> morphVelPS = [cache
+        buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                                 @".Canvas.velocity.morph"
+                                      registryID:regID
+                                     pixelFormat:MTLPixelFormatRG16Float
+                                        bundleID:kitBundleID
+                                    vertexShader:@"KKVelocityMorphVertexShader"
+                                  fragmentShader:@"KKVelocityFragment"
+                                       blendMode:KKBlendModeNone];
+    // Additive accumulation pipeline: averages N sub-frame samples of a draw-on
+    // layer (each scaled by 1/N in the opacity fragment) into a scratch texture.
+    // Draw-on is "appearing" content on a possibly-curved path, which velocity
+    // reconstruction can't smear cleanly.
     id<MTLRenderPipelineState> compositePS = [cache
         buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
                                                  @".Canvas.mbcomposite"
@@ -623,6 +637,35 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
         {{-iw / 2.0f, ih / 2.0f}, {0, 0}},
     };
 
+    // Composite mbBlurredTex over the dest (premultiplied "over"); shared by both
+    // the reconstruction and accumulation branches below. (`fsQuad` is captured
+    // via a pointer - blocks can't capture a C array by value.)
+    KKVertex2D *fsQuadP = fsQuad;
+    void (^compositeBlurredOverDest)(id<MTLCommandBuffer>) =
+        ^(id<MTLCommandBuffer> cb) {
+          MTLRenderPassDescriptor *rpd =
+              [MTLRenderPassDescriptor renderPassDescriptor];
+          rpd.colorAttachments[0].texture = destTex;
+          rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+          rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+          id<MTLRenderCommandEncoder> e =
+              [cb renderCommandEncoderWithDescriptor:rpd];
+          [e setViewport:(MTLViewport){0, 0, (double)iw, (double)ih, -1, 1}];
+          [e setVertexBytes:fsQuadP
+                     length:sizeof(KKVertex2D) * 4
+                    atIndex:KKVertexInputIndex_Vertices];
+          [e setVertexBytes:&vp
+                     length:sizeof(vp)
+                    atIndex:KKVertexInputIndex_ViewportSize];
+          [e setRenderPipelineState:compositePS];
+          [e setFragmentTexture:self.mbBlurredTex
+                        atIndex:KKTextureIndex_InputImage];
+          [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                  vertexStart:0
+                  vertexCount:4];
+          [e endEncoding];
+        };
+
     for (NSNumber *idxN in drawOrder) {
       NSInteger i = idxN.integerValue;
       id<MTLCommandBuffer> cb = [queue commandBuffer];
@@ -638,8 +681,12 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
       int tileSize = (int)fmaxf(16.0f, fminf(256.0f, ceilf(maxVel)));
       int taps = (int)fmaxf(9.0f, fminf(25.0f, ceilf((float)tileSize / 6.0f)));
 
-      // 1. Colour: the layer alone over transparent (clears, no source).
-      renderSampleOrdered(self.mbColorTex, cb, nil, frac, @[ idxN ]);
+      // 1. Colour: the layer alone over transparent (clears, no source). Passing
+      // fPrev enables the analytic DRAW-ON reveal fade in the stroke shader, so a
+      // (curving) progressive reveal blurs here in ONE render - no accumulation,
+      // no gather. The velocity pass below still handles the layer's spatial
+      // motion (transform / morph / width / corners), composing with the fade.
+      renderSampleOrdered(self.mbColorTex, cb, nil, frac, fPrev, @[ idxN ]);
 
       // 2. Velocity: the layer's analytic screen-space displacement.
       {
@@ -658,7 +705,23 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
         [e setRenderPipelineState:velPS];
         CanvasEncodeLayerVelocityQuad(layers, e, i, frac, fPrev, outputWidth,
                                       outputHeight, tileShiftX, tileShiftY,
-                                      marginPx, nil, nil);
+                                      marginPx, morphVelPS, nil, nil);
+        // Animating stroke width: the edges move ⊥ even when the centreline
+        // doesn't. Overwrites the stroke region with transform + width velocity.
+        CanvasEncodeStrokeWidthVelocity(layers, e, i, frac, fPrev, outputWidth,
+                                        outputHeight, tileShiftX, tileShiftY,
+                                        morphVelPS, nil, nil);
+        // Animating rounded corners: the fillet arc between anchors moves where
+        // the fan's straight chords miss it. Overwrites the corner regions.
+        CanvasEncodeCornerFilletVelocity(layers, e, i, frac, fPrev, outputWidth,
+                                         outputHeight, tileShiftX, tileShiftY,
+                                         morphVelPS, nil, nil);
+        // Draw-on endpoint marker riding the tip (the stroke reveal itself blurs
+        // via the analytic alpha fade in the colour pass, but the marker
+        // translates, so it blurs by velocity here).
+        CanvasEncodeMarkerVelocity(layers, e, i, frac, fPrev, outputWidth,
+                                   outputHeight, tileShiftX, tileShiftY,
+                                   morphVelPS, nil, nil);
         [e endEncoding];
       }
 
@@ -679,29 +742,7 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
       }
 
       // 4. Composite the blurred layer over the dest (premultiplied "over").
-      {
-        MTLRenderPassDescriptor *rpd =
-            [MTLRenderPassDescriptor renderPassDescriptor];
-        rpd.colorAttachments[0].texture = destTex;
-        rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
-        rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-        id<MTLRenderCommandEncoder> e =
-            [cb renderCommandEncoderWithDescriptor:rpd];
-        [e setViewport:(MTLViewport){0, 0, (double)iw, (double)ih, -1, 1}];
-        [e setVertexBytes:fsQuad
-                   length:sizeof(fsQuad)
-                  atIndex:KKVertexInputIndex_Vertices];
-        [e setVertexBytes:&vp
-                   length:sizeof(vp)
-                  atIndex:KKVertexInputIndex_ViewportSize];
-        [e setRenderPipelineState:compositePS];
-        [e setFragmentTexture:self.mbBlurredTex
-                      atIndex:KKTextureIndex_InputImage];
-        [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                vertexStart:0
-                vertexCount:4];
-        [e endEncoding];
-      }
+      compositeBlurredOverDest(cb);
 
       [cb commit];
       [cb waitUntilCompleted];
@@ -746,7 +787,7 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
                       // (image/fill/stroke) over its time-matched source into the
                       // sample texture; KKMotionBlur averages the samples.
                       renderSampleOrdered(sampleDest, commandBuffer,
-                                          inputTextures.firstObject, f,
+                                          inputTextures.firstObject, f, -1.0,
                                           drawOrder);
                       return YES;
                     }];

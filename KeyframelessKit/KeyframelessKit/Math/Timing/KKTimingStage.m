@@ -60,11 +60,15 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   self = [super init];
   if (self) {
     _curve = KKIntervalCurveEaseInOut;
-    _intensity = 1.0;
+    // Midpoint defaults (the documented neutral per KKEasing.h) - not max, so a
+    // freshly-picked easing / hold effect starts gentle and is dialed UP, rather
+    // than maxed out and needing to be dialed down. Saved animations are
+    // unaffected: the JSON always carries explicit values that override these.
+    _intensity = 0.5;
     _frequency = 0.5;
     _modulation = KKIntervalModulationNone;
-    _modulationIntensity = 1.0;
-    _modulationFrequency = 1.0;
+    _modulationIntensity = 0.5;
+    _modulationFrequency = 0.5;
     _modulationLinked = YES;
     // Default unlinked: an interval freshly created in Advanced (new keypose /
     // property) starts unlinked. Basic explicitly links its Hold pair when it

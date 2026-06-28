@@ -211,7 +211,7 @@ When exactly one editable **path** is selected, a marquee instead selects that p
 
 With the **cursor** tool and a vector path selected, its anchors and tangent handles are editable directly - in both the FCP viewer and the inspector mini-viewer (the selection stays in sync between the two):
 
-- **Move** - drag an anchor (grid-snaps like the pen) or drag a tangent handle (free; **Ctrl** breaks the handle into a cusp). Multiple selected anchors move together.
+- **Move** - drag an anchor to reposition it, or drag a tangent handle to recurve the segment. While dragging an **anchor**: **Shift** locks the move to horizontal / vertical, **Cmd** snaps it to align with another anchor's X or Y (independently per axis, in screen space), and grid **Snap** (when on) snaps to the grid like the pen. While dragging a **handle**: **Shift** locks it to horizontal / vertical, **Cmd** snaps its angle to 45° steps, **Ctrl** breaks the handle into a cusp. Multiple selected anchors move together (the modifiers act on the grabbed one; the rest follow its delta).
 - **Select** - click an anchor; **Shift**-click to add/remove; with that single path selected, drag an empty area over it to **marquee**-select a group of its anchors (**Opt**-drag subtracts). Enclosing the whole shape selects all its anchors.
 - **Delete** - press **Delete**/**Backspace** to remove the selected anchors. The cursor-tool delete is "destructive" like Illustrator's Direct-Selection: deleting an anchor from a **closed** path **opens** it at that gap. (The pen tool's Opt-delete is the "smart" delete - the neighbours reconnect and a closed path stays closed.) Removing the last viable anchor deletes the layer.
 - **Convert corner <-> smooth** - **double-click** an anchor to toggle it between a sharp corner (no handles) and a smooth point (auto-generated tangents).
@@ -247,6 +247,8 @@ Imported paths are ordinary editable paths. A small, simple SVG can be point-edi
 ## Motion blur
 
 The inspector's motion-blur control blurs the layer animation. Canvas offers two qualities (a Fast / Accurate pill in the settings popover): **Fast** (the default) is per-layer velocity-buffer reconstruction - real-time even with many layers, and only the moving layers cost anything, so the trail length follows each layer's motion. **Accurate** is sample-accumulation (the Samples slider applies) for maximum fidelity on extreme in-frame rotation. Shutter and Samples behave as in the shared timeline motion-blur docs.
+
+Motion blur appears only in the **main FCP viewer** (the final render). The inspector's mini-preview always renders **crisp**, with no motion blur, so it stays a stable, precise surface for editing points, handles, and on-screen controls at any playhead position. This is intentional, not a bug: a blurred preview would smear the very geometry you're placing. To judge the blurred result, watch the main viewer.
 
 ## Pending re-add (tracked during the v3 rebuild)
 

@@ -43,6 +43,132 @@
         }
       }
     },
+    "<kbd>⇧</kbd> + drag a point or handle": {
+      "comment": "Canvas keyboard shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + Punkt oder Griff ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + arrastrar un punto o tirador"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + glisser un point ou une poignée"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + ポイントまたはハンドルをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + 포인트 또는 핸들 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⇧</kbd> + 拖动点或手柄"
+          }
+        }
+      }
+    },
+    "<kbd>⌃</kbd> + drag a handle": {
+      "comment": "Canvas keyboard shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌃</kbd> + Griff ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌃</kbd> + arrastrar un tirador"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌃</kbd> + glisser une poignée"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌃</kbd> + ハンドルをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌃</kbd> + 핸들 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌃</kbd> + 拖动手柄"
+          }
+        }
+      }
+    },
+    "<kbd>⌘</kbd> + drag a point or handle": {
+      "comment": "Canvas keyboard shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + Punkt oder Griff ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + arrastrar un punto o tirador"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + glisser un point ou une poignée"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + ポイントまたはハンドルをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + 포인트 또는 핸들 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘</kbd> + 拖动点或手柄"
+          }
+        }
+      }
+    },
     "All layer's values animated": {
       "comment": "Tooltip on a grayed layer-list row in the constants popover.",
       "extractionState": "manual",
@@ -169,6 +295,90 @@
         }
       }
     },
+    "Break the curve handle's symmetry": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Symmetrie des Kurvengriffs aufheben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Romper la simetría del tirador de la curva"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Briser la symétrie de la poignée de courbe"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カーブハンドルの対称性を解除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "곡선 핸들의 대칭 해제"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打破曲线手柄的对称"
+          }
+        }
+      }
+    },
+    "Bring the selected layers forward / send them backward": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die ausgewählten Ebenen nach vorne / nach hinten bringen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Traer las capas seleccionadas adelante / enviarlas atrás"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avancer les calques sélectionnés / les reculer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択したレイヤーを前面へ / 背面へ移動"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 레이어를 앞으로 / 뒤로 보내기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将所选图层前移 / 后移"
+          }
+        }
+      }
+    },
     "Centerline": {
       "comment": "Toolbar tooltip: trace a filled shape down to its centerline stroke",
       "extractionState": "manual",
@@ -253,6 +463,48 @@
         }
       }
     },
+    "Cursor / pen / rectangle / ellipse tool": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Werkzeug Cursor / Stift / Rechteck / Ellipse"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herramienta cursor / pluma / rectángulo / elipse"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outil curseur / plume / rectangle / ellipse"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カーソル / ペン / 長方形 / 楕円ツール"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "커서 / 펜 / 사각형 / 타원 도구"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "光标 / 钢笔 / 矩形 / 椭圆工具"
+          }
+        }
+      }
+    },
     "Delete": {
       "comment": "Layer context menu.",
       "extractionState": "manual",
@@ -291,6 +543,132 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除"
+          }
+        }
+      }
+    },
+    "Delete the selected layers, or anchors of an edited path": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die ausgewählten Ebenen löschen, oder Ankerpunkte eines bearbeiteten Pfads"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar las capas seleccionadas, o los anclajes de una trayectoria en edición"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer les calques sélectionnés, ou les points d’une trajectoire en cours d’édition"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択したレイヤー、または編集中のパスのアンカーを削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 레이어 또는 편집 중인 경로의 앵커 삭제"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除所选图层，或正在编辑路径的锚点"
+          }
+        }
+      }
+    },
+    "Double-click a point": {
+      "comment": "Canvas keyboard shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doppelklick auf einen Punkt"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doble clic en un punto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double-clic sur un point"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ポイントをダブルクリック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "포인트 더블 클릭"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "双击点"
+          }
+        }
+      }
+    },
+    "Drag a Rotation ring": {
+      "comment": "Canvas keyboard shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Rotationsring ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastrar un anillo de Rotación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glisser un anneau de Rotation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回転リングをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "회전 링 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动旋转环"
           }
         }
       }
@@ -337,6 +715,90 @@
         }
       }
     },
+    "Drag the Position handle": {
+      "comment": "Canvas keyboard shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Positionsgriff ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastrar el tirador de Posición"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glisser la poignée de Position"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置ハンドルをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "위치 핸들 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动位置手柄"
+          }
+        }
+      }
+    },
+    "Drag the Scale box": {
+      "comment": "Canvas keyboard shortcut keys.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skalierungsrahmen ziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastrar el cuadro de Escala"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glisser le cadre d’Échelle"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スケールボックスをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "크기 조절 상자 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动缩放框"
+          }
+        }
+      }
+    },
     "Duplicate": {
       "comment": "Layer context menu.",
       "extractionState": "manual",
@@ -375,6 +837,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "复制"
+          }
+        }
+      }
+    },
+    "Duplicate the selected layers": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die ausgewählten Ebenen duplizieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicar las capas seleccionadas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dupliquer les calques sélectionnés"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択したレイヤーを複製"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 레이어 복제"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制所选图层"
           }
         }
       }
@@ -505,6 +1009,48 @@
         }
       }
     },
+    "Finish / cancel the path you're drawing with the pen": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den mit dem Stift gezeichneten Pfad abschließen / abbrechen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finalizar / cancelar la trayectoria que dibujas con la pluma"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminer / annuler la trajectoire que vous dessinez à la plume"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペンで描いているパスを完成 / キャンセル"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "펜으로 그리는 경로 완료 / 취소"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成 / 取消用钢笔绘制的路径"
+          }
+        }
+      }
+    },
     "Grid cell size": {
       "comment": "Toolbar tooltip: grid cell size",
       "extractionState": "manual",
@@ -589,6 +1135,48 @@
         }
       }
     },
+    "Group the selected layers": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die ausgewählten Ebenen gruppieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agrupar las capas seleccionadas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grouper les calques sélectionnés"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択したレイヤーをグループ化"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 레이어 그룹화"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将所选图层编组"
+          }
+        }
+      }
+    },
     "Intersect": {
       "comment": "Toolbar tooltip: keep only the overlap of the selected paths",
       "extractionState": "manual",
@@ -669,6 +1257,90 @@
           "stringUnit": {
             "state": "translated",
             "value": "图层"
+          }
+        }
+      }
+    },
+    "Lock the move to horizontal / vertical": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Bewegung auf horizontal / vertikal beschränken"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloquear el movimiento a horizontal / vertical"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verrouiller le déplacement à l’horizontale / la verticale"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移動を水平 / 垂直に固定"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이동을 가로 / 세로로 잠금"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将移动锁定为水平 / 垂直"
+          }
+        }
+      }
+    },
+    "Move the selected layer on the canvas": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die ausgewählte Ebene auf der Leinwand bewegen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mover la capa seleccionada en el lienzo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplacer le calque sélectionné sur le canevas"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択したレイヤーをキャンバス上で移動"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 레이어를 캔버스에서 이동"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在画布上移动所选图层"
           }
         }
       }
@@ -1093,6 +1765,48 @@
         }
       }
     },
+    "Resize the selected layer": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Größe der ausgewählten Ebene ändern"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar el tamaño de la capa seleccionada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redimensionner le calque sélectionné"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択したレイヤーのサイズを変更"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 레이어 크기 조절"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "调整所选图层的大小"
+          }
+        }
+      }
+    },
     "Select tool": {
       "comment": "Toolbar tooltip: selection tool",
       "extractionState": "manual",
@@ -1177,6 +1891,48 @@
         }
       }
     },
+    "Snap a point to align with others, or a handle to 45°": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Punkt an anderen ausrichten, oder einen Griff auf 45° einrasten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar un punto para alinearlo con otros, o un tirador a 45°"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aligner un point sur les autres, ou une poignée sur 45°"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ポイントを他のポイントに整列、またはハンドルを45°にスナップ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "포인트를 다른 포인트에 정렬, 또는 핸들을 45°로 스냅"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将点对齐到其他点，或将手柄吸附到 45°"
+          }
+        }
+      }
+    },
     "Snap to grid": {
       "comment": "Toolbar tooltip: snap drags to the grid",
       "extractionState": "manual",
@@ -1215,6 +1971,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "对齐到网格"
+          }
+        }
+      }
+    },
+    "Spin the selected layer": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die ausgewählte Ebene drehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Girar la capa seleccionada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faire pivoter le calque sélectionné"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択したレイヤーを回転"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 레이어 회전"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旋转所选图层"
           }
         }
       }
@@ -1341,6 +2139,90 @@
           "stringUnit": {
             "state": "translated",
             "value": "此图层未添加动画"
+          }
+        }
+      }
+    },
+    "Toggle a smooth curve or a sharp corner": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwischen weicher Kurve und scharfer Ecke umschalten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alternar entre curva suave y esquina marcada"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Basculer entre courbe lisse et angle net"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滑らかなカーブと鋭い角を切り替え"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "부드러운 곡선과 뾰족한 모서리 전환"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在平滑曲线和尖角之间切换"
+          }
+        }
+      }
+    },
+    "Undo / redo": {
+      "comment": "Canvas keyboard shortcut.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Widerrufen / Wiederholen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deshacer / rehacer"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Annuler / rétablir"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取り消す / やり直す"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실행 취소 / 다시 실행"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销 / 重做"
           }
         }
       }

@@ -14,6 +14,66 @@ static float sRGBToLinear(float c) {
   return (c <= 0.04045f) ? (c / 12.92f) : powf((c + 0.055f) / 1.055f, 2.4f);
 }
 
+// Endpoint-marker name -> KKBezierPath marker index. Matches the canonical
+// marker set (None, Arrow, Circle, Square, Arrowhead, Line). Unknown / "none"
+// -> 0 (no marker).
+static uint8_t KKMarkerIndexForName(NSString *name) {
+  static NSDictionary<NSString *, NSNumber *> *map;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    map = @{
+      @"arrow" : @1,
+      @"circle" : @2,
+      @"dot" : @2,
+      @"square" : @3,
+      @"arrowhead" : @4,
+      @"line" : @5,
+      @"bar" : @5,
+    };
+  });
+  NSNumber *idx = map[name.lowercaseString];
+  return idx ? (uint8_t)idx.unsignedCharValue : 0;
+}
+
+// Parse endpoint-marker hints from an SVG element `id`, so an author (or the AI)
+// can request the plugin's NATIVE stroke markers instead of drawing arrowhead
+// geometry. Tokens (space/comma separated): a LEADING tilde = START end, a
+// TRAILING tilde = END end, e.g. "~arrow" (arrow at start), "arrow~" (arrow at
+// end), "~arrow~" (both), "~circle arrow~" (circle start, arrow end). The marker
+// renders at the stroke's default size (% of stroke width).
+static void KKApplyMarkerHintsFromID(KKBezierPath *path, const char *cid) {
+  if (!cid || cid[0] == '\0')
+    return;
+  NSString *raw = [NSString stringWithUTF8String:cid];
+  NSCharacterSet *seps = [NSCharacterSet characterSetWithCharactersInString:@" ,;"];
+  for (NSString *tokenRaw in [raw componentsSeparatedByCharactersInSet:seps]) {
+    NSString *token = [tokenRaw stringByTrimmingCharactersInSet:
+                                    [NSCharacterSet whitespaceCharacterSet]];
+    if (token.length < 2)
+      continue;
+    BOOL atStart = [token hasPrefix:@"~"];
+    BOOL atEnd = [token hasSuffix:@"~"];
+    if (!atStart && !atEnd)
+      continue;
+    NSString *name = [token
+        stringByTrimmingCharactersInSet:
+            [NSCharacterSet characterSetWithCharactersInString:@"~"]];
+    uint8_t idx = KKMarkerIndexForName(name);
+    if (idx == 0)
+      continue;
+    if (atStart) {
+      path.startMarker = idx;
+      if (path.startMarkerSize <= 0.0f)
+        path.startMarkerSize = 300.0f; // 3x stroke width (lane default)
+    }
+    if (atEnd) {
+      path.endMarker = idx;
+      if (path.endMarkerSize <= 0.0f)
+        path.endMarkerSize = 300.0f;
+    }
+  }
+}
+
 @implementation KKSVGParser
 
 + (NSArray<KKBezierPath *> *)pathsFromSVGString:(NSString *)svgString
@@ -25,6 +85,16 @@ static float sRGBToLinear(float c) {
     canvasWidth = 1;
   if (canvasHeight < 1)
     canvasHeight = 1;
+
+  // `currentColor` means "inherit the CSS `color` property", which has no value
+  // outside a document - nanosvg can't resolve the keyword and falls back to a
+  // bogus mid-grey (the unknown-colour-name default). Resolve it to its spec
+  // default (black) up front so a currentColor stroke/fill imports as black
+  // rather than grey, and keeps its stroke-width.
+  svgString = [svgString stringByReplacingOccurrencesOfString:@"currentColor"
+                                                   withString:@"black"
+                                                      options:NSCaseInsensitiveSearch
+                                                        range:NSMakeRange(0, svgString.length)];
 
   // nsvgParse modifies the input string, so we need a mutable C copy.
   const char *utf8 = [svgString UTF8String];
@@ -77,6 +147,10 @@ static float sRGBToLinear(float c) {
     path.opacity = shape->opacity;
     path.lineJoin = (uint8_t)shape->strokeLineJoin;
     path.lineCap = (uint8_t)shape->strokeLineCap;
+
+    // Native endpoint markers requested via the element id (e.g. "arrow~"),
+    // so an arrow uses the plugin's stroke marker instead of drawn geometry.
+    KKApplyMarkerHintsFromID(path, shape->id);
 
     // --- Convert paths (contours) ---
     BOOL isFirstContour = YES;
@@ -166,8 +240,13 @@ static float sRGBToLinear(float c) {
       }
     }
 
+    // Stroke width is authored in the same canonical pixel space as the rest of
+    // the plugin (the canvasWidth/Height reference the caller passes), so scale
+    // the SVG-unit width by the SVG->canvas-pixel fit factor (pixScale) - NOT by
+    // pixScale/canvasDim, which is the 0..1 point scale and made strokes ~1000x
+    // too thin (the reason a placeholder width used to overwrite this).
     if (p.strokeEnabled && p.strokeWidth > 0)
-      p.strokeWidth = p.strokeWidth * fminf(scaleX, scaleY);
+      p.strokeWidth = p.strokeWidth * pixScale;
   }
 
   return results;

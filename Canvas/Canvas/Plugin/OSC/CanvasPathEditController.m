@@ -150,6 +150,59 @@ static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
   return YES;
 }
 
+// Cmd-snap for an anchor drag: align the grabbed anchor's proposed local target
+// to any OTHER anchor in the path, independently on X and Y, in SURFACE space
+// (so the threshold is a constant pixel reach under any layer transform / zoom -
+// exactly like the hit-test). The grabbed + selected anchors are excluded (they
+// move with the cursor, so aligning to them is meaningless). Returns the
+// (possibly snapped) target back in local space; unchanged when nothing's in
+// reach.
+- (simd_float2)_snapAnchorTargetLocalX:(float)tx
+                                     y:(float)ty
+                               grabbed:(NSInteger)grab
+                                 start:(KKBezierPath *)start
+                                layers:(NSArray<KKBezierPath *> *)layers
+                                  frac:(double)frac
+                                aspect:(float)aspect
+                             selection:(NSIndexSet *)sel {
+  _snapGuideShowX = _snapGuideShowY = NO;
+  if (start.count < 2)
+    return simd_make_float2(tx, ty);
+  CanvasProjCtx ctx = CanvasProjCtxMake(layers, start, frac, aspect);
+  simd_float2 to = CanvasProjectWithCtx(&ctx, tx, ty);
+  CGPoint ts = [_surface penSurfacePointFromObj:CGPointMake(to.x, to.y)];
+  const double kSnapPx = 8.0;
+  double bestDX = kSnapPx, bestDY = kSnapPx, snapSX = ts.x, snapSY = ts.y;
+  BOOL gotX = NO, gotY = NO;
+  for (NSUInteger i = 0; i < start.count; i++) {
+    if ((NSInteger)i == grab || [sel containsIndex:i])
+      continue;
+    KKBezierPoint p = [start pointAtIndex:i];
+    simd_float2 po = CanvasProjectWithCtx(&ctx, p.x, p.y);
+    CGPoint ps = [_surface penSurfacePointFromObj:CGPointMake(po.x, po.y)];
+    double dx = fabs(ps.x - ts.x), dy = fabs(ps.y - ts.y);
+    if (dx < bestDX) {
+      bestDX = dx;
+      snapSX = ps.x;
+      gotX = YES;
+    }
+    if (dy < bestDY) {
+      bestDY = dy;
+      snapSY = ps.y;
+      gotY = YES;
+    }
+  }
+  if (!gotX && !gotY)
+    return simd_make_float2(tx, ty);
+  CGPoint o = [_surface penObjFromSurfaceX:snapSX y:snapSY];
+  _snapGuideShowX = gotX;
+  _snapGuideShowY = gotY;
+  _snapGuideObjX = o.x;
+  _snapGuideObjY = o.y;
+  return CanvasUnprojectLayerPointObj(layers, start, frac, aspect, (float)o.x,
+                                      (float)o.y);
+}
+
 - (void)mouseDraggedAtX:(double)x
                       y:(double)y
               modifiers:(CanvasPenModifiers)mods {
@@ -157,6 +210,10 @@ static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
     return;
   _didDrag = YES;
   _dragMods = mods;
+  // Clear the snap guides each tick; the anchor branch re-asserts them only
+  // while a Cmd-snap is actually landing (so they vanish the moment Cmd is
+  // released, or on a handle / marquee / corner drag).
+  _snapGuideShowX = _snapGuideShowY = NO;
   if (_marqueeActive) {
     _marqueeEnd = CGPointMake(x, y);
     return; // the surface redraws on drag; selection commits on mouseUp
@@ -206,12 +263,30 @@ static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
     }
   } else {
     // Move every selected anchor by the same delta (the grabbed one lands on
-    // the grid-snapped cursor; the rest keep their relative offsets).
+    // the cursor; the rest keep their relative offsets). Shift axis-locks the
+    // delta to X or Y; Cmd snaps the grabbed anchor to align with other anchors.
     KKBezierPoint g = [start pointAtIndex:idx];
-    simd_float2 delta = simd_make_float2(local.x - g.x, local.y - g.y);
     NSIndexSet *sel = _selectedAnchors.count
                           ? _selectedAnchors
                           : [NSIndexSet indexSetWithIndex:idx];
+    simd_float2 target = local;
+    if (mods & CanvasPenModShift) {
+      simd_float2 d =
+          [self _constrain:simd_make_float2(local.x - g.x, local.y - g.y)
+                    aspect:aspect
+                 modifiers:CanvasPenModShift];
+      target = simd_make_float2(g.x + d.x, g.y + d.y);
+    }
+    if (mods & CanvasPenModCmd)
+      target = [self _snapAnchorTargetLocalX:target.x
+                                           y:target.y
+                                     grabbed:idx
+                                       start:start
+                                      layers:layers
+                                        frac:frac
+                                      aspect:aspect
+                                   selection:sel];
+    simd_float2 delta = simd_make_float2(target.x - g.x, target.y - g.y);
     [sel enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
       if (i >= start.count)
         return;
@@ -233,6 +308,7 @@ static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
 }
 
 - (void)mouseUp {
+  _snapGuideShowX = _snapGuideShowY = NO; // the guides are drag-only
   if (_marqueeActive) {
     [self _finalizeMarquee];
     _marqueeActive = NO;

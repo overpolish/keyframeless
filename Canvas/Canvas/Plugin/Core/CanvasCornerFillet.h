@@ -64,6 +64,24 @@ CanvasCornerWidget CanvasCornerWidgetObjCtx(KKBezierPath *path, NSUInteger i,
 /// No-op fast path: a path with no nonzero radii returns a plain copy.
 KKBezierPath *CanvasPathByExpandingCorners(KKBezierPath *path, float aspect);
 
+/// One rounded corner's fillet as a cubic bezier in OBJECT-NORMALISED space
+/// ([0,1], Y-up): the arc runs t1 -> t2 with control points c1, c2. The same arc
+/// the expander bakes into the rendered geometry, exposed so the motion-blur
+/// velocity pass can track the fillet as a corner's radius (or the shape)
+/// animates - the fan's straight anchor chords miss this curve entirely.
+typedef struct {
+  simd_float2 t1, c1, c2, t2;
+} CanvasFilletArc;
+
+/// Fill `out` with the fillet arc of every rounded corner of `path` (same corner
+/// detection + math as CanvasPathByExpandingCorners), up to `maxOut`. Returns the
+/// count. Corner order is stable across keyposes while the SET of rounded corners
+/// is unchanged, so two fractions' results correspond index-for-index (until a
+/// corner crosses sharp<->rounded, which changes the count). `aspect` = canvasW /
+/// canvasH. Empty for a path with no nonzero radii.
+NSUInteger CanvasPathFilletArcs(KKBezierPath *path, float aspect,
+                                CanvasFilletArc *out, NSUInteger maxOut);
+
 /// The inset distance `d` along each edge for a corner of interior angle
 /// `theta` (radians) and radius `r`: d = r / tan(theta/2). Shared by the
 /// expander and the OSC's drag<->radius mapping so the widget and the rendered

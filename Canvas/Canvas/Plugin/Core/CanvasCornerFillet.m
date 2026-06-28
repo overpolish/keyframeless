@@ -290,3 +290,54 @@ KKBezierPath *CanvasPathByExpandingCorners(KKBezierPath *path, float aspect) {
   free(pts);
   return out;
 }
+
+NSUInteger CanvasPathFilletArcs(KKBezierPath *path, float aspect,
+                                CanvasFilletArc *out, NSUInteger maxOut) {
+  if (!path || !out || maxOut == 0 || !path.hasCornerRadii || path.count < 3)
+    return 0;
+  if (aspect <= 0)
+    aspect = 1.0f;
+  NSUInteger nc = path.contourCount;
+  BOOL closed = path.closed;
+  NSUInteger m = 0;
+  for (NSUInteger c = 0; c < nc && m < maxOut; c++) {
+    NSRange range = [path contourRangeAtIndex:c];
+    NSUInteger cs = range.location, ce = NSMaxRange(range);
+    NSUInteger cn = range.length;
+    BOOL contourClosed = (nc > 1) ? YES : closed;
+    for (NSUInteger i = cs; i < ce && m < maxOut; i++) {
+      float r = [path cornerRadiusAtIndex:i];
+      BOOL hasPrev = contourClosed || i > cs;
+      BOOL hasNext = contourClosed || i + 1 < ce;
+      if (r <= 0 || !hasPrev || !hasNext || cn < 3)
+        continue;
+      KKBezierPoint cur = [path pointAtIndex:i];
+      NSUInteger pi = (i > cs) ? i - 1 : ce - 1;
+      NSUInteger ni = (i + 1 < ce) ? i + 1 : cs;
+      KKBezierPoint pp = [path pointAtIndex:pi], pn = [path pointAtIndex:ni];
+      simd_float2 P = ToPx(simd_make_float2(cur.x, cur.y), aspect);
+      simd_float2 A = ToPx(simd_make_float2(pp.x, pp.y), aspect);
+      simd_float2 B = ToPx(simd_make_float2(pn.x, pn.y), aspect);
+      CanvasCornerBasis basis = CanvasCornerBasisPx(P, A, B);
+      if (!basis.valid)
+        continue;
+      double d = CanvasCornerInsetForRadius(r, basis.theta);
+      double dMax = 0.5 * fmin((double)basis.la, (double)basis.lb);
+      if (d > dMax)
+        d = dMax;
+      double rEff = CanvasCornerRadiusForInset(d, basis.theta);
+      double phi = M_PI - basis.theta;
+      double h = (4.0 / 3.0) * tan(phi * 0.25) * rEff;
+      simd_float2 T1px = P + basis.u * (float)d, T2px = P + basis.v * (float)d;
+      simd_float2 T1outPx = -basis.u * (float)h, T2inPx = -basis.v * (float)h;
+      simd_float2 T1 = ToObj(T1px, aspect), T2 = ToObj(T2px, aspect);
+      simd_float2 T1out = ToObj(T1outPx, aspect), T2in = ToObj(T2inPx, aspect);
+      out[m].t1 = T1;
+      out[m].c1 = T1 + T1out;
+      out[m].c2 = T2 + T2in;
+      out[m].t2 = T2;
+      m++;
+    }
+  }
+  return m;
+}

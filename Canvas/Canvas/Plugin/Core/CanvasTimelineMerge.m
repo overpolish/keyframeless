@@ -177,3 +177,51 @@ void CanvasApplyMergedTimelineToPaths(KKTimeline *merged,
     p.animationJSON = [KKTimeline jsonFromTimeline:s];
   }
 }
+
+KKTimeline *CanvasAITimeline(NSArray<KKBezierPath *> *paths,
+                             NSArray<KKLane *> *templates) {
+  KKTimeline *tl = [KKTimeline timeline];
+  NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
+  NSMutableArray<NSString *> *order = [NSMutableArray array];
+  for (KKBezierPath *p in paths) {
+    NSString *lid = p.layerID.length ? p.layerID : @"";
+    NSString *name = p.name.length ? p.name : @"Layer";
+    // The same per-layer builder the UI uses: it returns exactly the lanes that
+    // apply to this layer type (vector-only lanes absent on an image/group),
+    // each seeded with the layer's CURRENT value (transform +
+    // stroke/fill/sketch constants read from the flat props). Expose ALL of
+    // them so the AI can change any property - animate a transform, retime an
+    // existing animation, or set a constant (stroke colour, width, fill,
+    // draw-on...). The kit merge only mutates labels already present here, so
+    // anything not exposed can't be touched.
+    KKTimeline *s = CanvasLayerTimelineForPath(p, templates);
+    NSMutableDictionary<NSString *, KKLane *> *stored =
+        [NSMutableDictionary dictionary];
+    for (KKLane *l in s.lanes)
+      if (l.label)
+        stored[l.label] = l;
+    void (^tag)(KKLane *, NSString *) = ^(KKLane *c, NSString *plain) {
+      c.label = CanvasTaggedLabel(plain, lid);
+      if (c.visibleWhenLabel.length)
+        c.visibleWhenLabel = CanvasTaggedLabel(c.visibleWhenLabel, lid);
+      c.layerKey = lid;
+      c.layerLabel = name;
+      c.layerSymbol = p.isGroup ? @"folder" : nil;
+      c.locked = p.locked;
+    };
+    // Emit in template (parameter) order so every layer's lanes share a stable
+    // order.
+    for (KKLane *t in templates) {
+      KKLane *st = stored[t.label];
+      if (!st)
+        continue; // lane doesn't apply to this layer type
+      KKLane *c = [st copy];
+      tag(c, t.label);
+      [lanes addObject:c];
+      [order addObject:c.label];
+    }
+  }
+  tl.lanes = lanes;
+  tl.paramOrder = order;
+  return tl;
+}
