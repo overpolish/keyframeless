@@ -3,11 +3,57 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLocalized.h"
 #import "KKTimelineAdvancedView_Private.h"
 
 @implementation KKTimelineAdvancedView (Guide)
 
+// Guides reference a PLAIN property label ("Position", "Scale"), but a
+// multi-owner merged graph (Canvas's per-layer timeline) tags every lane
+// "Position\x1f<ownerID>", so an exact-match lookup of the plain label finds
+// nothing and the spotlight/drag steps stall. Resolve the plain label to the
+// actual displayed lane's (tagged) label once, so all downstream exact-match
+// lookups + drag/selection bookkeeping hit the right row. Exact match wins
+// (single-owner plugins, or an already-tagged label); else the first animated
+// lane whose plain label matches - unambiguous because a guide always runs on a
+// single staged owner.
+- (NSString *)_guideResolvedLabel:(NSString *)label {
+  for (KKLane *l in self->_timeline.lanes)
+    if (l.enabled && [l.label isEqualToString:label])
+      return label;
+  NSString *plain = KKPlainLaneLabel(label);
+  for (KKLane *l in self->_timeline.lanes)
+    if (l.enabled && [KKPlainLaneLabel(l.label) isEqualToString:plain])
+      return l.label;
+  return label;
+}
+
+// The vertical span of the actual LANE rows (headers excluded), full track
+// width. The tracks rect spans every row including the layer + category header
+// rows that a multi-owner / categorised graph injects at the top; the marquee
+// guide steps spotlight + sweep the lanes, so they use this instead of the full
+// tracks height (which would bleed over the group header and, since the lane
+// rows share only the leftover height, sit misaligned over them). Falls back to
+// the full tracks rect when no lane rows are visible.
+- (NSRect)_guideLaneRowsRect {
+  NSRect tracks = [self _tracksRect];
+  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  NSInteger n = (NSInteger)lanes.count;
+  CGFloat top = -CGFLOAT_MAX, bot = CGFLOAT_MAX;
+  for (NSInteger i = 0; i < n; i++) {
+    if (lanes[i].headerPlaceholder)
+      continue;
+    NSRect r = [self _rowRectForIndex:i count:n];
+    top = MAX(top, NSMaxY(r));
+    bot = MIN(bot, NSMinY(r));
+  }
+  if (top <= bot)
+    return tracks;
+  return NSMakeRect(NSMinX(tracks), bot, NSWidth(tracks), top - bot);
+}
+
 - (NSRect)guideLaneRowScreenRectForLabel:(NSString *)label {
+  label = [self _guideResolvedLabel:label];
   NSWindow *w = self.window;
   NSInteger i = [self _animatableIndexForLabel:label];
   NSInteger n = [self _animatableCount];
@@ -20,6 +66,7 @@
 
 - (NSRect)guideKeyposeScreenRectForLabel:(NSString *)label
                                  atIndex:(NSInteger)kpIdx {
+  label = [self _guideResolvedLabel:label];
   KKLane *lane = [self _animatableLaneForLabel:label];
   if (!lane || kpIdx < 0 || kpIdx >= (NSInteger)lane.keyposes.count)
     return NSZeroRect;
@@ -29,6 +76,7 @@
 
 - (NSRect)guideKeyposeScreenRectForLabel:(NSString *)label
                               atFraction:(double)frac {
+  label = [self _guideResolvedLabel:label];
   NSWindow *w = self.window;
   NSInteger i = [self _animatableIndexForLabel:label];
   NSInteger n = [self _animatableCount];
@@ -48,6 +96,7 @@
 
 - (double)guideKeyposeFractionForLabel:(NSString *)label
                                atIndex:(NSInteger)kpIdx {
+  label = [self _guideResolvedLabel:label];
   KKLane *lane = [self _animatableLaneForLabel:label];
   if (!lane || kpIdx < 0 || kpIdx >= (NSInteger)lane.keyposes.count)
     return NAN;
@@ -56,6 +105,7 @@
 
 - (NSInteger)guideSelectedKeyposeIndexNearestFraction:(double)frac
                                              forLabel:(NSString *)label {
+  label = [self _guideResolvedLabel:label];
   KKLane *lane = [self _animatableLaneForLabel:label];
   if (!lane)
     return NSNotFound;
@@ -76,6 +126,7 @@
 - (BOOL)guideBeginPillDragForLabel:(NSString *)label
                            atIndex:(NSInteger)kpIdx
                      atScreenPoint:(NSPoint)screenPoint {
+  label = [self _guideResolvedLabel:label];
   KKLane *lane = [self _animatableLaneForLabel:label];
   if (!lane || kpIdx < 0 || kpIdx >= (NSInteger)lane.keyposes.count)
     return NO;
@@ -141,11 +192,11 @@
   if (NSWidth(tracks) <= 0 || NSHeight(tracks) <= 0)
     return NSZeroRect;
   CGFloat x = [self _xForFrac:frac inTracks:tracks];
-  // Vertically centred in the tracks so the guide's start->target line is a
-  // straight horizontal sweep (the box itself still spans every row, set in
-  // guideBeginMarquee). The start zone is also full-height-centred, so both
-  // ends share this midline.
-  CGFloat y = NSMidY(tracks);
+  // Vertically centred over the LANE rows so the guide's start->target line is
+  // a straight horizontal sweep (the box itself spans every lane row, set in
+  // guideBeginMarquee). The start zone is also lane-rows-centred, so both ends
+  // share this midline.
+  CGFloat y = NSMidY([self _guideLaneRowsRect]);
   NSRect view = NSMakeRect(x - 7.0, y - 7.0, 14.0, 14.0);
   return [w convertRectToScreen:[self convertRect:view toView:nil]];
 }
@@ -160,8 +211,9 @@
     return NSZeroRect;
   CGFloat xa = [self _xForFrac:fa inTracks:tracks];
   CGFloat xb = [self _xForFrac:fb inTracks:tracks];
-  NSRect view = NSMakeRect(MIN(xa, xb), NSMinY(tracks), fabs(xb - xa),
-                           NSHeight(tracks));
+  NSRect rows = [self _guideLaneRowsRect];
+  NSRect view =
+      NSMakeRect(MIN(xa, xb), NSMinY(rows), fabs(xb - xa), NSHeight(rows));
   return [w convertRectToScreen:[self convertRect:view toView:nil]];
 }
 
@@ -171,16 +223,16 @@
     return;
   NSPoint pt = [self convertPoint:[w convertPointFromScreen:screenPoint]
                          fromView:nil];
-  NSRect tracks = [self _tracksRect];
+  NSRect rows = [self _guideLaneRowsRect];
   [_selection removeAllObjects];
   [_selectedGaps removeAllObjects];
   _marqueeShift = NO;
   _marqueeActive = YES;
-  // Anchor the box at the press x but pin it to span every row vertically (top
-  // to bottom of the tracks), so the guide drag only has to sweep horizontally
-  // to enclose keyposes across all lanes.
-  _marqueeAnchor = NSMakePoint(pt.x, NSMaxY(tracks));
-  _marqueeCurrent = NSMakePoint(pt.x, NSMinY(tracks));
+  // Anchor the box at the press x but pin it to span every LANE row vertically
+  // (top to bottom of the lane rows, headers excluded), so the guide drag only
+  // has to sweep horizontally to enclose keyposes across all lanes.
+  _marqueeAnchor = NSMakePoint(pt.x, NSMaxY(rows));
+  _marqueeCurrent = NSMakePoint(pt.x, NSMinY(rows));
   [self setNeedsDisplay:YES];
 }
 
@@ -192,8 +244,7 @@
     return;
   NSPoint pt = [self convertPoint:[w convertPointFromScreen:screenPoint]
                          fromView:nil];
-  NSRect tracks = [self _tracksRect];
-  _marqueeCurrent = NSMakePoint(pt.x, NSMinY(tracks));
+  _marqueeCurrent = NSMakePoint(pt.x, NSMinY([self _guideLaneRowsRect]));
   [self setNeedsDisplay:YES];
 }
 
@@ -214,6 +265,7 @@
 - (BOOL)guideBeginSelectionDragForLabel:(NSString *)label
                                 atIndex:(NSInteger)kpIdx
                           atScreenPoint:(NSPoint)screenPoint {
+  label = [self _guideResolvedLabel:label];
   NSWindow *w = self.window;
   if (!w)
     return NO;
