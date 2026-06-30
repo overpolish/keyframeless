@@ -149,6 +149,19 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   return _miniViewer;
 }
 
+// Drop the mini-viewer (an MTKView, multi-MB GPU textures/drawables) on popover
+// close. With NSPopoverBehaviorApplicationDefined the backing _NSPopoverWindow
+// can outlive the NSPopover object, stranding this content view and - via this
+// strong ivar - the mini-viewer, leaking its GPU memory. The popover layer calls
+// this on close: niling the ivar + dropping the scroll view's documentView (its
+// other strong hold) lets the mini-viewer dealloc and free that memory even
+// while the empty window shell lingers.
+- (void)releaseMiniViewer {
+  _miniViewer.enclosingScrollView.documentView = nil;
+  [_miniViewer removeFromSuperview];
+  _miniViewer = nil;
+}
+
 - (NSRect)guideRenderModePillScreenRectForMode:(KKMiniViewerRenderMode)mode {
   // Pill segments are built Off/Filmstrip/Onion in order, so the segment index
   // equals the render-mode raw value.

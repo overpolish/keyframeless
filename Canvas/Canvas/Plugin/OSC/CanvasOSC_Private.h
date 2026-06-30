@@ -162,6 +162,16 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m);
 - (void)_applyGroupComposeOffsetAtTime:(CMTime)time;
 @end
 
+// Shared OSC-guide bridge feed: the timing guides read the viewer screen rect +
+// `hasCanvasReference` (the disabled-guides gate) off the per-process bridge,
+// which only this FxPlug tick can populate. See CanvasOSCGuide.h.
+@interface CanvasOSC (Guide) <KKPositionGuideProvider>
+// Feed one drawOSC tick's canvas geometry (handle pos in CANVAS space).
+- (void)_ingestGuideDrawTickWithPosition:(CGPoint)handleCanvasPos;
+// Feed one hover sample (the only place a valid scale + screen point coincide).
+- (void)_ingestGuideHitTestAtCanvasX:(double)cx y:(double)cy;
+@end
+
 // Reading the inspector-published snapshots (layer blob + UIState) and writing
 // back through the OSC's action scope - the OSC can't read the custom params.
 @interface CanvasOSC (State)

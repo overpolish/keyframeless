@@ -90,6 +90,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// The row view for `label`, or nil (guide spotlight anchor).
 - (nullable NSView *)rowViewForLabel:(NSString *)label;
 
+/// Switch the category nav to the page that holds `label`, so its row becomes
+/// visible (and the pill reflects it). No-op when there's no category nav, the
+/// label has no category, or that category is already selected. A guide uses
+/// this so a "tap <lane>" step can spotlight a lane that lives outside the
+/// default (first) category page.
+- (void)selectCategoryForLabel:(NSString *)label;
+
 + (CGFloat)preferredWidth;
 /// Height that hugs the currently-visible rows (>= the minimum height).
 - (CGFloat)fittingHeight;

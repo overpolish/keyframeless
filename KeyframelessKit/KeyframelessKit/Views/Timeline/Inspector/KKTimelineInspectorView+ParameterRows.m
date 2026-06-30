@@ -14,7 +14,9 @@
 #import "KKLaneCategoryNav.h"
 #import "KKMiniViewerView.h"
 #import "KKOSCChecklistView.h"
+#import "KKPaddedScrollView.h"
 #import "KKParameterRowView.h"
+#import "KKPillBar.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKPopupSelectView.h"
@@ -30,6 +32,9 @@
 #import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKJoyrideGuideHost.h>
 #import <KeyframelessKit/KKTimingCompat.h>
+
+// Cap the reorder list height; beyond this it scrolls inside KKPaddedScrollView.
+static const CGFloat kParamOrderMaxListH = 200.0;
 
 @implementation KKTimelineInspectorView (ParameterRows)
 
@@ -200,7 +205,10 @@
     [_paramOrderPopover close];
     return;
   }
-  NSArray<NSString *> *labels = [_basicView orderedParamLabels];
+  // Full parameter universe, not the selected layer's seeded subset - the
+  // reorder popover edits a global ordering and must list every param (Fill /
+  // Stroke etc.) regardless of which layer is currently selected.
+  NSArray<NSString *> *labels = [_basicView allOrderedParamLabels];
   if (labels.count < 2)
     return;
 
@@ -247,26 +255,58 @@
           strong->_paramOrderSelectedCategory = categoryKey;
           [strong _rebuildParamOrderList];
         });
-    [content addSubview:pill];
+    // Wrap the category pills in a KKPillBar so they scroll with edge-fade
+    // shadows instead of overflowing both sides of the popover.
+    KKPillBar *pillBar = [[KKPillBar alloc] initWithPillRow:pill];
+    pillBar.translatesAutoresizingMaskIntoConstraints = NO;
+    // Hug content when it fits, but a near-zero compression resistance lets it
+    // shrink so the inner scroll takes over on overflow (vs clipping).
+    [pillBar setContentHuggingPriority:NSLayoutPriorityRequired - 1
+                        forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [pillBar setContentCompressionResistancePriority:1
+                                      forOrientation:
+                                          NSLayoutConstraintOrientationHorizontal];
+    [content addSubview:pillBar];
 
     NSView *listContainer = [[NSView alloc] initWithFrame:NSZeroRect];
     listContainer.translatesAutoresizingMaskIntoConstraints = NO;
-    [content addSubview:listContainer];
     _paramOrderListContainer = listContainer;
+    // Cap the reorder list and let it scroll (with top/bottom fade shadows)
+    // rather than ballooning the popover when there are many params.
+    KKPaddedScrollView *scroll =
+        [[KKPaddedScrollView alloc] initWithDocumentView:listContainer
+                                                 padding:0.0];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    [content addSubview:scroll];
+    _paramOrderScrollHeight =
+        [scroll.heightAnchor constraintEqualToConstant:kParamOrderMaxListH];
+    // The reorder list has a fixed intrinsic width that used to drive the
+    // popover width; pinned inside the scroll it no longer does, so carry that
+    // width up to the scroll explicitly (set from the list in the rebuild).
+    _paramOrderScrollWidth =
+        [scroll.widthAnchor constraintEqualToConstant:0.0];
 
     [NSLayoutConstraint activateConstraints:@[
-      [pill.centerXAnchor constraintEqualToAnchor:content.centerXAnchor],
-      [pill.topAnchor constraintEqualToAnchor:header.bottomAnchor
-                                     constant:KKPaddingSM],
-      [listContainer.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
-                                                  constant:KKPaddingMD],
-      [listContainer.trailingAnchor
-          constraintEqualToAnchor:content.trailingAnchor
-                         constant:-KKPaddingMD],
-      [listContainer.topAnchor constraintEqualToAnchor:pill.bottomAnchor
-                                              constant:KKPaddingSM],
-      [listContainer.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
-                                                 constant:-KKPaddingMD],
+      [pillBar.centerXAnchor constraintEqualToAnchor:content.centerXAnchor],
+      [pillBar.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:content.leadingAnchor
+                                       constant:KKPaddingMD],
+      [pillBar.trailingAnchor
+          constraintLessThanOrEqualToAnchor:content.trailingAnchor
+                                   constant:-KKPaddingMD],
+      [pillBar.heightAnchor constraintEqualToConstant:24.0],
+      [pillBar.topAnchor constraintEqualToAnchor:header.bottomAnchor
+                                        constant:KKPaddingSM],
+      [scroll.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
+                                           constant:KKPaddingMD],
+      [scroll.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
+                                            constant:-KKPaddingMD],
+      [scroll.topAnchor constraintEqualToAnchor:pillBar.bottomAnchor
+                                       constant:KKPaddingSM],
+      [scroll.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
+                                          constant:-KKPaddingMD],
+      _paramOrderScrollHeight,
+      _paramOrderScrollWidth,
     ]];
     [self _rebuildParamOrderList];
   } else {
@@ -349,6 +389,13 @@
         constraintEqualToAnchor:_paramOrderListContainer.bottomAnchor],
   ]];
   _paramOrderList = list;
+
+  // Size the scroll to the list's content, capped - beyond the cap the list
+  // scrolls inside KKPaddedScrollView (with fade shadows) instead of growing
+  // the popover.
+  _paramOrderScrollHeight.constant =
+      MIN(list.intrinsicContentSize.height, kParamOrderMaxListH);
+  _paramOrderScrollWidth.constant = list.intrinsicContentSize.width;
 
   [_paramOrderContent layoutSubtreeIfNeeded];
   if (_paramOrderPopover.isShown)

@@ -874,6 +874,51 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   return out;
 }
 
+- (NSArray<NSString *> *)allOrderedParamLabels {
+  // Every available lane label, sorted the same way _timelineSeededFrom: sorts
+  // lanes (paramOrder first, then template order, then alphabetical) but WITHOUT
+  // the per-timeline / conditional-visibility filtering orderedParamLabels does.
+  // The reorder popover edits one global ordering, so it must list the full
+  // parameter set even when the selected layer doesn't carry those lanes.
+  NSArray<NSString *> *order = _timeline.paramOrder;
+  NSMutableDictionary<NSString *, NSNumber *> *rank =
+      [NSMutableDictionary dictionaryWithCapacity:order.count];
+  for (NSInteger i = 0; i < (NSInteger)order.count; i++)
+    if (!rank[order[i]])
+      rank[order[i]] = @(i);
+  NSMutableDictionary<NSString *, NSNumber *> *tmplRank =
+      [NSMutableDictionary dictionaryWithCapacity:_availableLanes.count];
+  NSMutableArray<NSString *> *labels =
+      [NSMutableArray arrayWithCapacity:_availableLanes.count];
+  for (NSInteger i = 0; i < (NSInteger)_availableLanes.count; i++) {
+    NSString *label = _availableLanes[i].label;
+    if (!tmplRank[label])
+      tmplRank[label] = @(i);
+    if (![labels containsObject:label])
+      [labels addObject:label];
+  }
+  [labels sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+    NSNumber *ra = rank[a];
+    NSNumber *rb = rank[b];
+    if (ra && rb)
+      return [ra compare:rb];
+    if (ra)
+      return NSOrderedAscending;
+    if (rb)
+      return NSOrderedDescending;
+    NSNumber *ta = tmplRank[a];
+    NSNumber *tb = tmplRank[b];
+    if (ta && tb)
+      return [ta compare:tb];
+    if (ta)
+      return NSOrderedAscending;
+    if (tb)
+      return NSOrderedDescending;
+    return [a localizedCaseInsensitiveCompare:b];
+  }];
+  return labels;
+}
+
 - (void)applyParamOrder:(NSArray<NSString *> *)labels {
   KKTimeline *updated = [_timeline copy];
   updated.paramOrder = labels;

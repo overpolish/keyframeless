@@ -72,6 +72,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// viewer + mini).
 @property(nonatomic, copy, nullable) void (^onUIStatePatch)(NSString *key,
                                                             id value);
+
+/// Fired just before a timing guide (Introduction / Advanced / Mini Viewer /
+/// On-Screen Controls) runs, so the plugin can stage a demo subject: it saves
+/// the current scene + selection and replaces it with a single demo shape the
+/// guide teaches on, restoring the scene when the guide ends (mirrors how a
+/// single-clip plugin seeds + restores the clip's timeline). The matching
+/// restore runs from the guide host's run-did-end hook. nil = no demo scene
+/// (the guide runs on whatever's selected).
+@property(nonatomic, copy, nullable) void (^onGuideSceneBegin)(void);
+
+/// Fired just before the Presets guide seeds. Stages an EMPTY scene (a preset
+/// applies onto a clean canvas) instead of the demo shape; restored by the same
+/// run-did-end hook. nil = no scene staging.
+@property(nonatomic, copy, nullable) void (^onGuidePresetsSceneBegin)(void);
 @end
 
 NS_ASSUME_NONNULL_END

@@ -93,11 +93,10 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   self.autoresizingMask =
       NSViewWidthSizable | NSViewHeightSizable | NSViewMinYMargin;
 
-  // Subdue the host popover's Liquid Glass: over bright viewer backgrounds the
-  // bare glass washes out the timeline UI. A dark backing wash behind
-  // everything (matching the layer-list body's 0.2 black) restores contrast.
+  // The dark backing wash (set in -beginDetachedCopy) only subdues the
+  // detached remote window's bright glass background. The embedded FCP
+  // inspector sits on the host's own dark chrome, so no wash there.
   self.wantsLayer = YES;
-  self.layer.backgroundColor = [NSColor colorWithWhite:0.0 alpha:0.2].CGColor;
 
   NSView *box = [self _buildBox];
   [self _buildTabBar];
@@ -606,6 +605,12 @@ const CGFloat kMBCheckboxTrailing = 23.0;
                                       timeline:_basicView.currentTimeline];
   copy->_isDetachedCopy = YES;
   copy->_detachedOwner = self;
+  // Subdue the detached window's Liquid Glass: over bright viewer backgrounds
+  // the bare glass washes out the timeline UI. A dark backing wash (matching
+  // the layer-list body's 0.2 black) restores contrast. Embedded inspector
+  // stays clear - it already sits on the host's dark chrome.
+  copy.wantsLayer = YES;
+  copy.layer.backgroundColor = [NSColor colorWithWhite:0.0 alpha:0.2].CGColor;
   copy->_detachButton.hidden = YES;
   // Propagate plugin-supplied configuration so the copy matches the source.
   copy.miniViewerDescriptorPath = _miniViewerDescriptorPath;

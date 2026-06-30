@@ -1,6 +1,48 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "<accent>Accurate</accent>: sample-and-accumulate (the effect is re-rendered several times across the shutter and averaged). Slower, cost grows with the sample count, but it also smears moving source footage, not just the animated parameters. Use it when you need footage motion blur or maximum fidelity on extreme in-frame rotation.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Genau</accent>: Abtasten und Akkumulieren (der Effekt wird mehrfach über den Verschluss gerendert und gemittelt). Langsamer, die Kosten wachsen mit der Anzahl der Samples, dafür verwischt es auch bewegtes Quellmaterial, nicht nur die animierten Parameter. Verwende es, wenn du Bewegungsunschärfe des Filmmaterials oder höchste Treue bei extremer Drehung im Bild brauchst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Preciso</accent>: muestreo y acumulación (el efecto se vuelve a renderizar varias veces a lo largo del obturador y se promedia). Más lento, el coste crece con el número de muestras, pero también difumina el metraje de origen en movimiento, no solo los parámetros animados. Úsalo cuando necesites desenfoque de movimiento del metraje o la máxima fidelidad en rotaciones extremas dentro del cuadro."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Précis</accent> : échantillonnage et accumulation (l'effet est rendu plusieurs fois sur la durée de l'obturateur, puis moyenné). Plus lent, le coût augmente avec le nombre d'échantillons, mais il floute aussi les images sources en mouvement, pas seulement les paramètres animés. À utiliser lorsqu'il faut un flou de mouvement des images ou une fidélité maximale sur une rotation extrême dans le cadre."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>高精度</accent>：サンプリングと累積（エフェクトをシャッター全体で複数回レンダリングして平均化します）。低速で、コストはサンプル数に応じて増えますが、アニメーションされたパラメータだけでなく、動いている元の映像もぼかします。映像自体のモーションブラーや、画面内の極端な回転で最大限の忠実度が必要なときに使います。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>정밀</accent>: 샘플링 및 누적(이펙트를 셔터 구간에 걸쳐 여러 번 렌더링한 뒤 평균을 냅니다). 더 느리고 비용은 샘플 수에 따라 늘지만, 애니메이션된 매개변수뿐 아니라 움직이는 소스 영상도 함께 번지게 합니다. 영상 자체의 모션 블러나 화면 내 극단적 회전에서 최대 충실도가 필요할 때 사용하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>精确</accent>：采样累积（在快门区间内多次重新渲染效果并求平均）。较慢，成本随采样数增加，但它还会模糊运动中的源素材，而不仅是动画参数。当你需要素材的运动模糊，或在画面内极端旋转时获得最高保真度时使用。"
+          }
+        }
+      }
+    },
     "<accent>Advanced</accent> - the full keyposes + intervals model: any number of keyposes, each interval with its own curve and modulation. Use it for multi-step motion or custom holds.": {
       "comment": "Help text.",
       "extractionState": "manual",
@@ -39,48 +81,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "<accent>高级</accent> - 完整的关键姿势与区间模型：任意数量的关键姿势，每个区间都有自己的曲线和调制。用于多步运动或自定义保持。"
-          }
-        }
-      }
-    },
-    "<accent>Always</accent>: blur every frame regardless of motion.": {
-      "comment": "Help text.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Immer</accent>: Unschärfe in jedem Bild, unabhängig von Bewegung."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Siempre</accent>: desenfoque en cada fotograma sin importar el movimiento."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Toujours</accent> : flou sur chaque image, quel que soit le mouvement."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>常に</accent>: 動きに関係なく毎フレームブラーをかけます。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>항상</accent>: 움직임과 관계없이 매 프레임에 블러를 적용합니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>始终</accent>：无论是否运动，每一帧都模糊。"
           }
         }
       }
@@ -463,6 +463,48 @@
         }
       }
     },
+    "<accent>Fast</accent> (default where available): per-object velocity-buffer reconstruction. A fixed, low cost that does not grow with the length of the blur, so it stays real-time even on heavy content. Blurs the effect's own animated motion (position, scale, rotation, etc.). The trail length follows the motion - faster motion or a wider shutter gives a longer trail.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Schnell</accent> (Standard, sofern verfügbar): Rekonstruktion über einen Geschwindigkeitspuffer pro Objekt. Geringe, feste Kosten, die nicht mit der Länge der Unschärfe wachsen, sodass es selbst bei aufwendigen Inhalten in Echtzeit bleibt. Verwischt die animierte Bewegung des Effekts selbst (Position, Skalierung, Drehung usw.). Die Länge der Spur folgt der Bewegung - schnellere Bewegung oder ein größerer Verschlusswinkel ergibt eine längere Spur."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rápido</accent> (predeterminado cuando está disponible): reconstrucción mediante búfer de velocidad por objeto. Un coste fijo y bajo que no crece con la longitud del desenfoque, por lo que se mantiene en tiempo real incluso con contenido exigente. Desenfoca el propio movimiento animado del efecto (posición, escala, rotación, etc.). La longitud de la estela sigue al movimiento - un movimiento más rápido o un obturador más amplio produce una estela más larga."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rapide</accent> (par défaut lorsque disponible) : reconstruction par tampon de vélocité, propre à chaque objet. Un coût faible et fixe qui n'augmente pas avec la longueur du flou, ce qui le maintient en temps réel même sur du contenu lourd. Floute le mouvement animé de l'effet lui-même (position, échelle, rotation, etc.). La longueur de la traînée suit le mouvement - un mouvement plus rapide ou un obturateur plus large donne une traînée plus longue."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>高速</accent>（利用可能な場合のデフォルト）：オブジェクトごとの速度バッファによる再構成。ブラーの長さに応じて増えることのない、低く一定のコストで、負荷の高いコンテンツでもリアルタイムを保ちます。エフェクト自身のアニメーション（位置、スケール、回転など）をぼかします。軌跡の長さは動きに従い、動きが速いほど、またシャッターが広いほど軌跡は長くなります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>빠름</accent>(사용 가능한 경우 기본값): 오브젝트별 속도 버퍼 재구성. 블러 길이에 따라 늘어나지 않는 낮고 고정된 비용이라 무거운 콘텐츠에서도 실시간을 유지합니다. 이펙트 자체의 애니메이션된 움직임(위치, 크기, 회전 등)을 흐립니다. 잔상 길이는 움직임을 따르며, 움직임이 빠르거나 셔터가 넓을수록 잔상이 길어집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>快速</accent>（可用时为默认值）：逐对象的速度缓冲重建。成本固定且低，不会随模糊长度增加，因此即使在繁重内容上也能保持实时。模糊的是效果自身的动画运动（位置、缩放、旋转等）。拖尾长度跟随运动 - 运动越快或快门越大，拖尾越长。"
+          }
+        }
+      }
+    },
     "<accent>Filter</accent> - type in the same field to narrow the list.": {
       "comment": "Help text.",
       "extractionState": "manual",
@@ -799,44 +841,86 @@
         }
       }
     },
-    "<accent>Samples</accent>: 2 to 128, default 16. Higher gives smoother blur at the cost of render time; the useful range is roughly 2 to 32.": {
-      "comment": "Help tip (motion blur).",
+    "<accent>Quality</accent> (Fast / Accurate): how the blur is computed. Only shown in plugins that support Fast.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Samples</accent>: 2 bis 128, Standard 16. Höhere Werte ergeben weichere Unschärfe auf Kosten der Renderzeit; der sinnvolle Bereich liegt etwa bei 2 bis 32."
+            "value": "<accent>Qualität</accent> (Schnell / Genau): wie die Unschärfe berechnet wird. Nur in Plug-ins sichtbar, die Schnell unterstützen."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Muestras</accent>: de 2 a 128, predeterminado 16. Más muestras dan un desenfoque más suave a costa del tiempo de render; el rango útil es aproximadamente de 2 a 32."
+            "value": "<accent>Calidad</accent> (Rápido / Preciso): cómo se calcula el desenfoque. Solo se muestra en plugins compatibles con Rápido."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Échantillons</accent> : de 2 à 128, par défaut 16. Une valeur plus élevée donne un flou plus lisse au prix du temps de rendu ; la plage utile va environ de 2 à 32."
+            "value": "<accent>Qualité</accent> (Rapide / Précis) : comment le flou est calculé. Affiché uniquement dans les modules prenant en charge Rapide."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>サンプル</accent>: 2～128、デフォルトは16。値を上げるとブラーは滑らかになりますがレンダリング時間が増えます。実用的な範囲はおよそ2～32です。"
+            "value": "<accent>品質</accent>（高速 / 高精度）：ブラーの計算方法。高速をサポートするプラグインでのみ表示されます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>샘플</accent>: 2에서 128까지, 기본값 16. 값이 높을수록 블러가 부드러워지지만 렌더링 시간이 늘어납니다. 유용한 범위는 대략 2에서 32입니다."
+            "value": "<accent>품질</accent>(빠름 / 정밀): 블러를 계산하는 방식. 빠름을 지원하는 플러그인에서만 표시됩니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>采样</accent>：2至128，默认16。数值越高模糊越平滑，但渲染时间越长；实用范围大约为2至32。"
+            "value": "<accent>质量</accent>（快速 / 精确）：模糊的计算方式。仅在支持快速的插件中显示。"
+          }
+        }
+      }
+    },
+    "<accent>Samples</accent>: 2 to 128. Only shown on the Accurate quality (Fast has no sample count - its cost is fixed). Higher gives smoother blur at the cost of render time; the useful range is roughly 2 to 32. The default sample count is plugin-specific.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Samples</accent>: 2 bis 128. Nur bei der Qualität Genau sichtbar (Schnell hat keine Sample-Anzahl - seine Kosten sind fest). Höher ergibt weichere Unschärfe auf Kosten der Renderzeit; der nützliche Bereich liegt etwa bei 2 bis 32. Die Standard-Sample-Anzahl ist plug-in-spezifisch."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Muestras</accent>: de 2 a 128. Solo se muestra en la calidad Preciso (Rápido no tiene recuento de muestras - su coste es fijo). Un valor más alto da un desenfoque más suave a costa del tiempo de renderizado; el rango útil ronda de 2 a 32. El número de muestras predeterminado depende del plugin."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Échantillons</accent> : de 2 à 128. Affiché uniquement pour la qualité Précis (Rapide n'a pas de nombre d'échantillons - son coût est fixe). Une valeur plus élevée donne un flou plus lisse au prix du temps de rendu ; la plage utile va environ de 2 à 32. Le nombre d'échantillons par défaut dépend du module."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>サンプル</accent>：2〜128。高精度の品質でのみ表示されます（高速にはサンプル数がなく、コストは固定です）。値を大きくするとブラーは滑らかになりますが、レンダリング時間が増えます。有効な範囲はおおよそ2〜32です。デフォルトのサンプル数はプラグインごとに異なります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>샘플</accent>: 2~128. 정밀 품질에서만 표시됩니다(빠름에는 샘플 수가 없으며 비용이 고정됨). 값이 높을수록 블러가 부드러워지지만 렌더링 시간이 늘어납니다. 유용한 범위는 대략 2~32입니다. 기본 샘플 수는 플러그인마다 다릅니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>采样</accent>：2 到 128。仅在精确质量下显示（快速没有采样数 - 其成本是固定的）。数值越高模糊越平滑，但会增加渲染时间；实用范围大致为 2 到 32。默认采样数因插件而异。"
           }
         }
       }
@@ -921,132 +1005,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "<accent>快门</accent>：0°至360°，默认180°。0°冻结每一帧且无模糊，180°是半帧拖尾(电影标准的180度快门)，360°在整帧间隔内拖出残影。"
-          }
-        }
-      }
-    },
-    "<accent>Transitions only</accent> (default): blur only when the keypose values differ, i.e. during actual motion.": {
-      "comment": "Help text.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Nur Übergänge</accent> (Standard): Unschärfe nur, wenn sich die Keypose-Werte unterscheiden, also während tatsächlicher Bewegung."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Solo transiciones</accent> (predeterminado): desenfoque solo cuando los valores de keypose difieren, es decir, durante el movimiento real."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Transitions uniquement</accent> (par défaut) : flou seulement lorsque les valeurs des keyposes diffèrent, c'est-à-dire pendant un mouvement réel."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>トランジションのみ</accent>(デフォルト): キーポーズの値が異なるとき、つまり実際の動きの間だけブラーをかけます。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>전환만</accent>(기본값): 키포즈 값이 다를 때, 즉 실제 움직임이 있는 동안에만 블러를 적용합니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>仅过渡</accent>(默认)：仅当关键姿势的值不同时(即实际运动期间)才模糊。"
-          }
-        }
-      }
-    },
-    "<accent>Value changes</accent>: blur whenever any value moves, including subtle modulation on held intervals.": {
-      "comment": "Help text.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Wertänderungen</accent>: Unschärfe, sobald sich ein Wert bewegt, einschließlich subtiler Modulation auf gehaltenen Intervallen."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Cambios de valor</accent>: desenfoque siempre que un valor se mueva, incluida la modulación sutil en intervalos mantenidos."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Changements de valeur</accent> : flou dès qu'une valeur bouge, y compris une modulation subtile sur les intervalles maintenus."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>値の変化</accent>: 保持された区間での微妙なモジュレーションを含め、いずれかの値が動くたびにブラーをかけます。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>값 변경</accent>: 유지된 구간의 미묘한 모듈레이션을 포함해 값이 움직일 때마다 블러를 적용합니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>值变化</accent>：只要任何值发生移动就模糊，包括保持区间上的细微调制。"
-          }
-        }
-      }
-    },
-    "<accent>When</accent>: a dropdown that controls when the blur is applied:": {
-      "comment": "Help text.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Wann</accent>: ein Aufklappmenü, das steuert, wann die Unschärfe angewendet wird:"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Cuándo</accent>: un menú desplegable que controla cuándo se aplica el desenfoque:"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>Quand</accent> : un menu déroulant qui contrôle quand le flou est appliqué :"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>タイミング</accent>: ブラーを適用するタイミングを制御するドロップダウン:"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>시점</accent>: 블러를 적용할 시점을 제어하는 드롭다운:"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<accent>何时</accent>：一个控制何时应用模糊的下拉菜单："
           }
         }
       }
@@ -1551,6 +1509,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "<red>红色</red>帧在此关键姿势之前，<blue>蓝色</blue>帧在之后。"
+          }
+        }
+      }
+    },
+    "A still frame (nothing moving across the shutter) is skipped automatically, so motion blur only costs render time on frames that actually move.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Standbild (bei dem sich während des Verschlusses nichts bewegt) wird automatisch übersprungen, sodass Bewegungsunschärfe nur bei Bildern Renderzeit kostet, die sich tatsächlich bewegen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un fotograma estático (sin nada en movimiento durante el obturador) se omite automáticamente, por lo que el desenfoque de movimiento solo consume tiempo de renderizado en los fotogramas que realmente se mueven."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une image fixe (rien ne bouge pendant l'obturateur) est ignorée automatiquement, de sorte que le flou de mouvement ne coûte du temps de rendu que sur les images qui bougent réellement."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "静止フレーム（シャッターの間に何も動かないフレーム）は自動的にスキップされるため、モーションブラーは実際に動きのあるフレームでのみレンダリング時間を消費します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정지 프레임(셔터 동안 아무것도 움직이지 않는 프레임)은 자동으로 건너뛰므로, 모션 블러는 실제로 움직이는 프레임에서만 렌더링 시간을 소모합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "静止帧（快门期间没有任何移动）会被自动跳过，因此运动模糊只在实际发生移动的帧上消耗渲染时间。"
           }
         }
       }
@@ -6343,44 +6343,44 @@
         }
       }
     },
-    "Motion blur is available on every animatable property. Three controls:": {
-      "comment": "Help tip (motion blur).",
+    "Motion blur is available on every animatable property. Controls:": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bewegungsunschärfe ist für jede animierbare Eigenschaft verfügbar. Drei Steuerelemente:"
+            "value": "Bewegungsunschärfe ist für jede animierbare Eigenschaft verfügbar. Steuerungen:"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El desenfoque de movimiento está disponible en todas las propiedades animables. Tres controles:"
+            "value": "El desenfoque de movimiento está disponible en todas las propiedades animables. Controles:"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le flou de mouvement est disponible sur chaque propriété animable. Trois réglages :"
+            "value": "Le flou de mouvement est disponible sur chaque propriété animable. Commandes :"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "モーションブラーはすべてのアニメーション可能なプロパティで利用できます。3つのコントロール:"
+            "value": "モーションブラーはすべてのアニメーション可能なプロパティで利用できます。コントロール:"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "모션 블러는 모든 애니메이션 가능한 속성에 사용할 수 있습니다. 세 가지 컨트롤:"
+            "value": "모션 블러는 애니메이션 가능한 모든 속성에서 사용할 수 있습니다. 컨트롤:"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "运动模糊可用于每个可动画属性。三个控件："
+            "value": "运动模糊可用于每个可设动画的属性。控制项："
           }
         }
       }

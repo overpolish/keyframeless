@@ -5,6 +5,7 @@
 
 #import "CanvasInspectorView.h"
 #import "CanvasLayerRender.h" // CanvasReadLayerPaths (fresh, not the snapshot)
+#import "CanvasOSCGuide.h"    // shared OSC guide bridge (canvas-reference gate)
 #import "CanvasLayerTimeline.h"
 #import "CanvasLocalized.h"
 #import "CanvasPresets.h"
@@ -25,6 +26,37 @@
 #import <KeyframelessKit/KKTimingGuide.h>
 #import <KeyframelessKit/KKTimingStage.h>
 @import KeyframelessAI;
+
+@interface CanvasPlugin (GuideScene)
+- (void)_guideBeginDemoScene;
+- (void)_guideBeginEmptyScene;
+- (void)_guideEndDemoScene;
+- (void)_guideSaveSceneAndSelectionWithGet:(id<FxParameterRetrievalAPI_v6>)get;
+@end
+
+// A simple centred rectangle (object space, 0..1, Y-up) the timing guides teach
+// on - Canvas is per-layer, so a guide needs a subject the way a single-clip
+// plugin always has its clip. Stroke-only + bright so it reads in the viewer.
+static KKBezierPath *_CanvasGuideDemoShape(void) {
+  KKBezierPath *p = [[KKBezierPath alloc] init];
+  p.name = CLoc(@"Guide Shape", @"Name of the temporary demo layer a timing "
+                                @"guide teaches on.");
+  p.isImage = NO;
+  p.isGroup = NO;
+  const float lo = 0.3f, hi = 0.7f;
+  [p insertAtIndex:0 position:simd_make_float2(lo, lo)];
+  [p insertAtIndex:1 position:simd_make_float2(hi, lo)];
+  [p insertAtIndex:2 position:simd_make_float2(hi, hi)];
+  [p insertAtIndex:3 position:simd_make_float2(lo, hi)];
+  p.closed = YES;
+  p.strokeEnabled = YES;
+  p.strokeWidth = 16.0f;
+  p.strokeR = 0.30f;
+  p.strokeG = 0.55f;
+  p.strokeB = 1.0f;
+  p.opacity = 1.0f;
+  return p;
+}
 
 // The coordinate-space description for Canvas's cross-layer transform lanes.
 // Forms the first half of the PROPERTY CATALOG handed to the targeted-routing
@@ -486,6 +518,15 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
       __strong CanvasPlugin *s = weakSelf;
       if (!s)
         return;
+      // Swallow the guide host's single async timeline-restore write: Canvas
+      // restores the whole demo scene itself in -_guideEndDemoScene, so letting
+      // this write through would apply the stale saved timeline to the restored
+      // selection (clobbering it / wiping the topmost layer when nothing was
+      // selected). One-shot - the very next mutation is the kit's restore.
+      if (s.guideSuppressMutate) {
+        s.guideSuppressMutate = NO;
+        return;
+      }
       id<FxCustomParameterActionAPI_v4> act = [s.apiManager
           apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
       if (!act)
@@ -517,6 +558,18 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
       KKTimeline *stamped = [s timelineStampedWithClipDuration:updated];
       KKSetProcessTimelineSnapshot(stamped ?: updated);
       [act endAction:s];
+      // After a guide's seed lands on the demo layer, refresh the Advanced graph
+      // from the new blob: the seed flows through here into the SELECTED layer's
+      // currentTimeline (which the Basic graph reads), but the Advanced graph
+      // shows the MERGED graphTimeline rebuilt from the blob - so without this
+      // the Advanced / Mini-Viewer / OSC guides' keypose lookups find nothing.
+      // One-shot per guide (the seed is the first mutation after staging).
+      if (s.guideNeedsGraphRefresh && s.guideSceneActive) {
+        s.guideNeedsGraphRefresh = NO;
+        dispatch_async(dispatch_get_main_queue(), ^{
+          [(CanvasInspectorView *)s.inspectorView reloadLayerList];
+        });
+      }
     };
 
     // Keypose edits in either graph mutate the ALL-LAYERS graph timeline; split
@@ -574,6 +627,41 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
                              paramID:kParamUIState];
     NSArray<NSString *> *oscKeys =
         [CanvasPlugin kkOSCElementKeysForCompounds:oscCompounds];
+    // Force OSCs visible while a timing guide runs (so its Position handle is on
+    // screen), then restore the user's OSC setting on guide end. Canvas defaults
+    // the master OFF, so without this the OSC guide would teach controls that
+    // aren't drawn. The render nudge makes the viewer redraw on force/restore.
+    // TEMPORARILY SKIPPED for leak isolation: if the leak stops with OSC forcing
+    // off, the forced viewer-OSC rendering during the guide's playback is the
+    // cause. Flip to NO to re-enable.
+    static const BOOL kSkipOSCForcingForLeakTest = NO;
+    if (!kSkipOSCForcingForLeakTest)
+      [self kkInstallGuideOSCForcingOnHost:[view timingGuideHost]
+                                      view:view
+                               elementKeys:oscKeys
+                              nudgeParamID:kParamRenderNudge];
+    // Demo-scene staging: each timing guide saves the user's scene + drops in a
+    // single demo shape to teach on (Canvas is per-layer, so without a subject
+    // the guides are empty), restoring the scene when the guide ends. -begin
+    // runs from the inspector's restart override (before the kit seeds);
+    // -end is chained onto the OSC-forcing run-did-end hook above.
+    view.onGuideSceneBegin = ^{
+      __strong CanvasPlugin *s = weakSelf;
+      [s _guideBeginDemoScene];
+    };
+    // Presets guide stages an EMPTY scene instead; same run-did-end restore.
+    view.onGuidePresetsSceneBegin = ^{
+      __strong CanvasPlugin *s = weakSelf;
+      [s _guideBeginEmptyScene];
+    };
+    KKJoyrideGuideHost *guideHost = [view timingGuideHost];
+    void (^priorRunDidEnd)(void) = guideHost.onRunDidEnd;
+    guideHost.onRunDidEnd = ^{
+      if (priorRunDidEnd)
+        priorRunDidEnd();
+      __strong CanvasPlugin *s = weakSelf;
+      [s _guideEndDemoScene];
+    };
     NSMutableDictionary *visState =
         [st.uiState mutableCopy] ?: [NSMutableDictionary dictionary];
     // Master "show controls" toggle stays GLOBAL (kkWire persists it under
@@ -723,10 +811,162 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
   return imp(self, _cmd, parameterID);
 }
 
+// Save the user's scene + selection and swap in a single demo shape for a
+// timing guide to teach on. Runs synchronously from the inspector's restart
+// override, BEFORE the kit captures the current timeline + applies its seed - so
+// the seed (Position/Scale) lands on the demo shape. Restored in
+// -_guideEndDemoScene when the guide ends.
+- (void)_guideBeginDemoScene {
+  // TEMPORARILY STRIPPED for leak isolation: don't stage a demo shape, so the
+  // guide runs on the user's own selected layer. If the leak stops with this,
+  // the demo-scene swap (param writes / fresh layerID per run) is the cause.
+  // Re-enable by flipping this to NO.
+  static const BOOL kStripDemoSceneForLeakTest = NO;
+  if (kStripDemoSceneForLeakTest)
+    return;
+  if (self.guideSceneActive)
+    return; // already staged (defensive)
+  CanvasInspectorView *view = (CanvasInspectorView *)self.inspectorView;
+  id<FxCustomParameterActionAPI_v4> act =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!view || !act) {
+    KKLogWarn(@"Canvas guide: can't stage demo scene (view/action API nil)");
+    return;
+  }
+  [act startAction:self];
+  id<FxParameterRetrievalAPI_v6> get =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> set =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  // Save the whole layer blob + the persisted selection so we can restore them.
+  [self _guideSaveSceneAndSelectionWithGet:get];
+  // Replace the scene with just the demo shape (a clean stage, like other
+  // plugins seeding the clip).
+  KKBezierPath *demo = _CanvasGuideDemoShape();
+  NSData *blob = [KKBezierPath blobFromPaths:@[ demo ]];
+  NSString *demoB64 = [blob base64EncodedStringWithOptions:0];
+  KKWriteCustomParamString(set, demoB64, kParamLayerData);
+  [act endAction:self];
+  self.guideSceneActive = YES;
+  self.guideNeedsGraphRefresh = YES;
+  // Seed the demo layer's PER-LAYER OSC visibility to Position-only. Canvas keys
+  // OSC visibility per layer (oscElementsByOwner[layerID]); an unseen vector path
+  // defaults to its Points handles, so without this the timing guides (which all
+  // teach Position) would draw Points instead. Must be set BEFORE the select
+  // below - canvasApplyOSCForLayer: reads this map on selection. In-memory only
+  // (the demo layer is removed on guide end, so its entry is transient).
+  KKPluginInstanceState *ist = KKInstanceStateForAPI(self.apiManager);
+  NSArray<NSString *> *oscKeys =
+      [CanvasPlugin kkOSCElementKeysForCompounds:[CanvasPlugin oscCompounds]];
+  NSMutableDictionary<NSString *, NSNumber *> *els =
+      [NSMutableDictionary dictionaryWithCapacity:oscKeys.count];
+  for (NSString *k in oscKeys)
+    els[k] = @([k isEqualToString:@"Position"]);
+  NSMutableDictionary *byLayer = [(ist.oscElementsByOwner ?: @{}) mutableCopy];
+  byLayer[demo.layerID] = els;
+  ist.oscElementsByOwner = byLayer;
+  // Publish the demo blob to the OSC's snapshot (it can't read the param) and
+  // refresh the inspector's layer list + select the demo so the seed targets it.
+  CanvasSetLayerBlobSnapshot(demoB64);
+  [view reloadLayerList];
+  [view restoreSelectedLayerID:demo.layerID];
+  KKLogInfo(@"Canvas guide: staged demo scene (saved %lu chars of layer blob)",
+            (unsigned long)self.guideSavedLayerB64.length);
+}
+
+// Save the current layer blob + persisted selection (so -_guideEndDemoScene can
+// restore them). Shared by the demo-shape and empty seeds. Must run inside an
+// action scope (the caller's), so `get` resolves.
+- (void)_guideSaveSceneAndSelectionWithGet:(id<FxParameterRetrievalAPI_v6>)get {
+  self.guideSavedLayerB64 = KKReadCustomParamString(get, kParamLayerData) ?: @"";
+  self.guideSavedSelPrimary = nil;
+  self.guideSavedSelIDs = nil;
+  NSString *uiStr = KKReadCustomParamString(get, kParamUIState);
+  if (uiStr.length) {
+    NSDictionary *ui = [NSJSONSerialization
+        JSONObjectWithData:[uiStr dataUsingEncoding:NSUTF8StringEncoding]
+                   options:0
+                     error:nil];
+    if ([ui isKindOfClass:[NSDictionary class]]) {
+      NSString *prim = ui[@"selectedLayerID"];
+      self.guideSavedSelPrimary = prim.length ? prim : nil;
+      NSArray *ids = ui[@"selectedLayerIDs"];
+      if ([ids isKindOfClass:[NSArray class]])
+        self.guideSavedSelIDs = ids;
+    }
+  }
+}
+
+// Stage an EMPTY scene for the Presets guide (a preset is applied onto a clean
+// canvas, so a demo shape would just be in the way). Saves the user's scene like
+// -_guideBeginDemoScene; the shared run-did-end hook restores it. Same
+// guideSceneActive bookkeeping, so the restore path is identical.
+- (void)_guideBeginEmptyScene {
+  if (self.guideSceneActive)
+    return;
+  CanvasInspectorView *view = (CanvasInspectorView *)self.inspectorView;
+  id<FxCustomParameterActionAPI_v4> act =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!view || !act) {
+    KKLogWarn(@"Canvas guide: can't stage empty scene (view/action API nil)");
+    return;
+  }
+  [act startAction:self];
+  id<FxParameterRetrievalAPI_v6> get =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  id<FxParameterSettingAPI_v5> set =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  [self _guideSaveSceneAndSelectionWithGet:get];
+  KKWriteCustomParamString(set, @"", kParamLayerData);
+  [act endAction:self];
+  self.guideSceneActive = YES;
+  self.guideNeedsGraphRefresh = YES;
+  CanvasSetLayerBlobSnapshot(nil);
+  [view reloadLayerList];
+  KKLogInfo(@"Canvas guide: staged empty scene (saved %lu chars of layer blob)",
+            (unsigned long)self.guideSavedLayerB64.length);
+}
+
+// Restore the user's scene + selection after a timing guide ends. Chained onto
+// the guide host's run-did-end hook (fires on completion OR skip).
+- (void)_guideEndDemoScene {
+  if (!self.guideSceneActive)
+    return;
+  self.guideSceneActive = NO;
+  CanvasInspectorView *view = (CanvasInspectorView *)self.inspectorView;
+  id<FxCustomParameterActionAPI_v4> act =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!view || !act) {
+    KKLogWarn(@"Canvas guide: can't restore demo scene (view/action API nil)");
+    return;
+  }
+  // Swallow the guide host's one async timeline-restore write (it would apply
+  // the stale pre-guide timeline to the restored selection).
+  self.guideSuppressMutate = YES;
+  NSString *savedB64 = self.guideSavedLayerB64 ?: @"";
+  [act startAction:self];
+  id<FxParameterSettingAPI_v5> set =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  KKWriteCustomParamString(set, savedB64, kParamLayerData);
+  [act endAction:self];
+  CanvasSetLayerBlobSnapshot(savedB64.length ? savedB64 : nil);
+  [view reloadLayerList];
+  [view restoreSelectedLayerIDs:(self.guideSavedSelIDs ?: @[])
+                        primary:self.guideSavedSelPrimary];
+  self.guideSavedLayerB64 = nil;
+  self.guideSavedSelPrimary = nil;
+  self.guideSavedSelIDs = nil;
+  KKLogInfo(@"Canvas guide: restored user scene");
+}
+
 - (NSArray<KKHelpGuide *> *)helpGuides {
   // The Introduction / Advanced Timing / Mini Viewer / On-Screen Controls /
   // Presets walkthroughs are identical across plugins - the kit builds them
-  // from the live inspector. Always enabled (no canvas-reference gate).
+  // from the live inspector. Gated on the OSC's canvas reference (set once the
+  // user focuses the effect on a clip and moves over the viewer), like every
+  // other plugin: the guides cut out the FCP viewer / boundary popover, which
+  // only resolve once the OSC bridge has a draw tick, so they show the
+  // "disabled until you focus the effect" subtitle until then.
   __weak typeof(self) weak = self;
   return [KKTimingGuide
       standardHelpGuidesForInspectorProvider:^KKTimelineInspectorView * {
@@ -734,13 +974,21 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
         return strong.inspectorView;
       }
       enabledProvider:^BOOL {
-        return YES;
+        return CanvasSharedOSCGuideBridge().hasCanvasReference;
       }];
 }
 
 - (nullable NSImage *)helpHeaderIcon {
   return [NSImage imageWithSystemSymbolName:@"pencil.and.outline"
                    accessibilityDescription:nil];
+}
+
+// Lets the Help window poll the guides' enabled state live (1s timer + this
+// notification on the enable edge): without it the disabled-guides warning is
+// evaluated once when the window opens and never updates - so it would clear on
+// first focus and never reappear when the effect is deselected again.
+- (nullable NSNotificationName)helpGuideRefreshNotificationName {
+  return CanvasSharedOSCGuideBridge().guidePositionNotificationName;
 }
 
 // One help section per AIKnowledge topic, single-sourced from the markdown so

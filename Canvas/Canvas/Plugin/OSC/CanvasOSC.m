@@ -26,6 +26,9 @@
                                                 pathLabel:@"Path"];
     _position.positionActivePart = CanvasOSCPartPosition;
     _position.tangentActivePart = CanvasOSCPartPath;
+    // Drive the shared guide bridge: during an OSC guide the handle follows the
+    // guide-pushed value (the drawOSC tick can't read the layer blob).
+    _position.guideProvider = self;
     for (KKLane *l in [CanvasPlugin availableLanes])
       if ([l.label isEqualToString:@"Position"])
         _position.templateLane = l;
@@ -104,6 +107,11 @@
         destinationImage:(FxImageTile *)destinationImage
                   atTime:(CMTime)time {
   self.penDrawTime = time; // current playhead, read by penEditFraction in input
+  // Feed the shared guide bridge this tick's canvas geometry: keeps the viewer
+  // screen rect fresh and marks the canvas reference alive, so the inspector's
+  // timing guides enable (and spotlight the viewer) only while the effect is
+  // focused. Unconditional - independent of selection / tool / gizmo state.
+  [self _ingestGuideDrawTickWithPosition:[self.position positionCanvasAtTime:time]];
   // Reset the draw surface (no-op encode) so only the handle/path are visible.
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero

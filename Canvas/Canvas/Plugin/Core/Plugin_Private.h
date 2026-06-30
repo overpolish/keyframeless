@@ -19,22 +19,39 @@
 /// so the selection-change callback skips its (otherwise undoable) re-persist
 /// and doesn't push a duplicate entry onto the undo stack.
 @property(nonatomic) BOOL restoringSelection;
+/// Guide demo-scene state: a timing guide saves the user's layer blob +
+/// selection here, swaps in a single demo shape to teach on, then restores both
+/// when the guide ends. `guideSceneActive` gates the restore; `guideSavedSel*`
+/// hold the pre-guide selection; `guideSuppressMutate` swallows the kit guide
+/// host's one async timeline-restore write (Canvas restores the whole scene
+/// itself, so that write would otherwise clobber the restored layer).
+@property(nonatomic) BOOL guideSceneActive;
+@property(nonatomic) BOOL guideSuppressMutate;
+/// Set when a demo scene is staged; the next timeline mutation (the guide's
+/// seed) refreshes the Advanced graph from the blob so its keypose-based steps
+/// (Advanced / Mini Viewer / OSC) can find the seeded keyposes.
+@property(nonatomic) BOOL guideNeedsGraphRefresh;
+@property(nonatomic, copy, nullable) NSString *guideSavedLayerB64;
+@property(nonatomic, copy, nullable) NSString *guideSavedSelPrimary;
+@property(nonatomic, copy, nullable) NSArray<NSString *> *guideSavedSelIDs;
 /// Per-instance cache of decoded image-layer textures, keyed by file path.
 /// (Instance-scoped, not a static - every plugin instance is a separate XPC
 /// process.)
 @property(nonatomic, strong, nonnull)
     NSMutableDictionary<NSString *, id<MTLTexture>> *imageTextureCache;
-/// Per-instance tracked scratch texture the non-blur render composites the whole
-/// layer stack into (one command buffer, intra-buffer hazard tracking serialises
-/// the per-layer passes), then blits to FCP's untracked dest - so the per-layer
-/// ordering needs NO per-draw waitUntilCompleted. Rebuilt on tile-size / format
-/// change. (Instance-scoped, not a static - separate XPC process per instance.)
+/// Per-instance tracked scratch texture the non-blur render composites the
+/// whole layer stack into (one command buffer, intra-buffer hazard tracking
+/// serialises the per-layer passes), then blits to FCP's untracked dest - so
+/// the per-layer ordering needs NO per-draw waitUntilCompleted. Rebuilt on
+/// tile-size / format change. (Instance-scoped, not a static - separate XPC
+/// process per instance.)
 @property(nonatomic, strong, nullable) id<MTLTexture> renderIntermediateTex;
 /// Per-layer "Fast" (velocity-reconstruction) motion-blur scratch textures,
-/// reused across layers and frames (rebuilt on size / format change). `mbColorTex`
-/// holds one layer rendered alone over transparent; `mbVelocityTex` (RG16Float)
-/// its analytic screen-space velocity; `mbBlurredTex` the reconstruction result
-/// composited over the dest. Instance-scoped (separate XPC process per instance).
+/// reused across layers and frames (rebuilt on size / format change).
+/// `mbColorTex` holds one layer rendered alone over transparent;
+/// `mbVelocityTex` (RG16Float) its analytic screen-space velocity;
+/// `mbBlurredTex` the reconstruction result composited over the dest.
+/// Instance-scoped (separate XPC process per instance).
 @property(nonatomic, strong, nullable) id<MTLTexture> mbColorTex;
 @property(nonatomic, strong, nullable) id<MTLTexture> mbVelocityTex;
 @property(nonatomic, strong, nullable) id<MTLTexture> mbBlurredTex;

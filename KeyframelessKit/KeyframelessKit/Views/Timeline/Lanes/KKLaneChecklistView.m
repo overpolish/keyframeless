@@ -312,6 +312,25 @@ static const CGFloat kChecklistPillH = 24.0;
   return nil;
 }
 
+- (void)selectCategoryForLabel:(NSString *)label {
+  if (!_hasPill || label.length == 0)
+    return;
+  NSString *cat = _rowCategoryByLabel[label];
+  if (cat.length == 0 || [cat isEqualToString:_selectedCategory])
+    return;
+  _selectedCategory = cat;
+  NSArray<NSString *> *keys = KKLaneCategoryKeys(_lanes);
+  NSInteger idx = [keys indexOfObject:cat];
+  if (idx != NSNotFound) {
+    NSMutableArray<NSNumber *> *states =
+        [NSMutableArray arrayWithCapacity:keys.count];
+    for (NSInteger i = 0; i < (NSInteger)keys.count; i++)
+      [states addObject:@(i == idx)];
+    _categoryPill.states = states;
+  }
+  [self _applyFilterAndResize];
+}
+
 #pragma mark - Filtering + sizing
 
 // Hide rows outside the selected category, and within it rows that don't match

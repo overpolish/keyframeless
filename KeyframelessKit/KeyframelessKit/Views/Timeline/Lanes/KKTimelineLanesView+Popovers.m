@@ -18,6 +18,12 @@
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <QuartzCore/QuartzCore.h>
 
+// Implemented in KKTimelineStaticValuesPopover.m; called on popover close to
+// free the mini-viewer's GPU memory even if the backing window shell lingers.
+@interface _KKStaticValuesPopoverView (Teardown)
+- (void)releaseMiniViewer;
+@end
+
 // The mini-viewer delegate is a KKMiniViewerRenderer (or subclass) but its
 // header framework-imports KKMiniViewerView.h, which collides with the quote
 // import above (path-dedup). Toggle its boundary-editing mode via KVC to
@@ -247,13 +253,26 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   NSViewController *vc = [[NSViewController alloc] init];
   vc.view = wrapper;
 
-  NSPopover *popover = [[NSPopover alloc] init];
-  // ApplicationDefined instead of Transient: Transient closes the popover if
-  // ANY event targets a different window - ViewBridge-routed clicks from FCP
-  // target the inspector window, not the popover, triggering that immediately.
-  // We replicate outside-click close with local + global mouseDown monitors.
-  popover.behavior = NSPopoverBehaviorApplicationDefined;
+  // Reuse one popover instance (and its remote-hosted backing window) across
+  // opens - see _openContentPopover's declaration. Just swap its content; only
+  // alloc the first time.
+  NSPopover *popover = _openContentPopover;
+  if (!popover) {
+    popover = [[NSPopover alloc] init];
+    // ApplicationDefined instead of Transient: Transient closes the popover if
+    // ANY event targets a different window - ViewBridge-routed clicks from FCP
+    // target the inspector window, not the popover, triggering that immediately.
+    // We replicate outside-click close with local + global mouseDown monitors.
+    popover.behavior = NSPopoverBehaviorApplicationDefined;
+  }
   popover.contentViewController = vc;
+  // Size the popover to THIS content before it shows. A reused instance keeps
+  // the previous open's contentSize, so without this the new content (e.g. a
+  // keypose mini-viewer) draws at the stale/small size and then pops to the
+  // right size on first layout. content.bounds is the caller-sized content (same
+  // value used for wrapper.frame above).
+  if (!NSIsEmptyRect(content.bounds))
+    popover.contentSize = content.bounds.size;
 
   [popover showRelativeToRect:anchor.bounds
                        ofView:anchor
@@ -272,6 +291,14 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
     popoverPanel.styleMask |= NSWindowStyleMaskNonactivatingPanel;
     popoverPanel.becomesKeyOnlyIfNeeded = NO;
   }
+  // The event monitors below must NOT strong-capture the popover window: NSEvent
+  // retains a monitor's block until -removeMonitor:, and during a guide the
+  // popover can be torn down without NSPopoverWillCloseNotification firing (so
+  // -removeMonitors never runs). A strong capture then pins the popover window,
+  // its content view, and the mini-viewer (an MTKView) - leaking that view's
+  // multi-MB CAMetalLayer drawables every guide run. Weak so a stranded monitor
+  // can't keep the window (and the whole mini-viewer) alive.
+  __weak NSWindow *weakPopoverWindow = popoverWindow;
   CFTimeInterval shownAt = CACurrentMediaTime();
   // Host app (FCP) is frontmost when the popover opens. Captured so an
   // outside-click in another app doesn't dismiss it.
@@ -279,6 +306,7 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
       NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
   __weak NSPopover *weakPopover = popover;
   KKMiniViewerView *canvas = KKFindMiniViewer(content);
+  __weak NSView *weakContent = content;
   // Let the mini grab key focus on click (so bare keys are handled in the
   // popover) when the plugin opted in.
   canvas.grabsKeyFocusOnClick = self.miniGrabsKeyFocusOnClick;
@@ -330,6 +358,19 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                 removeMonitors();
                 if (onClose)
                   onClose();
+                // Free the closing content's mini-viewer GPU memory promptly. The
+                // backing window is NOT destroyed: _openContentPopover is reused
+                // across opens (its remote-hosted window can't be freed until
+                // inspector teardown anyway - see its declaration), so reusing one
+                // window bounds the CA layer-hosting IOSurface leak instead of
+                // creating a fresh stranded window per open. Defer one runloop so
+                // the popover's own close settles first. Target weakContent (the
+                // CLOSING content), never the reused popover's current content.
+                dispatch_async(dispatch_get_main_queue(), ^{
+                  __strong NSView *c = weakContent;
+                  if ([c respondsToSelector:@selector(releaseMiniViewer)])
+                    [(id)c releaseMiniViewer];
+                });
                 [NSNotificationCenter.defaultCenter removeObserver:closeObs];
               }];
 
@@ -370,7 +411,7 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                        return e;
                                      if (!scrollInHostApp())
                                        return e;
-                                     if (e.window != popoverWindow)
+                                     if (e.window != weakPopoverWindow)
                                        [weakPopover close];
                                      return e;
                                    }];
@@ -443,7 +484,7 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                      // popover.
                                      if (CACurrentMediaTime() - shownAt < 0.2)
                                        return e;
-                                     if (e.window != popoverWindow)
+                                     if (e.window != weakPopoverWindow)
                                        closeIfOutsidePopover();
                                      return e;
                                    }];
@@ -481,7 +522,7 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                      // active in the key window (e.g. renaming
                                      // a layer in the companion panel, a
                                      // separate window from the popover).
-                                     if ([popoverWindow.firstResponder
+                                     if ([weakPopoverWindow.firstResponder
                                              isKindOfClass:[NSText class]] ||
                                          [NSApp.keyWindow.firstResponder
                                              isKindOfClass:[NSText class]])

@@ -41,10 +41,13 @@ NS_ASSUME_NONNULL_BEGIN
 
   __weak _KKManagePopoverView *_openManageView;
   __weak NSPopover *_openManagePopover;
-  // The last popover shown via _showPopoverWithContent: (gap/hold/boundary).
-  // Closed before a new one opens so clicking a second gap dismisses the
-  // first (outside-click monitors alone don't, click-to-click).
-  __weak NSPopover *_openContentPopover;
+  // The reused popover shown via _showPopoverWithContent: (gap/hold/boundary).
+  // STRONG + reused across opens: a ViewBridge XPC remote-hosts each NSPopover's
+  // backing window and FCP never releases it until inspector teardown, so a NEW
+  // popover per open leaks its CA layer-hosting IOSurfaces (~13 MB each) every
+  // time. Reusing one instance reuses its backing window (and surfaces), bounding
+  // it. Closed (not destroyed) before a new one opens.
+  NSPopover *_openContentPopover;
   __weak _KKStaticValuesPopoverView *_openStaticView;
   // YES when _openStaticView is a boundary-value popover (caller-supplied
   // display lanes) - its rows must NOT be clobbered by _refresh's

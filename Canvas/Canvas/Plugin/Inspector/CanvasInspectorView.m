@@ -7,8 +7,18 @@
 #import "CanvasLayerListController.h"
 #import "CanvasLayerTimeline.h"
 #import "CanvasMiniViewerRenderer.h"
+#import "CanvasOSCGuide.h" // shared OSC guide bridge (viewer rect + canvas ref)
 #import "CanvasPresets.h"
 #import <KeyframelessKit/KKBezierPath.h>
+
+@interface CanvasInspectorView ()
+/// Canvas's timing-guide data, built on -makeTimingGuideConfig. The inspector
+/// bridges (play, tabs, constants, scrub, ...) come pre-wired from the kit;
+/// only the per-plugin data (the lane it teaches + seed/target values) is
+/// filled here. Installed as -timingGuideConfigProvider in -viewDidMoveToWindow
+/// so the kit's restart machinery pulls a fresh config per guide run.
+- (KKTimingGuideConfig *)_timingGuideConfig;
+@end
 
 @implementation CanvasInspectorView {
   CanvasMiniViewerRenderer *_miniViewerRenderer;
@@ -674,6 +684,112 @@
   // The target is the host-recognized plugin for action scopes; now that it's
   // set, do an authoritative read to seed the preview's layers.
   [self _syncLayersToRenderer];
+}
+
+// Install the timing-guide config provider once the view is live. Without it
+// the kit's restart machinery (restartBasicTimingGuide / Advanced / MiniViewer
+// / OSC) early-returns, so the Help-window guides do nothing - which is why
+// only the self-contained Presets guide ran before. No autostart: Canvas opens
+// to a drawing surface, so the timing walkthroughs are launched on demand from
+// the Help window, not sprung on first appearance.
+- (void)viewDidMoveToWindow {
+  [super viewDidMoveToWindow];
+  if (self.isDetachedCopy)
+    return;
+  if (!self.timingGuideConfigProvider) {
+    __weak typeof(self) weak = self;
+    self.timingGuideConfigProvider = ^KKTimingGuideConfig * {
+      __strong typeof(weak) s = weak;
+      return s ? [s _timingGuideConfig] : nil;
+    };
+  }
+}
+
+// Stage a demo subject before each timing guide seeds. Canvas is per-layer, so
+// unlike a single-clip plugin (where the clip is always the subject) a guide
+// has nothing to teach on unless a shape exists - so we save the scene and drop
+// in a demo shape here, BEFORE the kit's restart captures + applies its seed
+// (which then attaches to the demo shape). The scene is restored from the guide
+// host's run-did-end hook. We invoke the original kit category implementation
+// via the base-class IMP (the subclass override otherwise shadows it).
+- (void)_runKitRestartForSelector:(SEL)sel {
+  if (self.onGuideSceneBegin)
+    self.onGuideSceneBegin();
+  IMP base = [KKTimelineInspectorView instanceMethodForSelector:sel];
+  ((void (*)(id, SEL))base)(self, sel);
+}
+
+- (void)restartBasicTimingGuide {
+  [self _runKitRestartForSelector:_cmd];
+}
+
+- (void)restartAdvancedTimingGuide {
+  [self _runKitRestartForSelector:_cmd];
+}
+
+- (void)restartMiniViewerGuide {
+  [self _runKitRestartForSelector:_cmd];
+}
+
+- (void)restartOSCGuide {
+  [self _runKitRestartForSelector:_cmd];
+}
+
+// The Presets guide stages an EMPTY scene (vs the timing guides' demo shape) so
+// the applied preset lands on a clean canvas. Same base-IMP trick as
+// -_runKitRestartForSelector: to invoke the kit's runPresetsGuide past this
+// override; the shared guide host's run-did-end hook restores the scene.
+- (void)runPresetsGuide {
+  if (self.onGuidePresetsSceneBegin)
+    self.onGuidePresetsSceneBegin();
+  IMP base = [KKTimelineInspectorView instanceMethodForSelector:_cmd];
+  ((void (*)(id, SEL))base)(self, _cmd);
+}
+
+// Canvas teaches the Position lane (a 2D clip-space point, stored 0..1) the
+// same way MagicMove does - it has the clearest mini-viewer point handle - with
+// Scale as the second Advanced lane so the per-property timeline + marquee
+// multi-select steps have two rows. Both live in Canvas's "Transform" category,
+// so the Advanced lane-filter step groups them under the real capsule.
+- (KKTimingGuideConfig *)_timingGuideConfig {
+  KKTimingGuideConfig *cfg = [self makeTimingGuideConfig];
+  cfg.primaryLabel = @"Position";
+  cfg.primaryComponentCount = 2;
+  cfg.primaryValueType = KKLaneValueTypeGeneric;
+  cfg.primarySeedValues = @[ @0.5, @0.5 ];
+  cfg.primaryCategoryKey = @"Transform";
+  // OSCs to keep visible while a guide runs (the rest are hidden, restored on
+  // end). The Position handle is what the guides reference.
+  cfg.oscKeepLabels = @[ @"Position" ];
+  // Second lane in the Advanced seed so the multi-row / marquee steps have two
+  // properties. Scale is a non-featured lane (not in the Position keypose
+  // mini-viewer), so seeding it can't disturb the featured Position handles.
+  cfg.secondaryLabel = @"Scale";
+  cfg.secondaryValueType = KKLaneValueTypeFloat;
+  cfg.secondarySeedValues = @[ @100.0, @100.0 ];
+  cfg.secondaryCategoryKey = @"Transform";
+  // Destination the Basic constants step drags Position to (off-centre from the
+  // 0.5,0.5 seed, normalized 0..1).
+  cfg.primaryTargetValues = @[ @0.7, @0.35 ];
+  // A different spot for the keypose-edit drag so the handle visibly moves.
+  cfg.keyposeTargetValues = @[ @0.3, @0.62 ];
+  // Mini-viewer guide: four corner positions so the clip visibly moves around
+  // the frame across the filmstrip / onion-skin frames.
+  cfg.miniViewerSeedValues =
+      @[ @[ @0.3, @0.3 ], @[ @0.7, @0.3 ], @[ @0.7, @0.7 ], @[ @0.3, @0.7 ] ];
+  // The OSC guide's pill step has the user disable a NON-featured control (so
+  // the keypose mini-viewer, which shows only Position, stays populated).
+  cfg.oscDisableLabel = @"Scale";
+  // The viewer image rect (for the Basic watch-back cutout + the OSC guide's
+  // viewer spotlight), read off the shared bridge the OSC tick feeds. Returns
+  // NSZeroRect until a draw tick lands, so the guides degrade gracefully.
+  cfg.viewerScreenRect = ^NSRect {
+    return CanvasSharedOSCGuideBridge().estimatedViewerScreenRect;
+  };
+  cfg.oscGuideBridge = ^KKOSCGuideBridge * {
+    return CanvasSharedOSCGuideBridge();
+  };
+  return cfg;
 }
 
 @end

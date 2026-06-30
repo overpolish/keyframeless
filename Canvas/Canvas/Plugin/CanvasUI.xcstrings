@@ -43,6 +43,930 @@
         }
       }
     },
+    "<accent>Anchor</accent> - the pivot that Rotation and Scale swing around. Defaults to the layer centre; a group keeps a stored anchor so moving a member never drags the pivot.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Anker</accent> - der Drehpunkt, um den Rotation und Skalieren schwenken. Standardmäßig die Mitte der Ebene; eine Gruppe behält einen gespeicherten Anker, sodass das Bewegen eines Mitglieds den Drehpunkt nie verschiebt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Anclaje</accent> - el pivote alrededor del cual giran la Rotación y la Escala. De forma predeterminada es el centro de la capa; un grupo conserva un anclaje almacenado, de modo que mover un miembro nunca arrastra el pivote."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Ancrage</accent> - le pivot autour duquel pivotent la Rotation et l'Échelle. Par défaut, le centre du calque ; un groupe conserve un ancrage mémorisé, de sorte que déplacer un membre ne déplace jamais le pivot."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>アンカー</accent> - 回転とスケールが回転する支点。デフォルトはレイヤーの中心です。グループは保存されたアンカーを保持するため、メンバーを移動しても支点は動きません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>앵커</accent> - 회전과 크기 조절이 도는 중심점입니다. 기본값은 레이어 중심이며, 그룹은 저장된 앵커를 유지하므로 구성원을 옮겨도 중심점이 끌려가지 않습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>锚点</accent> - 旋转和缩放围绕其转动的轴心。默认为图层中心；群组会保留存储的锚点，因此移动成员绝不会拖动轴心。"
+          }
+        }
+      }
+    },
+    "<accent>Colour</accent> - a solid colour or a gradient (with a <accent>Fill Angle</accent>), shared with the kit colour control.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Farbe</accent> - eine Vollfarbe oder ein Verlauf (mit einem <accent>Füllwinkel</accent>), gemeinsam mit dem Farb-Steuerelement des Kits genutzt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Color</accent> - un color sólido o un degradado (con un <accent>Ángulo de relleno</accent>), compartido con el control de color del kit."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Couleur</accent> - une couleur unie ou un dégradé (avec un <accent>Angle de remplissage</accent>), partagé avec la commande de couleur du kit."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>カラー</accent> - 単色またはグラデーション（<accent>塗りつぶし角度</accent>付き）。キットのカラーコントロールと共有されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>색상</accent> - 단색 또는 그라디언트(<accent>채우기 각도</accent> 포함)이며, 키트의 색상 컨트롤과 공유됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>颜色</accent> - 纯色或渐变（带<accent>填充角度</accent>），与套件的颜色控件共用。"
+          }
+        }
+      }
+    },
+    "<accent>Colour</accent> - a solid colour or a gradient (with an angle), shared with the kit colour control.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Farbe</accent> - eine Vollfarbe oder ein Verlauf (mit einem Winkel), gemeinsam mit dem Farb-Steuerelement des Kits genutzt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Color</accent> - un color sólido o un degradado (con un ángulo), compartido con el control de color del kit."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Couleur</accent> - une couleur unie ou un dégradé (avec un angle), partagé avec la commande de couleur du kit."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>カラー</accent> - 単色またはグラデーション（角度付き）。キットのカラーコントロールと共有されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>색상</accent> - 단색 또는 그라디언트(각도 포함)이며, 키트의 색상 컨트롤과 공유됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>颜色</accent> - 纯色或渐变（带角度），与套件的颜色控件共用。"
+          }
+        }
+      }
+    },
+    "<accent>Corners</accent> - a path can carry a corner radius that rounds its hard corners; the rounding follows the contour and rebuilds when you edit points.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Ecken</accent> - ein Pfad kann einen Eckenradius tragen, der seine harten Ecken abrundet; die Rundung folgt der Kontur und wird neu aufgebaut, wenn du Punkte bearbeitest."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Esquinas</accent> - un trazado puede tener un radio de esquina que redondea sus esquinas duras; el redondeo sigue el contorno y se reconstruye al editar los puntos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Coins</accent> - un tracé peut porter un rayon d'angle qui arrondit ses angles vifs ; l'arrondi suit le contour et se reconstruit lorsque vous modifiez les points."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>コーナー</accent> - パスはコーナー半径を持つことができ、鋭い角を丸めます。丸めは輪郭に沿い、ポイントを編集すると再構築されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>모서리</accent> - 패스는 날카로운 모서리를 둥글게 만드는 모서리 반경을 가질 수 있습니다. 둥글기는 윤곽을 따르며 포인트를 편집하면 다시 만들어집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>圆角</accent> - 路径可以带有圆角半径，将其尖锐的拐角变圆；圆角会沿着轮廓，并在你编辑点时重新生成。"
+          }
+        }
+      }
+    },
+    "<accent>Draw On</accent> - reveal the stroke over time. <accent>Draw On Start</accent> and <accent>Draw On End</accent> are the visible fraction of the line (0..1); animate End from 0 to 1 to draw the line on. <accent>Draw On Offset</accent> slides the revealed window. On a multi-contour path each contour reveals in turn.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Zeichnen</accent> - blendet die Kontur über die Zeit ein. <accent>Zeichnen Anfang</accent> und <accent>Zeichnen Ende</accent> sind der sichtbare Anteil der Linie (0..1); animiere Ende von 0 auf 1, um die Linie aufzuziehen. <accent>Zeichnen Versatz</accent> verschiebt das eingeblendete Fenster. Bei einem Pfad mit mehreren Konturen wird jede Kontur der Reihe nach eingeblendet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Dibujar</accent> - revela el trazo con el tiempo. <accent>Dibujar inicio</accent> y <accent>Dibujar fin</accent> son la fracción visible de la línea (0..1); anima Fin de 0 a 1 para ir dibujando la línea. <accent>Dibujar desplazamiento</accent> desliza la ventana revelada. En un trazado de varios contornos, cada contorno se revela por turno."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Tracé</accent> - révèle le contour au fil du temps. <accent>Tracé début</accent> et <accent>Tracé fin</accent> sont la fraction visible de la ligne (0..1) ; animez Fin de 0 à 1 pour tracer la ligne. <accent>Tracé décalage</accent> fait glisser la fenêtre révélée. Sur un tracé à contours multiples, chaque contour se révèle à tour de rôle."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>描画</accent> - 線を時間とともに表示します。<accent>描画開始</accent>と<accent>描画終了</accent>は線の表示される割合（0..1）です。終了を0から1へアニメーションすると線が描かれていきます。<accent>描画オフセット</accent>は表示される範囲をスライドさせます。複数輪郭のパスでは各輪郭が順番に表示されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>그리기</accent> - 시간에 따라 획을 드러냅니다. <accent>그리기 시작</accent>과 <accent>그리기 끝</accent>은 선의 보이는 비율(0..1)입니다. 끝을 0에서 1로 애니메이션하면 선이 그려집니다. <accent>그리기 오프셋</accent>은 드러나는 구간을 이동합니다. 다중 윤곽 패스에서는 각 윤곽이 차례로 드러납니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>绘制</accent> - 让描边随时间显现。<accent>绘制起点</accent>和<accent>绘制终点</accent>是线条的可见比例（0..1）；将“终点”从 0 动画到 1，即可把线条绘制出来。<accent>绘制偏移</accent>会滑动显现的窗口。在多轮廓路径上，每条轮廓依次显现。"
+          }
+        }
+      }
+    },
+    "<accent>Fill Amount</accent> - on an image layer, how strongly the fill tints the image (0 = untouched, 100 = full tint). A vector shape is always filled solid, so this applies to images only.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Füllmenge</accent> - bei einer Bildebene, wie stark die Füllung das Bild tönt (0 = unberührt, 100 = volle Tönung). Eine Vektorform wird immer voll gefüllt, daher gilt dies nur für Bilder."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Cantidad de relleno</accent> - en una capa de imagen, con qué intensidad el relleno tiñe la imagen (0 = intacta, 100 = tinte completo). Una forma vectorial siempre se rellena de forma sólida, así que esto solo se aplica a las imágenes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Quantité de remplissage</accent> - sur un calque image, l'intensité avec laquelle le remplissage teinte l'image (0 = intacte, 100 = teinte complète). Une forme vectorielle est toujours remplie en plein, donc ceci ne s'applique qu'aux images."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>塗りつぶし量</accent> - 画像レイヤーで、塗りつぶしが画像をどれだけ強く着色するか（0＝そのまま、100＝完全な着色）。ベクター図形は常にベタ塗りされるため、これは画像にのみ適用されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>채우기 양</accent> - 이미지 레이어에서 채우기가 이미지에 색조를 입히는 강도(0 = 그대로, 100 = 완전 색조). 벡터 도형은 항상 단색으로 채워지므로 이는 이미지에만 적용됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>填充量</accent> - 在图像图层上，填充对图像着色的强度（0 = 不变，100 = 完全着色）。矢量图形始终为实色填充，因此这仅适用于图像。"
+          }
+        }
+      }
+    },
+    "<accent>Fill Style</accent> - solid, or a hand-drawn <accent>hachure</accent> (cross-hatch / sketchy shading). Hachure exposes <accent>Fill Gap</accent> (line spacing) and <accent>Fill Weight</accent> (line thickness).": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Füllstil</accent> - voll oder eine handgezeichnete <accent>Schraffur</accent> (Kreuzschraffur / skizzenhafte Schattierung). Die Schraffur zeigt <accent>Füllabstand</accent> (Linienabstand) und <accent>Linienstärke</accent> (Liniendicke)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Estilo de relleno</accent> - sólido, o una <accent>trama</accent> dibujada a mano (rayado cruzado / sombreado tipo boceto). La trama muestra <accent>Espaciado de relleno</accent> (separación de líneas) y <accent>Grosor de línea</accent> (grosor de línea)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Style de remplissage</accent> - plein, ou des <accent>hachures</accent> dessinées à la main (hachures croisées / ombrage esquissé). Les hachures affichent <accent>Espacement</accent> (espacement des lignes) et <accent>Épaisseur du trait</accent> (épaisseur des lignes)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>塗りつぶしスタイル</accent> - ベタ塗り、または手描きの<accent>ハッチング</accent>（クロスハッチ／スケッチ風の陰影）。ハッチングでは<accent>塗りつぶし間隔</accent>（線の間隔）と<accent>線の太さ</accent>（線の太さ）が表示されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>채우기 스타일</accent> - 단색, 또는 손으로 그린 <accent>해칭</accent>(교차 빗금 / 스케치 느낌의 음영). 해칭은 <accent>채우기 간격</accent>(선 간격)과 <accent>선 두께</accent>(선 굵기)를 표시합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>填充样式</accent> - 实色，或手绘的<accent>影线</accent>（交叉排线／速写式阴影）。影线会显示<accent>填充间距</accent>（线条间距）和<accent>线宽</accent>（线条粗细）。"
+          }
+        }
+      }
+    },
+    "<accent>Line Cap</accent> - how an open end finishes: butt, round, or square (only on a path with an open end).": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Linienende</accent> - wie ein offenes Ende abschließt: stumpf, rund oder quadratisch (nur bei einem Pfad mit offenem Ende)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Extremo de línea</accent> - cómo termina un extremo abierto: plano, redondo o cuadrado (solo en un trazado con un extremo abierto)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Extrémité de ligne</accent> - comment se termine une extrémité ouverte : nette, ronde ou carrée (uniquement sur un tracé à extrémité ouverte)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>線端</accent> - 開いた端の終わり方：バット、丸、四角（開いた端を持つパスのみ）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>선 끝</accent> - 열린 끝이 마무리되는 방식: 평평, 둥금, 사각(열린 끝이 있는 패스에서만)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>线端</accent> - 开放端点的收尾方式：平头、圆头或方头（仅适用于带开放端点的路径）。"
+          }
+        }
+      }
+    },
+    "<accent>Line Join</accent> - how corners turn: miter, round, or bevel.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Linienverbindung</accent> - wie Ecken verlaufen: Gehrung, rund oder abgeschrägt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Unión de línea</accent> - cómo giran las esquinas: en inglete, redondeada o biselada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Raccord de ligne</accent> - comment tournent les angles : onglet, rond ou biseau."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>線の結合</accent> - 角の曲がり方：マイター、丸、ベベル。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>선 연결</accent> - 모서리가 도는 방식: 마이터, 둥금, 베벨."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>线连接</accent> - 拐角的转折方式：尖角、圆角或斜角。"
+          }
+        }
+      }
+    },
+    "<accent>Multi-contour paths</accent> - a boolean result, an imported SVG, or a centerline trace can hold several disconnected subpaths in one layer. They render, round, and reveal (draw-on) independently.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Pfade mit mehreren Konturen</accent> - ein boolesches Ergebnis, ein importiertes SVG oder eine Mittellinien-Trace kann mehrere voneinander getrennte Teilpfade in einer Ebene enthalten. Sie werden unabhängig gerendert, gerundet und eingeblendet (Draw On)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Trazados de varios contornos</accent> - un resultado booleano, un SVG importado o un trazado de línea central pueden contener varios subtrazados desconectados en una sola capa. Se renderizan, redondean y revelan (draw-on) de forma independiente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Tracés à contours multiples</accent> - un résultat booléen, un SVG importé ou un tracé de ligne médiane peut contenir plusieurs sous-tracés disjoints dans un seul calque. Ils se rendent, s'arrondissent et se révèlent (draw-on) indépendamment."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>複数輪郭のパス</accent> - ブール演算の結果、読み込んだSVG、または中心線トレースは、1つのレイヤーに複数の分離したサブパスを保持できます。これらは独立してレンダリング、丸め、表示（描画）されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>다중 윤곽 패스</accent> - 불리언 결과, 가져온 SVG, 중심선 추적은 한 레이어에 분리된 여러 하위 패스를 담을 수 있습니다. 각각 독립적으로 렌더링, 둥글기, 표시(그리기)됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>多轮廓路径</accent> - 布尔运算结果、导入的 SVG 或中心线描摹可以在一个图层中包含多个互不相连的子路径。它们各自独立地渲染、圆角和显现（绘制）。"
+          }
+        }
+      }
+    },
+    "<accent>Opacity</accent> - fade the layer from 0 (invisible) to 100 (opaque).": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Deckkraft</accent> - blendet die Ebene von 0 (unsichtbar) bis 100 (deckend)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Opacidad</accent> - desvanece la capa de 0 (invisible) a 100 (opaca)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Opacité</accent> - fait passer le calque de 0 (invisible) à 100 (opaque)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>不透明度</accent> - レイヤーを0（不可視）から100（不透明）まで変化させます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>불투명도</accent> - 레이어를 0(보이지 않음)에서 100(불투명)까지 페이드합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>不透明度</accent> - 将图层从 0（不可见）淡变到 100（不透明）。"
+          }
+        }
+      }
+    },
+    "<accent>Points</accent> - the path's anchor points and their bezier handles. Edit them with the pen tool: drag a point to move it, drag a handle to curve the segment, double-click a point to toggle it between a corner and a smooth point. Animating Points morphs the shape over time (the point count is carried across keyposes so the shape interpolates cleanly).": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Punkte</accent> - die Ankerpunkte des Pfades und ihre Bézier-Griffe. Bearbeite sie mit dem Stiftwerkzeug: zieh einen Punkt, um ihn zu bewegen, zieh einen Griff, um das Segment zu krümmen, doppelklicke einen Punkt, um zwischen Ecke und glattem Punkt zu wechseln. Das Animieren von Punkten lässt die Form über die Zeit morphen (die Punktanzahl wird über Keyposes hinweg beibehalten, damit die Form sauber interpoliert)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Puntos</accent> - los puntos de anclaje del trazado y sus manejadores bézier. Edítalos con la herramienta pluma: arrastra un punto para moverlo, arrastra un manejador para curvar el segmento, haz doble clic en un punto para alternarlo entre esquina y punto suave. Animar Puntos transforma la forma con el tiempo (el número de puntos se conserva entre keyposes para que la forma interpole de forma limpia)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Points</accent> - les points d'ancrage du tracé et leurs poignées de Bézier. Modifiez-les avec l'outil plume : faites glisser un point pour le déplacer, faites glisser une poignée pour courber le segment, double-cliquez sur un point pour basculer entre un coin et un point lisse. Animer Points transforme la forme au fil du temps (le nombre de points est conservé d'un keypose à l'autre pour que la forme s'interpole proprement)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>ポイント</accent> - パスのアンカーポイントとそのベジェハンドル。ペンツールで編集します。ポイントをドラッグして移動、ハンドルをドラッグしてセグメントを曲げ、ポイントをダブルクリックしてコーナーとスムーズポイントを切り替えます。ポイントをアニメーションすると形状が時間とともにモーフィングします（ポイント数はキーポーズ間で維持され、形状がきれいに補間されます）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>포인트</accent> - 패스의 앵커 포인트와 베지에 핸들입니다. 펜 도구로 편집합니다. 포인트를 드래그해 이동하고, 핸들을 드래그해 세그먼트를 곡선으로 만들고, 포인트를 더블 클릭해 모서리와 부드러운 포인트를 전환합니다. 포인트를 애니메이션하면 형태가 시간에 따라 모핑됩니다(포인트 수가 키포즈 간에 유지되어 형태가 깔끔하게 보간됩니다)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>点</accent> - 路径的锚点及其贝塞尔手柄。使用钢笔工具编辑：拖动点以移动它，拖动手柄以弯曲线段，双击点可在角点和平滑点之间切换。为“点”设置动画会让形状随时间变形（点的数量会在各关键姿势间保留，使形状平滑插值）。"
+          }
+        }
+      }
+    },
+    "<accent>Position</accent> - where the layer sits in the frame. Add two or more keyposes to move it along a path you can curve and reshape on the canvas. Normalised space: 0.5, 0.5 is the centre; Y points up.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Position</accent> - wo die Ebene im Bild sitzt. Füge zwei oder mehr Keyposes hinzu, um sie entlang eines Pfades zu bewegen, den du auf der Leinwand krümmen und umformen kannst. Normalisierter Raum: 0,5, 0,5 ist die Mitte; Y zeigt nach oben."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Posición</accent> - dónde se sitúa la capa en el fotograma. Añade dos o más keyposes para moverla a lo largo de un trazado que puedes curvar y remodelar en el lienzo. Espacio normalizado: 0.5, 0.5 es el centro; Y apunta hacia arriba."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Position</accent> - où se trouve le calque dans l'image. Ajoutez deux keyposes ou plus pour le déplacer le long d'un tracé que vous pouvez courber et remodeler sur le canevas. Espace normalisé : 0,5, 0,5 est le centre ; Y pointe vers le haut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>位置</accent> - レイヤーがフレーム内のどこに置かれるか。2つ以上のキーポーズを追加すると、キャンバス上で曲げたり形を変えたりできるパスに沿って移動します。正規化空間：0.5, 0.5が中心、Yは上向きです。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>위치</accent> - 레이어가 프레임에서 놓이는 위치입니다. 두 개 이상의 키포즈를 추가하면 캔버스에서 곡선으로 만들고 모양을 바꿀 수 있는 패스를 따라 이동합니다. 정규화 공간: 0.5, 0.5가 중심이며 Y는 위를 가리킵니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>位置</accent> - 图层在画面中的位置。添加两个或更多关键姿势，使其沿着可在画布上弯曲和重塑的路径移动。归一化空间：0.5, 0.5 为中心；Y 朝上。"
+          }
+        }
+      }
+    },
+    "<accent>Rotation</accent> - spin around the anchor. Z is the usual in-plane spin (clockwise positive); X and Y tilt the layer in 3D.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rotation</accent> - dreht um den Anker. Z ist die übliche Drehung in der Ebene (im Uhrzeigersinn positiv); X und Y kippen die Ebene in 3D."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rotación</accent> - gira alrededor del anclaje. Z es el giro habitual en el plano (positivo en sentido horario); X e Y inclinan la capa en 3D."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rotation</accent> - tourne autour de l'ancrage. Z est la rotation habituelle dans le plan (positive dans le sens horaire) ; X et Y inclinent le calque en 3D."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>回転</accent> - アンカーを中心に回転します。Zは通常の平面内の回転（時計回りが正）で、XとYはレイヤーを3Dで傾けます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>회전</accent> - 앵커를 중심으로 회전합니다. Z는 일반적인 평면 내 회전(시계 방향이 양수)이고, X와 Y는 레이어를 3D로 기울입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>旋转</accent> - 围绕锚点旋转。Z 是常规的平面内旋转（顺时针为正）；X 和 Y 使图层在 3D 中倾斜。"
+          }
+        }
+      }
+    },
+    "<accent>Scale</accent> - resize by percentage (X and Y). 100% is the layer's natural size; aspect is locked by default.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Skalieren</accent> - Größe ändern in Prozent (X und Y). 100 % ist die natürliche Größe der Ebene; das Seitenverhältnis ist standardmäßig gesperrt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Escala</accent> - cambia el tamaño por porcentaje (X e Y). 100 % es el tamaño natural de la capa; la proporción está bloqueada de forma predeterminada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Échelle</accent> - redimensionne en pourcentage (X et Y). 100 % correspond à la taille naturelle du calque ; les proportions sont verrouillées par défaut."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>スケール</accent> - パーセントでサイズを変更します（XとY）。100%はレイヤーの本来のサイズで、縦横比はデフォルトでロックされています。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>크기 조절</accent> - 백분율로 크기를 변경합니다(X와 Y). 100%는 레이어의 원래 크기이며 종횡비는 기본적으로 잠겨 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>缩放</accent> - 按百分比调整大小（X 和 Y）。100% 是图层的原始大小；默认锁定纵横比。"
+          }
+        }
+      }
+    },
+    "<accent>Sketch Bowing</accent> - how much straight segments bow out into curves.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Skizzenbiegung</accent> - wie stark sich gerade Segmente zu Kurven wölben."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Curvatura del boceto</accent> - cuánto se arquean los segmentos rectos en curvas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Courbure du croquis</accent> - de combien les segments droits se courbent en arcs."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>スケッチの曲がり</accent> - 直線セグメントがどれだけ曲線に膨らむか。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>스케치 휘기</accent> - 직선 세그먼트가 곡선으로 얼마나 휘는지."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>草图弯曲</accent> - 直线段向外弯成曲线的程度。"
+          }
+        }
+      }
+    },
+    "<accent>Sketch Roughness</accent> - how much the outline wobbles off the true path. 0 is clean; higher is scratchier.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Skizzenrauheit</accent> - wie stark der Umriss vom echten Pfad abweicht. 0 ist sauber; höher ist kratziger."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rugosidad del boceto</accent> - cuánto se aparta el contorno del trazado real. 0 es limpio; más alto es más áspero."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rugosité du croquis</accent> - de combien le contour s'écarte du tracé réel. 0 est net ; plus c'est élevé, plus c'est griffonné."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>スケッチの粗さ</accent> - 輪郭が本来のパスからどれだけ揺れるか。0はきれい、高いほどラフになります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>스케치 거칠기</accent> - 윤곽이 실제 패스에서 얼마나 흔들리는지. 0은 깔끔하고 높을수록 거칩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>草图粗糙度</accent> - 轮廓偏离真实路径的程度。0 表示干净；越高越潦草。"
+          }
+        }
+      }
+    },
+    "<accent>Sketch Seed</accent> - the random seed. Change it to get a different-but-equivalent rough variation; keep it fixed so the roughness doesn't reshuffle every frame.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Skizzen-Startwert</accent> - der Zufalls-Startwert. Ändere ihn für eine andere, aber gleichwertige raue Variation; halte ihn fest, damit sich die Rauheit nicht in jedem Bild neu mischt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Semilla del boceto</accent> - la semilla aleatoria. Cámbiala para obtener una variación áspera distinta pero equivalente; mantenla fija para que la aspereza no se rebaraje en cada fotograma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Graine du croquis</accent> - la graine aléatoire. Modifiez-la pour obtenir une variation irrégulière différente mais équivalente ; gardez-la fixe pour que l'irrégularité ne se réorganise pas à chaque image."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>スケッチのシード</accent> - 乱数のシード。変更すると、別の同等のラフなバリエーションが得られます。固定しておくと、フレームごとに粗さが入れ替わりません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>스케치 시드</accent> - 난수 시드입니다. 바꾸면 다르지만 동등한 거친 변형을 얻습니다. 고정하면 매 프레임마다 거칠기가 다시 섞이지 않습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>草图种子</accent> - 随机种子。更改它可获得不同但等效的粗糙变化；保持固定可让粗糙度不会每帧都重新洗牌。"
+          }
+        }
+      }
+    },
+    "<accent>Sketch Strokes</accent> - single or double, for one pass or a sketchier double-drawn line.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Skizzenstriche</accent> - einfach oder doppelt, für einen Durchgang oder eine skizzenhaftere, doppelt gezeichnete Linie."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Trazos del boceto</accent> - simple o doble, para una pasada o una línea de doble trazo más tipo boceto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Traits du croquis</accent> - simple ou double, pour un seul passage ou une ligne doublée plus esquissée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>スケッチのストローク</accent> - シングルまたはダブル。1回描きか、よりスケッチ風の二重描き線にします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>스케치 획</accent> - 단일 또는 이중. 한 번 그리기 또는 더 스케치 느낌의 이중으로 그린 선."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>草图笔画</accent> - 单笔或双笔，用于单次描绘或更具速写感的双重描线。"
+          }
+        }
+      }
+    },
+    "<accent>Start Marker / End Marker</accent> - an endpoint decoration (for example an arrowhead) with its own width, shown when the path has an open end.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Anfangsmarker / Endmarker</accent> - eine Endpunktverzierung (zum Beispiel eine Pfeilspitze) mit eigener Breite, die angezeigt wird, wenn der Pfad ein offenes Ende hat."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Marcador de inicio / Marcador de fin</accent> - una decoración de extremo (por ejemplo una punta de flecha) con su propio grosor, que se muestra cuando el trazado tiene un extremo abierto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Marqueur de début / Marqueur de fin</accent> - une décoration d'extrémité (par exemple une pointe de flèche) avec sa propre largeur, affichée lorsque le tracé a une extrémité ouverte."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>開始マーカー / 終了マーカー</accent> - 独自の幅を持つ端点の装飾（例えば矢じり）で、パスに開いた端があるときに表示されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>시작 마커 / 끝 마커</accent> - 자체 너비를 가진 끝점 장식(예: 화살촉)으로, 패스에 열린 끝이 있을 때 표시됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>起点标记 / 终点标记</accent> - 带有自身宽度的端点装饰（例如箭头），在路径有开放端点时显示。"
+          }
+        }
+      }
+    },
+    "<accent>Stroke Style</accent> - solid, dashed, or dotted. Dashed exposes <accent>Dash Length</accent> and <accent>Dash Gap</accent>; dotted exposes <accent>Dot Gap</accent>. Both expose <accent>Marching Ants Speed</accent> to scroll the pattern along the line (cycles per second).": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Linienstil</accent> - durchgezogen, gestrichelt oder gepunktet. Gestrichelt zeigt <accent>Strichlänge</accent> und <accent>Strichabstand</accent>; gepunktet zeigt <accent>Punktabstand</accent>. Beide zeigen <accent>Lauflinien-Geschwindigkeit</accent>, um das Muster entlang der Linie zu scrollen (Zyklen pro Sekunde)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Estilo de trazo</accent> - sólido, discontinuo o punteado. El discontinuo muestra <accent>Longitud de trazo</accent> y <accent>Espacio entre trazos</accent>; el punteado muestra <accent>Espacio entre puntos</accent>. Ambos muestran <accent>Velocidad de hormigas</accent> para desplazar el patrón a lo largo de la línea (ciclos por segundo)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Style de trait</accent> - plein, en tirets ou en pointillés. Les tirets affichent <accent>Longueur des tirets</accent> et <accent>Espacement des tirets</accent> ; les pointillés affichent <accent>Espacement des points</accent>. Les deux affichent <accent>Vitesse des pointillés animés</accent> pour faire défiler le motif le long de la ligne (cycles par seconde)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>線スタイル</accent> - 実線、破線、点線。破線では<accent>破線の長さ</accent>と<accent>破線の間隔</accent>が、点線では<accent>点の間隔</accent>が表示されます。どちらも<accent>マーチングアンツ速度</accent>が表示され、パターンを線に沿ってスクロールします（毎秒のサイクル数）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>선 스타일</accent> - 실선, 파선 또는 점선. 파선은 <accent>파선 길이</accent>와 <accent>파선 간격</accent>을, 점선은 <accent>점 간격</accent>을 표시합니다. 둘 다 <accent>마칭 앤츠 속도</accent>를 표시해 패턴을 선을 따라 스크롤합니다(초당 주기)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>线条样式</accent> - 实线、虚线或点线。虚线会显示<accent>划线长度</accent>和<accent>划线间隔</accent>；点线会显示<accent>点间隔</accent>。两者都会显示<accent>蚂蚁线速度</accent>，让图案沿线条滚动（每秒周期数）。"
+          }
+        }
+      }
+    },
+    "<accent>Stroke Width</accent> - the line thickness, in points.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Konturbreite</accent> - die Linienstärke in Punkten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Grosor de trazo</accent> - el grosor de la línea, en puntos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Épaisseur du contour</accent> - l'épaisseur de la ligne, en points."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>線幅</accent> - 線の太さ（ポイント単位）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>획 두께</accent> - 선의 두께(포인트 단위)입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>描边宽度</accent> - 线条粗细，以点为单位。"
+          }
+        }
+      }
+    },
     "<kbd>⇧</kbd> + drag a point or handle": {
       "comment": "Canvas keyboard shortcut keys.",
       "extractionState": "manual",
@@ -169,6 +1093,48 @@
         }
       }
     },
+    "A fill draws under the stroke. On a vector path the fill is the shape's interior; on an image it is a tint or a hachure overlay keyed to the image.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Füllung wird unter der Kontur gezeichnet. Bei einem Vektorpfad ist die Füllung das Innere der Form; bei einem Bild ist sie eine Tönung oder eine Schraffur-Überlagerung, die auf das Bild abgestimmt ist."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un relleno se dibuja debajo del trazo. En un trazado vectorial, el relleno es el interior de la forma; en una imagen es un tinte o una superposición de trama ajustada a la imagen."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un remplissage se dessine sous le contour. Sur un tracé vectoriel, le remplissage correspond à l'intérieur de la forme ; sur une image, c'est une teinte ou une superposition de hachures calée sur l'image."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "塗りつぶしは線の下に描かれます。ベクターパスでは塗りつぶしは図形の内側、画像では画像に合わせた色付けまたはハッチングの重ねになります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "채우기는 획 아래에 그려집니다. 벡터 패스에서는 채우기가 도형의 내부이고, 이미지에서는 이미지에 맞춘 색조 또는 해칭 오버레이입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填充绘制在描边之下。在矢量路径上，填充是图形的内部；在图像上，它是与图像对应的着色或影线叠加。"
+          }
+        }
+      }
+    },
     "All layer's values animated": {
       "comment": "Tooltip on a grayed layer-list row in the constants popover.",
       "extractionState": "manual",
@@ -207,6 +1173,90 @@
           "stringUnit": {
             "state": "translated",
             "value": "图层的所有值均已添加动画"
+          }
+        }
+      }
+    },
+    "Animate the topmost layer sliding in from off the left edge to its place over the first second.": {
+      "comment": "AI example value: slide a layer in.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animiere die oberste Ebene, wie sie in der ersten Sekunde von außerhalb des linken Rands an ihren Platz gleitet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anima la capa superior deslizándose desde fuera del borde izquierdo hasta su posición durante el primer segundo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animez le calque le plus haut qui glisse depuis l'extérieur du bord gauche jusqu'à sa place pendant la première seconde."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最前面のレイヤーが最初の1秒間で左端の外から定位置へスライドインするようにアニメーションして。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "맨 위 레이어가 첫 1초 동안 왼쪽 가장자리 바깥에서 제자리로 슬라이드해 들어오도록 애니메이션해 줘."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让最上面的图层在第一秒内从左边缘外滑入到它的位置。"
+          }
+        }
+      }
+    },
+    "Ask a question or describe an animation…": {
+      "comment": "AI prompt field placeholder for Canvas.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stelle eine Frage oder beschreibe eine Animation…"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz una pregunta o describe una animación…"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posez une question ou décrivez une animation…"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "質問するか、アニメーションを入力…"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "질문하거나 애니메이션을 설명하세요…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提问或描述一个动画…"
           }
         }
       }
@@ -379,6 +1429,132 @@
         }
       }
     },
+    "Canvas": {
+      "comment": "Help section title (plugin name).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas"
+          }
+        }
+      }
+    },
+    "Canvas is a layer-based drawing and animation effect for Final Cut Pro. Each clip holds a stack of <accent>layers</accent> - vector shapes you draw, imported images and SVGs, and groups - and every layer can be animated independently with the shared Keyframeless timeline (Basic and Advanced timing, easing, motion blur).": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas ist ein ebenenbasierter Zeichen- und Animationseffekt für Final Cut Pro. Jeder Clip enthält einen Stapel von <accent>Ebenen</accent> - Vektorformen, die du zeichnest, importierte Bilder und SVGs sowie Gruppen - und jede Ebene lässt sich unabhängig mit der gemeinsamen Keyframeless-Timeline animieren (Basis- und erweitertes Timing, Easing, Bewegungsunschärfe)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas es un efecto de dibujo y animación basado en capas para Final Cut Pro. Cada clip contiene una pila de <accent>capas</accent> - formas vectoriales que dibujas, imágenes y SVG importados, y grupos - y cada capa se puede animar de forma independiente con la línea de tiempo compartida de Keyframeless (sincronización Básica y Avanzada, easing, desenfoque de movimiento)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas est un effet de dessin et d'animation par calques pour Final Cut Pro. Chaque plan contient une pile de <accent>calques</accent> - formes vectorielles que vous dessinez, images et SVG importés, et groupes - et chaque calque peut être animé indépendamment avec la timeline partagée de Keyframeless (minutage Basique et Avancé, easing, flou de mouvement)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvasは、Final Cut Proのためのレイヤーベースの描画・アニメーション効果です。各クリップは<accent>レイヤー</accent>のスタック（描いたベクター図形、読み込んだ画像やSVG、グループ）を保持し、各レイヤーは共有のKeyframelessタイムラインで個別にアニメーションできます（ベーシック／アドバンスドのタイミング、イージング、モーションブラー）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas는 Final Cut Pro를 위한 레이어 기반 그리기 및 애니메이션 효과입니다. 각 클립은 <accent>레이어</accent> 스택(직접 그린 벡터 도형, 가져온 이미지와 SVG, 그룹)을 담고 있으며, 각 레이어는 공유 Keyframeless 타임라인으로 독립적으로 애니메이션할 수 있습니다(기본 및 고급 타이밍, 이징, 모션 블러)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas 是用于 Final Cut Pro 的基于图层的绘制与动画效果。每个片段都包含一叠<accent>图层</accent> - 你绘制的矢量图形、导入的图像和 SVG，以及群组 - 每个图层都可以借助共享的 Keyframeless 时间线独立设置动画（基础与高级计时、缓动、运动模糊）。"
+          }
+        }
+      }
+    },
+    "Canvas, a Final Cut Pro plugin for drawing and animating a stack of layers (vector shapes, imported images and SVGs, and groups) over a clip, using the shared Keyframeless timeline system (Basic and Advanced timing, easing, motion blur). Every layer can animate its transform (position, scale, rotation, anchor, opacity); vector layers can also animate stroke, fill, sketch and draw-on. Always refer to yourself as Canvas. Detailed feature information is in the reference docs below.": {
+      "comment": "AI assistant product context for Canvas plugin.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas, ein Final-Cut-Pro-Plug-in zum Zeichnen und Animieren eines Stapels von Ebenen (Vektorformen, importierte Bilder und SVGs sowie Gruppen) über einem Clip, mithilfe des gemeinsamen Keyframeless-Timeline-Systems (Basis- und erweitertes Timing, Easing, Bewegungsunschärfe). Jede Ebene kann ihre Transformation animieren (Position, Skalierung, Rotation, Anker, Deckkraft); Vektorebenen können außerdem Kontur, Füllung, Skizze und Draw-On animieren. Bezeichne dich immer als Canvas. Detaillierte Funktionsinformationen findest du in den Referenzdokumenten unten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas, un plugin de Final Cut Pro para dibujar y animar una pila de capas (formas vectoriales, imágenes y SVG importados, y grupos) sobre un clip, usando el sistema de línea de tiempo compartido de Keyframeless (sincronización Básica y Avanzada, easing, desenfoque de movimiento). Cada capa puede animar su transformación (posición, escala, rotación, anclaje, opacidad); las capas vectoriales también pueden animar trazo, relleno, boceto y draw-on. Refiérete siempre a ti mismo como Canvas. La información detallada de las funciones está en los documentos de referencia a continuación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas, un module Final Cut Pro pour dessiner et animer une pile de calques (formes vectorielles, images et SVG importés, et groupes) sur un plan, à l'aide du système de timeline partagé de Keyframeless (minutage Basique et Avancé, easing, flou de mouvement). Chaque calque peut animer sa transformation (position, échelle, rotation, ancrage, opacité) ; les calques vectoriels peuvent aussi animer contour, remplissage, croquis et draw-on. Désigne-toi toujours comme Canvas. Les informations détaillées sur les fonctionnalités se trouvent dans les documents de référence ci-dessous."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvasは、共有のKeyframelessタイムラインシステム（ベーシック／アドバンスドのタイミング、イージング、モーションブラー）を使って、クリップ上にレイヤーのスタック（ベクター図形、読み込んだ画像やSVG、グループ）を描画・アニメーションするためのFinal Cut Proプラグインです。各レイヤーは変形（位置、スケール、回転、アンカー、不透明度）をアニメーションでき、ベクターレイヤーは線、塗りつぶし、スケッチ、描画（draw-on）もアニメーションできます。自分のことは常にCanvasと呼んでください。詳細な機能情報は以下のリファレンスドキュメントにあります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas는 공유 Keyframeless 타임라인 시스템(기본 및 고급 타이밍, 이징, 모션 블러)을 사용하여 클립 위에 레이어 스택(벡터 도형, 가져온 이미지와 SVG, 그룹)을 그리고 애니메이션하기 위한 Final Cut Pro 플러그인입니다. 모든 레이어는 변형(위치, 크기, 회전, 앵커, 불투명도)을 애니메이션할 수 있으며, 벡터 레이어는 획, 채우기, 스케치, 그리기(draw-on)도 애니메이션할 수 있습니다. 자신을 항상 Canvas라고 지칭하세요. 자세한 기능 정보는 아래 참조 문서에 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canvas 是一个 Final Cut Pro 插件，使用共享的 Keyframeless 时间线系统（基础与高级计时、缓动、运动模糊），在片段上绘制并为一叠图层（矢量图形、导入的图像和 SVG，以及群组）设置动画。每个图层都可以为其变换（位置、缩放、旋转、锚点、不透明度）设置动画；矢量图层还可以为描边、填充、草图和绘制（draw-on）设置动画。请始终称自己为 Canvas。详细的功能信息见下方的参考文档。"
+          }
+        }
+      }
+    },
     "Centerline": {
       "comment": "Toolbar tooltip: trace a filled shape down to its centerline stroke",
       "extractionState": "manual",
@@ -459,6 +1635,90 @@
           "stringUnit": {
             "state": "translated",
             "value": "在检视器中点按图层以将其选中。"
+          }
+        }
+      }
+    },
+    "Core": {
+      "comment": "Help section title (geometry).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kern"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Núcleo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noyau"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コア"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "코어"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核心"
+          }
+        }
+      }
+    },
+    "Create geometry by drawing with the pen tool, dragging out a rectangle or ellipse, importing an SVG, or tracing an image's centerline. Images and groups have no editable Points - they show the transform gizmo instead.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstelle Geometrie, indem du mit dem Stiftwerkzeug zeichnest, ein Rechteck oder eine Ellipse aufziehst, ein SVG importierst oder die Mittellinie eines Bildes nachzeichnest. Bilder und Gruppen haben keine bearbeitbaren Punkte - sie zeigen stattdessen das Transformieren-Steuerelement."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea geometría dibujando con la herramienta pluma, arrastrando un rectángulo o una elipse, importando un SVG o trazando la línea central de una imagen. Las imágenes y los grupos no tienen Puntos editables - en su lugar muestran el controlador de transformación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créez de la géométrie en dessinant avec l'outil plume, en traçant un rectangle ou une ellipse, en important un SVG ou en suivant la ligne médiane d'une image. Les images et les groupes n'ont pas de Points modifiables - ils affichent plutôt la poignée de transformation."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ペンツールで描く、長方形や楕円をドラッグする、SVGを読み込む、画像の中心線をトレースするといった方法でジオメトリを作成します。画像とグループには編集可能なポイントがなく、代わりに変形ギズモが表示されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "펜 도구로 그리거나, 사각형이나 타원을 끌어내거나, SVG를 가져오거나, 이미지의 중심선을 추적해 지오메트리를 만듭니다. 이미지와 그룹에는 편집 가능한 포인트가 없으며 대신 변형 기즈모가 표시됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过使用钢笔工具绘制、拖出矩形或椭圆、导入 SVG，或描摹图像的中心线来创建几何形状。图像和群组没有可编辑的“点” - 它们改为显示变换控制柄。"
           }
         }
       }
@@ -799,6 +2059,132 @@
         }
       }
     },
+    "Draw on the stroke": {
+      "comment": "AI example chip: draw on the stroke.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontur aufziehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dibujar el trazo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tracer le contour"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "線を描き込む"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "획 그리기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "绘出描边"
+          }
+        }
+      }
+    },
+    "Drive Position, Scale and Rotation on the canvas with their on-screen controls (the handle and motion path, the scale box, the rotation rings), or type exact values in the inspector.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuere Position, Skalieren und Rotation auf der Leinwand mit ihren Bildschirmsteuerungen (dem Griff und Bewegungspfad, dem Skalierfeld, den Rotationsringen) oder gib genaue Werte im Informationsfenster ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controla Posición, Escala y Rotación en el lienzo con sus controles en pantalla (el manejador y el trazado de movimiento, la caja de escala, los anillos de rotación), o escribe valores exactos en el inspector."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pilotez Position, Échelle et Rotation sur le canevas avec leurs commandes à l'écran (la poignée et le tracé de mouvement, la boîte d'échelle, les anneaux de rotation), ou saisissez des valeurs exactes dans l'inspecteur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンバス上で位置、スケール、回転を画面上のコントロール（ハンドルとモーションパス、スケールボックス、回転リング）で操作するか、インスペクタで正確な値を入力します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "캔버스에서 위치, 크기 조절, 회전을 화면 컨트롤(핸들과 모션 패스, 크기 상자, 회전 링)로 조작하거나 인스펙터에 정확한 값을 입력하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在画布上用各自的屏幕控件（手柄与运动路径、缩放框、旋转环）来驱动“位置”“缩放”和“旋转”，或在检查器中输入精确数值。"
+          }
+        }
+      }
+    },
+    "Drop it on a clip from the Effects browser. Like the other Keyframeless plugins it works best on a compound or adjustment clip, so layers can extend past the clip's edges without being cropped.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zieh ihn aus dem Effekte-Browser auf einen Clip. Wie die anderen Keyframeless-Plug-ins funktioniert er am besten auf einem zusammengesetzten Clip oder Anpassungsclip, damit Ebenen über die Clipränder hinausragen können, ohne beschnitten zu werden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrástralo sobre un clip desde el explorador de efectos. Como los demás plugins de Keyframeless, funciona mejor en un clip compuesto o de ajuste, de modo que las capas puedan sobresalir de los bordes del clip sin recortarse."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déposez-le sur un plan depuis le navigateur d'effets. Comme les autres modules Keyframeless, il fonctionne au mieux sur un plan composé ou de réglage, afin que les calques puissent dépasser les bords du plan sans être rognés."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エフェクトブラウザからクリップにドロップします。他のKeyframelessプラグインと同様、複合クリップや調整クリップで最も効果的に機能し、レイヤーがクリップの端を越えても切り取られません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "효과 브라우저에서 클립 위로 끌어다 놓으세요. 다른 Keyframeless 플러그인과 마찬가지로 복합 클립이나 조정 클립에서 가장 잘 작동하여 레이어가 클립 가장자리를 넘어가도 잘리지 않습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从“效果”浏览器中将其拖到片段上。与其他 Keyframeless 插件一样，它在复合片段或调整片段上效果最佳，这样图层可以超出片段边缘而不被裁切。"
+          }
+        }
+      }
+    },
     "Duplicate": {
       "comment": "Layer context menu.",
       "extractionState": "manual",
@@ -967,6 +2353,48 @@
         }
       }
     },
+    "Every layer (shape, image, SVG, or group) shares the same Transform properties. Each can be a constant value or animated on the timeline.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede Ebene (Form, Bild, SVG oder Gruppe) teilt sich dieselben Transformieren-Eigenschaften. Jede kann ein konstanter Wert sein oder auf der Timeline animiert werden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada capa (forma, imagen, SVG o grupo) comparte las mismas propiedades de Transformación. Cada una puede ser un valor constante o animarse en la línea de tiempo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque calque (forme, image, SVG ou groupe) partage les mêmes propriétés de Transformation. Chacune peut être une valeur constante ou animée sur la timeline."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてのレイヤー（図形、画像、SVG、グループ）は同じ変形プロパティを共有します。各プロパティは定数値にも、タイムライン上でのアニメーションにもできます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모든 레이어(도형, 이미지, SVG, 그룹)는 동일한 변형 속성을 공유합니다. 각 속성은 상수 값이거나 타임라인에서 애니메이션할 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个图层（图形、图像、SVG 或群组）都共享相同的“变换”属性。每个属性都可以是恒定值，或在时间线上设置动画。"
+          }
+        }
+      }
+    },
     "Exclude": {
       "comment": "Toolbar tooltip: keep only the non-overlapping regions",
       "extractionState": "manual",
@@ -1005,6 +2433,132 @@
           "stringUnit": {
             "state": "translated",
             "value": "排除"
+          }
+        }
+      }
+    },
+    "Fade every layer's opacity up from 0 to 100 over the first half second.": {
+      "comment": "AI example value: fade everything in.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blende die Deckkraft jeder Ebene in der ersten halben Sekunde von 0 auf 100 hoch."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aumenta la opacidad de cada capa de 0 a 100 durante el primer medio segundo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Augmentez l'opacité de chaque calque de 0 à 100 pendant la première demi-seconde."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最初の0.5秒で各レイヤーの不透明度を0から100まで上げて。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "첫 0.5초 동안 각 레이어의 불투명도를 0에서 100까지 올려 줘."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在最初的半秒内将每个图层的不透明度从 0 提升到 100。"
+          }
+        }
+      }
+    },
+    "Fade everything in": {
+      "comment": "AI example chip: fade everything in.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles einblenden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hacer aparecer todo gradualmente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faire apparaître tout en fondu"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてをフェードイン"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전체 페이드 인"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让全部淡入"
+          }
+        }
+      }
+    },
+    "Fill": {
+      "comment": "Help section title (fill).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füllung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Relleno"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remplissage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "塗りつぶし"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "채우기"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填充"
           }
         }
       }
@@ -1807,6 +3361,48 @@
         }
       }
     },
+    "Reveal the stroke of the selected path by animating its draw-on from nothing to fully drawn across the clip.": {
+      "comment": "AI example value: draw on the stroke.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blende die Kontur des ausgewählten Pfades ein, indem du sein Draw-On über den Clip von nichts bis vollständig gezeichnet animierst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revela el trazo del trazado seleccionado animando su draw-on de nada a completamente dibujado a lo largo del clip."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Révélez le contour du tracé sélectionné en animant son draw-on de rien à entièrement tracé sur la durée du plan."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選択したパスの線を、クリップ全体で描画（draw-on）を何もない状態から完全に描かれた状態までアニメーションして表示して。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 패스의 획을 클립 전체에 걸쳐 그리기(draw-on)를 0에서 완전히 그려진 상태까지 애니메이션해서 드러내 줘."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过在整个片段中将所选路径的绘制（draw-on）从无到完全绘出来显现其描边。"
+          }
+        }
+      }
+    },
     "Select tool": {
       "comment": "Toolbar tooltip: selection tool",
       "extractionState": "manual",
@@ -1849,6 +3445,48 @@
         }
       }
     },
+    "Shortcuts": {
+      "comment": "Help section title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kurzbefehle"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Atajos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raccourcis"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ショートカット"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "단축키"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快捷键"
+          }
+        }
+      }
+    },
     "Show grid": {
       "comment": "Toolbar tooltip: toggle the grid overlay",
       "extractionState": "manual",
@@ -1887,6 +3525,132 @@
           "stringUnit": {
             "state": "translated",
             "value": "显示网格"
+          }
+        }
+      }
+    },
+    "Sketch": {
+      "comment": "Help section title (sketch).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skizze"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Boceto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Croquis"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スケッチ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스케치"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "草图"
+          }
+        }
+      }
+    },
+    "Sketch affects the stroke and the fill (the hachure picks up the same jitter), so the whole layer reads as hand-drawn.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Skizze wirkt auf die Kontur und die Füllung (die Schraffur nimmt denselben Jitter auf), sodass die ganze Ebene handgezeichnet wirkt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El boceto afecta al trazo y al relleno (la trama adopta el mismo temblor), de modo que toda la capa se ve dibujada a mano."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le croquis affecte le contour et le remplissage (les hachures reprennent le même tremblement), de sorte que tout le calque paraît dessiné à la main."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スケッチは線と塗りつぶしの両方に作用し（ハッチングも同じ揺れを拾います）、レイヤー全体が手描きのように見えます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스케치는 획과 채우기 모두에 영향을 주며(해칭도 같은 떨림을 따릅니다), 그래서 레이어 전체가 손으로 그린 것처럼 보입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "草图会影响描边和填充（影线也会带上相同的抖动），因此整个图层都呈现手绘感。"
+          }
+        }
+      }
+    },
+    "Slide the top layer in": {
+      "comment": "AI example chip: slide a layer in.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oberste Ebene einschieben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deslizar la capa superior"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faire glisser le calque supérieur"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最前面のレイヤーをスライドイン"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "맨 위 레이어 슬라이드 인"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滑入顶层图层"
           }
         }
       }
@@ -2017,6 +3781,48 @@
         }
       }
     },
+    "Stroke": {
+      "comment": "Help section title (stroke).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kontur"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trazo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contour"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "線"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "획"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "描边"
+          }
+        }
+      }
+    },
     "Stroke to path": {
       "comment": "Toolbar tooltip: convert a stroke to a filled outline path",
       "extractionState": "manual",
@@ -2101,6 +3907,174 @@
         }
       }
     },
+    "The Core group is the layer's geometry - the path itself.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Gruppe Kern ist die Geometrie der Ebene - der Pfad selbst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El grupo Núcleo es la geometría de la capa - el propio trazado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le groupe Noyau correspond à la géométrie du calque - le tracé lui-même."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コアグループはレイヤーのジオメトリ、つまりパスそのものです。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "코어 그룹은 레이어의 지오메트리, 즉 패스 자체입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“核心”组是图层的几何形状 - 即路径本身。"
+          }
+        }
+      }
+    },
+    "The Fill group paints the inside of a shape, or tints / overlays an image. Turn it on with <accent>Fill Enabled</accent>.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Gruppe Füllung füllt das Innere einer Form oder tönt / überlagert ein Bild. Schalte sie mit <accent>Aktiviert</accent> ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El grupo Relleno pinta el interior de una forma, o tiñe / superpone una imagen. Actívalo con <accent>Activado</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le groupe Remplissage peint l'intérieur d'une forme, ou teinte / superpose une image. Activez-le avec <accent>Activé</accent>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "塗りつぶしグループは図形の内側を塗るか、画像に色を付けたり重ねたりします。<accent>有効</accent>でオンにします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "채우기 그룹은 도형 내부를 칠하거나 이미지에 색조를 입히거나 오버레이합니다. <accent>활성화</accent>로 켜세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“填充”组填涂图形内部，或为图像着色/叠加。用<accent>启用</accent>将其打开。"
+          }
+        }
+      }
+    },
+    "The Sketch group roughens a layer so it looks hand-drawn (the rough.js style). Turn it on with <accent>Sketch Enabled</accent>; it applies to a vector path or an image, never a group.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Gruppe Skizze raut eine Ebene auf, damit sie handgezeichnet aussieht (der rough.js-Stil). Schalte sie mit <accent>Aktiviert</accent> ein; sie gilt für einen Vektorpfad oder ein Bild, nie für eine Gruppe."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El grupo Boceto da aspereza a una capa para que parezca dibujada a mano (el estilo rough.js). Actívalo con <accent>Activado</accent>; se aplica a un trazado vectorial o a una imagen, nunca a un grupo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le groupe Croquis rend un calque irrégulier pour qu'il paraisse dessiné à la main (le style rough.js). Activez-le avec <accent>Activé</accent> ; il s'applique à un tracé vectoriel ou à une image, jamais à un groupe."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スケッチグループはレイヤーを粗くして手描き風に見せます（rough.jsのスタイル）。<accent>有効</accent>でオンにします。ベクターパスまたは画像に適用され、グループには適用されません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "스케치 그룹은 레이어를 거칠게 만들어 손으로 그린 것처럼 보이게 합니다(rough.js 스타일). <accent>활성화</accent>로 켜세요. 벡터 패스나 이미지에 적용되며 그룹에는 적용되지 않습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“草图”组让图层变得粗糙，呈现手绘外观（rough.js 风格）。用<accent>启用</accent>将其打开；它适用于矢量路径或图像，绝不用于群组。"
+          }
+        }
+      }
+    },
+    "The Stroke group draws an outline along a vector path. Turn it on with <accent>Enabled</accent>.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Gruppe Kontur zeichnet eine Umrisslinie entlang eines Vektorpfades. Schalte sie mit <accent>Aktiviert</accent> ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El grupo Trazo dibuja un contorno a lo largo de un trazado vectorial. Actívalo con <accent>Activado</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le groupe Contour dessine un contour le long d'un tracé vectoriel. Activez-le avec <accent>Activé</accent>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "線グループはベクターパスに沿って輪郭線を描きます。<accent>有効</accent>でオンにします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "획 그룹은 벡터 패스를 따라 윤곽선을 그립니다. <accent>활성화</accent>로 켜세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“描边”组沿矢量路径绘制轮廓。用<accent>启用</accent>将其打开。"
+          }
+        }
+      }
+    },
     "This layer isn't animated": {
       "comment": "Tooltip on a grayed layer-list row in the applies-to popover.",
       "extractionState": "manual",
@@ -2143,6 +4117,48 @@
         }
       }
     },
+    "Tip: a line \"drawing on\" is Draw On End animating from 0 to 1; add an End Marker arrow for an arrow that appears at the tip.": {
+      "comment": "Canvas help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tipp: Eine Linie, die sich „aufzieht“, ist Zeichnen Ende, das von 0 auf 1 animiert; füge einen Endmarker-Pfeil hinzu, damit am Ende ein Pfeil erscheint."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Consejo: una línea que se \"va dibujando\" es Dibujar fin animándose de 0 a 1; añade una flecha de Marcador de fin para que aparezca una flecha en la punta."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Astuce : une ligne qui « se trace » correspond à Tracé fin animé de 0 à 1 ; ajoutez une flèche de Marqueur de fin pour qu'une flèche apparaisse à la pointe."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ヒント：線が「描かれていく」のは、描画終了を0から1へアニメーションすることです。終了マーカーの矢印を追加すると、先端に矢印が現れます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "팁: 선이 \"그려지는\" 것은 그리기 끝을 0에서 1로 애니메이션하는 것입니다. 끝 마커 화살표를 추가하면 끝에 화살표가 나타납니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提示：线条“逐渐绘出”就是“绘制终点”从 0 动画到 1；添加“终点标记”箭头，即可在末端出现一个箭头。"
+          }
+        }
+      }
+    },
     "Toggle a smooth curve or a sharp corner": {
       "comment": "Canvas keyboard shortcut.",
       "extractionState": "manual",
@@ -2181,6 +4197,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "在平滑曲线和尖角之间切换"
+          }
+        }
+      }
+    },
+    "Transform": {
+      "comment": "Help section title (transform).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transformieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transformación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transformation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変形"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "변형"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "变换"
           }
         }
       }
@@ -2307,6 +4365,90 @@
           "stringUnit": {
             "state": "translated",
             "value": "联集"
+          }
+        }
+      }
+    },
+    "What's Basic vs Advanced?": {
+      "comment": "AI example chip: Basic vs Advanced timing question.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ist Einfach vs. Erweitert?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Qué es Básico frente a Avanzado?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quelle différence entre Basique et Avancé ?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「基本」と「詳細」の違いは？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본과 고급의 차이는?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基本与高级有什么区别？"
+          }
+        }
+      }
+    },
+    "What's the difference between Basic and Advanced timing?": {
+      "comment": "AI example value: Basic vs Advanced timing question.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was ist der Unterschied zwischen einfachem und erweitertem Timing?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cuál es la diferencia entre el tiempo Básico y Avanzado?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quelle est la différence entre le timing Basique et Avancé ?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「基本」タイミングと「詳細」タイミングの違いは何ですか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본 타이밍과 고급 타이밍의 차이는 무엇인가요?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基本计时和高级计时有什么区别？"
           }
         }
       }

@@ -180,6 +180,7 @@
 				Plugin/OSC/CanvasOSC.m,
 				"Plugin/OSC/CanvasOSC+AutoSelect.m",
 				"Plugin/OSC/CanvasOSC+Geometry.m",
+				"Plugin/OSC/CanvasOSC+Guide.m",
 				"Plugin/OSC/CanvasOSC+Grid.m",
 				"Plugin/OSC/CanvasOSC+HitTest.m",
 				"Plugin/OSC/CanvasOSC+Input.m",

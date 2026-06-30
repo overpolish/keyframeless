@@ -59,6 +59,17 @@ static const CGFloat kSlideDistance = 12.0;
 
 - (void)invalidate {
   [NSNotificationCenter.defaultCenter removeObserver:self];
+  // Teardown path (called from -[CanvasInspectorView dealloc]). _hide fires host
+  // callbacks (onNonSelectableLayersChanged / ...Marquee...) that are blocks
+  // defined in the inspector's init and capture inspector state - invoking them
+  // while the inspector is mid-dealloc reads freed memory (SIGSEGV; also stalls
+  // the inspector reload after a popover edit -> ViewBridge placeholder). Drop
+  // them first so _hide only tears the panel down.
+  self.onPrimaryLayerSelected = nil;
+  self.onLayerHovered = nil;
+  self.onAutoSelectToggled = nil;
+  self.onNonSelectableLayersChanged = nil;
+  self.onMarqueeNonSelectableLayersChanged = nil;
   [self _hide];
 }
 

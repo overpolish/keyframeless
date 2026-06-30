@@ -98,13 +98,22 @@ static void _clearPopoverBackground(NSView *view) {
   NSViewController *vc = [[NSViewController alloc] init];
   vc.view = _contentView;
 
-  _popover = [[NSPopover alloc] init];
-  _popover.contentViewController = vc;
+  // Reuse one NSPopover instance (and its backing window) across opens. In an
+  // FxPlug custom-UI XPC, FCP remote-hosts each popover window and only releases
+  // it on inspector teardown, so a NEW popover per open strands its CA
+  // layer-hosting surfaces (~MBs) every time - worst with ApplicationDefined
+  // (guide mode), where we own dismissal so FCP never even learns it closed.
+  // Reusing the instance bounds it regardless of behavior. (See the same fix on
+  // KKTimelineLanesView's _openContentPopover.)
+  if (!_popover) {
+    _popover = [[NSPopover alloc] init];
+    _popover.delegate = self;
+  }
   // ApplicationDefined during a guide so the overlay/host clicks don't dismiss
-  // it; Transient otherwise.
+  // it; Transient otherwise. Set each show since the mode can change.
   _popover.behavior = _guideMode ? NSPopoverBehaviorApplicationDefined
                                  : NSPopoverBehaviorTransient;
-  _popover.delegate = self;
+  _popover.contentViewController = vc;
   _popover.contentSize = _contentView.frame.size;
   [_popover showRelativeToRect:rect ofView:view preferredEdge:NSRectEdgeMinY];
   // A guide drives the popover with narrated steps; the filter field auto-
@@ -375,7 +384,9 @@ static void _clearPopoverBackground(NSView *view) {
 }
 
 - (void)popoverDidClose:(NSNotification *)notification {
-  _popover = nil;
+  // Keep _popover (and its backing window) alive for reuse - see -showRelative...
+  // The next open swaps in fresh content; the toggle/close paths gate on
+  // -isShown, not nil-ness.
 }
 
 #pragma mark - Guide support

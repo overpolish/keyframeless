@@ -108,6 +108,13 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// drag-to-reorder list's source). Backs the property-order popover.
 - (NSArray<NSString *> *)orderedParamLabels;
 
+/// The full parameter universe - every available lane label, ordered by the
+/// user's paramOrder then the author's template order - independent of the
+/// selected layer's seeded lanes or conditional visibility. The Parameter Order
+/// popover edits a global ordering, so it shows every reorderable param
+/// regardless of which layer is selected.
+- (NSArray<NSString *> *)allOrderedParamLabels;
+
 /// Apply a user-defined property display order (persists via onTimelineMutated
 /// and re-sorts every view + popover through the display chokepoint).
 - (void)applyParamOrder:(NSArray<NSString *> *)labels;

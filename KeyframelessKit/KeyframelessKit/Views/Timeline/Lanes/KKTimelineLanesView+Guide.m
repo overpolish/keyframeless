@@ -17,6 +17,10 @@
   _KKManagePopoverView *mv = _openManageView;
   if (!mv || label.length == 0)
     return NSZeroRect;
+  // The Animated dropdown pages its lanes by category; the target lane may live
+  // outside the default (first) page, so flip to its page before spotlighting
+  // (idempotent - no-op once it's the selected page).
+  [mv selectCategoryForLabel:label];
   NSView *row = [mv rowViewForLabel:label];
   NSWindow *w = row.window;
   if (!row || !w)

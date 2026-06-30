@@ -112,6 +112,8 @@ NS_ASSUME_NONNULL_BEGIN
   // reorders within it, and the sub-order is merged back into the full order.
   NSView *_paramOrderContent;
   NSView *_paramOrderListContainer;
+  NSLayoutConstraint *_paramOrderScrollHeight;
+  NSLayoutConstraint *_paramOrderScrollWidth;
   KKReorderListView *_paramOrderList;
   NSArray<NSString *> *_paramOrderLabels; // current full order
   NSDictionary<NSString *, NSString *> *_paramOrderCatByLabel;

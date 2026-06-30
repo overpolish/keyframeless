@@ -131,8 +131,12 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 - (void)dealloc {
   [_pollTimer invalidate];
   [self _teardownKeyMonitors];
-  if (_sourceSurface)
-    CFRelease(_sourceSurface);
+  // NOTE: do NOT CFRelease(_sourceSurface) here. It is only ever an unowned
+  // alias of the active filmstrip slot's surface (-_selectActiveSlot:); the slot
+  // owns that +1 and releases it in -[_KKMiniFilmSlot dealloc]. Releasing it here
+  // too is an over-release - latent for as long as this view leaked (never
+  // deallocated), and the crash that surfaced once the popover-close path started
+  // freeing the view.
 }
 
 - (void)_teardownKeyMonitors {
@@ -156,11 +160,20 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   _pollTimer = nil;
   [self _teardownKeyMonitors];
   if (self.window) {
+    // Weak block (NOT target:self) - a target:self repeating timer retains the
+    // view, so it only deallocs when the timer is invalidated (window-leave /
+    // dealloc). The guide's popover juggling (content moving to the overlay /
+    // passthrough window, deferred closes) can leave the view in a window with
+    // a live timer, so it never deallocs and its MTKView CAMetalLayer drawables
+    // (multi-MB IOSurfaces) leak, accumulating per guide run. A weak block lets
+    // the view dealloc as soon as its popover releases it; dealloc invalidates
+    // the timer.
+    __weak typeof(self) weakSelf = self;
     _pollTimer = [NSTimer scheduledTimerWithTimeInterval:kPollInterval
-                                                  target:self
-                                                selector:@selector(_poll)
-                                                userInfo:nil
-                                                 repeats:YES];
+                                                 repeats:YES
+                                                   block:^(NSTimer *t) {
+                                                     [weakSelf _poll];
+                                                   }];
     [self _poll];
     [self _installKeyMonitor];
   }

@@ -58,6 +58,10 @@
                         activePart:(NSInteger *)activePart
                             atTime:(CMTime)time {
   *activePart = CanvasOSCPartNone;
+  // Bootstrap the guide bridge's screen<->canvas reference (the only place a
+  // valid canvas scale + screen point arrive together). Before the early
+  // returns so every hover feeds it.
+  [self _ingestGuideHitTestAtCanvasX:positionX y:positionY];
   // Clear a move cursor forced on the previous hover; the hit branch re-sets
   // it.
   if (self.pointCursorSet) {
