@@ -5,14 +5,14 @@
 
 #import "CanvasStrokeGlyphs.h"
 
-// The _Attic glyphs were authored on a 24-unit grid; this is the cubic-bezier
-// circle constant they use for the rounded connectors / caps.
+// The glyphs are authored on a 24-unit grid; this is the cubic-bezier
+// circle constant used for the rounded connectors / caps.
 static const CGFloat kKappa = 0.5522847498f;
 static const CGFloat kGlyphSize = 18.0f;
 
 // Cap glyph: two stacked bars joined by a small rounded connector, the right
 // edge closing per cap style. 0 = Butt (flat), 1 = Round (semicircle bulge),
-// 2 = Square (extends past the end). Ported from _Attic/UI/CapStyleView.m.
+// 2 = Square (extends past the end).
 static void CanvasDrawCapGlyph(CGFloat k, NSInteger cap) {
   NSBezierPath *p = [NSBezierPath bezierPath];
   [p moveToPoint:NSMakePoint(2 * k, 4 * k)];
@@ -53,7 +53,6 @@ static void CanvasDrawCapGlyph(CGFloat k, NSInteger cap) {
 
 // Join glyph: an outer L whose corner varies per join style (0 = Miter sharp,
 // 1 = Round quarter-circle, 2 = Bevel diagonal), with a fixed inner L cut out.
-// Ported from _Attic/UI/JoinStyleView.m.
 static void CanvasDrawJoinGlyph(CGFloat k, NSInteger join) {
   NSBezierPath *p = [NSBezierPath bezierPath];
   [p moveToPoint:NSMakePoint(2 * k, 22 * k)];
@@ -157,8 +156,8 @@ NSArray<NSImage *> *CanvasLineJoinGlyphs(void) {
 }
 
 // Marker glyphs: a baseline stroke (y = 12 on the 24-grid) with the decoration
-// at the matching end (right for End, mirrored left for Start). Ported from
-// _Attic/UI/MarkerStyleView.m, retuned to the cap/join glyph weight + bounds.
+// at the matching end (right for End, mirrored left for Start), tuned to the
+// cap/join glyph weight + bounds.
 static const CGFloat kMarkerLineW = 2.0f; // 24-grid units, scaled by k
 
 static void CanvasMarkerBaseline(CGFloat k, CGFloat x0, CGFloat x1) {
@@ -274,7 +273,6 @@ NSArray<NSImage *> *CanvasMarkerGlyphs(BOOL isStart) {
 // Fill style glyph on the 24-grid (the helper sets the template colour +
 // origin). 0 = Solid (filled rounded rect), 1 = Hachure (diagonals clipped to
 // the box), 2 = Cross-hatch (two diagonal sets), 3 = Zigzag, 4 = Dots (3x3).
-// Ported from _Attic/UI/FillStyleView.m.
 static void CanvasDrawFillStyleGlyph(CGFloat k, NSInteger style) {
   CGFloat inset = 5.0 * k, size = 14.0 * k;
   NSRect box = NSMakeRect(inset, inset, size, size);

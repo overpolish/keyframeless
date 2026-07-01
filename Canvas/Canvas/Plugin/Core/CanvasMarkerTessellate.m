@@ -4,8 +4,8 @@
  */
 
 // Stroke endpoint markers (arrow / circle / square / open arrowhead / tick).
-// Reworked from the pre-v3 _Attic MarkerTessellation: every marker is now ONE
-// triangle LIST so the start + end markers batch into a single buffer + draw,
+// Every marker is ONE triangle LIST so the start + end markers batch into a
+// single buffer + draw,
 // and they carry the same textureCoordinate.y edge-distance the stroke + dotted
 // disc use (rim ±1, interior 0) so KKLineFragment antialiases their edges the
 // same way - the old flat 3-vertex arrow had no AA, which is what read as
@@ -43,7 +43,7 @@ static inline NSUInteger CanvasMkTri(KKVertex2D *o, NSUInteger vc,
 }
 
 // Chord segments so a disc of `radius` stays smooth (chord error <= 0.25 px),
-// clamped. Mirrors the _Attic circle metric.
+// clamped.
 static NSUInteger CanvasMkCircleSegs(float radius) {
   if (radius < 1.0f)
     return 16;

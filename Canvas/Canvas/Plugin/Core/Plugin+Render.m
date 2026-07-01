@@ -299,7 +299,7 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
   // Render scale: stroke widths are authored in CANONICAL (canvas/100%) px, but
   // a downscaled FCP browser/effect thumbnail renders fewer real pixels per
   // canonical unit. Map the SOURCE image's pixel bounds back to canonical units
-  // via its inversePixelTransform (same idiom as Glow / the _Attic): resScale =
+  // via its inversePixelTransform (same idiom as Glow): resScale =
   // srcPixelWidth / srcCanonicalWidth (1.0 at full res, < 1 for a thumbnail).
   // Geometry is already correct (it scales with imageWidth); only the absolute
   // stroke width needs this, else thumbnails draw strokes far too thick.
