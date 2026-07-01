@@ -1116,7 +1116,9 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 }
 
 - (KKSliderView *)_guideSliderForLabel:(NSString *)label {
-  NSView *v = [_rowsByLabel[label] guideSliderView];
+  // Tolerant lookup: owner-scoped lanes (e.g. Draw On End) carry a composite
+  // "<plain>\x1f<layerID>" key, so an exact match would miss.
+  NSView *v = [[self _rowForLabelTolerant:label] guideSliderView];
   return [v isKindOfClass:[KKSliderView class]] ? (KKSliderView *)v : nil;
 }
 
@@ -1137,9 +1139,49 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   return [[self _guideSliderForLabel:label] valueForScreenX:screenX];
 }
 
+- (NSRect)guideChoicePillScreenRectForLabel:(NSString *)label
+                                    atIndex:(NSInteger)index {
+  return [[self _rowForLabelTolerant:label]
+      guideChoicePillScreenRectForIndex:index];
+}
+
+- (NSRect)guideAddToAnimatedButtonScreenRectForLabel:(NSString *)label {
+  return [[self _rowForLabelTolerant:label] guideAddToAnimatedButtonScreenRect];
+}
+
+- (NSRect)guideCategoryPillScreenRectForKey:(NSString *)key {
+  NSInteger idx = [_categoryKeys indexOfObject:key];
+  if (!_categoryPill || idx == NSNotFound)
+    return NSZeroRect;
+  return [_categoryPill guidePillScreenRectAtIndex:idx];
+}
+
+- (void)guideScrollRowIntoViewForLabel:(NSString *)label {
+  _KKStaticValueRow *row = [self _rowForLabelTolerant:label];
+  if (row && !row.hidden)
+    [row scrollRectToVisible:row.bounds];
+}
+
+// Programmatically switch the open popover to `key` (updating the nav pill's
+// selected segment, the row filter, and the height) WITHOUT firing
+// onCategoryChanged - a guide forces a known tab without tripping its own
+// category trigger or the remember. No-op if the category isn't present.
+- (void)guideSelectCategory:(NSString *)key {
+  NSInteger idx = [_categoryKeys indexOfObject:key];
+  if (!_categoryPill || idx == NSNotFound ||
+      [_selectedCategory isEqualToString:key])
+    return;
+  for (NSInteger i = 0; i < (NSInteger)_categoryKeys.count; i++)
+    [_categoryPill setState:(i == idx) atIndex:i];
+  _selectedCategory = [key copy];
+  [self _applyCategoryFilter];
+  [self _resizePopoverToSelectedCategory];
+}
+
 - (NSRect)guideFieldScreenRectForLabel:(NSString *)label
                              component:(NSInteger)component {
-  NSView *f = [_rowsByLabel[label] guideFieldViewForComponent:component];
+  NSView *f = [[self _rowForLabelTolerant:label]
+      guideFieldViewForComponent:component];
   NSWindow *w = f.window;
   if (!f || !w)
     return NSZeroRect;
@@ -1148,12 +1190,12 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 
 - (void)setGuideFieldEditHandlerForLabel:(NSString *)label
                                  handler:(void (^)(NSInteger, double))handler {
-  _rowsByLabel[label].onGuideFieldEdit = handler;
+  [self _rowForLabelTolerant:label].onGuideFieldEdit = handler;
 }
 
 - (void)guideCommitFieldForLabel:(NSString *)label
                        component:(NSInteger)component {
-  [_rowsByLabel[label] guideCommitFieldForComponent:component];
+  [[self _rowForLabelTolerant:label] guideCommitFieldForComponent:component];
 }
 
 - (void)updateUnoptedLanes:(NSArray<KKLane *> *)lanes {

@@ -28,6 +28,13 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)staticValuesPopoverClosed;
 /// `label` nil = any. Fires once per drag (after `onStaticValueDragEnded`).
 + (instancetype)staticValueDragEndedForLabel:(nullable NSString *)label;
+/// Fires when the constant choice-pill for `label` is set to `index` (a discrete
+/// radio selection, e.g. an end-marker type) - matched plain-label-tolerant.
++ (instancetype)staticChoiceSelectedForLabel:(NSString *)label
+                                       index:(NSInteger)index;
+/// Fires when the constant popover's category-nav pill switches to `key` (e.g.
+/// @"Stroke").
++ (instancetype)staticCategorySelectedForKey:(NSString *)key;
 /// Fires when the user types into the constant field for `label`/`component`
 /// and the parsed display value lands within `tolerance` of `equals`.
 + (instancetype)constantFieldEditedLabel:(NSString *)label

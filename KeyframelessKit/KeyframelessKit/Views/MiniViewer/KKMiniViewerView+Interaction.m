@@ -187,14 +187,118 @@
                    fromView:nil];
 }
 
-- (NSCursor *)cursorAtScreenPoint:(NSPoint)screenPoint {
+- (NSRect)guideToolbarButtonScreenRectForTag:(NSInteger)tag {
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (!self.window ||
-      ![d respondsToSelector:@selector(miniViewer:cursorAtPoint:contentRect:)])
-    return nil;
-  return [d miniViewer:self
-         cursorAtPoint:[self _viewPointForScreenPoint:screenPoint]
+      ![d respondsToSelector:@selector(miniViewer:toolbarButtonViewRectForTag:)])
+    return NSZeroRect;
+  NSRect vr = [d miniViewer:self toolbarButtonViewRectForTag:tag];
+  if (NSIsEmptyRect(vr))
+    return NSZeroRect;
+  return [self.window convertRectToScreen:[self convertRect:vr toView:nil]];
+}
+
+- (BOOL)guidePressToolbarAtScreenPoint:(NSPoint)screenPoint {
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
+  if (![d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)])
+    return NO;
+  CGPoint vp = [self _viewPointForScreenPoint:screenPoint];
+  if ([d miniViewer:self toolbarTagAtPoint:vp] == 0)
+    return NO; // not over a toolbar item
+  if ([d respondsToSelector:@selector(miniViewer:toolbarMouseDownAtPoint:)])
+    [d miniViewer:self toolbarMouseDownAtPoint:vp];
+  if ([d respondsToSelector:@selector(miniViewerToolbarMouseUp:)])
+    [d miniViewerToolbarMouseUp:self];
+  return YES;
+}
+
+// The XPC overlay swallows raw clicks/moves, so a guide drives the drawing
+// tool from the spotlight handlers. Mirror the overlay's move: feed the hover
+// point (rubber-band + snap ghost) and redraw, then the guide presents the tool
+// cursor via -cursorAtScreenPoint:.
+- (void)guideToolMoveToScreenPoint:(NSPoint)screenPoint {
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
+  if (![d respondsToSelector:@selector(miniViewer:toolMovedToPoint:contentRect:)])
+    return;
+  [d miniViewer:self
+      toolMovedToPoint:[self _viewPointForScreenPoint:screenPoint]
            contentRect:[self contentRectInViewPoints]];
+  [self setNeedsDisplay:YES];
+}
+
+// One synthesized tap of the active drawing tool (down + up at the same point,
+// no modifiers) - the mini's pen places / finishes a point per click.
+- (void)guideToolClickAtScreenPoint:(NSPoint)screenPoint {
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
+  CGPoint vp = [self _viewPointForScreenPoint:screenPoint];
+  CGRect cr = [self contentRectInViewPoints];
+  if ([d respondsToSelector:@selector(miniViewer:
+                                 toolDownAtPoint:contentRect:modifiers:)])
+    [d miniViewer:self toolDownAtPoint:vp contentRect:cr modifiers:0];
+  if ([d respondsToSelector:@selector(miniViewer:toolUpAtPoint:contentRect:)])
+    [d miniViewer:self toolUpAtPoint:vp contentRect:cr];
+  [self setNeedsDisplay:YES];
+}
+
+// In-progress pen point count (held first point counts as 1), 0 when idle or
+// finished - lets a guide advance per placed point.
+- (NSInteger)guidePenPointCount {
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
+  if (![d respondsToSelector:@selector(miniViewerGuidePenPointCount:)])
+    return 0;
+  return [d miniViewerGuidePenPointCount:self];
+}
+
+// A screen point at the given fraction of the canvas content rect (0..1, view
+// space), so a guide can place draw targets that track the popover's size.
+- (NSPoint)guideScreenPointForContentFractionX:(CGFloat)fx y:(CGFloat)fy {
+  if (!self.window)
+    return NSZeroPoint;
+  CGRect cr = [self contentRectInViewPoints];
+  if (CGRectIsEmpty(cr))
+    return NSZeroPoint;
+  NSPoint vp = NSMakePoint(CGRectGetMinX(cr) + fx * cr.size.width,
+                           CGRectGetMinY(cr) + fy * cr.size.height);
+  return [self.window convertPointToScreen:[self convertPoint:vp toView:nil]];
+}
+
+// The last placed in-progress pen point in screen space (NSZeroPoint when the
+// pen is idle). A guide targets the finish click here so it lands on the anchor
+// regardless of grid snap (clicking the last anchor finishes the open path).
+- (NSPoint)guideLastPenPointScreen {
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
+  if (!self.window ||
+      ![d respondsToSelector:@selector(miniViewerGuideLastPenPointView:)])
+    return NSZeroPoint;
+  NSPoint vp = [d miniViewerGuideLastPenPointView:self];
+  if (NSEqualPoints(vp, NSZeroPoint))
+    return NSZeroPoint;
+  return [self.window convertPointToScreen:[self convertPoint:vp toView:nil]];
+}
+
+- (NSCursor *)cursorAtScreenPoint:(NSPoint)screenPoint {
+  id<KKMiniViewerDelegate> d = self.canvasDelegate;
+  if (!self.window)
+    return nil;
+  CGPoint vp = [self _viewPointForScreenPoint:screenPoint];
+  CGRect cr = [self contentRectInViewPoints];
+  // A drawing tool owns the cursor over the canvas (the pen's place / close
+  // glyph, the shape crosshair) - mirror the overlay's mouseMoved precedence so
+  // a guide presents the SAME cursor the user would see hovering with the tool.
+  // The toolbar still owns its own buttons (the toolbar step spotlights those).
+  if ([d respondsToSelector:@selector(miniViewerToolDrawingActive:)] &&
+      [d miniViewerToolDrawingActive:self] &&
+      [d respondsToSelector:@selector(miniViewer:
+                                  toolCursorAtPoint:contentRect:)]) {
+    BOOL overToolbar =
+        [d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)] &&
+        [d miniViewer:self toolbarTagAtPoint:vp] != 0;
+    if (!overToolbar)
+      return [d miniViewer:self toolCursorAtPoint:vp contentRect:cr];
+  }
+  if (![d respondsToSelector:@selector(miniViewer:cursorAtPoint:contentRect:)])
+    return nil;
+  return [d miniViewer:self cursorAtPoint:vp contentRect:cr];
 }
 
 - (void)beginPointHandleDragAtScreenPoint:(NSPoint)screenPoint {

@@ -42,6 +42,20 @@
   return t;
 }
 
++ (instancetype)staticChoiceSelectedForLabel:(NSString *)label
+                                       index:(NSInteger)index {
+  KKJoyrideTrigger *t = [self _t:KKJoyrideTriggerTypeStaticChoiceSelected];
+  t->_label = [label copy];
+  t->_intArg = index;
+  return t;
+}
+
++ (instancetype)staticCategorySelectedForKey:(NSString *)key {
+  KKJoyrideTrigger *t = [self _t:KKJoyrideTriggerTypeStaticCategorySelected];
+  t->_label = [key copy];
+  return t;
+}
+
 + (instancetype)constantFieldEditedLabel:(NSString *)label
                                component:(NSInteger)component
                                   equals:(double)target

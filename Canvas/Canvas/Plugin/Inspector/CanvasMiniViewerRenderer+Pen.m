@@ -49,6 +49,19 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   return self.toolbarTool == CanvasToolbarToolPen || [self _shapeToolActive];
 }
 
+- (NSInteger)miniViewerGuidePenPointCount:(KKMiniViewerView *)canvas {
+  return [self.penController inProgressPointCount];
+}
+
+- (NSPoint)miniViewerGuideLastPenPointView:(KKMiniViewerView *)canvas {
+  CGPoint obj;
+  if (![self.penController lastInProgressPointObj:&obj])
+    return NSZeroPoint;
+  // penContentRect maps object (y-up) -> the mini's view points (the content
+  // rect the delegate is fed), so this is the anchor in view space.
+  return NSPointFromCGPoint([self penSurfacePointFromObj:obj]);
+}
+
 - (void)miniViewer:(KKMiniViewerView *)canvas
     toolDownAtPoint:(CGPoint)point
         contentRect:(CGRect)cr

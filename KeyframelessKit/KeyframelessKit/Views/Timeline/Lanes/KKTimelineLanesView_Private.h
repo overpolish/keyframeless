@@ -162,6 +162,13 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
     (NSInteger component, double displayValue);
 /// Commit component `i`'s field as if the user pressed Return.
 - (void)guideCommitFieldForComponent:(NSInteger)i;
+/// Screen rect of the choice-pill segment at `index` (a radio enum row, e.g. an
+/// end-marker type), or NSZeroRect if this row has no choice pill. Lets a guide
+/// spotlight a specific choice.
+- (NSRect)guideChoicePillScreenRectForIndex:(NSInteger)index;
+/// Screen rect of this row's leading "add to animated" gutter button, or
+/// NSZeroRect if the row doesn't show one. Spotlight target.
+- (NSRect)guideAddToAnimatedButtonScreenRect;
 /// Set the displayed values (skips a field currently being edited).
 - (void)applyValues:(NSArray<NSNumber *> *)values;
 /// Refresh the aspect-link glyph state without rebuilding.
@@ -328,6 +335,22 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
                                              double displayValue))handler;
 - (void)guideCommitFieldForLabel:(NSString *)label
                        component:(NSInteger)component;
+/// Screen rect of the choice-pill segment at `index` in `label`'s row (a radio
+/// enum, e.g. an end-marker type), NSZeroRect if none. Spotlight target.
+- (NSRect)guideChoicePillScreenRectForLabel:(NSString *)label
+                                    atIndex:(NSInteger)index;
+/// Screen rect of `label`'s row's "add to animated" gutter button, NSZeroRect
+/// if none. Spotlight target.
+- (NSRect)guideAddToAnimatedButtonScreenRectForLabel:(NSString *)label;
+/// Screen rect of the category-nav pill segment for `key` (e.g. @"Stroke"),
+/// NSZeroRect if there's no nav or no such category. Spotlight target.
+- (NSRect)guideCategoryPillScreenRectForKey:(NSString *)key;
+/// Scroll `label`'s row into the visible area of the row scroller (no-op if the
+/// row is missing or hidden by the current category tab).
+- (void)guideScrollRowIntoViewForLabel:(NSString *)label;
+/// Switch the open popover to category `key` (nav pill + filter + height),
+/// without firing onCategoryChanged. No-op if `key` isn't a present category.
+- (void)guideSelectCategory:(NSString *)key;
 + (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes
            descriptorPath:(nullable NSString *)descriptorPath
                clipAspect:(CGFloat)clipAspect

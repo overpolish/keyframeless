@@ -162,6 +162,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// over the bar instead of the handle-resize cursors.
 - (nullable NSCursor *)miniViewer:(KKMiniViewerView *)canvas
               toolbarCursorForTag:(NSInteger)tag;
+/// Rect (overlay view points, y-up) of the toolbar item with `tag`, or
+/// `NSZeroRect` if absent. Lets a guide spotlight a specific toolbar button (the
+/// view maps it to screen via -guideToolbarButtonScreenRectForTag:). Optional.
+- (NSRect)miniViewer:(KKMiniViewerView *)canvas
+    toolbarButtonViewRectForTag:(NSInteger)tag;
 /// A key was pressed while the mini is the key window (the toolbar's tool
 /// shortcuts, e.g. Control+letter). `chars` is charactersIgnoringModifiers.
 /// Return YES to consume the event. Optional.
@@ -194,6 +199,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSCursor *)miniViewer:(KKMiniViewerView *)canvas
                 toolCursorAtPoint:(CGPoint)point
                       contentRect:(CGRect)contentRect;
+/// The in-progress pen point count (a held first point counts as 1), 0 when the
+/// pen is idle or has just finished a path. Lets a guide advance per click.
+- (NSInteger)miniViewerGuidePenPointCount:(KKMiniViewerView *)canvas;
+/// The last placed in-progress pen point in view points (NSZeroPoint when idle),
+/// so a guide can target the finish click on the actual anchor.
+- (NSPoint)miniViewerGuideLastPenPointView:(KKMiniViewerView *)canvas;
 /// Draw the tool's in-progress overlay (pen anchors / handles / curve / ghost)
 /// in the Metal pass, on top of everything. The delegate encodes via the
 /// canvas's -encodeToolDotAtPoint:... / -encodeToolLineStrip:... so it uses the
@@ -516,11 +527,37 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 /// way the viewer OSC guide spotlights the in-viewer handle.
 - (NSRect)pointHandleScreenRect;
 
+/// Screen-space rect of the floating toolbar button with `tag` (e.g. the Pen
+/// tool), or `NSZeroRect` if the delegate exposes none. Lets a guide spotlight a
+/// mini toolbar button.
+- (NSRect)guideToolbarButtonScreenRectForTag:(NSInteger)tag;
+
+/// Synthesize a toolbar press at `screenPoint` (the XPC overlay swallows the raw
+/// click, exactly as the handle-drag methods), performing the item's action.
+/// Returns YES if a toolbar item was hit. Use from a guide's
+/// `spotlightMouseDown` to drive a tool/button selection in the mini.
+- (BOOL)guidePressToolbarAtScreenPoint:(NSPoint)screenPoint;
+
 /// The cursor the canvas delegate would show at `screenPoint` (its
 /// `miniViewer:cursorAtPoint:contentRect:`), or nil. Lets a guide present the
 /// real hover cursor while its pass-through overlay captures the mouse (the
 /// mini-viewer's own tracking can't fire then).
 - (nullable NSCursor *)cursorAtScreenPoint:(NSPoint)screenPoint;
+
+/// Drive the active drawing tool from screen points (the XPC overlay swallows
+/// the raw move/click, exactly as the handle-drag methods). `guideToolMove…`
+/// feeds the hover point (rubber-band + snap ghost) and redraws;
+/// `guideToolClick…` synthesizes one tap (down + up, no modifiers) - the pen
+/// places / finishes a point per tap. `guidePenPointCount` reports the
+/// in-progress point count (held first point = 1, 0 when idle/finished) so a
+/// guide can advance per click.
+- (void)guideToolMoveToScreenPoint:(NSPoint)screenPoint;
+- (void)guideToolClickAtScreenPoint:(NSPoint)screenPoint;
+- (NSInteger)guidePenPointCount;
+- (NSPoint)guideLastPenPointScreen;
+/// A screen point at fraction (fx, fy) of the canvas content rect (0..1, view
+/// space, y-up), so a guide can place draw targets that track the popover size.
+- (NSPoint)guideScreenPointForContentFractionX:(CGFloat)fx y:(CGFloat)fy;
 
 /// Drive the point handle from screen points - the exact path a real overlay
 /// drag takes (delegate hit-test/commit + the `onHandleDragBegin/End`

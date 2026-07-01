@@ -103,6 +103,33 @@
   return CGPointMake(vp.x * s, vp.y * s);
 }
 
+// Guide spotlight: the toolbar item's rect in view points (y-up). The layout
+// rects are in the bar's hit space (drawable px, the (vx*s, vy*s) space above),
+// so divide by the backing scale to get view points - the inverse of
+// -_toolbarPointForViewPoint:.
+- (NSRect)miniViewer:(KKMiniViewerView *)canvas
+    toolbarButtonViewRectForTag:(NSInteger)tag {
+  if (!self.toolbar)
+    return NSZeroRect;
+  NSArray<KKToolbarItem *> *items = self.toolbar.items;
+  NSInteger idx = NSNotFound;
+  for (NSInteger i = 0; i < (NSInteger)items.count; i++)
+    if (items[i].tag == tag) {
+      idx = i;
+      break;
+    }
+  if (idx == NSNotFound)
+    return NSZeroRect;
+  NSRect br = [self.toolbar buttonRectAtIndex:(NSUInteger)idx];
+  if (NSIsEmptyRect(br))
+    return NSZeroRect;
+  CGFloat s = canvas.window.backingScaleFactor;
+  if (s <= 0)
+    s = 2.0;
+  return NSMakeRect(NSMinX(br) / s, NSMinY(br) / s, NSWidth(br) / s,
+                    NSHeight(br) / s);
+}
+
 - (NSInteger)miniViewer:(KKMiniViewerView *)canvas
       toolbarTagAtPoint:(CGPoint)viewPoint {
   if (!self.toolbar)

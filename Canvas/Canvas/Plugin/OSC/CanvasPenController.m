@@ -61,6 +61,35 @@ static KKBezierPath *PenNewLayer(void) {
   return _layerID != nil || _pendingActive || _hasFirst;
 }
 
+- (NSInteger)inProgressPointCount {
+  if (!self.active)
+    return 0;
+  // The first click is held transiently (no 1-point layer is created until the
+  // second click) - count it as the one placed point.
+  if (_hasFirst && !_layerID)
+    return 1;
+  KKBezierPath *w = [self _workingLayer];
+  return w ? (NSInteger)w.count : 0;
+}
+
+- (BOOL)lastInProgressPointObj:(CGPoint *)outObj {
+  if (!self.active)
+    return NO;
+  // First click is held transiently (no layer yet) - its position is _firstPos.
+  if (_hasFirst && !_layerID) {
+    if (outObj)
+      *outObj = _firstPos;
+    return YES;
+  }
+  KKBezierPath *w = [self _workingLayer];
+  if (!w || w.count == 0)
+    return NO;
+  KKBezierPoint p = [w pointAtIndex:w.count - 1];
+  if (outObj)
+    *outObj = CGPointMake(p.x, p.y);
+  return YES;
+}
+
 - (void)_endSession {
   _layerID = nil;
   _cursorValid = NO;

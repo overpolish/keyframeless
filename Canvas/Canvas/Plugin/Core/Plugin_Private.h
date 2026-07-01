@@ -34,6 +34,15 @@
 @property(nonatomic, copy, nullable) NSString *guideSavedLayerB64;
 @property(nonatomic, copy, nullable) NSString *guideSavedSelPrimary;
 @property(nonatomic, copy, nullable) NSArray<NSString *> *guideSavedSelIDs;
+/// The Arrow guide forces the Cursor tool at start so its "switch to Pen" step
+/// has a real change to make; this holds the user's prior tool to restore on
+/// guide end. 0 (never a valid tool tag - they start at 101) = nothing to
+/// restore (no Arrow guide ran).
+@property(nonatomic) NSInteger guideSavedTool;
+/// Monotonic guide-run counter. Bumped on every guide start so a deferred help-
+/// window reopen (scheduled on a guide's end) can tell whether ANOTHER guide
+/// started in between (a restart) and skip the reopen - no help-window flicker.
+@property(nonatomic) NSInteger guideRunGeneration;
 /// Per-instance cache of decoded image-layer textures, keyed by file path.
 /// (Instance-scoped, not a static - every plugin instance is a separate XPC
 /// process.)

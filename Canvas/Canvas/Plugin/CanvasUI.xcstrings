@@ -1219,6 +1219,48 @@
         }
       }
     },
+    "Animating an Arrow": {
+      "comment": "Help guide title: arrow workflow walkthrough.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Pfeil animieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animar una flecha"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animer une flèche"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "矢印をアニメートする"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화살표 애니메이션"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "制作箭头动画"
+          }
+        }
+      }
+    },
     "Ask a question or describe an animation…": {
       "comment": "AI prompt field placeholder for Canvas.",
       "extractionState": "manual",
@@ -1639,6 +1681,216 @@
         }
       }
     },
+    "Click the <accent>curve</accent> button to animate <warn>Draw On End</warn> - that's what draws the line on.": {
+      "comment": "Arrow guide: add Draw On End to animated.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicke auf die Schaltfläche <accent>Kurve</accent>, um <warn>Zeichnen Ende</warn> zu animieren - das lässt die Linie entstehen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en el botón <accent>curva</accent> para animar <warn>Dibujar fin</warn>: eso hace que la línea se dibuje."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clique sur le bouton <accent>courbe</accent> pour animer <warn>Tracé fin</warn> - c'est ce qui fait apparaître la ligne."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>カーブ</accent>ボタンをクリックして<warn>描画終了</warn>をアニメートします。これで線が描かれていきます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>곡선</accent> 버튼을 클릭해 <warn>그리기 끝</warn>을 애니메이션합니다. 이것이 선을 그려지게 합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击<accent>曲线</accent>按钮为<warn>绘制终点</warn>添加动画--它让线条逐渐画出。"
+          }
+        }
+      }
+    },
+    "Click the <accent>first keypose</accent> to set where the line begins.": {
+      "comment": "Arrow guide: click the T=0 keypose.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicke auf die <accent>erste Keypose</accent>, um festzulegen, wo die Linie beginnt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en la <accent>primera pose clave</accent> para definir dónde empieza la línea."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clique sur la <accent>première pose clé</accent> pour définir où la ligne commence."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>最初のキーポーズ</accent>をクリックして、線の開始位置を設定します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>첫 번째 키포즈</accent>를 클릭해 선이 시작되는 위치를 설정합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击<accent>第一个关键姿势</accent>，设置线条的起点。"
+          }
+        }
+      }
+    },
+    "Click the <warn>glowing point</warn> to start your line.": {
+      "comment": "Arrow guide: click to place the first point.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicke auf den <warn>leuchtenden Punkt</warn>, um deine Linie zu beginnen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en el <warn>punto brillante</warn> para empezar tu línea."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clique sur le <warn>point lumineux</warn> pour commencer ta ligne."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>光っている点</warn>をクリックして線を描き始めます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>빛나는 점</warn>을 클릭해 선을 시작합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击<warn>发光的点</warn>开始画线。"
+          }
+        }
+      }
+    },
+    "Click the <warn>last point</warn> once more to finish the line.": {
+      "comment": "Arrow guide: click the last anchor to finish.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicke noch einmal auf den <warn>letzten Punkt</warn>, um die Linie abzuschließen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic de nuevo en el <warn>último punto</warn> para terminar la línea."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clique une nouvelle fois sur le <warn>dernier point</warn> pour terminer la ligne."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>最後の点</warn>をもう一度クリックして線を仕上げます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>마지막 점</warn>을 한 번 더 클릭해 선을 완성합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再次点击<warn>最后一个点</warn>完成线条。"
+          }
+        }
+      }
+    },
+    "Click the <warn>second point</warn> to draw the line.": {
+      "comment": "Arrow guide: click to place the end point.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klicke auf den <warn>zweiten Punkt</warn>, um die Linie zu zeichnen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haz clic en el <warn>segundo punto</warn> para dibujar la línea."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clique sur le <warn>deuxième point</warn> pour tracer la ligne."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>2つ目の点</warn>をクリックして線を描きます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>두 번째 점</warn>을 클릭해 선을 그립니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击<warn>第二个点</warn>画出线条。"
+          }
+        }
+      }
+    },
     "Core": {
       "comment": "Help section title (geometry).",
       "extractionState": "manual",
@@ -1891,6 +2143,48 @@
         }
       }
     },
+    "Drag <warn>Draw On End</warn> down to <warn>0</warn> so the line starts undrawn.": {
+      "comment": "Arrow guide: drag the start value to 0.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehe <warn>Zeichnen Ende</warn> auf <warn>0</warn> herunter, damit die Linie ungezeichnet beginnt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra <warn>Dibujar fin</warn> hasta <warn>0</warn> para que la línea empiece sin dibujar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fais glisser <warn>Tracé fin</warn> jusqu'à <warn>0</warn> pour que la ligne commence non tracée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>描画終了</warn>を<warn>0</warn>までドラッグして、線が未描画の状態から始まるようにします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>그리기 끝</warn>을 <warn>0</warn>까지 끌어내려 선이 그려지지 않은 상태에서 시작하도록 합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将<warn>绘制终点</warn>拖到<warn>0</warn>，让线条从未绘制状态开始。"
+          }
+        }
+      }
+    },
     "Drag a Rotation ring": {
       "comment": "Canvas keyboard shortcut keys.",
       "extractionState": "manual",
@@ -2055,6 +2349,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "拖动缩放框"
+          }
+        }
+      }
+    },
+    "Draw a path, add an arrow, and animate it drawing on": {
+      "comment": "Help guide subtitle: Animating an Arrow.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeichne einen Pfad, füge einen Pfeil hinzu und animiere sein Entstehen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dibuja un trazado, añade una flecha y anima cómo se dibuja"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trace un chemin, ajoute une flèche et anime son apparition"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パスを描き、矢印を追加して、描かれる様子をアニメートします"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "패스를 그리고 화살표를 추가한 뒤 그려지는 모습을 애니메이션합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "绘制路径，添加箭头，并让它以动画方式画出"
           }
         }
       }
@@ -2773,6 +3109,48 @@
         }
       }
     },
+    "Keep dragging to <warn>0</warn>.": {
+      "comment": "Arrow guide: drag-to-zero hint.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter bis <warn>0</warn> ziehen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sigue arrastrando hasta <warn>0</warn>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continue de glisser jusqu'à <warn>0</warn>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>0</warn>までドラッグを続けます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<warn>0</warn>까지 계속 끕니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续拖到<warn>0</warn>。"
+          }
+        }
+      }
+    },
     "Layers": {
       "comment": "Layers panel title.",
       "extractionState": "manual",
@@ -3025,6 +3403,90 @@
         }
       }
     },
+    "Open the <accent>Constants</accent> panel - it's where you draw and shape a layer.": {
+      "comment": "Arrow guide: open the Constants panel.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne das Panel <accent>Konstanten</accent> - hier zeichnest und formst du eine Ebene."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre el panel <accent>Constantes</accent>: aquí dibujas y das forma a una capa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvre le panneau <accent>Constantes</accent> - c'est là que tu dessines et mets en forme un calque."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>定数</accent>パネルを開きます。ここでレイヤーを描いて形を整えます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>상수</accent> 패널을 엽니다. 여기서 레이어를 그리고 다듬습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开<accent>常量</accent>面板--在这里绘制和塑造图层。"
+          }
+        }
+      }
+    },
+    "Open the <accent>Stroke</accent> group to shape the line's ends.": {
+      "comment": "Arrow guide: open the Stroke category tab.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne die Gruppe <accent>Kontur</accent>, um die Linienenden zu gestalten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre el grupo <accent>Trazo</accent> para dar forma a los extremos de la línea."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvre le groupe <accent>Contour</accent> pour façonner les extrémités de la ligne."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>線</accent>グループを開いて線の端を整えます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>획</accent> 그룹을 열어 선의 끝을 다듬습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开<accent>描边</accent>组来塑造线条的两端。"
+          }
+        }
+      }
+    },
     "Path %lu": {
       "comment": "Fallback name for an unnamed SVG sub-path (%lu = its number)",
       "extractionState": "manual",
@@ -3147,6 +3609,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "钢笔工具"
+          }
+        }
+      }
+    },
+    "Pick the <accent>Pen</accent> tool to start drawing your shape.": {
+      "comment": "Arrow guide: select the Pen tool in the mini.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle das Werkzeug <accent>Zeichenstift</accent>, um deine Form zu zeichnen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selecciona la herramienta <accent>Pluma</accent> para empezar a dibujar tu forma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisis l'outil <accent>Plume</accent> pour commencer à dessiner ta forme."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>ペン</accent>ツールを選んで図形を描き始めます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>펜</accent> 도구를 선택해 도형을 그리기 시작합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择<accent>钢笔</accent>工具开始绘制形状。"
           }
         }
       }
@@ -3441,6 +3945,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "选择工具"
+          }
+        }
+      }
+    },
+    "Set the <accent>End Marker</accent> to <warn>Arrow</warn> to tip your line.": {
+      "comment": "Arrow guide: pick the Arrow end marker.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setze den <accent>Endmarker</accent> auf <warn>Pfeil</warn>, um deiner Linie eine Spitze zu geben."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajusta el <accent>Marcador de fin</accent> a <warn>Flecha</warn> para rematar tu línea."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Règle le <accent>Marqueur de fin</accent> sur <warn>Flèche</warn> pour terminer ta ligne en pointe."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>終了マーカー</accent>を<warn>矢印</warn>に設定して線の先端を作ります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>끝 마커</accent>를 <warn>화살표</warn>로 설정해 선 끝을 만듭니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将<accent>终点标记</accent>设为<warn>箭头</warn>，为线条加上箭头。"
           }
         }
       }
@@ -3907,6 +4453,48 @@
         }
       }
     },
+    "That's it - you drew a line, tipped it with an arrow, and animated it drawing on.": {
+      "comment": "Arrow guide: closing step.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fertig - du hast eine Linie gezeichnet, sie mit einem Pfeil versehen und ihr Entstehen animiert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Listo: dibujaste una línea, le pusiste una flecha y la animaste para que se dibuje."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voilà - tu as tracé une ligne, ajouté une flèche et animé son apparition."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "これで完了です。線を描き、矢印を付け、線が描かれるアニメーションを作りました。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "완료입니다. 선을 그리고 화살표를 붙이고 선이 그려지는 애니메이션을 만들었습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成了--你画了一条线，加上箭头，并让它以动画方式画出。"
+          }
+        }
+      }
+    },
     "The Core group is the layer's geometry - the path itself.": {
       "comment": "Canvas help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
@@ -4243,6 +4831,48 @@
         }
       }
     },
+    "Turn <accent>In</accent> on so the line eases on from the start.": {
+      "comment": "Arrow guide: enable the In transition.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schalte <accent>Ein</accent> ein, damit die Linie von Anfang an sanft entsteht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activa <accent>Entrada</accent> para que la línea aparezca suavemente desde el inicio."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Active <accent>Entrée</accent> pour que la ligne apparaisse en douceur dès le début."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>イン</accent>をオンにすると、線が最初からなめらかに現れます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>인</accent>을 켜면 선이 처음부터 부드럽게 그려집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开<accent>进入</accent>，让线条从一开始就缓入出现。"
+          }
+        }
+      }
+    },
     "Undo / redo": {
       "comment": "Canvas keyboard shortcut.",
       "extractionState": "manual",
@@ -4365,6 +4995,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "联集"
+          }
+        }
+      }
+    },
+    "Watch it back: press <symbol play.fill color=accent />.": {
+      "comment": "Arrow guide: play the animation back.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sieh es dir an: drücke <symbol play.fill color=accent />."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Míralo: pulsa <symbol play.fill color=accent />."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regarde le résultat : appuie sur <symbol play.fill color=accent />."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再生して確認します：<symbol play.fill color=accent /> を押します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "재생해 확인합니다: <symbol play.fill color=accent /> 를 누릅니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回放查看：按 <symbol play.fill color=accent />。"
           }
         }
       }

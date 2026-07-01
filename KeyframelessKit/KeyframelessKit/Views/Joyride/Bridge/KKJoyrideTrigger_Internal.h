@@ -16,6 +16,8 @@ typedef NS_ENUM(NSInteger, KKJoyrideTriggerType) {
   KKJoyrideTriggerTypeStaticValuesPopoverWillOpen,
   KKJoyrideTriggerTypeStaticValuesPopoverClosed,
   KKJoyrideTriggerTypeStaticValueDragEnded,
+  KKJoyrideTriggerTypeStaticChoiceSelected,
+  KKJoyrideTriggerTypeStaticCategorySelected,
   KKJoyrideTriggerTypeConstantFieldEdited,
   KKJoyrideTriggerTypeGapPopoverWillOpen,
   KKJoyrideTriggerTypeGapPopoverCurveChanged,

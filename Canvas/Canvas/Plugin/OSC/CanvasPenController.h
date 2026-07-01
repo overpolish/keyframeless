@@ -129,6 +129,10 @@ typedef NS_OPTIONS(NSUInteger, CanvasPenModifiers) {
 @interface CanvasPenController : NSObject
 - (instancetype)initWithSurface:(id<CanvasPenSurface>)surface;
 @property(nonatomic, readonly) BOOL active; // a path is being drawn
+/// In-progress point count (a held first point counts as 1), 0 when idle.
+- (NSInteger)inProgressPointCount;
+/// The last placed in-progress point in OBJECT space (y-up). NO when idle.
+- (BOOL)lastInProgressPointObj:(out CGPoint *)outObj;
 
 // All coords are SURFACE points. mouseDown returns YES (the pen consumed it).
 - (BOOL)mouseDownAtX:(double)x y:(double)y modifiers:(CanvasPenModifiers)mods;

@@ -4,12 +4,24 @@
  */
 
 #import "CanvasInspectorView.h"
+#import "CanvasInspectorView+ArrowGuide.h"
 #import "CanvasLayerListController.h"
 #import "CanvasLayerTimeline.h"
+#import "CanvasLocalized.h" // CLoc (guide step messages)
 #import "CanvasMiniViewerRenderer.h"
 #import "CanvasOSCGuide.h" // shared OSC guide bridge (viewer rect + canvas ref)
 #import "CanvasPresets.h"
+#import "CanvasToolbar.h" // CanvasToolbarToolPen (arrow guide pen-tool step)
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKJoyrideController.h>    // KKJoyrideStep / controller
+#import <KeyframelessKit/KKJoyrideDragStep.h>      // slider drag-to-zero step
+#import <KeyframelessKit/KKJoyrideGuideHost.h>     // shared guide host
+#import <KeyframelessKit/KKJoyrideLanesBinder.h>   // step binding
+#import <KeyframelessKit/KKJoyrideTrigger.h>       // advance triggers
+#import <KeyframelessKit/KKMiniViewerView.h> // mini toolbar guide methods
+#import <KeyframelessKit/KKTimelineBasicView+Guide.h> // In-phase toggle rect
+#import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // timingGuideHost
+#import <KeyframelessKit/KKTimelineLanesView+Guide.h>     // basicGraph
 
 @interface CanvasInspectorView ()
 /// Canvas's timing-guide data, built on -makeTimingGuideConfig. The inspector
@@ -374,6 +386,7 @@
 - (void)setToolbarTool:(NSInteger)tool normPos:(CGPoint)normPos {
   _miniViewerRenderer.toolbarTool = tool;
   _miniViewerRenderer.toolbarNormPos = normPos;
+  [self _arrowGuideAdvanceIfPenSelected:tool];
 }
 
 - (void)restoreSelectedLayerID:(NSString *)layerID {
@@ -725,6 +738,60 @@
 
 - (void)restartAdvancedTimingGuide {
   [self _runKitRestartForSelector:_cmd];
+}
+
+// Canvas-specific end-to-end guide, run directly on the shared host (not a kit
+// restart - it's not one of the standard timing walkthroughs). Stages an empty
+// scene via the plugin hook, pins Basic, then runs the arrow steps in the
+// Constants popover (see -_arrowGuideStepsForGuide:binder:). The run-did-end
+// hook (shared with the other guides) restores the user's scene + tool.
+- (void)runArrowGuide {
+  if (self.isDetachedCopy)
+    return;
+  if (self.onGuideArrowSceneBegin)
+    self.onGuideArrowSceneBegin();
+  KKJoyrideGuideHost *host = [self timingGuideHost];
+  host.forwardsGestures = YES;
+  [self setActiveTab:KKTimelineTabBasic];
+  if (self.onScrub)
+    self.onScrub(0.0);
+  // Save the user's remembered constant tab; the guide forces Core before the
+  // "navigate to the Stroke group" step (when the drawn path guarantees a Core
+  // category exists) and restores this on completion.
+  self.arrowGuideSavedCategory = [self.basicLanesView guideRememberedConstantCategory];
+  self.arrowGuideActive = YES;
+  // The guide owns the play accent for its duration so FCP's bursty currentTime
+  // can't flicker it during the watch-back step (restored on completion).
+  self.guideOwnsPlayState = YES;
+  __weak typeof(self) weak = self;
+  [host runWithSeed:nil
+      buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
+                                             KKJoyrideLanesBinder *binder) {
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return @[];
+        // Forward play-button taps to the binder so the watch-back step's
+        // binder.playToggleTapped machine fires (else it never advances).
+        __weak KKJoyrideLanesBinder *wb = binder;
+        s.onPlaybackToggleTapped = ^{
+          [wb notifyPlaybackToggleTapped];
+        };
+        return [s _arrowGuideStepsForGuide:guide binder:binder];
+      }
+      extraOnComplete:^{
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return;
+        s.arrowGuideActive = NO;
+        s.onPlaybackToggleTapped = nil;
+        s.guideOwnsPlayState = NO;
+        // Restore the user's tab - live-switch the popover if it's still open
+        // (e.g. the user skipped), else it just updates the reopen memory.
+        if (s.arrowGuideSavedCategory.length)
+          [s.basicLanesView
+              guideSelectConstantCategory:s.arrowGuideSavedCategory];
+        s.arrowGuideSavedCategory = nil;
+      }];
 }
 
 - (void)restartMiniViewerGuide {

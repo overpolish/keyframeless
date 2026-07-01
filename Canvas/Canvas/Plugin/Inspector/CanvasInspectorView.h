@@ -86,6 +86,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// applies onto a clean canvas) instead of the demo shape; restored by the same
 /// run-did-end hook. nil = no scene staging.
 @property(nonatomic, copy, nullable) void (^onGuidePresetsSceneBegin)(void);
+
+/// Fired just before the Canvas-specific "Animating an Arrow" guide runs. Stages
+/// an EMPTY scene AND activates the Pen tool so the user can draw the demo path;
+/// restored by the same run-did-end hook. nil = no scene staging.
+@property(nonatomic, copy, nullable) void (^onGuideArrowSceneBegin)(void);
+
+/// Runs the Canvas-specific "Animating an Arrow" walkthrough: an interactive,
+/// end-to-end workflow (draw a path on the viewer, set an arrow marker, animate
+/// Draw On). Stages an empty scene + Pen tool, pins the Basic tab, forwards
+/// gestures, and runs the steps on the shared timing-guide host.
+- (void)runArrowGuide;
 @end
 
 NS_ASSUME_NONNULL_END

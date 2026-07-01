@@ -40,6 +40,16 @@
   [_openContentPopover close];
 }
 
+- (void)guideCloseAllPopovers {
+  [_openContentPopover close];
+  [self closeManagePopover];
+  [self closeFilterPopover];
+}
+
+- (NSString *)guideRememberedConstantCategory {
+  return _rememberedCategory;
+}
+
 - (NSRect)guideRenderModePillScreenRectForMode:(KKMiniViewerRenderMode)mode {
   _KKStaticValuesPopoverView *sv = _openStaticView;
   if (!sv || !_openStaticIsBoundary)

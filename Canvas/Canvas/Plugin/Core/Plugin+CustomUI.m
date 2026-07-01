@@ -8,6 +8,7 @@
 #import "CanvasOSCGuide.h"    // shared OSC guide bridge (canvas-reference gate)
 #import "CanvasLayerTimeline.h"
 #import "CanvasLocalized.h"
+#import "CanvasToolbar.h" // CanvasToolbarToolCursor (arrow guide tool save/force)
 #import "CanvasPresets.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
@@ -30,6 +31,7 @@
 @interface CanvasPlugin (GuideScene)
 - (void)_guideBeginDemoScene;
 - (void)_guideBeginEmptyScene;
+- (void)_guideBeginArrowScene;
 - (void)_guideEndDemoScene;
 - (void)_guideSaveSceneAndSelectionWithGet:(id<FxParameterRetrievalAPI_v6>)get;
 @end
@@ -654,13 +656,42 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
       __strong CanvasPlugin *s = weakSelf;
       [s _guideBeginEmptyScene];
     };
+    // Arrow guide stages an empty scene + activates the Pen tool so the user can
+    // draw the demo path; same run-did-end restore.
+    view.onGuideArrowSceneBegin = ^{
+      __strong CanvasPlugin *s = weakSelf;
+      [s _guideBeginArrowScene];
+    };
     KKJoyrideGuideHost *guideHost = [view timingGuideHost];
+    // Hide the Help window for the duration of ANY guide so it's never in the
+    // way, and reopen it when the guide ends. Chain (not clobber) the hooks the
+    // OSC-forcing install set above.
+    void (^priorRunWillStart)(void) = guideHost.onRunWillStart;
+    guideHost.onRunWillStart = ^{
+      if (priorRunWillStart)
+        priorRunWillStart();
+      __strong CanvasPlugin *s = weakSelf;
+      if (!s)
+        return;
+      s.guideRunGeneration = s.guideRunGeneration + 1;
+      [s closeRemoteWindowIfSupported];
+    };
     void (^priorRunDidEnd)(void) = guideHost.onRunDidEnd;
     guideHost.onRunDidEnd = ^{
       if (priorRunDidEnd)
         priorRunDidEnd();
       __strong CanvasPlugin *s = weakSelf;
+      if (!s)
+        return;
       [s _guideEndDemoScene];
+      // Reopen the Help window next tick, unless another guide started in the
+      // meantime (a restart bumps the generation), which would flicker it.
+      NSInteger gen = s.guideRunGeneration;
+      dispatch_async(dispatch_get_main_queue(), ^{
+        __strong CanvasPlugin *s2 = weakSelf;
+        if (s2 && s2.guideRunGeneration == gen)
+          [s2 openHelpRemoteWindow];
+      });
     };
     NSMutableDictionary *visState =
         [st.uiState mutableCopy] ?: [NSMutableDictionary dictionary];
@@ -927,6 +958,40 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
             (unsigned long)self.guideSavedLayerB64.length);
 }
 
+// The "Animating an Arrow" guide draws its own subject, so it stages the same
+// empty scene as Presets, then forces the Cursor tool so the guided "switch to
+// Pen" step has a real change to make. The user's prior tool is saved and
+// restored on guide end (-_guideEndDemoScene). The user switches to Pen
+// themselves as a step, so they learn where it lives.
+- (void)_guideBeginArrowScene {
+  [self _guideBeginEmptyScene];
+  if (!self.guideSceneActive)
+    return; // staging failed (logged in -_guideBeginEmptyScene)
+  id<FxCustomParameterActionAPI_v4> act =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!act)
+    return;
+  [act startAction:self];
+  id<FxParameterRetrievalAPI_v6> get =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  NSString *uiStr = KKReadCustomParamString(get, kParamUIState);
+  NSInteger tool = CanvasToolbarToolCursor;
+  if (uiStr.length) {
+    NSDictionary *ui = [NSJSONSerialization
+        JSONObjectWithData:[uiStr dataUsingEncoding:NSUTF8StringEncoding]
+                   options:0
+                     error:nil];
+    if ([ui isKindOfClass:[NSDictionary class]] && ui[@"tool"])
+      tool = [ui[@"tool"] integerValue];
+  }
+  [act endAction:self];
+  self.guideSavedTool = tool;
+  // Force Cursor (patchUIStateKey opens its own action scope + merges the key).
+  [self patchUIStateKey:@"tool"
+                  value:@(CanvasToolbarToolCursor)
+                paramID:kParamUIState];
+}
+
 // Restore the user's scene + selection after a timing guide ends. Chained onto
 // the guide host's run-did-end hook (fires on completion OR skip).
 - (void)_guideEndDemoScene {
@@ -956,6 +1021,13 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
   self.guideSavedLayerB64 = nil;
   self.guideSavedSelPrimary = nil;
   self.guideSavedSelIDs = nil;
+  // Restore the tool the Arrow guide forced to Cursor (0 = no Arrow guide ran).
+  if (self.guideSavedTool != 0) {
+    [self patchUIStateKey:@"tool"
+                    value:@(self.guideSavedTool)
+                  paramID:kParamUIState];
+    self.guideSavedTool = 0;
+  }
   KKLogInfo(@"Canvas guide: restored user scene");
 }
 
@@ -968,14 +1040,46 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
   // only resolve once the OSC bridge has a draw tick, so they show the
   // "disabled until you focus the effect" subtitle until then.
   __weak typeof(self) weak = self;
-  return [KKTimingGuide
-      standardHelpGuidesForInspectorProvider:^KKTimelineInspectorView * {
+  BOOL (^enabled)(void) = ^BOOL {
+    return CanvasSharedOSCGuideBridge().hasCanvasReference;
+  };
+  NSMutableArray<KKHelpGuide *> *guides =
+      [[KKTimingGuide standardHelpGuidesForInspectorProvider:^KKTimelineInspectorView * {
         __strong typeof(weak) strong = weak;
         return strong.inspectorView;
       }
-      enabledProvider:^BOOL {
-        return CanvasSharedOSCGuideBridge().hasCanvasReference;
-      }];
+                                              enabledProvider:enabled] mutableCopy];
+
+  // Canvas-specific end-to-end walkthrough: draw a path, give it an arrow
+  // marker, and animate it drawing on. Gated on the same OSC-canvas reference as
+  // the others (it spotlights the viewer).
+  __block __weak KKHelpGuide *weakArrow = nil;
+  KKHelpGuide *arrow = [KKHelpGuide
+      guideWithTitle:CLoc(@"Animating an Arrow",
+                          @"Help guide title: arrow workflow walkthrough.")
+            subtitle:CLoc(@"Draw a path, add an arrow, and animate it drawing on",
+                          @"Help guide subtitle: Animating an Arrow.")
+             onStart:^{
+               __strong typeof(weak) s = weak;
+               CanvasInspectorView *iv =
+                   (CanvasInspectorView *)s.inspectorView;
+               if (!iv)
+                 return;
+               KKHelpGuide *live = weakArrow;
+               iv.onGuideCompleted = ^{
+                 [live markCompleted];
+               };
+               [iv runArrowGuide];
+             }];
+  weakArrow = arrow;
+  arrow.identifier = @"canvas.arrow";
+  arrow.enabledProvider = enabled;
+  arrow.disabledSubtitle =
+      CLoc(@"Guides are disabled. Click the effect's header on a clip to select "
+           @"it, then move your mouse over the viewer to enable them.",
+           @"Help guide disabled subtitle (no OSC canvas reference yet).");
+  [guides addObject:arrow];
+  return guides;
 }
 
 - (nullable NSImage *)helpHeaderIcon {

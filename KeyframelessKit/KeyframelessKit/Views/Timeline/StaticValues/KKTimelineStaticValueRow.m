@@ -1384,6 +1384,18 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   [_fields[i].window makeFirstResponder:nil];
 }
 
+- (NSRect)guideChoicePillScreenRectForIndex:(NSInteger)index {
+  return _choicePill ? [_choicePill guidePillScreenRectAtIndex:index]
+                     : NSZeroRect;
+}
+
+- (NSRect)guideAddToAnimatedButtonScreenRect {
+  NSWindow *w = _addBtn.window;
+  if (!_addBtn || !w)
+    return NSZeroRect;
+  return [w convertRectToScreen:[_addBtn convertRect:_addBtn.bounds toView:nil]];
+}
+
 // Return commits and fully defocuses. Returning YES suppresses AppKit's
 // default Return handling, which otherwise re-selects all text and re-focuses
 // the field *after* our textDidEndEditing handler - leaving it stuck "all

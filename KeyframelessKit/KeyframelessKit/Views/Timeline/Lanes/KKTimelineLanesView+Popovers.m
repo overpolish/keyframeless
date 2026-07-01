@@ -768,7 +768,12 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   cfg.initialCategory = _rememberedCategory;
   cfg.onCategoryChanged = ^(NSString *category) {
     __strong typeof(weak) s = weak;
+    if (!s)
+      return;
     s->_rememberedCategory = [category copy];
+    // Guide observation, fired alongside the remember so it never clobbers it.
+    if (s.onGuideStaticCategoryChanged)
+      s.onGuideStaticCategoryChanged(category);
   };
   // Constants commits go through -_setLaneValues:forLabel: (cfg.onValue=nil).
   // Outer drag begin/end forward to the lanes view's properties so a guide
@@ -791,6 +796,10 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   cfg.onAddToAnimated = ^(NSString *label) {
     __strong typeof(weak) s = weak;
     [s _setLaneAnimatable:YES forLabel:label];
+    // Same opt-in signal the manage popover's toggle fires, so a guide can
+    // advance on this per-lane shortcut too (nil outside a guide).
+    if (s.onLaneOptedIn)
+      s.onLaneOptedIn(label);
   };
   // Preview at the live playhead, not t=0. A property animated to start
   // off-canvas (e.g. flying in) would otherwise render its first-frame pose,
@@ -852,6 +861,31 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
                                      component:(NSInteger)component {
   return [_openStaticView guideFieldScreenRectForLabel:label
                                              component:component];
+}
+
+- (NSRect)guideConstantChoicePillScreenRectForLabel:(NSString *)label
+                                            atIndex:(NSInteger)index {
+  return [_openStaticView guideChoicePillScreenRectForLabel:label
+                                                    atIndex:index];
+}
+
+- (NSRect)guideConstantCategoryPillScreenRectForKey:(NSString *)key {
+  return [_openStaticView guideCategoryPillScreenRectForKey:key];
+}
+
+- (NSRect)guideConstantAddToAnimatedButtonScreenRectForLabel:(NSString *)label {
+  return [_openStaticView guideAddToAnimatedButtonScreenRectForLabel:label];
+}
+
+- (void)guideScrollConstantRowIntoViewForLabel:(NSString *)label {
+  [_openStaticView guideScrollRowIntoViewForLabel:label];
+}
+
+- (void)guideSelectConstantCategory:(NSString *)key {
+  // Live-switch the open popover (if any); also remember it so a reopen lands
+  // on the same tab.
+  _rememberedCategory = [key copy];
+  [_openStaticView guideSelectCategory:key];
 }
 
 - (void)setGuideConstantFieldEditHandlerForLabel:(NSString *)label

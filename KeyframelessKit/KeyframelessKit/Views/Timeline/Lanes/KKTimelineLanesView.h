@@ -255,6 +255,12 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
     (NSInteger sizeIndex);
 @property(nonatomic, copy, nullable) void (^onGuideFilmstripCellActivated)
     (double fraction);
+/// Fires when the constant popover's category-nav pill switches category
+/// (`categoryKey` = the new tab). Fired alongside the functional category
+/// change; the arrow guide wires this via the binder to advance its
+/// "navigate to the Stroke group" step.
+@property(nonatomic, copy, nullable) void (^onGuideStaticCategoryChanged)
+    (NSString *categoryKey);
 /// Fires when the Advanced toolbar's Dynamic toggle is clicked (`on` = its new
 /// state). The Advanced-timing guide wires this via the lanes binder to advance
 /// its Dynamic step.
@@ -364,6 +370,24 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
                                                  double displayValue))handler;
 - (void)commitGuideConstantFieldForLabel:(NSString *)label
                                component:(NSInteger)component;
+/// Screen rect of the choice-pill segment at `index` in `label`'s constant row
+/// (a radio enum, e.g. an end-marker type), NSZeroRect if the popover isn't open
+/// or the row has no choice pill. Spotlight target.
+- (NSRect)guideConstantChoicePillScreenRectForLabel:(NSString *)label
+                                            atIndex:(NSInteger)index;
+/// Screen rect of the constant popover's category-nav pill for `key` (e.g.
+/// @"Stroke"), NSZeroRect if the popover isn't open or has no such category.
+- (NSRect)guideConstantCategoryPillScreenRectForKey:(NSString *)key;
+/// Screen rect of `label`'s "add to animated" gutter button in the open constant
+/// popover, NSZeroRect if not open or the row has none. Spotlight target.
+- (NSRect)guideConstantAddToAnimatedButtonScreenRectForLabel:(NSString *)label;
+/// Scroll `label`'s constant row into the popover's visible area (no-op if the
+/// popover isn't open or the row is hidden by the current category tab).
+- (void)guideScrollConstantRowIntoViewForLabel:(NSString *)label;
+/// Switch the open constant popover to category `key` (e.g. @"Core") and
+/// remember it for reopen. Live-updates the nav pill without firing the guide's
+/// category trigger. A guide forces a known starting tab with this.
+- (void)guideSelectConstantCategory:(NSString *)key;
 
 /// Close the manage popover if it is currently open.
 - (void)closeManagePopover;

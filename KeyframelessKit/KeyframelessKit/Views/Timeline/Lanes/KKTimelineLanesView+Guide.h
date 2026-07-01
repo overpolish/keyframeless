@@ -38,6 +38,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// open.
 - (void)guideCloseContentPopover;
 
+/// Close every lane popover (content / manage / lane-filter) - used at guide
+/// start so a popover the user left open isn't sitting over the guide. No-op
+/// for any that aren't open.
+- (void)guideCloseAllPopovers;
+
+/// The constant popover's remembered category tab (the one it reopens on), or
+/// nil. A guide saves this so it can restore the user's tab on completion after
+/// forcing a known starting tab to teach category navigation.
+- (nullable NSString *)guideRememberedConstantCategory;
+
 /// Screen rect of the render-mode pill's segment for `mode` (Off/Filmstrip/
 /// Onion) in the currently-open boundary value popover, or NSZeroRect if no
 /// such popover / pill is shown. The mini-viewer guide spotlights this so the

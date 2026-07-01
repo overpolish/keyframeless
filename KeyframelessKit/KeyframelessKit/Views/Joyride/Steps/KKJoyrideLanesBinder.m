@@ -5,6 +5,7 @@
 
 #import "KKJoyrideLanesBinder.h"
 #import "KKJoyrideTrigger_Internal.h"
+#import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKMiniViewerView.h>
 #import <KeyframelessKit/KKSegmentEditView.h>
 #import <KeyframelessKit/KKTimelineBasicView+Guide.h>
@@ -137,6 +138,7 @@
     lanes.onGuideFilmstripCellActivated = nil;
     lanes.onGuideDynamicToggled = nil;
     lanes.onGuideLaneFilterToggled = nil;
+    lanes.onGuideStaticCategoryChanged = nil;
     KKTimelineBasicView *graph = lanes.basicGraph;
     graph.onPhaseToggled = nil;
     graph.onDiamondTapped = nil;
@@ -271,6 +273,14 @@
     if (!s || !label)
       return;
     s->_latestStaticValues[label] = [values copy];
+    // A discrete choice-pill selection (no drag-end) lands here only - fire the
+    // choice trigger with the selected index so a step can advance on it. Only a
+    // step bound to this label+index matches, so slider ticks are harmless.
+    if (values.count)
+      [s _fireType:KKJoyrideTriggerTypeStaticChoiceSelected
+            intArg:(NSInteger)llround(values.firstObject.doubleValue)
+           intArg2:0
+             label:label];
   };
 
   lanes.onStaticValueDragEnded =
@@ -340,6 +350,16 @@
           intArg:0
          intArg2:0
            label:nil];
+  };
+
+  lanes.onGuideStaticCategoryChanged = ^(NSString *categoryKey) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    [s _fireType:KKJoyrideTriggerTypeStaticCategorySelected
+          intArg:0
+         intArg2:0
+           label:categoryKey];
   };
 
   lanes.onGuideDynamicToggled = ^(BOOL on) {
@@ -622,6 +642,17 @@
   switch (type) {
   case KKJoyrideTriggerTypeLaneOptedIn:
   case KKJoyrideTriggerTypeStaticValueDragEnded:
+    if (t.label && ![t.label isEqualToString:label])
+      return NO;
+    return YES;
+  case KKJoyrideTriggerTypeStaticChoiceSelected:
+    // Plain-label tolerant (multi-owner lanes carry a composite label).
+    if (t.label && label &&
+        ![KKPlainLaneLabel(t.label) isEqualToString:KKPlainLaneLabel(label)])
+      return NO;
+    return t.intArg == intArg;
+  case KKJoyrideTriggerTypeStaticCategorySelected:
+    // `label` carries the category key here (an exact identifier, not a lane).
     if (t.label && ![t.label isEqualToString:label])
       return NO;
     return YES;
