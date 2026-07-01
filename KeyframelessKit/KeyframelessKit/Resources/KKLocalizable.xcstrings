@@ -1,44 +1,44 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "<accent>Accurate</accent>: sample-and-accumulate (the effect is re-rendered several times across the shutter and averaged). Slower, cost grows with the sample count, but it also smears moving source footage, not just the animated parameters. Use it when you need footage motion blur or maximum fidelity on extreme in-frame rotation.": {
+    "<accent>Accurate</accent>: renders the frame a few times across the shutter and blends them. Slower, and the cost climbs as you raise Samples, but it also blurs moving footage underneath, not just the effect's motion. Use it when the footage itself needs to blur, or for the cleanest result on heavy spinning.": {
       "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Genau</accent>: Abtasten und Akkumulieren (der Effekt wird mehrfach über den Verschluss gerendert und gemittelt). Langsamer, die Kosten wachsen mit der Anzahl der Samples, dafür verwischt es auch bewegtes Quellmaterial, nicht nur die animierten Parameter. Verwende es, wenn du Bewegungsunschärfe des Filmmaterials oder höchste Treue bei extremer Drehung im Bild brauchst."
+            "value": "<accent>Genau</accent>: rendert das Bild mehrmals über die Blende hinweg und mischt sie. Langsamer, und die Kosten steigen, wenn Sie Samples erhöhen, aber es verschmiert auch bewegtes Filmmaterial darunter, nicht nur die Bewegung des Effekts. Nutzen Sie es, wenn das Material selbst unscharf werden soll oder für das sauberste Ergebnis bei starker Drehung."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Preciso</accent>: muestreo y acumulación (el efecto se vuelve a renderizar varias veces a lo largo del obturador y se promedia). Más lento, el coste crece con el número de muestras, pero también difumina el metraje de origen en movimiento, no solo los parámetros animados. Úsalo cuando necesites desenfoque de movimiento del metraje o la máxima fidelidad en rotaciones extremas dentro del cuadro."
+            "value": "<accent>Preciso</accent>: renderiza el fotograma varias veces a lo largo del obturador y las mezcla. Más lento, y el coste sube al subir Muestras, pero también difumina el metraje en movimiento debajo, no solo el movimiento del efecto. Úsalo cuando el propio metraje necesite desenfoque o para el resultado más limpio en giros intensos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Précis</accent> : échantillonnage et accumulation (l'effet est rendu plusieurs fois sur la durée de l'obturateur, puis moyenné). Plus lent, le coût augmente avec le nombre d'échantillons, mais il floute aussi les images sources en mouvement, pas seulement les paramètres animés. À utiliser lorsqu'il faut un flou de mouvement des images ou une fidélité maximale sur une rotation extrême dans le cadre."
+            "value": "<accent>Précis</accent> : rend l'image plusieurs fois sur la durée de l'obturateur et les mélange. Plus lent, et le coût grimpe quand vous montez Échantillons, mais il floute aussi la séquence en mouvement en dessous, pas seulement le mouvement de l'effet. À utiliser quand la séquence elle-même doit être floutée, ou pour le résultat le plus net sur une forte rotation."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>高精度</accent>：サンプリングと累積（エフェクトをシャッター全体で複数回レンダリングして平均化します）。低速で、コストはサンプル数に応じて増えますが、アニメーションされたパラメータだけでなく、動いている元の映像もぼかします。映像自体のモーションブラーや、画面内の極端な回転で最大限の忠実度が必要なときに使います。"
+            "value": "<accent>高精度</accent>: シャッターの間にフレームを数回レンダリングして合成します。遅くなり、サンプル数を上げるとコストも増えますが、エフェクトの動きだけでなく、その下で動いている素材もぼかします。素材自体をぼかしたいとき、または激しい回転で最もきれいな結果が欲しいときに使います。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>정밀</accent>: 샘플링 및 누적(이펙트를 셔터 구간에 걸쳐 여러 번 렌더링한 뒤 평균을 냅니다). 더 느리고 비용은 샘플 수에 따라 늘지만, 애니메이션된 매개변수뿐 아니라 움직이는 소스 영상도 함께 번지게 합니다. 영상 자체의 모션 블러나 화면 내 극단적 회전에서 최대 충실도가 필요할 때 사용하세요."
+            "value": "<accent>정확</accent>: 셔터 구간에 걸쳐 프레임을 여러 번 렌더링해 섞습니다. 더 느리고 샘플을 올릴수록 비용이 늘지만, 이펙트의 움직임뿐 아니라 아래에서 움직이는 영상도 번지게 합니다. 영상 자체를 번지게 해야 하거나 강한 회전에서 가장 깔끔한 결과가 필요할 때 사용하세요."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>精确</accent>：采样累积（在快门区间内多次重新渲染效果并求平均）。较慢，成本随采样数增加，但它还会模糊运动中的源素材，而不仅是动画参数。当你需要素材的运动模糊，或在画面内极端旋转时获得最高保真度时使用。"
+            "value": "<accent>精确</accent>:在快门时间内多次渲染该帧并将它们混合。更慢,而且提高采样数时开销也会上升,但它还会模糊下面正在移动的素材,而不只是效果的运动。当素材本身需要模糊,或需要在剧烈旋转时得到最干净的结果时使用它。"
           }
         }
       }
@@ -81,6 +81,90 @@
           "stringUnit": {
             "state": "translated",
             "value": "<accent>高级</accent> - 完整的关键姿势与区间模型：任意数量的关键姿势，每个区间都有自己的曲线和调制。用于多步运动或自定义保持。"
+          }
+        }
+      }
+    },
+    "<accent>Advanced</accent> - the full keyposes and intervals setup: as many keyposes as you like, each interval with its own easing and extra motion. Use it for motion with several steps or custom holds.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Erweitert</accent> - die volle Keyposes-und-Intervalle-Einrichtung: so viele Keyposes, wie Sie möchten, jedes Intervall mit eigener Beschleunigung und Zusatzbewegung. Nutzen Sie es für mehrstufige Bewegung oder eigene Haltephasen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Avanzado</accent> - la configuración completa de poses clave e intervalos: tantas poses clave como quieras, cada intervalo con su propia aceleración y movimiento extra. Úsalo para movimientos de varios pasos o retenciones a medida."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Avancé</accent> - la configuration complète en poses clés et intervalles : autant de poses clés que vous voulez, chaque intervalle avec son propre lissage et un mouvement en plus. À utiliser pour un mouvement en plusieurs étapes ou des maintiens personnalisés."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>アドバンス</accent> - キーポーズとインターバルの完全な設定です: 好きなだけキーポーズを置け、各インターバルに独自のイージングと追加の動きを持たせられます。複数ステップの動きやカスタムの保持に使います。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>고급</accent> - 키포즈와 인터벌을 완전히 다루는 방식입니다: 원하는 만큼 키포즈를 두고, 각 인터벌마다 고유한 이징과 추가 움직임을 줄 수 있습니다. 여러 단계의 움직임이나 맞춤 유지에 사용하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>高级</accent> - 完整的关键姿势加区间方式:想放多少关键姿势都行,每个区间都有自己的缓动和额外运动。适合多步骤的运动或自定义保持。"
+          }
+        }
+      }
+    },
+    "<accent>Apply at playhead</accent> - the insert button adds the preset's move in at the playhead and keeps your existing keyposes, so you can put a Pop In early and a Pop Out later on the same clip.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Am Abspielkopf anwenden</accent> - die Einfügen-Schaltfläche setzt die Bewegung der Vorgabe am Abspielkopf ein und behält Ihre bestehenden Keyposes, sodass Sie ein Pop In früh und ein Pop Out später im selben Clip platzieren können."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Aplicar en el cabezal</accent> - el botón de insertar añade el movimiento del ajuste en el cabezal de reproducción y conserva tus poses clave existentes, así puedes poner un Pop In al principio y un Pop Out más tarde en el mismo clip."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Appliquer à la tête de lecture</accent> - le bouton d'insertion ajoute le mouvement du préréglage à la tête de lecture et conserve vos poses clés existantes, ainsi vous pouvez placer un Pop In au début et un Pop Out plus tard sur le même clip."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>再生ヘッドに適用</accent> - 挿入ボタンはプリセットの動きを再生ヘッドの位置に加え、既存のキーポーズを保ちます。そのため同じクリップの前半にPop In、後半にPop Outを置けます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>재생 헤드에 적용</accent> - 삽입 버튼은 프리셋의 움직임을 재생 헤드 위치에 더하고 기존 키포즈를 유지하므로, 같은 클립의 앞부분에 Pop In, 뒷부분에 Pop Out을 둘 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>在播放头处应用</accent> - 插入按钮会在播放头处加入该预设的运动,并保留你已有的关键姿势,因此可以在同一片段前面放一个 Pop In、后面放一个 Pop Out。"
           }
         }
       }
@@ -169,6 +253,48 @@
         }
       }
     },
+    "<accent>Apply</accent> - click a preset to swap the current animation for it.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Anwenden</accent> - klicken Sie eine Vorgabe an, um die aktuelle Animation dagegen auszutauschen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Aplicar</accent> - haz clic en un ajuste para sustituir la animación actual por él."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Appliquer</accent> - cliquez sur un préréglage pour remplacer l'animation actuelle par celui-ci."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>適用</accent> - プリセットをクリックすると、現在のアニメーションと入れ替わります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>적용</accent> - 프리셋을 클릭하면 현재 애니메이션과 바꿉니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>应用</accent> - 点击某个预设即可用它替换当前动画。"
+          }
+        }
+      }
+    },
     "<accent>Basic</accent> - three checkboxed phases (<accent>In</accent>, <accent>Hold</accent>, <accent>Out</accent>) for a simple ease-in, hold, ease-out. Drag the hold boundary to move where In ends and Out begins.": {
       "comment": "Help text.",
       "extractionState": "manual",
@@ -207,6 +333,90 @@
           "stringUnit": {
             "state": "translated",
             "value": "<accent>基本</accent> - 三个带复选框的阶段(<accent>进入</accent>、<accent>保持</accent>、<accent>退出</accent>)，用于简单的缓入、保持、缓出。拖动保持边界可移动进入结束和退出开始的位置。"
+          }
+        }
+      }
+    },
+    "<accent>Basic</accent> - three simple stages you tick on or off: <accent>In</accent>, <accent>Hold</accent>, <accent>Out</accent>. This gives you an ease in, a hold, then an ease out. Drag the hold boundary to change where In ends and Out begins. Right-click a boundary pill (the In start, either edge of the hold, or the Out end) for Copy Values / Paste Values. This copies that moment's look across every animated property at once, so you can, for example, copy the start and paste it onto the end. Paste only fills properties that match the kind of value you copied.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Basis</accent> - drei einfache Phasen, die Sie an- oder abhaken: <accent>Ein</accent>, <accent>Halten</accent>, <accent>Aus</accent>. Das ergibt ein Einblenden, ein Halten und dann ein Ausblenden. Ziehen Sie die Haltegrenze, um zu ändern, wo Ein endet und Aus beginnt. Rechtsklicken Sie eine Grenzpille (der Ein-Start, eine der Haltekanten oder das Aus-Ende) für Werte kopieren / Werte einfügen. Das kopiert den Look dieses Moments über alle animierten Eigenschaften auf einmal, sodass Sie zum Beispiel den Anfang kopieren und ans Ende einfügen können. Einfügen füllt nur Eigenschaften, die zur kopierten Art von Wert passen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Básico</accent> - tres fases sencillas que marcas o desmarcas: <accent>Entrada</accent>, <accent>Retención</accent>, <accent>Salida</accent>. Esto da una entrada suave, una retención y luego una salida suave. Arrastra el borde de la retención para cambiar dónde termina la Entrada y empieza la Salida. Haz clic derecho en una píldora de borde (el inicio de la Entrada, cualquier borde de la retención o el final de la Salida) para Copiar valores / Pegar valores. Esto copia el aspecto de ese momento en todas las propiedades animadas a la vez, así puedes, por ejemplo, copiar el inicio y pegarlo en el final. Pegar solo rellena las propiedades que coinciden con el tipo de valor que copiaste."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Basique</accent> - trois étapes simples que vous cochez ou décochez : <accent>Entrée</accent>, <accent>Maintien</accent>, <accent>Sortie</accent>. Cela donne une entrée en douceur, un maintien, puis une sortie en douceur. Faites glisser la limite du maintien pour changer où l'Entrée finit et où la Sortie commence. Faites un clic droit sur une pastille de limite (le début de l'Entrée, un bord du maintien ou la fin de la Sortie) pour Copier les valeurs / Coller les valeurs. Cela copie l'aspect de cet instant sur toutes les propriétés animées d'un coup, ainsi vous pouvez, par exemple, copier le début et le coller à la fin. Le collage ne remplit que les propriétés qui correspondent au type de valeur copié."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>ベーシック</accent> - オンオフを切り替える3つのシンプルな段階: <accent>イン</accent>、<accent>ホールド</accent>、<accent>アウト</accent>。これでイーズイン、ホールド、イーズアウトが得られます。ホールドの境界をドラッグすると、インが終わりアウトが始まる位置を変えられます。境界のピル (インの開始、ホールドのどちらかの端、またはアウトの終わり) を右クリックすると、値をコピー / 値をペーストできます。これはその瞬間の見た目をすべてのアニメートされたプロパティに一度にコピーするので、例えば開始をコピーして終わりにペーストできます。ペーストはコピーした値の種類に一致するプロパティにのみ入ります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>기본</accent> - 켜고 끄는 세 가지 간단한 단계: <accent>인</accent>, <accent>홀드</accent>, <accent>아웃</accent>. 이렇게 하면 서서히 들어오고, 유지하고, 서서히 빠져나갑니다. 홀드 경계를 드래그하면 인이 끝나고 아웃이 시작되는 위치를 바꿀 수 있습니다. 경계 알약 (인 시작, 홀드의 양쪽 가장자리, 또는 아웃 끝) 을 오른쪽 클릭하면 값 복사 / 값 붙여넣기를 할 수 있습니다. 이는 그 순간의 모습을 애니메이션된 모든 속성에 한 번에 복사하므로, 예를 들어 시작을 복사해 끝에 붙여넣을 수 있습니다. 붙여넣기는 복사한 값의 종류와 일치하는 속성에만 채워집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>基本</accent> - 三个可勾选或取消的简单阶段:<accent>入</accent>、<accent>保持</accent>、<accent>出</accent>。这会带来一个缓入、一段保持,然后一个缓出。拖动保持的边界可改变入结束、出开始的位置。右键点击边界药丸标记(入的起点、保持的任一边缘,或出的终点)可复制数值 / 粘贴数值。这会一次性把那一刻的外观复制到每个已动画的属性上,例如你可以复制起点并粘贴到终点。粘贴只会填入与所复制数值类型相符的属性。"
+          }
+        }
+      }
+    },
+    "<accent>Bounce</accent> - lands with a few smaller and smaller bounces.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Abprallen</accent> - landet mit ein paar immer kleineren Sprüngen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rebote</accent> - aterriza con unos rebotes cada vez más pequeños."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rebond</accent> - se pose avec quelques rebonds de plus en plus petits."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>バウンス</accent> - だんだん小さくなる数回の跳ねで着地する。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>바운스</accent> - 점점 작아지는 몇 번의 튕김으로 내려앉음."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>弹跳</accent> - 以几次越来越小的弹跳落定。"
           }
         }
       }
@@ -295,6 +505,90 @@
         }
       }
     },
+    "<accent>Default presets</accent> - ready-made starters like Pop In and Pop Out, marked with a Default badge. You can use them but not change them.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Standardvorgaben</accent> - fertige Startpunkte wie Pop In und Pop Out, mit einem Standard-Abzeichen markiert. Sie können sie nutzen, aber nicht ändern."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Ajustes por defecto</accent> - puntos de partida listos como Pop In y Pop Out, marcados con una insignia Por defecto. Puedes usarlos pero no cambiarlos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Préréglages par défaut</accent> - des points de départ tout prêts comme Pop In et Pop Out, marqués d'un badge Par défaut. Vous pouvez les utiliser mais pas les modifier."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>デフォルトプリセット</accent> - Pop InやPop Outのような出来合いの出発点で、デフォルトのバッジが付いています。使えますが変更はできません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>기본 프리셋</accent> - Pop In, Pop Out처럼 바로 쓸 수 있는 출발점으로, 기본 배지가 붙어 있습니다. 사용할 수는 있지만 바꿀 수는 없습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>默认预设</accent> - 现成的起点,如 Pop In 和 Pop Out,带有默认徽章。可以使用但不能修改。"
+          }
+        }
+      }
+    },
+    "<accent>Ease In/Out</accent> - eases at both ends (the default).": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Ein-/Ausblenden</accent> - sanft an beiden Enden (die Vorgabe)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Entrada/Salida suave</accent> - suave en ambos extremos (opción por defecto)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Entrée/Sortie douce</accent> - en douceur aux deux extrémités (par défaut)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>イーズイン/アウト</accent> - 両端で緩やかになる (デフォルト)。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>이즈 인/아웃</accent> - 양 끝에서 부드러워짐 (기본값)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>缓入/缓出</accent> - 两端都放缓(默认)。"
+          }
+        }
+      }
+    },
     "<accent>Ease In/Out</accent> - slow at both ends (the default).": {
       "comment": "Help text.",
       "extractionState": "manual",
@@ -379,6 +673,48 @@
         }
       }
     },
+    "<accent>Ease In</accent> - starts slow, then speeds up.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Einblenden</accent> - beginnt langsam, wird dann schneller."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Entrada suave</accent> - empieza lento y luego acelera."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Entrée douce</accent> - démarre lentement, puis accélère."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>イーズイン</accent> - ゆっくり始まり、その後速くなる。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>이즈 인</accent> - 느리게 시작해 점점 빨라짐."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>缓入</accent> - 起步慢,然后加速。"
+          }
+        }
+      }
+    },
     "<accent>Ease Out</accent> - fast start, decelerates.": {
       "comment": "Help text.",
       "extractionState": "manual",
@@ -417,6 +753,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "<accent>缓出</accent> - 快速开始，逐渐减速。"
+          }
+        }
+      }
+    },
+    "<accent>Ease Out</accent> - starts fast, then slows down.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Ausblenden</accent> - beginnt schnell, wird dann langsamer."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Salida suave</accent> - empieza rápido y luego frena."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Sortie douce</accent> - démarre vite, puis ralentit."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>イーズアウト</accent> - 速く始まり、その後遅くなる。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>이즈 아웃</accent> - 빠르게 시작해 점점 느려짐."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>缓出</accent> - 起步快,然后减速。"
           }
         }
       }
@@ -463,56 +841,98 @@
         }
       }
     },
-    "<accent>Fast</accent> (default where available): per-object velocity-buffer reconstruction. A fixed, low cost that does not grow with the length of the blur, so it stays real-time even on heavy content. Blurs the effect's own animated motion (position, scale, rotation, etc.). The trail length follows the motion - faster motion or a wider shutter gives a longer trail.": {
+    "<accent>Elastic</accent> - overshoots and wobbles before settling.": {
       "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Schnell</accent> (Standard, sofern verfügbar): Rekonstruktion über einen Geschwindigkeitspuffer pro Objekt. Geringe, feste Kosten, die nicht mit der Länge der Unschärfe wachsen, sodass es selbst bei aufwendigen Inhalten in Echtzeit bleibt. Verwischt die animierte Bewegung des Effekts selbst (Position, Skalierung, Drehung usw.). Die Länge der Spur folgt der Bewegung - schnellere Bewegung oder ein größerer Verschlusswinkel ergibt eine längere Spur."
+            "value": "<accent>Elastisch</accent> - schießt über und schwingt, bevor es sich beruhigt."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Rápido</accent> (predeterminado cuando está disponible): reconstrucción mediante búfer de velocidad por objeto. Un coste fijo y bajo que no crece con la longitud del desenfoque, por lo que se mantiene en tiempo real incluso con contenido exigente. Desenfoca el propio movimiento animado del efecto (posición, escala, rotación, etc.). La longitud de la estela sigue al movimiento - un movimiento más rápido o un obturador más amplio produce una estela más larga."
+            "value": "<accent>Elástico</accent> - se pasa y oscila antes de asentarse."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Rapide</accent> (par défaut lorsque disponible) : reconstruction par tampon de vélocité, propre à chaque objet. Un coût faible et fixe qui n'augmente pas avec la longueur du flou, ce qui le maintient en temps réel même sur du contenu lourd. Floute le mouvement animé de l'effet lui-même (position, échelle, rotation, etc.). La longueur de la traînée suit le mouvement - un mouvement plus rapide ou un obturateur plus large donne une traînée plus longue."
+            "value": "<accent>Élastique</accent> - dépasse et oscille avant de se stabiliser."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>高速</accent>（利用可能な場合のデフォルト）：オブジェクトごとの速度バッファによる再構成。ブラーの長さに応じて増えることのない、低く一定のコストで、負荷の高いコンテンツでもリアルタイムを保ちます。エフェクト自身のアニメーション（位置、スケール、回転など）をぼかします。軌跡の長さは動きに従い、動きが速いほど、またシャッターが広いほど軌跡は長くなります。"
+            "value": "<accent>エラスティック</accent> - 行き過ぎて揺れてから落ち着く。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>빠름</accent>(사용 가능한 경우 기본값): 오브젝트별 속도 버퍼 재구성. 블러 길이에 따라 늘어나지 않는 낮고 고정된 비용이라 무거운 콘텐츠에서도 실시간을 유지합니다. 이펙트 자체의 애니메이션된 움직임(위치, 크기, 회전 등)을 흐립니다. 잔상 길이는 움직임을 따르며, 움직임이 빠르거나 셔터가 넓을수록 잔상이 길어집니다."
+            "value": "<accent>탄성</accent> - 지나쳤다가 흔들린 뒤 자리를 잡음."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>快速</accent>（可用时为默认值）：逐对象的速度缓冲重建。成本固定且低，不会随模糊长度增加，因此即使在繁重内容上也能保持实时。模糊的是效果自身的动画运动（位置、缩放、旋转等）。拖尾长度跟随运动 - 运动越快或快门越大，拖尾越长。"
+            "value": "<accent>弹性</accent> - 先冲过头并晃动,然后稳定下来。"
           }
         }
       }
     },
-    "<accent>Filter</accent> - type in the same field to narrow the list.": {
-      "comment": "Help text.",
+    "<accent>Fast</accent> (the default where offered): quick and light. Its render cost stays the same no matter how long the trail, so it keeps up in real time even on heavy shots. It blurs the effect's own motion (moving, scaling, spinning, and so on). The faster the motion or the wider the Shutter, the longer the trail.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Filtern</accent> - tippen Sie in dasselbe Feld, um die Liste einzugrenzen."
+            "value": "<accent>Schnell</accent> (die Vorgabe, wo verfügbar): schnell und leicht. Die Renderkosten bleiben gleich, egal wie lang die Spur ist, sodass es selbst bei aufwendigen Aufnahmen in Echtzeit mithält. Es verschmiert die eigene Bewegung des Effekts (Bewegen, Skalieren, Drehen usw.). Je schneller die Bewegung oder je weiter die Blende, desto länger die Spur."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rápido</accent> (opción por defecto donde está disponible): rápido y ligero. Su coste de render no cambia por larga que sea la estela, así que mantiene el tiempo real incluso en tomas pesadas. Difumina el propio movimiento del efecto (mover, escalar, girar, etc.). Cuanto más rápido el movimiento o más ancho el Obturador, más larga la estela."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Rapide</accent> (par défaut là où il est proposé) : rapide et léger. Son coût de rendu reste le même quelle que soit la longueur de la traînée, il tient donc le temps réel même sur des plans lourds. Il floute le propre mouvement de l'effet (déplacement, mise à l'échelle, rotation, etc.). Plus le mouvement est rapide ou l'Obturateur large, plus la traînée est longue."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>高速</accent> (提供される場合のデフォルト): 速くて軽いです。トレイルがどれだけ長くてもレンダーコストは変わらないため、重い映像でもリアルタイムを保ちます。エフェクト自身の動き (移動、拡大縮小、回転など) をぼかします。動きが速いほど、またシャッターが広いほど、トレイルは長くなります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>빠름</accent> (제공되는 경우 기본값): 빠르고 가볍습니다. 잔상이 아무리 길어도 렌더 비용이 그대로라, 무거운 장면에서도 실시간을 유지합니다. 이펙트 자체의 움직임 (이동, 크기 조절, 회전 등) 을 번지게 합니다. 움직임이 빠르거나 셔터가 넓을수록 잔상이 길어집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>快速</accent>(在提供时为默认):又快又轻。无论拖尾多长,它的渲染开销都不变,因此即使画面繁重也能保持实时。它模糊效果本身的运动(移动、缩放、旋转等)。运动越快、快门越宽,拖尾就越长。"
+          }
+        }
+      }
+    },
+    "<accent>Filter</accent> - type in the same field to narrow the list.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Filtern</accent> - tippen Sie im selben Feld, um die Liste einzugrenzen."
           }
         },
         "es": {
@@ -524,25 +944,25 @@
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Filtrer</accent> - saisissez du texte dans le même champ pour réduire la liste."
+            "value": "<accent>Filtrer</accent> - saisissez dans le même champ pour restreindre la liste."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>絞り込み</accent> - 同じフィールドに入力するとリストを絞り込めます。"
+            "value": "<accent>フィルター</accent> - 同じフィールドに入力すると一覧を絞り込めます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>필터</accent> - 같은 필드에 입력하면 목록을 좁힐 수 있습니다."
+            "value": "<accent>필터</accent> - 같은 입력란에 입력하면 목록이 좁혀집니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>筛选</accent> - 在同一字段中输入即可缩小列表范围。"
+            "value": "<accent>筛选</accent> - 在同一个输入框中输入即可缩小列表。"
           }
         }
       }
@@ -589,6 +1009,48 @@
         }
       }
     },
+    "<accent>Fixed transitions</accent> - a preset stores its moving parts as fixed lengths and its holds as stretchy, so it feels the same whether the clip is short or long.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Feste Übergänge</accent> - eine Vorgabe speichert ihre bewegten Teile als feste Längen und ihre Haltephasen als dehnbar, sodass sie sich gleich anfühlt, ob der Clip kurz oder lang ist."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Transiciones fijas</accent> - un ajuste guarda sus partes en movimiento con duraciones fijas y sus retenciones como elásticas, así se siente igual tanto si el clip es corto como largo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Transitions fixes</accent> - un préréglage enregistre ses parties en mouvement en durées fixes et ses maintiens en durées extensibles, il rend donc pareil que le clip soit court ou long."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>固定トランジション</accent> - プリセットは動く部分を固定の長さで、保持部分を伸縮可能として保存するので、クリップが短くても長くても同じ印象になります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>고정 전환</accent> - 프리셋은 움직이는 부분을 고정 길이로, 유지 부분을 늘어나는 것으로 저장하므로 클립이 짧든 길든 같은 느낌을 줍니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>固定过渡</accent> - 预设把运动的部分存为固定长度,把保持的部分存为可伸缩,因此无论片段长短感觉都一样。"
+          }
+        }
+      }
+    },
     "<accent>Intervals</accent> - the gap between two keyposes. Each carries its own easing curve and optional modulation. Link the endpoints to make the interval a flat hold.": {
       "comment": "Help text.",
       "extractionState": "manual",
@@ -627,6 +1089,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "<accent>区间</accent> - 两个关键姿势之间的间隔。每个区间都有自己的缓动曲线和可选调制。链接两端可使区间成为平直的保持。"
+          }
+        }
+      }
+    },
+    "<accent>Intervals</accent> - the stretch between two keyposes. Each interval has its own easing (how it speeds up and slows down) and can add extra motion on top. Link the two ends to turn the interval into a still hold.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Intervalle</accent> - der Abschnitt zwischen zwei Keyposes. Jedes Intervall hat seine eigene Beschleunigung (wie es schneller und langsamer wird) und kann zusätzliche Bewegung hinzufügen. Verbinden Sie die beiden Enden, um das Intervall in eine ruhige Haltephase zu verwandeln."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Intervalos</accent> - el tramo entre dos poses clave. Cada intervalo tiene su propia aceleración (cómo acelera y frena) y puede añadir movimiento extra encima. Enlaza los dos extremos para convertir el intervalo en una retención inmóvil."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Intervalles</accent> - la portion entre deux poses clés. Chaque intervalle a son propre lissage (la façon dont il accélère et ralentit) et peut ajouter du mouvement en plus. Liez les deux extrémités pour transformer l'intervalle en pause immobile."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>インターバル</accent> - 2つのキーポーズの間の区間です。各インターバルには独自のイージング (加速と減速の仕方) があり、さらに動きを重ねられます。両端をリンクするとインターバルは静止した保持になります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>인터벌</accent> - 두 키포즈 사이의 구간입니다. 각 인터벌은 고유한 이징 (빨라지고 느려지는 방식) 을 가지며 위에 추가 움직임을 더할 수 있습니다. 양 끝을 연결하면 인터벌이 정지 유지 구간이 됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>区间</accent> - 两个关键姿势之间的一段。每个区间有自己的缓动(如何加速和减速),还能在上面叠加额外运动。把两端连接起来,区间就变成静止保持。"
           }
         }
       }
@@ -673,6 +1177,48 @@
         }
       }
     },
+    "<accent>Keyposes</accent> - a value set at a moment in time, shown as a pill on the lane. Drop one wherever you want the motion to hit a certain look.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Keyposes</accent> - ein Wert zu einem bestimmten Zeitpunkt, als Pille auf der Spur dargestellt. Setzen Sie eine überall dort, wo die Bewegung einen bestimmten Look treffen soll."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Poses clave</accent> - un valor fijado en un momento del tiempo, mostrado como una píldora en la pista. Coloca una donde quieras que el movimiento alcance un aspecto concreto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Poses clés</accent> - une valeur définie à un instant précis, affichée sous forme de pastille sur la piste. Déposez-en une là où le mouvement doit atteindre un aspect donné."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>キーポーズ</accent> - ある時点で設定した値で、レーン上にピルとして表示されます。動きを特定の見た目にしたい場所に置きます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>키포즈</accent> - 특정 시점에 설정한 값으로, 레인에 알약 모양으로 표시됩니다. 움직임이 특정 모습이 되기를 원하는 곳에 놓으세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>关键姿势</accent> - 在某个时间点设定的一个值,在轨道上显示为一个药丸形标记。想让运动呈现某种效果的位置就放一个。"
+          }
+        }
+      }
+    },
     "<accent>Lanes</accent> - one per animatable property (Position, Radius, Color...). Toggle a lane on to animate it, off to hold a constant. The lane list is on the left.": {
       "comment": "Help text.",
       "extractionState": "manual",
@@ -711,6 +1257,90 @@
           "stringUnit": {
             "state": "translated",
             "value": "<accent>轨道</accent> - 每个可动画属性一条(位置、半径、颜色等)。打开轨道即可制作动画，关闭则保持恒定值。轨道列表在左侧。"
+          }
+        }
+      }
+    },
+    "<accent>Lanes</accent> - one row per property you can animate (Position, Radius, Color, and so on). Turn a lane on to animate that property, off to keep it fixed. The lane list is on the left.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Spuren</accent> - eine Zeile pro animierbarer Eigenschaft (Position, Radius, Farbe usw.). Schalten Sie eine Spur ein, um die Eigenschaft zu animieren, oder aus, um sie fest zu halten. Die Spurenliste ist links."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Pistas</accent> - una fila por cada propiedad que puedes animar (Posición, Radio, Color, etc.). Activa una pista para animar esa propiedad, desactívala para dejarla fija. La lista de pistas está a la izquierda."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Pistes</accent> - une ligne par propriété que vous pouvez animer (Position, Rayon, Couleur, etc.). Activez une piste pour animer la propriété, désactivez-la pour la garder fixe. La liste des pistes est à gauche."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>レーン</accent> - アニメートできるプロパティごとに1行 (位置、半径、カラーなど)。レーンをオンにするとそのプロパティがアニメートされ、オフにすると固定されます。レーンの一覧は左側にあります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>레인</accent> - 애니메이션할 수 있는 속성마다 한 줄씩 (위치, 반지름, 색상 등). 레인을 켜면 그 속성이 애니메이션되고, 끄면 고정됩니다. 레인 목록은 왼쪽에 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>轨道</accent> - 每个可动画的属性占一行(位置、半径、颜色等)。打开轨道即可为该属性制作动画,关闭则保持固定。轨道列表在左侧。"
+          }
+        }
+      }
+    },
+    "<accent>Linear</accent> - steady speed the whole way.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Linear</accent> - gleichmäßige Geschwindigkeit durchgehend."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Lineal</accent> - velocidad constante todo el recorrido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Linéaire</accent> - vitesse constante du début à la fin."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>リニア</accent> - 最初から最後まで一定の速度。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>선형</accent> - 처음부터 끝까지 일정한 속도."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>线性</accent> - 全程速度恒定。"
           }
         }
       }
@@ -841,104 +1471,146 @@
         }
       }
     },
-    "<accent>Quality</accent> (Fast / Accurate): how the blur is computed. Only shown in plugins that support Fast.": {
+    "<accent>Manage</accent> - rename, overwrite with the current animation, or delete your own presets (the built-in ones can't be changed).": {
       "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Qualität</accent> (Schnell / Genau): wie die Unschärfe berechnet wird. Nur in Plug-ins sichtbar, die Schnell unterstützen."
+            "value": "<accent>Verwalten</accent> - benennen Sie eigene Vorgaben um, überschreiben Sie sie mit der aktuellen Animation oder löschen Sie sie (die eingebauten lassen sich nicht ändern)."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Calidad</accent> (Rápido / Preciso): cómo se calcula el desenfoque. Solo se muestra en plugins compatibles con Rápido."
+            "value": "<accent>Gestionar</accent> - renombra, sobrescribe con la animación actual o elimina tus propios ajustes (los integrados no se pueden cambiar)."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Qualité</accent> (Rapide / Précis) : comment le flou est calculé. Affiché uniquement dans les modules prenant en charge Rapide."
+            "value": "<accent>Gérer</accent> - renommez, remplacez par l'animation actuelle ou supprimez vos propres préréglages (les intégrés ne peuvent pas être modifiés)."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>品質</accent>（高速 / 高精度）：ブラーの計算方法。高速をサポートするプラグインでのみ表示されます。"
+            "value": "<accent>管理</accent> - 自分のプリセットの名前変更、現在のアニメーションでの上書き、削除ができます (組み込みのものは変更できません)。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>품질</accent>(빠름 / 정밀): 블러를 계산하는 방식. 빠름을 지원하는 플러그인에서만 표시됩니다."
+            "value": "<accent>관리</accent> - 나만의 프리셋을 이름 변경, 현재 애니메이션으로 덮어쓰기, 또는 삭제할 수 있습니다 (내장된 것은 바꿀 수 없습니다)."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>质量</accent>（快速 / 精确）：模糊的计算方式。仅在支持快速的插件中显示。"
+            "value": "<accent>管理</accent> - 可以重命名、用当前动画覆盖,或删除你自己的预设(内置的无法更改)。"
           }
         }
       }
     },
-    "<accent>Samples</accent>: 2 to 128. Only shown on the Accurate quality (Fast has no sample count - its cost is fixed). Higher gives smoother blur at the cost of render time; the useful range is roughly 2 to 32. The default sample count is plugin-specific.": {
+    "<accent>Quality</accent> (Fast / Accurate): how the blur is made. Only shown in plugins that offer Fast.": {
       "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Samples</accent>: 2 bis 128. Nur bei der Qualität Genau sichtbar (Schnell hat keine Sample-Anzahl - seine Kosten sind fest). Höher ergibt weichere Unschärfe auf Kosten der Renderzeit; der nützliche Bereich liegt etwa bei 2 bis 32. Die Standard-Sample-Anzahl ist plug-in-spezifisch."
+            "value": "<accent>Qualität</accent> (Schnell / Genau): wie die Unschärfe erzeugt wird. Nur in Plug-ins zu sehen, die Schnell anbieten."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Muestras</accent>: de 2 a 128. Solo se muestra en la calidad Preciso (Rápido no tiene recuento de muestras - su coste es fijo). Un valor más alto da un desenfoque más suave a costa del tiempo de renderizado; el rango útil ronda de 2 a 32. El número de muestras predeterminado depende del plugin."
+            "value": "<accent>Calidad</accent> (Rápido / Preciso): cómo se genera el desenfoque. Solo se muestra en plugins que ofrecen Rápido."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Échantillons</accent> : de 2 à 128. Affiché uniquement pour la qualité Précis (Rapide n'a pas de nombre d'échantillons - son coût est fixe). Une valeur plus élevée donne un flou plus lisse au prix du temps de rendu ; la plage utile va environ de 2 à 32. Le nombre d'échantillons par défaut dépend du module."
+            "value": "<accent>Qualité</accent> (Rapide / Précis) : comment le flou est produit. Affiché uniquement dans les plugins qui proposent Rapide."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>サンプル</accent>：2〜128。高精度の品質でのみ表示されます（高速にはサンプル数がなく、コストは固定です）。値を大きくするとブラーは滑らかになりますが、レンダリング時間が増えます。有効な範囲はおおよそ2〜32です。デフォルトのサンプル数はプラグインごとに異なります。"
+            "value": "<accent>品質</accent> (高速 / 高精度): ブラーの作り方です。高速に対応したプラグインでのみ表示されます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>샘플</accent>: 2~128. 정밀 품질에서만 표시됩니다(빠름에는 샘플 수가 없으며 비용이 고정됨). 값이 높을수록 블러가 부드러워지지만 렌더링 시간이 늘어납니다. 유용한 범위는 대략 2~32입니다. 기본 샘플 수는 플러그인마다 다릅니다."
+            "value": "<accent>품질</accent> (빠름 / 정확): 블러를 만드는 방식입니다. 빠름을 지원하는 플러그인에서만 표시됩니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>采样</accent>：2 到 128。仅在精确质量下显示（快速没有采样数 - 其成本是固定的）。数值越高模糊越平滑，但会增加渲染时间；实用范围大致为 2 到 32。默认采样数因插件而异。"
+            "value": "<accent>质量</accent>(快速 / 精确):模糊的生成方式。仅在提供快速的插件中显示。"
+          }
+        }
+      }
+    },
+    "<accent>Samples</accent>: 2 to 128. Only shown on Accurate (Fast needs no samples, its cost is fixed). More samples give smoother blur but take longer to render. About 2 to 32 covers most needs. The starting value depends on the plugin.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Samples</accent>: 2 bis 128. Nur bei Genau zu sehen (Schnell braucht keine Samples, die Kosten sind fest). Mehr Samples ergeben eine weichere Unschärfe, brauchen aber länger zum Rendern. Etwa 2 bis 32 deckt die meisten Fälle ab. Der Startwert hängt vom Plug-in ab."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Muestras</accent>: de 2 a 128. Solo se muestra en Preciso (Rápido no necesita muestras, su coste es fijo). Más muestras dan un desenfoque más suave pero tardan más en renderizar. De 2 a 32 aproximadamente cubre casi todo. El valor inicial depende del plugin."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Échantillons</accent> : de 2 à 128. Affiché uniquement en Précis (Rapide n'a pas besoin d'échantillons, son coût est fixe). Plus d'échantillons donnent un flou plus doux mais mettent plus de temps à rendre. De 2 à 32 environ couvre la plupart des cas. La valeur de départ dépend du plugin."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>サンプル</accent>: 2〜128。高精度でのみ表示されます (高速はサンプル不要でコストは固定)。サンプルを増やすとブラーは滑らかになりますが、レンダリングに時間がかかります。おおよそ2〜32でほとんどの用途をカバーします。初期値はプラグインごとに異なります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>샘플</accent>: 2에서 128까지. 정확에서만 표시됩니다 (빠름은 샘플이 필요 없고 비용이 고정됨). 샘플이 많을수록 블러가 부드러워지지만 렌더링에 더 오래 걸립니다. 대략 2에서 32면 대부분을 충족합니다. 시작 값은 플러그인마다 다릅니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>采样数</accent>:2 到 128。仅在精确下显示(快速无需采样,其开销是固定的)。采样越多模糊越平滑,但渲染时间也更长。大约 2 到 32 就能满足多数需求。初始值取决于插件。"
           }
         }
       }
     },
     "<accent>Save</accent> - type a name in the field and press <kbd>+</kbd> to save the current animation as your own preset.": {
-      "comment": "Help text.",
+      "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Sichern</accent> - geben Sie einen Namen in das Feld ein und drücken Sie <kbd>+</kbd>, um die aktuelle Animation als eigenes Preset zu sichern."
+            "value": "<accent>Speichern</accent> - geben Sie im Feld einen Namen ein und drücken Sie <kbd>+</kbd>, um die aktuelle Animation als eigene Vorgabe zu speichern."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Guardar</accent> - escribe un nombre en el campo y pulsa <kbd>+</kbd> para guardar la animación actual como tu propio preajuste."
+            "value": "<accent>Guardar</accent> - escribe un nombre en el campo y pulsa <kbd>+</kbd> para guardar la animación actual como tu propio ajuste."
           }
         },
         "fr": {
@@ -950,19 +1622,19 @@
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>保存</accent> - フィールドに名前を入力し、<kbd>+</kbd> を押すと、現在のアニメーションを自分のプリセットとして保存できます。"
+            "value": "<accent>保存</accent> - フィールドに名前を入力し<kbd>+</kbd>を押すと、現在のアニメーションを自分のプリセットとして保存します。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>저장</accent> - 필드에 이름을 입력하고 <kbd>+</kbd>를 누르면 현재 애니메이션을 내 프리셋으로 저장합니다."
+            "value": "<accent>저장</accent> - 입력란에 이름을 적고 <kbd>+</kbd>를 누르면 현재 애니메이션을 나만의 프리셋으로 저장합니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>保存</accent> - 在字段中输入名称并按 <kbd>+</kbd>，即可将当前动画保存为你自己的预设。"
+            "value": "<accent>保存</accent> - 在输入框中输入名称并按 <kbd>+</kbd>,即可把当前动画保存为你自己的预设。"
           }
         }
       }
@@ -1005,6 +1677,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "<accent>快门</accent>：0°至360°，默认180°。0°冻结每一帧且无模糊，180°是半帧拖尾(电影标准的180度快门)，360°在整帧间隔内拖出残影。"
+          }
+        }
+      }
+    },
+    "<accent>Shutter</accent>: 0° to 360°, default 180°. 0° gives a sharp frame with no blur. 180° is a half-frame trail, the classic film look. 360° blurs across a whole frame for the strongest smear.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Blende</accent>: 0° bis 360°, Vorgabe 180°. 0° ergibt ein scharfes Bild ohne Unschärfe. 180° ist eine Halbbild-Spur, der klassische Filmlook. 360° verschmiert über ein ganzes Bild für den stärksten Effekt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Obturador</accent>: de 0° a 360°, por defecto 180°. 0° da un fotograma nítido sin desenfoque. 180° es una estela de medio fotograma, el aspecto clásico de cine. 360° difumina a lo largo de un fotograma entero para el máximo emborronado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Obturateur</accent> : de 0° à 360°, par défaut 180°. 0° donne une image nette sans flou. 180° est une traînée d'une demi-image, le rendu ciné classique. 360° étale sur une image entière pour le flou le plus fort."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>シャッター</accent>: 0°〜360°、デフォルトは180°。0°はブラーのないシャープなフレームになります。180°はハーフフレームのトレイルで、定番のフィルムらしい見た目です。360°は1フレーム分にわたってにじませ、最も強くにじみます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>셔터</accent>: 0°에서 360°까지, 기본값 180°. 0°는 블러 없이 선명한 프레임을 줍니다. 180°는 반 프레임 잔상으로, 전형적인 필름 느낌입니다. 360°는 한 프레임 전체에 걸쳐 번져 가장 강하게 번집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>快门</accent>:0° 到 360°,默认 180°。0° 给出无模糊的清晰画面。180° 是半帧拖尾,经典的电影质感。360° 会在整整一帧内涂抹开,得到最强的模糊。"
           }
         }
       }
@@ -1094,6 +1808,7 @@
       }
     },
     "<kbd>⌘ click</kbd> the lane to add a <accent>keypose</accent>.": {
+      "comment": "Advanced timing guide: add a keypose to a lane.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -1102,16 +1817,16 @@
             "value": "<kbd>⌘ Klick</kbd> auf die Spur, um eine <accent>Keypose</accent> hinzuzufügen."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "<kbd>⌘ clic</kbd> sur la piste pour ajouter une <accent>pose clé</accent>."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "<kbd>⌘ clic</kbd> en la pista para añadir una <accent>pose clave</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>⌘ clic</kbd> sur la piste pour ajouter une <accent>pose clé</accent>."
           }
         },
         "ja": {
@@ -1132,8 +1847,7 @@
             "value": "<kbd>⌘ 点击</kbd>轨道以添加<accent>关键姿势</accent>。"
           }
         }
-      },
-      "comment": "Advanced timing guide: add a keypose to a lane."
+      }
     },
     "<kbd>⌘ ⌥</kbd> + click": {
       "comment": "Shortcut keys.",
@@ -1472,8 +2186,8 @@
       }
     },
     "<red>Red</red> frames are before this keypose, <blue>blue</blue> frames after.": {
-      "extractionState": "manual",
       "comment": "Mini-viewer guide: onion-skin red/blue meaning.",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -1481,16 +2195,16 @@
             "value": "<red>Rote</red> Bilder liegen vor dieser Keypose, <blue>blaue</blue> danach."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les images <red>rouges</red> sont avant cette pose clé, les <blue>bleues</blue> après."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Los fotogramas <red>rojos</red> van antes de esta pose clave, los <blue>azules</blue> después."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les images <red>rouges</red> sont avant cette pose clé, les <blue>bleues</blue> après."
           }
         },
         "ja": {
@@ -1509,48 +2223,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "<red>红色</red>帧在此关键姿势之前，<blue>蓝色</blue>帧在之后。"
-          }
-        }
-      }
-    },
-    "A still frame (nothing moving across the shutter) is skipped automatically, so motion blur only costs render time on frames that actually move.": {
-      "comment": "Help tip rendered from a timeline knowledge doc.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein Standbild (bei dem sich während des Verschlusses nichts bewegt) wird automatisch übersprungen, sodass Bewegungsunschärfe nur bei Bildern Renderzeit kostet, die sich tatsächlich bewegen."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Un fotograma estático (sin nada en movimiento durante el obturador) se omite automáticamente, por lo que el desenfoque de movimiento solo consume tiempo de renderizado en los fotogramas que realmente se mueven."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Une image fixe (rien ne bouge pendant l'obturateur) est ignorée automatiquement, de sorte que le flou de mouvement ne coûte du temps de rendu que sur les images qui bougent réellement."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "静止フレーム（シャッターの間に何も動かないフレーム）は自動的にスキップされるため、モーションブラーは実際に動きのあるフレームでのみレンダリング時間を消費します。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "정지 프레임(셔터 동안 아무것도 움직이지 않는 프레임)은 자동으로 건너뛰므로, 모션 블러는 실제로 움직이는 프레임에서만 렌더링 시간을 소모합니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "静止帧（快门期间没有任何移动）会被自动跳过，因此运动模糊只在实际发生移动的帧上消耗渲染时间。"
           }
         }
       }
@@ -1598,6 +2270,7 @@
       }
     },
     "Add <accent>%@</accent>.": {
+      "comment": "Timing guide: add the named property. %@ = property name.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -1606,16 +2279,16 @@
             "value": "<accent>%@</accent> hinzufügen."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajouter <accent>%@</accent>."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Añadir <accent>%@</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter <accent>%@</accent>."
           }
         },
         "ja": {
@@ -1636,8 +2309,7 @@
             "value": "添加<accent>%@</accent>。"
           }
         }
-      },
-      "comment": "Timing guide: add the named property. %@ = property name."
+      }
     },
     "Add Keypose Here": {
       "comment": "Context menu: add a keypose at this point.",
@@ -1724,6 +2396,7 @@
       }
     },
     "Add keyposes anywhere and shape transitions per property": {
+      "comment": "Help guide subtitle: Advanced Timing.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -1732,16 +2405,16 @@
             "value": "Keyposes überall hinzufügen und Übergänge pro Eigenschaft gestalten"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ajoutez des poses clés où vous voulez et façonnez les transitions par propriété"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Añade poses clave donde quieras y da forma a las transiciones por propiedad"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoutez des poses clés où vous voulez et façonnez les transitions par propriété"
           }
         },
         "ja": {
@@ -1762,8 +2435,7 @@
             "value": "在任意位置添加关键姿势，并按属性调整过渡"
           }
         }
-      },
-      "comment": "Help guide subtitle: Advanced Timing."
+      }
     },
     "Add properties…": {
       "comment": "Button: add animatable properties.",
@@ -1892,6 +2564,7 @@
       }
     },
     "Advanced Timing": {
+      "comment": "Help guide title: advanced timing walkthrough.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -1900,16 +2573,16 @@
             "value": "Erweitertes Timing"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Timing avancé"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Timing avanzado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timing avancé"
           }
         },
         "ja": {
@@ -1930,35 +2603,34 @@
             "value": "高级时间控制"
           }
         }
-      },
-      "comment": "Help guide title: advanced timing walkthrough."
+      }
     },
     "Advanced timeline only:": {
-      "comment": "Help tip: header grouping the Advanced-only toolbar toggles.",
+      "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nur erweiterte Timeline:"
+            "value": "Nur in der erweiterten Timeline:"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Solo línea de tiempo avanzada:"
+            "value": "Solo en la línea de tiempo Avanzada:"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Timeline avancée uniquement :"
+            "value": "Uniquement dans la timeline Avancée :"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "詳細タイムラインのみ："
+            "value": "アドバンスのタイムラインのみ:"
           }
         },
         "ko": {
@@ -1970,7 +2642,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "仅高级时间线："
+            "value": "仅限高级时间线:"
           }
         }
       }
@@ -2144,7 +2816,7 @@
       }
     },
     "Animation is built from three things:": {
-      "comment": "Help text.",
+      "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -2156,31 +2828,31 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "La animación se compone de tres cosas:"
+            "value": "La animación se compone de tres elementos:"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "L'animation repose sur trois éléments :"
+            "value": "Une animation repose sur trois éléments :"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アニメーションは3つの要素で構成されます:"
+            "value": "アニメーションは3つの要素で作られます:"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "애니메이션은 세 가지 요소로 구성됩니다:"
+            "value": "애니메이션은 세 가지 요소로 이루어집니다:"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "动画由三个部分构成："
+            "value": "动画由三个部分组成:"
           }
         }
       }
@@ -2480,6 +3152,7 @@
       }
     },
     "Basic timing has three phases: <accent>In</accent>, <accent>Hold</accent>, <accent>Out</accent>.": {
+      "comment": "Timing guide: the three Basic phases.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -2488,16 +3161,16 @@
             "value": "Einfaches Timing hat drei Phasen: <accent>Ein</accent>, <accent>Halten</accent>, <accent>Aus</accent>."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le timing basique comporte trois phases : <accent>Entrée</accent>, <accent>Maintien</accent>, <accent>Sortie</accent>."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "El timing básico tiene tres fases: <accent>Entrada</accent>, <accent>Mantener</accent>, <accent>Salida</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le timing basique comporte trois phases : <accent>Entrée</accent>, <accent>Maintien</accent>, <accent>Sortie</accent>."
           }
         },
         "ja": {
@@ -2518,8 +3191,7 @@
             "value": "基本时间控制有三个阶段：<accent>进入</accent>、<accent>保持</accent>、<accent>退出</accent>。"
           }
         }
-      },
-      "comment": "Timing guide: the three Basic phases."
+      }
     },
     "Basic vs Advanced": {
       "comment": "Help section title.",
@@ -2816,6 +3488,7 @@
       }
     },
     "Click a <accent>keypose</accent> to open the mini viewer.": {
+      "comment": "Mini-viewer guide: open the boundary popover.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -2824,16 +3497,16 @@
             "value": "Klicken Sie auf eine <accent>Keypose</accent>, um den Mini-Viewer zu öffnen."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cliquez sur une <accent>pose clé</accent> pour ouvrir la mini-visionneuse."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Haz clic en una <accent>pose clave</accent> para abrir el mini-visor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur une <accent>pose clé</accent> pour ouvrir la mini-visionneuse."
           }
         },
         "ja": {
@@ -2854,12 +3527,11 @@
             "value": "点击一个<accent>关键姿势</accent>来打开迷你检视器。"
           }
         }
-      },
-      "comment": "Mini-viewer guide: open the boundary popover."
+      }
     },
     "Click a frame to <accent>jump</accent> to that keypose.": {
-      "extractionState": "manual",
       "comment": "Mini-viewer guide: click a filmstrip frame.",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -2867,16 +3539,16 @@
             "value": "Klicken Sie auf ein Bild, um zu dieser <accent>Keypose zu springen</accent>."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cliquez sur une image pour <accent>accéder</accent> à cette pose clé."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Haz clic en un fotograma para <accent>saltar</accent> a esa pose clave."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur une image pour <accent>accéder</accent> à cette pose clé."
           }
         },
         "ja": {
@@ -2942,6 +3614,7 @@
       }
     },
     "Click the <warn>gap</warn> between keyposes to change its easing.": {
+      "comment": "Timing guide: click a gap to edit easing.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -2950,16 +3623,16 @@
             "value": "Klicken Sie auf die <warn>Lücke</warn> zwischen Keyposes, um deren Easing zu ändern."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cliquez sur l'<warn>intervalle</warn> entre les poses clés pour changer son accélération."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Haz clic en el <warn>intervalo</warn> entre poses clave para cambiar su suavizado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cliquez sur l'<warn>intervalle</warn> entre les poses clés pour changer son accélération."
           }
         },
         "ja": {
@@ -2980,8 +3653,7 @@
             "value": "点击关键姿势之间的<warn>间隙</warn>来更改其缓动。"
           }
         }
-      },
-      "comment": "Timing guide: click a gap to edit easing."
+      }
     },
     "Completed": {
       "comment": "Help guide status: this guide has been completed.",
@@ -3446,8 +4118,8 @@
       }
     },
     "Double-click to <accent>reset</accent> the view.": {
-      "extractionState": "manual",
       "comment": "Mini-viewer guide: reset zoom/pan.",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -3455,16 +4127,16 @@
             "value": "Doppelklicken Sie, um die Ansicht <accent>zurückzusetzen</accent>."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Double-cliquez pour <accent>réinitialiser</accent> la vue."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Haz doble clic para <accent>restablecer</accent> la vista."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double-cliquez pour <accent>réinitialiser</accent> la vue."
           }
         },
         "ja": {
@@ -3530,6 +4202,7 @@
       }
     },
     "Drag <accent>%@</accent> in the viewer to edit it directly.": {
+      "comment": "OSC guide: edit via the viewer handle. %@ = property name.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -3538,16 +4211,16 @@
             "value": "Ziehen Sie <accent>%@</accent> im Viewer, um es direkt zu bearbeiten."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faites glisser <accent>%@</accent> dans le visualiseur pour le modifier directement."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Arrastra <accent>%@</accent> en el visor para editarlo directamente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser <accent>%@</accent> dans le visualiseur pour le modifier directement."
           }
         },
         "ja": {
@@ -3568,10 +4241,10 @@
             "value": "在检视器中拖动<accent>%@</accent>即可直接编辑。"
           }
         }
-      },
-      "comment": "OSC guide: edit via the viewer handle. %@ = property name."
+      }
     },
     "Drag <accent>%@</accent> in the viewer to the <warn>glowing target</warn>.": {
+      "comment": "OSC guide: drag the handle to the target. %@ = property name.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -3580,16 +4253,16 @@
             "value": "Ziehen Sie <accent>%@</accent> im Viewer zum <warn>leuchtenden Ziel</warn>."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faites glisser <accent>%@</accent> dans le visualiseur vers la <warn>cible lumineuse</warn>."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Arrastra <accent>%@</accent> en el visor hacia el <warn>objetivo brillante</warn>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser <accent>%@</accent> dans le visualiseur vers la <warn>cible lumineuse</warn>."
           }
         },
         "ja": {
@@ -3610,10 +4283,10 @@
             "value": "在检视器中将<accent>%@</accent>拖向<warn>发光的目标</warn>。"
           }
         }
-      },
-      "comment": "OSC guide: drag the handle to the target. %@ = property name."
+      }
     },
     "Drag <accent>%@</accent> toward the <warn>target</warn>. It applies straight away.": {
+      "comment": "Timing guide: drag a constant to a target. %@ = property name.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -3622,16 +4295,16 @@
             "value": "Ziehen Sie <accent>%@</accent> zum <warn>Ziel</warn>. Es wird sofort übernommen."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faites glisser <accent>%@</accent> vers la <warn>cible</warn>. C'est appliqué immédiatement."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Arrastra <accent>%@</accent> hacia el <warn>objetivo</warn>. Se aplica al instante."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser <accent>%@</accent> vers la <warn>cible</warn>. C'est appliqué immédiatement."
           }
         },
         "ja": {
@@ -3652,10 +4325,10 @@
             "value": "将<accent>%@</accent>拖向<warn>目标</warn>，会立即应用。"
           }
         }
-      },
-      "comment": "Timing guide: drag a constant to a target. %@ = property name."
+      }
     },
     "Drag a <accent>keypose</accent> toward the <warn>target</warn> to retime it.": {
+      "comment": "Advanced timing guide: drag a keypose to retime.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -3664,16 +4337,16 @@
             "value": "Ziehen Sie eine <accent>Keypose</accent> zum <warn>Ziel</warn>, um sie neu zu timen."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faites glisser une <accent>pose clé</accent> vers la <warn>cible</warn> pour la recaler dans le temps."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Arrastra una <accent>pose clave</accent> hacia el <warn>objetivo</warn> para reajustar su tiempo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser une <accent>pose clé</accent> vers la <warn>cible</warn> pour la recaler dans le temps."
           }
         },
         "ja": {
@@ -3694,8 +4367,7 @@
             "value": "将<accent>关键姿势</accent>拖向<warn>目标</warn>来重新设定其时间。"
           }
         }
-      },
-      "comment": "Advanced timing guide: drag a keypose to retime."
+      }
     },
     "Drag across filter pills": {
       "comment": "Shortcut keys.",
@@ -3740,6 +4412,7 @@
       }
     },
     "Drag any <accent>selected</accent> keypose - they all retime together.": {
+      "comment": "Advanced timing guide: drag the multi-selection to retime.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -3748,16 +4421,16 @@
             "value": "Ziehen Sie eine beliebige <accent>ausgewählte</accent> Keypose - alle werden gemeinsam neu getimt."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faites glisser n'importe quelle pose clé <accent>sélectionnée</accent> : toutes sont recalées dans le temps ensemble."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Arrastra cualquier pose clave <accent>seleccionada</accent>: todas se reajustan en el tiempo juntas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser n'importe quelle pose clé <accent>sélectionnée</accent> : toutes sont recalées dans le temps ensemble."
           }
         },
         "ja": {
@@ -3778,8 +4451,7 @@
             "value": "拖动任意<accent>已选中</accent>的关键姿势，它们会一起重新设定时间。"
           }
         }
-      },
-      "comment": "Advanced timing guide: drag the multi-selection to retime."
+      }
     },
     "Drag empty space": {
       "comment": "Shortcut keys.",
@@ -3824,6 +4496,7 @@
       }
     },
     "Drag the <warn>boundary</warn> to retime where <accent>In</accent> ends.": {
+      "comment": "Timing guide: drag the hold boundary to retime.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -3832,16 +4505,16 @@
             "value": "Ziehen Sie die <warn>Grenze</warn>, um neu festzulegen, wo <accent>Ein</accent> endet."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faites glisser la <warn>limite</warn> pour redéfinir la fin de <accent>Entrée</accent>."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Arrastra el <warn>límite</warn> para reajustar dónde termina <accent>Entrada</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser la <warn>limite</warn> pour redéfinir la fin de <accent>Entrée</accent>."
           }
         },
         "ja": {
@@ -3862,12 +4535,11 @@
             "value": "拖动<warn>边界</warn>来重新设定<accent>进入</accent>的结束位置。"
           }
         }
-      },
-      "comment": "Timing guide: drag the hold boundary to retime."
+      }
     },
     "Drag the preview to <accent>pan</accent> around.": {
-      "extractionState": "manual",
       "comment": "Mini-viewer guide: pan the canvas by dragging.",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -3875,16 +4547,16 @@
             "value": "Ziehen Sie die Vorschau, um zu <accent>schwenken</accent>."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faites glisser l'aperçu pour vous <accent>déplacer</accent>."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Arrastra la previsualización para <accent>desplazarte</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser l'aperçu pour vous <accent>déplacer</accent>."
           }
         },
         "ja": {
@@ -3950,6 +4622,7 @@
       }
     },
     "Drag toward the <warn>glowing target</warn>.": {
+      "comment": "Timing guide: drag-to-target hint.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -3958,16 +4631,16 @@
             "value": "Ziehen Sie zum <warn>leuchtenden Ziel</warn>."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faites glisser vers la <warn>cible lumineuse</warn>."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Arrastra hacia el <warn>objetivo brillante</warn>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser vers la <warn>cible lumineuse</warn>."
           }
         },
         "ja": {
@@ -3988,8 +4661,7 @@
             "value": "拖向<warn>发光的目标</warn>。"
           }
         }
-      },
-      "comment": "Timing guide: drag-to-target hint."
+      }
     },
     "Draw Around": {
       "comment": "Canvas annotation preset name (circle/box something).",
@@ -4037,6 +4709,12 @@
       "comment": "Hold effect: endpoints differ (drift).",
       "extractionState": "manual",
       "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drift"
+          }
+        },
         "es": {
           "stringUnit": {
             "state": "translated",
@@ -4065,12 +4743,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "漂移"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drift"
           }
         }
       }
@@ -4160,6 +4832,7 @@
       }
     },
     "Each <accent>pill</accent> is a keypose, a value at a moment in time. Click one to edit it.": {
+      "comment": "Timing guide: edit a keypose pill.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -4168,16 +4841,16 @@
             "value": "Jede <accent>Kapsel</accent> ist eine Keypose, ein Wert zu einem Zeitpunkt. Klicken Sie auf eine, um sie zu bearbeiten."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chaque <accent>pastille</accent> est une pose clé, une valeur à un instant donné. Cliquez sur l'une d'elles pour la modifier."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Cada <accent>cápsula</accent> es una pose clave, un valor en un momento concreto. Haz clic en una para editarla."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque <accent>pastille</accent> est une pose clé, une valeur à un instant donné. Cliquez sur l'une d'elles pour la modifier."
           }
         },
         "ja": {
@@ -4198,8 +4871,7 @@
             "value": "每个<accent>胶囊</accent>都是一个关键姿势，即某一时刻的值。点击即可编辑。"
           }
         }
-      },
-      "comment": "Timing guide: edit a keypose pill."
+      }
     },
     "Each Advanced interval has an easing curve. Click the interval to pick it (Shift-click to select several first):": {
       "comment": "Help text.",
@@ -4243,49 +4915,8 @@
         }
       }
     },
-    "Each control has a reset arrow that appears when the value differs from the default.": {
-      "comment": "Help tip (motion blur).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jedes Steuerelement hat einen Zurücksetzen-Pfeil, der erscheint, wenn der Wert vom Standard abweicht."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cada control tiene una flecha de restablecimiento que aparece cuando el valor difiere del predeterminado."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chaque réglage a une flèche de réinitialisation qui apparaît lorsque la valeur diffère de celle par défaut."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "各コントロールには、値がデフォルトと異なるときに表示されるリセット矢印があります。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "각 컨트롤에는 값이 기본값과 다를 때 나타나는 재설정 화살표가 있습니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "每个控件都有一个重置箭头，当数值与默认值不同时会出现。"
-          }
-        }
-      }
-    },
     "Each row is a property. Drop <accent>keyposes</accent> anywhere and shape each interval independently.": {
+      "comment": "Advanced timing guide: per-property lanes.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -4294,16 +4925,16 @@
             "value": "Jede Zeile ist eine Eigenschaft. Setzen Sie <accent>Keyposes</accent> beliebig und gestalten Sie jedes Intervall einzeln."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chaque ligne est une propriété. Placez des <accent>poses clés</accent> où vous voulez et façonnez chaque intervalle indépendamment."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Cada fila es una propiedad. Coloca <accent>poses clave</accent> donde quieras y da forma a cada intervalo de forma independiente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque ligne est une propriété. Placez des <accent>poses clés</accent> où vous voulez et façonnez chaque intervalle indépendamment."
           }
         },
         "ja": {
@@ -4324,8 +4955,7 @@
             "value": "每一行是一个属性。在任意位置放置<accent>关键姿势</accent>，并独立调整每个区间。"
           }
         }
-      },
-      "comment": "Advanced timing guide: per-property lanes."
+      }
     },
     "Ease In": {
       "comment": "Easing curve name.",
@@ -4495,7 +5125,50 @@
         }
       }
     },
+    "Easing sets how a move speeds up and slows down. Each Advanced interval has one. Click the interval to pick it (Shift-click to choose several first):": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Beschleunigung legt fest, wie eine Bewegung schneller und langsamer wird. Jedes erweiterte Intervall hat eine. Klicken Sie das Intervall an, um sie zu wählen (Umschalt-Klick, um zuerst mehrere auszuwählen):"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La aceleración define cómo un movimiento acelera y frena. Cada intervalo Avanzado tiene una. Haz clic en el intervalo para elegirla (Mayús-clic para seleccionar varios primero):"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le lissage définit comment un mouvement accélère et ralentit. Chaque intervalle Avancé en a un. Cliquez sur l'intervalle pour le choisir (Maj-clic pour en sélectionner plusieurs d'abord) :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "イージングは動きの加速と減速の仕方を決めます。アドバンスの各インターバルに1つあります。インターバルをクリックして選びます (Shiftクリックで先に複数を選択):"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이징은 움직임이 어떻게 빨라지고 느려지는지를 정합니다. 고급 인터벌마다 하나씩 있습니다. 인터벌을 클릭해 고르세요 (Shift 클릭으로 먼저 여러 개 선택):"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓动决定一段运动如何加速和减速。每个高级区间都有一个。点击区间即可选择(先按 Shift 点击可选中多个):"
+          }
+        }
+      }
+    },
     "Edit <accent>values</accent> at this point in time.": {
+      "comment": "Advanced timing guide: edit keypose values.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -4504,16 +5177,16 @@
             "value": "Bearbeiten Sie die <accent>Werte</accent> zu diesem Zeitpunkt."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modifiez les <accent>valeurs</accent> à cet instant."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Edita los <accent>valores</accent> en este momento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modifiez les <accent>valeurs</accent> à cet instant."
           }
         },
         "ja": {
@@ -4534,8 +5207,7 @@
             "value": "编辑此时间点的<accent>值</accent>。"
           }
         }
-      },
-      "comment": "Advanced timing guide: edit keypose values."
+      }
     },
     "Edit on canvas": {
       "comment": "OSC-only lane: edit via the on-screen control.",
@@ -4621,6 +5293,48 @@
         }
       }
     },
+    "Elastic and Bounce add Intensity and Frequency controls to dial in the wobble.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elastisch und Abprallen fügen Regler für Intensität und Frequenz hinzu, um das Schwingen einzustellen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elástico y Rebote añaden controles de Intensidad y Frecuencia para ajustar la oscilación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Élastique et Rebond ajoutent des réglages Intensité et Fréquence pour ajuster l'oscillation."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エラスティックとバウンスには、揺れを調整する強度と周波数のコントロールが追加されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "탄성과 바운스에는 흔들림을 조절하는 강도와 빈도 컨트롤이 추가됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹性和弹跳会增加强度和频率控制,用来调节晃动。"
+          }
+        }
+      }
+    },
     "Elastic and Bounce have Intensity and Frequency knobs.": {
       "comment": "Help text.",
       "extractionState": "manual",
@@ -4664,43 +5378,43 @@
       }
     },
     "Every property has two timing modes, switched with the pill at the top of its row:": {
-      "comment": "Help text.",
+      "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Jede Eigenschaft hat zwei Timing-Modi, umgeschaltet mit der Pille oben in ihrer Zeile:"
+            "value": "Jede Eigenschaft hat zwei Timing-Modi, umschaltbar über die Pille oben in ihrer Zeile:"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cada propiedad tiene dos modos de temporización, que se alternan con la píldora en la parte superior de su fila:"
+            "value": "Cada propiedad tiene dos modos de sincronización, que cambias con la píldora en la parte superior de su fila:"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Chaque propriété a deux modes de minutage, basculés avec la pilule en haut de sa ligne :"
+            "value": "Chaque propriété a deux modes de synchronisation, que vous changez avec la pastille en haut de sa ligne :"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "各プロパティには2つのタイミングモードがあり、行の上部のピルで切り替えます:"
+            "value": "各プロパティには2つのタイミングモードがあり、行の上部にあるピルで切り替えます:"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "각 속성에는 두 가지 타이밍 모드가 있으며, 행 상단의 알약으로 전환합니다:"
+            "value": "각 속성에는 두 가지 타이밍 모드가 있으며, 해당 줄 상단의 알약 버튼으로 전환합니다:"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "每个属性都有两种时间控制模式，用其行顶部的胶囊开关切换："
+            "value": "每个属性有两种计时模式,用其所在行顶部的药丸按钮切换:"
           }
         }
       }
@@ -4958,6 +5672,7 @@
       }
     },
     "Guides are disabled. Click the effect's header on a clip to select it (it highlights yellow), then move your mouse over the viewer to enable them.": {
+      "comment": "Help guide disabled subtitle (no OSC canvas reference yet).",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -4966,16 +5681,16 @@
             "value": "Anleitungen sind deaktiviert. Klicken Sie auf die Kopfzeile des Effekts in einem Clip, um ihn auszuwählen (er wird gelb hervorgehoben), und bewegen Sie dann die Maus über den Viewer, um sie zu aktivieren."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les guides sont désactivés. Cliquez sur l'en-tête de l'effet sur un plan pour le sélectionner (il apparaît en jaune), puis placez le pointeur sur le visualiseur pour les activer."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Las guías están desactivadas. Haz clic en el encabezado del efecto en un clip para seleccionarlo (se resalta en amarillo) y luego mueve el ratón sobre el visor para activarlas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les guides sont désactivés. Cliquez sur l'en-tête de l'effet sur un plan pour le sélectionner (il apparaît en jaune), puis placez le pointeur sur le visualiseur pour les activer."
           }
         },
         "ja": {
@@ -4996,8 +5711,7 @@
             "value": "指南已停用。点击片段上效果的标题来选择它（会以黄色高亮显示），然后将鼠标移到检视器上即可启用。"
           }
         }
-      },
-      "comment": "Help guide disabled subtitle (no OSC canvas reference yet)."
+      }
     },
     "Handheld": {
       "comment": "Hold modulation name.",
@@ -5126,6 +5840,7 @@
       }
     },
     "Hide, reveal, and peek the viewer controls": {
+      "comment": "Help guide subtitle: On-Screen Controls.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -5134,16 +5849,16 @@
             "value": "Viewer-Steuerelemente ausblenden, einblenden und kurz anzeigen"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Masquer, afficher et apercevoir les commandes du visualiseur"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Oculta, muestra y echa un vistazo a los controles del visor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masquer, afficher et apercevoir les commandes du visualiseur"
           }
         },
         "ja": {
@@ -5164,8 +5879,7 @@
             "value": "隐藏、显示并临时查看检视器控件"
           }
         }
-      },
-      "comment": "Help guide subtitle: On-Screen Controls."
+      }
     },
     "Highlight": {
       "comment": "Canvas annotation preset name.",
@@ -5252,6 +5966,7 @@
       }
     },
     "Hold <kbd>⌥</kbd> and click a control to hide it.": {
+      "comment": "OSC guide: opt-click a mini-viewer handle to hide.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -5260,16 +5975,16 @@
             "value": "Halten Sie <kbd>⌥</kbd> gedrückt und klicken Sie auf ein Steuerelement, um es auszublenden."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Maintenez <kbd>⌥</kbd> et cliquez sur une commande pour la masquer."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Mantén <kbd>⌥</kbd> y haz clic en un control para ocultarlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez <kbd>⌥</kbd> et cliquez sur une commande pour la masquer."
           }
         },
         "ja": {
@@ -5290,10 +6005,10 @@
             "value": "按住<kbd>⌥</kbd>并点击控件即可隐藏它。"
           }
         }
-      },
-      "comment": "OSC guide: opt-click a mini-viewer handle to hide."
+      }
     },
     "Hold <kbd>⌥</kbd> and click the dimmed control to bring it back.": {
+      "comment": "OSC guide: opt-click a ghost to re-show it.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -5302,16 +6017,16 @@
             "value": "Halten Sie <kbd>⌥</kbd> gedrückt und klicken Sie auf das abgeblendete Steuerelement, um es zurückzuholen."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Maintenez <kbd>⌥</kbd> et cliquez sur la commande estompée pour la rétablir."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Mantén <kbd>⌥</kbd> y haz clic en el control atenuado para recuperarlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez <kbd>⌥</kbd> et cliquez sur la commande estompée pour la rétablir."
           }
         },
         "ja": {
@@ -5332,10 +6047,10 @@
             "value": "按住<kbd>⌥</kbd>并点击变暗的控件即可恢复它。"
           }
         }
-      },
-      "comment": "OSC guide: opt-click a ghost to re-show it."
+      }
     },
     "Hold <kbd>⌥</kbd> and move over the controls to <accent>peek</accent> at the hidden one.": {
+      "comment": "OSC guide: opt-peek a hidden control.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -5344,16 +6059,16 @@
             "value": "Halten Sie <kbd>⌥</kbd> gedrückt und bewegen Sie den Zeiger über die Steuerelemente, um das <accent>ausgeblendete</accent> kurz einzublenden."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Maintenez <kbd>⌥</kbd> et déplacez le curseur sur les commandes pour <accent>entrevoir</accent> celle qui est masquée."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Mantén <kbd>⌥</kbd> y mueve el cursor sobre los controles para <accent>ver</accent> el oculto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez <kbd>⌥</kbd> et déplacez le curseur sur les commandes pour <accent>entrevoir</accent> celle qui est masquée."
           }
         },
         "ja": {
@@ -5374,10 +6089,10 @@
             "value": "按住<kbd>⌥</kbd>并在控件上移动，即可<accent>预览</accent>隐藏的控件。"
           }
         }
-      },
-      "comment": "OSC guide: opt-peek a hidden control."
+      }
     },
     "Hold <kbd>⌥</kbd> and move to reveal the control you hid. <warn>Release ⌥</warn> to continue.": {
+      "comment": "OSC guide: opt-peek a hidden control.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -5386,16 +6101,16 @@
             "value": "Halten Sie <kbd>⌥</kbd> gedrückt und bewegen Sie den Zeiger, um das ausgeblendete Steuerelement einzublenden. <warn>⌥ loslassen</warn>, um fortzufahren."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Maintenez <kbd>⌥</kbd> et déplacez le curseur pour révéler la commande masquée. <warn>Relâchez ⌥</warn> pour continuer."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Mantén <kbd>⌥</kbd> y mueve el cursor para revelar el control oculto. <warn>Suelta ⌥</warn> para continuar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintenez <kbd>⌥</kbd> et déplacez le curseur pour révéler la commande masquée. <warn>Relâchez ⌥</warn> pour continuer."
           }
         },
         "ja": {
@@ -5416,8 +6131,7 @@
             "value": "按住<kbd>⌥</kbd>并移动以显示你隐藏的控件。<warn>松开 ⌥</warn>以继续。"
           }
         }
-      },
-      "comment": "OSC guide: opt-peek a hidden control."
+      }
     },
     "How animation works": {
       "comment": "Help section title.",
@@ -5546,6 +6260,7 @@
       }
     },
     "Introduction": {
+      "comment": "Help guide title: basic timing walkthrough.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -5554,16 +6269,16 @@
             "value": "Einführung"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Introduction"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Introducción"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Introduction"
           }
         },
         "ja": {
@@ -5584,10 +6299,10 @@
             "value": "入门"
           }
         }
-      },
-      "comment": "Help guide title: basic timing walkthrough."
+      }
     },
     "Keep dragging right, past the keyposes, then release.": {
+      "comment": "Advanced timing guide: finish the marquee drag.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -5596,16 +6311,16 @@
             "value": "Ziehen Sie weiter nach rechts, über die Keyposes hinaus, und lassen Sie dann los."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continuez à glisser vers la droite, au-delà des poses clés, puis relâchez."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Sigue arrastrando a la derecha, más allá de las poses clave, y luego suelta."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuez à glisser vers la droite, au-delà des poses clés, puis relâchez."
           }
         },
         "ja": {
@@ -5626,10 +6341,10 @@
             "value": "继续向右拖动，越过关键姿势，然后松开。"
           }
         }
-      },
-      "comment": "Advanced timing guide: finish the marquee drag."
+      }
     },
     "Keep dragging toward the <warn>glowing target</warn>.": {
+      "comment": "OSC guide: drag-to-target hint.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -5638,16 +6353,16 @@
             "value": "Ziehen Sie weiter zum <warn>leuchtenden Ziel</warn>."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Continuez à faire glisser vers la <warn>cible lumineuse</warn>."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Sigue arrastrando hacia el <warn>objetivo brillante</warn>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuez à faire glisser vers la <warn>cible lumineuse</warn>."
           }
         },
         "ja": {
@@ -5668,8 +6383,7 @@
             "value": "继续拖向<warn>发光的目标</warn>。"
           }
         }
-      },
-      "comment": "OSC guide: drag-to-target hint."
+      }
     },
     "Keypose": {
       "comment": "Noun: a keypose (this app's term for a keyframe-like pose).",
@@ -5756,6 +6470,7 @@
       }
     },
     "Learn the basics of timing": {
+      "comment": "Help guide subtitle: Introduction.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -5764,16 +6479,16 @@
             "value": "Lernen Sie die Grundlagen des Timings"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apprenez les bases du timing"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Aprende los conceptos básicos del timing"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apprenez les bases du timing"
           }
         },
         "ja": {
@@ -5794,8 +6509,7 @@
             "value": "了解时间控制的基础知识"
           }
         }
-      },
-      "comment": "Help guide subtitle: Introduction."
+      }
     },
     "Linear": {
       "comment": "Easing curve name.",
@@ -6176,6 +6890,7 @@
       }
     },
     "Mini Viewer": {
+      "comment": "Help guide title: mini-viewer walkthrough.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -6184,16 +6899,16 @@
             "value": "Mini-Viewer"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mini-visionneuse"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Mini-visor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mini-visionneuse"
           }
         },
         "ja": {
@@ -6214,8 +6929,7 @@
             "value": "迷你检视器"
           }
         }
-      },
-      "comment": "Help guide title: mini-viewer walkthrough."
+      }
     },
     "Modulation": {
       "comment": "Section title: modulation (wobble/drift) settings.",
@@ -6343,44 +7057,44 @@
         }
       }
     },
-    "Motion blur is available on every animatable property. Controls:": {
+    "Motion blur smears anything that is moving, so fast motion looks natural instead of choppy. It works on every animated property. Controls:": {
       "comment": "Help tip rendered from a timeline knowledge doc.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bewegungsunschärfe ist für jede animierbare Eigenschaft verfügbar. Steuerungen:"
+            "value": "Bewegungsunschärfe verschmiert alles, was sich bewegt, damit schnelle Bewegung natürlich statt abgehackt wirkt. Sie funktioniert bei jeder animierten Eigenschaft. Steuerungen:"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "El desenfoque de movimiento está disponible en todas las propiedades animables. Controles:"
+            "value": "El desenfoque de movimiento difumina todo lo que se mueve, para que el movimiento rápido se vea natural en lugar de entrecortado. Funciona en todas las propiedades animadas. Controles:"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Le flou de mouvement est disponible sur chaque propriété animable. Commandes :"
+            "value": "Le flou de mouvement étale tout ce qui bouge, pour qu'un mouvement rapide paraisse naturel plutôt que saccadé. Il fonctionne sur toutes les propriétés animées. Réglages :"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "モーションブラーはすべてのアニメーション可能なプロパティで利用できます。コントロール:"
+            "value": "モーションブラーは動いているものをにじませ、速い動きがカクつかず自然に見えるようにします。アニメートされたすべてのプロパティで機能します。コントロール:"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "모션 블러는 애니메이션 가능한 모든 속성에서 사용할 수 있습니다. 컨트롤:"
+            "value": "모션 블러는 움직이는 모든 것을 번지게 하여 빠른 움직임이 뚝뚝 끊기지 않고 자연스럽게 보이도록 합니다. 애니메이션된 모든 속성에서 작동합니다. 컨트롤:"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "运动模糊可用于每个可设动画的属性。控制项："
+            "value": "运动模糊会把一切正在移动的东西涂抹开,让快速运动看起来自然而不卡顿。它对每个已动画的属性都有效。控制项:"
           }
         }
       }
@@ -6848,6 +7562,7 @@
       }
     },
     "On-Screen Controls": {
+      "comment": "Help guide title: on-screen-control walkthrough.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -6856,16 +7571,16 @@
             "value": "On-Screen-Steuerelemente"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Commandes à l'écran"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Controles en pantalla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commandes à l'écran"
           }
         },
         "ja": {
@@ -6886,10 +7601,10 @@
             "value": "屏幕控件"
           }
         }
-      },
-      "comment": "Help guide title: on-screen-control walkthrough."
+      }
     },
     "On-screen controls show in the viewer only where the property is <accent>constant</accent> or on a <accent>keypose</accent>.": {
+      "comment": "OSC guide: closing note on viewer OSC visibility.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -6898,16 +7613,16 @@
             "value": "On-Screen-Steuerelemente erscheinen im Viewer nur dort, wo die Eigenschaft <accent>konstant</accent> ist oder auf einer <accent>Keypose</accent> liegt."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les commandes à l'écran n'apparaissent dans le visualiseur que là où la propriété est <accent>constante</accent> ou sur une <accent>pose clé</accent>."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Los controles en pantalla solo aparecen en el visor donde la propiedad es <accent>constante</accent> o está en una <accent>pose clave</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les commandes à l'écran n'apparaissent dans le visualiseur que là où la propriété est <accent>constante</accent> ou sur une <accent>pose clé</accent>."
           }
         },
         "ja": {
@@ -6928,10 +7643,10 @@
             "value": "屏幕控件仅在属性<accent>恒定</accent>或位于<accent>关键姿势</accent>处时才显示在检视器中。"
           }
         }
-      },
-      "comment": "OSC guide: closing note on viewer OSC visibility."
+      }
     },
     "Open <accent>settings</accent> to hide controls one at a time.": {
+      "comment": "OSC guide: open the OSC settings gear.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -6940,16 +7655,16 @@
             "value": "Öffnen Sie die <accent>Einstellungen</accent>, um Steuerelemente einzeln auszublenden."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ouvrez les <accent>réglages</accent> pour masquer les commandes une par une."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Abre los <accent>ajustes</accent> para ocultar los controles uno a uno."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ouvrez les <accent>réglages</accent> pour masquer les commandes une par une."
           }
         },
         "ja": {
@@ -6970,8 +7685,7 @@
             "value": "打开<accent>设置</accent>来逐个隐藏控件。"
           }
         }
-      },
-      "comment": "OSC guide: open the OSC settings gear."
+      }
     },
     "Open help": {
       "comment": "Help button tooltip",
@@ -7058,6 +7772,7 @@
       }
     },
     "Open the keypose again.": {
+      "comment": "OSC guide: re-open the keypose mini viewer.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -7066,16 +7781,16 @@
             "value": "Öffnen Sie die Keypose erneut."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rouvrez la pose clé."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Vuelve a abrir la pose clave."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rouvrez la pose clé."
           }
         },
         "ja": {
@@ -7096,8 +7811,7 @@
             "value": "再次打开关键姿势。"
           }
         }
-      },
-      "comment": "OSC guide: re-open the keypose mini viewer."
+      }
     },
     "Open your presets to get started.": {
       "comment": "Presets guide step: open the popover.",
@@ -7142,6 +7856,7 @@
       }
     },
     "Or hold <kbd>⌥</kbd> and click a control in the viewer to hide it.": {
+      "comment": "OSC guide: opt-click to hide a control.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -7150,16 +7865,16 @@
             "value": "Oder halten Sie <kbd>⌥</kbd> gedrückt und klicken Sie im Viewer auf ein Steuerelement, um es auszublenden."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ou maintenez <kbd>⌥</kbd> et cliquez sur une commande dans le visualiseur pour la masquer."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "O mantén <kbd>⌥</kbd> y haz clic en un control del visor para ocultarlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ou maintenez <kbd>⌥</kbd> et cliquez sur une commande dans le visualiseur pour la masquer."
           }
         },
         "ja": {
@@ -7180,8 +7895,7 @@
             "value": "或按住<kbd>⌥</kbd>并点击检视器中的控件即可隐藏它。"
           }
         }
-      },
-      "comment": "OSC guide: opt-click to hide a control."
+      }
     },
     "Oscillate": {
       "comment": "Hold modulation name.",
@@ -7403,16 +8117,16 @@
             "value": "Wählen Sie <accent>%@</accent> für ein lebhaftes Überschwingen."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choisissez <accent>%@</accent> pour un rebond dynamique."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Elige <accent>%@</accent> para un rebote enérgico."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choisissez <accent>%@</accent> pour un rebond dynamique."
           }
         },
         "ja": {
@@ -7478,6 +8192,7 @@
       }
     },
     "Plugins don't animate by default. Tap <symbol plus.circle.fill color=accent /> to give a property a lane.": {
+      "comment": "Timing guide: open the Animated dropdown.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -7486,16 +8201,16 @@
             "value": "Plug-ins animieren standardmäßig nicht. Tippen Sie auf <symbol plus.circle.fill color=accent />, um einer Eigenschaft eine Spur zu geben."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les plug-ins ne s'animent pas par défaut. Touchez <symbol plus.circle.fill color=accent /> pour donner une piste à une propriété."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Los plugins no se animan por omisión. Toca <symbol plus.circle.fill color=accent /> para dar una pista a una propiedad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les plug-ins ne s'animent pas par défaut. Touchez <symbol plus.circle.fill color=accent /> pour donner une piste à une propriété."
           }
         },
         "ja": {
@@ -7516,8 +8231,7 @@
             "value": "插件默认不制作动画。轻点 <symbol plus.circle.fill color=accent /> 为属性添加一条轨道。"
           }
         }
-      },
-      "comment": "Timing guide: open the Animated dropdown."
+      }
     },
     "Pop In": {
       "comment": "Built-in preset name: scale + opacity grow in.",
@@ -7772,6 +8486,7 @@
       }
     },
     "Preview keyposes, with filmstrip and onion-skin": {
+      "comment": "Help guide subtitle: Mini Viewer.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -7780,16 +8495,16 @@
             "value": "Keyposes mit Filmstreifen und Zwiebelhaut in der Vorschau ansehen"
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Prévisualisez les poses clés avec pellicule et pelure d'oignon"
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Previsualiza poses clave con tira de fotogramas y papel cebolla"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prévisualisez les poses clés avec pellicule et pelure d'oignon"
           }
         },
         "ja": {
@@ -7810,8 +8525,7 @@
             "value": "通过胶片和洋葱皮预览关键姿势"
           }
         }
-      },
-      "comment": "Help guide subtitle: Mini Viewer."
+      }
     },
     "Pulsing Glow": {
       "comment": "Built-in preset name: the glow radius pulses in and out.",
@@ -8485,6 +9199,48 @@
         }
       }
     },
+    "Save an animation you like and reuse it on any clip from the <accent>Presets</accent> row:": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Speichern Sie eine Animation, die Ihnen gefällt, und verwenden Sie sie über die Zeile <accent>Vorgaben</accent> auf jedem Clip wieder:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guarda una animación que te guste y reutilízala en cualquier clip desde la fila <accent>Ajustes preestablecidos</accent>:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistrez une animation qui vous plaît et réutilisez-la sur n'importe quel clip depuis la ligne <accent>Préréglages</accent> :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "気に入ったアニメーションを保存し、<accent>プリセット</accent>の行からどのクリップにも再利用できます:"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "마음에 드는 애니메이션을 저장하고 <accent>프리셋</accent> 행에서 어떤 클립에나 다시 사용하세요:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把喜欢的动画保存下来,并从<accent>预设</accent>一行在任何片段上重复使用:"
+          }
+        }
+      }
+    },
     "Save preset": {
       "comment": "Accessibility: save the current animation as a preset.",
       "extractionState": "manual",
@@ -8570,8 +9326,8 @@
       }
     },
     "Scroll or pinch to <accent>zoom</accent> in and out.": {
-      "extractionState": "manual",
       "comment": "Mini-viewer guide: zoom the canvas.",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -8579,16 +9335,16 @@
             "value": "Scrollen oder zwei Finger spreizen zum <accent>Zoomen</accent>."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Faites défiler ou pincez pour <accent>zoomer</accent>."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Desplázate o pellizca para <accent>hacer zoom</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites défiler ou pincez pour <accent>zoomer</accent>."
           }
         },
         "ja": {
@@ -8864,6 +9620,7 @@
       }
     },
     "Show only the on-screen controls you're working with.": {
+      "comment": "OSC guide: closing benefit step.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -8872,16 +9629,16 @@
             "value": "Zeigen Sie nur die On-Screen-Steuerelemente an, mit denen Sie gerade arbeiten."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "N'affichez que les commandes à l'écran que vous utilisez."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Muestra solo los controles en pantalla con los que estás trabajando."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "N'affichez que les commandes à l'écran que vous utilisez."
           }
         },
         "ja": {
@@ -8902,8 +9659,7 @@
             "value": "只显示你正在使用的屏幕控件。"
           }
         }
-      },
-      "comment": "OSC guide: closing benefit step."
+      }
     },
     "Show or hide several lanes at once": {
       "comment": "Help shortcut.",
@@ -9199,91 +9955,8 @@
         }
       }
     },
-    "Some plugins group their properties into categories (for example Glow's <accent>Core</accent> and <accent>Noise</accent>). When there is more than one category, <accent>category pills</accent> let you switch between groups in the value-editor popover, the Animated dropdown, and the parameter list, and a <accent>filter bar</accent> above the Advanced timeline lets you show, hide, or solo lanes so you can focus on a few at a time. Categories are optional - a plugin with no categories just lists its properties flat.": {
-      "comment": "Help tip rendered from a timeline knowledge doc.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Manche Plug-ins gruppieren ihre Eigenschaften in Kategorien (zum Beispiel <accent>Kern</accent> und <accent>Rauschen</accent> bei Glow). Bei mehr als einer Kategorie können Sie mit <accent>Kategorie-Pills</accent> zwischen Gruppen im Werte-Editor-Popover, im Animiert-Menü und in der Eigenschaftenliste wechseln, und eine <accent>Filterleiste</accent> über der erweiterten Timeline blendet Spuren ein, aus oder schaltet sie solo, damit Sie sich auf wenige konzentrieren können. Kategorien sind optional - ein Plug-in ohne Kategorien listet seine Eigenschaften einfach flach auf."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Algunos plugins agrupan sus propiedades en categorías (por ejemplo <accent>Núcleo</accent> y <accent>Ruido</accent> en Glow). Cuando hay más de una categoría, las <accent>píldoras de categoría</accent> permiten cambiar entre grupos en el popover del editor de valores, el menú Animado y la lista de propiedades, y una <accent>barra de filtro</accent> sobre la línea de tiempo Avanzada permite mostrar, ocultar o aislar carriles para centrarte en unos pocos. Las categorías son opcionales: un plugin sin categorías simplemente lista sus propiedades de forma plana."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Certains plug-ins regroupent leurs propriétés en catégories (par exemple <accent>Noyau</accent> et <accent>Bruit</accent> dans Glow). Quand il y a plus d’une catégorie, les <accent>pastilles de catégorie</accent> permettent de basculer entre les groupes dans le popover de l’éditeur de valeurs, le menu Animé et la liste des propriétés, et une <accent>barre de filtre</accent> au-dessus de la timeline Avancée permet d’afficher, masquer ou isoler des pistes pour vous concentrer sur quelques-unes. Les catégories sont facultatives - un plug-in sans catégories liste simplement ses propriétés à plat."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一部のプラグインはプロパティをカテゴリにまとめます(例: Glowの<accent>コア</accent>と<accent>ノイズ</accent>)。カテゴリが複数ある場合、<accent>カテゴリピル</accent>で値エディタのポップオーバー、アニメーションメニュー、プロパティリストのグループを切り替えられます。また、詳細タイムラインの上の<accent>フィルターバー</accent>でレーンを表示・非表示・ソロにして、いくつかに集中できます。カテゴリは任意です。カテゴリのないプラグインはプロパティをフラットに並べるだけです。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "일부 플러그인은 속성을 카테고리로 묶습니다(예: Glow의 <accent>코어</accent>와 <accent>노이즈</accent>). 카테고리가 둘 이상이면 <accent>카테고리 알약</accent>으로 값 편집기 팝오버, 애니메이션 메뉴, 속성 목록에서 그룹을 전환할 수 있고, 고급 타임라인 위의 <accent>필터 막대</accent>로 레인을 표시·숨김·솔로하여 몇 개에만 집중할 수 있습니다. 카테고리는 선택 사항입니다. 카테고리가 없는 플러그인은 속성을 평면으로 나열합니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "某些插件会将其属性归入类别（例如 Glow 的<accent>核心</accent>和<accent>噪点</accent>）。当类别多于一个时，<accent>类别药丸</accent>可在值编辑器弹出窗口、“已添加动画”菜单和属性列表中切换组，而“高级”时间线上方的<accent>筛选栏</accent>可显示、隐藏或独显轨道，让你专注于少数几个。类别是可选的--没有类别的插件只是平铺列出其属性。"
-          }
-        }
-      }
-    },
-    "Some plugins group their properties into categories (for example Glow's <accent>Core</accent> and <accent>Noise</accent>). When there is more than one category, <accent>category pills</accent> let you switch between groups in the value-editor popover, the Animated dropdown, and the parameter list, and a <accent>lane filter</accent> on the Advanced timeline lets you show or hide individual properties so you can focus on a few at a time. Categories are optional - a plugin with no categories just lists its properties flat.": {
-      "comment": "Help tip rendered from a timeline knowledge doc.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Manche Plug-ins gruppieren ihre Eigenschaften in Kategorien (zum Beispiel <accent>Kern</accent> und <accent>Rauschen</accent> bei Glow). Bei mehr als einer Kategorie können Sie mit <accent>Kategorie-Pills</accent> zwischen Gruppen im Werte-Editor-Popover, im Animiert-Menü und in der Eigenschaftenliste wechseln, und ein <accent>Spurenfilter</accent> auf der erweiterten Timeline blendet einzelne Eigenschaften ein oder aus, damit Sie sich auf wenige konzentrieren können. Kategorien sind optional - ein Plug-in ohne Kategorien listet seine Eigenschaften einfach flach auf."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Algunos plugins agrupan sus propiedades en categorías (por ejemplo <accent>Núcleo</accent> y <accent>Ruido</accent> en Glow). Cuando hay más de una categoría, las <accent>píldoras de categoría</accent> permiten cambiar entre grupos en el popover del editor de valores, el menú Animado y la lista de propiedades, y un <accent>filtro de carriles</accent> en la línea de tiempo Avanzada permite mostrar u ocultar propiedades concretas para centrarte en unas pocas. Las categorías son opcionales: un plugin sin categorías simplemente lista sus propiedades de forma plana."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Certains plug-ins regroupent leurs propriétés en catégories (par exemple <accent>Noyau</accent> et <accent>Bruit</accent> dans Glow). Quand il y a plus d’une catégorie, les <accent>pastilles de catégorie</accent> permettent de basculer entre les groupes dans le popover de l’éditeur de valeurs, le menu Animé et la liste des propriétés, et un <accent>filtre de pistes</accent> sur la timeline Avancée permet d’afficher ou masquer des propriétés individuelles pour vous concentrer sur quelques-unes. Les catégories sont facultatives - un plug-in sans catégories liste simplement ses propriétés à plat."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一部のプラグインはプロパティをカテゴリにまとめます(例: Glowの<accent>コア</accent>と<accent>ノイズ</accent>)。カテゴリが複数ある場合、<accent>カテゴリピル</accent>で値エディタのポップオーバー、アニメーションメニュー、プロパティリストのグループを切り替えられます。また、詳細タイムラインの<accent>レーンフィルター</accent>で個々のプロパティを表示・非表示にして、いくつかに集中できます。カテゴリは任意です。カテゴリのないプラグインはプロパティをフラットに並べるだけです。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "일부 플러그인은 속성을 카테고리로 묶습니다(예: Glow의 <accent>코어</accent>와 <accent>노이즈</accent>). 카테고리가 둘 이상이면 <accent>카테고리 알약</accent>으로 값 편집기 팝오버, 애니메이션 메뉴, 속성 목록에서 그룹을 전환할 수 있고, 고급 타임라인의 <accent>레인 필터</accent>로 개별 속성을 표시하거나 숨겨 몇 개에만 집중할 수 있습니다. 카테고리는 선택 사항입니다. 카테고리가 없는 플러그인은 속성을 평면으로 나열합니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "某些插件会将其属性归入类别（例如 Glow 的<accent>核心</accent>和<accent>噪点</accent>）。当类别多于一个时，<accent>类别药丸</accent>可在值编辑器弹出窗口、“已添加动画”菜单和属性列表中切换组，而“高级”时间线上的<accent>轨道筛选器</accent>可显示或隐藏单个属性，让你专注于少数几个。类别是可选的--没有类别的插件只是平铺列出其属性。"
-          }
-        }
-      }
-    },
     "Start a drag in the <accent>highlighted region</accent> and move right to box-select several keyposes.": {
+      "comment": "Advanced timing guide: start a marquee selection.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -9292,16 +9965,16 @@
             "value": "Beginnen Sie einen Zug im <accent>markierten Bereich</accent> und ziehen Sie nach rechts, um mehrere Keyposes per Rahmen auszuwählen."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Commencez un glissement dans la <accent>zone en surbrillance</accent> et déplacez-vous vers la droite pour sélectionner plusieurs poses clés au cadre."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Empieza a arrastrar en la <accent>región resaltada</accent> y muévete a la derecha para seleccionar varias poses clave con un recuadro."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commencez un glissement dans la <accent>zone en surbrillance</accent> et déplacez-vous vers la droite pour sélectionner plusieurs poses clés au cadre."
           }
         },
         "ja": {
@@ -9322,10 +9995,10 @@
             "value": "在<accent>高亮区域</accent>中开始拖动并向右移动，框选多个关键姿势。"
           }
         }
-      },
-      "comment": "Advanced timing guide: start a marquee selection."
+      }
     },
     "Switch a control <warn>off</warn> to hide just that one.": {
+      "comment": "OSC guide: toggle a per-element pill off.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -9334,16 +10007,16 @@
             "value": "Schalten Sie ein Steuerelement <warn>aus</warn>, um nur dieses auszublenden."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Réglez une commande sur <warn>arrêt</warn> pour ne masquer que celle-ci."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Pon un control en <warn>apagado</warn> para ocultar solo ese."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réglez une commande sur <warn>arrêt</warn> pour ne masquer que celle-ci."
           }
         },
         "ja": {
@@ -9364,8 +10037,7 @@
             "value": "将某个控件<warn>关闭</warn>，即可仅隐藏该控件。"
           }
         }
-      },
-      "comment": "OSC guide: toggle a per-element pill off."
+      }
     },
     "Switch anyway": {
       "comment": "Alert button: switch despite the warning.",
@@ -9452,6 +10124,7 @@
       }
     },
     "Tap <accent>Advanced</accent> for the per-property timeline.": {
+      "comment": "Advanced timing guide: open the Advanced editor.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -9460,16 +10133,16 @@
             "value": "Tippen Sie auf <accent>Erweitert</accent> für die Timeline pro Eigenschaft."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Touchez <accent>Avancé</accent> pour la timeline par propriété."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Toca <accent>Avanzado</accent> para la línea de tiempo por propiedad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez <accent>Avancé</accent> pour la timeline par propriété."
           }
         },
         "ja": {
@@ -9490,8 +10163,7 @@
             "value": "点击<accent>高级</accent>查看按属性的时间线。"
           }
         }
-      },
-      "comment": "Advanced timing guide: open the Advanced editor."
+      }
     },
     "Tap <accent>Dynamic</accent> to space out short transitions so they stay easy to grab on a long clip.": {
       "comment": "Advanced timing guide: try the Dynamic display toggle.",
@@ -9536,8 +10208,8 @@
       }
     },
     "Tap <accent>Filmstrip</accent> to lay out every keypose.": {
-      "extractionState": "manual",
       "comment": "Mini-viewer guide: switch to filmstrip mode.",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -9545,16 +10217,16 @@
             "value": "Tippen Sie auf <accent>Filmstreifen</accent>, um alle Keyposes anzuordnen."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Touchez <accent>Pellicule</accent> pour disposer toutes les poses clés."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Toca <accent>Tira de fotogramas</accent> para distribuir todas las poses clave."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez <accent>Pellicule</accent> pour disposer toutes les poses clés."
           }
         },
         "ja": {
@@ -9578,8 +10250,8 @@
       }
     },
     "Tap <accent>Large</accent> for a bigger preview.": {
-      "extractionState": "manual",
       "comment": "Mini-viewer guide: enlarge the preview.",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -9587,16 +10259,16 @@
             "value": "Tippen Sie auf <accent>Groß</accent> für eine größere Vorschau."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Touchez <accent>Grand</accent> pour un aperçu plus grand."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Toca <accent>Grande</accent> para una vista previa más grande."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez <accent>Grand</accent> pour un aperçu plus grand."
           }
         },
         "ja": {
@@ -9620,8 +10292,8 @@
       }
     },
     "Tap <accent>Onion</accent> to stack the frames.": {
-      "extractionState": "manual",
       "comment": "Mini-viewer guide: switch to onion-skin mode.",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -9629,16 +10301,16 @@
             "value": "Tippen Sie auf <accent>Zwiebelhaut</accent>, um die Bilder zu stapeln."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Touchez <accent>Pelure d'oignon</accent> pour superposer les images."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Toca <accent>Papel cebolla</accent> para apilar los fotogramas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touchez <accent>Pelure d'oignon</accent> pour superposer les images."
           }
         },
         "ja": {
@@ -9662,6 +10334,7 @@
       }
     },
     "That's <accent>Advanced</accent> timing: add keyposes anywhere and shape each one independently.": {
+      "comment": "Advanced timing guide: closing step.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -9670,16 +10343,16 @@
             "value": "Das ist <accent>Erweitertes</accent> Timing: Keyposes überall hinzufügen und jede einzeln gestalten."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Voilà le timing <accent>Avancé</accent> : ajoutez des poses clés où vous voulez et façonnez-les une à une."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Eso es el timing <accent>Avanzado</accent>: añade poses clave donde quieras y da forma a cada una de forma independiente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voilà le timing <accent>Avancé</accent> : ajoutez des poses clés où vous voulez et façonnez-les une à une."
           }
         },
         "ja": {
@@ -9700,10 +10373,10 @@
             "value": "这就是<accent>高级</accent>时间控制：在任意位置添加关键姿势，并独立调整每一个。"
           }
         }
-      },
-      "comment": "Advanced timing guide: closing step."
+      }
     },
     "That's the <accent>basics</accent> of timing.": {
+      "comment": "Timing guide: closing step.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -9712,16 +10385,16 @@
             "value": "Das sind die <accent>Grundlagen</accent> des Timings."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Voilà les <accent>bases</accent> du timing."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Esos son los <accent>conceptos básicos</accent> del timing."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voilà les <accent>bases</accent> du timing."
           }
         },
         "ja": {
@@ -9742,8 +10415,49 @@
             "value": "这就是时间控制的<accent>基础</accent>。"
           }
         }
-      },
-      "comment": "Timing guide: closing step."
+      }
+    },
+    "The <accent>Dynamic</accent> toolbar toggle stretches out short moves so they stay easy to grab on a long clip, and each lane gets its own playback line. It only changes how the timeline looks, is off to start, and never changes the animation.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Umschalter <accent>Dynamisch</accent> in der Werkzeugleiste dehnt kurze Bewegungen aus, damit sie in einem langen Clip gut greifbar bleiben, und jede Spur erhält ihre eigene Wiedergabelinie. Er ändert nur, wie die Timeline aussieht, ist anfangs aus und ändert nie die Animation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El interruptor <accent>Dinámico</accent> de la barra de herramientas estira los movimientos cortos para que sigan siendo fáciles de agarrar en un clip largo, y cada pista recibe su propia línea de reproducción. Solo cambia cómo se ve la línea de tiempo, está desactivado al principio y nunca cambia la animación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bouton <accent>Dynamique</accent> de la barre d'outils étire les mouvements courts pour qu'ils restent faciles à saisir sur un clip long, et chaque piste reçoit sa propre ligne de lecture. Il ne change que l'apparence de la timeline, est désactivé au départ et ne modifie jamais l'animation."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ツールバーの<accent>ダイナミック</accent>トグルは短い動きを引き伸ばし、長いクリップでもつかみやすく保ちます。各レーンには独自の再生ラインが付きます。タイムラインの見た目を変えるだけで、最初はオフ、アニメーションは決して変えません。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "툴바의 <accent>다이내믹</accent> 토글은 짧은 움직임을 늘려 긴 클립에서도 쉽게 잡을 수 있게 하고, 각 레인에 고유한 재생 선이 생깁니다. 타임라인의 모습만 바꿀 뿐 처음에는 꺼져 있으며 애니메이션은 절대 바꾸지 않습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具栏上的<accent>动态</accent>开关会把短小的运动拉长,让它们在长片段中依然容易抓取,每条轨道也会有自己的播放线。它只改变时间线的外观,初始为关闭,绝不会改动画本身。"
+          }
+        }
+      }
     },
     "The <accent>Dynamic</accent> toolbar toggle widens short transitions so they stay easy to grab on a long clip; each lane then shows its own playback line. It's display-only, off by default, and never changes the animation.": {
       "comment": "Help tip: the Dynamic toolbar toggle (nested under Advanced).",
@@ -9829,7 +10543,50 @@
         }
       }
     },
+    "The <accent>Maintain Timing</accent> toolbar toggle is a lock that pins the animation to real clip time. With it on, trimming, lengthening, or splitting the clip keeps each keypose at its moment instead of stretching everything, and a split stays smooth across the cut. It writes the new timing into the clip, so it sticks even after you turn the lock off.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Umschalter <accent>Timing beibehalten</accent> in der Werkzeugleiste ist eine Sperre, die die Animation an die echte Cliptzeit bindet. Ist sie an, halten Trimmen, Verlängern oder Teilen des Clips jede Keypose an ihrem Moment fest, statt alles zu dehnen, und ein Schnitt bleibt sauber. Sie schreibt das neue Timing in den Clip, sodass es auch nach dem Ausschalten der Sperre erhalten bleibt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El interruptor <accent>Mantener sincronización</accent> de la barra de herramientas es un bloqueo que fija la animación al tiempo real del clip. Con él activado, recortar, alargar o dividir el clip mantiene cada pose clave en su momento en lugar de estirarlo todo, y una división queda continua en el corte. Escribe la nueva sincronización en el clip, así que se conserva aunque quites el bloqueo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bouton <accent>Conserver la synchro</accent> de la barre d'outils est un verrou qui fixe l'animation au temps réel du clip. Activé, rogner, allonger ou diviser le clip garde chaque pose clé à son instant au lieu de tout étirer, et une coupe reste continue. Il inscrit la nouvelle synchro dans le clip, elle est donc conservée même après avoir désactivé le verrou."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ツールバーの<accent>タイミングを維持</accent>トグルは、アニメーションを実際のクリップ時間に固定するロックです。オンにすると、クリップのトリミング、延長、分割をしても、すべてを引き伸ばす代わりに各キーポーズをその瞬間に留め、分割してもカットをまたいで滑らかに続きます。新しいタイミングをクリップに書き込むため、ロックをオフにしても保たれます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "툴바의 <accent>타이밍 유지</accent> 토글은 애니메이션을 실제 클립 시간에 고정하는 잠금입니다. 켜면 클립을 다듬거나 늘리거나 나눠도 전체를 늘리는 대신 각 키포즈를 그 순간에 유지하고, 나눈 자리도 자연스럽게 이어집니다. 새 타이밍을 클립에 기록하므로 잠금을 꺼도 유지됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具栏上的<accent>保持计时</accent>开关是一把锁,把动画固定到片段的真实时间上。开启后,修剪、加长或分割片段时,每个关键姿势都停留在它自己的时刻,而不是整体拉伸,分割处也会平滑衔接。它把新的计时写入片段,因此即使关掉这把锁也依然生效。"
+          }
+        }
+      }
+    },
     "The <accent>graph</accent> updates to show the movement.": {
+      "comment": "Timing guide: the graph reflects the transition.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -9838,16 +10595,16 @@
             "value": "Das <accent>Diagramm</accent> wird aktualisiert und zeigt die Bewegung."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Le <accent>graphique</accent> se met à jour pour montrer le mouvement."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "El <accent>gráfico</accent> se actualiza para mostrar el movimiento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le <accent>graphique</accent> se met à jour pour montrer le mouvement."
           }
         },
         "ja": {
@@ -9868,10 +10625,52 @@
             "value": "<accent>图表</accent>会更新以显示运动。"
           }
         }
-      },
-      "comment": "Timing guide: the graph reflects the transition."
+      }
+    },
+    "The <accent>lane filter</accent> on the Advanced timeline lets you show or hide individual property lanes, so you can focus on just a few at a time. It works on any plugin, whether or not its properties are grouped.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der <accent>Spurenfilter</accent> in der erweiterten Timeline lässt dich einzelne Eigenschaftsspuren ein- oder ausblenden, damit du dich auf ein paar konzentrieren kannst. Er funktioniert bei jedem Plug-in, ob seine Eigenschaften gruppiert sind oder nicht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El <accent>filtro de pistas</accent> en la línea de tiempo Avanzada te permite mostrar u ocultar pistas de propiedad concretas, para que te centres en unas pocas a la vez. Funciona en cualquier plugin, tenga o no agrupadas sus propiedades."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le <accent>filtre de pistes</accent> sur la timeline Avancée vous permet d’afficher ou de masquer des pistes de propriété précises, pour vous concentrer sur quelques-unes à la fois. Il fonctionne sur tout plugin, que ses propriétés soient groupées ou non."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アドバンスのタイムラインにある<accent>レーンフィルター</accent>で、個々のプロパティのレーンを表示または非表示にして、いくつかに絞って作業できます。プロパティがグループ分けされているかどうかにかかわらず、どのプラグインでも使えます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "고급 타임라인의 <accent>레인 필터</accent>로 개별 속성 레인을 보이거나 숨겨 한 번에 몇 개에 집중할 수 있습니다. 속성이 그룹으로 묶여 있든 아니든 모든 플러그인에서 작동합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高级时间线上的<accent>轨道筛选</accent>可让你显示或隐藏单个属性轨道，以便一次专注于少数几个。无论插件的属性是否分组，它都能使用。"
+          }
+        }
+      }
     },
     "The <accent>mini viewer</accent> previews your clip at this keypose.": {
+      "comment": "Mini-viewer guide: what the preview shows.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -9880,16 +10679,16 @@
             "value": "Der <accent>Mini-Viewer</accent> zeigt eine Vorschau Ihres Clips bei dieser Keypose."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La <accent>mini-visionneuse</accent> prévisualise votre plan à cette pose clé."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "El <accent>mini-visor</accent> previsualiza tu clip en esta pose clave."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La <accent>mini-visionneuse</accent> prévisualise votre plan à cette pose clé."
           }
         },
         "ja": {
@@ -9910,10 +10709,10 @@
             "value": "<accent>迷你检视器</accent>会预览此关键姿势处的片段。"
           }
         }
-      },
-      "comment": "Mini-viewer guide: what the preview shows."
+      }
     },
     "The <accent>mini viewer</accent> shows the clip here. Drag the handle to the <warn>target</warn>.": {
+      "comment": "Timing guide: drag the keypose value to a target.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -9922,16 +10721,16 @@
             "value": "Der <accent>Mini-Viewer</accent> zeigt hier den Clip. Ziehen Sie den Griff zum <warn>Ziel</warn>."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "La <accent>mini-visionneuse</accent> affiche le plan ici. Faites glisser la poignée vers la <warn>cible</warn>."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "El <accent>mini-visor</accent> muestra el clip aquí. Arrastra el tirador hasta el <warn>objetivo</warn>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La <accent>mini-visionneuse</accent> affiche le plan ici. Faites glisser la poignée vers la <warn>cible</warn>."
           }
         },
         "ja": {
@@ -9952,10 +10751,10 @@
             "value": "<accent>迷你检视器</accent>在此显示片段。将控制柄拖到<warn>目标</warn>。"
           }
         }
-      },
-      "comment": "Timing guide: drag the keypose value to a target."
+      }
     },
     "The controls are on the <accent>mini viewer</accent> too. Click a keypose to open it.": {
+      "comment": "OSC guide: open a keypose mini viewer.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -9964,16 +10763,16 @@
             "value": "Die Steuerelemente sind auch im <accent>Mini-Viewer</accent>. Klicken Sie auf eine Keypose, um ihn zu öffnen."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les commandes sont aussi dans la <accent>mini-visionneuse</accent>. Cliquez sur une pose clé pour l'ouvrir."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Los controles también están en el <accent>mini-visor</accent>. Haz clic en una pose clave para abrirlo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les commandes sont aussi dans la <accent>mini-visionneuse</accent>. Cliquez sur une pose clé pour l'ouvrir."
           }
         },
         "ja": {
@@ -9994,8 +10793,7 @@
             "value": "控件也在<accent>迷你检视器</accent>中。点击一个关键姿势来打开它。"
           }
         }
-      },
-      "comment": "OSC guide: open a keypose mini viewer."
+      }
     },
     "These <accent>filter</accent> pills show or hide lanes - tap one to focus the timeline on the properties you care about.": {
       "comment": "Advanced timing guide: try the lane-filter pills.",
@@ -10082,6 +10880,7 @@
       }
     },
     "This is where you shape <accent>timing</accent>: how a property changes over the clip.": {
+      "comment": "Timing guide: intro to the timing editor.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -10090,16 +10889,16 @@
             "value": "Hier gestalten Sie das <accent>Timing</accent>: wie sich eine Eigenschaft über den Clip verändert."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "C'est ici que vous façonnez le <accent>timing</accent> : comment une propriété évolue au fil du plan."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Aquí defines el <accent>timing</accent>: cómo cambia una propiedad a lo largo del clip."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "C'est ici que vous façonnez le <accent>timing</accent> : comment une propriété évolue au fil du plan."
           }
         },
         "ja": {
@@ -10120,8 +10919,7 @@
             "value": "在这里塑造<accent>时间控制</accent>：属性如何在片段中变化。"
           }
         }
-      },
-      "comment": "Timing guide: intro to the timing editor."
+      }
     },
     "Timing shortcuts": {
       "comment": "Help section title.",
@@ -10207,6 +11005,48 @@
         }
       }
     },
+    "To move from one look to another, drop a keypose where it starts and another where it ends. The interval fills in the motion between them. To pause the motion in the middle, add two keyposes with linked ends across the part you want to hold still.": {
+      "comment": "Help tip rendered from a timeline knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um von einem Look zum anderen zu wechseln, setzen Sie eine Keypose an den Anfang und eine ans Ende. Das Intervall füllt die Bewegung dazwischen aus. Um die Bewegung in der Mitte anzuhalten, fügen Sie über dem stillzuhaltenden Bereich zwei Keyposes mit verbundenen Enden ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para pasar de un aspecto a otro, coloca una pose clave donde empiece y otra donde termine. El intervalo completa el movimiento entre ambas. Para pausar el movimiento en medio, añade dos poses clave con los extremos enlazados sobre la parte que quieras mantener inmóvil."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pour passer d'un aspect à un autre, déposez une pose clé au début et une autre à la fin. L'intervalle remplit le mouvement entre les deux. Pour mettre le mouvement en pause au milieu, ajoutez deux poses clés aux extrémités liées sur la partie à garder immobile."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ある見た目から別の見た目へ動かすには、始まりにキーポーズを1つ、終わりにもう1つ置きます。その間の動きはインターバルが埋めます。途中で動きを止めるには、静止させたい部分に両端をリンクした2つのキーポーズを追加します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한 모습에서 다른 모습으로 옮기려면 시작점에 키포즈 하나, 끝점에 하나를 놓으세요. 그 사이의 움직임은 인터벌이 채웁니다. 중간에 움직임을 멈추려면 정지시키려는 구간에 양 끝을 연결한 키포즈 두 개를 추가하세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要从一种效果过渡到另一种,在起点放一个关键姿势,在终点再放一个。区间会填补两者之间的运动。要让运动在中间暂停,在想保持静止的那段两端各放一个已连接两端的关键姿势。"
+          }
+        }
+      }
+    },
     "To save your own, type a name here and press +.": {
       "comment": "Presets guide step: save.",
       "extractionState": "manual",
@@ -10250,6 +11090,7 @@
       }
     },
     "Turn <accent>In</accent> on to ease into the value from the start.": {
+      "comment": "Timing guide: enable the In transition.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -10258,16 +11099,16 @@
             "value": "Schalten Sie <accent>Ein</accent> ein, um vom Anfang an sanft in den Wert überzugehen."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Activez <accent>Entrée</accent> pour entrer progressivement dans la valeur dès le début."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Activa <accent>Entrada</accent> para entrar suavemente en el valor desde el inicio."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activez <accent>Entrée</accent> pour entrer progressivement dans la valeur dès le début."
           }
         },
         "ja": {
@@ -10288,10 +11129,10 @@
             "value": "打开<accent>进入</accent>，从开头平滑过渡到该值。"
           }
         }
-      },
-      "comment": "Timing guide: enable the In transition."
+      }
     },
     "Turn the <accent>checkbox</accent> off to hide them all.": {
+      "comment": "OSC guide: master toggle off.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -10300,16 +11141,16 @@
             "value": "Schalten Sie das <accent>Kontrollkästchen</accent> aus, um alle auszublenden."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Décochez la <accent>case</accent> pour toutes les masquer."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Desactiva la <accent>casilla</accent> para ocultarlos todos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Décochez la <accent>case</accent> pour toutes les masquer."
           }
         },
         "ja": {
@@ -10330,8 +11171,7 @@
             "value": "取消勾选<accent>复选框</accent>即可全部隐藏。"
           }
         }
-      },
-      "comment": "OSC guide: master toggle off."
+      }
     },
     "Uncheck a <accent>property</accent> to hide its lane and focus the timeline.": {
       "comment": "Advanced timing guide: toggle a property in the filter checklist.",
@@ -10502,8 +11342,8 @@
       }
     },
     "Use the <accent>mini viewer</accent> to edit a keypose at its point in time, without scrubbing the timeline there.": {
-      "extractionState": "manual",
       "comment": "Mini-viewer guide: closing benefit step.",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -10511,16 +11351,16 @@
             "value": "Mit dem <accent>Mini-Viewer</accent> bearbeiten Sie eine Keypose zu ihrem Zeitpunkt, ohne in der Timeline dorthin zu scrubben."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Utilisez la <accent>mini-visionneuse</accent> pour modifier une pose clé à son instant précis, sans parcourir la timeline jusque-là."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Usa el <accent>mini-visor</accent> para editar una pose clave en su momento exacto, sin desplazarte por la línea de tiempo hasta ahí."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilisez la <accent>mini-visionneuse</accent> pour modifier une pose clé à son instant précis, sans parcourir la timeline jusque-là."
           }
         },
         "ja": {
@@ -10544,6 +11384,7 @@
       }
     },
     "Values you don't animate stay <accent>constant</accent>. Open the <accent>Constants</accent> panel to edit them.": {
+      "comment": "Timing guide: open the Constants panel.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -10552,16 +11393,16 @@
             "value": "Werte, die Sie nicht animieren, bleiben <accent>konstant</accent>. Öffnen Sie das Feld <accent>Konstanten</accent>, um sie zu bearbeiten."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Les valeurs que vous n'animez pas restent <accent>constantes</accent>. Ouvrez le panneau <accent>Constantes</accent> pour les modifier."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Los valores que no animas permanecen <accent>constantes</accent>. Abre el panel <accent>Constantes</accent> para editarlos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les valeurs que vous n'animez pas restent <accent>constantes</accent>. Ouvrez le panneau <accent>Constantes</accent> pour les modifier."
           }
         },
         "ja": {
@@ -10582,10 +11423,10 @@
             "value": "未制作动画的值保持<accent>恒定</accent>。打开<accent>常量</accent>面板进行编辑。"
           }
         }
-      },
-      "comment": "Timing guide: open the Constants panel."
+      }
     },
     "Watch it back: press <symbol play.fill color=accent />.": {
+      "comment": "Timing guide: play the animation back.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -10594,16 +11435,16 @@
             "value": "Sehen Sie es sich an: Drücken Sie <symbol play.fill color=accent />."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Visionnez le résultat : appuyez sur <symbol play.fill color=accent />."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Reprodúcelo: pulsa <symbol play.fill color=accent />."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visionnez le résultat : appuyez sur <symbol play.fill color=accent />."
           }
         },
         "ja": {
@@ -10624,8 +11465,7 @@
             "value": "回放查看：按 <symbol play.fill color=accent />。"
           }
         }
-      },
-      "comment": "Timing guide: play the animation back."
+      }
     },
     "What's New": {
       "comment": "Changelog button label / tooltip",
@@ -10712,6 +11552,7 @@
       }
     },
     "With them all off, hold <kbd>⌥</kbd> and move to reveal them, still usable. <warn>Release ⌥</warn> to continue.": {
+      "comment": "OSC guide: opt-peek when OSCs are off.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -10720,16 +11561,16 @@
             "value": "Wenn alle aus sind, halten Sie <kbd>⌥</kbd> gedrückt und bewegen Sie den Zeiger, um sie einzublenden, weiterhin nutzbar. <warn>⌥ loslassen</warn>, um fortzufahren."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quand elles sont toutes masquées, maintenez <kbd>⌥</kbd> et déplacez le curseur pour les révéler, toujours utilisables. <warn>Relâchez ⌥</warn> pour continuer."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Con todos desactivados, mantén <kbd>⌥</kbd> y mueve el cursor para revelarlos, siguen siendo usables. <warn>Suelta ⌥</warn> para continuar."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand elles sont toutes masquées, maintenez <kbd>⌥</kbd> et déplacez le curseur pour les révéler, toujours utilisables. <warn>Relâchez ⌥</warn> pour continuer."
           }
         },
         "ja": {
@@ -10750,10 +11591,10 @@
             "value": "全部关闭后，按住<kbd>⌥</kbd>并移动即可显示它们，仍可使用。<warn>松开 ⌥</warn>以继续。"
           }
         }
-      },
-      "comment": "OSC guide: opt-peek when OSCs are off."
+      }
     },
     "With them off, hold <kbd>⌥</kbd> to peek and still use them.": {
+      "comment": "OSC guide: opt-peek when OSCs are off.",
       "extractionState": "manual",
       "localizations": {
         "de": {
@@ -10762,16 +11603,16 @@
             "value": "Wenn sie aus sind, halten Sie <kbd>⌥</kbd> gedrückt, um sie kurz einzublenden und weiter zu verwenden."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quand elles sont masquées, maintenez <kbd>⌥</kbd> pour les apercevoir et les utiliser quand même."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Con ellos ocultos, mantén <kbd>⌥</kbd> para verlos un momento y seguir usándolos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quand elles sont masquées, maintenez <kbd>⌥</kbd> pour les apercevoir et les utiliser quand même."
           }
         },
         "ja": {
@@ -10792,8 +11633,7 @@
             "value": "隐藏后，按住<kbd>⌥</kbd>即可临时显示并继续使用它们。"
           }
         }
-      },
-      "comment": "OSC guide: opt-peek when OSCs are off."
+      }
     },
     "Wrap your clip in a Compound Clip <kbd>⌥ G</kbd> before applying to avoid the animation being clipped at the edges.": {
       "comment": "Help tip: wrap the clip.",
@@ -10922,8 +11762,8 @@
       }
     },
     "Zoom out to see the <accent>other keyposes</accent>.": {
-      "extractionState": "manual",
       "comment": "Mini-viewer guide: zoom out across the filmstrip.",
+      "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
@@ -10931,16 +11771,16 @@
             "value": "Zoomen Sie heraus, um die <accent>anderen Keyposes</accent> zu sehen."
           }
         },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dézoomez pour voir les <accent>autres poses clés</accent>."
-          }
-        },
         "es": {
           "stringUnit": {
             "state": "translated",
             "value": "Aleja el zoom para ver las <accent>otras poses clave</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dézoomez pour voir les <accent>autres poses clés</accent>."
           }
         },
         "ja": {

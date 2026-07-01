@@ -4,11 +4,11 @@ summary: How animation works (lanes, keyposes, intervals, linked endpoints)
 ---
 
 - Animation is built from three things:
-  - **Lanes** - one per animatable property (Position, Radius, Color...). Toggle a lane on to animate it, off to hold a constant. The lane list is on the left.
-  - **Keyposes** - a value at a point in time, shown as a pill on the lane. Place them wherever the motion should pass through.
-  - **Intervals** - the gap between two keyposes. Each carries its own easing curve and optional modulation. Link the endpoints to make the interval a flat hold.
+  - **Lanes** - one row per property you can animate (Position, Radius, Color, and so on). Turn a lane on to animate that property, off to keep it fixed. The lane list is on the left.
+  - **Keyposes** - a value set at a moment in time, shown as a pill on the lane. Drop one wherever you want the motion to hit a certain look.
+  - **Intervals** - the stretch between two keyposes. Each interval has its own easing (how it speeds up and slows down) and can add extra motion on top. Link the two ends to turn the interval into a still hold.
 
-To animate from A to B, drop a keypose at A and another at B; the interval does the rest. To hold still mid-animation, add two keyposes with linked endpoints across the still region.
+To move from one look to another, drop a keypose where it starts and another where it ends. The interval fills in the motion between them. To pause the motion in the middle, add two keyposes with linked ends across the part you want to hold still.
 
 ## How it differs from keyframes
 

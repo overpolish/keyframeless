@@ -3,11 +3,11 @@ id: transform
 summary: Move, scale, rotate, pivot and fade a layer
 ---
 
-- Every layer (shape, image, SVG, or group) shares the same Transform properties. Each can be a constant value or animated on the timeline.
-  - **Position** - where the layer sits in the frame. Add two or more keyposes to move it along a path you can curve and reshape on the canvas. Normalised space: 0.5, 0.5 is the centre; Y points up.
-  - **Scale** - resize by percentage (X and Y). 100% is the layer's natural size; aspect is locked by default.
-  - **Rotation** - spin around the anchor. Z is the usual in-plane spin (clockwise positive); X and Y tilt the layer in 3D.
-  - **Anchor** - the pivot that Rotation and Scale swing around. Defaults to the layer centre; a group keeps a stored anchor so moving a member never drags the pivot.
-  - **Opacity** - fade the layer from 0 (invisible) to 100 (opaque).
+- Every layer, whether a shape, image, SVG, or group, has the same Transform controls. Each one can hold a fixed value or change over time on the timeline.
+  - **Position** - where the layer sits in the frame. Add two or more keyposes and it travels along a path you can bend and reshape right on the preview.
+  - **Scale** - the size, as a percentage. 100% is the layer's normal size, and width and height stay in step unless you unlock them.
+  - **Rotation** - spins the layer around its anchor. Z is the normal flat spin, and X and Y tilt it back in 3D.
+  - **Anchor** - the point the layer turns and grows around. It starts at the layer's centre.
+  - **Opacity** - how solid the layer is, from 0 (invisible) to 100 (fully there).
 
-Drive Position, Scale and Rotation on the canvas with their on-screen controls (the handle and motion path, the scale box, the rotation rings), or type exact values in the inspector.
+Drag Position, Scale and Rotation right on the preview with their on-screen handles, or type exact numbers in the inspector.

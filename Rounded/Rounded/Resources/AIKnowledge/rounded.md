@@ -3,12 +3,9 @@ id: rounded
 summary: What Rounded does
 ---
 
-Rounded rounds the corners of any clip and crops it with an animatable box. Drop it on a clip from the Effects browser. It animates with the shared timeline, so see the Timing sections for how Basic, Advanced, easing, and motion blur work.
-
-Parameters:
-
-- **Radius** - rounds the corners, from 0% (square) to 100% (fully round; pill-shaped on a rectangular clip). Has X and Y components, aspect-lockable.
-- **Crop** - crops the clip to a rectangle with four animatable edges. Animate it to reveal or hide content over time; combine with Radius for a rounded crop region.
+- Rounded rounds off the corners of any clip and crops it with a box you can animate. Drop it on a clip from the Effects browser. It animates with the timeline, so the Timing sections cover how Basic, Advanced, easing, and motion blur work.
+  - **Radius** - rounds the corners, from 0% (square) to 100% (fully round, a pill shape on a rectangular clip). Has separate width and height, which you can lock together.
+  - **Crop** - trims the clip down to a rectangle with four edges you can animate. Animate it to reveal or hide parts of the clip over time. Combine it with Radius for a rounded crop.
 
 ## Showing and hiding on-screen controls
 

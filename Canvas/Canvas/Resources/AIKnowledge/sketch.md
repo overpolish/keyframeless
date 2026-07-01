@@ -3,10 +3,10 @@ id: sketch
 summary: Give a layer a hand-drawn, rough look
 ---
 
-- The Sketch group roughens a layer so it looks hand-drawn (the rough.js style). Turn it on with **Sketch Enabled**; it applies to a vector path or an image, never a group.
-  - **Sketch Roughness** - how much the outline wobbles off the true path. 0 is clean; higher is scratchier.
-  - **Sketch Bowing** - how much straight segments bow out into curves.
-  - **Sketch Strokes** - single or double, for one pass or a sketchier double-drawn line.
-  - **Sketch Seed** - the random seed. Change it to get a different-but-equivalent rough variation; keep it fixed so the roughness doesn't reshuffle every frame.
+- The Sketch group roughens a layer so it looks hand-drawn. Turn it on with **Sketch Enabled**. It works on a shape or an image, not on a group.
+  - **Sketch Roughness** - how much the line wobbles away from a clean edge. 0 is neat, higher is scratchier.
+  - **Sketch Bowing** - how much straight lines bend into gentle curves.
+  - **Sketch Strokes** - draw each line once, or twice for a sketchier, gone-over look.
+  - **Sketch Seed** - picks one of the endless random variations of the rough look. Change it for a different take on the same shape. Leave it alone and the roughness stays put instead of reshuffling every frame.
 
-Sketch affects the stroke and the fill (the hachure picks up the same jitter), so the whole layer reads as hand-drawn.
+Sketch roughens both the outline and the fill, so the whole layer looks hand-drawn.

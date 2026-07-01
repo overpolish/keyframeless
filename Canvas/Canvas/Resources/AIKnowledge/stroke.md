@@ -3,13 +3,11 @@ id: stroke
 summary: Outline a path - width, caps, dashes, markers, draw-on, colour
 ---
 
-- The Stroke group draws an outline along a vector path. Turn it on with **Enabled**.
-  - **Stroke Width** - the line thickness, in points.
-  - **Line Cap** - how an open end finishes: butt, round, or square (only on a path with an open end).
-  - **Line Join** - how corners turn: miter, round, or bevel.
-  - **Stroke Style** - solid, dashed, or dotted. Dashed exposes **Dash Length** and **Dash Gap**; dotted exposes **Dot Gap**. Both expose **Marching Ants Speed** to scroll the pattern along the line (cycles per second).
-  - **Start Marker / End Marker** - an endpoint decoration (for example an arrowhead) with its own width, shown when the path has an open end.
-  - **Draw On** - reveal the stroke over time. **Draw On Start** and **Draw On End** are the visible fraction of the line (0..1); animate End from 0 to 1 to draw the line on. **Draw On Offset** slides the revealed window. On a multi-contour path each contour reveals in turn.
-  - **Colour** - a solid colour or a gradient (with an angle), shared with the kit colour control.
-
-Tip: a line "drawing on" is Draw On End animating from 0 to 1; add an End Marker arrow for an arrow that appears at the tip.
+- The Stroke group draws a line along the edge of a shape. Turn it on with **Enabled**.
+  - **Stroke Width** - how thick the line is.
+  - **Line Cap** - how an open end finishes: flat, round, or square.
+  - **Line Join** - how corners turn: sharp, round, or bevelled.
+  - **Stroke Style** - solid, dashed, or dotted. Dashed lets you set the **Dash Length** and **Dash Gap**, dotted the **Dot Gap**. Both can slowly crawl along the line, and **Marching Ants Speed** sets how fast.
+  - **Start Marker / End Marker** - a shape on the end of the line, like an arrowhead, with its own size. Shows when the line has an open end.
+  - **Draw On** - draws the line on over time, as if by hand. **Draw On Start** and **Draw On End** set how much of the line shows, from none to all of it, so animating End from empty to full draws it on. **Draw On Offset** slides the visible part along.
+  - **Colour** - a single colour or a gradient at an angle.

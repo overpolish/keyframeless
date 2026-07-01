@@ -1144,6 +1144,11 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
                                  title:CLoc(@"Sketch",
                                             @"Help section title (sketch).")
                                 symbol:@"pencil.and.scribble"];
+  KKHelpSection *grid =
+      [self _canvasHelpSectionForTopic:@"grid"
+                                 title:CLoc(@"Grid",
+                                            @"Help section title (grid).")
+                                symbol:@"grid"];
 
   // Glyph-only keys carry nothing to translate (pure <kbd> symbols), so they
   // stay literal - only the description is localized. Mirrors the kit's
@@ -1192,7 +1197,7 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
   shortcuts.icon = [NSImage imageWithSystemSymbolName:@"keyboard"
                              accessibilityDescription:nil];
 
-  return @[ overview, core, transform, stroke, fill, sketch, shortcuts ];
+  return @[ overview, core, transform, stroke, fill, sketch, grid, shortcuts ];
 }
 
 - (nullable NSView *)aiAccessoryView {

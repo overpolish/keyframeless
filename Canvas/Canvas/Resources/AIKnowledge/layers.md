@@ -154,14 +154,7 @@ Dividers split it into groups. The buttons are icon-only; **hover any button for
 
 - **Tools** - cursor, pen, rectangle, ellipse, with keyboard shortcuts **^V / ^X / ^B / ^G** shown on the button. The shortcuts work whenever either surface is focused. Selecting a tool (by click or shortcut) highlights it and stores it as the active tool. The **pen** tool draws paths and the **rectangle** / **ellipse** tools drag out shapes (see below); both work in the FCP viewer and the inspector mini-viewer.
 - **Path operations** - a group that appears only when the selection makes it relevant (see Path operations below).
-- **Grid controls** - see below.
-
-### Grid
-
-- **Grid** - toggles the overlay grid across the **whole preview** (it fills the letterbox margins too, not just the playback rectangle). Off by default. The grid is drawn as a subtle two-tone line (a darker edge under a lighter core) so it stays legible over both light and dark footage.
-- **Auto grid spacing** - when on, keeps the cells readable by doubling the spacing as you zoom out so the grid never collapses into a grey wash; when off, the spacing stays fixed. On by default (the icon switches between the dotted "auto" and plain "fixed" grid glyph).
-- **Cell size** - cycles the base cell size through **10 / 20 / 50 / 100** canvas pixels (so the grid is pinned to the canvas and scales on screen with zoom). The button shows the current value.
-- **Snap to grid** - toggles snapping to the grid. Off by default. While it's on, dragging a layer's **Position** handle or its **Anchor** square pins the point to the nearest grid intersection (hold **Cmd** during a drag to override it with the usual centre / corner / keypose snapping instead). The grid spacing used is the one shown, so turn the grid on to see where things land. Snapping is shared infrastructure, so future path / shape editing will reuse it.
+- **Grid controls** - the grid overlay, adaptive spacing, cell size, and snap-to-grid. See the **Grid** topic for the full details. Snapping is shared infrastructure, so future path / shape editing will reuse it.
 
 ## Drawing with the pen tool
 

@@ -3,7 +3,7 @@ id: lane-filter
 summary: Property categories and the lane filter for focusing the Advanced timeline
 ---
 
-Some plugins group their properties into categories (for example Glow's **Core** and **Noise**). When there is more than one category, **category pills** let you switch between groups in the value-editor popover, the Animated dropdown, and the parameter list, and a **lane filter** on the Advanced timeline lets you show or hide individual properties so you can focus on a few at a time. Categories are optional - a plugin with no categories just lists its properties flat.
+The **lane filter** on the Advanced timeline lets you show or hide individual property lanes, so you can focus on just a few at a time. It works on any plugin, whether or not its properties are grouped.
 
 ### Where categories appear
 

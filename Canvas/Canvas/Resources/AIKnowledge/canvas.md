@@ -3,7 +3,7 @@ id: canvas
 summary: What Canvas does
 ---
 
-Canvas is a layer-based drawing and animation effect for Final Cut Pro. Each clip holds a stack of **layers** - vector shapes you draw, imported images and SVGs, and groups - and every layer can be animated independently with the shared Keyframeless timeline (Basic and Advanced timing, easing, motion blur).
+Canvas is a layer-based drawing and animation effect for Final Cut Pro. Each clip holds a stack of **layers**: shapes you draw, imported images and SVGs, and groups. Every layer can be animated on its own with the shared Keyframeless timeline (Basic and Advanced timing, easing, motion blur).
 
 Drop it on a clip from the Effects browser. Like the other Keyframeless plugins it works best on a compound or adjustment clip, so layers can extend past the clip's edges without being cropped.
 
