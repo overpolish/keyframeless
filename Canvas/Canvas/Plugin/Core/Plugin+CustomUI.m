@@ -8,6 +8,7 @@
 #import "CanvasOSCGuide.h"    // shared OSC guide bridge (canvas-reference gate)
 #import "CanvasLayerTimeline.h"
 #import "CanvasLocalized.h"
+#import "CanvasMiniViewerRenderer.h" // per-instance mini-viewer rendezvous paths
 #import "CanvasToolbar.h" // CanvasToolbarToolCursor (arrow guide tool save/force)
 #import "CanvasPresets.h"
 #import "Constants.h"
@@ -487,6 +488,13 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
                                               activeTab:st.activeTab
                                          availableLanes:available
                                                timeline:timeline];
+    // Per-instance rendezvous paths (keyed by the instance UUID minted above)
+    // so two stacked Canvas clips read/write distinct /tmp files instead of the
+    // clip below showing the top clip's source in its mini-viewer.
+    NSString *instUUID = KKInstanceUUIDForAPI(self.apiManager);
+    view.miniViewerDescriptorPath =
+        CanvasMiniViewerDescriptorPathForUUID(instUUID);
+    view.miniViewerRequestPath = CanvasMiniViewerRequestPathForUUID(instUUID);
     if (seedClipDurSec > 0)
       [view setClipDurationSeconds:seedClipDurSec];
     if (seedFrameDurSec > 0)

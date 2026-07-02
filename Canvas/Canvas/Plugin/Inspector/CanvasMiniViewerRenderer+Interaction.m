@@ -413,7 +413,7 @@
   if ([self _pathEditContext] &&
       [self.pathEditController cornerWidgetHitAtX:p.x y:p.y])
     return [self kkVisibilityCursorForLabel:@"Corners"]
-               ?: [NSCursor crosshairCursor];
+               ?: KKPointMoveCursor();
   if ([self.anchorMini squareHitAtPoint:p contentRect:cr])
     return [self kkVisibilityCursorForLabel:@"Anchor"] ?: KKPointMoveCursor();
   if ([self pointHandleHitAtPoint:p contentRect:cr])

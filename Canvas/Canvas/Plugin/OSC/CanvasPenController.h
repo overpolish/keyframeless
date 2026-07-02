@@ -62,6 +62,9 @@ typedef NS_OPTIONS(NSUInteger, CanvasPenModifiers) {
 - (nullable NSSet<NSString *> *)penNonSelectableLayerIDs;
 /// Identifies this surface for cross-process selection sync ("osc" / "mini").
 - (NSString *)penSurfaceTag;
+/// The instance UUID, so the selection sync rides a per-instance /tmp file
+/// (two stacked / copy-pasted Canvas clips must not share one). May be nil.
+- (nullable NSString *)penInstanceUUID;
 /// The full layer stack + the current edit fraction, so the path-edit
 /// controller can project the selected path's geometry through its transform +
 /// groups (pen CREATION is member-local, but EDITING a transformed/grouped path

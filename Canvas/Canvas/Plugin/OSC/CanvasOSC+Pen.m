@@ -207,10 +207,11 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m) {
 - (void)penDrawRingAtObj:(CGPoint)objYUp maxed:(BOOL)maxed {
   if (!self.penDrawDest)
     return;
-  // The shared KKRingOSC glyph (same control as the Glow radius ring), tinted
-  // accent - or error at the clamp. The ring shader is crisp by construction
-  // (no line-strip anti-alias washout), so no manual pixel-snap is needed.
-  NSColor *tint = maxed ? [NSColor error] : [NSColor accentMatchingHost];
+  // The shared KKRingOSC glyph (same control as the Glow radius ring), white
+  // for legibility on any background - or error at the clamp. The ring shader is
+  // crisp by construction (no line-strip anti-alias washout), so no manual
+  // pixel-snap is needed.
+  NSColor *tint = maxed ? [NSColor error] : [NSColor whiteColor];
   // Dim to a ghost while the "Corners" element is individually hidden but
   // Opt-peeked (master on) - the visual cue that an Opt-click re-shows it, like
   // every other OSC handle. Master-off peek stays full ("peek and use").

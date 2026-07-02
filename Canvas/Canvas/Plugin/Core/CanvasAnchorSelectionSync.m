@@ -6,24 +6,32 @@
 #import "CanvasAnchorSelectionSync.h"
 
 // Shared with the mini-viewer feed files (same /tmp convention, cross-process).
+// Per-instance path keyed by the instance UUID so two stacked (or copy/pasted)
+// Canvas clips don't share one file; empty UUID falls back to the static path.
 static NSString *const kSelectionSyncPath = @"/tmp/canvas-anchorsel.json";
 
-static NSDictionary *ReadSelectionFile(void) {
-  NSData *data = [NSData dataWithContentsOfFile:kSelectionSyncPath];
+static NSString *SelectionSyncPathForUUID(NSString *uuid) {
+  if (!uuid.length)
+    return kSelectionSyncPath;
+  return [NSString stringWithFormat:@"/tmp/canvas-anchorsel-%@.json", uuid];
+}
+
+static NSDictionary *ReadSelectionFile(NSString *uuid) {
+  NSData *data = [NSData dataWithContentsOfFile:SelectionSyncPathForUUID(uuid)];
   if (!data.length)
     return nil;
   id obj = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
   return [obj isKindOfClass:[NSDictionary class]] ? obj : nil;
 }
 
-void CanvasPublishAnchorSelection(NSString *writerTag, NSString *layerID,
-                                  NSIndexSet *indices) {
+void CanvasPublishAnchorSelection(NSString *uuid, NSString *writerTag,
+                                  NSString *layerID, NSIndexSet *indices) {
   if (!writerTag.length)
     return;
   // Monotonic generation: read the current value and bump it, so the other
   // surface can tell a newer publish from one it already applied.
   long long gen = 0;
-  NSDictionary *cur = ReadSelectionFile();
+  NSDictionary *cur = ReadSelectionFile(uuid);
   if ([cur[@"gen"] isKindOfClass:[NSNumber class]])
     gen = [cur[@"gen"] longLongValue];
   gen += 1;
@@ -38,21 +46,28 @@ void CanvasPublishAnchorSelection(NSString *writerTag, NSString *layerID,
     @"layer" : layerID ?: @"",
     @"idx" : idx,
   };
-  NSData *data = [NSJSONSerialization dataWithJSONObject:out options:0 error:nil];
-  [data writeToFile:kSelectionSyncPath atomically:YES];
+  NSData *data = [NSJSONSerialization dataWithJSONObject:out
+                                                 options:0
+                                                   error:nil];
+  [data writeToFile:SelectionSyncPathForUUID(uuid) atomically:YES];
 }
 
-NSIndexSet *CanvasConsumeAnchorSelection(NSString *readerTag, NSString *layerID) {
+NSIndexSet *CanvasConsumeAnchorSelection(NSString *uuid, NSString *readerTag,
+                                         NSString *layerID) {
   if (!readerTag.length)
     return nil;
-  // Per-reader high-water mark of the generation already applied.
+  // Per-reader high-water mark of the generation already applied. Keyed by
+  // (uuid, readerTag): the ViewBridge process is shared across instances, so a
+  // bare "mini"/"osc" key would let one clip's gen suppress another's.
   static NSMutableDictionary<NSString *, NSNumber *> *seen;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     seen = [NSMutableDictionary dictionary];
   });
+  NSString *seenKey =
+      [NSString stringWithFormat:@"%@:%@", uuid ?: @"", readerTag];
 
-  NSDictionary *cur = ReadSelectionFile();
+  NSDictionary *cur = ReadSelectionFile(uuid);
   if (!cur)
     return nil;
   NSString *writer = cur[@"writer"];
@@ -60,13 +75,13 @@ NSIndexSet *CanvasConsumeAnchorSelection(NSString *readerTag, NSString *layerID)
     return nil; // our own write
   if (![cur[@"layer"] isEqualToString:(layerID ?: @"")])
     return nil; // a different layer's selection
-  long long gen =
-      [cur[@"gen"] isKindOfClass:[NSNumber class]] ? [cur[@"gen"] longLongValue]
-                                                   : 0;
-  long long lastSeen = [seen[readerTag] longLongValue];
+  long long gen = [cur[@"gen"] isKindOfClass:[NSNumber class]]
+                      ? [cur[@"gen"] longLongValue]
+                      : 0;
+  long long lastSeen = [seen[seenKey] longLongValue];
   if (gen <= lastSeen)
     return nil; // already applied
-  seen[readerTag] = @(gen);
+  seen[seenKey] = @(gen);
 
   NSArray *idx = cur[@"idx"];
   if (![idx isKindOfClass:[NSArray class]])

@@ -469,6 +469,11 @@ static const BOOL kPointShadingLighterTop = YES;
   float B = (float)(CGRectGetMinY(br) * s - d.height / 2.0);
   float T = (float)(CGRectGetMaxY(br) * s - d.height / 2.0);
   float lw = (float)(1.0 * s);
+  // Straddle the rect edges (centerline ON the boundary) rather than insetting
+  // inward, so each edge's centerline runs through the rect corners where the
+  // handle dots are centered. Insetting shifted the border ~lw/2 inside the
+  // corner, making the dots read as offset up/right off the line in the mini.
+  float h = lw * 0.5f;
   simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
   [enc setRenderPipelineState:_linePipeline];
   [enc setVertexBytes:&vp
@@ -476,10 +481,10 @@ static const BOOL kPointShadingLighterTop = YES;
               atIndex:KKVertexInputIndex_ViewportSize];
   [enc setFragmentBytes:&lineColor length:sizeof(lineColor) atIndex:0];
   float edges[4][4] = {
-      {L, B, R, B + lw},
-      {L, T - lw, R, T},
-      {L, B, L + lw, T},
-      {R - lw, B, R, T},
+      {L - h, B - h, R + h, B + h},
+      {L - h, T - h, R + h, T + h},
+      {L - h, B - h, L + h, T + h},
+      {R - h, B - h, R + h, T + h},
   };
   for (int e = 0; e < 4; e++) {
     float x0 = edges[e][0], y0 = edges[e][1], x1 = edges[e][2],

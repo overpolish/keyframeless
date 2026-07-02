@@ -19,6 +19,19 @@ NSString *const GlowMiniViewerDescriptorPath = @"/tmp/glow-miniviewer.json";
 NSString *const GlowMiniViewerRequestPath =
     @"/tmp/glow-miniviewer-request.json";
 
+NSString *GlowMiniViewerDescriptorPathForUUID(NSString *uuid) {
+  if (!uuid.length)
+    return GlowMiniViewerDescriptorPath;
+  return [NSString stringWithFormat:@"/tmp/glow-miniviewer-%@.json", uuid];
+}
+
+NSString *GlowMiniViewerRequestPathForUUID(NSString *uuid) {
+  if (!uuid.length)
+    return GlowMiniViewerRequestPath;
+  return
+      [NSString stringWithFormat:@"/tmp/glow-miniviewer-request-%@.json", uuid];
+}
+
 // Prep + blur run in float, matching the main render (FCP tiles are
 // RGBA16Float). The mini dest is 8-bit BGRA, which would quantize the soft
 // glow tail toward zero in an 8-bit blur - making the preview read as a

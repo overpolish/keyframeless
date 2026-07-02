@@ -57,7 +57,8 @@ static const CFTimeInterval kDoubleClickSecs = 0.4; // anchor convert (viewer)
 }
 
 - (void)_publishSelection {
-  CanvasPublishAnchorSelection([_surface penSurfaceTag],
+  CanvasPublishAnchorSelection([_surface penInstanceUUID],
+                               [_surface penSurfaceTag],
                                [_surface penSelectedLayerID], _selectedAnchors);
 }
 

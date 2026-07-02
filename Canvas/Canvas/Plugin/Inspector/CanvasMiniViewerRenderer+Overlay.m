@@ -227,7 +227,8 @@
   if (!sel.length)
     return;
   // Pick up an anchor selection published by the viewer (cross-process sync).
-  NSIndexSet *synced = CanvasConsumeAnchorSelection(@"mini", sel);
+  NSIndexSet *synced =
+      CanvasConsumeAnchorSelection(self.instanceUUID, @"mini", sel);
   if (synced)
     [self.pathEditController setSelectedAnchorIndexes:synced];
   KKBezierPath *path = nil;

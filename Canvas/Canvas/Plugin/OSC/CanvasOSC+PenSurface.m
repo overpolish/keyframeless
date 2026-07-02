@@ -70,6 +70,10 @@
   return @"osc";
 }
 
+- (NSString *)penInstanceUUID {
+  return KKInstanceUUIDForAPI(self.apiManager);
+}
+
 // The viewer has no popover scope, so every layer is selectable.
 - (NSSet<NSString *> *)penNonSelectableLayerIDs {
   return nil;

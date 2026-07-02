@@ -66,6 +66,9 @@
     _miniViewerRenderer = [[CanvasMiniViewerRenderer alloc] init];
     _miniViewerRenderer.timeline = timeline;
     _miniViewerRenderer.laneTemplates = availableLanes;
+    // Per-instance UUID for the cross-process anchor-selection sync (createView
+    // mints it before building this view, so it resolves here).
+    _miniViewerRenderer.instanceUUID = KKInstanceUUIDForAPI(apiManager);
     [self _retainMiniClipDurationFromTimeline:timeline];
     // Cold-boot seed for the viewer Position OSC (it reads the snapshot, not
     // the param). applyTimeline republishes on selection / edits.

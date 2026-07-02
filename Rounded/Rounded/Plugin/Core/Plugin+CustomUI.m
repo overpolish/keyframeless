@@ -8,6 +8,7 @@
 #import "RoundedInspectorView+Guides.h"
 #import "RoundedInspectorView.h"
 #import "RoundedLocalized.h"
+#import "RoundedMiniViewerRenderer.h" // per-instance mini-viewer rendezvous paths
 #import "RoundedOSCRadiusMath.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKDataBlob.h>
@@ -155,6 +156,13 @@ static NSString *_RoundedAILaneSchemaText(void) {
                     activeTab:activeTab
                availableLanes:available
                      timeline:timeline];
+    // Per-instance rendezvous paths (keyed by the instance UUID minted above)
+    // so two stacked Rounded clips read/write distinct /tmp files instead of the
+    // clip below showing the top clip's source in its mini-viewer.
+    NSString *instUUID = KKInstanceUUIDForAPI(self.apiManager);
+    view.miniViewerDescriptorPath =
+        RoundedMiniViewerDescriptorPathForUUID(instUUID);
+    view.miniViewerRequestPath = RoundedMiniViewerRequestPathForUUID(instUUID);
     // Seed the basic-view scrubber clamp immediately. Plugin+Render's
     // dispatch_async push runs once on first render - if it raced ahead
     // and weakSelf.inspectorView was still nil, the basic view would

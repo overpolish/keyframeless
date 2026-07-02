@@ -409,19 +409,23 @@
                            ghostAlpha:ghostAlpha
                               encoder:enc];
       } else if (style == KKMiniHandleStyleRing) {
-        // Haloed KKRingOSC ring (the shared radius-widget glyph). Accent fill +
-        // dark outline, scaled with the OSC sizing ratio like the dot.
+        // Haloed KKRingOSC ring (the shared radius-widget glyph). White fill +
+        // dark outline for legibility on any background (matches Canvas's corner
+        // ring), scaled with the OSC sizing ratio like the dot. Sizes match
+        // Canvas's corner-radius ring (CanvasMiniViewerRenderer+Pen.m
+        // penDrawRingAtObj:) so the two read identically in the mini-viewer,
+        // as they already do in the main viewer.
         CGFloat cs = [self _canvasScale];
-        simd_float4 f = accentFill;
+        simd_float4 f = whiteFill;
         f.w *= (float)ghostAlpha;
         simd_float4 outline = {0.0f, 0.0f, 0.0f, 0.75f * (float)ghostAlpha};
         [self _encodeRingOSCAt:handleCenterPts
-                     radiusXPt:3.5 * cs
-                     radiusYPt:3.5 * cs
+                     radiusXPt:2.3 * cs
+                     radiusYPt:2.3 * cs
                      fillColor:f
                    strokeColor:outline
-                   fillWidthPt:1.5 * cs
-                outlineWidthPt:0.75 * cs
+                   fillWidthPt:1.0 * cs
+                outlineWidthPt:0.5 * cs
                        encoder:enc];
       } else {
         // Point-style handles dim via the fill alpha (no ghostAlpha param).

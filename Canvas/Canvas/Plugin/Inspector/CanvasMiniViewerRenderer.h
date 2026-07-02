@@ -20,6 +20,13 @@ extern NSString *const CanvasMiniViewerDescriptorPath;
 /// to also pull those frames for the preview.
 extern NSString *const CanvasMiniViewerRequestPath;
 
+/// Per-instance rendezvous paths keyed by the instance UUID. Two stacked Canvas
+/// clips must read/write distinct `/tmp` files, otherwise the top clip's render
+/// pollutes the feed the clip below reads (its mini-viewer shows the wrong
+/// source). Falls back to the static path when `uuid` is empty.
+NSString *CanvasMiniViewerDescriptorPathForUUID(NSString *_Nullable uuid);
+NSString *CanvasMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
+
 /// Canvas's mini-viewer delegate. The generic timeline / handle scaffolding
 /// lives in `KKMiniViewerRenderer`; this subclass runs the same image-layer
 /// compositing as the main render (Plugin+Render.m) over the source frame, so
@@ -34,6 +41,10 @@ extern NSString *const CanvasMiniViewerRequestPath;
 /// media-time phase. Retained across timeline rebuilds (a gesture rebuild drops
 /// the lanes' lastKnownClipDuration), so 0 only before the first stamp.
 @property(nonatomic) double clipDurationSeconds;
+/// Instance UUID, so the cross-process anchor-selection sync rides a
+/// per-instance /tmp file (two stacked / copy-pasted Canvas clips must not share
+/// one). Set by the inspector view (which holds the apiManager) in -init.
+@property(nonatomic, copy, nullable) NSString *instanceUUID;
 /// The layer the open popover edits. Its transform in the composite comes from
 /// the live `timeline` (the kit's in-memory edited copy) so a Position-handle
 /// drag previews immediately; the Position OSC also reads/writes this layer.

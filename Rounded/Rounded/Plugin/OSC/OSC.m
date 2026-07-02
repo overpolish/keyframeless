@@ -121,14 +121,15 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
     // Match the shared box-OSC handle size so the radius point and the crop
     // box's corner/edge handles are one size.
     self.oscRadius = 6.0f;
-    // Blue, matching the mini viewer radius handle (accent color).
-    self.fillColorOverride = [NSColor accent];
+    // White for legibility on any background, matching the mini-viewer radius
+    // handle + Canvas's corner ring.
+    self.fillColorOverride = [NSColor whiteColor];
     // The radius handle draws as the shared ring glyph (see -drawAtCanvasPosition
-    // override) - accent-tinted, crisp ring shader. Sized to the old point's
-    // footprint so hit-testing (still KKPointOSC) stays aligned.
+    // override) - white, crisp ring shader. Sized to the old point's footprint
+    // so hit-testing (still KKPointOSC) stays aligned.
     _ringGlyph = [[KKRingOSC alloc] initWithAPIManager:apiManager];
     [_ringGlyph applyRadiusWidgetStyle]; // shared style with Canvas's corner widget
-    _ringGlyph.tintColor = [NSColor accent];
+    _ringGlyph.tintColor = [NSColor whiteColor];
 
     // Crop OSC: model-agnostic block-based I/O. Reads from / writes to the
     // Rounded timeline-snapshot Crop lane (single instance per PLAN §"OSC
@@ -164,7 +165,7 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
                     isActive:(BOOL)isActive
             destinationImage:(FxImageTile *)destinationImage
                       atTime:(CMTime)time {
-  _ringGlyph.tintColor = self.fillColorOverride ?: [NSColor accent];
+  _ringGlyph.tintColor = self.fillColorOverride ?: [NSColor whiteColor];
   _ringGlyph.ghostAlpha = self.ghostAlpha;
   [_ringGlyph drawAtCanvasPosition:canvasPosition
                          isHovered:isHovered

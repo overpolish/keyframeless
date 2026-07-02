@@ -150,7 +150,8 @@ static double CanvasOSCKeyposeFrameEps(void) {
   if (!sel.length)
     return;
   // Pick up an anchor selection published by the mini (cross-process sync).
-  NSIndexSet *synced = CanvasConsumeAnchorSelection(@"osc", sel);
+  NSIndexSet *synced =
+      CanvasConsumeAnchorSelection([self penInstanceUUID], @"osc", sel);
   if (synced)
     [self.pathEditController setSelectedAnchorIndexes:synced];
   KKBezierPath *path = nil;

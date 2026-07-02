@@ -54,7 +54,10 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
   // is snapshotted into -pluginState: (prefix of the blob); read it back so
   // KKBuildSourceRequests appends the sub-frame source requests.
   NSArray *reqs = KKBuildSourceRequests(
-      renderTime, CanvasMiniViewerRequestPath, self.renderCache,
+      renderTime,
+      CanvasMiniViewerRequestPathForUUID(
+          KKInstanceUUIDForAPI(self.apiManager)),
+      self.renderCache,
       ^id(CMTime t) {
         return [[FxImageTileRequest alloc]
             initWithSource:kFxImageTileRequestSourceEffectClip
@@ -168,7 +171,9 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
   // renderer blits it straight through (Canvas is passthrough for now).
   [self kkPublishMiniViewerFeedForDestination:destinationImage
                                  sourceImages:sourceImages
-                               descriptorPath:CanvasMiniViewerDescriptorPath
+                               descriptorPath:
+                                   CanvasMiniViewerDescriptorPathForUUID(
+                                       KKInstanceUUIDForAPI(self.apiManager))
                               boundaryReqSecs:self.renderCache.boundaryReqSecs
                              boundaryReqFracs:self.renderCache.boundaryReqFracs
                               multiSlotActive:YES

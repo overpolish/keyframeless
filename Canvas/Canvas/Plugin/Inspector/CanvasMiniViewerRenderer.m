@@ -21,6 +21,19 @@ NSString *const CanvasMiniViewerDescriptorPath = @"/tmp/canvas-miniviewer.json";
 NSString *const CanvasMiniViewerRequestPath =
     @"/tmp/canvas-miniviewer-request.json";
 
+NSString *CanvasMiniViewerDescriptorPathForUUID(NSString *uuid) {
+  if (!uuid.length)
+    return CanvasMiniViewerDescriptorPath;
+  return [NSString stringWithFormat:@"/tmp/canvas-miniviewer-%@.json", uuid];
+}
+
+NSString *CanvasMiniViewerRequestPathForUUID(NSString *uuid) {
+  if (!uuid.length)
+    return CanvasMiniViewerRequestPath;
+  return
+      [NSString stringWithFormat:@"/tmp/canvas-miniviewer-request-%@.json", uuid];
+}
+
 @implementation CanvasMiniViewerRenderer
 
 // The kit boundary popover owns suppressedHandleLabels (per-phase: lanes with

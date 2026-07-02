@@ -30,7 +30,10 @@
   // single source frame (see KKBuildSourceRequests' header); no sub-frame source
   // requests - Rounded crops/rounds in place, it doesn't smear footage.
   *inputImageRequests = KKBuildSourceRequests(
-      renderTime, RoundedMiniViewerRequestPath, self.renderCache,
+      renderTime,
+      RoundedMiniViewerRequestPathForUUID(
+          KKInstanceUUIDForAPI(self.apiManager)),
+      self.renderCache,
       ^id(CMTime t) {
         return [[FxImageTileRequest alloc]
             initWithSource:kFxImageTileRequestSourceEffectClip
@@ -229,7 +232,9 @@
   [self
       kkPublishMiniViewerFeedForDestination:destinationImage
                                sourceImages:sourceImages
-                             descriptorPath:RoundedMiniViewerDescriptorPath
+                             descriptorPath:
+                                 RoundedMiniViewerDescriptorPathForUUID(
+                                     KKInstanceUUIDForAPI(self.apiManager))
                             boundaryReqSecs:self.renderCache.boundaryReqSecs
                            boundaryReqFracs:self.renderCache.boundaryReqFracs
                             multiSlotActive:self.renderCache.boundaryFeedActive

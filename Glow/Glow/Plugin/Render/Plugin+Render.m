@@ -369,7 +369,9 @@ static void _texPairReturn(NSInteger idx) {
   // Motion blur averages Glow's per-sample params over a single source frame
   // (see KKBuildSourceRequests' header); no sub-frame source requests.
   NSArray *reqs = KKBuildSourceRequests(
-      renderTime, GlowMiniViewerRequestPath, self.renderCache,
+      renderTime,
+      GlowMiniViewerRequestPathForUUID(KKInstanceUUIDForAPI(self.apiManager)),
+      self.renderCache,
       ^id(CMTime t) {
         return [[FxImageTileRequest alloc]
             initWithSource:kFxImageTileRequestSourceEffectClip
@@ -698,7 +700,9 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
   [self
       kkPublishMiniViewerFeedForDestination:destinationImage
                                sourceImages:sourceImages
-                             descriptorPath:GlowMiniViewerDescriptorPath
+                             descriptorPath:
+                                 GlowMiniViewerDescriptorPathForUUID(
+                                     KKInstanceUUIDForAPI(self.apiManager))
                             boundaryReqSecs:self.renderCache.boundaryReqSecs
                            boundaryReqFracs:self.renderCache.boundaryReqFracs
                             multiSlotActive:self.renderCache.boundaryFeedActive

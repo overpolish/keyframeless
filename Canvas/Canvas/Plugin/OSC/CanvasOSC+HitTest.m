@@ -197,7 +197,7 @@
       id<FxOnScreenControlAPI_v4> cAPI =
           [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
       [cAPI setCursor:[self kkVisibilityCursorForLabel:@"Corners"]
-                          ?: [NSCursor pointingHandCursor]];
+                          ?: KKPointMoveCursor()];
       self.pointCursorSet = YES;
       return;
     }

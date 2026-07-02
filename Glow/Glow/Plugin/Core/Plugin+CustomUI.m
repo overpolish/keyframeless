@@ -6,6 +6,7 @@
 #import "Constants.h"
 #import "GlowInspectorView.h"
 #import "GlowLocalized.h"
+#import "GlowMiniViewerRenderer.h" // per-instance mini-viewer rendezvous paths
 #import "GlowOSCRadiusMath.h"
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
@@ -332,6 +333,13 @@ static NSString *_GlowAILaneSchemaText(void) {
                                             activeTab:activeTab
                                        availableLanes:available
                                              timeline:timeline];
+    // Per-instance rendezvous paths (keyed by the instance UUID minted above)
+    // so two stacked Glow clips read/write distinct /tmp files instead of the
+    // clip below showing the top clip's source in its mini-viewer.
+    NSString *instUUID = KKInstanceUUIDForAPI(self.apiManager);
+    view.miniViewerDescriptorPath =
+        GlowMiniViewerDescriptorPathForUUID(instUUID);
+    view.miniViewerRequestPath = GlowMiniViewerRequestPathForUUID(instUUID);
     if (seedClipDurSec > 0)
       [view setClipDurationSeconds:seedClipDurSec];
     if (seedFrameDurSec > 0)

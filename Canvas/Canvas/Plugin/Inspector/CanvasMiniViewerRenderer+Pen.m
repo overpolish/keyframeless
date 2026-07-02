@@ -282,6 +282,10 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   return @"mini";
 }
 
+- (NSString *)penInstanceUUID {
+  return self.instanceUUID;
+}
+
 // The popover scope's non-selectable layers for the MARQUEE / body-drag. Uses
 // the stricter marquee set (constants: move-lane-animated) when present, else
 // the single-click set (keypose: no keypose at that time).
@@ -358,8 +362,8 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   CGFloat scale = canvas.oscSizingHeight / 230.0;
   if (scale <= 0)
     scale = 1.0;
-  simd_float4 fill =
-      maxed ? CanvasMiniColorRGBA([NSColor error]) : CanvasMiniAccentRGBA();
+  simd_float4 fill = maxed ? CanvasMiniColorRGBA([NSColor error])
+                           : CanvasMiniColorRGBA([NSColor whiteColor]);
   simd_float4 outline = {0.0f, 0.0f, 0.0f, 0.75f};
   // Dim to a ghost while "Corners" is individually hidden but Opt-peeked (master
   // on) - the cue that an Opt-click re-shows it, like the other handles. Full

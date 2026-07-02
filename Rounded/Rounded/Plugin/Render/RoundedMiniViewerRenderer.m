@@ -17,6 +17,19 @@ NSString *const RoundedMiniViewerDescriptorPath =
 NSString *const RoundedMiniViewerRequestPath =
     @"/tmp/rounded-miniviewer-request.json";
 
+NSString *RoundedMiniViewerDescriptorPathForUUID(NSString *uuid) {
+  if (!uuid.length)
+    return RoundedMiniViewerDescriptorPath;
+  return [NSString stringWithFormat:@"/tmp/rounded-miniviewer-%@.json", uuid];
+}
+
+NSString *RoundedMiniViewerRequestPathForUUID(NSString *uuid) {
+  if (!uuid.length)
+    return RoundedMiniViewerRequestPath;
+  return [NSString
+      stringWithFormat:@"/tmp/rounded-miniviewer-request-%@.json", uuid];
+}
+
 // Mini-viewer analog of the viewer OSC's `oscSize` (KKPointOSC oscRadius +
 // outline). Kept in sync with KKMiniViewerView's kKKMiniHandleOuterPt so
 // placement, hit-test and the drawn glyph all agree.
