@@ -54,7 +54,7 @@
 Grab the installer from Payhip - one payment to help support continued development, all future updates included.
 
 <div align="center">
-	<a href="https://store.overpolish.co/b/QG73g"><b>Buy on Payhip →</b></a>
+	<a href="https://store.overpolish.co"><b>Buy on Payhip →</b></a>
 </div>
 
 <br />
