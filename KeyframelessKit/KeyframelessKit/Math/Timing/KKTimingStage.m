@@ -5,6 +5,51 @@
 
 #import "KKTimingStage.h"
 
+#import "KKBezierPath.h"
+#import "KKEasing.h"
+#import "KKPathMorph.h"
+
+BOOL KKLaneKeyposeValuesEqual(KKLane *lane, KKKeyPose *a, KKKeyPose *b) {
+  if (lane.oscEditedOnly)
+    return KKMorphSnapshotSignature(a.geometrySnapshot) ==
+           KKMorphSnapshotSignature(b.geometrySnapshot);
+  NSArray<NSNumber *> *va = a.values, *vb = b.values;
+  if (va.count != vb.count)
+    return NO;
+  for (NSUInteger i = 0; i < va.count; i++)
+    if (fabs(va[i].doubleValue - vb[i].doubleValue) > 1.0e-4)
+      return NO;
+  return YES;
+}
+
+NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
+  NSArray<KKKeyPose *> *kps = lane.keyposes;
+  if (kps.count == 0)
+    return nil;
+  if (frac <= kps.firstObject.time)
+    return kps.firstObject.geometrySnapshot;
+  if (frac >= kps.lastObject.time)
+    return kps.lastObject.geometrySnapshot;
+  for (NSUInteger i = 0; i + 1 < kps.count; i++) {
+    KKKeyPose *a = kps[i], *b = kps[i + 1];
+    if (frac < a.time || frac > b.time)
+      continue;
+    NSData *sa = a.geometrySnapshot, *sb = b.geometrySnapshot;
+    if (!sa || !sb)
+      return sa ?: sb; // partial / un-snapshotted: fall back to the base shape
+    double span = b.time - a.time;
+    double t = span > 1e-9 ? (frac - a.time) / span : 0.0;
+    double e = a.outgoing
+                   ? KKApplyEasing(t, (KKEasingCurve)a.outgoing.curve,
+                                   a.outgoing.intensity, a.outgoing.frequency)
+                   : t;
+    KKBezierPath *p = [[KKBezierPath alloc] init];
+    KKMorphInterpolateApply(sa, sb, (float)e, p);
+    return KKMorphSnapshotCapture(p);
+  }
+  return nil;
+}
+
 // ---------------------------------------------------------------------------
 // KKInterval
 // ---------------------------------------------------------------------------
@@ -15,11 +60,15 @@
   self = [super init];
   if (self) {
     _curve = KKIntervalCurveEaseInOut;
-    _intensity = 1.0;
+    // Midpoint defaults (the documented neutral per KKEasing.h) - not max, so a
+    // freshly-picked easing / hold effect starts gentle and is dialed UP, rather
+    // than maxed out and needing to be dialed down. Saved animations are
+    // unaffected: the JSON always carries explicit values that override these.
+    _intensity = 0.5;
     _frequency = 0.5;
     _modulation = KKIntervalModulationNone;
-    _modulationIntensity = 1.0;
-    _modulationFrequency = 1.0;
+    _modulationIntensity = 0.5;
+    _modulationFrequency = 0.5;
     _modulationLinked = YES;
     // Default unlinked: an interval freshly created in Advanced (new keypose /
     // property) starts unlinked. Basic explicitly links its Hold pair when it
@@ -178,6 +227,7 @@
   c.spatialSmooth = _spatialSmooth;
   c.inHandle = [_inHandle copy];
   c.outHandle = [_outHandle copy];
+  c.geometrySnapshot = [_geometrySnapshot copy];
   return c;
 }
 
@@ -201,6 +251,8 @@
     d[@"in_handle"] = _inHandle;
   if (_outHandle)
     d[@"out_handle"] = _outHandle;
+  if (_geometrySnapshot)
+    d[@"geom_snapshot"] = [_geometrySnapshot base64EncodedStringWithOptions:0];
   return d;
 }
 
@@ -219,6 +271,10 @@
   id oh = d[@"out_handle"];
   if ([oh isKindOfClass:[NSArray class]])
     kp.outHandle = oh;
+  id gs = d[@"geom_snapshot"];
+  if ([gs isKindOfClass:[NSString class]])
+    kp.geometrySnapshot = [[NSData alloc] initWithBase64EncodedString:gs
+                                                              options:0];
   return kp;
 }
 
@@ -250,6 +306,21 @@
   return l;
 }
 
++ (instancetype)opacityLane {
+  // Standard FCP-style opacity: one whole-percentage component, 0..100 (no
+  // overshoot), identity 100 = fully opaque. Shared by every plugin that has an
+  // opacity property (the render multiplies premultiplied RGBA by value/100).
+  // The owning plugin sets category / enabled etc. after as needed.
+  KKLane *opacity = [self laneWithLabel:@"Opacity"];
+  opacity.valueType = KKLaneValueTypeFloat;
+  opacity.componentMin = @[ @0.0 ];
+  opacity.componentMax = @[ @100.0 ];
+  opacity.componentUnits = @[ @"%" ];
+  opacity.integerValued = YES;
+  [opacity insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @100.0 ]]];
+  return opacity;
+}
+
 - (void)kkApplyPickerMetadataFrom:(KKLane *)tmpl {
   if (!tmpl)
     return;
@@ -257,10 +328,24 @@
   _categorySymbol = [tmpl.categorySymbol copy];
   _animatable = tmpl.animatable;
   _seedField = tmpl.seedField;
+  _oscEditedOnly = tmpl.oscEditedOnly;
+  _ownerScoped = tmpl.ownerScoped;
   _choiceLabels = [tmpl.choiceLabels copy];
+  _choiceIcons = [tmpl.choiceIcons copy];
+  _wrapsChoicePills = tmpl.wrapsChoicePills;
+  _isToggle = tmpl.isToggle;
+  _autoSizesComponentLabels = tmpl.autoSizesComponentLabels;
   _visibleWhenLabel = [tmpl.visibleWhenLabel copy];
   _visibleWhenValues = [tmpl.visibleWhenValues copy];
+  _visibleWhenOrLabel = [tmpl.visibleWhenOrLabel copy];
+  _visibleWhenOrValues = [tmpl.visibleWhenOrValues copy];
   _gradientShowsTypeAngle = tmpl.gradientShowsTypeAngle;
+  // Slider-only bounds (decoupled from the value clamp) are display metadata
+  // too: a rebuilt keypose / boundary lane must carry them or its slider falls
+  // back to the wide componentMin/Max (e.g. draw-on Offset's unbounded field ->
+  // a slider with a useless million-wide range).
+  _sliderMax = [tmpl.sliderMax copy];
+  _sliderMin = [tmpl.sliderMin copy];
   // Pixel-display flag is template metadata too: keypose/boundary popovers
   // rebuild a display lane and must carry it, or a normalised 0..1 spatial lane
   // (Position / Crop / Anchor) shows raw fractions instead of pixels.
@@ -297,6 +382,8 @@
   c.valueType = _valueType;
   c.componentMin = [_componentMin copy];
   c.componentMax = [_componentMax copy];
+  c.sliderMax = [_sliderMax copy];
+  c.sliderMin = [_sliderMin copy];
   c.componentUnits = [_componentUnits copy];
   c.componentLabels = [_componentLabels copy];
   c.componentLabelColors = [_componentLabelColors copy];
@@ -311,11 +398,25 @@
   c.componentsScaleWithMedia = _componentsScaleWithMedia;
   c.categoryKey = [_categoryKey copy];
   c.categorySymbol = [_categorySymbol copy];
+  c.layerKey = [_layerKey copy];
+  c.layerLabel = [_layerLabel copy];
+  c.layerSymbol = [_layerSymbol copy];
+  c.headerPlaceholder = _headerPlaceholder;
+  c.categoryHeader = _categoryHeader;
+  c.locked = _locked;
   c.animatable = _animatable;
   c.seedField = _seedField;
+  c.oscEditedOnly = _oscEditedOnly;
+  c.ownerScoped = _ownerScoped;
   c.choiceLabels = [_choiceLabels copy];
+  c.choiceIcons = [_choiceIcons copy];
+  c.wrapsChoicePills = _wrapsChoicePills;
+  c.isToggle = _isToggle;
+  c.autoSizesComponentLabels = _autoSizesComponentLabels;
   c.visibleWhenLabel = [_visibleWhenLabel copy];
   c.visibleWhenValues = [_visibleWhenValues copy];
+  c.visibleWhenOrLabel = [_visibleWhenOrLabel copy];
+  c.visibleWhenOrValues = [_visibleWhenOrValues copy];
   c.gradientShowsTypeAngle = _gradientShowsTypeAngle;
   return c;
 }
@@ -356,15 +457,33 @@
     d[@"category_key"] = _categoryKey;
   if (_categorySymbol)
     d[@"category_symbol"] = _categorySymbol;
+  if (_layerKey)
+    d[@"layer_key"] = _layerKey;
+  if (_layerLabel)
+    d[@"layer_label"] = _layerLabel;
+  if (_layerSymbol)
+    d[@"layer_symbol"] = _layerSymbol;
   if (!_animatable)
     d[@"animatable"] = @NO;
   if (_seedField)
     d[@"seed_field"] = @YES;
+  if (_oscEditedOnly)
+    d[@"osc_edited_only"] = @YES;
+  if (_ownerScoped)
+    d[@"owner_scoped"] = @YES;
   if (_choiceLabels)
     d[@"choice_labels"] = _choiceLabels;
+  if (_isToggle)
+    d[@"is_toggle"] = @YES;
+  if (_autoSizesComponentLabels)
+    d[@"autosize_component_labels"] = @YES;
   if (_visibleWhenLabel) {
     d[@"visible_when_label"] = _visibleWhenLabel;
     d[@"visible_when_values"] = _visibleWhenValues ?: @[];
+  }
+  if (_visibleWhenOrLabel) {
+    d[@"visible_when_or_label"] = _visibleWhenOrLabel;
+    d[@"visible_when_or_values"] = _visibleWhenOrValues ?: @[];
   }
   if (_gradientShowsTypeAngle)
     d[@"gradient_type_angle"] = @YES;
@@ -402,13 +521,23 @@
   l.componentsScaleWithMedia = [d[@"components_scale_with_media"] boolValue];
   l.categoryKey = d[@"category_key"];
   l.categorySymbol = d[@"category_symbol"];
+  l.layerKey = d[@"layer_key"];
+  l.layerLabel = d[@"layer_label"];
+  l.layerSymbol = d[@"layer_symbol"];
   l.animatable = d[@"animatable"] ? [d[@"animatable"] boolValue] : YES;
   l.seedField = [d[@"seed_field"] boolValue];
+  l.oscEditedOnly = [d[@"osc_edited_only"] boolValue];
+  l.ownerScoped = [d[@"owner_scoped"] boolValue];
   if ([d[@"choice_labels"] isKindOfClass:[NSArray class]])
     l.choiceLabels = d[@"choice_labels"];
+  l.isToggle = [d[@"is_toggle"] boolValue];
+  l.autoSizesComponentLabels = [d[@"autosize_component_labels"] boolValue];
   l.visibleWhenLabel = d[@"visible_when_label"];
   if ([d[@"visible_when_values"] isKindOfClass:[NSArray class]])
     l.visibleWhenValues = d[@"visible_when_values"];
+  l.visibleWhenOrLabel = d[@"visible_when_or_label"];
+  if ([d[@"visible_when_or_values"] isKindOfClass:[NSArray class]])
+    l.visibleWhenOrValues = d[@"visible_when_or_values"];
   l.gradientShowsTypeAngle = [d[@"gradient_type_angle"] boolValue];
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {
@@ -764,7 +893,7 @@ KKTimeline *KKTimelineRebalanced(KKTimeline *timeline, double oldDuration,
 
 // Builds the coalesced edge keypose: `edge` moved to `newTime` (keeping its
 // easing/handles), but with the INTERPOLATED value at the clip boundary when a
-// sampler is supplied — `fOrig` is the boundary's fraction in the original
+// sampler is supplied - `fOrig` is the boundary's fraction in the original
 // frame. Without a sampler it keeps `edge`'s raw value.
 static KKKeyPose *KKRetimeBoundaryKeypose(KKKeyPose *edge, double newTime,
                                           KKLane *lane, double fOrig,
@@ -804,10 +933,10 @@ KKTimeline *KKTimelineRetimedForMediaAnchor(KKTimeline *timeline,
     // map is monotonic in `kp.time`, so the keyposes split into a head run
     // (f below the clip start), interior (inside), and a tail run (past the
     // end). Off-edge runs are COALESCED to a single edge keypose instead of
-    // piling up (which would leave overlapping keyposes — invalid, the visible
+    // piling up (which would leave overlapping keyposes - invalid, the visible
     // trim/split symptom).
     //   - If a REAL keypose sits ON the edge (within `eps`, e.g. a split AT a
-    //     keypose), snap THAT one to the edge — keeping its own value + easing,
+    //     keypose), snap THAT one to the edge - keeping its own value + easing,
     //     and NOT also adding a synthesized boundary (the duplicate-keypose
     //     bug). `eps` is ~half a frame.
     //   - Otherwise synthesize one boundary keypose carrying the INTERPOLATED
@@ -952,6 +1081,20 @@ NSArray<NSString *> *KKLaneComponentLabels(KKLane *lane) {
     return @[ @"W", @"H", @"X", @"Y" ];
   case KKLaneValueTypeColor:
     return @[ @"R", @"G", @"B", @"A" ];
+  case KKLaneValueTypeAngle: {
+    // A multi-axis angle (e.g. Rotation X/Y/Z) carries explicit labels and
+    // returned above; a lone angle (Fill Angle, a gradient direction) has none,
+    // so hand back a single empty label. The static-value row keys its circular
+    // knob off a >= 1 component count, so without this a 1-axis angle would
+    // fall through to a plain field instead of the dial.
+    NSUInteger n = lane.keyposes.firstObject.values.count;
+    if (n <= 1)
+      return @[ @"" ];
+    NSMutableArray<NSString *> *out = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++)
+      [out addObject:@""];
+    return out;
+  }
   case KKLaneValueTypeFloat:
   case KKLaneValueTypeNormalized:
     return nil;
@@ -982,28 +1125,60 @@ static NSArray<NSNumber *> *_KKLaneCondValues(
 static BOOL _KKLaneCondVisible(
     KKLane *lane, NSDictionary<NSString *, KKLane *> *byLabel,
     NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel,
+    NSMutableDictionary<NSString *, NSNumber *> *memo);
+
+// One visibility clause: does `ctrlLabel`'s component-0 value match `values`,
+// and is the controller itself visible? An absent controller / empty label =
+// NO (the clause doesn't hold) - the OR caller treats that as "this side off".
+static BOOL _KKLaneCondClause(
+    NSString *ctrlLabel, NSArray<NSNumber *> *values, KKLane *lane,
+    NSDictionary<NSString *, KKLane *> *byLabel,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel,
     NSMutableDictionary<NSString *, NSNumber *> *memo) {
-  if (lane.visibleWhenLabel.length == 0)
-    return YES;
-  // Controller not in this set - the rule can't be evaluated, so don't filter.
-  KKLane *ctrl = byLabel[lane.visibleWhenLabel];
+  if (ctrlLabel.length == 0)
+    return NO;
+  KKLane *ctrl = byLabel[ctrlLabel];
   if (!ctrl)
+    return NO;
+  NSArray<NSNumber *> *cv = _KKLaneCondValues(ctrl, valuesByLabel);
+  NSInteger idx = cv.count ? (NSInteger)llround(cv[0].doubleValue) : 0;
+  BOOL match = NO;
+  for (NSNumber *n in values)
+    if ((NSInteger)llround(n.doubleValue) == idx) {
+      match = YES;
+      break;
+    }
+  if (!match)
+    return NO;
+  if (ctrl == lane)
+    return YES;
+  return _KKLaneCondVisible(ctrl, byLabel, valuesByLabel, memo);
+}
+
+static BOOL _KKLaneCondVisible(
+    KKLane *lane, NSDictionary<NSString *, KKLane *> *byLabel,
+    NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel,
+    NSMutableDictionary<NSString *, NSNumber *> *memo) {
+  if (lane.visibleWhenLabel.length == 0 && lane.visibleWhenOrLabel.length == 0)
     return YES;
   NSNumber *cached = memo[lane.label];
   if (cached)
     return cached.boolValue;
   memo[lane.label] = @NO; // cycle guard
-  NSArray<NSNumber *> *cv = _KKLaneCondValues(ctrl, valuesByLabel);
-  NSInteger idx = cv.count ? (NSInteger)llround(cv[0].doubleValue) : 0;
-  BOOL pass = NO;
-  for (NSNumber *n in lane.visibleWhenValues)
-    if ((NSInteger)llround(n.doubleValue) == idx) {
-      pass = YES;
-      break;
-    }
-  BOOL vis = pass;
-  if (vis && ctrl != lane)
-    vis = _KKLaneCondVisible(ctrl, byLabel, valuesByLabel, memo);
+  BOOL vis;
+  if (lane.visibleWhenOrLabel.length > 0) {
+    // OR mode: visible if either clause holds (absent controller = clause off).
+    vis = _KKLaneCondClause(lane.visibleWhenLabel, lane.visibleWhenValues, lane,
+                            byLabel, valuesByLabel, memo) ||
+          _KKLaneCondClause(lane.visibleWhenOrLabel, lane.visibleWhenOrValues,
+                            lane, byLabel, valuesByLabel, memo);
+  } else if (!byLabel[lane.visibleWhenLabel]) {
+    // Single rule, controller absent: can't evaluate, so don't filter.
+    vis = YES;
+  } else {
+    vis = _KKLaneCondClause(lane.visibleWhenLabel, lane.visibleWhenValues, lane,
+                            byLabel, valuesByLabel, memo);
+  }
   memo[lane.label] = @(vis);
   return vis;
 }

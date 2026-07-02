@@ -40,6 +40,48 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// Does not fire onTimelineMutated.
 - (void)applyTimeline:(KKTimeline *)timeline;
 
+/// Optional all-owners (all-layers) timeline. When set, BOTH graphs (Basic +
+/// Advanced) render and edit this instead of the single-owner `timeline`: every
+/// animated lane across every layer shows, all editable, independent of which
+/// layer is selected. Lanes must carry unique labels + layerKey/layerLabel for
+/// the per-layer headers. The single-owner `timeline` still drives the Animated
+/// dropdown + Constants (the layer list picks which owner those target). nil
+/// (single-owner plugins) => the graphs use `timeline` as before.
+@property(nonatomic, copy, nullable) KKTimeline *graphTimeline;
+/// Owner (layer) keys in display order, so the graph lanes group in the layer
+/// list's stack order. nil = no ordering.
+@property(nonatomic, copy, nullable) NSArray<NSString *> *layerOrder;
+/// Fired when an edit in a graph mutates the `graphTimeline` (all layers). The
+/// host splits it back per owner. Only used when `graphTimeline` is set;
+/// otherwise edits flow through `onTimelineMutated` as usual.
+@property(nonatomic, copy, nullable) void (^onGraphTimelineMutated)
+    (KKTimeline *updated);
+/// Fired when a keypose popover opens scoped to one layer (multi-owner graph),
+/// so the host can highlight that layer in its layer list.
+@property(nonatomic, copy, nullable) void (^onKeyposeLayerActivated)
+    (NSString *layerKey);
+/// Re-point an OPEN keypose popover at a different layer's keypose at the same
+/// time (driven by the host's layer-list selection). No-op if no keypose
+/// popover is open.
+- (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey;
+/// Host's selected layer (multi-owner), so a freshly-opened keypose popover
+/// scopes its params to that layer (nil => the first animated layer).
+@property(nonatomic, copy, nullable) NSString *activeLayerKey;
+/// Host hint (multi-owner): YES if SOME layer still has a constant param, so
+/// the Constants button stays available even when the selected layer is fully
+/// animated (open it, then pick the layer with constants in the panel).
+@property(nonatomic) BOOL ownerConstantsAvailable;
+/// Multi-owner: names of every animated layer, listed in the Animated dropdown
+/// trigger with +N truncation ("layer 1, layer 2 +1"). nil/empty for
+/// single-owner plugins (the trigger shows the property summary instead).
+@property(nonatomic, copy, nullable) NSArray<NSString *> *dropdownLayerTitles;
+
+/// Optional minimum content height (points) for the Animated (manage) popover,
+/// so a sparse property list - and the layer panel beside it, which matches the
+/// popover height - isn't uncomfortably short. 0 (default) keeps the popover
+/// hugging its rows.
+@property(nonatomic) CGFloat minimumManagePopoverHeight;
+
 /// Live clip duration (seconds) for the Basic motion-graph ruler, pushed
 /// from the render tick (a clip trim never fires parameterChanged:).
 - (void)setClipDurationSeconds:(double)seconds;
@@ -65,6 +107,13 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// All reorderable property labels in their current display order (the
 /// drag-to-reorder list's source). Backs the property-order popover.
 - (NSArray<NSString *> *)orderedParamLabels;
+
+/// The full parameter universe - every available lane label, ordered by the
+/// user's paramOrder then the author's template order - independent of the
+/// selected layer's seeded lanes or conditional visibility. The Parameter Order
+/// popover edits a global ordering, so it shows every reorderable param
+/// regardless of which layer is selected.
+- (NSArray<NSString *> *)allOrderedParamLabels;
 
 /// Apply a user-defined property display order (persists via onTimelineMutated
 /// and re-sorts every view + popover through the display chokepoint).
@@ -122,6 +171,12 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 @property(nonatomic, readonly) NSArray<NSView *> *accessoryButtons;
 @property(nonatomic, copy, nullable) void (^onAccessoryButtonsChanged)(void);
 
+/// The lane-visibility filter cluster (filter glyph + clear), hosted CENTERED
+/// in the inspector's header row rather than in the right-aligned accessory
+/// stack. Self-hiding (Advanced + >=2 lanes), so the inspector can mount it
+/// once.
+@property(nonatomic, readonly) NSView *filterAccessory;
+
 /// Mini-viewer render mode (see typedef above). The 3-way pill lives in the
 /// popover's header bar (only visible while a boundary popover is open).
 /// Setter is the host pushing the persisted value; `onRenderModeChanged`
@@ -163,6 +218,14 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// fires. Defaults to nil - first available lane alphabetically is used.
 @property(nonatomic, copy, nullable) NSString *managePopoverSpotlightLabel;
 
+/// Guide hooks for the Advanced lane-filter checklist popover, mirroring the
+/// manage-popover ones. `willOpen` fires (after a short entrance delay) with
+/// the checklist content view so a guide can set passthrough + spotlight it;
+/// `closed` fires when it dismisses.
+@property(nonatomic, copy, nullable) void (^onFilterPopoverWillOpen)
+    (NSView *content);
+@property(nonatomic, copy, nullable) void (^onFilterPopoverClosed)(void);
+
 /// Guide hooks for the static-values (constants) popover, mirroring the
 /// manage-popover ones. `willOpen` fires after the popover appears (short
 /// delay for the entrance animation) with its content view and the live
@@ -185,8 +248,19 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// cell. The mini-viewer guide wires these via the lanes binder.
 @property(nonatomic, copy, nullable) void (^onGuideRenderModeChanged)
     (KKMiniViewerRenderMode mode);
+/// Fires when the boundary popover's size pill switches the mini-viewer size
+/// (`sizeIndex` 0 = sm, 1 = md, 2 = lg). The mini-viewer guide wires this to
+/// advance its "make the preview bigger" step.
+@property(nonatomic, copy, nullable) void (^onGuideMiniViewerSizeChanged)
+    (NSInteger sizeIndex);
 @property(nonatomic, copy, nullable) void (^onGuideFilmstripCellActivated)
     (double fraction);
+/// Fires when the constant popover's category-nav pill switches category
+/// (`categoryKey` = the new tab). Fired alongside the functional category
+/// change; the arrow guide wires this via the binder to advance its
+/// "navigate to the Stroke group" step.
+@property(nonatomic, copy, nullable) void (^onGuideStaticCategoryChanged)
+    (NSString *categoryKey);
 /// Fires when the Advanced toolbar's Dynamic toggle is clicked (`on` = its new
 /// state). The Advanced-timing guide wires this via the lanes binder to advance
 /// its Dynamic step.
@@ -231,6 +305,12 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 @property(nonatomic, weak, nullable) id<KKMiniViewerDelegate>
     miniViewerDelegate;
 
+/// Forwarded to the popover mini's -grabsKeyFocusOnClick: when YES, clicking the
+/// mini makes it the key window so bare keys (e.g. Delete) are handled inside the
+/// popover instead of reaching the host. Default NO. Opt in from a plugin whose
+/// mini handles keys (e.g. Canvas's delete-selected-layer).
+@property(nonatomic) BOOL miniGrabsKeyFocusOnClick;
+
 @end
 
 /// Popover presentation (manage + static-values). Split out of
@@ -240,6 +320,16 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 
 /// Open the static-values popover anchored to the given view.
 - (void)showStaticValuesPopoverFromView:(NSView *)anchor;
+
+/// Present arbitrary `content` in a companion-capable popover (same keep-alive
+/// outside-click handling as the value popovers) and post the open/close
+/// signals a companion side panel (Canvas's layer list) observes, tagged with
+/// `kind`. Used by the OSC settings popover so it can host the layer-list panel
+/// too. Returns the popover.
+- (NSPopover *)showCompanionPopover:(NSView *)content
+                           fromView:(NSView *)anchor
+                               kind:(NSString *)kind
+                            onClose:(nullable void (^)(void))onClose;
 
 /// The value-editor row (slider/fields) for `label` in the currently open
 /// static-values popover, or nil if it isn't open / no such lane. Lets a
@@ -280,9 +370,35 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
                                                  double displayValue))handler;
 - (void)commitGuideConstantFieldForLabel:(NSString *)label
                                component:(NSInteger)component;
+/// Screen rect of the choice-pill segment at `index` in `label`'s constant row
+/// (a radio enum, e.g. an end-marker type), NSZeroRect if the popover isn't open
+/// or the row has no choice pill. Spotlight target.
+- (NSRect)guideConstantChoicePillScreenRectForLabel:(NSString *)label
+                                            atIndex:(NSInteger)index;
+/// Screen rect of the constant popover's category-nav pill for `key` (e.g.
+/// @"Stroke"), NSZeroRect if the popover isn't open or has no such category.
+- (NSRect)guideConstantCategoryPillScreenRectForKey:(NSString *)key;
+/// Screen rect of `label`'s "add to animated" gutter button in the open constant
+/// popover, NSZeroRect if not open or the row has none. Spotlight target.
+- (NSRect)guideConstantAddToAnimatedButtonScreenRectForLabel:(NSString *)label;
+/// Scroll `label`'s constant row into the popover's visible area (no-op if the
+/// popover isn't open or the row is hidden by the current category tab).
+- (void)guideScrollConstantRowIntoViewForLabel:(NSString *)label;
+/// Switch the open constant popover to category `key` (e.g. @"Core") and
+/// remember it for reopen. Live-updates the nav pill without firing the guide's
+/// category trigger. A guide forces a known starting tab with this.
+- (void)guideSelectConstantCategory:(NSString *)key;
 
 /// Close the manage popover if it is currently open.
 - (void)closeManagePopover;
+
+/// Close the lane-filter checklist popover if it is currently open.
+- (void)closeFilterPopover;
+
+/// Re-open the open gap / modulation ("Applies to") popover against the current
+/// timeline, so a multi-layer host can re-scope it to a newly-selected layer.
+/// No-op when no such popover is open.
+- (void)reopenOpenAppliesToPopover;
 
 @end
 

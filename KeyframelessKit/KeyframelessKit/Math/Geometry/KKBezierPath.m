@@ -19,6 +19,10 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   KKBezierPoint *_points;
   NSUInteger _count;
   NSUInteger _capacity;
+  // Per-anchor corner radius, parallel to _points; nil = all sharp (lazy, so a
+  // path that never rounds a corner stores nothing extra). Kept index-synced
+  // through insert / remove; a bulk geometry replace resets it.
+  NSMutableArray<NSNumber *> *_cornerRadii;
   NSUInteger *_contourStarts;
   NSUInteger _contourCount;
   NSUInteger _contourCapacity;
@@ -367,6 +371,35 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
             path->_shape = [KKShape shapeWithKind:shapeKind
                                             bytes:bytes + hdr
                                         available:need];
+            hdr += need;
+          }
+        }
+        if (ver >= 29 && data.length >= hdr + 4) {
+          uint32_t ajLen;
+          memcpy(&ajLen, bytes + hdr, 4);
+          hdr += 4;
+          if (ajLen > 0 && data.length >= hdr + ajLen) {
+            path->_animationJSON =
+                [[NSString alloc] initWithBytes:bytes + hdr
+                                         length:ajLen
+                                       encoding:NSUTF8StringEncoding];
+            hdr += ajLen;
+          }
+        }
+        if (ver >= 30 && data.length >= hdr + 1) {
+          uint8_t hasRadii = bytes[hdr];
+          hdr += 1;
+          if (hasRadii && path->_count > 0 &&
+              data.length >= hdr + path->_count * sizeof(float)) {
+            NSMutableArray<NSNumber *> *radii =
+                [NSMutableArray arrayWithCapacity:path->_count];
+            for (NSUInteger i = 0; i < path->_count; i++) {
+              float r;
+              memcpy(&r, bytes + hdr + i * sizeof(float), sizeof(float));
+              [radii addObject:@(r)];
+            }
+            path->_cornerRadii = radii;
+            hdr += path->_count * sizeof(float);
           }
         }
       }
@@ -405,6 +438,14 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     }
   }
   return path;
+}
+
+- (id)copyWithZone:(NSZone *)zone {
+  // Round-trip through the canonical serializer so the copy stays complete
+  // (points, contours, shape, animationJSON, morph targets, every property)
+  // without a parallel field-by-field copy that would silently drop anything
+  // added to dataRepresentation later.
+  return [KKBezierPath pathWithData:[self dataRepresentation]];
 }
 
 - (NSData *)dataRepresentation {
@@ -464,7 +505,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   // v11: + endWidth (1 float).
   // v12: + contour starts (2-byte count + N × uint32 indices).
   uint8_t propMarker = 0xAA;
-  uint8_t propVersion = 28;
+  uint8_t propVersion = 30;
   [data appendBytes:&propMarker length:1];
   [data appendBytes:&propVersion length:1];
   float strokeData[4] = {_strokeWidth, _strokeR, _strokeG, _strokeB};
@@ -588,6 +629,26 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   [data appendBytes:&shapeKind length:1];
   if (payload)
     [data appendData:payload];
+  // v29: animationJSON (uint32 length-prefixed UTF-8; opaque per-layer payload,
+  // e.g. a serialized KKTimeline). uint32 length since a timeline can exceed
+  // the 64KB a uint16 allows.
+  NSData *ajData = [_animationJSON dataUsingEncoding:NSUTF8StringEncoding];
+  uint32_t ajLen = (uint32_t)ajData.length;
+  [data appendBytes:&ajLen length:4];
+  if (ajLen > 0)
+    [data appendData:ajData];
+  // v30: per-anchor corner radii (1 flag byte; if set, _count floats). The
+  // stored path keeps a rounded corner as a single anchor + this radius - the
+  // fillet geometry is generated at render / display time (see KKCornerFillet).
+  // Absent in older blobs = all sharp.
+  uint8_t hasRadii = [self hasCornerRadii] ? 1 : 0;
+  [data appendBytes:&hasRadii length:1];
+  if (hasRadii) {
+    for (NSUInteger i = 0; i < _count; i++) {
+      float r = (i < _cornerRadii.count) ? _cornerRadii[i].floatValue : 0.0f;
+      [data appendBytes:&r length:sizeof(float)];
+    }
+  }
   return data;
 }
 
@@ -793,6 +854,37 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   return _points[index];
 }
 
+- (float)cornerRadiusAtIndex:(NSUInteger)index {
+  if (!_cornerRadii || index >= _cornerRadii.count)
+    return 0.0f;
+  return _cornerRadii[index].floatValue;
+}
+
+- (void)setCornerRadius:(float)radius atIndex:(NSUInteger)index {
+  if (index >= _count)
+    return;
+  if (!_cornerRadii) {
+    if (radius == 0.0f)
+      return; // stay lazy: a path with no rounding stores nothing
+    _cornerRadii = [NSMutableArray arrayWithCapacity:_count];
+    for (NSUInteger i = 0; i < _count; i++)
+      [_cornerRadii addObject:@0.0f];
+  }
+  // Defensive: keep the array sized to the point count.
+  while (_cornerRadii.count < _count)
+    [_cornerRadii addObject:@0.0f];
+  _cornerRadii[index] = @(radius);
+}
+
+- (BOOL)hasCornerRadii {
+  if (!_cornerRadii)
+    return NO;
+  for (NSNumber *n in _cornerRadii)
+    if (n.floatValue != 0.0f)
+      return YES;
+  return NO;
+}
+
 - (void)ensureCapacity:(NSUInteger)needed {
   if (_capacity >= needed)
     return;
@@ -814,6 +906,10 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
       .type = KKBezierPointLinear,
   };
   _count++;
+  // Keep the radii array (if materialized) in step: the new anchor is sharp.
+  if (_cornerRadii)
+    [_cornerRadii insertObject:@0.0f
+                       atIndex:MIN(index, _cornerRadii.count)];
   _shape = nil;
 }
 
@@ -822,6 +918,8 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     memmove(&_points[index], &_points[index + 1],
             (_count - index - 1) * sizeof(KKBezierPoint));
   _count--;
+  if (_cornerRadii && index < _cornerRadii.count)
+    [_cornerRadii removeObjectAtIndex:index];
   _shape = nil;
 }
 
@@ -836,7 +934,9 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
   _count = count;
   _closed = closed;
   // Bulk geometry replacement invalidates the cached shape - the new
-  // points may not be a rect/ellipse/line anymore.
+  // points may not be a rect/ellipse/line anymore - and the per-anchor radii
+  // (the new points are a different set; callers re-apply radii if needed).
+  _cornerRadii = nil;
   _shape = nil;
 }
 
@@ -848,6 +948,7 @@ static simd_float2 evalCubicBezier(simd_float2 p0, simd_float2 c0,
     memcpy(_points, points, count * sizeof(KKBezierPoint));
   _count = count;
   _closed = closed;
+  _cornerRadii = nil;
   _shape = nil;
 }
 

@@ -74,9 +74,10 @@ GlowGuideTimelineWithRadiusValues(NSArray<NSNumber *> *values) {
   cfg.primaryValueType = KKLaneValueTypeFloat;
   cfg.primarySeedValues = @[ @100.0, @100.0 ];
   // Seed a second lane (Noise Amount) so the Advanced guide has two lanes - the
-  // lane-filter bar then appears and its "try the filter pills" step makes
-  // sense. The category keys mirror the real lanes so the bar shows the actual
-  // [Core | Radius] [Noise | Amount] grouping the user sees outside the guide.
+  // lane-filter button then appears and its open-the-filter /
+  // uncheck-a-property steps make sense. The category keys mirror the real
+  // lanes so the filter checklist shows the actual Core/Noise grouping the user
+  // sees outside the guide.
   cfg.primaryCategoryKey = @"Core";
   cfg.secondaryLabel = @"Amount";
   cfg.secondaryValueType = KKLaneValueTypeFloat;

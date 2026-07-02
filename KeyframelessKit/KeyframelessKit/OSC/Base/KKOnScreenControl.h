@@ -43,6 +43,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Override to return the canvas-space position of the OSC center.
 - (CGPoint)oscPositionAtTime:(CMTime)time;
 
+/// Clip-local fraction (0..1) at `time`, from the effect's start + duration via
+/// FxTimingAPI. 0 when timing is unavailable. Shared by the composable
+/// controls (Position / Scale); the host's own OSC has its own
+/// `_fractionAtTime`.
+- (double)fractionAtTime:(CMTime)time;
+
 /// Standard distance-based hit test using hitRadius.
 /// Override for non-circular hit testing.
 - (BOOL)hitTestAtMousePositionX:(double)positionX
@@ -237,6 +243,38 @@ NS_ASSUME_NONNULL_BEGIN
                                            id<MTLRenderCommandEncoder> encoder,
                                            CGPoint metalPosition,
                                            simd_uint2 viewportSize))commands;
+
+/// OSC draw batch. By default every primitive draw above
+/// (encodeRenderCommandsForDestinationImage: / drawLineStrip / drawQuad …)
+/// creates, commits and waitUntilScheduled-syncs its OWN command buffer - fine
+/// for a handful of handles, but a dense path-edit OSC issues hundreds of them
+/// (one per anchor dot, tangent line, contour-halo segment), and the per-buffer
+/// commit sync dominates (tens of ms on the main thread, stalling the drag).
+///
+/// While a batch is armed every such draw - across ALL control instances in
+/// this process - encodes into ONE shared command buffer + render encoder
+/// instead, collapsing those hundreds of commits into a single one. The encoder
+/// loads the current destination on open (`clear` = wipe first, NO = compose
+/// over what's already drawn, e.g. the grid), so per-primitive clear requests
+/// are ignored inside the batch. Viewer-OSC use only: single-threaded, one
+/// synchronous drawOSC pass; ALWAYS pair begin with end (even on early return)
+/// or the next pass inherits a stale encoder. Returns NO if the batch couldn't
+/// open (the caller then draws unbatched as before). Nested begins no-op and
+/// return YES.
+- (BOOL)beginOSCDrawBatchForDestinationImage:(FxImageTile *)destinationImage
+                            clearDestination:(BOOL)clear;
+- (void)endOSCDrawBatch;
+
+/// One-call form of the batch (the recommended entry point): runs `block` with
+/// a batch armed and guarantees -endOSCDrawBatch even if the block returns
+/// early or throws. Wrap any dense OSC draw (many handles / a path outline / a
+/// point grid) in this and its hundreds of per-primitive command-buffer commits
+/// collapse to one. `clear` = wipe the destination first (a standalone
+/// overlay), NO = compose over what's already drawn (e.g. a grid). A handful of
+/// primitives needn't bother - the batch only pays off past ~tens of draws.
+- (void)drawOSCBatchedForDestinationImage:(FxImageTile *)destinationImage
+                         clearDestination:(BOOL)clear
+                                    block:(NS_NOESCAPE void (^)(void))block;
 
 @end
 

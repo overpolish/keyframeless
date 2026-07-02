@@ -16,6 +16,8 @@ typedef NS_ENUM(NSInteger, KKJoyrideTriggerType) {
   KKJoyrideTriggerTypeStaticValuesPopoverWillOpen,
   KKJoyrideTriggerTypeStaticValuesPopoverClosed,
   KKJoyrideTriggerTypeStaticValueDragEnded,
+  KKJoyrideTriggerTypeStaticChoiceSelected,
+  KKJoyrideTriggerTypeStaticCategorySelected,
   KKJoyrideTriggerTypeConstantFieldEdited,
   KKJoyrideTriggerTypeGapPopoverWillOpen,
   KKJoyrideTriggerTypeGapPopoverCurveChanged,
@@ -26,11 +28,14 @@ typedef NS_ENUM(NSInteger, KKJoyrideTriggerType) {
   KKJoyrideTriggerTypeMiniViewerViewReset,
   KKJoyrideTriggerTypeMiniViewerDoubleClickHandled,
   KKJoyrideTriggerTypeRenderModeChanged,
+  KKJoyrideTriggerTypeMiniViewerSizeChanged,
   KKJoyrideTriggerTypeFilmstripCellActivated,
   KKJoyrideTriggerTypeMiniViewerOptHide,
   KKJoyrideTriggerTypePlayToggleEdge,
   KKJoyrideTriggerTypeDynamicToggled,
   KKJoyrideTriggerTypeLaneFilterToggled,
+  KKJoyrideTriggerTypeFilterPopoverWillOpen,
+  KKJoyrideTriggerTypeFilterPopoverClosed,
 };
 
 @interface KKJoyrideTrigger ()

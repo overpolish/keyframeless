@@ -26,6 +26,11 @@
     _onGapTapped((NSInteger)sec);
   if (!self.onGapPopover)
     return;
+  _lastGapSection = sec;
+  _lastGapWasHold = NO;
+  // Multi-owner: if the selected layer has nothing animated, land on the first
+  // layer that does (and highlight it) so the popover never opens empty.
+  [self _resolveBasicActiveLayerKey];
   KKBasicProj p = [self _projection];
   NSRect g = [self _graphRect];
   if (NSWidth(g) <= 0.0)
@@ -54,9 +59,7 @@
   // flips holdsFlat (non-destructive) via _setLaneParticipation.
   NSMutableArray<NSString *> *partLabels = [NSMutableArray array];
   NSMutableArray<NSNumber *> *partStates = [NSMutableArray array];
-  for (KKLane *lane in _timeline.lanes) {
-    if (!lane.enabled || lane.keyposes.count < 2)
-      continue;
+  for (KKLane *lane in [self _gapParticipatingLanes]) {
     // A gradient stays a single top-level toggle here (does it ease or hold
     // flat during the phase) - it is NOT component-expanded, and it is excluded
     // only from the Hold-modulation/wiggle capsule below.
@@ -81,9 +84,7 @@
         if (!s)
           return nil;
         NSMutableArray<NSNumber *> *out = [NSMutableArray array];
-        for (KKLane *lane in s->_timeline.lanes) {
-          if (!lane.enabled || lane.keyposes.count < 2)
-            continue;
+        for (KKLane *lane in [s _gapParticipatingLanes]) {
           KKHoldShape sh = KKShapeOfLane(lane);
           BOOL ap = (capSec == KKBasicSectionOut)
                         ? (sh.outEnabled &&
@@ -184,6 +185,50 @@
   return nil;
 }
 
+// Multi-owner (Canvas) timelines carry every layer's lanes; the gap / modulate
+// "Applies to" must list only the active layer's, exactly like the keypose
+// popover. Single-owner timelines (no layerKey / no active key) include all.
+- (BOOL)_laneInActiveLayer:(KKLane *)lane {
+  return !_activeLayerKey.length || !lane.layerKey.length ||
+         [lane.layerKey isEqualToString:_activeLayerKey];
+}
+
+// The animatable lanes that appear in a gap / modulation "Applies to": enabled,
+// shaped (>=2 keyposes), visible under the mode-gating cascade, and on the
+// active layer. ONE source of truth so each builder and its cmd-Z rebuilder
+// stay in lock-step (a mismatch silently no-ops the state refresh).
+- (NSArray<KKLane *> *)_gapParticipatingLanes {
+  NSSet<NSString *> *visible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+  NSMutableArray<KKLane *> *out = [NSMutableArray array];
+  for (KKLane *lane in _timeline.lanes)
+    if (lane.enabled && lane.keyposes.count >= 2 &&
+        [visible containsObject:lane.label] && [self _laneInActiveLayer:lane])
+      [out addObject:lane];
+  return out;
+}
+
+// The Hold interval whose modulation the popover + graph should DISPLAY. The
+// modulation type/intensity/freq/seed are shared across every participating
+// lane, so reflect the first lane that actually HAS modulation - not just the
+// first animatable lane, which may be excluded (its Hold modulation == None)
+// and would otherwise blank the curve buttons + graph line even while other
+// lanes wiggle. Falls back to the first animatable lane's interval (the None
+// state).
+- (KKInterval *)_representativeModulationIntervalForHold {
+  KKInterval *fallback = nil;
+  for (KKLane *lane in _timeline.lanes) {
+    if (!lane.enabled || lane.keyposes.count < 2)
+      continue;
+    KKInterval *iv = lane.keyposes[KKShapeOfLane(lane).holdStart].outgoing;
+    if (!fallback)
+      fallback = iv;
+    if (iv && iv.modulation != KKIntervalModulationNone)
+      return iv;
+  }
+  return fallback;
+}
+
 // Per-lane phase "applies to" - NON-DESTRUCTIVE. Turning a phase off for one
 // property just flips that property's In/Out interval to holdsFlat (it sits at
 // the Hold value through the phase, no animation); the keypose and its stored
@@ -275,6 +320,9 @@
   NSRect g = [self _graphRect];
   if (NSWidth(g) <= 0.0 || !p.anyAnimatable)
     return;
+  _lastGapSection = KKBasicSectionHold;
+  _lastGapWasHold = YES;
+  [self _resolveBasicActiveLayerKey]; // land on a layer that has animation
 
   double midFrac = (p.inEndFrac + p.outStartFrac) / 2.0;
   double lo = 0.0, hi = 1.0;
@@ -293,9 +341,7 @@
   // participates when its Hold interval is unlinked (drift-capable).
   NSMutableArray<NSString *> *holdLabels = [NSMutableArray array];
   NSMutableArray<NSNumber *> *driftStates = [NSMutableArray array];
-  for (KKLane *lane in _timeline.lanes) {
-    if (!lane.enabled || lane.keyposes.count < 2)
-      continue;
+  for (KKLane *lane in [self _gapParticipatingLanes]) {
     KKInterval *liv = lane.keyposes[KKShapeOfLane(lane).holdStart].outgoing;
     [holdLabels addObject:lane.label];
     [driftStates addObject:@(liv && !liv.endpointsLinked)];
@@ -354,12 +400,10 @@
 
   if (!self.onHoldModulationPopover)
     return;
-  KKInterval *hv = nil;
-  for (KKLane *lane in _timeline.lanes)
-    if (lane.enabled && lane.keyposes.count >= 2) {
-      hv = lane.keyposes[KKShapeOfLane(lane).holdStart].outgoing;
-      break;
-    }
+  // The displayed modulation reflects the first PARTICIPATING lane (shared
+  // params), so the curve buttons + graph aren't blanked when the first
+  // animatable lane happens to be excluded.
+  KKInterval *hv = [self _representativeModulationIntervalForHold];
   KKIntervalModulation mod = hv ? hv.modulation : KKIntervalModulationNone;
   double mInten = hv ? hv.modulationIntensity : 1.0;
   double mFreq = hv ? hv.modulationFrequency : 1.0;
@@ -380,9 +424,7 @@
   // the single-segment compound for a single-component lane.
   NSMutableArray<NSString *> *partLaneLabels = [NSMutableArray array];
   NSMutableArray<NSNumber *> *partComponentIdx = [NSMutableArray array];
-  for (KKLane *lane in _timeline.lanes) {
-    if (!lane.enabled || lane.keyposes.count < 2)
-      continue;
+  for (KKLane *lane in [self _gapParticipatingLanes]) {
     BOOL isGradient = (lane.valueType == KKLaneValueTypeGradient);
     BOOL gradientLinear =
         isGradient && lane.keyposes.firstObject.values.count >= 1 &&
@@ -437,9 +479,7 @@
     if (!strong)
       return nil;
     NSMutableArray<NSArray<NSNumber *> *> *out = [NSMutableArray array];
-    for (KKLane *lane in strong->_timeline.lanes) {
-      if (!lane.enabled || lane.keyposes.count < 2)
-        continue;
+    for (KKLane *lane in [strong _gapParticipatingLanes]) {
       BOOL isGradient2 = (lane.valueType == KKLaneValueTypeGradient);
       BOOL gradientLinear2 =
           isGradient2 && lane.keyposes.firstObject.values.count >= 1 &&
@@ -508,10 +548,13 @@
       },
       self.onDragBegin, self.onDragEnd,
       [self _representativeLaneLabelForSection:KKBasicSectionHold],
-      [self _representativeIntervalForSection:KKBasicSectionHold]
+      // Display state (curve buttons / sliders) reflects the first
+      // PARTICIPATING lane, so toggling a non-first lane updates them even when
+      // the first lane is excluded.
+      [self _representativeModulationIntervalForHold]
           ?: [[KKInterval alloc] init],
       ^KKInterval *(void) {
-        return [weak _representativeIntervalForSection:KKBasicSectionHold];
+        return [weak _representativeModulationIntervalForHold];
       },
       ^(void (^_Nonnull mutate)(KKInterval *_Nonnull)) {
         NSString *lbl =

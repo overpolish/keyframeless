@@ -67,7 +67,17 @@
       mbState[@"shutterAngle"] ? [mbState[@"shutterAngle"] doubleValue] : 180.0;
   st.motionBlurSamples =
       mbState[@"samples"] ? [mbState[@"samples"] integerValue] : 16;
-  st.motionBlurMode = mbState[@"mode"] ? [mbState[@"mode"] integerValue] : 0;
+  // Technique (Fast=0 / Accurate=1). Migrate a legacy "mode"-only blob: the old
+  // "Always" was the footage-smear case, which is Accurate.
+  if (mbState[@"technique"])
+    st.motionBlurTechnique = [mbState[@"technique"] integerValue];
+  else if (mbState[@"mode"])
+    st.motionBlurTechnique =
+        ([mbState[@"mode"] integerValue] == KKMotionBlurModeAlways)
+            ? KKMotionBlurTechniqueAccurate
+            : KKMotionBlurTechniqueFast;
+  else
+    st.motionBlurTechnique = KKMotionBlurTechniqueFast;
 
   NSString *timelineJson =
       KKReadCustomParamString(getAPI, kKKParamTimelineData);
@@ -118,7 +128,8 @@
                     paramID:uiStateParamID];
   };
   view.onMotionBlurChanged = ^(BOOL enabled, double shutterAngle,
-                               NSInteger samples, KKMotionBlurMode mode) {
+                               NSInteger samples,
+                               KKMotionBlurTechnique technique) {
     __strong typeof(weak) strong = weak;
     if (!strong)
       return;
@@ -133,7 +144,7 @@
       @"enabled" : @(enabled),
       @"shutterAngle" : @(shutterAngle),
       @"samples" : @(samples),
-      @"mode" : @((NSInteger)mode)
+      @"technique" : @((NSInteger)technique)
     };
     NSData *data = [NSJSONSerialization dataWithJSONObject:mb
                                                    options:0

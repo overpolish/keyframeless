@@ -108,7 +108,12 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 				additionalContext: ["enable_thinking": false]
 			)
 			let genStart = Date()
-			let text = Self.stripThink(try await session.respond(to: user))
+			// Wrap MLX generation so a Metal/MLX error (e.g. a prompt that exceeds
+			// the model's context) throws a Swift error instead of MLX's default
+			// fatalError - which would crash the whole helper process and leave the
+			// next request hitting a dead socket ("helper exited unexpectedly").
+			let text = Self.stripThink(
+				try await withError { try await session.respond(to: user) })
 			localLog.notice("text gen done in \(Self.ms(genStart), privacy: .public)ms")
 			return text
 		}
@@ -134,7 +139,8 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 				additionalContext: ["enable_thinking": true]
 			)
 			let thinkStart = Date()
-			let analysis = Self.stripThink(try await thinker.respond(to: user))
+			let analysis = Self.stripThink(
+				try await withError { try await thinker.respond(to: user) })
 			localLog.notice("think pass done in \(Self.ms(thinkStart), privacy: .public)ms")
 			formatSystem =
 				system + "\n\nThe request was analysed as follows:\n\(analysis)"
@@ -186,10 +192,12 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 					let session = ChatSession(
 						container, instructions: system, generateParameters: params,
 						additionalContext: ["enable_thinking": false])
-					for try await chunk in session.streamResponse(
-						to: user, images: [], videos: [])
-					{
-						continuation.yield(chunk)
+					try await withError {
+						for try await chunk in session.streamResponse(
+							to: user, images: [], videos: [])
+						{
+							continuation.yield(chunk)
+						}
 					}
 					continuation.finish()
 				} catch {
@@ -225,7 +233,8 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 			generateParameters: params,
 			additionalContext: ["enable_thinking": false]
 		)
-		let text = Self.stripThink(try await session.respond(to: user))
+		let text = Self.stripThink(
+			try await withError { try await session.respond(to: user) })
 		return StructuredResult(json: Self.extractJSONObject(from: text), raw: text)
 	}
 
@@ -258,6 +267,15 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 			out = tc.stringByReplacingMatches(
 				in: out, range: NSRange(out.startIndex..., in: out),
 				withTemplate: "$1")
+		}
+		// Strip INVALID backslash escapes: small models emitting a long string
+		// (e.g. an SVG document) routinely write `\<`, `\#`, `\ ` etc., which JSON
+		// rejects (only \" \\ \/ \b \f \n \r \t \uXXXX are legal). Drop the stray
+		// backslash; valid escapes (incl. `\\`) are preserved by the lookahead.
+		if let esc = try? NSRegularExpression(pattern: #"\\(?!["\\/bfnrtu])"#) {
+			out = esc.stringByReplacingMatches(
+				in: out, range: NSRange(out.startIndex..., in: out),
+				withTemplate: "")
 		}
 		return out
 	}

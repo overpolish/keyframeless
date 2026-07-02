@@ -17,6 +17,19 @@ NSString *const RoundedMiniViewerDescriptorPath =
 NSString *const RoundedMiniViewerRequestPath =
     @"/tmp/rounded-miniviewer-request.json";
 
+NSString *RoundedMiniViewerDescriptorPathForUUID(NSString *uuid) {
+  if (!uuid.length)
+    return RoundedMiniViewerDescriptorPath;
+  return [NSString stringWithFormat:@"/tmp/rounded-miniviewer-%@.json", uuid];
+}
+
+NSString *RoundedMiniViewerRequestPathForUUID(NSString *uuid) {
+  if (!uuid.length)
+    return RoundedMiniViewerRequestPath;
+  return [NSString
+      stringWithFormat:@"/tmp/rounded-miniviewer-request-%@.json", uuid];
+}
+
 // Mini-viewer analog of the viewer OSC's `oscSize` (KKPointOSC oscRadius +
 // outline). Kept in sync with KKMiniViewerView's kKKMiniHandleOuterPt so
 // placement, hit-test and the drawn glyph all agree.
@@ -33,6 +46,11 @@ static const CGFloat kHandleHitTolPt = 12.0;
 }
 - (NSString *)pointLabel {
   return @"Radius";
+}
+- (KKMiniHandleStyle)pointHandleStyle {
+  // The radius handle draws as the shared ring glyph (matches the viewer OSC +
+  // Canvas's corner widget), not the default dot.
+  return KKMiniHandleStyleRing;
 }
 - (CGFloat)pointHandleSizeScale {
   // Match Magic Move's path-anchor KKPointOSC dot in the mini-viewer (0.6),

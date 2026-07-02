@@ -20,12 +20,12 @@ These mouse and keyboard shortcuts apply on the Advanced timeline canvas.
 - Shift-click adds or removes a gap from the multi-selection.
 - Right-click a gap for Link Endpoints / Unlink Endpoints. Linked endpoints share one value so the interval becomes a hold; unlinked endpoints animate via the curve.
 
-### Lane filter bar (above the timeline)
+### Lane filter (toolbar button above the timeline)
 
-- Click a property pill to hide or show its lane in the timeline.
-- Click a category's leading pill to toggle that whole group on or off; it stays highlighted while any lane in the group is still visible.
-- Click and drag across pills to set several at once (show or hide), carrying across capsules. The category master pills are skipped by the drag.
-- Option-click a property to solo it - everything else hides and the soloed pill turns the warning colour. Option-click a category to solo the whole group; Option-click the active solo again to clear it.
+- Click the filter button in the Advanced toolbar to open the checklist.
+- Uncheck a property's row to hide its lane in the timeline; check it to show it again. Search by name, and use the category pills to page between groups.
+- Option-click a row to solo that property - everything else hides and the row turns the warning colour. Option-click the active solo again to clear it.
+- While a filter is active the button is warning-tinted; click the clear (×) button beside it to show every lane.
 
 ### Marquee selection
 

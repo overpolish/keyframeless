@@ -135,6 +135,14 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *inHandle;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *outHandle;
 
+/// Opaque per-keypose geometry payload for OSC-edited geometry lanes (e.g. a
+/// path's Points): the shape AT this keypose, captured via KKMorphSnapshot. The
+/// renderer interpolates between adjacent keyposes' snapshots. Storing it on
+/// the keypose means it travels with the keypose through copy / move / remove,
+/// so no parallel array needs syncing. nil for ordinary scalar lanes. Default
+/// nil.
+@property(nonatomic, copy, nullable) NSData *geometrySnapshot;
+
 + (instancetype)keyposeAtTime:(double)time values:(NSArray<NSNumber *> *)values;
 
 /// Returns a copy of the receiver with a new time, preserving everything else
@@ -161,6 +169,20 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
     *componentMin; // one per component, empty = unconstrained
 @property(nonatomic, copy) NSArray<NSNumber *>
     *componentMax; // one per component, empty = unconstrained
+/// Optional upper bound for the single-component SLIDER only, decoupled from
+/// the value clamp (`componentMax`). When set, the slider tops out here while
+/// the field still accepts (and clamps to) the larger `componentMax` - so a
+/// value can be typed past the slider's end. nil = slider uses componentMax.
+/// Used for the marker width (slider 0..500 %, field pushable further).
+/// Build-time.
+@property(nonatomic, copy, nullable) NSNumber *sliderMax;
+/// Optional lower bound for the single-component SLIDER only, decoupled from
+/// the value clamp (`componentMin`). When set, the slider stops here while the
+/// field still accepts (and clamps to) the wider `componentMin` - so a value
+/// can be typed past the slider's start. nil = slider uses componentMin (or 0).
+/// Used for the draw-on Offset (slider 0..100 %, field unbounded so it can spin
+/// the reveal round and round). Build-time.
+@property(nonatomic, copy, nullable) NSNumber *sliderMin;
 @property(nonatomic, copy) NSArray<NSString *>
     *componentUnits; // one per component (e.g. @"px", @"%"); empty = unitless
 /// Plugin-supplied display captions for each component (e.g. @[@"X",@"Y",@"Z"])
@@ -233,6 +255,34 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy, nullable) NSString *categoryKey;
 @property(nonatomic, copy, nullable) NSString *categorySymbol;
 
+/// Optional OUTER grouping level above `categoryKey`, for plugins (e.g. Canvas)
+/// whose timeline holds lanes from several owners - one "layer" per owner. When
+/// set, the Advanced view draws a layer header strip above the category
+/// header(s), giving a layer > category > lane tree; `layerLabel` is the
+/// displayed name and `layerSymbol` an optional SF Symbol. nil (the default for
+/// every other plugin) = no layer level, so their timeline renders unchanged.
+/// Build-time / assembly metadata; the kit never infers it.
+@property(nonatomic, copy, nullable) NSString *layerKey;
+@property(nonatomic, copy, nullable) NSString *layerLabel;
+@property(nonatomic, copy, nullable) NSString *layerSymbol;
+
+/// Transient (never serialized) marker: this lane is a synthetic HEADER row in
+/// the Advanced graph (drawn as a name + collapse glyph, no keyposes). Set by
+/// the view when it injects per-layer / per-category header rows; not part of
+/// any plugin's timeline. `categoryHeader` (below) discriminates the two kinds.
+@property(nonatomic) BOOL headerPlaceholder;
+
+/// Transient (never serialized) marker: when paired with `headerPlaceholder`,
+/// this header row is a CATEGORY header (drawn from `categoryKey` /
+/// `categorySymbol`, collapses the lanes of that category) rather than a layer
+/// header. Set by the view when it injects per-category header rows.
+@property(nonatomic) BOOL categoryHeader;
+
+/// Transient (never serialized) marker: this lane is READ-ONLY in the timeline
+/// (e.g. it belongs to a locked layer). The graphs draw it dimmed and reject
+/// interaction; set by a multi-owner host when building its merged timeline.
+@property(nonatomic) BOOL locked;
+
 /// When NO the property can't be animated: it's left out of the Animated
 /// dropdown and its "make animatable" button is hidden in Constants, so it
 /// stays a value-only param (e.g. a noise seed). Default YES. Build-time
@@ -245,6 +295,24 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// and `integerValued = YES`. Default NO. Build-time metadata.
 @property(nonatomic) BOOL seedField;
 
+/// When YES the property is edited only via an on-screen control (no numeric
+/// fields): the value / keypose / constants popover shows a message row
+/// ("Edit on canvas") instead of value fields. The lane still animates
+/// (keyposes drive timing) and appears in the timeline; only the inline value
+/// editor is replaced. Use for geometry-style properties (e.g. a path's
+/// points). Default NO. Build-time metadata.
+@property(nonatomic) BOOL oscEditedOnly;
+
+/// When YES this property applies to SOME owners only (multi-owner plugins):
+/// the plugin includes the lane in the applied timeline just for the layers
+/// that support it (e.g. a vector path's stroke, not an image / group). The kit
+/// must NOT re-seed it as a constant default when the applied timeline omits it
+/// - otherwise its whole category shows (greyed) for every owner. Same
+/// per-owner opt-in the geometry lanes get for free via `oscEditedOnly`, but
+/// without that flag's OSC-only editing behaviour. Default NO. Build-time
+/// metadata.
+@property(nonatomic) BOOL ownerScoped;
+
 /// When set (count >= 2) the value row presents a grouped radio pill (one
 /// segment per label) instead of a number field, and the lane's single value is
 /// the selected index (0-based). Labels are English identifiers, localized for
@@ -252,6 +320,35 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// `integerValued = YES` for a structural enum (e.g. a colour mode). nil/empty
 /// = a normal numeric row. Build-time metadata.
 @property(nonatomic, copy, nullable) NSArray<NSString *> *choiceLabels;
+
+/// Optional per-choice GLYPH icons (one NSImage per `choiceLabels` entry). When
+/// set, the radio pill shows these icons instead of text (the labels stay as
+/// accessibility/tooltip names). Build-time DISPLAY metadata - NOT serialized
+/// (NSImage isn't codable), so a per-layer timeline builder must re-assert it
+/// from the template (carried by `kkApplyPickerMetadataFrom:`), like
+/// `componentLabelColors`. Use for icon enums (e.g. stroke Line Cap / Join).
+@property(nonatomic, copy, nullable) NSArray<NSImage *> *choiceIcons;
+
+/// When YES a choice-pill row lets its pills WRAP onto multiple right-aligned
+/// lines if they don't fit the row width (and the row grows in height), instead
+/// of overflowing. Use for a wide glyph set like the 6 stroke-marker types; a
+/// short set (Line Cap / Join) leaves it NO and stays single-line. Build-time
+/// metadata; re-asserted via `kkApplyPickerMetadataFrom:`.
+@property(nonatomic) BOOL wrapsChoicePills;
+
+/// When YES the value row presents a single right-aligned CHECKBOX instead of a
+/// number field; the lane's single value is 0 (off) or 1 (on). Pair with
+/// `animatable = NO` + `integerValued = YES` for a structural on/off (e.g. a
+/// Stroke "enabled" toggle). A plugin can gate its other lanes (lock/grey) on
+/// this value. nil/NO = a normal numeric row. Build-time metadata.
+@property(nonatomic) BOOL isToggle;
+
+/// When YES the per-component prefix caption (e.g. "Start" / "End") sizes to
+/// fit its text instead of the fixed one-character slot. Use for multi-word
+/// component labels (single-char W/H/X/Y keep the default fixed slot so columns
+/// align across rows). Widens the row, so opt in only where needed. Default NO.
+/// Build-time metadata.
+@property(nonatomic) BOOL autoSizesComponentLabels;
 
 /// Conditional visibility (static-values / constants popover only): this lane's
 /// row shows only when the lane named `visibleWhenLabel` has a component-0
@@ -262,6 +359,15 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy, nullable) NSString *visibleWhenLabel;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *visibleWhenValues;
 
+/// Optional OR alternative to `visibleWhenLabel`: when set, the lane is visible
+/// if EITHER the primary rule (visibleWhenLabel/Values) OR this one holds (the
+/// named lane's component-0 value is in `visibleWhenOrValues`). With this set,
+/// an ABSENT controller counts as that side being false (not "always visible"),
+/// so a lane gated on "A OR B" hides when only one of A/B is present and off.
+/// Used for Sketch (visible when Stroke OR Fill is enabled). Serialized.
+@property(nonatomic, copy, nullable) NSString *visibleWhenOrLabel;
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *visibleWhenOrValues;
+
 /// For a KKLaneValueTypeGradient lane: when YES the row also shows an inline
 /// radial/linear type toggle and (for linear) an angle knob, all in one row,
 /// and the lane value is laid out as `[type, angleDegrees, <flat stops...>]`
@@ -270,6 +376,11 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic) BOOL gradientShowsTypeAngle;
 
 + (instancetype)laneWithLabel:(NSString *)label;
+
+/// Standard FCP-style opacity lane (one whole-percentage component 0..100,
+/// identity 100). Shared so every plugin with an opacity property uses one
+/// definition; the owning plugin sets category / enabled after.
++ (instancetype)opacityLane;
 
 /// Copy the param-picker build-time metadata (`categoryKey`, `categorySymbol`,
 /// `animatable`, `seedField`, `choiceLabels`) from a plugin template lane onto
@@ -339,7 +450,7 @@ FOUNDATION_EXPORT KKTimeline *KKTimelineRebalanced(KKTimeline *timeline,
 
 /// "Maintain Timing" bake: rewrites each keypose's time fraction so its
 /// ABSOLUTE source-media position is preserved when the clip's source range
-/// changes from (`fromSrcIn`, `fromDur`) to (`toSrcIn`, `toDur`) — i.e. a
+/// changes from (`fromSrcIn`, `fromDur`) to (`toSrcIn`, `toDur`) - i.e. a
 /// trim/grow/split. A keypose at fraction `f` sits at media time
 /// `fromSrcIn + f*fromDur`; its new fraction is `(media - toSrcIn) / toDur`.
 /// Keyposes pushed off an edge are COALESCED (not piled up): of the head run
@@ -358,7 +469,7 @@ FOUNDATION_EXPORT KKTimeline *KKTimelineRebalanced(KKTimeline *timeline,
 /// values (no evaluator dependency).
 ///
 /// `edgeEps` is the near-edge tolerance (a 0-1 fraction, ~half a frame). A real
-/// keypose within `edgeEps` of an edge — e.g. a split landing AT a keypose —
+/// keypose within `edgeEps` of an edge - e.g. a split landing AT a keypose -
 /// is snapped to that edge (keeping its own value + easing) rather than being
 /// kept as a separate interior keypose alongside a synthesized boundary, which
 /// would leave two coincident keyposes. 0 disables it.
@@ -433,5 +544,24 @@ FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingValuesNearestFraction(
 + (nullable KKTimeline *)timelineFromJSON:(NSString *)json;
 
 @end
+
+/// Geometry-aware keypose "value" equality. For an OSC-edited geometry lane
+/// (`oscEditedOnly`) the keyposes carry no scalar - their value IS the shape -
+/// so this compares their morph-snapshot hashes; for any other lane it compares
+/// the scalar `values`. Use it wherever the timeline asks "do these two
+/// keyposes hold the same value?" (drift / transition detection) so geometry
+/// lanes are handled correctly instead of always reading equal (empty values).
+FOUNDATION_EXPORT BOOL KKLaneKeyposeValuesEqual(KKLane *lane, KKKeyPose *a,
+                                                KKKeyPose *b);
+
+/// The geometry snapshot a geometry lane (`oscEditedOnly`) DISPLAYS at `frac`:
+/// the surrounding keyposes' snapshots interpolated with the segment's easing
+/// curve (mirrors the renderer). Use it when inserting a keypose so the new one
+/// captures the shape currently shown - otherwise splitting a hold gives the
+/// new keypose no snapshot, it falls back to the base shape, and the segment
+/// reads as a transition. Returns nil when the surrounding keyposes have no
+/// usable snapshots (so the new keypose falls back to the base, like them).
+FOUNDATION_EXPORT NSData *_Nullable KKLaneGeometrySnapshotAtFraction(
+    KKLane *lane, double frac);
 
 NS_ASSUME_NONNULL_END

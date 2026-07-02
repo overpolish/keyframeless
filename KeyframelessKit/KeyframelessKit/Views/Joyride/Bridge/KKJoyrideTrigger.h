@@ -28,6 +28,13 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)staticValuesPopoverClosed;
 /// `label` nil = any. Fires once per drag (after `onStaticValueDragEnded`).
 + (instancetype)staticValueDragEndedForLabel:(nullable NSString *)label;
+/// Fires when the constant choice-pill for `label` is set to `index` (a discrete
+/// radio selection, e.g. an end-marker type) - matched plain-label-tolerant.
++ (instancetype)staticChoiceSelectedForLabel:(NSString *)label
+                                       index:(NSInteger)index;
+/// Fires when the constant popover's category-nav pill switches to `key` (e.g.
+/// @"Stroke").
++ (instancetype)staticCategorySelectedForKey:(NSString *)key;
 /// Fires when the user types into the constant field for `label`/`component`
 /// and the parsed display value lands within `tolerance` of `equals`.
 + (instancetype)constantFieldEditedLabel:(NSString *)label
@@ -64,6 +71,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// Fires when the boundary popover's render-mode pill changes the mode. `mode`
 /// is a KKMiniViewerRenderMode (0 = Off, 1 = Filmstrip, 2 = Onion); < 0 = any.
 + (instancetype)renderModeChanged:(NSInteger)mode;
+/// Fires when the boundary popover's size pill changes the mini-viewer size.
+/// `sizeIndex` is 0 = sm, 1 = md, 2 = lg; < 0 = any.
++ (instancetype)miniViewerSizeChanged:(NSInteger)sizeIndex;
 /// Fires when the user clicks an inactive filmstrip cell (navigates to that
 /// keypose). Filmstrip mode only.
 + (instancetype)filmstripCellActivated;
@@ -85,10 +95,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// direction - the step just wants the user to try it).
 + (instancetype)dynamicToggled;
 
-/// Fires when the user toggles (or solos) a pill in the Advanced lane-filter
-/// bar - any direction. Programmatic show-all/restore (e.g. the guide taking
-/// over) does NOT fire this; only a real user click does.
+/// Fires when the user toggles (or solos) a row in the Advanced lane-filter
+/// checklist - any direction. Programmatic show-all/restore (e.g. the guide
+/// taking over) does NOT fire this; only a real user click does.
 + (instancetype)laneFilterToggled;
+
+/// Fires when the Advanced lane-filter checklist popover opens / closes. The
+/// binder sets the popover as a passthrough window on open (so the guide can
+/// let the user interact with it) and captures its content view as
+/// `latestFilterPopoverContent`.
++ (instancetype)filterPopoverWillOpen;
++ (instancetype)filterPopoverClosed;
 
 #pragma mark - Combinators
 

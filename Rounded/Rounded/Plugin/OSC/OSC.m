@@ -106,7 +106,12 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
   return MAX(0.0, MIN(100.0, (lo + hi) * 0.5));
 }
 
-@implementation RoundedOSC
+@implementation RoundedOSC {
+  // Radius handle glyph: the shared KKRingOSC, so it matches Canvas's corner
+  // widget + Glow's radius ring. RoundedOSC stays a KKPointOSC for hit-testing /
+  // drag / guide logic; only the drawn glyph changes.
+  KKRingOSC *_ringGlyph;
+}
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
   self = [super initWithAPIManager:apiManager];
@@ -116,8 +121,15 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
     // Match the shared box-OSC handle size so the radius point and the crop
     // box's corner/edge handles are one size.
     self.oscRadius = 6.0f;
-    // Blue, matching the mini viewer radius handle (accent color).
-    self.fillColorOverride = [NSColor accent];
+    // White for legibility on any background, matching the mini-viewer radius
+    // handle + Canvas's corner ring.
+    self.fillColorOverride = [NSColor whiteColor];
+    // The radius handle draws as the shared ring glyph (see -drawAtCanvasPosition
+    // override) - white, crisp ring shader. Sized to the old point's footprint
+    // so hit-testing (still KKPointOSC) stays aligned.
+    _ringGlyph = [[KKRingOSC alloc] initWithAPIManager:apiManager];
+    [_ringGlyph applyRadiusWidgetStyle]; // shared style with Canvas's corner widget
+    _ringGlyph.tintColor = [NSColor whiteColor];
 
     // Crop OSC: model-agnostic block-based I/O. Reads from / writes to the
     // Rounded timeline-snapshot Crop lane (single instance per PLAN §"OSC
@@ -144,6 +156,22 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
 - (void)dealloc {
   if (sCurrentOSC == self)
     sCurrentOSC = nil;
+}
+
+// Draw the radius handle as the shared ring glyph instead of the inherited
+// KKPointOSC dot (hit-testing / drag / guide logic stay point-based above).
+- (void)drawAtCanvasPosition:(CGPoint)canvasPosition
+                   isHovered:(BOOL)isHovered
+                    isActive:(BOOL)isActive
+            destinationImage:(FxImageTile *)destinationImage
+                      atTime:(CMTime)time {
+  _ringGlyph.tintColor = self.fillColorOverride ?: [NSColor whiteColor];
+  _ringGlyph.ghostAlpha = self.ghostAlpha;
+  [_ringGlyph drawAtCanvasPosition:canvasPosition
+                         isHovered:isHovered
+                          isActive:isActive
+                  destinationImage:destinationImage
+                            atTime:time];
 }
 
 - (BOOL)getCanvasTopRight:(CGPoint *)outTopRight

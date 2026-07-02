@@ -28,6 +28,11 @@ struct HelperRequest: Codable {
 	/// Stream the reply token-by-token (chunk frames) instead of one result frame.
 	/// Optional for wire-compat with a mismatched/stale helper binary (absent = off).
 	var stream: Bool? = nil
+	/// Non-generation CONTROL request: "status" (reply with the active job count),
+	/// "cancel" (cancel every in-flight generation), or "shutdown" (exit the
+	/// helper). Sent on a SEPARATE connection so it's serviced even while another
+	/// connection is stuck mid-generation. nil = an ordinary generation request.
+	var control: String? = nil
 }
 
 struct HelperResponse: Codable {
@@ -40,6 +45,9 @@ struct HelperResponse: Codable {
 	/// Out-of-band coarse status ("Loading model…", "Thinking…") emitted before the
 	/// terminal frame so the client can show what the helper is actually doing.
 	var status: String? = nil
+	/// Control "status"/"cancel" reply: the number of in-flight generations (after
+	/// the action, for cancel).
+	var activeJobs: Int? = nil
 }
 
 /// Length-prefixed message framing over a pipe: a 4-byte big-endian payload

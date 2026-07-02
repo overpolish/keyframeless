@@ -66,11 +66,15 @@
             ?: @{};
     BOOL enabled = [state[@"loopEnabled"] boolValue];
     NSInteger tab = [state[@"activeTab"] integerValue];
+    // Must list EVERY OSC element (matches the compounds +
+    // GlowOSC.oscElementKeys); kkApplyOSCVisibilityFromState rebuilds the
+    // hidden set ONLY from these keys, so a missing key (Position/Path) can
+    // never become hidden - the handle would ignore its visibility toggle.
     [self kkRefreshOSCVisibilityFromState:state
                                      view:self.inspectorView
                                  renderer:(KKMiniViewerRenderer *)self
                                               .inspectorView.miniViewerDelegate
-                              elementKeys:@[ @"Radius" ]];
+                              elementKeys:@[ @"Radius", @"Position", @"Path" ]];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];

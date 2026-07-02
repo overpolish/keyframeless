@@ -71,6 +71,8 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
     extraOnComplete:(void (^)(void))extraOnComplete {
   // End any in-flight run (its onComplete will restore + release).
   [_guide dismiss];
+  // Close any popover the user left open so it isn't sitting over the guide.
+  [_lanesView guideCloseAllPopovers];
   KKTimeline *seed = seedBlock ? seedBlock() : nil;
   if (seed)
     [self prepareWithSeed:seed];
@@ -83,6 +85,7 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
                                 KKJoyrideLanesBinder *))buildSteps
             extraOnComplete:(void (^)(void))extraOnComplete {
   [_guide dismiss];
+  [_lanesView guideCloseAllPopovers];
   [self prepareWithSeed:seed];
 
   NSArray<KKJoyrideStep *> * (^build)(

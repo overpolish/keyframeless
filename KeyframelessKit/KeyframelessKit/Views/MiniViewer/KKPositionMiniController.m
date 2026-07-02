@@ -109,8 +109,14 @@ static const CGFloat kHandleHitTolPt = 12.0;
   // Capture the press normals + the grabbed value so the drag moves by delta
   // (Shift axis-lock anchors here too).
   if (cr.size.width > 0 && cr.size.height > 0) {
-    _posPressNX = (p.x - CGRectGetMinX(cr)) / cr.size.width;
-    _posPressNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+    if (self.viewToValue) {
+      simd_float2 v = self.viewToValue(p, cr);
+      _posPressNX = v.x;
+      _posPressNY = v.y;
+    } else {
+      _posPressNX = (p.x - CGRectGetMinX(cr)) / cr.size.width;
+      _posPressNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+    }
   }
   NSArray<NSNumber *> *pv = [self.renderer valuesForLabel:self.laneLabel];
   _posGrabValX = pv.count > 0 ? pv[0].doubleValue : 0.5;
@@ -126,8 +132,15 @@ static const CGFloat kHandleHitTolPt = 12.0;
                     modifiers:(NSEventModifierFlags)modifiers {
   if (cr.size.width <= 0 || cr.size.height <= 0)
     return;
-  double nx = (p.x - CGRectGetMinX(cr)) / cr.size.width;
-  double ny = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+  double nx, ny;
+  if (self.viewToValue) {
+    simd_float2 v = self.viewToValue(p, cr); // cursor in member-local value space
+    nx = v.x;
+    ny = v.y;
+  } else {
+    nx = (p.x - CGRectGetMinX(cr)) / cr.size.width;
+    ny = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+  }
   // Delta drag: move the grabbed value by the cursor's offset from the press
   // point, so grabbing off-centre doesn't snap the handle to the cursor.
   double newX = _posGrabValX + (nx - _posPressNX);
@@ -138,10 +151,17 @@ static const CGFloat kHandleHitTolPt = 12.0;
     else
       newX = _posGrabValX;
   }
-  if (modifiers & NSEventModifierFlagCommand)
+  if (modifiers & NSEventModifierFlagCommand) {
     [self _snapPositionX:&newX Y:&newY contentRect:cr];
-  else
+  } else {
+    if (self.gridSnapValue) {
+      simd_float2 sv =
+          self.gridSnapValue((simd_float2){(float)newX, (float)newY}, cr);
+      newX = sv.x;
+      newY = sv.y;
+    }
     [_snapEngine reset];
+  }
   [self.renderer commitValues:@[ @(newX), @(newY) ]
                      forLabel:self.laneLabel
                        canvas:canvas];

@@ -38,6 +38,17 @@ NSString *MagicMoveMiniViewerRequestPathForUUID(NSString *uuid) {
         [[KKPositionMiniController alloc] initWithRenderer:self
                                                  laneLabel:@"Position"
                                                  pathLabel:@"Path"];
+    _scaleMini = [[KKScaleMiniController alloc] initWithRenderer:self
+                                                       laneLabel:@"Scale"];
+    _anchorMini = [[KKAnchorMiniController alloc]
+         initWithRenderer:self
+                laneLabel:@"Anchor"
+        positionLaneLabel:@"Position"
+               snapEngine:_positionMini.snapEngine];
+    // The anchor pivot sits dead-centre on the Position arc at a default
+    // anchor, so keep its grab zone tight - the larger Position handle around
+    // it stays clickable, the small centre square still grabs the anchor.
+    _anchorMini.hitRadiusPt = 3.0;
   }
   return self;
 }
@@ -250,6 +261,13 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   return [super valueTypeForLabel:label];
 }
 
+- (KKLane *)templateLaneForLabel:(NSString *)label {
+  for (KKLane *l in self.laneTemplates)
+    if ([l.label isEqualToString:label])
+      return l;
+  return [super templateLaneForLabel:label];
+}
+
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
   // These must match the availableLanes template defaults (and the render
   // reader's fallbacks). Without an entry the base returns zeros, which drew
@@ -276,9 +294,29 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   return @"Rotation";
 }
 
+// The gizmo cluster (rotation rings + scale box) centres on the ANCHOR pivot
+// (Position + Anchor offset) - where the render rotates / scales the image - so
+// a moved anchor swings/grows the gizmo from there, matching the viewer.
 - (CGPoint)rotationCenterForContentRect:(CGRect)cr {
-  return [self _handlePointForContentRect:cr
-                                 position:[self valuesForLabel:@"Position"]];
+  NSArray<NSNumber *> *pos = [self valuesForLabel:@"Position"];
+  NSArray<NSNumber *> *anc = [self valuesForLabel:@"Anchor"];
+  double px = pos.count > 0 ? pos[0].doubleValue : 0.5;
+  double py = pos.count > 1 ? pos[1].doubleValue : 0.5;
+  double ax = anc.count > 0 ? anc[0].doubleValue : 0.5;
+  double ay = anc.count > 1 ? anc[1].doubleValue : 0.5;
+  return
+      [self _handlePointForContentRect:cr
+                              position:@[ @(px + ax - 0.5), @(py + ay - 0.5) ]];
+}
+
+// Scale from the anchor (clip-filling content: ref 0.5, half 0.5). Mirrors the
+// viewer; a centred anchor is symmetric.
+- (CGPoint)scaleAnchorFrac {
+  NSArray<NSNumber *> *a = [self valuesForLabel:@"Anchor"];
+  if (a.count < 2)
+    return CGPointZero;
+  return KKScaleGizmoAnchorFrac(a[0].doubleValue, a[1].doubleValue, 0.5, 0.5,
+                                0.5, 0.5);
 }
 
 @end

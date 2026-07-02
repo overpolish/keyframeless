@@ -318,6 +318,10 @@ NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
   // (Position/Path element keys, shared per-instance state) and reads the live
   // drag flag for mid-drag draw.
   _positionController.dragging = _positionDragging;
+  // Feed opt-reveal so a hidden Position handle / path surfaces as a dim ghost
+  // on Opt-hold, matching the radius ring (without it the viewer never peeks
+  // Position even though the mini-viewer does).
+  _positionController.optRevealActive = self.optRevealActive;
   [_positionController drawPathInDestination:destinationImage
                                       atTime:time
                                   activePart:activePart];

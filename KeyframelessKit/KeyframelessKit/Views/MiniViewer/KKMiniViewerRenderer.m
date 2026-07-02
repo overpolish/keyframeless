@@ -7,6 +7,7 @@
 
 #import "KKMiniViewerCropEditor.h"
 #import "KKResizeCursor.h"
+#import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimingStage.h>
@@ -183,6 +184,17 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   return CGPointMake(CGRectGetMidX(cr), CGRectGetMidY(cr));
 }
 
+- (KKRotMatrix3)rotationBaseMatrix {
+  return KKRotMatrixIdentity();
+}
+
+- (CGPoint)scaleAnchorFrac {
+  // OPT-IN: default symmetric (no scale-from-anchor). A plugin whose render
+  // scales about the anchor overrides this to map its Anchor lane to a
+  // fraction.
+  return CGPointZero;
+}
+
 - (NSArray<NSColor *> *)rotationRingColors {
   return @[
     [NSColor colorWithRed:1.00 green:0.30 blue:0.30 alpha:1.0],
@@ -196,22 +208,26 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 }
 
 - (CGFloat)rotationRadiusPxForCanvas:(KKMiniViewerView *)canvas {
-  CGFloat h = canvas.bounds.size.height;
+  CGFloat h = canvas.oscSizingHeight;
   CGFloat scale = (h > 0) ? (h / kKKRotationBaselineCanvasH) : 1.0;
   return kKKRotationBaselineRadiusPt * scale;
 }
 
 #pragma mark - Rotation gizmo: state machine (default impls)
 
-// Returns the current world matrix from rotationEulerDegrees.
+// The displayed world matrix = parent/group rotation · the object's own Euler.
+// Used for drawing the rings, hit-testing them, and the drag tangent, so a
+// nested object's rings show + drag in the parent's frame; the written value
+// stays the object's own Euler (the parent factors out of the compose).
 - (KKRotMatrix3)_currentRotationMatrix {
   NSArray<NSNumber *> *r = [self rotationEulerDegrees];
   double xDeg = r[0].doubleValue;
   double yDeg = r[1].doubleValue;
   double zDeg = r[2].doubleValue;
-  return KKBuildRotationMatrix((float)(xDeg * M_PI / 180.0),
-                               (float)(yDeg * M_PI / 180.0),
-                               (float)(zDeg * M_PI / 180.0));
+  KKRotMatrix3 pose = KKBuildRotationMatrix((float)(xDeg * M_PI / 180.0),
+                                            (float)(yDeg * M_PI / 180.0),
+                                            (float)(zDeg * M_PI / 180.0));
+  return KKRotMatrixMul([self rotationBaseMatrix], pose);
 }
 
 // Converts an NSColor to the simd_float4 the rotation shader wants.
@@ -223,9 +239,11 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 // Reveal mode only bites when the host wired the toggle (so plugins that don't
-// support opt-hide are untouched).
+// support opt-hide are untouched). A locked layer is never revealed - Opt-hold
+// can't peek a non-interactive OSC into existence.
 - (BOOL)_revealActive {
-  return _revealHidden && self.onHandleVisibilityToggled != nil;
+  return !_handlesLocked && _revealHidden &&
+         self.onHandleVisibilityToggled != nil;
 }
 
 // "Peek and use" mode: the master is off (handlesHidden) and Opt is held. Every
@@ -258,6 +276,8 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 //                master-on, so it respects your per-element config rather than
 //                flashing everything).
 - (BOOL)_shownLabel:(NSString *)label {
+  if (_handlesLocked)
+    return NO;
   BOOL hidden = [self _individuallyHiddenLabel:label];
   if (_handlesHidden)
     return [self _revealActive] && !hidden;
@@ -288,6 +308,8 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 // Ring is drawn / hit-tested this frame. Mirrors -_shownLabel: : master-off
 // peek shows only the rings left enabled.
 - (BOOL)_ringShownAtAxis:(int)k {
+  if (_handlesLocked)
+    return NO;
   BOOL hidden = [self _ringIndividuallyHiddenAtAxis:k];
   if (_handlesHidden)
     return [self _revealActive] && !hidden;
@@ -502,6 +524,13 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 
 - (KKTimeline *)_timelineBySettingValues:(NSArray<NSNumber *> *)values
                                 forLabel:(NSString *)label {
+  // The boundary (keypose) popover in a multi-owner timeline passes a
+  // LAYER-TAGGED label ("Stroke Width\x1f<id>"), but this renderer's timeline is
+  // single-owner with PLAIN labels - so match on the plain label or the live
+  // value edit finds no lane and the mini never re-renders (it worked in
+  // Constants only because that popover is single-owner / plain). No-op for
+  // single-owner plugins (plain == plain).
+  NSString *plain = KKPlainLaneLabel(label);
   if (self.boundaryEditing) {
     // Replace the keypose nearest editFraction, preserving the lane's
     // structure (times, intervals, enabled).
@@ -514,7 +543,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     KKTimeline *updated = [self.timeline copy] ?: [KKTimeline timeline];
     NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-      if (![lanes[i].label isEqualToString:label])
+      if (![KKPlainLaneLabel(lanes[i].label) isEqualToString:plain])
         continue;
       if (lanes[i].keyposes.count)
         lanes[i] = KKLaneBySettingValuesNearestFraction(
@@ -528,7 +557,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
   BOOL replaced = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if ([lanes[i].label isEqualToString:label]) {
+    if ([KKPlainLaneLabel(lanes[i].label) isEqualToString:plain]) {
       // Copy the existing lane so EVERY property survives a constant value edit
       // - aspectLinked especially. A fresh lane that only carried
       // valueType/enabled/min/max dropped aspectLinked, so the first scale-box
@@ -589,6 +618,13 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   _handlesHidden = handlesHidden;
   // Repaint the bound canvas (if a preview/popover is open) so the change
   // shows without a scrub; nil canvas is a no-op.
+  [self.canvas setHandlesNeedDisplay];
+}
+
+- (void)setHandlesLocked:(BOOL)handlesLocked {
+  if (_handlesLocked == handlesLocked)
+    return;
+  _handlesLocked = handlesLocked;
   [self.canvas setHandlesNeedDisplay];
 }
 

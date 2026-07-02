@@ -7,6 +7,7 @@
 
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKLocalized.h>
+#import <KeyframelessKit/KKPathMorph.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
 @implementation KKTimelineAdvancedView (Popovers)
@@ -44,6 +45,12 @@
 }
 
 - (void)_openValuePopoverForLane:(NSInteger)laneIdx kp:(NSInteger)kpIdx {
+  [self _openValuePopoverForLane:laneIdx kp:kpIdx fireActivation:YES];
+}
+
+- (void)_openValuePopoverForLane:(NSInteger)laneIdx
+                              kp:(NSInteger)kpIdx
+                  fireActivation:(BOOL)fireActivation {
   if (!self.onValuePopover)
     return;
   NSArray<KKLane *> *lanes = [self _animatableLanes];
@@ -54,6 +61,30 @@
     return;
   KKKeyPose *kp = lane.keyposes[kpIdx];
   double frac = kp.time;
+
+  // The keypose popover scopes to this lane's layer (multi-owner timelines).
+  // Tell the host so it selects/highlights that layer. Fire EVERY open (not
+  // only when _activeLayerKey changes): the host selection can diverge from the
+  // keypose owner via an external change (drawing a new path, picking a
+  // no-keypose layer in Constants) while _activeLayerKey already equals the
+  // owner - a change-gated fire would never correct it. Set _activeLayerKey
+  // FIRST so the host's retarget (which compares against it) early-returns - no
+  // re-entrancy; the host handler also no-ops when already on that layer.
+  if (lane.layerKey.length) {
+    _activeLayerKey = [lane.layerKey copy];
+    // Only a USER landing on this keypose (a graph click / nav) moves the host
+    // selection to its owner. A selection-DRIVEN re-drive (retarget after the
+    // host already changed layers, or a timeline re-feed) passes NO - firing
+    // here would drive selection back to the popover's stale owner, the
+    // ping-pong.
+    if (fireActivation && self.onKeyposeLayerActivated)
+      self.onKeyposeLayerActivated(_activeLayerKey);
+  }
+
+  // Scroll the target row fully into view first (e.g. when re-targeting to a
+  // layer whose row was scrolled off), so the popover doesn't anchor to a
+  // clipped/off-screen pill.
+  [self _ensureLaneRowVisible:laneIdx count:lanes.count];
 
   // Anchor: transient invisible subview the size of the clicked pill so the
   // popover arrow lands on the pill body.
@@ -79,9 +110,18 @@
   // excludedLabels - shown as the "available zone" row with an "Animate"
   // button.
   NSString *groupKey = lane.groupKey;
+  NSString *layerKey = lane.layerKey;
   NSMutableArray<KKLane *> *displayLanes = [NSMutableArray array];
   NSMutableArray<NSString *> *excludedLabels = [NSMutableArray array];
   for (KKLane *l in lanes) {
+    if (l.headerPlaceholder)
+      continue; // layer header rows aren't editable params
+    // Multi-owner timelines: scope the popover to the clicked lane's LAYER, so
+    // a keypose popover shows only that layer's params (not every layer's).
+    BOOL sameLayer =
+        (l.layerKey == layerKey) || [l.layerKey isEqualToString:layerKey];
+    if (!sameLayer)
+      continue;
     BOOL sameGroup =
         (l.groupKey == groupKey) || [l.groupKey isEqualToString:groupKey];
     if (!sameGroup)
@@ -112,9 +152,14 @@
     // spatialCurvable is lane metadata, not per-project state, so source it
     // from the template - an older blob (saved before the flag existed) would
     // otherwise leave it off and hide the curve toggle.
+    // Multi-owner lanes are layer-tagged ("Stroke Width\x1f<id>"); match the
+    // template on the PLAIN label or the metadata lookup fails for every tagged
+    // lane (integerValued / autoSizesComponentLabels / scaleWithMedia lost, so
+    // the keypose popover diverged from constants).
+    NSString *plain = KKPlainLaneLabel(l.label);
     KKLane *tmpl = nil;
     for (KKLane *t in _availableLanes)
-      if ([t.label isEqualToString:l.label]) {
+      if ([t.label isEqualToString:plain]) {
         tmpl = t;
         break;
       }
@@ -123,6 +168,17 @@
     display.aspectLinkable = tmpl ? tmpl.aspectLinkable : l.aspectLinkable;
     display.aspectLinked = l.aspectLinked;
     display.integerValued = tmpl ? tmpl.integerValued : l.integerValued;
+    // Media-scaled (normalised 0..1 shown as pixels) is template metadata; the
+    // row keys pixel display off it. Without it the keypose popover showed the
+    // raw 0.5 instead of pixels (Constants copies it, so it worked there).
+    display.componentsScaleWithMedia =
+        tmpl ? tmpl.componentsScaleWithMedia : l.componentsScaleWithMedia;
+    // OSC-edited-only (geometry lanes like Points) shows the "edit on canvas"
+    // message instead of value fields. It's template metadata, but fall back to
+    // the source lane (it's serialized too) so a keypose popover still matches
+    // the constants row when the template isn't resolved.
+    display.oscEditedOnly = tmpl ? tmpl.oscEditedOnly : l.oscEditedOnly;
+    display.locked = l.locked; // locked layer -> read-only value row
     [display kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     KKKeyPose *displayKp = [KKKeyPose keyposeAtTime:0.0
                                              values:vals ?: @[ @0.0 ]];
@@ -187,12 +243,28 @@
                       onDragBegin, onDragEnd);
 }
 
+// A candidate lane for the keypose popover: a real lane in the active layer
+// (when one is set) - never a header placeholder or another layer's lane.
+- (BOOL)_laneEligibleForValuePopover:(KKLane *)lane {
+  if (lane.headerPlaceholder)
+    return NO;
+  if (_activeLayerKey.length)
+    return [lane.layerKey isEqualToString:_activeLayerKey];
+  return YES;
+}
+
 - (void)requestValuePopoverAtFraction:(double)fraction {
+  [self requestValuePopoverAtFraction:fraction fireActivation:YES];
+}
+
+- (void)requestValuePopoverAtFraction:(double)fraction
+                       fireActivation:(BOOL)fireActivation {
   NSArray<KKLane *> *lanes = [self _animatableLanes];
   NSInteger preferredLane = -1;
   if (_topLaneLabel) {
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-      if ([lanes[i].label isEqualToString:_topLaneLabel]) {
+      if ([lanes[i].label isEqualToString:_topLaneLabel] &&
+          [self _laneEligibleForValuePopover:lanes[i]]) {
         preferredLane = i;
         break;
       }
@@ -212,6 +284,30 @@
   if (foundLane < 0) {
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
       KKLane *l = lanes[i];
+      if (![self _laneEligibleForValuePopover:l])
+        continue;
+      for (NSInteger k = 0; k < (NSInteger)l.keyposes.count; k++) {
+        if (fabs(l.keyposes[k].time - fraction) < kEps) {
+          foundLane = i;
+          foundKP = k;
+          break;
+        }
+      }
+      if (foundLane >= 0)
+        break;
+    }
+  }
+  if (foundLane < 0) {
+    // The active layer has no keypose at this time (e.g. it's constant, or a
+    // new path was just drawn and stole the selection). Fall through to ANY
+    // layer with a keypose here - mirrors Basic - so the popover, and the
+    // selection it drives via onKeyposeLayerActivated, move to a real keypose
+    // owner instead of leaving the popover (and the layer-list highlight)
+    // stranded.
+    for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+      KKLane *l = lanes[i];
+      if (l.headerPlaceholder)
+        continue;
       for (NSInteger k = 0; k < (NSInteger)l.keyposes.count; k++) {
         if (fabs(l.keyposes[k].time - fraction) < kEps) {
           foundLane = i;
@@ -227,7 +323,9 @@
     return;
   _topLaneLabel = [lanes[foundLane].label copy];
   _topKPIdx = foundKP;
-  [self _openValuePopoverForLane:foundLane kp:foundKP];
+  [self _openValuePopoverForLane:foundLane
+                              kp:foundKP
+                  fireActivation:fireActivation];
 }
 
 // Equal endpoints → modulation pills (Wiggle / Oscillate / Handheld) - curve
@@ -255,6 +353,17 @@
   if (lane.valueType == KKLaneValueTypeGradient &&
       KKAdvValuesEqual(a.values, b.values) &&
       (a.values.count < 1 || llround(a.values[0].doubleValue) != 1)) {
+    if (self.onRequestClosePopover)
+      self.onRequestClosePopover();
+    return;
+  }
+
+  // Geometry lane (Points): a hold (identical shapes at both ends) has nothing
+  // to ease or modulate, so close any open popover rather than show dead
+  // controls. A transition (different shapes) falls through to the curve pills
+  // below (endpointsEqual is forced NO for geometry).
+  if (lane.oscEditedOnly && KKMorphSnapshotSignature(a.geometrySnapshot) ==
+                                KKMorphSnapshotSignature(b.geometrySnapshot)) {
     if (self.onRequestClosePopover)
       self.onRequestClosePopover();
     return;
@@ -312,7 +421,13 @@
       s.onDragEnd();
   };
 
-  if (KKAdvValuesEqual(a.values, b.values)) {
+  // Geometry lanes (Points) carry no scalar of their own, so value-equality
+  // always reads "equal" - but the shape DOES change between keyposes and the
+  // morph eases via the curve (modulation is a no-op for geometry). Always
+  // route them to the curve pills, never the modulation popover.
+  BOOL endpointsEqual =
+      lane.oscEditedOnly ? NO : KKAdvValuesEqual(a.values, b.values);
+  if (endpointsEqual) {
     if (!self.onHoldModulationPopover)
       return;
     void (^onModulation)(KKIntervalModulation) = ^(KKIntervalModulation m) {
@@ -352,13 +467,15 @@
                       lane.valueType != KKLaneValueTypeGradient &&
                       compLabels.count > 1 && compCount > 1);
     BOOL laneModActive = iv.modulation != KKIntervalModulationNone;
-    NSString *masterLabel = (lane.valueType == KKLaneValueTypeGradient)
-                                ? KKLocalizedParamName(@"Angle")
-                                : label;
-    NSMutableArray<NSString *> *segLabels =
-        [NSMutableArray arrayWithObject:masterLabel];
-    NSMutableArray<NSNumber *> *segStates =
-        [NSMutableArray arrayWithObject:@(laneModActive)];
+    // Advanced is per-lane: the curve-type pill already toggles THIS lane's
+    // modulation, so a single-component lane needs no "Applies to" (disabling
+    // it == picking None). A multi-component lane shows just its axes (X / Y)
+    // as flat rows - no redundant master row - so they can be wiggled
+    // independently.
+    NSMutableArray<NSArray<NSString *> *> *partCompoundLabels =
+        [NSMutableArray array];
+    NSMutableArray<NSArray<NSNumber *> *> *partCompoundStates =
+        [NSMutableArray array];
     if (multiComp) {
       NSIndexSet *mask = iv.modulationComponents;
       for (NSUInteger c = 0; c < compCount; c++) {
@@ -366,48 +483,51 @@
             (c < compLabels.count)
                 ? compLabels[c]
                 : [NSString stringWithFormat:@"%lu", (unsigned long)c];
-        [segLabels addObject:cn];
         BOOL on = laneModActive && (!mask || [mask containsIndex:c]);
-        [segStates addObject:@(on)];
+        [partCompoundLabels addObject:@[ cn ]];
+        [partCompoundStates addObject:@[ @(on) ]];
       }
     }
-    NSArray<NSArray<NSString *> *> *partCompoundLabels = @[ segLabels ];
-    NSArray<NSArray<NSNumber *> *> *partCompoundStates = @[ segStates ];
     void (^onParticipation)(NSInteger, BOOL) = ^(NSInteger idx, BOOL on) {
-      [weak
-          _mutateIntervalInLaneLabel:label
-                               kpIdx:aIdx
-                                with:^(KKInterval *iv2) {
-                                  if (idx == 0) {
-                                    iv2.modulation =
-                                        on ? (iv2.modulation !=
-                                                      KKIntervalModulationNone
-                                                  ? iv2.modulation
-                                                  : KKIntervalModulationWiggle)
-                                           : KKIntervalModulationNone;
-                                    return;
-                                  }
-                                  NSUInteger c = (NSUInteger)(idx - 1);
-                                  NSUInteger n =
-                                      lane.keyposes.firstObject.values.count;
-                                  NSMutableIndexSet *m =
-                                      iv2.modulationComponents
-                                          ? [iv2.modulationComponents
-                                                    mutableCopy]
-                                          : ({
-                                              NSMutableIndexSet *all =
-                                                  [NSMutableIndexSet indexSet];
-                                              [all
-                                                  addIndexesInRange:NSMakeRange(
-                                                                        0, n)];
-                                              all;
-                                            });
-                                  if (on)
-                                    [m addIndex:c];
-                                  else
-                                    [m removeIndex:c];
-                                  iv2.modulationComponents = m;
-                                }];
+      [weak _mutateIntervalInLaneLabel:label
+                                 kpIdx:aIdx
+                                  with:^(KKInterval *iv2) {
+                                    // Each row IS one axis (no master). When
+                                    // the lane isn't modulating yet, checking
+                                    // an axis arms just that one; unchecking
+                                    // the last axis drops back to None.
+                                    NSUInteger c = (NSUInteger)idx;
+                                    NSUInteger n =
+                                        lane.keyposes.firstObject.values.count;
+                                    BOOL wasNone = iv2.modulation ==
+                                                   KKIntervalModulationNone;
+                                    NSMutableIndexSet *m;
+                                    if (wasNone) {
+                                      m = [NSMutableIndexSet indexSet];
+                                    } else {
+                                      m = iv2.modulationComponents
+                                              ? [iv2.modulationComponents
+                                                        mutableCopy]
+                                              : ({
+                                                  NSMutableIndexSet *all =
+                                                      [NSMutableIndexSet
+                                                          indexSet];
+                                                  [all addIndexesInRange:
+                                                           NSMakeRange(0, n)];
+                                                  all;
+                                                });
+                                    }
+                                    if (on)
+                                      [m addIndex:c];
+                                    else
+                                      [m removeIndex:c];
+                                    iv2.modulationComponents = m;
+                                    if (m.count == 0)
+                                      iv2.modulation = KKIntervalModulationNone;
+                                    else if (wasNone)
+                                      iv2.modulation =
+                                          KKIntervalModulationWiggle;
+                                  }];
     };
     BOOL showsModLinked = multiComp;
     void (^onLinked)(BOOL) = ^(BOOL on) {
@@ -437,16 +557,20 @@
       BOOL active = iv2 && iv2.modulation != KKIntervalModulationNone;
       NSArray<NSString *> *cl2 = KKLaneComponentLabels(l2);
       NSUInteger cc2 = l2.keyposes.firstObject.values.count;
-      NSMutableArray<NSNumber *> *segStates2 =
-          [NSMutableArray arrayWithObject:@(active)];
-      if (cl2.count > 1 && cc2 > 1) {
+      // One single-segment compound per axis (matches the builder); empty for a
+      // single-component lane (no "Applies to" section).
+      NSMutableArray<NSArray<NSNumber *> *> *out = [NSMutableArray array];
+      BOOL multi =
+          (l2.valueType != KKLaneValueTypeColor &&
+           l2.valueType != KKLaneValueTypeGradient && cl2.count > 1 && cc2 > 1);
+      if (multi) {
         NSIndexSet *mask = iv2.modulationComponents;
         for (NSUInteger c = 0; c < cc2; c++) {
           BOOL on = active && (!mask || [mask containsIndex:c]);
-          [segStates2 addObject:@(on)];
+          [out addObject:@[ @(on) ]];
         }
       }
-      return @[ segStates2 ];
+      return out;
     };
     NSString *capLabelMut = label;
     NSInteger capIdxMut = aIdx;
@@ -556,12 +680,18 @@
     iv.endpointsLinked = newLinked;
     if (!newLinked)
       iv.curve = KKIntervalCurveLinear;
-    KKKeyPose *newA = [KKKeyPose keyposeAtTime:a.time values:a.values];
+    // Copy-preserve A (keyposeAtTime:values: would drop its spatial state +
+    // geometrySnapshot); only its outgoing interval changes.
+    KKKeyPose *newA = [a copy];
     newA.outgoing = iv;
     kps[aIdx] = newA;
     if (newLinked) {
-      KKKeyPose *newB = [KKKeyPose keyposeAtTime:b.time values:a.values];
-      newB.outgoing = b.outgoing;
+      // Linking collapses B onto A's value (a hold). For a geometry lane the
+      // "value" IS the shape, so carry A's snapshot too - otherwise B keeps its
+      // own shape (or falls back to base) and the link doesn't actually hold.
+      KKKeyPose *newB = [b copy];
+      newB.values = a.values;
+      newB.geometrySnapshot = a.geometrySnapshot;
       kps[aIdx + 1] = newB;
     }
     nl.keyposes = kps;
@@ -617,7 +747,12 @@
       if (idx < 0 || idx + 1 >= (NSInteger)kps.count)
         continue;
       KKKeyPose *src = kps[idx];
-      KKKeyPose *newKP = [KKKeyPose keyposeAtTime:src.time values:src.values];
+      // Copy-preserve: keyposeAtTime:values: would drop the keypose's spatial
+      // state (spatialSmooth / in-out handles) AND its geometrySnapshot, so a
+      // curve change would silently reset a Points keypose's shape to the base
+      // (i.e. the last-edited keypose's). See
+      // [[project_keypose_copy_preserve_spatial]].
+      KKKeyPose *newKP = [src copy];
       KKInterval *iv = [src.outgoing copy] ?: [[KKInterval alloc] init];
       mut(iv);
       newKP.outgoing = iv;

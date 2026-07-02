@@ -50,6 +50,47 @@ static simd_float2 evalCubic(simd_float2 p0, simd_float2 c0, simd_float2 c1,
 // matter). Payload sizes live on KKShape +payloadByteCountForKind:.
 #define KK_MORPH_FLAG_CLOSED (1u << 0)
 #define KK_MORPH_FLAG_HAS_SHAPE_TAIL (1u << 1)
+// bit 2: a per-anchor corner-radius block (count × float) follows the points,
+// before any contour block. Gated by the flag so it only exists for paths that
+// actually round a corner; the reverse-readable shape tail is unaffected.
+#define KK_MORPH_FLAG_HAS_RADII (1u << 2)
+
+// Byte length of the optional corner-radii block in `blob` (0 if the flag is
+// clear). Used to offset the contour block + locate the radii.
+static size_t radiiBlockBytes(NSData *blob, uint32_t pointCount) {
+  if (!blob || blob.length < 5)
+    return 0;
+  uint8_t flags = ((const uint8_t *)blob.bytes)[4];
+  return (flags & KK_MORPH_FLAG_HAS_RADII) ? (size_t)pointCount * sizeof(float)
+                                           : 0;
+}
+
+// Reads the per-anchor radii block, or nil if absent / malformed.
+static NSArray<NSNumber *> *readRadii(NSData *blob, uint32_t pointCount) {
+  if (radiiBlockBytes(blob, pointCount) == 0)
+    return nil;
+  size_t off = 5 + (size_t)pointCount * sizeof(KKBezierPoint);
+  if (blob.length < off + (size_t)pointCount * sizeof(float))
+    return nil;
+  const uint8_t *bytes = blob.bytes;
+  NSMutableArray<NSNumber *> *out =
+      [NSMutableArray arrayWithCapacity:pointCount];
+  for (uint32_t i = 0; i < pointCount; i++) {
+    float r;
+    memcpy(&r, bytes + off + (size_t)i * sizeof(float), sizeof(float));
+    [out addObject:@(r)];
+  }
+  return out;
+}
+
+// Applies a radii array (from readRadii) onto a path that already has its points.
+static void applyRadii(NSArray<NSNumber *> *radii, KKBezierPath *path) {
+  if (!radii)
+    return;
+  NSUInteger n = MIN(radii.count, path.count);
+  for (NSUInteger i = 0; i < n; i++)
+    [path setCornerRadius:radii[i].floatValue atIndex:i];
+}
 
 static BOOL readHeader(NSData *blob, const KKBezierPoint **outPts,
                        uint32_t *outCount, BOOL *outClosed) {
@@ -93,7 +134,8 @@ static KKShape *readShapeTail(NSData *blob) {
 // Returns the array of contour start indices from a snapshot blob, or nil
 // for single-contour / legacy blobs.
 static NSArray<NSNumber *> *readContours(NSData *blob, uint32_t pointCount) {
-  size_t pointsEnd = 5 + (size_t)pointCount * sizeof(KKBezierPoint);
+  size_t pointsEnd = 5 + (size_t)pointCount * sizeof(KKBezierPoint) +
+                     radiiBlockBytes(blob, pointCount);
   if (blob.length < pointsEnd + 2)
     return nil;
   const uint8_t *bytes = blob.bytes;
@@ -118,21 +160,33 @@ NSData *KKMorphSnapshotCapture(KKBezierPath *path) {
   uint32_t count = (uint32_t)path.count;
   KKShape *shape = path.shape;
   NSData *shapePayload = shape.serializedPayload;
+  BOOL hasRadii = path.hasCornerRadii;
   uint8_t flags = 0;
   if (path.closed)
     flags |= KK_MORPH_FLAG_CLOSED;
   if (shapePayload)
     flags |= KK_MORPH_FLAG_HAS_SHAPE_TAIL;
+  if (hasRadii)
+    flags |= KK_MORPH_FLAG_HAS_RADII;
   NSUInteger nContours = path.contourCount;
   size_t tailBytes = shapePayload ? shapePayload.length + 1 : 0;
+  size_t radiiBytes = hasRadii ? count * sizeof(float) : 0;
   NSMutableData *data =
-      [NSMutableData dataWithCapacity:5 + count * sizeof(KKBezierPoint) + 2 +
-                                      nContours * 4 + tailBytes];
+      [NSMutableData dataWithCapacity:5 + count * sizeof(KKBezierPoint) +
+                                      radiiBytes + 2 + nContours * 4 + tailBytes];
   [data appendBytes:&count length:4];
   [data appendBytes:&flags length:1];
   for (uint32_t i = 0; i < count; i++) {
     KKBezierPoint p = [path pointAtIndex:i];
     [data appendBytes:&p length:sizeof(KKBezierPoint)];
+  }
+  // Corner radii (count × float) immediately after the points, before any
+  // contour block; the reverse-readable shape tail stays at the very end.
+  if (hasRadii) {
+    for (uint32_t i = 0; i < count; i++) {
+      float r = [path cornerRadiusAtIndex:i];
+      [data appendBytes:&r length:sizeof(float)];
+    }
   }
   if (nContours > 1) {
     uint16_t nc = (uint16_t)MIN((NSUInteger)UINT16_MAX, nContours);
@@ -165,6 +219,25 @@ void KKMorphSnapshotApply(NSData *blob, KKBezierPath *path) {
   [path setBezierPoints:pts count:count closed:closed];
   [path setContourStarts:readContours(blob, count)];
   [path restoreShape:readShapeTail(blob)];
+  applyRadii(readRadii(blob, count), path); // after setBezierPoints (clears them)
+}
+
+double KKMorphSnapshotSignature(NSData *blob) {
+  if (blob.length == 0)
+    return 0.5;
+  // FNV-1a over the whole snapshot blob. A mean-of-points fingerprint collides
+  // (move one anchor left, another right by the same amount → same mean → a
+  // real transition reads as a flat hold). A hash gives equal-shape → equal,
+  // any-difference → (all but certainly) distinct, so holds vs transitions are
+  // detected exactly. Mapped to [0,1) for plotting on the normalised track.
+  const uint8_t *bytes = blob.bytes;
+  NSUInteger n = blob.length;
+  uint64_t h = 1469598103934665603ULL;
+  for (NSUInteger i = 0; i < n; i++) {
+    h ^= bytes[i];
+    h *= 1099511628211ULL;
+  }
+  return (double)(h >> 11) / (double)(1ULL << 53);
 }
 
 // --- Cubic helpers -----------------------------------------------------
@@ -456,6 +529,17 @@ void KKMorphInterpolateApply(NSData *fromBlob, NSData *toBlob, float t,
     // topology when the count matches).
     [path setContourStarts:readContours(fromBlob, aN)];
     restoreLerpedShapeTail(fromBlob, toBlob, t, path);
+    // Per-anchor corner radii interpolate 1:1 with the matched topology (the
+    // whole reason rounding is stored, not baked: sharp<->round animates).
+    NSArray<NSNumber *> *aRadii = readRadii(fromBlob, aN);
+    NSArray<NSNumber *> *bRadii = readRadii(toBlob, bN);
+    if (aRadii || bRadii) {
+      for (uint32_t i = 0; i < aN; i++) {
+        float ra = (i < aRadii.count) ? aRadii[i].floatValue : 0.0f;
+        float rb = (i < bRadii.count) ? bRadii[i].floatValue : 0.0f;
+        [path setCornerRadius:ra + (rb - ra) * t atIndex:i];
+      }
+    }
     free(out);
     return;
   }

@@ -17,6 +17,10 @@
   _KKManagePopoverView *mv = _openManageView;
   if (!mv || label.length == 0)
     return NSZeroRect;
+  // The Animated dropdown pages its lanes by category; the target lane may live
+  // outside the default (first) page, so flip to its page before spotlighting
+  // (idempotent - no-op once it's the selected page).
+  [mv selectCategoryForLabel:label];
   NSView *row = [mv rowViewForLabel:label];
   NSWindow *w = row.window;
   if (!row || !w)
@@ -36,11 +40,36 @@
   [_openContentPopover close];
 }
 
+- (void)guideCloseAllPopovers {
+  [_openContentPopover close];
+  [self closeManagePopover];
+  [self closeFilterPopover];
+}
+
+- (NSString *)guideRememberedConstantCategory {
+  return _rememberedCategory;
+}
+
 - (NSRect)guideRenderModePillScreenRectForMode:(KKMiniViewerRenderMode)mode {
   _KKStaticValuesPopoverView *sv = _openStaticView;
   if (!sv || !_openStaticIsBoundary)
     return NSZeroRect;
   return [sv guideRenderModePillScreenRectForMode:mode];
+}
+
+- (NSRect)guideSizePillScreenRectForIndex:(NSInteger)index {
+  _KKStaticValuesPopoverView *sv = _openStaticView;
+  if (!sv || !_openStaticIsBoundary)
+    return NSZeroRect;
+  return [sv guideSizePillScreenRectForIndex:index];
+}
+
+- (NSInteger)guideMiniViewerSizeIndex {
+  return [_KKStaticValuesPopoverView popoverSizeIndex];
+}
+
+- (void)guideSetMiniViewerSizeIndex:(NSInteger)sizeIndex {
+  [_KKStaticValuesPopoverView setPopoverSizeIndex:sizeIndex];
 }
 
 - (void (^)(NSView *, KKSegmentEditView *))onGapPopoverWillOpen {

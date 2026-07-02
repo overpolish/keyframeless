@@ -12,11 +12,78 @@
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKEasing.h>
+#import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
 @implementation KKTimelineBasicView (BoundaryPopover)
 
+- (NSString *)_resolveBasicActiveLayerKey {
+  return [self _resolveBasicActiveLayerKeyFiringActivation:YES];
+}
+
+- (NSString *)_resolveBasicActiveLayerKeyFiringActivation:(BOOL)fireActivation {
+  BOOL hasLayers = NO;
+  for (KKLane *l in _timeline.lanes)
+    if (l.enabled && l.layerKey.length) {
+      hasLayers = YES;
+      break;
+    }
+  if (!hasLayers)
+    return nil; // single-owner timeline: no scoping
+  // The keypose popover targets an ANIMATED layer - one whose lane actually has
+  // keyposes (>=2), not merely an enabled/animatable lane. A layer that's only
+  // animatable (e.g. a group with the default identity keypose) has nothing to
+  // open here, so it must fall through to the first layer that does - otherwise
+  // a keyposeless layer stays "active" and selection never moves to the layer
+  // being edited.
+  BOOL (^animated)(KKLane *) = ^BOOL(KKLane *l) {
+    return l.enabled && l.layerKey.length && l.keyposes.count >= 2;
+  };
+  NSString *resolved = nil;
+  if (_activeLayerKey.length)
+    for (KKLane *l in _timeline.lanes)
+      if (animated(l) && [l.layerKey isEqualToString:_activeLayerKey]) {
+        resolved = _activeLayerKey;
+        break;
+      }
+  if (!resolved) // active layer isn't animated -> first layer that is
+    for (KKLane *l in _timeline.lanes)
+      if (animated(l)) {
+        resolved = l.layerKey;
+        break;
+      }
+  if (resolved && ![resolved isEqualToString:_activeLayerKey]) {
+    _activeLayerKey = [resolved copy];
+    // Only fire on a USER-driven open (graph click / nav). A selection-driven
+    // re-drive (retarget / timeline re-feed) passes NO, else activation drives
+    // the host selection back to the popover's old owner - the ping-pong.
+    if (fireActivation && self.onKeyposeLayerActivated)
+      self.onKeyposeLayerActivated(resolved);
+  }
+  return resolved;
+}
+
+- (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey {
+  BOOL eligible = NO;
+  for (KKLane *l in _timeline.lanes)
+    if (l.enabled && [l.layerKey isEqualToString:layerKey]) {
+      eligible = YES;
+      break;
+    }
+  if (!eligible || [layerKey isEqualToString:_activeLayerKey])
+    return;
+  _activeLayerKey = [layerKey copy];
+  // Selection already moved here; re-scope the popover without firing
+  // activation back at the host (the ping-pong).
+  [self _openBoundaryPopoverForDiamond:_curDiamond fireActivation:NO];
+}
+
 - (void)_openBoundaryPopoverForDiamond:(NSInteger)d {
+  [self _openBoundaryPopoverForDiamond:d fireActivation:YES];
+}
+
+- (void)_openBoundaryPopoverForDiamond:(NSInteger)d
+                        fireActivation:(BOOL)fireActivation {
   if (_onDiamondTapped)
     _onDiamondTapped(d);
   if (!self.onBoundaryValuePopover)
@@ -50,11 +117,19 @@
   // - with valueType / component bounds taken from the plugin template
   // (canonical), exactly like _timelineSeededFrom:, so the reused
   // static-values rows pick the right editor (Radius float 0–100, Crop grid).
+  // Multi-owner timelines: scope the popover's params to ONE layer (the
+  // host-selected one, or the first animated layer), so it doesn't list every
+  // layer's values. nil for single-owner plugins (shows all, as before).
+  NSString *activeLayer =
+      [self _resolveBasicActiveLayerKeyFiringActivation:fireActivation];
+
   NSMutableArray<KKLane *> *displayLanes = [NSMutableArray array];
   NSMutableArray<NSString *> *excludedLabels = [NSMutableArray array];
   for (KKLane *lane in _timeline.lanes) {
     if (!lane.enabled)
       continue;
+    if (activeLayer && ![lane.layerKey isEqualToString:activeLayer])
+      continue; // another layer's lane - not in this popover
     // A property "doesn't apply to" this boundary's phase when it has no
     // keypose there OR its phase interval is flat (holdsFlat) - either way it
     // sits at Hold through the phase. Flag it excluded (row becomes a message +
@@ -75,9 +150,14 @@
     }
     NSArray<NSNumber *> *vals = KKTimelineLaneValueAtFraction(lane, frac)
                                     ?: lane.keyposes.firstObject.values;
+    // Multi-owner lanes are layer-tagged ("Stroke Width\x1f<id>"); match the
+    // template on the PLAIN label or it's nil for every tagged lane, losing its
+    // metadata (integerValued / autoSizesComponentLabels / scaleWithMedia) so
+    // the Basic keypose popover diverged from Constants.
+    NSString *plain = KKPlainLaneLabel(lane.label);
     KKLane *tmpl = nil;
     for (KKLane *t in _availableLanes)
-      if ([t.label isEqualToString:lane.label]) {
+      if ([t.label isEqualToString:plain]) {
         tmpl = t;
         break;
       }
@@ -94,6 +174,18 @@
     dl.aspectLinkable = tmpl ? tmpl.aspectLinkable : lane.aspectLinkable;
     dl.aspectLinked = lane.aspectLinked;
     dl.integerValued = tmpl ? tmpl.integerValued : lane.integerValued;
+    // Media-scaled (normalised 0..1 shown as pixels) is template metadata; the
+    // row keys pixel display off it. Without it Position showed the raw 0.5.
+    dl.componentsScaleWithMedia =
+        tmpl ? tmpl.componentsScaleWithMedia : lane.componentsScaleWithMedia;
+    // OSC-edited geometry lanes (Points) show the "edit on canvas" message
+    // instead of value fields + reset. It's template metadata, but fall back to
+    // the source lane (it's serialized too) so the Basic boundary popover
+    // matches the constants row and Advanced.
+    dl.oscEditedOnly = tmpl ? tmpl.oscEditedOnly : lane.oscEditedOnly;
+    // Basic intentionally ignores lock: its keypose timings are shared/linked
+    // across all layers, so freezing one layer here has no meaning. Lock is an
+    // Advanced-only (per-lane) concept - so don't mark the Basic row read-only.
     [dl kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     KKKeyPose *dlKp = [KKKeyPose keyposeAtTime:0.0 values:vals ?: @[ @0.0 ]];
     // Carry the curve state from the keypose nearest this boundary (matches the
@@ -202,6 +294,11 @@
 }
 
 - (void)requestValuePopoverAtFraction:(double)fraction {
+  [self requestValuePopoverAtFraction:fraction fireActivation:YES];
+}
+
+- (void)requestValuePopoverAtFraction:(double)fraction
+                       fireActivation:(BOOL)fireActivation {
   // Map the requested fraction to whichever of the 4 boundary diamonds is
   // closest, then re-open at that diamond. Reuses the lanes-view in-place
   // rebind path for an already-open popover.
@@ -218,7 +315,8 @@
     }
   // Diamond IDs are 1-indexed (1=InStart, 2=Hold-start, 3=Hold-end,
   // 4=OutEnd); array index `best` maps directly to (best + 1).
-  [self _openBoundaryPopoverForDiamond:(best + 1)];
+  [self _openBoundaryPopoverForDiamond:(best + 1)
+                        fireActivation:fireActivation];
 }
 
 - (void)writeSpatialSmoothForLabel:(NSString *)label
@@ -268,7 +366,21 @@
   KKTimeline *t = [_timeline copy];
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    // Exact label match, OR (multi-owner) the ACTIVE owner's lane whose plain
+    // label matches. The mini-viewer handle commits the PLAIN label from the
+    // selected owner's timeline ("Position"), while a merged Basic timeline
+    // tags lanes "Position\x1f<ownerID>" - so the exact match misses and the
+    // drag pinged back. Field edits already pass the tagged label (exact).
+    // Single-owner timelines have no tag / active key, so only the exact branch
+    // fires (this is a no-op for them). layerKey==_activeLayerKey keeps it
+    // scoped to one owner, so no cross-layer double-write.
+    BOOL match = [lanes[i].label isEqualToString:label];
+    if (!match && _activeLayerKey.length && lanes[i].layerKey.length &&
+        [lanes[i].layerKey isEqualToString:_activeLayerKey] &&
+        [KKPlainLaneLabel(lanes[i].label)
+            isEqualToString:KKPlainLaneLabel(label)])
+      match = YES;
+    if (!match)
       continue;
     KKLane *nl = [lanes[i] copy];
     NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
@@ -325,8 +437,8 @@
       continue;
     KKHoldShape s = KKShapeOfLane(lane);
     if (s.holdEnd > s.holdStart &&
-        !KKValuesEqual(lane.keyposes[s.holdStart].values,
-                       lane.keyposes[s.holdEnd].values)) {
+        !KKLaneKeyposeValuesEqual(lane, lane.keyposes[s.holdStart],
+                                  lane.keyposes[s.holdEnd])) {
       nowDrifts = YES;
       break;
     }

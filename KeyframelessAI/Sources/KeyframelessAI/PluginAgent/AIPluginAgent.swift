@@ -9,23 +9,34 @@ import Foundation
 public enum AIPluginResultKind: Int {
 	case answer = 0
 	case mutation = 1
+	/// The user asked to ADD a new shape/layer. `createSVG` holds an SVG
+	/// document the host parses into new layers; `createAnimatePrompt`, when
+	/// non-empty, is a follow-up animation request the host runs once the new
+	/// layers exist. Only produced when the caller passed
+	/// `supportsLayerCreation: true` (Canvas); other plugins never see it.
+	case createLayers = 2
 }
 
-/// Returned by `AIPluginAgent.run(...)`. Either `.answer(String)` (Q&A reply)
-/// or `.mutation(String)` where the mutation is JSON of shape
-/// `{ "operations": [{ "lane": "...", "keyposes": [{ "time": ..., "values": [...], "outgoing": {...} }] }] }`.
-/// The host plugin merges this into its current timeline JSON and writes
+/// Returned by `AIPluginAgent.run(...)`. Either `.answer(String)` (Q&A reply),
+/// `.mutation(String)` where the mutation is JSON of shape
+/// `{ "operations": [{ "lane": "...", "keyposes": [{ "time": ..., "values": [...], "outgoing": {...} }] }] }`,
+/// or `.createLayers` (an SVG + optional follow-up animation prompt).
+/// The host plugin merges a mutation into its current timeline JSON and writes
 /// it back through the existing param-mutation path.
 @objc(KKAIPluginResult)
 public final class AIPluginResult: NSObject {
 	@objc public let kind: AIPluginResultKind
 	@objc public let answer: String?
 	@objc public let mutationJSON: String?
+	@objc public let createSVG: String?
+	@objc public let createAnimatePrompt: String?
 
 	init(answer: String) {
 		self.kind = .answer
 		self.answer = answer
 		self.mutationJSON = nil
+		self.createSVG = nil
+		self.createAnimatePrompt = nil
 		super.init()
 	}
 
@@ -33,6 +44,17 @@ public final class AIPluginResult: NSObject {
 		self.kind = .mutation
 		self.answer = nil
 		self.mutationJSON = mutationJSON
+		self.createSVG = nil
+		self.createAnimatePrompt = nil
+		super.init()
+	}
+
+	init(createSVG: String, animatePrompt: String?) {
+		self.kind = .createLayers
+		self.answer = nil
+		self.mutationJSON = nil
+		self.createSVG = createSVG
+		self.createAnimatePrompt = animatePrompt
 		super.init()
 	}
 }
@@ -62,6 +84,7 @@ public final class AIPluginAgent: NSObject {
 		currentTimelineJSON: String,
 		clipDurationSeconds: Double,
 		currentInspectorMode: String,
+		supportsLayerCreation: Bool,
 		completion: @escaping (AIPluginResult?, Error?) -> Void
 	) {
 		Task { @MainActor in
@@ -72,8 +95,37 @@ public final class AIPluginAgent: NSObject {
 					laneSchemaText: laneSchemaText,
 					currentTimelineJSON: currentTimelineJSON,
 					clipDurationSeconds: clipDurationSeconds,
-					currentInspectorMode: currentInspectorMode
+					currentInspectorMode: currentInspectorMode,
+					supportsCreate: supportsLayerCreation
 				)
+				completion(result, nil)
+			} catch {
+				completion(nil, error)
+			}
+		}
+	}
+
+	/// Canvas targeted routing (see `runCanvasTargetedAsync`). Declared in the
+	/// main class body - not an extension - so the `@objc` entry point reliably
+	/// lands in the generated ObjC header the plugin imports.
+	@MainActor
+	@objc public static func runCanvasTargeted(
+		prompt: String,
+		productContext: String,
+		laneLabels: [String],
+		propertyCatalog: String,
+		layerCatalog: String,
+		clipDurationSeconds: Double,
+		supportsLayerCreation: Bool,
+		completion: @escaping (AIPluginResult?, Error?) -> Void
+	) {
+		Task { @MainActor in
+			do {
+				let result = try await runCanvasTargetedAsync(
+					prompt: prompt, productContext: productContext,
+					laneLabels: laneLabels, propertyCatalog: propertyCatalog,
+					layerCatalog: layerCatalog, clipDurationSeconds: clipDurationSeconds,
+					supportsCreate: supportsLayerCreation)
 				completion(result, nil)
 			} catch {
 				completion(nil, error)
@@ -88,7 +140,8 @@ public final class AIPluginAgent: NSObject {
 		laneSchemaText: String,
 		currentTimelineJSON: String,
 		clipDurationSeconds: Double,
-		currentInspectorMode: String
+		currentInspectorMode: String,
+		supportsCreate: Bool = false
 	) async throws -> AIPluginResult {
 		AIDraftState.shared.routingStatus = AILoc("Reading prompt")
 		// Pass 0a: classify. No docs in this prompt - classifier is just a
@@ -101,7 +154,18 @@ public final class AIPluginAgent: NSObject {
 			fromTimelineJSON: currentTimelineJSON,
 			fallbackSchemaText: laneSchemaText)
 		let classification = try await classify(
-			prompt: prompt, productContext: productContext, laneLabels: labels)
+			prompt: prompt, productContext: productContext, laneLabels: labels,
+			supportsCreate: supportsCreate)
+		// The user wants a new shape drawn. Hand back an SVG (+ optional follow-up
+		// animation request); the host parses it into layers and, if asked, runs
+		// the animation once they exist.
+		if classification.kind == "create" {
+			AIDraftState.shared.routingStatus = AILoc("Drawing")
+			let draft = try await generateLayers(
+				prompt: prompt, productContext: productContext)
+			return AIPluginResult(
+				createSVG: draft.svg, animatePrompt: draft.animatePrompt)
+		}
 		if classification.kind == "answer" {
 			let docs = await renderDocs(for: prompt)
 			let reply = try await answerQuestion(
@@ -170,7 +234,10 @@ public final class AIPluginAgent: NSObject {
 		let complex = classification.complexity == "complex"
 		for (opIdx, op) in effectiveOperations.enumerated() {
 			let suffix = totalOps > 1 ? " (\(opIdx + 1)/\(totalOps))" : ""
-			let laneLabel = "\(op.lane)\(suffix)"
+			// A multi-layer host tags labels "<property>\u{1F}<layerID>"; show only
+			// the property name in the status, never the opaque layer id.
+			let displayLane = op.lane.components(separatedBy: "\u{1F}").first ?? op.lane
+			let laneLabel = "\(displayLane)\(suffix)"
 			AIDraftState.shared.routingStatus = AILoc("Resolving \(laneLabel)")
 			let oldKeyposes = currentLanes[op.lane] ?? []
 			let oldIntervals = currentIntervals[op.lane] ?? []

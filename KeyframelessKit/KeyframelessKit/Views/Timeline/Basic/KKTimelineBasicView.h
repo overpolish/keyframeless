@@ -47,6 +47,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Reset pinch-zoom/pan back to fit (zoom 1, no pan).
 - (void)resetZoom;
 
+/// Re-open the most-recently-opened gap / modulation popover against the
+/// current timeline (a multi-layer host calls this after switching the selected
+/// layer so the open "Applies to" popover re-scopes to the new layer). No-op if
+/// the new layer's section can't open (e.g. it lacks that phase).
+- (void)reopenLastGapPopover;
+
 /// Fired whenever zoom/pan changes; YES = currently zoomed/panned in (not
 /// at fit). Drives the reset button's enabled/accent state.
 @property(nonatomic, copy, nullable) void (^onZoomChanged)(BOOL zoomed);
@@ -55,6 +61,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// drag, phase toggle). Host serializes + writes the blob.
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
+
+/// Multi-owner timelines: the host's selected layer, so the keypose popover
+/// scopes its params to that layer (nil => first animated layer).
+@property(nonatomic, copy, nullable) NSString *activeLayerKey;
+/// Fired when a keypose popover resolves its scope to a layer, so the host can
+/// highlight that layer in its layer list.
+@property(nonatomic, copy, nullable) void (^onKeyposeLayerActivated)
+    (NSString *layerKey);
 
 /// Bracket a continuous boundary drag so the host coalesces the burst of
 /// onTimelineMutated writes into one undo group.
@@ -152,6 +166,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// inactive cell swaps the popover to the corresponding boundary diamond
 /// (Basic's filmstrip cells correspond to the 4 boundary times).
 - (void)requestValuePopoverAtFraction:(double)fraction;
+/// As above, but `fireActivation` NO suppresses the onKeyposeLayerActivated
+/// callback - pass NO for selection-driven re-drives (retarget / timeline
+/// re-feed) so the popover re-scope doesn't drive selection back (ping-pong).
+- (void)requestValuePopoverAtFraction:(double)fraction
+                       fireActivation:(BOOL)fireActivation;
+/// Re-point an OPEN keypose popover at a different layer (host's layer-list
+/// selection). No-op if that layer has no animated lane.
+- (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey;
 /// Flip the Position keypose nearest `frac` between corner and smooth (bezier)
 /// spatial interpolation. Routed from the keypose popover's curve toggle.
 - (void)writeSpatialSmoothForLabel:(NSString *)label

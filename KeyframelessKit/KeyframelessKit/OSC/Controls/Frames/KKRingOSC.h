@@ -52,6 +52,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// hit and tracks it so clearCursorIfSet resets it. Default 0.
 @property(nonatomic) NSInteger visibilityHint;
 
+/// Configure this ring as the standard small "radius widget" handle - the shared
+/// look used for Canvas's live-corner widget and Rounded's radius handle, so the
+/// two can't drift. Sets ringRadius / fillWidth / ringOutlineWidth + clearsOnDraw;
+/// the caller still sets `center` and `tintColor` per use.
+- (void)applyRadiusWidgetStyle;
+
 /// Updates the resize cursor direction based on mouse position relative to
 /// center. Call during drag to keep the cursor aligned with drag direction.
 - (void)updateCursorForMouseX:(double)positionX positionY:(double)positionY;

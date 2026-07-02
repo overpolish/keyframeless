@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+  Centerline-tracing test fixture.
+
+  Every visible shape is a FILLED CLOSED OUTLINE that visually reads as a
+  stroke / line of constant thickness. Centerline tracing should collapse each
+  one back to a single centerline path (the medial axis), i.e. the inverse of
+  the existing "Stroke to path" (outline) op.
+
+  Each ribbon has a known constant thickness, so the expected centerline is
+  exact. The ground-truth centerlines are duplicated in the hidden
+  #expected-centerlines group below (display:none so they don't import/render)
+  for visual comparison while developing the op.
+
+  Cases (increasing difficulty):
+    A  straight horizontal bar      thickness 24   -> single segment
+    B  straight vertical bar        thickness 24   -> single segment
+    C  right-angle elbow (L)        thickness 24   -> 2 segments + 1 corner
+    D  plus / cross                 thickness 24   -> 4 arms, 1 junction (branch)
+    E  quarter-circle arc ribbon    thickness 48   -> curved centerline
+-->
+<svg width="800" height="680" viewBox="0 0 800 680" version="1.1"
+     xmlns="http://www.w3.org/2000/svg">
+
+  <g id="ribbons" fill="#cfd4da" stroke="none">
+
+    <!-- A: horizontal bar. centerline y=80, x 50..350 -->
+    <path id="A-hbar" d="M 50,68 H 350 V 92 H 50 Z" />
+
+    <!-- B: vertical bar. centerline x=462, y 50..250 -->
+    <path id="B-vbar" d="M 450,50 H 474 V 250 H 450 Z" />
+
+    <!-- C: L elbow. centerline (60,180)->(260,180)->(260,360) -->
+    <path id="C-elbow"
+          d="M 48,168 H 272 V 372 H 248 V 192 H 48 Z" />
+
+    <!-- D: plus. centerlines cross at (530,430): H y=430 x430..630, V x=530 y330..530 -->
+    <path id="D-plus"
+          d="M 518,330 H 542 V 418 H 630 V 442 H 542 V 530 H 518 V 442 H 430 V 418 H 518 Z" />
+
+    <!-- E: quarter-circle arc ribbon. center (200,560), centerline radius 120,
+         thickness 48 (inner 96, outer 144), quarter from east to north -->
+    <path id="E-arc"
+          d="M 344,560 A 144 144 0 0 0 200,416 L 200,464 A 96 96 0 0 1 296,560 Z" />
+  </g>
+
+  <!-- Ground-truth centerlines (hidden: reference only, not imported/rendered). -->
+  <g id="expected-centerlines" display="none"
+     fill="none" stroke="#e0245e" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 50,80 H 350" />
+    <path d="M 462,50 V 250" />
+    <path d="M 60,180 H 260 V 360" />
+    <path d="M 430,430 H 630 M 530,330 V 530" />
+    <path d="M 320,560 A 120 120 0 0 0 200,440" />
+  </g>
+</svg>

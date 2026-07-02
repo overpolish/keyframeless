@@ -6,6 +6,7 @@
 #import "Constants.h"
 #import "GlowInspectorView.h"
 #import "GlowLocalized.h"
+#import "GlowMiniViewerRenderer.h" // per-instance mini-viewer rendezvous paths
 #import "GlowOSCRadiusMath.h"
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
@@ -289,7 +290,7 @@ static NSString *_GlowAILaneSchemaText(void) {
     BOOL motionBlurEnabled = st.motionBlurEnabled;
     double motionBlurShutterAngle = st.motionBlurShutterAngle;
     NSInteger motionBlurSamples = st.motionBlurSamples;
-    NSInteger motionBlurMode = st.motionBlurMode;
+    NSInteger motionBlurTechnique = st.motionBlurTechnique;
     BOOL oscMasterVisible = st.oscMasterVisible;
     NSDictionary *uiState = st.uiState;
     KKTimeline *timeline = [self timelineStampedWithClipDuration:st.timeline];
@@ -332,6 +333,13 @@ static NSString *_GlowAILaneSchemaText(void) {
                                             activeTab:activeTab
                                        availableLanes:available
                                              timeline:timeline];
+    // Per-instance rendezvous paths (keyed by the instance UUID minted above)
+    // so two stacked Glow clips read/write distinct /tmp files instead of the
+    // clip below showing the top clip's source in its mini-viewer.
+    NSString *instUUID = KKInstanceUUIDForAPI(self.apiManager);
+    view.miniViewerDescriptorPath =
+        GlowMiniViewerDescriptorPathForUUID(instUUID);
+    view.miniViewerRequestPath = GlowMiniViewerRequestPathForUUID(instUUID);
     if (seedClipDurSec > 0)
       [view setClipDurationSeconds:seedClipDurSec];
     if (seedFrameDurSec > 0)
@@ -339,7 +347,7 @@ static NSString *_GlowAILaneSchemaText(void) {
     [view setMotionBlurEnabled:motionBlurEnabled];
     [view setMotionBlurShutterAngle:motionBlurShutterAngle
                             samples:motionBlurSamples];
-    [view setMotionBlurMode:(KKMotionBlurMode)motionBlurMode];
+    [view setMotionBlurTechnique:(KKMotionBlurTechnique)motionBlurTechnique];
 
     // On-screen-control visibility: master tick + the single Radius pill +
     // opt-click-hide + opt-reveal. Shared glue in KKPlugin (OSCVisibility); the
@@ -577,6 +585,7 @@ static NSString *_GlowAILaneSchemaText(void) {
        currentTimelineJSON:currentJSON
        clipDurationSeconds:clipDurSec
       currentInspectorMode:currentMode
+     supportsLayerCreation:NO
                 completion:^(KKAIPluginResult *result, NSError *err) {
                   dispatch_async(dispatch_get_main_queue(), ^{
                     __strong typeof(weakSelf) strong = weakSelf;

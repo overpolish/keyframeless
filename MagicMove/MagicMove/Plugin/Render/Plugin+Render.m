@@ -24,13 +24,14 @@
        withPluginState:(NSData *)pluginState
                 atTime:(CMTime)renderTime
                  error:(NSError **)error {
-  KKMotionBlurState mbState = {0};
-  if (pluginState.length >= sizeof(KKMotionBlurState))
-    [pluginState getBytes:&mbState length:sizeof(mbState)];
   NSString *reqPath = MagicMoveMiniViewerRequestPathForUUID(
       KKInstanceUUIDForAPI(self.apiManager));
+  // MagicMove animates a TRANSFORM: its motion blur averages the N sub-frame
+  // transforms (per-sample in pluginState) over a SINGLE source frame, so it
+  // requests no sub-frame source frames (KKBuildSourceRequests no longer adds
+  // any - see its header).
   *inputImageRequests = KKBuildSourceRequests(
-      renderTime, mbState, reqPath, self.renderCache, ^id(CMTime t) {
+      renderTime, reqPath, self.renderCache, ^id(CMTime t) {
         return [[FxImageTileRequest alloc]
             initWithSource:kFxImageTileRequestSourceEffectClip
                       time:t

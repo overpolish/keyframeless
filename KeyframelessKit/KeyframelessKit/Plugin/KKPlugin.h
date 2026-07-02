@@ -548,6 +548,13 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// registered as a custom-string parameter.
 - (void)patchUIStateKey:(NSString *)key value:(id)value paramID:(UInt32)paramID;
 
+/// Like `patchUIStateKey:value:paramID:` but patches several keys into the JSON
+/// dict in ONE action scope, so a set of related UI-state changes lands as a
+/// single undo entry (avoids the "takes two cmd-Z" problem of back-to-back
+/// single-key writes).
+- (void)patchUIStateKeys:(NSDictionary<NSString *, id> *)values
+                 paramID:(UInt32)paramID;
+
 /// Persists the "Maintain Timing" toggle into the UI-state blob at `paramID`.
 /// When enabling, captures the current source-media in-point + clip duration
 /// (read from FxTimingAPI inside the action scope) as the anchor the render
@@ -559,7 +566,7 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// KKRefreshRenderCache populates `cache`). When the lock is on and the clip's
 /// source range has moved away from the stored anchor (a trim/grow surfaced
 /// this tick), it rewrites the timeline blob's keypose fractions to hold their
-/// absolute media position and advances the anchor — both in one action scope
+/// absolute media position and advances the anchor - both in one action scope
 /// (dispatched to the main queue, since the render tick has no action scope).
 /// The blob write flows to the Advanced graph via the normal parameterChanged
 /// path, so the keyposes visibly move. A per-tick guard on `cache` makes it

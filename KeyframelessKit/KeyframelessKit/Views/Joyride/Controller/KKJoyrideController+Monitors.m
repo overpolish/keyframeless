@@ -73,8 +73,16 @@ static const NSEventModifierFlags kJoyrideModifierMask =
   [target sendEvent:mk(NSEventTypeLeftMouseDown)];
   [target sendEvent:mk(NSEventTypeLeftMouseUp)];
   // Route keystrokes here (e.g. typing into a field): the forwarded click is
-  // the user's intent to interact with this window.
-  [target makeKeyWindow];
+  // the user's intent to interact with this window. Only re-key when NOT already
+  // key: -makeKeyWindow re-runs first-responder restoration, and if the target's
+  // first responder is a search/text field, that re-fires
+  // becomeFirstResponder -> the field editor is re-bridged across ViewBridge,
+  // which leaks an NSViewBridgeObject (+ the layer-backed field-editor NSTextView
+  // it bridges) on EVERY forwarded click. Guarding collapses that to once per
+  // real key change. (Found via Instruments: -[NSViewBridge registerKey:] under
+  // -[_KKSearchField becomeFirstResponder] under this method.)
+  if (!target.isKeyWindow)
+    [target makeKeyWindow];
 }
 
 - (void)_handleGlobalMouseDown:(NSEvent *)event {

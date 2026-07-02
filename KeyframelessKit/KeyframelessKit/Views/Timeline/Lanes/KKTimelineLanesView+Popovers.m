@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLaneFilterBar.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTokens.h"
@@ -15,6 +17,12 @@
 #import <KeyframelessKit/KKSegmentEditView.h>
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <QuartzCore/QuartzCore.h>
+
+// Implemented in KKTimelineStaticValuesPopover.m; called on popover close to
+// free the mini-viewer's GPU memory even if the backing window shell lingers.
+@interface _KKStaticValuesPopoverView (Teardown)
+- (void)releaseMiniViewer;
+@end
 
 // The mini-viewer delegate is a KKMiniViewerRenderer (or subclass) but its
 // header framework-imports KKMiniViewerView.h, which collides with the quote
@@ -98,24 +106,34 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
 
 @implementation KKTimelineLanesView (PopoversInternal)
 
+// The lanes the Animated dropdown offers for the CURRENT owner: scoped to this
+// layer's applicable params (a path's Points/Stroke aren't offered for an image
+// / group) and with mode-gated lanes dropped (the whole "Color" group when Mode
+// = Dynamic, the "Stroke" group when the stroke is off) via the visibleWhen
+// cascade over the timeline so each controller resolves to its current value.
+- (NSArray<KKLane *> *)_manageVisibleLanes {
+  NSSet<NSString *> *condVisible =
+      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+  NSMutableArray<KKLane *> *visibleLanes = [NSMutableArray array];
+  for (KKLane *l in [self _ownerScopedAvailableLanes])
+    // Only animatable lanes are offered (a structural toggle / enum can't be
+    // animated), matching the manage view's own init filter.
+    if (l.animatable && [condVisible containsObject:l.label])
+      [visibleLanes addObject:l];
+  return visibleLanes;
+}
+
 - (void)_showManagePopoverFromView:(NSView *)anchorView {
   NSSet<NSString *> *checked = [self _optedInLabelsSet];
   __weak typeof(self) weak = self;
 
-  // Mode-gated lanes drop out of the manage list (and their category, e.g. the
-  // whole "Color" group when Mode = Dynamic) - computed over the timeline so
-  // the controller Mode resolves to its current value.
-  NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
-  NSMutableArray<KKLane *> *visibleLanes = [NSMutableArray array];
-  for (KKLane *l in _availableLanes)
-    if ([condVisible containsObject:l.label])
-      [visibleLanes addObject:l];
+  NSArray<KKLane *> *visibleLanes = [self _manageVisibleLanes];
 
   __block _KKManagePopoverView *manageView = nil;
   manageView = [[_KKManagePopoverView alloc]
       initWithLanes:visibleLanes
       checkedLabels:checked
+      minimumHeight:self.minimumManagePopoverHeight
            onToggle:^(NSString *label) {
              __strong typeof(weak) s = weak;
              if (!s)
@@ -129,22 +147,35 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
 
   _openManageView = manageView;
 
-  NSPopover *pop = [self _showPopoverWithContent:manageView
-                                        fromView:anchorView
-                                         onClose:^{
-                                           __strong typeof(weak) s = weak;
-                                           if (!s)
-                                             return;
-                                           s->_openManageView = nil;
-                                           if (s.onManagePopoverClosed)
-                                             s.onManagePopoverClosed();
-                                         }];
+  NSPopover *pop =
+      [self _showPopoverWithContent:manageView
+                           fromView:anchorView
+                      preferredEdge:NSRectEdgeMinX
+                            onClose:^{
+                              __strong typeof(weak) s = weak;
+                              if (!s)
+                                return;
+                              s->_openManageView = nil;
+                              [NSNotificationCenter.defaultCenter
+                                  postNotificationName:
+                                      KKStaticValuesPopoverDidCloseNotification
+                                                object:s];
+                              if (s.onManagePopoverClosed)
+                                s.onManagePopoverClosed();
+                            }];
   _openManagePopover = pop;
   manageView.popover = pop;
 
+  // Companion-panel signal (same as the constants/keypose popovers): a
+  // multi-owner host (Canvas) shows its layer list beside the dropdown so you
+  // can pick which owner's animated properties to manage. kind=manage => every
+  // layer is selectable (you can animate any layer's params).
+  KKPostStaticValuesPopoverDidOpen(pop, self, @"manage", NO, 0.0);
+
   if (self.onManagePopoverWillOpen) {
     NSString *targetLabel =
-        self.managePopoverSpotlightLabel ?: _availableLanes.firstObject.label;
+        self.managePopoverSpotlightLabel
+            ?: [self _ownerScopedAvailableLanes].firstObject.label;
     __weak _KKManagePopoverView *weakManage = _openManageView;
     dispatch_after(
         dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
@@ -160,8 +191,47 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   }
 }
 
+// PID of the app owning the topmost normal window under `screenPoint`
+// (NSEvent.mouseLocation coords). 0 if none/unknown. Used so an outside-click
+// in ANOTHER app (e.g. clicking Finder to drag in a file) doesn't dismiss the
+// popover - only a click within the host app should.
+static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
+  NSScreen *primary = NSScreen.screens.firstObject;
+  if (!primary)
+    return 0;
+  // NSEvent.mouseLocation is bottom-left origin; CGWindow bounds are top-left
+  // (y down from the primary display top).
+  CGPoint cgPt =
+      CGPointMake(screenPoint.x, NSMaxY(primary.frame) - screenPoint.y);
+  CFArrayRef list = CGWindowListCopyWindowInfo(
+      kCGWindowListOptionOnScreenOnly | kCGWindowListExcludeDesktopElements,
+      kCGNullWindowID);
+  if (!list)
+    return 0;
+  pid_t owner = 0;
+  CFIndex count = CFArrayGetCount(list); // front-to-back
+  for (CFIndex i = 0; i < count; i++) {
+    NSDictionary *win =
+        (__bridge NSDictionary *)CFArrayGetValueAtIndex(list, i);
+    if ([win[(__bridge id)kCGWindowLayer] intValue] != 0)
+      continue; // normal app windows only
+    CGRect bounds = CGRectZero;
+    if (!CGRectMakeWithDictionaryRepresentation(
+            (__bridge CFDictionaryRef)win[(__bridge id)kCGWindowBounds],
+            &bounds))
+      continue;
+    if (CGRectContainsPoint(bounds, cgPt)) {
+      owner = (pid_t)[win[(__bridge id)kCGWindowOwnerPID] intValue];
+      break;
+    }
+  }
+  CFRelease(list);
+  return owner;
+}
+
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
+                         preferredEdge:(NSRectEdge)preferredEdge
                                onClose:(void (^)(void))onClose {
   // Dismiss any popover from a previous call first - the ApplicationDefined
   // outside-click monitors don't fire click-to-click between two gaps in the
@@ -183,22 +253,63 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   NSViewController *vc = [[NSViewController alloc] init];
   vc.view = wrapper;
 
-  NSPopover *popover = [[NSPopover alloc] init];
-  // ApplicationDefined instead of Transient: Transient closes the popover if
-  // ANY event targets a different window - ViewBridge-routed clicks from FCP
-  // target the inspector window, not the popover, triggering that immediately.
-  // We replicate outside-click close with local + global mouseDown monitors.
-  popover.behavior = NSPopoverBehaviorApplicationDefined;
+  // Reuse one popover instance (and its remote-hosted backing window) across
+  // opens - see _openContentPopover's declaration. Just swap its content; only
+  // alloc the first time.
+  NSPopover *popover = _openContentPopover;
+  if (!popover) {
+    popover = [[NSPopover alloc] init];
+    // ApplicationDefined instead of Transient: Transient closes the popover if
+    // ANY event targets a different window - ViewBridge-routed clicks from FCP
+    // target the inspector window, not the popover, triggering that immediately.
+    // We replicate outside-click close with local + global mouseDown monitors.
+    popover.behavior = NSPopoverBehaviorApplicationDefined;
+  }
   popover.contentViewController = vc;
+  // Size the popover to THIS content before it shows. A reused instance keeps
+  // the previous open's contentSize, so without this the new content (e.g. a
+  // keypose mini-viewer) draws at the stale/small size and then pops to the
+  // right size on first layout. content.bounds is the caller-sized content (same
+  // value used for wrapper.frame above).
+  if (!NSIsEmptyRect(content.bounds))
+    popover.contentSize = content.bounds.size;
 
   [popover showRelativeToRect:anchor.bounds
                        ofView:anchor
-                preferredEdge:NSRectEdgeMinY];
+                preferredEdge:preferredEdge];
 
   NSWindow *popoverWindow = popover.contentViewController.view.window;
+  // Don't let the popover steal app focus from the host (FCP): without this the
+  // popover's window activates our ViewBridge process when it (or a click in
+  // it) becomes key, deactivating FCP so its cursors / Cmd-Z / shortcuts stop
+  // until the user clicks back. The companion layer-list panel avoids this by
+  // being a NONACTIVATING panel; NSPopover's backing window is an NSPanel
+  // subclass, so give it the same treatment - become key (for field editing /
+  // bare keys) WITHOUT activating the process.
+  if ([popoverWindow isKindOfClass:[NSPanel class]]) {
+    NSPanel *popoverPanel = (NSPanel *)popoverWindow;
+    popoverPanel.styleMask |= NSWindowStyleMaskNonactivatingPanel;
+    popoverPanel.becomesKeyOnlyIfNeeded = NO;
+  }
+  // The event monitors below must NOT strong-capture the popover window: NSEvent
+  // retains a monitor's block until -removeMonitor:, and during a guide the
+  // popover can be torn down without NSPopoverWillCloseNotification firing (so
+  // -removeMonitors never runs). A strong capture then pins the popover window,
+  // its content view, and the mini-viewer (an MTKView) - leaking that view's
+  // multi-MB CAMetalLayer drawables every guide run. Weak so a stranded monitor
+  // can't keep the window (and the whole mini-viewer) alive.
+  __weak NSWindow *weakPopoverWindow = popoverWindow;
   CFTimeInterval shownAt = CACurrentMediaTime();
+  // Host app (FCP) is frontmost when the popover opens. Captured so an
+  // outside-click in another app doesn't dismiss it.
+  pid_t hostPID =
+      NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
   __weak NSPopover *weakPopover = popover;
   KKMiniViewerView *canvas = KKFindMiniViewer(content);
+  __weak NSView *weakContent = content;
+  // Let the mini grab key focus on click (so bare keys are handled in the
+  // popover) when the plugin opted in.
+  canvas.grabsKeyFocusOnClick = self.miniGrabsKeyFocusOnClick;
   __block id localMon = nil;
   __block id globalMon = nil;
   __block id magnifyLocalMon = nil;
@@ -247,6 +358,19 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                 removeMonitors();
                 if (onClose)
                   onClose();
+                // Free the closing content's mini-viewer GPU memory promptly. The
+                // backing window is NOT destroyed: _openContentPopover is reused
+                // across opens (its remote-hosted window can't be freed until
+                // inspector teardown anyway - see its declaration), so reusing one
+                // window bounds the CA layer-hosting IOSurface leak instead of
+                // creating a fresh stranded window per open. Defer one runloop so
+                // the popover's own close settles first. Target weakContent (the
+                // CLOSING content), never the reused popover's current content.
+                dispatch_async(dispatch_get_main_queue(), ^{
+                  __strong NSView *c = weakContent;
+                  if ([c respondsToSelector:@selector(releaseMiniViewer)])
+                    [(id)c releaseMiniViewer];
+                });
                 [NSNotificationCenter.defaultCenter removeObserver:closeObs];
               }];
 
@@ -265,14 +389,29 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   // (KKMiniViewerView inside an NSScrollView - the proven mechanism). These
   // monitors only keep the outside-scroll-dismiss behavior, and must NOT
   // swallow or close when the pointer is over the canvas.
+  // A scroll only dismisses when it lands within the HOST app (FCP). A scroll
+  // while another app is focused reaches the global monitor too; without this
+  // guard any such scroll closed the popover.
+  BOOL (^scrollInHostApp)(void) = ^BOOL {
+    if (hostPID == 0)
+      return YES; // couldn't resolve host - keep the old close-on-scroll
+    return KKWindowOwnerPIDAtScreenPoint(NSEvent.mouseLocation) == hostPID;
+  };
   localMon = [NSEvent
       addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                    handler:^NSEvent *(NSEvent *e) {
                                      if (canvas && [canvas pointerOverCanvas])
                                        return e; // let the responder handle it
+                                     // Scroll inside a companion side panel
+                                     // scrolls it, doesn't dismiss.
+                                     if (KKPopoverPointInKeepAliveWindow(
+                                             NSEvent.mouseLocation))
+                                       return e;
                                      if (contentSuppressesDismiss())
                                        return e;
-                                     if (e.window != popoverWindow)
+                                     if (!scrollInHostApp())
+                                       return e;
+                                     if (e.window != weakPopoverWindow)
                                        [weakPopover close];
                                      return e;
                                    }];
@@ -282,7 +421,12 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                                     handler:^(NSEvent *e) {
                                       if (canvas && [canvas pointerOverCanvas])
                                         return;
+                                      if (KKPopoverPointInKeepAliveWindow(
+                                              NSEvent.mouseLocation))
+                                        return;
                                       if (contentSuppressesDismiss())
+                                        return;
+                                      if (!scrollInHostApp())
                                         return;
                                       [weakPopover close];
                                     }];
@@ -316,6 +460,18 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
       return;
     if (pointInJoyridePanel(p))
       return;
+    // A plugin's companion side panel (e.g. a layer list shown beside the
+    // popover) registers itself as keep-alive so clicking it doesn't dismiss.
+    if (KKPopoverPointInKeepAliveWindow(p))
+      return;
+    // Only an outside click within the HOST app dismisses. A click in another
+    // app (e.g. Finder, to drag a file into the panel) leaves it open. Fall
+    // back to the old close-on-outside if we couldn't resolve the host PID.
+    if (hostPID != 0) {
+      pid_t owner = KKWindowOwnerPIDAtScreenPoint(p);
+      if (owner != hostPID)
+        return;
+    }
     [weakPopover close];
   };
   mouseLocalMon = [NSEvent
@@ -328,7 +484,7 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                                      // popover.
                                      if (CACurrentMediaTime() - shownAt < 0.2)
                                        return e;
-                                     if (e.window != popoverWindow)
+                                     if (e.window != weakPopoverWindow)
                                        closeIfOutsidePopover();
                                      return e;
                                    }];
@@ -361,8 +517,14 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
                                      // responder instead. An NSText (the field
                                      // editor) means a value field is being
                                      // edited: let the arrows move the text
-                                     // cursor rather than navigating.
-                                     if ([popoverWindow.firstResponder
+                                     // cursor rather than navigating. Also let
+                                     // them through when a field editor is
+                                     // active in the key window (e.g. renaming
+                                     // a layer in the companion panel, a
+                                     // separate window from the popover).
+                                     if ([weakPopoverWindow.firstResponder
+                                             isKindOfClass:[NSText class]] ||
+                                         [NSApp.keyWindow.firstResponder
                                              isKindOfClass:[NSText class]])
                                        return e;
                                      [s _navigateBoundaryPopoverDirection:
@@ -531,6 +693,57 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   [_openManagePopover close];
 }
 
+- (void)closeFilterPopover {
+  [_laneFilterBar closeFilterPopover];
+}
+
+- (void)reopenOpenAppliesToPopover {
+  if (!(_openGapEditor || _openHoldModEditor))
+    return;
+  // Basic's "Applies to" is keyed on shared In/Out/Hold sections, so re-derive
+  // it against the new layer's timeline and re-scope the OPEN editor's
+  // checklist in place (the `_rescopingGapPopover` flag routes the re-derived
+  // participation to a rescope instead of a fresh popover - no close/reopen
+  // flicker). Advanced's gap popover is anchored to one layer-specific keypose
+  // interval - re-scoping to another layer's interval is undefined, so just
+  // close it.
+  if (_activeTab == 1) {
+    [_openContentPopover close];
+    return;
+  }
+  _rescopingGapPopover = YES;
+  [_basicGraph reopenLastGapPopover];
+  _rescopingGapPopover = NO;
+}
+
+- (NSPopover *)showCompanionPopover:(NSView *)content
+                           fromView:(NSView *)anchor
+                               kind:(NSString *)kind
+                            onClose:(void (^)(void))onClose {
+  // Present through the same keep-alive-aware presenter the value / manage
+  // popovers use (ApplicationDefined + outside-click monitors that ignore
+  // registered companion windows), then post the open/close signals a companion
+  // panel (Canvas's layer list) observes - scoped to this lanes view via
+  // `object`. Lets the OSC settings popover host the layer-list panel too.
+  __weak typeof(self) weak = self;
+  NSPopover *popover =
+      [self _showPopoverWithContent:content
+                           fromView:anchor
+                      preferredEdge:NSRectEdgeMinX
+                            onClose:^{
+                              __strong typeof(weak) s = weak;
+                              [NSNotificationCenter.defaultCenter
+                                  postNotificationName:
+                                      KKStaticValuesPopoverDidCloseNotification
+                                                object:s];
+                              if (onClose)
+                                onClose();
+                            }];
+  // isBoundary NO => every layer selectable (like the constants kind).
+  KKPostStaticValuesPopoverDidOpen(popover, self, kind ?: @"osc", NO, 0.0);
+  return popover;
+}
+
 - (void)showStaticValuesPopoverFromView:(NSView *)anchor {
   NSArray<KKLane *> *unopted = [self _unoptedLanes];
   if (unopted.count == 0)
@@ -555,7 +768,12 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   cfg.initialCategory = _rememberedCategory;
   cfg.onCategoryChanged = ^(NSString *category) {
     __strong typeof(weak) s = weak;
+    if (!s)
+      return;
     s->_rememberedCategory = [category copy];
+    // Guide observation, fired alongside the remember so it never clobbers it.
+    if (s.onGuideStaticCategoryChanged)
+      s.onGuideStaticCategoryChanged(category);
   };
   // Constants commits go through -_setLaneValues:forLabel: (cfg.onValue=nil).
   // Outer drag begin/end forward to the lanes view's properties so a guide
@@ -578,6 +796,10 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   cfg.onAddToAnimated = ^(NSString *label) {
     __strong typeof(weak) s = weak;
     [s _setLaneAnimatable:YES forLabel:label];
+    // Same opt-in signal the manage popover's toggle fires, so a guide can
+    // advance on this per-lane shortcut too (nil outside a guide).
+    if (s.onLaneOptedIn)
+      s.onLaneOptedIn(label);
   };
   // Preview at the live playhead, not t=0. A property animated to start
   // off-canvas (e.g. flying in) would otherwise render its first-frame pose,
@@ -639,6 +861,31 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
                                      component:(NSInteger)component {
   return [_openStaticView guideFieldScreenRectForLabel:label
                                              component:component];
+}
+
+- (NSRect)guideConstantChoicePillScreenRectForLabel:(NSString *)label
+                                            atIndex:(NSInteger)index {
+  return [_openStaticView guideChoicePillScreenRectForLabel:label
+                                                    atIndex:index];
+}
+
+- (NSRect)guideConstantCategoryPillScreenRectForKey:(NSString *)key {
+  return [_openStaticView guideCategoryPillScreenRectForKey:key];
+}
+
+- (NSRect)guideConstantAddToAnimatedButtonScreenRectForLabel:(NSString *)label {
+  return [_openStaticView guideAddToAnimatedButtonScreenRectForLabel:label];
+}
+
+- (void)guideScrollConstantRowIntoViewForLabel:(NSString *)label {
+  [_openStaticView guideScrollRowIntoViewForLabel:label];
+}
+
+- (void)guideSelectConstantCategory:(NSString *)key {
+  // Live-switch the open popover (if any); also remember it so a reopen lands
+  // on the same tab.
+  _rememberedCategory = [key copy];
+  [_openStaticView guideSelectCategory:key];
 }
 
 - (void)setGuideConstantFieldEditHandlerForLabel:(NSString *)label

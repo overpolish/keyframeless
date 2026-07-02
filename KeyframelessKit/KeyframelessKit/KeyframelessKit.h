@@ -13,6 +13,8 @@ FOUNDATION_EXPORT const unsigned char
 
 #import <KeyframelessKit/KKAlertStackView.h>
 #import <KeyframelessKit/KKAlertView.h>
+#import <KeyframelessKit/KKAnchorMiniController.h>
+#import <KeyframelessKit/KKAnchorOSC.h>
 #import <KeyframelessKit/KKArcOSC.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKBoxOSC.h>
@@ -57,6 +59,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKMiniViewerRenderer.h>
 #import <KeyframelessKit/KKMiniViewerView.h>
 #import <KeyframelessKit/KKMotionBlur.h>
+#import <KeyframelessKit/KKMotionBlurReconstruct.h>
 #import <KeyframelessKit/KKMotionLean.h>
 #import <KeyframelessKit/KKOSCGuide.h>
 #import <KeyframelessKit/KKOSCGuideBridge.h>
@@ -80,7 +83,9 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPluginInstanceState.h>
 #import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKPointRowView.h>
+#import <KeyframelessKit/KKPresets.h>
 #import <KeyframelessKit/KKPopoverExtraRow.h>
+#import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKPopupSelectView.h>
 #import <KeyframelessKit/KKPositionMiniController.h>
 #import <KeyframelessKit/KKPositionOSC.h>
@@ -93,6 +98,8 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKRotationOSCMath.h>
 #import <KeyframelessKit/KKSVGParser.h>
 #import <KeyframelessKit/KKScaleGizmo.h>
+#import <KeyframelessKit/KKScaleMiniController.h>
+#import <KeyframelessKit/KKScaleOSC.h>
 #import <KeyframelessKit/KKSeedView.h>
 #import <KeyframelessKit/KKSegmentEditView+Guide.h>
 #import <KeyframelessKit/KKSegmentEditView.h>

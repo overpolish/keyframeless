@@ -7,8 +7,8 @@
 
 #import "KKConstants.h"
 #import "KKLocalized.h"
+#import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
-#import "KKPopupSelectView.h"
 #import "KKShaderTypes.h"
 #import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
@@ -25,14 +25,16 @@ static NSTextField *_KKMBCaption(NSString *s) {
 }
 
 static const double kMBDefaultShutter = 180.0;
-static const NSInteger kMBDefaultSamples = 16;
-static const KKMotionBlurMode kMBDefaultMode = KKMotionBlurModeTransitionsOnly;
-// Dropdown order maps 1:1 to KKMotionBlurMode (index 0 = TransitionsOnly).
-static NSArray<NSString *> *_KKMBModeTitles(void) {
+static const KKMotionBlurTechnique kMBDefaultTechnique =
+    KKMotionBlurTechniqueFast;
+static const CGFloat kMBRowHeight = 24.0;
+static const CGFloat kMBWidth = 252.0;
+
+// Pill order maps 1:1 to KKMotionBlurTechnique (index 0 = Fast).
+static NSArray<NSString *> *_KKMBTechniqueTitles(void) {
   return @[
-    KKLoc(@"Transitions only", @"Motion blur mode option."),
-    KKLoc(@"Value changes", @"Motion blur mode option."),
-    KKLoc(@"Always", @"Motion blur mode option.")
+    KKLoc(@"Fast", @"Motion blur technique: velocity reconstruction."),
+    KKLoc(@"Accurate", @"Motion blur technique: sample accumulation.")
   ];
 }
 
@@ -43,33 +45,48 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   KKValueTextField *_samplesField;
   NSButton *_shutterReset;
   NSButton *_samplesReset;
-  KKPopupSelectView *_modePopup;
-  NSButton *_modeReset;
+  KKPillToggleRowView *_techniquePill;
+  NSButton *_techniqueReset;
+  NSView *_samplesRow;
+  NSLayoutConstraint *_samplesTopC;
+  NSLayoutConstraint *_samplesHeightC;
   double _shutterAngle;
   NSInteger _samples;
-  KKMotionBlurMode _mode;
+  KKMotionBlurTechnique _technique;
+  BOOL _supportsFast;
+  NSInteger _defaultSamples;
 }
 
 - (instancetype)initWithShutterAngle:(double)shutterAngle
                              samples:(NSInteger)samples
-                                mode:(KKMotionBlurMode)mode {
-  self = [super initWithFrame:NSMakeRect(0, 0, 252, 144)];
+                           technique:(KKMotionBlurTechnique)technique
+                        supportsFast:(BOOL)supportsFast
+                      defaultSamples:(NSInteger)defaultSamples {
+  self = [super initWithFrame:NSMakeRect(0, 0, kMBWidth, 144)];
   if (!self)
     return nil;
   _shutterAngle = shutterAngle;
   _samples = samples;
-  _mode = mode;
+  _supportsFast = supportsFast;
+  _defaultSamples = defaultSamples;
+  // A host that can't do Fast only ever runs Accurate, regardless of the blob.
+  _technique = supportsFast ? technique : KKMotionBlurTechniqueAccurate;
 
   KKPopoverHeaderView *header = [[KKPopoverHeaderView alloc]
       initWithTitle:KKLoc(@"Motion Blur", @"Section title: motion blur.")
          symbolName:@"figure.walk.motion"];
+  header.translatesAutoresizingMaskIntoConstraints = NO;
   [self addSubview:header];
+
+  // Quality pill row (Fast / Accurate) - only when the host supports Fast;
+  // otherwise there's only one technique and a pill would be pointless.
+  NSView *qualityRow = nil;
+  if (_supportsFast)
+    qualityRow = [self _buildTechniqueRow];
 
   KKSliderView *shSlider = nil, *spSlider = nil;
   KKValueTextField *shField = nil, *spField = nil;
   NSButton *shReset = nil, *spReset = nil;
-  // Samples slider: scale break so the useful low end (2–32) gets most of the
-  // track, with 32–128 in the last quarter.
   NSView *shutterRow =
       [self _buildRow:KKLoc(@"Shutter", @"Motion blur: shutter angle label.")
                          min:0.0
@@ -82,12 +99,14 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
                       slider:&shSlider
                        field:&shField
                        reset:&shReset];
-  NSView *samplesRow =
+  // Samples slider: scale break so the useful low end (2–32) gets most of the
+  // track, with 32–128 in the last quarter.
+  _samplesRow =
       [self _buildRow:KKLoc(@"Samples", @"Motion blur: samples label.")
                          min:2.0
                          max:(double)KK_MOTION_BLUR_MAX_SAMPLES
                        value:(double)_samples
-                defaultValue:(double)kMBDefaultSamples
+                defaultValue:(double)_defaultSamples
                       suffix:@""
              scaleBreakValue:32.0
           scaleBreakPosition:0.75
@@ -101,39 +120,15 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   _samplesField = spField;
   _samplesReset = spReset;
   [self addSubview:shutterRow];
-  [self addSubview:samplesRow];
-  [self _updateResetVisibility];
+  [self addSubview:_samplesRow];
 
-  // "When" row: a styled dropdown picking the fire mode. Caption matches the
-  // slider rows' gutter; the popup floats to the trailing edge.
-  NSView *whenRow = [[NSView alloc] initWithFrame:NSZeroRect];
-  whenRow.translatesAutoresizingMaskIntoConstraints = NO;
-  NSTextField *whenCaption =
-      _KKMBCaption(KKLoc(@"When", @"Label: when a setting applies."));
-  KKPopupSelectView *modePopup =
-      [[KKPopupSelectView alloc] initWithTitles:_KKMBModeTitles()];
-  modePopup.translatesAutoresizingMaskIntoConstraints = NO;
-  [modePopup selectIndex:(NSInteger)_mode];
-  __weak typeof(self) weakSelf = self;
-  modePopup.onSelectionChanged = ^(NSInteger idx) {
-    typeof(self) s = weakSelf;
-    if (!s)
-      return;
-    s->_mode = (KKMotionBlurMode)idx;
-    [s _updateResetVisibility];
-    if (s.onChanged)
-      s.onChanged(s->_shutterAngle, s->_samples, s->_mode);
-  };
-  _modePopup = modePopup;
-  NSButton *modeReset = KKResetToDefaultButton(self, @selector(_resetTapped:));
-  _modeReset = modeReset;
-  [whenRow addSubview:whenCaption];
-  [whenRow addSubview:modePopup];
-  [whenRow addSubview:modeReset];
-  [self addSubview:whenRow];
-  [self _updateResetVisibility];
+  // The row above Shutter is the quality pill when present, else the header.
+  NSLayoutYAxisAnchor *shutterTopAnchor =
+      qualityRow ? qualityRow.bottomAnchor : header.bottomAnchor;
 
-  [NSLayoutConstraint activateConstraints:@[
+  NSMutableArray<NSLayoutConstraint *> *cs = [NSMutableArray arrayWithArray:@[
+    [self.widthAnchor constraintEqualToConstant:kMBWidth],
+
     [header.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                          constant:KKPaddingMD],
     [header.topAnchor constraintEqualToAnchor:self.topAnchor
@@ -143,40 +138,101 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
                                              constant:KKPaddingMD],
     [shutterRow.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
                                               constant:-KKPaddingMD],
-    [shutterRow.topAnchor constraintEqualToAnchor:header.bottomAnchor
+    [shutterRow.topAnchor constraintEqualToAnchor:shutterTopAnchor
                                          constant:KKSpacingSM],
+    [shutterRow.heightAnchor constraintEqualToConstant:kMBRowHeight],
 
-    [samplesRow.leadingAnchor constraintEqualToAnchor:shutterRow.leadingAnchor],
-    [samplesRow.trailingAnchor
+    [_samplesRow.leadingAnchor constraintEqualToAnchor:shutterRow.leadingAnchor],
+    [_samplesRow.trailingAnchor
         constraintEqualToAnchor:shutterRow.trailingAnchor],
-    [samplesRow.topAnchor constraintEqualToAnchor:shutterRow.bottomAnchor
-                                         constant:KKSpacingSM],
-    [samplesRow.heightAnchor constraintEqualToAnchor:shutterRow.heightAnchor],
-
-    [whenRow.leadingAnchor constraintEqualToAnchor:shutterRow.leadingAnchor],
-    [whenRow.trailingAnchor constraintEqualToAnchor:shutterRow.trailingAnchor],
-    [whenRow.topAnchor constraintEqualToAnchor:samplesRow.bottomAnchor
-                                      constant:KKSpacingSM],
-    [whenRow.heightAnchor constraintEqualToAnchor:shutterRow.heightAnchor],
-    [whenRow.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
-                                         constant:-KKPaddingMD],
-
-    [whenCaption.leadingAnchor constraintEqualToAnchor:whenRow.leadingAnchor],
-    [whenCaption.centerYAnchor constraintEqualToAnchor:whenRow.centerYAnchor],
-    [whenCaption.widthAnchor constraintEqualToConstant:54.0],
-    [modePopup.leadingAnchor constraintEqualToAnchor:whenCaption.trailingAnchor
-                                            constant:KKSpacingSM],
-    [modePopup.trailingAnchor constraintEqualToAnchor:modeReset.leadingAnchor
-                                             constant:-KKPaddingXS],
-    [modePopup.topAnchor constraintEqualToAnchor:whenRow.topAnchor],
-    [modePopup.bottomAnchor constraintEqualToAnchor:whenRow.bottomAnchor],
-
-    [modeReset.trailingAnchor constraintEqualToAnchor:whenRow.trailingAnchor],
-    [modeReset.centerYAnchor constraintEqualToAnchor:whenRow.centerYAnchor],
-    [modeReset.widthAnchor constraintEqualToConstant:15.0],
-    [modeReset.heightAnchor constraintEqualToConstant:15.0],
   ]];
+  if (qualityRow) {
+    [cs addObjectsFromArray:@[
+      [qualityRow.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                               constant:KKPaddingMD],
+      [qualityRow.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                                constant:-KKPaddingMD],
+      [qualityRow.topAnchor constraintEqualToAnchor:header.bottomAnchor
+                                           constant:KKSpacingSM],
+      [qualityRow.heightAnchor constraintEqualToConstant:kMBRowHeight],
+    ]];
+  }
+  // Samples sits last; its top gap + height collapse to 0 in Fast so the view
+  // (and the popover) shrink to remove the row entirely.
+  _samplesTopC = [_samplesRow.topAnchor constraintEqualToAnchor:shutterRow.bottomAnchor
+                                                       constant:KKSpacingSM];
+  _samplesHeightC = [_samplesRow.heightAnchor constraintEqualToConstant:kMBRowHeight];
+  [cs addObjectsFromArray:@[
+    _samplesTopC, _samplesHeightC,
+    [_samplesRow.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
+                                             constant:-KKPaddingMD],
+  ]];
+  [NSLayoutConstraint activateConstraints:cs];
+
+  [self _applySamplesVisibility];
+  [self _updateResetVisibility];
+  [self _resizeToFit];
   return self;
+}
+
+- (NSView *)_buildTechniqueRow {
+  NSView *row = [[NSView alloc] initWithFrame:NSZeroRect];
+  row.translatesAutoresizingMaskIntoConstraints = NO;
+
+  NSTextField *caption =
+      _KKMBCaption(KKLoc(@"Quality", @"Label: motion blur quality/technique."));
+
+  KKPillToggleRowView *pill =
+      [[KKPillToggleRowView alloc] initWithLabels:_KKMBTechniqueTitles()];
+  pill.radioMode = YES;
+  pill.grouped = YES;
+  pill.hidesGroupTrack = YES; // inline selector, not a nav bar
+  pill.translatesAutoresizingMaskIntoConstraints = NO;
+  pill.states = @[
+    @(_technique == KKMotionBlurTechniqueFast),
+    @(_technique == KKMotionBlurTechniqueAccurate)
+  ];
+  __weak typeof(self) weak = self;
+  pill.onToggled = ^(NSInteger index, BOOL isOn) {
+    typeof(self) s = weak;
+    if (!s || !isOn)
+      return;
+    s->_technique = (KKMotionBlurTechnique)index;
+    [s _applySamplesVisibility];
+    [s _updateResetVisibility];
+    [s _resizeToFit];
+    if (s.onChanged)
+      s.onChanged(s->_shutterAngle, s->_samples, s->_technique);
+  };
+  _techniquePill = pill;
+
+  NSButton *reset = KKResetToDefaultButton(self, @selector(_resetTapped:));
+  _techniqueReset = reset;
+
+  [row addSubview:caption];
+  [row addSubview:pill];
+  [row addSubview:reset];
+  [NSLayoutConstraint activateConstraints:@[
+    [caption.leadingAnchor constraintEqualToAnchor:row.leadingAnchor],
+    [caption.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+    [caption.widthAnchor constraintEqualToConstant:54.0],
+
+    // Right-aligned: the pill hugs the reset button (its trailing pinned), and
+    // only grows leftward - matches the choice-pill rows (e.g. stroke markers).
+    [pill.leadingAnchor
+        constraintGreaterThanOrEqualToAnchor:caption.trailingAnchor
+                                    constant:KKSpacingSM],
+    [pill.trailingAnchor constraintEqualToAnchor:reset.leadingAnchor
+                                        constant:-KKPaddingXS],
+    [pill.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+
+    [reset.trailingAnchor constraintEqualToAnchor:row.trailingAnchor],
+    [reset.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+    [reset.widthAnchor constraintEqualToConstant:15.0],
+    [reset.heightAnchor constraintEqualToConstant:15.0],
+  ]];
+  [self addSubview:row];
+  return row;
 }
 
 - (NSView *)_buildRow:(NSString *)title
@@ -262,8 +318,6 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
     [reset.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
     [reset.widthAnchor constraintEqualToConstant:15.0],
     [reset.heightAnchor constraintEqualToConstant:15.0],
-
-    [row.heightAnchor constraintEqualToConstant:24.0],
   ]];
 
   *outSlider = slider;
@@ -272,10 +326,32 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
   return row;
 }
 
+// Samples only applies to Accurate (the accumulate path); in Fast the row is
+// removed (collapsed to 0) rather than greyed.
+- (void)_applySamplesVisibility {
+  BOOL showSamples = (_technique == KKMotionBlurTechniqueAccurate);
+  _samplesRow.hidden = !showSamples;
+  _samplesTopC.constant = showSamples ? KKSpacingSM : 0.0;
+  _samplesHeightC.constant = showSamples ? kMBRowHeight : 0.0;
+}
+
+- (void)_resizeToFit {
+  [self layoutSubtreeIfNeeded];
+  CGFloat h = [self fittingSize].height;
+  if (h <= 0.0)
+    return;
+  NSRect f = self.frame;
+  if (fabs(f.size.height - h) < 0.5)
+    return;
+  self.frame = NSMakeRect(f.origin.x, f.origin.y, kMBWidth, h);
+  if (self.onLayoutChanged)
+    self.onLayoutChanged();
+}
+
 - (void)_updateResetVisibility {
   _shutterReset.hidden = fabs(_shutterAngle - kMBDefaultShutter) < 1e-6;
-  _samplesReset.hidden = (_samples == kMBDefaultSamples);
-  _modeReset.hidden = (_mode == kMBDefaultMode);
+  _samplesReset.hidden = (_samples == _defaultSamples);
+  _techniqueReset.hidden = (_technique == kMBDefaultTechnique);
 }
 
 - (void)_sliderMoved:(id)sender {
@@ -289,7 +365,7 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
         [NSString stringWithFormat:@"%ld", (long)_samples];
   [self _updateResetVisibility];
   if (_onChanged)
-    _onChanged(_shutterAngle, _samples, _mode);
+    _onChanged(_shutterAngle, _samples, _technique);
 }
 
 - (void)_fieldChanged:(id)sender {
@@ -304,27 +380,27 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
       [NSString stringWithFormat:@"%ld", (long)_samples];
   [self _updateResetVisibility];
   if (_onChanged)
-    _onChanged(_shutterAngle, _samples, _mode);
+    _onChanged(_shutterAngle, _samples, _technique);
 }
 
 - (void)_resetTapped:(id)sender {
   if (sender == _shutterReset)
     _shutterAngle = kMBDefaultShutter;
   else if (sender == _samplesReset)
-    _samples = kMBDefaultSamples;
-  else if (sender == _modeReset)
-    _mode = kMBDefaultMode;
-  [self applyShutterAngle:_shutterAngle samples:_samples mode:_mode];
+    _samples = _defaultSamples;
+  else if (sender == _techniqueReset)
+    _technique = kMBDefaultTechnique;
+  [self applyShutterAngle:_shutterAngle samples:_samples technique:_technique];
   if (_onChanged)
-    _onChanged(_shutterAngle, _samples, _mode);
+    _onChanged(_shutterAngle, _samples, _technique);
 }
 
 - (void)applyShutterAngle:(double)shutterAngle
                   samples:(NSInteger)samples
-                     mode:(KKMotionBlurMode)mode {
+                technique:(KKMotionBlurTechnique)technique {
   _shutterAngle = shutterAngle;
   _samples = samples;
-  _mode = mode;
+  _technique = _supportsFast ? technique : KKMotionBlurTechniqueAccurate;
   if (!_shutterField.kkEditing) {
     _shutterSlider.doubleValue = shutterAngle;
     _shutterField.stringValue =
@@ -335,8 +411,13 @@ static NSArray<NSString *> *_KKMBModeTitles(void) {
     _samplesField.stringValue =
         [NSString stringWithFormat:@"%ld", (long)samples];
   }
-  [_modePopup selectIndex:(NSInteger)mode];
+  _techniquePill.states = @[
+    @(_technique == KKMotionBlurTechniqueFast),
+    @(_technique == KKMotionBlurTechniqueAccurate)
+  ];
+  [self _applySamplesVisibility];
   [self _updateResetVisibility];
+  [self _resizeToFit];
 }
 
 - (BOOL)control:(NSControl *)control

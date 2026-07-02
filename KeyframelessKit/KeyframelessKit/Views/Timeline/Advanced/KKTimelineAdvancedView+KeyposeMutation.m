@@ -159,7 +159,13 @@
     if (!vals)
       vals = [self _templateDefaultValuesForLabel:src.label];
     KKLane *nl = [src copy];
-    [nl insertKeypose:[KKKeyPose keyposeAtTime:frac values:vals]];
+    KKKeyPose *inserted = [KKKeyPose keyposeAtTime:frac values:vals];
+    // Geometry lane: capture the shape shown at this fraction so splitting a
+    // hold yields an identical keypose (no phantom transition) instead of a
+    // snapshot-less keypose that falls back to the base shape.
+    if (src.oscEditedOnly)
+      inserted.geometrySnapshot = KKLaneGeometrySnapshotAtFraction(src, frac);
+    [nl insertKeypose:inserted];
     // The user added an independent checkpoint - break any link chain at
     // this insertion point so the first value edit doesn't propagate into
     // the neighbours.
@@ -285,6 +291,7 @@
   KKKeyPose *tgt = kps[targetIdx];
   KKKeyPose *fixed = [tgt keyposeBySettingTime:tgt.time];
   fixed.values = dup.values;
+  fixed.geometrySnapshot = dup.geometrySnapshot; // geometry lane: carry the shape
   kps[targetIdx] = fixed;
   nl.keyposes = kps;
   [nl removeKeyposeAtIndex:dupIdx];
@@ -304,7 +311,21 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   BOOL changed = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    // Exact label match, OR (multi-owner) the ACTIVE owner's lane whose plain
+    // label matches. The mini-viewer point handle commits the PLAIN label
+    // ("Position") from the selected owner's timeline, while a merged Advanced
+    // timeline tags lanes "Position\x1f<ownerID>" - so the exact match misses
+    // and the graph didn't update for the active keypose's OSC drag (field
+    // edits pass the tagged label; path-anchor drags persist the whole blob).
+    // layerKey==_activeLayerKey keeps it scoped to one owner. Single-owner
+    // timelines have no tag / active key, so only the exact branch fires.
+    BOOL match = [lanes[i].label isEqualToString:label];
+    if (!match && _activeLayerKey.length && lanes[i].layerKey.length &&
+        [lanes[i].layerKey isEqualToString:_activeLayerKey] &&
+        [KKPlainLaneLabel(lanes[i].label)
+            isEqualToString:KKPlainLaneLabel(label)])
+      match = YES;
+    if (!match)
       continue;
     KKLane *nl = [lanes[i] copy];
     NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];

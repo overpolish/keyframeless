@@ -23,6 +23,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly) BOOL spatialSmooth;
 @property(nonatomic, readonly, copy, nullable) NSArray<NSNumber *> *inHandle;
 @property(nonatomic, readonly, copy, nullable) NSArray<NSNumber *> *outHandle;
+/// Shape snapshot for OSC-edited geometry lanes (Points), whose "value" is the
+/// path shape rather than a scalar. nil for ordinary lanes.
+@property(nonatomic, readonly, copy, nullable) NSData *geometrySnapshot;
 
 /// YES when this entry may paste onto `lane`: same label, same valueType, and
 /// the component count matches. The label gate is what makes pasting a Rotation

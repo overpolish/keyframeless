@@ -61,9 +61,15 @@
     return NO;
   }
 
+  // Motion blur defaults ON (Accurate technique - MagicMove animates a transform
+  // and its accumulate is cheap source-once; it has no Fast/reconstruction path).
+  // A "magic move" reads more naturally with blur. Fresh instances read this
+  // default; existing projects keep their saved value.
+  NSString *mbDefault =
+      @"{\"enabled\":true,\"shutterAngle\":180,\"samples\":16,\"technique\":1}";
   if (![paramAPI addCustomParameterWithName:@""
                                 parameterID:kKKParamMotionBlurData
-                               defaultValue:[KKDataBlob blobWithData:nil]
+                               defaultValue:[KKDataBlob blobWithString:mbDefault]
                              parameterFlags:kFxParameterFlag_HIDDEN |
                                             kFxParameterFlag_NOT_ANIMATABLE]) {
     return NO;

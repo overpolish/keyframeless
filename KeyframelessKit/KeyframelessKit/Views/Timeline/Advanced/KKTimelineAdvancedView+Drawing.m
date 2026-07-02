@@ -14,6 +14,7 @@
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKGradientBarView.h>
 #import <KeyframelessKit/KKGradientSampling.h>
+#import <KeyframelessKit/KKPathMorph.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 
 // Derived graph values for a composite gradient lane value
@@ -41,6 +42,54 @@ BOOL KKAdvValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   return KKValuesEqual(a, b); // shared impl (Basic+Model)
 }
 
+// A geometry lane (oscEditedOnly, e.g. a path's Points) carries no scalar of
+// its own - just a per-keypose shape snapshot. Rewrite it to a single 0..1
+// component so the generic curve drawing plots a line that holds flat across
+// equal shapes and slopes between distinct ones.
+//
+// The plotted value is a DUMMY normalized level, not the raw signature: the
+// signature is an FNV hash, so two different shapes can hash to nearby values
+// (0.51 vs 0.52) and their transition would draw almost flat - looking like a
+// hold. We use the hash only to decide EQUALITY (group identical shapes), then
+// spread the distinct shapes evenly over [0,1] by first-appearance order, so
+// every real transition reads as a clear slope and holds stay flat.
+// Curve/easing state is preserved (KKKeyPose copy keeps `outgoing`), so the
+// line eases like the morph.
+static KKLane *KKAdvGeometryLaneForPlot(KKLane *lane) {
+  NSUInteger n = lane.keyposes.count;
+  NSMutableArray<NSNumber *> *distinctSigs = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *rankForKp = [NSMutableArray arrayWithCapacity:n];
+  for (KKKeyPose *kp in lane.keyposes) {
+    double sig = KKMorphSnapshotSignature(kp.geometrySnapshot);
+    NSInteger rank = -1;
+    for (NSUInteger j = 0; j < distinctSigs.count; j++)
+      if (fabs(distinctSigs[j].doubleValue - sig) < 1e-9) {
+        rank = (NSInteger)j;
+        break;
+      }
+    if (rank < 0) {
+      rank = (NSInteger)distinctSigs.count;
+      [distinctSigs addObject:@(sig)];
+    }
+    [rankForKp addObject:@(rank)];
+  }
+  double maxRank =
+      distinctSigs.count > 1 ? (double)(distinctSigs.count - 1) : 1.0;
+  NSMutableArray<KKKeyPose *> *kps = [NSMutableArray arrayWithCapacity:n];
+  for (NSUInteger i = 0; i < n; i++) {
+    KKKeyPose *c = [lane.keyposes[i] copy];
+    double v =
+        distinctSigs.count > 1 ? rankForKp[i].doubleValue / maxRank : 0.5;
+    c.values = @[ @(v) ];
+    [kps addObject:c];
+  }
+  KKLane *out = [lane copy];
+  out.keyposes = kps;
+  out.componentMin = @[ @0.0 ];
+  out.componentMax = @[ @1.0 ];
+  return out;
+}
+
 // Normalise one component value to [0,1] given its [min,max] bounds. No
 // clamp: the row reserves outer headroom (1 - kRowValueFrac) so easing
 // overshoot (Elastic/Bounce/Back) draws into that band instead of
@@ -56,9 +105,15 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 
 @implementation KKTimelineAdvancedView (Drawing)
 
-- (void)_drawGroupDividerForLane:(KKLane *)lane inStrip:(NSRect)strip {
+// A category HEADER row: icon + localized category name flush-left, plus a
+// trailing collapse chevron at the graph's right edge (so the row doubles as
+// the collapse affordance, mirroring the layer header). Indented under the
+// layer header when the timeline has a layer level, giving a layer > category
+// > lane tree.
+- (void)_drawCategoryHeaderRowForLane:(KKLane *)lane
+                                inRow:(NSRect)row
+                            collapsed:(BOOL)collapsed {
   NSColor *ink = [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
-
   NSString *name = KKLocalizedParamName(lane.categoryKey ?: @"");
   NSDictionary *attrs = @{
     NSFontAttributeName : [NSFont systemFontOfSize:kGroupDividerFontSize
@@ -67,34 +122,113 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     NSKernAttributeName : @0.5,
   };
   NSSize tsz = [name sizeWithAttributes:attrs];
+  CGFloat midY = NSMidY(row);
+  NSRect g = [self _graphRect];
 
-  NSImage *icon = nil;
-  CGFloat iconW = 0, iconH = 0;
+  NSImageSymbolConfiguration *cfg = [[NSImageSymbolConfiguration
+      configurationWithPointSize:kGroupDividerFontSize
+                          weight:NSFontWeightSemibold]
+      configurationByApplyingConfiguration:
+          [NSImageSymbolConfiguration configurationWithHierarchicalColor:ink]];
+
+  CGFloat x = NSMinX(g) + kRowLabelInset +
+              (lane.layerKey.length ? kCategoryHeaderIndent : 0.0);
   if (lane.categorySymbol.length) {
-    NSImageSymbolConfiguration *cfg = [[NSImageSymbolConfiguration
-        configurationWithPointSize:kGroupDividerFontSize
-                            weight:NSFontWeightSemibold]
-        configurationByApplyingConfiguration:
-            [NSImageSymbolConfiguration
-                configurationWithHierarchicalColor:ink]];
-    icon = [[NSImage imageWithSystemSymbolName:lane.categorySymbol
-                      accessibilityDescription:nil]
+    NSImage *icon = [[NSImage imageWithSystemSymbolName:lane.categorySymbol
+                               accessibilityDescription:nil]
         imageWithSymbolConfiguration:cfg];
-    iconW = icon.size.width;
-    iconH = icon.size.height;
-  }
-
-  CGFloat iconGap = icon ? KKPaddingSM : 0.0;
-  CGFloat midY = NSMidY(strip);
-
-  // Left-aligned icon + label flush to the strip's left edge.
-  CGFloat x = NSMinX(strip);
-  if (icon) {
-    [icon drawInRect:NSMakeRect(x, floor(midY - iconH * 0.5), iconW, iconH)];
-    x += iconW + iconGap;
+    if (icon) {
+      CGFloat iconH = icon.size.height;
+      [icon drawInRect:NSMakeRect(x, floor(midY - iconH * 0.5), icon.size.width,
+                                  iconH)];
+      x += icon.size.width + KKPaddingSM;
+    }
   }
   [name drawAtPoint:NSMakePoint(x, floor(midY - tsz.height * 0.5))
       withAttributes:attrs];
+
+  NSString *chev = collapsed ? @"chevron.right" : @"chevron.down";
+  NSImage *chevImg = [[NSImage imageWithSystemSymbolName:chev
+                                accessibilityDescription:nil]
+      imageWithSymbolConfiguration:cfg];
+  if (chevImg) {
+    CGFloat cw = chevImg.size.width, ch = chevImg.size.height;
+    [chevImg drawInRect:NSMakeRect(NSMaxX(g) - kRowLabelInset - cw,
+                                   floor(midY - ch * 0.5), cw, ch)];
+  }
+}
+
+// A layer HEADER row (multi-owner timelines that set `layerKey`/`layerLabel`):
+// the layer's name + symbol, plus a trailing collapse glyph. Drawn heavier than
+// a lane label so the layer reads as the outer grouping level. The symbol shows
+// FILLED when the layer is collapsed, outline when expanded (so the row doubles
+// as the collapse affordance). Defaults to a stacked-squares glyph.
+- (void)_drawLayerHeaderRowForLane:(KKLane *)lane
+                             inRow:(NSRect)row
+                         collapsed:(BOOL)collapsed {
+  NSColor *ink = [[NSColor inspectorLabel] colorWithAlphaComponent:0.9];
+  NSString *name = lane.layerLabel.length ? lane.layerLabel : @"";
+  NSDictionary *attrs = @{
+    NSFontAttributeName : [NSFont systemFontOfSize:kGroupDividerFontSize
+                                            weight:NSFontWeightBold],
+    NSForegroundColorAttributeName : ink,
+    NSKernAttributeName : @0.3,
+  };
+  NSSize tsz = [name sizeWithAttributes:attrs];
+  CGFloat midY = NSMidY(row);
+  // Anchor to the GRAPH's left/right edges (not the row rect, which starts
+  // after the label gutter) so the layer name lines up flush-left with the
+  // lane labels + category headers below it, instead of looking indented.
+  NSRect g = [self _graphRect];
+
+  NSImageSymbolConfiguration *cfg = [[NSImageSymbolConfiguration
+      configurationWithPointSize:kGroupDividerFontSize
+                          weight:NSFontWeightBold]
+      configurationByApplyingConfiguration:
+          [NSImageSymbolConfiguration configurationWithHierarchicalColor:ink]];
+
+  NSString *base = lane.layerSymbol.length ? lane.layerSymbol : @"square.stack";
+  NSString *symbol = collapsed ? [base stringByAppendingString:@".fill"] : base;
+  NSImage *icon =
+      [[NSImage imageWithSystemSymbolName:symbol
+                 accessibilityDescription:nil] imageWithSymbolConfiguration:cfg]
+          ?: [[NSImage imageWithSystemSymbolName:base
+                        accessibilityDescription:nil]
+                 imageWithSymbolConfiguration:cfg];
+  CGFloat x = NSMinX(g) + kRowLabelInset;
+  if (icon) {
+    CGFloat iconH = icon.size.height;
+    [icon drawInRect:NSMakeRect(x, floor(midY - iconH * 0.5), icon.size.width,
+                                iconH)];
+    x += icon.size.width + KKPaddingSM;
+  }
+  // Locked layer: a lock glyph between the layer icon and its name marks the
+  // whole layer read-only (the lanes below are washed instead of overlaid
+  // here).
+  if (lane.locked) {
+    NSImage *lockImg = [[NSImage imageWithSystemSymbolName:@"lock.fill"
+                                  accessibilityDescription:nil]
+        imageWithSymbolConfiguration:cfg];
+    if (lockImg) {
+      CGFloat lh = lockImg.size.height;
+      [lockImg drawInRect:NSMakeRect(x, floor(midY - lh * 0.5),
+                                     lockImg.size.width, lh)];
+      x += lockImg.size.width + KKPaddingSM;
+    }
+  }
+  [name drawAtPoint:NSMakePoint(x, floor(midY - tsz.height * 0.5))
+      withAttributes:attrs];
+
+  // Trailing chevron echoes the collapse state at the graph's right edge.
+  NSString *chev = collapsed ? @"chevron.right" : @"chevron.down";
+  NSImage *chevImg = [[NSImage imageWithSystemSymbolName:chev
+                                accessibilityDescription:nil]
+      imageWithSymbolConfiguration:cfg];
+  if (chevImg) {
+    CGFloat cw = chevImg.size.width, ch = chevImg.size.height;
+    [chevImg drawInRect:NSMakeRect(NSMaxX(g) - kRowLabelInset - cw,
+                                   floor(midY - ch * 0.5), cw, ch)];
+  }
 }
 
 - (void)drawRect:(NSRect)dirtyRect {
@@ -124,16 +258,25 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   [NSGraphicsContext saveGraphicsState];
   [track addClip];
 
-  NSArray<NSNumber *> *divFlags = [self _groupDividerFlags];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
     NSRect row = [self _rowRectForIndex:i count:lanes.count];
-    // Category header strip sits directly above the first row of each group.
-    if (i < (NSInteger)divFlags.count && divFlags[i].boolValue) {
-      NSRect strip = NSMakeRect(NSMinX(g) + kRowLabelInset, NSMaxY(row),
-                                NSMaxX(g) - 2.0 * kRowLabelInset - NSMinX(g),
-                                kGroupDividerH);
-      [self _drawGroupDividerForLane:lane inStrip:strip];
+    // A header row draws a name + collapse glyph in place of a lane
+    // label/curve - the category header for a categorised run, otherwise the
+    // layer (owner) header.
+    if (lane.headerPlaceholder) {
+      if (lane.categoryHeader)
+        [self _drawCategoryHeaderRowForLane:lane
+                                      inRow:row
+                                  collapsed:[_collapsedCategoryKeys
+                                                containsObject:lane.label]];
+      else
+        [self _drawLayerHeaderRowForLane:lane
+                                   inRow:row
+                               collapsed:[_collapsedLayerKeys
+                                             containsObject:lane.layerKey
+                                                                ?: @""]];
+      continue;
     }
     if (i == _hoverLaneRow) {
       // Extend the hover highlight by kPillW/2 on each side so it lines up
@@ -165,10 +308,27 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSRectClip(NSMakeRect(clipL, NSMinY(g), NSMaxX(g) - clipL, NSHeight(g)));
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
+    if (lane.headerPlaceholder)
+      continue;
     NSRect row = [self _rowRectForIndex:i count:lanes.count];
     [self _drawLane:lane inRow:row tracks:tracks];
   }
   [NSGraphicsContext restoreGraphicsState]; // curve clip
+
+  // Locked layers are read-only: wash their rows (labels, header, curve, pills)
+  // toward the background so they read as disabled but still visible.
+  NSColor *lockWash =
+      [[NSColor inspectorBackground] colorWithAlphaComponent:0.6];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    // Lane rows wash to read as disabled; the layer HEADER row is left clean
+    // and instead shows a lock glyph (drawn in _drawLayerHeaderRowForLane:).
+    if (!lanes[i].locked || lanes[i].headerPlaceholder)
+      continue;
+    NSRect row = [self _rowRectForIndex:i count:lanes.count];
+    NSRect wash = NSInsetRect(row, -kPillW * 0.5, 0);
+    [lockWash setFill];
+    NSRectFillUsingOperation(wash, NSCompositingOperationSourceOver);
+  }
   [NSGraphicsContext restoreGraphicsState]; // outer rows clip
 
   // Fade shadows over the rows go under the ruler / playhead so those stay
@@ -276,7 +436,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     if (_pressKPIdx > 0) {
       KKKeyPose *prev = lane.keyposes[_pressKPIdx - 1];
       NSColor *tint =
-          KKAdvValuesEqual(prev.values, lane.keyposes[_pressKPIdx].values)
+          KKLaneKeyposeValuesEqual(lane, prev, lane.keyposes[_pressKPIdx])
               ? neutral
               : warn;
       [self _drawDurationPillInRect:g
@@ -290,7 +450,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     if (_pressKPIdx + 1 < (NSInteger)lane.keyposes.count) {
       KKKeyPose *next = lane.keyposes[_pressKPIdx + 1];
       NSColor *tint =
-          KKAdvValuesEqual(lane.keyposes[_pressKPIdx].values, next.values)
+          KKLaneKeyposeValuesEqual(lane, lane.keyposes[_pressKPIdx], next)
               ? neutral
               : warn;
       [self _drawDurationPillInRect:g
@@ -317,7 +477,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       return;
     KKKeyPose *a = lane.keyposes[_hoverGapAIdx];
     KKKeyPose *b = lane.keyposes[_hoverGapAIdx + 1];
-    NSColor *tint = KKAdvValuesEqual(a.values, b.values) ? neutral : warn;
+    NSColor *tint = KKLaneKeyposeValuesEqual(lane, a, b) ? neutral : warn;
     [self _drawDurationPillInRect:g
                            tracks:tracks
                              lane:lane
@@ -421,6 +581,11 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSArray<KKKeyPose *> *kps = lane.keyposes;
   if (kps.count == 0)
     return;
+  // Geometry lanes (Points) have no scalar to plot - swap in a signature line.
+  if (lane.oscEditedOnly) {
+    lane = KKAdvGeometryLaneForPlot(lane);
+    kps = lane.keyposes;
+  }
   NSColor *neutral = [NSColor accentMatchingHost];
   NSColor *warn = [NSColor warning];
 
@@ -437,6 +602,11 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   CGFloat clampHi = NSMaxY(row);
 
   NSUInteger compCount = kps.firstObject.values.count;
+  // A colour lane is [R,G,B,A] but the graph plots only R/G/B - the alpha curve
+  // is near-always flat and just clutters the row (and read as a spurious extra
+  // line). Alpha stays editable via the swatch.
+  if (lane.valueType == KKLaneValueTypeColor && compCount > 3)
+    compCount = 3;
   // Composite gradient lanes don't plot their raw [type, angle, stops...] -
   // they plot 1-2 derived lines (a stops "signature", plus angle when linear),
   // all in 0..1, so the scale stays fixed and the raw sampling below is
@@ -451,25 +621,33 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   };
   if (gradComposite)
     compCount = gradLinear ? 2 : 1;
-  // Plot range = union of the lane's declared componentMin/Max and the
-  // *actual* per-component min/max sampled across all intervals (so
-  // modulation overshoot or out-of-range edits expand the visual scale
-  // instead of clipping into the row edges).
-  NSMutableArray<NSNumber *> *plotMin = lane.componentMin
-                                            ? [lane.componentMin mutableCopy]
-                                            : [NSMutableArray array];
-  NSMutableArray<NSNumber *> *plotMax = lane.componentMax
-                                            ? [lane.componentMax mutableCopy]
-                                            : [NSMutableArray array];
+  // Plot range = union of the lane's declared range and the *actual* per-
+  // component min/max sampled across all intervals (so modulation overshoot or
+  // out-of-range edits expand the visual scale instead of clipping into the row
+  // edges). Prefer the SLIDER bounds when set: they're the intended display
+  // range, decoupled from a deliberately huge value clamp (draw-on Offset's
+  // field is ~unbounded so it can spin past 100 %, but the curve must plot on the
+  // 0..100 % scale, not a million-wide one that renders every transition flat).
+  NSMutableArray<NSNumber *> *plotMin =
+      lane.sliderMin ? [@[ lane.sliderMin ] mutableCopy]
+                     : (lane.componentMin ? [lane.componentMin mutableCopy]
+                                          : [NSMutableArray array]);
+  NSMutableArray<NSNumber *> *plotMax =
+      lane.sliderMax ? [@[ lane.sliderMax ] mutableCopy]
+                     : (lane.componentMax ? [lane.componentMax mutableCopy]
+                                          : [NSMutableArray array]);
   while (plotMin.count < compCount)
     [plotMin addObject:@0.0];
   while (plotMax.count < compCount)
     [plotMax addObject:@1.0];
   // For a Linear gradient only the angle line (derived component 0) auto-scales
   // to its sampled range so a modulation wiggle shows clean symmetric humps;
-  // the signature line stays on the fixed 0..1 scale. Non-gradient lanes expand
-  // all components as before. Radial gradients have nothing to expand.
-  NSUInteger expandCount = gradComposite ? (gradLinear ? 1 : 0) : compCount;
+  // the signature line stays on the fixed 0..1 scale. A geometry lane's hash
+  // signature is already in [0,1) and must stay on that fixed scale (expanding
+  // it to the sampled hash range makes the line fill the row and read as if
+  // un-normalised). Non-gradient lanes expand all components as before.
+  NSUInteger expandCount =
+      (gradComposite || lane.oscEditedOnly) ? (gradLinear ? 1 : 0) : compCount;
   for (NSInteger i = 0; expandCount > 0 && i + 1 < (NSInteger)kps.count; i++) {
     KKKeyPose *ka = kps[i];
     KKKeyPose *kb = kps[i + 1];
@@ -842,6 +1020,8 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     NSArray<KKLane *> *lanes = [self _animatableLanes];
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
       KKLane *lane = lanes[i];
+      if (lane.headerPlaceholder)
+        continue;
       NSRect row = [self _rowRectForIndex:i count:lanes.count];
       CGFloat y0 = MAX(NSMinY(row), NSMinY(g));
       CGFloat y1 = MIN(NSMaxY(row), NSMaxY(g));

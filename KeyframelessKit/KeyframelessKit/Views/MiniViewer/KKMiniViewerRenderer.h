@@ -7,6 +7,7 @@
 
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMiniViewerView.h>
+#import <KeyframelessKit/KKRotationOSCMath.h>
 
 @class KKTimeline;
 @class KKLane;
@@ -63,6 +64,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// hit-tested in the mini-viewer, regardless of `suppressedHandleLabels`.
 /// Set by the host when the user toggles the inspector's OSC visibility.
 @property(nonatomic) BOOL handlesHidden;
+
+/// Hard "this layer is locked" gate. Like `handlesHidden` it hides every
+/// handle, but unlike it Option-hold does NOT peek/reveal and nothing is
+/// hit-testable - a locked layer is visible-but-non-interactive, so its OSC
+/// must never become grabbable. Default NO (plugins without per-layer lock
+/// leave it untouched). Set by the host alongside the selection sync.
+@property(nonatomic) BOOL handlesLocked;
 
 /// Per-element OSC visibility from the settings popover's pills: lane labels
 /// the user has individually hidden (e.g. @"Position"). Distinct from
@@ -168,6 +176,8 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
                               ///< (e.g. Glow's radius ring) but still exposes a
                               ///< point-handle anchor for guides / programmatic
                               ///< drag.
+  KKMiniHandleStyleRing = 3,  ///< Haloed ring (matches KKRingOSC): the shared
+                             ///< radius-widget glyph (Canvas corners, Rounded).
 };
 
 #pragma mark - Subclass effect + point handle (override)
@@ -241,6 +251,19 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 /// `contentRect`. Override to lock it to another handle (e.g. MagicMove
 /// uses the Position handle so the rings move with the translated image).
 - (CGPoint)rotationCenterForContentRect:(CGRect)contentRect;
+/// A parent/world rotation pre-applied to the DISPLAYED rings + drag tangent
+/// (not the written value), so a control on an object nested in a rotated
+/// parent (e.g. a Canvas member inside a rotated group) shows rings in the
+/// parent's frame. Default identity.
+- (KKRotMatrix3)rotationBaseMatrix;
+/// The anchor's normalised position within the content box, per axis ([-1,1]; 0
+/// = centre, +-1 = an edge/corner), so the scale box keeps the anchor as the
+/// fixed point instead of scaling symmetrically about the centre. OPT-IN: the
+/// default returns {0,0} (symmetric), so a plugin is unchanged unless it
+/// overrides this. A plugin whose render scales about the anchor maps its
+/// Anchor lane to a fraction (relative to its rest, over its content bbox
+/// half).
+- (CGPoint)scaleAnchorFrac;
 /// Per-axis ring colours, [X, Y, Z]. Default = red / green / blue.
 - (NSArray<NSColor *> *)rotationRingColors;
 /// Per-axis drag direction sign (simd_double3). Default = `{+1, -1, +1}`,

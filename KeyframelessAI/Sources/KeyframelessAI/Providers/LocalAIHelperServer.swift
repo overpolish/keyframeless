@@ -5,6 +5,7 @@
 
 import Darwin
 import Foundation
+import MLX
 import os
 
 private let helperLog = Logger(subsystem: "co.overpolish.keyframeless", category: "ai.helper")
@@ -155,6 +156,35 @@ public enum LocalAIHelperServer {
 				continue
 			}
 
+			// CONTROL requests (status / cancel / shutdown) are handled right here on
+			// this connection's own thread - never touching the MLX actor - so they
+			// answer instantly even when another connection is stuck mid-generation.
+			if let control = req.control {
+				switch control {
+				case "status":
+					_ = writeFrame(
+						HelperResponse(
+							result: nil, error: nil, activeJobs: JobRegistry.shared.count),
+						to: h)
+				case "cancel":
+					let n = JobRegistry.shared.cancelAll()
+					helperLog.notice("helper: cancel requested (\(n, privacy: .public) job(s))")
+					_ = writeFrame(
+						HelperResponse(
+							result: nil, error: nil, activeJobs: JobRegistry.shared.count),
+						to: h)
+				case "shutdown":
+					helperLog.notice("helper: shutdown requested; exiting")
+					_ = writeFrame(HelperResponse(result: nil, error: nil, done: true), to: h)
+					exit(0)
+				default:
+					_ = writeFrame(
+						HelperResponse(result: nil, error: "helper: unknown control \(control)"),
+						to: h)
+				}
+				continue
+			}
+
 			// Streaming answers emit many chunk frames then a done frame; everything
 			// else is one result frame. Either path returns false on a write failure
 			// (peer closed) so we stop serving this connection.
@@ -186,7 +216,15 @@ public enum LocalAIHelperServer {
 		let sem = DispatchSemaphore(value: 0)
 		let box = ResultBox()
 		let sink = FrameSink(h)
-		Task(priority: .userInitiated) {
+		// Register this generation so a "cancel" control request can stop it
+		// (MLX honours Task cancellation between tokens). Reserve the id first so
+		// the count is right even before the Task handle exists.
+		let jobID = JobRegistry.shared.reserve()
+		let task = Task(priority: .userInitiated) {
+			defer {
+				JobRegistry.shared.remove(jobID)
+				sem.signal()
+			}
 			// Forward the runner's coarse status ("Loading model…"/"Thinking…") to
 			// the client as status frames, written before the terminal result frame
 			// (the runner reports them during the awaited call below).
@@ -202,8 +240,8 @@ public enum LocalAIHelperServer {
 					box.value = .failure(error)
 				}
 			}
-			sem.signal()
 		}
+		JobRegistry.shared.attach(jobID, task)
 		sem.wait()
 
 		switch box.value {
@@ -224,7 +262,12 @@ public enum LocalAIHelperServer {
 		let sem = DispatchSemaphore(value: 0)
 		let writeOK = FlagBox()
 		let sink = FrameSink(h)
-		Task(priority: .userInitiated) {
+		let jobID = JobRegistry.shared.reserve()
+		let task = Task(priority: .userInitiated) {
+			defer {
+				JobRegistry.shared.remove(jobID)
+				sem.signal()
+			}
 			func send(_ resp: HelperResponse) -> Bool {
 				let ok = writeFrame(resp, to: h)
 				if !ok { writeOK.value = false }
@@ -248,10 +291,71 @@ public enum LocalAIHelperServer {
 					_ = send(HelperResponse(result: nil, error: error.localizedDescription))
 				}
 			}
-			sem.signal()
 		}
+		JobRegistry.shared.attach(jobID, task)
 		sem.wait()
 		return writeOK.value
+	}
+
+	/// Tracks in-flight generations so a "status" control request can report how
+	/// many are running and a "cancel" can stop them. `reserve()` bumps the count
+	/// before the Task handle exists (so a status query mid-spawn is accurate);
+	/// `attach` stores the cancellable handle; `remove` clears it on completion.
+	final class JobRegistry: @unchecked Sendable {
+		static let shared = JobRegistry()
+		private let lock = NSLock()
+		private var nextID = 0
+		private var inFlight = Set<Int>()
+		private var tasks = [Int: Task<Void, Never>]()
+		// Set by cancelAll: once the cancelled generations finish unwinding and the
+		// helper goes idle, release MLX's pooled GPU buffers so cancelling actually
+		// gives the memory back (MLX keeps a buffer cache, so RSS otherwise stays
+		// at the in-generation high-water mark). Not done on NORMAL completion -
+		// that would clear the cache between an agent's sequential passes and force
+		// a costly re-alloc each time.
+		private var clearCacheWhenIdle = false
+
+		func reserve() -> Int {
+			lock.lock()
+			defer { lock.unlock() }
+			let id = nextID
+			nextID += 1
+			inFlight.insert(id)
+			return id
+		}
+		func attach(_ id: Int, _ t: Task<Void, Never>) {
+			lock.lock()
+			if inFlight.contains(id) { tasks[id] = t }
+			lock.unlock()
+		}
+		func remove(_ id: Int) {
+			lock.lock()
+			inFlight.remove(id)
+			tasks[id] = nil
+			let drainedAfterCancel = inFlight.isEmpty && clearCacheWhenIdle
+			if drainedAfterCancel { clearCacheWhenIdle = false }
+			lock.unlock()
+			if drainedAfterCancel {
+				helperLog.notice("helper: cancelled jobs drained; clearing MLX cache")
+				Memory.clearCache()
+			}
+		}
+		var count: Int {
+			lock.lock()
+			defer { lock.unlock() }
+			return inFlight.count
+		}
+		/// Cancel every in-flight generation; returns how many were running. Arms a
+		/// cache clear for when they finish, so the GPU memory is actually reclaimed.
+		func cancelAll() -> Int {
+			lock.lock()
+			let handles = Array(tasks.values)
+			let n = inFlight.count
+			if n > 0 { clearCacheWhenIdle = true }
+			lock.unlock()
+			handles.forEach { $0.cancel() }
+			return n
+		}
 	}
 
 	private final class ResultBox: @unchecked Sendable {

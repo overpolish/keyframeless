@@ -3,15 +3,15 @@ id: easing
 summary: Easing curves on intervals (Linear, Ease, Elastic, Bounce)
 ---
 
-- Each Advanced interval has an easing curve. Click the interval to pick it (Shift-click to select several first):
-  - **Linear** - uniform motion.
-  - **Ease In** - slow start, accelerates.
-  - **Ease Out** - fast start, decelerates.
-  - **Ease In/Out** - slow at both ends (the default).
-  - **Elastic** - overshoots and oscillates before settling.
-  - **Bounce** - settles with a few decreasing bounces.
+- Easing sets how a move speeds up and slows down. Each Advanced interval has one. Click the interval to pick it (Shift-click to choose several first):
+  - **Linear** - steady speed the whole way.
+  - **Ease In** - starts slow, then speeds up.
+  - **Ease Out** - starts fast, then slows down.
+  - **Ease In/Out** - eases at both ends (the default).
+  - **Elastic** - overshoots and wobbles before settling.
+  - **Bounce** - lands with a few smaller and smaller bounces.
 
-Elastic and Bounce have Intensity and Frequency knobs.
+Elastic and Bounce add Intensity and Frequency controls to dial in the wobble.
 
 ## In Basic mode
 

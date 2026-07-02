@@ -50,7 +50,8 @@ extension AIPluginAgent {
 
 	@MainActor
 	static func classify(
-		prompt: String, productContext: String, laneLabels: [String]
+		prompt: String, productContext: String, laneLabels: [String],
+		supportsCreate: Bool = false
 	) async throws -> Classification {
 		// Obvious questions bypass the (locally expensive) LLM router.
 		if looksLikeQuestion(prompt) {
@@ -62,6 +63,12 @@ extension AIPluginAgent {
 			laneLabels.isEmpty
 			? "(no lanes available)"
 			: laneLabels.map { "\"\($0)\"" }.joined(separator: ", ")
+		// Only a layer-based host (Canvas) can add new shapes; offer the "create"
+		// route there, otherwise the kinds are answer/mutation/vague as before.
+		let createKindLine =
+			supportsCreate
+			? "  \"create\"   - user wants to ADD a NEW shape / drawing / layer that doesn't exist yet (\"draw a line\", \"add a circle\", \"put an arrow in the corner\", \"create a box\"). Even when they also describe animating or styling it, choose \"create\" - the new shape must be made first.\n"
+			: ""
 		let system = """
 			Route a user message for \(productContext)'s AI animation assistant. \
 			Output a kind, complexity, optional clarification, and optional template \
@@ -71,9 +78,11 @@ extension AIPluginAgent {
 
 			kind:
 			  "answer"   - user is asking a QUESTION about the tool.
-			  "mutation" - user describes a SPECIFIC change to the animation. Has \
-			               enough detail to act on (some combination of lane, value, \
-			               time range, or a known modulation/style intent).
+			\(createKindLine)\
+			  "mutation" - user describes a SPECIFIC change to EXISTING content's \
+			               animation or properties. Has enough detail to act on (some \
+			               combination of lane, value, time range, or a known \
+			               modulation/style intent).
 			  "vague"    - user wants a mutation but it's not actionable: missing \
 			               which lane, what value/direction, or what time range. \
 			               Examples: "make it cool", "animate something", "improve it".
@@ -136,7 +145,12 @@ extension AIPluginAgent {
 				"template", "template_lane", "template_modulation",
 			],
 			"properties": [
-				"kind": ["type": "string", "enum": ["answer", "mutation", "vague"]],
+				"kind": [
+					"type": "string",
+					"enum": supportsCreate
+						? ["answer", "create", "mutation", "vague"]
+						: ["answer", "mutation", "vague"],
+				],
 				"complexity": ["type": "string", "enum": ["simple", "complex"]],
 				"clarification": ["type": "string"],
 				"template": ["type": "string", "enum": ["none", "modulate"]],

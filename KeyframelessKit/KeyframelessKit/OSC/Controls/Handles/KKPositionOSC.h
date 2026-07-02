@@ -8,8 +8,10 @@
 #import <KeyframelessKit/KKArcOSC.h>
 #import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKSnapEngine.h>
+#import <simd/simd.h>
 
 @class KKLane;
+@class KKTimeline;
 @class KKOSCGuideBridge;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -70,8 +72,35 @@ typedef NS_ENUM(NSInteger, KKPositionHit) {
 /// doesn't receive FCP's mouse bookkeeping directly).
 @property(nonatomic) BOOL dragging;
 
+/// A 2D affine in OBJECT space (homogeneous 3x3) mapping the control's own lane
+/// space to an enclosing parent's space - e.g. a Canvas member's clip space to
+/// where its rotated/scaled/translated group actually draws it. Applied forward
+/// to every drawn point (object -> parent -> canvas) and INVERTED on input
+/// (canvas -> parent -> object), so the handle draws where the layer is rendered
+/// AND a drag maps the cursor back through the parent (reacting to the parent's
+/// rotation) instead of skewing or feeding back. Default identity.
+@property(nonatomic) simd_float3x3 parentObjectTransform;
+
 /// nil = no guide.
 @property(nonatomic, weak, nullable) id<KKPositionGuideProvider> guideProvider;
+
+/// Optional persist override. When set, a drag/smooth/tangent edit calls this
+/// with the updated timeline INSTEAD of writing the single
+/// `kKKParamTimelineData` param - so a multi-owner host (e.g. Canvas, whose
+/// layers each carry their own `animationJSON`) can route the write to the
+/// owning layer. The block is invoked inside the control's open action scope,
+/// so the host's get/set API (same apiManager) resolves there. The lane carries
+/// its owner via `layerKey`. nil = default single-param write
+/// (Glow/MagicMove/Rounded unchanged).
+@property(nonatomic, copy, nullable) void (^onTimelinePersist)
+    (KKTimeline *timeline);
+
+/// Optional persistent snap (e.g. a grid), applied to the dragged handle's
+/// CANVAS point when Cmd is NOT held. The host returns the snapped canvas point;
+/// the control converts it back to the lane value. Generic (canvas space) so the
+/// Anchor control and a future pen tool reuse the same hook. nil = no snap.
+@property(nonatomic, copy, nullable) CGPoint (^canvasSnapProvider)
+    (CGPoint canvasPoint);
 
 /// Set by the hit-test: YES when the hovered Position target is a keypose
 /// anchor dot rather than the playhead arc handle (both report Handle/AnchorDot
@@ -87,8 +116,6 @@ typedef NS_ENUM(NSInteger, KKPositionHit) {
 /// the guide-pushed value during a guide). The host's other controls (rotation,
 /// scale, anchor pivot) centre on this.
 - (CGPoint)positionCanvasAtTime:(CMTime)time;
-/// Clip fraction (0..1) at `time`.
-- (double)fractionAtTime:(CMTime)time;
 
 /// Draw the motion path (line + tangent handles + keypose anchor dots). Drawn
 /// FIRST (under the host's other controls). Split from the handle draw so the

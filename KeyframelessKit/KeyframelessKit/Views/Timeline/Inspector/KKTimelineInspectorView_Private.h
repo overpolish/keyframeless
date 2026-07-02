@@ -24,7 +24,7 @@
 @class _KKCompatBannerView;
 @class _KKMotionBlurSettingsView;
 @class KKJoyrideGuideHost;
-@class KKCompoundPillBar;
+@class KKOSCChecklistView;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -74,7 +74,7 @@ NS_ASSUME_NONNULL_BEGIN
   void (^_onGuideOSCElementToggled)(NSString *label, BOOL visible);
   /// The live per-element OSC pill bar inside the open settings popover (weak;
   /// nil when closed). Exposed for the OSC guide's pill spotlight.
-  __weak KKCompoundPillBar *_oscPillBar;
+  __weak KKOSCChecklistView *_oscPillBar;
 
   // Main inspector state (migrated off the @implementation block so the
   // +ParameterRows / layout categories can reach it).
@@ -84,6 +84,7 @@ NS_ASSUME_NONNULL_BEGIN
   KKPlayButton *_playButton;
   KKResetZoomButton *_resetButton;
   NSStackView *_accessoryStack;
+  NSView *_headerRow; // hosts the centered lane-filter accessory
   KKLoopButton *_loopButton;
   KKMaintainTimingButton *_maintainTimingButton;
   KKConstantsButton *_constantsButton;
@@ -111,6 +112,8 @@ NS_ASSUME_NONNULL_BEGIN
   // reorders within it, and the sub-order is merged back into the full order.
   NSView *_paramOrderContent;
   NSView *_paramOrderListContainer;
+  NSLayoutConstraint *_paramOrderScrollHeight;
+  NSLayoutConstraint *_paramOrderScrollWidth;
   KKReorderListView *_paramOrderList;
   NSArray<NSString *> *_paramOrderLabels; // current full order
   NSDictionary<NSString *, NSString *> *_paramOrderCatByLabel;
@@ -122,7 +125,7 @@ NS_ASSUME_NONNULL_BEGIN
   BOOL _showsPresetsRow;
   double _mbShutterAngle;
   NSInteger _mbSamples;
-  KKMotionBlurMode _mbMode;
+  KKMotionBlurTechnique _mbTechnique;
   NSArray<KKLane *> *_availableLanes;
   BOOL _isDetachedCopy;
   BOOL _detachedAttached;

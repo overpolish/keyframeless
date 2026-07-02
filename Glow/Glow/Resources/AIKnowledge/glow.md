@@ -3,28 +3,28 @@ id: glow
 summary: What Glow does
 ---
 
-Glow adds a soft, animatable glow around a clip's content. Drop it on a clip from the Effects browser. It animates with the shared timeline, so see the Timing sections for how Basic, Advanced, easing, and motion blur work.
+Glow wraps a clip's content in a soft, glowing halo you can animate. Drag it onto a clip from the Effects browser. It animates with the timeline, so the Timing sections cover how Basic, Advanced, easing, and motion blur work.
 
-Parameters are split into three groups (shown as category pills in the inspector): **Core**, **Color**, and **Noise**.
+The controls sit in three groups you switch between with the pills at the top of the inspector: **Core**, **Color**, and **Noise**.
 
 - Core:
-  - **Radius** - the size of the glow, in pixels (0 = no glow, up to 500 for a large halo). Has X and Y components, aspect-lockable, so the glow can be a circle or stretched into an oval. The default is 100.
-  - **Intensity** - how bright the glow is, 0-300%. 100% is normal; higher pushes the glow brighter. Default 100.
-  - **Falloff** - how the glow fades at its edge, 0-200%. 0 is the softest, widest fade; higher tightens the edge. Default 0.
-  - **Threshold** - a bloom cutoff, 0-100%. 0 means no bloom; raise it to make the brightest parts of the clip bloom into the glow. Default 0.
-  - **Position** - where the glow sits relative to the clip, as an X / Y offset. Centred by default (the glow sits on the clip); drag it to push the glow off to one side. It can be animated so the glow drifts along a path, with a draggable handle and a curved motion path on the canvas.
+  - **Radius** - how big the glow is, in pixels, from 0 (no glow) up to 500 (a large halo). It starts at 100. You can lock width and height together for a round glow, or unlock them to stretch it into an oval.
+  - **Intensity** - how bright the glow is, from 0 to 300%. 100% is normal and higher makes the glow brighter. Starts at 100.
+  - **Falloff** - how the glow fades out at its edge, from 0 to 200%. 0 is the softest, widest fade and higher tightens the edge. Starts at 0.
+  - **Threshold** - how much the clip's own bright areas add to the glow, from 0 to 100%. 0 adds nothing. Raise it and the brightest parts of the clip bleed into the glow. Starts at 0.
+  - **Position** - where the glow sits relative to the clip. It is centred on the clip to start. Drag it to push the glow off to one side. Animate it and the glow drifts along a path you can shape right on the preview.
 
 - Color - how the glow is tinted:
-  - **Mode** - **Dynamic** (the default) takes the colour from the clip so the glow matches the content, **Solid** is one colour you pick, and **Gradient** blends colour stops (radial or linear, with an angle for the linear type). Solid and Gradient can be animated.
+  - **Mode** - **Dynamic** (the default) borrows colour from the clip so the glow matches whatever is under it. **Solid** is one colour you pick. **Gradient** blends between colours, spreading out from the centre or across at an angle. Solid and Gradient can be animated.
 
-- Noise - optional grain mixed into the glow for a textured, less perfectly-smooth halo:
-  - **Amount** - how much grain is mixed in, 0-100%. 0 is a clean glow; higher breaks the halo up into grain.
-  - **Spread** - how far the grain reaches into the glow's falloff, 0-100%. Low keeps grain near the edge; high pushes it through the whole glow.
-  - **Grain Size** - the size of each grain speck, 0-100%. Low is fine, tiny grain; high is coarse, chunky grain. Default 50.
-  - **Speed** - how fast the grain animates over time, 0-100%. 0 is a static grain; raise it to make the grain shimmer. Default 0.
-  - **Seed** - a random value that picks which grain pattern you get; re-roll it for a different look. Not animatable (a fixed pattern for the clip).
+- Noise - optional grain mixed into the glow for a textured halo instead of a perfectly smooth one:
+  - **Amount** - how much grain is mixed in, from 0 to 100%. 0 is a clean glow and higher breaks the halo up into grain.
+  - **Spread** - how far the grain reaches into the glow, from 0 to 100%. Low keeps grain near the edge and high pushes it through the whole glow.
+  - **Grain Size** - how big each speck of grain is, from 0 to 100%. Low is fine, tiny grain and high is coarse, chunky grain. Starts at 50.
+  - **Speed** - how fast the grain shimmers over time, from 0 to 100%. 0 holds it still and higher makes it flicker. Starts at 0.
+  - **Seed** - the random value that decides which grain pattern you get. Re-roll it for a different look. It cannot be animated, so it stays one fixed pattern for the clip.
 
-Amount, Spread, Grain Size, and Speed animate on the timeline like any other property; Seed is a constant set in the Constants panel / Noise tab.
+Amount, Spread, Grain Size, and Speed can all be animated on the timeline like any other control. Seed stays a fixed value you set in the Constants panel or the Noise tab.
 
 ## Showing and hiding on-screen controls
 

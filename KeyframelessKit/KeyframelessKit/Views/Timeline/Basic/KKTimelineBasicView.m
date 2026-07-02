@@ -82,6 +82,13 @@
   [self _notifyZoomChanged];
 }
 
+- (void)reopenLastGapPopover {
+  if (_lastGapWasHold)
+    [self _openHoldPopover];
+  else
+    [self _openGapPopoverForSection:_lastGapSection];
+}
+
 - (void)applyTimeline:(KKTimeline *)timeline {
   _timeline = timeline;
   [self _restoreCheckboxes];
@@ -210,6 +217,7 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
   p.holdModFrequency = 1.0;
   p.holdModSeed = 0;
   BOOL holdFound = NO;
+  BOOL modFound = NO;
 
   for (KKLane *lane in _timeline.lanes) {
     if (!lane.enabled || lane.keyposes.count < 2)
@@ -218,7 +226,7 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
     KKHoldShape s = KKShapeOfLane(lane);
     if (!holdFound) {
       holdFound = YES;
-      // Tentative boundary times + the shared Hold curve/mod params from the
+      // Tentative boundary times + the shared Hold curve params from the
       // first animatable lane. The In/Out blocks below OVERRIDE inEndFrac /
       // outStartFrac from a lane that actually participates in that phase -
       // a Hold-only lane parks its hold-start at t=0 (no In) / hold-end at the
@@ -231,10 +239,20 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
         p.holdCurve = (KKEasingCurve)hv.curve;
         p.holdIntensity = hv.intensity;
         p.holdFrequency = hv.frequency;
-        p.holdMod = hv.modulation;
-        p.holdModIntensity = hv.modulationIntensity;
-        p.holdModFrequency = hv.modulationFrequency;
-        p.holdModSeed = hv.modulationSeed;
+      }
+    }
+    // Modulation params are shared across every PARTICIPATING lane, so read
+    // them from the first lane that actually has modulation - not just the
+    // first animatable lane (which may be excluded, leaving the graph flat even
+    // while other lanes wiggle).
+    if (!modFound) {
+      KKInterval *miv = lane.keyposes[s.holdStart].outgoing;
+      if (miv && miv.modulation != KKIntervalModulationNone) {
+        modFound = YES;
+        p.holdMod = miv.modulation;
+        p.holdModIntensity = miv.modulationIntensity;
+        p.holdModFrequency = miv.modulationFrequency;
+        p.holdModSeed = miv.modulationSeed;
       }
     }
     // Drift is OR-style across animated lanes: any lane with differing Hold
@@ -242,8 +260,8 @@ KKHoldShape KKShapeOfLane(KKLane *lane) {
     // this, adding a new (initially-flat) animatable lane would mask an
     // existing drifted lane and visually flatten the curve.
     if (!p.holdDrift && s.holdEnd > s.holdStart &&
-        !KKValuesEqual(lane.keyposes[s.holdStart].values,
-                       lane.keyposes[s.holdEnd].values))
+        !KKLaneKeyposeValuesEqual(lane, lane.keyposes[s.holdStart],
+                                  lane.keyposes[s.holdEnd]))
       p.holdDrift = YES;
     // In/Out is "on" when at least one property still APPLIES (its phase
     // interval isn't flat). A property toggled off via applies-to keeps its

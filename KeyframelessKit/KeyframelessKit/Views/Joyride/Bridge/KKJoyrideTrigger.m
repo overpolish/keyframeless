@@ -42,6 +42,20 @@
   return t;
 }
 
++ (instancetype)staticChoiceSelectedForLabel:(NSString *)label
+                                       index:(NSInteger)index {
+  KKJoyrideTrigger *t = [self _t:KKJoyrideTriggerTypeStaticChoiceSelected];
+  t->_label = [label copy];
+  t->_intArg = index;
+  return t;
+}
+
++ (instancetype)staticCategorySelectedForKey:(NSString *)key {
+  KKJoyrideTrigger *t = [self _t:KKJoyrideTriggerTypeStaticCategorySelected];
+  t->_label = [key copy];
+  return t;
+}
+
 + (instancetype)constantFieldEditedLabel:(NSString *)label
                                component:(NSInteger)component
                                   equals:(double)target
@@ -118,6 +132,12 @@
   return t;
 }
 
++ (instancetype)miniViewerSizeChanged:(NSInteger)sizeIndex {
+  KKJoyrideTrigger *t = [self _t:KKJoyrideTriggerTypeMiniViewerSizeChanged];
+  t->_intArg = sizeIndex;
+  return t;
+}
+
 + (instancetype)filmstripCellActivated {
   return [self _t:KKJoyrideTriggerTypeFilmstripCellActivated];
 }
@@ -138,6 +158,14 @@
 
 + (instancetype)laneFilterToggled {
   return [self _t:KKJoyrideTriggerTypeLaneFilterToggled];
+}
+
++ (instancetype)filterPopoverWillOpen {
+  return [self _t:KKJoyrideTriggerTypeFilterPopoverWillOpen];
+}
+
++ (instancetype)filterPopoverClosed {
+  return [self _t:KKJoyrideTriggerTypeFilterPopoverClosed];
 }
 
 - (instancetype)thenWaitFor:(KKJoyrideTrigger *)next {

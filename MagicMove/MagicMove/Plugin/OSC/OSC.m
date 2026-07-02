@@ -10,13 +10,6 @@
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <simd/simd.h>
 
-// Scale gizmo half-extent as a fraction of the clip's on-screen frame, so the
-// box tracks the clip (scales with viewer zoom) instead of being a fixed screen
-// size. e0 = 0% half-extent, span = the 0->100% growth; >100% sqrt-compresses
-// (see KKScaleGizmo). Same proportion as the mini-viewer box.
-static const double kScaleGizmoE0Frac = 0.12;
-static const double kScaleGizmoSpanFrac = 0.057;
-
 // Shared per-process OSC guide bridge. MRR-safe static singleton (no
 // dispatch_once / autoreleased static); lives for the process so the inspector
 // guide and the OSC share one instance.
@@ -170,61 +163,34 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
     for (KKLane *l in [MagicMovePlugin availableLanes])
       if ([l.label isEqualToString:@"Position"])
         _positionController.templateLane = l;
-    _rotationOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager];
-    _scaleBox = [[KKBoxOSC alloc] initWithAPIManager:apiManager];
-    // Extra grab slack so the compact gizmo's handles stay easy to hit.
-    _scaleBox.hitPadding = 6.0;
-    _anchorPointOSC = [[KKSquarePointOSC alloc] initWithAPIManager:apiManager];
-    _anchorPointOSC.clearsOnDraw = NO;
-    _anchorSnap = [[KKSnapEngine alloc] init];
-    _scaleHitHandle = -1;
-    _scaleGrabHandle = -1;
+    _rotationOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager
+                                                   laneLabel:@"Rotation"];
+    _rotationOSC.rotationActivePart = kOSCRotationPart;
+    _scaleControl = [[KKScaleOSC alloc] initWithAPIManager:apiManager
+                                                 laneLabel:@"Scale"];
+    _scaleControl.scaleActivePart = kOSCScalePart;
+    // Scale from the anchor: the render scales about the anchor pivot (Position
+    // + Anchor offset), so the box should too. Content is clip-filling (the
+    // default ref 0.5 / half 0.5), so just opting in on the Anchor lane is
+    // enough - a centred anchor stays symmetric.
+    _scaleControl.anchorLaneLabel = @"Anchor";
+    for (KKLane *l in [MagicMovePlugin availableLanes]) {
+      if ([l.label isEqualToString:@"Scale"])
+        _scaleControl.templateLane = l;
+      if ([l.label isEqualToString:@"Rotation"])
+        _rotationOSC.templateLane = l;
+    }
+    // Anchor pivot square (clip-space pivot: the kit control's default geometry
+    // shifts the sibling Position lane by the Anchor offset and maps it to
+    // canvas, so no geometry blocks are needed here).
+    _anchorControl = [[KKAnchorOSC alloc] initWithAPIManager:apiManager
+                                                   laneLabel:@"Anchor"];
+    _anchorControl.anchorActivePart = kOSCAnchorPart;
+    for (KKLane *l in [MagicMovePlugin availableLanes])
+      if ([l.label isEqualToString:@"Anchor"])
+        _anchorControl.templateLane = l;
   }
   return self;
-}
-
-// Set the rotation rings' per-axis show + ghost-alpha for this frame, and
-// report whether the sphere should be drawn / hit-tested at all. A ring is
-// fully shown when the Rotation master and its own element are on; opt-reveal
-// exposes a hidden ring as a dimmed (0.3), still-hittable ghost so an opt-click
-// can re-show it. Ghosts only appear where the rotation OSC would normally be
-// on screen at this playhead.
-- (BOOL)_configureRotationRingsAtFraction:(double)frac dragging:(BOOL)dragging {
-  BOOL shownHere = _rotationVisibleAtFraction(frac);
-  BOOL activeHere = shownHere || dragging;
-  BOOL master = [self kkOSCElementVisible:@"Rotation"];
-  BOOL xEn = master && [self kkOSCElementVisible:@"Rotation.X"];
-  BOOL yEn = master && [self kkOSCElementVisible:@"Rotation.Y"];
-  BOOL zEn = master && [self kkOSCElementVisible:@"Rotation.Z"];
-  // Per-ring reveal: master-off peek shows only the rings left enabled (a ring
-  // whose own pill or the Rotation compound is off stays off), while master-on
-  // reveal still ghosts the hidden rings for re-showing.
-  BOOL reveal = self.optRevealActive && shownHere;
-  BOOL xShow = (xEn && activeHere) ||
-               (reveal && [self kkOSCRevealEligible:@"Rotation.X"]);
-  BOOL yShow = (yEn && activeHere) ||
-               (reveal && [self kkOSCRevealEligible:@"Rotation.Y"]);
-  BOOL zShow = (zEn && activeHere) ||
-               (reveal && [self kkOSCRevealEligible:@"Rotation.Z"]);
-  self.rotationOSC.showX = xShow;
-  self.rotationOSC.showY = yShow;
-  self.rotationOSC.showZ = zShow;
-  float ghost = [self kkRevealGhostAlpha];
-  self.rotationOSC.ringAlphaX = xEn ? 1.0f : ghost;
-  self.rotationOSC.ringAlphaY = yEn ? 1.0f : ghost;
-  self.rotationOSC.ringAlphaZ = zEn ? 1.0f : ghost;
-  return dragging || xShow || yShow || zShow;
-}
-
-// Pull X/Y/Z ring colors from the Rotation lane's `componentLabelColors`
-// (already red/green/blue in the timeline) so OSC matches the inspector.
-- (void)_syncRotationColorsFromLane {
-  KKLane *lane = _rotationLane();
-  if (lane.componentLabelColors.count >= 3) {
-    self.rotationOSC.colorX = lane.componentLabelColors[0];
-    self.rotationOSC.colorY = lane.componentLabelColors[1];
-    self.rotationOSC.colorZ = lane.componentLabelColors[2];
-  }
 }
 
 - (double)_fractionAtTime:(CMTime)time {
@@ -294,13 +260,6 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   return (m > 1.0) ? m : 1000.0;
 }
 
-// Gizmo curve params for the current zoom: fractions of the on-screen frame.
-- (void)_scaleGizmoE0:(double *)outE0 span:(double *)outSpan {
-  double frameMin = [self _onScreenFrameMin];
-  *outE0 = frameMin * kScaleGizmoE0Frac;
-  *outSpan = frameMin * kScaleGizmoSpanFrac;
-}
-
 - (CGPoint)_canvasFromObjX:(double)ox y:(double)oy {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
@@ -312,17 +271,6 @@ BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                             toX:&c.x
                             toY:&c.y];
   return c;
-}
-
-// Canvas point of the anchor pivot at a fraction: the clip centre (Position)
-// shifted by the Anchor offset, in object space, mapped to canvas. The pivot
-// travels with the clip, so it tracks Position as the playhead moves.
-- (CGPoint)_anchorCanvasAtFraction:(double)frac {
-  NSArray<NSNumber *> *pv = _positionValuesAtFraction(frac);
-  NSArray<NSNumber *> *av = _anchorValuesAtFraction(frac);
-  double objX = pv[0].doubleValue + av[0].doubleValue - 0.5;
-  double objY = pv[1].doubleValue + av[1].doubleValue - 0.5;
-  return [self _canvasFromObjX:objX y:objY];
 }
 
 // Override the base OSC-visibility hooks: the full element-key list, and the

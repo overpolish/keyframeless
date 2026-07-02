@@ -83,6 +83,9 @@
   // Renderer retains onHandleVisibilityToggled, so capture it weakly to avoid a
   // cycle; the inspector callbacks capture it weakly too for symmetry.
   __weak KKMiniViewerRenderer *weakRenderer = renderer;
+  // Read the LIVE compound set (a plugin may narrow it per selected layer, e.g.
+  // drop a path-only element for an image) so states stay aligned with the rows.
+  __weak KKTimelineInspectorView *weakView = view;
 
   view.onOSCVisibleToggled = ^(BOOL visible) {
     __strong typeof(weak) strong = weak;
@@ -103,7 +106,9 @@
         KKInstanceStateForAPI(strong.apiManager).hiddenOSCElements
             ?: [NSSet set];
     NSMutableArray<NSArray<NSNumber *> *> *out = [NSMutableArray array];
-    for (NSArray<NSString *> *compound in compounds) {
+    NSArray<NSArray<NSString *> *> *live =
+        weakView.oscVisibilityCompounds ?: compounds;
+    for (NSArray<NSString *> *compound in live) {
       NSMutableArray<NSNumber *> *group = [NSMutableArray array];
       for (NSString *key in compound)
         [group addObject:@(![hidden containsObject:key])];

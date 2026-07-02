@@ -149,7 +149,8 @@ static void cgPathApplyCallback(void *info, const CGPathElement *element) {
       KKBezierPoint first = [path pointAtIndex:ctx->contourStartIdx];
       float dx = last.x - first.x;
       float dy = last.y - first.y;
-      if (fabsf(dx) < kMergeEpsilon && fabsf(dy) < kMergeEpsilon) {
+      BOOL merged = (fabsf(dx) < kMergeEpsilon && fabsf(dy) < kMergeEpsilon);
+      if (merged) {
         // Transfer inHandle from duplicate to contour start.
         if (last.type == KKBezierPointBezier) {
           [path setInHandle:(simd_float2){last.inX, last.inY}
@@ -172,6 +173,24 @@ static KKBezierPath *KKBezierPathFromCGPath(CGPathRef cgPath) {
       .path = path, .pointCount = 0, .contourStartIdx = 0, .needsContour = NO};
   CGPathApply(cgPath, &ctx, cgPathApplyCallback);
   return path;
+}
+
+// A path-op RESULT must sit where its source did: inherit the source's group
+// membership AND its layer transform. Without this the result renders at the
+// raw stored geometry - offset by whatever translate/scale/rotation the source
+// carried, and outside the source's group. (Centerline already does this via
+// CenterlineCopyStyle; outline + boolean didn't, which is the "offset by the
+// stroke width + drops the group" bug.)
+static void copyPlacementProperties(KKBezierPath *dst, KKBezierPath *src) {
+  dst.parentGroupID = src.parentGroupID;
+  dst.transformEnabled = src.transformEnabled;
+  dst.translateX = src.translateX;
+  dst.translateY = src.translateY;
+  dst.scaleX = src.scaleX;
+  dst.scaleY = src.scaleY;
+  dst.rotationZ = src.rotationZ;
+  dst.anchorX = src.anchorX;
+  dst.anchorY = src.anchorY;
 }
 
 static void copyStyleProperties(KKBezierPath *dst, KKBezierPath *src) {
@@ -1167,6 +1186,7 @@ NSArray<KKBezierPath *> *KKPathStrokeToOutline(NSArray<KKBezierPath *> *paths,
     outline.strokeEnabled = NO;
     outline.opacity = src.opacity;
     outline.name = src.name;
+    copyPlacementProperties(outline, src); // stay in the source's group + place
 
     [results addObject:outline];
   }
@@ -1216,6 +1236,7 @@ KKBezierPath *KKPathBooleanApply(NSArray<KKBezierPath *> *paths,
     return nil;
 
   copyStyleProperties(output, paths[0]);
+  copyPlacementProperties(output, paths[0]); // stay in the base operand's group
   output.name = paths[0].name;
 
   return output;

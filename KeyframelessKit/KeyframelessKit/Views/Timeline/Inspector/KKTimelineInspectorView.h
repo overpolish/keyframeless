@@ -46,6 +46,10 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// subclass) - supplies the effect render + point-handle vocabulary.
 @property(nonatomic, strong, nullable) id<KKMiniViewerDelegate>
     miniViewerDelegate;
+/// Forwarded to the lanes view (and on to the popover mini): when YES, clicking
+/// the mini makes it the key window so bare keys (e.g. Delete) are handled in
+/// the popover instead of reaching the host. Default NO.
+@property(nonatomic) BOOL miniGrabsKeyFocusOnClick;
 /// Lane label the "manage properties" popover highlights for the first-run
 /// spotlight (e.g. @"Radius"). nil = no spotlight.
 @property(nonatomic, copy, nullable) NSString *managePopoverSpotlightLabel;
@@ -90,18 +94,31 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 @property(nonatomic, copy, nullable) void (^oscVisibilityElementToggled)
     (NSInteger compoundIndex, NSInteger segmentIndex, BOOL isOn);
 /// Any motion-blur edit (enable toggle, a Shutter/Samples slider/field, or the
-/// When dropdown in the settings popover). `shutterAngle` is degrees (0–360);
-/// `samples` is the sample count (2–128); `mode` is when blur fires (see
-/// `KKMotionBlurMode`). The host writes the full
-/// `{enabled,shutterAngle,samples,mode}` blob. Only fired when
+/// Quality pill in the settings popover). `shutterAngle` is degrees (0–360);
+/// `samples` is the sample count (2–128, Accurate only); `technique` is how the
+/// blur is computed (see `KKMotionBlurTechnique`). The host writes the full
+/// `{enabled,shutterAngle,samples,technique}` blob. Only fired when
 /// `showsMotionBlurRow` is YES. Wrap continuous slider drags with
 /// `onDragBegin`/`onDragEnd` for undo coalescing (same chain the mini-viewer
 /// handles use).
 @property(nonatomic, copy, nullable) void (^onMotionBlurChanged)
     (BOOL enabled, double shutterAngle, NSInteger samples,
-     KKMotionBlurMode mode);
+     KKMotionBlurTechnique technique);
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
+/// A CONTENT preset was applied (one carrying a `payloadKind`): the plugin
+/// inserts the decoded content rather than applying a timeline curve (e.g.
+/// Canvas decodes a `"canvasLayers"` payload into a new layer). Only fired for
+/// presets with a payload; timeline presets use the normal apply path. `atPlayhead`
+/// mirrors the preset apply intent (the plugin decides what it means).
+@property(nonatomic, copy, nullable) void (^onApplyPresetPayload)
+    (NSString *payloadKind, NSString *payloadJSON, BOOL atPlayhead);
+/// Fired right before the Constants popover opens (button tap), so a
+/// multi-owner host can switch the selected owner to one that actually has
+/// constants (the popover shows the selected owner's constants - landing on an
+/// empty one would open nothing). Runs synchronously before the popover reads
+/// the timeline.
+@property(nonatomic, copy, nullable) void (^onConstantsWillShow)(void);
 /// Start / end of a continuous mini-viewer handle drag - host wraps the
 /// burst of `onTimelineMutated` writes in one undo group.
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
@@ -173,6 +190,11 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// Live clip duration (seconds) for the Basic ruler, pushed from the
 /// render tick (clip trims never fire `parameterChanged:`).
 - (void)setClipDurationSeconds:(double)seconds;
+/// The clip duration last set (seconds), 0 if never. Subclasses use it to stamp
+/// `lastKnownClipDuration` onto a freshly-built per-layer timeline before
+/// publishing it as the viewer-OSC snapshot, so keypose-proximity visibility
+/// uses a one-frame epsilon instead of a blind fallback.
+- (double)clipDurationSeconds;
 /// Live frame duration (seconds) - bounds the scrubber to the last frame.
 - (void)setFrameDurationSeconds:(double)seconds;
 /// Live playhead position (clip fraction 0–1; < 0 hides) for the scrubber.
@@ -197,6 +219,20 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// height for it). Default YES. Override to NO in a plugin whose effect has no
 /// motion blur. Read once during init.
 - (BOOL)showsMotionBlurRow;
+
+/// Whether the host plugin can render the Fast (velocity-reconstruction)
+/// technique. Default NO (only the universal Accurate accumulate path). Override
+/// to YES in a plugin that emits a velocity buffer (per-object analytic motion,
+/// e.g. Canvas / MagicMove); the settings popover then shows the Fast/Accurate
+/// Quality pill. A NO host always runs Accurate and hides the pill.
+- (BOOL)motionBlurSupportsFastTechnique;
+
+/// The default Accurate-path sample count (2–128) for this plugin - the initial
+/// value, the reset target, and what a fresh enable persists. Default 16.
+/// Override to tune per plugin (e.g. fewer for heavy per-layer content). Only
+/// relevant on the Accurate path (Fast hides the Samples row). Read at init and
+/// when the settings popover opens.
+- (NSInteger)motionBlurDefaultSamples;
 
 /// Whether to build the "On-Screen Controls" visibility row below the box
 /// (and reserve height for it). Default NO. Override to YES in a plugin whose
@@ -223,12 +259,17 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// from the host's MB blob. No-op when `showsMotionBlurRow` is NO.
 - (void)setMotionBlurShutterAngle:(double)shutterAngle
                           samples:(NSInteger)samples;
-/// Push the persisted motion-blur fire mode from the host's MB blob. No-op
+/// Push the persisted motion-blur technique from the host's MB blob. No-op
 /// when `showsMotionBlurRow` is NO.
-- (void)setMotionBlurMode:(KKMotionBlurMode)mode;
+- (void)setMotionBlurTechnique:(KKMotionBlurTechnique)technique;
 /// Push the persisted "On-Screen Controls" master visibility into the tick.
 /// No-op when `showsOSCVisibilityRow` is NO.
 - (void)setOSCVisible:(BOOL)visible;
+/// Re-read `oscVisibilityElementStates` into the OPEN OSC settings popover (if
+/// shown). A multi-owner host (Canvas) calls this when the selected owner
+/// changes so the checklist reflects the newly-selected layer's set without
+/// reopening. No-op if the popover isn't open.
+- (void)refreshOpenOSCChecklist;
 @end
 
 NS_ASSUME_NONNULL_END

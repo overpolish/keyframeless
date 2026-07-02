@@ -37,6 +37,15 @@ static const CGFloat kRowGap = 2.0;
 static const CGFloat kGroupDividerH = 24.0;
 // Divider icon + label point size, matched to the duration-overlay text.
 static const CGFloat kGroupDividerFontSize = 9.0;
+// Layer (owner) header rows hug their content at this fixed height rather than
+// sharing the lane rows' equal split - so a collapsed layer is just a slim
+// header, not a wasted full-height lane row. Category header rows share the
+// same fixed height.
+static const CGFloat kLayerHeaderRowH = 22.0;
+// Horizontal indent of a category header (and nothing else) below a layer
+// header, so a layer > category > lane timeline reads as a nested tree. Zero
+// effect for single-owner plugins (no layer level).
+static const CGFloat kCategoryHeaderIndent = 14.0;
 
 // Boundary pill - vertical capsule spanning the row, same width as Basic.
 static const CGFloat kPillW = 6.0;
@@ -90,6 +99,7 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSInteger _pressKPIdx;
   NSPoint _pressPoint;
   BOOL _dragActive;
+  BOOL _pressLocked; // press is on a locked lane: opens read-only, never drags
   double _dragSnapFrac;
 
   NSString *_topLaneLabel;
@@ -99,6 +109,16 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 
   NSMutableSet<NSString *> *_selection;
   NSMutableSet<NSString *> *_selectedGaps;
+  // layerKeys whose lanes are collapsed (hidden) in the graph; the layer's
+  // header row stays, with a filled glyph. Display-only, per view instance.
+  NSMutableSet<NSString *> *_collapsedLayerKeys;
+  // Collapse keys (layerKey + category, see -_categoryCollapseKeyForLayer:
+  // category:) whose category's lanes are collapsed; the category header row
+  // stays, with a right-pointing chevron. Display-only, per view instance.
+  NSMutableSet<NSString *> *_collapsedCategoryKeys;
+  // The layer the keypose popover currently scopes to (multi-owner timelines).
+  // Set on pill click + by the host's layer-list selection.
+  NSString *_activeLayerKey;
 
   BOOL _gapPressActive;
   NSString *_gapPressLabel;
@@ -201,15 +221,24 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (NSArray<NSNumber *> *)_laneKeyposeTimes:(KKLane *)lane;
 - (CGFloat)_rowHeightForCount:(NSInteger)n;
 - (NSRect)_rowRectForIndex:(NSInteger)i count:(NSInteger)n;
-// Per-animatable-lane flags marking the first lane of each categorised run (a
-// group-header strip is drawn above those rows). All-NO when no lane is
-// categorised, so the layout collapses to the flat row model.
-- (NSArray<NSNumber *> *)_groupDividerFlags;
+// Stable collapse identity for a category, scoped by its owning layer (nil for
+// single-owner plugins). Keys -_collapsedCategoryKeys + the synthetic category
+// header row's label.
+- (NSString *)_categoryCollapseKeyForLayer:(nullable NSString *)layerKey
+                                  category:(NSString *)category;
+// Append one owner's lanes to `result`, injecting a collapsible category header
+// row before each categorised run and hiding a collapsed run's lanes.
+- (void)_appendCategoryGroupedLanes:(NSArray<KKLane *> *)lanes
+                           layerKey:(nullable NSString *)layerKey
+                               into:(NSMutableArray<KKLane *> *)result;
 // Largest valid _scrollY: total row height minus the visible tracks height
 // (0 when every row fits, i.e. no scrolling needed).
 - (CGFloat)_maxScrollY;
 // Re-clamp _scrollY into [0, _maxScrollY] after a layout / timeline change.
 - (void)_clampScroll;
+// Scroll the minimum amount so lane row `i` (of `n`) sits fully inside the
+// visible tracks region (so a popover anchored to it isn't clipped/off-screen).
+- (void)_ensureLaneRowVisible:(NSInteger)i count:(NSInteger)n;
 - (NSArray<NSNumber *> *)_snapCandidates;
 - (NSInteger)_intervalStartKPIdxInLane:(KKLane *)lane atFrac:(double)frac;
 - (NSInteger)_animatableIndexForLabel:(NSString *)label;
@@ -260,9 +289,17 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 // Top/bottom fade shadows over the scrolling rows (mirrors KKPaddedScrollView)
 // - top fade shown while scrolled down, bottom fade while more rows lie below.
 - (void)_drawScrollFadesInRect:(NSRect)g;
-// Draw a "── icon Name ──" category header in `strip` (above a group's first
-// row), using `lane`'s categoryKey (localized) + categorySymbol.
-- (void)_drawGroupDividerForLane:(KKLane *)lane inStrip:(NSRect)strip;
+// Draws a layer HEADER row (name + symbol + collapse glyph) for a placeholder
+// lane; `collapsed` picks the filled vs outline symbol.
+- (void)_drawLayerHeaderRowForLane:(KKLane *)lane
+                             inRow:(NSRect)row
+                         collapsed:(BOOL)collapsed;
+// Draws a CATEGORY HEADER row (icon + localized categoryKey + chevron) for a
+// placeholder lane; `collapsed` picks chevron.right vs chevron.down. Indented
+// under a layer header when the timeline has a layer level.
+- (void)_drawCategoryHeaderRowForLane:(KKLane *)lane
+                                inRow:(NSRect)row
+                            collapsed:(BOOL)collapsed;
 
 // Interaction - scrub + drag + edits + keyboard + menu.
 - (BOOL)_isInScrubBand:(NSPoint)pt;
@@ -297,6 +334,9 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 
 // Popovers - value / gap / link.
 - (void)_openValuePopoverForLane:(NSInteger)laneIdx kp:(NSInteger)kpIdx;
+- (void)_openValuePopoverForLane:(NSInteger)laneIdx
+                              kp:(NSInteger)kpIdx
+                  fireActivation:(BOOL)fireActivation;
 - (void)_openGapPopoverForLabel:(NSString *)label kpIdx:(NSInteger)aIdx;
 - (void)_toggleLinkForLabel:(NSString *)label kpIdx:(NSInteger)aIdx;
 - (void)_mutateIntervalInLaneLabel:(NSString *)label

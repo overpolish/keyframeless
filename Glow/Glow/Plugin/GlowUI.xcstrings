@@ -1,470 +1,506 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "Parameters are split into three groups (shown as category pills in the inspector): <accent>Core</accent>, <accent>Color</accent>, and <accent>Noise</accent>.": {
+    "<accent>Amount</accent> - how much grain is mixed in, from 0 to 100%. 0 is a clean glow and higher breaks the halo up into grain.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Die Parameter sind in drei Gruppen unterteilt (als Kategorie-Pills im Informationsfenster): <accent>Kern</accent>, <accent>Farbe</accent> und <accent>Rauschen</accent>."
+            "value": "<accent>Menge</accent> - wie viel Körnung eingemischt wird, von 0 bis 100%. 0 ist ein sauberer Schein, höher bricht den Halo in Körnung auf."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Los parámetros se dividen en tres grupos (mostrados como píldoras de categoría en el inspector): <accent>Núcleo</accent>, <accent>Color</accent> y <accent>Ruido</accent>."
+            "value": "<accent>Cantidad</accent> - cuánto grano se mezcla, de 0 a 100%. 0 es un resplandor limpio y más alto rompe el halo en grano."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Les paramètres sont répartis en trois groupes (affichés comme pastilles de catégorie dans l’inspecteur) : <accent>Noyau</accent>, <accent>Couleur</accent> et <accent>Bruit</accent>."
+            "value": "<accent>Quantité</accent> - la quantité de grain mêlée, de 0 à 100%. 0 donne une lueur nette et plus haut casse le halo en grain."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "パラメータは3つのグループに分かれています(インスペクタにカテゴリピルとして表示): <accent>コア</accent>、<accent>カラー</accent>、<accent>ノイズ</accent>。"
+            "value": "<accent>量</accent> - どれだけ粒子を混ぜるかで、0から100%までです。0はきれいなグローで、上げるほどハローが粒状に崩れます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "매개변수는 세 그룹으로 나뉩니다(인스펙터에 카테고리 알약으로 표시): <accent>코어</accent>, <accent>색상</accent>, <accent>노이즈</accent>."
+            "value": "<accent>양</accent> - 얼마나 많은 입자를 섞는지로, 0에서 100%까지입니다. 0은 깨끗한 글로우이고 높일수록 후광이 입자로 부서집니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "参数分为三组（在检查器中显示为类别药丸）：<accent>核心</accent>、<accent>颜色</accent>和<accent>噪点</accent>。"
+            "value": "<accent>数量</accent> - 混入多少颗粒，从 0 到 100%。0 是干净的辉光，越高越会把光晕打散成颗粒。"
           }
         }
       }
     },
-    "Color - how the glow is tinted:": {
+    "<accent>Falloff</accent> - how the glow fades out at its edge, from 0 to 200%. 0 is the softest, widest fade and higher tightens the edge. Starts at 0.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Farbe - wie der Schein eingefärbt wird:"
+            "value": "<accent>Abfall</accent> - wie der Schein an seinem Rand ausblendet, von 0 bis 200%. 0 ist der weichste, breiteste Verlauf, höher schärft den Rand. Startwert 0."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Color - cómo se tiñe el resplandor:"
+            "value": "<accent>Caída</accent> - cómo se desvanece el resplandor en su borde, de 0 a 200%. 0 es el desvanecido más suave y amplio, y más alto ciñe el borde. Empieza en 0."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Couleur - comment la lueur est teintée :"
+            "value": "<accent>Atténuation</accent> - comment la lueur s'estompe sur son bord, de 0 à 200%. 0 est le fondu le plus doux et le plus large, plus haut resserre le bord. Part de 0."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "カラー - グローの色付け方法:"
+            "value": "<accent>減衰</accent> - グローが縁でどのように消えるかで、0から200%までです。0が最も柔らかく広いフェードで、上げるほど縁が締まります。初期値は0。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "색상 - 글로우의 색조를 지정하는 방법:"
+            "value": "<accent>감쇠</accent> - 글로우가 가장자리에서 어떻게 사라지는지로, 0에서 200%까지입니다. 0이 가장 부드럽고 넓은 페이드이며, 높일수록 가장자리가 좁아집니다. 0에서 시작합니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "颜色 - 如何为辉光着色："
+            "value": "<accent>衰减</accent> - 辉光在边缘如何淡出，从 0 到 200%。0 是最柔和、最宽的淡出，越高边缘越收紧。初始为 0。"
           }
         }
       }
     },
-    "<accent>Mode</accent> - <accent>Dynamic</accent> (the default) takes the colour from the clip so the glow matches the content, <accent>Solid</accent> is one colour you pick, and <accent>Gradient</accent> blends colour stops (radial or linear, with an angle for the linear type). Solid and Gradient can be animated.": {
+    "<accent>Grain Size</accent> - how big each speck of grain is, from 0 to 100%. Low is fine, tiny grain and high is coarse, chunky grain. Starts at 50.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Modus</accent> - <accent>Dynamisch</accent> (der Standard) nimmt die Farbe aus dem Clip, sodass der Schein zum Inhalt passt, <accent>Einfarbig</accent> ist eine einzelne Farbe deiner Wahl und <accent>Verlauf</accent> mischt Farbstopps (radial oder linear, mit einem Winkel beim linearen Typ). Einfarbig und Verlauf können animiert werden."
+            "value": "<accent>Körnungsgröße</accent> - wie groß jedes Korn ist, von 0 bis 100%. Niedrig ist feine, winzige Körnung, hoch ist grobe, klobige Körnung. Startwert 50."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Modo</accent> - <accent>Dinámico</accent> (el valor por omisión) toma el color del clip para que el resplandor coincida con el contenido, <accent>Sólido</accent> es un único color que eliges y <accent>Degradado</accent> combina paradas de color (radial o lineal, con un ángulo para el tipo lineal). Sólido y Degradado se pueden animar."
+            "value": "<accent>Tamaño de grano</accent> - qué tan grande es cada mota de grano, de 0 a 100%. Bajo es grano fino y diminuto, y alto es grano grueso y grande. Empieza en 50."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Mode</accent> - <accent>Dynamique</accent> (par défaut) prend la couleur du plan pour que la lueur corresponde au contenu, <accent>Uni</accent> est une seule couleur que vous choisissez et <accent>Dégradé</accent> mélange des arrêts de couleur (radial ou linéaire, avec un angle pour le type linéaire). Uni et Dégradé peuvent être animés."
+            "value": "<accent>Taille du grain</accent> - la taille de chaque grain, de 0 à 100%. Bas donne un grain fin et minuscule, haut un grain grossier et épais. Part de 50."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>モード</accent> - <accent>ダイナミック</accent>(デフォルト)はクリップから色を取り込み、グローを内容に合わせます。<accent>単色</accent>は選んだ単一の色、<accent>グラデーション</accent>はカラーストップをブレンドします(放射状または線形。線形タイプでは角度を指定)。単色とグラデーションはアニメーションできます。"
+            "value": "<accent>粒子サイズ</accent> - 粒ひとつの大きさで、0から100%までです。低いと細かく小さな粒子、高いと粗く大きな粒子になります。初期値は50。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>모드</accent> - <accent>다이내믹</accent>(기본값)은 클립에서 색상을 가져와 글로우를 콘텐츠에 맞추고, <accent>단색</accent>은 직접 고른 단일 색상이며, <accent>그라데이션</accent>은 색상 정지점을 혼합합니다(방사형 또는 선형, 선형 유형에서는 각도 지정). 단색과 그라데이션은 애니메이션할 수 있습니다."
+            "value": "<accent>입자 크기</accent> - 입자 하나가 얼마나 큰지로, 0에서 100%까지입니다. 낮으면 곱고 작은 입자, 높으면 거칠고 굵은 입자입니다. 50에서 시작합니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>模式</accent> - <accent>动态</accent>（默认）从片段取色，使辉光与内容匹配；<accent>纯色</accent>是你选择的单一颜色；<accent>渐变</accent>混合多个色标（径向或线性，线性类型可设角度）。纯色和渐变可制作动画。"
+            "value": "<accent>颗粒大小</accent> - 每一粒颗粒有多大，从 0 到 100%。低时是细小颗粒，高时是粗大颗粒。初始为 50。"
           }
         }
       }
     },
-    "<accent>Amount</accent> - how much grain is mixed in, 0-100%. 0 is a clean glow; higher breaks the halo up into grain.": {
+    "<accent>Intensity</accent> - how bright the glow is, from 0 to 300%. 100% is normal and higher makes the glow brighter. Starts at 100.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Menge</accent> - wie viel Korn beigemischt wird, 0-100 %. 0 ist ein sauberer Schein; höhere Werte zerlegen den Halo in Korn."
+            "value": "<accent>Intensität</accent> - wie hell der Schein ist, von 0 bis 300%. 100% ist normal, höher macht den Schein heller. Startwert 100."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Cantidad</accent> - cuánto grano se mezcla, 0-100 %. 0 es un resplandor limpio; valores mayores descomponen el halo en grano."
+            "value": "<accent>Intensidad</accent> - qué tan brillante es el resplandor, de 0 a 300%. 100% es normal y más alto lo hace más brillante. Empieza en 100."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Quantité</accent> - quelle quantité de grain est mélangée, 0-100 %. 0 donne une lueur nette ; plus haut décompose le halo en grain."
+            "value": "<accent>Intensité</accent> - la luminosité de la lueur, de 0 à 300%. 100% est normal et plus haut rend la lueur plus vive. Part de 100."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>量</accent> - 混ぜる粒子の量、0〜100%。0はクリーンなグロー、高くするとハローが粒状になります。"
+            "value": "<accent>強度</accent> - グローの明るさで、0から300%までです。100%が標準で、上げるほどグローが明るくなります。初期値は100。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>양</accent> - 섞이는 입자의 양, 0-100%. 0은 깨끗한 글로우이고, 높일수록 후광이 입자로 분해됩니다."
+            "value": "<accent>강도</accent> - 글로우의 밝기로, 0에서 300%까지입니다. 100%가 보통이고 높일수록 더 밝아집니다. 100에서 시작합니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>数量</accent> - 混入多少颗粒，0-100%。0 为干净的辉光；越高越会把光晕分解成颗粒。"
+            "value": "<accent>强度</accent> - 辉光有多亮，从 0 到 300%。100% 为正常，越高辉光越亮。初始为 100。"
           }
         }
       }
     },
-    "<accent>Intensity</accent> - how bright the glow is, 0-300%. 100% is normal; higher pushes the glow brighter. Default 100.": {
-      "comment": "Glow help tip (from AIKnowledge markdown).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "<accent>Intensität</accent> - wie hell der Schein ist, 0-300 %. 100 % ist normal; höher macht den Schein heller. Standard 100." } },
-        "es": { "stringUnit": { "state": "translated", "value": "<accent>Intensidad</accent> - el brillo del resplandor, 0-300 %. 100 % es normal; más alto lo hace más brillante. Por omisión 100." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "<accent>Intensité</accent> - la luminosité de la lueur, 0-300 %. 100 % est normal ; plus haut rend la lueur plus vive. Par défaut 100." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "<accent>強度</accent> - グローの明るさ、0〜300%。100%が標準で、上げるとグローが明るくなります。デフォルト100。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "<accent>강도</accent> - 글로우의 밝기, 0-300%. 100%가 표준이며, 높이면 글로우가 더 밝아집니다. 기본값 100." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "<accent>强度</accent> - 辉光的亮度，0-300%。100% 为正常；调高会让辉光更亮。默认 100。" } }
-      }
-    },
-    "<accent>Falloff</accent> - how the glow fades at its edge, 0-200%. 0 is the softest, widest fade; higher tightens the edge. Default 0.": {
-      "comment": "Glow help tip (from AIKnowledge markdown).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "<accent>Abfall</accent> - wie der Schein an seiner Kante ausläuft, 0-200 %. 0 ist der weichste, breiteste Verlauf; höher verengt die Kante. Standard 0." } },
-        "es": { "stringUnit": { "state": "translated", "value": "<accent>Caída</accent> - cómo se desvanece el resplandor en su borde, 0-200 %. 0 es el desvanecido más suave y amplio; más alto ajusta el borde. Por omisión 0." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "<accent>Atténuation</accent> - comment la lueur s'estompe à son bord, 0-200 %. 0 donne le fondu le plus doux et large ; plus haut resserre le bord. Par défaut 0." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "<accent>減衰</accent> - グローが縁でどのように消えるか、0〜200%。0は最も柔らかく広いフェード。上げると縁が引き締まります。デフォルト0。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "<accent>감쇠</accent> - 글로우가 가장자리에서 사라지는 방식, 0-200%. 0은 가장 부드럽고 넓은 페이드이고, 높이면 가장자리가 좁아집니다. 기본값 0." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "<accent>衰减</accent> - 辉光在边缘的淡出方式，0-200%。0 为最柔和、最宽的淡出；调高会收紧边缘。默认 0。" } }
-      }
-    },
-    "<accent>Threshold</accent> - a bloom cutoff, 0-100%. 0 means no bloom; raise it to make the brightest parts of the clip bloom into the glow. Default 0.": {
-      "comment": "Glow help tip (from AIKnowledge markdown).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "<accent>Schwelle</accent> - ein Bloom-Schwellenwert, 0-100 %. 0 bedeutet kein Bloom; höher lässt die hellsten Bereiche des Clips in den Schein strahlen. Standard 0." } },
-        "es": { "stringUnit": { "state": "translated", "value": "<accent>Umbral</accent> - un corte de bloom, 0-100 %. 0 significa sin bloom; súbelo para que las zonas más brillantes del clip irradien en el resplandor. Por omisión 0." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "<accent>Seuil</accent> - un seuil de bloom, 0-100 %. 0 signifie aucun bloom ; augmentez-le pour que les zones les plus claires du plan diffusent dans la lueur. Par défaut 0." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "<accent>しきい値</accent> - ブルームのしきい値、0〜100%。0はブルームなし。上げるとクリップの最も明るい部分がグローに広がります。デフォルト0。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "<accent>임계값</accent> - 블룸 컷오프, 0-100%. 0은 블룸 없음이며, 높이면 클립의 가장 밝은 부분이 글로우로 번집니다. 기본값 0." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "<accent>阈值</accent> - 泛光阈值，0-100%。0 表示无泛光；调高可让片段最亮的部分泛入辉光。默认 0。" } }
-      }
-    },
-    "<accent>Position</accent> - where the glow sits relative to the clip, as an X / Y offset. Centred by default (the glow sits on the clip); drag it to push the glow off to one side. It can be animated so the glow drifts along a path, with a draggable handle and a curved motion path on the canvas.": {
-      "comment": "Glow help tip (from AIKnowledge markdown).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": { "stringUnit": { "state": "translated", "value": "<accent>Position</accent> - wo der Schein relativ zum Clip sitzt, als X-/Y-Versatz. Standardmäßig zentriert (der Schein sitzt auf dem Clip); ziehe ihn, um den Schein zur Seite zu verschieben. Er kann animiert werden, sodass der Schein einer Bahn folgt, mit einem ziehbaren Griff und einem gekrümmten Bewegungspfad auf der Leinwand." } },
-        "es": { "stringUnit": { "state": "translated", "value": "<accent>Posición</accent> - dónde se sitúa el resplandor respecto al clip, como un desplazamiento X / Y. Centrado por omisión (el resplandor se sitúa sobre el clip); arrástralo para desplazar el resplandor hacia un lado. Puede animarse para que el resplandor recorra una trayectoria, con un tirador arrastrable y una trayectoria de movimiento curva en el lienzo." } },
-        "fr": { "stringUnit": { "state": "translated", "value": "<accent>Position</accent> - où se place la lueur par rapport au plan, sous forme de décalage X / Y. Centrée par défaut (la lueur se place sur le plan) ; faites-la glisser pour décaler la lueur sur le côté. Elle peut être animée pour que la lueur suive une trajectoire, avec une poignée déplaçable et une trajectoire de mouvement courbe sur le canevas." } },
-        "ja": { "stringUnit": { "state": "translated", "value": "<accent>位置</accent> - グローをクリップに対してどこに置くか、X / Y のオフセットで指定します。デフォルトでは中央（グローはクリップに重なります）。ドラッグするとグローを片側にずらせます。アニメーションさせるとグローがパスに沿って移動し、キャンバス上にドラッグできるハンドルと曲線のモーションパスが表示されます。" } },
-        "ko": { "stringUnit": { "state": "translated", "value": "<accent>위치</accent> - 글로우가 클립을 기준으로 어디에 놓이는지를 X / Y 오프셋으로 지정합니다. 기본값은 가운데(글로우가 클립 위에 놓임)이며, 드래그하면 글로우를 한쪽으로 옮길 수 있습니다. 애니메이션하면 글로우가 경로를 따라 움직이며, 캔버스에 드래그할 수 있는 핸들과 곡선 모션 경로가 표시됩니다." } },
-        "zh-Hans": { "stringUnit": { "state": "translated", "value": "<accent>位置</accent> - 辉光相对于片段的位置，以 X / Y 偏移表示。默认居中（辉光位于片段上）；拖动即可将辉光移向一侧。可对其制作动画，使辉光沿路径移动，并在画布上显示可拖动的控制柄和一条曲线运动路径。" } }
-      }
-    },
-    "<accent>Radius</accent> - the size of the glow, in pixels (0 = no glow, up to 500 for a large halo). Has X and Y components, aspect-lockable, so the glow can be a circle or stretched into an oval. The default is 100.": {
+    "<accent>Mode</accent> - <accent>Dynamic</accent> (the default) borrows colour from the clip so the glow matches whatever is under it. <accent>Solid</accent> is one colour you pick. <accent>Gradient</accent> blends between colours, spreading out from the centre or across at an angle. Solid and Gradient can be animated.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Radius</accent> - die Größe des Leuchtens, in Pixeln (0 = kein Leuchten, bis zu 500 für einen großen Schein). Hat X- und Y-Komponenten, seitenverhältnissperrbar, sodass das Leuchten ein Kreis oder zu einem Oval gestreckt sein kann. Der Standardwert ist 100."
+            "value": "<accent>Modus</accent> - <accent>Dynamisch</accent> (die Vorgabe) übernimmt Farbe vom Clip, sodass der Schein zu dem passt, was darunter liegt. <accent>Einfarbig</accent> ist eine Farbe, die du wählst. <accent>Verlauf</accent> mischt zwischen Farben, vom Zentrum ausstrahlend oder quer in einem Winkel. Einfarbig und Verlauf lassen sich animieren."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Radio</accent> - el tamaño del resplandor, en píxeles (0 = sin resplandor, hasta 500 para un halo grande). Tiene componentes X e Y, con relación de aspecto bloqueable, de modo que el resplandor puede ser un círculo o estirarse en un óvalo. El valor por omisión es 100."
+            "value": "<accent>Modo</accent> - <accent>Dinámico</accent> (por defecto) toma color del clip para que el resplandor combine con lo que haya debajo. <accent>Sólido</accent> es un color que eliges. <accent>Degradado</accent> mezcla entre colores, extendiéndose desde el centro o de lado en un ángulo. Sólido y Degradado se pueden animar."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Rayon</accent> - la taille de la lueur, en pixels (0 = aucune lueur, jusqu'à 500 pour un grand halo). Possède des composantes X et Y, à proportions verrouillables, de sorte que la lueur peut être un cercle ou étirée en ovale. La valeur par défaut est 100."
+            "value": "<accent>Mode</accent> - <accent>Dynamique</accent> (par défaut) emprunte la couleur au clip pour que la lueur s'accorde à ce qui est en dessous. <accent>Uni</accent> est une couleur que vous choisissez. <accent>Dégradé</accent> mélange les couleurs, en partant du centre ou en travers selon un angle. Uni et Dégradé peuvent être animés."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>半径</accent> - グローの大きさ（ピクセル単位、0 = グローなし、最大 500 で大きなハロー）。X と Y のコンポーネントがあり、縦横比をロックできるため、グローを円にも楕円にも引き伸ばせます。デフォルトは 100 です。"
+            "value": "<accent>モード</accent> - <accent>ダイナミック</accent> (デフォルト) はクリップから色を借りて、下にあるものにグローを合わせます。<accent>単色</accent> は自分で選ぶ1色です。<accent>グラデーション</accent> は色の間をブレンドし、中心から広がるか、角度をつけて横切ります。単色とグラデーションはアニメーションできます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>반경</accent> - 광채의 크기(픽셀 단위, 0 = 광채 없음, 최대 500은 큰 후광). X 및 Y 구성 요소가 있으며 종횡비를 잠글 수 있어 광채를 원이나 타원으로 늘릴 수 있습니다. 기본값은 100입니다."
+            "value": "<accent>모드</accent> - <accent>다이내믹</accent>(기본값)은 클립에서 색을 가져와 글로우가 아래에 있는 것과 어울리게 합니다. <accent>단색</accent>은 직접 고르는 한 가지 색입니다. <accent>그라데이션</accent>은 색 사이를 섞으며 중심에서 퍼지거나 각도를 두고 가로지릅니다. 단색과 그라데이션은 애니메이션할 수 있습니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>半径</accent> - 辉光的大小，以像素为单位（0 = 无辉光，最大 500 为大光环）。具有 X 和 Y 分量，可锁定长宽比，因此辉光可以是圆形，也可以拉伸为椭圆形。默认值为 100。"
+            "value": "<accent>模式</accent> - <accent>动态</accent>（默认）从片段借用颜色，让辉光与其下方的内容相配。<accent>纯色</accent>是你挑选的一种颜色。<accent>渐变</accent>在多种颜色间混合，从中心散开或带角度横向铺开。纯色和渐变都可以添加动画。"
           }
         }
       }
     },
-    "<accent>Seed</accent> - a random value that picks which grain pattern you get; re-roll it for a different look. Not animatable (a fixed pattern for the clip).": {
+    "<accent>Position</accent> - where the glow sits relative to the clip. It is centred on the clip to start. Drag it to push the glow off to one side. Animate it and the glow drifts along a path you can shape right on the preview.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Startwert</accent> - ein Zufallswert, der das Kornmuster bestimmt; neu würfeln für ein anderes Aussehen. Nicht animierbar (ein festes Muster für den Clip)."
+            "value": "<accent>Position</accent> - wo der Schein relativ zum Clip sitzt. Anfangs ist er auf dem Clip zentriert. Zieh ihn, um den Schein zur Seite zu schieben. Animiere ihn, und der Schein wandert entlang eines Pfads, den du direkt in der Vorschau formen kannst."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Semilla</accent> - un valor aleatorio que elige el patrón de grano; vuelve a generarlo para un aspecto distinto. No animable (un patrón fijo para el clip)."
+            "value": "<accent>Posición</accent> - dónde se sitúa el resplandor respecto al clip. Al principio está centrado en el clip. Arrástralo para empujar el resplandor hacia un lado. Anímalo y el resplandor se desplaza por una trayectoria que puedes moldear directamente en la previsualización."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Graine</accent> - une valeur aléatoire qui choisit le motif de grain ; relancez-la pour un autre rendu. Non animable (un motif fixe pour le plan)."
+            "value": "<accent>Position</accent> - l'endroit où la lueur se place par rapport au clip. Au départ, elle est centrée sur le clip. Faites-la glisser pour pousser la lueur sur le côté. Animez-la et la lueur se déplace le long d'un tracé que vous pouvez façonner directement sur l'aperçu."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>シード</accent> - 粒子パターンを決めるランダムな値。振り直すと別の見た目になります。アニメート不可(クリップ全体で固定パターン)。"
+            "value": "<accent>位置</accent> - グローがクリップに対してどこに置かれるか。最初はクリップの中央にあります。ドラッグするとグローを片側に寄せられます。アニメーションさせると、プレビュー上で直接形を作れるパスに沿ってグローが動きます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>시드</accent> - 입자 패턴을 결정하는 무작위 값. 다시 생성하면 다른 모양이 됩니다. 애니메이션 불가(클립 전체에 고정된 패턴)."
+            "value": "<accent>위치</accent> - 글로우가 클립을 기준으로 어디에 놓이는지. 처음에는 클립 중앙에 있습니다. 드래그하면 글로우를 한쪽으로 밀 수 있습니다. 애니메이션을 주면 글로우가 미리보기에서 바로 모양을 잡을 수 있는 경로를 따라 이동합니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>种子</accent> - 决定颗粒图案的随机值；重新生成可获得不同外观。不可动画（片段使用固定图案）。"
+            "value": "<accent>位置</accent> - 辉光相对片段的位置。初始时它在片段中央。拖动它可把辉光推向一侧。为它添加动画，辉光会沿着一条你能在预览中直接塑形的路径移动。"
           }
         }
       }
     },
-    "<accent>Speed</accent> - how fast the grain animates over time, 0-100%. 0 is a static grain; raise it to make the grain shimmer. Default 0.": {
+    "<accent>Radius</accent> - how big the glow is, in pixels, from 0 (no glow) up to 500 (a large halo). It starts at 100. You can lock width and height together for a round glow, or unlock them to stretch it into an oval.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Geschwindigkeit</accent> - wie schnell sich das Korn über die Zeit bewegt, 0-100 %. 0 ist ein statisches Korn; erhöhen, damit das Korn flimmert. Standard 0."
+            "value": "<accent>Radius</accent> - wie groß der Schein ist, in Pixeln, von 0 (kein Schein) bis 500 (ein großer Halo). Startwert 100. Du kannst Breite und Höhe für einen runden Schein koppeln oder sie entkoppeln, um ihn zu einem Oval zu strecken."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Velocidad</accent> - con qué rapidez se anima el grano en el tiempo, 0-100 %. 0 es un grano estático; súbelo para que el grano titile. Por omisión 0."
+            "value": "<accent>Radio</accent> - qué tan grande es el resplandor, en píxeles, de 0 (sin resplandor) hasta 500 (un halo grande). Empieza en 100. Puedes bloquear el ancho y el alto juntos para un resplandor redondo, o desbloquearlos para estirarlo en un óvalo."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Vitesse</accent> - à quelle vitesse le grain s’anime dans le temps, 0-100 %. 0 donne un grain statique ; augmentez pour faire scintiller le grain. Par défaut 0."
+            "value": "<accent>Rayon</accent> - la taille de la lueur, en pixels, de 0 (aucune lueur) jusqu'à 500 (un grand halo). Elle part de 100. Vous pouvez verrouiller la largeur et la hauteur ensemble pour une lueur ronde, ou les déverrouiller pour l'étirer en ovale."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>速度</accent> - 粒子が時間とともにどれだけ速くアニメートするか、0〜100%。0は静止した粒子。上げると粒子がちらつきます。デフォルト0。"
+            "value": "<accent>半径</accent> - グローの大きさをピクセルで表し、0 (グローなし) から 500 (大きなハロー) までです。初期値は100。幅と高さをロックして丸いグローにも、ロックを外して楕円に伸ばすこともできます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>속도</accent> - 입자가 시간에 따라 얼마나 빠르게 애니메이션되는지, 0-100%. 0은 정적인 입자이고, 높이면 입자가 반짝입니다. 기본값 0."
+            "value": "<accent>반경</accent> - 글로우의 크기로, 픽셀 단위이며 0(글로우 없음)부터 500(큰 후광)까지입니다. 100에서 시작합니다. 가로와 세로를 함께 잠가 둥근 글로우를 만들거나, 잠금을 풀어 타원으로 늘일 수 있습니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>速度</accent> - 颗粒随时间动画的快慢，0-100%。0 为静态颗粒；调高可让颗粒闪烁。默认 0。"
+            "value": "<accent>半径</accent> - 辉光有多大，以像素为单位，从 0（无辉光）到 500（大光晕）。初始为 100。你可以把宽和高一起锁定得到圆形辉光，或解锁把它拉成椭圆。"
           }
         }
       }
     },
-    "<accent>Spread</accent> - how far the grain reaches into the glow's falloff, 0-100%. Low keeps grain near the edge; high pushes it through the whole glow.": {
+    "<accent>Seed</accent> - the random value that decides which grain pattern you get. Re-roll it for a different look. It cannot be animated, so it stays one fixed pattern for the clip.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Streuung</accent> - wie weit das Korn in den Abfall des Scheins reicht, 0-100 %. Niedrig hält das Korn am Rand; hoch verteilt es über den ganzen Schein."
+            "value": "<accent>Startwert</accent> - der Zufallswert, der bestimmt, welches Körnungsmuster du bekommst. Würfle ihn neu für einen anderen Look. Er lässt sich nicht animieren, also bleibt er ein festes Muster für den Clip."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Dispersión</accent> - hasta dónde llega el grano en la caída del resplandor, 0-100 %. Bajo mantiene el grano cerca del borde; alto lo extiende por todo el resplandor."
+            "value": "<accent>Semilla</accent> - el valor aleatorio que decide qué patrón de grano obtienes. Vuelve a tirarlo para un aspecto distinto. No se puede animar, así que se queda como un patrón fijo para el clip."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Diffusion</accent> - jusqu’où le grain pénètre dans l’atténuation de la lueur, 0-100 %. Bas garde le grain près du bord ; haut le répartit dans toute la lueur."
+            "value": "<accent>Graine</accent> - la valeur aléatoire qui décide du motif de grain que vous obtenez. Relancez-la pour un autre rendu. Elle ne peut pas être animée, elle reste donc un motif fixe pour le clip."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>広がり</accent> - 粒子がグローの減衰のどこまで届くか、0〜100%。低いと粒子は端付近に、高いとグロー全体に広がります。"
+            "value": "<accent>シード</accent> - どの粒子パターンになるかを決める乱数値です。振り直すと別の見た目になります。アニメーションはできないので、クリップに対して1つの固定パターンのままです。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>확산</accent> - 입자가 글로우의 감쇠에서 얼마나 멀리 도달하는지, 0-100%. 낮으면 가장자리 근처에, 높으면 글로우 전체로 퍼집니다."
+            "value": "<accent>시드</accent> - 어떤 입자 패턴이 나올지 정하는 무작위 값입니다. 다시 굴리면 다른 느낌이 됩니다. 애니메이션할 수 없어서 클립에 대해 하나의 고정된 패턴으로 유지됩니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>扩散</accent> - 颗粒延伸到辉光衰减的多远，0-100%。低值使颗粒靠近边缘；高值将其推及整个辉光。"
+            "value": "<accent>种子</accent> - 决定你得到哪种颗粒图案的随机值。重新摇一次可换个样子。它不能添加动画，所以对该片段始终保持一个固定图案。"
           }
         }
       }
     },
-    "<accent>Grain Size</accent> - the size of each grain speck, 0-100%. Low is fine, tiny grain; high is coarse, chunky grain. Default 50.": {
+    "<accent>Speed</accent> - how fast the grain shimmers over time, from 0 to 100%. 0 holds it still and higher makes it flicker. Starts at 0.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Körnungsgröße</accent> - die Größe jedes Korns, 0-100 %. Niedrig ist feines, winziges Korn; hoch ist grobes, klobiges Korn. Standard 50."
+            "value": "<accent>Geschwindigkeit</accent> - wie schnell die Körnung mit der Zeit flimmert, von 0 bis 100%. 0 hält sie still, höher lässt sie flackern. Startwert 0."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Tamaño de grano</accent> - el tamaño de cada mota de grano, 0-100 %. Bajo es grano fino y diminuto; alto es grano grueso y basto. Por omisión 50."
+            "value": "<accent>Velocidad</accent> - qué tan rápido titila el grano con el tiempo, de 0 a 100%. 0 lo mantiene quieto y más alto lo hace parpadear. Empieza en 0."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>Taille du grain</accent> - la taille de chaque grain, 0-100 %. Bas donne un grain fin et minuscule ; haut un grain grossier et épais. Par défaut 50."
+            "value": "<accent>Vitesse</accent> - à quelle vitesse le grain scintille dans le temps, de 0 à 100%. 0 le garde immobile et plus haut le fait vaciller. Part de 0."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>粒子サイズ</accent> - 各粒子の大きさ、0〜100%。低いと細かく小さな粒子、高いと粗く大きな粒子になります。デフォルト50。"
+            "value": "<accent>速度</accent> - 粒子が時間とともにどれだけ速くちらつくかで、0から100%までです。0では静止し、上げるほどちらつきます。初期値は0。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>입자 크기</accent> - 각 입자의 크기, 0-100%. 낮으면 곱고 작은 입자, 높으면 거칠고 굵은 입자입니다. 기본값 50."
+            "value": "<accent>속도</accent> - 입자가 시간에 따라 얼마나 빨리 반짝이는지로, 0에서 100%까지입니다. 0은 정지 상태로 두고 높일수록 깜빡입니다. 0에서 시작합니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "<accent>颗粒大小</accent> - 每个颗粒的大小，0-100%。低值为细小颗粒；高值为粗大颗粒。默认 50。"
+            "value": "<accent>速度</accent> - 颗粒随时间闪烁得多快，从 0 到 100%。0 让它静止，越高越闪烁。初始为 0。"
           }
         }
       }
     },
-    "Amount, Spread, Grain Size, and Speed animate on the timeline like any other property; Seed is a constant set in the Constants panel / Noise tab.": {
+    "<accent>Spread</accent> - how far the grain reaches into the glow, from 0 to 100%. Low keeps grain near the edge and high pushes it through the whole glow.": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Menge, Streuung, Körnungsgröße und Geschwindigkeit lassen sich auf der Timeline wie jede andere Eigenschaft animieren; Startwert ist ein konstanter Wert, der im Konstanten-Bereich / Rauschen-Tab festgelegt wird."
+            "value": "<accent>Streuung</accent> - wie weit die Körnung in den Schein reicht, von 0 bis 100%. Niedrig hält die Körnung nahe am Rand, hoch drückt sie durch den ganzen Schein."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cantidad, Dispersión, Tamaño de grano y Velocidad se animan en la línea de tiempo como cualquier otra propiedad; Semilla es una constante que se fija en el panel de Constantes / pestaña Ruido."
+            "value": "<accent>Dispersión</accent> - hasta dónde llega el grano dentro del resplandor, de 0 a 100%. Bajo mantiene el grano cerca del borde y alto lo empuja por todo el resplandor."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quantité, Diffusion, Taille du grain et Vitesse s’animent sur la timeline comme toute autre propriété ; Graine est une constante définie dans le panneau Constantes / l’onglet Bruit."
+            "value": "<accent>Diffusion</accent> - jusqu'où le grain s'étend dans la lueur, de 0 à 100%. Bas garde le grain près du bord et haut le pousse à travers toute la lueur."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "量、広がり、粒子サイズ、速度は他のプロパティと同様にタイムラインでアニメートできます。シードは定数で、定数パネル / ノイズタブで設定します。"
+            "value": "<accent>広がり</accent> - 粒子がグローのどこまで届くかで、0から100%までです。低いと粒子は縁の近くに留まり、高いとグロー全体に押し広げられます。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "양, 확산, 입자 크기, 속도는 다른 속성처럼 타임라인에서 애니메이션할 수 있습니다. 시드는 상수 패널 / 노이즈 탭에서 설정하는 상수입니다."
+            "value": "<accent>확산</accent> - 입자가 글로우 안으로 얼마나 퍼지는지로, 0에서 100%까지입니다. 낮으면 입자가 가장자리 근처에 머물고 높으면 글로우 전체로 밀려납니다."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "数量、扩散、颗粒大小和速度可像其他属性一样在时间线上制作动画；种子是在“常量”面板/“噪点”标签中设置的常量。"
+            "value": "<accent>扩散</accent> - 颗粒延伸进辉光多远，从 0 到 100%。低时颗粒靠近边缘，高时把它推遍整个辉光。"
+          }
+        }
+      }
+    },
+    "<accent>Threshold</accent> - how much the clip's own bright areas add to the glow, from 0 to 100%. 0 adds nothing. Raise it and the brightest parts of the clip bleed into the glow. Starts at 0.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Schwelle</accent> - wie stark die hellen Bereiche des Clips selbst zum Schein beitragen, von 0 bis 100%. 0 fügt nichts hinzu. Erhöhe sie, und die hellsten Teile des Clips fließen in den Schein. Startwert 0."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Umbral</accent> - cuánto añaden al resplandor las propias zonas brillantes del clip, de 0 a 100%. 0 no añade nada. Súbelo y las partes más brillantes del clip se derraman en el resplandor. Empieza en 0."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Seuil</accent> - à quel point les zones claires du clip lui-même s'ajoutent à la lueur, de 0 à 100%. 0 n'ajoute rien. Augmentez-le et les parties les plus claires du clip débordent dans la lueur. Part de 0."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>しきい値</accent> - クリップ自身の明るい部分がどれだけグローに加わるかで、0から100%までです。0では何も加わりません。上げると、クリップの最も明るい部分がグローににじみ出ます。初期値は0。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>임계값</accent> - 클립 자체의 밝은 영역이 글로우에 얼마나 더해지는지로, 0에서 100%까지입니다. 0은 아무것도 더하지 않습니다. 높이면 클립의 가장 밝은 부분이 글로우로 번져 나옵니다. 0에서 시작합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>阈值</accent> - 片段自身的明亮区域给辉光增添多少，从 0 到 100%。0 不增添任何东西。调高它，片段最亮的部分会渗入辉光。初始为 0。"
+          }
+        }
+      }
+    },
+    "Amount, Spread, Grain Size, and Speed can all be animated on the timeline like any other control. Seed stays a fixed value you set in the Constants panel or the Noise tab.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menge, Streuung, Körnungsgröße und Geschwindigkeit lassen sich alle wie jede andere Steuerung auf der Timeline animieren. Der Startwert bleibt ein fester Wert, den du im Konstanten-Panel oder im Rauschen-Tab einstellst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cantidad, Dispersión, Tamaño de grano y Velocidad se pueden animar en la línea de tiempo como cualquier otro control. La Semilla se queda como un valor fijo que fijas en el panel de Constantes o en la pestaña Ruido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quantité, Diffusion, Taille du grain et Vitesse peuvent toutes être animées sur la timeline comme n'importe quelle commande. La Graine reste une valeur fixe que vous réglez dans le panneau Constantes ou l'onglet Bruit."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "量、広がり、粒子サイズ、速度は、他のコントロールと同じようにすべてタイムラインでアニメーションできます。シードは、定数パネルまたはノイズタブで設定する固定値のままです。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "양, 확산, 입자 크기, 속도는 모두 다른 컨트롤처럼 타임라인에서 애니메이션할 수 있습니다. 시드는 상수 패널이나 노이즈 탭에서 설정하는 고정값으로 유지됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数量、扩散、颗粒大小和速度都可以像其他控件一样在时间线上添加动画。种子保持为一个固定值，你在常量面板或噪点选项卡中设置它。"
           }
         }
       }
@@ -549,6 +585,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "提问或描述一个动画…"
+          }
+        }
+      }
+    },
+    "Color - how the glow is tinted:": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Farbe - wie der Schein eingefärbt wird:"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color - cómo se tiñe el resplandor:"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couleur - comment la lueur est teintée :"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カラー - グローの色付け方法:"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "색상 - 글로우의 색조를 지정하는 방법:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "颜色 - 如何为辉光着色："
           }
         }
       }
@@ -679,48 +757,6 @@
         }
       }
     },
-    "Glow adds a soft, animatable glow around a clip's content. Drop it on a clip from the Effects browser. It animates with the shared timeline, so see the Timing sections for how Basic, Advanced, easing, and motion blur work.": {
-      "comment": "Glow help tip (from AIKnowledge markdown).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Glow fügt ein weiches, animierbares Leuchten um den Inhalt eines Clips hinzu. Ziehe es aus dem Effekte-Browser auf einen Clip. Es animiert mit der gemeinsamen Timeline; siehe daher die Timing-Abschnitte dazu, wie Einfach, Erweitert, Easing und Bewegungsunschärfe funktionieren."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Glow añade un resplandor suave y animable alrededor del contenido de un clip. Arrástralo a un clip desde el explorador de Efectos. Se anima con la línea de tiempo compartida, así que consulta las secciones de Sincronización para ver cómo funcionan Básico, Avanzado, la suavización y el desenfoque de movimiento."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Glow ajoute une lueur douce et animable autour du contenu d'un plan. Faites-le glisser sur un plan depuis le navigateur d'effets. Il s'anime avec la timeline partagée ; consultez donc les sections Minutage pour savoir comment fonctionnent Basique, Avancé, le lissage et le flou de mouvement."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Glow はクリップの内容のまわりに、アニメート可能な柔らかいグローを追加します。エフェクトブラウザからクリップにドロップしてください。共有タイムラインでアニメートするため、「基本」「詳細」、イージング、モーションブラーの動作についてはタイミングのセクションを参照してください。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Glow는 클립 내용 주위에 부드럽고 애니메이션할 수 있는 광채를 더합니다. 효과 브라우저에서 클립으로 드래그하세요. 공유 타임라인으로 애니메이션되므로 기본, 고급, 이징, 모션 블러의 작동 방식은 타이밍 섹션을 참조하세요."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Glow 在片段内容周围添加柔和、可制作动画的辉光。从“效果”浏览器将它拖到片段上。它使用共享时间线制作动画，因此请参阅“计时”部分了解“基本”、“高级”、缓动和运动模糊的工作方式。"
-          }
-        }
-      }
-    },
     "Glow in with bounce": {
       "comment": "AI example chip: animate glow in.",
       "extractionState": "manual",
@@ -759,6 +795,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "让辉光弹跳出现"
+          }
+        }
+      }
+    },
+    "Glow wraps a clip's content in a soft, glowing halo you can animate. Drag it onto a clip from the Effects browser. It animates with the timeline, so the Timing sections cover how Basic, Advanced, easing, and motion blur work.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow legt einen weichen, leuchtenden Schein um den Inhalt eines Clips, den du animieren kannst. Zieh es aus dem Effekte-Browser auf einen Clip. Es animiert mit der Timeline, daher erklären die Timing-Abschnitte, wie Basic, Erweitert, Easing und Bewegungsunschärfe funktionieren."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow envuelve el contenido de un clip en un halo suave y luminoso que puedes animar. Arrástralo a un clip desde el navegador de Efectos. Se anima con la línea de tiempo, así que las secciones de Sincronización explican cómo funcionan Básico, Avanzado, la suavización y el desenfoque de movimiento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow entoure le contenu d'un clip d'un halo doux et lumineux que vous pouvez animer. Faites-le glisser sur un clip depuis le navigateur d'Effets. Il s'anime avec la timeline, donc les sections Minutage expliquent comment fonctionnent Basique, Avancé, le lissage et le flou de mouvement."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow はクリップの内容を柔らかく光るハローで包み、アニメーションできます。エフェクトブラウザからクリップにドラッグします。タイムラインでアニメートするので、タイミングのセクションでベーシック、アドバンス、イージング、モーションブラーの仕組みを説明しています。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow는 클립의 내용을 부드럽게 빛나는 후광으로 감싸며, 애니메이션할 수 있습니다. 효과 브라우저에서 클립으로 드래그하세요. 타임라인으로 애니메이션되므로 타이밍 섹션에서 베이식, 고급, 이징, 모션 블러가 어떻게 작동하는지 다룹니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glow 用柔和发光的光晕包裹片段的内容，你可以为它添加动画。从效果浏览器把它拖到片段上。它随时间线播放动画，因此计时部分讲解了基础、高级、缓动和运动模糊如何工作。"
           }
         }
       }
@@ -805,44 +883,44 @@
         }
       }
     },
-    "Noise - optional grain mixed into the glow for a textured, less perfectly-smooth halo:": {
+    "Noise - optional grain mixed into the glow for a textured halo instead of a perfectly smooth one:": {
       "comment": "Glow help tip (from AIKnowledge markdown).",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rauschen - optionales Korn, das in den Schein gemischt wird, für einen strukturierten, weniger perfekt glatten Halo:"
+            "value": "Rauschen - optionale Körnung, die in den Schein gemischt wird, für einen strukturierten statt perfekt glatten Halo:"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ruido - grano opcional mezclado en el resplandor para un halo con textura, menos perfectamente suave:"
+            "value": "Ruido - grano opcional mezclado en el resplandor para un halo con textura en lugar de uno perfectamente liso:"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Bruit - grain optionnel mélangé à la lueur pour un halo texturé, moins parfaitement lisse :"
+            "value": "Bruit - grain optionnel mêlé à la lueur pour un halo texturé plutôt que parfaitement lisse :"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ノイズ - グローに混ぜるオプションの粒子。質感のある、完全には滑らかでないハローになります:"
+            "value": "ノイズ - 完全に滑らかではなく質感のあるハローにするために、グローに混ぜる任意の粒子:"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "노이즈 - 글로우에 섞는 선택적 입자. 질감이 있는, 완벽하게 매끄럽지 않은 후광을 만듭니다:"
+            "value": "노이즈 - 완벽히 매끄러운 대신 질감 있는 후광을 위해 글로우에 섞는 선택적 입자:"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "噪点 - 混入辉光的可选颗粒，营造有质感、不那么完美平滑的光晕："
+            "value": "噪点 - 可选的颗粒，混入辉光，让光晕带质感而非完全平滑："
           }
         }
       }
@@ -885,48 +963,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "屏幕控件快捷键"
-          }
-        }
-      }
-    },
-    "Parameters:": {
-      "comment": "Glow help tip (from AIKnowledge markdown).",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Parameter:"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Parámetros:"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Paramètres :"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "パラメータ:"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "매개변수:"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "参数："
           }
         }
       }
@@ -1053,6 +1089,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "在画布上设置辉光大小"
+          }
+        }
+      }
+    },
+    "The controls sit in three groups you switch between with the pills at the top of the inspector: <accent>Core</accent>, <accent>Color</accent>, and <accent>Noise</accent>.": {
+      "comment": "Glow help tip (from AIKnowledge markdown).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Steuerungen liegen in drei Gruppen, zwischen denen du mit den Pillen oben im Inspektor wechselst: <accent>Kern</accent>, <accent>Farbe</accent> und <accent>Rauschen</accent>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los controles están en tres grupos entre los que cambias con las píldoras en la parte superior del inspector: <accent>Núcleo</accent>, <accent>Color</accent> y <accent>Ruido</accent>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les commandes sont réparties en trois groupes entre lesquels vous basculez avec les pastilles en haut de l'inspecteur : <accent>Noyau</accent>, <accent>Couleur</accent> et <accent>Bruit</accent>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロールは3つのグループに分かれ、インスペクタ上部のピルで切り替えます: <accent>コア</accent>、<accent>カラー</accent>、<accent>ノイズ</accent>。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤은 세 그룹으로 나뉘며 인스펙터 상단의 알약으로 전환합니다: <accent>코어</accent>, <accent>색상</accent>, <accent>노이즈</accent>."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件分为三组，用检查器顶部的药丸按钮切换：<accent>核心</accent>、<accent>颜色</accent>和<accent>噪点</accent>。"
           }
         }
       }

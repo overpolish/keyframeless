@@ -7,6 +7,7 @@
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKTimelineLanesView+Guide.h"
 #import "KKTimelineLanesView_Popovers.h"
 #import "KKTokens.h"
@@ -190,6 +191,10 @@
          editsKeypose:cfg.isBoundary
       initialCategory:cfg.initialCategory];
   staticView.onCategoryChanged = cfg.onCategoryChanged;
+  __weak typeof(self) weakSize = self;
+  staticView.onSizeChanged = ^(NSInteger sizeIndex) {
+    [weakSize _miniViewerSizeDidChange:sizeIndex];
+  };
 
   _openStaticView = staticView;
   _openStaticIsBoundary = cfg.isBoundary;
@@ -212,13 +217,20 @@
       [s->_basicGraph writeSpatialSmoothForLabel:label atFrac:frac isOn:on];
   }];
 
-  // Aspect link is a global per-lane toggle (no fraction), routed to whichever
-  // graph owns the open popover.
+  // Aspect link is a global per-lane toggle (no fraction). The keypose popover
+  // routes it to whichever graph owns the open keypose; the constants popover
+  // edits the lanes view's own _timeline, so it persists there instead (else
+  // the toggle never reached _timeline and the next constant scrub's _refresh
+  // re-read the stale linked lane and relocked it).
   __weak typeof(self) weakLink = self;
   [staticView setOnLinkToggled:^(NSString *label, BOOL on) {
     __strong typeof(weakLink) s = weakLink;
     if (!s)
       return;
+    if (!isBoundary) {
+      [s _setLaneAspectLinked:on forLabel:label];
+      return;
+    }
     s->_boundaryRedriveSuppressUntil =
         [NSDate timeIntervalSinceReferenceDate] + 0.4;
     if (s->_activeTab == 1)
@@ -312,13 +324,25 @@
                       excludedLabels:cfg.excludedLabels];
   }
 
+  // Clamp the initial popover height to the anchor's screen so a small /
+  // low-resolution display doesn't push the bottom rows off-screen. The view's
+  // internal rows scroller (under the sticky mini-viewer + category pill) takes
+  // up the overflow; the popover self-clamps on every later re-fit. On a tall
+  // screen this is a no-op (clamp == natural, no scroll).
+  [staticView clampContentToScreenOfView:anchor];
+
   NSPopover *popover = [self
       _showPopoverWithContent:staticView
                      fromView:anchor
+                preferredEdge:NSRectEdgeMinX
                       onClose:^{
                         __strong typeof(weak) s = weak;
                         if (!s)
                           return;
+                        [NSNotificationCenter.defaultCenter
+                            postNotificationName:
+                                KKStaticValuesPopoverDidCloseNotification
+                                          object:s];
                         s->_openStaticView = nil;
                         if (isBoundary) {
                           s->_openStaticIsBoundary = NO;
@@ -340,6 +364,15 @@
                           s.onStaticValuesPopoverClosed();
                       }];
   staticView.popover = popover;
+
+  // Companion-panel signal: a plugin (e.g. Canvas's layer list) observes this
+  // to show a panel beside the popover (scoped to this lanes view via
+  // `object`). A keypose (boundary) popover passes its `fraction` so the
+  // companion can gray layers with no keypose there; a constants popover leaves
+  // every layer selectable.
+  KKPostStaticValuesPopoverDidOpen(popover, self,
+                                   isBoundary ? @"keypose" : @"constants",
+                                   isBoundary, cfg.fraction);
 
   if (self.onStaticValuesPopoverWillOpen) {
     __weak _KKStaticValuesPopoverView *weakStatic = staticView;

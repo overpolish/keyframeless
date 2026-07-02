@@ -69,8 +69,8 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
       continue;
     KKHoldShape s = KKShapeOfLane(lane);
     if (s.holdEnd > s.holdStart &&
-        !KKValuesEqual(lane.keyposes[s.holdStart].values,
-                       lane.keyposes[s.holdEnd].values))
+        !KKLaneKeyposeValuesEqual(lane, lane.keyposes[s.holdStart],
+                                  lane.keyposes[s.holdEnd]))
       return YES;
   }
   return NO;
@@ -87,8 +87,8 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     KKHoldShape s = KKShapeOfLane(lane);
     if (!s.inEnabled || lane.keyposes.firstObject.outgoing.holdsFlat)
       continue; // no In keypose, or applies-to off (flat) → not animating
-    if (!KKValuesEqual(lane.keyposes.firstObject.values,
-                       lane.keyposes[s.holdStart].values))
+    if (!KKLaneKeyposeValuesEqual(lane, lane.keyposes.firstObject,
+                                  lane.keyposes[s.holdStart]))
       return YES;
   }
   return NO;
@@ -101,8 +101,8 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     KKHoldShape s = KKShapeOfLane(lane);
     if (!s.outEnabled || lane.keyposes[s.holdEnd].outgoing.holdsFlat)
       continue;
-    if (!KKValuesEqual(lane.keyposes[s.holdEnd].values,
-                       lane.keyposes.lastObject.values))
+    if (!KKLaneKeyposeValuesEqual(lane, lane.keyposes[s.holdEnd],
+                                  lane.keyposes.lastObject))
       return YES;
   }
   return NO;
@@ -133,8 +133,10 @@ BOOL KKValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     if (!newLinked)
       iv.curve = KKIntervalCurveLinear;
     b.outgoing = iv;
-    if (newLinked)
+    if (newLinked) {
       c.values = b.values;
+      c.geometrySnapshot = b.geometrySnapshot; // geometry lane: hold the shape too
+    }
     c.outgoing = kps[s.holdEnd].outgoing;
     kps[s.holdStart] = b;
     kps[s.holdEnd] = c;
@@ -161,6 +163,9 @@ static void KKBasicCopySpatial(KKKeyPose *dst, KKKeyPose *_Nullable src) {
   dst.spatialSmooth = src.spatialSmooth;
   dst.inHandle = src.inHandle;
   dst.outHandle = src.outHandle;
+  // Geometry lanes (Points) carry their shape on the keypose; without this an
+  // In/Out boundary rebuild would drop every snapshot and collapse the morph.
+  dst.geometrySnapshot = src.geometrySnapshot;
 }
 
 // Rebuild one animatable lane's keyposes for the requested In/Out phases.

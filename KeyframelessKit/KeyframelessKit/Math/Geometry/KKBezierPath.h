@@ -34,7 +34,7 @@ NS_ASSUME_NONNULL_BEGIN
 @class KKEllipseShape;
 @class KKLineShape;
 
-@interface KKBezierPath : NSObject
+@interface KKBezierPath : NSObject <NSCopying>
 
 /// Number of points.
 @property(nonatomic, readonly) NSUInteger count;
@@ -97,6 +97,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Persists in `dataRepresentation` (v17+); older blobs get a fresh UUID
 /// on load.
 @property(nonatomic, copy) NSString *layerID;
+
+/// Opaque per-object animation payload (e.g. a serialized KKTimeline). The
+/// owning plugin defines the format; the geometry layer just round-trips it.
+/// Persists in `dataRepresentation` (v29+); older blobs read nil. Travels with
+/// the path through the blob (duplicate / reorder / group all preserve it).
+@property(nonatomic, copy, nullable) NSString *animationJSON;
 
 /// Whether the Transform group (translate/rotate/scale) applies at render
 /// time. When NO, the path renders at its raw point coords so OSC editing
@@ -333,6 +339,20 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)setOutHandle:(simd_float2)offset atIndex:(NSUInteger)index;
 - (void)setType:(KKBezierPointType)type atIndex:(NSUInteger)index;
 - (void)translateBy:(simd_float2)delta;
+
+/// Per-anchor corner radius (0 = sharp). The stored path keeps a rounded corner
+/// as a single anchor carrying this radius; the actual fillet geometry is
+/// generated for rendering / display by the corner expander (see KKCornerFillet)
+/// - so point counts stay stable across keyposes and the radius interpolates
+/// cleanly in a morph. Units are aspect-corrected object units (object Y units;
+/// X is scaled by the canvas aspect when the fillet is expanded). Stored lazily:
+/// a path with no rounded corners carries nothing extra. Index-synced through
+/// insert / remove; a bulk geometry replace (setBezierPoints / setLinearPositions)
+/// clears all radii.
+- (float)cornerRadiusAtIndex:(NSUInteger)index;
+- (void)setCornerRadius:(float)radius atIndex:(NSUInteger)index;
+/// YES if any anchor carries a nonzero corner radius (fast skip for the expander).
+- (BOOL)hasCornerRadii;
 
 /// Rebuild this path as a rounded rectangle with per-corner fractions.
 /// Each fraction 0–1: 0 = sharp, 1 = max radius for that corner.

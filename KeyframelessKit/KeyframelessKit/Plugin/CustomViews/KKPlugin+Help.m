@@ -25,6 +25,11 @@
 - (void)patchUIStateKey:(NSString *)key
                   value:(id)value
                 paramID:(UInt32)paramID {
+  [self patchUIStateKeys:@{key : value} paramID:paramID];
+}
+
+- (void)patchUIStateKeys:(NSDictionary<NSString *, id> *)values
+                 paramID:(UInt32)paramID {
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!actionAPI)
@@ -45,7 +50,7 @@
            : nil)
           ?: @{};
   state = [state mutableCopy];
-  state[key] = value;
+  [state addEntriesFromDictionary:values];
   NSString *json = [[NSString alloc]
       initWithData:[NSJSONSerialization dataWithJSONObject:state
                                                    options:0
@@ -409,18 +414,11 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
                                               @"popovers",
                                               @"Help shortcut.")],
                [KKHelpShortcut
-                   shortcutWithKeysMarkup:KKLoc(@"Drag across filter pills",
-                                                @"Shortcut keys.")
-                               descMarkup:KKLoc(
-                                              @"Show or hide several lanes at "
-                                              @"once",
-                                              @"Help shortcut.")],
-               [KKHelpShortcut
                    shortcutWithKeysMarkup:KKLoc(
                                               @"<kbd>⌥</kbd> + click a filter "
-                                              @"pill",
+                                              @"row",
                                               @"Shortcut keys.")
-                               descMarkup:KKLoc(@"Solo that lane or group",
+                               descMarkup:KKLoc(@"Solo that property",
                                                 @"Help shortcut.")],
              ]];
   s.icon = [NSImage imageWithSystemSymbolName:@"keyboard"

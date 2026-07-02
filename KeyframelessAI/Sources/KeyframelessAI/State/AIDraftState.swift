@@ -32,6 +32,14 @@ public final class AIDraftState: ObservableObject {
 	/// fire-and-look-away question also leaves a badge waiting (plugins + the
 	/// Steno workflow extension).
 	@Published public var didAnswerQuestion: Bool = false
+	/// How many local generations the shared kk-ai-helper is running right now
+	/// (polled while routing on the local provider). Drives the popover's job
+	/// indicator next to the Stop button; 0 hides it.
+	@Published public var localJobCount: Int = 0
+	/// Set when the user taps Stop, so the error the cancelled request reports
+	/// back is swallowed (a deliberate cancel isn't a failure). Consumed by the
+	/// next error, cleared when a new run starts.
+	public var cancelRequested: Bool = false
 
 	private init() {}
 

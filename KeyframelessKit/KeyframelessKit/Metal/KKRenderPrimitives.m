@@ -111,16 +111,24 @@
     d.colorAttachments[0].blendingEnabled = YES;
     d.colorAttachments[0].rgbBlendOperation = MTLBlendOperationAdd;
     d.colorAttachments[0].alphaBlendOperation = MTLBlendOperationAdd;
-    d.colorAttachments[0].destinationRGBBlendFactor =
-        MTLBlendFactorOneMinusSourceAlpha;
-    d.colorAttachments[0].destinationAlphaBlendFactor =
-        MTLBlendFactorOneMinusSourceAlpha;
-    d.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
 
-    if (blendMode == KKBlendModePremultipliedAlpha) {
+    if (blendMode == KKBlendModeAdditive) {
+      // src·1 + dst·1 on every channel: pure accumulation (no alpha weighting).
       d.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
+      d.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+      d.colorAttachments[0].destinationRGBBlendFactor = MTLBlendFactorOne;
+      d.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOne;
     } else {
-      d.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+      d.colorAttachments[0].destinationRGBBlendFactor =
+          MTLBlendFactorOneMinusSourceAlpha;
+      d.colorAttachments[0].destinationAlphaBlendFactor =
+          MTLBlendFactorOneMinusSourceAlpha;
+      d.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
+      if (blendMode == KKBlendModePremultipliedAlpha) {
+        d.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
+      } else {
+        d.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorSourceAlpha;
+      }
     }
   }
 

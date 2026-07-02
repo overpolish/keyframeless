@@ -19,6 +19,16 @@ NS_ASSUME_NONNULL_BEGIN
 @protected
   NSArray<KKLane *> *_availableLanes;
   KKTimeline *_timeline;
+  // Optional multi-owner (layer) timeline. When set, the Basic + Advanced
+  // graphs render and edit THIS (all layers' animated lanes, uniquely tagged)
+  // while _timeline stays the single selected owner that drives the Animated
+  // dropdown + Constants. nil for single-owner plugins (graphs use _timeline).
+  KKTimeline *_graphTimeline;
+  // Host's selected layer (multi-owner), scopes the Basic keypose popover.
+  NSString *_activeLayerKey;
+  // Host hint (multi-owner): some layer has a constant param even if the
+  // selected one doesn't, so the Constants button stays reachable.
+  BOOL _ownerConstantsAvailable;
   NSInteger _activeTab; // 0 = Basic, 1 = Advanced
 
   NSStackView *_laneStack;
@@ -31,10 +41,13 @@ NS_ASSUME_NONNULL_BEGIN
 
   __weak _KKManagePopoverView *_openManageView;
   __weak NSPopover *_openManagePopover;
-  // The last popover shown via _showPopoverWithContent: (gap/hold/boundary).
-  // Closed before a new one opens so clicking a second gap dismisses the
-  // first (outside-click monitors alone don't, click-to-click).
-  __weak NSPopover *_openContentPopover;
+  // The reused popover shown via _showPopoverWithContent: (gap/hold/boundary).
+  // STRONG + reused across opens: a ViewBridge XPC remote-hosts each NSPopover's
+  // backing window and FCP never releases it until inspector teardown, so a NEW
+  // popover per open leaks its CA layer-hosting IOSurfaces (~13 MB each) every
+  // time. Reusing one instance reuses its backing window (and surfaces), bounding
+  // it. Closed (not destroyed) before a new one opens.
+  NSPopover *_openContentPopover;
   __weak _KKStaticValuesPopoverView *_openStaticView;
   // YES when _openStaticView is a boundary-value popover (caller-supplied
   // display lanes) - its rows must NOT be clobbered by _refresh's
@@ -89,6 +102,15 @@ NS_ASSUME_NONNULL_BEGIN
   // lands in the visible pills/sliders. Same role as the hold-mod
   // reader (curve gap and hold-mod popovers are mutually exclusive).
   KKInterval *_Nullable (^_openGapIntervalReader)(void);
+  // Set while re-opening the gap/modulation popover for a newly-selected layer:
+  // the presenter then re-scopes the OPEN editor's checklist in place (no
+  // close/reopen) instead of building a fresh popover.
+  BOOL _rescopingGapPopover;
+  // The open gap/modulation editor's + its container's height constraints, so
+  // an in-place re-scope (different layer = different row count) resizes the
+  // popover (and the container, else the header is pushed out) by the delta.
+  NSLayoutConstraint *_openSegEditHeightConstraint;
+  NSLayoutConstraint *_openSegContainerHeightConstraint;
   // Extras rows currently shown below the gap-popover segment editor. Held
   // strong while the popover is open so -popoverDidRefresh can fire on
   // cmd-Z without the rows being deallocated mid-flight. Cleared in the
@@ -118,9 +140,17 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable KKLane *)_laneForLabel:(NSString *)label;
 - (NSSet<NSString *> *)_optedInLabelsSet;
 - (NSArray<KKLane *> *)_unoptedLanes;
+// `_availableLanes` scoped to the CURRENT owner: only the templates whose label
+// is present in `_timeline.lanes` (which a multi-owner plugin scopes per layer,
+// dropping owner-inapplicable lanes like a path's Points/Stroke for an image).
+// Single-owner plugins seed every available lane into `_timeline`, so this is
+// the full `_availableLanes` for them.
+- (NSArray<KKLane *> *)_ownerScopedAvailableLanes;
 - (nullable KKLane *)_templateForLabel:(NSString *)label;
 - (BOOL)_isAnimatableLabel:(NSString *)label;
 - (void)_refresh;
+- (KKTimeline *)_graphTimeline;
+- (void)_graphDidMutateTimeline:(KKTimeline *)updated;
 @end
 
 /// Lane add/remove/animatable mutations. Declared in a named category so the
@@ -130,6 +160,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSArray<NSNumber *> *)_defaultValuesForLabel:(NSString *)label;
 - (void)_setLaneAnimatable:(BOOL)animatable forLabel:(NSString *)label;
 - (void)_setLaneValues:(NSArray<NSNumber *> *)values forLabel:(NSString *)label;
+- (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label;
 @end
 
 /// Internal popover plumbing - the manage-popover presenter and the generic
@@ -139,6 +170,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// KKTimelineLanesView+Popovers.m.
 @interface KKTimelineLanesView (PopoversInternal)
 - (void)_showManagePopoverFromView:(NSView *)anchorView;
+/// The owner-scoped, mode-gated lane set the Animated dropdown shows; re-pulled
+/// on refresh so a companion-panel layer switch re-scopes the open dropdown.
+- (NSArray<KKLane *> *)_manageVisibleLanes;
 /// Boundary value popover (Basic step 27): reuses the static-values popover
 /// machinery but with caller-supplied display lanes (one synthetic
 /// single-keypose lane per animatable property = its value at the boundary),
@@ -162,6 +196,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (NSPopover *)_showPopoverWithContent:(NSView *)content
                               fromView:(NSView *)anchor
+                         preferredEdge:(NSRectEdge)preferredEdge
                                onClose:(void (^)(void))onClose;
 // Defined in +Popovers.m (PopoversInternal @implementation); called back from
 // the +BoundaryNav navigation methods.
@@ -264,6 +299,7 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 - (void)_refreshBoundaryPopoverNavEnabled;
 - (void)_navigateBoundaryPopoverDirection:(NSInteger)direction;
 - (void)_renderModeDidChange:(KKMiniViewerRenderMode)mode;
+- (void)_miniViewerSizeDidChange:(NSInteger)sizeIndex;
 /// In-place re-bind for an already-open boundary popover. Used by the
 /// onion-skin filmstrip when the user clicks an inactive cell - the popover
 /// stays open (no close/reopen blink), the value rows re-display the new

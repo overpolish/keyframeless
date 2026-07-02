@@ -65,7 +65,19 @@ extension AIPluginAgent {
 	) -> [String] {
 		let fromTimeline = extractLanes(fromTimelineJSON: json)
 		if !fromTimeline.isEmpty {
-			return Array(fromTimeline.keys).sorted()
+			// A multi-layer host (Canvas) tags each label "<property>\u{1F}<layerID>"
+			// so the same property on different layers stays distinct in the
+			// timeline. The classifier only needs the PROPERTY names to route, so
+			// strip the tag and dedupe - otherwise it sees the same property N times
+			// with opaque layer ids and burns tokens. No-op for single-owner hosts
+			// (no separator present).
+			var seen = Set<String>()
+			var out: [String] = []
+			for key in fromTimeline.keys.sorted() {
+				let plain = key.components(separatedBy: "\u{1F}").first ?? key
+				if seen.insert(plain).inserted { out.append(plain) }
+			}
+			return out
 		}
 		return parseLabelsFromSchemaText(fallbackSchemaText)
 	}

@@ -24,6 +24,8 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
     _dragSnapFrac = NAN;
     _selection = [NSMutableSet set];
     _selectedGaps = [NSMutableSet set];
+    _collapsedLayerKeys = [NSMutableSet set];
+    _collapsedCategoryKeys = [NSMutableSet set];
     _dragOriginTimes = [NSMutableDictionary dictionary];
     _hoverLaneRow = -1;
     _hoverGapAIdx = -1;
@@ -32,6 +34,24 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
         boolForKey:kKKAdvancedDynamicDisplayDefaultsKey];
   }
   return self;
+}
+
+- (void)setActiveLayerKey:(NSString *)activeLayerKey {
+  _activeLayerKey = [activeLayerKey copy];
+}
+
+- (NSString *)activeLayerKey {
+  return _activeLayerKey;
+}
+
+- (void)retargetKeyposePopoverToLayerKey:(NSString *)layerKey {
+  if (layerKey == _activeLayerKey || [layerKey isEqualToString:_activeLayerKey])
+    return;
+  _activeLayerKey = [layerKey copy];
+  // Re-point the open keypose popover at this layer's keypose at the same time.
+  // Selection already moved here (this IS the response to it), so don't fire
+  // the activation callback back at the host - that's the ping-pong.
+  [self requestValuePopoverAtFraction:_currentPopoverFrac fireActivation:NO];
 }
 
 - (void)setDynamicDisplay:(BOOL)dynamicDisplay {

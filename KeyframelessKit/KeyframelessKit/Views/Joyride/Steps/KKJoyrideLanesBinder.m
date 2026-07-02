@@ -5,6 +5,7 @@
 
 #import "KKJoyrideLanesBinder.h"
 #import "KKJoyrideTrigger_Internal.h"
+#import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKMiniViewerView.h>
 #import <KeyframelessKit/KKSegmentEditView.h>
 #import <KeyframelessKit/KKTimelineBasicView+Guide.h>
@@ -123,6 +124,8 @@
   if (lanes) {
     lanes.onManagePopoverWillOpen = nil;
     lanes.onManagePopoverClosed = nil;
+    lanes.onFilterPopoverWillOpen = nil;
+    lanes.onFilterPopoverClosed = nil;
     lanes.onLaneOptedIn = nil;
     lanes.onStaticValuesPopoverWillOpen = nil;
     lanes.onStaticValuesPopoverClosed = nil;
@@ -131,9 +134,11 @@
     lanes.onGapPopoverWillOpen = nil;
     lanes.onGapPopoverCurveChanged = nil;
     lanes.onGuideRenderModeChanged = nil;
+    lanes.onGuideMiniViewerSizeChanged = nil;
     lanes.onGuideFilmstripCellActivated = nil;
     lanes.onGuideDynamicToggled = nil;
     lanes.onGuideLaneFilterToggled = nil;
+    lanes.onGuideStaticCategoryChanged = nil;
     KKTimelineBasicView *graph = lanes.basicGraph;
     graph.onPhaseToggled = nil;
     graph.onDiamondTapped = nil;
@@ -191,6 +196,32 @@
            label:nil];
   };
 
+  lanes.onFilterPopoverWillOpen = ^(NSView *content) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    s->_latestFilterPopoverContent = content;
+    KKJoyrideController *g = s->_guide;
+    g.additionalPassthroughWindow = content.window;
+    [s _fireType:KKJoyrideTriggerTypeFilterPopoverWillOpen
+          intArg:0
+         intArg2:0
+           label:nil];
+  };
+
+  lanes.onFilterPopoverClosed = ^{
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    s->_latestFilterPopoverContent = nil;
+    KKJoyrideController *g = s->_guide;
+    g.additionalPassthroughWindow = nil;
+    [s _fireType:KKJoyrideTriggerTypeFilterPopoverClosed
+          intArg:0
+         intArg2:0
+           label:nil];
+  };
+
   lanes.onLaneOptedIn = ^(NSString *label) {
     __strong typeof(weak) s = weak;
     if (!s)
@@ -242,6 +273,14 @@
     if (!s || !label)
       return;
     s->_latestStaticValues[label] = [values copy];
+    // A discrete choice-pill selection (no drag-end) lands here only - fire the
+    // choice trigger with the selected index so a step can advance on it. Only a
+    // step bound to this label+index matches, so slider ticks are harmless.
+    if (values.count)
+      [s _fireType:KKJoyrideTriggerTypeStaticChoiceSelected
+            intArg:(NSInteger)llround(values.firstObject.doubleValue)
+           intArg2:0
+             label:label];
   };
 
   lanes.onStaticValueDragEnded =
@@ -293,6 +332,16 @@
            label:nil];
   };
 
+  lanes.onGuideMiniViewerSizeChanged = ^(NSInteger sizeIndex) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    [s _fireType:KKJoyrideTriggerTypeMiniViewerSizeChanged
+          intArg:sizeIndex
+         intArg2:0
+           label:nil];
+  };
+
   lanes.onGuideFilmstripCellActivated = ^(double fraction) {
     __strong typeof(weak) s = weak;
     if (!s)
@@ -301,6 +350,16 @@
           intArg:0
          intArg2:0
            label:nil];
+  };
+
+  lanes.onGuideStaticCategoryChanged = ^(NSString *categoryKey) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    [s _fireType:KKJoyrideTriggerTypeStaticCategorySelected
+          intArg:0
+         intArg2:0
+           label:categoryKey];
   };
 
   lanes.onGuideDynamicToggled = ^(BOOL on) {
@@ -560,6 +619,12 @@
     });
     break;
   }
+  case KKJoyrideCloseOnAdvanceFilterPopover: {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [lanes closeFilterPopover];
+    });
+    break;
+  }
   case KKJoyrideCloseOnAdvanceNone:
     break;
   }
@@ -580,10 +645,22 @@
     if (t.label && ![t.label isEqualToString:label])
       return NO;
     return YES;
+  case KKJoyrideTriggerTypeStaticChoiceSelected:
+    // Plain-label tolerant (multi-owner lanes carry a composite label).
+    if (t.label && label &&
+        ![KKPlainLaneLabel(t.label) isEqualToString:KKPlainLaneLabel(label)])
+      return NO;
+    return t.intArg == intArg;
+  case KKJoyrideTriggerTypeStaticCategorySelected:
+    // `label` carries the category key here (an exact identifier, not a lane).
+    if (t.label && ![t.label isEqualToString:label])
+      return NO;
+    return YES;
   case KKJoyrideTriggerTypeGapPopoverCurveChanged:
   case KKJoyrideTriggerTypeDiamondTapped:
   case KKJoyrideTriggerTypeGapTapped:
   case KKJoyrideTriggerTypeRenderModeChanged:
+  case KKJoyrideTriggerTypeMiniViewerSizeChanged:
   case KKJoyrideTriggerTypeDynamicToggled:
   case KKJoyrideTriggerTypeMiniViewerViewTransformChanged:
     if (t.intArg >= 0 && t.intArg != intArg)

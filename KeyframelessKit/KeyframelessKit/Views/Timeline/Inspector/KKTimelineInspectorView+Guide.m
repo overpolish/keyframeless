@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKCompoundPillBar.h"
+#import "KKOSCChecklistView.h"
 #import "KKPillToggleRowView.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineInspectorView+Guide.h"
@@ -337,6 +337,12 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   // Start in Off so the first Filmstrip / Onion tap is a real mode change the
   // renderModeChanged trigger can catch.
   self.basicLanesView.renderMode = KKMiniViewerRenderModeOff;
+  // Snapshot + reset the mini-viewer size to the smallest (default) so the
+  // popover opens at a known size and the size step has somewhere to grow to;
+  // restored in extraOnComplete.
+  NSInteger priorMiniViewerSize =
+      [self.basicLanesView guideMiniViewerSizeIndex];
+  [self.basicLanesView guideSetMiniViewerSizeIndex:0];
   KKJoyrideGuideHost *host = [self timingGuideHost];
   host.forwardsGestures = YES;
   // The mini viewer (with all three modes) lives in the Advanced sequencer's
@@ -364,6 +370,7 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
           return;
         [s.basicLanesView guideCloseContentPopover];
         s.basicLanesView.renderMode = priorRenderMode;
+        [s.basicLanesView guideSetMiniViewerSizeIndex:priorMiniViewerSize];
         s.guideOwnsTab = NO; // unlock before restoring the user's tab
         if (priorTab != s.activeTab)
           [s setActiveTab:priorTab];

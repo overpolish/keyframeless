@@ -30,6 +30,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) void (^onApplyPreset)
     (NSString *timelineJSON, BOOL atPlayhead);
 
+/// The user picked a CONTENT preset (one with a `payloadKind`); hand back its
+/// kind + payload so the plugin inserts the content (e.g. a Canvas layer) rather
+/// than applying a timeline curve. `atPlayhead` carries the same intent as
+/// `onApplyPreset` (the plugin decides what it means for its content).
+@property(nonatomic, copy, nullable) void (^onApplyPresetPayload)
+    (NSString *payloadKind, NSString *payloadJSON, BOOL atPlayhead);
+
 - (void)showRelativeToRect:(NSRect)rect ofView:(NSView *)view;
 
 #pragma mark - Guide support

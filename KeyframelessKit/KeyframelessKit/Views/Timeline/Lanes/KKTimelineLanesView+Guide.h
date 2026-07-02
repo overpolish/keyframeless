@@ -38,11 +38,33 @@ NS_ASSUME_NONNULL_BEGIN
 /// open.
 - (void)guideCloseContentPopover;
 
+/// Close every lane popover (content / manage / lane-filter) - used at guide
+/// start so a popover the user left open isn't sitting over the guide. No-op
+/// for any that aren't open.
+- (void)guideCloseAllPopovers;
+
+/// The constant popover's remembered category tab (the one it reopens on), or
+/// nil. A guide saves this so it can restore the user's tab on completion after
+/// forcing a known starting tab to teach category navigation.
+- (nullable NSString *)guideRememberedConstantCategory;
+
 /// Screen rect of the render-mode pill's segment for `mode` (Off/Filmstrip/
 /// Onion) in the currently-open boundary value popover, or NSZeroRect if no
 /// such popover / pill is shown. The mini-viewer guide spotlights this so the
 /// user can tap the mode it's teaching.
 - (NSRect)guideRenderModePillScreenRectForMode:(KKMiniViewerRenderMode)mode;
+
+/// Screen rect of the mini-viewer size pill's segment `index` (0 = sm, 1 = md,
+/// 2 = lg) in the currently-open boundary popover, or NSZeroRect if no such
+/// popover / pill is shown. The mini-viewer guide spotlights the size it
+/// teaches.
+- (NSRect)guideSizePillScreenRectForIndex:(NSInteger)index;
+
+/// Read / write the global mini-viewer size preference (0 = sm, 1 = md, 2 =
+/// lg). The guide host snapshots the value, resets to the default for the run,
+/// and restores it afterwards (mirrors the Dynamic-toggle reset/restore).
+- (NSInteger)guideMiniViewerSizeIndex;
+- (void)guideSetMiniViewerSizeIndex:(NSInteger)sizeIndex;
 
 /// Fired after a gap-easing popover opens (settle delay applied so the
 /// segment editor is in a window and laid out). The guide grabs the

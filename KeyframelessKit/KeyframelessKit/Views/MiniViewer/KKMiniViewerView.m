@@ -83,6 +83,11 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   return self;
 }
 
+- (CGFloat)oscSizingHeight {
+  return _oscReferenceHeight > 0 ? _oscReferenceHeight
+                                 : self.bounds.size.height;
+}
+
 - (CGRect)contentRectInViewPoints {
   CGRect r = [self _contentRectInDrawable];
   CGFloat s = self.window.backingScaleFactor;
@@ -96,6 +101,27 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   [_overlay setNeedsDisplay:YES];
 }
 
+// Only accept first responder when a plugin opted in (so its NSPopover mini can
+// become key for bare-key handling). Default minis stay non-first-responder, so
+// host keyboard shortcuts keep working while interacting with them.
+- (BOOL)acceptsFirstResponder {
+  return _grabsKeyFocusOnClick;
+}
+
+// Interact on the FIRST click even when the popover window isn't key yet (it's
+// a nonactivating panel, so clicking in from the layer panel / FCP would
+// otherwise be swallowed just to make it key, needing a second click to
+// actually drag an OSC). The mini is a transient editing surface - a single
+// click should act.
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+
+- (void)endFieldEditingGrabbingFocusIfNeeded {
+  [self.window
+      makeFirstResponder:(_grabsKeyFocusOnClick ? (NSResponder *)self : nil)];
+}
+
 - (void)reportHandleValueForLabel:(NSString *)laneLabel
                            values:(NSArray<NSNumber *> *)values {
   if (self.onHandleValue)
@@ -105,8 +131,12 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 - (void)dealloc {
   [_pollTimer invalidate];
   [self _teardownKeyMonitors];
-  if (_sourceSurface)
-    CFRelease(_sourceSurface);
+  // NOTE: do NOT CFRelease(_sourceSurface) here. It is only ever an unowned
+  // alias of the active filmstrip slot's surface (-_selectActiveSlot:); the slot
+  // owns that +1 and releases it in -[_KKMiniFilmSlot dealloc]. Releasing it here
+  // too is an over-release - latent for as long as this view leaked (never
+  // deallocated), and the crash that surfaced once the popover-close path started
+  // freeing the view.
 }
 
 - (void)_teardownKeyMonitors {
@@ -118,6 +148,10 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
     [NSEvent removeMonitor:_keyGlobalMon];
     _keyGlobalMon = nil;
   }
+  if (_magnifyMon) {
+    [NSEvent removeMonitor:_magnifyMon];
+    _magnifyMon = nil;
+  }
 }
 
 - (void)viewDidMoveToWindow {
@@ -126,11 +160,20 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   _pollTimer = nil;
   [self _teardownKeyMonitors];
   if (self.window) {
+    // Weak block (NOT target:self) - a target:self repeating timer retains the
+    // view, so it only deallocs when the timer is invalidated (window-leave /
+    // dealloc). The guide's popover juggling (content moving to the overlay /
+    // passthrough window, deferred closes) can leave the view in a window with
+    // a live timer, so it never deallocs and its MTKView CAMetalLayer drawables
+    // (multi-MB IOSurfaces) leak, accumulating per guide run. A weak block lets
+    // the view dealloc as soon as its popover releases it; dealloc invalidates
+    // the timer.
+    __weak typeof(self) weakSelf = self;
     _pollTimer = [NSTimer scheduledTimerWithTimeInterval:kPollInterval
-                                                  target:self
-                                                selector:@selector(_poll)
-                                                userInfo:nil
-                                                 repeats:YES];
+                                                 repeats:YES
+                                                   block:^(NSTimer *t) {
+                                                     [weakSelf _poll];
+                                                   }];
     [self _poll];
     [self _installKeyMonitor];
   }
@@ -167,21 +210,103 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   return YES;
 }
 
+// Toolbar tool shortcuts (Control+letter). Same XPC routing caveat as the reset
+// key: in FCP's ViewBridge the event may only reach the GLOBAL monitor, so we
+// can fire but not always swallow it. Gate on the mini being the visible key
+// window and skip while a value field (NSText) is editing.
+- (BOOL)_handleToolbarKeyEvent:(NSEvent *)e {
+  if (!self.window.isVisible || !self.window.isKeyWindow)
+    return NO;
+  if ([self.window.firstResponder isKindOfClass:[NSText class]])
+    return NO;
+  if (![self.canvasDelegate
+          respondsToSelector:@selector(
+                                 miniViewer:toolbarKeyDownChars:modifiers:)])
+    return NO;
+  NSString *chars = e.charactersIgnoringModifiers;
+  if (chars.length == 0)
+    return NO;
+  return [self.canvasDelegate miniViewer:self
+                     toolbarKeyDownChars:chars
+                               modifiers:e.modifierFlags];
+}
+
+// Esc / Return etc. for an active drawing tool (pen), via the same monitor as
+// the reset + toolbar shortcuts. Gated on the mini being the key window + not
+// editing a field. Drawing-tool keys require a drawing tool active; Delete /
+// Backspace is forwarded in ANY tool so the cursor can remove a selection.
+- (BOOL)_handleToolKeyEvent:(NSEvent *)e {
+  if (!self.window.isVisible || !self.window.isKeyWindow)
+    return NO;
+  if ([self.window.firstResponder isKindOfClass:[NSText class]])
+    return NO;
+  if (![self.canvasDelegate
+          respondsToSelector:@selector(miniViewer:toolKeyDown:)])
+    return NO;
+  NSString *chars = e.charactersIgnoringModifiers;
+  if (chars.length == 0)
+    return NO;
+  unichar ch = [chars characterAtIndex:0];
+  BOOL isDelete = (ch == NSDeleteCharacter || ch == NSBackspaceCharacter);
+  BOOL drawingActive =
+      [self.canvasDelegate
+          respondsToSelector:@selector(miniViewerToolDrawingActive:)] &&
+      [self.canvasDelegate miniViewerToolDrawingActive:self];
+  if (!drawingActive && !isDelete)
+    return NO;
+  BOOL handled = [self.canvasDelegate miniViewer:self toolKeyDown:ch];
+  if (handled)
+    [self setNeedsDisplay:YES]; // redraw the tool overlay (Metal pass) after
+                                // the key
+  return handled;
+}
+
 - (void)_installKeyMonitor {
   __weak typeof(self) weak = self;
   _keyMon = [NSEvent
       addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
                                    handler:^NSEvent *(NSEvent *e) {
                                      __strong typeof(self) s = weak;
-                                     return [s _handleResetKeyEvent:e] ? nil
-                                                                       : e;
+                                     if ([s _handleResetKeyEvent:e] ||
+                                         [s _handleToolbarKeyEvent:e] ||
+                                         [s _handleToolKeyEvent:e])
+                                       return nil;
+                                     return e;
                                    }];
+  // Global monitor = events delivered to OTHER apps (the local monitor above
+  // covers our own process). It exists only because FCP handles its Cmd-key
+  // equivalents in the host process and doesn't forward them across ViewBridge
+  // - so it's limited to those equivalents (reset / toolbar). The tool keys,
+  // which include the DESTRUCTIVE Delete, are NOT handled here: a key typed
+  // into another app (e.g. backspace in an editor) must never delete a layer.
+  // Those go through the local monitor only (i.e. when FCP itself has the
+  // event).
   _keyGlobalMon =
       [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskKeyDown
                                              handler:^(NSEvent *e) {
                                                __strong typeof(self) s = weak;
-                                               [s _handleResetKeyEvent:e];
+                                               if ([s _handleResetKeyEvent:e])
+                                                 return;
+                                               [s _handleToolbarKeyEvent:e];
                                              }];
+  // Pinch-to-zoom via a LOCAL magnify monitor instead of the magnifyWithEvent:
+  // responder (which AppKit only calls on the key window - so a pinch over the
+  // mini does nothing while the companion layer list holds key). The monitor
+  // fires for the app's magnify events regardless of key window and routes by
+  // pointer location; applyMagnifyEvent: reads the global mouse position. Gated
+  // on pointerOverCanvas so it ignores pinches over other views (e.g. the
+  // timeline graph keeps its own zoom). Swallow when handled so no other
+  // responder double-zooms.
+  _magnifyMon =
+      [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMagnify
+                                            handler:^NSEvent *(NSEvent *e) {
+                                              __strong typeof(self) s = weak;
+                                              if ([s pointerOverCanvas]) {
+                                                [s applyMagnifyEvent:e];
+                                                return nil;
+                                              }
+                                              return e;
+                                            }];
 }
 
 - (BOOL)_resolveSlot:(_KKMiniFilmSlot *)slot

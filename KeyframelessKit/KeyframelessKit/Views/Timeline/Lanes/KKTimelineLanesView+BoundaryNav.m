@@ -40,7 +40,7 @@
   if (_renderMode != KKMiniViewerRenderModeOff) {
     NSSet<NSString *> *scope = [self _scopedLaneLabelsForOpenPopover];
     NSMutableArray<NSNumber *> *kpTimes = [NSMutableArray array];
-    for (KKLane *lane in _timeline.lanes) {
+    for (KKLane *lane in [self _graphTimeline].lanes) {
       if (!lane.enabled)
         continue;
       if (scope && ![scope containsObject:lane.label])
@@ -82,7 +82,7 @@
 - (NSArray<NSNumber *> *)_animatableKPFractions {
   NSSet<NSString *> *scope = [self _scopedLaneLabelsForOpenPopover];
   NSMutableArray<NSNumber *> *kpTimes = [NSMutableArray array];
-  for (KKLane *lane in _timeline.lanes) {
+  for (KKLane *lane in [self _graphTimeline].lanes) {
     if (!lane.enabled)
       continue;
     if (scope && ![scope containsObject:lane.label])
@@ -112,7 +112,7 @@
                            and:(double)b
                          scope:(nullable NSSet<NSString *> *)scope {
   double mid = 0.5 * (a + b);
-  for (KKLane *lane in _timeline.lanes) {
+  for (KKLane *lane in [self _graphTimeline].lanes) {
     if (!lane.enabled)
       continue;
     if (scope && ![scope containsObject:lane.label])
@@ -224,6 +224,14 @@
   }
 }
 
+- (void)_miniViewerSizeDidChange:(NSInteger)sizeIndex {
+  // Guide-only observation hook (the popover already persisted the global pref
+  // and resized itself). Lets the mini-viewer guide's "make the preview bigger"
+  // step advance when the user picks the large size.
+  if (self.onGuideMiniViewerSizeChanged)
+    self.onGuideMiniViewerSizeChanged(sizeIndex);
+}
+
 - (void)_republishBoundaryRequestIfOpen {
   if (_renderMode == KKMiniViewerRenderModeOff)
     return;
@@ -249,6 +257,8 @@
   // Full row rebuild (not just value rebind): the editable↔Animate split can
   // change between fractions (navigate) or after add/remove, and the one-way
   // applyExcludedLabels: swap can't restore an editable row on its own.
+  // rebuildRowsWithLanes: re-fits the popover to the new row count (handles a
+  // re-target to a layer with fewer params).
   [_openStaticView rebuildRowsWithLanes:lanes excludedLabels:excludedLabels];
   [_openStaticView setHeaderDetail:[self _timeStringForFraction:fraction]];
   [_openStaticView setHeaderLinked:[self _anyLinkedKeyposeAtFraction:fraction]];

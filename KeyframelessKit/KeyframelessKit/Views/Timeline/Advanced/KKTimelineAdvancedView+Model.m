@@ -22,7 +22,116 @@
     if (l.enabled && ![_hiddenLaneLabels containsObject:l.label] &&
         [condVisible containsObject:l.label])
       [out addObject:l];
-  return out;
+
+  NSMutableArray<KKLane *> *result = [NSMutableArray array];
+
+  // Single-owner plugins (no layerKey on any lane): no layer level, so the
+  // category headers (if any) sit at the top level. Plugins without categories
+  // append flat - no headers, layout unchanged.
+  BOOL hasLayers = NO;
+  for (KKLane *l in out)
+    if (l.layerKey.length) {
+      hasLayers = YES;
+      break;
+    }
+  if (!hasLayers) {
+    [self _appendCategoryGroupedLanes:out layerKey:nil into:result];
+    return result;
+  }
+
+  // Multi-owner: emit, per layer in stack order, a synthetic layer HEADER row
+  // then (unless collapsed) that layer's lanes - themselves grouped under
+  // collapsible category headers. The layer header is always present so a
+  // collapsed layer stays visible + re-expandable.
+  for (NSString *lk in [self _orderedLayerKeysForLanes:out]) {
+    KKLane *sample = nil;
+    for (KKLane *l in out)
+      if ([(l.layerKey ?: @"") isEqualToString:lk]) {
+        sample = l;
+        break;
+      }
+    KKLane *header = [sample copy];
+    header.headerPlaceholder = YES;
+    header.categoryHeader = NO;
+    header.label = lk; // unique, never matches a real lane label
+    header.categoryKey = nil;
+    header.categorySymbol = nil;
+    header.keyposes = @[];
+    [result addObject:header];
+    if ([_collapsedLayerKeys containsObject:lk])
+      continue;
+    NSMutableArray<KKLane *> *layerLanes = [NSMutableArray array];
+    for (KKLane *l in out)
+      if ([(l.layerKey ?: @"") isEqualToString:lk])
+        [layerLanes addObject:l];
+    [self _appendCategoryGroupedLanes:layerLanes layerKey:lk into:result];
+  }
+  return result;
+}
+
+// The collapse identity for a category, scoped by its owning layer so the same
+// categoryKey (e.g. "Transform") collapses independently in each Canvas layer.
+// Single-owner plugins pass a nil layerKey, giving a bare category key.
+- (NSString *)_categoryCollapseKeyForLayer:(nullable NSString *)layerKey
+                                  category:(NSString *)category {
+  return [NSString stringWithFormat:@"%@\x1f%@", layerKey ?: @"", category];
+}
+
+// Append `lanes` (already in display order, all from one owner) to `result`,
+// injecting a synthetic CATEGORY HEADER row before the first lane of each
+// categorised run and skipping that run's lanes while the category is
+// collapsed. Uncategorised lanes are always appended with no header, so a
+// plugin that sets no categoryKey keeps the flat layout.
+- (void)_appendCategoryGroupedLanes:(NSArray<KKLane *> *)lanes
+                           layerKey:(nullable NSString *)layerKey
+                               into:(NSMutableArray<KKLane *> *)result {
+  NSString *prevCat = nil;
+  BOOL collapsedRun = NO;
+  for (KKLane *l in lanes) {
+    NSString *cat = l.categoryKey.length ? l.categoryKey : nil;
+    if (cat && ![cat isEqualToString:prevCat]) {
+      NSString *collapseKey = [self _categoryCollapseKeyForLayer:layerKey
+                                                        category:cat];
+      KKLane *header = [l copy];
+      header.headerPlaceholder = YES;
+      header.categoryHeader = YES;
+      header.label = collapseKey; // unique, never matches a real lane label
+      header.keyposes = @[];
+      header.locked = NO;
+      [result addObject:header];
+      collapsedRun = [_collapsedCategoryKeys containsObject:collapseKey];
+    } else if (!cat) {
+      collapsedRun = NO;
+    }
+    prevCat = cat;
+    if (cat && collapsedRun)
+      continue;
+    [result addObject:l];
+  }
+}
+
+// Layer keys present among `lanes`, in layerOrder (stack) order, extras last.
+- (NSArray<NSString *> *)_orderedLayerKeysForLanes:(NSArray<KKLane *> *)lanes {
+  NSMutableArray<NSString *> *keys = [NSMutableArray array];
+  NSMutableSet<NSString *> *seen = [NSMutableSet set];
+  for (NSString *lk in (self.layerOrder ?: @[])) {
+    if ([seen containsObject:lk])
+      continue;
+    for (KKLane *l in lanes)
+      if ([(l.layerKey ?: @"") isEqualToString:lk]) {
+        [keys addObject:lk];
+        [seen addObject:lk];
+        break;
+      }
+  }
+  for (KKLane *l in lanes) {
+    NSString *lk = l.layerKey ?: @"";
+    if (lk.length && ![seen containsObject:lk]) {
+      [keys addObject:lk];
+      [seen addObject:lk];
+    }
+  }
+  return keys;
 }
 
 - (double)_clipDuration {
@@ -69,6 +178,8 @@
   };
   CGFloat maxW = 0.0;
   for (KKLane *lane in [self _animatableLanes]) {
+    if (lane.headerPlaceholder)
+      continue; // header rows draw a full-width name, not a gutter label
     NSString *label = KKLocalizedParamName(lane.label ?: @"");
     maxW = MAX(maxW, ceil([label sizeWithAttributes:attrs].width));
   }
@@ -121,82 +232,94 @@
   return f < 0.0 ? 0.0 : (f > hi ? hi : f);
 }
 
-- (NSArray<NSNumber *> *)_groupDividerFlags {
-  NSArray<KKLane *> *lanes = [self _animatableLanes];
-  NSMutableArray<NSNumber *> *flags =
-      [NSMutableArray arrayWithCapacity:lanes.count];
-  NSString *prev = nil;
-  for (KKLane *l in lanes) {
-    NSString *cat = l.categoryKey.length ? l.categoryKey : nil;
-    // A header sits above the first lane of each categorised run, and stays
-    // even when only that one group is shown - so e.g. Amount / Spread / Speed
-    // keep the "Noise" header that gives them meaning. Uncategorised lanes get
-    // no header, so plugins without categories keep the flat layout.
-    BOOL start = cat != nil && ![cat isEqualToString:prev];
-    [flags addObject:@(start)];
-    prev = cat;
-  }
-  return flags;
-}
-
-// Divider strips + inter-lane gaps that precede lane `upto` (exclusive when
-// negative-sentinel), summed from the group flags. `upto` == n totals them all.
+// Inter-row gaps that precede row `upto`. Layer AND category headers are full
+// rows now (no thin divider strips), so every row below the top carries a plain
+// kRowGap above it; there are no dividers. `upto` == n totals them all. The
+// dividers out-param is retained (always 0) so the height formulas keep their
+// general `gaps*kRowGap + dividers*kGroupDividerH` shape.
 - (void)_dividerCount:(NSInteger *)outDividers
              gapCount:(NSInteger *)outGaps
               through:(NSInteger)upto {
-  NSArray<NSNumber *> *flags = [self _groupDividerFlags];
-  NSInteger d = 0, g = 0;
-  for (NSInteger j = 0; j < upto; j++) {
-    BOOL start = j < (NSInteger)flags.count && flags[j].boolValue;
-    if (start)
-      d++;
-    else if (j > 0)
-      g++; // a non-start row below the top carries a plain gap above it
-  }
+  NSInteger g = 0;
+  for (NSInteger j = 1; j < upto; j++)
+    g++;
   if (outDividers)
-    *outDividers = d;
+    *outDividers = 0;
   if (outGaps)
     *outGaps = g;
 }
 
+// The height of a single LANE row. Layer-header rows take a fixed compact
+// height (kLayerHeaderRowH) and are excluded from the equal split, so the real
+// lanes share whatever is left - a collapsed layer (header only) frees its
+// space for the others instead of holding a full row.
 - (CGFloat)_rowHeightForCount:(NSInteger)n {
   if (n <= 0)
     return 0.0;
+  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  NSInteger headers = 0;
+  for (KKLane *l in lanes)
+    if (l.headerPlaceholder)
+      headers++;
+  NSInteger laneRows = n - headers;
+  if (laneRows <= 0)
+    return 0.0; // only headers visible (every layer collapsed)
   NSRect t = [self _tracksRect];
   NSInteger dividers = 0, gaps = 0;
   [self _dividerCount:&dividers gapCount:&gaps through:n];
   CGFloat avail = NSHeight(t) - kRowGap * (CGFloat)gaps -
-                  kGroupDividerH * (CGFloat)dividers;
-  CGFloat h = avail / (CGFloat)n;
+                  kGroupDividerH * (CGFloat)dividers -
+                  kLayerHeaderRowH * (CGFloat)headers;
+  CGFloat h = avail / (CGFloat)laneRows;
   if (h < kRowMin)
     h = kRowMin;
   return floor(h);
 }
 
+// Own height of row `i`: fixed for a layer-header row, the shared lane height
+// otherwise.
+- (CGFloat)_ownHeightForRow:(NSInteger)i
+                    inLanes:(NSArray<KKLane *> *)lanes
+                   laneRowH:(CGFloat)laneRowH {
+  if (i >= 0 && i < (NSInteger)lanes.count && lanes[i].headerPlaceholder)
+    return kLayerHeaderRowH;
+  return laneRowH;
+}
+
 - (NSRect)_rowRectForIndex:(NSInteger)i count:(NSInteger)n {
   NSRect t = [self _tracksRect];
-  CGFloat h = [self _rowHeightForCount:n];
-  // Dividers + gaps stacked above this row's top (the row's own leading divider
+  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  CGFloat laneRowH = [self _rowHeightForCount:n];
+  // Sum the own-heights of rows 0..i (headers fixed, lanes shared) plus the
+  // dividers + gaps stacked above this row's top (the row's own leading divider
   // is counted; its preceding plain gap is not, since a group-start row has a
   // strip instead). +_scrollY raises the rows (y-up). Single funnel: drawing,
   // hit-testing and popover anchors all read row positions from here.
+  CGFloat rowsAbove = 0.0;
+  for (NSInteger j = 0; j <= i && j < (NSInteger)lanes.count; j++)
+    rowsAbove += [self _ownHeightForRow:j inLanes:lanes laneRowH:laneRowH];
+  CGFloat ownH = [self _ownHeightForRow:i inLanes:lanes laneRowH:laneRowH];
   NSInteger dAbove = 0, gAbove = 0;
   [self _dividerCount:&dAbove gapCount:&gAbove through:i + 1];
   CGFloat y = NSMaxY(t) + _scrollY -
-              ((CGFloat)(i + 1) * h + (CGFloat)gAbove * kRowGap +
+              (rowsAbove + (CGFloat)gAbove * kRowGap +
                (CGFloat)dAbove * kGroupDividerH);
-  return NSMakeRect(NSMinX(t), y, NSWidth(t), h);
+  return NSMakeRect(NSMinX(t), y, NSWidth(t), ownH);
 }
 
 - (CGFloat)_maxScrollY {
   NSInteger n = [self _animatableCount];
   if (n <= 0)
     return 0.0;
-  CGFloat h = [self _rowHeightForCount:n];
+  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  CGFloat laneRowH = [self _rowHeightForCount:n];
   NSInteger dividers = 0, gaps = 0;
   [self _dividerCount:&dividers gapCount:&gaps through:n];
-  CGFloat contentH = h * (CGFloat)n + kRowGap * (CGFloat)gaps +
-                     kGroupDividerH * (CGFloat)dividers;
+  CGFloat rowsH = 0.0;
+  for (NSInteger j = 0; j < (NSInteger)lanes.count; j++)
+    rowsH += [self _ownHeightForRow:j inLanes:lanes laneRowH:laneRowH];
+  CGFloat contentH =
+      rowsH + kRowGap * (CGFloat)gaps + kGroupDividerH * (CGFloat)dividers;
   CGFloat avail = NSHeight([self _tracksRect]);
   return MAX(0.0, contentH - avail);
 }
@@ -206,6 +329,25 @@
   CGFloat clamped = MAX(0.0, MIN(_scrollY, maxY));
   if (clamped != _scrollY)
     _scrollY = clamped;
+}
+
+- (void)_ensureLaneRowVisible:(NSInteger)i count:(NSInteger)n {
+  if (i < 0 || n <= 0)
+    return;
+  NSRect g = [self _graphRect];
+  NSRect row = [self _rowRectForIndex:i count:n];
+  // _scrollY raises rows (y-up): + moves them up, - moves them down. Nudge the
+  // minimum amount to bring the row fully inside [NSMinY(g), NSMaxY(g)].
+  CGFloat newScroll = _scrollY;
+  if (NSMinY(row) < NSMinY(g))
+    newScroll += NSMinY(g) - NSMinY(row);
+  else if (NSMaxY(row) > NSMaxY(g))
+    newScroll -= NSMaxY(row) - NSMaxY(g);
+  newScroll = MAX(0.0, MIN(newScroll, [self _maxScrollY]));
+  if (newScroll != _scrollY) {
+    _scrollY = newScroll;
+    [self setNeedsDisplay:YES];
+  }
 }
 
 // Candidate snap fractions = every distinct keypose time across all
@@ -243,23 +385,22 @@
 }
 
 - (NSInteger)_animatableIndexForLabel:(NSString *)label {
-  NSInteger i = 0;
-  for (KKLane *lane in _timeline.lanes) {
-    if (!lane.enabled)
-      continue;
-    if ([lane.label isEqualToString:label])
+  // Index into the DISPLAYED row list (-_animatableLanes), which injects layer/
+  // category header rows and drops hidden/collapsed/mode-gated lanes - the same
+  // list -_rowRectForIndex:count: walks. Walking _timeline.lanes instead
+  // mis-mapped every row below a category header (e.g. Glow's Core/Noise), so a
+  // guide cutout for a lane/keypose landed on the wrong row. Returns -1 when
+  // the lane isn't currently a visible row (collapsed/hidden), so the guide
+  // rect methods yield NSZeroRect.
+  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
+    if (!lanes[i].headerPlaceholder && [lanes[i].label isEqualToString:label])
       return i;
-    i++;
-  }
   return -1;
 }
 
 - (NSInteger)_animatableCount {
-  NSInteger n = 0;
-  for (KKLane *lane in _timeline.lanes)
-    if (lane.enabled)
-      n++;
-  return n;
+  return (NSInteger)[self _animatableLanes].count;
 }
 
 - (KKLane *)_animatableLaneForLabel:(NSString *)label {

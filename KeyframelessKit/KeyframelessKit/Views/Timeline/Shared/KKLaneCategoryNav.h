@@ -53,4 +53,14 @@ FOUNDATION_EXPORT KKPillToggleRowView *_Nullable KKMakeLaneCategoryPill(
     NSArray<KKLane *> *lanes, NSString *_Nullable selected,
     void (^onSelect)(NSString *categoryKey));
 
+/// A compact hierarchical summary of `lanes` for a dropdown field:
+///  - no groups (Rounded/MagicMove): `Position, Scale`
+///  - categories (Glow): `Core > Glow, Radius | Noise > Amount`
+///  - layers (Canvas): `Layer 1 > Core > … | Layer 2 > …`
+/// Layers are joined by " | ", category groups within a layer by ", ", and leaf
+/// params by ", ". Returns an empty string when `lanes` is empty (the caller
+/// supplies its own placeholder). Localizes param/category names; layer names
+/// run through `KKTruncatedLayerName`.
+FOUNDATION_EXPORT NSString *KKHierarchicalLaneSummary(NSArray<KKLane *> *lanes);
+
 NS_ASSUME_NONNULL_END

@@ -162,6 +162,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// rail as `oscMasterVisible`.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *hiddenOSCElements;
 
+/// Optional PER-OWNER OSC element maps, for multi-owner plugins (Canvas) that
+/// keep a separate hidden set per layer: keyed by owner id (layerID), each
+/// value an element-key -> visible(BOOL) dictionary (the same shape persisted
+/// under `oscElements`). `hiddenOSCElements` above stays the ACTIVE owner's
+/// resolved set; this map is the store the host loads the active set from when
+/// selection changes. nil for single-owner plugins (they use the global set).
+@property(nonatomic, copy, nullable)
+    NSDictionary<NSString *, NSDictionary<NSString *, NSNumber *> *>
+        *oscElementsByOwner;
+
 /// YES while a guide is transiently forcing OSC visibility (see
 /// `-kkForceOSCForGuideKeepingLabels:...`). The UI-state OSC refresh checks
 /// this and skips re-applying the saved visibility, so an async

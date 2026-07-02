@@ -212,9 +212,13 @@ NSArray<NSValue *> *KKLanePositionPathPoints(KKLane *lane,
       [out addObject:[NSValue valueWithPoint:NSMakePoint(x, y)]];
     }
   }
+  // Guard the final endpoint's component count too (the per-segment loop above
+  // guards each anchor, but the last keypose is appended unconditionally) - a
+  // malformed <2-component keypose would otherwise index past its values array.
   KKKeyPose *last = kps.lastObject;
-  [out addObject:[NSValue
-                     valueWithPoint:NSMakePoint(last.values[0].doubleValue,
-                                                last.values[1].doubleValue)]];
+  if (last.values.count >= 2)
+    [out addObject:[NSValue
+                       valueWithPoint:NSMakePoint(last.values[0].doubleValue,
+                                                  last.values[1].doubleValue)]];
   return out;
 }

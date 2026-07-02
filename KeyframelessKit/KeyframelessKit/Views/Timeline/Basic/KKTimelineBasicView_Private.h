@@ -120,6 +120,9 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
 @package
   NSArray<KKLane *> *_availableLanes;
   KKTimeline *_timeline;
+  // Multi-owner timelines: the layer the keypose popover scopes to (host pushes
+  // the selected layer; resolved to the first animated layer when nil/empty).
+  NSString *_activeLayerKey;
   KKCheckboxView *_inCheck;
   KKCheckboxView *_outCheck;
   NSTextField *_inLabel;
@@ -172,6 +175,12 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
   // actually open a transition popover (In/Out for now); Hold has its own
   // _openHoldPopover path.
   void (^_onGapTapped)(NSInteger section);
+  // The section of the gap/modulation popover most recently opened from this
+  // view, so a host (Canvas) can re-open it for a newly-selected layer. -1 when
+  // none has been opened. `_lastGapWasHold` distinguishes the Hold-modulation
+  // popover (its own opener) from the In/Out transition popover.
+  KKBasicSection _lastGapSection;
+  BOOL _lastGapWasHold;
 }
 @end
 
@@ -266,6 +275,16 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
 - (nullable NSString *)_representativeLaneLabelForSection:
     (KKBasicSection)section;
 - (void)_openBoundaryPopoverForDiamond:(NSInteger)d;
+- (void)_openBoundaryPopoverForDiamond:(NSInteger)d
+                        fireActivation:(BOOL)fireActivation;
+// The layer the keypose popover scopes to: the host-selected `_activeLayerKey`
+// if it has an animated lane, else the first animated layer. nil for
+// single-owner timelines (no scoping). Updates `_activeLayerKey` + fires
+// onKeyposeLayerActivated when it resolves to a different layer (unless
+// fireActivation is NO - a selection-driven re-drive must not fire back).
+- (nullable NSString *)_resolveBasicActiveLayerKey;
+- (nullable NSString *)_resolveBasicActiveLayerKeyFiringActivation:
+    (BOOL)fireActivation;
 - (void)_writeBoundary:(KKBasicBoundary)boundary
                 values:(NSArray<NSNumber *> *)values
               forLabel:(NSString *)label

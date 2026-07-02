@@ -83,11 +83,20 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   _showsParamOrderRow = (_availableLanes.count >= 2);
   _showsPresetsRow = [self showsPresetsRow];
   _mbShutterAngle = 180.0; // the natural shutter
-  _mbSamples = 16;
-  _mbMode = KKMotionBlurModeTransitionsOnly; // default; cheapest
+  _mbSamples = [self motionBlurDefaultSamples];
+  // Default to Fast (fixed-cost reconstruction) when the host supports it, else
+  // Accurate - a host with no velocity buffer only has the accumulate path.
+  _mbTechnique = [self motionBlurSupportsFastTechnique]
+                     ? KKMotionBlurTechniqueFast
+                     : KKMotionBlurTechniqueAccurate;
   [self setFrameSize:NSMakeSize(0, [self _totalHeight])];
   self.autoresizingMask =
       NSViewWidthSizable | NSViewHeightSizable | NSViewMinYMargin;
+
+  // The dark backing wash (set in -beginDetachedCopy) only subdues the
+  // detached remote window's bright glass background. The embedded FCP
+  // inspector sits on the host's own dark chrome, so no wash there.
+  self.wantsLayer = YES;
 
   NSView *box = [self _buildBox];
   [self _buildTabBar];
@@ -228,11 +237,28 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   }
   for (NSView *v in _basicView.accessoryButtons)
     [_accessoryStack addArrangedSubview:v];
+  [self _mountFilterAccessory];
+}
+
+// The lane-filter cluster sits centered in the header row (its own slot, not in
+// the right-aligned accessory stack). Mounted once; its own hidden flag (driven
+// by the lanes view) collapses it outside Advanced / with <2 lanes.
+- (void)_mountFilterAccessory {
+  NSView *filter = _basicView.filterAccessory;
+  if (!filter || !_headerRow || filter.superview == _headerRow)
+    return;
+  [filter removeFromSuperview];
+  [_headerRow addSubview:filter];
+  [NSLayoutConstraint activateConstraints:@[
+    [filter.centerXAnchor constraintEqualToAnchor:_headerRow.centerXAnchor],
+    [filter.centerYAnchor constraintEqualToAnchor:_headerRow.centerYAnchor],
+  ]];
 }
 
 - (NSView *)_buildHeaderRow:(NSView *)box {
   NSView *headerRow = [[NSView alloc] init];
   headerRow.translatesAutoresizingMaskIntoConstraints = NO;
+  _headerRow = headerRow;
   [box addSubview:headerRow];
   [headerRow addSubview:_playButton];
   [headerRow addSubview:_loopButton];
@@ -262,8 +288,13 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   __weak KKConstantsButton *weakConstants = _constantsButton;
   __weak KKTimelineLanesView *weakBasic = _basicView;
   _constantsButton.onTapped = ^{
+    KKTimelineInspectorView *strong = weak;
     KKTimelineLanesView *basic = weakBasic;
     KKConstantsButton *btn = weakConstants;
+    // Let the host pick an owner that has constants before the popover reads
+    // the (selected-owner) timeline.
+    if (strong.onConstantsWillShow)
+      strong.onConstantsWillShow();
     if (basic && btn)
       [basic showStaticValuesPopoverFromView:btn];
   };
@@ -340,6 +371,14 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   return YES;
 }
 
+- (BOOL)motionBlurSupportsFastTechnique {
+  return NO;
+}
+
+- (NSInteger)motionBlurDefaultSamples {
+  return 16;
+}
+
 - (BOOL)showsOSCVisibilityRow {
   return NO;
 }
@@ -376,6 +415,11 @@ const CGFloat kMBCheckboxTrailing = 23.0;
 - (void)setMiniViewerDelegate:(id<KKMiniViewerDelegate>)delegate {
   _miniViewerDelegate = delegate;
   _basicView.miniViewerDelegate = delegate;
+}
+
+- (void)setMiniGrabsKeyFocusOnClick:(BOOL)grabs {
+  _miniGrabsKeyFocusOnClick = grabs;
+  _basicView.miniGrabsKeyFocusOnClick = grabs;
 }
 
 - (void)setManagePopoverSpotlightLabel:(NSString *)label {
@@ -513,6 +557,10 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   [_detachedView setClipDurationSeconds:seconds];
 }
 
+- (double)clipDurationSeconds {
+  return _clipDurationSeconds;
+}
+
 - (void)setFrameDurationSeconds:(double)seconds {
   _frameDurationSeconds = seconds;
   [_basicView setFrameDurationSeconds:seconds];
@@ -557,11 +605,18 @@ const CGFloat kMBCheckboxTrailing = 23.0;
                                       timeline:_basicView.currentTimeline];
   copy->_isDetachedCopy = YES;
   copy->_detachedOwner = self;
+  // Subdue the detached window's Liquid Glass: over bright viewer backgrounds
+  // the bare glass washes out the timeline UI. A dark backing wash (matching
+  // the layer-list body's 0.2 black) restores contrast. Embedded inspector
+  // stays clear - it already sits on the host's dark chrome.
+  copy.wantsLayer = YES;
+  copy.layer.backgroundColor = [NSColor colorWithWhite:0.0 alpha:0.2].CGColor;
   copy->_detachButton.hidden = YES;
   // Propagate plugin-supplied configuration so the copy matches the source.
   copy.miniViewerDescriptorPath = _miniViewerDescriptorPath;
   copy.miniViewerRequestPath = _miniViewerRequestPath;
   copy.miniViewerDelegate = _miniViewerDelegate;
+  copy.miniGrabsKeyFocusOnClick = _miniGrabsKeyFocusOnClick;
   copy.managePopoverSpotlightLabel = _managePopoverSpotlightLabel;
   copy.constantsButtonTitle = _constantsButtonTitle;
   copy.presetPluginKey = self.presetPluginKey;
@@ -573,7 +628,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   copy.onMotionBlurChanged = _onMotionBlurChanged;
   [copy setMotionBlurEnabled:_mbCheckbox.isChecked];
   [copy setMotionBlurShutterAngle:_mbShutterAngle samples:_mbSamples];
-  [copy setMotionBlurMode:_mbMode];
+  [copy setMotionBlurTechnique:_mbTechnique];
   copy.onRenderModeChanged = _onRenderModeChanged;
   copy.renderMode = _basicView.renderMode;
   copy.onTimelineMutated = _onTimelineMutated;

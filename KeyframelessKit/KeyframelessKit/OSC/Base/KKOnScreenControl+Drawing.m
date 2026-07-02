@@ -10,10 +10,95 @@
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
+// Transient OSC draw batch (see -beginOSCDrawBatchForDestinationImage:). While
+// armed, every encodeRenderCommandsForDestinationImage: across ALL control
+// instances encodes into this one command buffer + encoder instead of creating
+// and committing its own. Process-global because the participating controls are
+// distinct instances (the path-edit surface plus its anchor / handle / ring
+// glyphs); safe as a static because viewer-OSC drawing is single-threaded and
+// one synchronous pass at a time, and each FxPlug instance is its own XPC
+// process. Cleared by -endOSCDrawBatch; nil when not batching.
+static id<MTLCommandQueue> sOSCBatchQueue = nil;
+static id<MTLCommandBuffer> sOSCBatchCmdBuf = nil;
+static id<MTLRenderCommandEncoder> sOSCBatchEncoder = nil;
+static simd_uint2 sOSCBatchViewport = {0, 0};
+
 // Pipeline construction and the Metal line/quad/encode primitives shared by
 // every OSC control. Subclasses reach these via the public KKOnScreenControl
 // interface; the bevel-glyph subclasses use -pipelineStateForDestinationImage:.
 @implementation KKOnScreenControl (Drawing)
+
+- (BOOL)beginOSCDrawBatchForDestinationImage:(FxImageTile *)destinationImage
+                            clearDestination:(BOOL)clear {
+  if (sOSCBatchEncoder)
+    return YES; // already armed (nested begin): reuse the open pass
+  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  id<MTLDevice> gpuDevice =
+      [cache deviceWithRegistryID:destinationImage.deviceRegistryID];
+  MTLPixelFormat pixelFormat =
+      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+  id<MTLCommandQueue> queue =
+      [cache commandQueueWithRegistryID:destinationImage.deviceRegistryID
+                            pixelFormat:pixelFormat];
+  id<MTLTexture> outputTexture =
+      gpuDevice ? [destinationImage metalTextureForDevice:gpuDevice] : nil;
+  if (!gpuDevice || !queue || !outputTexture) {
+    if (queue)
+      [cache returnCommandQueueToCache:queue];
+    return NO;
+  }
+  id<MTLCommandBuffer> commandBuffer = [queue commandBuffer];
+  commandBuffer.label = @"KKOnScreenControl OSC Batch";
+  [commandBuffer enqueue];
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0].texture = outputTexture;
+  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+  if (clear) {
+    rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+    rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+  } else {
+    rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+  }
+  id<MTLRenderCommandEncoder> encoder =
+      [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+  float w = [destinationImage.ioSurface width];
+  float h = [destinationImage.ioSurface height];
+  [encoder setViewport:(MTLViewport){0, 0, w, h, -1.0, 1.0}];
+  sOSCBatchQueue = queue;
+  sOSCBatchCmdBuf = commandBuffer;
+  sOSCBatchEncoder = encoder;
+  sOSCBatchViewport = (simd_uint2){(unsigned int)w, (unsigned int)h};
+  return YES;
+}
+
+- (void)endOSCDrawBatch {
+  if (!sOSCBatchEncoder)
+    return;
+  [sOSCBatchEncoder endEncoding];
+  [sOSCBatchCmdBuf commit];
+  [sOSCBatchCmdBuf waitUntilScheduled];
+  [[KKMetalDeviceCache sharedCache] returnCommandQueueToCache:sOSCBatchQueue];
+  sOSCBatchEncoder = nil;
+  sOSCBatchCmdBuf = nil;
+  sOSCBatchQueue = nil;
+}
+
+- (void)drawOSCBatchedForDestinationImage:(FxImageTile *)destinationImage
+                         clearDestination:(BOOL)clear
+                                    block:(NS_NOESCAPE void (^)(void))block {
+  if (!block)
+    return;
+  // @finally guarantees the batch closes on every exit (early return / throw),
+  // so a half-open batch can never leak into the next draw pass.
+  BOOL batched = [self beginOSCDrawBatchForDestinationImage:destinationImage
+                                           clearDestination:clear];
+  @try {
+    block();
+  } @finally {
+    if (batched)
+      [self endOSCDrawBatch];
+  }
+}
 
 - (nullable id<MTLRenderPipelineState>)pipelineStateForDestinationImage:
     (FxImageTile *)destinationImage {
@@ -473,6 +558,18 @@
                                            id<MTLRenderCommandEncoder> encoder,
                                            CGPoint metalPosition,
                                            simd_uint2 viewportSize))commands {
+  // Batched: encode into the shared pass instead of a private command buffer.
+  // The batch already loaded/cleared the destination on open, so an individual
+  // clear request is dropped (a mid-pass clear would wipe earlier primitives).
+  // metalPosition uses the batch's viewport, same centring math as below.
+  if (sOSCBatchEncoder) {
+    float w = (float)sOSCBatchViewport.x, h = (float)sOSCBatchViewport.y;
+    CGPoint metalPosition = {canvasPosition.x - w / 2.0f,
+                             h / 2.0f - canvasPosition.y};
+    commands(sOSCBatchEncoder, metalPosition, sOSCBatchViewport);
+    return;
+  }
+
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
 
   id<MTLDevice> gpuDevice =

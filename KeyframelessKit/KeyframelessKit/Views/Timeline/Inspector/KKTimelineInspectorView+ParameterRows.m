@@ -9,12 +9,14 @@
 #import "KKTimelineInspectorView_Private.h"
 
 #import "KKCheckboxView.h"
-#import "KKCompoundPillBar.h"
 #import "KKConstants.h"
 #import "KKLabelView.h"
 #import "KKLaneCategoryNav.h"
 #import "KKMiniViewerView.h"
+#import "KKOSCChecklistView.h"
+#import "KKPaddedScrollView.h"
 #import "KKParameterRowView.h"
+#import "KKPillBar.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKPopupSelectView.h"
@@ -30,6 +32,9 @@
 #import "NSColor+KKColors.h"
 #import <KeyframelessKit/KKJoyrideGuideHost.h>
 #import <KeyframelessKit/KKTimingCompat.h>
+
+// Cap the reorder list height; beyond this it scrolls inside KKPaddedScrollView.
+static const CGFloat kParamOrderMaxListH = 200.0;
 
 @implementation KKTimelineInspectorView (ParameterRows)
 
@@ -137,7 +142,7 @@
     strong->_mbSettingsButton.enabled = isChecked;
     if (strong.onMotionBlurChanged)
       strong.onMotionBlurChanged(isChecked, strong->_mbShutterAngle,
-                                 strong->_mbSamples, strong->_mbMode);
+                                 strong->_mbSamples, strong->_mbTechnique);
   };
 
   [self addSubview:_mbRow];
@@ -200,7 +205,10 @@
     [_paramOrderPopover close];
     return;
   }
-  NSArray<NSString *> *labels = [_basicView orderedParamLabels];
+  // Full parameter universe, not the selected layer's seeded subset - the
+  // reorder popover edits a global ordering and must list every param (Fill /
+  // Stroke etc.) regardless of which layer is currently selected.
+  NSArray<NSString *> *labels = [_basicView allOrderedParamLabels];
   if (labels.count < 2)
     return;
 
@@ -228,7 +236,7 @@
   NSArray<NSString *> *categoryKeys = KKLaneCategoryKeys(_availableLanes);
   __weak typeof(self) weak = self;
 
-  if (categoryKeys.count > 1) {
+  if (categoryKeys.count > 0) {
     // Category pills filter the reorder list to one category at a time; the
     // category blocks themselves stay in the plugin's order. Dragging reorders
     // within the shown category, merged back into the full order on each
@@ -247,26 +255,58 @@
           strong->_paramOrderSelectedCategory = categoryKey;
           [strong _rebuildParamOrderList];
         });
-    [content addSubview:pill];
+    // Wrap the category pills in a KKPillBar so they scroll with edge-fade
+    // shadows instead of overflowing both sides of the popover.
+    KKPillBar *pillBar = [[KKPillBar alloc] initWithPillRow:pill];
+    pillBar.translatesAutoresizingMaskIntoConstraints = NO;
+    // Hug content when it fits, but a near-zero compression resistance lets it
+    // shrink so the inner scroll takes over on overflow (vs clipping).
+    [pillBar setContentHuggingPriority:NSLayoutPriorityRequired - 1
+                        forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [pillBar setContentCompressionResistancePriority:1
+                                      forOrientation:
+                                          NSLayoutConstraintOrientationHorizontal];
+    [content addSubview:pillBar];
 
     NSView *listContainer = [[NSView alloc] initWithFrame:NSZeroRect];
     listContainer.translatesAutoresizingMaskIntoConstraints = NO;
-    [content addSubview:listContainer];
     _paramOrderListContainer = listContainer;
+    // Cap the reorder list and let it scroll (with top/bottom fade shadows)
+    // rather than ballooning the popover when there are many params.
+    KKPaddedScrollView *scroll =
+        [[KKPaddedScrollView alloc] initWithDocumentView:listContainer
+                                                 padding:0.0];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    [content addSubview:scroll];
+    _paramOrderScrollHeight =
+        [scroll.heightAnchor constraintEqualToConstant:kParamOrderMaxListH];
+    // The reorder list has a fixed intrinsic width that used to drive the
+    // popover width; pinned inside the scroll it no longer does, so carry that
+    // width up to the scroll explicitly (set from the list in the rebuild).
+    _paramOrderScrollWidth =
+        [scroll.widthAnchor constraintEqualToConstant:0.0];
 
     [NSLayoutConstraint activateConstraints:@[
-      [pill.centerXAnchor constraintEqualToAnchor:content.centerXAnchor],
-      [pill.topAnchor constraintEqualToAnchor:header.bottomAnchor
-                                     constant:KKPaddingSM],
-      [listContainer.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
-                                                  constant:KKPaddingMD],
-      [listContainer.trailingAnchor
-          constraintEqualToAnchor:content.trailingAnchor
-                         constant:-KKPaddingMD],
-      [listContainer.topAnchor constraintEqualToAnchor:pill.bottomAnchor
-                                              constant:KKPaddingSM],
-      [listContainer.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
-                                                 constant:-KKPaddingMD],
+      [pillBar.centerXAnchor constraintEqualToAnchor:content.centerXAnchor],
+      [pillBar.leadingAnchor
+          constraintGreaterThanOrEqualToAnchor:content.leadingAnchor
+                                       constant:KKPaddingMD],
+      [pillBar.trailingAnchor
+          constraintLessThanOrEqualToAnchor:content.trailingAnchor
+                                   constant:-KKPaddingMD],
+      [pillBar.heightAnchor constraintEqualToConstant:24.0],
+      [pillBar.topAnchor constraintEqualToAnchor:header.bottomAnchor
+                                        constant:KKPaddingSM],
+      [scroll.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
+                                           constant:KKPaddingMD],
+      [scroll.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
+                                            constant:-KKPaddingMD],
+      [scroll.topAnchor constraintEqualToAnchor:pillBar.bottomAnchor
+                                       constant:KKPaddingSM],
+      [scroll.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
+                                          constant:-KKPaddingMD],
+      _paramOrderScrollHeight,
+      _paramOrderScrollWidth,
     ]];
     [self _rebuildParamOrderList];
   } else {
@@ -350,6 +390,13 @@
   ]];
   _paramOrderList = list;
 
+  // Size the scroll to the list's content, capped - beyond the cap the list
+  // scrolls inside KKPaddedScrollView (with fade shadows) instead of growing
+  // the popover.
+  _paramOrderScrollHeight.constant =
+      MIN(list.intrinsicContentSize.height, kParamOrderMaxListH);
+  _paramOrderScrollWidth.constant = list.intrinsicContentSize.width;
+
   [_paramOrderContent layoutSubtreeIfNeeded];
   if (_paramOrderPopover.isShown)
     _paramOrderPopover.contentSize = _paramOrderContent.fittingSize;
@@ -387,27 +434,17 @@
   if (!compounds.count)
     return;
 
-  // Localize the display label of each segment (its last dot-separated
-  // component, so @"Rotation.X" reads as "X").
-  NSMutableArray<NSArray<NSString *> *> *labels = [NSMutableArray array];
-  for (NSArray<NSString *> *compound in compounds) {
-    NSMutableArray<NSString *> *group = [NSMutableArray array];
-    for (NSString *key in compound) {
-      NSString *leaf = [key componentsSeparatedByString:@"."].lastObject ?: key;
-      [group addObject:KKLocalizedParamName(leaf)];
-    }
-    [labels addObject:group];
-  }
-
-  KKCompoundPillBar *bar = [[KKCompoundPillBar alloc] initWithCompounds:labels];
-  bar.translatesAutoresizingMaskIntoConstraints = NO;
-  _oscPillBar = bar; // guide spotlight anchor (weak; lives in the popover)
+  // The checklist derives each row's display label from the element key's leaf
+  // (e.g. @"Rotation.X" -> "X") and localizes it itself.
   NSArray<NSArray<NSNumber *> *> *states =
       self.oscVisibilityElementStates ? self.oscVisibilityElementStates() : nil;
-  if (states.count == compounds.count)
-    bar.states = states;
+  KKOSCChecklistView *list = [[KKOSCChecklistView alloc]
+      initWithCompounds:compounds
+                 states:(states.count == compounds.count ? states : @[])];
+  list.translatesAutoresizingMaskIntoConstraints = NO;
+  _oscPillBar = list; // guide spotlight anchor (weak; lives in the popover)
   __weak typeof(self) weak = self;
-  bar.onToggled = ^(NSInteger compoundIdx, NSInteger segIdx, BOOL isOn) {
+  list.onToggled = ^(NSInteger compoundIdx, NSInteger segIdx, BOOL isOn) {
     KKTimelineInspectorView *strong = weak;
     if (strong.oscVisibilityElementToggled)
       strong.oscVisibilityElementToggled(compoundIdx, segIdx, isOn);
@@ -423,42 +460,33 @@
     }
   };
 
-  // Wrap in the lanes-view popover content view so the macOS 26 liquid-glass
-  // double-border fix applies (same as the motion-blur / curve popovers).
-  _KKLVPopoverContentView *content = [[_KKLVPopoverContentView alloc] init];
-  [content addSubview:bar];
-  [NSLayoutConstraint activateConstraints:@[
-    [bar.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
-                                      constant:KKPaddingMD],
-    [bar.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
-                                       constant:-KKPaddingMD],
-    [bar.topAnchor constraintEqualToAnchor:content.topAnchor
-                                  constant:KKPaddingMD],
-    [bar.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
-                                     constant:-KKPaddingMD],
-  ]];
-
-  NSViewController *vc = [[NSViewController alloc] init];
-  vc.view = content;
-  _oscPopover = [[NSPopover alloc] init];
-  // While a guide is running, ViewBridge-routed clicks (the joyride overlay
-  // forwarding a pill click) target the inspector window, not the popover -
-  // Transient reads that as an outside click and dismisses before the pill
-  // toggles. ApplicationDefined keeps it open; the guide owns its lifecycle
-  // (it closes the popover on its opt-click step and on completion).
-  _oscPopover.behavior = _timingGuideHost.isActive
-                             ? NSPopoverBehaviorApplicationDefined
-                             : NSPopoverBehaviorTransient;
-  _oscPopover.contentViewController = vc;
-  _oscPopover.contentSize = content.fittingSize;
-  [_oscPopover showRelativeToRect:_oscSettingsButton.bounds
-                           ofView:_oscSettingsButton
-                    preferredEdge:NSRectEdgeMinY];
+  // Present through the lanes view's companion-capable popover path (same
+  // keep-alive outside-click handling as the value popovers) so a plugin's
+  // companion side panel - Canvas's layer list - can attach beside it and
+  // clicking that panel doesn't dismiss it. The presenter wraps `list` in the
+  // liquid-glass content view (double-border fix) itself, so size + hand it the
+  // checklist directly. `kind:@"osc"` tells the companion every layer is
+  // selectable (like the constants kind).
+  list.frame =
+      NSMakeRect(0, 0, [KKOSCChecklistView preferredWidth], list.fittingHeight);
+  __weak typeof(self) weakClose = self;
+  _oscPopover = [self.basicLanesView
+      showCompanionPopover:list
+                  fromView:_oscSettingsButton
+                      kind:@"osc"
+                   onClose:^{
+                     __strong typeof(weakClose) s = weakClose;
+                     if (!s)
+                       return;
+                     s->_oscPopover = nil;
+                     s->_oscPillBar = nil;
+                   }];
+  list.popover = _oscPopover; // so the search filter can re-fit the height
   // Guide observation: let the OSC guide grab the live popover (passthrough
   // window + pill spotlight) once it has settled into a window and laid out.
   if (self.onGuideOSCSettingsPopoverWillOpen) {
     __weak typeof(self) weakSelf = self;
-    __weak NSView *weakContent = content;
+    __weak NSView *weakContent = _oscPopover.contentViewController.view;
     dispatch_after(
         dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
         dispatch_get_main_queue(), ^{
@@ -468,6 +496,12 @@
             s.onGuideOSCSettingsPopoverWillOpen(c);
         });
   }
+}
+
+- (void)refreshOpenOSCChecklist {
+  if (!_oscPopover.isShown || !_oscPillBar || !self.oscVisibilityElementStates)
+    return;
+  [_oscPillBar reloadStates:self.oscVisibilityElementStates()];
 }
 
 - (void)setOSCVisible:(BOOL)visible {
@@ -484,14 +518,19 @@
                           samples:(NSInteger)samples {
   _mbShutterAngle = shutterAngle;
   _mbSamples = samples;
-  [_mbSettingsView applyShutterAngle:shutterAngle samples:samples mode:_mbMode];
+  [_mbSettingsView applyShutterAngle:shutterAngle
+                            samples:samples
+                          technique:_mbTechnique];
 }
 
-- (void)setMotionBlurMode:(KKMotionBlurMode)mode {
-  _mbMode = mode;
+- (void)setMotionBlurTechnique:(KKMotionBlurTechnique)technique {
+  // A host with no Fast support is always Accurate, whatever the blob says.
+  _mbTechnique = [self motionBlurSupportsFastTechnique]
+                     ? technique
+                     : KKMotionBlurTechniqueAccurate;
   [_mbSettingsView applyShutterAngle:_mbShutterAngle
-                             samples:_mbSamples
-                                mode:mode];
+                            samples:_mbSamples
+                          technique:_mbTechnique];
 }
 
 - (void)_mbSettingsClicked:(id)sender {
@@ -499,22 +538,24 @@
     [_mbPopover close];
     return;
   }
-  _KKMotionBlurSettingsView *content =
-      [[_KKMotionBlurSettingsView alloc] initWithShutterAngle:_mbShutterAngle
-                                                      samples:_mbSamples
-                                                         mode:_mbMode];
+  _KKMotionBlurSettingsView *content = [[_KKMotionBlurSettingsView alloc]
+      initWithShutterAngle:_mbShutterAngle
+                   samples:_mbSamples
+                 technique:_mbTechnique
+              supportsFast:[self motionBlurSupportsFastTechnique]
+            defaultSamples:[self motionBlurDefaultSamples]];
   __weak typeof(self) weak = self;
   content.onChanged =
-      ^(double shutterAngle, NSInteger samples, KKMotionBlurMode mode) {
+      ^(double shutterAngle, NSInteger samples, KKMotionBlurTechnique technique) {
         KKTimelineInspectorView *strong = weak;
         if (!strong)
           return;
         strong->_mbShutterAngle = shutterAngle;
         strong->_mbSamples = samples;
-        strong->_mbMode = mode;
+        strong->_mbTechnique = technique;
         if (strong.onMotionBlurChanged)
           strong.onMotionBlurChanged(strong->_mbCheckbox.isChecked,
-                                     shutterAngle, samples, mode);
+                                     shutterAngle, samples, technique);
       };
   content.onDragBegin = ^{
     if (weak.onDragBegin)
@@ -523,6 +564,13 @@
   content.onDragEnd = ^{
     if (weak.onDragEnd)
       weak.onDragEnd();
+  };
+  // The Samples row is removed in Fast, so the content height changes - resize
+  // the open popover to match.
+  content.onLayoutChanged = ^{
+    KKTimelineInspectorView *strong = weak;
+    if (strong && strong->_mbPopover.isShown)
+      strong->_mbPopover.contentSize = strong->_mbSettingsView.frame.size;
   };
   _mbSettingsView = content;
 

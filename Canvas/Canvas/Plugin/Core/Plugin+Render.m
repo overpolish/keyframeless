@@ -3,997 +3,150 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "CanvasFillProperties.h" // CanvasFillEnabledAtFraction (lane gate)
+#import "CanvasFillRender.h"     // TEMP solid fill for closed paths
+#import "CanvasLayerRender.h"
+#import "CanvasLayerTimeline.h" // CanvasSetUIStateSnapshot
+#import "CanvasLayerTree.h"     // CanvasLayerPathWithAncestors
+#import "CanvasMiniViewerRenderer.h"
 #import "Constants.h"
-#import "KKParamSync.h"
-#import "LayerList_Private.h"
-#import "ObjectParams.h"
 #import "Plugin_Private.h"
-#import "RenderFill.h"
-#import "RenderImage.h"
-#import "RenderStroke.h"
-#import "ShaderTypes.h"
-#import "SketchPath.h"
-#import <IOSurface/IOSurfaceObjC.h>
+#import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKMotionBlur.h>
+#import <KeyframelessKit/KKMotionBlurReconstruct.h>
+#import <KeyframelessKit/KKPlugin+MiniViewerFeed.h>
+#import <KeyframelessKit/KKShaderTypes.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
-static NSDictionary<NSString *, KKBezierPath *> *
-_kkIndexGroupsByID(NSArray<KKBezierPath *> *paths) {
-  NSMutableDictionary<NSString *, KKBezierPath *> *out = nil;
-  for (KKBezierPath *g in paths) {
-    if (g.isGroup && g.groupID.length) {
-      if (!out)
-        out = [NSMutableDictionary dictionary];
-      out[g.groupID] = g;
-    }
-  }
-  return out;
-}
-
-static matrix_float4x4 _kkTranslate4(float tx, float ty, float tz);
-
-/// Tile-shift-only transform. Translates canvas-centered pixel-space
-/// vertices into the tile-relative pixel space the viewport expects when
-/// FCP renders into a sub-tile of the full image (e.g. project-browser
-/// previews). Used in place of identity for paths without per-path
-/// transforms so geometry still lands in the right tile pixels.
-static CanvasPathTransform _kkTileShiftPathTransform(float tileShiftX,
-                                                     float tileShiftY) {
-  CanvasPathTransform x;
-  x.m4 = _kkTranslate4(tileShiftX, tileShiftY, 0);
-  matrix_float3x3 t2 =
-      simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
-                  simd_make_float3(tileShiftX, tileShiftY, 1));
-  x.mInv = simd_inverse(t2);
-  return x;
-}
-
-static matrix_float4x4 _kkTranslate4(float tx, float ty, float tz) {
-  return simd_matrix(simd_make_float4(1, 0, 0, 0), simd_make_float4(0, 1, 0, 0),
-                     simd_make_float4(0, 0, 1, 0),
-                     simd_make_float4(tx, ty, tz, 1));
-}
-
-/// Object-space bbox of a single (non-group) path. Approximates curves with
-/// 16 samples per segment, matching the OSC's bboxCenterOfPath:.
-static BOOL _kkPathBounds(KKBezierPath *p, simd_float2 *outMin,
-                          simd_float2 *outMax) {
-  if (p.count == 0)
-    return NO;
-  NSUInteger segCount = p.count - 1;
-  if (p.closed && p.count >= 2)
-    segCount = p.count;
-  simd_float2 first = [p evaluatePointAtIndex:0 nextIndex:0 atT:0.0f];
-  float minX = first.x, minY = first.y, maxX = first.x, maxY = first.y;
-  for (NSUInteger c = 0; c < segCount; c++) {
-    NSUInteger nextIdx = (c + 1) % p.count;
-    for (NSUInteger s = 0; s <= 16; s++) {
-      float t = (float)s / 16.0f;
-      simd_float2 pos = [p evaluatePointAtIndex:c nextIndex:nextIdx atT:t];
-      minX = fminf(minX, pos.x);
-      minY = fminf(minY, pos.y);
-      maxX = fmaxf(maxX, pos.x);
-      maxY = fmaxf(maxY, pos.y);
-    }
-  }
-  *outMin = (simd_float2){minX, minY};
-  *outMax = (simd_float2){maxX, maxY};
-  return YES;
-}
-
-/// Object-space bbox center keyed by layerID, for both groups (union of
-/// descendants) and individual paths. (0.5, 0.5) is returned when a group
-/// has no points yet - matches OSC fallback so anchor handles don't snap to
-/// (0,0) on empty groups.
-static NSDictionary<NSString *, NSData *> *
-_kkBboxCentersByLayerID(NSArray<KKBezierPath *> *paths) {
-  NSMutableDictionary<NSString *, NSData *> *centers =
-      [NSMutableDictionary dictionary];
-  // First pass: non-group paths.
-  NSMutableDictionary<NSString *, NSData *> *pathBboxMin =
-      [NSMutableDictionary dictionary];
-  NSMutableDictionary<NSString *, NSData *> *pathBboxMax =
-      [NSMutableDictionary dictionary];
-  for (KKBezierPath *p in paths) {
-    if (p.isGroup || !p.layerID.length)
-      continue;
-    simd_float2 bmin, bmax;
-    if (!_kkPathBounds(p, &bmin, &bmax))
-      continue;
-    pathBboxMin[p.layerID] = [NSData dataWithBytes:&bmin length:sizeof(bmin)];
-    pathBboxMax[p.layerID] = [NSData dataWithBytes:&bmax length:sizeof(bmax)];
-    simd_float2 c = (bmin + bmax) * 0.5f;
-    centers[p.layerID] = [NSData dataWithBytes:&c length:sizeof(c)];
-  }
-  // Second pass: groups, by walking descendants. Iterate until stable so
-  // sub-groups resolve via earlier-resolved children. Cap iterations to
-  // group count + 1 so a malformed cycle can't spin forever.
-  NSUInteger maxRounds = paths.count + 1;
-  for (NSUInteger round = 0; round < maxRounds; round++) {
-    BOOL grew = NO;
-    for (KKBezierPath *g in paths) {
-      if (!g.isGroup || !g.groupID.length)
-        continue;
-      if (centers[g.layerID])
-        continue;
-      simd_float2 gmin = {HUGE_VALF, HUGE_VALF};
-      simd_float2 gmax = {-HUGE_VALF, -HUGE_VALF};
-      BOOL found = NO;
-      for (KKBezierPath *child in paths) {
-        if (![child.parentGroupID isEqualToString:g.groupID])
-          continue;
-        NSData *cMin = pathBboxMin[child.layerID];
-        NSData *cMax = pathBboxMax[child.layerID];
-        if (!cMin || !cMax)
-          continue;
-        simd_float2 cmin, cmax;
-        [cMin getBytes:&cmin length:sizeof(cmin)];
-        [cMax getBytes:&cmax length:sizeof(cmax)];
-        gmin = simd_min(gmin, cmin);
-        gmax = simd_max(gmax, cmax);
-        found = YES;
-      }
-      if (found && g.layerID.length) {
-        pathBboxMin[g.layerID] = [NSData dataWithBytes:&gmin
-                                                length:sizeof(gmin)];
-        pathBboxMax[g.layerID] = [NSData dataWithBytes:&gmax
-                                                length:sizeof(gmax)];
-        simd_float2 c = (gmin + gmax) * 0.5f;
-        centers[g.layerID] = [NSData dataWithBytes:&c length:sizeof(c)];
-        grew = YES;
-      }
-    }
-    if (!grew)
-      break;
-  }
-  return centers;
-}
-
-/// Compute the centered-pixel-space anchor (ax, ay) and pixel translation
-/// (pxTx, pxTy) for one path/group. The anchor is an object-space offset
-/// from the path's bbox center; the bbox center comes from `centers` so
-/// groups resolve via their descendants. Y is flipped because bezier points
-/// live in Y-up object space while pixel space is Y-down.
-static void _kkAnchorPixels(KKBezierPath *p,
-                            NSDictionary<NSString *, NSData *> *centers,
-                            float W, float H, float *outAx, float *outAy,
-                            float *outPxTx, float *outPxTy) {
-  simd_float2 bboxCenter = (simd_float2){0.5f, 0.5f};
-  if (p.layerID.length) {
-    NSData *d = centers[p.layerID];
-    if (d.length >= sizeof(bboxCenter))
-      [d getBytes:&bboxCenter length:sizeof(bboxCenter)];
-  }
-  float anchorObjX = bboxCenter.x + p.anchorX;
-  float anchorObjY = bboxCenter.y + p.anchorY;
-  *outAx = (anchorObjX - 0.5f) * W;
-  *outAy = (0.5f - anchorObjY) * H;
-  *outPxTx = p.translateX * W;
-  *outPxTy = -p.translateY * H;
-}
-
-/// Build the local 3x3 affine for one path/group in centered-pixel space:
-/// `T(translate) · T(anchor) · R(rotZ) · S(scale) · T(-anchor)`. The
-/// rotation matrix is mirrored to match Y-down pixel space so a positive
-/// angle rotates CCW visually.
-static matrix_float3x3
-_kkLocalMatrix(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
-               float W, float H) {
-  float ax, ay, pxTx, pxTy;
-  _kkAnchorPixels(p, centers, W, H, &ax, &ay, &pxTx, &pxTy);
-  float sx = p.scaleX;
-  float sy = p.scaleY;
-  float c = cosf(p.rotationZ);
-  float s = sinf(p.rotationZ);
-  // Match MM's rotation direction: positive angle rotates the geometry the
-  // same visual direction as MM's image transform (+θ = CW in Y-down screen
-  // space, which lines up with the OSC handle: drag the arm clockwise →
-  // shape rotates clockwise).
-  matrix_float3x3 R =
-      simd_matrix(simd_make_float3(c, s, 0), simd_make_float3(-s, c, 0),
-                  simd_make_float3(0, 0, 1));
-  matrix_float3x3 S =
-      simd_matrix(simd_make_float3(sx, 0, 0), simd_make_float3(0, sy, 0),
-                  simd_make_float3(0, 0, 1));
-  matrix_float3x3 Tneg =
-      simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
-                  simd_make_float3(-ax, -ay, 1));
-  matrix_float3x3 Tpos =
-      simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
-                  simd_make_float3(pxTx + ax, pxTy + ay, 1));
-  return simd_mul(Tpos, simd_mul(R, simd_mul(S, Tneg)));
-}
-
-/// 4x4 model transform around the path's anchor including 3D rotation
-/// (rotX/rotY/rotZ), scale, and translation. No perspective - that's
-/// applied once at the end of the chain so nested groups compose cleanly
-/// in 3D world space. Y is flipped to centered-pixel-space (Y-down).
-static matrix_float4x4
-_kkLocalModel4(KKBezierPath *p, NSDictionary<NSString *, NSData *> *centers,
-               float W, float H) {
-  float ax, ay, pxTx, pxTy;
-  _kkAnchorPixels(p, centers, W, H, &ax, &ay, &pxTx, &pxTy);
-
-  float sx = p.scaleX, sy = p.scaleY;
-  float cz = cosf(p.rotationZ), sz = sinf(p.rotationZ);
-  float cx = cosf(p.rotationX), sxx = sinf(p.rotationX);
-  float cy = cosf(p.rotationY), syy = sinf(p.rotationY);
-
-  matrix_float4x4 S =
-      simd_matrix(simd_make_float4(sx, 0, 0, 0), simd_make_float4(0, sy, 0, 0),
-                  simd_make_float4(0, 0, 1, 0), simd_make_float4(0, 0, 0, 1));
-  // Match the MM rotation convention: +Z rotates CW in Y-down screen.
-  matrix_float4x4 Rz = simd_matrix(
-      simd_make_float4(cz, sz, 0, 0), simd_make_float4(-sz, cz, 0, 0),
-      simd_make_float4(0, 0, 1, 0), simd_make_float4(0, 0, 0, 1));
-  // RotX (around screen X axis): positive tilts the top toward the viewer.
-  matrix_float4x4 Rx = simd_matrix(
-      simd_make_float4(1, 0, 0, 0), simd_make_float4(0, cx, sxx, 0),
-      simd_make_float4(0, -sxx, cx, 0), simd_make_float4(0, 0, 0, 1));
-  // RotY (around screen Y axis): positive tilts the right edge away.
-  matrix_float4x4 Ry = simd_matrix(
-      simd_make_float4(cy, 0, -syy, 0), simd_make_float4(0, 1, 0, 0),
-      simd_make_float4(syy, 0, cy, 0), simd_make_float4(0, 0, 0, 1));
-
-  matrix_float4x4 Tneg = _kkTranslate4(-ax, -ay, 0);
-  matrix_float4x4 Tpos = _kkTranslate4(pxTx + ax, pxTy + ay, 0);
-
-  return simd_mul(Tpos,
-                  simd_mul(Rz, simd_mul(Ry, simd_mul(Rx, simd_mul(S, Tneg)))));
-}
-
-/// Build the per-path forward (4x4 with perspective) + 2D inverse (3x3).
-/// Each level (leaf + ancestor groups) contributes its full 3D model
-/// transform, composed in 3D world space; one perspective projection is
-/// applied at the very end so the entire hierarchy sees the same camera.
-/// This way a group's rotX/rotY tilts its descendants together with the
-/// group, instead of being discarded. Walks parentGroupID with a depth cap
-/// so a cyclic parent reference can't spin forever. The 2D inverse is used
-/// by the fill color pass for gradient bbox sampling - it ignores rotX/rotY
-/// (gradients on 3D-rotated fills fall back to a 2D approximation).
-static CanvasPathTransform _kkBuildPathTransform(
-    KKBezierPath *path, NSDictionary<NSString *, KKBezierPath *> *groupsByID,
-    NSDictionary<NSString *, NSData *> *bboxCenters, float imageWidth,
-    float imageHeight, float tileShiftX, float tileShiftY) {
-  if (!path.transformEnabled)
-    return _kkTileShiftPathTransform(tileShiftX, tileShiftY);
-  matrix_float4x4 model =
-      _kkLocalModel4(path, bboxCenters, imageWidth, imageHeight);
-  matrix_float3x3 m2 =
-      _kkLocalMatrix(path, bboxCenters, imageWidth, imageHeight);
-  NSString *parentID = path.parentGroupID;
-  NSUInteger depth = 0;
-  while (parentID.length && depth++ < 32) {
-    KKBezierPath *g = groupsByID[parentID];
-    if (!g)
-      break;
-    if (g.transformEnabled) {
-      model = simd_mul(_kkLocalModel4(g, bboxCenters, imageWidth, imageHeight),
-                       model);
-      m2 =
-          simd_mul(_kkLocalMatrix(g, bboxCenters, imageWidth, imageHeight), m2);
-    }
-    parentID = g.parentGroupID;
-  }
-  // Tile-shift post-translation in centered-pixel space - applied AFTER
-  // the path's own model transform so per-path translate/rotate still
-  // operate in canvas-centered space, but the final output lands in the
-  // tile-relative pixel space the viewport expects (Approach C).
-  matrix_float4x4 Tshift = _kkTranslate4(tileShiftX, tileShiftY, 0);
-  matrix_float3x3 Tshift2 =
-      simd_matrix(simd_make_float3(1, 0, 0), simd_make_float3(0, 1, 0),
-                  simd_make_float3(tileShiftX, tileShiftY, 1));
-  model = simd_mul(Tshift, model);
-  m2 = simd_mul(Tshift2, m2);
-  // Perspective: camera at (0, 0, -camD) looking down +Z, applied once
-  // after the full hierarchy's 3D model transform.
-  // (x, y, z, 1) → (camD*x, camD*y, z, z + camD); after divide:
-  // ndc = (x, y) * camD / (z + camD).
-  float camD = fmaxf(imageWidth, imageHeight);
-  matrix_float4x4 P = simd_matrix(
-      simd_make_float4(camD, 0, 0, 0), simd_make_float4(0, camD, 0, 0),
-      simd_make_float4(0, 0, 1, 1), simd_make_float4(0, 0, 0, camD));
-  CanvasPathTransform x;
-  x.m4 = simd_mul(P, model);
-  x.mInv = simd_inverse(m2);
-  return x;
-}
-
-static id<MTLRenderPipelineState> getOrCreatePipeline(
-    NSString *key, uint64_t registryID, MTLPixelFormat pixelFormat,
-    KKMetalDeviceCache *cache, id<MTLDevice> device, NSString *vertexName,
-    NSString *fragmentName, BOOL blending, MTLPixelFormat stencilFormat) {
-  id<MTLRenderPipelineState> ps = [cache pipelineStateForPluginID:key
-                                                       registryID:registryID
-                                                      pixelFormat:pixelFormat];
-  if (ps)
-    return ps;
-
-  id<MTLLibrary> library = [device newDefaultLibrary];
-  MTLRenderPipelineDescriptor *desc =
-      [[MTLRenderPipelineDescriptor alloc] init];
-  desc.vertexFunction = [library newFunctionWithName:vertexName];
-  desc.fragmentFunction = [library newFunctionWithName:fragmentName];
-  desc.colorAttachments[0].pixelFormat = pixelFormat;
-  if (blending) {
-    desc.colorAttachments[0].blendingEnabled = YES;
-    desc.colorAttachments[0].sourceRGBBlendFactor = MTLBlendFactorOne;
-    desc.colorAttachments[0].destinationRGBBlendFactor =
-        MTLBlendFactorOneMinusSourceAlpha;
-    desc.colorAttachments[0].sourceAlphaBlendFactor = MTLBlendFactorOne;
-    desc.colorAttachments[0].destinationAlphaBlendFactor =
-        MTLBlendFactorOneMinusSourceAlpha;
-  }
-  if (stencilFormat != MTLPixelFormatInvalid)
-    desc.stencilAttachmentPixelFormat = stencilFormat;
-  if (!blending && stencilFormat != MTLPixelFormatInvalid)
-    desc.colorAttachments[0].writeMask = MTLColorWriteMaskNone;
-
-  NSError *error = nil;
-  ps = [device newRenderPipelineStateWithDescriptor:desc error:&error];
-  if (ps)
-    [cache registerPipelineState:ps
-                     forPluginID:key
-                      registryID:registryID
-                     pixelFormat:pixelFormat];
-  return ps;
+// Returns `existing` if it already matches (w,h,format), else allocates a fresh
+// private render-target+shader-read texture. Used for the "Fast" motion-blur
+// per-layer scratch textures, reused across frames.
+static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
+                                             id<MTLDevice> device, NSInteger w,
+                                             NSInteger h, MTLPixelFormat fmt) {
+  if (existing && (NSInteger)existing.width == w &&
+      (NSInteger)existing.height == h && existing.pixelFormat == fmt)
+    return existing;
+  MTLTextureDescriptor *td =
+      [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:fmt
+                                                         width:(NSUInteger)w
+                                                        height:(NSUInteger)h
+                                                     mipmapped:NO];
+  td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  td.storageMode = MTLStorageModePrivate;
+  return [device newTextureWithDescriptor:td];
 }
 
 @implementation CanvasPlugin (Render)
 
-/// Build the per-sample evaluated paths blob for `sampleTime`. Decodes
-/// `baseBlob` afresh each call so per-sample mutations don't leak across
-/// samples. Returns nil when there are no paths.
-- (NSData *)_kkSamplePathsBlobFromBaseBlob:(NSData *)baseBlob
-                               paramGetAPI:
-                                   (id<FxParameterRetrievalAPI_v6>)paramGetAPI
-                                     lanes:(NSArray<KKTimingLane *> *)lanes
-                                sampleTime:(CMTime)sampleTime
-                               effectStart:(CMTime)effectStart
-                              effectDurSec:(double)effectDurSec {
-  if (baseBlob.length == 0)
-    return nil;
-  NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:baseBlob];
+- (BOOL)scheduleInputs:(NSArray<FxImageTileRequest *> *_Nullable *_Nullable)
+                           inputImageRequests
+       withPluginState:(NSData *)pluginState
+                atTime:(CMTime)renderTime
+                 error:(NSError **)error {
+  // Slot 0 is the playhead frame (the main viewer render). Additional slots
+  // are the boundary / filmstrip / onion frames the mini-viewer requested via
+  // the reverse-channel path, plus motion-blur sub-frame samples. The MB state
+  // is snapshotted into -pluginState: (prefix of the blob); read it back so
+  // KKBuildSourceRequests appends the sub-frame source requests.
+  NSArray *reqs = KKBuildSourceRequests(
+      renderTime,
+      CanvasMiniViewerRequestPathForUUID(
+          KKInstanceUUIDForAPI(self.apiManager)),
+      self.renderCache,
+      ^id(CMTime t) {
+        return [[FxImageTileRequest alloc]
+            initWithSource:kFxImageTileRequestSourceEffectClip
+                      time:t
+            includeFilters:YES
+               parameterID:0];
+      });
+  *inputImageRequests = reqs;
+  return YES;
+}
 
-  NSString *uuid = KKLayerUUIDForAPI(self.apiManager);
-  NSIndexSet *sel = uuid ? KKCanvasCurrentSelection(uuid) : nil;
-  if (sel.count > 0) {
-    KKParamsToSelectedPaths(paramGetAPI, sel, paths);
-  } else {
-    NSInteger selIdx = KKReadSelectedIndex(paramGetAPI);
-    if (selIdx >= 0 && (NSUInteger)selIdx < paths.count &&
-        !paths[selIdx].isGroup)
-      KKParamsToPath(paramGetAPI, paths[selIdx]);
-  }
-
-  if (lanes.count && effectDurSec > 0) {
-    double frac = MAX(0.0, MIN(1.0, (CMTimeGetSeconds(sampleTime) -
-                                     CMTimeGetSeconds(effectStart)) /
-                                        effectDurSec));
-    [CanvasPlugin kkApplyLanes:lanes
-                    atFraction:frac
-                  effectDurSec:effectDurSec
-                       toPaths:paths];
-  }
-
-  // Bake the time-driven marching-ants phase into each path's offset field
-  // (used as a transient phase carrier) so the renderer stays time-agnostic.
-  // Speed of 1.0 = ~3 cycles/sec, matching Photoshop-style ants in the middle
-  // of the slider range.
-  double secsSinceStart =
-      CMTimeGetSeconds(sampleTime) - CMTimeGetSeconds(effectStart);
-  for (KKBezierPath *p in paths) {
-    if (p.isGroup || p.marchingAntsSpeed == 0.0f) {
-      p.marchingAntsOffset = 0.0f;
-      continue;
-    }
-    double advanced = secsSinceStart * p.marchingAntsSpeed * 3.0;
-    advanced = fmod(advanced, 1.0);
-    if (advanced < 0.0)
-      advanced += 1.0;
-    p.marchingAntsOffset = (float)advanced;
-  }
-  // Per-path translate/rotate/scale lives on KKBezierPath as properties
-  // (translateX/Y, future scale/rotate); the render side composes them
-  // into a per-path matrix and applies it in the vertex shader. Nothing
-  // to bake into points here.
-  return [KKBezierPath blobFromPaths:paths];
+- (BOOL)sourceTileRect:(FxRect *)sourceTileRect
+       sourceImageIndex:(NSUInteger)sourceImageIndex
+           sourceImages:(NSArray<FxImageTile *> *)sourceImages
+    destinationTileRect:(FxRect)destinationTileRect
+       destinationImage:(FxImageTile *)destinationImage
+            pluginState:(NSData *)pluginState
+                 atTime:(CMTime)renderTime
+                  error:(NSError *_Nullable *)outError {
+  // Request the FULL source image (not just the dest tile) so the mini-viewer
+  // feed publish sees a full-frame tile - its publish gate skips sub-tiles, so
+  // without this the preview never receives a frame (the main viewer still
+  // works: its encoder maps the dest tile to a source sub-region via UVs).
+  *sourceTileRect = sourceImages[sourceImageIndex].imagePixelBounds;
+  return YES;
 }
 
 - (BOOL)pluginState:(NSData **)pluginState
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error {
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
+  // Increment 1: render is a literal passthrough, so the state blob carries no
+  // per-frame data. We still refresh the render cache + arm the live-scrub
+  // poller so the inspector playhead tracks during playback, mirroring the
+  // timing-driven plugins.
+  id<FxParameterRetrievalAPI_v6> api =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (api) {
+    NSString *uiJSON = KKReadCustomParamString(api, kParamUIState);
+    if (uiJSON.length) {
+      // Seed the viewer OSC's UIState snapshot here too (the OSC can't read the
+      // param directly). pluginState only fires on a CHANGE, so on a cold FCP
+      // launch the snapshot would be empty until the user interacts - leaving the
+      // toolbar / grid at defaults. Render runs before the OSC draws, so seeding
+      // here restores them immediately.
+      CanvasSetUIStateSnapshot(uiJSON);
+      NSDictionary *ui = [NSJSONSerialization
+          JSONObjectWithData:[uiJSON dataUsingEncoding:NSUTF8StringEncoding]
+                     options:0
+                       error:nil];
+      KKRenderCacheApplyUIState(self.renderCache, ui);
+    }
+  }
+  BOOL hasTiming = KKRefreshRenderCache(
+      self.apiManager, (KKTimelineInspectorView *)self.inspectorView,
+      self.renderCache);
+  if (hasTiming) {
+    KKPlayheadPoller *poller = self.playheadPoller;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [poller ensureRunning];
+    });
+  }
+
+  // Snapshot the layer stack into the state blob so the render reads no params.
+  // The param value is base64 of +[KKBezierPath blobFromPaths:]; decode it back
+  // to the raw blob here and hand the raw blob to render (pathsFromBlob:).
+  NSData *layerBlob = nil;
+  if (api) {
+    NSString *b64 = KKReadCustomParamString(api, kParamLayerData);
+    if (b64.length)
+      layerBlob = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
+  }
+
+  // Snapshot the motion-blur settings now (the param API is unavailable at
+  // render time). The blob layout is [KKMotionBlurState][layer blob]; render
+  // reads the state prefix, then the per-sample clip fractions are recomputed
+  // there from sampleTimesForState + the render cache (no paramAPI needed).
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-
-  CanvasStrokeParams params;
-  double width = 8.0;
-  [paramGetAPI getFloatValue:&width
-               fromParameter:kParamStrokeWidth
-                      atTime:renderTime];
-  params.strokeWidth = (float)width;
-
-  double r = 1.0, g = 0.0, b = 0.0;
-  [paramGetAPI getRedValue:&r
-                greenValue:&g
-                 blueValue:&b
-             fromParameter:kParamStrokeColor
-                    atTime:renderTime];
-  params.r = (float)r;
-  params.g = (float)g;
-  params.b = (float)b;
-
-  // Snapshot motion-blur state. When transitionsOnly is set and no lane is
-  // mid-transition at this frame, drop blur so the cheap single-pass path
-  // wins (mirrors MagicMove).
-  KKMotionBlurState mbState =
-      [KKMotionBlur snapshotStateWithParameterAPI:paramGetAPI
-                                        timingAPI:timingAPI
-                                           atTime:renderTime];
-  if (mbState.enabled && mbState.transitionsOnly &&
-      ![self multiStageAnyLaneInTransitionAtTime:renderTime])
-    mbState.enabled = false;
-  // Canvas's per-path render assumes the sample target is sized to the
-  // final output. Opt out of subframe downscaling so sample dims match
-  // outputWidth/Height (KKMotionBlur header documents this opt-out).
-  mbState.subframeScale = 1.0f;
-
-  // Render tick can't read KKDataBlob params (FxPlug XPC scope rule -
-  // see project_osc_custom_blob_unreadable.md); read the native mirror.
-  NSString *baseStr = KKCanvasReadPathDataMirror(paramGetAPI);
-  NSData *baseBlob = baseStr.length
-                         ? [[NSData alloc] initWithBase64EncodedString:baseStr
-                                                               options:0]
-                         : nil;
-
-  // Render scope can't read KKDataBlob params; read the native-string
-  // mirror that KKKit writes in lockstep with every lanes blob write.
-  NSString *lanesJSON = nil;
-  [paramGetAPI getStringParameterValue:&lanesJSON
-                         fromParameter:kKKParamMultiStageDataMirror];
-  NSArray<KKTimingLane *> *lanes =
-      lanesJSON.length ? [KKTimingLane lanesFromJSON:lanesJSON] : nil;
-  CMTime effectStart = kCMTimeZero, effectDuration = kCMTimeZero;
-  [timingAPI startTimeForEffect:&effectStart];
-  [timingAPI durationTimeForEffect:&effectDuration];
-  double effectDurSec = CMTimeGetSeconds(effectDuration);
-
-  NSArray<NSValue *> *sampleTimes =
-      mbState.enabled
-          ? [KKMotionBlur sampleTimesForState:mbState renderTime:renderTime]
-          : @[ [NSValue valueWithBytes:&renderTime objCType:@encode(CMTime)] ];
-
-  NSMutableArray<NSData *> *sampleBlobs =
-      [NSMutableArray arrayWithCapacity:sampleTimes.count];
-  for (NSValue *tv in sampleTimes) {
-    CMTime t = kCMTimeZero;
-    [tv getValue:&t];
-    NSData *blob = [self _kkSamplePathsBlobFromBaseBlob:baseBlob
-                                            paramGetAPI:paramGetAPI
-                                                  lanes:lanes
-                                             sampleTime:t
-                                            effectStart:effectStart
-                                           effectDurSec:effectDurSec];
-    [sampleBlobs addObject:(blob ?: [NSData data])];
-  }
-
-  // Layout: [CanvasStrokeParams | KKMotionBlurState | uint32 sampleCount |
-  //         (uint32 blobLen | blobBytes) × sampleCount]
-  NSMutableData *state = [NSMutableData data];
-  [state appendBytes:&params length:sizeof(params)];
-  [state appendBytes:&mbState length:sizeof(mbState)];
-  uint32_t sampleCount = (uint32_t)sampleBlobs.count;
-  [state appendBytes:&sampleCount length:sizeof(sampleCount)];
-  for (NSData *blob in sampleBlobs) {
-    uint32_t len = (uint32_t)blob.length;
-    [state appendBytes:&len length:sizeof(len)];
-    if (len)
-      [state appendData:blob];
-  }
+  NSString *mbJSON =
+      api ? KKReadCustomParamString(api, kKKParamMotionBlurData) : nil;
+  KKMotionBlurState mbState = [KKMotionBlur snapshotStateFromJSON:mbJSON
+                                                        timingAPI:timingAPI
+                                                           atTime:renderTime];
+  NSMutableData *state = [NSMutableData dataWithBytes:&mbState
+                                               length:sizeof(mbState)];
+  if (layerBlob.length)
+    [state appendData:layerBlob];
   *pluginState = state;
-  return (*pluginState != nil);
-}
-
-- (void)renderPath:(KKBezierPath *)path
-          originalPath:(KKBezierPath *)orig
-             transform:(CanvasPathTransform)pathXform
-                target:(id<MTLTexture>)target
-           outputWidth:(float)outputWidth
-          outputHeight:(float)outputHeight
-            imageWidth:(float)imageWidth
-           imageHeight:(float)imageHeight
-           tileOffsetX:(float)tileOffsetX
-           tileOffsetY:(float)tileOffsetY
-                device:(id<MTLDevice>)device
-         commandBuffer:(id<MTLCommandBuffer>)commandBuffer
-          viewportSize:(simd_uint2)viewportSize
-               imagePS:(id<MTLRenderPipelineState>)imagePS
-              strokePS:(id<MTLRenderPipelineState>)strokePS
-         fillStencilPS:(id<MTLRenderPipelineState>)fillStencilPS
-           fillColorPS:(id<MTLRenderPipelineState>)fillColorPS
-       strokeStencilPS:(id<MTLRenderPipelineState>)strokeStencilPS
-    fillStencilDSState:(id<MTLDepthStencilState>)fillStencilDSState
-      fillColorDSState:(id<MTLDepthStencilState>)fillColorDSState
-        stencilTexture:(id<MTLTexture>)stencilTexture {
-  if (path.isImage && path.imagePath && imagePS) {
-    id<MTLTexture> imgTex = KKGetOrLoadImageTexture(path.imagePath, device);
-    if (imgTex) {
-      KKBezierPoint bl = [path pointAtIndex:0];
-      KKBezierPoint br = [path pointAtIndex:1];
-      KKBezierPoint tr = [path pointAtIndex:2];
-      KKBezierPoint tl = [path pointAtIndex:3];
-
-      id<MTLTexture> drawTex =
-          KKProcessImageWithEffects(imgTex, path, device, commandBuffer);
-
-      float scaleX = (float)drawTex.width / (float)imgTex.width;
-      float scaleY = (float)drawTex.height / (float)imgTex.height;
-      float cx = (bl.x + tr.x) * 0.5f;
-      float cy = (bl.y + tr.y) * 0.5f;
-
-      // Canvas-centered pixel space - pathXform.m4 carries the tile-shift
-      // post-translation that maps canvas-centered coords into the
-      // tile-relative pixel space the viewport expects (Approach C; see
-      // `_kkBuildPathTransform`).
-      float halfW = imageWidth * 0.5f;
-      float halfH = imageHeight * 0.5f;
-      CanvasFillVertex quadVerts[4] = {
-          {{(cx + (bl.x - cx) * scaleX) * imageWidth - halfW,
-            (1.0f - (cy + (bl.y - cy) * scaleY)) * imageHeight - halfH}},
-          {{(cx + (br.x - cx) * scaleX) * imageWidth - halfW,
-            (1.0f - (cy + (br.y - cy) * scaleY)) * imageHeight - halfH}},
-          {{(cx + (tl.x - cx) * scaleX) * imageWidth - halfW,
-            (1.0f - (cy + (tl.y - cy) * scaleY)) * imageHeight - halfH}},
-          {{(cx + (tr.x - cx) * scaleX) * imageWidth - halfW,
-            (1.0f - (cy + (tr.y - cy) * scaleY)) * imageHeight - halfH}},
-      };
-
-      float opacity = path.opacity;
-      MTLRenderPassDescriptor *rpd =
-          [MTLRenderPassDescriptor renderPassDescriptor];
-      rpd.colorAttachments[0].texture = target;
-      rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
-      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-
-      id<MTLRenderCommandEncoder> enc =
-          [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-      [enc setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
-      [enc setRenderPipelineState:imagePS];
-      [enc setVertexBytes:quadVerts length:sizeof(quadVerts) atIndex:0];
-      [enc setVertexBytes:&viewportSize length:sizeof(viewportSize) atIndex:1];
-      [enc setVertexBytes:&pathXform length:sizeof(pathXform) atIndex:2];
-      [enc setFragmentTexture:drawTex atIndex:0];
-      [enc setFragmentBytes:&opacity length:sizeof(opacity) atIndex:0];
-      [enc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-              vertexStart:0
-              vertexCount:4];
-      [enc endEncoding];
-    }
-  } else if (path.fillEnabled && orig.count >= 2 && fillStencilPS &&
-             fillColorPS && stencilTexture) {
-    // All path-coord-based helpers (fan, bbox, hachure, sketch jitter,
-    // tessellation) work in canvas-centered pixel space; pass image dims
-    // so output is canvas-relative and let pathXform.m4 carry the
-    // tile-shift translation that maps it to the viewport (Approach C).
-    if (path.sketchFillStyle > 0) {
-      KKBezierPath *clipPath = orig;
-      if (orig.sketchEnabled && orig.sketchRoughness > 0.0001f) {
-        clipPath = KKSketchPath(orig, orig.sketchRoughness, orig.sketchBowing,
-                                orig.sketchSeed, 1, imageWidth, imageHeight);
-      }
-      KKRenderFillStencilOnly(clipPath, pathXform, imageWidth, imageHeight,
-                              device, commandBuffer, target, stencilTexture,
-                              fillStencilPS, fillStencilDSState, viewportSize);
-      KKRenderSketchFillForPath(orig, pathXform, imageWidth, imageHeight,
-                                device, commandBuffer, target, stencilTexture,
-                                strokeStencilPS, fillColorDSState, viewportSize,
-                                YES);
-    } else {
-      KKBezierPath *fillPath = orig;
-      if (orig.sketchEnabled && orig.sketchRoughness > 0.0001f) {
-        fillPath = KKSketchPath(orig, orig.sketchRoughness, orig.sketchBowing,
-                                orig.sketchSeed, 1, imageWidth, imageHeight);
-      }
-      KKRenderFillForPath(fillPath, pathXform, imageWidth, imageHeight, device,
-                          commandBuffer, target, stencilTexture, fillStencilPS,
-                          fillColorPS, fillStencilDSState, fillColorDSState,
-                          viewportSize);
-      if (strokePS) {
-        KKRenderFillAAOutline(fillPath, pathXform, imageWidth, imageHeight,
-                              device, commandBuffer, target, strokePS,
-                              viewportSize);
-      }
-    }
-  }
-
-  if (!path.isImage && path.strokeEnabled && strokePS) {
-    KKRenderStrokeForPath(path, pathXform, imageWidth, imageHeight, device,
-                          commandBuffer, target, strokePS, viewportSize);
-  }
-}
-
-/// Decode a sample's path blob from pluginState. Returns the inner
-/// `paths` array, plus the count of bytes consumed (so callers can advance
-/// to the next sample). Sets *paths to an empty array if the sample's blob
-/// is empty.
-static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
-                              NSMutableArray<KKBezierPath *> **paths,
-                              NSUInteger *bytesConsumed) {
-  if (offset + sizeof(uint32_t) > pluginState.length)
-    return NO;
-  uint32_t blobLen = 0;
-  [pluginState getBytes:&blobLen range:NSMakeRange(offset, sizeof(blobLen))];
-  NSUInteger payloadStart = offset + sizeof(uint32_t);
-  if (payloadStart + blobLen > pluginState.length)
-    return NO;
-  NSData *blob =
-      blobLen
-          ? [pluginState subdataWithRange:NSMakeRange(payloadStart, blobLen)]
-          : nil;
-  *paths = blob ? [KKBezierPath pathsFromBlob:blob] : [NSMutableArray array];
-  *bytesConsumed = sizeof(uint32_t) + blobLen;
-  return YES;
-}
-
-/// Renders one Canvas frame (paths → target). Encodes onto `commandBuffer`
-/// but does NOT commit/wait - caller owns lifetime. `sampleIndex` < 0 uses
-/// the static texture cache (single-frame path); ≥ 0 fetches per-sample
-/// scratch textures from `KKMotionBlur` so concurrent samples on the same
-/// command buffer don't share state.
-- (BOOL)_kkRenderFrameWithDevice:(id<MTLDevice>)device
-                   commandBuffer:(id<MTLCommandBuffer>)commandBuffer
-                          target:(id<MTLTexture>)targetTexture
-                    inputTexture:(id<MTLTexture>)inputTexture
-                     outputWidth:(float)outputWidth
-                    outputHeight:(float)outputHeight
-                      imageWidth:(float)imageWidth
-                     imageHeight:(float)imageHeight
-                     tileOffsetX:(float)tileOffsetX
-                     tileOffsetY:(float)tileOffsetY
-                     renderScale:(float)renderScale
-                           cache:(KKMetalDeviceCache *)cache
-                      registryID:(uint64_t)registryID
-                     pixelFormat:(MTLPixelFormat)pixelFormat
-                           paths:(NSMutableArray<KKBezierPath *> *)inputPaths
-                     sampleIndex:(int)sampleIndex {
-  // Fix up rounded rect geometry.
-  for (KKBezierPath *p in inputPaths) {
-    if (p.isImage)
-      continue;
-    KKRectShape *rs = p.rectShape;
-    if (!rs)
-      continue;
-    float rW = (rs.max.x - rs.min.x) * imageWidth;
-    float rH = (rs.max.y - rs.min.y) * imageHeight;
-    [rs applyToPath:p canvasWidth:rW canvasHeight:rH];
-  }
-
-  // Blit upstream input → target so the canvas composites over it.
-  {
-    id<MTLBlitCommandEncoder> blit = [commandBuffer blitCommandEncoder];
-    NSUInteger copyW = MIN(inputTexture.width, targetTexture.width);
-    NSUInteger copyH = MIN(inputTexture.height, targetTexture.height);
-    [blit copyFromTexture:inputTexture
-              sourceSlice:0
-              sourceLevel:0
-             sourceOrigin:MTLOriginMake(0, 0, 0)
-               sourceSize:MTLSizeMake(copyW, copyH, 1)
-                toTexture:targetTexture
-         destinationSlice:0
-         destinationLevel:0
-        destinationOrigin:MTLOriginMake(0, 0, 0)];
-    [blit endEncoding];
-  }
-
-  // Scale pixel-space stroke properties by render quality.
-  if (renderScale < 0.9999f) {
-    for (KKBezierPath *p in inputPaths) {
-      p.strokeWidth *= renderScale;
-      p.endWidth *= renderScale;
-      p.dashLength *= renderScale;
-      p.dashGap *= renderScale;
-      p.dotGap *= renderScale;
-      p.sketchFillGap *= renderScale;
-      p.sketchFillWeight *= renderScale;
-    }
-  }
-
-  // Apply sketch jitter - produces (renderPaths, origPaths) pairs.
-  NSMutableArray<KKBezierPath *> *origPathsMut =
-      [NSMutableArray arrayWithCapacity:inputPaths.count];
-  NSMutableArray<KKBezierPath *> *renderPaths =
-      [NSMutableArray arrayWithCapacity:inputPaths.count];
-  for (KKBezierPath *p in inputPaths) {
-    if (p.sketchEnabled && p.count >= 2 && !p.hidden) {
-      BOOL needsSplit = !p.closed && p.sketchStrokes >= 2;
-      if (needsSplit) {
-        KKBezierPath *pass1 =
-            KKSketchPath(p, p.sketchRoughness, p.sketchBowing, p.sketchSeed, 1,
-                         imageWidth, imageHeight);
-        [renderPaths addObject:pass1];
-        [origPathsMut addObject:p];
-        KKBezierPath *pass2 =
-            KKSketchPath(p, p.sketchRoughness, p.sketchBowing,
-                         p.sketchSeed ^ 0xFACE0042, 1, imageWidth, imageHeight);
-        pass2.fillEnabled = NO;
-        pass2.startMarker = 0;
-        pass2.endMarker = 0;
-        [renderPaths addObject:pass2];
-        [origPathsMut addObject:p];
-      } else {
-        [renderPaths
-            addObject:KKSketchPath(p, p.sketchRoughness, p.sketchBowing,
-                                   p.sketchSeed, p.sketchStrokes, imageWidth,
-                                   imageHeight)];
-        [origPathsMut addObject:p];
-      }
-    } else {
-      [renderPaths addObject:p];
-      [origPathsMut addObject:p];
-    }
-  }
-  NSArray<KKBezierPath *> *paths = renderPaths;
-  NSArray<KKBezierPath *> *origPaths = origPathsMut;
-
-  BOOL hasDrawablePaths = NO;
-  for (KKBezierPath *p in paths) {
-    if (p.count >= 2 && !p.hidden) {
-      hasDrawablePaths = YES;
-      break;
-    }
-  }
-  if (!hasDrawablePaths)
-    return YES; // background blit already laid down - nothing else to do
-
-  NSString *strokeKey = [NSString
-      stringWithFormat:@"%@_stroke_%lu", kPluginID, (unsigned long)pixelFormat];
-  id<MTLRenderPipelineState> strokePS = getOrCreatePipeline(
-      strokeKey, registryID, pixelFormat, cache, device, @"strokeVertexShader",
-      @"strokeFragmentShader", YES, MTLPixelFormatInvalid);
-  if (!strokePS)
-    return NO;
-
-  simd_uint2 viewportSize = {(unsigned int)outputWidth,
-                             (unsigned int)outputHeight};
-  MTLPixelFormat stencilFormat = MTLPixelFormatStencil8;
-
-  NSString *fillStencilKey =
-      [NSString stringWithFormat:@"%@_fillStencil_%lu", kPluginID,
-                                 (unsigned long)pixelFormat];
-  id<MTLRenderPipelineState> fillStencilPS = getOrCreatePipeline(
-      fillStencilKey, registryID, pixelFormat, cache, device,
-      @"fillVertexShader", @"fillFragmentShader", NO, stencilFormat);
-
-  NSString *fillColorKey =
-      [NSString stringWithFormat:@"%@_fillColor_%lu", kPluginID,
-                                 (unsigned long)pixelFormat];
-  id<MTLRenderPipelineState> fillColorPS = getOrCreatePipeline(
-      fillColorKey, registryID, pixelFormat, cache, device, @"fillVertexShader",
-      @"fillFragmentShader", YES, stencilFormat);
-
-  NSString *strokeStencilKey =
-      [NSString stringWithFormat:@"%@_strokeStencil_%lu", kPluginID,
-                                 (unsigned long)pixelFormat];
-  id<MTLRenderPipelineState> strokeStencilPS = getOrCreatePipeline(
-      strokeStencilKey, registryID, pixelFormat, cache, device,
-      @"strokeVertexShader", @"strokeFragmentShader", YES, stencilFormat);
-
-  static id<MTLDepthStencilState> sFillStencilDSState = nil;
-  static id<MTLDepthStencilState> sFillColorDSState = nil;
-  if (!sFillStencilDSState) {
-    MTLStencilDescriptor *stencilInvertDesc =
-        [[MTLStencilDescriptor alloc] init];
-    stencilInvertDesc.stencilCompareFunction = MTLCompareFunctionAlways;
-    stencilInvertDesc.depthStencilPassOperation = MTLStencilOperationInvert;
-    MTLDepthStencilDescriptor *fillStencilDSDesc =
-        [[MTLDepthStencilDescriptor alloc] init];
-    fillStencilDSDesc.frontFaceStencil = stencilInvertDesc;
-    fillStencilDSDesc.backFaceStencil = stencilInvertDesc;
-    sFillStencilDSState =
-        [device newDepthStencilStateWithDescriptor:fillStencilDSDesc];
-
-    MTLStencilDescriptor *stencilTestDesc = [[MTLStencilDescriptor alloc] init];
-    stencilTestDesc.stencilCompareFunction = MTLCompareFunctionNotEqual;
-    stencilTestDesc.readMask = 0xFF;
-    stencilTestDesc.stencilFailureOperation = MTLStencilOperationKeep;
-    stencilTestDesc.depthStencilPassOperation = MTLStencilOperationZero;
-    MTLDepthStencilDescriptor *fillColorDSDesc =
-        [[MTLDepthStencilDescriptor alloc] init];
-    fillColorDSDesc.frontFaceStencil = stencilTestDesc;
-    fillColorDSDesc.backFaceStencil = stencilTestDesc;
-    sFillColorDSState =
-        [device newDepthStencilStateWithDescriptor:fillColorDSDesc];
-  }
-  id<MTLDepthStencilState> fillStencilDSState = sFillStencilDSState;
-  id<MTLDepthStencilState> fillColorDSState = sFillColorDSState;
-
-  NSUInteger texW = (NSUInteger)outputWidth;
-  NSUInteger texH = (NSUInteger)outputHeight;
-
-  BOOL anyFill = NO;
-  for (KKBezierPath *p in paths) {
-    if (p.fillEnabled && p.count >= 2 && !p.hidden) {
-      anyFill = YES;
-      break;
-    }
-  }
-
-  NSString *compositeKey =
-      [NSString stringWithFormat:@"%@_composite_%lu", kPluginID,
-                                 (unsigned long)pixelFormat];
-  id<MTLRenderPipelineState> compositePS =
-      getOrCreatePipeline(compositeKey, registryID, pixelFormat, cache, device,
-                          @"compositeVertexShader", @"compositeFragmentShader",
-                          YES, MTLPixelFormatInvalid);
-
-  NSString *imageKey = [NSString
-      stringWithFormat:@"%@_image_%lu", kPluginID, (unsigned long)pixelFormat];
-  id<MTLRenderPipelineState> imagePS = getOrCreatePipeline(
-      imageKey, registryID, pixelFormat, cache, device, @"imageVertexShader",
-      @"imageFragmentShader", YES, MTLPixelFormatInvalid);
-
-  // Stencil + intermediate textures: motion-blur path uses per-sample
-  // scratch textures (multiple samples ride the same command buffer);
-  // single-frame path keeps the static cache.
-  id<MTLTexture> stencilTexture = nil;
-  id<MTLTexture> intermediateTexture = nil;
-
-  if (sampleIndex >= 0) {
-    if (anyFill && fillStencilPS && fillColorPS) {
-      stencilTexture =
-          [KKMotionBlur scratchTextureForKey:@"canvas.stencil"
-                                 sampleIndex:sampleIndex
-                                       width:texW
-                                      height:texH
-                                      format:stencilFormat
-                                       usage:MTLTextureUsageRenderTarget
-                                      device:device];
-    }
-    if (compositePS) {
-      intermediateTexture =
-          [KKMotionBlur scratchTextureForKey:@"canvas.intermediate"
-                                 sampleIndex:sampleIndex
-                                       width:texW
-                                      height:texH
-                                      format:pixelFormat
-                                       usage:MTLTextureUsageRenderTarget |
-                                             MTLTextureUsageShaderRead
-                                      device:device];
-    }
-  } else {
-    static id<MTLTexture> sCachedStencilTex = nil;
-    static id<MTLTexture> sCachedIntermediateTex = nil;
-    static NSUInteger sCachedTexW = 0, sCachedTexH = 0;
-    static MTLPixelFormat sCachedIntPixFmt = MTLPixelFormatInvalid;
-
-    if (sCachedTexW != texW || sCachedTexH != texH) {
-      sCachedStencilTex = nil;
-      sCachedIntermediateTex = nil;
-      sCachedTexW = texW;
-      sCachedTexH = texH;
-      sCachedIntPixFmt = MTLPixelFormatInvalid;
-    }
-
-    if (anyFill && fillStencilPS && fillColorPS) {
-      if (!sCachedStencilTex) {
-        MTLTextureDescriptor *stencilTexDesc = [MTLTextureDescriptor
-            texture2DDescriptorWithPixelFormat:stencilFormat
-                                         width:texW
-                                        height:texH
-                                     mipmapped:NO];
-        stencilTexDesc.usage = MTLTextureUsageRenderTarget;
-        stencilTexDesc.storageMode = MTLStorageModePrivate;
-        sCachedStencilTex = [device newTextureWithDescriptor:stencilTexDesc];
-      }
-      stencilTexture = sCachedStencilTex;
-    }
-    if (compositePS) {
-      if (!sCachedIntermediateTex || sCachedIntPixFmt != pixelFormat) {
-        MTLTextureDescriptor *intDesc =
-            [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:pixelFormat
-                                                               width:texW
-                                                              height:texH
-                                                           mipmapped:NO];
-        intDesc.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
-        intDesc.storageMode = MTLStorageModePrivate;
-        sCachedIntermediateTex = [device newTextureWithDescriptor:intDesc];
-        sCachedIntPixFmt = pixelFormat;
-      }
-      intermediateTexture = sCachedIntermediateTex;
-    }
-  }
-
-  NSDictionary<NSString *, KKBezierPath *> *groupsByID =
-      _kkIndexGroupsByID(origPaths);
-  NSDictionary<NSString *, NSData *> *bboxCenters =
-      _kkBboxCentersByLayerID(origPaths);
-
-  for (NSUInteger pi = paths.count; pi > 0; pi--) {
-    @autoreleasepool {
-      KKBezierPath *path = paths[pi - 1];
-      KKBezierPath *orig = origPaths[pi - 1];
-      if (path.count < 2 || path.hidden)
-        continue;
-      float tileShiftX = imageWidth * 0.5f - tileOffsetX;
-      float tileShiftY = imageHeight * 0.5f - tileOffsetY;
-      CanvasPathTransform pathXform =
-          _kkBuildPathTransform(orig, groupsByID, bboxCenters, imageWidth,
-                                imageHeight, tileShiftX, tileShiftY);
-
-      float pathOpacity = path.opacity;
-      BOOL needsIntermediate =
-          intermediateTexture && compositePS && pathOpacity < 0.9999f;
-
-      id<MTLTexture> drawTarget =
-          needsIntermediate ? intermediateTexture : targetTexture;
-
-      if (needsIntermediate) {
-        path.opacity = 1.0f;
-        orig.opacity = 1.0f;
-
-        MTLRenderPassDescriptor *clearRPD =
-            [MTLRenderPassDescriptor renderPassDescriptor];
-        clearRPD.colorAttachments[0].texture = intermediateTexture;
-        clearRPD.colorAttachments[0].loadAction = MTLLoadActionClear;
-        clearRPD.colorAttachments[0].storeAction = MTLStoreActionStore;
-        clearRPD.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
-        id<MTLRenderCommandEncoder> clearEnc =
-            [commandBuffer renderCommandEncoderWithDescriptor:clearRPD];
-        [clearEnc endEncoding];
-      }
-
-      [self renderPath:path
-                originalPath:orig
-                   transform:pathXform
-                      target:drawTarget
-                 outputWidth:outputWidth
-                outputHeight:outputHeight
-                  imageWidth:imageWidth
-                 imageHeight:imageHeight
-                 tileOffsetX:tileOffsetX
-                 tileOffsetY:tileOffsetY
-                      device:device
-               commandBuffer:commandBuffer
-                viewportSize:viewportSize
-                     imagePS:imagePS
-                    strokePS:strokePS
-               fillStencilPS:fillStencilPS
-                 fillColorPS:fillColorPS
-             strokeStencilPS:strokeStencilPS
-          fillStencilDSState:fillStencilDSState
-            fillColorDSState:fillColorDSState
-              stencilTexture:stencilTexture];
-
-      if (needsIntermediate) {
-        path.opacity = pathOpacity;
-        orig.opacity = pathOpacity;
-
-        MTLRenderPassDescriptor *compRPD =
-            [MTLRenderPassDescriptor renderPassDescriptor];
-        compRPD.colorAttachments[0].texture = targetTexture;
-        compRPD.colorAttachments[0].loadAction = MTLLoadActionLoad;
-        compRPD.colorAttachments[0].storeAction = MTLStoreActionStore;
-
-        id<MTLRenderCommandEncoder> compEnc =
-            [commandBuffer renderCommandEncoderWithDescriptor:compRPD];
-        [compEnc
-            setViewport:(MTLViewport){0, 0, outputWidth, outputHeight, -1, 1}];
-        [compEnc setRenderPipelineState:compositePS];
-        [compEnc setFragmentTexture:intermediateTexture atIndex:0];
-        [compEnc setFragmentBytes:&pathOpacity
-                           length:sizeof(pathOpacity)
-                          atIndex:0];
-        [compEnc drawPrimitives:MTLPrimitiveTypeTriangleStrip
-                    vertexStart:0
-                    vertexCount:4];
-        [compEnc endEncoding];
-      }
-    }
-  }
   return YES;
 }
 
@@ -1002,106 +155,626 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
-  [KKPlugin multiStageRenderTickForAPI:self.apiManager
-                                atTime:renderTime
-                                sender:self];
-
-  if (!pluginState || !destinationImage.ioSurface || sourceImages.count < 1) {
-    if (outError != NULL)
-      *outError =
-          [NSError errorWithDomain:FxPlugErrorDomain
-                              code:kFxError_InvalidParameter
-                          userInfo:@{
-                            NSLocalizedDescriptionKey :
-                                @"Invalid plugin state received from host"
-                          }];
+  if (!sourceImages.count || !sourceImages[0].ioSurface ||
+      !destinationImage.ioSurface) {
+    KKLogError(@"Canvas render bail: src=%lu",
+               (unsigned long)sourceImages.count);
+    if (outError)
+      *outError = [NSError errorWithDomain:FxPlugErrorDomain
+                                      code:kFxError_InvalidParameter
+                                  userInfo:nil];
     return NO;
   }
 
-  // Decode header (CanvasStrokeParams + KKMotionBlurState + sample count)
-  // and locate each sample's path-blob slice within pluginState.
-  NSUInteger headerLen =
-      sizeof(CanvasStrokeParams) + sizeof(KKMotionBlurState) + sizeof(uint32_t);
-  if (pluginState.length < headerLen)
-    return NO;
-  KKMotionBlurState mbState;
-  [pluginState getBytes:&mbState
-                  range:NSMakeRange(sizeof(CanvasStrokeParams),
-                                    sizeof(KKMotionBlurState))];
-  uint32_t sampleCount = 0;
-  [pluginState getBytes:&sampleCount
-                  range:NSMakeRange(sizeof(CanvasStrokeParams) +
-                                        sizeof(KKMotionBlurState),
-                                    sizeof(uint32_t))];
-  if (sampleCount == 0)
-    return NO;
+  // Mini-viewer source feed: publish the raw source per slot (single-slot =
+  // playhead, multi-slot = boundary preview / filmstrip / onion). The inspector
+  // renderer blits it straight through (Canvas is passthrough for now).
+  [self kkPublishMiniViewerFeedForDestination:destinationImage
+                                 sourceImages:sourceImages
+                               descriptorPath:
+                                   CanvasMiniViewerDescriptorPathForUUID(
+                                       KKInstanceUUIDForAPI(self.apiManager))
+                              boundaryReqSecs:self.renderCache.boundaryReqSecs
+                             boundaryReqFracs:self.renderCache.boundaryReqFracs
+                              multiSlotActive:YES
+                            changesOutputSize:NO
+                                   defaultTag:CMTimeGetSeconds(renderTime)];
 
-  NSMutableArray<NSNumber *> *sampleOffsets =
-      [NSMutableArray arrayWithCapacity:sampleCount];
-  {
-    NSUInteger off = headerLen;
-    for (uint32_t i = 0; i < sampleCount; i++) {
-      [sampleOffsets addObject:@(off)];
-      if (off + sizeof(uint32_t) > pluginState.length)
-        return NO;
-      uint32_t blobLen = 0;
-      [pluginState getBytes:&blobLen range:NSMakeRange(off, sizeof(blobLen))];
-      off += sizeof(uint32_t) + blobLen;
-      if (off > pluginState.length)
-        return NO;
-    }
-  }
-
+  // Passthrough: sample the source straight into the destination via the kit's
+  // shared full-screen-quad infra + the kit-bundle passthrough shaders. Canvas
+  // ships no Metal library of its own (increment 1), so the pipeline is built
+  // against the KeyframelessKit framework bundle.
+  NSString *kitBundleID =
+      [NSBundle bundleForClass:[KKPlugin class]].bundleIdentifier;
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
-  MTLPixelFormat pixelFormat =
+  MTLPixelFormat pf =
       [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
-  uint64_t registryID = destinationImage.deviceRegistryID;
-  id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
+  uint64_t regID = destinationImage.deviceRegistryID;
 
-  float outputWidth = (float)(destinationImage.tilePixelBounds.right -
-                              destinationImage.tilePixelBounds.left);
-  float outputHeight = (float)(destinationImage.tilePixelBounds.top -
-                               destinationImage.tilePixelBounds.bottom);
-
-  // FCP may composite the effect into a sub-tile of the full image
-  // (e.g. project-browser previews use 2x2 sub-tiling). Path coords
-  // are normalized to the canvas, so they must be scaled by image
-  // dims and shifted by the tile-center offset; otherwise each
-  // sub-tile draws the entire canvas inside itself (4-copies bug).
-  float imageWidth = (float)(destinationImage.imagePixelBounds.right -
-                             destinationImage.imagePixelBounds.left);
-  float imageHeight = (float)(destinationImage.imagePixelBounds.top -
-                              destinationImage.imagePixelBounds.bottom);
-  float tileOffsetX = (float)((destinationImage.tilePixelBounds.left +
-                               destinationImage.tilePixelBounds.right) *
-                                  0.5 -
-                              destinationImage.imagePixelBounds.left);
-  float tileOffsetY = (float)(destinationImage.imagePixelBounds.top -
-                              (destinationImage.tilePixelBounds.top +
-                               destinationImage.tilePixelBounds.bottom) *
-                                  0.5);
-
-  NSString *renderUUID = KKLayerUUIDForAPI(self.apiManager);
-  if (renderUUID) {
-    KKLayerInstanceState *renderState = KKLayerStateForUUID(renderUUID);
-    renderState.canvasWidth = outputWidth;
-    renderState.canvasHeight = outputHeight;
+  // Image pipeline: the transform-aware vertex shader (per-layer 4x4 model +
+  // perspective + tile shift) + the opacity fragment, composited with
+  // premultiplied-alpha "over". Both the source frame AND the layers go through
+  // it so they tile identically in FCP's sub-tiled / reverse-Y library preview.
+  id<MTLRenderPipelineState> imagePS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Canvas.image"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:kitBundleID
+                                  vertexShader:@"KKTransformVertexShader"
+                                fragmentShader:@"KKTextureOpacityFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+  if (!imagePS) {
+    KKLogError(@"Canvas render bail: no image pipeline");
+    if (outError)
+      *outError = [NSError errorWithDomain:FxPlugErrorDomain
+                                      code:kFxError_InvalidParameter
+                                  userInfo:nil];
+    return NO;
   }
+  // Image-tint pipeline: same transform vertex shader, the kit tint fragment
+  // (lerp the sampled image toward the fill colour by the amount). Used for a
+  // fill-enabled image layer; nil-tolerant (the image just renders plain).
+  id<MTLRenderPipelineState> imageTintPS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Canvas.imageTint"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:kitBundleID
+                                  vertexShader:@"KKTransformVertexShader"
+                                fragmentShader:@"KKTextureTintFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+  // Gradient-tint variant: tint the image toward the gradient (UV space).
+  id<MTLRenderPipelineState> imageGradTintPS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Canvas.imageGradTint"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:kitBundleID
+                                  vertexShader:@"KKTransformVertexShader"
+                                fragmentShader:@"KKTextureGradientTintFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
 
-  FxRect srcBounds = sourceImages[0].imagePixelBounds;
-  FxMatrix44 *inv = sourceImages[0].inversePixelTransform;
-  FxPoint2D ll = {srcBounds.left, srcBounds.bottom};
-  FxPoint2D ur = {srcBounds.right, srcBounds.top};
-  ll = [inv transform2DPoint:ll];
-  ur = [inv transform2DPoint:ur];
-  float pxW = srcBounds.right - srcBounds.left;
-  float logicalW = ur.x - ll.x;
-  float renderScale = (logicalW > 0) ? (pxW / logicalW) : 1.0f;
+  // Stroke pipeline: the SAME transform vertex shader (so vector strokes compose
+  // with CanvasComposedModelMatrix exactly like image quads) + the kit's
+  // antialiased line fragment, which reads the signed edge distance the
+  // tessellator packs into textureCoordinate.y. One pipeline serves normal AND
+  // (later) sketch strokes - sketch is a path pre-jitter, not a second pipeline.
+  id<MTLRenderPipelineState> strokePS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Canvas.stroke"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:kitBundleID
+                                  vertexShader:@"KKTransformVertexShader"
+                                fragmentShader:@"KKLineFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+  // Gradient-stroke variant: same vertex pipeline, gradient-LUT fragment.
+  id<MTLRenderPipelineState> strokeGradientPS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Canvas.strokeGradient"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:kitBundleID
+                                  vertexShader:@"KKTransformVertexShader"
+                                fragmentShader:@"KKGradientLineFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
+  // Dashed-stroke variant: a vertex shader that also threads per-vertex arc
+  // length, + a fragment that masks the dash pattern by arc (solid OR gradient).
+  // Same solid stroke geometry, so dash corners == solid corners.
+  id<MTLRenderPipelineState> strokeDashPS = [cache
+      buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                               @".Canvas.strokeDash"
+                                    registryID:regID
+                                   pixelFormat:pf
+                                      bundleID:kitBundleID
+                                  vertexShader:@"KKStrokeDashVertexShader"
+                                fragmentShader:@"KKStrokeDashFragment"
+                                     blendMode:KKBlendModePremultipliedAlpha];
 
-  if (mbState.enabled && sampleCount > 1) {
-    __weak typeof(self) weakSelf = self;
-    NSData *capturedState = pluginState;
-    NSArray<NSNumber *> *capturedOffsets = sampleOffsets;
+  // The state blob is [KKMotionBlurState][layer blob]; split off the MB prefix
+  // before decoding the layer stack (bottom of the array draws in front, so
+  // composite back-to-front: last index first).
+  KKMotionBlurState mbState = {0};
+  NSData *layerBlob = nil;
+  if (pluginState.length >= sizeof(KKMotionBlurState)) {
+    [pluginState getBytes:&mbState length:sizeof(mbState)];
+    if (pluginState.length > sizeof(mbState))
+      layerBlob = [pluginState
+          subdataWithRange:NSMakeRange(sizeof(mbState),
+                                       pluginState.length - sizeof(mbState))];
+  }
+  NSArray<KKBezierPath *> *layers =
+      layerBlob.length ? [KKBezierPath pathsFromBlob:layerBlob] : nil;
+  id<MTLDevice> device = [cache deviceWithRegistryID:regID];
+  NSMutableDictionary<NSString *, id<MTLTexture>> *texCache =
+      self.imageTextureCache;
+
+  // Layers are positioned in FULL-image space; a per-tile shift maps that into
+  // the current render tile (the shader divides by the tile viewport). For a
+  // full-frame tile the shift is 0; FCP's tiled previews pass a non-zero shift
+  // so each tile shows its slice instead of redrawing the whole composite.
+  FxRect tileB = destinationImage.tilePixelBounds;
+  FxRect imgB = destinationImage.imagePixelBounds;
+  float outputWidth = (float)(imgB.right - imgB.left);
+  float outputHeight = (float)(imgB.top - imgB.bottom);
+  // Publish the true output size for the viewer OSC's path ops (stroke-to-outline
+  // bakes px-relative geometry and the OSC only knows zoom-dependent canvas px).
+  CanvasSetOutputSize(outputWidth, outputHeight);
+  // Render scale: stroke widths are authored in CANONICAL (canvas/100%) px, but
+  // a downscaled FCP browser/effect thumbnail renders fewer real pixels per
+  // canonical unit. Map the SOURCE image's pixel bounds back to canonical units
+  // via its inversePixelTransform (same idiom as Glow): resScale =
+  // srcPixelWidth / srcCanonicalWidth (1.0 at full res, < 1 for a thumbnail).
+  // Geometry is already correct (it scales with imageWidth); only the absolute
+  // stroke width needs this, else thumbnails draw strokes far too thick.
+  float strokeScale = 1.0f;
+  FxRect sp = sourceImages[0].imagePixelBounds;
+  FxMatrix44 *invXf = sourceImages[0].inversePixelTransform;
+  if (invXf) {
+    FxPoint2D sll = [invXf transform2DPoint:(FxPoint2D){sp.left, sp.bottom}];
+    FxPoint2D sur = [invXf transform2DPoint:(FxPoint2D){sp.right, sp.top}];
+    float canonW = (float)(sur.x - sll.x);
+    float pxW = (float)(sp.right - sp.left);
+    if (canonW > 0.0f)
+      strokeScale = pxW / canonW;
+  }
+  float tileShiftX =
+      outputWidth * 0.5f - ((tileB.left + tileB.right) * 0.5f - imgB.left);
+  // Y measured from the image TOP (the vert/shader Y here runs opposite FCP's
+  // Y-up pixel bounds, so a from-bottom reference reversed the tile strip).
+  float tileShiftY =
+      outputHeight * 0.5f - (imgB.top - (tileB.bottom + tileB.top) * 0.5f);
+
+  // Clip-local time a layer's Scale/Position is evaluated at (same remap as
+  // every timing read). Negative when the duration isn't known yet, which tells
+  // CanvasEncodeImageLayers to draw the static rects.
+  double (^fracForTime)(CMTime) = ^double(CMTime t) {
+    if (self.renderCache.effectDurSec <= 0.0)
+      return -1.0;
+    double f = (CMTimeGetSeconds(t) - self.renderCache.effectStartSec) /
+               self.renderCache.effectDurSec;
+    f = MAX(0.0, MIN(1.0, f));
+    return KKMaintainTimingRemappedFraction(f, self.renderCache);
+  };
+  double frac = fracForTime(renderTime);
+  // Media time since the effect start - drives the marching-ants dash animation
+  // (independent of the clip fraction, so it marches even on a constant stroke).
+  double marchElapsed =
+      fmax(0.0, CMTimeGetSeconds(renderTime) - self.renderCache.effectStartSec);
+
+  // Source passthrough + the layer stack (evaluated at `f`) into one encoder.
+  // `withStrokes` keeps the strokes IN this accumulated composite (the
+  // motion-blur path, so strokes smear); the non-blur path passes NO and draws
+  // strokes in their own pass AFTER the fills (so a fill sits UNDER its stroke).
+  // Motion-blur sample: render the layer stack PER LAYER (image -> fill ->
+  // stroke, back-to-front, array[0] = topmost drawn last) into one blur SAMPLE
+  // texture over its time-matched source, so every accumulated sample carries the
+  // SAME correct cross-layer z-order as the non-blur path (fills now smear with
+  // the rest instead of the old single post-pass). `sdest` is a tracked scratch
+  // texture owned by KKMotionBlur (it commits `scb` and averages the samples), so
+  // sequential render passes in that one command buffer serialize correctly - no
+  // separate buffers / waits (unlike the untracked FCP dest).
+  // Depth-order the drawables ONCE per render (back-to-front) so a layer tilted
+  // physically in front draws on top, instead of strict list order. The order is
+  // stable across motion-blur sub-frame samples, so it's computed here at the
+  // frame `frac` and reused for every sample - NOT rebuilt inside
+  // renderSampleOrdered (that re-evaluated every layer's transform N times and
+  // stalled the viewer during a rotation drag). Near-coincident layers flip
+  // front/back by deck facing (see CanvasOrderDrawablesBackToFront); flat keep
+  // stack order.
+  NSInteger total = (NSInteger)layers.count;
+  NSInteger *idxBuf = malloc(sizeof(NSInteger) * (size_t)MAX(total, 1));
+  CanvasLayerDrawKey *keyBuf =
+      malloc(sizeof(CanvasLayerDrawKey) * (size_t)MAX(total, 1));
+  NSInteger nDraw = 0;
+  for (NSInteger i = 0; i < total; i++) {
+    KKBezierPath *lp = layers[i];
+    if (lp.isGroup || lp.hidden)
+      continue;
+    idxBuf[nDraw] = i;
+    keyBuf[nDraw] = CanvasLayerComposedDrawKey(
+        layers, i, frac, outputWidth, outputHeight, tileShiftX, tileShiftY, nil,
+        nil);
+    nDraw++;
+  }
+  NSInteger *ordBuf = malloc(sizeof(NSInteger) * (size_t)MAX(nDraw, 1));
+  CanvasOrderDrawablesBackToFront(idxBuf, keyBuf, nDraw,
+                                  0.02f * fmaxf(outputWidth, outputHeight),
+                                  ordBuf);
+  NSMutableArray<NSNumber *> *drawOrder =
+      [NSMutableArray arrayWithCapacity:(NSUInteger)nDraw];
+  for (NSInteger k = 0; k < nDraw; k++)
+    [drawOrder addObject:@(ordBuf[k])];
+  free(idxBuf);
+  free(keyBuf);
+  free(ordBuf);
+
+  void (^renderSampleOrdered)(id<MTLTexture>, id<MTLCommandBuffer>,
+                              id<MTLTexture>, double, double,
+                              NSArray<NSNumber *> *) =
+      ^(id<MTLTexture> sdest, id<MTLCommandBuffer> scb, id<MTLTexture> srcTex,
+        double f, double mbPrevFrac, NSArray<NSNumber *> *order) {
+        if (!device || !sdest || !imagePS)
+          return;
+        float sw = (float)sdest.width, sh = (float)sdest.height;
+        MTLViewport svp = (MTLViewport){0, 0, sw, sh, -1, 1};
+        simd_uint2 svpSize = {(unsigned int)sw, (unsigned int)sh};
+        id<MTLRenderCommandEncoder> (^sEnc)(id<MTLRenderPipelineState>,
+                                            MTLLoadAction) =
+            ^(id<MTLRenderPipelineState> ps, MTLLoadAction load) {
+              MTLRenderPassDescriptor *rpd =
+                  [MTLRenderPassDescriptor renderPassDescriptor];
+              rpd.colorAttachments[0].texture = sdest;
+              rpd.colorAttachments[0].loadAction = load;
+              rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+              if (load == MTLLoadActionClear)
+                rpd.colorAttachments[0].clearColor =
+                    MTLClearColorMake(0, 0, 0, 0);
+              id<MTLRenderCommandEncoder> e =
+                  [scb renderCommandEncoderWithDescriptor:rpd];
+              [e setViewport:svp];
+              [e setVertexBytes:&svpSize
+                         length:sizeof(svpSize)
+                        atIndex:KKVertexInputIndex_ViewportSize];
+              [e setRenderPipelineState:ps];
+              return e;
+            };
+        // Source base: clear the sample + draw its time-matched source frame.
+        id<MTLRenderCommandEncoder> base = sEnc(imagePS, MTLLoadActionClear);
+        if (srcTex)
+          CanvasEncodeSourceTile(base, srcTex, outputWidth, outputHeight,
+                                 tileShiftX, tileShiftY);
+        [base endEncoding];
+        CanvasFillPipelines fillPipes = {0};
+        CanvasFillBuildPipelines(device, regID, pf, &fillPipes);
+        BOOL canFill =
+            fillPipes.stencil && fillPipes.color && fillPipes.composite;
+        double ef = f < 0.0 ? 0.0 : f;
+        for (NSNumber *idxN in order) {
+          NSInteger i = idxN.integerValue;
+          KKBezierPath *p = layers[i];
+          // Bundle p's ancestor groups in so the per-layer encoders still
+          // compose the group transform (they skip group rows but read them for
+          // the compose); a bare @[p] drops it and a grouped layer renders
+          // untransformed while its OSC/highlight follow the group.
+          NSArray<KKBezierPath *> *one =
+              CanvasLayerPathWithAncestors(p, layers);
+          if (p.isImage) {
+            id<MTLRenderCommandEncoder> e = sEnc(imagePS, MTLLoadActionLoad);
+            CanvasEncodeImageLayers(one, e, device, texCache, outputWidth,
+                                    outputHeight, tileShiftX, tileShiftY, f, nil,
+                                    nil, imagePS, imageTintPS, imageGradTintPS);
+            [e endEncoding];
+          }
+          if (canFill && CanvasFillEnabledAtFraction(p, ef, nil, nil) &&
+              (!p.isImage ||
+               CanvasFillStyleAtFraction(p, ef, nil, nil).style != 0)) {
+            CanvasEncodeFilledLayers(one, device, texCache, scb, sdest,
+                                     &fillPipes, outputWidth, outputHeight, sw, sh,
+                                     tileShiftX, tileShiftY, f, nil, nil);
+          }
+          if (!p.isImage && p.strokeEnabled && strokePS) {
+            id<MTLRenderCommandEncoder> e = sEnc(strokePS, MTLLoadActionLoad);
+            CanvasEncodeVectorLayers(one, e, device, outputWidth, outputHeight,
+                                     tileShiftX, tileShiftY, f, nil, nil,
+                                     strokeScale, marchElapsed, mbPrevFrac,
+                                     strokePS, strokeGradientPS, strokeDashPS);
+            [e endEncoding];
+          }
+        }
+      };
+
+  // Destination tile dims: the non-blur per-layer loop's viewport + the fill
+  // MSAA target size. (The blur path reads its sample texture's own dims.)
+  FxRect tileBF = destinationImage.tilePixelBounds;
+  float tileW = (float)(tileBF.right - tileBF.left);
+  float tileH = (float)(tileBF.top - tileBF.bottom);
+
+  // Non-blur path: composite the whole per-layer-ordered stack (source +
+  // image/fill/stroke, top-of-list LAST) into a TRACKED per-instance intermediate
+  // via renderSampleOrdered - ONE command buffer, whose intra-buffer hazard
+  // tracking serialises the passes correctly - then a single blit copies that to
+  // FCP's untracked dest tile. This replaces the old per-draw waitUntilCompleted
+  // (one command buffer + CPU stall PER image/fill/stroke), which crushed
+  // playback on busy / multi-instance setups (dozens of GPU round-trips a frame).
+  BOOL (^runLayersOrdered)(double) = ^BOOL(double f) {
+    if (!device)
+      return NO;
+    id<MTLTexture> destTex = [destinationImage metalTextureForDevice:device];
+    if (!destTex)
+      return NO;
+    NSInteger iw = (NSInteger)tileW, ih = (NSInteger)tileH;
+    if (iw <= 0 || ih <= 0)
+      return NO;
+    // Reuse the cached intermediate when its size / format still match.
+    id<MTLTexture> interm = self.renderIntermediateTex;
+    if (!interm || (NSInteger)interm.width != iw ||
+        (NSInteger)interm.height != ih || interm.pixelFormat != pf) {
+      MTLTextureDescriptor *td = [MTLTextureDescriptor
+          texture2DDescriptorWithPixelFormat:pf
+                                       width:(NSUInteger)iw
+                                      height:(NSUInteger)ih
+                                   mipmapped:NO];
+      td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+      td.storageMode = MTLStorageModePrivate;
+      interm = [device newTextureWithDescriptor:td];
+      self.renderIntermediateTex = interm;
+    }
+    if (!interm)
+      return NO;
+    id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:regID
+                                                      pixelFormat:pf];
+    if (!queue)
+      return NO;
+    id<MTLCommandBuffer> cb = [queue commandBuffer];
+    id<MTLTexture> srcTex =
+        sourceImages.firstObject
+            ? [sourceImages.firstObject metalTextureForDevice:device]
+            : nil;
+    renderSampleOrdered(interm, cb, srcTex, f, -1.0, drawOrder);
+    // Copy the finished composite onto the dest tile. The intermediate is tracked
+    // so the blit waits for the render passes; the dest is the lone write here.
+    id<MTLBlitCommandEncoder> blit = [cb blitCommandEncoder];
+    [blit copyFromTexture:interm
+                sourceSlice:0
+                sourceLevel:0
+               sourceOrigin:MTLOriginMake(0, 0, 0)
+                 sourceSize:MTLSizeMake((NSUInteger)iw, (NSUInteger)ih, 1)
+                  toTexture:destTex
+           destinationSlice:0
+           destinationLevel:0
+          destinationOrigin:MTLOriginMake(0, 0, 0)];
+    [blit endEncoding];
+    [cb commit];
+    [cb waitUntilCompleted];
+    [cache returnCommandQueueToCache:queue];
+    return YES;
+  };
+
+  // "Fast" motion blur: per-layer velocity-buffer reconstruction (McGuire/
+  // Guertin via the shared KKMotionBlurReconstruct). For each layer: render it
+  // ALONE over transparent (mbColorTex), emit its analytic screen-space velocity
+  // (mbVelocityTex) from the composed matrix at the current frac AND the shutter
+  // start, reconstruct into mbBlurredTex, then composite that over the dest. Cost
+  // is fixed in the tap count - independent of blur length - unlike the N-sample
+  // accumulate path below. The source frame is the un-blurred base (footage
+  // smear stays on the Accurate path). Returns NO on any setup failure so the
+  // caller falls through to accumulate.
+  BOOL (^runFastBlur)(void) = ^BOOL {
+    if (!device)
+      return NO;
+    id<MTLTexture> destTex = [destinationImage metalTextureForDevice:device];
+    if (!destTex)
+      return NO;
+    NSInteger iw = (NSInteger)tileW, ih = (NSInteger)tileH;
+    if (iw <= 0 || ih <= 0 || drawOrder.count == 0)
+      return NO;
+
+    id<MTLRenderPipelineState> velPS = [cache
+        buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                                 @".Canvas.velocity"
+                                      registryID:regID
+                                     pixelFormat:MTLPixelFormatRG16Float
+                                        bundleID:kitBundleID
+                                    vertexShader:@"KKVelocityVertexShader"
+                                  fragmentShader:@"KKVelocityFragment"
+                                       blendMode:KKBlendModeNone];
+    id<MTLRenderPipelineState> morphVelPS = [cache
+        buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                                 @".Canvas.velocity.morph"
+                                      registryID:regID
+                                     pixelFormat:MTLPixelFormatRG16Float
+                                        bundleID:kitBundleID
+                                    vertexShader:@"KKVelocityMorphVertexShader"
+                                  fragmentShader:@"KKVelocityFragment"
+                                       blendMode:KKBlendModeNone];
+    // Additive accumulation pipeline: averages N sub-frame samples of a draw-on
+    // layer (each scaled by 1/N in the opacity fragment) into a scratch texture.
+    // Draw-on is "appearing" content on a possibly-curved path, which velocity
+    // reconstruction can't smear cleanly.
+    id<MTLRenderPipelineState> compositePS = [cache
+        buildAndRegisterPipelineStateForPluginID:@"co.overpolish.keyframeless"
+                                                 @".Canvas.mbcomposite"
+                                      registryID:regID
+                                     pixelFormat:pf
+                                        bundleID:kitBundleID
+                                    vertexShader:@"KKVertexShader"
+                                  fragmentShader:@"KKTexturePassthroughFragment"
+                                       blendMode:KKBlendModePremultipliedAlpha];
+    if (!velPS || !compositePS)
+      return NO;
+
+    self.mbColorTex = CanvasEnsureScratchTex(self.mbColorTex, device, iw, ih, pf);
+    self.mbVelocityTex = CanvasEnsureScratchTex(self.mbVelocityTex, device, iw,
+                                                ih, MTLPixelFormatRG16Float);
+    self.mbBlurredTex =
+        CanvasEnsureScratchTex(self.mbBlurredTex, device, iw, ih, pf);
+    if (!self.mbColorTex || !self.mbVelocityTex || !self.mbBlurredTex)
+      return NO;
+
+    id<MTLCommandQueue> queue = [cache commandQueueWithRegistryID:regID
+                                                      pixelFormat:pf];
+    if (!queue)
+      return NO;
+    id<MTLTexture> srcTex =
+        sourceImages.firstObject
+            ? [sourceImages.firstObject metalTextureForDevice:device]
+            : nil;
+
+    // Shutter-start clip fraction (the velocity is the displacement from here to
+    // `frac`). Fixed 90000 timescale so a sub-frame offset survives FCP's low
+    // playback timescales (same reason as KKMotionBlur sampleTimes).
+    double fPrev = fracForTime(
+        CMTimeSubtract(renderTime, CMTimeMakeWithSeconds(mbState.shutterSec,
+                                                         90000)));
+    const float marginPx = 64.0f; // cover stroke width; smear handled by tiles
+    simd_uint2 vp = {(unsigned int)iw, (unsigned int)ih};
+
+    // Base: clear the dest + draw the un-blurred source frame.
+    {
+      id<MTLCommandBuffer> cb = [queue commandBuffer];
+      MTLRenderPassDescriptor *rpd =
+          [MTLRenderPassDescriptor renderPassDescriptor];
+      rpd.colorAttachments[0].texture = destTex;
+      rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+      rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+      id<MTLRenderCommandEncoder> e =
+          [cb renderCommandEncoderWithDescriptor:rpd];
+      [e setViewport:(MTLViewport){0, 0, (double)iw, (double)ih, -1, 1}];
+      [e setVertexBytes:&vp
+                 length:sizeof(vp)
+                atIndex:KKVertexInputIndex_ViewportSize];
+      [e setRenderPipelineState:imagePS];
+      if (srcTex)
+        CanvasEncodeSourceTile(e, srcTex, outputWidth, outputHeight, tileShiftX,
+                               tileShiftY);
+      [e endEncoding];
+      [cb commit];
+      [cb waitUntilCompleted];
+    }
+
+    KKVertex2D fsQuad[4] = {
+        {{iw / 2.0f, -ih / 2.0f}, {1, 1}},
+        {{-iw / 2.0f, -ih / 2.0f}, {0, 1}},
+        {{iw / 2.0f, ih / 2.0f}, {1, 0}},
+        {{-iw / 2.0f, ih / 2.0f}, {0, 0}},
+    };
+
+    // Composite mbBlurredTex over the dest (premultiplied "over"); shared by both
+    // the reconstruction and accumulation branches below. (`fsQuad` is captured
+    // via a pointer - blocks can't capture a C array by value.)
+    KKVertex2D *fsQuadP = fsQuad;
+    void (^compositeBlurredOverDest)(id<MTLCommandBuffer>) =
+        ^(id<MTLCommandBuffer> cb) {
+          MTLRenderPassDescriptor *rpd =
+              [MTLRenderPassDescriptor renderPassDescriptor];
+          rpd.colorAttachments[0].texture = destTex;
+          rpd.colorAttachments[0].loadAction = MTLLoadActionLoad;
+          rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+          id<MTLRenderCommandEncoder> e =
+              [cb renderCommandEncoderWithDescriptor:rpd];
+          [e setViewport:(MTLViewport){0, 0, (double)iw, (double)ih, -1, 1}];
+          [e setVertexBytes:fsQuadP
+                     length:sizeof(KKVertex2D) * 4
+                    atIndex:KKVertexInputIndex_Vertices];
+          [e setVertexBytes:&vp
+                     length:sizeof(vp)
+                    atIndex:KKVertexInputIndex_ViewportSize];
+          [e setRenderPipelineState:compositePS];
+          [e setFragmentTexture:self.mbBlurredTex
+                        atIndex:KKTextureIndex_InputImage];
+          [e drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                  vertexStart:0
+                  vertexCount:4];
+          [e endEncoding];
+        };
+
+    for (NSNumber *idxN in drawOrder) {
+      NSInteger i = idxN.integerValue;
+      id<MTLCommandBuffer> cb = [queue commandBuffer];
+
+      // Size this layer's blur reach (= tile size) to its actual screen-space
+      // motion, so a faster layer gets a longer trail instead of clamping at a
+      // fixed radius. Sample count scales with trail length so a long blur stays
+      // smooth (no ghosting between taps). A still layer (vel ~0) reconstructs to
+      // a no-op, so the tile floor keeps it cheap.
+      float maxVel = CanvasLayerMaxVelocityPx(layers, i, frac, fPrev, outputWidth,
+                                              outputHeight, tileShiftX,
+                                              tileShiftY, nil, nil);
+      int tileSize = (int)fmaxf(16.0f, fminf(256.0f, ceilf(maxVel)));
+      int taps = (int)fmaxf(9.0f, fminf(25.0f, ceilf((float)tileSize / 6.0f)));
+
+      // 1. Colour: the layer alone over transparent (clears, no source). Passing
+      // fPrev enables the analytic DRAW-ON reveal fade in the stroke shader, so a
+      // (curving) progressive reveal blurs here in ONE render - no accumulation,
+      // no gather. The velocity pass below still handles the layer's spatial
+      // motion (transform / morph / width / corners), composing with the fade.
+      renderSampleOrdered(self.mbColorTex, cb, nil, frac, fPrev, @[ idxN ]);
+
+      // 2. Velocity: the layer's analytic screen-space displacement.
+      {
+        MTLRenderPassDescriptor *rpd =
+            [MTLRenderPassDescriptor renderPassDescriptor];
+        rpd.colorAttachments[0].texture = self.mbVelocityTex;
+        rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+        rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+        rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+        id<MTLRenderCommandEncoder> e =
+            [cb renderCommandEncoderWithDescriptor:rpd];
+        [e setViewport:(MTLViewport){0, 0, (double)iw, (double)ih, -1, 1}];
+        [e setVertexBytes:&vp
+                   length:sizeof(vp)
+                  atIndex:KKVertexInputIndex_ViewportSize];
+        [e setRenderPipelineState:velPS];
+        CanvasEncodeLayerVelocityQuad(layers, e, i, frac, fPrev, outputWidth,
+                                      outputHeight, tileShiftX, tileShiftY,
+                                      marginPx, morphVelPS, nil, nil);
+        // Animating stroke width: the edges move ⊥ even when the centreline
+        // doesn't. Overwrites the stroke region with transform + width velocity.
+        CanvasEncodeStrokeWidthVelocity(layers, e, i, frac, fPrev, outputWidth,
+                                        outputHeight, tileShiftX, tileShiftY,
+                                        morphVelPS, nil, nil);
+        // Animating rounded corners: the fillet arc between anchors moves where
+        // the fan's straight chords miss it. Overwrites the corner regions.
+        CanvasEncodeCornerFilletVelocity(layers, e, i, frac, fPrev, outputWidth,
+                                         outputHeight, tileShiftX, tileShiftY,
+                                         morphVelPS, nil, nil);
+        // Draw-on endpoint marker riding the tip (the stroke reveal itself blurs
+        // via the analytic alpha fade in the colour pass, but the marker
+        // translates, so it blurs by velocity here).
+        CanvasEncodeMarkerVelocity(layers, e, i, frac, fPrev, outputWidth,
+                                   outputHeight, tileShiftX, tileShiftY,
+                                   morphVelPS, nil, nil);
+        [e endEncoding];
+      }
+
+      // 3. Reconstruct the blurred layer from colour + velocity.
+      if (![KKMotionBlurReconstruct
+              encodeReconstructionToTexture:self.mbBlurredTex
+                               colorTexture:self.mbColorTex
+                            velocityTexture:self.mbVelocityTex
+                                   tileSize:tileSize
+                                sampleCount:taps
+                                 registryID:regID
+                                     device:device
+                              commandBuffer:cb]) {
+        [cb commit];
+        [cb waitUntilCompleted];
+        [cache returnCommandQueueToCache:queue];
+        return NO;
+      }
+
+      // 4. Composite the blurred layer over the dest (premultiplied "over").
+      compositeBlurredOverDest(cb);
+
+      [cb commit];
+      [cb waitUntilCompleted];
+    }
+    [cache returnCommandQueueToCache:queue];
+    return YES;
+  };
+
+  // Motion blur: accumulate the composite across sub-frame sample times (the
+  // shared KKMotionBlur infra averages N passes). Each pass composites the
+  // layer stack at that sample's clip fraction over its time-matched source
+  // frame, so both the layer animation and the underlying content smear.
+  if (mbState.enabled) {
+    // Fast technique = per-layer velocity reconstruction (fixed cost). If it
+    // bails (setup failure), fall through to accumulate. Accurate technique skips
+    // straight to the accumulate path below (footage smear / heavy correctness).
+    if (mbState.technique == KKMotionBlurTechniqueFast && runFastBlur())
+      return YES;
+    NSArray<NSValue *> *times = [KKMotionBlur sampleTimesForState:mbState
+                                                       renderTime:renderTime];
+    NSMutableArray<NSNumber *> *fracs =
+        [NSMutableArray arrayWithCapacity:times.count];
+    for (NSValue *v in times) {
+      CMTime t = kCMTimeZero;
+      [v getValue:&t];
+      [fracs addObject:@(fracForTime(t))];
+    }
     BOOL applied = [KKMotionBlur
         applyToDestinationImage:destinationImage
                    sourceImages:sourceImages
@@ -1111,83 +784,41 @@ static BOOL _kkDecodeSampleAt(NSData *pluginState, NSUInteger offset,
                                       id<MTLTexture> sampleDest,
                                       id<MTLCommandBuffer> commandBuffer,
                                       NSArray<id<MTLTexture>> *inputTextures) {
-                      __strong typeof(weakSelf) strongSelf = weakSelf;
-                      if (!strongSelf || inputTextures.count == 0)
-                        return NO;
-                      if ((NSUInteger)sampleIndex >= capturedOffsets.count)
-                        return NO;
-                      NSUInteger off =
-                          capturedOffsets[sampleIndex].unsignedIntegerValue;
-                      NSMutableArray<KKBezierPath *> *paths = nil;
-                      NSUInteger consumed = 0;
-                      if (!_kkDecodeSampleAt(capturedState, off, &paths,
-                                             &consumed))
-                        return NO;
-                      return
-                          [strongSelf _kkRenderFrameWithDevice:device
-                                                 commandBuffer:commandBuffer
-                                                        target:sampleDest
-                                                  inputTexture:inputTextures[0]
-                                                   outputWidth:outputWidth
-                                                  outputHeight:outputHeight
-                                                    imageWidth:imageWidth
-                                                   imageHeight:imageHeight
-                                                   tileOffsetX:tileOffsetX
-                                                   tileOffsetY:tileOffsetY
-                                                   renderScale:renderScale
-                                                         cache:cache
-                                                    registryID:registryID
-                                                   pixelFormat:pixelFormat
-                                                         paths:paths
-                                                   sampleIndex:sampleIndex];
+                      double f =
+                          (sampleIndex >= 0 && sampleIndex < (int)fracs.count)
+                              ? fracs[sampleIndex].doubleValue
+                              : frac;
+                      // Each sample renders the full per-layer-ordered stack
+                      // (image/fill/stroke) over its time-matched source into the
+                      // sample texture; KKMotionBlur averages the samples.
+                      renderSampleOrdered(sampleDest, commandBuffer,
+                                          inputTextures.firstObject, f, -1.0,
+                                          drawOrder);
+                      return YES;
                     }];
     if (applied)
       return YES;
-    // Fall through on failure - render the un-blurred frame.
   }
 
-  id<MTLCommandQueue> commandQueue =
-      [cache commandQueueWithRegistryID:registryID pixelFormat:pixelFormat];
-  if (!commandQueue)
-    return NO;
-
-  @autoreleasepool {
-    id<MTLTexture> outputTexture =
-        [destinationImage metalTextureForDevice:device];
-    id<MTLTexture> inputTexture =
-        [sourceImages[0] metalTextureForDevice:device];
-
-    NSMutableArray<KKBezierPath *> *paths = nil;
-    NSUInteger consumed = 0;
-    if (!_kkDecodeSampleAt(pluginState, sampleOffsets[0].unsignedIntegerValue,
-                           &paths, &consumed))
-      paths = [NSMutableArray array];
-
-    id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
-    commandBuffer.label = @"Canvas Command Buffer";
-    [commandBuffer enqueue];
-
-    BOOL ok = [self _kkRenderFrameWithDevice:device
-                               commandBuffer:commandBuffer
-                                      target:outputTexture
-                                inputTexture:inputTexture
-                                 outputWidth:outputWidth
-                                outputHeight:outputHeight
-                                  imageWidth:imageWidth
-                                 imageHeight:imageHeight
-                                 tileOffsetX:tileOffsetX
-                                 tileOffsetY:tileOffsetY
-                                 renderScale:renderScale
-                                       cache:cache
-                                  registryID:registryID
-                                 pixelFormat:pixelFormat
-                                       paths:paths
-                                 sampleIndex:-1];
-    [commandBuffer commit];
-    [commandBuffer waitUntilCompleted];
-    [cache returnCommandQueueToCache:commandQueue];
-    return ok;
-  }
+  // No blur (or the accumulate bailed): composite the per-layer-ordered stack
+  // into the tracked intermediate and blit it to the dest (one command buffer).
+  if (runLayersOrdered(frac))
+    return YES;
+  // Degenerate fallback (no device / texture / queue): pass the source through.
+  return [self
+      encodeRenderCommandsForDestinationImage:destinationImage
+                                 sourceImages:sourceImages
+                                     commands:^(
+                                         id<MTLRenderCommandEncoder> enc,
+                                         NSArray<id<MTLTexture>> *inputs) {
+                                       if (!inputs.count || !imagePS)
+                                         return;
+                                       [enc setRenderPipelineState:imagePS];
+                                       CanvasEncodeSourceTile(
+                                           enc, inputs[0], outputWidth,
+                                           outputHeight, tileShiftX, tileShiftY);
+                                     }];
 }
 
 @end
+#pragma clang diagnostic pop

@@ -8,6 +8,7 @@
 #import "RoundedInspectorView+Guides.h"
 #import "RoundedInspectorView.h"
 #import "RoundedLocalized.h"
+#import "RoundedMiniViewerRenderer.h" // per-instance mini-viewer rendezvous paths
 #import "RoundedOSCRadiusMath.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKDataBlob.h>
@@ -108,7 +109,7 @@ static NSString *_RoundedAILaneSchemaText(void) {
     BOOL motionBlurEnabled = st.motionBlurEnabled;
     double motionBlurShutterAngle = st.motionBlurShutterAngle;
     NSInteger motionBlurSamples = st.motionBlurSamples;
-    NSInteger motionBlurMode = st.motionBlurMode;
+    NSInteger motionBlurTechnique = st.motionBlurTechnique;
     NSDictionary *uiState = st.uiState;
     KKTimeline *timeline = [self timelineStampedWithClipDuration:st.timeline];
 
@@ -155,6 +156,13 @@ static NSString *_RoundedAILaneSchemaText(void) {
                     activeTab:activeTab
                availableLanes:available
                      timeline:timeline];
+    // Per-instance rendezvous paths (keyed by the instance UUID minted above)
+    // so two stacked Rounded clips read/write distinct /tmp files instead of the
+    // clip below showing the top clip's source in its mini-viewer.
+    NSString *instUUID = KKInstanceUUIDForAPI(self.apiManager);
+    view.miniViewerDescriptorPath =
+        RoundedMiniViewerDescriptorPathForUUID(instUUID);
+    view.miniViewerRequestPath = RoundedMiniViewerRequestPathForUUID(instUUID);
     // Seed the basic-view scrubber clamp immediately. Plugin+Render's
     // dispatch_async push runs once on first render - if it raced ahead
     // and weakSelf.inspectorView was still nil, the basic view would
@@ -166,7 +174,7 @@ static NSString *_RoundedAILaneSchemaText(void) {
     [view setMotionBlurEnabled:motionBlurEnabled];
     [view setMotionBlurShutterAngle:motionBlurShutterAngle
                             samples:motionBlurSamples];
-    [view setMotionBlurMode:(KKMotionBlurMode)motionBlurMode];
+    [view setMotionBlurTechnique:(KKMotionBlurTechnique)motionBlurTechnique];
 
     // On-screen-control visibility: master tick + per-element pills (Radius,
     // Crop) + opt-click-hide + opt-reveal. Shared glue in KKPlugin
@@ -366,6 +374,7 @@ static NSString *_RoundedAILaneSchemaText(void) {
        currentTimelineJSON:currentJSON
        clipDurationSeconds:clipDurSec
       currentInspectorMode:currentMode
+     supportsLayerCreation:NO
                 completion:^(KKAIPluginResult *result, NSError *err) {
                   dispatch_async(dispatch_get_main_queue(), ^{
                     __strong typeof(weakSelf) strong = weakSelf;

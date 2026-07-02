@@ -563,15 +563,9 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   [scale insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                          values:@[ @100.0, @100.0 ]]];
 
-  KKLane *opacity = [KKLane laneWithLabel:@"Opacity"];
-  opacity.valueType = KKLaneValueTypeFloat;
-  // Percentage like FCP's opacity control; 100 = fully opaque. Hard 0-100
-  // bounds (unlike Scale's open top) - there's no meaningful overshoot.
-  opacity.componentMin = @[ @0.0 ];
-  opacity.componentMax = @[ @100.0 ];
-  opacity.componentUnits = @[ @"%" ];
-  opacity.integerValued = YES; // whole percentages only
-  [opacity insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @100.0 ]]];
+  // Shared kit definition (0-100% whole percentages, identity 100), reused by
+  // Canvas too; MagicMove applies it in its own transform shader.
+  KKLane *opacity = [KKLane opacityLane];
 
   KKLane *anchor = [KKLane laneWithLabel:@"Anchor"];
   anchor.valueType = KKLaneValueTypeGeneric;
@@ -634,7 +628,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   BOOL motionBlurEnabled = st.motionBlurEnabled;
   double motionBlurShutterAngle = st.motionBlurShutterAngle;
   NSInteger motionBlurSamples = st.motionBlurSamples;
-  NSInteger motionBlurMode = st.motionBlurMode;
+  NSInteger motionBlurTechnique = st.motionBlurTechnique;
   NSDictionary *uiState = st.uiState;
   KKTimeline *timeline = [self timelineStampedWithClipDuration:st.timeline];
 
@@ -678,6 +672,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
     self.miniViewerRenderer = [[MagicMoveMiniViewerRenderer alloc] init];
   }
   self.miniViewerRenderer.timeline = timeline;
+  self.miniViewerRenderer.laneTemplates = available;
   self.miniViewerRenderer.handlesHidden = !oscMasterVisible;
   [self applyOSCElementsFromUIState:uiState];
   // Wire the master tick + per-element pills + mini-viewer opt-click in one
@@ -711,7 +706,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   [view setMotionBlurEnabled:motionBlurEnabled];
   [view setMotionBlurShutterAngle:motionBlurShutterAngle
                           samples:motionBlurSamples];
-  [view setMotionBlurMode:(KKMotionBlurMode)motionBlurMode];
+  [view setMotionBlurTechnique:(KKMotionBlurTechnique)motionBlurTechnique];
   [view setRenderMode:renderMode];
   [view setOSCVisible:oscMasterVisible];
 
@@ -1033,6 +1028,7 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
        currentTimelineJSON:currentJSON
        clipDurationSeconds:clipDurSec
       currentInspectorMode:currentMode
+     supportsLayerCreation:NO
                 completion:^(KKAIPluginResult *result, NSError *err) {
                   dispatch_async(dispatch_get_main_queue(), ^{
                     __strong typeof(weakSelf) strong = weakSelf;

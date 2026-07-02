@@ -57,6 +57,12 @@
       [self _ensureProcessedTextureForSlot:slot];
       if (!slot.processedTexture)
         continue;
+      // Interaction frame: the content can't have changed (only the view
+      // transform), so skip the plugin effect re-render and reuse last frame's
+      // processed texture. This is the big pan win - it nearly halves the frame
+      // and lets macOS deliver scroll events at full rate.
+      if (_reuseProcessedTexture)
+        continue;
       if (n > 1) {
         @try {
           [(NSObject *)del setValue:@(slot.tag) forKey:@"editFraction"];
@@ -110,7 +116,12 @@
                   vertexCount:4];
         };
 
-    [enc setRenderPipelineState:_pipeline];
+    // Past a modest zoom, swap to NEAREST magnification so texels read as crisp
+    // squares (pixel inspection) instead of bilinear blur; normal/zoomed-out
+    // viewing keeps the smooth linear passthrough. Onion ghosts stay linear.
+    id<MTLRenderPipelineState> passthrough =
+        (_zoom > 3.0 && _pipelineNearest) ? _pipelineNearest : _pipeline;
+    [enc setRenderPipelineState:passthrough];
     [enc setVertexBytes:&vp
                  length:sizeof(vp)
                 atIndex:KKVertexInputIndex_ViewportSize];
@@ -163,6 +174,22 @@
         [enc setFragmentBytes:&outAlpha length:sizeof(outAlpha) atIndex:1];
         drawSlotQuad((NSUInteger)idx, tex);
       }
+    }
+  }
+
+  // Alignment grid - drawn first (under the box borders + glyphs), tiled across
+  // the whole view to match the in-viewer grid. Two-tone for legibility.
+  if (_linePipeline && del &&
+      [del respondsToSelector:
+               @selector(miniViewer:gridSpacingX:spacingY:contentRect:)]) {
+    CGFloat gnx = 0, gny = 0;
+    CGRect gcr = [self contentRectInViewPoints];
+    if ([del miniViewer:self gridSpacingX:&gnx spacingY:&gny contentRect:gcr] &&
+        gnx > 0 && gny > 0) {
+      [self _encodeGridWithSpacingX:gnx
+                           spacingY:gny
+                        contentRect:gcr
+                            encoder:enc];
     }
   }
 
@@ -381,6 +408,25 @@
                              isActive:isActive
                            ghostAlpha:ghostAlpha
                               encoder:enc];
+      } else if (style == KKMiniHandleStyleRing) {
+        // Haloed KKRingOSC ring (the shared radius-widget glyph). White fill +
+        // dark outline for legibility on any background (matches Canvas's corner
+        // ring), scaled with the OSC sizing ratio like the dot. Sizes match
+        // Canvas's corner-radius ring (CanvasMiniViewerRenderer+Pen.m
+        // penDrawRingAtObj:) so the two read identically in the mini-viewer,
+        // as they already do in the main viewer.
+        CGFloat cs = [self _canvasScale];
+        simd_float4 f = whiteFill;
+        f.w *= (float)ghostAlpha;
+        simd_float4 outline = {0.0f, 0.0f, 0.0f, 0.75f * (float)ghostAlpha};
+        [self _encodeRingOSCAt:handleCenterPts
+                     radiusXPt:2.3 * cs
+                     radiusYPt:2.3 * cs
+                     fillColor:f
+                   strokeColor:outline
+                   fillWidthPt:1.0 * cs
+                outlineWidthPt:0.5 * cs
+                       encoder:enc];
       } else {
         // Point-style handles dim via the fill alpha (no ghostAlpha param).
         simd_float4 f = accentFill;
@@ -430,6 +476,36 @@
                          ghostAlpha:posGhost
                             encoder:enc];
     }
+  }
+
+  // Toolbar chrome, drawn LAST (on top of the grid + handles), the same way the
+  // Tool overlay (pen anchors / handles / curve / ghost), above the gizmo but
+  // under the toolbar chrome. The delegate encodes via -encodeToolDotAtPoint: /
+  // -encodeToolLineStrip:, which use this armed encoder + the glyph/line
+  // pipelines (same look as the motion path).
+  if ((_pointPipeline || _linePipeline) && del &&
+      [del respondsToSelector:@selector(
+                                  miniViewerDrawToolOverlay:contentRect:)]) {
+    _toolEncoder = enc;
+    [self _beginToolBatch];
+    [del miniViewerDrawToolOverlay:self
+                       contentRect:[self contentRectInViewPoints]];
+    [self _endToolBatch];
+    _toolEncoder = nil;
+  }
+
+  // viewer draws it over the gizmo. The delegate renders its KKToolbar into
+  // this pass via the shared -drawInEncoder: path, using the toolbar pipeline.
+  if (_toolbarPipeline && del &&
+      [del respondsToSelector:@selector(miniViewer:drawToolbarInEncoder:device:
+                                        pipeline:viewportWidth:height:)]) {
+    CGSize d = self.drawableSize;
+    [del miniViewer:self
+        drawToolbarInEncoder:enc
+                      device:self.device
+                    pipeline:_toolbarPipeline
+               viewportWidth:(float)d.width
+                      height:(float)d.height];
   }
 
   [enc endEncoding];

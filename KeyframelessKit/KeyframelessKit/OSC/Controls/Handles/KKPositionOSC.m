@@ -57,6 +57,7 @@
     _dragHandleFrac = NAN;
     _lastClickTime = -1.0;
     _lastClickFrac = NAN;
+    _parentObjectTransform = matrix_identity_float3x3;
   }
   return self;
 }
@@ -84,22 +85,6 @@
   return v.count >= 2 ? v : @[ @0.5, @0.5 ];
 }
 
-- (double)fractionAtTime:(CMTime)time {
-  id<FxTimingAPI_v4> timingAPI =
-      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  if (!timingAPI)
-    return 0.0;
-  CMTime effectStart = kCMTimeZero, effectDur = kCMTimeZero;
-  [timingAPI startTimeForEffect:&effectStart];
-  [timingAPI durationTimeForEffect:&effectDur];
-  double durSec = CMTimeGetSeconds(effectDur);
-  if (durSec <= 0)
-    return 0.0;
-  return MAX(0.0,
-             MIN(1.0, (CMTimeGetSeconds(time) - CMTimeGetSeconds(effectStart)) /
-                          durSec));
-}
-
 - (CGPoint)oscPositionAtTime:(CMTime)time {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
@@ -119,31 +104,51 @@
     objX = vals[0].doubleValue;
     objY = vals[1].doubleValue;
   }
-  CGPoint canvas = CGPointZero;
-  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                          fromX:objX
-                          fromY:objY
-                        toSpace:kFxDrawingCoordinates_CANVAS
-                            toX:&canvas.x
-                            toY:&canvas.y];
-  return canvas;
+  return [self _canvasFromObjX:objX y:objY];
 }
 
 - (CGPoint)positionCanvasAtTime:(CMTime)time {
   return [self oscPositionAtTime:time];
 }
 
+// OBJECT (the control's own lane space) -> parent space (parentObjectTransform)
+// -> CANVAS. The parent transform is identity unless a host nests this control
+// inside a transformed parent (e.g. a Canvas member in a group).
 - (CGPoint)_canvasFromObjX:(double)ox y:(double)oy {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  simd_float3 p = simd_mul(self.parentObjectTransform,
+                           simd_make_float3((float)ox, (float)oy, 1.0f));
+  double px = (p.z != 0.0f) ? p.x / p.z : p.x;
+  double py = (p.z != 0.0f) ? p.y / p.z : p.y;
   CGPoint c = CGPointZero;
   [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                          fromX:ox
-                          fromY:oy
+                          fromX:px
+                          fromY:py
                         toSpace:kFxDrawingCoordinates_CANVAS
                             toX:&c.x
                             toY:&c.y];
   return c;
+}
+
+// CANVAS -> parent space -> INVERSE parentObjectTransform -> the control's own
+// lane space, so a drag maps the cursor back through the parent (reacting to its
+// rotation/scale) into the value's space.
+- (CGPoint)_objFromCanvasX:(double)cx y:(double)cy {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  double qx = 0.0, qy = 0.0;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
+                          fromX:cx
+                          fromY:cy
+                        toSpace:kFxDrawingCoordinates_OBJECT
+                            toX:&qx
+                            toY:&qy];
+  simd_float3 l = simd_mul(simd_inverse(self.parentObjectTransform),
+                           simd_make_float3((float)qx, (float)qy, 1.0f));
+  double lx = (l.z != 0.0f) ? l.x / l.z : l.x;
+  double ly = (l.z != 0.0f) ? l.y / l.z : l.y;
+  return CGPointMake(lx, ly);
 }
 
 // Read-only motion path: the trajectory the clip's centre travels, sampled
@@ -164,14 +169,7 @@
   CGPoint *pts = malloc(sizeof(CGPoint) * n);
   for (NSUInteger i = 0; i < n; i++) {
     NSPoint o = path[i].pointValue;
-    CGPoint c = CGPointZero;
-    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                            fromX:o.x
-                            fromY:o.y
-                          toSpace:kFxDrawingCoordinates_CANVAS
-                              toX:&c.x
-                              toY:&c.y];
-    pts[i] = c;
+    pts[i] = [self _canvasFromObjX:o.x y:o.y];
   }
   simd_float4 red = {1.0f, 0.25f, 0.25f, 0.9f * ghostAlpha};
   [self drawLineStripWithPoints:pts
@@ -248,13 +246,7 @@
   }
   for (NSValue *pv in KKLaneCoalescedAnchors(lane, skipIdx)) {
     NSPoint v = pv.pointValue;
-    CGPoint c = CGPointZero;
-    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                            fromX:v.x
-                            fromY:v.y
-                          toSpace:kFxDrawingCoordinates_CANVAS
-                              toX:&c.x
-                              toY:&c.y];
+    CGPoint c = [self _canvasFromObjX:v.x y:v.y];
     [self.anchorDotOSC drawAtCanvasPosition:c
                                   isHovered:NO
                                    isActive:NO
@@ -365,13 +357,8 @@
   for (KKKeyPose *kp in lane.keyposes) {
     if (kp.values.count < 2)
       continue;
-    CGPoint c = CGPointZero;
-    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
-                            fromX:kp.values[0].doubleValue
-                            fromY:kp.values[1].doubleValue
-                          toSpace:kFxDrawingCoordinates_CANVAS
-                              toX:&c.x
-                              toY:&c.y];
+    CGPoint c = [self _canvasFromObjX:kp.values[0].doubleValue
+                                    y:kp.values[1].doubleValue];
     double d = hypot(x - c.x, y - c.y);
     if (d < hitR && d < bestD) {
       bestD = d;
@@ -477,18 +464,8 @@
     }
     return;
   }
-  id<FxOnScreenControlAPI_v4> oscAPI =
-      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  if (oscAPI) {
-    double objX = 0.0, objY = 0.0;
-    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
-                            fromX:x
-                            fromY:y
-                          toSpace:kFxDrawingCoordinates_OBJECT
-                              toX:&objX
-                              toY:&objY];
-    self.posPressObject = (simd_float2){(float)objX, (float)objY};
-  }
+  CGPoint pressObj = [self _objFromCanvasX:x y:y];
+  self.posPressObject = (simd_float2){(float)pressObj.x, (float)pressObj.y};
   double pressFrac = [self fractionAtTime:time];
   BOOL onHandle = [self _positionVisibleAtFraction:pressFrac] &&
                   [self hitTestAtMousePositionX:x positionY:y atTime:time];
@@ -535,17 +512,8 @@
                   atTime:time];
     return;
   }
-  id<FxOnScreenControlAPI_v4> oscAPI =
-      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  if (!oscAPI)
-    return;
-  double curX = 0.0, curY = 0.0;
-  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
-                          fromX:x
-                          fromY:y
-                        toSpace:kFxDrawingCoordinates_OBJECT
-                            toX:&curX
-                            toY:&curY];
+  CGPoint cur = [self _objFromCanvasX:x y:y];
+  double curX = cur.x, curY = cur.y;
   // Delta-based drag: move by the cursor's offset from the grab point.
   double newX = self.posGrabValX + (curX - (double)self.posPressObject.x);
   double newY = self.posGrabValY + (curY - (double)self.posPressObject.y);
@@ -570,6 +538,18 @@
                  atFraction:targetFrac];
     newX = snapped.x;
     newY = snapped.y;
+  } else if (self.canvasSnapProvider) {
+    // Use the parent-aware conversion pair (_canvasFromObjX / _objFromCanvasX) so
+    // the round-trip stays consistent when the control is nested in a transformed
+    // parent (a Canvas member in a rotated group). canvasPointFromObjectPoint is
+    // the raw object->canvas and would mismatch the inverse below, offsetting the
+    // snapped handle.
+    CGPoint cp = [self _canvasFromObjX:newX y:newY];
+    CGPoint sp = self.canvasSnapProvider(cp);
+    CGPoint so = [self _objFromCanvasX:sp.x y:sp.y];
+    newX = so.x;
+    newY = so.y;
+    [self.snapEngine reset];
   } else {
     [self.snapEngine reset];
   }
@@ -604,8 +584,11 @@
     tl.lanes = lanes;
   }
 
-  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                           kKKParamTimelineData);
+  if (self.onTimelinePersist)
+    self.onTimelinePersist(tl);
+  else
+    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                             kKKParamTimelineData);
   [actionAPI endAction:self];
   if (forceUpdate)
     *forceUpdate = YES;
@@ -697,9 +680,13 @@
     cur = lane.keyposes[KKLaneNearestKeyposeIndex(lane, frac)].spatialSmooth;
   KKTimeline *tl =
       KKTimelineSettingSpatialSmooth(snap, self.laneLabel, frac, !cur);
-  if (tl)
-    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                             kKKParamTimelineData);
+  if (tl) {
+    if (self.onTimelinePersist)
+      self.onTimelinePersist(tl);
+    else
+      KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                               kKKParamTimelineData);
+  }
   [actionAPI endAction:self];
 }
 
@@ -714,17 +701,8 @@
                 atTime:(CMTime)time {
   if (isnan(self.dragHandleFrac))
     return;
-  id<FxOnScreenControlAPI_v4> oscAPI =
-      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-  if (!oscAPI)
-    return;
-  double curX = 0, curY = 0;
-  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_CANVAS
-                          fromX:x
-                          fromY:y
-                        toSpace:kFxDrawingCoordinates_OBJECT
-                            toX:&curX
-                            toY:&curY];
+  CGPoint cur = [self _objFromCanvasX:x y:y];
+  double curX = cur.x, curY = cur.y;
   id<FxCustomParameterActionAPI_v4> actionAPI =
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!actionAPI)
@@ -797,8 +775,11 @@
   posLane.keyposes = out;
   lanes[laneIdx] = posLane;
   tl.lanes = lanes;
-  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                           kKKParamTimelineData);
+  if (self.onTimelinePersist)
+    self.onTimelinePersist(tl);
+  else
+    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                             kKKParamTimelineData);
   [actionAPI endAction:self];
   if (forceUpdate)
     *forceUpdate = YES;

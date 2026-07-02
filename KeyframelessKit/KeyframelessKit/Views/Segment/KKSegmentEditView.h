@@ -9,6 +9,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class KKLane;
+
 typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
   KKSegmentEditKindHold,
   KKSegmentEditKindTransition,
@@ -67,16 +69,29 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
          participationLabels:(nullable NSArray<NSString *> *)labels
          participationStates:(nullable NSArray<NSNumber *> *)states;
 
-/// Compound participation variant - `labels`/`states` are nested per
-/// compound (one compound = one lane, each compound's inner array is its
-/// segments: lane label + optional component labels). Renders one grouped
-/// pill capsule per compound packed horizontally with scroll/shadow on
-/// overflow. The flat `onParticipationToggled` index is computed by
-/// summing prior compounds' segment counts plus the within-compound idx,
-/// so existing callers don't need a separate callback shape.
+/// Checklist participation variant - the Animated dropdown's content (search +
+/// category pill nav + one checkable row per property) embedded as the "Applies
+/// to" section instead of a horizontal pill bar, so it scales to many grouped
+/// properties. `lanes` carry the category / layer metadata that drives grouping
+/// and dedup; `states[i]` is whether `lanes[i]` participates. The
+/// `onParticipationToggled` index matches `lanes` order, so downstream callers
+/// are unchanged.
+- (instancetype)initWithKind:(KKSegmentEditKind)kind
+                 showsLinked:(BOOL)showsLinked
+                  bulkHeader:(BOOL)bulkHeader
+          participationLanes:(nullable NSArray<KKLane *> *)lanes
+         participationStates:(nullable NSArray<NSNumber *> *)states;
+
+/// Checklist variant of the compound participation: the Animated dropdown's
+/// content (search + category pill nav + checkable rows) with multi-component
+/// lanes shown as a master row plus indented per-component sub-rows, instead of
+/// the horizontal compound pill bar. `lanes[i]` is the lane behind
+/// `compounds[i]` (drives the category pill nav). `onParticipationToggled`'s
+/// index is the flattened (compound, segment) position, matching the pill bar.
 - (instancetype)initWithKind:(KKSegmentEditKind)kind
                     showsLinked:(BOOL)showsLinked
                      bulkHeader:(BOOL)bulkHeader
+     participationCompoundLanes:(nullable NSArray<KKLane *> *)lanes
          participationCompounds:
              (nullable NSArray<NSArray<NSString *> *> *)compoundLabels
     participationCompoundStates:
@@ -88,8 +103,31 @@ typedef NS_ENUM(NSInteger, KKSegmentEditKind) {
 - (void)applyParticipationCompoundStates:
     (NSArray<NSArray<NSNumber *> *> *)states;
 
-/// Plain (non-compound) participation pill variant of the above.
+/// Plain (non-compound) participation pill variant of the above. Also refreshes
+/// the checklist participation variant.
 - (void)applyParticipationStates:(NSArray<NSNumber *> *)states;
+
+/// Replace the checklist participation's lanes + states (a multi-owner host
+/// re-scoping the open popover to a newly-selected layer's lanes, in place - no
+/// close/reopen). The matching variant for the kind that's shown.
+- (void)rescopeParticipationLanes:(NSArray<KKLane *> *)lanes
+                           states:(NSArray<NSNumber *> *)states;
+- (void)rescopeCompoundParticipationLanes:(NSArray<KKLane *> *)lanes
+                                compounds:
+                                    (NSArray<NSArray<NSString *> *> *)compounds
+                                   states:
+                                       (NSArray<NSArray<NSNumber *> *> *)states;
+
+/// The view's required content height for the current configuration. Unlike the
+/// class method this accounts for the checklist participation section, whose
+/// height depends on the (filtered) row count. Falls back to the class-method
+/// height when there is no checklist.
+- (CGFloat)contentHeight;
+
+/// YES when the "Applies to" section renders as the embedded checklist (its
+/// scroll fade marks the bottom edge), so the host can drop its own bottom
+/// padding when the checklist is the last element.
+@property(nonatomic, readonly) BOOL hasChecklistParticipation;
 
 /// Computed height required for the view's content. Caller sizes the
 /// containing popover accordingly.

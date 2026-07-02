@@ -10,6 +10,8 @@
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
+#import "KKLaneChecklistView.h" // _KKLaneChecklistView base
+
 @class KKSegmentEditView;
 @protocol KKMiniViewerDelegate;
 
@@ -19,9 +21,15 @@ static const CGFloat kCheckSize = 12.0;
 static const CGFloat kCheckRadius = 3.0;
 static const CGFloat kSearchH = 28.0;
 static const CGFloat kPopoverW = 180.0;
-// Wider variant for the static-values popover when it hosts the mini viewer,
-// so the preview is legible before in-canvas zoom exists.
-static const CGFloat kCanvasPopoverW = 540.0;
+// Static-values popover width when it hosts the mini-viewer, so the preview is
+// legible before in-canvas zoom exists. Three sizes (sm/md/lg) the user toggles
+// via a global preference: a wider popover scales the mini-viewer up
+// aspect-correct (height = width/aspect) while the parameter rows keep their
+// heights and just fill the extra width. `kCanvasPopoverW` is sm (the default,
+// unchanged original width).
+static const CGFloat kCanvasPopoverW = 540.0;       // sm (default)
+static const CGFloat kCanvasPopoverWMedium = 760.0; // md
+static const CGFloat kCanvasPopoverWLarge = 980.0;  // lg
 static const NSInteger kMaxSummaryLabels = 2;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -38,19 +46,36 @@ NS_ASSUME_NONNULL_BEGIN
 @interface _KKManageRow : NSView
 @property(nonatomic, copy) NSString *rowLabel;
 @property(nonatomic) BOOL checked;
+/// Indent depth (0 = top level). Shifts the checkbox + label right so a child
+/// row (e.g. a Rotation axis) reads as nested under its parent. Default 0.
+@property(nonatomic) NSInteger indentLevel;
+/// When non-nil, drawn verbatim as the row label instead of localizing
+/// `rowLabel` (for callers whose labels are already localized, e.g. the lane
+/// filter's compound display strings). Default nil.
+@property(nonatomic, copy, nullable) NSString *displayOverride;
+/// Draw the checkbox + label in the warning tint (the lane filter marks a
+/// soloed row this way). Default NO.
+@property(nonatomic) BOOL warning;
+/// The row's category key, so the checklist can page it under the right
+/// category pill even when its label is not unique (component sub-rows like
+/// "X"/"Y" share labels across lanes). nil = uncategorised (shows on all
+/// pages). Default nil.
+@property(nonatomic, copy, nullable) NSString *categoryKey;
 @property(nonatomic, copy, nullable) void (^onToggle)(void);
+/// Fired on an option-click instead of `onToggle` (the lane filter solos the
+/// row). When nil, an option-click falls through to `onToggle`.
+@property(nonatomic, copy, nullable) void (^onOptionToggle)(void);
 @end
 
-@interface _KKManagePopoverView : NSView <NSSearchFieldDelegate>
-// Set by the host so the dropdown can resize itself to the visible row count as
-// the category pill / search narrows the list.
-@property(nonatomic, weak, nullable) NSPopover *popover;
+// The Animated "manage" dropdown's checkable lane list. Shared chrome (search,
+// category pill, filtering, sizing, `popover`, `rowViewForLabel:`) lives in the
+// base; this only adds opt-in checkbox state.
+@interface _KKManagePopoverView : _KKLaneChecklistView
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                 checkedLabels:(NSSet<NSString *> *)checked
+                minimumHeight:(CGFloat)minimumHeight
                      onToggle:(void (^)(NSString *label))onToggle;
 - (void)updateCheckedLabels:(NSSet<NSString *> *)checked;
-- (nullable NSView *)rowViewForLabel:(NSString *)label;
-+ (CGFloat)heightForLaneCount:(NSInteger)count;
 @end
 
 // Shared static-values UI helpers: defined in the value-row .m, used by the
@@ -109,10 +134,23 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
                  showsRemove:(BOOL)showsRemove
           showsAddToAnimated:(BOOL)showsAddToAnimated
                  showsSmooth:(BOOL)showsSmooth
-            labelColumnWidth:(CGFloat)labelColumnWidth;
+              reservesGutter:(BOOL)reservesGutter
+            labelColumnWidth:(CGFloat)labelColumnWidth
+                contentWidth:(CGFloat)contentWidth;
 /// Width to pin every row's label column to, so the value controls line up
 /// regardless of label length (the widest localized param name). 0 = natural.
 + (CGFloat)labelColumnWidthForLanes:(NSArray<KKLane *> *)lanes;
+/// Width-aware row height: a wrapping choice-pill lane (a `wrapsChoicePills`
+/// marker type) grows per wrapped line for the popover content width; every
+/// other lane is width-independent. The popover height calc and the row layout
+/// both use this so they agree.
++ (CGFloat)heightForLane:(KKLane *)lane
+            contentWidth:(CGFloat)contentWidth
+        labelColumnWidth:(CGFloat)labelColumnWidth;
+/// Re-derive a wrapping pill row's block width + height for a new popover
+/// content width (the size pill resizes without rebuilding rows). No-op
+/// otherwise.
+- (void)updateContentWidth:(CGFloat)contentWidth;
 /// The KKSliderView (Float rows), for a guide that drives the slider.
 - (nullable NSView *)guideSliderView;
 /// The number field for component `i` (Float: 0; Crop: 0..3 = W,H,X,Y), for
@@ -124,6 +162,13 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
     (NSInteger component, double displayValue);
 /// Commit component `i`'s field as if the user pressed Return.
 - (void)guideCommitFieldForComponent:(NSInteger)i;
+/// Screen rect of the choice-pill segment at `index` (a radio enum row, e.g. an
+/// end-marker type), or NSZeroRect if this row has no choice pill. Lets a guide
+/// spotlight a specific choice.
+- (NSRect)guideChoicePillScreenRectForIndex:(NSInteger)index;
+/// Screen rect of this row's leading "add to animated" gutter button, or
+/// NSZeroRect if the row doesn't show one. Spotlight target.
+- (NSRect)guideAddToAnimatedButtonScreenRect;
 /// Set the displayed values (skips a field currently being edited).
 - (void)applyValues:(NSArray<NSNumber *> *)values;
 /// Refresh the aspect-link glyph state without rebuilding.
@@ -143,6 +188,12 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// path that wires onion-skin filmstrip clicks) can attach extra closures
 /// without threading another init parameter.
 @property(nonatomic, readonly, nullable) KKMiniViewerView *miniViewer;
+/// Size the view's frame to its natural content height clamped to `view`'s
+/// screen, before the popover is shown. On a small / low-resolution display the
+/// overflow goes to the internal rows scroller (the rows below the sticky
+/// mini-viewer + category pill); on a tall screen this is the natural height
+/// (no clamp, no scroll). Later re-fits self-clamp the same way.
+- (void)clampContentToScreenOfView:(NSView *)view;
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                descriptorPath:(nullable NSString *)descriptorPath
                    clipAspect:(CGFloat)clipAspect
@@ -195,6 +246,21 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// (Off/Filmstrip/Onion), or NSZeroRect if the pill isn't shown. Used by the
 /// mini-viewer guide to spotlight the mode the user should tap.
 - (NSRect)guideRenderModePillScreenRectForMode:(KKMiniViewerRenderMode)mode;
+
+/// Fired when the user picks a size pill segment (0 = sm, 1 = md, 2 = lg). The
+/// popover has already persisted the global preference and resized itself; the
+/// host uses this only to advance the mini-viewer guide's size step.
+@property(nonatomic, copy, nullable) void (^onSizeChanged)(NSInteger sizeIndex);
+
+/// Guide-only: screen rect of the size pill's segment `index` (0/1/2), or
+/// NSZeroRect if there's no mini-viewer (so no size pill).
+- (NSRect)guideSizePillScreenRectForIndex:(NSInteger)index;
+
+/// The global mini-viewer size preference (0 = sm/default, 1 = md, 2 = lg).
+/// Exposed so a guide can reset it to the default for the run and restore the
+/// user's value afterwards.
++ (NSInteger)popoverSizeIndex;
++ (void)setPopoverSizeIndex:(NSInteger)sizeIndex;
 
 /// Enable/disable the popover header's prev/next KP buttons (only meaningful
 /// when `onNavigate` was passed at init). The lanes view calls this on open
@@ -269,6 +335,22 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
                                              double displayValue))handler;
 - (void)guideCommitFieldForLabel:(NSString *)label
                        component:(NSInteger)component;
+/// Screen rect of the choice-pill segment at `index` in `label`'s row (a radio
+/// enum, e.g. an end-marker type), NSZeroRect if none. Spotlight target.
+- (NSRect)guideChoicePillScreenRectForLabel:(NSString *)label
+                                    atIndex:(NSInteger)index;
+/// Screen rect of `label`'s row's "add to animated" gutter button, NSZeroRect
+/// if none. Spotlight target.
+- (NSRect)guideAddToAnimatedButtonScreenRectForLabel:(NSString *)label;
+/// Screen rect of the category-nav pill segment for `key` (e.g. @"Stroke"),
+/// NSZeroRect if there's no nav or no such category. Spotlight target.
+- (NSRect)guideCategoryPillScreenRectForKey:(NSString *)key;
+/// Scroll `label`'s row into the visible area of the row scroller (no-op if the
+/// row is missing or hidden by the current category tab).
+- (void)guideScrollRowIntoViewForLabel:(NSString *)label;
+/// Switch the open popover to category `key` (nav pill + filter + height),
+/// without firing onCategoryChanged. No-op if `key` isn't a present category.
+- (void)guideSelectCategory:(NSString *)key;
 + (CGFloat)heightForLanes:(NSArray<KKLane *> *)lanes
            descriptorPath:(nullable NSString *)descriptorPath
                clipAspect:(CGFloat)clipAspect
@@ -282,6 +364,15 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 
 @interface _KKDropdownTrigger : NSView
 @property(nonatomic, copy, nullable) NSArray<NSString *> *selectedLabels;
+/// Optional owner (layer) names (multi-owner hosts): when non-empty the trigger
+/// lists every animated layer's name with +N truncation ("layer 1, layer 2 +1")
+/// instead of the property summary.
+@property(nonatomic, copy, nullable) NSArray<NSString *> *layerTitles;
+/// Pre-computed hierarchical summary string (see KKHierarchicalLaneSummary), or
+/// the localized "All" sentinel. When non-nil it replaces the derived label
+/// list as the field's text. The host owns the empty/placeholder decision by
+/// leaving this nil (then `selectedLabels` drives the placeholder).
+@property(nonatomic, copy, nullable) NSString *summaryOverride;
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 

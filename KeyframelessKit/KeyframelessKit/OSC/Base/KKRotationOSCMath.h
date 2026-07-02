@@ -35,6 +35,29 @@ static inline KKRotMatrix3 KKBuildRotationMatrix(float rx, float ry, float rz) {
   return m;
 }
 
+/// Identity rotation.
+static inline KKRotMatrix3 KKRotMatrixIdentity(void) {
+  KKRotMatrix3 m;
+  m.col0 = simd_make_float3(1, 0, 0);
+  m.col1 = simd_make_float3(0, 1, 0);
+  m.col2 = simd_make_float3(0, 0, 1);
+  return m;
+}
+
+/// m · v (column-major).
+static inline simd_float3 KKRotMatrixApply(KKRotMatrix3 m, simd_float3 v) {
+  return m.col0 * v.x + m.col1 * v.y + m.col2 * v.z;
+}
+
+/// a · b (apply b then a).
+static inline KKRotMatrix3 KKRotMatrixMul(KKRotMatrix3 a, KKRotMatrix3 b) {
+  KKRotMatrix3 r;
+  r.col0 = KKRotMatrixApply(a, b.col0);
+  r.col1 = KKRotMatrixApply(a, b.col1);
+  r.col2 = KKRotMatrixApply(a, b.col2);
+  return r;
+}
+
 /// Plane basis (U, V) for ring `k` (0=X, 1=Y, 2=Z) under the current matrix.
 static inline void KKRingBasis(KKRotMatrix3 m, int k, simd_float3 *outU,
                                simd_float3 *outV) {

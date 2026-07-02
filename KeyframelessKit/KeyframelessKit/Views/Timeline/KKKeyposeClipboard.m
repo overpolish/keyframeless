@@ -19,6 +19,7 @@ static NSInteger const kKKKeyposePBVersion = 1;
 @property(nonatomic) BOOL spatialSmooth;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *inHandle;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *outHandle;
+@property(nonatomic, copy, nullable) NSData *geometrySnapshot;
 @end
 
 @implementation KKKeyposeClipboardEntry
@@ -33,6 +34,8 @@ static NSInteger const kKKKeyposePBVersion = 1;
     d[@"inHandle"] = self.inHandle;
   if (self.outHandle)
     d[@"outHandle"] = self.outHandle;
+  if (self.geometrySnapshot)
+    d[@"geom"] = [self.geometrySnapshot base64EncodedStringWithOptions:0];
   return d;
 }
 
@@ -42,7 +45,13 @@ static NSInteger const kKKKeyposePBVersion = 1;
   NSString *label = d[@"label"];
   NSArray *values = d[@"values"];
   if (![label isKindOfClass:[NSString class]] ||
-      ![values isKindOfClass:[NSArray class]] || values.count == 0)
+      ![values isKindOfClass:[NSArray class]])
+    return nil;
+  NSString *geomB64 = [d[@"geom"] isKindOfClass:[NSString class]] ? d[@"geom"]
+                                                                  : nil;
+  // A geometry-lane pose carries no scalar (empty values) - its shape is the
+  // payload, so allow an empty values array as long as a snapshot is present.
+  if (values.count == 0 && !geomB64)
     return nil;
   KKKeyposeClipboardEntry *e = [[KKKeyposeClipboardEntry alloc] init];
   e.label = label;
@@ -53,6 +62,9 @@ static NSInteger const kKKKeyposePBVersion = 1;
       [d[@"inHandle"] isKindOfClass:[NSArray class]] ? d[@"inHandle"] : nil;
   e.outHandle =
       [d[@"outHandle"] isKindOfClass:[NSArray class]] ? d[@"outHandle"] : nil;
+  e.geometrySnapshot =
+      geomB64 ? [[NSData alloc] initWithBase64EncodedString:geomB64 options:0]
+              : nil;
   return e;
 }
 
@@ -71,6 +83,7 @@ static NSInteger const kKKKeyposePBVersion = 1;
   nk.spatialSmooth = self.spatialSmooth;
   nk.inHandle = self.inHandle;
   nk.outHandle = self.outHandle;
+  nk.geometrySnapshot = self.geometrySnapshot;
   return nk;
 }
 
@@ -87,6 +100,7 @@ static NSInteger const kKKKeyposePBVersion = 1;
   e.spatialSmooth = keypose.spatialSmooth;
   e.inHandle = keypose.inHandle;
   e.outHandle = keypose.outHandle;
+  e.geometrySnapshot = keypose.geometrySnapshot;
   return e;
 }
 

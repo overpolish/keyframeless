@@ -1,0 +1,1661 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#import "CanvasLayerRender.h"
+#import "CanvasCornerFillet.h"
+#import "CanvasFillProperties.h" // CanvasFillEnabledAtFraction + tint/colour
+#import "CanvasImageTexture.h"
+#import "CanvasLayerRenderInternal.h"
+#import "CanvasLayerTransform.h"
+#import "CanvasMarkerTessellate.h"
+#import "CanvasPathMorph.h"
+#import "CanvasSketchPath.h"       // CanvasSketchPath (hand-drawn jitter)
+#import "CanvasSketchProperties.h" // CanvasSketchEnabledAtFraction + params
+#import "CanvasStrokeTessellate.h"
+#import "CanvasStrokeTessellateInternal.h"
+#import "Constants.h"
+#import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKDataBlob.h>
+
+// Cached tessellated stroke geometry for one layer: the vertex strip (+ the
+// dash arc-length buffer + endpoint markers), all on the GPU. Keyed by the
+// layer's tessellation INPUTS (geometry bytes + widths + cap/join +
+// dash/draw-on + gradient direction), which are invariant to the layer's
+// transform / opacity / solid colour. So a layer that is static OR merely
+// moving/scaling/rotating/ fading tessellates ONCE and reuses the buffers
+// across every motion-blur sample and frame - only re-tessellating when the
+// geometry itself changes (points morph, draw-on reveal). Per-process cache
+// (separate XPC process per instance); content-addressed, so sharing across
+// instances in one process is harmless.
+@interface CanvasStrokeTess : NSObject
+@property(nonatomic, strong) id<MTLBuffer> vbuf;
+@property(nonatomic) NSUInteger vc;
+@property(nonatomic, strong, nullable) id<MTLBuffer> arcBuf;
+@property(nonatomic, strong, nullable) id<MTLBuffer> mbuf;
+@property(nonatomic) NSUInteger mvc;
+@end
+@implementation CanvasStrokeTess
+@end
+
+static NSCache<NSData *, CanvasStrokeTess *> *CanvasStrokeTessCache(void) {
+  static NSCache *c;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    c = [[NSCache alloc] init];
+    c.countLimit = 256;
+  });
+  return c;
+}
+#import <KeyframelessKit/KKPluginHost.h>
+#import <KeyframelessKit/KKShaderTypes.h>
+#import <KeyframelessKit/KKShape.h>
+#import <simd/simd.h>
+
+NSMutableArray<KKBezierPath *> *CanvasReadLayerPaths(id<PROAPIAccessing> api,
+                                                     id target) {
+  if (!api)
+    return [NSMutableArray array];
+  id<FxCustomParameterActionAPI_v4> action =
+      [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!action)
+    return [NSMutableArray array];
+  id token = target ?: (id)action;
+  [action startAction:token];
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  NSString *b64 = KKReadCustomParamString(getAPI, kParamLayerData);
+  [action endAction:token];
+  if (b64.length == 0)
+    return [NSMutableArray array];
+  NSData *blob = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
+  NSMutableArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:blob];
+  return paths ?: [NSMutableArray array];
+}
+
+void CanvasEncodeSourceTile(id<MTLRenderCommandEncoder> encoder,
+                            id<MTLTexture> source, float imageWidth,
+                            float imageHeight, float tileShiftX,
+                            float tileShiftY) {
+  if (!encoder || !source)
+    return;
+  // A full-image identity quad: same image-centered pixel space + tile-shift as
+  // the layers, so the source tiles the same way (correct in the sub-tiled,
+  // reverse-Y library preview). For a full-frame render shift=0 -> m4=P, which
+  // reproduces the orthographic full-frame source draw.
+  matrix_float4x4 m4 = CanvasLayerTiltMatrix(
+      CanvasLayerTransformIdentity(), simd_make_float2(0.0f, 0.0f), imageWidth,
+      imageHeight, simd_make_float2(tileShiftX, tileShiftY));
+  float halfW = imageWidth * 0.5f, halfH = imageHeight * 0.5f;
+  KKVertex2D quad[4] = {
+      {{halfW, -halfH}, {1, 1}},
+      {{-halfW, -halfH}, {0, 1}},
+      {{halfW, halfH}, {1, 0}},
+      {{-halfW, halfH}, {0, 0}},
+  };
+  float opacity = 1.0f; // image pipeline's opacity fragment reads buffer 0
+  [encoder setVertexBytes:&m4
+                   length:sizeof(m4)
+                  atIndex:KKVertexInputIndex_Transform];
+  [encoder setVertexBytes:quad
+                   length:sizeof(quad)
+                  atIndex:KKVertexInputIndex_Vertices];
+  [encoder setFragmentBytes:&opacity length:sizeof(opacity) atIndex:0];
+  [encoder setFragmentTexture:source atIndex:KKTextureIndex_InputImage];
+  [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+              vertexStart:0
+              vertexCount:4];
+}
+
+// The layer's composed model matrix (member + ancestor groups + perspective) at
+// clip fraction `f`, in the render's centered-pixel space. Shared by the
+// velocity quad encode and the CPU velocity measure so both project
+// identically.
+static matrix_float4x4 CanvasLayerComposedMatAt(
+    NSArray<KKBezierPath *> *layers, NSInteger layerIndex, KKBezierPath *path,
+    simd_float2 center, double f, simd_float2 scale, simd_float2 tileShift,
+    NSString *overrideLayerID, KKTimeline *overrideTimeline) {
+  BOOL ov = overrideTimeline && overrideLayerID.length &&
+            [path.layerID isEqualToString:overrideLayerID];
+  CanvasLayerTransform t =
+      ov ? CanvasLayerTransformFromTimeline(overrideTimeline, f)
+         : CanvasLayerTransformAtFraction(path, f);
+  CanvasGroupXform groups[kCanvasGroupXformCap];
+  NSInteger ng =
+      CanvasBuildGroupXforms(layers, (NSUInteger)layerIndex, f, overrideLayerID,
+                             overrideTimeline, groups, kCanvasGroupXformCap);
+  return CanvasComposedModelMatrix(t, center, groups, ng, scale, tileShift);
+}
+
+// Project a centered-pixel local point through `m` to screen pixels (top-left
+// origin, +y down), the SAME mapping KKVelocityVertexShader emits.
+static simd_float2 CanvasProjectToScreenPx(matrix_float4x4 m,
+                                           simd_float2 localPx,
+                                           simd_float2 viewportHalf) {
+  simd_float4 w =
+      simd_mul(m, simd_make_float4(localPx.x, localPx.y, 0.0f, 1.0f));
+  if (fabsf(w.w) < 1e-5f)
+    return simd_make_float2(0.0f, 0.0f);
+  return simd_make_float2(w.x, -w.y) / w.w + viewportHalf;
+}
+
+// Object point on a built contour polyline (pts[0..n), cumulative arc cum[0..n]
+// where cum[n] is the closing edge when `closed`) at arc length `arc`.
+static simd_float2 CanvasPolyPointAtArc(const simd_float2 *pts,
+                                        const float *cum, NSUInteger n,
+                                        BOOL closed, float arc) {
+  NSUInteger segCount = closed ? n : (n - 1);
+  if (arc <= 0.0f)
+    return pts[0];
+  if (arc >= cum[segCount])
+    return closed ? pts[0] : pts[n - 1];
+  NSUInteger seg = 0;
+  while (seg + 1 < segCount && cum[seg + 1] < arc)
+    seg++;
+  float c0 = cum[seg], c1 = cum[seg + 1];
+  float u = (c1 - c0) > 1e-6f ? (arc - c0) / (c1 - c0) : 0.0f;
+  u = fmaxf(0.0f, fminf(1.0f, u));
+  simd_float2 p0 = pts[seg], p1 = pts[(seg + 1) % n];
+  return p0 + (p1 - p0) * u;
+}
+
+// Point on a fillet's cubic bezier at parameter t (object-normalised space).
+static simd_float2 CanvasCubicEval(CanvasFilletArc a, float t) {
+  float u = 1.0f - t;
+  return a.t1 * (u * u * u) + a.c1 * (3.0f * u * u * t) +
+         a.c2 * (3.0f * u * t * t) + a.t2 * (t * t * t);
+}
+
+// One draw-on endpoint MARKER that moved over the shutter: its object-space
+// (centered-pixel) position now (`nowTipObj`) and at the shutter start
+// (`prevTipObj`), plus its half-reach. Unlike the (curved) stroke reveal -
+// which blurs by the analytic alpha fade - a marker is a compact shape that
+// simply TRANSLATES with the tip, so straight velocity reconstruction is exact
+// for it.
+typedef struct {
+  simd_float2 nowTipObj, prevTipObj;
+  float halfObj;
+} CanvasMarkerTip;
+
+// Fill `out[0..1]` with the draw-on layer's moving endpoint markers (start /
+// end edge). Single-contour, non-spinning draw-on only. Returns the count.
+static int CanvasComputeMarkerTips(NSArray<KKBezierPath *> *layers, NSInteger i,
+                                   double frac, double fracPrev,
+                                   float imageWidth, float imageHeight,
+                                   NSString *overrideLayerID,
+                                   KKTimeline *overrideTimeline,
+                                   CanvasMarkerTip out[2]) {
+  if (i < 0 || i >= (NSInteger)layers.count || frac < 0.0 || fracPrev < 0.0)
+    return 0;
+  KKBezierPath *path = layers[(NSUInteger)i];
+  if (path.isGroup || path.hidden || path.isImage)
+    return 0;
+  if (!CanvasStrokeEnabledAtFraction(path, frac, overrideLayerID,
+                                     overrideTimeline))
+    return 0;
+  KKBezierPath *geom = CanvasPathMorphedAtFraction(path, frac);
+  if (geom.count < 2 || geom.contourCount != 1)
+    return 0;
+  BOOL closed = CanvasContourClosed(geom, geom.contourCount);
+  NSUInteger polyCap = CanvasMaxContourPolyCap(geom, closed);
+  if (polyCap == 0)
+    return 0;
+  simd_float2 *pts = malloc(sizeof(simd_float2) * polyCap);
+  NSRange r = [geom contourRangeAtIndex:0];
+  NSUInteger n = CanvasBuildContourPolyline(geom, r, closed, imageWidth,
+                                            imageHeight, pts, polyCap);
+  if (n < 2) {
+    free(pts);
+    return 0;
+  }
+  float L = CanvasContourArcLength(pts, n, closed);
+  if (L < 1e-3f) {
+    free(pts);
+    return 0;
+  }
+  float *cum = malloc(sizeof(float) * (n + 1));
+  cum[0] = 0.0f;
+  for (NSUInteger k = 1; k < n; k++)
+    cum[k] = cum[k - 1] + simd_distance(pts[k], pts[k - 1]);
+  cum[n] = closed ? cum[n - 1] + simd_distance(pts[0], pts[n - 1]) : cum[n - 1];
+
+  float ssW = path.strokeWidth, seW = path.strokeWidth;
+  CanvasStrokeWidthAtFraction(path, frac, overrideLayerID, overrideTimeline,
+                              &ssW, &seW);
+  CanvasDrawOnRender dN = CanvasResolveStrokeDrawOn(
+      path, geom, frac, overrideLayerID, overrideTimeline, ssW, seW, 1.0f,
+      imageWidth, imageHeight);
+  CanvasDrawOnRender dP = CanvasResolveStrokeDrawOn(
+      path, geom, fracPrev, overrideLayerID, overrideTimeline, ssW, seW, 1.0f,
+      imageWidth, imageHeight);
+  if (dN.collapsed) {
+    free(pts);
+    free(cum);
+    return 0;
+  }
+  // k=0 start edge, k=1 end edge.
+  float edgeN[2] = {dN.offset + dN.lineStart, dN.offset + dN.lineEnd};
+  float edgeP[2] = {dP.offset + dP.lineStart, dP.offset + dP.lineEnd};
+  float markPx[2] = {dN.startMarker != 0 ? dN.sMarkerPx : 0.0f,
+                     dN.endMarker != 0 ? dN.eMarkerPx : 0.0f};
+  int cnt = 0;
+  for (int k = 0; k < 2; k++) {
+    if (markPx[k] <= 0.5f)
+      continue; // no marker on this edge
+    float fN = edgeN[k] - floorf(edgeN[k]);
+    float fP = edgeP[k] - floorf(edgeP[k]);
+    float aN = fN * L, aP = fP * L;
+    float d = aN - aP;
+    if (fabsf(d) > 0.4f * L || fabsf(d) < 0.25f)
+      continue; // seam-wrap or static marker
+    out[cnt].nowTipObj = CanvasPolyPointAtArc(pts, cum, n, closed, aN);
+    out[cnt].prevTipObj = CanvasPolyPointAtArc(pts, cum, n, closed, aP);
+    out[cnt].halfObj = markPx[k] + 2.0f;
+    cnt++;
+  }
+  free(pts);
+  free(cum);
+  return cnt;
+}
+
+// Max fan triangles for a morph-velocity mesh. 84 tris = 252 verts × 16 B =
+// 4032 B, just under the 4 KB setVertexBytes limit, so two (now + prev)
+// payloads fit without a staged MTLBuffer. Denser outlines are strided down to
+// this.
+enum { kCanvasMorphFanMaxTri = 84 };
+
+// Build a centroid-fan velocity mesh from a layer's morphed outline at the two
+// shutter endpoints. `nowP`/`prevP` are the SAME path morphed to `frac` /
+// `fracPrev`; their points are index-aligned by the morph correspondence (the
+// caller guarantees equal counts). Each fan vertex carries its NOW object
+// position in `nowOut` and its PREV counterpart in `prevOut` (centered-pixel),
+// so KKVelocityMorphVertexShader emits a per-vertex displacement - capturing a
+// non-uniform reshape (one edge extending while another holds) that a single
+// rigid quad cannot. Each ring point is pushed radially out from its centroid
+// by `marginNorm` so the stroke half-width + blur smear fall inside the field
+// (the colour pass's exact geometry masks the over-coverage). Returns the
+// vertex count written (a multiple of 3), or 0 if the outline is degenerate.
+static NSInteger
+CanvasBuildMorphVelocityFan(KKBezierPath *nowP, KKBezierPath *prevP,
+                            simd_float2 scale, simd_float2 marginNorm,
+                            KKVertex2D *nowOut, KKVertex2D *prevOut) {
+  NSUInteger n = nowP.count;
+  if (n < 3 || prevP.count != n)
+    return 0;
+  // Stride the outline down to the triangle cap; the same stride on both frames
+  // keeps the now/prev correspondence intact.
+  NSUInteger stride = 1;
+  while ((n + stride - 1) / stride > (NSUInteger)kCanvasMorphFanMaxTri)
+    stride++;
+  NSUInteger m = (n + stride - 1) / stride;
+  if (m < 3)
+    return 0;
+
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+  simd_float2 ringNow[kCanvasMorphFanMaxTri];
+  simd_float2 ringPrev[kCanvasMorphFanMaxTri];
+  simd_float2 cNow = simd_make_float2(0, 0), cPrev = simd_make_float2(0, 0);
+  for (NSUInteger s = 0; s < m; s++) {
+    KKBezierPoint a = [nowP pointAtIndex:(s * stride)];
+    KKBezierPoint b = [prevP pointAtIndex:(s * stride)];
+    ringNow[s] = simd_make_float2(a.x, a.y);
+    ringPrev[s] = simd_make_float2(b.x, b.y);
+    cNow += ringNow[s];
+    cPrev += ringPrev[s];
+  }
+  cNow /= (float)m;
+  cPrev /= (float)m;
+  // Push each ring point out from its centroid by the margin (radial,
+  // per-axis).
+  for (NSUInteger s = 0; s < m; s++) {
+    simd_float2 dN = ringNow[s] - cNow;
+    float lN = simd_length(dN);
+    if (lN > 1e-6f)
+      ringNow[s] += (dN / lN) * marginNorm;
+    simd_float2 dP = ringPrev[s] - cPrev;
+    float lP = simd_length(dP);
+    if (lP > 1e-6f)
+      ringPrev[s] += (dP / lP) * marginNorm;
+  }
+
+  NSInteger v = 0;
+  for (NSUInteger s = 0; s < m; s++) {
+    NSUInteger s1 = (s + 1) % m;
+    nowOut[v] = (KKVertex2D){(cNow - half) * scale, {0, 0}};
+    nowOut[v + 1] = (KKVertex2D){(ringNow[s] - half) * scale, {0, 0}};
+    nowOut[v + 2] = (KKVertex2D){(ringNow[s1] - half) * scale, {0, 0}};
+    prevOut[v] = (KKVertex2D){(cPrev - half) * scale, {0, 0}};
+    prevOut[v + 1] = (KKVertex2D){(ringPrev[s] - half) * scale, {0, 0}};
+    prevOut[v + 2] = (KKVertex2D){(ringPrev[s1] - half) * scale, {0, 0}};
+    v += 3;
+  }
+  return v;
+}
+
+float CanvasLayerMaxVelocityPx(NSArray<KKBezierPath *> *layers,
+                               NSInteger layerIndex, double frac,
+                               double fracPrev, float imageWidth,
+                               float imageHeight, float tileShiftX,
+                               float tileShiftY, NSString *overrideLayerID,
+                               KKTimeline *overrideTimeline) {
+  if (layerIndex < 0 || layerIndex >= (NSInteger)layers.count)
+    return 0.0f;
+  if (frac < 0.0 || fracPrev < 0.0)
+    return 0.0f;
+  KKBezierPath *path = layers[(NSUInteger)layerIndex];
+  if (path.isGroup || path.hidden)
+    return 0.0f;
+
+  simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+  simd_float2 vpHalf = simd_make_float2(imageWidth * 0.5f, imageHeight * 0.5f);
+  simd_float2 center = CanvasLayerObjectCenter(path);
+  matrix_float4x4 mNow =
+      CanvasLayerComposedMatAt(layers, layerIndex, path, center, frac, scale,
+                               tileShift, overrideLayerID, overrideTimeline);
+  matrix_float4x4 mPrev = CanvasLayerComposedMatAt(
+      layers, layerIndex, path, center, fracPrev, scale, tileShift,
+      overrideLayerID, overrideTimeline);
+
+  float hx = 0.5f, hy = 0.5f;
+  CanvasLayerContentHalfExtentObj(layers, path, &hx, &hy);
+  // Sample the bbox centre + corners; rotation/scale move the corners further
+  // than the centre, so the corners capture the true peak velocity.
+  simd_float2 pts[5] = {
+      center,
+      center + simd_make_float2(hx, hy),
+      center + simd_make_float2(-hx, hy),
+      center + simd_make_float2(hx, -hy),
+      center + simd_make_float2(-hx, -hy),
+  };
+  float maxd = 0.0f;
+  for (int k = 0; k < 5; k++) {
+    simd_float2 lp = (pts[k] - half) * scale;
+    simd_float2 pn = CanvasProjectToScreenPx(mNow, lp, vpHalf);
+    simd_float2 pp = CanvasProjectToScreenPx(mPrev, lp, vpHalf);
+    float d = simd_length(pn - pp);
+    if (d > maxd)
+      maxd = d;
+  }
+
+  // A per-point morph (the outline grows / reshapes) moves the geometry without
+  // moving the transform, so the bbox corners above miss it. Sample the morphed
+  // outline directly - per-point displacement under each frame's own pivot,
+  // matching the colour pass - so the tile (= trail length) covers the morph.
+  KKBezierPath *nowP = CanvasPathMorphedAtFraction(path, frac);
+  KKBezierPath *prevP = CanvasPathMorphedAtFraction(path, fracPrev);
+  NSUInteger n = nowP.count;
+  BOOL morphs = (nowP != path) || (prevP != path);
+  if (morphs && n >= 3 && prevP.count == n) {
+    matrix_float4x4 mNowM = CanvasLayerComposedMatAt(
+        layers, layerIndex, path, CanvasLayerObjectCenter(nowP), frac, scale,
+        tileShift, overrideLayerID, overrideTimeline);
+    matrix_float4x4 mPrevM = CanvasLayerComposedMatAt(
+        layers, layerIndex, path, CanvasLayerObjectCenter(prevP), fracPrev,
+        scale, tileShift, overrideLayerID, overrideTimeline);
+    NSUInteger stride = n / 64 + 1;
+    for (NSUInteger i = 0; i < n; i += stride) {
+      KKBezierPoint a = [nowP pointAtIndex:i];
+      KKBezierPoint b = [prevP pointAtIndex:i];
+      simd_float2 pn = CanvasProjectToScreenPx(
+          mNowM, (simd_make_float2(a.x, a.y) - half) * scale, vpHalf);
+      simd_float2 pp = CanvasProjectToScreenPx(
+          mPrevM, (simd_make_float2(b.x, b.y) - half) * scale, vpHalf);
+      float d = simd_length(pn - pp);
+      if (d > maxd)
+        maxd = d;
+    }
+  }
+
+  // Corner-radius / corner motion lives on the fillet ARC between anchors,
+  // which the anchor loop above misses; sample each arc's midpoint so the tile
+  // covers a rounding/unrounding corner's smear.
+  if (morphs && nowP.hasCornerRadii) {
+    enum { kMC = 64 };
+    CanvasFilletArc aN[kMC], aP[kMC];
+    float asp = imageHeight > 0 ? imageWidth / imageHeight : 1.0f;
+    NSUInteger cN = CanvasPathFilletArcs(nowP, asp, aN, kMC);
+    NSUInteger cP = CanvasPathFilletArcs(prevP, asp, aP, kMC);
+    if (cN > 0 && cN == cP) {
+      matrix_float4x4 mN = CanvasLayerComposedMatAt(
+          layers, layerIndex, path, CanvasLayerObjectCenter(nowP), frac, scale,
+          tileShift, overrideLayerID, overrideTimeline);
+      matrix_float4x4 mP = CanvasLayerComposedMatAt(
+          layers, layerIndex, path, CanvasLayerObjectCenter(prevP), fracPrev,
+          scale, tileShift, overrideLayerID, overrideTimeline);
+      for (NSUInteger c = 0; c < cN; c++) {
+        simd_float2 mid =
+            CanvasProjectToScreenPx(
+                mN, (CanvasCubicEval(aN[c], 0.5f) - half) * scale, vpHalf) -
+            CanvasProjectToScreenPx(
+                mP, (CanvasCubicEval(aP[c], 0.5f) - half) * scale, vpHalf);
+        float d = simd_length(mid);
+        if (d > maxd)
+          maxd = d;
+      }
+    }
+  }
+
+  // (Draw-on reveal is NOT a velocity - it blurs via the analytic alpha fade in
+  // the stroke shader, not reconstruction - so it does not size the tile here.)
+  // But an endpoint MARKER rides the tip and TRANSLATES, so it does: size the
+  // tile to its travel.
+  {
+    CanvasMarkerTip tips[2];
+    int nt = CanvasComputeMarkerTips(layers, layerIndex, frac, fracPrev,
+                                     imageWidth, imageHeight, overrideLayerID,
+                                     overrideTimeline, tips);
+    for (int k = 0; k < nt; k++) {
+      simd_float2 pn =
+          CanvasProjectToScreenPx(mNow, (tips[k].nowTipObj), vpHalf);
+      simd_float2 pp =
+          CanvasProjectToScreenPx(mPrev, (tips[k].prevTipObj), vpHalf);
+      float d = simd_length(pn - pp);
+      if (d > maxd)
+        maxd = d;
+    }
+  }
+
+  // Stroke-width animation moves each edge by half the width change; size the
+  // tile so the widening edge's smear isn't clamped.
+  if (CanvasStrokeEnabledAtFraction(path, frac, overrideLayerID,
+                                    overrideTimeline)) {
+    float ssN = path.strokeWidth, seN = path.strokeWidth;
+    float ssP = path.strokeWidth, seP = path.strokeWidth;
+    CanvasStrokeWidthAtFraction(path, frac, overrideLayerID, overrideTimeline,
+                                &ssN, &seN);
+    CanvasStrokeWidthAtFraction(path, fracPrev, overrideLayerID,
+                                overrideTimeline, &ssP, &seP);
+    float dw = 0.5f * fmaxf(fabsf(ssN - ssP), fabsf(seN - seP));
+    if (dw > maxd)
+      maxd = dw;
+  }
+  return maxd;
+}
+
+void CanvasEncodeLayerVelocityQuad(
+    NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
+    NSInteger layerIndex, double frac, double fracPrev, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY, float marginPx,
+    id<MTLRenderPipelineState> morphVelPS, NSString *overrideLayerID,
+    KKTimeline *overrideTimeline) {
+  if (!encoder || layerIndex < 0 || layerIndex >= (NSInteger)layers.count)
+    return;
+  if (frac < 0.0 || fracPrev < 0.0)
+    return; // no time known -> leave velocity cleared (no blur)
+  KKBezierPath *path = layers[(NSUInteger)layerIndex];
+  if (path.isGroup || path.hidden)
+    return;
+
+  simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+  simd_float2 marginNorm = simd_make_float2(
+      marginPx / fmaxf(imageWidth, 1.0f), marginPx / fmaxf(imageHeight, 1.0f));
+
+  // Per-point morph path: when the outline itself animates (grows / reshapes)
+  // the transform is unchanged, so a single rigid quad would emit zero velocity
+  // (or, if forced, smear static edges). Instead emit a centroid-fan velocity
+  // mesh from the morphed outline at the two shutter endpoints, each vertex
+  // carrying its now + prev position, so the displacement is per-vertex (a
+  // growing edge blurs while a held edge stays sharp). Pivots match the colour
+  // pass (each frame's morphed-outline centre). Shape-based layers (rect /
+  // ellipse, no bezier points) and frames whose point sets don't correspond
+  // fall through to the rigid quad below.
+  if (morphVelPS && !path.isImage) {
+    KKBezierPath *nowP = CanvasPathMorphedAtFraction(path, frac);
+    KKBezierPath *prevP = CanvasPathMorphedAtFraction(path, fracPrev);
+    NSUInteger n = nowP.count;
+    // Only morph-animated layers take the fan (CanvasPathMorphedAtFraction
+    // returns the SAME `path` for a constant outline); transform-only layers
+    // stay on the proven rigid quad below.
+    BOOL morphs = (nowP != path) || (prevP != path);
+    if (morphs && n >= 3 && prevP.count == n) {
+      KKVertex2D fanNow[3 * kCanvasMorphFanMaxTri];
+      KKVertex2D fanPrev[3 * kCanvasMorphFanMaxTri];
+      NSInteger fv = CanvasBuildMorphVelocityFan(nowP, prevP, scale, marginNorm,
+                                                 fanNow, fanPrev);
+      if (fv >= 3) {
+        matrix_float4x4 mNowM = CanvasLayerComposedMatAt(
+            layers, layerIndex, path, CanvasLayerObjectCenter(nowP), frac,
+            scale, tileShift, overrideLayerID, overrideTimeline);
+        matrix_float4x4 mPrevM = CanvasLayerComposedMatAt(
+            layers, layerIndex, path, CanvasLayerObjectCenter(prevP), fracPrev,
+            scale, tileShift, overrideLayerID, overrideTimeline);
+        [encoder setRenderPipelineState:morphVelPS];
+        [encoder setVertexBytes:&mNowM
+                         length:sizeof(mNowM)
+                        atIndex:KKVertexInputIndex_Transform];
+        [encoder setVertexBytes:&mPrevM
+                         length:sizeof(mPrevM)
+                        atIndex:KKVertexInputIndex_TransformPrev];
+        [encoder setVertexBytes:fanNow
+                         length:sizeof(KKVertex2D) * (NSUInteger)fv
+                        atIndex:KKVertexInputIndex_Vertices];
+        [encoder setVertexBytes:fanPrev
+                         length:sizeof(KKVertex2D) * (NSUInteger)fv
+                        atIndex:KKVertexInputIndex_VerticesPrev];
+        [encoder drawPrimitives:MTLPrimitiveTypeTriangle
+                    vertexStart:0
+                    vertexCount:(NSUInteger)fv];
+        return;
+      }
+    }
+  }
+
+  simd_float2 center = CanvasLayerObjectCenter(path);
+
+  // Composed model matrix at the two shutter endpoints (current + start), so a
+  // parent group's own animation contributes to the velocity too.
+  matrix_float4x4 mNow =
+      CanvasLayerComposedMatAt(layers, layerIndex, path, center, frac, scale,
+                               tileShift, overrideLayerID, overrideTimeline);
+  matrix_float4x4 mPrev = CanvasLayerComposedMatAt(
+      layers, layerIndex, path, center, fracPrev, scale, tileShift,
+      overrideLayerID, overrideTimeline);
+
+  // Bounding quad in object-normalised space, expanded by the margin (stroke
+  // width + blur reach) so the stroke and its smear fall inside the field. The
+  // colour pass's exact geometry masks the over-coverage.
+  float hx = 0.5f, hy = 0.5f;
+  CanvasLayerContentHalfExtentObj(layers, path, &hx, &hy);
+  simd_float2 he = simd_make_float2(hx, hy) + marginNorm;
+  simd_float2 lo = center - he;
+  simd_float2 hiC = center + he;
+
+  KKVertex2D quad[4] = {
+      {(simd_make_float2(hiC.x, lo.y) - half) * scale, {1, 1}},
+      {(simd_make_float2(lo.x, lo.y) - half) * scale, {0, 1}},
+      {(simd_make_float2(hiC.x, hiC.y) - half) * scale, {1, 0}},
+      {(simd_make_float2(lo.x, hiC.y) - half) * scale, {0, 0}},
+  };
+  [encoder setVertexBytes:&mNow
+                   length:sizeof(mNow)
+                  atIndex:KKVertexInputIndex_Transform];
+  [encoder setVertexBytes:&mPrev
+                   length:sizeof(mPrev)
+                  atIndex:KKVertexInputIndex_TransformPrev];
+  [encoder setVertexBytes:quad
+                   length:sizeof(quad)
+                  atIndex:KKVertexInputIndex_Vertices];
+  [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+              vertexStart:0
+              vertexCount:4];
+}
+
+// Max centerline samples for the stroke-width velocity strip. 128 samples = 256
+// edge verts × 16 B = 4096 B per (now / prev) payload - the setVertexBytes cap.
+enum { kCanvasWidthStripMaxSamples = 128 };
+
+void CanvasEncodeStrokeWidthVelocity(
+    NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
+    NSInteger layerIndex, double frac, double fracPrev, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY,
+    id<MTLRenderPipelineState> morphVelPS, NSString *overrideLayerID,
+    KKTimeline *overrideTimeline) {
+  if (!encoder || !morphVelPS || layerIndex < 0 ||
+      layerIndex >= (NSInteger)layers.count || frac < 0.0 || fracPrev < 0.0)
+    return;
+  KKBezierPath *path = layers[(NSUInteger)layerIndex];
+  if (path.isGroup || path.hidden || path.isImage)
+    return;
+  if (!CanvasStrokeEnabledAtFraction(path, frac, overrideLayerID,
+                                     overrideTimeline))
+    return;
+
+  // The Stroke Width lane's Start/End at both shutter ends. Bail if the width
+  // is not animating over the shutter (the transform/morph passes already cover
+  // a moving / reshaping stroke; only a CHANGING width adds a new ⊥ edge
+  // motion).
+  float ssN = path.strokeWidth, seN = path.strokeWidth;
+  float ssP = path.strokeWidth, seP = path.strokeWidth;
+  CanvasStrokeWidthAtFraction(path, frac, overrideLayerID, overrideTimeline,
+                              &ssN, &seN);
+  CanvasStrokeWidthAtFraction(path, fracPrev, overrideLayerID, overrideTimeline,
+                              &ssP, &seP);
+  if (fabsf(ssN - ssP) < 0.05f && fabsf(seN - seP) < 0.05f)
+    return;
+
+  KKBezierPath *gNow = CanvasPathMorphedAtFraction(path, frac);
+  KKBezierPath *gPrev = CanvasPathMorphedAtFraction(path, fracPrev);
+  if (gNow.count < 2 || gNow.contourCount != 1)
+    return;
+  BOOL closed = CanvasContourClosed(gNow, gNow.contourCount);
+  NSUInteger capN = CanvasMaxContourPolyCap(gNow, closed);
+  NSUInteger capP = CanvasMaxContourPolyCap(gPrev, closed);
+  if (capN == 0 || capP == 0)
+    return;
+  simd_float2 *ptsN = malloc(sizeof(simd_float2) * capN);
+  simd_float2 *ptsP = malloc(sizeof(simd_float2) * capP);
+  NSRange rN = [gNow contourRangeAtIndex:0];
+  NSRange rP = [gPrev contourRangeAtIndex:0];
+  NSUInteger nN = CanvasBuildContourPolyline(gNow, rN, closed, imageWidth,
+                                             imageHeight, ptsN, capN);
+  NSUInteger nP = CanvasBuildContourPolyline(gPrev, rP, closed, imageWidth,
+                                             imageHeight, ptsP, capP);
+  if (nN < 2 || nP < 2) {
+    free(ptsN);
+    free(ptsP);
+    return;
+  }
+  float Ln = CanvasContourArcLength(ptsN, nN, closed);
+  float Lp = CanvasContourArcLength(ptsP, nP, closed);
+  if (Ln < 1e-3f || Lp < 1e-3f) {
+    free(ptsN);
+    free(ptsP);
+    return;
+  }
+  float *cumN = malloc(sizeof(float) * (nN + 1));
+  float *cumP = malloc(sizeof(float) * (nP + 1));
+  cumN[0] = cumP[0] = 0.0f;
+  for (NSUInteger k = 1; k < nN; k++)
+    cumN[k] = cumN[k - 1] + simd_distance(ptsN[k], ptsN[k - 1]);
+  cumN[nN] = closed ? cumN[nN - 1] + simd_distance(ptsN[0], ptsN[nN - 1])
+                    : cumN[nN - 1];
+  for (NSUInteger k = 1; k < nP; k++)
+    cumP[k] = cumP[k - 1] + simd_distance(ptsP[k], ptsP[k - 1]);
+  cumP[nP] = closed ? cumP[nP - 1] + simd_distance(ptsP[0], ptsP[nP - 1])
+                    : cumP[nP - 1];
+
+  NSUInteger m = nN;
+  if (m > (NSUInteger)kCanvasWidthStripMaxSamples)
+    m = kCanvasWidthStripMaxSamples;
+  if (m < 2) {
+    free(ptsN);
+    free(ptsP);
+    free(cumN);
+    free(cumP);
+    return;
+  }
+  float pad = kCanvasAAPaddingPx;
+  float dsN = Ln / (float)(m * 4); // tangent probe step
+  float dsP = Lp / (float)(m * 4);
+  KKVertex2D nowV[2 * kCanvasWidthStripMaxSamples];
+  KKVertex2D prevV[2 * kCanvasWidthStripMaxSamples];
+  for (NSUInteger i = 0; i < m; i++) {
+    float f = (float)i / (float)(m - 1);
+    float aN = f * Ln, aP = f * Lp;
+    simd_float2 Cn = CanvasPolyPointAtArc(ptsN, cumN, nN, closed, aN);
+    simd_float2 Cp = CanvasPolyPointAtArc(ptsP, cumP, nP, closed, aP);
+    simd_float2 Cn2 =
+        CanvasPolyPointAtArc(ptsN, cumN, nN, closed, fminf(aN + dsN, Ln));
+    simd_float2 Cp2 =
+        CanvasPolyPointAtArc(ptsP, cumP, nP, closed, fminf(aP + dsP, Lp));
+    simd_float2 tn = Cn2 - Cn, tp = Cp2 - Cp;
+    float ln = simd_length(tn), lp = simd_length(tp);
+    simd_float2 un = ln > 1e-5f ? tn / ln : simd_make_float2(1.0f, 0.0f);
+    simd_float2 up = lp > 1e-5f ? tp / lp : simd_make_float2(1.0f, 0.0f);
+    simd_float2 perpN = simd_make_float2(-un.y, un.x);
+    simd_float2 perpP = simd_make_float2(-up.y, up.x);
+    float hwN = (ssN + (seN - ssN) * f) * 0.5f + pad;
+    float hwP = (ssP + (seP - ssP) * f) * 0.5f + pad;
+    nowV[2 * i] = (KKVertex2D){Cn + perpN * hwN, {0, 0}};
+    nowV[2 * i + 1] = (KKVertex2D){Cn - perpN * hwN, {0, 0}};
+    prevV[2 * i] = (KKVertex2D){Cp + perpP * hwP, {0, 0}};
+    prevV[2 * i + 1] = (KKVertex2D){Cp - perpP * hwP, {0, 0}};
+  }
+
+  simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
+  matrix_float4x4 mNow = CanvasLayerComposedMatAt(
+      layers, layerIndex, path, CanvasLayerObjectCenter(gNow), frac, scale,
+      tileShift, overrideLayerID, overrideTimeline);
+  matrix_float4x4 mPrev = CanvasLayerComposedMatAt(
+      layers, layerIndex, path, CanvasLayerObjectCenter(gPrev), fracPrev, scale,
+      tileShift, overrideLayerID, overrideTimeline);
+  [encoder setRenderPipelineState:morphVelPS];
+  [encoder setVertexBytes:&mNow
+                   length:sizeof(mNow)
+                  atIndex:KKVertexInputIndex_Transform];
+  [encoder setVertexBytes:&mPrev
+                   length:sizeof(mPrev)
+                  atIndex:KKVertexInputIndex_TransformPrev];
+  [encoder setVertexBytes:nowV
+                   length:sizeof(KKVertex2D) * 2 * m
+                  atIndex:KKVertexInputIndex_Vertices];
+  [encoder setVertexBytes:prevV
+                   length:sizeof(KKVertex2D) * 2 * m
+                  atIndex:KKVertexInputIndex_VerticesPrev];
+  [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+              vertexStart:0
+              vertexCount:2 * m];
+  free(ptsN);
+  free(ptsP);
+  free(cumN);
+  free(cumP);
+}
+
+void CanvasEncodeCornerFilletVelocity(
+    NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
+    NSInteger layerIndex, double frac, double fracPrev, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY,
+    id<MTLRenderPipelineState> morphVelPS, NSString *overrideLayerID,
+    KKTimeline *overrideTimeline) {
+  if (!encoder || !morphVelPS || layerIndex < 0 ||
+      layerIndex >= (NSInteger)layers.count || frac < 0.0 || fracPrev < 0.0)
+    return;
+  KKBezierPath *path = layers[(NSUInteger)layerIndex];
+  if (path.isGroup || path.hidden || path.isImage)
+    return;
+  KKBezierPath *nowRaw = CanvasPathMorphedAtFraction(path, frac);
+  KKBezierPath *prevRaw = CanvasPathMorphedAtFraction(path, fracPrev);
+  if (!nowRaw.hasCornerRadii)
+    return;
+  // Corners only move via morph / radius animation (CanvasPathMorphedAtFraction
+  // returns the SAME `path` when constant); pure transform is already covered
+  // by the bbox quad over the whole shape.
+  if (nowRaw == path && prevRaw == path)
+    return;
+
+  float aspect = imageHeight > 0 ? imageWidth / imageHeight : 1.0f;
+  enum { kMaxCorners = 64, kArcSamples = 10 };
+  CanvasFilletArc arcsN[kMaxCorners], arcsP[kMaxCorners];
+  NSUInteger nN = CanvasPathFilletArcs(nowRaw, aspect, arcsN, kMaxCorners);
+  NSUInteger nP = CanvasPathFilletArcs(prevRaw, aspect, arcsP, kMaxCorners);
+  // Mismatched counts = a corner crossed sharp<->rounded this shutter; skip the
+  // frame rather than correspond the wrong arcs.
+  if (nN == 0 || nN != nP)
+    return;
+
+  // Strip thickness: cover the stroke (its width straddles the fillet
+  // centreline) or a small band for a fill-only corner.
+  float ssN = path.strokeWidth, seN = path.strokeWidth;
+  if (CanvasStrokeEnabledAtFraction(path, frac, overrideLayerID,
+                                    overrideTimeline))
+    CanvasStrokeWidthAtFraction(path, frac, overrideLayerID, overrideTimeline,
+                                &ssN, &seN);
+  float thick = fmaxf(fmaxf(ssN, seN) * 0.5f, 6.0f) + 2.0f;
+
+  simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+  matrix_float4x4 mNow = CanvasLayerComposedMatAt(
+      layers, layerIndex, path, CanvasLayerObjectCenter(nowRaw), frac, scale,
+      tileShift, overrideLayerID, overrideTimeline);
+  matrix_float4x4 mPrev = CanvasLayerComposedMatAt(
+      layers, layerIndex, path, CanvasLayerObjectCenter(prevRaw), fracPrev,
+      scale, tileShift, overrideLayerID, overrideTimeline);
+  [encoder setRenderPipelineState:morphVelPS];
+  [encoder setVertexBytes:&mNow
+                   length:sizeof(mNow)
+                  atIndex:KKVertexInputIndex_Transform];
+  [encoder setVertexBytes:&mPrev
+                   length:sizeof(mPrev)
+                  atIndex:KKVertexInputIndex_TransformPrev];
+
+  // One thin strip per corner: each vertex carries its NOW fillet position and
+  // its PREV counterpart (same arc parameter), so the morph shader emits the
+  // per-vertex displacement of the rounding corner (radius + transform +
+  // morph).
+  for (NSUInteger c = 0; c < nN; c++) {
+    simd_float2 cpN[kArcSamples], cpP[kArcSamples];
+    for (int k = 0; k < kArcSamples; k++) {
+      float t = (float)k / (float)(kArcSamples - 1);
+      cpN[k] = (CanvasCubicEval(arcsN[c], t) - half) * scale;
+      cpP[k] = (CanvasCubicEval(arcsP[c], t) - half) * scale;
+    }
+    KKVertex2D nowV[2 * kArcSamples], prevV[2 * kArcSamples];
+    for (int k = 0; k < kArcSamples; k++) {
+      int k0 = k > 0 ? k - 1 : k, k1 = k < kArcSamples - 1 ? k + 1 : k;
+      simd_float2 tn = cpN[k1] - cpN[k0];
+      float ln = simd_length(tn);
+      simd_float2 un = ln > 1e-5f ? tn / ln : simd_make_float2(1.0f, 0.0f);
+      simd_float2 pn = simd_make_float2(-un.y, un.x);
+      simd_float2 tp = cpP[k1] - cpP[k0];
+      float lp = simd_length(tp);
+      simd_float2 up = lp > 1e-5f ? tp / lp : simd_make_float2(1.0f, 0.0f);
+      simd_float2 pp = simd_make_float2(-up.y, up.x);
+      nowV[2 * k] = (KKVertex2D){cpN[k] + pn * thick, {0, 0}};
+      nowV[2 * k + 1] = (KKVertex2D){cpN[k] - pn * thick, {0, 0}};
+      prevV[2 * k] = (KKVertex2D){cpP[k] + pp * thick, {0, 0}};
+      prevV[2 * k + 1] = (KKVertex2D){cpP[k] - pp * thick, {0, 0}};
+    }
+    [encoder setVertexBytes:nowV
+                     length:sizeof(nowV)
+                    atIndex:KKVertexInputIndex_Vertices];
+    [encoder setVertexBytes:prevV
+                     length:sizeof(prevV)
+                    atIndex:KKVertexInputIndex_VerticesPrev];
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                vertexStart:0
+                vertexCount:2 * kArcSamples];
+  }
+}
+
+void CanvasEncodeMarkerVelocity(
+    NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
+    NSInteger layerIndex, double frac, double fracPrev, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY,
+    id<MTLRenderPipelineState> morphVelPS, NSString *overrideLayerID,
+    KKTimeline *overrideTimeline) {
+  if (!encoder || !morphVelPS)
+    return;
+  CanvasMarkerTip tips[2];
+  int nt = CanvasComputeMarkerTips(layers, layerIndex, frac, fracPrev,
+                                   imageWidth, imageHeight, overrideLayerID,
+                                   overrideTimeline, tips);
+  if (nt <= 0)
+    return;
+
+  simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
+  KKBezierPath *path = layers[(NSUInteger)layerIndex];
+  KKBezierPath *geom = CanvasPathMorphedAtFraction(path, frac);
+  simd_float2 center = CanvasLayerObjectCenter(geom);
+  matrix_float4x4 mNow =
+      CanvasLayerComposedMatAt(layers, layerIndex, path, center, frac, scale,
+                               tileShift, overrideLayerID, overrideTimeline);
+  matrix_float4x4 mPrev = CanvasLayerComposedMatAt(
+      layers, layerIndex, path, center, fracPrev, scale, tileShift,
+      overrideLayerID, overrideTimeline);
+  [encoder setRenderPipelineState:morphVelPS];
+  [encoder setVertexBytes:&mNow
+                   length:sizeof(mNow)
+                  atIndex:KKVertexInputIndex_Transform];
+  [encoder setVertexBytes:&mPrev
+                   length:sizeof(mPrev)
+                  atIndex:KKVertexInputIndex_TransformPrev];
+
+  // A box at the marker's now-tip carries its now positions; the SAME box at
+  // the prev-tip its prev positions - so the morph shader emits the tip's
+  // translation (+ any transform), smearing the arrowhead / dot along its
+  // travel.
+  for (int k = 0; k < nt; k++) {
+    float h = tips[k].halfObj;
+    simd_float2 N = tips[k].nowTipObj, P = tips[k].prevTipObj;
+    KKVertex2D nowV[4] = {
+        {N + simd_make_float2(h, -h), {0, 0}},
+        {N + simd_make_float2(-h, -h), {0, 0}},
+        {N + simd_make_float2(h, h), {0, 0}},
+        {N + simd_make_float2(-h, h), {0, 0}},
+    };
+    KKVertex2D prevV[4] = {
+        {P + simd_make_float2(h, -h), {0, 0}},
+        {P + simd_make_float2(-h, -h), {0, 0}},
+        {P + simd_make_float2(h, h), {0, 0}},
+        {P + simd_make_float2(-h, h), {0, 0}},
+    };
+    [encoder setVertexBytes:nowV
+                     length:sizeof(nowV)
+                    atIndex:KKVertexInputIndex_Vertices];
+    [encoder setVertexBytes:prevV
+                     length:sizeof(prevV)
+                    atIndex:KKVertexInputIndex_VerticesPrev];
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                vertexStart:0
+                vertexCount:4];
+  }
+}
+
+// One ready-to-draw image layer: its full transform, verts, opacity, texture,
+// and its 3D centre depth (for back-to-front sorting). `order` is the original
+// layer-stack draw order (bottom-first), the tiebreak for equal depth so flat /
+// untilted layers keep strict layer-list stacking.
+typedef struct {
+  matrix_float4x4 matrix;
+  KKVertex2D quad[4];
+  float opacity;
+  __unsafe_unretained id<MTLTexture> tex;
+  float depth;
+  NSInteger order;
+  uint8_t tintMode;     // 0 none, 1 solid fill tint, 2 gradient fill tint
+  simd_float4 tintRGBA; // solid: linear fill RGB + amount (0..1) in .a
+  KKGradientTintParams gradTint; // gradient: UV-space params + amount
+  simd_float3 gradLUT[KK_GRADIENT_LUT_SIZE]; // gradient: sRGB colour ramp
+} CanvasDrawItem;
+
+void CanvasEncodeImageLayers(
+    NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
+    id<MTLDevice> device,
+    NSMutableDictionary<NSString *, id<MTLTexture>> *cache, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY, double frac,
+    NSString *overrideLayerID, KKTimeline *overrideTimeline,
+    id<MTLRenderPipelineState> imagePS, id<MTLRenderPipelineState> tintPS,
+    id<MTLRenderPipelineState> gradTintPS) {
+  if (!encoder || !device || layers.count == 0)
+    return;
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
+  simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+
+  // Build pass: gather each drawable layer's transform + verts + 3D centre
+  // depth, in bottom-first stack order.
+  CanvasDrawItem *items = malloc(sizeof(CanvasDrawItem) * layers.count);
+  NSInteger count = 0;
+  for (NSInteger i = (NSInteger)layers.count - 1; i >= 0; i--) {
+    KKBezierPath *path = layers[i];
+    if (!path.isImage || path.hidden || path.isGroup || !path.imagePath.length)
+      continue;
+    if (![path.shape isKindOfClass:[KKRectShape class]])
+      continue;
+
+    id<MTLTexture> tex =
+        CanvasImageTextureForPath(path.imagePath, device, cache);
+    if (!tex)
+      continue;
+
+    KKRectShape *rect = (KKRectShape *)path.shape;
+    // Negative frac = caller wants the static rect (no transform). The selected
+    // layer (overrideLayerID) reads the live popover timeline so a mini-viewer
+    // handle drag previews before it persists into the layer's animationJSON.
+    CanvasLayerTransform t;
+    if (frac < 0.0)
+      t = CanvasLayerTransformIdentity();
+    else if (overrideTimeline && overrideLayerID.length &&
+             [path.layerID isEqualToString:overrideLayerID])
+      t = CanvasLayerTransformFromTimeline(overrideTimeline, frac);
+    else
+      t = CanvasLayerTransformAtFraction(path, frac);
+    float cx = (rect.min.x + rect.max.x) * 0.5f;
+    float cy = (rect.min.y + rect.max.y) * 0.5f;
+    // Compose the layer's full 3D model with each ancestor group's so a parent
+    // group moves/scales/spins/tilts its members as a rigid unit. RAW
+    // rect-corner verts go to the shader; ALL of
+    // scale/rotation(X,Y,Z)/position/perspective live in the matrix so the axes
+    // compose correctly even when combined.
+    CanvasGroupXform groups[kCanvasGroupXformCap];
+    NSInteger ng =
+        CanvasBuildGroupXforms(layers, (NSUInteger)i, frac, overrideLayerID,
+                               overrideTimeline, groups, kCanvasGroupXformCap);
+    matrix_float4x4 m = CanvasComposedModelMatrix(t, simd_make_float2(cx, cy),
+                                                  groups, ng, scale, tileShift);
+    // Group opacity multiplies the member's (a 40% group halves a 50% member).
+    float opacity = t.opacity;
+    for (NSInteger k = 0; k < ng; k++)
+      opacity *= groups[k].t.opacity;
+    // 3D centre depth: the layer's own rotation pivots about its centre (so the
+    // centre's depth comes from the GROUP's tilt). Use the RAW view-space z
+    // (cClip.z, which the perspective passes through unchanged) - comparable
+    // across layers, whereas z/w isn't now that camD scales per layer.
+    simd_float2 cPx = (simd_make_float2(cx, cy) - half) * scale;
+    simd_float4 cClip = simd_mul(m, simd_make_float4(cPx.x, cPx.y, 0.0f, 1.0f));
+    float depth = cClip.z;
+
+    items[count].matrix = m;
+    items[count].quad[0] = (KKVertex2D){
+        (simd_make_float2(rect.max.x, rect.min.y) - half) * scale, {1, 1}};
+    items[count].quad[1] = (KKVertex2D){
+        (simd_make_float2(rect.min.x, rect.min.y) - half) * scale, {0, 1}};
+    items[count].quad[2] = (KKVertex2D){
+        (simd_make_float2(rect.max.x, rect.max.y) - half) * scale, {1, 0}};
+    items[count].quad[3] = (KKVertex2D){
+        (simd_make_float2(rect.min.x, rect.max.y) - half) * scale, {0, 0}};
+    items[count].opacity = opacity;
+    items[count].tex = tex;
+    items[count].depth = depth;
+    items[count].order = count;
+    // Fill on an IMAGE layer = tint: colorize the image toward the fill colour
+    // by the Fill Amount (lane-gated like the render's fill). frac < 0 (static
+    // preview) reads frame 0. Solid mode tints toward the flat colour; Gradient
+    // mode tints toward the gradient sampled in the image's UV space.
+    items[count].tintMode = 0;
+    items[count].tintRGBA = simd_make_float4(0, 0, 0, 0);
+    double efrac = frac < 0.0 ? 0.0 : frac;
+    if (CanvasFillEnabledAtFraction(path, efrac, overrideLayerID,
+                                    overrideTimeline)) {
+      // A non-Solid Fill Style on an image REPLACES it with the hachure pattern
+      // (drawn in the fill pass, like a shape fill) - so skip drawing the
+      // image. A Solid fill tints the image here.
+      CanvasFillStyle ifs = CanvasFillStyleAtFraction(
+          path, efrac, overrideLayerID, overrideTimeline);
+      if (ifs.style != 0)
+        continue;
+      float amt = CanvasFillTintAtFraction(path, efrac, overrideLayerID,
+                                           overrideTimeline);
+      if (amt > 0.001f) {
+        KKColorLanesValue cv = CanvasFillColorAtFraction(
+            path, efrac, overrideLayerID, overrideTimeline);
+        if (cv.mode == KKColorModeGradient) {
+          simd_float2 dir =
+              simd_make_float2(sinf(cv.gradientAngle), cosf(cv.gradientAngle));
+          items[count].gradTint.dir = dir;
+          // UV-space half extent along `dir` (the 0..1 UV box, half 0.5/axis).
+          items[count].gradTint.halfExtent =
+              fmaxf(0.5f * fabsf(dir.x) + 0.5f * fabsf(dir.y), 1.0e-3f);
+          items[count].gradTint.type = cv.gradientType;
+          items[count].gradTint.amount = amt;
+          items[count].gradTint.opacity = opacity;
+          memcpy(items[count].gradLUT, cv.gradientLUT, sizeof(cv.gradientLUT));
+          items[count].tintMode = 2;
+        } else {
+          simd_float3 fc = cv.solidColor;
+          items[count].tintRGBA = simd_make_float4(
+              powf(fc.x, 2.2f), powf(fc.y, 2.2f), powf(fc.z, 2.2f), amt);
+          items[count].tintMode = 1;
+        }
+      }
+    }
+    count++;
+  }
+
+  // Back-to-front by 3D depth so a layer rotated physically in front (e.g. a
+  // group tilted past edge-on) draws on top. Equal depth (flat / untilted
+  // layers all at z=0) falls back to layer-stack order, so normal 2D stacking
+  // is unchanged. Painter's order - correct for the non-intersecting image
+  // planes Canvas composites (a depth buffer would be needed for intersecting
+  // quads).
+  qsort_b(items, (size_t)count, sizeof(CanvasDrawItem),
+          ^int(const void *a, const void *b) {
+            const CanvasDrawItem *ia = a, *ib = b;
+            if (ia->depth > ib->depth)
+              return -1;
+            if (ia->depth < ib->depth)
+              return 1;
+            return ia->order < ib->order ? -1 : (ia->order > ib->order ? 1 : 0);
+          });
+
+  for (NSInteger j = 0; j < count; j++) {
+    CanvasDrawItem *it = &items[j];
+    // A tinted image uses a tint fragment (lerp toward the fill colour /
+    // gradient by the amount); a plain image the opacity fragment. Set the
+    // pipeline per item so they interleave by depth. A missing tint pipeline ->
+    // render plain.
+    if (it->tintMode == 2 && gradTintPS) {
+      [encoder setRenderPipelineState:gradTintPS];
+      [encoder setFragmentBytes:it->gradLUT
+                         length:sizeof(it->gradLUT)
+                        atIndex:0];
+      [encoder setFragmentBytes:&it->gradTint
+                         length:sizeof(it->gradTint)
+                        atIndex:1];
+    } else if (it->tintMode == 1 && tintPS) {
+      [encoder setRenderPipelineState:tintPS];
+      [encoder setFragmentBytes:&it->tintRGBA
+                         length:sizeof(it->tintRGBA)
+                        atIndex:0];
+      [encoder setFragmentBytes:&it->opacity
+                         length:sizeof(it->opacity)
+                        atIndex:1];
+    } else {
+      [encoder setRenderPipelineState:imagePS];
+      [encoder setFragmentBytes:&it->opacity
+                         length:sizeof(it->opacity)
+                        atIndex:0];
+    }
+    [encoder setVertexBytes:&it->matrix
+                     length:sizeof(it->matrix)
+                    atIndex:KKVertexInputIndex_Transform];
+    [encoder setVertexBytes:it->quad
+                     length:sizeof(it->quad)
+                    atIndex:KKVertexInputIndex_Vertices];
+    [encoder setFragmentTexture:it->tex atIndex:KKTextureIndex_InputImage];
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                vertexStart:0
+                vertexCount:4];
+  }
+  free(items);
+}
+
+simd_float2 CanvasLayerObjectCenter(KKBezierPath *path) {
+  if (!path || path.isGroup)
+    return simd_make_float2(0.5f, 0.5f); // groups pivot on their stored Anchor
+  if ([path.shape isKindOfClass:[KKRectShape class]]) {
+    KKRectShape *r = (KKRectShape *)path.shape;
+    return (r.min + r.max) * 0.5f;
+  }
+  if ([path.shape isKindOfClass:[KKEllipseShape class]]) {
+    KKEllipseShape *e = (KKEllipseShape *)path.shape;
+    return (e.min + e.max) * 0.5f;
+  }
+  if (path.count == 0)
+    return simd_make_float2(0.5f, 0.5f);
+  KKBezierPoint p0 = [path pointAtIndex:0];
+  simd_float2 lo = simd_make_float2(p0.x, p0.y), hi = lo;
+  for (NSUInteger i = 1; i < path.count; i++) {
+    KKBezierPoint p = [path pointAtIndex:i];
+    lo = simd_min(lo, simd_make_float2(p.x, p.y));
+    hi = simd_max(hi, simd_make_float2(p.x, p.y));
+  }
+  return (lo + hi) * 0.5f;
+}
+
+CanvasLayerDrawKey CanvasLayerComposedDrawKey(
+    NSArray<KKBezierPath *> *layers, NSInteger i, double frac, float imageWidth,
+    float imageHeight, float tileShiftX, float tileShiftY,
+    NSString *overrideLayerID, KKTimeline *overrideTimeline) {
+  CanvasLayerDrawKey key = {0.0f, 1.0f};
+  if (i < 0 || i >= (NSInteger)layers.count)
+    return key;
+  KKBezierPath *path = layers[i];
+  CanvasLayerTransform t;
+  if (frac < 0.0)
+    t = CanvasLayerTransformIdentity();
+  else if (overrideTimeline && overrideLayerID.length &&
+           [path.layerID isEqualToString:overrideLayerID])
+    t = CanvasLayerTransformFromTimeline(overrideTimeline, frac);
+  else
+    t = CanvasLayerTransformAtFraction(path, frac);
+  simd_float2 center = CanvasLayerObjectCenter(path);
+  CanvasGroupXform groups[kCanvasGroupXformCap];
+  NSInteger ng =
+      CanvasBuildGroupXforms(layers, (NSUInteger)i, frac, overrideLayerID,
+                             overrideTimeline, groups, kCanvasGroupXformCap);
+  simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
+  matrix_float4x4 m =
+      CanvasComposedModelMatrix(t, center, groups, ng, scale, tileShift);
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+  simd_float2 cPx = (center - half) * scale;
+  // Depth = view-space z of the centre (camD passes it through), comparable
+  // across layers - same metric the image pass sorts by.
+  float z0 = simd_mul(m, simd_make_float4(cPx.x, cPx.y, 0.0f, 1.0f)).z;
+  // Facing = how depth changes when the centre is pushed +1 along the layer's
+  // own normal. Front-facing decks push further BACK (z increases); once tilted
+  // past edge-on the normal points away, so +normal pulls FORWARD (z drops) -
+  // the sign is exactly cos(tilt). Lets near-coincident layers flip front/back
+  // at the horizon without depending on their hair's-width depth gap.
+  float z1 = simd_mul(m, simd_make_float4(cPx.x, cPx.y, 1.0f, 1.0f)).z;
+  key.depth = z0;
+  key.facing = z1 - z0;
+  return key;
+}
+
+void CanvasOrderDrawablesBackToFront(const NSInteger *indices,
+                                     const CanvasLayerDrawKey *keys,
+                                     NSInteger count, float tol,
+                                     NSInteger *outOrder) {
+  if (count <= 0)
+    return;
+  float t = tol > 1e-4f ? tol : 1e-4f;
+  // `outOrder` works as POSITIONS (0..count-1 into indices/keys) until the
+  // final pass maps them back to layer indices.
+  for (NSInteger k = 0; k < count; k++)
+    outOrder[k] = k;
+  // Base order: real depth, back (higher z) first; stable tie-break by stack
+  // index so a deck's members start in list order before the facing reorder.
+  qsort_b(outOrder, (size_t)count, sizeof(NSInteger),
+          ^int(const void *a, const void *b) {
+            NSInteger pa = *(const NSInteger *)a, pb = *(const NSInteger *)b;
+            if (keys[pa].depth > keys[pb].depth)
+              return -1;
+            if (keys[pa].depth < keys[pb].depth)
+              return 1;
+            NSInteger ia = indices[pa], ib = indices[pb];
+            return ia < ib ? -1 : (ia > ib ? 1 : 0);
+          });
+  // Walk the depth-sorted list; any run of consecutive layers closer than `tol`
+  // to their neighbour is one near-coincident "deck". Relative gaps (not
+  // absolute buckets) so a deck drifting in depth never straddles a boundary ->
+  // no flicker. Reorder each deck by stack position, REVERSED when it's
+  // back-facing (tilted past edge-on) - the clean two-sided front/back flip at
+  // the horizon.
+  NSInteger s = 0;
+  while (s < count) {
+    NSInteger e = s + 1;
+    while (e < count &&
+           fabsf(keys[outOrder[e]].depth - keys[outOrder[e - 1]].depth) < t)
+      e++;
+    if (e - s > 1) {
+      // Each layer ordered by ITS OWN facing, as a stable total order: the
+      // back-facing block first (drawn behind), then the front-facing block;
+      // within each, facing-flipped stack. A deck of all-one-facing (the normal
+      // rotation case) is unchanged; a MIXED-facing deck - which only happens
+      // transiently when a tilted deck goes coplanar with other flat layers at
+      // ~180 - can't flicker, because the order no longer depends on which
+      // member happened to sort first.
+      qsort_b(outOrder + s, (size_t)(e - s), sizeof(NSInteger),
+              ^int(const void *a, const void *b) {
+                NSInteger pa = *(const NSInteger *)a,
+                          pb = *(const NSInteger *)b;
+                BOOL backA = keys[pa].facing < 0.0f;
+                BOOL backB = keys[pb].facing < 0.0f;
+                if (backA != backB)
+                  return backA ? -1 : 1; // back-facing block drawn first
+                NSInteger ia = indices[pa], ib = indices[pb];
+                if (ia == ib)
+                  return 0;
+                BOOL aFirst = backA ? (ia < ib) : (ia > ib);
+                return aFirst ? -1 : 1;
+              });
+    }
+    s = e;
+  }
+  for (NSInteger k = 0; k < count; k++)
+    outOrder[k] = indices[outOrder[k]];
+}
+
+// Encode ONE vector layer's stroke (skipping image / group / hidden /
+// stroke-off layers via early return). Pulled out of the per-layer loop so
+// CanvasEncodeVectorLayers stays a thin walk; the context bundles the shared
+// render inputs. The objects are __unsafe_unretained - the struct lives only
+// for the synchronous call and the caller retains them throughout.
+typedef struct {
+  __unsafe_unretained NSArray<KKBezierPath *> *layers;
+  __unsafe_unretained id<MTLRenderCommandEncoder> encoder;
+  __unsafe_unretained id<MTLDevice> device;
+  float imageWidth, imageHeight;
+  simd_float2 scale, tileShift;
+  double frac;
+  __unsafe_unretained NSString *overrideLayerID;
+  __unsafe_unretained KKTimeline *overrideTimeline;
+  float strokeScale;
+  double elapsedSec;
+  // Shutter-start fraction for the "Fast" motion-blur reveal fade: when >= 0 a
+  // stroked layer whose draw-on reveal moved between `mbPrevFrac` and `frac`
+  // fades the just-revealed segment (analytic per-pixel reveal blur, no extra
+  // render). < 0 = no fade (normal render).
+  double mbPrevFrac;
+  __unsafe_unretained id<MTLRenderPipelineState> solidPS, gradientPS, dashPS;
+} CanvasVectorEncodeCtx;
+
+static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
+                                       NSInteger i) {
+  NSArray<KKBezierPath *> *layers = ctx->layers;
+  id<MTLRenderCommandEncoder> encoder = ctx->encoder;
+  id<MTLDevice> device = ctx->device;
+  float imageWidth = ctx->imageWidth, imageHeight = ctx->imageHeight;
+  simd_float2 scale = ctx->scale, tileShift = ctx->tileShift;
+  double frac = ctx->frac;
+  // Fraction to EVALUATE lanes at (a static preview, frac < 0, reads frame 0).
+  // `frac < 0.0` itself stays the static-preview branch test elsewhere.
+  double evalFrac = frac < 0.0 ? 0.0 : frac;
+  NSString *overrideLayerID = ctx->overrideLayerID;
+  KKTimeline *overrideTimeline = ctx->overrideTimeline;
+  float strokeScale = ctx->strokeScale;
+  double elapsedSec = ctx->elapsedSec;
+  id<MTLRenderPipelineState> solidPS = ctx->solidPS,
+                             gradientPS = ctx->gradientPS, dashPS = ctx->dashPS;
+  KKBezierPath *path = layers[i];
+  if (path.isImage || path.isGroup || path.hidden)
+    return;
+  if (!CanvasStrokeEnabledAtFraction(path, evalFrac, overrideLayerID,
+                                     overrideTimeline))
+    return;
+  // Effective Start/End widths from the Stroke Width lane at this fraction
+  // (px), falling back to the flat strokeWidth/endWidth. The stroke tapers
+  // Start -> End along each contour; a static preview (frac < 0) reads frac
+  // 0.
+  float strokeStart = path.strokeWidth;
+  float strokeEnd = path.strokeWidth;
+  CanvasStrokeWidthAtFraction(path, evalFrac, overrideLayerID, overrideTimeline,
+                              &strokeStart, &strokeEnd);
+  if (path.count < 2 || (strokeStart <= 0.0f && strokeEnd <= 0.0f))
+    return;
+
+  // Geometry AT this fraction: the base points for a constant path, or the
+  // interpolated shape between the Points keyposes' snapshots for an animated
+  // one. (Static-rect preview, frac < 0, uses the base.)
+  KKBezierPath *geom =
+      (frac < 0.0) ? path : CanvasPathMorphedAtFraction(path, frac);
+  if (geom.count < 2)
+    return;
+  // Round any per-anchor corners into the display fillet before stroking
+  // (aspect-correct; no-op when nothing is rounded).
+  if (geom.hasCornerRadii)
+    geom = CanvasPathByExpandingCorners(
+        geom, imageHeight > 0 ? (float)imageWidth / (float)imageHeight : 1.0f);
+
+  // Sketch (hand-drawn) jitter: replace the geometry with a roughened copy so
+  // the stroke wobbles like a pen drawing. Driven by the Sketch lanes; the seed
+  // is constant so the wobble is stable across frames. Applied AFTER the corner
+  // fillet so rounded corners roughen too. Uses the effective stroke width to
+  // scale the jitter.
+  if (CanvasSketchEnabledAtFraction(path, evalFrac, overrideLayerID,
+                                    overrideTimeline)) {
+    CanvasSketchParams sp = CanvasSketchParamsAtFraction(
+        path, evalFrac, overrideLayerID, overrideTimeline);
+    if (sp.roughness > 0.0001f)
+      geom = CanvasSketchPath(geom, sp.roughness, sp.bowing, sp.seed,
+                              sp.strokes, fmaxf(strokeStart, strokeEnd),
+                              imageWidth, imageHeight);
+  }
+
+  uint8_t lineCap = path.lineCap, lineJoin = path.lineJoin;
+  CanvasStrokeCapJoinAtFraction(path, evalFrac, overrideLayerID,
+                                overrideTimeline, &lineCap, &lineJoin);
+  // Draw-on reveal + endpoint-marker animation (the line shows [lineStart,
+  // lineEnd] rotated by offset; the markers ride / grow per type). Nothing
+  // visible at this fraction (raw span empty) -> skip the stroke.
+  CanvasDrawOnRender dor = CanvasResolveStrokeDrawOn(
+      path, geom, evalFrac, overrideLayerID, overrideTimeline, strokeStart,
+      strokeEnd, strokeScale, imageWidth, imageHeight);
+  if (dor.collapsed)
+    return;
+  // Dash pattern (Solid / Dashed / Dotted). The dash metrics are absolute px,
+  // so they scale with the render like the widths (strokeScale handles the
+  // thumbnail downscale).
+  CanvasStrokeStyle ss = CanvasStrokeStyleAtFraction(
+      path, evalFrac, overrideLayerID, overrideTimeline);
+  float dashLen = ss.dashLength * strokeScale;
+  float dashGap = ss.dashGap * strokeScale;
+  float dotGap = ss.dotGap * strokeScale;
+  // Dashed (style 1) draws the SOLID stroke geometry (correct corners) and
+  // masks the dash pattern by per-vertex arc length in KKStrokeDashFragment, so
+  // it needs the dash pipeline + an arc buffer. Falls back to a plain solid
+  // stroke if the dash pipeline is unavailable.
+  BOOL dashed = (ss.style == 1) && dashPS != nil;
+  BOOL dotted = (ss.style == 2);
+
+  // Draw-on motion-blur REVEAL FADE (analytic): if the reveal window's edges
+  // moved over the shutter [mbPrevFrac, frac], fade the just-revealed segment
+  // to its tip - the closed-form time-integral of a linear reveal. This blurs a
+  // curving draw-on perfectly (it rides the actual stroke geometry) in ONE
+  // render, where a velocity gather can't follow the curve. Needs the
+  // per-vertex arc buffer (like dashes); non-spinning single windows only
+  // (offset wraps the arc, which the simple ramp can't span). Fade values are
+  // per-call fragment uniforms, NOT part of the tessellation.
+  float revealLeadEnd = 0.0f, revealLeadLen = 0.0f, revealTrailLen = 0.0f;
+  BOOL revealActive = NO;
+  if (ctx->mbPrevFrac >= 0.0 && dor.active && !dotted &&
+      dor.offset <= 0.0001f && dashPS != nil) {
+    CanvasDrawOnRender dorP = CanvasResolveStrokeDrawOn(
+        path, geom, ctx->mbPrevFrac, overrideLayerID, overrideTimeline,
+        strokeStart, strokeEnd, strokeScale, imageWidth, imageHeight);
+    if (!dorP.collapsed) {
+      float Lpx = CanvasContourTotalArc(geom, imageWidth, imageHeight);
+      float visLen = fmaxf((dor.lineEnd - dor.lineStart) * Lpx, 0.0f);
+      // Local-arc tip (the tessellator pulls the window back behind markers).
+      float localMax =
+          fmaxf(visLen - dor.startPullback - dor.endPullback, 0.0f);
+      float leadAdv = fminf(fabsf(dor.lineEnd - dorP.lineEnd) * Lpx, localMax);
+      float trailAdv =
+          fminf(fabsf(dor.lineStart - dorP.lineStart) * Lpx, localMax);
+      if (leadAdv > 0.5f || trailAdv > 0.5f) {
+        revealActive = YES;
+        revealLeadEnd = localMax;
+        revealLeadLen = leadAdv;
+        revealTrailLen = trailAdv;
+      }
+    }
+  }
+  // The reveal fade needs the same per-vertex arc buffer the dash mask uses.
+  BOOL needArc = dashed || revealActive;
+  NSUInteger cap =
+      dotted ? CanvasDottedStrokeVertexCapacity(geom, strokeStart * strokeScale,
+                                                dotGap, imageWidth, imageHeight)
+             : CanvasStrokeVertexCapacity(geom);
+  // A draw-on reveal can cut each contour into two pieces (an offset wrap),
+  // each with its own pair of caps - budget two extra round-cap fans per
+  // contour (multi-contour draw-on reveals every branch).
+  if (dor.active && !dotted)
+    cap += 128 * geom.contourCount;
+  if (cap == 0)
+    return;
+  // Per-call transform + opacity + colour (cheap; NOT part of the cached
+  // tessellation, which is invariant to them).
+  CanvasLayerTransform t;
+  if (frac < 0.0)
+    t = CanvasLayerTransformIdentity();
+  else if (overrideTimeline && overrideLayerID.length &&
+           [path.layerID isEqualToString:overrideLayerID])
+    t = CanvasLayerTransformFromTimeline(overrideTimeline, frac);
+  else
+    t = CanvasLayerTransformAtFraction(path, frac);
+  CanvasGroupXform groups[kCanvasGroupXformCap];
+  NSInteger ng =
+      CanvasBuildGroupXforms(layers, (NSUInteger)i, frac, overrideLayerID,
+                             overrideTimeline, groups, kCanvasGroupXformCap);
+  matrix_float4x4 m = CanvasComposedModelMatrix(
+      t, CanvasLayerObjectCenter(geom), groups, ng, scale, tileShift);
+  float opacity = t.opacity * path.opacity;
+  for (NSInteger k = 0; k < ng; k++)
+    opacity *= groups[k].t.opacity;
+  KKColorLanesValue cv = CanvasStrokeColorAtFraction(
+      path, evalFrac, overrideLayerID, overrideTimeline);
+  BOOL useGradient = (cv.mode == KKColorModeGradient) && gradientPS != nil;
+  simd_float3 solid = cv.solidColor;
+  simd_float4 color = simd_make_float4(powf(solid.x, 2.2f), powf(solid.y, 2.2f),
+                                       powf(solid.z, 2.2f), opacity);
+
+  // Marching-ants phase (px): elapsed seconds x speed (cycles/sec) x the
+  // pattern's pixel period. Dash phase is a fragment uniform (the strip is the
+  // same), so it stays OUT of the cache key; dotted phase moves the discs, so
+  // it is keyed below.
+  float dotsCycle = strokeStart * strokeScale + dotGap;
+  float dashCycle = fmaxf(dashLen + dashGap, 1.0f);
+  float dotPhase =
+      (frac < 0.0) ? 0.0f : (float)(elapsedSec * ss.marchSpeed) * dotsCycle;
+  float dashPhase =
+      (frac < 0.0) ? 0.0f : (float)(elapsedSec * ss.marchSpeed) * dashCycle;
+
+  // Cache key: the geometry bytes + every scalar that affects the tessellated
+  // verts / arc / markers. Excludes the transform, opacity, solid colour and
+  // dash phase (applied per-call as uniforms), so a moving / static / solid
+  // layer reuses the tessellation across MB samples + frames.
+  NSMutableData *keyData = [[geom dataRepresentation] mutableCopy];
+  struct {
+    float strokeStart, strokeEnd, strokeScale, imageWidth, imageHeight;
+    uint32_t lineCap, lineJoin, dotted, dashed, useGradient, contourCount;
+    float lineStart, lineEnd, offset, startPullback, endPullback;
+    uint32_t startMarker, endMarker;
+    float sMarkerPx, eMarkerPx, markerStartTrim, markerEndTrim;
+    float dotGap, dotPhase, gradAngle;
+    uint32_t gradType, needArc;
+  } key = {0};
+  key.needArc =
+      needArc ? 1u : 0u; // arc buffer presence (dashed OR reveal fade)
+  key.strokeStart = strokeStart;
+  key.strokeEnd = strokeEnd;
+  key.strokeScale = strokeScale;
+  key.imageWidth = imageWidth;
+  key.imageHeight = imageHeight;
+  key.lineCap = lineCap;
+  key.lineJoin = lineJoin;
+  key.dotted = dotted ? 1 : 0;
+  key.dashed = dashed ? 1 : 0;
+  key.useGradient = useGradient ? 1 : 0;
+  key.contourCount = (uint32_t)geom.contourCount;
+  key.lineStart = dor.lineStart;
+  key.lineEnd = dor.lineEnd;
+  key.offset = dor.offset;
+  key.startPullback = dor.startPullback;
+  key.endPullback = dor.endPullback;
+  key.startMarker = dor.startMarker;
+  key.endMarker = dor.endMarker;
+  key.sMarkerPx = dor.sMarkerPx;
+  key.eMarkerPx = dor.eMarkerPx;
+  key.markerStartTrim = dor.markerStartTrim;
+  key.markerEndTrim = dor.markerEndTrim;
+  key.dotGap = dotGap;
+  key.dotPhase = dotted ? dotPhase : 0.0f;
+  key.gradAngle = useGradient ? cv.gradientAngle : 0.0f;
+  key.gradType = useGradient ? (uint32_t)cv.gradientType : 0u;
+  [keyData appendBytes:&key length:sizeof(key)];
+
+  NSCache<NSData *, CanvasStrokeTess *> *tessCache = CanvasStrokeTessCache();
+  CanvasStrokeTess *entry = [tessCache objectForKey:keyData];
+  if (!entry) {
+    // MISS: tessellate the strip (+ dash arc + markers), bake the gradient
+    // coordinates, upload to GPU buffers, then cache for reuse across samples.
+    KKVertex2D *verts = malloc(sizeof(KKVertex2D) * cap);
+    float *arc = needArc ? malloc(sizeof(float) * cap) : NULL;
+    NSUInteger vc;
+    if (dotted) {
+      vc = CanvasTessellateDottedStroke(
+          geom, strokeStart * strokeScale, strokeEnd * strokeScale, imageWidth,
+          imageHeight, dotGap, dotPhase, dor.lineStart, dor.lineEnd, dor.offset,
+          verts, cap);
+    } else {
+      // Solid + dashed share this strip (dashed masks the pattern in the
+      // fragment). Draw-on extracts the visible arc window, pulling the stroke
+      // back behind any endpoint markers.
+      vc = CanvasTessellateStrokeDrawOn(
+          geom, strokeStart * strokeScale, strokeEnd * strokeScale, imageWidth,
+          imageHeight, lineCap, lineJoin, dor.lineStart, dor.lineEnd,
+          dor.offset, dor.startPullback, dor.endPullback, verts, cap, arc);
+    }
+    if (vc < 4) {
+      free(verts);
+      free(arc);
+      return;
+    }
+    // Endpoint markers (single open contour only): share the stroke's colour +
+    // gradient, baked with the same fill.
+    KKVertex2D *mverts = NULL;
+    NSUInteger mvc = 0;
+    if ((dor.startMarker != 0 || dor.endMarker != 0) &&
+        geom.contourCount == 1) {
+      NSUInteger mcap = CanvasMarkerVertexCapacity();
+      mverts = malloc(sizeof(KKVertex2D) * mcap);
+      mvc = CanvasTessellateMarkers(
+          geom, imageWidth, imageHeight, dor.startMarker, dor.endMarker,
+          dor.sMarkerPx, dor.eMarkerPx, strokeStart * strokeScale,
+          strokeEnd * strokeScale, dor.markerStartTrim, dor.markerEndTrim,
+          mverts, mcap);
+    }
+    if (useGradient) {
+      CanvasGradientFill gfill =
+          CanvasComputeGradientFill(geom, imageWidth, imageHeight, strokeStart,
+                                    strokeEnd, strokeScale, cv, mverts, mvc);
+      CanvasApplyGradientFill(verts, vc, gfill);
+      if (mvc >= 3)
+        CanvasApplyGradientFill(mverts, mvc, gfill);
+    }
+    entry = [CanvasStrokeTess new];
+    entry.vc = vc;
+    entry.vbuf = [device newBufferWithBytes:verts
+                                     length:sizeof(KKVertex2D) * vc
+                                    options:MTLResourceStorageModeShared];
+    if (needArc)
+      entry.arcBuf = [device newBufferWithBytes:arc
+                                         length:sizeof(float) * vc
+                                        options:MTLResourceStorageModeShared];
+    entry.mvc = mvc;
+    if (mvc >= 3)
+      entry.mbuf = [device newBufferWithBytes:mverts
+                                       length:sizeof(KKVertex2D) * mvc
+                                      options:MTLResourceStorageModeShared];
+    free(verts);
+    free(arc);
+    free(mverts);
+    [tessCache setObject:entry forKey:keyData];
+  }
+
+  // Per-call draw using the (possibly cached) buffers. The transform matrix +
+  // colour/dash uniforms are set here, so only the GEOMETRY is reused.
+  id<MTLRenderPipelineState> ps =
+      needArc ? dashPS : (useGradient ? gradientPS : solidPS);
+  [encoder setRenderPipelineState:ps];
+  [encoder setVertexBytes:&m
+                   length:sizeof(m)
+                  atIndex:KKVertexInputIndex_Transform];
+  [encoder setVertexBuffer:entry.vbuf
+                    offset:0
+                   atIndex:KKVertexInputIndex_Vertices];
+  if (needArc) {
+    [encoder setVertexBuffer:entry.arcBuf
+                      offset:0
+                     atIndex:KKVertexInputIndex_StrokeArc];
+    KKStrokeDashParams dp;
+    dp.solidColor = color;
+    // A reveal-only stroke (not actually dashed) runs the dash fragment with
+    // the pattern fully "on" (cycle == onLength), so only the reveal fade
+    // applies.
+    dp.cycle = dashed ? dashCycle : 1.0e9f;
+    dp.onLength = dashed ? dashLen : 1.0e9f;
+    dp.phase = dashed ? dashPhase : 0.0f; // marching-ants animation
+    dp.opacity = opacity;
+    dp.useGradient = useGradient ? 1 : 0;
+    dp.revealLeadEnd = revealLeadEnd;
+    dp.revealLeadLen = revealLeadLen;
+    dp.revealTrailLen = revealTrailLen;
+    [encoder setFragmentBytes:&dp length:sizeof(dp) atIndex:0];
+    if (useGradient)
+      [encoder setFragmentBytes:cv.gradientLUT
+                         length:sizeof(cv.gradientLUT)
+                        atIndex:1];
+  } else if (useGradient) {
+    [encoder setFragmentBytes:cv.gradientLUT
+                       length:sizeof(cv.gradientLUT)
+                      atIndex:0];
+    [encoder setFragmentBytes:&opacity length:sizeof(opacity) atIndex:1];
+  } else {
+    [encoder setFragmentBytes:&color length:sizeof(color) atIndex:0];
+  }
+  [encoder drawPrimitives:(dotted ? MTLPrimitiveTypeTriangle
+                                  : MTLPrimitiveTypeTriangleStrip)
+              vertexStart:0
+              vertexCount:entry.vc];
+
+  if (entry.mvc >= 3 && entry.mbuf) {
+    [encoder setRenderPipelineState:(useGradient ? gradientPS : solidPS)];
+    [encoder setVertexBuffer:entry.mbuf
+                      offset:0
+                     atIndex:KKVertexInputIndex_Vertices];
+    if (useGradient) {
+      [encoder setFragmentBytes:cv.gradientLUT
+                         length:sizeof(cv.gradientLUT)
+                        atIndex:0];
+      [encoder setFragmentBytes:&opacity length:sizeof(opacity) atIndex:1];
+    } else {
+      [encoder setFragmentBytes:&color length:sizeof(color) atIndex:0];
+    }
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangle
+                vertexStart:0
+                vertexCount:entry.mvc];
+  }
+}
+
+void CanvasEncodeVectorLayers(
+    NSArray<KKBezierPath *> *layers, id<MTLRenderCommandEncoder> encoder,
+    id<MTLDevice> device, float imageWidth, float imageHeight, float tileShiftX,
+    float tileShiftY, double frac, NSString *overrideLayerID,
+    KKTimeline *overrideTimeline, float strokeScale, double elapsedSec,
+    double mbPrevFrac, id<MTLRenderPipelineState> solidPS,
+    id<MTLRenderPipelineState> gradientPS, id<MTLRenderPipelineState> dashPS) {
+  if (!encoder || !device || layers.count == 0)
+    return;
+  if (strokeScale <= 0.0f)
+    strokeScale = 1.0f;
+  simd_float2 scale = simd_make_float2(imageWidth, imageHeight);
+  simd_float2 tileShift = simd_make_float2(tileShiftX, tileShiftY);
+
+  // Bottom-first (array index 0 = topmost, drawn last) so vector layers stack
+  // like the image pass. No depth sort yet - strokes draw after the images.
+  CanvasVectorEncodeCtx ctx = {
+      .layers = layers,
+      .encoder = encoder,
+      .device = device,
+      .imageWidth = imageWidth,
+      .imageHeight = imageHeight,
+      .scale = scale,
+      .tileShift = tileShift,
+      .frac = frac,
+      .overrideLayerID = overrideLayerID,
+      .overrideTimeline = overrideTimeline,
+      .strokeScale = strokeScale,
+      .elapsedSec = elapsedSec,
+      .mbPrevFrac = mbPrevFrac,
+      .solidPS = solidPS,
+      .gradientPS = gradientPS,
+      .dashPS = dashPS,
+  };
+  for (NSInteger i = (NSInteger)layers.count - 1; i >= 0; i--)
+    CanvasEncodeOneVectorLayer(&ctx, i);
+}
+
+simd_float3x3 CanvasSquareToQuadHomography(CGPoint p0, CGPoint p1, CGPoint p2,
+                                           CGPoint p3) {
+  double dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dx3 = p0.x - p1.x + p2.x - p3.x;
+  double dy1 = p1.y - p2.y, dy2 = p3.y - p2.y, dy3 = p0.y - p1.y + p2.y - p3.y;
+  double a, b, c, d, e, f, g, h;
+  if (fabs(dx3) < 1e-9 && fabs(dy3) < 1e-9) {
+    // Parallelogram = affine, no perspective term.
+    a = p1.x - p0.x;
+    b = p2.x - p1.x;
+    c = p0.x;
+    d = p1.y - p0.y;
+    e = p2.y - p1.y;
+    f = p0.y;
+    g = 0;
+    h = 0;
+  } else {
+    double den = dx1 * dy2 - dx2 * dy1;
+    if (fabs(den) < 1e-12)
+      return matrix_identity_float3x3; // degenerate, don't blow up
+    g = (dx3 * dy2 - dx2 * dy3) / den;
+    h = (dx1 * dy3 - dx3 * dy1) / den;
+    a = p1.x - p0.x + g * p1.x;
+    b = p3.x - p0.x + h * p3.x;
+    c = p0.x;
+    d = p1.y - p0.y + g * p1.y;
+    e = p3.y - p0.y + h * p3.y;
+    f = p0.y;
+  }
+  return simd_matrix(simd_make_float3((float)a, (float)d, (float)g),
+                     simd_make_float3((float)b, (float)e, (float)h),
+                     simd_make_float3((float)c, (float)f, 1.0f));
+}

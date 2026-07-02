@@ -12,6 +12,9 @@ import Foundation
 public final class AIDraftBridge: NSObject {
 	@MainActor
 	@objc public static func setRouting(_ routing: Bool) {
+		// A new run starts: clear any stale cancel request so it can't swallow a
+		// real error from this run.
+		if routing { AIDraftState.shared.cancelRequested = false }
 		AIDraftState.shared.isRouting = routing
 		if !routing { AIDraftState.shared.routingStatus = nil }
 	}
@@ -39,6 +42,14 @@ public final class AIDraftBridge: NSObject {
 
 	@MainActor
 	@objc public static func setError(_ message: String?) {
+		// A cancelled request reports back an error (the helper returns the
+		// generation's cancellation as a failure). That's not a real failure - the
+		// user asked to stop - so swallow it once.
+		if AIDraftState.shared.cancelRequested {
+			AIDraftState.shared.cancelRequested = false
+			AIDraftState.shared.routingError = nil
+			return
+		}
 		AIDraftState.shared.routingError = message
 	}
 

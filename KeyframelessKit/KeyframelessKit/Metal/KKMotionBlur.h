@@ -31,6 +31,22 @@ typedef NS_ENUM(int32_t, KKMotionBlurMode) {
   KKMotionBlurModeAlways = 2,
 };
 
+/// How the blur is computed. Stored in the custom-UI blob as `"technique"`;
+/// absent = Fast. The user-facing pill is just Fast vs Accurate; the old
+/// when-to-fire modes are derived from this (Fast skips still layers
+/// automatically, Accurate blurs every frame for footage smear).
+typedef NS_ENUM(int32_t, KKMotionBlurTechnique) {
+  /// Per-layer velocity-buffer reconstruction (KKMotionBlurReconstruct). Fixed
+  /// cost independent of blur length; blurs the plugin's own animated
+  /// transforms. Requires the plugin to emit a velocity buffer (opt-in via
+  /// `-motionBlurSupportsFastTechnique`). The default.
+  KKMotionBlurTechniqueFast = 0,
+  /// Sample-and-accumulate (re-render N sub-frame samples). Universal - blurs
+  /// moving footage too - and the correctness fallback for extreme in-shutter
+  /// rotation. Costs N renders; `sampleCount` applies.
+  KKMotionBlurTechniqueAccurate = 1,
+};
+
 /// Snapshot of motion-blur params resolved during `pluginState:atTime:`,
 /// where FxParameterRetrievalAPI_v6 is available. Plugins concatenate this
 /// into their own pluginState NSData so render - which has no paramAPI -
@@ -39,7 +55,8 @@ typedef struct {
   bool enabled;
   int sampleCount; // 2..KK_MOTION_BLUR_MAX_SAMPLES, undefined when disabled
   double shutterSec;
-  KKMotionBlurMode mode; // when to fire; 0 = transitions-only
+  KKMotionBlurMode mode;           // when to fire; derived from technique
+  KKMotionBlurTechnique technique; // how to blur; 0 = Fast (reconstruction)
 } KKMotionBlurState;
 
 /// Sample-and-accumulate motion blur shared across plugins.

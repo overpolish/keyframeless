@@ -7,6 +7,7 @@
 
 #import "KKMiniViewerView.h"
 #import <IOSurface/IOSurface.h>
+#import <KeyframelessKit/KKShaderTypes.h> // KKVertex2D
 #import <MetalKit/MetalKit.h>
 #import <simd/simd.h>
 
@@ -51,6 +52,10 @@ NS_ASSUME_NONNULL_BEGIN
 @interface KKMiniViewerView () {
 @package
   id<MTLRenderPipelineState> _pipeline;
+  // Same passthrough but NEAREST magnification, swapped in past a zoom
+  // threshold so a zoomed-in preview shows crisp texels instead of bilinear
+  // blur.
+  id<MTLRenderPipelineState> _pipelineNearest;
   id<MTLRenderPipelineState> _onionPipeline;
   id<MTLCommandQueue> _queue;
   // Slot 0 aliases - keep the existing names so the handle/border/OSC code
@@ -68,6 +73,14 @@ NS_ASSUME_NONNULL_BEGIN
   id _keyMon;       // Cmd-0 reset-zoom local keyDown monitor
   id _keyGlobalMon; // Cmd-0 reset-zoom global keyDown monitor (XPC: events
                     // arrive global, like scroll/magnify)
+  id _magnifyMon;   // pinch-to-zoom local magnify monitor: AppKit delivers
+                    // magnify gestures ONLY to the key window, so when the
+                    // companion layer list holds key (popover non-key) a pinch
+  // over the mini never reaches magnifyWithEvent:. The monitor
+  // catches the app's magnify events regardless of which
+  // window is key and routes by pointer location. (Pan needs
+  // no monitor: AppKit delivers scrollWheel: to inactive
+  // windows already.)
   _KKMiniViewerOverlay *_overlay;
   CGFloat _zoom;           // 1 == aspect-fit
   CGPoint _panPixels;      // drawable-space pan offset
@@ -87,6 +100,28 @@ NS_ASSUME_NONNULL_BEGIN
   id<MTLRenderPipelineState> _rotationPipeline;
   id<MTLRenderPipelineState> _linePipeline;
   id<MTLRenderPipelineState> _aaLinePipeline;
+  id<MTLRenderPipelineState> _toolbarPipeline;
+  // The render encoder armed during -miniViewerDrawToolOverlay: so the public
+  // encodeTool* methods can encode into the current pass. nil otherwise.
+  __unsafe_unretained id<MTLRenderCommandEncoder> _toolEncoder;
+  // Tool-overlay primitive batch (opaque KKToolBatch*, owned by +Draw.m), armed
+  // around the overlay delegate call. While armed, encodeToolDot/LineStrip
+  // accumulate per-colour vertex buckets instead of issuing a draw each; the
+  // buckets flush as one drawPrimitives per colour. nil when not batching.
+  void *_toolBatch;
+  // Set only around an interaction-driven synchronous draw (pan/zoom via
+  // -_drawNowForInteraction). While YES, drawInMTKView reuses each slot's
+  // existing processed texture instead of re-running the (unchanging) plugin
+  // effect - panning can't change the rendered content, only the view
+  // transform, so re-rendering it every frame was wasted time that throttled
+  // the scroll event rate. Normal redraws (param edits via setNeedsDisplay)
+  // leave this NO and render fresh, so there's no staleness.
+  BOOL _reuseProcessedTexture;
+  // CACurrentMediaTime of the last pan/zoom gesture event. The overlay's
+  // hitTest: skips its expensive per-anchor handle hit-test while this is
+  // recent (a scroll/pinch never targets a handle), so a dense path doesn't pay
+  // ~35ms of hit-testing per scroll event - that was the real pan throttle.
+  NSTimeInterval _lastPanZoomTime;
 }
 - (CGRect)contentRectInViewPoints;
 - (CGSize)sourceMediaSize;
@@ -111,6 +146,16 @@ NS_ASSUME_NONNULL_BEGIN
 // () extension) so the primary @implementation isn't expected to provide the
 // required delegate methods - they live in KKMiniViewerView+Draw.m.
 @interface KKMiniViewerView (Draw) <MTKViewDelegate>
+@end
+
+// Tool-overlay primitive batching. Implemented in KKMiniViewerView+ToolBatch.m
+// (along with the public (ToolDraw) encode methods). drawInMTKView arms a batch
+// around the overlay delegate call via begin/end; the encoders accumulate into
+// per-colour vertex buckets and flush as one draw each.
+@interface KKMiniViewerView (ToolBatchInternal)
+- (void)_beginToolBatch;
+- (void)_endToolBatch;
+- (void)_flushToolBatchBuckets;
 @end
 
 // Pipeline construction + Metal glyph/line encoders. Implemented in
@@ -141,6 +186,10 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_encodeRectBorder:(CGRect)br
                 lineColor:(simd_float4)lineColor
                   encoder:(id<MTLRenderCommandEncoder>)enc;
+- (void)_encodeGridWithSpacingX:(CGFloat)nx
+                       spacingY:(CGFloat)ny
+                    contentRect:(CGRect)cr
+                        encoder:(id<MTLRenderCommandEncoder>)enc;
 - (void)_encodeHandleGlyphAt:(CGPoint)centerPts
                    fillColor:(simd_float4)fillColor
                      encoder:(id<MTLRenderCommandEncoder>)enc;
@@ -156,6 +205,18 @@ NS_ASSUME_NONNULL_BEGIN
                          color:(simd_float4)color
                    halfWidthPt:(CGFloat)halfWidthPt
                        encoder:(id<MTLRenderCommandEncoder>)enc;
+// Vertex generators shared by the immediate encoders above and the batched
+// tool-overlay path (+Draw.m). They fill a caller buffer rather than encoding,
+// so the batch can pack many primitives into one draw. The dot helper writes
+// exactly 6 verts; the line helper writes up to (count-1)*6 and returns how
+// many.
+- (void)_toolDotQuad:(KKVertex2D *)out
+            atCenter:(CGPoint)centerPts
+           sizeScale:(CGFloat)sizeScale;
+- (NSUInteger)_toolLineVerts:(KKVertex2D *)out
+                      points:(const CGPoint *)pts
+                       count:(NSUInteger)count
+                 halfWidthPt:(CGFloat)halfWidthPt;
 @end
 
 // View transform / hit geometry. Implemented in KKMiniViewerView+Interaction.m
@@ -169,6 +230,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSRect)_screenRectForHandleCenters:(NSArray<NSValue *> *)centers
                               atIndex:(NSInteger)index;
 - (BOOL)_pointFromGlobalEvent:(NSPoint *)outViewPt;
+/// YES if a pan/zoom gesture event arrived very recently. The overlay's
+/// hitTest: skips its expensive per-anchor handle hit-test while this holds.
+- (BOOL)_isPanZoomGestureActive;
 @end
 
 NS_ASSUME_NONNULL_END

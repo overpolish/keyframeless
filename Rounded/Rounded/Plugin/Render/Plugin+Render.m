@@ -26,11 +26,14 @@
        withPluginState:(NSData *)pluginState
                 atTime:(CMTime)renderTime
                  error:(NSError **)error {
-  KKMotionBlurState mbState = {0};
-  if (pluginState.length >= sizeof(KKMotionBlurState))
-    [pluginState getBytes:&mbState length:sizeof(mbState)];
+  // Motion blur averages Rounded's per-sample params (crop box / radius) over a
+  // single source frame (see KKBuildSourceRequests' header); no sub-frame source
+  // requests - Rounded crops/rounds in place, it doesn't smear footage.
   *inputImageRequests = KKBuildSourceRequests(
-      renderTime, mbState, RoundedMiniViewerRequestPath, self.renderCache,
+      renderTime,
+      RoundedMiniViewerRequestPathForUUID(
+          KKInstanceUUIDForAPI(self.apiManager)),
+      self.renderCache,
       ^id(CMTime t) {
         return [[FxImageTileRequest alloc]
             initWithSource:kFxImageTileRequestSourceEffectClip
@@ -229,7 +232,9 @@
   [self
       kkPublishMiniViewerFeedForDestination:destinationImage
                                sourceImages:sourceImages
-                             descriptorPath:RoundedMiniViewerDescriptorPath
+                             descriptorPath:
+                                 RoundedMiniViewerDescriptorPathForUUID(
+                                     KKInstanceUUIDForAPI(self.apiManager))
                             boundaryReqSecs:self.renderCache.boundaryReqSecs
                            boundaryReqFracs:self.renderCache.boundaryReqFracs
                             multiSlotActive:self.renderCache.boundaryFeedActive
