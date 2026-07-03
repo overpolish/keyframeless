@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Lets the sandboxed FxPlug plugin reach the shared app-group container (the
+	     kkai.sock unix socket + HuggingFace model cache) and look up the helper's
+	     app-group Mach service to wake it on demand. No in-process MLX ships here;
+	     inference runs in the separately-installed kk-ai-helper. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.co.overpolish.keyframeless</string>
+	</array>
+</dict>
+</plist>

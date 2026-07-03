@@ -69,7 +69,7 @@ Quick sanity check that points at this cause: add `+ (void)load` and an `initWit
 Debug XPC service builds are non-sandboxed, so `NSUserDefaults` writes to `~/Library/Preferences/<BundleID>.plist` instead of the sandbox container. The `defaults` CLI looks in the container and won't find or delete the key. To reset the intro-seen state:
 
 ```sh
-plutil -remove introSeen ~/Library/Preferences/Rounded-XPC-Service.plist
+plutil -remove introSeen ~/Library/Preferences/co.overpolish.keyframeless.Rounded.PlugIn.plist
 killall cfprefsd
 ```
 

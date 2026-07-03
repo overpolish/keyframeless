@@ -30,6 +30,9 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 		case helperExited
 		case helperError(String)
 		case timedOut
+		/// The user cancelled the download; the helper stopped the fetch and dropped
+		/// the partial. Not surfaced as an error in the UI.
+		case downloadCancelled
 		public var errorDescription: String? {
 			switch self {
 			case .spawnFailed(let m): return "Couldn't start local AI helper: \(m)"
@@ -38,6 +41,7 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 			case .helperError(let m): return m
 			case .timedOut:
 				return "The local AI didn't respond in time and was stopped. Try again."
+			case .downloadCancelled: return "Download cancelled."
 			}
 		}
 	}
@@ -51,18 +55,15 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 	private static let idleTimeout: TimeInterval = 120
 
 	private let socketPath: String
-	private let helperLocator: @Sendable () -> URL?
 	private let queue = DispatchQueue(label: "co.overpolish.ai.helper.client")
 	private var conn: FileHandle?
 
 	/// Fails to init when the app-group socket path is unavailable (missing
-	/// entitlement) - the caller should then fall back.
-	/// - Parameter helperLocator: returns the helper binary in the client's own
-	///   bundle (sandbox only permits exec'ing in-bundle binaries).
-	public init?(helperLocator: @escaping @Sendable () -> URL?) {
+	/// `group.co.overpolish.keyframeless` entitlement) - local inference is then
+	/// unavailable and the caller (`LocalLLM.defaultRunner`) returns nil.
+	public init?() {
 		guard let path = LocalAIHelperSocket.sharedSocketPath() else { return nil }
 		self.socketPath = path
-		self.helperLocator = helperLocator
 	}
 
 	public func complete(
@@ -139,11 +140,29 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 		(try? controlExchange("status"))?.activeJobs ?? 0
 	}
 
+	/// The model the helper is currently downloading (started by ANY client) and its
+	/// fraction (0...1), or nil if no download is in flight or the helper isn't up.
+	/// Uses a short-lived control connection that does NOT wake the helper - a status
+	/// poll must never launch it. Off-main (blocking socket I/O).
+	public func currentDownload() -> (id: String, progress: Double)? {
+		guard let resp = try? controlExchange("status"), let id = resp.downloadingModelID
+		else { return nil }
+		return (id, resp.downloadProgress ?? 0)
+	}
+
 	/// Cancel every in-flight generation on the helper (MLX stops between tokens,
 	/// so the stuck pass throws and its waiting client unblocks). Best-effort;
 	/// no-op if the helper isn't up. Off-main (blocking socket I/O).
 	public func cancelActiveJobs() {
 		_ = try? controlExchange("cancel")
+	}
+
+	/// Stop the in-flight model download and drop its partial bytes from the shared
+	/// cache (frees disk). The initiating client's `downloadModel` then throws
+	/// `.downloadCancelled`. Best-effort; no-op if nothing is downloading or the helper
+	/// isn't up. Off-main (blocking socket I/O).
+	public func cancelDownload() {
+		_ = try? controlExchange("cancel-download")
 	}
 
 	/// Open a fresh connection, send one CONTROL request, read one reply, close.
@@ -272,73 +291,121 @@ public final class SharedHelperRunner: LocalLLMRunner, @unchecked Sendable {
 		Task { @MainActor in AIDraftState.shared.routingStatus = status }
 	}
 
-	private func ensureConnected() throws {
-		if conn != nil { return }
-
-		if let fd = LocalAIHelperSocket.clientConnect(path: socketPath) {
-			conn = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
-			return
-		}
-
-		// Nobody listening - spawn the helper, then poll for the socket. Bind +
-		// listen happens immediately at helper start (before the slow model load),
-		// so this resolves within ~a second; allow generous headroom.
-		try spawnHelper()
+	/// Return a connected socket fd, waking the helper (launchd) if nothing is
+	/// listening yet. Bind + listen happens immediately at helper start (before the
+	/// slow model load), so this resolves within ~a second; allow headroom. Returns
+	/// nil if the helper can't be reached within ~10s.
+	private func connectOrWake() -> Int32? {
+		if let fd = LocalAIHelperSocket.clientConnect(path: socketPath) { return fd }
+		try? wakeHelper()
 		for _ in 0..<200 {  // ~10s at 50ms
-			if let fd = LocalAIHelperSocket.clientConnect(path: socketPath) {
-				conn = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
-				clientLog.notice("client: connected to helper socket")
-				return
-			}
+			if let fd = LocalAIHelperSocket.clientConnect(path: socketPath) { return fd }
 			usleep(50_000)
 		}
-		throw HelperError.spawnFailed("helper did not come up at \(socketPath)")
+		return nil
 	}
 
-	private func spawnHelper() throws {
-		guard let exe = helperLocator() else {
-			throw HelperError.spawnFailed("helper binary not found in bundle")
+	private func ensureConnected() throws {
+		if conn != nil { return }
+		guard let fd = connectOrWake() else {
+			throw HelperError.spawnFailed("helper did not come up at \(socketPath)")
 		}
-		guard FileManager.default.fileExists(atPath: exe.path) else {
-			throw HelperError.spawnFailed("missing at \(exe.path)")
-		}
-		let p = Process()
-		p.executableURL = exe
-		// CRITICAL for speed: a detached helper otherwise runs at background QoS
-		// (efficiency cores + low GPU priority), making MLX generation ~10-15x
-		// slower than the old in-process path. Pin it to user-initiated so it gets
-		// performance cores and competes for the GPU with FCP's foreground work.
-		p.qualityOfService = .userInitiated
-		// Hand the helper the resolved socket path so it needs no app-group
-		// entitlement of its own (it binds the path; filesystem access to the
-		// group container is inherited from our sandbox).
-		p.arguments = ["--socket", socketPath]
-		// Point the helper at the SHARED model cache via HF_HUB_CACHE. It's read
-		// from the process environment at startup (ProcessInfo snapshots it), so a
-		// freshly spawned child picks it up - and every helper, whoever spawns it,
-		// then loads from the one app-group cache instead of re-downloading.
-		if let cacheDir = LocalAIHelperSocket.sharedModelCacheDir() {
-			var env = ProcessInfo.processInfo.environment
-			env["HF_HUB_CACHE"] = cacheDir.path
-			p.environment = env
-		}
-		// The protocol is the socket; silence the child's stdout/stderr (MLX is
-		// chatty) so it never pollutes the spawner. The helper logs via os.Logger.
-		p.standardInput = FileHandle.nullDevice
-		p.standardOutput = FileHandle.nullDevice
-		p.standardError = FileHandle.nullDevice
-		do {
-			try p.run()
-		} catch {
-			clientLog.error("client: spawn FAILED: \(error.localizedDescription, privacy: .public)")
-			throw HelperError.spawnFailed(error.localizedDescription)
-		}
-		// Do NOT wait/retain: the helper detaches and outlives us (reparented to
-		// launchd), so it can keep serving other clients after we exit.
-		clientLog.notice(
-			"client: spawned helper \(exe.lastPathComponent, privacy: .public) pid \(p.processIdentifier, privacy: .public)"
-		)
+		conn = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+		clientLog.notice("client: connected to helper socket")
 	}
+
+	/// Ask the helper to download a model's files into the shared cache, forwarding
+	/// progress (0...1). Runs on a background queue over its OWN connection so it
+	/// doesn't block generation on the serial queue; wakes the helper first if
+	/// needed. Returns when the download completes, throws on failure.
+	public func downloadModel(
+		_ modelID: String, progress: @escaping @Sendable (Double) -> Void
+	) async throws {
+		try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+			DispatchQueue.global(qos: .utility).async {
+				guard let fd = self.connectOrWake() else {
+					cont.resume(throwing: HelperError.notConnected)
+					return
+				}
+				let h = FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+				defer { try? h.close() }
+				do {
+					let req = HelperRequest(
+						modelID: modelID, system: "", user: "", jsonSchemaJSON: nil,
+						enableThinking: false, control: "download")
+					try HelperFraming.write(try JSONEncoder().encode(req), to: h)
+					while true {
+						guard let data = try self.readFrame(from: h) else {
+							throw HelperError.helperExited
+						}
+						let resp = try JSONDecoder().decode(HelperResponse.self, from: data)
+						if let err = resp.error { throw HelperError.helperError(err) }
+						if resp.cancelled == true { throw HelperError.downloadCancelled }
+						if let p = resp.downloadProgress { progress(p) }
+						if resp.done == true { break }
+					}
+					cont.resume()
+				} catch {
+					cont.resume(throwing: error)
+				}
+			}
+		}
+	}
+
+	/// Start the shared helper without exec'ing it ourselves. The sandbox forbids a
+	/// plugin from launching an out-of-bundle binary, but it CAN look up an app-group
+	/// Mach service - and the helper is installed once (by the "Keyframeless AI"
+	/// package) as an on-demand LaunchAgent that vends exactly that service. Opening
+	/// the connection and sending one message makes launchd launch the helper, which
+	/// then binds its socket and serves as before. On a dev machine with no installed
+	/// LaunchAgent, `KKAI_HELPER_PATH` spawns a built helper directly instead.
+	private func wakeHelper() throws {
+		#if DEBUG
+			if let devPath = ProcessInfo.processInfo.environment["KKAI_HELPER_PATH"] {
+				try spawnHelperDev(URL(fileURLWithPath: devPath))
+				return
+			}
+		#endif
+		let c = NSXPCConnection(machServiceName: LocalAIHelperSocket.machServiceName, options: [])
+		c.remoteObjectInterface = NSXPCInterface(with: KKAIHelperWake.self)
+		c.resume()
+		let sema = DispatchSemaphore(value: 0)
+		let proxy = c.remoteObjectProxyWithErrorHandler { err in
+			// A connection error still triggered the launch attempt; log and move on -
+			// the socket poll below is the real readiness signal.
+			clientLog.notice(
+				"client: wake xpc error (\(err.localizedDescription, privacy: .public))")
+			sema.signal()
+		}
+		(proxy as? KKAIHelperWake)?.ping { sema.signal() }
+		_ = sema.wait(timeout: .now() + 2)
+		c.invalidate()
+	}
+
+	#if DEBUG
+		/// Dev-only: spawn a locally built helper (no installer/LaunchAgent present).
+		/// Mirrors the shipped launch: user-initiated QoS + the shared HF cache.
+		private func spawnHelperDev(_ exe: URL) throws {
+			guard FileManager.default.fileExists(atPath: exe.path) else {
+				throw HelperError.spawnFailed("KKAI_HELPER_PATH missing at \(exe.path)")
+			}
+			let p = Process()
+			p.executableURL = exe
+			p.qualityOfService = .userInitiated
+			p.arguments = ["--socket", socketPath]
+			if let cacheDir = LocalAIHelperSocket.sharedModelCacheDir() {
+				var env = ProcessInfo.processInfo.environment
+				env["HF_HUB_CACHE"] = cacheDir.path
+				p.environment = env
+			}
+			p.standardInput = FileHandle.nullDevice
+			p.standardOutput = FileHandle.nullDevice
+			p.standardError = FileHandle.nullDevice
+			try p.run()
+			clientLog.notice(
+				"client: spawned DEV helper pid \(p.processIdentifier, privacy: .public)")
+		}
+	#endif
 
 	private func teardown() {
 		try? conn?.close()

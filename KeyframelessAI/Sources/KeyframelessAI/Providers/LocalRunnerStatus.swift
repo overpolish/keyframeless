@@ -15,15 +15,15 @@ import Foundation
 /// installing a `sink` (via the task-local) around the runner call that forwards
 /// each update to the client as a status frame; the client then writes ITS OWN
 /// `AIDraftState`. Leave the sink nil for the default in-process behaviour.
-enum LocalRunnerStatus {
+public enum LocalRunnerStatus {
 	/// When set, status goes here instead of `AIDraftState` (the helper forwards
 	/// it over the socket). Task-local so it's scoped to one request and inherited
 	/// by the runner's async work, including across its `MainActor` hops.
-	@TaskLocal static var sink: (@Sendable (String) -> Void)?
+	@TaskLocal public static var sink: (@Sendable (String) -> Void)?
 
 	/// Report a coarse status. Routes to the task-local sink when present (helper),
 	/// else to the in-process `AIDraftState` on the main actor.
-	static func report(_ status: String) async {
+	public static func report(_ status: String) async {
 		if let sink {
 			sink(status)
 		} else {

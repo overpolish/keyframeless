@@ -75,7 +75,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				F220BFE42F4E07EB0034AF77 /* KeyframelessKit.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -308,12 +307,10 @@
 				F2E2ED7D2F4CA530008620D9 /* Copy and Code Sign FxPlug.framework */,
 				F2E2ED7E2F4CA530008620D9 /* Copy and Code Sign PluginManager.framework */,
 				F220BFE52F4E07EC0034AF77 /* Embed Frameworks */,
-				F20AACA52FD720500032F7FF /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				F20AACA42FD720480032F7FF /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F2E2ED902F4CA530008620D9 /* MagicMove */,
@@ -363,7 +360,6 @@
 			targets = (
 				F2E2ED742F4CA530008620D9 /* Wrapper Application */,
 				F2E2ED7F2F4CA530008620D9 /* XPC Service */,
-				F20AAC992FD720220032F7FF /* kk-ai-helper */,
 			);
 		};
 /* End PBXProject section */
@@ -474,6 +470,7 @@
 		F20AAC9E2FD720220032F7FF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "MagicMove/Plugin/MagicMovePluginEntitlements.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -490,6 +487,7 @@
 		F20AAC9F2FD720220032F7FF /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "MagicMove/Plugin/MagicMovePluginEntitlements.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -517,10 +515,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
+					"@loader_path/../../../../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.MagicMove.PlugIn;
 				PRODUCT_NAME = "MagicMove $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "MagicMove/Plugin/XPC Service-Bridging-Header.h";
@@ -542,10 +541,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
+					"@loader_path/../../../../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.MagicMove.PlugIn;
 				PRODUCT_NAME = "MagicMove $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "MagicMove/Plugin/XPC Service-Bridging-Header.h";
@@ -570,7 +570,7 @@
 				INFOPLIST_FILE = "MagicMove/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.MagicMove;
 				PRODUCT_NAME = MagicMove;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -604,8 +604,7 @@
 				INFOPLIST_FILE = "MagicMove/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = co.overpolish.keyframeless.MagicMove;
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.MagicMove;
 				PRODUCT_NAME = MagicMove;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;

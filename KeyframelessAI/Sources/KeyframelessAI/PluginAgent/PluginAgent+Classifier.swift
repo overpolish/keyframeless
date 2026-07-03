@@ -222,7 +222,7 @@ extension AIPluginAgent {
 				acc += chunk
 				AIDraftState.shared.pendingAnswer = acc
 			}
-			let final = MLXLocalLLMRunner.stripThink(acc)
+			let final = LocalLLM.stripThink(acc)
 			AIDraftState.shared.pendingAnswer = final
 			return final
 		}

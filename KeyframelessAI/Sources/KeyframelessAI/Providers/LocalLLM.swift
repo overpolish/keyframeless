@@ -66,9 +66,6 @@ public enum LocalLLM {
 	/// the `.local` dispatch throws rather than runs.
 	@MainActor public static var runner: LocalLLMRunner? = defaultRunner()
 
-	/// Name of the helper executable, embedded in each client's bundle.
-	private static let helperName = "kk-ai-helper"
-
 	/// Poll how many local generations the shared helper is running (0 when local
 	/// isn't the shared helper, or the helper is down). The socket I/O is done off
 	/// the main thread; the result is delivered back on the main actor. Drives the
@@ -91,40 +88,28 @@ public enum LocalLLM {
 		DispatchQueue.global(qos: .userInitiated).async { shared.cancelActiveJobs() }
 	}
 
-	/// Pick the right engine for the current host:
-	/// - If the app-group socket is reachable (the `group.co.overpolish.keyframeless`
-	///   entitlement is present), use the SHARED out-of-process helper for EVERY
-	///   client - extension AND plugins. One helper process, one model load, serving
-	///   them all: it dodges the FCP workflow extension's ~1 GB cap AND stops each
-	///   plugin XPC instance from loading its own ~16 GB copy. The first client to
-	///   call spawns it from its own bundle; the rest connect over the socket.
-	/// - Otherwise (no app-group entitlement wired yet): the memory-capped extension
-	///   can't load MLX in-process, so local is disabled (nil); a plugin has the
-	///   headroom, so it falls back to the in-process MLX runner.
+	/// The runner is ALWAYS the shared out-of-process helper (installed once by the
+	/// "Keyframeless AI" package, launched on demand by launchd). MLX is never linked
+	/// in-process here - this is the thin client every plugin/extension links.
+	/// `SharedHelperRunner` init returns nil without the `group.co.overpolish.keyframeless`
+	/// entitlement (no app-group socket path); local inference is then unavailable and
+	/// the `.local` dispatch throws rather than runs.
 	@MainActor static func defaultRunner() -> LocalLLMRunner? {
-		if let shared = SharedHelperRunner(helperLocator: { helperBinaryURL() }) {
+		if let shared = SharedHelperRunner() {
 			llmLog.notice("LocalLLM: shared out-of-process helper (app-group)")
 			return shared
 		}
-		guard Bundle.main.bundleURL.pathExtension == "appex" else {
-			llmLog.notice("LocalLLM: in-process MLX (plugin, no app-group)")
-			return MLXLocalLLMRunner()
-		}
-		llmLog.error("LocalLLM: extension has no app-group socket; local disabled")
+		llmLog.error("LocalLLM: no app-group socket; local disabled (install Keyframeless AI)")
 		return nil
 	}
 
-	/// The helper executable embedded in THIS client's bundle (sandbox only allows
-	/// exec'ing in-bundle binaries). Resolved via the auxiliary-executable lookup,
-	/// with a direct Contents/MacOS fallback.
-	private static func helperBinaryURL() -> URL? {
-		let fm = FileManager.default
-		if let aux = Bundle.main.url(forAuxiliaryExecutable: helperName),
-			fm.fileExists(atPath: aux.path)
-		{
-			return aux
+	/// Strip a `<think>...</think>` reasoning prefix from a model reply, returning the
+	/// trimmed answer. Lives here (thin) so plugin code can call it without linking the
+	/// MLX engine; the in-process runner uses it too.
+	public static func stripThink(_ s: String) -> String {
+		guard let r = s.range(of: "</think>") else {
+			return s.trimmingCharacters(in: .whitespacesAndNewlines)
 		}
-		let direct = Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/\(helperName)")
-		return fm.fileExists(atPath: direct.path) ? direct : nil
+		return String(s[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
 	}
 }

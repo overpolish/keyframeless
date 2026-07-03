@@ -56,7 +56,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				F220BFE42F4E07EB0034AF77 /* KeyframelessKit.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -309,12 +308,10 @@
 				F2E2ED7D2F4CA530008620D9 /* Copy and Code Sign FxPlug.framework */,
 				F2E2ED7E2F4CA530008620D9 /* Copy and Code Sign PluginManager.framework */,
 				F220BFE52F4E07EC0034AF77 /* Embed Frameworks */,
-				F2BE95712FD766C400B5DF6A /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				F2BE95702FD766C200B5DF6A /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F2E2ED902F4CA530008620D9 /* Rounded */,
@@ -370,7 +367,6 @@
 			targets = (
 				F2E2ED742F4CA530008620D9 /* Wrapper Application */,
 				F2E2ED7F2F4CA530008620D9 /* XPC Service */,
-				F2BE95652FD7669D00B5DF6A /* kk-ai-helper */,
 			);
 		};
 /* End PBXProject section */
@@ -481,6 +477,7 @@
 		F2BE956A2FD7669D00B5DF6A /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Rounded/Plugin/RoundedPluginEntitlements.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -497,6 +494,7 @@
 		F2BE956B2FD7669D00B5DF6A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Rounded/Plugin/RoundedPluginEntitlements.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -524,10 +522,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
+					"@loader_path/../../../../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Rounded.PlugIn;
 				PRODUCT_NAME = "Rounded $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Rounded/Plugin/XPC Service-Bridging-Header.h";
@@ -549,10 +548,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
+					"@loader_path/../../../../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Rounded.PlugIn;
 				PRODUCT_NAME = "Rounded $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Rounded/Plugin/XPC Service-Bridging-Header.h";
@@ -577,7 +577,7 @@
 				INFOPLIST_FILE = "Rounded/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Rounded;
 				PRODUCT_NAME = Rounded;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -600,8 +600,7 @@
 				INFOPLIST_FILE = "Rounded/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = co.overpolish.keyframeless.Rounded;
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Rounded;
 				PRODUCT_NAME = Rounded;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;

@@ -10,7 +10,12 @@ public struct PopoverGlassFix: ViewModifier {
 	public init() {}
 
 	public func body(content: Content) -> some View {
-		content.background(PopoverGlassFixProbe())
+		content
+			// A dark backing wash subdues macOS 26's Liquid Glass so the popover UI
+			// keeps contrast over bright viewer backgrounds. Mirrors the kit's 0.2
+			// black wash on the timeline inspector / layer-list popovers.
+			.background(Color.black.opacity(0.2))
+			.background(PopoverGlassFixProbe())
 	}
 }
 

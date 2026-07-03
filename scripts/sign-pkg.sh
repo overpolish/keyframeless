@@ -39,10 +39,18 @@ productsign --sign "Developer ID Installer" "$UNSIGNED" "$SIGNED"
 
 echo ""
 echo "Notarizing..."
-xcrun notarytool submit "$SIGNED" \
-  --apple-id "$APPLE_ID" \
-  --team-id "$TEAM_ID" \
-  --wait
+# Prefer a stored keychain profile named "keyframeless" (non-interactive + more
+# robust for retries): create once with
+#   xcrun notarytool store-credentials keyframeless --apple-id <id> --team-id <team>
+# Otherwise fall back to Apple ID + Team ID (prompts for the app-specific password).
+if security find-generic-password \
+    -s "com.apple.gke.notary.tool.saved-creds.keyframeless" &>/dev/null; then
+  echo "  (using stored notary profile 'keyframeless')"
+  NOTARY_AUTH=(--keychain-profile keyframeless)
+else
+  NOTARY_AUTH=(--apple-id "$APPLE_ID" --team-id "$TEAM_ID")
+fi
+xcrun notarytool submit "$SIGNED" "${NOTARY_AUTH[@]}" --wait
 
 echo ""
 echo "Stapling..."

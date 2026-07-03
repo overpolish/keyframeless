@@ -46,7 +46,15 @@ COMPONENT_ID = {
     "magicmove": "co.overpolish.keyframeless.MagicMove",
     "glow": "co.overpolish.keyframeless.Glow",
     "canvas": "co.overpolish.keyframeless.Canvas",
+    # The shared local-AI engine (helper + LaunchAgent to /Library). Not a plugin
+    # (no .app / Motion Template), so `--components` (which drives `all`) excludes it;
+    # build it explicitly. build-and-sign.sh stages the helper before packaging.
+    "keyframelessai": "co.overpolish.keyframeless.KeyframelessAI",
 }
+
+# The FxPlug plugins + the workflow extension (everything `all` builds). The AI engine
+# is deliberately not here - it needs the helper staged first.
+PLUGIN_COMPONENTS = [k for k in COMPONENT_ID if k != "keyframelessai"]
 
 
 def installer_list(project):
@@ -116,6 +124,11 @@ def build_one(combined, component):
     proj = copy.deepcopy(combined)
     only = copy.deepcopy(pkg)
     proj["PACKAGES"] = [only]
+    # A single-product installer should go straight to the standard install screen,
+    # not the "Installation Type" selection with a pointless checkbox to deselect the
+    # only product. The combined project uses MODE 2 (always customize) so bundle
+    # buyers can pick; a standalone drops to MODE 1 (standard, no forced customize).
+    proj["PROJECT"]["PROJECT_PRESENTATION"]["INSTALLATION TYPE"]["MODE"] = 1
     # Keep only this package's choice in the chooser; drop the other plugins.
     keep = [c for c in installer_list(proj) if c.get("PACKAGE_UUID") == uuid]
     proj["PROJECT"]["PROJECT_PRESENTATION"]["INSTALLATION TYPE"]["HIERARCHIES"][
@@ -129,13 +142,17 @@ def build_one(combined, component):
         loc["VALUE"] = name
 
     # Generate a per-plugin uninstaller and point the package's uninstall resource
-    # at it (the suite-wide scripts/uninstall stays for the combined bundle).
+    # at it (the suite-wide scripts/uninstall stays for the combined bundle). Skipped
+    # for non-plugin components (e.g. the AI engine ships its own uninstaller in the
+    # payload and has no .app / Motion Template).
     app_name = find_app_name(only["PACKAGE_FILES"]["HIERARCHY"])
-    tmpl_name = template_folder_name(only)
-    write_uninstaller(component, name, app_name, tmpl_name)
-    for r in only.get("PACKAGE_SCRIPTS", {}).get("RESOURCES", []):
-        if r.get("PATH", "").rstrip("/").endswith("scripts/uninstall"):
-            r["PATH"] = f"scripts/uninstall-{component}"
+    tmpl_name = ""
+    if app_name is not None:
+        tmpl_name = template_folder_name(only)
+        write_uninstaller(component, name, app_name, tmpl_name)
+        for r in only.get("PACKAGE_SCRIPTS", {}).get("RESOURCES", []):
+            if r.get("PATH", "").rstrip("/").endswith("scripts/uninstall"):
+                r["PATH"] = f"scripts/uninstall-{component}"
 
     out = ROOT / "Distribution" / f"{name}.pkgproj"
     with open(out, "wb") as f:
@@ -163,7 +180,7 @@ def product_name(combined, component):
 def main(argv):
     # Query modes used by build-and-sign.sh to drive generation without printing noise.
     if argv == ["--components"]:
-        print(" ".join(COMPONENT_ID))
+        print(" ".join(PLUGIN_COMPONENTS))
         return
     if len(argv) == 2 and argv[0] == "--name":
         print(product_name(plistlib.loads(COMBINED.read_bytes()), argv[1]))
@@ -171,7 +188,7 @@ def main(argv):
     if not argv:
         sys.exit(__doc__)
     combined = plistlib.loads(COMBINED.read_bytes())
-    targets = list(COMPONENT_ID) if argv == ["all"] else argv
+    targets = list(PLUGIN_COMPONENTS) if argv == ["all"] else argv
     for c in targets:
         build_one(combined, c)
 

@@ -5,20 +5,15 @@
 
 import Combine
 import Foundation
-import HuggingFace
-import MLXHuggingFace
-import MLXLMCommon
-import Tokenizers
 import os
 
-/// Download progress diagnostics; view in Console.app, subsystem
-/// `co.overpolish.keyframeless`, category `ai.local`.
 private let storeLog = Logger(subsystem: "co.overpolish.keyframeless", category: "ai.local")
 
-/// Tracks which local models are downloaded + which is selected. With MLX, the
-/// model is a HuggingFace repo that MLX/Hub downloads and caches on demand, so
-/// "download" just pre-fetches it and we record the installed set in
-/// UserDefaults (the Hub owns the bytes on disk).
+/// Tracks which local models are downloaded + which is selected. The actual bytes
+/// live in the shared app-group HuggingFace cache; the DOWNLOAD runs in the helper
+/// (so plugins don't link swift-huggingface / swift-nio), driven here over the socket.
+/// "Downloaded" is derived from that shared cache on disk, so a model fetched by any
+/// client shows up for all of them.
 @MainActor
 public final class LocalModelStore: ObservableObject {
 	public static let shared = LocalModelStore()
@@ -26,8 +21,7 @@ public final class LocalModelStore: ObservableObject {
 	@Published public private(set) var downloadedModels: Set<String> = []
 	@Published public private(set) var downloadingModel: String? = nil
 	@Published public private(set) var downloadProgress: Double = 0
-	/// Last download/load error, surfaced in the UI. Temporary diagnostic until
-	/// local is confirmed working end to end.
+	/// Last download/load error, surfaced in the UI.
 	@Published public private(set) var lastError: String? = nil
 	@Published public var selectedModelID: String? {
 		didSet {
@@ -45,110 +39,133 @@ public final class LocalModelStore: ObservableObject {
 		return downloadedModels.contains(id)
 	}
 
-	/// Total bytes for the active download, learned from the Hub progress handler;
-	/// the on-disk poll divides by this to compute the real fraction.
-	private var downloadTotalBytes: Int64 = 0
-
 	private static let selectedKey = "co.overpolish.ai.local.selectedModel"
-	private static let downloadedKey = "co.overpolish.ai.local.downloadedModels"
+
+	/// True while THIS process is the one running the active download (its own socket
+	/// stream drives `downloadProgress`). When false, the helper-sync poll is free to
+	/// mirror a download another plugin started.
+	private var ownsActiveDownload = false
+	/// Polls the helper for a download in flight (possibly started by another plugin)
+	/// while the models UI is on screen. nil when not polling.
+	private var helperSyncTask: Task<Void, Never>?
 
 	private init() {
-		let saved = Set(UserDefaults.standard.stringArray(forKey: Self.downloadedKey) ?? [])
-		// Only trust entries still in the catalog.
-		let valid = Set(LocalModelCatalog.models.map(\.id))
-		downloadedModels = saved.intersection(valid)
 		selectedModelID = UserDefaults.standard.string(forKey: Self.selectedKey)
-		if let current = selectedModelID, !downloadedModels.contains(current) {
-			selectedModelID = downloadedModels.first
+		refreshDownloaded()
+	}
+
+	/// Re-derive the downloaded set from the shared model cache on disk (a model's
+	/// `snapshots/` dir holds files once fetched), then reconcile the selection.
+	public func refreshDownloaded() {
+		var found: Set<String> = []
+		for model in LocalModelCatalog.models where Self.isDownloaded(model.repoID) {
+			found.insert(model.id)
+		}
+		downloadedModels = found
+		if let cur = selectedModelID, !found.contains(cur) {
+			selectedModelID = found.first
 		} else if selectedModelID == nil {
-			selectedModelID = downloadedModels.first
+			selectedModelID = found.first
 		}
 	}
 
-	public func refreshDownloaded() {
-		// Source of truth is our persisted set; MLX/Hub owns the actual cache.
-		let valid = Set(LocalModelCatalog.models.map(\.id))
-		downloadedModels = downloadedModels.intersection(valid)
+	/// Begin mirroring the helper's live download state while the models UI is visible,
+	/// so a plugin that DIDN'T start a download still shows its progress (the download
+	/// stream only reaches the initiating process). Call from the view's `onAppear`;
+	/// pair with `stopHelperSync()` in `onDisappear`. Cheap: one control roundtrip/sec,
+	/// and it never wakes the helper (no download in flight => helper stays down).
+	public func startHelperSync() {
+		guard helperSyncTask == nil else { return }
+		refreshDownloaded()
+		helperSyncTask = Task { @MainActor in
+			while !Task.isCancelled {
+				await reconcileHelperDownload()
+				try? await Task.sleep(nanoseconds: 1_000_000_000)
+			}
+		}
 	}
 
-	/// Pre-fetch (and cache) the model files via HuggingFace Hub. We download the
-	/// snapshot directly rather than going through `loadModelContainer` - the
-	/// latter loads the whole model (up to ~16 GB) into memory just to discard
-	/// it, which is wasteful and reports no progress during the load phase. The
-	/// bytes land in the Hub cache, so the runner's later load is a cache hit.
+	public func stopHelperSync() {
+		helperSyncTask?.cancel()
+		helperSyncTask = nil
+	}
+
+	/// One poll tick: ask the helper what it's downloading and mirror it. Skips while
+	/// WE own the active download (our own stream already drives the UI). When the
+	/// helper reports nothing and we were mirroring a foreign download, treat it as
+	/// finished and reconcile against the on-disk marker.
+	private func reconcileHelperDownload() async {
+		if ownsActiveDownload { return }
+		let runner = LocalLLM.runner as? SharedHelperRunner
+		let cur: (id: String, progress: Double)? = await withCheckedContinuation { cont in
+			DispatchQueue.global(qos: .utility).async {
+				cont.resume(returning: runner?.currentDownload())
+			}
+		}
+		if let cur, LocalModelCatalog.model(id: cur.id) != nil {
+			downloadingModel = cur.id
+			downloadProgress = cur.progress
+		} else if downloadingModel != nil {
+			downloadingModel = nil
+			downloadProgress = 0
+			refreshDownloaded()
+		}
+	}
+
+	/// Download the model's files into the shared cache via the helper, forwarding
+	/// its progress. The helper is woken on demand; the bytes land in the shared
+	/// cache so the runner's later load is a cache hit.
 	public func download(_ id: String) async {
-		guard downloadingModel == nil, let model = LocalModelCatalog.model(id: id) else { return }
-		guard let repo = Repo.ID(rawValue: model.repoID) else {
-			lastError = "\(model.repoID): invalid repository id"
+		guard downloadingModel == nil, LocalModelCatalog.model(id: id) != nil else { return }
+		guard let runner = LocalLLM.runner as? SharedHelperRunner else {
+			lastError = "Local AI engine unavailable - install Keyframeless AI."
 			return
 		}
 		downloadingModel = id
 		downloadProgress = 0
-		downloadTotalBytes = 0
 		lastError = nil
-
-		// swift-huggingface only bumps its Progress counter when each large shard
-		// FINISHES (bytes stream to CFNetworkDownload_*.tmp meanwhile), so its bar
-		// sits at the metadata size then jumps. Poll real bytes on disk instead:
-		// completed shards live in the repo's blobs/, in-flight ones in the temp
-		// dir. The HuggingFace Progress handler is used only to learn the total.
-		let blobsDir = Self.repoCacheDir(model.repoID).appendingPathComponent("blobs")
-		let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory())
-		// Ignore CFNetworkDownload temp files left over from earlier (interrupted)
-		// downloads - counting those orphans pinned the bar at 99%. Only new temp
-		// files created for THIS download count toward in-flight bytes.
-		let baselineTemps = Self.tempDownloadNames(tmpDir)
-		let poll = Task.detached { [weak self] in
-			while !Task.isCancelled {
-				let bytes =
-					Self.directorySize(blobsDir)
-					+ Self.tempDownloadSize(tmpDir, excluding: baselineTemps)
-				await MainActor.run { [weak self] in
-					guard let self, self.downloadTotalBytes > 0 else { return }
-					self.downloadProgress = min(
-						0.99, Double(bytes) / Double(self.downloadTotalBytes))
-				}
-				try? await Task.sleep(for: .milliseconds(750))
-			}
-		}
-
+		ownsActiveDownload = true
 		do {
-			let hub = HubClient(cache: Self.sharedHubCache())
-			_ = try await hub.downloadSnapshot(of: repo) { @MainActor [weak self] progress in
-				self?.downloadTotalBytes = progress.totalUnitCount
+			try await runner.downloadModel(id) { frac in
+				Task { @MainActor in
+					let s = LocalModelStore.shared
+					if s.downloadingModel == id { s.downloadProgress = frac }
+				}
 			}
-			poll.cancel()
 			downloadProgress = 1.0
 			downloadedModels.insert(id)
-			persistDownloaded()
-			lastError = nil
 			if selectedModelID == nil { selectedModelID = id }
+		} catch SharedHelperRunner.HelperError.downloadCancelled {
+			// User cancelled; the helper already stopped and dropped the partial. Not
+			// an error - just fall through and clear the UI.
+			storeLog.notice("download cancelled \(id, privacy: .public)")
 		} catch {
-			poll.cancel()
-			lastError = "\(model.repoID): \(error.localizedDescription)"
+			lastError = error.localizedDescription
 			storeLog.error(
-				"download failed \(model.repoID, privacy: .public): \(error.localizedDescription, privacy: .public)"
+				"download failed \(id, privacy: .public): \(error.localizedDescription, privacy: .public)"
 			)
 		}
+		ownsActiveDownload = false
 		downloadingModel = nil
 	}
 
-	/// Soft cancel - resets the UI. MLX's load has no cancellation handle, so an
-	/// in-flight fetch may continue in the background.
+	/// Cancel the active download: tell the helper to stop the fetch and drop the
+	/// partial from the shared cache (frees disk), then reset the UI. The helper clears
+	/// its download registry, so the sync poll stops mirroring it in every plugin.
 	public func cancelDownload() {
 		downloadingModel = nil
 		downloadProgress = 0
+		let runner = LocalLLM.runner as? SharedHelperRunner
+		Task.detached { runner?.cancelDownload() }
 	}
 
 	public func uninstall(_ id: String) {
 		downloadedModels.remove(id)
-		persistDownloaded()
 		if selectedModelID == id { selectedModelID = downloadedModels.first }
-		// Actually free the disk: delete the repo's Hub cache dir (blobs +
-		// snapshots + refs). Without this an "uninstall" only forgot the entry
-		// and a re-download finished instantly from the still-present cache.
-		guard let model = LocalModelCatalog.model(id: id) else { return }
-		let dir = Self.repoCacheDir(model.repoID)
+		// Free the disk: delete the repo's cache dir (blobs + snapshots + refs).
+		guard let model = LocalModelCatalog.model(id: id),
+			let dir = LocalAIHelperSocket.repoCacheDir(model.repoID)
+		else { return }
 		do {
 			try FileManager.default.removeItem(at: dir)
 			storeLog.notice("uninstalled \(model.repoID, privacy: .public) (removed cache)")
@@ -164,69 +181,13 @@ public final class LocalModelStore: ObservableObject {
 		selectedModelID = id
 	}
 
-	private func persistDownloaded() {
-		UserDefaults.standard.set(Array(downloadedModels), forKey: Self.downloadedKey)
-	}
-
-	/// The shared cache used for downloads. When the app-group container is
-	/// available, downloads land in the shared cache so any client's spawned
-	/// helper finds the model (no re-download); otherwise the default cache.
-	static func sharedHubCache() -> HubCache {
-		if let dir = LocalAIHelperSocket.sharedModelCacheDir() {
-			return HubCache(cacheDirectory: dir)
-		}
-		return .default
-	}
-
-	/// The HuggingFace Hub cache directory for a repo, e.g.
-	/// `<cache>/models--mlx-community--gemma-4-26b-a4b-it-4bit`.
-	private static func repoCacheDir(_ repoID: String) -> URL {
-		let dirName = "models--" + repoID.replacingOccurrences(of: "/", with: "--")
-		let base = LocalAIHelperSocket.sharedModelCacheDir() ?? HubCache.default.cacheDirectory
-		return base.appendingPathComponent(dirName)
-	}
-
-	/// Total byte size of all files under `dir` (0 if it doesn't exist yet).
-	nonisolated private static func directorySize(_ dir: URL) -> Int64 {
-		let fm = FileManager.default
-		guard let en = fm.enumerator(at: dir, includingPropertiesForKeys: [.fileSizeKey]) else {
-			return 0
-		}
-		var total: Int64 = 0
-		for case let url as URL in en {
-			total += Int64((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
-		}
-		return total
-	}
-
-	/// Names of existing `CFNetworkDownload_*.tmp` files - captured at download
-	/// start so orphans from earlier attempts can be excluded from the byte count.
-	nonisolated private static func tempDownloadNames(_ tmpDir: URL) -> Set<String> {
-		let fm = FileManager.default
-		guard let items = try? fm.contentsOfDirectory(at: tmpDir, includingPropertiesForKeys: nil)
-		else { return [] }
-		return Set(
-			items.map { $0.lastPathComponent }.filter { $0.hasPrefix("CFNetworkDownload") })
-	}
-
-	/// Total bytes of in-flight URLSession downloads (`CFNetworkDownload_*.tmp`)
-	/// in the temp dir - the shards stream here before being moved into blobs/.
-	/// `excluding` skips orphan temp files from earlier download attempts.
-	nonisolated private static func tempDownloadSize(
-		_ tmpDir: URL, excluding: Set<String>
-	) -> Int64 {
-		let fm = FileManager.default
-		guard
-			let items = try? fm.contentsOfDirectory(
-				at: tmpDir, includingPropertiesForKeys: [.fileSizeKey])
-		else { return 0 }
-		var total: Int64 = 0
-		for url in items
-		where url.lastPathComponent.hasPrefix("CFNetworkDownload")
-			&& !excluding.contains(url.lastPathComponent)
-		{
-			total += Int64((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
-		}
-		return total
+	/// True only when the helper has stamped the repo's completion marker - i.e. the
+	/// download fully finished. A partial or cancelled download leaves blobs on disk
+	/// but no marker, so it correctly reads as NOT downloaded (the old "snapshot has
+	/// any file" check reported partials as done, so every plugin saw a half-finished
+	/// model as ready).
+	private static func isDownloaded(_ repoID: String) -> Bool {
+		guard let marker = LocalAIHelperSocket.repoCompleteMarker(repoID) else { return false }
+		return FileManager.default.fileExists(atPath: marker.path)
 	}
 }

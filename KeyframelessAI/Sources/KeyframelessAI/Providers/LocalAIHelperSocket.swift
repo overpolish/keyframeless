@@ -7,20 +7,27 @@ import Darwin
 import Foundation
 
 /// POSIX Unix-domain-socket plumbing for the SHARED local-inference helper. The
-/// helper is a singleton: the first client to need it spawns it, it binds a
-/// socket in the app-group container, and every other client (plugin or
-/// extension, in any process) connects to that same socket. One model load
-/// serves everyone.
+/// helper is a singleton, installed once and launched on demand by launchd (a
+/// client's `SharedHelperRunner` wakes it via the app-group Mach service). On start
+/// it binds a socket in the app-group container, and every client (plugin or
+/// extension, in any process) connects to that same socket. One model load serves
+/// everyone.
 ///
 /// The socket lives in the app-group container so all sandboxed clients can reach
 /// it; that requires the `group.co.overpolish.keyframeless` app-group
 /// entitlement on every client AND on the helper. Without the entitlement
-/// `sharedSocketPath()` returns nil and callers fall back (in-process for
-/// plugins, disabled for the extension).
-enum LocalAIHelperSocket {
+/// `sharedSocketPath()` returns nil and local inference is unavailable (the caller
+/// returns a nil runner).
+public enum LocalAIHelperSocket {
 	static let appGroupID = "group.co.overpolish.keyframeless"
 	/// Short name to stay well under the 104-byte sun_path limit.
 	static let socketName = "kkai.sock"
+
+	/// App-group Mach service the installed helper vends (via an on-demand
+	/// LaunchAgent). A sandboxed plugin can't exec the helper, but it CAN look up
+	/// this name; the lookup makes launchd launch it. Must be prefixed by the app
+	/// group id so the sandbox permits the lookup.
+	public static let machServiceName = "group.co.overpolish.keyframeless.aihelper"
 
 	/// Shared HuggingFace model cache ("hub") directory in the app-group
 	/// container, so EVERY client downloads to - and every spawned helper loads
@@ -28,7 +35,7 @@ enum LocalAIHelperSocket {
 	/// (different sandbox container) doesn't find the model and re-downloads it.
 	/// Returns nil without the app-group entitlement. Matches the `HF_HUB_CACHE`
 	/// layout (the dir that holds `models--org--name`).
-	static func sharedModelCacheDir() -> URL? {
+	public static func sharedModelCacheDir() -> URL? {
 		guard
 			let container = FileManager.default.containerURL(
 				forSecurityApplicationGroupIdentifier: appGroupID)
@@ -39,9 +46,44 @@ enum LocalAIHelperSocket {
 		return dir
 	}
 
+	/// Effective model-cache base: the app-group shared cache when the caller is
+	/// entitled (installed helper + plugins), else `HF_HUB_CACHE` (a dev helper run
+	/// outside the sandbox). Matches how `MLXLocalLLMRunner` resolves it, so the
+	/// helper downloads into the same place the loader reads from.
+	public static func modelCacheBase() -> URL? {
+		if let dir = sharedModelCacheDir() { return dir }
+		if let env = ProcessInfo.processInfo.environment["HF_HUB_CACHE"], !env.isEmpty {
+			return URL(fileURLWithPath: env)
+		}
+		return nil
+	}
+
+	/// Marker file the helper writes into a repo's cache dir once its download FULLY
+	/// completes. Its presence is how a client tells a finished download from a
+	/// partial or cancelled one (which leaves some blobs but no marker) - a plain
+	/// "snapshot has any file" check reports partials as done.
+	public static let completeMarkerName = ".kkcomplete"
+
+	/// The completion-marker URL for a repo, or nil without a cache base. Written by
+	/// the helper on success, checked by the plugin's "is downloaded" test, and
+	/// removed with the repo dir on uninstall.
+	public static func repoCompleteMarker(_ repoID: String) -> URL? {
+		repoCacheDir(repoID)?.appendingPathComponent(completeMarkerName)
+	}
+
+	/// The HuggingFace hub cache directory for a repo id inside the shared model
+	/// cache, e.g. `<container>/huggingface/hub/models--org--name`. nil without a
+	/// cache base. Used by the plugin (to check downloaded state / uninstall) and the
+	/// helper (which does the actual download).
+	public static func repoCacheDir(_ repoID: String) -> URL? {
+		guard let base = modelCacheBase() else { return nil }
+		let dirName = "models--" + repoID.replacingOccurrences(of: "/", with: "--")
+		return base.appendingPathComponent(dirName)
+	}
+
 	/// Absolute path of the shared socket, or nil if the app-group container
 	/// isn't available (missing entitlement) or the path would exceed sun_path.
-	static func sharedSocketPath() -> String? {
+	public static func sharedSocketPath() -> String? {
 		guard
 			let container = FileManager.default.containerURL(
 				forSecurityApplicationGroupIdentifier: appGroupID)
@@ -56,7 +98,7 @@ enum LocalAIHelperSocket {
 	/// another live server already owns the socket (lost the spawn race) or bind
 	/// failed. A stale socket file (previous helper crashed) is detected by an
 	/// unconnectable address and unlinked before rebinding.
-	static func serverBind(path: String) -> Int32? {
+	public static func serverBind(path: String) -> Int32? {
 		let fd = socket(AF_UNIX, SOCK_STREAM, 0)
 		guard fd >= 0 else { return nil }
 		setNoSigpipe(fd)
@@ -87,7 +129,7 @@ enum LocalAIHelperSocket {
 	}
 
 	/// Accept the next client connection, or nil on error.
-	static func acceptConn(_ serverFd: Int32) -> Int32? {
+	public static func acceptConn(_ serverFd: Int32) -> Int32? {
 		let c = accept(serverFd, nil, nil)
 		guard c >= 0 else { return nil }
 		setNoSigpipe(c)
@@ -95,7 +137,7 @@ enum LocalAIHelperSocket {
 	}
 
 	/// Connect to the singleton server, or nil if nobody is listening.
-	static func clientConnect(path: String) -> Int32? {
+	public static func clientConnect(path: String) -> Int32? {
 		let fd = socket(AF_UNIX, SOCK_STREAM, 0)
 		guard fd >= 0 else { return nil }
 		setNoSigpipe(fd)

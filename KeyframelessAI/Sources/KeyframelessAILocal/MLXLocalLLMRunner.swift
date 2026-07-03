@@ -5,6 +5,7 @@
 
 import Foundation
 import HuggingFace
+import KeyframelessAI
 import MLX
 import MLXHuggingFace
 import MLXLLM
@@ -112,7 +113,7 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 			// the model's context) throws a Swift error instead of MLX's default
 			// fatalError - which would crash the whole helper process and leave the
 			// next request hitting a dead socket ("helper exited unexpectedly").
-			let text = Self.stripThink(
+			let text = LocalLLM.stripThink(
 				try await withError { try await session.respond(to: user) })
 			localLog.notice("text gen done in \(Self.ms(genStart), privacy: .public)ms")
 			return text
@@ -139,7 +140,7 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 				additionalContext: ["enable_thinking": true]
 			)
 			let thinkStart = Date()
-			let analysis = Self.stripThink(
+			let analysis = LocalLLM.stripThink(
 				try await withError { try await thinker.respond(to: user) })
 			localLog.notice("think pass done in \(Self.ms(thinkStart), privacy: .public)ms")
 			formatSystem =
@@ -233,7 +234,7 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 			generateParameters: params,
 			additionalContext: ["enable_thinking": false]
 		)
-		let text = Self.stripThink(
+		let text = LocalLLM.stripThink(
 			try await withError { try await session.respond(to: user) })
 		return StructuredResult(json: Self.extractJSONObject(from: text), raw: text)
 	}
@@ -358,13 +359,5 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 	/// Elapsed milliseconds since `start`, rounded, for timing logs.
 	private static func ms(_ start: Date) -> Int {
 		Int((Date().timeIntervalSince(start) * 1000).rounded())
-	}
-
-	/// Drop a leading `<think>…</think>` block if a model emitted one anyway.
-	static func stripThink(_ s: String) -> String {
-		guard let r = s.range(of: "</think>") else {
-			return s.trimmingCharacters(in: .whitespacesAndNewlines)
-		}
-		return String(s[r.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
 	}
 }

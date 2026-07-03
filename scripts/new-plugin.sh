@@ -201,10 +201,10 @@ log "Registering in KKUpdateChecker.m..."
 sed -i '' "s|@\"magicmove\" : @\"MagicMove\"|@\"magicmove\" : @\"MagicMove\",\\
     @\"$PLUGIN_KEY\" : @\"$PLUGIN_NAME\"|" "$UPDATE_CHECKER"
 
-# Add to KKBundleIDToComponent
-sed -i '' "s|@\"MagicMove-XPC-Service\" : @\"magicmove\"|@\"MagicMove-XPC-Service\" : @\"magicmove\",\\
-    @\"$PLUGIN_NAME\" : @\"$PLUGIN_KEY\",\\
-    @\"$PLUGIN_NAME-XPC-Service\" : @\"$PLUGIN_KEY\"|" "$UPDATE_CHECKER"
+# Add to KKBundleIDToComponent (host + .PlugIn extension, the standard scheme)
+sed -i '' "s|@\"co.overpolish.keyframeless.MagicMove.PlugIn\" : @\"magicmove\"|@\"co.overpolish.keyframeless.MagicMove.PlugIn\" : @\"magicmove\",\\
+    @\"co.overpolish.keyframeless.$PLUGIN_NAME\" : @\"$PLUGIN_KEY\",\\
+    @\"co.overpolish.keyframeless.$PLUGIN_NAME.PlugIn\" : @\"$PLUGIN_KEY\"|" "$UPDATE_CHECKER"
 
 ok "Added '$PLUGIN_NAME' to KKUpdateChecker.m"
 

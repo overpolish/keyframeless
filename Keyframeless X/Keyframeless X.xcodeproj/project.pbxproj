@@ -264,12 +264,10 @@
 				F29C84DD2F6820750073B1A9 /* Frameworks */,
 				F29C84DE2F6820750073B1A9 /* Resources */,
 				F28BD2322F68595000C5F6B7 /* Embed Frameworks */,
-				F20AACB72FD728120032F7FF /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				F20AACB62FD728100032F7FF /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F29C84E12F6820750073B1A9 /* Keyframeless X FCP */,
@@ -333,7 +331,6 @@
 			targets = (
 				F29C84C52F68205E0073B1A9 /* Keyframeless X */,
 				F29C84DF2F6820750073B1A9 /* Keyframeless X FCP */,
-				F20AACAB2FD727B00032F7FF /* kk-ai-helper */,
 			);
 		};
 /* End PBXProject section */

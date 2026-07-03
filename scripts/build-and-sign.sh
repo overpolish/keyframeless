@@ -9,7 +9,7 @@
 #   <target>:
 #     combined         the all-in-one Keyframeless.pkg (every plugin)
 #     all              every plugin as its own per-product .pkg
-#     <component>      one per-product .pkg (rounded|keyframelessx|magicmove|glow|canvas)
+#     <component>      one per-product .pkg (rounded|keyframelessx|magicmove|glow|canvas|keyframelessai)
 #
 # Per-product builds GENERATE the single-product .pkgproj and its uninstaller from
 # templates (split-pkgproj.py + uninstall.template), build, sign, then delete those
@@ -23,7 +23,7 @@ SPLIT="$ROOT/scripts/split-pkgproj.py"
 
 usage() {
   echo "Usage: build-and-sign.sh <target> <apple-id> <team-id>"
-  echo "  <target>: combined | all | rounded | keyframelessx | magicmove | glow | canvas"
+  echo "  <target>: combined | all | rounded | keyframelessx | magicmove | glow | canvas | keyframelessai"
   exit 1
 }
 
@@ -50,6 +50,42 @@ cleanup() {
   GEN_UNINSTALL=""
 }
 trap cleanup EXIT
+
+# The AI engine's payload is a built binary (unlike the plugins, whose .app is
+# archived beforehand). Build kk-ai-helper with xcodebuild (only the Metal toolchain
+# compiles MLX's metallib), thin to arm64 (MLX is Apple-Silicon), Developer-ID sign it
+# with the app-group + hardened runtime, and stage it where the .pkgproj payload points
+# (Distribution/helper/staging). No Xcode "archive" step is involved.
+AI_STAGE="$ROOT/Distribution/helper/staging"
+
+stage_ai_helper() {
+  echo "Building + signing kk-ai-helper (xcodebuild, arm64)..."
+  local dd; dd="$(mktemp -d)"
+  ( cd "$ROOT/KeyframelessAI" && xcodebuild -scheme kk-ai-helper -configuration Release \
+      -destination 'generic/platform=macOS' -derivedDataPath "$dd" build ) >/dev/null
+  local prod="$dd/Build/Products/Release"
+  [[ -x "$prod/kk-ai-helper" ]] || { echo "Error: kk-ai-helper not built"; rm -rf "$dd"; exit 1; }
+  rm -rf "$AI_STAGE"; mkdir -p "$AI_STAGE"
+  # Helper binary, thinned to arm64 (MLX is Apple-Silicon), Developer-ID signed.
+  lipo "$prod/kk-ai-helper" -thin arm64 -output "$AI_STAGE/kk-ai-helper" 2>/dev/null \
+    || cp "$prod/kk-ai-helper" "$AI_STAGE/kk-ai-helper"
+  codesign --force --options runtime --timestamp \
+    --identifier co.overpolish.keyframeless.aihelper \
+    --entitlements "$ROOT/Distribution/helper/kk-ai-helper.entitlements" \
+    --sign "Developer ID Application" "$AI_STAGE/kk-ai-helper"
+  chmod 0755 "$AI_STAGE/kk-ai-helper"
+  # SwiftPM resource bundles MUST sit next to the executable or the helper traps at
+  # runtime: KeyframelessAI_KeyframelessAI (Bundle.module - localization/knowledge),
+  # mlx-swift_Cmlx (default.metallib), swift-transformers_Hub, swift-crypto_Crypto.
+  # Ship the exact set xcodebuild produced.
+  cp -R "$prod"/*.bundle "$AI_STAGE/"
+  codesign -dvv "$AI_STAGE/kk-ai-helper" 2>&1 | grep -m1 Authority || true
+  rm -rf "$dd"
+}
+
+unstage_ai_helper() {
+  rm -f "$AI_STAGE/kk-ai-helper" "$AI_STAGE/mlx.metallib"
+}
 
 build_combined() {
   echo "Building Keyframeless (combined)..."
@@ -93,6 +129,11 @@ case "$TARGET" in
     for component in $(python3 "$SPLIT" --components); do
       build_product "$component"
     done
+    ;;
+  keyframelessai)
+    stage_ai_helper
+    build_product keyframelessai
+    unstage_ai_helper
     ;;
   *)
     build_product "$TARGET"

@@ -56,7 +56,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				F220BFE42F4E07EB0034AF77 /* KeyframelessKit.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -375,12 +374,10 @@
 				F2E2ED7D2F4CA530008620D9 /* Copy and Code Sign FxPlug.framework */,
 				F2E2ED7E2F4CA530008620D9 /* Copy and Code Sign PluginManager.framework */,
 				F220BFE52F4E07EC0034AF77 /* Embed Frameworks */,
-				F2600FDD2FF0EB9800E5E38B /* Embed AI Helper */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				F2600FDC2FF0EB8400E5E38B /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F2E2ED902F4CA530008620D9 /* Canvas */,
@@ -436,7 +433,6 @@
 			targets = (
 				F2E2ED742F4CA530008620D9 /* Wrapper Application */,
 				F2E2ED7F2F4CA530008620D9 /* XPC Service */,
-				F2600FD12FF0EB4500E5E38B /* kk-ai-helper */,
 			);
 		};
 /* End PBXProject section */
@@ -547,6 +543,7 @@
 		F2600FD72FF0EB4500E5E38B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Canvas/Plugin/CanvasPluginEntitlements.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -563,6 +560,7 @@
 		F2600FD82FF0EB4500E5E38B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Canvas/Plugin/CanvasPluginEntitlements.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -589,10 +587,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
+					"@loader_path/../../../../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Canvas.PlugIn;
 				PRODUCT_NAME = "Canvas $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Canvas/Plugin/XPC Service-Bridging-Header.h";
@@ -615,10 +614,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
+					"@loader_path/../../../../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Canvas.PlugIn;
 				PRODUCT_NAME = "Canvas $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Canvas/Plugin/XPC Service-Bridging-Header.h";
@@ -641,8 +641,7 @@
 				INFOPLIST_FILE = "Canvas/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = co.overpolish.keyframeless.Canvas;
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Canvas;
 				PRODUCT_NAME = Canvas;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Canvas/Wrapper Application/Wrapper Application-Bridging-Header.h";
@@ -666,7 +665,7 @@
 				INFOPLIST_FILE = "Canvas/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Canvas;
 				PRODUCT_NAME = Canvas;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Canvas/Wrapper Application/Wrapper Application-Bridging-Header.h";

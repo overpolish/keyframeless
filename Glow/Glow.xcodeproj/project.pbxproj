@@ -14,8 +14,6 @@
 		F223525E2FD96E8F00411551 /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = F223525D2FD96E8F00411551 /* KeyframelessAI */; };
 		F26E024F2F4DE56D009D949A /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
 		F26E02502F4DE56D009D949A /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		F28AC7EB2FD9629C005447BD /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = F28AC7EA2FD9629C005447BD /* KeyframelessAI */; };
-		F28AC7EF2FD962CF005447BD /* kk-ai-helper in CopyFiles */ = {isa = PBXBuildFile; fileRef = F28AC7E32FD96282005447BD /* kk-ai-helper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		F2E2ED792F4CA530008620D9 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED782F4CA530008620D9 /* Cocoa.framework */; };
 		F2E2ED812F4CA530008620D9 /* Glow XPC Service.pluginkit in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = F2E2ED802F4CA530008620D9 /* Glow XPC Service.pluginkit */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F2E2ED852F4CA530008620D9 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED842F4CA530008620D9 /* Foundation.framework */; };
@@ -26,13 +24,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		F28AC7EC2FD962C6005447BD /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = F2E2ED6D2F4CA530008620D9 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = F28AC7E22FD96282005447BD;
-			remoteInfo = "kk-ai-helper";
-		};
 		F2E2ED822F4CA530008620D9 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F2E2ED6D2F4CA530008620D9 /* Project object */;
@@ -56,7 +47,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				F220BFE42F4E07EB0034AF77 /* KeyframelessKit.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -70,25 +60,6 @@
 				F26E02502F4DE56D009D949A /* KeyframelessKit.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F28AC7E12FD96282005447BD /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = /usr/share/man/man1/;
-			dstSubfolderSpec = 0;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 1;
-		};
-		F28AC7EE2FD962C8005447BD /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 6;
-			files = (
-				F28AC7EF2FD962CF005447BD /* kk-ai-helper in CopyFiles */,
-			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		F2E2EDB92F4CA530008620D9 /* Embed PlugIns */ = {
@@ -177,14 +148,6 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		F28AC7E02FD96282005447BD /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				F28AC7EB2FD9629C005447BD /* KeyframelessAI in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		F2E2ED722F4CA530008620D9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -250,29 +213,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		F28AC7E22FD96282005447BD /* kk-ai-helper */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = F28AC7E92FD96282005447BD /* Build configuration list for PBXNativeTarget "kk-ai-helper" */;
-			buildPhases = (
-				F28AC7DF2FD96282005447BD /* Sources */,
-				F28AC7E02FD96282005447BD /* Frameworks */,
-				F28AC7E12FD96282005447BD /* CopyFiles */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				F28AC7E42FD96282005447BD /* kk-ai-helper */,
-			);
-			name = "kk-ai-helper";
-			packageProductDependencies = (
-				F28AC7EA2FD9629C005447BD /* KeyframelessAI */,
-			);
-			productName = "kk-ai-helper";
-			productReference = F28AC7E32FD96282005447BD /* kk-ai-helper */;
-			productType = "com.apple.product-type.tool";
-		};
 		F2E2ED742F4CA530008620D9 /* Wrapper Application */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F2E2EDBA2F4CA530008620D9 /* Build configuration list for PBXNativeTarget "Wrapper Application" */;
@@ -309,12 +249,10 @@
 				F2E2ED7D2F4CA530008620D9 /* Copy and Code Sign FxPlug.framework */,
 				F2E2ED7E2F4CA530008620D9 /* Copy and Code Sign PluginManager.framework */,
 				F220BFE52F4E07EC0034AF77 /* Embed Frameworks */,
-				F28AC7EE2FD962C8005447BD /* CopyFiles */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				F28AC7ED2FD962C6005447BD /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				F2E2ED902F4CA530008620D9 /* Glow */,
@@ -337,9 +275,6 @@
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
-					F28AC7E22FD96282005447BD = {
-						CreatedOnToolsVersion = 26.5;
-					};
 					F2E2ED742F4CA530008620D9 = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
@@ -364,7 +299,6 @@
 			targets = (
 				F2E2ED742F4CA530008620D9 /* Wrapper Application */,
 				F2E2ED7F2F4CA530008620D9 /* XPC Service */,
-				F28AC7E22FD96282005447BD /* kk-ai-helper */,
 			);
 		};
 /* End PBXProject section */
@@ -430,13 +364,6 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		F28AC7DF2FD96282005447BD /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		F2E2ED712F4CA530008620D9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -454,11 +381,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		F28AC7ED2FD962C6005447BD /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = F28AC7E22FD96282005447BD /* kk-ai-helper */;
-			targetProxy = F28AC7EC2FD962C6005447BD /* PBXContainerItemProxy */;
-		};
 		F2E2ED832F4CA530008620D9 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F2E2ED7F2F4CA530008620D9 /* XPC Service */;
@@ -472,42 +394,10 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		F28AC7E72FD96282005447BD /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 378WQ9W95U;
-				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		F28AC7E82FD96282005447BD /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 378WQ9W95U;
-				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SKIP_INSTALL = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 		F2E2EDB72F4CA530008620D9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Glow/Plugin/GlowPluginEntitlements.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
@@ -519,10 +409,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
+					"@loader_path/../../../../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Glow.PlugIn;
 				PRODUCT_NAME = "Glow $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Glow/Plugin/XPC Service-Bridging-Header.h";
@@ -533,6 +424,7 @@
 		F2E2EDB82F4CA530008620D9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Glow/Plugin/GlowPluginEntitlements.entitlements";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
 				CODE_SIGN_STYLE = Manual;
 				DEAD_CODE_STRIPPING = YES;
@@ -545,10 +437,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
+					"@loader_path/../../../../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Glow.PlugIn;
 				PRODUCT_NAME = "Glow $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Glow/Plugin/XPC Service-Bridging-Header.h";
@@ -571,8 +464,7 @@
 				INFOPLIST_FILE = "Glow/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
-				"PRODUCT_BUNDLE_IDENTIFIER[sdk=macosx*]" = co.overpolish.keyframeless.Glow;
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Glow;
 				PRODUCT_NAME = Glow;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -597,7 +489,7 @@
 				INFOPLIST_FILE = "Glow/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Glow;
 				PRODUCT_NAME = Glow;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -741,15 +633,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		F28AC7E92FD96282005447BD /* Build configuration list for PBXNativeTarget "kk-ai-helper" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				F28AC7E72FD96282005447BD /* Debug */,
-				F28AC7E82FD96282005447BD /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		F2E2ED702F4CA530008620D9 /* Build configuration list for PBXProject "Glow" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -781,10 +664,6 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		F223525D2FD96E8F00411551 /* KeyframelessAI */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = KeyframelessAI;
-		};
-		F28AC7EA2FD9629C005447BD /* KeyframelessAI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KeyframelessAI;
 		};

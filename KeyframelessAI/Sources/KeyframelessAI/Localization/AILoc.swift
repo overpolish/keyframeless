@@ -16,6 +16,6 @@ import Foundation
 /// Pinning to `.module` mirrors KeyframelessKit's `KKLoc` / `bundleForClass`
 /// pattern and keeps resolution deterministic in both contexts. Use this for
 /// every user-facing string in this package; never a bare `String(localized:)`.
-func AILoc(_ key: String.LocalizationValue) -> String {
+public func AILoc(_ key: String.LocalizationValue) -> String {
 	String(localized: key, bundle: .module)
 }

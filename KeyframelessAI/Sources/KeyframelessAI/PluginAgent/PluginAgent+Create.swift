@@ -80,7 +80,7 @@ extension AIPluginAgent {
 				cachedPrefix
 				+ "\n\nOutput ONLY the SVG document: start with `<svg` and end with "
 				+ "`</svg>`. No JSON, no code fences, no commentary."
-			let text = MLXLocalLLMRunner.stripThink(
+			let text = LocalLLM.stripThink(
 				try await runner.complete(
 					modelID: modelID, system: sys, user: prompt,
 					jsonSchemaJSON: nil, enableThinking: true))

@@ -1,0 +1,25 @@
+#!/bin/bash
+#
+# SPDX-FileCopyrightText: 2026 overpolish
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Bootstrap the on-demand local-AI LaunchAgent for the logged-in user so it's active
+# immediately (without a logout). The plist lives in /Library/LaunchAgents, so it also
+# auto-loads for every user at their next login; this just avoids the wait for the
+# person installing right now. On-demand (MachServices, no RunAtLoad) means nothing
+# runs until a plugin actually asks for local inference.
+
+set -e
+
+LABEL="co.overpolish.keyframeless.aihelper"
+PLIST="/Library/LaunchAgents/$LABEL.plist"
+
+CONSOLE_USER=$(stat -f "%Su" /dev/console)
+if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ] && [ -f "$PLIST" ]; then
+	USER_UID=$(id -u "$CONSOLE_USER")
+	# Replace any prior registration, then bootstrap into the user's GUI domain.
+	launchctl bootout "gui/$USER_UID/$LABEL" 2>/dev/null || true
+	launchctl bootstrap "gui/$USER_UID" "$PLIST" 2>/dev/null || true
+fi
+
+exit 0

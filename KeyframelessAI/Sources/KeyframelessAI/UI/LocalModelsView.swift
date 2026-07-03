@@ -24,11 +24,16 @@ struct LocalModelsView: View {
 					.foregroundStyle(Color.aiTertiaryText)
 			}
 
+			if KKAIEngine.showInstallNotice {
+				KKAIEngineNotice()
+			}
+
 			VStack(alignment: .leading, spacing: 2) {
 				ForEach(LocalModelCatalog.models) { model in
 					LocalModelRow(model: model, store: store)
 				}
 			}
+			.opacity(KKAIEngine.showInstallNotice ? 0.5 : 1)
 
 			if let err = store.lastError {
 				Text(err)
@@ -43,7 +48,44 @@ struct LocalModelsView: View {
 				.foregroundStyle(Color.aiTertiaryText)
 				.fixedSize(horizontal: false, vertical: true)
 		}
-		.onAppear { store.refreshDownloaded() }
+		.onAppear { store.startHelperSync() }
+		.onDisappear { store.stopHelperSync() }
+	}
+}
+
+/// Shown when the shared local-inference engine isn't installed: local models can be
+/// browsed but need the one-time "Keyframeless AI" install before they'll run.
+private struct KKAIEngineNotice: View {
+	var body: some View {
+		HStack(alignment: .top, spacing: 8) {
+			Image(systemName: "shippingbox.fill")
+				.font(.system(size: 12))
+			VStack(alignment: .leading, spacing: 1) {
+				Text(AILoc("Install Keyframeless AI to run local models"))
+					.font(.system(size: 11, weight: .medium))
+					.fixedSize(horizontal: false, vertical: true)
+				Text(
+					AILoc(
+						"On-device models run in a small engine you install once - shared by every Keyframeless plugin. Remote (BYOK) works without it."
+					)
+				)
+				.font(.system(size: 9))
+				.foregroundStyle(.secondary)
+				.fixedSize(horizontal: false, vertical: true)
+			}
+			Spacer(minLength: 0)
+		}
+		.foregroundStyle(Color.accentColor)
+		.padding(.horizontal, 10)
+		.padding(.vertical, 8)
+		.background(
+			RoundedRectangle(cornerRadius: 6)
+				.fill(Color.accentColor.opacity(0.1))
+				.overlay(
+					RoundedRectangle(cornerRadius: 6)
+						.strokeBorder(Color.accentColor.opacity(0.2), lineWidth: 1)
+				)
+		)
 	}
 }
 

@@ -34,10 +34,14 @@ public final class AIKeyState: ObservableObject {
 
 	public func refresh() {
 		var providers = AIKeychain.providersWithKeys()
-		// The local provider has no key; it's "configured" once a model is
-		// downloaded and selected. Only where local is supported (Apple Silicon,
-		// >=16 GB RAM).
-		if AIPlatform.supportsLocal, LocalModelStore.shared.hasReadyModel {
+		// The local provider has no key; it's "configured" (runnable) once a model is
+		// downloaded AND the shared inference engine is installed. Only where local is
+		// supported (Apple Silicon, >=16 GB RAM). Without the engine, local stays
+		// selectable but unconfigured, so the Action tab disables and the install note
+		// shows instead of a run that would fail.
+		if AIPlatform.supportsLocal, LocalModelStore.shared.hasReadyModel,
+			!KKAIEngine.showInstallNotice
+		{
 			providers.append(.local)
 		}
 		configuredProviders = providers
