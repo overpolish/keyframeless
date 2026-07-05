@@ -27,7 +27,7 @@ struct TemplateParamsPanel: View {
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingMD) {
 			if hasParams {
-				ScrollView(.vertical, showsIndicators: false) {
+				ScrollShadowView {
 					VStack(alignment: .leading, spacing: KKSpacingLG) {
 						ForEach(enabledParams) { param in
 							ParamControlRow(

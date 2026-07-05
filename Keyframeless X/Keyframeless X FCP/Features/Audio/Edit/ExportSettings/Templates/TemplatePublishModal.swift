@@ -175,16 +175,10 @@ struct TemplatePublishModal: View {
 
 	@ViewBuilder
 	private func paramBadge(_ param: PublishedParameter) -> some View {
-		switch param.kind {
-		case .color:
-			InfoBadge(label: param.name, systemImage: "paintpalette", color: .kkAccent)
-		case .slider:
-			InfoBadge(label: param.name, systemImage: "slider.horizontal.3", color: .kkWarning)
-		case .toggle:
-			InfoBadge(label: param.name, systemImage: "checkmark.circle", color: .green)
-		default:
-			InfoBadge(label: param.name, color: .secondary)
-		}
+		InfoBadge(
+			label: param.name,
+			systemImage: param.kind.displayIcon,
+			color: param.kind.displayColor)
 	}
 
 	private func setGif(_ url: URL) {

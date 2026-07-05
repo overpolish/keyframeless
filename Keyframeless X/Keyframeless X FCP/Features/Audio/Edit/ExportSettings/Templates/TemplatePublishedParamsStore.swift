@@ -24,6 +24,9 @@ class TemplatePublishedParamsStore: ObservableObject {
 		var a: Double = 1
 		var sliderValue: Double = 0
 		var toggleValue: Bool = false
+		var enumValue: Int = 0
+		var pointX: Double = 0
+		var pointY: Double = 0
 		var fontMode: FontMode = .base
 		var customFont: String?
 		static func fromDefaults(_ param: PublishedParameter) -> ParamValue {
@@ -32,6 +35,17 @@ class TemplatePublishedParamsStore: ObservableObject {
 				return ParamValue(
 					r: param.defaultR ?? 1, g: param.defaultG ?? 1,
 					b: param.defaultB ?? 1)
+			case .dropdown:
+				return ParamValue(
+					enumValue: param.defaultTag ?? param.options?.first?.tag ?? 0)
+			case .slider:
+				return ParamValue(sliderValue: param.defaultNumber ?? 0)
+			case .rotation:
+				return ParamValue(sliderValue: (param.defaultNumber ?? 0).rounded())
+			case .point:
+				let s = PublishedParameter.pointDisplayScale
+				return ParamValue(
+					pointX: (param.defaultX ?? 0) * s, pointY: (param.defaultY ?? 0) * s)
 			case .font:
 				return ParamValue(fontMode: .base, customFont: param.defaultFont)
 			default:

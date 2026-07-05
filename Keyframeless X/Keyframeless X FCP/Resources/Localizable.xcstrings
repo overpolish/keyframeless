@@ -127,6 +127,9 @@
     "“%@”" : {
 
     },
+    "\"%@\" references media that wasn't included, so it can't be used as-is. Ask the author to re-export it as a self-contained template, or import it without the missing image." : {
+
+    },
     "%lld" : {
       "localizations" : {
         "de" : {
@@ -326,6 +329,9 @@
           }
         }
       }
+    },
+    "°" : {
+
     },
     "+%lld" : {
 
@@ -612,6 +618,9 @@
           }
         }
       }
+    },
+    "Animation" : {
+
     },
     "Apply" : {
 
@@ -1256,6 +1265,9 @@
         }
       }
     },
+    "Color" : {
+
+    },
     "Coming Soon" : {
       "localizations" : {
         "de" : {
@@ -1375,6 +1387,12 @@
           }
         }
       }
+    },
+    "Couldn't process the template file." : {
+
+    },
+    "Couldn't read the template file." : {
+
     },
     "Custom" : {
       "localizations" : {
@@ -1936,6 +1954,9 @@
         }
       }
     },
+    "Dropdown" : {
+
+    },
     "Edit" : {
       "localizations" : {
         "de" : {
@@ -2496,6 +2517,12 @@
         }
       }
     },
+    "Import Without Image" : {
+
+    },
+    "Incomplete Template" : {
+
+    },
     "Keep" : {
       "localizations" : {
         "de" : {
@@ -3015,6 +3042,9 @@
           }
         }
       }
+    },
+    "Missing media" : {
+
     },
     "Mix and match settings by processing only the selected clips." : {
       "localizations" : {
@@ -3902,6 +3932,9 @@
         }
       }
     },
+    "Point" : {
+
+    },
     "Preparing…" : {
       "localizations" : {
         "de" : {
@@ -3978,6 +4011,46 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "预览"
+          }
+        }
+      }
+    },
+    "Preview assumes a center-aligned template. Position may differ with off-center templates." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die Vorschau geht von einer zentrierten Vorlage aus. Bei nicht zentrierten Vorlagen kann die Position abweichen."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La vista previa supone una plantilla centrada. La posición puede variar con plantillas no centradas."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’aperçu suppose un modèle centré. La position peut varier avec des modèles non centrés."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "プレビューは中央揃えのテンプレートを前提としています。中央揃えでないテンプレートでは位置が異なる場合があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "미리보기는 가운데 정렬 템플릿을 기준으로 합니다. 가운데 정렬이 아닌 템플릿에서는 위치가 다를 수 있습니다."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "预览基于居中对齐的模板。使用非居中模板时位置可能不同。"
           }
         }
       }
@@ -4541,6 +4614,9 @@
           }
         }
       }
+    },
+    "Rotation" : {
+
     },
     "Save" : {
       "localizations" : {
@@ -5302,6 +5378,9 @@
         }
       }
     },
+    "Toggle" : {
+
+    },
     "Transcribe" : {
       "localizations" : {
         "de" : {
@@ -5821,6 +5900,9 @@
           }
         }
       }
+    },
+    "Value" : {
+
     },
     "What's New" : {
       "localizations" : {

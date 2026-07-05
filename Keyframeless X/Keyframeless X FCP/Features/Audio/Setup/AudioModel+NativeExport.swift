@@ -116,7 +116,8 @@ extension AudioModel {
 				textOzmlKey: storedSettings?.textOzmlKey,
 				textOzml: storedSettings?.textOzml,
 				textOzmlDefaultText: storedSettings?.textOzmlDefaultText,
-				textOzmlStyleID: storedSettings?.textOzmlStyleID
+				textOzmlStyleID: storedSettings?.textOzmlStyleID,
+				verticalAlignmentTag: verticalAlignmentTag()
 			)
 			publishedParams = buildNativePublishedParams()
 		}
@@ -131,13 +132,25 @@ extension AudioModel {
 		)
 	}
 
+	/// Selected Vertical Alignment tag for the native text-ozml patch. The param is
+	/// identified by channel path (`2/373/2`), which survives a creator renaming it.
+	private func verticalAlignmentTag() -> Int? {
+		let store = TemplatePublishedParamsStore.shared
+		guard let settings = store.params(for: selectedTemplate.id),
+			let va = settings.allParams.first(where: {
+				$0.kind == .dropdown && $0.channelPath == "2/373/2"
+			})
+		else { return nil }
+		return store.value(paramID: va.id, for: selectedTemplate.id).enumValue
+	}
+
 	private func buildNativePublishedParams() -> [FCPNativePasteboardBuilder.EffectValueEntry] {
 		let store = TemplatePublishedParamsStore.shared
 		guard let settings = store.params(for: selectedTemplate.id) else { return [] }
 		var entries: [FCPNativePasteboardBuilder.EffectValueEntry] = []
 		for param in settings.allParams {
 			let val = store.value(paramID: param.id, for: selectedTemplate.id)
-			let key = param.effectValueKey
+			let key = param.styleKey ?? param.effectValueKey
 			switch param.kind {
 			case .color:
 				entries.append(
@@ -150,13 +163,47 @@ extension AudioModel {
 						data: OzmlBuilder.slider(
 							name: param.name, paramID: param.channelParamID,
 							value: val.sliderValue)))
-			case .toggle:
+			case .rotation:
+				// Motion stores angles in degrees, but the native ozml value is in
+				// RADIANS (sending 45 raw reads back as 45 rad = 2578°). Convert.
 				entries.append(
 					.init(
 						key: key,
-						data: OzmlBuilder.toggle(
+						data: OzmlBuilder.slider(
 							name: param.name, paramID: param.channelParamID,
-							value: val.toggleValue)))
+							value: val.sliderValue * .pi / 180)))
+			case .toggle:
+				if let baseFlags = param.filterEnableFlags {
+					// Filter-enable (e.g. Drop Shadow): FCP enables the filter by the
+					// PRESENCE of an override at the group key; omit it to leave it off.
+					if val.toggleValue {
+						entries.append(
+							.init(
+								key: key,
+								data: OzmlBuilder.filterEnable(
+									name: param.name, paramID: param.channelParamID,
+									enabledFlags: baseFlags & ~0x8000)))
+					}
+				} else {
+					entries.append(
+						.init(
+							key: key,
+							data: OzmlBuilder.toggle(
+								name: param.name, paramID: param.channelParamID,
+								value: val.toggleValue)))
+				}
+			case .point:
+				// A point overrides its X (child id 1) and Y (child id 2) sub-channels.
+				// The field is in FCP units; the native value is field ÷ display scale.
+				let s = PublishedParameter.pointDisplayScale
+				entries.append(
+					.init(
+						key: "\(key)/1",
+						data: OzmlBuilder.slider(name: "X", paramID: "1", value: val.pointX / s)))
+				entries.append(
+					.init(
+						key: "\(key)/2",
+						data: OzmlBuilder.slider(name: "Y", paramID: "2", value: val.pointY / s)))
 			default:
 				if let defaultFont = param.defaultFont {
 					let fontToUse =
@@ -181,15 +228,27 @@ extension AudioModel {
 		for param in settings.allParams where param.isToggleable {
 			let val = store.value(paramID: param.id, for: selectedTemplate.id)
 			if param.isFont { continue }
-			let key = param.effectValueKey
+			// Filter-enable toggles map to text-style shadow attrs in FCPXML (a
+			// different mechanism than the native group-key override); skip for now.
+			if param.filterEnableFlags != nil { continue }
+			let key = param.styleKey ?? param.effectValueKey
+			if param.kind == .point {
+				entries.append(
+					.init(name: "\(param.name) X", key: "\(key)/1", value: "\(val.pointX)"))
+				entries.append(
+					.init(name: "\(param.name) Y", key: "\(key)/2", value: "\(val.pointY)"))
+				continue
+			}
 			let valueStr: String
 			switch param.kind {
 			case .color:
 				valueStr = "\(val.r) \(val.g) \(val.b) \(val.a)"
-			case .slider:
+			case .slider, .rotation:
 				valueStr = "\(val.sliderValue)"
 			case .toggle:
 				valueStr = val.toggleValue ? "1" : "0"
+			case .dropdown:
+				valueStr = "\(val.enumValue)"
 			default:
 				continue
 			}

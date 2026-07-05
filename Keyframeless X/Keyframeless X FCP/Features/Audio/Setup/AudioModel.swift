@@ -59,6 +59,7 @@ class AudioModel: ObservableObject {
 	@Published var paramsModalHasPerWord: Bool = false
 	@Published var publishModalTemplate: CaptionTemplate?
 	@Published var updateModalTemplate: (CaptionTemplate, CommunityTemplate)?
+	@Published var missingMediaModal: MissingMediaInfo?
 
 	var textStyle: TextStyleSettings {
 		get {
@@ -137,6 +138,34 @@ class AudioModel: ObservableObject {
 	func removeCustomTemplate(_ template: CaptionTemplate) {
 		CustomTemplateStore.shared.remove(template)
 		refreshTemplates()
+	}
+
+	/// Resolves the "Import without image" choice: strips unresolved media, then
+	/// continues the normal post-install flow.
+	func importStrippingMissingMedia(_ info: MissingMediaInfo) {
+		missingMediaModal = nil
+		switch CustomTemplateInstaller.installStrippingMedia(from: info.sourceURL) {
+		case .installed(let dest):
+			finishImport(installedURL: dest)
+		case .missingMedia, .failed:
+			break
+		}
+	}
+
+	/// Registers an installed custom `.moti` and surfaces its published params.
+	/// Shared by the direct-drop path and the "Import without image" path.
+	func finishImport(installedURL: URL) {
+		let result = PublishedParameter.parseAll(from: installedURL)
+		addCustomTemplate(from: installedURL)
+		let templateID = "custom:\(installedURL.path)"
+		guard let added = captionTemplates.first(where: { $0.id == templateID }) else { return }
+		if let textOzml = result.textOzml {
+			TemplatePublishedParamsStore.shared.setTextOzml(textOzml, for: templateID)
+		}
+		guard !result.customParams.isEmpty || result.hasPerWordAnimation else { return }
+		paramsModalParams = result.customParams
+		paramsModalHasPerWord = result.hasPerWordAnimation
+		paramsModalTemplate = added
 	}
 
 	func buildCaptionSegments(from rows: [AudioEditRow]) -> [CaptionSegment] {
@@ -388,7 +417,8 @@ class AudioModel: ObservableObject {
 	@MainActor
 	func runAITransform(instruction: String) {
 		let selected = editSelectedClips ?? Set(audioClips.indices)
-		let clips: [(Int, FCPXMLParser.AudioClip)] = selected
+		let clips: [(Int, FCPXMLParser.AudioClip)] =
+			selected
 			.sorted()
 			.compactMap { idx in
 				guard audioClips.indices.contains(idx) else { return nil }

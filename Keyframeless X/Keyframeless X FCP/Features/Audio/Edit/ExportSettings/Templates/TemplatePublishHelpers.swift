@@ -201,17 +201,56 @@ enum FilePicker {
 	}
 }
 
+extension PublishedParameter.ParamKind {
+	var displayLabel: String {
+		switch self {
+		case .off: return String(localized: "Off")
+		case .color: return String(localized: "Color")
+		case .slider: return String(localized: "Value")
+		case .toggle: return String(localized: "Toggle")
+		case .dropdown: return String(localized: "Dropdown")
+		case .rotation: return String(localized: "Rotation")
+		case .point: return String(localized: "Point")
+		case .font: return String(localized: "Font")
+		case .animation: return String(localized: "Animation")
+		}
+	}
+
+	var displayIcon: String {
+		switch self {
+		case .off: return "circle.slash"
+		case .color: return "paintpalette"
+		case .slider: return "slider.horizontal.3"
+		case .toggle: return "checkmark.circle"
+		case .dropdown: return "chevron.down.square"
+		case .rotation: return "arrow.clockwise"
+		case .point: return "dot.arrowtriangles.up.right.down.left.circle"
+		case .font: return "textformat"
+		case .animation: return "directcurrent"
+		}
+	}
+
+	var displayColor: Color {
+		// Neutral grey for every kind; per-word animation keeps its green accent.
+		switch self {
+		case .animation: return .green
+		default: return .secondary
+		}
+	}
+}
+
 struct ParamKindRow: View {
 	let name: String
 	@Binding var kind: PublishedParameter.ParamKind
+	var hasOptions: Bool = false
+	var hasPoint: Bool = false
 
-	private let kindOptions:
-		[(label: String, value: PublishedParameter.ParamKind, icon: String?, color: Color?)] = [
-			(String(localized: "Off"), .off, nil, .kkError),
-			("Color", .color, "paintpalette", .kkAccent),
-			("Slider", .slider, "slider.horizontal.3", .kkWarning),
-			("Toggle", .toggle, "checkmark.circle", .green),
-		]
+	private var kinds: [PublishedParameter.ParamKind] {
+		var k: [PublishedParameter.ParamKind] = [.off, .color, .slider, .toggle, .rotation]
+		if hasOptions { k.append(.dropdown) }
+		if hasPoint { k.append(.point) }
+		return k
+	}
 
 	var body: some View {
 		HStack(spacing: KKSpacingMD) {
@@ -220,9 +259,16 @@ struct ParamKindRow: View {
 				.foregroundStyle(.primary)
 				.lineLimit(2)
 				.fixedSize(horizontal: false, vertical: true)
-			Spacer()
-			PillToggle(selection: $kind, options: kindOptions)
-				.fixedSize()
+			Spacer(minLength: KKSpacingMD)
+			KKDropdown(
+				selection: $kind,
+				items: kinds.map {
+					KKDropdownItem(
+						value: $0, label: $0.displayLabel, icon: $0.displayIcon,
+						color: $0.displayColor)
+				}
+			)
+			.frame(width: 116)
 		}
 		.padding(.vertical, KKPaddingXS)
 	}
@@ -278,40 +324,87 @@ struct ParamControlRow: View {
 		)
 	}
 
+	private var labelWidth: CGFloat { compact ? 96 : 120 }
+
 	var body: some View {
+		HStack(spacing: KKSpacingMD) {
+			Text(param.name)
+				.font(compact ? .system(size: 10) : .caption)
+				.foregroundStyle(.primary)
+				.lineLimit(1)
+				.frame(width: labelWidth, alignment: .leading)
+			control
+				.frame(maxWidth: .infinity, alignment: .leading)
+		}
+	}
+
+	private func pointField(_ axis: String, _ value: Binding<Double>) -> some View {
+		HStack(spacing: KKSpacingXS) {
+			Text(axis)
+				.font(.system(size: 10, weight: .medium))
+				.foregroundStyle(.secondary)
+				.fixedSize()
+			TextField("", value: value, format: .number.precision(.fractionLength(0)))
+				.textFieldStyle(.plain)
+				.font(.system(size: 11).monospacedDigit())
+				.multilineTextAlignment(.trailing)
+				.frame(width: 26)
+				.frame(height: KKInspectorRowHeight)
+				.padding(.horizontal, KKPaddingXS)
+				.kkPanel(cornerRadius: KKRadiusMD)
+		}
+	}
+
+	@ViewBuilder private var control: some View {
 		switch param.kind {
 		case .color:
-			HStack(spacing: KKSpacingMD) {
-				Text(param.name).font(.caption).foregroundStyle(.primary)
-				Spacer()
+			HStack(spacing: 0) {
+				Spacer(minLength: 0)
 				ColorSwatch(
 					colorR: binding(\.r), colorG: binding(\.g),
 					colorB: binding(\.b), colorA: binding(\.a))
 			}
 		case .slider:
-			if compact {
-				HStack(spacing: KKSpacingSM) {
-					Text(param.name).font(.system(size: 9)).foregroundStyle(.secondary).lineLimit(1)
-					Spacer()
-					Slider(value: binding(\.sliderValue), in: 0...100).controlSize(.mini)
-						.frame(maxWidth: 80)
-				}
-			} else {
-				LabeledSlider(
-					label: param.name, labelWidth: 120,
-					value: binding(\.sliderValue), range: 0...100,
-					textColor: .primary, valueWidth: 20)
-			}
+			TextField("", value: binding(\.sliderValue), format: .number)
+				.textFieldStyle(.plain)
+				.font(.system(size: 11))
+				.frame(maxWidth: .infinity, alignment: .leading)
+				.frame(height: KKInspectorRowHeight)
+				.padding(.horizontal, KKPaddingLG)
+				.kkPanel(cornerRadius: KKRadiusMD)
 		case .toggle:
-			HStack(spacing: KKSpacingMD) {
-				Text(param.name).font(.caption).foregroundStyle(.primary)
-				Spacer()
+			HStack(spacing: 0) {
+				Spacer(minLength: 0)
 				Toggle("", isOn: binding(\.toggleValue))
 					.toggleStyle(.checkbox).controlSize(.small).labelsHidden()
 					.tint(.kkAccent)
-					.overlay(
-						RoundedRectangle(cornerRadius: 3)
-							.stroke(Color.secondary.opacity(compact ? 0 : 0.4), lineWidth: 1))
+			}
+		case .dropdown:
+			if let options = param.options {
+				KKDropdown(
+					selection: binding(\.enumValue),
+					items: options.map { KKDropdownItem(value: $0.tag, label: $0.name) })
+			}
+		case .point:
+			HStack(spacing: KKSpacingSM) {
+				Spacer(minLength: 0)
+				pointField("x", binding(\.pointX))
+				pointField("y", binding(\.pointY))
+			}
+		case .rotation:
+			HStack(spacing: KKSpacingSM) {
+				Spacer(minLength: 0)
+				CircularSlider(degrees: binding(\.sliderValue))
+					.frame(width: 13, height: 13)
+				TextField(
+					"", value: binding(\.sliderValue),
+					format: .number.precision(.fractionLength(0))
+				)
+				.textFieldStyle(.plain)
+				.font(.system(size: 11).monospacedDigit())
+				.multilineTextAlignment(.trailing)
+				.frame(width: 34)
+				Text("°").font(.system(size: 10)).foregroundStyle(.secondary)
 			}
 		default:
 			EmptyView()

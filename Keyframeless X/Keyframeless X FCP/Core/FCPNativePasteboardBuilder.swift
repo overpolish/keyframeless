@@ -38,6 +38,9 @@ enum FCPNativePasteboardBuilder {
 		var textOzml: String?
 		var textOzmlDefaultText: String?
 		var textOzmlStyleID: String?
+		/// Selected Vertical Alignment tag (0 Top / 1 Center / 2 Bottom). Patched into
+		/// the injected text ozml. Defaults to Center when the param isn't a dropdown.
+		var verticalAlignmentTag: Int?
 	}
 
 	struct EffectValueEntry {
@@ -306,6 +309,13 @@ enum FCPNativePasteboardBuilder {
 				patchOzmlAttribute(
 					&patched, after: "name=\"Size\" id=\"3\"",
 					attribute: "value", replacement: "\(style.fontSize)")
+				// Set the text's vertical alignment (default Center 1). Templates that
+				// bottom- or top-align their text otherwise land the caption off-center,
+				// breaking the assumption that the Y-position offset is measured from the
+				// vertical centre. No-op when the param is absent.
+				patchOzmlAttribute(
+					&patched, after: "name=\"Vertical Alignment\"",
+					attribute: "value", replacement: "\(info.verticalAlignmentTag ?? 1)")
 				entries.append(
 					EffectValueEntry(
 						key: textOzmlKey, data: patched.data(using: .utf8)!))

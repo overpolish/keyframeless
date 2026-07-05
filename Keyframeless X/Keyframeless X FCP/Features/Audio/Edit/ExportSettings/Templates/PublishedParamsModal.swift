@@ -35,7 +35,7 @@ struct PublishedParamsModal: View {
 		_paramKinds = State(
 			initialValue: Dictionary(
 				uniqueKeysWithValues: params.filter { $0.defaultFont == nil }.map {
-					($0.id, initialKinds[$0.id] ?? .off)
+					($0.id, initialKinds[$0.id] ?? $0.kind)
 				}))
 		_fontModes = State(
 			initialValue: Dictionary(
@@ -108,7 +108,9 @@ struct PublishedParamsModal: View {
 								name: param.name,
 								kind: Binding(
 									get: { paramKinds[param.id] ?? .off },
-									set: { paramKinds[param.id] = $0 }))
+									set: { paramKinds[param.id] = $0 }),
+								hasOptions: param.options?.isEmpty == false,
+								hasPoint: param.defaultX != nil)
 						}
 					}
 					.onGeometryChange(for: CGFloat.self) {

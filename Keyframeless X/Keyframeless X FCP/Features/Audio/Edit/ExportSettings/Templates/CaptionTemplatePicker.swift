@@ -11,7 +11,6 @@ struct CaptionTemplatePicker: View {
 	@ObservedObject var model: AudioModel
 	let templates: [CaptionTemplate]
 	var hidePerWord: Bool = false
-	var onDropMoti: ((URL) -> Void)?
 	var onRemoveCustom: ((CaptionTemplate) -> Void)?
 
 	@ObservedObject private var favorites = TemplateFavorites.shared
@@ -318,18 +317,18 @@ struct CaptionTemplatePicker: View {
 	}
 
 	private func addMotiAndDetectParams(_ url: URL) {
-		let result = PublishedParameter.parseAll(from: url)
-		onDropMoti?(url)
-		let templateID = "custom:\(url.path)"
-		if let added = model.captionTemplates.first(where: { $0.id == templateID }) {
-			// Store text ozml even if no published params
-			if let textOzml = result.textOzml {
-				paramsStore.setTextOzml(textOzml, for: templateID)
-			}
-			guard !result.customParams.isEmpty || result.hasPerWordAnimation else { return }
-			model.paramsModalParams = result.customParams
-			model.paramsModalHasPerWord = result.hasPerWordAnimation
-			model.paramsModalTemplate = added
+		switch CustomTemplateInstaller.install(from: url) {
+		case .installed(let dest):
+			downloadError = nil
+			model.finishImport(installedURL: dest)
+		case .missingMedia(let missing):
+			downloadError = nil
+			model.missingMediaModal = MissingMediaInfo(
+				sourceURL: url,
+				templateName: url.deletingPathExtension().lastPathComponent,
+				missing: missing)
+		case .failed(let message):
+			downloadError = message
 		}
 	}
 

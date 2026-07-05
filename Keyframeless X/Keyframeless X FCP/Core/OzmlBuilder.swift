@@ -46,11 +46,16 @@ enum OzmlBuilder {
 	}
 
 	static func slider(name: String, paramID: String, value: Double) -> Data {
+		// The template doesn't carry a UI range, and the field is unbounded, so widen
+		// the curve range to encompass the value (values > 100 or negatives would
+		// otherwise clamp). Stays 0…100 for the common in-range case.
+		let lo = Swift.min(0, value)
+		let hi = Swift.max(100, value)
 		let body =
 			"<parameter name=\"\(name)\" id=\"\(paramID)\" factoryID=\"1\">\n"
 			+ "\t<flags>8589934608</flags>\n"
 			+ "\t<curve type=\"1\" default=\"\(value)\" value=\"\(value)\">\n"
-			+ "\t\t<min>0</min>\n\t\t<max>100</max>\n"
+			+ "\t\t<min>\(lo)</min>\n\t\t<max>\(hi)</max>\n"
 			+ "\t</curve>\n</parameter>\n"
 		return wrap(channelFactory, body).data(using: .utf8)!
 	}
@@ -63,6 +68,23 @@ enum OzmlBuilder {
 			+ "\t<curve type=\"0\" default=\"\(v)\" value=\"\(v)\"/>\n"
 			+ "</parameter>\n"
 		return wrap(channelFactory, body).data(using: .utf8)!
+	}
+
+	private static let groupFactory =
+		"<factory id=\"1\" uuid=\"e7bf3809229011d798e500039389b702\">\n"
+		+ "\t<description>Channel</description>\n\t<manufacturer>Apple</manufacturer>\n"
+		+ "\t<version>1</version>\n</factory>\n"
+
+	/// Enables a filter GROUP (e.g. Drop Shadow). FCP represents an enabled filter as
+	/// an override at the group key with the group's flags minus the `0x8000` disable
+	/// bit; absence of this override means disabled. Captured from an FCP paste.
+	static func filterEnable(name: String, paramID: String, enabledFlags: Int) -> Data {
+		let body =
+			"<parameter name=\"\(name)\" id=\"\(paramID)\" factoryID=\"1\">\n"
+			+ "\t<flags>\(enabledFlags)</flags>\n"
+			+ "\t<foldFlags>131076</foldFlags>\n"
+			+ "</parameter>\n"
+		return wrap(groupFactory, body).data(using: .utf8)!
 	}
 
 	static func font(name: String, paramID: String = "83", font: String, defaultFont: String)

@@ -40,6 +40,13 @@ struct CaptionStyleControls: View {
 					}
 				}
 				.frame(height: 100)
+				HelperText(
+					String(
+						localized:
+							"Preview assumes a center-aligned template. Position may differ with off-center templates."
+					),
+					systemImage: "info.circle"
+				)
 			}
 			HStack(spacing: KKSpacingLG) {
 				LabeledSlider(
@@ -132,7 +139,6 @@ struct CaptionStyleControls: View {
 					model: model,
 					templates: model.captionTemplates,
 					hidePerWord: anySelectedClipIsSrt,
-					onDropMoti: { model.addCustomTemplate(from: $0) },
 					onRemoveCustom: { model.removeCustomTemplate($0) }
 				)
 			}

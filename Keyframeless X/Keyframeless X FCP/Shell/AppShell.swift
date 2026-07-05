@@ -92,13 +92,15 @@ struct AppShell: View {
 			radius: audioModel.isDraggingToFCP || audioModel.paramsModalTemplate != nil
 				|| audioModel.publishModalTemplate != nil
 				|| audioModel.updateModalTemplate != nil
-				|| audioModel.aiTransformBatch != nil ? 3 : 0
+				|| audioModel.aiTransformBatch != nil
+				|| audioModel.missingMediaModal != nil ? 3 : 0
 		)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.isDraggingToFCP)
 		.allowsHitTesting(
 			audioModel.paramsModalTemplate == nil && audioModel.publishModalTemplate == nil
 				&& audioModel.updateModalTemplate == nil
 				&& audioModel.aiTransformBatch == nil
+				&& audioModel.missingMediaModal == nil
 				&& !processingCoordinator.isProcessing
 		)
 		.background(Color(nsColor: .windowBackground()))
@@ -188,11 +190,20 @@ struct AppShell: View {
 				)
 				.transition(.opacity)
 			}
+			if let info = audioModel.missingMediaModal {
+				MissingMediaModal(
+					info: info,
+					onImportWithoutImage: { audioModel.importStrippingMissingMedia(info) },
+					onDismiss: { audioModel.missingMediaModal = nil }
+				)
+				.transition(.opacity)
+			}
 		}
 		.animation(.easeInOut(duration: 0.2), value: audioModel.paramsModalTemplate != nil)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.publishModalTemplate != nil)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.updateModalTemplate != nil)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.aiTransformBatch != nil)
+		.animation(.easeInOut(duration: 0.2), value: audioModel.missingMediaModal != nil)
 	}
 
 	private var topBar: some View {
