@@ -162,7 +162,7 @@ extension AudioModel {
 				if param.channelPath == blurCh || param.channelPath.hasSuffix("/" + blurCh) {
 					// Blur is a 2D X/Y point natively; a single value maps to both (uniform,
 					// no elliptical support). Emit the LEAF channel flags (8589934608), NOT
-					// param.overrideFlags — those are the Blur GROUP's flags, whose 0x1000
+					// param.overrideFlags - those are the Blur GROUP's flags, whose 0x1000
 					// folder bit makes FCP treat each X/Y leaf as a self-referential folder
 					// and crash tearing the scene down (cyclic removeAllDependencies).
 					for (axis, pid) in [("X", "1"), ("Y", "2")] {
@@ -247,7 +247,7 @@ extension AudioModel {
 
 		// The caption's Text Size drives the text-style font size. We patch the injected
 		// scene's Size, but character-animation templates ignore that scene and render
-		// the template's own size, so also emit the real style-size override — the same
+		// the template's own size, so also emit the real style-size override - the same
 		// mechanism FCP's own inspector uses (verified against a working manual edit). The
 		// key/flags are synthesized from the text style, so this works whether or not the
 		// template publishes "Size".
@@ -271,7 +271,7 @@ extension AudioModel {
 	/// FCPXML enables face-layer filters (drop shadow, outline, …) via `<text-style>`
 	/// attributes rather than the native group-key override, so map each enabled filter
 	/// toggle to its attributes. Colours are read from the template's published sub-params
-	/// (their per-filter sparse base — red outline / black shadow — is baked in at parse),
+	/// (their per-filter sparse base - red outline / black shadow - is baked in at parse),
 	/// with a user-set Colour control taking precedence. Glow has no text-style equivalent
 	/// (FCP drops it on import). shadow opacity/offset + outline width keep FCP defaults
 	/// except width, which reads its published value.
@@ -333,7 +333,7 @@ extension AudioModel {
 				let width = filterNumber(group: group, sub: TF.outlineWidth, fallback: 13)
 				attrs += " strokeColor=\"\(rgb) 1\" strokeWidth=\"\(-width)\""
 			default:
-				break  // glow etc — no text-style equivalent
+				break  // glow etc - no text-style equivalent
 			}
 		}
 		return attrs

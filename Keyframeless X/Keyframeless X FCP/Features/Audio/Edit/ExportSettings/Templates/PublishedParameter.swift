@@ -30,7 +30,7 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 	/// for these (verified against an FCPXML export). nil for non-style params.
 	var styleKey: String?
 	/// For a toggle whose target is a filter GROUP (e.g. "Drop Shadow On/Off"), the
-	/// group's ozml `name` and base `flags`. Such a group has no value curve — FCP
+	/// group's ozml `name` and base `flags`. Such a group has no value curve - FCP
 	/// enables it by an override at the group key carrying `flags & ~0x8000` (the
 	/// disable bit cleared); absence of that override means off. nil for value toggles.
 	var filterEnableName: String?
@@ -45,7 +45,7 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 	var nativeFlags: Int?
 
 	/// Backing store for `isTextSize`. Optional so params persisted before this field
-	/// existed still decode — synthesized `Codable` throws on a missing NON-optional key
+	/// existed still decode - synthesized `Codable` throws on a missing NON-optional key
 	/// (it ignores default values), which would wipe every saved template's settings.
 	var isTextSizeStored: Bool?
 
@@ -241,7 +241,7 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 					nativeFlags: nativeFlags, isTextSizeStored: isTextSize))
 		}
 
-		// Face-layer filters store colours/numerics SPARSELY — Motion omits any channel
+		// Face-layer filters store colours/numerics SPARSELY - Motion omits any channel
 		// already at its per-filter factory default. Fill the omitted ones so the control's
 		// shown default and the emitted attr agree. Keyed by FIXED Motion channel ids (see
 		// TextFilter), never the renamable name. Per filter: colour base + factory numerics.

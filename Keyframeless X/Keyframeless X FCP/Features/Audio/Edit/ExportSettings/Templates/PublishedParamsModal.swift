@@ -41,7 +41,7 @@ struct PublishedParamsModal: View {
 			initialValue: Dictionary(
 				uniqueKeysWithValues: params.filter { $0.defaultFont != nil }.map {
 					// Restore the saved mode (.font = custom). The passed params are re-parsed
-					// on reopen with kind reset, so read the persisted kind via initialKinds —
+					// on reopen with kind reset, so read the persisted kind via initialKinds -
 					// same source the non-font paramKinds use just below.
 					($0.id, (initialKinds[$0.id] ?? $0.kind) == .font ? .custom : .base)
 				}))

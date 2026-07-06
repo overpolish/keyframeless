@@ -35,7 +35,7 @@ extension PublishedParameter {
 
 	/// The text of a `<parameter>` element starting at `start`, up to its matching
 	/// `</parameter>` (handling self-closing children and nesting). Bounds a child search
-	/// to the node's OWN element so it can't bleed into a sibling filter's params — a
+	/// to the node's OWN element so it can't bleed into a sibling filter's params - a
 	/// fixed-size window would, e.g. reading an outline's absent channels from the next
 	/// filter's colour. Returns the open tag alone for a self-closing node.
 	static func elementText(from start: String.Index, in content: String) -> String? {
@@ -92,7 +92,7 @@ extension PublishedParameter {
 	}
 
 	/// Per-channel RGB defaults for a colour param. A channel is `nil` when Motion omitted
-	/// it — Motion stores colours sparsely, writing only channels that differ from the
+	/// it - Motion stores colours sparsely, writing only channels that differ from the
 	/// param's per-channel factory default. Callers apply the right base for absent
 	/// channels (white for a face colour via `?? 1`, red for an outline); collapsing
 	/// absent→1 here would lose that distinction.
@@ -170,7 +170,7 @@ extension PublishedParameter {
 			}
 		}
 
-		// A single (or zero) real option isn't a menu — e.g. blank separator params
+		// A single (or zero) real option isn't a menu - e.g. blank separator params
 		// whose only <entry> is whitespace. Fall through to the known-enum tables.
 		if options.count >= 2 {
 			return (options, templateTag)
@@ -187,7 +187,7 @@ extension PublishedParameter {
 
 	/// Option lists for pop-ups that don't inline their `<entry>` children. Keyed by
 	/// CHANNEL PATH (the behavior/object param id), which survives a creator renaming
-	/// the published param — the display name does not. Params whose channel path
+	/// the published param - the display name does not. Params whose channel path
 	/// carries an instance id (horizontal Alignment) fall back to a name key.
 	///
 	/// Tags are assumed sequential 0-based, pending verification against Motion.
@@ -288,7 +288,7 @@ extension PublishedParameter {
 	}
 
 	/// If the param targets a filter GROUP (a `<parameter>` with `flags` but no
-	/// `value` — its on/off is the `0x800` enable bit), the group's ozml name +
+	/// `value` - its on/off is the `0x800` enable bit), the group's ozml name +
 	/// base flags. nil for ordinary value toggles.
 	static func extractFilterEnable(
 		objectID: String, channelPath: String, in content: String
