@@ -235,7 +235,8 @@ class AudioModel: ObservableObject {
 			format: format,
 			template: selectedTemplate,
 			publishedParams: publishedParams,
-			perWordStartsAtZero: startsAtZero
+			perWordStartsAtZero: startsAtZero,
+			textStyleFilterAttrs: enabledTextFilterAttrs()
 		)
 	}
 

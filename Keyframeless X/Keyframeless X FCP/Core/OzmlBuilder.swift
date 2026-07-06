@@ -45,7 +45,9 @@ enum OzmlBuilder {
 		}
 	}
 
-	static func slider(name: String, paramID: String, value: Double) -> Data {
+	static func slider(name: String, paramID: String, value: Double, flags: Int = 8_589_934_608)
+		-> Data
+	{
 		// The template doesn't carry a UI range, and the field is unbounded, so widen
 		// the curve range to encompass the value (values > 100 or negatives would
 		// otherwise clamp). Stays 0…100 for the common in-range case.
@@ -53,7 +55,7 @@ enum OzmlBuilder {
 		let hi = Swift.max(100, value)
 		let body =
 			"<parameter name=\"\(name)\" id=\"\(paramID)\" factoryID=\"1\">\n"
-			+ "\t<flags>8589934608</flags>\n"
+			+ "\t<flags>\(flags)</flags>\n"
 			+ "\t<curve type=\"1\" default=\"\(value)\" value=\"\(value)\">\n"
 			+ "\t\t<min>\(lo)</min>\n\t\t<max>\(hi)</max>\n"
 			+ "\t</curve>\n</parameter>\n"

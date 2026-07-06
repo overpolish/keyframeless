@@ -33,6 +33,37 @@ extension PublishedParameter {
 		return searchStart
 	}
 
+	/// The text of a `<parameter>` element starting at `start`, up to its matching
+	/// `</parameter>` (handling self-closing children and nesting). Bounds a child search
+	/// to the node's OWN element so it can't bleed into a sibling filter's params — a
+	/// fixed-size window would, e.g. reading an outline's absent channels from the next
+	/// filter's colour. Returns the open tag alone for a self-closing node.
+	static func elementText(from start: String.Index, in content: String) -> String? {
+		guard let firstGt = content.range(of: ">", range: start..<content.endIndex)
+		else { return nil }
+		if content[start..<firstGt.upperBound].hasSuffix("/>") {
+			return String(content[start..<firstGt.upperBound])
+		}
+		var depth = 1
+		var pos = firstGt.upperBound
+		while depth > 0, pos < content.endIndex {
+			let open = content.range(of: "<parameter", range: pos..<content.endIndex)
+			guard let close = content.range(of: "</parameter>", range: pos..<content.endIndex)
+			else { return nil }
+			if let open, open.lowerBound < close.lowerBound {
+				guard let gt = content.range(of: ">", range: open.lowerBound..<content.endIndex)
+				else { return nil }
+				if !content[open.lowerBound..<gt.upperBound].hasSuffix("/>") { depth += 1 }
+				pos = gt.upperBound
+			} else {
+				depth -= 1
+				if depth == 0 { return String(content[start..<close.upperBound]) }
+				pos = close.upperBound
+			}
+		}
+		return nil
+	}
+
 	/// The `value=` of a `name="…"` sub-parameter within a resolved node's lookahead.
 	static func childDouble(_ name: String, in lookahead: String) -> Double? {
 		let p = "name=\"\(name)\"[^>]*value=\"([^\"]+)\""
@@ -60,24 +91,28 @@ extension PublishedParameter {
 		return (lookahead as NSString).substring(with: fontMatch.range(at: 1))
 	}
 
+	/// Per-channel RGB defaults for a colour param. A channel is `nil` when Motion omitted
+	/// it — Motion stores colours sparsely, writing only channels that differ from the
+	/// param's per-channel factory default. Callers apply the right base for absent
+	/// channels (white for a face colour via `?? 1`, red for an outline); collapsing
+	/// absent→1 here would lose that distinction.
 	static func extractColorDefaults(
 		objectID: String, channelPath: String, in content: String
-	) -> (r: Double, g: Double, b: Double)? {
+	) -> (r: Double?, g: Double?, b: Double?)? {
 		guard
 			let searchStart = resolveNodeStart(
 				objectID: objectID, channelPath: channelPath, in: content)
 		else { return nil }
 
-		let lookahead = String(content[searchStart...].prefix(2000))
-		guard
-			lookahead.contains("name=\"Red\"") || lookahead.contains("name=\"Green\"")
-				|| lookahead.contains("name=\"Blue\"")
+		guard let region = elementText(from: searchStart, in: content),
+			region.contains("name=\"Red\"") || region.contains("name=\"Green\"")
+				|| region.contains("name=\"Blue\"")
 		else { return nil }
 
 		return (
-			childDouble("Red", in: lookahead) ?? 1,
-			childDouble("Green", in: lookahead) ?? 1,
-			childDouble("Blue", in: lookahead) ?? 1
+			childDouble("Red", in: region),
+			childDouble("Green", in: region),
+			childDouble("Blue", in: region)
 		)
 	}
 
@@ -240,6 +275,16 @@ extension PublishedParameter {
 		guard let tag = resolveOpenTag(objectID: objectID, channelPath: channelPath, in: content)
 		else { return nil }
 		return attrDouble("value", in: tag)
+	}
+
+	/// The resolved node's own `flags`, mirrored onto our override so FCP honors it the
+	/// same way its inspector would (a generic flag value is ignored by rigged params).
+	static func extractFlags(
+		objectID: String, channelPath: String, in content: String
+	) -> Int? {
+		guard let tag = resolveOpenTag(objectID: objectID, channelPath: channelPath, in: content)
+		else { return nil }
+		return attrInt("flags", in: tag)
 	}
 
 	/// If the param targets a filter GROUP (a `<parameter>` with `flags` but no

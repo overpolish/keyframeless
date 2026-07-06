@@ -12,7 +12,7 @@ struct TemplateParamsPanel: View {
 
 	private var enabledParams: [PublishedParameter] {
 		guard let settings = store.params(for: template.id) else { return [] }
-		return settings.allParams.filter { $0.isToggleable && !$0.isFont }
+		return settings.allParams.filter { $0.isToggleable && !$0.isFont && !$0.isTextSize }
 	}
 
 	private var fontParams: [PublishedParameter] {

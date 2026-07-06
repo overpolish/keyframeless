@@ -40,13 +40,18 @@ struct PublishedParamsModal: View {
 		_fontModes = State(
 			initialValue: Dictionary(
 				uniqueKeysWithValues: params.filter { $0.defaultFont != nil }.map {
-					($0.id, TemplatePublishedParamsStore.FontMode.base)
+					// Restore the saved mode (.font = custom). The passed params are re-parsed
+					// on reopen with kind reset, so read the persisted kind via initialKinds —
+					// same source the non-font paramKinds use just below.
+					($0.id, (initialKinds[$0.id] ?? $0.kind) == .font ? .custom : .base)
 				}))
 		_perWordStartsAtZero = State(initialValue: initialPerWordStartsAtZero)
 	}
 
 	private var fontParams: [PublishedParameter] { params.filter { $0.defaultFont != nil } }
-	private var nonFontParams: [PublishedParameter] { params.filter { $0.defaultFont == nil } }
+	private var nonFontParams: [PublishedParameter] {
+		params.filter { $0.defaultFont == nil && !$0.isTextSize }
+	}
 	private var hasAnyContent: Bool { !params.isEmpty || hasPerWordAnimation }
 
 	var body: some View {

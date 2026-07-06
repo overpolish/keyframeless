@@ -211,6 +211,7 @@ extension PublishedParameter.ParamKind {
 		case .dropdown: return String(localized: "Dropdown")
 		case .rotation: return String(localized: "Rotation")
 		case .point: return String(localized: "Point")
+		case .percent: return String(localized: "Percent")
 		case .font: return String(localized: "Font")
 		case .animation: return String(localized: "Animation")
 		}
@@ -225,6 +226,7 @@ extension PublishedParameter.ParamKind {
 		case .dropdown: return "chevron.down.square"
 		case .rotation: return "arrow.clockwise"
 		case .point: return "dot.arrowtriangles.up.right.down.left.circle"
+		case .percent: return "percent"
 		case .font: return "textformat"
 		case .animation: return "directcurrent"
 		}
@@ -246,7 +248,9 @@ struct ParamKindRow: View {
 	var hasPoint: Bool = false
 
 	private var kinds: [PublishedParameter.ParamKind] {
-		var k: [PublishedParameter.ParamKind] = [.off, .color, .slider, .toggle, .rotation]
+		var k: [PublishedParameter.ParamKind] = [
+			.off, .color, .slider, .percent, .toggle, .rotation,
+		]
 		if hasOptions { k.append(.dropdown) }
 		if hasPoint { k.append(.point) }
 		return k
@@ -349,10 +353,10 @@ struct ParamControlRow: View {
 				.font(.system(size: 11).monospacedDigit())
 				.multilineTextAlignment(.trailing)
 				.frame(width: 26)
-				.frame(height: KKInspectorRowHeight)
-				.padding(.horizontal, KKPaddingXS)
-				.kkPanel(cornerRadius: KKRadiusMD)
 		}
+		.frame(height: KKInspectorRowHeight)
+		.padding(.horizontal, KKPaddingLG)
+		.kkPanel(cornerRadius: KKRadiusMD)
 	}
 
 	@ViewBuilder private var control: some View {
@@ -368,10 +372,23 @@ struct ParamControlRow: View {
 			TextField("", value: binding(\.sliderValue), format: .number)
 				.textFieldStyle(.plain)
 				.font(.system(size: 11))
-				.frame(maxWidth: .infinity, alignment: .leading)
+				.multilineTextAlignment(.trailing)
+				.frame(maxWidth: .infinity)
 				.frame(height: KKInspectorRowHeight)
 				.padding(.horizontal, KKPaddingLG)
 				.kkPanel(cornerRadius: KKRadiusMD)
+		case .percent:
+			HStack(spacing: KKSpacingXS) {
+				TextField("", value: binding(\.sliderValue), format: .number)
+					.textFieldStyle(.plain)
+					.font(.system(size: 11))
+					.multilineTextAlignment(.trailing)
+					.frame(maxWidth: .infinity)
+				Text("%").font(.system(size: 11)).foregroundStyle(.secondary)
+			}
+			.frame(height: KKInspectorRowHeight)
+			.padding(.horizontal, KKPaddingLG)
+			.kkPanel(cornerRadius: KKRadiusMD)
 		case .toggle:
 			HStack(spacing: 0) {
 				Spacer(minLength: 0)
@@ -383,13 +400,19 @@ struct ParamControlRow: View {
 			if let options = param.options {
 				KKDropdown(
 					selection: binding(\.enumValue),
-					items: options.map { KKDropdownItem(value: $0.tag, label: $0.name) })
+					// Known Motion enum values localize via the catalog; template-inline
+					// entry names (arbitrary) aren't in it and pass through unchanged.
+					items: options.map {
+						KKDropdownItem(
+							value: $0.tag,
+							label: String(localized: String.LocalizationValue($0.name)))
+					})
 			}
 		case .point:
 			HStack(spacing: KKSpacingSM) {
 				Spacer(minLength: 0)
-				pointField("x", binding(\.pointX))
-				pointField("y", binding(\.pointY))
+				pointField("X", binding(\.pointX))
+				pointField("Y", binding(\.pointY))
 			}
 		case .rotation:
 			HStack(spacing: KKSpacingSM) {

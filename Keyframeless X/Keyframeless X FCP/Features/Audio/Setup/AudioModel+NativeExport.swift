@@ -148,7 +148,7 @@ extension AudioModel {
 		let store = TemplatePublishedParamsStore.shared
 		guard let settings = store.params(for: selectedTemplate.id) else { return [] }
 		var entries: [FCPNativePasteboardBuilder.EffectValueEntry] = []
-		for param in settings.allParams {
+		for param in settings.allParams where !param.isTextSize {
 			let val = store.value(paramID: param.id, for: selectedTemplate.id)
 			let key = param.styleKey ?? param.effectValueKey
 			switch param.kind {
@@ -157,12 +157,37 @@ extension AudioModel {
 					contentsOf: OzmlBuilder.colorEntries(
 						keyBase: key, r: val.r, g: val.g, b: val.b))
 			case .slider:
+				let blurCh =
+					"\(PublishedParameter.TextFilter.dropShadow)/\(PublishedParameter.TextFilter.shadowBlur)"
+				if param.channelPath == blurCh || param.channelPath.hasSuffix("/" + blurCh) {
+					// Blur is a 2D X/Y point natively; a single value maps to both (uniform,
+					// no elliptical support). Emit the LEAF channel flags (8589934608), NOT
+					// param.overrideFlags — those are the Blur GROUP's flags, whose 0x1000
+					// folder bit makes FCP treat each X/Y leaf as a self-referential folder
+					// and crash tearing the scene down (cyclic removeAllDependencies).
+					for (axis, pid) in [("X", "1"), ("Y", "2")] {
+						entries.append(
+							.init(
+								key: "\(key)/\(pid)",
+								data: OzmlBuilder.slider(
+									name: axis, paramID: pid, value: val.sliderValue)))
+					}
+				} else {
+					entries.append(
+						.init(
+							key: key,
+							data: OzmlBuilder.slider(
+								name: param.name, paramID: param.channelParamID,
+								value: val.sliderValue, flags: param.overrideFlags)))
+				}
+			case .percent:
+				// A percentage control (0-100) → the native 0-1 value.
 				entries.append(
 					.init(
 						key: key,
 						data: OzmlBuilder.slider(
 							name: param.name, paramID: param.channelParamID,
-							value: val.sliderValue)))
+							value: val.sliderValue / 100, flags: param.overrideFlags)))
 			case .rotation:
 				// Motion stores angles in degrees, but the native ozml value is in
 				// RADIANS (sending 45 raw reads back as 45 rad = 2578°). Convert.
@@ -171,7 +196,8 @@ extension AudioModel {
 						key: key,
 						data: OzmlBuilder.slider(
 							name: param.name, paramID: param.channelParamID,
-							value: val.sliderValue * .pi / 180)))
+							value: val.sliderValue * .pi / 180,
+							flags: param.overrideFlags)))
 			case .toggle:
 				if let baseFlags = param.filterEnableFlags {
 					// Filter-enable (e.g. Drop Shadow): FCP enables the filter by the
@@ -218,14 +244,106 @@ extension AudioModel {
 				}
 			}
 		}
+
+		// The caption's Text Size drives the text-style font size. We patch the injected
+		// scene's Size, but character-animation templates ignore that scene and render
+		// the template's own size, so also emit the real style-size override — the same
+		// mechanism FCP's own inspector uses (verified against a working manual edit). The
+		// key/flags are synthesized from the text style, so this works whether or not the
+		// template publishes "Size".
+		// textSizeKey is synthesized at parse; fall back to a published Size param's own
+		// key/flags so configs stored before this field existed keep working pre-reimport.
+		let sizeParam = settings.allParams.first(where: { $0.isTextSize })
+		if let sizeKey = settings.textSizeKey ?? sizeParam?.styleKey {
+			let size = Double(max(10, Int(textStyle.textSize)))
+			let flags =
+				(settings.textSizeFlags ?? sizeParam?.nativeFlags).map { $0 | 0x1_0000_0000 }
+				?? 8_589_934_608
+			entries.append(
+				.init(
+					key: sizeKey,
+					data: OzmlBuilder.slider(name: "Size", paramID: "3", value: size, flags: flags))
+			)
+		}
 		return entries
+	}
+
+	/// FCPXML enables face-layer filters (drop shadow, outline, …) via `<text-style>`
+	/// attributes rather than the native group-key override, so map each enabled filter
+	/// toggle to its attributes. Colours are read from the template's published sub-params
+	/// (their per-filter sparse base — red outline / black shadow — is baked in at parse),
+	/// with a user-set Colour control taking precedence. Glow has no text-style equivalent
+	/// (FCP drops it on import). shadow opacity/offset + outline width keep FCP defaults
+	/// except width, which reads its published value.
+	func enabledTextFilterAttrs() -> String {
+		let store = TemplatePublishedParamsStore.shared
+		guard let settings = store.params(for: selectedTemplate.id) else { return "" }
+
+		typealias TF = PublishedParameter.TextFilter
+
+		// "R G B" for a filter's Colour sub-param at `group/sub`: a user-set control wins,
+		// else the parsed template default (per-filter base already baked in at parse), else
+		// `base` when the filter publishes no colour at all.
+		func filterColorRGB(group: String, sub: String, base: String) -> String {
+			guard
+				let col = settings.allParams.first(where: { $0.channelPath == group + "/" + sub })
+			else { return base }
+			if col.kind == .color,
+				let custom = store.sessionValue(paramID: col.id, for: selectedTemplate.id)
+			{
+				return "\(custom.r) \(custom.g) \(custom.b)"
+			}
+			return "\(col.defaultR ?? 0) \(col.defaultG ?? 0) \(col.defaultB ?? 0)"
+		}
+
+		// A filter's numeric sub-param at `group/sub`: the control's live value if it's a
+		// slider/percent the user set, else the parsed template default, else `fallback`.
+		func filterNumber(group: String, sub: String, fallback: Double) -> Double {
+			guard let p = settings.allParams.first(where: { $0.channelPath == group + "/" + sub })
+			else { return fallback }
+			if p.kind == .slider || p.kind == .rotation || p.kind == .percent {
+				return store.value(paramID: p.id, for: selectedTemplate.id).sliderValue
+			}
+			return p.defaultNumber ?? fallback
+		}
+
+		var attrs = ""
+		for param in settings.allParams where param.filterEnableFlags != nil {
+			guard store.value(paramID: param.id, for: selectedTemplate.id).toggleValue else {
+				continue
+			}
+			// Detect by FIXED Motion channel id (rename-proof), not the published name.
+			let group = param.channelPath
+			switch param.channelParamID {
+			case TF.dropShadow:
+				let rgb = filterColorRGB(group: group, sub: TF.shadowColor, base: "0 0 0")
+				// Opacity is a 0-100 percentage → FCP's 0-1 alpha; distance/angle map 1:1.
+				let alpha = filterNumber(group: group, sub: TF.shadowOpacity, fallback: 75) / 100
+				let distance = filterNumber(group: group, sub: TF.shadowDistance, fallback: 5)
+				let angle = filterNumber(group: group, sub: TF.shadowAngle, fallback: 315)
+				attrs +=
+					" shadowColor=\"\(rgb) \(alpha)\" shadowOffset=\"\(distance) \(angle)\""
+				// Blur is a uniform single value (its X=Y); emit only when set. FCP renders
+				// shadowBlurRadius at half the value we pass (25 → 12.5), so double it to
+				// match the native drag.
+				let blur = filterNumber(group: group, sub: TF.shadowBlur, fallback: 0)
+				if blur > 0 { attrs += " shadowBlurRadius=\"\(blur * 2)\"" }
+			case TF.outline:
+				let rgb = filterColorRGB(group: group, sub: TF.outlineColor, base: "1 0 0")
+				let width = filterNumber(group: group, sub: TF.outlineWidth, fallback: 13)
+				attrs += " strokeColor=\"\(rgb) 1\" strokeWidth=\"\(-width)\""
+			default:
+				break  // glow etc — no text-style equivalent
+			}
+		}
+		return attrs
 	}
 
 	func buildPublishedParamEntries() -> [FCPXMLBuilder.PublishedParamEntry] {
 		let store = TemplatePublishedParamsStore.shared
 		guard let settings = store.params(for: selectedTemplate.id) else { return [] }
 		var entries: [FCPXMLBuilder.PublishedParamEntry] = []
-		for param in settings.allParams where param.isToggleable {
+		for param in settings.allParams where param.isToggleable && !param.isTextSize {
 			let val = store.value(paramID: param.id, for: selectedTemplate.id)
 			if param.isFont { continue }
 			// Filter-enable toggles map to text-style shadow attrs in FCPXML (a
@@ -245,6 +363,9 @@ extension AudioModel {
 				valueStr = "\(val.r) \(val.g) \(val.b) \(val.a)"
 			case .slider, .rotation:
 				valueStr = "\(val.sliderValue)"
+			case .percent:
+				// Percentage control (0-100) → FCP's 0-1 value.
+				valueStr = "\(val.sliderValue / 100)"
 			case .toggle:
 				valueStr = val.toggleValue ? "1" : "0"
 			case .dropdown:
@@ -254,6 +375,16 @@ extension AudioModel {
 			}
 			entries.append(
 				FCPXMLBuilder.PublishedParamEntry(name: param.name, key: key, value: valueStr))
+		}
+
+		// Mirror the native path: the caption's Text Size drives the text-style font size
+		// via a real override synthesized from the style, so it works even when the
+		// template doesn't publish "Size".
+		let sizeParam = settings.allParams.first(where: { $0.isTextSize })
+		if let sizeKey = settings.textSizeKey ?? sizeParam?.styleKey {
+			let size = Double(max(10, Int(textStyle.textSize)))
+			entries.append(
+				FCPXMLBuilder.PublishedParamEntry(name: "Size", key: sizeKey, value: "\(size)"))
 		}
 		return entries
 	}

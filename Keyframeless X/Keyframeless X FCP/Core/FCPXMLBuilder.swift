@@ -51,7 +51,8 @@ enum FCPXMLBuilder {
 		format: ExportFormat,
 		template: CaptionTemplate = .basicTitle,
 		publishedParams: [PublishedParamEntry] = [],
-		perWordStartsAtZero: Bool = false
+		perWordStartsAtZero: Bool = false,
+		textStyleFilterAttrs: String = ""
 	) -> String {
 		let allSegments = storylines.flatMap { $0 }
 		guard !allSegments.isEmpty else {
@@ -152,7 +153,7 @@ enum FCPXMLBuilder {
 				xml += "\t\t\t\t\t\t\t\t</text>\n"
 				xml += "\t\t\t\t\t\t\t\t<text-style-def id=\"\(tsID)\">\n"
 				xml +=
-					"\t\t\t\t\t\t\t\t\t<text-style font=\"\(escapedFamily)\" fontSize=\"\(fontSize)\" fontFace=\"\(escapedFace)\" fontColor=\"\(fontColor)\" alignment=\"center\" />\n"
+					"\t\t\t\t\t\t\t\t\t<text-style font=\"\(escapedFamily)\" fontSize=\"\(fontSize)\" fontFace=\"\(escapedFace)\" fontColor=\"\(fontColor)\"\(textStyleFilterAttrs) alignment=\"center\" />\n"
 				xml += "\t\t\t\t\t\t\t\t</text-style-def>\n"
 				xml += "\t\t\t\t\t\t\t\t<adjust-transform position=\"0 \(yPosition)\" />\n"
 				xml += "\t\t\t\t\t\t\t</title>\n"

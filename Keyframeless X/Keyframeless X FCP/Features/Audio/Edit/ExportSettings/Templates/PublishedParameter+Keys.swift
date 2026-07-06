@@ -191,7 +191,30 @@ extension PublishedParameter {
 			"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE ozxmlscene>\n<ozml version=\"5.14\">\n\n"
 			+ factories + "\n" + fullScenenode + "\n</ozml>\n"
 
-		let key = "9999/\(layerID)/\(scenenodeID)"
-		return TextOzmlInfo(key: key, ozml: ozml, defaultText: defaultText, styleID: styleID)
+		// The key must trace the scenenode's FULL enclosing layer/scenenode ancestry, not
+		// just its outermost layer. A deeply nested scenenode (character-animation
+		// templates) sits many levels down; keying it at `9999/<firstLayer>/<scenenode>`
+		// points at the wrong node, so FCP silently ignores the whole injected scene (text,
+		// size, colour) and renders the template defaults. Falls back to the flat form when
+		// no ancestry is found (shallow titles, where the two are identical anyway).
+		let ancestors = ancestorChain(for: scenenodeID, in: content)
+		let pathToScenenode =
+			ancestors.isEmpty
+			? "\(layerID)/\(scenenodeID)"
+			: ancestors.joined(separator: "/") + "/" + scenenodeID
+		let key = "9999/\(pathToScenenode)"
+
+		// Synthesize the text style's font-size key + flags straight from the style (not
+		// from a published "Size" param), so the caption Text Size drives it for any
+		// template with a text style, published or not.
+		let sizeKey = styleID.flatMap {
+			extractStyleKey(objectID: $0, channelPath: "3", in: content)
+		}
+		let sizeFlags = styleID.flatMap {
+			extractFlags(objectID: $0, channelPath: "3", in: content)
+		}
+		return TextOzmlInfo(
+			key: key, ozml: ozml, defaultText: defaultText, styleID: styleID,
+			sizeKey: sizeKey, sizeFlags: sizeFlags)
 	}
 }
