@@ -340,6 +340,7 @@ struct ParamControlRow: View {
 			control
 				.frame(maxWidth: .infinity, alignment: .leading)
 		}
+		.frame(maxWidth: .infinity)
 	}
 
 	private func pointField(_ axis: String, _ value: Binding<Double>) -> some View {
@@ -348,15 +349,19 @@ struct ParamControlRow: View {
 				.font(.system(size: 10, weight: .medium))
 				.foregroundStyle(.secondary)
 				.fixedSize()
-			TextField("", value: value, format: .number.precision(.fractionLength(0)))
-				.textFieldStyle(.plain)
-				.font(.system(size: 11).monospacedDigit())
-				.multilineTextAlignment(.trailing)
-				.frame(width: 26)
+			TextField(
+				"", value: value,
+				format: .number.precision(.fractionLength(0)).grouping(.never)
+			)
+			.textFieldStyle(.plain)
+			.font(.system(size: 11).monospacedDigit())
+			.multilineTextAlignment(.trailing)
+			.frame(maxWidth: .infinity)
 		}
 		.frame(height: KKInspectorRowHeight)
 		.padding(.horizontal, KKPaddingLG)
 		.kkPanel(cornerRadius: KKRadiusMD)
+		.frame(maxWidth: .infinity)
 	}
 
 	@ViewBuilder private var control: some View {
@@ -369,7 +374,7 @@ struct ParamControlRow: View {
 					colorB: binding(\.b), colorA: binding(\.a))
 			}
 		case .slider:
-			TextField("", value: binding(\.sliderValue), format: .number)
+			TextField("", value: binding(\.sliderValue), format: .number.grouping(.never))
 				.textFieldStyle(.plain)
 				.font(.system(size: 11))
 				.multilineTextAlignment(.trailing)
@@ -379,7 +384,7 @@ struct ParamControlRow: View {
 				.kkPanel(cornerRadius: KKRadiusMD)
 		case .percent:
 			HStack(spacing: KKSpacingXS) {
-				TextField("", value: binding(\.sliderValue), format: .number)
+				TextField("", value: binding(\.sliderValue), format: .number.grouping(.never))
 					.textFieldStyle(.plain)
 					.font(.system(size: 11))
 					.multilineTextAlignment(.trailing)
@@ -406,11 +411,12 @@ struct ParamControlRow: View {
 						KKDropdownItem(
 							value: $0.tag,
 							label: String(localized: String.LocalizationValue($0.name)))
-					})
+					}
+				)
+				.frame(maxWidth: .infinity)
 			}
 		case .point:
 			HStack(spacing: KKSpacingSM) {
-				Spacer(minLength: 0)
 				pointField("X", binding(\.pointX))
 				pointField("Y", binding(\.pointY))
 			}
@@ -421,7 +427,7 @@ struct ParamControlRow: View {
 					.frame(width: 13, height: 13)
 				TextField(
 					"", value: binding(\.sliderValue),
-					format: .number.precision(.fractionLength(0))
+					format: .number.precision(.fractionLength(0)).grouping(.never)
 				)
 				.textFieldStyle(.plain)
 				.font(.system(size: 11).monospacedDigit())
@@ -429,6 +435,11 @@ struct ParamControlRow: View {
 				.frame(width: 34)
 				Text("°").font(.system(size: 10)).foregroundStyle(.secondary)
 			}
+			// The native circular NSSlider paints larger than its 13pt box; pin the row
+			// height and clip so the knob can't spill past the row (visible when it's the
+			// last row against the scroll's bottom edge).
+			.frame(height: KKInspectorRowHeight)
+			.clipped()
 		default:
 			EmptyView()
 		}

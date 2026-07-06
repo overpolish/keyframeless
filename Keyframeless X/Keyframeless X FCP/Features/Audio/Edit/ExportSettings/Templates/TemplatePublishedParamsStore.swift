@@ -176,6 +176,12 @@ class TemplatePublishedParamsStore: ObservableObject {
 		sessionValues[templateID]?[paramID]
 	}
 
+	/// True when the template has any session override, i.e. `resetValues` would change
+	/// something. Drives the Reset control's visibility.
+	func hasSessionValues(for templateID: String) -> Bool {
+		!(sessionValues[templateID]?.isEmpty ?? true)
+	}
+
 	func value(paramID: String, for templateID: String) -> ParamValue {
 		if let v = sessionValues[templateID]?[paramID] { return v }
 		if let param = settings[templateID]?.allParams.first(where: { $0.id == paramID }) {

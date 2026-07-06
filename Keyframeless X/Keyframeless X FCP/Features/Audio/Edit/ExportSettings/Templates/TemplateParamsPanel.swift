@@ -27,7 +27,7 @@ struct TemplateParamsPanel: View {
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingMD) {
 			if hasParams {
-				ScrollShadowView {
+				ScrollShadowView(cornerRadius: KKRadiusSM) {
 					VStack(alignment: .leading, spacing: KKSpacingLG) {
 						ForEach(enabledParams) { param in
 							ParamControlRow(
@@ -40,19 +40,7 @@ struct TemplateParamsPanel: View {
 								store: store, compact: true)
 						}
 					}
-				}
-				Spacer()
-				HStack {
-					Spacer()
-					Button {
-						store.resetValues(for: template.id)
-					} label: {
-						Label("Reset", systemImage: "arrow.uturn.backward")
-							.font(.system(size: 9))
-							.contentShape(Capsule())
-					}
-					.buttonStyle(.plain)
-					.foregroundStyle(.secondary)
+					.padding(.vertical, KKPaddingXS)
 				}
 			} else {
 				Spacer()
@@ -64,6 +52,6 @@ struct TemplateParamsPanel: View {
 				Spacer()
 			}
 		}
-		.padding(KKPaddingMD)
+		.frame(maxHeight: .infinity)
 	}
 }
