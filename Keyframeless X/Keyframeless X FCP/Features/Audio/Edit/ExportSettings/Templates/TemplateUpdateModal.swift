@@ -123,7 +123,9 @@ struct TemplateUpdateModal: View {
 			Text("Update Template").font(.title3).foregroundStyle(.primary)
 			Spacer()
 			if hasPerWordAnimation {
-				InfoBadge(label: "Per word", systemImage: "directcurrent", color: .green)
+				InfoBadge(
+					label: String(localized: "Per word"), systemImage: "directcurrent",
+					color: .green)
 			}
 			HStack(spacing: KKSpacingMD) {
 				Text("v\(currentVersion)").font(.system(size: 11)).foregroundStyle(.secondary)
@@ -136,7 +138,7 @@ struct TemplateUpdateModal: View {
 
 	private var leftColumn: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
-			LabeledField(label: "Name") {
+			LabeledField(label: String(localized: "Name")) {
 				HStack(spacing: KKSpacingSM) {
 					Image(systemName: "tag.fill").font(.system(size: 10)).foregroundStyle(
 						.secondary)
@@ -146,12 +148,13 @@ struct TemplateUpdateModal: View {
 				.frame(maxWidth: .infinity, alignment: .leading)
 				.kkPanel(cornerRadius: KKRadiusMD)
 			}
-			LabeledField(label: "Author") {
+			LabeledField(label: String(localized: "Author")) {
 				HStack(spacing: KKSpacingSM) {
 					Image(systemName: "person.circle.fill").font(.system(size: 10))
 						.foregroundStyle(.secondary)
 					PublishTextField(
-						text: $author, placeholder: "Optional", requestFocus: $focusAuthor
+						text: $author, placeholder: String(localized: "Optional"),
+						requestFocus: $focusAuthor
 					)
 					.frame(height: 16)
 				}
@@ -220,8 +223,8 @@ struct TemplateUpdateModal: View {
 					PillToggle(
 						selection: $perWordStartsAtZero,
 						options: [
-							(label: "Straight Away", value: true),
-							(label: "Late Start", value: false),
+							(label: String(localized: "Straight Away"), value: true),
+							(label: String(localized: "Late Start"), value: false),
 						])
 				}
 			}

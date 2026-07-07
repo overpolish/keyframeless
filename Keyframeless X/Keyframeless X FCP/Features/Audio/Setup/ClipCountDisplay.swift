@@ -9,8 +9,8 @@ import SwiftUI
 struct ClipCountDisplay: View {
 	let selectedCount: Int
 	let totalCount: Int
-	var emptyLabel: String = "No Clips Found"
-	var selectedLabel: String = "Clips Selected"
+	var emptyLabel: String = String(localized: "No Clips Found")
+	var selectedLabel: String = String(localized: "Clips Selected")
 
 	var body: some View {
 		HStack(alignment: .lastTextBaseline, spacing: KKSpacingLG) {

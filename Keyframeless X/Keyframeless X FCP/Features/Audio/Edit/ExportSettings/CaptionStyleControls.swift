@@ -1,0 +1,175 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+import KeyframelessKit
+import SwiftUI
+
+struct CaptionStyleControls: View {
+	@ObservedObject var model: AudioModel
+	@ObservedObject private var paramsStore = TemplatePublishedParamsStore.shared
+	@State private var initialTextStyle: TextStyleSettings?
+	@State private var initialCaptionStyle: CaptionStyleSettings?
+
+	private var hasChanges: Bool {
+		if let initialTextStyle, model.textStyle != initialTextStyle { return true }
+		if let initialCaptionStyle, model.captionStyle != initialCaptionStyle { return true }
+		return false
+	}
+
+	private var isCaption: Bool { model.captionImportType == .caption }
+	private var isTitle: Bool { model.captionImportType == .title }
+	private var isSubtitles: Bool { model.captionImportType == .subtitles }
+
+	private var anySelectedClipIsSrt: Bool {
+		let selected = model.editSelectedClips ?? Set(model.audioClips.indices)
+		return selected.contains { idx in
+			model.audioClips.indices.contains(idx)
+				&& TranscriptionStore.shared.isSrtImported(model.audioClips[idx])
+		}
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: KKSpacingLG) {
+			if isTitle {
+				GeometryReader { geo in
+					let halfWidth = (geo.size.width - KKSpacingXL) / 2
+					HStack(alignment: .bottom, spacing: KKSpacingXL) {
+						TextSettingsPanel(model: model)
+							.frame(width: halfWidth)
+						DimensionsPreview(model: model)
+							.frame(width: halfWidth)
+					}
+				}
+				.frame(height: 100)
+				HelperText(
+					String(
+						localized:
+							"Preview assumes a center-aligned template. Position may differ with off-center templates."
+					),
+					systemImage: "info.circle"
+				)
+			}
+			HStack(spacing: KKSpacingLG) {
+				LabeledSlider(
+					label: String(localized: "Max Words"), value: $model.maxWordsPerLine,
+					range: 1...10,
+					step: 1, valueWidth: 16
+				).padding(.trailing, KKSpacingMD)
+				HStack(spacing: KKSpacingLG) {
+					PillToggle(
+						selection: $model.captionLines,
+						options: [
+							(label: String(localized: "One"), value: CaptionLineCount.one),
+							(label: String(localized: "Two"), value: CaptionLineCount.two),
+						]
+					)
+					Text("Lines")
+						.font(.caption)
+						.foregroundStyle(.secondary)
+				}
+			}
+			if model.captionImportType == .caption && model.captionFormat == .cea608 {
+				HelperText(
+					String(localized: "CEA-608 splits lines longer than 32 characters"),
+					systemImage: "info.circle"
+				)
+			}
+			FlowLayout(spacing: KKSpacingMD, lineSpacing: KKSpacingSM) {
+				CapsuleToggle(
+					isOn: $model.allCaps,
+					label: String(localized: "ALL CAPS"),
+					systemImage: "textformat"
+				)
+				CapsuleToggle(
+					isOn: $model.noGaps,
+					label: String(localized: "No Gaps"),
+					systemImage: "arrow.down.right.and.arrow.up.left"
+				)
+				CapsuleToggle(
+					isOn: $model.censorProfanity,
+					label: String(localized: "Censor"),
+					systemImage: "exclamationmark.bubble.fill"
+				)
+				CapsuleToggle(
+					isOn: $model.stripPunctuation,
+					label: String(localized: "Strip Punctuation"),
+					systemImage: "xmark.triangle.circle.square.fill"
+				)
+				CapsuleToggle(
+					isOn: $model.keepQuestionMarks,
+					label: String(localized: "Keep"),
+					systemImage: "questionmark",
+					disabled: !model.stripPunctuation
+				)
+			}.frame(maxWidth: .infinity)
+			HStack(spacing: KKSpacingLG) {
+				Button {
+					TextStyleDefaults.shared.save(model.textStyle)
+					CaptionStyleDefaults.shared.save(model.captionStyle)
+					initialTextStyle = model.textStyle
+					initialCaptionStyle = model.captionStyle
+				} label: {
+					Label("Make Default", systemImage: "star")
+						.font(.system(size: 10))
+						.padding(.horizontal, KKPaddingLG)
+						.padding(.vertical, KKSpacingSM)
+						.contentShape(Capsule())
+				}
+				.buttonStyle(.plain)
+				.foregroundStyle(Color.kkAccent)
+				Spacer()
+				if hasChanges {
+					Button {
+						model.textStyle = initialTextStyle ?? TextStyleDefaults.shared.settings
+						model.captionStyle =
+							initialCaptionStyle ?? CaptionStyleDefaults.shared.settings
+					} label: {
+						Label("Reset", systemImage: "arrow.uturn.backward")
+							.font(.system(size: 10))
+							.padding(.horizontal, KKPaddingLG)
+							.padding(.vertical, KKSpacingSM)
+							.contentShape(Capsule())
+					}
+					.buttonStyle(.plain)
+					.foregroundStyle(.secondary)
+				}
+			}
+			if isTitle {
+				Divider()
+				CaptionTemplatePicker(
+					model: model,
+					templates: model.captionTemplates,
+					hidePerWord: anySelectedClipIsSrt,
+					onRemoveCustom: { model.removeCustomTemplate($0) }
+				)
+			}
+			if isSubtitles {
+				Divider()
+				HStack(spacing: KKSpacingLG) {
+					Text("Subtitle Style")
+						.font(.title3)
+						.foregroundStyle(.secondary)
+					Spacer()
+					if paramsStore.hasSessionValues(for: CaptionTemplate.subtitle.id) {
+						Button {
+							paramsStore.resetValues(for: CaptionTemplate.subtitle.id)
+						} label: {
+							Label("Reset", systemImage: "arrow.uturn.backward")
+								.font(.system(size: 10))
+								.foregroundStyle(.secondary)
+								.contentShape(Capsule())
+						}
+						.buttonStyle(.plain)
+					}
+				}
+				SubtitleStylePanel(store: paramsStore)
+			}
+		}
+		.onAppear {
+			initialTextStyle = TextStyleDefaults.shared.settings
+			initialCaptionStyle = CaptionStyleDefaults.shared.settings
+		}
+	}
+}

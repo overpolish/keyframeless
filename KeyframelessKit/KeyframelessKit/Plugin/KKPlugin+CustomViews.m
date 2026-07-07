@@ -3,13 +3,16 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../Views/KKAlertView.h"
-#import "../Views/KKCustomGroupHeaderView.h"
-#import "../Views/KKLogoBannerView.h"
-#import "../Views/KKSeparatorView.h"
+#import "KKAlertView.h"
+#import "KKCustomGroupHeaderView.h"
 #import "KKDataBlob.h"
+#import "KKLog.h"
+#import "KKLogoBannerView.h"
 #import "KKPlugin+Color.h"
 #import "KKPlugin_Private.h"
+#import "KKRemoteWindowKeyHandlerView.h"
+#import "KKSeparatorView.h"
+#import "NSColor+KKColors.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKConstants.h>
 
@@ -21,15 +24,28 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
 
 @implementation KKPlugin (CustomViews)
 
+- (NSRect)effectHeaderScreenRect {
+  return self.logoBanner ? [self.logoBanner effectHeaderScreenRect]
+                         : NSZeroRect;
+}
+
+- (NSRect)helpButtonScreenRect {
+  return self.logoBanner ? [self.logoBanner helpButtonScreenRect] : NSZeroRect;
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kKKParamLogoBanner) {
     KKLogoBannerView *banner = [[KKLogoBannerView alloc] init];
+    self.logoBanner = banner; // per-instance, for guide header anchoring
     if ([self helpSections].count > 0) {
       __weak typeof(self) weakSelf = self;
       banner.onHelpTap = ^{
         [weakSelf openHelpRemoteWindow];
       };
     }
+    NSView *aiAccessory = [self aiAccessoryView];
+    if (aiAccessory)
+      [banner setLeadingAccessoryView:aiAccessory];
     return banner;
   }
 
@@ -262,6 +278,124 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     [self.genericGroupHeadersByEnabledParamID setObject:header
                                                  forKey:@(enabledParamID)];
   }
+}
+
+- (void)presentRemoteWindowOfSize:(CGSize)size
+                  contentProvider:(NSView * (^)(void))contentProvider {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI) {
+    KKLogError(@"FxCustomParameterActionAPI_v4 unavailable");
+    return;
+  }
+  [actionAPI startAction:self];
+
+  id<FxRemoteWindowAPI> windowAPI =
+      [self.apiManager apiForProtocol:@protocol(FxRemoteWindowAPI)];
+  if (!windowAPI) {
+    KKLogError(@"FxRemoteWindowAPI unavailable");
+    [actionAPI endAction:self];
+    return;
+  }
+
+  __weak typeof(self) weakSelf = self;
+  [windowAPI
+      remoteWindowOfSize:size
+                   reply:^(FxXPView *parentView, NSError *error) {
+                     if (!parentView) {
+                       if (error)
+                         KKLogError(@"remoteWindow error: %@", error);
+                       return;
+                     }
+                     // The host hands us a parentView at a non-zero origin
+                     // in its superview - adding content there right-clips
+                     // and offsets the first render. Attach to the superview
+                     // (the correctly sized XPC jail).
+                     NSView *host = parentView.superview ?: parentView;
+                     for (NSView *sub in [host.subviews copy])
+                       if ([sub.identifier
+                               isEqualToString:KKRemoteWindowContentID])
+                         [sub removeFromSuperview];
+
+                     NSView *content =
+                         contentProvider ? contentProvider() : nil;
+                     if (!content) {
+                       [actionAPI endAction:self];
+                       return;
+                     }
+
+                     // Wrap so Space / Cmd-Z / Cmd-Shift-Z reach the host
+                     // command API (which resolves nil outside an action
+                     // scope) instead of beeping.
+                     KKRemoteWindowKeyHandlerView *keyHandler =
+                         [[KKRemoteWindowKeyHandlerView alloc] init];
+                     keyHandler.identifier = KKRemoteWindowContentID;
+                     keyHandler.translatesAutoresizingMaskIntoConstraints = NO;
+                     keyHandler.wantsLayer = YES;
+                     keyHandler.layer.backgroundColor =
+                         [NSColor remoteWindowBackground].CGColor;
+                     void (^perform)(FxCommand) = ^(FxCommand command) {
+                       __strong typeof(weakSelf) s = weakSelf;
+                       if (!s)
+                         return;
+                       id<FxCustomParameterActionAPI_v4> act = [s.apiManager
+                           apiForProtocol:@protocol(
+                                              FxCustomParameterActionAPI_v4)];
+                       if (!act)
+                         return;
+                       [act startAction:s];
+                       id<FxCommandAPI_v2> cmd = [s.apiManager
+                           apiForProtocol:@protocol(FxCommandAPI_v2)];
+                       [cmd performCommand:command error:nil];
+                       [act endAction:s];
+                     };
+                     keyHandler.onTogglePlayback = ^{
+                       perform(kFxCommand_TogglePlayback);
+                     };
+                     keyHandler.onUndo = ^{
+                       perform(kFxCommand_Undo);
+                     };
+                     keyHandler.onRedo = ^{
+                       perform(kFxCommand_Redo);
+                     };
+                     [host addSubview:keyHandler];
+
+                     content.translatesAutoresizingMaskIntoConstraints = NO;
+                     [keyHandler addSubview:content];
+                     [NSLayoutConstraint activateConstraints:@[
+                       [keyHandler.leadingAnchor
+                           constraintEqualToAnchor:host.leadingAnchor],
+                       [keyHandler.trailingAnchor
+                           constraintEqualToAnchor:host.trailingAnchor],
+                       [keyHandler.topAnchor
+                           constraintEqualToAnchor:host.topAnchor],
+                       [keyHandler.bottomAnchor
+                           constraintEqualToAnchor:host.bottomAnchor],
+                       [content.leadingAnchor
+                           constraintEqualToAnchor:keyHandler.leadingAnchor],
+                       [content.trailingAnchor
+                           constraintEqualToAnchor:keyHandler.trailingAnchor],
+                       [content.topAnchor
+                           constraintEqualToAnchor:keyHandler.topAnchor],
+                       [content.bottomAnchor
+                           constraintEqualToAnchor:keyHandler.bottomAnchor],
+                     ]];
+                   }];
+
+  [actionAPI endAction:self];
+}
+
+- (void)closeRemoteWindowIfSupported {
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+  id<FxRemoteWindowAPI> windowAPI =
+      [self.apiManager apiForProtocol:@protocol(FxRemoteWindowAPI)];
+  if ([(id)windowAPI respondsToSelector:@selector(closeRemoteWindow)])
+    [(id<FxRemoteWindowAPI_v3>)windowAPI closeRemoteWindow];
+  [actionAPI endAction:self];
 }
 
 @end

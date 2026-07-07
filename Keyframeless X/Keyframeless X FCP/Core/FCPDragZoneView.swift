@@ -4,7 +4,9 @@
  */
 
 import AppKit
+import CoreMedia
 import KeyframelessKit
+import ProExtensionHost
 import SwiftUI
 
 struct FCPDragZoneView: NSViewRepresentable {
@@ -60,7 +62,7 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 
 		let iconString = NSAttributedString(attachment: iconAttachment)
 		let labelString = NSAttributedString(
-			string: " Drag to FCP",
+			string: String(localized: " Drag to FCP"),
 			attributes: [
 				.font: NSFont.systemFont(ofSize: 11, weight: .medium),
 				.foregroundColor: accentColor,
@@ -87,7 +89,7 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 		let dragEvent = event
 		let dragData = data
 
-		ensureCaptionRoleExists { [weak self] in
+		let startDrag = { [weak self] in
 			guard let self else { return }
 			let pbItem = NSPasteboardItem()
 			pbItem.setData(dragData, forType: proFFPasteboardType)
@@ -99,10 +101,12 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 			let session = beginDraggingSession(with: [draggingItem], event: dragEvent, source: self)
 			session.animatesToStartingPositionsOnCancelOrFail = true
 		}
+
+		ensureCaptionRoleExists(then: startDrag)
 	}
 
 	// FCP's drag handler doesn't create custom roles from the embedded roles data
-	// in the native pasteboard — only paste (Cmd+V) does. So before every drag we
+	// in the native pasteboard - only paste (Cmd+V) does. So before every drag we
 	// silently paste a 1-frame stub with the Captions role and immediately undo it.
 	// This forces FCP to register the role in the library, after which the native
 	// drag works fine. Hacky but there's no public API to create roles.
@@ -192,14 +196,16 @@ class FCPDragSourceView: NSView, NSDraggingSource {
 		pb.clearContents()
 		pb.setData(data, forType: proFFPasteboardType)
 
+		_ = FCPHost.shared.timeline?.movePlayhead(to: .zero)
+
 		DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
 			let src = CGEventSource(stateID: .hidSystemState)
-			let keyDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true)
-			keyDown?.flags = .maskCommand
-			let keyUp = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
-			keyUp?.flags = .maskCommand
-			keyDown?.post(tap: .cghidEventTap)
-			keyUp?.post(tap: .cghidEventTap)
+			let pasteDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true)
+			pasteDown?.flags = .maskCommand
+			let pasteUp = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
+			pasteUp?.flags = .maskCommand
+			pasteDown?.post(tap: .cghidEventTap)
+			pasteUp?.post(tap: .cghidEventTap)
 		}
 	}
 }

@@ -54,18 +54,20 @@ struct TemplatePublishModal: View {
 					.foregroundStyle(.primary)
 				Spacer()
 				if hasPerWordAnimation {
-					InfoBadge(label: "Per word", systemImage: "directcurrent", color: .green)
+					InfoBadge(
+						label: String(localized: "Per word"), systemImage: "directcurrent",
+						color: .green)
 				}
 			}
 
 			VStack(alignment: .leading, spacing: KKSpacingLG) {
-				LabeledField(label: "Name") {
+				LabeledField(label: String(localized: "Name")) {
 					HStack(spacing: KKSpacingSM) {
 						Image(systemName: "tag.fill")
 							.font(.system(size: 10))
 							.foregroundStyle(.secondary)
 						PublishTextField(
-							text: $name, placeholder: "Template name",
+							text: $name, placeholder: String(localized: "Template name"),
 							requestFocus: $focusName
 						)
 						.frame(height: 16)
@@ -76,13 +78,13 @@ struct TemplatePublishModal: View {
 					.onTapGesture { focusName.toggle() }
 					.kkPanel(cornerRadius: KKRadiusMD)
 				}
-				LabeledField(label: "Author") {
+				LabeledField(label: String(localized: "Author")) {
 					HStack(spacing: KKSpacingSM) {
 						Image(systemName: "person.circle.fill")
 							.font(.system(size: 10))
 							.foregroundStyle(.secondary)
 						PublishTextField(
-							text: $author, placeholder: "Optional",
+							text: $author, placeholder: String(localized: "Optional"),
 							requestFocus: $focusAuthor
 						)
 						.frame(height: 16)
@@ -173,16 +175,10 @@ struct TemplatePublishModal: View {
 
 	@ViewBuilder
 	private func paramBadge(_ param: PublishedParameter) -> some View {
-		switch param.kind {
-		case .color:
-			InfoBadge(label: param.name, systemImage: "paintpalette", color: .kkAccent)
-		case .slider:
-			InfoBadge(label: param.name, systemImage: "slider.horizontal.3", color: .kkWarning)
-		case .toggle:
-			InfoBadge(label: param.name, systemImage: "checkmark.circle", color: .green)
-		default:
-			InfoBadge(label: param.name, color: .secondary)
-		}
+		InfoBadge(
+			label: param.name,
+			systemImage: param.kind.displayIcon,
+			color: param.kind.displayColor)
 	}
 
 	private func setGif(_ url: URL) {

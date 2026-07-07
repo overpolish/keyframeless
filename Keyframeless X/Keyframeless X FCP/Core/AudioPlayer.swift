@@ -5,6 +5,7 @@
 
 import AVFoundation
 import Combine
+import Foundation
 
 @MainActor
 final class AudioPlayer: ObservableObject {
@@ -12,7 +13,6 @@ final class AudioPlayer: ObservableObject {
 	// instance, so we track all live instances here to allow AxisDocumentView's
 	// keyDown to stop whichever one is currently playing.
 	private static var activeInstances = NSHashTable<AudioPlayer>.weakObjects()
-	private static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "mxf", "mts", "avi"]
 
 	static var isAnyPlaying: Bool {
 		activeInstances.allObjects.contains { $0.playingIndex != nil }
@@ -30,19 +30,17 @@ final class AudioPlayer: ObservableObject {
 	}
 	let currentTimeSubject = PassthroughSubject<Double?, Never>()
 
-	private var audioPlayer: AVAudioPlayer?
-	private var avPlayer: AVPlayer?
+	private var session: LivePlaybackSession?
+	private var startTask: Task<Void, Never>?
 	private var stopWorkItem: DispatchWorkItem?
 	private var progressTimer: Timer?
-	private var scopedURL: URL?
+	private var startSourceTime: Double = 0
 
 	init() {
 		Self.activeInstances.add(self)
 	}
 
-	func isPlaying(index: Int) -> Bool {
-		playingIndex == index
-	}
+	func isPlaying(index: Int) -> Bool { playingIndex == index }
 
 	func toggle(clip: FCPXMLParser.AudioClip, index: Int) {
 		stopWorkItem?.cancel()
@@ -51,7 +49,7 @@ final class AudioPlayer: ObservableObject {
 			stop()
 			return
 		}
-		startPlaying(clip: clip, index: index, from: clip.sourceStart)
+		startPlaying(clip: clip, index: index, from: clip.sourceStart, stopAfter: nil)
 	}
 
 	func toggleRange(clip: FCPXMLParser.AudioClip, index: Int, from: Double, to: Double) {
@@ -63,87 +61,70 @@ final class AudioPlayer: ObservableObject {
 		}
 		let clipEnd = clip.sourceStart + clip.sourceDuration
 		let clampedTo = min(clipEnd, to)
-		startPlaying(clip: clip, index: index, from: from)
-		stopWorkItem?.cancel()
-		scheduleStop(after: max(0, clampedTo - from))
+		startPlaying(clip: clip, index: index, from: from, stopAfter: max(0, clampedTo - from))
 	}
 
 	func scrub(clip: FCPXMLParser.AudioClip, index: Int, progress: Double) {
 		let offset = clip.sourceStart + progress * clip.sourceDuration
-		if isPlaying(index: index) {
-			stopWorkItem?.cancel()
-			if let avPlayer {
-				avPlayer.seek(
-					to: CMTime(seconds: offset, preferredTimescale: 48000),
-					toleranceBefore: .zero, toleranceAfter: .zero)
-			} else if let audioPlayer {
-				audioPlayer.currentTime = offset
-			}
-			currentTime = offset
-			let remaining = clip.sourceDuration * (1 - progress)
-			scheduleStop(after: max(0, remaining))
-		} else {
-			startPlaying(clip: clip, index: index, from: offset)
-		}
+		startPlaying(clip: clip, index: index, from: offset, stopAfter: nil)
 	}
 
 	func stop() {
+		startTask?.cancel()
+		startTask = nil
 		progressTimer?.invalidate()
 		progressTimer = nil
 		stopWorkItem?.cancel()
 		stopWorkItem = nil
-		avPlayer?.pause()
-		avPlayer = nil
-		audioPlayer?.stop()
-		audioPlayer = nil
+		session?.stop()
+		session = nil
 		playingIndex = nil
 		currentTime = nil
-		if let url = scopedURL {
-			url.stopAccessingSecurityScopedResource()
-			scopedURL = nil
+	}
+
+	private func startPlaying(
+		clip: FCPXMLParser.AudioClip, index: Int, from time: Double, stopAfter: Double?
+	) {
+		stop()
+		playingIndex = index
+		currentTime = time
+		startSourceTime = time
+
+		startTask = Task { [weak self] in
+			guard let self else { return }
+			do {
+				let newSession = try await LivePlaybackSession.start(
+					clip: clip, fromSourceTime: time)
+				if Task.isCancelled {
+					newSession.stop()
+					return
+				}
+				await MainActor.run {
+					guard self.playingIndex == index else {
+						newSession.stop()
+						return
+					}
+					self.session = newSession
+					self.progressTimer = Timer.scheduledTimer(
+						withTimeInterval: 1.0 / 30.0, repeats: true
+					) { [weak self] _ in
+						MainActor.assumeIsolated { self?.tickCurrentTime() }
+					}
+					let remaining = stopAfter ?? (clip.sourceDuration - (time - clip.sourceStart))
+					self.scheduleStop(after: max(0, remaining))
+				}
+			} catch {
+				print("[AudioPlayer] start failed: \(error)")
+				await MainActor.run { self.stop() }
+			}
 		}
 	}
 
-	private func startPlaying(clip: FCPXMLParser.AudioClip, index: Int, from time: Double) {
-		stop()
-		guard let resolved = try? clip.resolvedURL() else { return }
-
-		let isVideo = Self.videoExtensions.contains(resolved.url.pathExtension.lowercased())
-
-		if isVideo {
-			let playerItem = AVPlayerItem(url: resolved.url)
-			let newPlayer = AVPlayer(playerItem: playerItem)
-			newPlayer.seek(
-				to: CMTime(seconds: time, preferredTimescale: 48000),
-				toleranceBefore: .zero, toleranceAfter: .zero)
-			newPlayer.play()
-			avPlayer = newPlayer
-		} else {
-			guard let newPlayer = try? AVAudioPlayer(contentsOf: resolved.url) else {
-				resolved.stopAccess()
-				return
-			}
-			newPlayer.prepareToPlay()
-			newPlayer.currentTime = time
-			newPlayer.play()
-			audioPlayer = newPlayer
-		}
-
-		if resolved.isSecurityScoped { scopedURL = resolved.url } else { resolved.stopAccess() }
-		playingIndex = index
-		currentTime = time
-		progressTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) {
-			[weak self] _ in
-			MainActor.assumeIsolated {
-				if let avp = self?.avPlayer {
-					self?.currentTime = avp.currentTime().seconds
-				} else {
-					self?.currentTime = self?.audioPlayer?.currentTime
-				}
-			}
-		}
-		let remaining = clip.sourceDuration - (time - clip.sourceStart)
-		scheduleStop(after: max(0, remaining))
+	private func tickCurrentTime() {
+		guard let session, let elapsed = session.elapsedSeconds() else { return }
+		let absoluteTime = startSourceTime + elapsed
+		currentTime = absoluteTime
+		session.updateAutomation(atSourceTime: absoluteTime)
 	}
 
 	private func scheduleStop(after delay: Double) {

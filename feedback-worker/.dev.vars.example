@@ -1,0 +1,8 @@
+# Copy to .dev.vars for `wrangler dev` (local). Never commit .dev.vars.
+# In production these are set with `wrangler secret put <NAME>`.
+TURNSTILE_SECRET="your-turnstile-secret-key"
+GITHUB_TOKEN="your-fine-grained-pat-issues-rw"
+# Shared with the GitHub repo webhook that triggers screenshot cleanup on issue
+# close. Any random string; must match the webhook's secret. (Webhooks can't
+# reach localhost without a tunnel, so this is only exercised in production.)
+GITHUB_WEBHOOK_SECRET="your-webhook-secret"

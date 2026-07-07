@@ -14,7 +14,7 @@ import SwiftUI
 // monitors (NSEvent.addLocalMonitorForEvents) never receive keyDown unless a
 // native NSView has been made first responder through an actual user click.
 // Programmatic makeFirstResponder calls (e.g. in viewDidAppear) do NOT prime
-// the routing — only a real mouseDown on an NSView that accepts first responder
+// the routing - only a real mouseDown on an NSView that accepts first responder
 // causes the system to start forwarding key events to the extension process.
 //
 // Solution: AxisDocumentView accepts first responder and overrides keyDown to
@@ -45,6 +45,7 @@ struct TimelineAxisView: View {
 	var showWaveforms: Bool = true
 	var hoveredClipIndex: Binding<Int?> = .constant(nil)
 	var onClickDimmed: ((Int) -> Void)? = nil
+	var onLoadingChanged: ((Set<Int>) -> Void)? = nil
 
 	@State private var zoom: CGFloat = 1.0
 
@@ -64,7 +65,8 @@ struct TimelineAxisView: View {
 				overlapRegions: overlapRegions,
 				showWaveforms: showWaveforms,
 				hoveredClipIndex: hoveredClipIndex,
-				onClickDimmed: onClickDimmed
+				onClickDimmed: onClickDimmed,
+				onLoadingChanged: onLoadingChanged
 			)
 		}
 		.padding(.horizontal, KKPaddingMD)
@@ -93,6 +95,7 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 	var showWaveforms: Bool
 	var hoveredClipIndex: Binding<Int?>
 	var onClickDimmed: ((Int) -> Void)?
+	var onLoadingChanged: ((Set<Int>) -> Void)?
 
 	func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -146,6 +149,10 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 			stateChanged = true
 		}
 
+		// onLoadingChanged must be wired BEFORE clips, since clips' didSet kicks off
+		// waveform tasks and reports the initial loading state synchronously.
+		docView.onLoadingChanged = onLoadingChanged
+
 		// clips triggers waveform loading via didSet, so always assign through the setter
 		let clipsChanged =
 			clips.map(\.url) != docView.clips.map(\.url)
@@ -164,8 +171,8 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 			stateChanged = true
 			if hoveredClipIndex.wrappedValue != nil {
 				docView.startPulse()
-			} else if docView.localHoveredIndex == nil {
-				docView.stopPulse()
+			} else {
+				docView.stopPulseIfIdle()
 			}
 		}
 		docView.onToggleClip = { index in
@@ -173,6 +180,13 @@ private struct TimelineAxisScrollView: NSViewRepresentable {
 				selectedClips.remove(index)
 			} else {
 				selectedClips.insert(index)
+			}
+		}
+		docView.onSetClipSelected = { index, shouldSelect in
+			if shouldSelect {
+				selectedClips.insert(index)
+			} else {
+				selectedClips.remove(index)
 			}
 		}
 		docView.onClickDimmed = onClickDimmed
@@ -219,7 +233,11 @@ private class AxisDocumentView: NSView {
 	var hoveredClipIndex: Int?
 	var onHoverClip: ((Int?) -> Void)?
 	var onToggleClip: ((Int) -> Void)?
+	var onSetClipSelected: ((Int, Bool) -> Void)?
+	fileprivate var dragTargetSelected: Bool?
+	fileprivate var dragVisitedIndices: Set<Int> = []
 	var onClickDimmed: ((Int) -> Void)?
+	var onLoadingChanged: ((Set<Int>) -> Void)?
 	var labelForTime: ((Double) -> String)?
 	var onMagnify: ((CGFloat, CGFloat) -> Void)?
 	var audioPlayer: AudioPlayer? {
@@ -284,7 +302,7 @@ private class AxisDocumentView: NSView {
 		let index = cachedClipRects.reversed().first { $0.rect.contains(point) }?.index
 		if index != localHoveredIndex {
 			localHoveredIndex = index
-			if index != nil { startPulse() } else { stopPulse() }
+			if index != nil { startPulse() } else { stopPulseIfIdle() }
 			needsDisplay = true
 		}
 	}
@@ -293,8 +311,14 @@ private class AxisDocumentView: NSView {
 		if localHoveredIndex != nil {
 			localHoveredIndex = nil
 		}
-		stopPulse()
+		stopPulseIfIdle()
 		needsDisplay = true
+	}
+
+	fileprivate func stopPulseIfIdle() {
+		if hoveredClipIndex == nil && localHoveredIndex == nil && waveformTasks.isEmpty {
+			stopPulse()
+		}
 	}
 
 	override func magnify(with event: NSEvent) {
@@ -312,7 +336,7 @@ private class AxisDocumentView: NSView {
 
 	override func mouseDown(with event: NSEvent) {
 		// Claiming first responder on click primes FCP's key event routing
-		// to the extension — see TimelineFirstResponder comment.
+		// to the extension - see TimelineFirstResponder comment.
 		window?.makeFirstResponder(self)
 		let point = convert(event.locationInWindow, from: nil)
 		for entry in cachedClipRects.reversed() {
@@ -325,10 +349,16 @@ private class AxisDocumentView: NSView {
 
 			isDraggingSelection = true
 			dragHoveredIndex = entry.index
-			onToggleClip?(entry.index)
+			let target = !selectedClips.contains(entry.index)
+			dragTargetSelected = target
+			dragVisitedIndices = [entry.index]
+			onSetClipSelected?(entry.index, target)
 			return
 		}
 		isDraggingSelection = true
+		dragTargetSelected = nil
+		dragVisitedIndices = []
+		dragHoveredIndex = nil
 	}
 
 	override func mouseDragged(with event: NSEvent) {
@@ -346,9 +376,16 @@ private class AxisDocumentView: NSView {
 		}?.index
 		if hoveredIndex != dragHoveredIndex {
 			dragHoveredIndex = hoveredIndex
-			if let index = hoveredIndex {
-				onToggleClip?(index)
+			if let index = hoveredIndex, !dragVisitedIndices.contains(index) {
+				let target = dragTargetSelected ?? !selectedClips.contains(index)
+				dragTargetSelected = target
+				dragVisitedIndices.insert(index)
+				onSetClipSelected?(index, target)
 			}
+		}
+		if hoveredIndex != localHoveredIndex {
+			localHoveredIndex = hoveredIndex
+			needsDisplay = true
 		}
 	}
 
@@ -356,6 +393,8 @@ private class AxisDocumentView: NSView {
 		scrubbingClipIndex = nil
 		isDraggingSelection = false
 		dragHoveredIndex = nil
+		dragVisitedIndices = []
+		dragTargetSelected = nil
 	}
 
 	override func draw(_ dirtyRect: NSRect) {
@@ -374,6 +413,7 @@ private class AxisDocumentView: NSView {
 			glowClipIndex: hoveredClipIndex ?? localHoveredIndex,
 			pulsePhase: pulsePhase,
 			waveforms: waveforms,
+			loadingIndices: Set(waveformTasks.keys),
 			hasAudioPlayer: audioPlayer != nil,
 			playingIndex: audioPlayer?.playingIndex,
 			labelForTime: labelForTime,
@@ -497,23 +537,53 @@ private class AxisDocumentView: NSView {
 	}
 
 	private func loadWaveformsIfNeeded(from oldClips: [FCPXMLParser.AudioClip]) {
-		let urlsChanged = clips.map(\.url) != oldClips.map(\.url)
-		if urlsChanged {
+		let changed = clips.map(AudioClipFingerprint.of) != oldClips.map(AudioClipFingerprint.of)
+		if changed {
 			waveformTasks.values.forEach { $0.cancel() }
 			waveformTasks = [:]
 			waveforms = [:]
 		}
 		for (i, clip) in clips.enumerated() {
 			guard waveforms[i] == nil, waveformTasks[i] == nil else { continue }
-			waveformTasks[i] = Task {
-				guard let samples = try? await WaveformLoader.shared.waveform(for: clip) else {
+			waveformTasks[i] = Task { [weak self] in
+				let onProgress: @Sendable ([Float]) -> Void = { [weak self] partial in
+					Task { @MainActor [weak self] in
+						guard let self else { return }
+						self.waveforms[i] = partial
+						self.needsDisplay = true
+					}
+				}
+				guard
+					let samples = try? await WaveformLoader.shared.waveform(
+						for: clip, onProgress: onProgress)
+				else {
+					await MainActor.run { [weak self] in
+						self?.waveformTasks[i] = nil
+						self?.reportLoadingState()
+					}
 					return
 				}
 				await MainActor.run { [weak self] in
 					self?.waveforms[i] = samples
+					self?.waveformTasks[i] = nil
 					self?.needsDisplay = true
+					self?.reportLoadingState()
 				}
 			}
+		}
+		reportLoadingState()
+	}
+
+	private func reportLoadingState() {
+		let loadingSet = Set(waveformTasks.keys)
+		if !loadingSet.isEmpty {
+			startPulse()
+		} else if hoveredClipIndex == nil && localHoveredIndex == nil {
+			stopPulse()
+		}
+		needsDisplay = true
+		if let onLoadingChanged {
+			DispatchQueue.main.async { onLoadingChanged(loadingSet) }
 		}
 	}
 }

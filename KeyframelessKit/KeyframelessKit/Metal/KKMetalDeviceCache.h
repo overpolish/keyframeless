@@ -11,7 +11,10 @@
 typedef NS_ENUM(NSUInteger, KKBlendMode) {
   KKBlendModeNone,
   KKBlendModeStraightAlpha,
-  KKBlendModePremultipliedAlpha
+  KKBlendModePremultipliedAlpha,
+  // Pure additive (src·1 + dst·1) on all four channels - for averaging passes
+  // (e.g. per-layer motion-blur accumulation: draw N samples each scaled by 1/N).
+  KKBlendModeAdditive
 };
 
 @class FxImageTile;

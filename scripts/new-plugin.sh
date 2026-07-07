@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# new-plugin.sh — Scaffold a new Keyframeless plugin from the Template.
+# new-plugin.sh - Scaffold a new Keyframeless plugin from the Template.
 #
 # Usage:
 #   ./scripts/new-plugin.sh <PluginName> [--type effect|title|generator] [--bundle-prefix <prefix>] [--add-to-workspace]
@@ -78,7 +78,6 @@ SOURCE="$REPO_ROOT/Template"
 DEST="$REPO_ROOT/$PLUGIN_NAME"
 WORKSPACE="$REPO_ROOT/Keyframeless.xcworkspace/contents.xcworkspacedata"
 PKGPROJ="$REPO_ROOT/Distribution/Keyframeless.pkgproj"
-MANIFEST="$REPO_ROOT/manifest.json"
 BUMP_SCRIPT="$REPO_ROOT/scripts/bump-version.sh"
 UPDATE_CHECKER="$REPO_ROOT/KeyframelessKit/KeyframelessKit/Update/KKUpdateChecker.m"
 
@@ -89,7 +88,7 @@ UPDATE_CHECKER="$REPO_ROOT/KeyframelessKit/KeyframelessKit/Update/KKUpdateChecke
 
 # ── Known UUIDs to replace ───────────────────────────────────────────────────
 
-# These are Template's fixed UUIDs from Info.plist — must be unique per plugin.
+# These are Template's fixed UUIDs from Info.plist - must be unique per plugin.
 OLD_UUID_EFFECT="E62BB814-A76B-4438-B1B1-090145A42CC2"
 OLD_UUID_OSC="A1B70771-EDBB-4D3B-81B6-DB70B74CEDE4"
 OLD_UUID_GROUP="450150AA-FB81-4198-BB73-058CFEF39F5C"
@@ -166,23 +165,7 @@ ok "UUIDs: effect=$NEW_UUID_EFFECT"
 ok "       osc   =$NEW_UUID_OSC"
 ok "       group =$NEW_UUID_GROUP"
 
-# ── Step 5: Register in manifest.json ─────────────────────────────────────────
-
-log "Registering in manifest.json..."
-
-python3 -c "
-import json
-with open('$MANIFEST', 'r') as f:
-    m = json.load(f)
-m['$PLUGIN_KEY'] = '1.0.0'
-with open('$MANIFEST', 'w') as f:
-    json.dump(m, f, indent=2)
-    f.write('\n')
-"
-
-ok "Added '$PLUGIN_KEY' to manifest.json"
-
-# ── Step 6: Register in bump-version.sh ───────────────────────────────────────
+# ── Step 5: Register in bump-version.sh ───────────────────────────────────────
 
 log "Registering in bump-version.sh..."
 
@@ -210,7 +193,7 @@ sed -i '' "/^  keyframelessx)$/i\\
 
 ok "Added '$PLUGIN_KEY' to bump-version.sh"
 
-# ── Step 7: Register in KKUpdateChecker.m ─────────────────────────────────────
+# ── Step 6: Register in KKUpdateChecker.m ─────────────────────────────────────
 
 log "Registering in KKUpdateChecker.m..."
 
@@ -218,14 +201,14 @@ log "Registering in KKUpdateChecker.m..."
 sed -i '' "s|@\"magicmove\" : @\"MagicMove\"|@\"magicmove\" : @\"MagicMove\",\\
     @\"$PLUGIN_KEY\" : @\"$PLUGIN_NAME\"|" "$UPDATE_CHECKER"
 
-# Add to KKBundleIDToComponent
-sed -i '' "s|@\"MagicMove-XPC-Service\" : @\"magicmove\"|@\"MagicMove-XPC-Service\" : @\"magicmove\",\\
-    @\"$PLUGIN_NAME\" : @\"$PLUGIN_KEY\",\\
-    @\"$PLUGIN_NAME-XPC-Service\" : @\"$PLUGIN_KEY\"|" "$UPDATE_CHECKER"
+# Add to KKBundleIDToComponent (host + .PlugIn extension, the standard scheme)
+sed -i '' "s|@\"co.overpolish.keyframeless.MagicMove.PlugIn\" : @\"magicmove\"|@\"co.overpolish.keyframeless.MagicMove.PlugIn\" : @\"magicmove\",\\
+    @\"co.overpolish.keyframeless.$PLUGIN_NAME\" : @\"$PLUGIN_KEY\",\\
+    @\"co.overpolish.keyframeless.$PLUGIN_NAME.PlugIn\" : @\"$PLUGIN_KEY\"|" "$UPDATE_CHECKER"
 
 ok "Added '$PLUGIN_NAME' to KKUpdateChecker.m"
 
-# ── Step 8: Register in installer pkgproj ────────────────────────────────────
+# ── Step 7: Register in installer pkgproj ────────────────────────────────────
 
 log "Registering in Keyframeless.pkgproj..."
 
@@ -282,7 +265,7 @@ with open(pkgproj, 'w') as f:
 
 ok "Added '$PLUGIN_NAME' to Keyframeless.pkgproj (pkg=$PKG_UUID)"
 
-# ── Step 9 (optional): Add to workspace ──────────────────────────────────────
+# ── Step 8 (optional): Add to workspace ──────────────────────────────────────
 
 if $ADD_TO_WORKSPACE; then
     log "Adding to workspace..."

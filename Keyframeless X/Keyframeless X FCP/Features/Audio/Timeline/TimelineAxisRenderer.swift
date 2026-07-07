@@ -19,6 +19,7 @@ struct TimelineAxisRenderer {
 	let glowClipIndex: Int?
 	let pulsePhase: CGFloat
 	let waveforms: [Int: [Float]]
+	let loadingIndices: Set<Int>
 	let hasAudioPlayer: Bool
 	let playingIndex: Int?
 	let labelForTime: ((Double) -> String)?
@@ -167,28 +168,33 @@ struct TimelineAxisRenderer {
 	private func drawClipBackground(_ state: ClipDrawState, in ctx: CGContext) {
 		let isDimmed = dimmedIndices.contains(state.index)
 		let isHoverDimmed = hoveredClipIndex != nil && hoveredClipIndex != state.index && !isDimmed
-		let alpha: CGFloat =
-			isDimmed
-			? 0.1 : isHoverDimmed ? 0.25 : selectedClips.contains(state.index) ? 0.85 : 0.25
+		let isSelected = selectedClips.contains(state.index)
 		let clipColor = clipColor(for: state.clip, isDimmed: isDimmed)
-
-		ctx.setFillColor(clipColor.withAlphaComponent(alpha).cgColor)
 		let path = CGPath(
 			roundedRect: state.rect, cornerWidth: state.cornerRadius,
 			cornerHeight: state.cornerRadius, transform: nil)
-		ctx.addPath(path)
-		ctx.fillPath()
+
+		if isDimmed {
+			ctx.setStrokeColor(NSColor.secondaryLabelColor.withAlphaComponent(0.15).cgColor)
+			ctx.setLineWidth(1.5)
+			ctx.addPath(path)
+			ctx.strokePath()
+		} else {
+			let alpha: CGFloat = isSelected ? 0.85 : isHoverDimmed ? 0.25 : 0.08
+			let fill: NSColor = isSelected || isHoverDimmed ? clipColor : .secondaryLabelColor
+			ctx.setFillColor(fill.withAlphaComponent(alpha).cgColor)
+			ctx.addPath(path)
+			ctx.fillPath()
+		}
 
 		if isDimmed && glowClipIndex == state.index {
 			drawPulseGlow(rect: state.rect, path: path, color: clipColor, dimmed: true, in: ctx)
 		}
 
 		if !isDimmed && !isHoverDimmed && glowClipIndex == state.index {
-			let isSelected = selectedClips.contains(state.index)
 			drawPulseGlow(
 				rect: state.rect, path: path, color: clipColor, dimmed: !isSelected, in: ctx)
 		}
-
 	}
 
 	private func drawPulseGlow(
@@ -226,6 +232,8 @@ struct TimelineAxisRenderer {
 		if showWaveforms, !skipWaveforms, let samples = waveforms[state.index], !samples.isEmpty {
 			drawClipWaveform(
 				samples, state: state, hasAudioControls: hasAudioControls, in: ctx)
+		} else if showWaveforms, !skipWaveforms, loadingIndices.contains(state.index) {
+			drawLoadingPlaceholder(state: state, hasAudioControls: hasAudioControls, in: ctx)
 		}
 
 		if hasAudioControls {
@@ -233,6 +241,50 @@ struct TimelineAxisRenderer {
 		} else if state.laneHeight >= 16 && state.w > 30 {
 			drawClipTitle(state, in: ctx)
 		}
+	}
+
+	private func drawLoadingPlaceholder(
+		state: ClipDrawState, hasAudioControls: Bool, in ctx: CGContext
+	) {
+		let waveformRect: CGRect
+		if hasAudioControls {
+			let titleStripH: CGFloat = playBtnSize + 8
+			let waveformY = state.rect.minY + titleStripH
+			let waveformH = state.rect.height - titleStripH - scrubStripHeight
+			guard waveformH > 4 else { return }
+			waveformRect = CGRect(
+				x: state.rect.minX, y: waveformY,
+				width: state.rect.width, height: waveformH)
+		} else {
+			waveformRect = state.rect
+		}
+		let barWidth: CGFloat = 3
+		let barSpacing: CGFloat = 4
+		let stride = barWidth + barSpacing
+		let barCount = max(1, Int(waveformRect.width / stride))
+		let centerY = waveformRect.midY
+		let maxHalfHeight = waveformRect.height * 0.175
+		let color = NSColor.white
+		let cycleSeconds: CGFloat = 4.0
+		ctx.saveGState()
+		for i in 0..<barCount {
+			let x = waveformRect.minX + CGFloat(i) * stride
+			// Per-bar fixed phase offset using fractional part of i * irrational -
+			// scatters bars across the cycle without a monotonic stagger that would
+			// read as a traveling wave.
+			let offset = (CGFloat(i) * 0.6180339887).truncatingRemainder(dividingBy: 1.0)
+			let t = pulsePhase / cycleSeconds + offset
+			let cyclePos = (t.truncatingRemainder(dividingBy: 1.0) + 1.0)
+				.truncatingRemainder(dividingBy: 1.0)
+			let amp = max(0, sin(.pi * cyclePos))
+			let halfH = maxHalfHeight * amp
+			guard halfH > 0.5 else { continue }
+			let bar = CGRect(
+				x: x, y: centerY - halfH, width: barWidth, height: halfH * 2)
+			ctx.setFillColor(color.withAlphaComponent(0.35).cgColor)
+			ctx.fill(bar)
+		}
+		ctx.restoreGState()
 	}
 
 	private func drawClipWaveform(
@@ -370,8 +422,7 @@ struct TimelineAxisRenderer {
 		let midY = rect.midY
 		let halfH = rect.height * 0.4
 
-		let peak = samples.max() ?? 1
-		let scale = peak > 0 ? 1 / CGFloat(peak) : 1
+		let scale: CGFloat = 1
 
 		// Only draw the visible portion of the waveform
 		let visX = dirtyRect.isNull ? rect : rect.intersection(dirtyRect)

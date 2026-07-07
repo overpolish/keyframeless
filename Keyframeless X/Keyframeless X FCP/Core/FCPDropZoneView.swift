@@ -46,7 +46,7 @@ class FCPDropTargetView: NSView {
 		fatalError("init(coder:) not implemented")
 	}
 
-	// Passthrough for all mouse events — drag system uses bounds, not hitTest
+	// Passthrough for all mouse events - drag system uses bounds, not hitTest
 	override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
 	override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {

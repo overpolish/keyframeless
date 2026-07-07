@@ -1,4 +1,5 @@
 build/
+.build/
 release/
 DerivedData/
 xcuserdata/
@@ -8,7 +9,18 @@ xcuserdata/
 buildServer.json
 scripts/*.fcpxml
 !scripts/*.template.fcpxml
+# Per-product installer artifacts (generated transiently by build-and-sign.sh from
+# the combined project + uninstall.template; never committed).
+Distribution/*.pkgproj
+!Distribution/Keyframeless.pkgproj
+Distribution/scripts/uninstall-*
+!Distribution/scripts/uninstall-motionblur
+
+# Staged kk-ai-helper binary + metallib (built by build-and-sign.sh keyframelessai;
+# the plist/uninstaller/postinstall/entitlements alongside them ARE committed source).
+Distribution/helper/staging/
 .derived-data*
 .claude
 CLAUDE.md
 .compile
+.cache

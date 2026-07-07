@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../Math/KKTimingStage.h"
-#import "../Views/KKCustomGroupHeaderView.h"
 #import "KKConstants.h"
+#import "KKCustomGroupHeaderView.h"
 #import "KKDataBlob.h"
 #import "KKPlugin_Private.h"
+#import "KKTimingStage.h"
 #import <FxPlug/FxPlugSDK.h>
 
 static BOOL KKAddParam(BOOL ok, NSError **err, NSString *desc) {
@@ -61,11 +61,11 @@ static const FxParameterFlags kHiddenNotAnim =
           error, @"Unable to add Timing expanded toggle"))
     return NO;
 
-  // Native bool toggle — NOT a KKDataBlob. `setBoolValue:atTime:` IS
+  // Native bool toggle - NOT a KKDataBlob. `setBoolValue:atTime:` IS
   // undoable (the no-undo caveat below applies to `setStringParameterValue:`,
   // not booleans), AND native reads work from the OSC's separate apiManager
   // scope. The pump's `KKSyncLoopFromParams` runs on every drawOSC tick and
-  // would clobber `state.loopEnabled` to NO if the read returned empty —
+  // would clobber `state.loopEnabled` to NO if the read returned empty -
   // see the matching kKKParamInstanceID note for the full failure mode.
   // NOT_ANIMATABLE deliberately omitted so cmd-Z reverts the toggle.
   if (!KKAddParam([paramAPI addToggleButtonWithName:@""
@@ -76,11 +76,11 @@ static const FxParameterFlags kHiddenNotAnim =
     return NO;
 
   // Custom parameter (KKDataBlob wrapping the lanes-JSON UTF-8 bytes).
-  // String params can't be undone in FCP — `setStringParameterValue:` has
+  // String params can't be undone in FCP - `setStringParameterValue:` has
   // no `atTime:` variant and FCP filters those writes off its undo stack.
   // Custom params route through `setCustomParameterValue:atTime:`, the
   // same pipeline animatable scalars use, which IS undoable.
-  // NOT_ANIMATABLE deliberately omitted — that flag would re-exclude the
+  // NOT_ANIMATABLE deliberately omitted - that flag would re-exclude the
   // param from the undo path.
   if (!KKAddParam([paramAPI
                       addCustomParameterWithName:@""
@@ -90,14 +90,14 @@ static const FxParameterFlags kHiddenNotAnim =
                   error, @"Unable to add multi-stage data"))
     return NO;
 
-  // Native string param — NOT a KKDataBlob. The OSC is a separate
+  // Native string param - NOT a KKDataBlob. The OSC is a separate
   // FxOnScreenControl principal with its own apiManager, and custom-blob
   // reads from that scope return nil (they need an action scope, which
   // OSCs aren't supposed to open per FxCustomParameterActionAPI docs).
   // Since this UUID is the bootstrap key for the per-instance state
-  // map, a nil read here cascades into "OSC sees no state at all" — the
+  // map, a nil read here cascades into "OSC sees no state at all" - the
   // sequencer's per-lane oscVisible toggle silently no-ops. Native
-  // string reads work from OSC scope. UUIDs don't need undo coverage —
+  // string reads work from OSC scope. UUIDs don't need undo coverage -
   // they're per-instance identity, never user-edited.
   if (!KKAddParam([paramAPI addStringParameterWithName:@""
                                            parameterID:kKKParamInstanceID
@@ -106,7 +106,7 @@ static const FxParameterFlags kHiddenNotAnim =
                   error, @"Unable to add instance ID"))
     return NO;
 
-  // Native-string mirror of the lanes JSON — read by OSC on cold-boot
+  // Native-string mirror of the lanes JSON - read by OSC on cold-boot
   // (blob unreadable from OSC scope). Written in lockstep with every
   // `KKWriteMultiStageJSONDeduped`; refreshed on cmd-Z echo.
   if (!KKAddParam([paramAPI
@@ -136,7 +136,7 @@ static const FxParameterFlags kHiddenNotAnim =
                   error, @"Unable to add Motion Blur group"))
     return NO;
 
-  // Hidden — driven by the checkbox in the group header view. KKDataBlob-
+  // Hidden - driven by the checkbox in the group header view. KKDataBlob-
   // backed so it lives in the same undoable custom-param pipeline as other
   // plugin-internal state. "1"/"0".
   if (!KKAddParam(
@@ -222,7 +222,7 @@ static void _setFlagsIfNeeded(id<FxParameterSettingAPI_v5> setAPI,
 
 - (void)updateTimingParameterVisibility {
   // setParameterFlags on params in the kKKParam range (9000s) crashes FCP
-  // when called synchronously from `parameterChanged:` — the host action
+  // when called synchronously from `parameterChanged:` - the host action
   // wrapping the user's interaction (group toggle, OSC drag) ends with our
   // flag-writes in the bulk-change list and FCP's transaction processor
   // null-derefs walking the channel tree. Defer onto the main queue inside

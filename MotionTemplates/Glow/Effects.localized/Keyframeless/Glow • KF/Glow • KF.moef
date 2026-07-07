@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE ozxmlscene>
-<ozml version="5.14">
+<ozml version="5.15">
 
-<displayversion>6.2</displayversion>
+<displayversion>6.3</displayversion>
 
 <factory id="1" uuid="46c844a813d311d8a438000a95af9f7e">
 	<description>Channel</description>
@@ -110,7 +110,7 @@
 	<displayEffects>1</displayEffects>
 	<videoVerticalZoom>1.6111111640930176</videoVerticalZoom>
 	<audioVerticalZoom>1.6111111640930176</audioVerticalZoom>
-	<displayRange in="-182385188 2125000000 3 0" out="2085828324 1000000000 3 0"/>
+	<displayRange in="-182342188 2130859375 3 0" out="2085572136 1000000000 3 0"/>
 </timeline>
 
 <curveeditor>
@@ -118,8 +118,8 @@
 	<snapping>0</snapping>
 	<displayAudioWaveform>0</displayAudioWaveform>
 	<lockKeyframesInTime>0</lockKeyframesInTime>
-	<displayRange in="-182385188 2125000000 3 0" out="2085828324 1000000000 3 0"/>
-	<currentviewvolume originx="-0.08582832376470588" originy="-62.5" width="2.1716566479999999" height="125"/>
+	<displayRange in="-182342188 2130859375 3 0" out="2085572136 1000000000 3 0"/>
+	<currentviewvolume originx="-0.085572135890009171" originy="-62.5" width="2.1711442719999998" height="125"/>
 	<snapshotChannels>0</snapshotChannels>
 </curveeditor>
 
@@ -172,29 +172,7 @@
 	<publishSettings>
 		<version>2</version>
 		<target object="3001889871" channel="./9990" name=""/>
-		<target object="3001889871" channel="./109" name="Preset"/>
-		<target object="3001889871" channel="./100" name="Radius X"/>
-		<target object="3001889871" channel="./101" name="Radius Y"/>
 		<target object="3001889871" channel="./200" name="Position"/>
-		<target object="3001889871" channel="./102" name="Intensity"/>
-		<target object="3001889871" channel="./103" name="Falloff"/>
-		<target object="3001889871" channel="./110" name="Threshold"/>
-		<target object="3001889871" channel="./9800" name=""/>
-		<target object="3001889871" channel="./9801" name="Color Mode"/>
-		<target object="3001889871" channel="./9802" name="Color"/>
-		<target object="3001889871" channel="./9803" name="Gradient"/>
-		<target object="3001889871" channel="./106" name="Gradient Type"/>
-		<target object="3001889871" channel="./107" name="Angle"/>
-		<target object="3001889871" channel="./150" name=""/>
-		<target object="3001889871" channel="./104" name="Amount"/>
-		<target object="3001889871" channel="./105" name="Offset"/>
-		<target object="3001889871" channel="./108" name="Speed"/>
-		<target object="3001889871" channel="./9900" name=""/>
-		<target object="3001889871" channel="./9905" name=""/>
-		<target object="3001889871" channel="./9924" name=""/>
-		<target object="3001889871" channel="./9926" name="Length"/>
-		<target object="3001889871" channel="./9927" name="Quality"/>
-		<target object="3001889871" channel="./9929" name="Transitions only?"/>
 	</publishSettings>
 	<currentFrame>15360 153600 1 0</currentFrame>
 	<currentObject>3001886282</currentObject>
@@ -227,7 +205,7 @@
 		<parameter name="Properties" id="1" flags="8589938704">
 			<parameter name="HDR White Level" id="103" flags="8606744592" default="0.75" value="0.75"/>
 		</parameter>
-		<parameter name="Object" id="2" flags="8589938704"/>
+		<parameter name="Object" id="2" flags="8589938705"/>
 	</scenenode>
 	<layer name="Group" id="3001886279">
 		<scenenode name="Effect Source" id="3001886282" factoryID="3" version="5">
@@ -296,108 +274,44 @@
 			</parameter>
 			<filter name="Glow · KF" id="3001889871" factoryID="6" pluginUUID="7E866F79-E273-43B3-AF28-D9F423B1427C" pluginVersion="1" pluginName="Glow · KF" pluginDynamicParams="0">
 				<timing in="0 1 1 0" out="304640 153600 1 0" offset="0 1 1 0"/>
-				<baseFlags>8589934609</baseFlags>
+				<baseFlags>8858370065</baseFlags>
 				<parameter name="" id="9990" flags="12901679124">
 					<numberOfKeypoints>0</numberOfKeypoints>
 					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GQ40-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
 					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GQ40-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
 				</parameter>
-				<parameter name="Force Show All Parameters" id="9001" flags="12901679104" default="0" value="0"/>
-				<parameter name="Preset" id="109" flags="12901744656" default="0" value="0"/>
-				<parameter name="Radius X" id="100" flags="12901679120" default="100" value="100"/>
-				<parameter name="Radius Y" id="101" flags="12901679120" default="100" value="100"/>
-				<parameter name="Position" id="200" flags="12884905984">
-					<foldFlags>15</foldFlags>
-				</parameter>
-				<parameter name="Intensity" id="102" flags="12901679120" default="1" value="1"/>
-				<parameter name="Falloff" id="103" flags="12901679120" default="0" value="0"/>
-				<parameter name="Threshold" id="110" flags="12901679120" default="0" value="0"/>
-				<parameter name="" id="9800" flags="12901679120">
+				<parameter name="" id="200" flags="12901679120">
 					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GN60-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
-					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GN60-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
+					<defaultVal>*********J2eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0GMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2AU62FcY8H6rGIlMKZpX*********E2*********1E*******************4I6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*F*********0*E*********E*******************-2E**</defaultVal>
+					<dataValue>*********J2eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0GMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2AU62FcY8H6rGIlMKZpX*********E2*********1E*******************4I6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*F*********0*E*********E*******************-2E**</dataValue>
 				</parameter>
-				<parameter name="" id="9804" flags="12905938992">
+				<parameter name="" id="201" flags="12905938992">
 					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********OweMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1kMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B-AB6H3-IKKWFXP43nQqtVPKJM74BgMLBnNLBOGoh2MLFVEaljMe6L43d9GoFVR430P4xWK2tHHq7eNKBo0-2O70YmBoZAK3dTNKdjRbVuT64AZO0XfU********2-*********-Y*******************0r0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk3i*********U2*********2********************Kw*</defaultVal>
-					<dataValue>*********OweMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1kMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B-AB6H3-IKKWFXP43nQqtVPKJM74BgMLBnNLBOGoh2MLFVEaljMe6L43d9GoFVR430P4xWK2tHHq7eNKBo0-2O70YmBoZAK3dTNKdjRbVuT64AZO0XfU********2-*********-Y*******************0r0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk3i*********U2*********2********************Kw*</dataValue>
+					<defaultVal>*********OseMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1jMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B*oVAI3FNO74BgMLBnPa3hNJUYMqlVQrBZQpd9GoFVR430P4xWcVQMKYh9F43oMI7gPq7MHZBDMadZMrE62FcY8H6rGIlMKZxZOaxqS5dvU6iIbu8h*********E2*********4E*******************9M6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*Ko********0*E*********E*******************-PU**</defaultVal>
+					<dataValue>*********OseMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1jMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B*oVAI3FNO74BgMLBnPa3hNJUYMqlVQrBZQpd9GoFVR430P4xWcVQMKYh9F43oMI7gPq7MHZBDMadZMrE62FcY8H6rGIlMKZxZOaxqS5dvU6iIbu8h*********E2*********4E*******************9M6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*Ko********0*E*********E*******************-PU**</dataValue>
 				</parameter>
-				<parameter name="Color Mode" id="9801" flags="12905938992" default="0" value="0"/>
-				<parameter name="Color" id="9802" flags="12889165872">
-					<foldFlags>15</foldFlags>
-				</parameter>
-				<parameter name="GradientData" id="9805" flags="12905938992">
+				<parameter name="" id="9931" flags="12905938992">
 					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********SMeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl2-7a7kP4ZnR1*kp*20*kE3-UQ8K0FqNL7nOKxiKGFVQaBcOLNZQZEYR4xkK0FjMadZMrFn2U*-Ve-T2*xCIohZSKJYEL7XO4ZqNL9F0*ZPErJnR4xh62FVR44**OE91-2GJGFiRKlgoUoC1l-IN43oMJMYMqlVQrC**c*1Hl*pKrgWQ06uA0kWQW6uA0kWNm6uA0kWMW6uA5ogSm7k6Xcl907m6Xcl907b6Xcl907W6XclTJrG2lEJ3ZcYMqlVQrBiMKpZK0FXP43nQqJnKYh9F43oMI7gPq8W3lVOGoh2MLFVEaljMZVCIoxWOaJXR*UF4WEdAXR7H3VOLqJePrNsSf8rkgjKqSE********-*E*********N********************vEU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-dE********6-*********-********************4a</defaultVal>
-					<dataValue>*********SMeMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl2-7a7kP4ZnR1*kp*20*kE3-UQ8K0FqNL7nOKxiKGFVQaBcOLNZQZEYR4xkK0FjMadZMrFn2U*-Ve-T2*xCIohZSKJYEL7XO4ZqNL9F0*ZPErJnR4xh62FVR44**OE91-2GJGFiRKlgoUoC1l-IN43oMJMYMqlVQrC**c*1Hl*pKrgWQ06uA0kWQW6uA0kWNm6uA0kWMW6uA5ogSm7k6Xcl907m6Xcl907b6Xcl907W6XclTJrG2lEJ3ZcYMqlVQrBiMKpZK0FXP43nQqJnKYh9F43oMI7gPq8W3lVOGoh2MLFVEaljMZVCIoxWOaJXR*UF4WEdAXR7H3VOLqJePrNsSf8rkgjKqSE********-*E*********N********************vEU*0**F*-c*7**d*16*Bk-7*2s*Kk-h*4w*QE-p*5g-dE********6-*********-********************4a</dataValue>
+					<defaultVal>*********OseMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1jMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B*oVAI3FNO74BgMLBnPa3hNJUYMqlVQrBZQpd9GoFVR430P4xWcVQMKYh9F43oMI7gPq7MHZBDMadZMrE62FcY8H6rGIlMKZxZOaxqS5dvU6iIbu8h*********E2*********4E*******************9M6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*Ko********0*E*********E*******************-PU**</defaultVal>
+					<dataValue>*********OseMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1jMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B*oVAI3FNO74BgMLBnPa3hNJUYMqlVQrBZQpd9GoFVR430P4xWcVQMKYh9F43oMI7gPq7MHZBDMadZMrE62FcY8H6rGIlMKZxZOaxqS5dvU6iIbu8h*********E2*********4E*******************9M6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*Ko********0*E*********E*******************-PU**</dataValue>
 				</parameter>
-				<parameter name="Gradient" id="9803" flags="12905938992">
+				<parameter name="" id="202" flags="12905938992">
 					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GN90-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
-					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GN90-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
+					<defaultVal>*********OseMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1jMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B*oVAI3FNO74BgMLBnPa3hNJUYMqlVQrBZQpd9GoFVR430P4xWcVQMKYh9F43oMI7gPq7MHZBDMadZMrE62FcY8H6rGIlMKZxZOaxqS5dvU6iIbu8h*********E2*********4E*******************9M6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*Ko********0*E*********E*******************-PU**</defaultVal>
+					<dataValue>*********OseMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1jMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B*oVAI3FNO74BgMLBnPa3hNJUYMqlVQrBZQpd9GoFVR430P4xWcVQMKYh9F43oMI7gPq7MHZBDMadZMrE62FcY8H6rGIlMKZxZOaxqS5dvU6iIbu8h*********E2*********4E*******************9M6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*Ko********0*E*********E*******************-PU**</dataValue>
 				</parameter>
-				<parameter name="Gradient Type" id="106" flags="12905938992" default="0" value="0"/>
-				<parameter name="Angle" id="107" flags="12905938992" default="0" value="0"/>
-				<parameter name="" id="150" flags="12901679120">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********J2eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0GMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg27M62FcY8H6rGIlMKZpX*********E2*********1E*******************4I6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*F*********0*E*********E*******************-2E**</defaultVal>
-					<dataValue>*********J2eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0GMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg27M62FcY8H6rGIlMKZpX*********E2*********1E*******************4I6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*F*********0*E*********E*******************-2E**</dataValue>
-				</parameter>
-				<parameter name="" id="151" flags="12905938992">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********OweMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1kMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B-AB6H3-IKKWFXP43nQqtVPKJM74BgMLBnNLBOGoh2MLFVEaljMe6L43d9GoFVR430P4xWK2tHHq7eNKBo0-2O70YmBoZAK3dTNKdjRbVuT64AZO0XfU********2-*********-Y*******************0r0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk3i*********U2*********2********************Kw*</defaultVal>
-					<dataValue>*********OweMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1kMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B-AB6H3-IKKWFXP43nQqtVPKJM74BgMLBnNLBOGoh2MLFVEaljMe6L43d9GoFVR430P4xWK2tHHq7eNKBo0-2O70YmBoZAK3dTNKdjRbVuT64AZO0XfU********2-*********-Y*******************0r0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk3i*********U2*********2********************Kw*</dataValue>
-				</parameter>
-				<parameter name="Amount" id="104" flags="12905938992" default="0" value="0"/>
-				<parameter name="Offset" id="105" flags="12905938992" default="0" value="0"/>
-				<parameter name="Speed" id="108" flags="12905938992" default="0" value="0"/>
-				<parameter name="" id="9900" flags="12901679120">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOg0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
-					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOg0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
-				</parameter>
-				<parameter name="" id="9905" flags="12901679120">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOl0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
-					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GOl0-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
-				</parameter>
-				<parameter name="" id="9908" flags="12905938992">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********OweMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1kMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B-AR6H3-IKKWFXP43nQqtVPKJM74BgMLBnNLBOGoh2MLFVEaljMe6L43d9GoFVR430P4xWK2tHHq7eNKBo0-2O70YmBoZAK3dTNKdjRbVuT64AZO0XfU********2-*********-Y*******************0r0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk3i*********U2*********2********************Kw*</defaultVal>
-					<dataValue>*********OweMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1kMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B-AR6H3-IKKWFXP43nQqtVPKJM74BgMLBnNLBOGoh2MLFVEaljMe6L43d9GoFVR430P4xWK2tHHq7eNKBo0-2O70YmBoZAK3dTNKdjRbVuT64AZO0XfU********2-*********-Y*******************0r0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk3i*********U2*********2********************Kw*</dataValue>
-				</parameter>
-				<parameter name="" id="9923" flags="12905938992" default="0" value="0"/>
-				<parameter name="" id="9919" flags="12905938992">
+				<parameter name="" id="9932" flags="12905938992">
 					<numberOfKeypoints>0</numberOfKeypoints>
 					<defaultVal>*********OseMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1jMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B*oVAI3FNO74BgMLBnPa3hNJUYMqlVQrBZQpd9GoFVR430P4xWcVQMKYh9F43oMI7gPq7MHZBDMadZMrE62FcY8H6rGIlMKZxZOaxqS5dvU6iIbu8h*********E2*********4E*******************9M6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*Ko********0*E*********E*******************-PU**</defaultVal>
 					<dataValue>*********OseMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1jMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B*oVAI3FNO74BgMLBnPa3hNJUYMqlVQrBZQpd9GoFVR430P4xWcVQMKYh9F43oMI7gPq7MHZBDMadZMrE62FcY8H6rGIlMKZxZOaxqS5dvU6iIbu8h*********E2*********4E*******************9M6**U*2E*O*0E*8E*m*1Q*GE-C*3g*PE-j*52*RE-v*Ko********0*E*********E*******************-PU**</dataValue>
 				</parameter>
 				<parameter name="" id="9922" flags="12905938976">
-					<text>A35F4932-AC41-4255-88FF-391DF348943A</text>
+					<text>99F74BB9-6020-46F9-A40E-58F73D0E5E15</text>
 				</parameter>
-				<parameter name="" id="9930" flags="12905938976"/>
-				<parameter name="" id="9924" flags="12901679120">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GP20-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</defaultVal>
-					<dataValue>*********J6eMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl0HMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-cUgAJGFiRKlg2GP20-2O70YmBoZAK3dRMk********2-**********o*******************-a0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk2F*********U2*********2********************F6*</dataValue>
-				</parameter>
-				<parameter name="" id="9925" flags="12905938992">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********OweMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1kMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B-AB6H3-IKKWFXP43nQqtVPKJM74BgMLBnNLBOGoh2MLFVEaljMe6L43d9GoFVR430P4xWK2tHHq7eNKBo0-2O70YmBoZAK3dTNKdjRbVuT64AZO0XfU********2-*********-Y*******************0r0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk3i*********U2*********2********************Kw*</defaultVal>
-					<dataValue>*********OweMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1kMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B-AB6H3-IKKWFXP43nQqtVPKJM74BgMLBnNLBOGoh2MLFVEaljMe6L43d9GoFVR430P4xWK2tHHq7eNKBo0-2O70YmBoZAK3dTNKdjRbVuT64AZO0XfU********2-*********-Y*******************0r0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk3i*********U2*********2********************Kw*</dataValue>
-				</parameter>
-				<parameter name="" id="9928" flags="12905938992">
-					<numberOfKeypoints>0</numberOfKeypoints>
-					<defaultVal>*********OweMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1kMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B-AB6H3-IKKWFXP43nQqtVPKJM74BgMLBnNLBOGoh2MLFVEaljMe6L43d9GoFVR430P4xWK2tHHq7eNKBo0-2O70YmBoZAK3dTNKdjRbVuT64AZO0XfU********2-*********-Y*******************0r0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk3i*********U2*********2********************Kw*</defaultVal>
-					<dataValue>*********OweMb-gOLBoA11I*E61-*I4-klM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh660Ec9L2FVR437QolZNq3XSJwE1o7gOKtYF43oMIxWOaJXR6*0U*4X1EsDJGFiRKlgHl1kMb-gOLBoA11I*E61-*I4-kdM75NZQbBdPqtN743mMqVdRaJmJ0FoPr-M74xWOaJXR5AG**44c3wE1otHGqJtNKF-QaBcOLNZQh260Jh1RLBoPqoUF43oMM*-d*gA2F7J74tpP4nG1EsD23FYMLFVJWFXP43nQs*0U*B-AB6H3-IKKWFXP43nQqtVPKJM74BgMLBnNLBOGoh2MLFVEaljMe6L43d9GoFVR430P4xWK2tHHq7eNKBo0-2O70YmBoZAK3dTNKdjRbVuT64AZO0XfU********2-*********-Y*******************0r0**6*-2*4U*Y*0Y*AU*r*2Y*HU-P*4o*Pk-l*5I*Sk3i*********U2*********2********************Kw*</dataValue>
-				</parameter>
-				<parameter name="Length" id="9926" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="Quality" id="9927" flags="12905938992" default="0.5" value="0.5"/>
-				<parameter name="Transitions only?" id="9929" flags="12905938992" default="0" value="0"/>
 				<parameter name="Mix" id="10001" flags="12901679104" default="1" value="1"/>
 				<parameter name="Flip" id="10002" flags="12905938976" default="0" value="0"/>
 				<parameter name="Input Points" id="10003" flags="12905938976" default="1" value="1"/>
-				<parameter name="Publish OSC" id="10005" flags="4311744512" default="0" value="1"/>
+				<parameter name="Publish OSC" id="10005" flags="12901679104" default="0" value="1"/>
 			</filter>
 		</scenenode>
 		<aspectRatio>1</aspectRatio>

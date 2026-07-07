@@ -12,7 +12,7 @@ struct TemplateParamsPanel: View {
 
 	private var enabledParams: [PublishedParameter] {
 		guard let settings = store.params(for: template.id) else { return [] }
-		return settings.allParams.filter { $0.isToggleable && !$0.isFont }
+		return settings.allParams.filter { $0.isToggleable && !$0.isFont && !$0.isTextSize }
 	}
 
 	private var fontParams: [PublishedParameter] {
@@ -27,32 +27,18 @@ struct TemplateParamsPanel: View {
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingMD) {
 			if hasParams {
-				ScrollView(.vertical, showsIndicators: false) {
+				ScrollShadowView(cornerRadius: KKRadiusSM) {
 					VStack(alignment: .leading, spacing: KKSpacingLG) {
 						ForEach(enabledParams) { param in
 							ParamControlRow(
-								param: param, templateID: template.id,
-								store: store, compact: true)
+								param: param, templateID: template.id, store: store, compact: true)
 						}
 						ForEach(fontParams) { param in
 							FontControlRow(
-								param: param, templateID: template.id,
-								store: store, compact: true)
+								param: param, templateID: template.id, store: store, compact: true)
 						}
 					}
-				}
-				Spacer()
-				HStack {
-					Spacer()
-					Button {
-						store.resetValues(for: template.id)
-					} label: {
-						Label("Reset", systemImage: "arrow.uturn.backward")
-							.font(.system(size: 9))
-							.contentShape(Capsule())
-					}
-					.buttonStyle(.plain)
-					.foregroundStyle(.secondary)
+					.padding(.vertical, KKPaddingXS)
 				}
 			} else {
 				Spacer()
@@ -64,6 +50,6 @@ struct TemplateParamsPanel: View {
 				Spacer()
 			}
 		}
-		.padding(KKPaddingMD)
+		.frame(maxHeight: .infinity)
 	}
 }

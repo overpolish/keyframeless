@@ -11,6 +11,7 @@
 		F21396032F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
 		F220BFE42F4E07EB0034AF77 /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F223525E2FD96E8F00411551 /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = F223525D2FD96E8F00411551 /* KeyframelessAI */; };
 		F26E024F2F4DE56D009D949A /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
 		F26E02502F4DE56D009D949A /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F2E2ED792F4CA530008620D9 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED782F4CA530008620D9 /* Cocoa.framework */; };
@@ -46,7 +47,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				F220BFE42F4E07EB0034AF77 /* KeyframelessKit.framework in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -78,6 +78,8 @@
 /* Begin PBXFileReference section */
 		F21396012F649EF900E1EC03 /* keyframeless.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = keyframeless.icon; path = ../Assets/keyframeless.icon; sourceTree = SOURCE_ROOT; };
 		F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		F28AC7E32FD96282005447BD /* kk-ai-helper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "kk-ai-helper"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F28AC7F02FD962DE005447BD /* Wrapper ApplicationDebug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Wrapper ApplicationDebug.entitlements"; sourceTree = "<group>"; };
 		F2E2ED752F4CA530008620D9 /* Glow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Glow.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2E2ED782F4CA530008620D9 /* Cocoa.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Cocoa.framework; path = System/Library/Frameworks/Cocoa.framework; sourceTree = SDKROOT; };
 		F2E2ED802F4CA530008620D9 /* Glow XPC Service.pluginkit */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Glow XPC Service.pluginkit"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -94,16 +96,21 @@
 			membershipExceptions = (
 				"/Localized: Plugin/InfoPlist.strings",
 				"/Localized: Plugin/Localizable.strings",
-				Plugin/Glow.metal,
+				Plugin/Core/GlowLocalized.m,
+				Plugin/Core/main.m,
+				Plugin/Core/Plugin.m,
+				"Plugin/Core/Plugin+CustomUI.m",
+				"Plugin/Core/Plugin+Parameters.m",
+				Plugin/GlowUI.xcstrings,
 				Plugin/Info.plist,
-				Plugin/main.m,
-				Plugin/OSC.m,
-				Plugin/Plugin.m,
-				"Plugin/Plugin+CustomUI.m",
-				"Plugin/Plugin+Parameters.m",
-				"Plugin/Plugin+Render.m",
-				"Plugin/Plugin+Presets.m",
-				"Plugin/Plugin+Visibility.m",
+				Plugin/Inspector/GlowInspectorView.m,
+				"Plugin/Inspector/GlowInspectorView+BasicTimingGuide.m",
+				"Plugin/OSC/GlowOSC+MouseHandlers.m",
+				Plugin/OSC/GlowOSCRadiusMath.m,
+				Plugin/OSC/OSC.m,
+				Plugin/Render/Glow.metal,
+				Plugin/Render/GlowMiniViewerRenderer.m,
+				"Plugin/Render/Plugin+Render.m",
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;
@@ -124,6 +131,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		F28AC7E42FD96282005447BD /* kk-ai-helper */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "kk-ai-helper";
+			sourceTree = "<group>";
+		};
 		F2E2ED902F4CA530008620D9 /* Glow */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
@@ -153,6 +165,7 @@
 				F2E2ED8B2F4CA530008620D9 /* PluginManager.framework in Frameworks */,
 				F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */,
 				F2E2ED852F4CA530008620D9 /* Foundation.framework in Frameworks */,
+				F223525E2FD96E8F00411551 /* KeyframelessAI in Frameworks */,
 				F2E2ED872F4CA530008620D9 /* AppKit.framework in Frameworks */,
 				F2E2ED8D2F4CA530008620D9 /* FxPlug.framework in Frameworks */,
 			);
@@ -164,8 +177,10 @@
 		F2E2ED6C2F4CA530008620D9 = {
 			isa = PBXGroup;
 			children = (
+				F28AC7F02FD962DE005447BD /* Wrapper ApplicationDebug.entitlements */,
 				F21396012F649EF900E1EC03 /* keyframeless.icon */,
 				F2E2ED902F4CA530008620D9 /* Glow */,
+				F28AC7E42FD96282005447BD /* kk-ai-helper */,
 				F2E2ED772F4CA530008620D9 /* Frameworks */,
 				F2E2ED762F4CA530008620D9 /* Products */,
 			);
@@ -176,6 +191,7 @@
 			children = (
 				F2E2ED752F4CA530008620D9 /* Glow.app */,
 				F2E2ED802F4CA530008620D9 /* Glow XPC Service.pluginkit */,
+				F28AC7E32FD96282005447BD /* kk-ai-helper */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -243,6 +259,7 @@
 			);
 			name = "XPC Service";
 			packageProductDependencies = (
+				F223525D2FD96E8F00411551 /* KeyframelessAI */,
 			);
 			productName = "XPC Service";
 			productReference = F2E2ED802F4CA530008620D9 /* Glow XPC Service.pluginkit */;
@@ -255,6 +272,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					F2E2ED742F4CA530008620D9 = {
@@ -321,7 +339,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "mkdir -p \"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}\"\nrsync --archive --links --whole-file --no-owner --no-group --checksum --exclude='Headers' \"/Library/Developer/Frameworks/FxPlug.framework/\" \"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FxPlug.framework/\"\nif [ \"$?\" -ne 0 ]; then echo \"error: rsync failed; couldn't embed FxPlug.framework\"; exit 1; fi\ncodesign --force --timestamp --options runtime --sign \"${CODE_SIGN_IDENTITY}\" \"${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}/FxPlug.framework\"";
+			shellScript = "mkdir -p \"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}\"\nrsync --archive --links --whole-file --no-owner --no-group --checksum --exclude='Headers' \"/Library/Developer/Frameworks/FxPlug.framework/\" \"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FxPlug.framework/\"\nif [ \"$?\" -ne 0 ]; then echo \"error: rsync failed; couldn't embed FxPlug.framework\"; exit 1; fi\ncodesign --force --timestamp --options runtime --sign \"${CODE_SIGN_IDENTITY}\" \"${BUILT_PRODUCTS_DIR}/${FRAMEWORKS_FOLDER_PATH}/FxPlug.framework\"\n";
 			showEnvVarsInLog = 0;
 		};
 		F2E2ED7E2F4CA530008620D9 /* Copy and Code Sign PluginManager.framework */ = {
@@ -379,11 +397,11 @@
 		F2E2EDB72F4CA530008620D9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_ENTITLEMENTS = "Glow/Plugin/GlowPluginEntitlements.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
@@ -391,10 +409,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
+					"@loader_path/../../../../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Glow.PlugIn;
 				PRODUCT_NAME = "Glow $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Glow/Plugin/XPC Service-Bridging-Header.h";
@@ -405,6 +424,7 @@
 		F2E2EDB82F4CA530008620D9 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = "Glow/Plugin/GlowPluginEntitlements.entitlements";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
 				CODE_SIGN_STYLE = Manual;
 				DEAD_CODE_STRIPPING = YES;
@@ -417,10 +437,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
+					"@loader_path/../../../../Frameworks",
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Glow.PlugIn;
 				PRODUCT_NAME = "Glow $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Glow/Plugin/XPC Service-Bridging-Header.h";
@@ -433,21 +454,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = keyframeless;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
-				CODE_SIGN_ENTITLEMENTS = "Glow/Wrapper Application/SandboxEntitlements.entitlements";
+				CODE_SIGN_ENTITLEMENTS = "Wrapper ApplicationDebug.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
 				INFOPLIST_FILE = "Glow/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Glow;
 				PRODUCT_NAME = Glow;
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "Glow/Wrapper Application/Wrapper Application-Bridging-Header.h";
 			};
 			name = Debug;
@@ -469,9 +489,10 @@
 				INFOPLIST_FILE = "Glow/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Glow;
 				PRODUCT_NAME = Glow;
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
 				SWIFT_OBJC_BRIDGING_HEADER = "Glow/Wrapper Application/Wrapper Application-Bridging-Header.h";
 			};
 			name = Release;
@@ -486,7 +507,7 @@
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
@@ -556,7 +577,7 @@
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
@@ -640,6 +661,13 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F223525D2FD96E8F00411551 /* KeyframelessAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KeyframelessAI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = F2E2ED6D2F4CA530008620D9 /* Project object */;
 }

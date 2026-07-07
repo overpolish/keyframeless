@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		F207778B2FA3FD7B00AA4E71 /* FluidAudio in Frameworks */ = {isa = PBXBuildFile; productRef = F207778A2FA3FD7B00AA4E71 /* FluidAudio */; };
+		F23EEFDA2FC893D500AFBA1E /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = F23EEFD92FC893D500AFBA1E /* KeyframelessAI */; };
 		F274D93A2F6E7AC2001FE373 /* Profanity in Resources */ = {isa = PBXBuildFile; fileRef = F274D9392F6E7AC2001FE373 /* Profanity */; };
 		F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; };
 		F28BD2312F68595000C5F6B7 /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
@@ -52,6 +53,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F20AACAC2FD727B00032F7FF /* kk-ai-helper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "kk-ai-helper"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F274D9392F6E7AC2001FE373 /* Profanity */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Profanity; path = "Keyframeless X FCP/Resources/Profanity"; sourceTree = "<group>"; };
 		F28BD22F2F68595000C5F6B7 /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F29C84C62F68205E0073B1A9 /* Keyframeless X.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Keyframeless X.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -95,6 +97,11 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		F20AACAD2FD727B00032F7FF /* kk-ai-helper */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "kk-ai-helper";
+			sourceTree = "<group>";
+		};
 		F29C84C82F68205E0073B1A9 /* Keyframeless X */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "Keyframeless X";
@@ -123,6 +130,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F207778B2FA3FD7B00AA4E71 /* FluidAudio in Frameworks */,
+				F23EEFDA2FC893D500AFBA1E /* KeyframelessAI in Frameworks */,
 				F2A8FB212F6C52C2007989B9 /* SwiftWhisper in Frameworks */,
 				F2B9DC012F7452A0007989B9 /* WhisperKit in Frameworks */,
 				F28BD2302F68595000C5F6B7 /* KeyframelessKit.framework in Frameworks */,
@@ -146,6 +154,7 @@
 				F274D9392F6E7AC2001FE373 /* Profanity */,
 				F29C84C82F68205E0073B1A9 /* Keyframeless X */,
 				F29C84E12F6820750073B1A9 /* Keyframeless X FCP */,
+				F20AACAD2FD727B00032F7FF /* kk-ai-helper */,
 				F28BD22E2F68595000C5F6B7 /* Frameworks */,
 				F29C84C72F68205E0073B1A9 /* Products */,
 			);
@@ -156,6 +165,7 @@
 			children = (
 				F29C84C62F68205E0073B1A9 /* Keyframeless X.app */,
 				F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */,
+				F20AACAC2FD727B00032F7FF /* kk-ai-helper */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -208,6 +218,7 @@
 				F2A8FB202F6C52C2007989B9 /* SwiftWhisper */,
 				F2B9DC002F7452A0007989B9 /* WhisperKit */,
 				F207778A2FA3FD7B00AA4E71 /* FluidAudio */,
+				F23EEFD92FC893D500AFBA1E /* KeyframelessAI */,
 			);
 			productName = "Keyframeless X FCP";
 			productReference = F29C84E02F6820750073B1A9 /* Keyframeless X FCP.appex */;
@@ -220,8 +231,8 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2630;
-				LastUpgradeCheck = 2630;
+				LastSwiftUpdateCheck = 2650;
+				LastUpgradeCheck = 2640;
 				TargetAttributes = {
 					F29C84C52F68205E0073B1A9 = {
 						CreatedOnToolsVersion = 26.3;
@@ -237,6 +248,12 @@
 			knownRegions = (
 				en,
 				Base,
+				"zh-Hans",
+				fr,
+				de,
+				ja,
+				ko,
+				es,
 			);
 			mainGroup = F29C84BD2F68205E0073B1A9;
 			minimizedProjectReferenceProxies = 1;
@@ -305,6 +322,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -370,6 +388,7 @@
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
 				CLANG_ANALYZER_NONNULL = YES;
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
@@ -427,13 +446,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = keyframeless;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_ENTITLEMENTS = "Keyframeless X/Keyframeless X.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -445,7 +464,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 2.1.0;
+				MARKETING_VERSION = 3.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -464,13 +483,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = keyframeless;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_ENTITLEMENTS = "Keyframeless X/Keyframeless X.entitlements";
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -482,7 +501,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 2.1.0;
+				MARKETING_VERSION = 3.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -504,13 +523,11 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = "Keyframeless X FCP/Keyframeless_X_FCP.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readwrite;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -546,7 +563,7 @@
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 2.1.0;
+				MARKETING_VERSION = 3.0.0;
 				OTHER_LDFLAGS = (
 					"-fapplication-extension",
 					"-lProExtension",
@@ -554,6 +571,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
@@ -579,13 +597,11 @@
 				AUTOMATION_APPLE_EVENTS = NO;
 				CODE_SIGN_ENTITLEMENTS = "Keyframeless X FCP/Keyframeless_X_FCP.entitlements";
 				CODE_SIGN_IDENTITY = "Apple Development";
-				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Developer ID Application";
-				CODE_SIGN_STYLE = Manual;
+				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
-				DEVELOPMENT_TEAM = "";
-				"DEVELOPMENT_TEAM[sdk=macosx*]" = 378WQ9W95U;
+				DEVELOPMENT_TEAM = 378WQ9W95U;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_FILE_ACCESS_MOVIES_FOLDER = readwrite;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -621,7 +637,7 @@
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				MARKETING_VERSION = 2.1.0;
+				MARKETING_VERSION = 3.0.0;
 				OTHER_LDFLAGS = (
 					"-fapplication-extension",
 					"-lProExtension",
@@ -629,6 +645,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
+				REGISTER_APP_GROUPS = YES;
 				RUNTIME_EXCEPTION_ALLOW_DYLD_ENVIRONMENT_VARIABLES = NO;
 				RUNTIME_EXCEPTION_ALLOW_JIT = NO;
 				RUNTIME_EXCEPTION_ALLOW_UNSIGNED_EXECUTABLE_MEMORY = NO;
@@ -710,6 +727,10 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F20777892FA3FD7B00AA4E71 /* XCRemoteSwiftPackageReference "FluidAudio" */;
 			productName = FluidAudio;
+		};
+		F23EEFD92FC893D500AFBA1E /* KeyframelessAI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KeyframelessAI;
 		};
 		F2A8FB202F6C52C2007989B9 /* SwiftWhisper */ = {
 			isa = XCSwiftPackageProductDependency;

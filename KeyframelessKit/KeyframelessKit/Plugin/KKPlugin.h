@@ -8,14 +8,20 @@
 #import <CoreMedia/CoreMedia.h>
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKTimingLane.h>
 #import <KeyframelessKit/KKTimingStage.h>
 #import <Metal/Metal.h>
 
 @class FxImageTile;
+@class KKMiniViewerFeed;
 @class KKCustomGroupHeaderView;
 @class KKHelpSection;
+@class KKHelpShortcut;
+@class KKHelpGuide;
 @class KKTimingLane;
 @class KKTimingSegment;
+@class KKRenderCache;
+@class KKTimelineInspectorView;
 @class NSBezierPath;
 @protocol PROAPIAccessing;
 @protocol FxParameterCreationAPI_v5;
@@ -40,12 +46,29 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
 
+/// Set while a continuous mini-viewer / inspector handle drag is coalescing its
+/// per-tick timeline writes into one undo group. Toggled by the standard
+/// inspector onDragBegin/onDragEnd callbacks (see KKPlugin+InspectorCallbacks).
+@property(nonatomic) BOOL miniDragUndoStarted;
+
+/// The mini-viewer source feed published from renderDestinationImage: and the
+/// descriptor path it was created with. Managed by the shared feed-publish
+/// helper (see KKPlugin+MiniViewerFeed); recreated when the path changes.
+@property(nonatomic, strong, nullable) KKMiniViewerFeed *miniViewerFeed;
+@property(nonatomic, copy, nullable) NSString *miniViewerFeedPath;
+
 /// Extra parameter IDs to show/hide alongside the timing group's children.
 /// Set before the first render pass (e.g. in addParametersWithError:).
 @property(nonatomic, copy, nullable)
     NSArray<NSNumber *> *timingGroupExtraParamIDs;
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager;
+
+/// Namespace under which this plugin's animation presets are stored and listed
+/// (see KKPresets / the inspector Presets row). Defaults to the plugin's bundle
+/// identifier - stable and unique per plugin. Override only to share a preset
+/// namespace between plugins.
+- (NSString *)presetPluginKey;
 
 /// Convenience wrapper around KKMetalDeviceCache buildAndRegisterPipelineState.
 /// Call from renderDestinationImage: to get or build the pipeline state for
@@ -80,7 +103,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// `commands` with the encoder.
 - (BOOL)
     encodeFullScreenQuadIntoTexture:(id<MTLTexture>)destTexture
-                   destinationImage:(FxImageTile *)destinationImage
+                   destinationImage:(nullable FxImageTile *)destinationImage
                       commandBuffer:(id<MTLCommandBuffer>)commandBuffer
                      sourceTextures:(NSArray<id<MTLTexture>> *)sourceTextures
                            commands:
@@ -105,7 +128,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// main().
 + (id)servicePrincipalDelegate;
 
-/// Registers only the multi-stage timing params — Timing separator, curve
+/// Registers only the multi-stage timing params - Timing separator, curve
 /// preview, enabled toggle (always YES, hidden), JSON data, selected
 /// property/stage, and instance ID. Call this from
 /// `addParametersWithError:` in plugins that are fully multi-stage (no
@@ -138,8 +161,19 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)addLogoBannerParameterWithAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                                 error:(NSError **)error;
 
+/// Best-effort screen rect of THIS effect instance's FCP header row, derived
+/// from its own logo banner. NSZeroRect if the banner isn't placed. Use to
+/// anchor a guide step at the header; correct with multiple effect instances
+/// (unlike a process-global lookup).
+- (NSRect)effectHeaderScreenRect;
+
+/// Best-effort screen rect of THIS effect instance's Help (`?`) button in its
+/// logo banner. NSZeroRect if the banner isn't placed or has no Help button.
+/// Use to anchor a guide's closing step on the Help button.
+- (NSRect)helpButtonScreenRect;
+
 /// Adds a full-width informational text display occupying one parameter ID.
-/// The parameter is not animatable and stores no meaningful value — it is
+/// The parameter is not animatable and stores no meaningful value - it is
 /// purely a static label in the inspector.
 - (BOOL)addInfoParameterWithText:(NSString *)text
                             icon:(nullable NSImage *)icon
@@ -147,7 +181,7 @@ NS_ASSUME_NONNULL_BEGIN
                          withAPI:(id<FxParameterCreationAPI_v5>)paramAPI
                            error:(NSError **)error;
 
-/// Accepts an attributed string — use to embed KKKbd badges
+/// Accepts an attributed string - use to embed KKKbd badges
 /// or other inline styled content.
 - (BOOL)addInfoParameterWithAttributedText:(NSAttributedString *)text
                                       icon:(nullable NSImage *)icon
@@ -172,7 +206,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Updates the selected segment of the lane matching `label` with `values`
 /// and persists. Used by `parameterChanged:` to translate slider drags into
-/// segment edits. Plugin owns the `paramID → (label, values)` mapping —
+/// segment edits. Plugin owns the `paramID → (label, values)` mapping -
 /// no `KKAnimatableProperty` lookup is performed.
 ///
 /// Returns YES when a lane matched and was updated; NO when no enabled
@@ -205,11 +239,11 @@ NS_ASSUME_NONNULL_BEGIN
                                    values:(NSArray<NSNumber *> *)values;
 
 /// Returns the active segment of the lane matching `label` at `time`. Lets
-/// plugins reach per-segment data (e.g. `pathData`) — the only remaining
+/// plugins reach per-segment data (e.g. `pathData`) - the only remaining
 /// pump-side accessor since `multiStageValuesAtTime:` was retired in
 /// favour of `KKTimingLaneValueAtFraction`.
 ///
-/// `outSegments` (optional) is the lane's segments array — useful for
+/// `outSegments` (optional) is the lane's segments array - useful for
 /// `KKTimingBoundaryBefore/After` when interpreting transitions.
 /// `outLocalT` (optional) is the un-eased `t` inside the segment's range
 /// (0 at segment start, 1 at end). Plugins typically pass it through
@@ -232,21 +266,21 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Persists `pathData` (or nil to clear) onto the segment at `segmentIndex`
 /// inside the lane matching `label`. Pushes the updated lanes through the
-/// same path as user edits — re-renders the sequencer view, broadcasts to
+/// same path as user edits - re-renders the sequencer view, broadcasts to
 /// other instances, persists the JSON. Returns YES on success.
 - (BOOL)multiStageSetPathData:(nullable NSData *)pathData
                      forLabel:(NSString *)label
                  segmentIndex:(NSInteger)segmentIndex;
 
 /// Call once per `drawOSC` tick. Flushes pending lanes, syncs from params
-/// (undo/redo detection), and pumps playheads — all broadcast across every
+/// (undo/redo detection), and pumps playheads - all broadcast across every
 /// live plugin instance on the timeline.
 + (void)multiStageDrawOSCTickForAPI:(id<PROAPIAccessing>)apiManager
                              atTime:(CMTime)time;
 
 /// Call once per `renderDestinationImage:` tick. Converts the effect-local
 /// `renderTime` to timeline time, flushes pending lanes, and pumps playheads
-/// — subordinate to drawOSC (skipped if drawOSC pumped recently, and briefly
+/// - subordinate to drawOSC (skipped if drawOSC pumped recently, and briefly
 /// after any `parameterChanged:` to avoid FCP's warm-up renders flickering
 /// the playhead to frame 0).
 + (void)multiStageRenderTickForAPI:(id<PROAPIAccessing>)apiManager
@@ -267,7 +301,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// their `parameterChanged:` when `parameterID == kKKParamMultiStageData`.
 + (void)multiStageRefreshFromParamForAPI:(id<PROAPIAccessing>)apiManager;
 
-/// Force-refresh path for `kKKParamTimingLoopEnabled` — read the current
+/// Force-refresh path for `kKKParamTimingLoopEnabled` - read the current
 /// param value and push it to all rulers' `loopEnabled`. Plugins call from
 /// `parameterChanged:` when the loopback param changes (host cmd-Z, etc).
 + (void)multiStageRefreshLoopFromParamForAPI:(id<PROAPIAccessing>)apiManager;
@@ -311,7 +345,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// the partner (FCP suppresses recursive echoes). This means
 /// `parameterChanged:`-driven persistence (e.g. Canvas's
 /// `kkPushParamToLane:`) never runs for the partner, and any backing
-/// blob/path-side effect for it is skipped — the inspector value updates
+/// blob/path-side effect for it is skipped - the inspector value updates
 /// but the persistent state lags. Plugins that mirror inspector values
 /// to a backing blob should query this after `handleLinkedParameterChanged:`
 /// returns and run the same per-edit hook for the partner ID. Returns 0
@@ -362,7 +396,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Override for plugins whose lane set tracks an external source (Canvas:
 /// the layer list). Receives the lanes just read from JSON and returns a
-/// reconciled array — typically by matching existing lanes against the
+/// reconciled array - typically by matching existing lanes against the
 /// current source items via `groupKey`, updating labels, dropping stale
 /// entries, and seeding lanes for new items. Default returns `existing`
 /// unchanged. The framework persists the new array when it differs from
@@ -374,7 +408,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Optional cheap fingerprint of the inputs `reconcileLanes:` would consume
 /// (for Canvas: layerIDs + the path bits that flip lane visibility/labels).
-/// Computed from in-memory state — must NOT do FCP param I/O. The pump
+/// Computed from in-memory state - must NOT do FCP param I/O. The pump
 /// short-circuits the reconcile (skipping the JSON read + plugin call)
 /// when the fingerprint matches the previous successful reconcile.
 /// Default returns nil → no caching, current behavior preserved.
@@ -389,7 +423,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Override to hide specific animatable-property lanes from the multi-stage
 /// sequencer based on current parameter state (e.g. a Color lane should
 /// disappear when the plugin is in gradient-only mode). Segment data stays
-/// in JSON — the lane reappears when the set no longer contains its label.
+/// in JSON - the lane reappears when the set no longer contains its label.
 /// Call `-multiStageRefreshLaneVisibility` after any param change that would
 /// affect the return value; the pump applies the filter on every push.
 - (NSSet<NSString *> *)hiddenAnimatablePropertyLabels;
@@ -406,7 +440,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// empty set by default.
 - (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff;
 
-/// Override to drive the sequencer's "selected group" highlight — return
+/// Override to drive the sequencer's "selected group" highlight - return
 /// the `groupKey` (typically a layer/object ID) of the currently-selected
 /// item, or nil for none. The default returns nil.
 ///
@@ -416,7 +450,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Override to handle a track-side click on a group header in the sequencer
 /// (the summary span bar, not the chevron/label). The default falls back
-/// to toggling the group's collapse state — i.e. behaves identically to
+/// to toggling the group's collapse state - i.e. behaves identically to
 /// clicking the label. Plugins that want a custom action (e.g. selecting
 /// the underlying object so editing is faster while animating) override
 /// this and dispatch their own selection write.
@@ -498,13 +532,13 @@ typedef NS_ENUM(NSInteger, KKLaneSegmentMutation) {
 /// in an Adjustment Clip or a Compound Clip before applying. The help
 /// window auto-prepends a matching tip when this is non-`None`.
 typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
-  /// No wrapping required — clips can take the effect directly.
+  /// No wrapping required - clips can take the effect directly.
   KKClipWrappingModeNone = 0,
-  /// Effect samples underlying frames (Glow, etc.) — needs an Adjustment
+  /// Effect samples underlying frames (Glow, etc.) - needs an Adjustment
   /// Clip or Compound Clip so it sees moving content.
   KKClipWrappingModeAdjustmentOrCompound,
   /// Effect transforms a single clip past its natural bounds (Magic Move)
-  /// — needs a Compound Clip to avoid being clipped.
+  /// - needs a Compound Clip to avoid being clipped.
   KKClipWrappingModeCompound,
 };
 
@@ -512,17 +546,120 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// Default: `KKClipWrappingModeNone`.
 - (KKClipWrappingMode)clipWrappingMode;
 
+/// Reads the flat JSON dict stored at `paramID`, patches `{key: value}` into
+/// it, and writes it back - all in a fresh action scope. Suitable for any
+/// plugin that keeps lightweight UI state (tab index, toggle values, etc.) in
+/// a single custom-string param as a JSON object. The param must already be
+/// registered as a custom-string parameter.
+- (void)patchUIStateKey:(NSString *)key value:(id)value paramID:(UInt32)paramID;
+
+/// Like `patchUIStateKey:value:paramID:` but patches several keys into the JSON
+/// dict in ONE action scope, so a set of related UI-state changes lands as a
+/// single undo entry (avoids the "takes two cmd-Z" problem of back-to-back
+/// single-key writes).
+- (void)patchUIStateKeys:(NSDictionary<NSString *, id> *)values
+                 paramID:(UInt32)paramID;
+
+/// Persists the "Maintain Timing" toggle into the UI-state blob at `paramID`.
+/// When enabling, captures the current source-media in-point + clip duration
+/// (read from FxTimingAPI inside the action scope) as the anchor the render
+/// remap pins keyposes to, so trimming/growing/splitting holds their absolute
+/// position. All keys are written in one action scope (single undo entry).
+- (void)patchMaintainTimingEnabled:(BOOL)enabled paramID:(UInt32)paramID;
+
+/// "Maintain Timing" bake. Call from the render tick (after
+/// KKRefreshRenderCache populates `cache`). When the lock is on and the clip's
+/// source range has moved away from the stored anchor (a trim/grow surfaced
+/// this tick), it rewrites the timeline blob's keypose fractions to hold their
+/// absolute media position and advances the anchor - both in one action scope
+/// (dispatched to the main queue, since the render tick has no action scope).
+/// The blob write flows to the Advanced graph via the normal parameterChanged
+/// path, so the keyposes visibly move. A per-tick guard on `cache` makes it
+/// fire once per trim, not every frame while the async write is in flight.
+/// No-op when the lock is off, no anchor is set, or the range already matches.
+- (void)bakeMaintainTimingForCache:(KKRenderCache *)cache
+                   timelineParamID:(UInt32)timelineParamID
+                    uiStateParamID:(UInt32)uiStateParamID;
+
+/// The plugin's timeline inspector, if open. Override to return it so the bake
+/// can push the retimed timeline straight to the graph (the parameterChanged
+/// round-trip from a self-write isn't always reliable). Default nil.
+- (nullable KKTimelineInspectorView *)maintainTimingInspectorView;
+
 /// Override to provide help/keyboard-shortcut sections. Each section is
 /// rendered as a titled block with a tips bullet list and/or a 2-column
 /// shortcuts table. Returning a non-empty array makes the logo-banner
 /// help button visible. Default: empty array.
 - (NSArray<KKHelpSection *> *)helpSections;
 
-/// Opens the host's remote window with the rendered `helpSections`.
+/// Override to give the help window a title bar at the very top: the plugin's
+/// name beside its icon, so it's clear which plugin the window belongs to. If
+/// a `helpSections` entry carries the same title, its inline heading is
+/// dropped (the title now lives in the header) and its body is promoted to an
+/// intro block above the contents table. Default: nil (no header bar).
+- (nullable NSString *)helpHeaderTitle;
+
+/// SF Symbol or image shown beside `helpHeaderTitle` in the help window's top
+/// title bar. Default: nil.
+- (nullable NSImage *)helpHeaderIcon;
+
+/// Build a help section whose tips are rendered from one of this plugin's
+/// bundled `AIKnowledge` markdown topics - the same `.md` the AI assistant
+/// reads - so the help window and the AI stay single-sourced. `topicID` is the
+/// `.md` filename (no extension) in the plugin bundle's `AIKnowledge`
+/// subdirectory. Markdown `**bold**` renders as an accent run and `` `code` ``
+/// as a key badge. `localizer`, if non-nil, localizes each rendered tip - pass
+/// your plugin's Loc (e.g. `^(NSString *s){ return MMLoc(s, @"..."); }`) so the
+/// translations live in your plugin's own catalog. `symbol` is an optional SF
+/// Symbol name for the section icon. Tips are empty if the topic file is
+/// missing. Use this from `-helpSections`.
+- (KKHelpSection *)helpSectionFromKnowledgeTopic:(NSString *)topicID
+                                           title:(NSString *)title
+                                          symbol:(nullable NSString *)symbol
+                                       localizer:(nullable NSString * (^)(
+                                                     NSString *tip))localizer;
+
+/// The generic on-screen-control + mini-viewer shortcut rows that every plugin
+/// with on-screen controls shares (hide a control, reveal hidden ones, reset
+/// the mini-viewer zoom). Append your plugin-specific rows and pass the
+/// combined array as a help section's `shortcuts`, so each plugin's shortcuts
+/// table lists its own gestures plus the shared ones. Localized via the kit
+/// catalog.
++ (NSArray<KKHelpShortcut *> *)sharedOnScreenControlShortcuts;
+
+/// Override to provide interactive guide entries shown at the top of the
+/// help window. Each guide has a title, optional subtitle, and an onStart
+/// block that launches the in-inspector walkthrough. Default: empty array.
+- (NSArray<KKHelpGuide *> *)helpGuides;
+
+/// Override to return an NSNotificationName that signals guide enabled-state
+/// may have changed. When non-nil, the help window automatically calls
+/// refreshGuideRows when the notification is posted. Default: nil.
+- (nullable NSNotificationName)helpGuideRefreshNotificationName;
+
+/// Opens the host's remote window with the rendered `helpSections` and guides.
 - (void)openHelpRemoteWindow;
 
+/// Override to attach an AI accessory view (built via `KeyframelessAI`'s
+/// `KKAIBannerHost`) to the leading edge of the logo banner. Default: nil
+/// (no AI button).
+- (nullable NSView *)aiAccessoryView;
+
+/// Generic host remote-window presenter. Runs the required action scope,
+/// resolves FxRemoteWindowAPI, attaches to the correctly-sized superview,
+/// clears any prior remote content, and wraps `contentProvider()`'s view in a
+/// key handler that forwards Space / Cmd-Z / Cmd-Shift-Z to the host command
+/// API. Every plugin's remote window (help, editor, …) gets those keystrokes
+/// for free. The provider is invoked on the reply to build the content view.
+- (void)presentRemoteWindowOfSize:(CGSize)size
+                  contentProvider:(NSView * (^)(void))contentProvider;
+
+/// Asks the host to close this instance's remote window if the resolved
+/// FxRemoteWindowAPI supports it (v3+). Runs inside an action scope.
+- (void)closeRemoteWindowIfSupported;
+
 /// Creates a collapsible group header view wired to a hidden bool toggle.
-/// Use from createViewForParameterID: — the returned view reads/writes
+/// Use from createViewForParameterID: - the returned view reads/writes
 /// the expanded state at expandedParamID via an action scope.
 - (NSView *)createGroupHeaderWithTitle:(NSString *)title
                                   icon:(nullable NSImage *)icon
@@ -534,7 +671,7 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// extra closures run **inside** the same action scope as the bool write,
 /// so any extra writes (e.g. mutating selected-path properties for the
 /// undo entry to coalesce) coalesce with the user's checkbox/chevron
-/// change as one undo entry — matches motion blur's pattern. Pass nil if
+/// change as one undo entry - matches motion blur's pattern. Pass nil if
 /// not needed. The header is auto-registered via `registerGroupHeader:`.
 - (KKCustomGroupHeaderView *)
     createCheckboxGroupHeaderWithTitle:(NSString *)title
@@ -562,7 +699,7 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// readable), and updates the per-instance lanesSnapshot. Plugins that
 /// mutate lanes outside the standard kit handlers (e.g. routing inspector
 /// slider edits into the selected segment) MUST use this rather than
-/// writing the blob directly — otherwise the mirror trails and the render
+/// writing the blob directly - otherwise the mirror trails and the render
 /// scope reads stale lane values until something else triggers a write.
 /// Caller must already be inside an FxCustomParameterActionAPI_v4 scope.
 /// Convenience wrapper around the C-level `KKWriteLanesJSON`.
@@ -581,7 +718,7 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// find and update it from `parameterChanged:`. Use when a plugin builds
 /// its own header (e.g. with a checkbox) instead of going through
 /// `createGroupHeaderWithTitle:…`. Pass `enabledParamID = 0` if the header
-/// has no checkbox. Map values are weak — caller retains the header.
+/// has no checkbox. Map values are weak - caller retains the header.
 - (void)registerGroupHeader:(KKCustomGroupHeaderView *)header
              enabledParamID:(UInt32)enabledParamID
             expandedParamID:(UInt32)expandedParamID;
@@ -606,7 +743,7 @@ extern void KKWriteLanesJSON(NSArray<KKTimingLane *> *_Nonnull lanes,
 
 /// Stack-style undo grouping. Pair every `KKBeginUndoGroup` with exactly
 /// one `KKEndUndoGroup` along every code path (including early returns).
-/// Returns YES if the group was actually started — pass that BOOL into
+/// Returns YES if the group was actually started - pass that BOOL into
 /// `KKEndUndoGroup` so the end is a no-op when the start was a no-op.
 /// Nested calls return NO; only the outermost begin/end pair starts the
 /// host-level undo group.

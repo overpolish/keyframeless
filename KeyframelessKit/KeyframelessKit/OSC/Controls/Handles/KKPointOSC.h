@@ -1,0 +1,30 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#pragma once
+
+#import <AppKit/NSColor.h>
+#import <KeyframelessKit/KKOnScreenControl.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+@interface KKPointOSC : KKOnScreenControl
+
+/// Radius of the point in canvas pixels. Default 7.
+@property(nonatomic) float oscRadius;
+
+/// Width of the outline around the point. Default 2.
+@property(nonatomic) float outlineWidth;
+
+/// Optional fill color override. When non-nil, replaces the default white fill.
+@property(nonatomic, strong, nullable) NSColor *fillColorOverride;
+
+/// Multiplier on the fill + stroke alpha (default 1.0). Draw at < 1.0 to render
+/// the point as a dimmed "ghost" during opt-reveal.
+@property(nonatomic) float ghostAlpha;
+
+@end
+
+NS_ASSUME_NONNULL_END

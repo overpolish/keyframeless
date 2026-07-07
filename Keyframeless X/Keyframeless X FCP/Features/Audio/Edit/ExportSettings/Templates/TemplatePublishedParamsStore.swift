@@ -24,6 +24,9 @@ class TemplatePublishedParamsStore: ObservableObject {
 		var a: Double = 1
 		var sliderValue: Double = 0
 		var toggleValue: Bool = false
+		var enumValue: Int = 0
+		var pointX: Double = 0
+		var pointY: Double = 0
 		var fontMode: FontMode = .base
 		var customFont: String?
 		static func fromDefaults(_ param: PublishedParameter) -> ParamValue {
@@ -32,8 +35,26 @@ class TemplatePublishedParamsStore: ObservableObject {
 				return ParamValue(
 					r: param.defaultR ?? 1, g: param.defaultG ?? 1,
 					b: param.defaultB ?? 1)
+			case .dropdown:
+				return ParamValue(
+					enumValue: param.defaultTag ?? param.options?.first?.tag ?? 0)
+			case .slider, .percent:
+				return ParamValue(sliderValue: param.defaultNumber ?? 0)
+			case .rotation:
+				return ParamValue(sliderValue: (param.defaultNumber ?? 0).rounded())
+			case .point:
+				let s = PublishedParameter.pointDisplayScale
+				return ParamValue(
+					pointX: (param.defaultX ?? 0) * s, pointY: (param.defaultY ?? 0) * s)
 			case .font:
 				return ParamValue(fontMode: .base, customFont: param.defaultFont)
+			case .toggle:
+				// A filter-enable toggle (Drop Shadow / Outline) inherits the template's
+				// state: enabled unless the group's 0x8000 disable bit is set.
+				if let flags = param.filterEnableFlags {
+					return ParamValue(toggleValue: (flags & 0x8000) == 0)
+				}
+				return ParamValue()
 			default:
 				return ParamValue()
 			}
@@ -51,6 +72,10 @@ class TemplatePublishedParamsStore: ObservableObject {
 		var textOzml: String?
 		var textOzmlDefaultText: String?
 		var textOzmlStyleID: String?
+		/// Synthesized text-style font-size override key + flags (see TextOzmlInfo). Lets
+		/// the caption Text Size drive size even when the template doesn't publish "Size".
+		var textSizeKey: String?
+		var textSizeFlags: Int?
 	}
 
 	private let filename = "template_published_params.json"
@@ -77,6 +102,23 @@ class TemplatePublishedParamsStore: ObservableObject {
 				needsSave = true
 			}
 		}
+		// Templates stored before the text-style Size became a recognized (Text Size-
+		// driven) param lack the flag; back-fill it so they hide/emit it consistently.
+		for (key, var setting) in loaded {
+			guard let styleID = setting.textOzmlStyleID else { continue }
+			var changed = false
+			for i in setting.allParams.indices
+			where setting.allParams[i].objectID == styleID
+				&& setting.allParams[i].channelParamID == "3" && !setting.allParams[i].isTextSize
+			{
+				setting.allParams[i].isTextSize = true
+				changed = true
+			}
+			if changed {
+				loaded[key] = setting
+				needsSave = true
+			}
+		}
 		settings = loaded
 		if needsSave { KKStore.save(settings, to: filename) }
 	}
@@ -99,6 +141,8 @@ class TemplatePublishedParamsStore: ObservableObject {
 		s.textOzml = textOzml?.ozml ?? existing?.textOzml
 		s.textOzmlDefaultText = textOzml?.defaultText ?? existing?.textOzmlDefaultText
 		s.textOzmlStyleID = textOzml?.styleID ?? existing?.textOzmlStyleID
+		s.textSizeKey = textOzml?.sizeKey ?? existing?.textSizeKey
+		s.textSizeFlags = textOzml?.sizeFlags ?? existing?.textSizeFlags
 		settings[templateID] = s
 		resetValues(for: templateID)
 		KKStore.save(settings, to: filename)
@@ -112,6 +156,8 @@ class TemplatePublishedParamsStore: ObservableObject {
 		settings[templateID]?.textOzml = info.ozml
 		settings[templateID]?.textOzmlDefaultText = info.defaultText
 		settings[templateID]?.textOzmlStyleID = info.styleID
+		settings[templateID]?.textSizeKey = info.sizeKey
+		settings[templateID]?.textSizeFlags = info.sizeFlags
 		KKStore.save(settings, to: filename)
 	}
 
@@ -122,6 +168,18 @@ class TemplatePublishedParamsStore: ObservableObject {
 
 	func setValue(_ value: ParamValue, paramID: String, for templateID: String) {
 		sessionValues[templateID, default: [:]][paramID] = value
+	}
+
+	/// The user-set value if one exists, else nil. Distinguishes an explicit override from
+	/// a fallback default (e.g. a custom outline colour vs the template's default).
+	func sessionValue(paramID: String, for templateID: String) -> ParamValue? {
+		sessionValues[templateID]?[paramID]
+	}
+
+	/// True when the template has any session override, i.e. `resetValues` would change
+	/// something. Drives the Reset control's visibility.
+	func hasSessionValues(for templateID: String) -> Bool {
+		!(sessionValues[templateID]?.isEmpty ?? true)
 	}
 
 	func value(paramID: String, for templateID: String) -> ParamValue {

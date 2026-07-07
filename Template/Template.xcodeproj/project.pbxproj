@@ -95,14 +95,13 @@
 				"/Localized: Plugin/InfoPlist.strings",
 				"/Localized: Plugin/Localizable.strings",
 				Plugin/Info.plist,
-				Plugin/main.m,
-				Plugin/OSC.m,
-				Plugin/Plugin.m,
-				"Plugin/Plugin+CustomUI.m",
-				"Plugin/Plugin+Parameters.m",
-				"Plugin/Plugin+Render.m",
-				"Plugin/Plugin+Visibility.m",
-				Plugin/Template.metal,
+				Plugin/Core/main.m,
+				Plugin/OSC/OSC.m,
+				Plugin/Core/Plugin.m,
+				"Plugin/Core/Plugin+CustomUI.m",
+				"Plugin/Core/Plugin+Parameters.m",
+				"Plugin/Render/Plugin+Render.m",
+				Plugin/Render/Template.metal,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;
@@ -393,7 +392,7 @@
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Template.PlugIn;
 				PRODUCT_NAME = "Template $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Template/Plugin/XPC Service-Bridging-Header.h";
@@ -419,7 +418,7 @@
 				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Template.PlugIn;
 				PRODUCT_NAME = "Template $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Template/Plugin/XPC Service-Bridging-Header.h";
@@ -444,7 +443,7 @@
 				INFOPLIST_FILE = "Template/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Template;
 				PRODUCT_NAME = Template;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Template/Wrapper Application/Wrapper Application-Bridging-Header.h";
@@ -468,7 +467,7 @@
 				INFOPLIST_FILE = "Template/Wrapper Application/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = "@loader_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_BUNDLE_IDENTIFIER = "$(PRODUCT_NAME:rfc1034identifier)";
+				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Template;
 				PRODUCT_NAME = Template;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "Template/Wrapper Application/Wrapper Application-Bridging-Header.h";
@@ -485,7 +484,7 @@
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;
@@ -555,7 +554,7 @@
 				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
 				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
 				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = NO;
+				CLANG_ENABLE_OBJC_ARC = YES;
 				CLANG_ENABLE_OBJC_WEAK = YES;
 				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
 				CLANG_WARN_BOOL_CONVERSION = YES;

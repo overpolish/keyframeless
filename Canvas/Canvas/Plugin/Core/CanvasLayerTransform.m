@@ -1,0 +1,473 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#import "CanvasLayerTransform.h"
+#import "CanvasLayerRender.h" // CanvasGroupContentCenterObj (public decl)
+#import "CanvasLayerTree.h"
+#import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKShape.h>
+#import <KeyframelessKit/KKTimingEvaluation.h>
+#import <KeyframelessKit/KKTimingStage.h>
+
+KKTimeline *CanvasLayerEffectiveTimeline(KKBezierPath *path,
+                                         NSString *overrideLayerID,
+                                         KKTimeline *overrideTimeline) {
+  if (overrideTimeline && overrideLayerID.length &&
+      [path.layerID isEqualToString:overrideLayerID])
+    return overrideTimeline;
+  NSString *json = path.animationJSON;
+  if (!json.length)
+    return nil;
+  // Memoize the parse: every lane evaluation (stroke width/colour/draw-on, fill
+  // style/colour, the per-layer fill gate, ...) calls this, so one render would
+  // otherwise deserialize a layer's animationJSON dozens of times - and motion
+  // blur multiplies that by the sample count (~1000 parses/frame). The result is
+  // read-only, so a content-addressed cache (keyed by the JSON text) is safe and
+  // reused across calls AND frames. Per-process (separate XPC process per
+  // instance); content-addressed so sharing across instances in one process is
+  // harmless. NSCache is thread-safe for FCP's render threads.
+  static NSCache<NSString *, KKTimeline *> *sCache;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    sCache = [[NSCache alloc] init];
+    sCache.countLimit = 512;
+  });
+  KKTimeline *cached = [sCache objectForKey:json];
+  if (cached)
+    return cached;
+  KKTimeline *parsed = [KKTimeline timelineFromJSON:json];
+  if (parsed)
+    [sCache setObject:parsed forKey:json];
+  return parsed;
+}
+
+static matrix_float4x4 CanvasTranslate4(float x, float y) {
+  return simd_matrix(simd_make_float4(1, 0, 0, 0), simd_make_float4(0, 1, 0, 0),
+                     simd_make_float4(0, 0, 1, 0),
+                     simd_make_float4(x, y, 0, 1));
+}
+
+static matrix_float4x4 CanvasScale4(float sx, float sy, float sz) {
+  return simd_matrix(
+      simd_make_float4(sx, 0, 0, 0), simd_make_float4(0, sy, 0, 0),
+      simd_make_float4(0, 0, sz, 0), simd_make_float4(0, 0, 0, 1));
+}
+
+// In-plane (Z) rotation, CCW. Pixel space already carries the aspect, so no
+// fudge.
+static matrix_float4x4 CanvasRotZ4(float a) {
+  float c = cosf(a), s = sinf(a);
+  return simd_matrix(
+      simd_make_float4(c, s, 0, 0), simd_make_float4(-s, c, 0, 0),
+      simd_make_float4(0, 0, 1, 0), simd_make_float4(0, 0, 0, 1));
+}
+
+// Tilt about the screen X axis (positive tips the top toward the viewer).
+static matrix_float4x4 CanvasRotX4(float a) {
+  float c = cosf(a), s = sinf(a);
+  return simd_matrix(simd_make_float4(1, 0, 0, 0), simd_make_float4(0, c, s, 0),
+                     simd_make_float4(0, -s, c, 0),
+                     simd_make_float4(0, 0, 0, 1));
+}
+
+// Tilt about the screen Y axis (positive tips the right edge away).
+static matrix_float4x4 CanvasRotY4(float a) {
+  float c = cosf(a), s = sinf(a);
+  return simd_matrix(simd_make_float4(c, 0, -s, 0),
+                     simd_make_float4(0, 1, 0, 0), simd_make_float4(s, 0, c, 0),
+                     simd_make_float4(0, 0, 0, 1));
+}
+
+// Camera at distance camD on +Z: (x,y,z,1) -> (camD x, camD y, z, z + camD);
+// after the perspective divide, foreshortening scales by camD/(z + camD).
+static matrix_float4x4 CanvasPerspective4(float camD) {
+  return simd_matrix(
+      simd_make_float4(camD, 0, 0, 0), simd_make_float4(0, camD, 0, 0),
+      simd_make_float4(0, 0, 1, 1), simd_make_float4(0, 0, 0, camD));
+}
+
+CanvasLayerTransform CanvasLayerTransformIdentity(void) {
+  return (CanvasLayerTransform){1.0f, 1.0f, 0.0f, 0.5f, 0.5f,
+                                0.0f, 0.0f, 1.0f, 0.5f, 0.5f};
+}
+
+CanvasLayerTransform CanvasLayerTransformFromTimeline(KKTimeline *tl,
+                                                      double frac) {
+  CanvasLayerTransform t = CanvasLayerTransformIdentity();
+  for (KKLane *lane in tl.lanes) {
+    if ([lane.label isEqualToString:@"Scale"]) {
+      NSArray<NSNumber *> *v =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      // Overshoot/elastic easing can dip scale below 0; clamp rather than flip.
+      if (v.count > 0)
+        t.scaleX = (float)(fmax(0.0, v[0].doubleValue) / 100.0);
+      if (v.count > 1)
+        t.scaleY = (float)(fmax(0.0, v[1].doubleValue) / 100.0);
+    } else if ([lane.label isEqualToString:@"Position"]) {
+      NSArray<NSNumber *> *v =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      if (v.count > 0)
+        t.posX = (float)v[0].doubleValue;
+      if (v.count > 1)
+        t.posY = (float)v[1].doubleValue;
+    } else if ([lane.label isEqualToString:@"Rotation"]) {
+      // 3-axis Euler [X,Y,Z]°.
+      NSArray<NSNumber *> *v =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      const double kDegToRad = M_PI / 180.0;
+      if (v.count > 0)
+        t.rotX = (float)(v[0].doubleValue * kDegToRad);
+      if (v.count > 1)
+        t.rotY = (float)(v[1].doubleValue * kDegToRad);
+      if (v.count > 2)
+        t.rotation = (float)(v[2].doubleValue * kDegToRad);
+    } else if ([lane.label isEqualToString:@"Opacity"]) {
+      NSArray<NSNumber *> *v =
+          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      if (v.count > 0)
+        t.opacity = (float)(fmax(0.0, fmin(100.0, v[0].doubleValue)) / 100.0);
+    } else if ([lane.label isEqualToString:@"Anchor"]) {
+      // Pivot for Rotation/Scale, normalised (0.5,0.5 = layer centre). Empty
+      // lane on a cold-boot snapshot evaluates to [0,0]; keep the centre
+      // default.
+      if (lane.keyposes.count > 0) {
+        NSArray<NSNumber *> *v =
+            KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+        if (v.count > 0)
+          t.anchorX = (float)v[0].doubleValue;
+        if (v.count > 1)
+          t.anchorY = (float)v[1].doubleValue;
+      }
+    }
+  }
+  return t;
+}
+
+CanvasLayerTransform CanvasLayerTransformAtFraction(KKBezierPath *path,
+                                                    double frac) {
+  if (path.animationJSON.length == 0)
+    return CanvasLayerTransformIdentity();
+  return CanvasLayerTransformFromTimeline(
+      [KKTimeline timelineFromJSON:path.animationJSON], frac);
+}
+
+// A group's own transform at `frac`. A group is a layer like any other (its own
+// Scale/Position/Rotation/Opacity animationJSON), so this reuses the per-layer
+// reader, with the same live-edit override hook.
+static CanvasLayerTransform
+CanvasGroupTransformAtFraction(KKBezierPath *group, double frac,
+                               NSString *overrideLayerID,
+                               KKTimeline *overrideTimeline) {
+  if (frac < 0.0)
+    return CanvasLayerTransformIdentity();
+  if (overrideTimeline && overrideLayerID.length &&
+      [group.layerID isEqualToString:overrideLayerID])
+    return CanvasLayerTransformFromTimeline(overrideTimeline, frac);
+  return CanvasLayerTransformAtFraction(group, frac);
+}
+
+// Bounds of where the image layers nested under the group at `groupIdx`
+// actually SIT, in object space (Y-up) - the bbox of each member's TRANSFORMED
+// centre (rect centre + its Position offset), not the raw shape rect. Images
+// are created centred at (0.5,0.5) and moved by their Position transform, so
+// the rest rect alone collapses every layer to the clip centre; the group must
+// pivot about its content's real location. Evaluated at frac 0 (the members'
+// base pose) so the pivot is STABLE as it (and its members) animate. NO when
+// the group has no rect-shaped image descendants. Scale/rotation about a
+// layer's OWN centre don't move that centre, so only the Position offset
+// matters here.
+static BOOL CanvasGroupContentBoundsObj(NSArray<KKBezierPath *> *layers,
+                                        NSUInteger groupIdx,
+                                        simd_float2 *outMin,
+                                        simd_float2 *outMax) {
+  NSIndexSet *desc = CanvasLayerDescendantIndices(groupIdx, layers);
+  __block BOOL found = NO;
+  __block float minX = 0, minY = 0, maxX = 0, maxY = 0;
+  [desc enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
+    KKBezierPath *p = layers[i];
+    if (p.isGroup || ![p.shape isKindOfClass:[KKRectShape class]])
+      return;
+    KKRectShape *r = (KKRectShape *)p.shape;
+    float rcx = (r.min.x + r.max.x) * 0.5f, rcy = (r.min.y + r.max.y) * 0.5f;
+    CanvasLayerTransform t = CanvasLayerTransformAtFraction(p, 0.0);
+    // Member's transformed centre (Y flips like the render: lane Y is Y-down).
+    float mx = rcx + (t.posX - 0.5f), my = rcy - (t.posY - 0.5f);
+    if (!found) {
+      minX = maxX = mx;
+      minY = maxY = my;
+      found = YES;
+    } else {
+      minX = fminf(minX, mx);
+      minY = fminf(minY, my);
+      maxX = fmaxf(maxX, mx);
+      maxY = fmaxf(maxY, my);
+    }
+  }];
+  if (found) {
+    *outMin = simd_make_float2(minX, minY);
+    *outMax = simd_make_float2(maxX, maxY);
+  }
+  return found;
+}
+
+BOOL CanvasGroupContentCenterObj(NSArray<KKBezierPath *> *layers,
+                                 KKBezierPath *group, float *outCx,
+                                 float *outCy) {
+  if (!group.isGroup)
+    return NO;
+  NSUInteger idx = [layers indexOfObjectIdenticalTo:group];
+  if (idx == NSNotFound)
+    for (NSUInteger i = 0; i < layers.count; i++)
+      if (layers[i].layerID.length &&
+          [layers[i].layerID isEqualToString:group.layerID]) {
+        idx = i;
+        break;
+      }
+  simd_float2 mn, mx;
+  if (idx == NSNotFound || !CanvasGroupContentBoundsObj(layers, idx, &mn, &mx))
+    return NO;
+  if (outCx)
+    *outCx = (mn.x + mx.x) * 0.5f;
+  if (outCy)
+    *outCy = (mn.y + mx.y) * 0.5f;
+  return YES;
+}
+
+simd_float2 CanvasLayerGroupRest(KKBezierPath *group) {
+  // A group's frozen content-centre rest, stored in its repurposed translateX/Y
+  // (Position-lane space). 0,0 = unseeded / legacy / a non-group: fall back to
+  // the clip centre, so callers get the right Position reference
+  // unconditionally.
+  if (group.isGroup) {
+    float rx = group.translateX, ry = group.translateY;
+    if (rx != 0.0f || ry != 0.0f)
+      return simd_make_float2(rx, ry);
+  }
+  return simd_make_float2(0.5f, 0.5f);
+}
+
+BOOL CanvasLayerContentHalfExtentObj(NSArray<KKBezierPath *> *layers,
+                                     KKBezierPath *layer, float *outHx,
+                                     float *outHy) {
+  if (!layer)
+    return NO;
+  float hx = 0.5f, hy = 0.5f; // clip-filling default (image / fallback)
+  if (layer.isGroup) {
+    NSUInteger idx = [layers indexOfObjectIdenticalTo:layer];
+    simd_float2 mn, mx;
+    if (idx == NSNotFound ||
+        !CanvasGroupContentBoundsObj(layers, idx, &mn, &mx))
+      return NO;
+    hx = (mx.x - mn.x) * 0.5f;
+    hy = (mx.y - mn.y) * 0.5f;
+  } else if (layer.isImage) {
+    hx = hy = 0.5f;
+  } else if ([layer.shape isKindOfClass:[KKRectShape class]]) {
+    KKRectShape *r = (KKRectShape *)layer.shape;
+    hx = (r.max.x - r.min.x) * 0.5f;
+    hy = (r.max.y - r.min.y) * 0.5f;
+  } else if ([layer.shape isKindOfClass:[KKEllipseShape class]]) {
+    KKEllipseShape *e = (KKEllipseShape *)layer.shape;
+    hx = (e.max.x - e.min.x) * 0.5f;
+    hy = (e.max.y - e.min.y) * 0.5f;
+  } else if (layer.count >= 2) {
+    KKBezierPoint p0 = [layer pointAtIndex:0];
+    simd_float2 lo = simd_make_float2(p0.x, p0.y), hi = lo;
+    for (NSUInteger i = 1; i < layer.count; i++) {
+      KKBezierPoint p = [layer pointAtIndex:i];
+      lo = simd_min(lo, simd_make_float2(p.x, p.y));
+      hi = simd_max(hi, simd_make_float2(p.x, p.y));
+    }
+    hx = (hi.x - lo.x) * 0.5f;
+    hy = (hi.y - lo.y) * 0.5f;
+  }
+  // Degenerate (zero-size) axis: fall back to clip-filling so f stays finite.
+  if (hx < 1e-4f)
+    hx = 0.5f;
+  if (hy < 1e-4f)
+    hy = 0.5f;
+  if (outHx)
+    *outHx = hx;
+  if (outHy)
+    *outHy = hy;
+  return YES;
+}
+
+// Shared core: build group xforms from a precomputed ancestor index set. A
+// group sits before its members in the flat stack, so a nested group has a
+// higher index than its parent - reverse index order gives innermost-first,
+// matching the parentGroupID chain. Composing innermost-first means each outer
+// group transforms the already-placed result.
+static NSInteger CanvasGroupXformsFromAncestors(NSArray<KKBezierPath *> *layers,
+                                                NSIndexSet *anc, double frac,
+                                                NSString *overrideLayerID,
+                                                KKTimeline *overrideTimeline,
+                                                CanvasGroupXform *out,
+                                                NSInteger maxN) {
+  __block NSInteger n = 0;
+  [anc enumerateIndexesWithOptions:NSEnumerationReverse
+                        usingBlock:^(NSUInteger gi, BOOL *stop) {
+                          if (n >= maxN) {
+                            *stop = YES;
+                            return;
+                          }
+                          out[n].t = CanvasGroupTransformAtFraction(
+                              layers[gi], frac, overrideLayerID,
+                              overrideTimeline);
+                          // Pivot base = the clip centre; the group's STORED
+                          // Anchor lane (out[n].t.anchorX/Y) carries the real
+                          // pivot. Was the live content-bbox centre, which
+                          // moved whenever a member moved - so the group's
+                          // scale / rotation swung every sibling. The anchor is
+                          // seeded to the content centre at creation
+                          // (CanvasSeedGroupAnchor) so this is visually
+                          // identical but now stable.
+                          out[n].cx = 0.5f;
+                          out[n].cy = 0.5f;
+                          // Frozen content-centre rest (Position-lane space),
+                          // stored on the group's repurposed translateX/Y at
+                          // creation (clip centre when unseeded).
+                          simd_float2 rest = CanvasLayerGroupRest(layers[gi]);
+                          out[n].restX = rest.x;
+                          out[n].restY = rest.y;
+                          n++;
+                        }];
+  return n;
+}
+
+NSInteger CanvasBuildGroupXforms(NSArray<KKBezierPath *> *layers,
+                                 NSUInteger idx, double frac,
+                                 NSString *overrideLayerID,
+                                 KKTimeline *overrideTimeline,
+                                 CanvasGroupXform *out, NSInteger maxN) {
+  return CanvasGroupXformsFromAncestors(
+      layers, CanvasLayerAncestorIndices(idx, layers), frac, overrideLayerID,
+      overrideTimeline, out, maxN);
+}
+
+NSInteger CanvasBuildGroupXformsForParentID(
+    NSArray<KKBezierPath *> *layers, NSString *parentGroupID, double frac,
+    NSString *overrideLayerID, KKTimeline *overrideTimeline,
+    CanvasGroupXform *out, NSInteger maxN) {
+  return CanvasGroupXformsFromAncestors(
+      layers, CanvasLayerAncestorIndicesForParentID(parentGroupID, layers),
+      frac, overrideLayerID, overrideTimeline, out, maxN);
+}
+
+matrix_float4x4 CanvasLayerTiltMatrix(CanvasLayerTransform t,
+                                      simd_float2 centerPx, float W, float H,
+                                      simd_float2 tileShift) {
+  matrix_float4x4 P = CanvasPerspective4(fmaxf(W, H));
+  matrix_float4x4 Tshift = CanvasTranslate4(tileShift.x, tileShift.y);
+  if (t.rotX == 0.0f && t.rotY == 0.0f)
+    return simd_mul(Tshift, P); // no tilt: perspective (ortho at z=0) + shift
+  // Tpos · P · Ry · Rx · Tneg: centre the layer at the origin, tilt, project
+  // (perspective about the layer centre), translate back as a post-divide
+  // screen offset; Tshift then nudges into the render tile.
+  matrix_float4x4 R = simd_mul(CanvasRotY4(t.rotY), CanvasRotX4(t.rotX));
+  matrix_float4x4 model = simd_mul(
+      CanvasTranslate4(centerPx.x, centerPx.y),
+      simd_mul(P, simd_mul(R, CanvasTranslate4(-centerPx.x, -centerPx.y))));
+  return simd_mul(Tshift, model);
+}
+
+// A layer's full 3D model matrix in pixel space: T(centerPx+posPx) · Ry·Rx·Rz ·
+// S · T(-centerPx). One matrix for ALL of the layer's rotation axes so X/Y/Z
+// compose as a single rigid rotation about the layer's centre (Z is NOT split
+// into a separate 2D bake - that split made combining Z with X/Y, or with a
+// group's rotation, interleave wrong). Rotation about the rest centre then
+// translate by Position == rotation about the POSITIONED centre (where the OSC
+// rings sit). Z is scaled by the X/Y average so scaling TILTED geometry (a
+// group shrinking its members, which carry a Z-extent) shrinks uniformly
+// instead of flattening to a sliver; a no-op for flat (Z=0) geometry.
+// `anchorPx` shifts the Rotation/Scale pivot off the layer centre (0 = centre).
+// R/S swing around piv = centerPx + anchorPx instead, so a corner/edge anchor
+// makes the layer spin/grow from there. With identity R/S it cancels out (the
+// layer still sits at posPx), so the anchor does nothing visible on its own.
+static matrix_float4x4 CanvasLayerModelMatrix(CanvasLayerTransform t,
+                                              simd_float2 centerPx,
+                                              simd_float2 posPx,
+                                              simd_float2 anchorPx) {
+  float scaleZ = sqrtf(fmaxf(0.0f, t.scaleX * t.scaleY));
+  matrix_float4x4 S = CanvasScale4(t.scaleX, t.scaleY, scaleZ);
+  matrix_float4x4 R = simd_mul(
+      CanvasRotY4(t.rotY),
+      simd_mul(CanvasRotX4(t.rotX), CanvasRotZ4(t.rotation))); // Ry·Rx·Rz
+  simd_float2 piv = centerPx + anchorPx;
+  matrix_float4x4 Tneg = CanvasTranslate4(-piv.x, -piv.y);
+  matrix_float4x4 Tpos = CanvasTranslate4(piv.x + posPx.x, piv.y + posPx.y);
+  return simd_mul(Tpos, simd_mul(R, simd_mul(S, Tneg)));
+}
+
+// The Anchor pivot offset in pixel space (Y flips: lane Y is Y-down, pixel
+// Y-up), as a fraction of `dims`. 0 when the anchor is centred (0.5,0.5).
+static simd_float2 CanvasAnchorOffsetPx(CanvasLayerTransform t,
+                                        simd_float2 dims) {
+  return simd_make_float2(t.anchorX - 0.5f, -(t.anchorY - 0.5f)) * dims;
+}
+
+// The Position offset in pixel space (Y flips: lane Y is Y-down, pixel Y-up).
+static simd_float2 CanvasPosOffsetPx(CanvasLayerTransform t, simd_float2 dims) {
+  return simd_make_float2(t.posX - 0.5f, -(t.posY - 0.5f)) * dims;
+}
+
+matrix_float4x4 CanvasComposedModelMatrix(CanvasLayerTransform memberT,
+                                          simd_float2 memberCenterObj,
+                                          const CanvasGroupXform *groups,
+                                          NSInteger ng, simd_float2 dims,
+                                          simd_float2 tileShift) {
+  simd_float2 half = simd_make_float2(0.5f, 0.5f);
+  simd_float2 mcPx = (memberCenterObj - half) * dims;
+  simd_float2 mPosPx = CanvasPosOffsetPx(memberT, dims);
+  matrix_float4x4 model = CanvasLayerModelMatrix(
+      memberT, mcPx, mPosPx, CanvasAnchorOffsetPx(memberT, dims));
+  simd_float2 pcPx = mcPx + mPosPx; // perspective centre = outermost element
+  // Total scale applied to the geometry (member * each group, X/Y average). The
+  // camera distance scales by this so the perspective is SCALE-INVARIANT: a
+  // tilted layer scaled up grows uniformly instead of foreshortening harder and
+  // "peeking over its edge" (z-extent and camera distance grow together).
+  float camScale = sqrtf(fmaxf(0.0f, memberT.scaleX * memberT.scaleY));
+  for (NSInteger k = 0; k < ng; k++) {
+    simd_float2 gcPx =
+        (simd_make_float2(groups[k].cx, groups[k].cy) - half) * dims;
+    simd_float2 gPosPx = CanvasPosOffsetPx(groups[k].t, dims);
+    simd_float2 gAncPx = CanvasAnchorOffsetPx(groups[k].t, dims);
+    // A group's Position is measured from its FROZEN content-centre rest, not
+    // from the clip centre: translation = Position - rest. Both Position and
+    // rest are seeded to the content centre at creation, so this is zero and
+    // the members render in place; seeding Position to the content centre
+    // therefore does NOT shift them. The Anchor stays the rotation / scale
+    // pivot (gAncPx) and is free to pan-behind (it never feeds rest, so moving
+    // it leaves the content put).
+    simd_float2 gRestPx =
+        simd_make_float2(groups[k].restX - 0.5f, -(groups[k].restY - 0.5f)) *
+        dims;
+    matrix_float4x4 gm =
+        CanvasLayerModelMatrix(groups[k].t, gcPx, gPosPx - gRestPx, gAncPx);
+    model = simd_mul(gm, model);
+    // The perspective centres on the OUTERMOST element that actually TILTS: a
+    // group's 3D tilt foreshortens its members about the group's pivot. A group
+    // with NO tilt (including an identity group) must stay a no-op for the
+    // member's own perspective, so track the member's centre THROUGH the group's
+    // 2D transform instead of snapping the pivot onto the group - otherwise an
+    // untilted group re-shears a self-tilted member about the clip centre.
+    if (groups[k].t.rotX != 0.0f || groups[k].t.rotY != 0.0f) {
+      pcPx = gcPx + (gPosPx - gRestPx) + gAncPx;
+    } else {
+      simd_float4 pc4 =
+          simd_mul(gm, simd_make_float4(pcPx.x, pcPx.y, 0.0f, 1.0f));
+      pcPx = simd_make_float2(pc4.x, pc4.y);
+    }
+    camScale *= sqrtf(fmaxf(0.0f, groups[k].t.scaleX * groups[k].t.scaleY));
+  }
+  matrix_float4x4 P =
+      CanvasPerspective4(fmaxf(dims.x, dims.y) * fmaxf(camScale, 1e-3f));
+  matrix_float4x4 Tshift = CanvasTranslate4(tileShift.x, tileShift.y);
+  // Tshift · Tpos(pc) · P · Tneg(pc) · model
+  matrix_float4x4 persp =
+      simd_mul(CanvasTranslate4(pcPx.x, pcPx.y),
+               simd_mul(P, CanvasTranslate4(-pcPx.x, -pcPx.y)));
+  return simd_mul(Tshift, simd_mul(persp, model));
+}

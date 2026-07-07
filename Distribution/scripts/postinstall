@@ -18,11 +18,16 @@ for TEMPLATE_TYPE_DIR in Effects.localized Generators.localized Titles.localized
     fi
 done
 
-# Install uninstall script alongside the app
+# Install the uninstall script alongside the app, named for the product. Per-product
+# builds carry a `PLUGIN="..."` line; the suite bundle's uninstall has none, so it
+# falls back to "Keyframeless".
 SCRIPT_DIR="$(dirname "$0")"
-if [ -f "$SCRIPT_DIR/uninstall" ] && [ -d "$2" ]; then
-    cp "$SCRIPT_DIR/uninstall" "$2/Uninstall Keyframeless"
-    chmod +x "$2/Uninstall Keyframeless"
+UNINSTALL=$(ls "$SCRIPT_DIR"/uninstall* 2>/dev/null | head -1)
+if [ -n "$UNINSTALL" ] && [ -d "$2" ]; then
+    PLUGIN_NAME=$(sed -n 's/^PLUGIN="\(.*\)"$/\1/p' "$UNINSTALL" | head -1)
+    [ -z "$PLUGIN_NAME" ] && PLUGIN_NAME="Keyframeless"
+    cp "$UNINSTALL" "$2/Uninstall $PLUGIN_NAME"
+    chmod +x "$2/Uninstall $PLUGIN_NAME"
 fi
 
 exit 0

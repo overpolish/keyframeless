@@ -41,12 +41,20 @@ struct ProjectSettingsHeader: View {
 				.buttonStyle(.plain)
 				.foregroundStyle(.secondary)
 			}
-			IntegerField(placeholder: "Width", text: $model.exportWidth, min: 60, max: 7680)
+			if model.captionImportType != .caption {
+				IntegerField(
+					placeholder: String(localized: "Width"), text: $model.exportWidth, min: 60,
+					max: 7680
+				)
 				.frame(width: 60)
-			Text("\u{00d7}")
-				.foregroundStyle(.secondary)
-			IntegerField(placeholder: "Height", text: $model.exportHeight, min: 60, max: 4320)
+				Text("\u{00d7}")
+					.foregroundStyle(.secondary)
+				IntegerField(
+					placeholder: String(localized: "Height"), text: $model.exportHeight, min: 60,
+					max: 4320
+				)
 				.frame(width: 60)
+			}
 			FrameratePickerButton(selection: $model.exportFramerate)
 		}
 	}

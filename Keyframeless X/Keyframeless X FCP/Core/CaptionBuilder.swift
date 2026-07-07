@@ -175,7 +175,7 @@ enum CaptionBuilder {
 		return result
 	}
 
-	private static func closeAllGaps(_ segments: [CaptionSegment]) -> [CaptionSegment] {
+	static func closeAllGaps(_ segments: [CaptionSegment]) -> [CaptionSegment] {
 		guard segments.count > 1 else { return segments }
 		var result = segments.sorted { $0.startTime < $1.startTime }
 
@@ -218,6 +218,143 @@ enum CaptionBuilder {
 			maxEnd = max(maxEnd, seg.endTime)
 		}
 		return regions
+	}
+
+	static func splitToMaxChars(_ segments: [CaptionSegment], maxChars: Int) -> [CaptionSegment] {
+		func make(_ s: CaptionSegment, _ text: String, _ start: Double, _ end: Double)
+			-> CaptionSegment
+		{
+			CaptionSegment(
+				clipIndex: s.clipIndex, clipName: s.clipName, text: text, lines: [text],
+				startTime: start, endTime: end, wordStarts: [])
+		}
+		var out: [CaptionSegment] = []
+		for seg in segments {
+			let oneLine = seg.lines.joined(separator: " ")
+			if oneLine.count <= maxChars {
+				out.append(make(seg, oneLine, seg.startTime, seg.endTime))
+				continue
+			}
+			let words = oneLine.split(separator: " ").map(String.init)
+			var chunkTexts: [String] = []
+			var chunkStartWord: [Int] = []
+			var cur: [String] = []
+			var curLen = 0
+			var curStartWord = 0
+			func flush() {
+				if cur.isEmpty { return }
+				chunkTexts.append(cur.joined(separator: " "))
+				chunkStartWord.append(curStartWord)
+				cur = []
+				curLen = 0
+			}
+			for (wi, w) in words.enumerated() {
+				if w.count > maxChars {
+					flush()
+					var word = w
+					while !word.isEmpty {
+						chunkTexts.append(String(word.prefix(maxChars)))
+						chunkStartWord.append(-1)
+						word = String(word.dropFirst(maxChars))
+					}
+					continue
+				}
+				let addLen = (cur.isEmpty ? 0 : 1) + w.count
+				if !cur.isEmpty && curLen + addLen > maxChars { flush() }
+				if cur.isEmpty {
+					curStartWord = wi
+					curLen = w.count
+				} else {
+					curLen += 1 + w.count
+				}
+				cur.append(w)
+			}
+			flush()
+
+			let aligned = seg.wordStarts.count == words.count && !chunkStartWord.contains(-1)
+			let totalDur = seg.endTime - seg.startTime
+			let totalChars = chunkTexts.reduce(0) { $0 + $1.count }
+			var t = seg.startTime
+			for i in chunkTexts.indices {
+				let start: Double
+				let end: Double
+				if aligned {
+					start = seg.wordStarts[chunkStartWord[i]]
+					end =
+						i == chunkTexts.count - 1
+						? seg.endTime : seg.wordStarts[chunkStartWord[i + 1]]
+				} else {
+					start = t
+					let frac =
+						totalChars > 0
+						? Double(chunkTexts[i].count) / Double(totalChars)
+						: 1.0 / Double(chunkTexts.count)
+					end = i == chunkTexts.count - 1 ? seg.endTime : t + totalDur * frac
+					t = end
+				}
+				out.append(make(seg, chunkTexts[i], start, end))
+			}
+		}
+		return out
+	}
+
+	/// Augments the segment boundaries (`baseBreaks`, which already include the user's manual breaks)
+	/// with the extra ≤`maxChars` word-boundary breaks CEA-608 export adds, so the editor's `|`
+	/// markers match where the export actually splits. The char counter resets at every base break,
+	/// so manual breaks are respected and 32-char splitting only happens within each segment.
+	static func cea608BreakIndices(
+		row: AudioEditRow, baseBreaks: Set<Int>, maxChars: Int
+	) -> Set<Int> {
+		let words = (row.editedWords ?? row.words).map {
+			$0.word.trimmingCharacters(in: .whitespaces)
+		}
+		guard words.count > 1 else { return baseBreaks }
+		var breaks = baseBreaks
+		var curLen = 0
+		for (i, w) in words.enumerated() {
+			if i == 0 {
+				curLen = w.count
+				continue
+			}
+			if baseBreaks.contains(i) {
+				curLen = w.count
+				continue
+			}
+			let addLen = 1 + w.count
+			if curLen + addLen > maxChars {
+				breaks.insert(i)
+				curLen = w.count
+			} else {
+				curLen += addLen
+			}
+		}
+		return breaks
+	}
+
+	/// Forces same-clip captions to be sequential by TRIMMING the earlier one's end down to the
+	/// later one's start when they overlap (start times stay anchored to speech timing). Captions
+	/// from different clips are left untouched so cross-clip overlap (intentional, e.g. simultaneous
+	/// speakers across two audio clips) is preserved.
+	static func enforceSequentialPerClip(_ segments: [CaptionSegment]) -> [CaptionSegment] {
+		guard segments.count > 1 else { return segments }
+		var result = segments
+		let groups = Dictionary(grouping: result.indices, by: { result[$0].clipIndex })
+		for (_, idxs) in groups {
+			let sorted = idxs.sorted { result[$0].startTime < result[$1].startTime }
+			for k in 0..<(sorted.count - 1) {
+				let i = sorted[k]
+				let j = sorted[k + 1]
+				if result[i].endTime > result[j].startTime {
+					let seg = result[i]
+					result[i] = CaptionSegment(
+						clipIndex: seg.clipIndex, clipName: seg.clipName, text: seg.text,
+						lines: seg.lines, startTime: seg.startTime,
+						endTime: max(seg.startTime, result[j].startTime),
+						wordStarts: seg.wordStarts)
+				}
+			}
+		}
+		return result
 	}
 
 	static func hasOverlaps(_ segments: [CaptionSegment]) -> Bool {
@@ -405,7 +542,7 @@ enum CaptionBuilder {
 				continue
 			}
 
-			// Step 2: Find break point — forced breaks take priority
+			// Step 2: Find break point - forced breaks take priority
 			var segEnd = greedyEnd
 			let firstForced = forcedBreaks.filter { $0 > segStart && $0 < greedyEnd }
 				.min()

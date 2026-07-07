@@ -10,7 +10,11 @@ import UniformTypeIdentifiers
 
 class AudioModel: ObservableObject {
 
+	static let projectWideClipIndex: Int = -1
+
 	enum Stage { case setup, edit }
+
+	var projectKey: String { dropItems.first?.name ?? "default" }
 
 	@Published var stage: Stage = .setup
 	@Published var isDraggingToFCP: Bool = false
@@ -19,6 +23,8 @@ class AudioModel: ObservableObject {
 	@Published var selectedClips: Set<Int> = []
 	@Published var editSelectedClips: Set<Int>?
 	@Published var dropItems: [FCPXMLParser.DropItem] = []
+	@Published var loadingWaveformIndices: Set<Int> = []
+	@Published var srtImportVersion: Int = 0
 	@Published var useTimecode: Bool = true
 	@Published var exportWidth: String = ""
 	@Published var exportHeight: String = ""
@@ -42,13 +48,18 @@ class AudioModel: ObservableObject {
 	@Published var keepQuestionMarks: Bool = CaptionStyleDefaults.shared.settings.keepQuestionMarks
 	@Published var noGaps: Bool = CaptionStyleDefaults.shared.settings.noGaps
 
+	@Published var captionImportType: CaptionImportType = .title
+	@Published var captionFormat: CaptionFormat = .itt
+
 	@Published var captionTemplates: [CaptionTemplate] = []
 	@Published var selectedTemplate: CaptionTemplate = .basicTitle
+	@Published var aiTransformBatch: AITransformBatch?
 	@Published var paramsModalTemplate: CaptionTemplate?
 	@Published var paramsModalParams: [PublishedParameter] = []
 	@Published var paramsModalHasPerWord: Bool = false
 	@Published var publishModalTemplate: CaptionTemplate?
 	@Published var updateModalTemplate: (CaptionTemplate, CommunityTemplate)?
+	@Published var missingMediaModal: MissingMediaInfo?
 
 	var textStyle: TextStyleSettings {
 		get {
@@ -129,12 +140,40 @@ class AudioModel: ObservableObject {
 		refreshTemplates()
 	}
 
+	/// Resolves the "Import without image" choice: strips unresolved media, then
+	/// continues the normal post-install flow.
+	func importStrippingMissingMedia(_ info: MissingMediaInfo) {
+		missingMediaModal = nil
+		switch CustomTemplateInstaller.installStrippingMedia(from: info.sourceURL) {
+		case .installed(let dest):
+			finishImport(installedURL: dest)
+		case .missingMedia, .failed:
+			break
+		}
+	}
+
+	/// Registers an installed custom `.moti` and surfaces its published params.
+	/// Shared by the direct-drop path and the "Import without image" path.
+	func finishImport(installedURL: URL) {
+		let result = PublishedParameter.parseAll(from: installedURL)
+		addCustomTemplate(from: installedURL)
+		let templateID = "custom:\(installedURL.path)"
+		guard let added = captionTemplates.first(where: { $0.id == templateID }) else { return }
+		if let textOzml = result.textOzml {
+			TemplatePublishedParamsStore.shared.setTextOzml(textOzml, for: templateID)
+		}
+		guard !result.customParams.isEmpty || result.hasPerWordAnimation else { return }
+		paramsModalParams = result.customParams
+		paramsModalHasPerWord = result.hasPerWordAnimation
+		paramsModalTemplate = added
+	}
+
 	func buildCaptionSegments(from rows: [AudioEditRow]) -> [CaptionSegment] {
 		let selected = editSelectedClips ?? Set(audioClips.indices)
-		let filtered = rows.filter { $0.isHeader || selected.contains($0.clipIndex) }
+		let (filtered, clipsForBuild) = preparePWForCaptions(rows: rows, selected: selected)
 		return CaptionBuilder.build(
 			rows: filtered,
-			clips: audioClips,
+			clips: clipsForBuild,
 			style: captionStyle,
 			textStyle: textStyle,
 			exportWidth: Int(exportWidth) ?? projectFormat?.width ?? 1920,
@@ -143,8 +182,34 @@ class AudioModel: ObservableObject {
 		)
 	}
 
+	/// Retags project-wide rows so CaptionBuilder can render them against a synthetic clip
+	/// appended at index `audioClips.count` (offset=0, so `sentenceStart` flows through as
+	/// absolute timeline time).
+	private func preparePWForCaptions(
+		rows: [AudioEditRow], selected: Set<Int>
+	) -> (rows: [AudioEditRow], clips: [FCPXMLParser.AudioClip]) {
+		let pwSelected = selected.contains(AudioModel.projectWideClipIndex)
+		let syntheticIndex = audioClips.count
+		let retagged: [AudioEditRow] = rows.compactMap { row in
+			guard row.isProjectWide else { return row }
+			if !pwSelected || row.isHeader { return nil }
+			var copy = row
+			copy.clipIndex = syntheticIndex
+			return copy
+		}
+		let filtered = retagged.filter {
+			$0.isHeader || $0.clipIndex == syntheticIndex || selected.contains($0.clipIndex)
+		}
+		var clips = audioClips
+		if pwSelected {
+			clips.append(TranscriptionStore.syntheticProjectWideClip(projectKey: projectKey))
+		}
+		return (filtered, clips)
+	}
+
 	func buildFCPXML(from rows: [AudioEditRow]) -> String {
-		let segments = buildCaptionSegments(from: rows)
+		let segments = CaptionBuilder.enforceSequentialPerClip(
+			buildCaptionSegments(from: rows))
 		let format = FCPXMLBuilder.ExportFormat(
 			width: Int(exportWidth) ?? projectFormat?.width ?? 1920,
 			height: Int(exportHeight) ?? projectFormat?.height ?? 1080,
@@ -152,7 +217,7 @@ class AudioModel: ObservableObject {
 		)
 		let publishedParams = buildPublishedParamEntries()
 		let startsAtZero =
-			TemplatePublishedParamsStore.shared.params(for: selectedTemplate.id)?
+			TemplatePublishedParamsStore.shared.params(for: activeTemplate.id)?
 			.perWordStartsAtZero ?? false
 
 		let hasOverlaps = CaptionBuilder.hasOverlaps(segments)
@@ -166,11 +231,13 @@ class AudioModel: ObservableObject {
 
 		return FCPXMLBuilder.build(
 			storylines: storylines,
-			textStyle: textStyle,
+			textStyle: activeTextStyle,
 			format: format,
-			template: selectedTemplate,
+			template: activeTemplate,
 			publishedParams: publishedParams,
-			perWordStartsAtZero: startsAtZero
+			perWordStartsAtZero: startsAtZero,
+			textStyleFilterAttrs: activeTextStyleFilterAttrs,
+			role: activeRole
 		)
 	}
 
@@ -180,8 +247,9 @@ class AudioModel: ObservableObject {
 
 	func srtOverlapRegions(from rows: [AudioEditRow]) -> [CaptionBuilder.OverlapRegion] {
 		let selected = editSelectedClips ?? Set(audioClips.indices)
+		let store = TranscriptionStore.shared
 		let clips = audioClips.enumerated()
-			.filter { selected.contains($0.offset) }
+			.filter { selected.contains($0.offset) && store.words(for: $0.element) != nil }
 			.map { $0.element }
 		let sorted = clips.sorted { $0.start < $1.start }
 		var regions: [CaptionBuilder.OverlapRegion] = []
@@ -217,11 +285,50 @@ class AudioModel: ObservableObject {
 	}
 
 	func insertTitle(rows: [AudioEditRow]) {
-		let fcpxml = buildFCPXML(from: rows)
+		let fcpxml: String
+		switch captionImportType {
+		case .caption: fcpxml = buildNativeCaptionFCPXML(from: rows)
+		// Subtitles is just a title with the subtitles role, so it reuses buildFCPXML via the
+		// active* accessors (activeTemplate / activeRole / activeTextStyle).
+		case .subtitles, .title: fcpxml = buildFCPXML(from: rows)
+		}
 		let tmpURL = FileManager.default.temporaryDirectory
 			.appendingPathComponent("keyframeless_captions.fcpxml")
 		try? fcpxml.write(to: tmpURL, atomically: true, encoding: .utf8)
 		NSWorkspace.shared.open(tmpURL)
+	}
+
+	func buildNativeCaptionFCPXML(from rows: [AudioEditRow]) -> String {
+		var segments = buildCaptionSegments(from: rows)
+		if captionFormat == .cea608 {
+			let maxLines = captionStyle.captionLines == .two ? 2 : 1
+			segments = CaptionBuilder.splitCEA608Multiline(
+				segments, maxCharsPerLine: 32, maxLines: maxLines)
+			segments = CaptionBuilder.mergeOrphansCEA608(
+				segments, maxCharsPerLine: 32, maxLines: maxLines,
+				maxWordsPerLine: Int(captionStyle.maxWordsPerLine))
+			segments = CEA608TimingValidator.adjusted(
+				segments, frameDuration: exportFramerate.rawValue)
+		}
+		segments = CaptionBuilder.enforceSequentialPerClip(segments)
+		// Mirror the pasteboard path: the CEA-608 validator pushes start times later for
+		// SCC byte-pair compliance, which reopens gaps closeAllGaps closed inside
+		// buildCaptionSegments. Re-close here so noGaps holds for CEA-608 too.
+		if captionStyle.noGaps {
+			segments = CaptionBuilder.closeAllGaps(segments)
+		}
+		let format = FCPXMLBuilder.ExportFormat(
+			width: Int(exportWidth) ?? projectFormat?.width ?? 1920,
+			height: Int(exportHeight) ?? projectFormat?.height ?? 1080,
+			frameDuration: exportFramerate.rawValue
+		)
+		let language = AudioSetupSettings.shared.selectedLanguage ?? "en"
+		return FCPXMLBuilder.buildNativeCaptions(
+			segments: segments,
+			format: format,
+			role: captionFormat.role(language: language),
+			captionFormat: captionFormat
+		)
 	}
 
 	private struct PersistedState: Codable {
@@ -238,6 +345,8 @@ class AudioModel: ObservableObject {
 		var textStyle: TextStyleSettings?
 		var captionStyle: CaptionStyleSettings?
 		var selectedTemplateID: String?
+		var captionImportType: CaptionImportType?
+		var captionFormat: CaptionFormat?
 	}
 
 	private static var fcpProcessID: Int32? {
@@ -272,6 +381,8 @@ class AudioModel: ObservableObject {
 		if let ts = state.textStyle { textStyle = ts }
 		if let cs = state.captionStyle { captionStyle = cs }
 		if let tid = state.selectedTemplateID { _pendingTemplateID = tid }
+		if let ct = state.captionImportType { captionImportType = ct }
+		if let cf = state.captionFormat { captionFormat = cf }
 	}
 
 	private var _pendingTemplateID: String?
@@ -301,9 +412,27 @@ class AudioModel: ObservableObject {
 			exportFramerate: exportFramerate,
 			textStyle: textStyle,
 			captionStyle: captionStyle,
-			selectedTemplateID: selectedTemplate.id
+			selectedTemplateID: selectedTemplate.id,
+			captionImportType: captionImportType,
+			captionFormat: captionFormat
 		)
 		try? JSONEncoder().encode(state).write(to: url, options: .atomic)
+	}
+
+	@MainActor
+	func runAITransform(instruction: String) {
+		let selected = editSelectedClips ?? Set(audioClips.indices)
+		let clips: [(Int, FCPXMLParser.AudioClip)] =
+			selected
+			.sorted()
+			.compactMap { idx in
+				guard audioClips.indices.contains(idx) else { return nil }
+				return (idx, audioClips[idx])
+			}
+		let batch = AITransformBatch(instruction: instruction, clips: clips)
+		guard !batch.items.isEmpty else { return }
+		aiTransformBatch = batch
+		Task { await AITransformRunner.run(batch) }
 	}
 
 }

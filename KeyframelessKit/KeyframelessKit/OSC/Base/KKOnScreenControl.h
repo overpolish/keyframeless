@@ -11,6 +11,7 @@
 #import <simd/simd.h>
 
 @class FxImageTile;
+@class NSCursor;
 @protocol PROAPIAccessing;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -33,11 +34,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// Override to provide the fragment shader function name.
 - (NSString *)fragmentFunctionName;
 
-/// Loads or retrieves cached pipeline state matching the destination image's
-/// pixel format.
-- (nullable id<MTLRenderPipelineState>)pipelineStateForDestinationImage:
-    (FxImageTile *)destinationImage;
-
 /// The radius used for hit testing. Override in subclass.
 - (float)hitRadius;
 
@@ -46,6 +42,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Override to return the canvas-space position of the OSC center.
 - (CGPoint)oscPositionAtTime:(CMTime)time;
+
+/// Clip-local fraction (0..1) at `time`, from the effect's start + duration via
+/// FxTimingAPI. 0 when timing is unavailable. Shared by the composable
+/// controls (Position / Scale); the host's own OSC has its own
+/// `_fractionAtTime`.
+- (double)fractionAtTime:(CMTime)time;
 
 /// Standard distance-based hit test using hitRadius.
 /// Override for non-circular hit testing.
@@ -92,6 +94,89 @@ NS_ASSUME_NONNULL_BEGIN
                forceUpdate:(BOOL *)forceUpdate
                  didHandle:(BOOL *)didHandle
                     atTime:(CMTime)time;
+
+/// YES while the user holds Option over the viewer. Hidden elements should then
+/// be drawn as dimmed ghosts and made hit-testable so an opt-click re-shows
+/// them. Maintained by -kkUpdateOptRevealWithModifiers:forceUpdate:; read it
+/// from your drawOSC / hitTest to decide ghost rendering and hit gating.
+@property(nonatomic) BOOL optRevealActive;
+
+/// The element keys this control can hide (e.g. @"Position", @"Rotation.X",
+/// @"Crop"). Override to opt into the visibility feature; the default @[]
+/// leaves it inert. Keys must match the inspector pills + mini-viewer labels.
+- (NSArray<NSString *> *)oscElementKeys;
+
+/// The element key under `activePart` (granular - e.g. a specific rotation
+/// ring). Override; return nil for parts that can't be hidden. Default nil.
+- (nullable NSString *)oscElementKeyForActivePart:(NSInteger)activePart;
+
+/// Param ID of the UI-state blob whose `oscElements` map is rewritten on
+/// toggle. Default 201 (the established kParamUIState). Override if different.
+- (UInt32)oscVisibilityParamID;
+
+/// Whether an element is currently visible: master tick on AND not individually
+/// hidden. Reads this instance's KKPluginInstanceState. Call from drawOSC /
+/// hitTest to gate each control.
+- (BOOL)kkOSCElementVisible:(NSString *)label;
+
+/// YES when the master "all OSCs off" tick is off. In that state Option-hold is
+/// a transient "peek and use" mode (every control reveals + is interactive)
+/// rather than the per-element hide/show toggle, so callers gate on this.
+- (BOOL)kkOSCMasterOff;
+
+/// Whether `label` is hidden by its own pill (or an ancestor's, via the dotted
+/// "Rotation"->"Rotation.X" hierarchy), independent of the master tick.
+- (BOOL)kkOSCElementIndividuallyHidden:(NSString *)label;
+
+/// Whether Option-hold should REVEAL `label` this frame. Master on: the
+/// elements you individually hid (so an Opt-click re-shows them). Master off:
+/// the elements left enabled (the "peek and use" set) - the ones you turned off
+/// stay off. Use this in place of a bare `!kkOSCElementVisible:` /
+/// `optRevealActive` reveal term so peek mirrors a flip back to master-on
+/// rather than flashing everything.
+- (BOOL)kkOSCRevealEligible:(NSString *)label;
+
+/// Draw alpha for a revealed ghost. 0.3 (dimmed) in the normal case - a single
+/// element you individually hid, previewed so you can opt-click it back. But
+/// 1.0 (full) when the master is off: there the whole OSC is hidden and Opt is
+/// the "peek and use" modifier, so the revealed controls read as fully usable,
+/// not as dimmed re-show targets. Use in place of a literal 0.3 ghost alpha.
+- (float)kkRevealGhostAlpha;
+
+/// The Opt-hover visibility cursor for `label`, or nil if none applies. Returns
+/// the `eye.slash` (hide) cursor when Opt is held over a visible, toggleable
+/// element, or `eye` (show) over a revealed ghost - but nil in peek-and-use
+/// mode (master off), where Opt-click doesn't toggle. Call from a hit-test when
+/// the pointer is over `label`'s handle, e.g. `[oscAPI setCursor:[self
+/// kkVisibilityCursorForLabel:lbl] ?: KKPointMoveCursor()]`.
+- (nullable NSCursor *)kkVisibilityCursorForLabel:(NSString *)label;
+
+/// Call at the top of mouseMoved:. Tracks the Option-reveal state (updates
+/// optRevealActive and requests a redraw on change) and resets the per-press
+/// opt-hide arming so the next press is judged fresh.
+- (void)kkUpdateOptRevealWithModifiers:(NSUInteger)modifiers
+                           forceUpdate:(BOOL *)forceUpdate;
+
+/// Call at the top of mouseDown: and mouseDragged:. Latches the interaction's
+/// nature on its first event: if Option is held over a hideable part, toggles
+/// that element off (or back on, for a ghost) and returns YES - you should set
+/// *forceUpdate = YES and return without dragging. Returns NO for a normal
+/// drag.
+- (BOOL)kkArmOptHideForActivePart:(NSInteger)activePart
+                        modifiers:(NSUInteger)modifiers;
+
+/// Call from mouseUp: to clear the per-interaction opt-hide arming.
+- (void)kkResetOptHideArming;
+
+@end
+
+/// Metal draw helpers. Implemented in KKOnScreenControl+Drawing.m.
+@interface KKOnScreenControl (Drawing)
+
+/// Loads or retrieves cached pipeline state matching the destination image's
+/// pixel format.
+- (nullable id<MTLRenderPipelineState>)pipelineStateForDestinationImage:
+    (FxImageTile *)destinationImage;
 
 /// Draws a quad with the given fragment data. Handles pipeline, vertices,
 /// viewport, and cleanup. Clears the destination by default.
@@ -158,6 +243,38 @@ NS_ASSUME_NONNULL_BEGIN
                                            id<MTLRenderCommandEncoder> encoder,
                                            CGPoint metalPosition,
                                            simd_uint2 viewportSize))commands;
+
+/// OSC draw batch. By default every primitive draw above
+/// (encodeRenderCommandsForDestinationImage: / drawLineStrip / drawQuad …)
+/// creates, commits and waitUntilScheduled-syncs its OWN command buffer - fine
+/// for a handful of handles, but a dense path-edit OSC issues hundreds of them
+/// (one per anchor dot, tangent line, contour-halo segment), and the per-buffer
+/// commit sync dominates (tens of ms on the main thread, stalling the drag).
+///
+/// While a batch is armed every such draw - across ALL control instances in
+/// this process - encodes into ONE shared command buffer + render encoder
+/// instead, collapsing those hundreds of commits into a single one. The encoder
+/// loads the current destination on open (`clear` = wipe first, NO = compose
+/// over what's already drawn, e.g. the grid), so per-primitive clear requests
+/// are ignored inside the batch. Viewer-OSC use only: single-threaded, one
+/// synchronous drawOSC pass; ALWAYS pair begin with end (even on early return)
+/// or the next pass inherits a stale encoder. Returns NO if the batch couldn't
+/// open (the caller then draws unbatched as before). Nested begins no-op and
+/// return YES.
+- (BOOL)beginOSCDrawBatchForDestinationImage:(FxImageTile *)destinationImage
+                            clearDestination:(BOOL)clear;
+- (void)endOSCDrawBatch;
+
+/// One-call form of the batch (the recommended entry point): runs `block` with
+/// a batch armed and guarantees -endOSCDrawBatch even if the block returns
+/// early or throws. Wrap any dense OSC draw (many handles / a path outline / a
+/// point grid) in this and its hundreds of per-primitive command-buffer commits
+/// collapse to one. `clear` = wipe the destination first (a standalone
+/// overlay), NO = compose over what's already drawn (e.g. a grid). A handful of
+/// primitives needn't bother - the batch only pays off past ~tens of draws.
+- (void)drawOSCBatchedForDestinationImage:(FxImageTile *)destinationImage
+                         clearDestination:(BOOL)clear
+                                    block:(NS_NOESCAPE void (^)(void))block;
 
 @end
 

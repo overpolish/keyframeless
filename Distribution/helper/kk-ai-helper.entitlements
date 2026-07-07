@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Shares the app-group container with the sandboxed plugins: the unix socket
+	     (kkai.sock) and the HuggingFace model cache live here, and the app-group
+	     Mach service name is prefixed by this id so the plugins' sandbox permits the
+	     lookup. The helper itself is NOT sandboxed (it needs full Metal/GPU). -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.co.overpolish.keyframeless</string>
+	</array>
+</dict>
+</plist>

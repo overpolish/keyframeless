@@ -1,0 +1,13 @@
+{
+  "name": "keyframeless-feedback",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "sync-assets": "mkdir -p public/assets && cp ../docs/assets/style.css ../docs/assets/favicon-16.png ../docs/assets/favicon-32.png ../docs/assets/apple-touch-icon.png public/assets/",
+    "dev": "npm run sync-assets && wrangler dev",
+    "deploy": "npm run sync-assets && wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  }
+}

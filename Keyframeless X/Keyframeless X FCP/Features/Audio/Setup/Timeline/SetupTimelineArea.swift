@@ -43,14 +43,8 @@ struct SetupTimelineArea: View {
 			}
 			.frame(maxWidth: .infinity)
 			.frame(minHeight: 80)
-			.overlay(alignment: .bottomTrailing) {
-				HelperText(
-					"Click and drag to quickly select/deselect clips",
-					systemImage: "cursorarrow.motionlines"
-				)
-				.padding(.trailing, KKPaddingSM)
-				.alignmentGuide(.bottom) { d in d[.top] - KKSpacingMD }
-			}
+			TimelineFooterMessages(clips: model.audioClips)
+				.padding(.top, KKSpacingMD)
 			ClipCountDisplay(
 				selectedCount: model.selectedClips.count,
 				totalCount: model.audioClips.count
@@ -82,7 +76,8 @@ private struct SetupTimelineContent: View {
 			clips: model.audioClips,
 			selectedClips: $model.selectedClips,
 			audioPlayer: audioPlayer,
-			showWaveforms: true
+			showWaveforms: true,
+			onLoadingChanged: { model.loadingWaveformIndices = $0 }
 		)
 		.id(timelineLoadID)
 		.padding(.bottom, KKSpacingSM)

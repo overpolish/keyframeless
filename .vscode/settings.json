@@ -68,6 +68,7 @@
     "Keyframeless",
     "keyframelesskit",
     "keyframelessx",
+    "keypose",
     "KKOSC",
     "KKRing",
     "lefthalf",
@@ -143,10 +144,13 @@
     "KeyframelessKit",
     "FxPlug",
     "Rounded",
-    "Keyframeless X - Audio",
     "Glow",
     "Canvas",
     "Timing",
-    "MotionBlur"
+    "MotionBlur",
+    "Joyride",
+    "Feedback",
+    "Keyframeless X - Steno",
+    "KeyframelessAI"
   ]
 }

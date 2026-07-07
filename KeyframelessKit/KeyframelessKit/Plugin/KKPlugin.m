@@ -3,13 +3,12 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "../Update/KKUpdateChecker.h"
-#import "../Views/StageSequencer/KKStageSequencerView.h"
 #import "KKConstants.h"
 #import "KKDataBlob.h"
 #import "KKHostInfo.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
+#import "KKUpdateChecker.h"
 #import <AppKit/AppKit.h>
 #import <Carbon/Carbon.h>
 #import <FxPlug/FxPlugSDK.h>
@@ -59,6 +58,11 @@
     _apiManager = apiManager;
   }
   return self;
+}
+
+- (NSString *)presetPluginKey {
+  return [NSBundle bundleForClass:[self class]].bundleIdentifier
+             ?: NSStringFromClass([self class]);
 }
 
 - (void)setTimingGroupExtraParamIDs:(NSArray<NSNumber *> *)ids {
@@ -139,7 +143,7 @@
 
   // First-tick guard: when prevSource is nil or different (i.e. this is
   // the first parameterChanged for `parameterID` in this gesture), only
-  // record the ratio baseline — don't write the linked partner yet.
+  // record the ratio baseline - don't write the linked partner yet.
   // A cmd-Z / cmd-Shift-Z echo for a linked param is a single one-shot
   // event so it never reaches a "second tick", meaning the linked write
   // never fires from a host-revert echo and the redo stack is preserved.
@@ -265,7 +269,7 @@
   // When parent Scale > 100%, FCP renders only a sub-tile of the destination
   // image (tilePixelBounds ⊂ imagePixelBounds). UVs map [0,1] across the full
   // source image, so the shader sees the tile as the corresponding sub-region
-  // of the source — not the whole image — which prevents the entire source
+  // of the source - not the whole image - which prevents the entire source
   // from being squashed into the sub-tile.
   FxRect dTile = destinationImage.tilePixelBounds;
   FxRect dImg = destinationImage.imagePixelBounds;
@@ -333,7 +337,7 @@
   MTLViewport viewport = {0, 0, w, h, -1.0, 1.0};
   [encoder setViewport:viewport];
 
-  // See encodeRenderCommandsForDestinationImage: — UVs are mapped to the
+  // See encodeRenderCommandsForDestinationImage: - UVs are mapped to the
   // sub-region of source addressed by the destination tile, so >100% parent
   // Scale (which makes FCP request only a sub-tile) renders sharply.
   float uvL = 0, uvR = 1, uvT = 0, uvB = 1;
@@ -537,34 +541,9 @@
 }
 
 - (void)kkHandleGroupSegmentClickedForKey:(NSString *)groupKey {
-  // Default: behave like a label-side click. Plugins override to wire a
-  // custom action (e.g. selecting the underlying object).
-  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
-  KKStageSequencerView *seq = state.sequencerView;
-  BOOL nowCollapsed = NO;
-  for (KKTimingLane *lane in seq.lanes) {
-    if ([lane.groupKey isEqualToString:groupKey]) {
-      nowCollapsed = !lane.groupCollapsed;
-      break;
-    }
-  }
-  [self _handleGroupCollapseToggledForKey:groupKey collapsed:nowCollapsed];
 }
 
 - (void)kkRefreshSequencerSelectedGroup {
-  KKPluginInstanceState *state = KKInstanceStateForAPI(self.apiManager);
-  if (!state)
-    return;
-  NSString *key = [self kkSelectedGroupKey];
-  dispatch_block_t apply = ^{
-    state.sequencerView.selectedGroupKey = key;
-    for (KKTimingViewRefs *r in state.additionalTimingViews)
-      r.seqView.selectedGroupKey = key;
-  };
-  if (NSThread.isMainThread)
-    apply();
-  else
-    dispatch_async(dispatch_get_main_queue(), apply);
 }
 
 - (void)kkHandleLaneSegmentMutation:(KKLaneSegmentMutation)mutation
@@ -603,7 +582,7 @@
   return @"rectangle.on.rectangle.slash";
 }
 
-// FxPlug requires this when the plugin uses custom parameters — FCP needs
+// FxPlug requires this when the plugin uses custom parameters - FCP needs
 // the value classes ahead of unarchiving project files. Subclasses can
 // override and call super to add their own custom-param IDs.
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {

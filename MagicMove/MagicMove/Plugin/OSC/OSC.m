@@ -1,0 +1,308 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#import "Constants.h"
+#import "OSC_Internal.h"
+#import "Plugin_Private.h"
+#import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KeyframelessKit.h>
+#import <simd/simd.h>
+
+// Shared per-process OSC guide bridge. MRR-safe static singleton (no
+// dispatch_once / autoreleased static); lives for the process so the inspector
+// guide and the OSC share one instance.
+static KKOSCGuideBridge *MagicMoveGuideBridge(void) {
+  static KKOSCGuideBridge *sBridge = nil;
+  if (!sBridge)
+    sBridge = [[KKOSCGuideBridge alloc] init];
+  return sBridge;
+}
+
+KKOSCGuideBridge *MagicMoveSharedOSCGuideBridge(void) {
+  return MagicMoveGuideBridge();
+}
+
+// Guide-scoped Position (object [0,1] space). The OSC can't read the timeline
+// blob from the drawOSC tick (FxParameterRetrievalAPI is nil there), so during
+// the OSC guide the inspector drag pushes the live position here and the handle
+// tracks it - mirrors Rounded's sGuideRadius.
+static CGPoint sGuidePosition = {0.5, 0.5};
+
+// Object-space target the interactive drag nudges the Position handle toward
+// (upper-left of centre, clearly offset from the 0.5,0.5 seed).
+static const CGPoint kMagicMoveGuideTargetObject = {0.3, 0.7};
+
+void MagicMoveSetGuidePosition(double objX, double objY) {
+  sGuidePosition = CGPointMake(objX, objY);
+}
+
+CGPoint MagicMoveGuideTargetObjectPosition(void) {
+  return kMagicMoveGuideTargetObject;
+}
+
+// Inverse map: a screen point → object-space Position via the bridge's cached
+// viewer rect. Object [0,1]^2 maps to the viewer rect corners (both Y-up), so
+// the value is simply the normalized position within that rect - the canvas
+// terms cancel, same identity Rounded's radius map uses.
+BOOL MagicMoveGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
+                                          double *outY) {
+  KKOSCGuideBridge *b = MagicMoveGuideBridge();
+  NSRect vr = b.estimatedViewerScreenRect;
+  if (!b.geometryValid || NSIsEmptyRect(vr))
+    return NO;
+  double x = (screenPt.x - NSMinX(vr)) / NSWidth(vr);
+  double y = (screenPt.y - NSMinY(vr)) / NSHeight(vr);
+  if (outX)
+    *outX = MAX(0.0, MIN(1.0, x));
+  if (outY)
+    *outY = MAX(0.0, MIN(1.0, y));
+  return YES;
+}
+
+@implementation MagicMoveOSC
+
+// Feed the shared guide bridge canvas geometry each tick so the timing guide
+// can read the viewer screen rect (the watch-back cutout). Generic FxPlug
+// canvas conversion - nothing Magic Move specific. hasTarget:NO because we
+// only want the viewer rect, not the OSC drag handle/target.
+- (BOOL)_guideCanvasTopRight:(CGPoint *)outTR bottomLeft:(CGPoint *)outBL {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return NO;
+  CGPoint tr = {0, 0}, bl = {0, 0};
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:1.0
+                          fromY:1.0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&tr.x
+                            toY:&tr.y];
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0.0
+                          fromY:0.0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&bl.x
+                            toY:&bl.y];
+  if (outTR)
+    *outTR = tr;
+  if (outBL)
+    *outBL = bl;
+  return YES;
+}
+
+// drawOSC context: canvasZoom is often 0 here (no live canvas), so spC may be
+// 0 - the bridge keeps its last good scale. Keeps the viewer rect fresh once
+// the hit-test feed has bootstrapped the canvas reference.
+- (void)_ingestGuideDrawTickWithPosition:(CGPoint)pos {
+  CGPoint tr, bl;
+  if (![self _guideCanvasTopRight:&tr bottomLeft:&bl])
+    return;
+  id<FxOnScreenControlAPI_v2> oscAPI2 =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
+  double rawZoom = oscAPI2 ? ([oscAPI2 canvasZoom] / 100.0) : 0.0;
+  double displayScale = [[NSScreen mainScreen] backingScaleFactor];
+  double spC =
+      (rawZoom > 0.0 && displayScale > 0.0) ? rawZoom / displayScale : 0.0;
+  // During the OSC guide, feed the drag target (object-space → canvas) so the
+  // bridge can spotlight the glowing destination; otherwise we only want the
+  // viewer rect for the timing guide's watch-back step.
+  BOOL inGuide = MagicMoveGuideBridge().guideStep > 0;
+  CGPoint targetCanvas = CGPointZero;
+  if (inGuide) {
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    CGPoint tgt = MagicMoveGuideTargetObjectPosition();
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                            fromX:tgt.x
+                            fromY:tgt.y
+                          toSpace:kFxDrawingCoordinates_CANVAS
+                              toX:&targetCanvas.x
+                              toY:&targetCanvas.y];
+  }
+  [MagicMoveGuideBridge() ingestDrawTickWithCanvasTopRight:tr
+                                                bottomLeft:bl
+                                               canvasScale:spC
+                                           handleCanvasPos:pos
+                                           targetCanvasPos:targetCanvas
+                                                 hasTarget:inGuide];
+}
+
+// hit-test context: screen + canvas coords arrive together AND canvasZoom is
+// valid here, so this bootstraps the bridge's canvas reference - the draw tick
+// can't on its own. Mirrors Rounded's OSC hit-test feed.
+- (void)_ingestGuideHitTestAtCanvasX:(double)cx y:(double)cy {
+  CGPoint tr, bl;
+  if (![self _guideCanvasTopRight:&tr bottomLeft:&bl])
+    return;
+  id<FxOnScreenControlAPI_v2> oscAPI2 =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
+  double rawZoom = oscAPI2 ? ([oscAPI2 canvasZoom] / 100.0) : 1.0;
+  double displayScale = [[NSScreen mainScreen] backingScaleFactor];
+  double spC = (displayScale > 0.0) ? rawZoom / displayScale : rawZoom;
+  [MagicMoveGuideBridge() ingestHitTestAtScreen:NSEvent.mouseLocation
+                                      canvasPos:CGPointMake(cx, cy)
+                                    canvasScale:spC
+                                       topRight:tr
+                                     bottomLeft:bl
+                                       onHandle:NO
+                                handleCanvasPos:CGPointZero];
+}
+
+- (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
+  self = [super initWithAPIManager:apiManager];
+  if (self) {
+    self.clearsOnDraw = NO;
+    _positionController = [[KKPositionOSC alloc] initWithAPIManager:apiManager
+                                                          laneLabel:@"Position"
+                                                          pathLabel:@"Path"];
+    _positionController.positionActivePart = kOSCPositionPart;
+    _positionController.tangentActivePart = kOSCPathHandlePart;
+    _positionController.guideProvider = self;
+    for (KKLane *l in [MagicMovePlugin availableLanes])
+      if ([l.label isEqualToString:@"Position"])
+        _positionController.templateLane = l;
+    _rotationOSC = [[KKRotationOSC alloc] initWithAPIManager:apiManager
+                                                   laneLabel:@"Rotation"];
+    _rotationOSC.rotationActivePart = kOSCRotationPart;
+    _scaleControl = [[KKScaleOSC alloc] initWithAPIManager:apiManager
+                                                 laneLabel:@"Scale"];
+    _scaleControl.scaleActivePart = kOSCScalePart;
+    // Scale from the anchor: the render scales about the anchor pivot (Position
+    // + Anchor offset), so the box should too. Content is clip-filling (the
+    // default ref 0.5 / half 0.5), so just opting in on the Anchor lane is
+    // enough - a centred anchor stays symmetric.
+    _scaleControl.anchorLaneLabel = @"Anchor";
+    for (KKLane *l in [MagicMovePlugin availableLanes]) {
+      if ([l.label isEqualToString:@"Scale"])
+        _scaleControl.templateLane = l;
+      if ([l.label isEqualToString:@"Rotation"])
+        _rotationOSC.templateLane = l;
+    }
+    // Anchor pivot square (clip-space pivot: the kit control's default geometry
+    // shifts the sibling Position lane by the Anchor offset and maps it to
+    // canvas, so no geometry blocks are needed here).
+    _anchorControl = [[KKAnchorOSC alloc] initWithAPIManager:apiManager
+                                                   laneLabel:@"Anchor"];
+    _anchorControl.anchorActivePart = kOSCAnchorPart;
+    for (KKLane *l in [MagicMovePlugin availableLanes])
+      if ([l.label isEqualToString:@"Anchor"])
+        _anchorControl.templateLane = l;
+  }
+  return self;
+}
+
+- (double)_fractionAtTime:(CMTime)time {
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  if (!timingAPI)
+    return 0.0;
+  CMTime effectStart = kCMTimeZero, effectDur = kCMTimeZero;
+  [timingAPI startTimeForEffect:&effectStart];
+  [timingAPI durationTimeForEffect:&effectDur];
+  double durSec = CMTimeGetSeconds(effectDur);
+  if (durSec <= 0)
+    return 0.0;
+  return MAX(0.0,
+             MIN(1.0, (CMTimeGetSeconds(time) - CMTimeGetSeconds(effectStart)) /
+                          durSec));
+}
+
+// The clip's centre in canvas space - the Position handle's value. Rotation,
+// scale, and the anchor pivot all centre on it, so it stays a host method,
+// shimmed to the Position controller which owns the read (+ the guide branch).
+- (CGPoint)oscPositionAtTime:(CMTime)time {
+  return [self.positionController positionCanvasAtTime:time];
+}
+
+// KKPositionGuideProvider: the controller reads the guide bridge + the
+// guide-pushed Position through these (so the controller stays plugin-agnostic
+// while Magic Move keeps its singleton bridge + sGuidePosition).
+- (KKOSCGuideBridge *)positionGuideBridge {
+  return MagicMoveGuideBridge();
+}
+
+- (CGPoint)positionGuideObjectValue {
+  return sGuidePosition;
+}
+
+// Min dimension of the clip's frame in canvas space (object [0,1]^2 corners
+// converted to canvas). Scales with viewer zoom, so a box sized off it tracks
+// the clip rather than staying a fixed screen size.
+- (double)_onScreenFrameMin {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  if (!oscAPI)
+    return 1000.0;
+  CGPoint c0 = CGPointZero, cx = CGPointZero, cy = CGPointZero;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0
+                          fromY:0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&c0.x
+                            toY:&c0.y];
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:1
+                          fromY:0
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&cx.x
+                            toY:&cx.y];
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:0
+                          fromY:1
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&cy.x
+                            toY:&cy.y];
+  double w = hypot(cx.x - c0.x, cx.y - c0.y);
+  double h = hypot(cy.x - c0.x, cy.y - c0.y);
+  double m = MIN(w, h);
+  return (m > 1.0) ? m : 1000.0;
+}
+
+- (CGPoint)_canvasFromObjX:(double)ox y:(double)oy {
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  CGPoint c = CGPointZero;
+  [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                          fromX:ox
+                          fromY:oy
+                        toSpace:kFxDrawingCoordinates_CANVAS
+                            toX:&c.x
+                            toY:&c.y];
+  return c;
+}
+
+// Override the base OSC-visibility hooks: the full element-key list, and the
+// per-part mapping (granular for rotation rings - the preceding hit-test left
+// the hit ring in rotationOSC.activeAxis). The toggle / arming / reveal / blob
+// persistence all live in KKOnScreenControl now.
+- (NSArray<NSString *> *)oscElementKeys {
+  return [MagicMovePlugin oscElementKeys];
+}
+
+- (nullable NSString *)oscElementKeyForActivePart:(NSInteger)activePart {
+  if (activePart == kOSCPathHandlePart)
+    return @"Path";
+  if (activePart == kOSCScalePart)
+    return @"Scale";
+  if (activePart == kOSCAnchorPart)
+    return @"Anchor";
+  if (activePart == kOSCPositionPart)
+    return self.positionController.hoverTargetIsAnchor ? @"Path" : @"Position";
+  if (activePart == kOSCRotationPart) {
+    switch (self.rotationOSC.activeAxis) {
+    case 0:
+      return @"Rotation.X";
+    case 1:
+      return @"Rotation.Y";
+    case 2:
+      return @"Rotation.Z";
+    default:
+      return @"Rotation";
+    }
+  }
+  return nil;
+}
+
+@end

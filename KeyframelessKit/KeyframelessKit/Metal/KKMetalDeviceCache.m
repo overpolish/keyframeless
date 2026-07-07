@@ -21,6 +21,7 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
 @property(nonatomic, strong) NSLock *commandQueueCacheLock;
 @property(nonatomic, strong)
     NSMutableDictionary<NSString *, id<MTLRenderPipelineState>> *pipelineStates;
+@property(nonatomic, strong) NSLock *pipelineStatesLock;
 
 - (instancetype)initWithDevice:(id<MTLDevice>)device;
 - (nullable id<MTLCommandQueue>)getNextFreeCommandQueue;
@@ -42,6 +43,7 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
         [[NSMutableArray alloc] initWithCapacity:kMaxCommandQueues];
     _commandQueueCacheLock = [[NSLock alloc] init];
     _pipelineStates = [[NSMutableDictionary alloc] init];
+    _pipelineStatesLock = [[NSLock alloc] init];
 
     for (NSUInteger i = 0; i < kMaxCommandQueues; i++) {
       NSMutableDictionary *dict = [NSMutableDictionary dictionary];
@@ -59,11 +61,16 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
 
 - (void)registerPipelineState:(id<MTLRenderPipelineState>)pipelineState
                        forKey:(NSString *)key {
+  [_pipelineStatesLock lock];
   [_pipelineStates setObject:pipelineState forKey:key];
+  [_pipelineStatesLock unlock];
 }
 
 - (nullable id<MTLRenderPipelineState>)pipelineStateForKey:(NSString *)key {
-  return [_pipelineStates objectForKey:key];
+  [_pipelineStatesLock lock];
+  id<MTLRenderPipelineState> result = [_pipelineStates objectForKey:key];
+  [_pipelineStatesLock unlock];
+  return result;
 }
 
 - (id<MTLCommandQueue>)getNextFreeCommandQueue {
@@ -104,6 +111,7 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
 
 @implementation KKMetalDeviceCache {
   NSMutableArray<KKMetalDeviceCacheItem *> *_deviceCaches;
+  NSLock *_deviceCachesLock;
 }
 
 + (instancetype)sharedCache {
@@ -118,6 +126,7 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
 - (instancetype)init {
   self = [super init];
   if (self != nil) {
+    _deviceCachesLock = [[NSLock alloc] init];
     NSArray<id<MTLDevice>> *devices = MTLCopyAllDevices();
     _deviceCaches = [[NSMutableArray alloc] initWithCapacity:devices.count];
     for (id<MTLDevice> device in devices) {
@@ -133,8 +142,10 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
 
 - (nullable KKMetalDeviceCacheItem *)cacheItemForRegistryID:
     (uint64_t)registryID {
+  [_deviceCachesLock lock];
   for (KKMetalDeviceCacheItem *item in _deviceCaches) {
     if (item.gpuDevice.registryID == registryID) {
+      [_deviceCachesLock unlock];
       return item;
     }
   }
@@ -153,6 +164,7 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
       break;
     }
   }
+  [_deviceCachesLock unlock];
   return result;
 }
 
@@ -259,12 +271,14 @@ static NSString *kKey_CommandQueue = @"CommandQueue";
 }
 
 - (void)returnCommandQueueToCache:(id<MTLCommandQueue>)commandQueue {
+  [_deviceCachesLock lock];
   for (KKMetalDeviceCacheItem *item in _deviceCaches) {
     if ([item containsCommandQueue:commandQueue]) {
       [item returnCommandQueue:commandQueue];
       break;
     }
   }
+  [_deviceCachesLock unlock];
 }
 
 + (MTLPixelFormat)pixelFormatForImageTile:(FxImageTile *)imageTile {

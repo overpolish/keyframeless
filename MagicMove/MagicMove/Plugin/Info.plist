@@ -17,7 +17,7 @@
 	<key>CFBundlePackageType</key>
 	<string>XPC!</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.0.0</string>
+	<string>3.0.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSHumanReadableCopyright</key>
@@ -81,7 +81,7 @@
 			<key>group</key>
 			<string>5DFF1F7F-2EEE-4062-92A5-B40CE1B76666</string>
 			<key>infoString</key>
-			<string>MagicMove Radius Control</string>
+			<string>MagicMove Position Control</string>
 			<key>protocolNames</key>
 			<array>
 				<string>FxOnScreenControl</string>

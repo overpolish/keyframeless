@@ -38,7 +38,7 @@ class CaptionStyleDefaults {
 struct TextStyleSettings: Codable, Equatable {
 	var textWidthPercent: Double = 80
 	var textSize: Double = 100
-	var textYPosition: Double = 20
+	var textYPosition: Double = 50
 	var textFont: String = "HelveticaNeue"
 	var textColorR: Double = 1
 	var textColorG: Double = 1

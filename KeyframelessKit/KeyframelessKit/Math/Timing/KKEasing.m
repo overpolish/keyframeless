@@ -1,0 +1,278 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#import "KKEasing.h"
+#import "KKLocalized.h"
+#import <math.h>
+
+NSString *KKEasingCurveDisplayName(KKEasingCurve curve) {
+  switch (curve) {
+  case KKEasingCurveLinear:
+    return KKLoc(@"Linear", @"Easing curve name.");
+  case KKEasingCurveEaseIn:
+    return KKLoc(@"Ease In", @"Easing curve name.");
+  case KKEasingCurveEaseOut:
+    return KKLoc(@"Ease Out", @"Easing curve name.");
+  case KKEasingCurveEaseInOut:
+    return KKLoc(@"Ease In/Out", @"Easing curve name.");
+  case KKEasingCurveElastic:
+    return KKLoc(@"Elastic", @"Easing curve name.");
+  case KKEasingCurveBounce:
+    return KKLoc(@"Bounce", @"Easing curve name.");
+  }
+  return @"";
+}
+
+NSString *KKHoldEffectDisplayName(KKHoldEffect effect) {
+  switch (effect) {
+  case KKHoldEffectNone:
+    return KKLoc(@"None", @"Hold modulation name (no modulation).");
+  case KKHoldEffectBounce:
+    return KKLoc(@"Oscillate", @"Hold modulation name (enum Bounce).");
+  case KKHoldEffectWiggle:
+    return KKLoc(@"Wiggle", @"Hold modulation name.");
+  case KKHoldEffectHandheld:
+    return KKLoc(@"Handheld", @"Hold modulation name.");
+  }
+  return @"";
+}
+
+static double KKEaseIn(double t, double intensity) {
+  double exponent = 1.0 + intensity * 7.0;
+  double power = pow(t, exponent);
+  if (intensity <= 0.5)
+    return power;
+  double overshoot = (intensity - 0.5) * 2.0 * 2.5;
+  double back = t * t * ((overshoot + 1.0) * t - overshoot);
+  double blend = (intensity - 0.5) * 2.0;
+  return power * (1.0 - blend) + back * blend;
+}
+
+static double KKEaseOut(double t, double intensity) {
+  double exponent = 1.0 + intensity * 7.0;
+  double u = 1.0 - t;
+  double power = 1.0 - pow(u, exponent);
+  if (intensity <= 0.5)
+    return power;
+  double overshoot = (intensity - 0.5) * 2.0 * 2.5;
+  double back = 1.0 - u * u * ((overshoot + 1.0) * u - overshoot);
+  double blend = (intensity - 0.5) * 2.0;
+  return power * (1.0 - blend) + back * blend;
+}
+
+static double KKEaseInOut(double t, double intensity) {
+  double exponent = 1.0 + intensity * 7.0;
+  double power;
+  if (t < 0.5)
+    power = pow(2.0, exponent - 1.0) * pow(t, exponent);
+  else {
+    double u = -2.0 * t + 2.0;
+    power = 1.0 - pow(u, exponent) / 2.0;
+  }
+  if (intensity <= 0.5)
+    return power;
+  double overshoot = (intensity - 0.5) * 2.0 * 2.5 * 1.525;
+  double back;
+  if (t < 0.5)
+    back = (4.0 * t * t * ((overshoot + 1.0) * 2.0 * t - overshoot)) / 2.0;
+  else {
+    double u = 2.0 * t - 2.0;
+    back = (u * u * ((overshoot + 1.0) * u + overshoot) + 2.0) / 2.0;
+  }
+  double blend = (intensity - 0.5) * 2.0;
+  return power * (1.0 - blend) + back * blend;
+}
+
+// Elastic with a polynomial decay envelope: (1-t)^p kills both
+// value and velocity at t=1 (for p>=2), so the curve naturally lands on
+// (1, 0) without needing a tail-damp blend.
+//
+//   v(t) = 1 - (1-t)^p · cos(2π·N·t)
+//
+// v(0) = 1 - 1·1 = 0; v(1) = 1 - 0·cos = 1; v'(1) = 0 (envelope dominates).
+static double KKEaseOutElastic(double t, double intensity, double frequency) {
+  if (t <= 0.0)
+    return 0.0;
+  if (t >= 1.0)
+    return 1.0;
+
+  // intensity: 0 → fast decay (subtle), 1 → slow decay (dramatic).
+  double p = 2.0 + (1.0 - intensity) * 5.0; // [2, 7]
+  // frequency: 0 → 1 oscillation, 1 → 4 oscillations.
+  double N = 1.0 + frequency * 3.0;
+
+  double envelope = pow(1.0 - t, p);
+  return 1.0 - envelope * cos(2.0 * M_PI * N * t);
+}
+
+static double KKEaseOutBounce(double t, double intensity, double frequency) {
+  if (t <= 0.0)
+    return 0.0;
+  if (t >= 1.0)
+    return 1.0;
+
+  // intensity: restitution (how much speed is retained per bounce)
+  // frequency: number of bounces (2-7)
+  double restitution = 0.15 + intensity * 0.75;
+  int numBounces = 3 + (int)round(frequency * 5.0);
+
+  // Segment durations proportional to physical air time.
+  // Initial drop from height H: t0 ∝ √H. Each subsequent bounce reaches
+  // height e²ʲ·H and spends 2eʲ·t0 in the air (up + down).
+  double durations[9];
+  durations[0] = 1.0;
+  double total = 1.0;
+  for (int i = 1; i <= numBounces; i++) {
+    durations[i] = 2.0 * pow(restitution, i);
+    total += durations[i];
+  }
+  for (int i = 0; i <= numBounces; i++)
+    durations[i] /= total;
+
+  double cumul = 0;
+  for (int i = 0; i <= numBounces; i++) {
+    double d = durations[i];
+    if (t <= cumul + d || i == numBounces) {
+      double local = (t - cumul) / d;
+      if (i == 0) {
+        // Initial fall: gravity accelerates the ball (ease-in parabola).
+        return local * local;
+      }
+      double depth = pow(restitution, 2.0 * i);
+      if (i == numBounces) {
+        // Last arc: cubic that peaks at local=0.5 and lands at local=1
+        // with zero velocity - `8·local·(1-local)²` satisfies g(0)=0,
+        // g(0.5)=1, g(1)=0, g'(1)=0. Ball settles into the floor.
+        double oneMinus = 1.0 - local;
+        return 1.0 - depth * 8.0 * local * oneMinus * oneMinus;
+      }
+      // Mid bounce: projectile arc, peak at local=0.5, hits floor with
+      // velocity (next bounce picks it up).
+      return 1.0 - depth * 4.0 * local * (1.0 - local);
+    }
+    cumul += d;
+  }
+  return 1.0;
+}
+
+double KKApplyEasing(double raw, KKEasingCurve curve, double intensity,
+                     double frequency) {
+  switch (curve) {
+  case KKEasingCurveLinear:
+    return raw;
+  case KKEasingCurveEaseIn:
+    return KKEaseIn(raw, intensity);
+  case KKEasingCurveEaseOut:
+    return KKEaseOut(raw, intensity);
+  case KKEasingCurveEaseInOut:
+    return KKEaseInOut(raw, intensity);
+  case KKEasingCurveElastic:
+    return KKEaseOutElastic(raw, intensity, frequency);
+  case KKEasingCurveBounce:
+    return KKEaseOutBounce(raw, intensity, frequency);
+  default:
+    return raw;
+  }
+}
+
+// Derive a pseudo-random double from a seed and index.
+static double KKSeedHash(int seed, int idx) {
+  unsigned v = (unsigned)(seed * 2654435761u + idx * 2246822519u);
+  v ^= v >> 16;
+  v *= 0x45d9f3b;
+  v ^= v >> 16;
+  return (double)(v & 0xFFFF) / 65535.0;
+}
+
+double KKSeedSign(int seed, int index) {
+  if (seed == 0)
+    return 1.0;
+  return (KKSeedHash(seed, index + 100) > 0.5) ? 1.0 : -1.0;
+}
+
+static double KKHoldBounce(double t, double frequency, int seed) {
+  double freq = frequency * 12.0; // 0 at min (barely-there), 12 at max
+  double phase = (seed != 0) ? KKSeedHash(seed, 0) * M_PI * 2.0 : 0.0;
+  return 1.0 + 0.15 * sin(t * M_PI * freq + phase) * sin(t * M_PI);
+}
+
+static double KKHoldWiggle(double t, double frequency, int seed) {
+  double fScale = frequency * 3.0; // 0 at min (barely-there), 3 at max
+  double envelope = sin(t * M_PI);
+  double f0 = 17.0, f1 = 31.0, f2 = 59.0, f3 = 97.0;
+  double p0 = 0, p1 = 0, p2 = 0, p3 = 0;
+  if (seed != 0) {
+    f0 = 13.0 + KKSeedHash(seed, 0) * 10.0;
+    f1 = 27.0 + KKSeedHash(seed, 1) * 12.0;
+    f2 = 47.0 + KKSeedHash(seed, 2) * 24.0;
+    f3 = 79.0 + KKSeedHash(seed, 3) * 36.0;
+    p0 = KKSeedHash(seed, 4) * M_PI * 2.0;
+    p1 = KKSeedHash(seed, 5) * M_PI * 2.0;
+    p2 = KKSeedHash(seed, 6) * M_PI * 2.0;
+    p3 = KKSeedHash(seed, 7) * M_PI * 2.0;
+  }
+  double noise =
+      sin(t * f0 * fScale + p0) * 0.4 + sin(t * f1 * fScale + p1) * 0.3 +
+      sin(t * f2 * fScale + p2) * 0.2 + sin(t * f3 * fScale + p3) * 0.1;
+  return 1.0 + 0.08 * noise * envelope;
+}
+
+// Low-frequency-dominant fractal noise (fBm / 1-over-f). A slow wander with
+// progressively smaller tremor layered on - the analogue/handheld-camera
+// signature, unlike Wiggle's flat high-frequency hash. Smooth, band-limited,
+// deterministic per seed. Centred on 1.0; envelope zeroes at the hold ends.
+static double KKHoldHandheld(double t, double frequency, int seed) {
+  double envelope = sin(t * M_PI);
+  double cycles = frequency * 3.75; // 0 at min (barely-there) … slow sway
+  const int octaves = 5;
+  double sum = 0.0, norm = 0.0, amp = 1.0;
+  for (int k = 0; k < octaves; k++) {
+    double ph = (seed != 0) ? KKSeedHash(seed, k) * M_PI * 2.0 : k * 1.2399;
+    double detune = 1.0 + 0.03 * (KKSeedHash(seed, k + 16) - 0.5);
+    double c = cycles * pow(2.0, k) * detune; // octave: ~2× frequency
+    sum += amp * sin(t * 2.0 * M_PI * c + ph);
+    norm += amp;
+    amp *= 0.5; // …and ~½ amplitude → low frequencies dominate (pink)
+  }
+  double noise = (norm > 0.0) ? sum / norm : 0.0; // ~[-1, 1]
+  return 1.0 + 0.12 * noise * envelope;
+}
+
+double KKApplyHoldEffect(double t, KKHoldEffect effect, double intensity,
+                         double frequency, int seed) {
+  double scale = intensity * 3.0; // 0 at min (no modulation), 3.0 at max
+  switch (effect) {
+  case KKHoldEffectBounce: {
+    double raw = KKHoldBounce(t, frequency, seed);
+    return 1.0 + (raw - 1.0) * scale;
+  }
+  case KKHoldEffectWiggle: {
+    double raw = KKHoldWiggle(t, frequency, seed);
+    return 1.0 + (raw - 1.0) * scale;
+  }
+  case KKHoldEffectHandheld: {
+    double raw = KKHoldHandheld(t, frequency, seed);
+    return 1.0 + (raw - 1.0) * scale;
+  }
+  case KKHoldEffectNone:
+  default:
+    return 1.0;
+  }
+}
+
+double KKApplyHoldEffectForComponent(double t, KKHoldEffect effect,
+                                     double intensity, double frequency,
+                                     int seed, int component) {
+  if (component == 0)
+    return KKApplyHoldEffect(t, effect, intensity, frequency, seed);
+  // Mix the component index into the seed with a large odd multiplier so
+  // each component gets an independent phase/frequency set. A non-zero
+  // seed is guaranteed so the per-component randomised path runs even
+  // when the caller passes seed == 0.
+  int mixed = seed ^ (int)((unsigned)component * 0x9E3779B9u);
+  if (mixed == 0)
+    mixed = component + 1;
+  return KKApplyHoldEffect(t, effect, intensity, frequency, mixed);
+}

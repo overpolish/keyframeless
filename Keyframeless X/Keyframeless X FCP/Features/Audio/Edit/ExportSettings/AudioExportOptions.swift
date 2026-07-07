@@ -8,114 +8,12 @@ import SwiftUI
 
 struct AudioExportOptionsView: View {
 	@ObservedObject var model: AudioModel
-	@State private var initialTextStyle: TextStyleSettings?
-	@State private var initialCaptionStyle: CaptionStyleSettings?
-
-	private var hasChanges: Bool {
-		if let initialTextStyle, model.textStyle != initialTextStyle { return true }
-		if let initialCaptionStyle, model.captionStyle != initialCaptionStyle { return true }
-		return false
-	}
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
-			ProjectSettingsHeader(model: model).padding(.bottom, KKPaddingMD)
-			GeometryReader { geo in
-				let halfWidth = (geo.size.width - KKSpacingXL) / 2
-				HStack(alignment: .bottom, spacing: KKSpacingXL) {
-					TextSettingsPanel(model: model)
-						.frame(width: halfWidth)
-					DimensionsPreview(model: model)
-						.frame(width: halfWidth)
-				}
-			}
-			.frame(height: 100)
-			HStack(spacing: KKSpacingLG) {
-				LabeledSlider(
-					label: "Max Words", value: $model.maxWordsPerLine, range: 1...10,
-					step: 1, valueWidth: 16
-				).padding(.trailing, KKSpacingMD)
-				HStack(spacing: KKSpacingLG) {
-					PillToggle(
-						selection: $model.captionLines,
-						options: [
-							(label: "One", value: CaptionLineCount.one),
-							(label: "Two", value: CaptionLineCount.two),
-						]
-					)
-					Text("Lines")
-						.font(.caption)
-						.foregroundStyle(.secondary)
-				}
-			}
-			HStack(alignment: .center, spacing: KKSpacingMD) {
-				CapsuleToggle(
-					isOn: $model.allCaps,
-					label: "ALL CAPS",
-					systemImage: "textformat"
-				)
-				CapsuleToggle(
-					isOn: $model.noGaps,
-					label: "No Gaps",
-					systemImage: "arrow.down.right.and.arrow.up.left"
-				)
-				Divider().frame(height: 12).padding(.horizontal, KKPaddingMD)
-				CapsuleToggle(
-					isOn: $model.censorProfanity,
-					label: "Censor",
-					systemImage: "exclamationmark.bubble.fill"
-				)
-				CapsuleToggle(
-					isOn: $model.stripPunctuation,
-					label: "Strip Punctuation",
-					systemImage: "xmark.triangle.circle.square.fill"
-				)
-				CapsuleToggle(
-					isOn: $model.keepQuestionMarks,
-					label: "Keep",
-					systemImage: "questionmark",
-					disabled: !model.stripPunctuation
-				)
-			}.frame(maxWidth: .infinity)
-			HStack(spacing: KKSpacingLG) {
-				Button {
-					TextStyleDefaults.shared.save(model.textStyle)
-					CaptionStyleDefaults.shared.save(model.captionStyle)
-					initialTextStyle = model.textStyle
-					initialCaptionStyle = model.captionStyle
-				} label: {
-					Label("Make Default", systemImage: "star")
-						.font(.system(size: 10))
-						.padding(.horizontal, KKPaddingLG)
-						.padding(.vertical, KKSpacingSM)
-						.contentShape(Capsule())
-				}
-				.buttonStyle(.plain)
-				.foregroundStyle(Color.kkAccent)
-				Spacer()
-				if hasChanges {
-					Button {
-						model.textStyle = initialTextStyle ?? TextStyleDefaults.shared.settings
-						model.captionStyle =
-							initialCaptionStyle ?? CaptionStyleDefaults.shared.settings
-					} label: {
-						Label("Reset", systemImage: "arrow.uturn.backward")
-							.font(.system(size: 10))
-							.padding(.horizontal, KKPaddingLG)
-							.padding(.vertical, KKSpacingSM)
-							.contentShape(Capsule())
-					}
-					.buttonStyle(.plain)
-					.foregroundStyle(.secondary)
-				}
-			}
-			Divider()
-			CaptionTemplatePicker(
-				model: model,
-				templates: model.captionTemplates,
-				onDropMoti: { model.addCustomTemplate(from: $0) },
-				onRemoveCustom: { model.removeCustomTemplate($0) }
-			)
+			ProjectSettingsHeader(model: model)
+			CaptionTypeSelector(model: model).padding(.bottom, KKPaddingMD)
+			CaptionStyleControls(model: model)
 		}
 		.onAppear {
 			if !model.exportSettingsInitialized {
@@ -125,8 +23,56 @@ struct AudioExportOptionsView: View {
 				model.exportFramerate = Framerate.from(frameDuration: format.frameDuration)
 				model.exportSettingsInitialized = true
 			}
-			initialTextStyle = TextStyleDefaults.shared.settings
-			initialCaptionStyle = CaptionStyleDefaults.shared.settings
+			// Host is ready by the time the view appears (init runs too early to read the
+			// FCP version), so load the built-in Subtitle params here.
+			model.loadSubtitleParamsIfSupported()
+		}
+	}
+}
+
+struct CaptionTypeSelector: View {
+	@ObservedObject var model: AudioModel
+
+	/// Title | (Subtitles) | Caption. Subtitles only appears on FCP 12.3+ where the built-in
+	/// Subtitle title exists.
+	private var typeOptions: [(label: String, value: CaptionImportType)] {
+		var options: [(label: String, value: CaptionImportType)] = [
+			(label: String(localized: "Title"), value: .title)
+		]
+		if FCPHost.supportsSubtitles {
+			options.append((label: String(localized: "Subtitles"), value: .subtitles))
+		}
+		options.append((label: String(localized: "Caption"), value: .caption))
+		return options
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: KKSpacingMD) {
+			HStack(spacing: KKSpacingSM) {
+				Text("Caption Type")
+					.font(.caption)
+					.foregroundStyle(.secondary)
+				Spacer()
+				PillToggle(selection: $model.captionImportType, options: typeOptions)
+			}
+			if model.captionImportType == .caption {
+				HStack(spacing: KKSpacingSM) {
+					Text("Caption Format")
+						.font(.caption)
+						.foregroundStyle(.secondary)
+					Spacer()
+					PillToggle(
+						selection: $model.captionFormat,
+						options: CaptionFormat.allCases.map { (label: $0.label, value: $0) }
+					)
+				}
+			}
+		}
+		.onAppear {
+			// A persisted .subtitles selection is invalid on a host without the feature.
+			if model.captionImportType == .subtitles && !FCPHost.supportsSubtitles {
+				model.captionImportType = .title
+			}
 		}
 	}
 }
@@ -144,6 +90,16 @@ struct AudioExportOptionsSidebar: View {
 		return rows.contains { !$0.isHeader && $0.isTranscribed && selected.contains($0.clipIndex) }
 	}
 
+	private var captionMode: Bool { model.captionImportType == .caption }
+
+	private var dragEnabled: Bool {
+		hasTranscribedSelection && !srtHasOverlaps
+	}
+
+	private var captionPasteBlocked: Bool {
+		captionMode && srtHasOverlaps
+	}
+
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
 			Text("Export Settings")
@@ -153,16 +109,19 @@ struct AudioExportOptionsSidebar: View {
 				AudioExportOptionsView(model: model)
 				Spacer()
 				HStack(spacing: KKSpacingLG) {
-					FCPDragZoneView(
-						nativeDataProvider: { model.buildNativePasteboardData(from: rows) },
-						onDragStateChanged: { model.isDraggingToFCP = $0 }
-					)
-					.allowsHitTesting(hasTranscribedSelection && !srtHasOverlaps)
-					.opacity(hasTranscribedSelection && !srtHasOverlaps ? 1 : 0.4)
+					if !captionMode {
+						FCPDragZoneView(
+							nativeDataProvider: { model.buildNativePasteboardData(from: rows) },
+							onDragStateChanged: { model.isDraggingToFCP = $0 }
+						)
+						.allowsHitTesting(dragEnabled)
+						.opacity(dragEnabled ? 1 : 0.4)
+					}
 					PrimaryButton(
-						label: "Paste to FCP",
+						label: String(localized: "Paste to FCP"),
 						systemImage: "doc.on.clipboard",
-						disabled: !hasTranscribedSelection || !hasAccessibility,
+						disabled: !hasTranscribedSelection || !hasAccessibility
+							|| captionPasteBlocked,
 						fontSize: 11
 					) {
 						if let data = model.buildNativePasteboardData(from: rows) {
@@ -186,8 +145,8 @@ struct AudioExportOptionsSidebar: View {
 					FCPXMLImportButton(
 						action: { model.insertTitle(rows: rows) }
 					)
-					.allowsHitTesting(hasTranscribedSelection)
-					.opacity(hasTranscribedSelection ? 1 : 0.4)
+					.allowsHitTesting(hasTranscribedSelection && !captionPasteBlocked)
+					.opacity(hasTranscribedSelection && !captionPasteBlocked ? 1 : 0.4)
 					SRTExportButton(
 						hasOverlaps: srtHasOverlaps,
 						action: { model.exportSRT(from: rows) }
@@ -212,13 +171,36 @@ struct AudioExportOptionsSidebar: View {
 						)
 						.offset(y: -KKSpacingXL - KKSpacingSM)
 					} else if hasTranscribedSelection {
-						HelperText(
-							srtHasOverlaps
-								? "Use paste for overlapping clips"
-								: "Drag for single clip, paste for multiple",
-							systemImage: "info.circle"
-						)
-						.offset(y: -KKSpacingXL - KKSpacingSM)
+						if model.captionImportType == .caption {
+							if captionPasteBlocked {
+								HelperText(
+									String(
+										localized:
+											"Captions cannot be pasted with overlapping clips"
+									),
+									systemImage: "exclamationmark.triangle.fill",
+									warning: true
+								)
+								.offset(y: -KKSpacingXL - KKSpacingSM)
+							} else {
+								HelperText(
+									String(
+										localized:
+											"When pasting you will need to enable the role in FCP's Timeline Index"
+									),
+									systemImage: "exclamationmark.triangle"
+								)
+								.offset(y: -KKSpacingXL - KKSpacingSM)
+							}
+						} else {
+							HelperText(
+								srtHasOverlaps
+									? String(localized: "Use paste for overlapping clips")
+									: String(localized: "Drag for single clip, paste for multiple"),
+								systemImage: "info.circle"
+							)
+							.offset(y: -KKSpacingXL - KKSpacingSM)
+						}
 					}
 				}
 			}

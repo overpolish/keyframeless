@@ -13,6 +13,7 @@ struct UntranscribedClipRow: View {
 	let isHighlighted: Bool
 	@Binding var hoveredClipIndex: Int?
 	var onTranscribe: () -> Void
+	var onImportSRT: (() -> Void)? = nil
 
 	private var clipColor: Color { .kkClipColor(isCompound: isCompound) }
 
@@ -25,6 +26,16 @@ struct UntranscribedClipRow: View {
 				.font(.system(size: 12, weight: .semibold))
 				.foregroundStyle(.tertiary)
 			Spacer()
+			if let onImportSRT {
+				Button {
+					onImportSRT()
+				} label: {
+					Text("Import SRT")
+						.font(.system(size: 11))
+				}
+				.buttonStyle(.plain)
+				.foregroundStyle(Color.kkWarning)
+			}
 			Button {
 				onTranscribe()
 			} label: {

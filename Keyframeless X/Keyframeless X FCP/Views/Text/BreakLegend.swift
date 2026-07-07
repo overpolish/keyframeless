@@ -9,8 +9,8 @@ import SwiftUI
 struct BreakLegend: View {
 	var body: some View {
 		HStack(spacing: KKSpacingXL) {
-			LegendItem(label: "Auto", color: Color(NSColor.warning()))
-			LegendItem(label: "Manual", color: Color(.systemBlue))
+			LegendItem(label: String(localized: "Auto"), color: Color(NSColor.warning()))
+			LegendItem(label: String(localized: "Manual"), color: Color(.systemBlue))
 		}
 	}
 }

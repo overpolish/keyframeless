@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+import Foundation
+import KeyframelessAI
 import KeyframelessKit
 import SwiftUI
 
@@ -11,17 +13,43 @@ struct AppShell: View {
 	@StateObject private var audioModelManager = AudioModelManager()
 	@StateObject private var processingCoordinator = AudioProcessingCoordinator()
 	@State private var selectedTab: AppTab = .audio
-	@State private var updateMessage: String?
-	@State private var updateURL: URL?
+	@State private var availableVersion: String?
+	@State private var currentVersion: String = ""
 	@State private var updateDismissed = Self.dismissed
 	private static var dismissed = false
 
+	#if DEBUG
+		// Flip to true + rebuild to force the banner in FCP. Env vars / scheme args
+		// do NOT reach an FCP-hosted extension, so this is a compile-time switch.
+		// (For pure UI work, use the #Preview in UpdateBanner.swift instead.)
+		private static let forceUpdateBanner = false
+	#endif
+
+	private static var aiKnowledgeRegistered = false
+
+	@MainActor
+	private static func registerAIKnowledgeOnce() {
+		guard !aiKnowledgeRegistered else { return }
+		aiKnowledgeRegistered = true
+		AIKnowledgeRegistry.shared.register(
+			BundleMarkdownKnowledgeProvider(
+				name: "Steno",
+				bundle: .main,
+				subdirectory: "AIKnowledge"
+			)
+		)
+	}
+
+	static let aiProductContext =
+		"Steno, the audio transcription and caption tool in the Keyframeless X workflow extension for Final Cut Pro. Always refer to yourself / the tool as \"Steno\", not \"Keyframeless X\". Detailed feature information is in the reference docs below."
+
 	var body: some View {
 		VStack(spacing: KKSpacingMD) {
-			if let message = updateMessage, !updateDismissed {
+			if let availableVersion, !updateDismissed {
 				UpdateBanner(
-					message: message,
-					url: updateURL,
+					version: availableVersion,
+					currentVersion: currentVersion,
+					url: KKUpdateChecker.shared().notesURL,
 					onDismiss: {
 						withAnimation { updateDismissed = true }
 						Self.dismissed = true
@@ -38,13 +66,13 @@ struct AppShell: View {
 						AudioSetupView(
 							model: audioModel,
 							audioModelManager: audioModelManager,
+							isProcessing: processingCoordinator.isProcessing,
 							onProcess: { replaceAll in
+								guard !processingCoordinator.isProcessing else { return }
 								if replaceAll {
 									audioModel.editSelectedClips = nil
 								}
-								withAnimation(.easeInOut(duration: 0.3)) {
-									processingCoordinator.isProcessing = true
-								}
+								processingCoordinator.isProcessing = true
 								processingCoordinator.process(
 									model: audioModel,
 									audioModelManager: audioModelManager,
@@ -63,23 +91,38 @@ struct AppShell: View {
 		.blur(
 			radius: audioModel.isDraggingToFCP || audioModel.paramsModalTemplate != nil
 				|| audioModel.publishModalTemplate != nil
-				|| audioModel.updateModalTemplate != nil ? 3 : 0
+				|| audioModel.updateModalTemplate != nil
+				|| audioModel.aiTransformBatch != nil
+				|| audioModel.missingMediaModal != nil ? 3 : 0
 		)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.isDraggingToFCP)
 		.allowsHitTesting(
 			audioModel.paramsModalTemplate == nil && audioModel.publishModalTemplate == nil
 				&& audioModel.updateModalTemplate == nil
+				&& audioModel.aiTransformBatch == nil
+				&& audioModel.missingMediaModal == nil
 				&& !processingCoordinator.isProcessing
 		)
 		.background(Color(nsColor: .windowBackground()))
 		.onAppear {
 			FontCache.warmup()
+			Self.registerAIKnowledgeOnce()
+			#if DEBUG
+				if Self.forceUpdateBanner {
+					// Reset dismissal so the forced banner returns on every reopen.
+					Self.dismissed = false
+					updateDismissed = false
+					currentVersion = KKUpdateChecker.shared().currentVersion
+					availableVersion = "9.9.9"
+					return
+				}
+			#endif
 			KKUpdateChecker.shared().check { available in
-				guard available else { return }
 				let checker = KKUpdateChecker.shared()
+				guard available, let version = checker.availableVersion else { return }
 				withAnimation {
-					updateMessage = Self.updateMessage(from: checker)
-					updateURL = checker.downloadURL
+					currentVersion = checker.currentVersion
+					availableVersion = version
 				}
 			}
 		}
@@ -125,6 +168,17 @@ struct AppShell: View {
 				)
 				.transition(.opacity)
 			}
+			if let batch = audioModel.aiTransformBatch {
+				AITransformPreviewModal(
+					batch: batch,
+					onApply: {
+						AITransformRunner.apply(batch)
+						audioModel.aiTransformBatch = nil
+					},
+					onDismiss: { audioModel.aiTransformBatch = nil }
+				)
+				.transition(.opacity)
+			}
 			if let (template, community) = audioModel.updateModalTemplate {
 				TemplateUpdateModal(
 					template: template,
@@ -136,15 +190,33 @@ struct AppShell: View {
 				)
 				.transition(.opacity)
 			}
+			if let info = audioModel.missingMediaModal {
+				MissingMediaModal(
+					info: info,
+					onImportWithoutImage: { audioModel.importStrippingMissingMedia(info) },
+					onDismiss: { audioModel.missingMediaModal = nil }
+				)
+				.transition(.opacity)
+			}
 		}
 		.animation(.easeInOut(duration: 0.2), value: audioModel.paramsModalTemplate != nil)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.publishModalTemplate != nil)
 		.animation(.easeInOut(duration: 0.2), value: audioModel.updateModalTemplate != nil)
+		.animation(.easeInOut(duration: 0.2), value: audioModel.aiTransformBatch != nil)
+		.animation(.easeInOut(duration: 0.2), value: audioModel.missingMediaModal != nil)
 	}
 
 	private var topBar: some View {
-		HStack {
+		HStack(spacing: KKSpacingLG) {
+			AIButton(
+				selectedCount: audioModel.editSelectedClips?.count
+					?? (audioModel.stage == .edit ? audioModel.audioClips.count : 0),
+				productContext: AppShell.aiProductContext,
+				onRun: { instruction in audioModel.runAITransform(instruction: instruction) }
+			)
 			PillTabBar(selected: $selectedTab)
+			WhatsNewButton(url: KKUpdateChecker.shared().notesURL)
+			FeedbackButton(url: KKUpdateChecker.shared().feedbackURL)
 			Spacer()
 			toolNav
 		}
@@ -157,17 +229,6 @@ struct AppShell: View {
 		}
 	}
 
-	private static func updateMessage(from checker: KKUpdateChecker) -> String {
-		var parts: [String] = []
-		if let version = checker.availableVersion {
-			parts.append("Keyframeless X \(version) available")
-		}
-		for key in checker.availableComponentKeys {
-			parts.append("\(key) now available")
-		}
-		return parts.joined(separator: " · ")
-	}
-
 	@ViewBuilder
 	private var toolNav: some View {
 		switch selectedTab {
@@ -176,10 +237,14 @@ struct AppShell: View {
 				selection: $audioModel.stage,
 				options: [
 					(
-						label: "Setup", systemImage: "sparkles.rectangle.stack.fill",
+						label: String(localized: "Setup"),
+						systemImage: "sparkles.rectangle.stack.fill",
 						value: .setup
 					),
-					(label: "Edit", systemImage: "bubble.and.pencil", value: .edit),
+					(
+						label: String(localized: "Edit"), systemImage: "bubble.and.pencil",
+						value: .edit
+					),
 				],
 				disabledValues: audioModel.audioClips.isEmpty ? [.edit] : []
 			)

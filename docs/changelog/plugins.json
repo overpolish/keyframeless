@@ -1,0 +1,32 @@
+{
+  "siteTitle": "Keyframeless",
+  "payhip": "https://store.overpolish.co/b/QG73g",
+  "releases": "https://github.com/overpolish/keyframeless/releases",
+  "plugins": {
+    "canvas": {
+      "name": "Canvas",
+      "kind": "FxPlug effect",
+      "payhip": "https://store.overpolish.co/b/aWpXq"
+    },
+    "magicmove": {
+      "name": "MagicMove",
+      "kind": "FxPlug effect",
+      "payhip": "https://store.overpolish.co/b/80FRU"
+    },
+    "glow": {
+      "name": "Glow",
+      "kind": "FxPlug effect",
+      "payhip": "https://store.overpolish.co/b/MfWRG"
+    },
+    "rounded": {
+      "name": "Rounded",
+      "kind": "FxPlug effect",
+      "payhip": "https://store.overpolish.co/b/H5SUW"
+    },
+    "keyframelessx": {
+      "name": "Keyframeless X",
+      "kind": "workflow extension",
+      "payhip": "https://store.overpolish.co/b/pDFf6"
+    }
+  }
+}

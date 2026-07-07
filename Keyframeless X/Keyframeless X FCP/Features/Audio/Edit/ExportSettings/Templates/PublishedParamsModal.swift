@@ -35,18 +35,23 @@ struct PublishedParamsModal: View {
 		_paramKinds = State(
 			initialValue: Dictionary(
 				uniqueKeysWithValues: params.filter { $0.defaultFont == nil }.map {
-					($0.id, initialKinds[$0.id] ?? .off)
+					($0.id, initialKinds[$0.id] ?? $0.kind)
 				}))
 		_fontModes = State(
 			initialValue: Dictionary(
 				uniqueKeysWithValues: params.filter { $0.defaultFont != nil }.map {
-					($0.id, TemplatePublishedParamsStore.FontMode.base)
+					// Restore the saved mode (.font = custom). The passed params are re-parsed
+					// on reopen with kind reset, so read the persisted kind via initialKinds -
+					// same source the non-font paramKinds use just below.
+					($0.id, (initialKinds[$0.id] ?? $0.kind) == .font ? .custom : .base)
 				}))
 		_perWordStartsAtZero = State(initialValue: initialPerWordStartsAtZero)
 	}
 
 	private var fontParams: [PublishedParameter] { params.filter { $0.defaultFont != nil } }
-	private var nonFontParams: [PublishedParameter] { params.filter { $0.defaultFont == nil } }
+	private var nonFontParams: [PublishedParameter] {
+		params.filter { $0.defaultFont == nil && !$0.isTextSize }
+	}
 	private var hasAnyContent: Bool { !params.isEmpty || hasPerWordAnimation }
 
 	var body: some View {
@@ -57,7 +62,9 @@ struct PublishedParamsModal: View {
 						.font(.title3).foregroundStyle(.primary)
 					Spacer()
 					if hasPerWordAnimation {
-						InfoBadge(label: "Per word", systemImage: "directcurrent", color: .green)
+						InfoBadge(
+							label: String(localized: "Per word"), systemImage: "directcurrent",
+							color: .green)
 					}
 				}
 				if !hasAnyContent {
@@ -86,8 +93,8 @@ struct PublishedParamsModal: View {
 					PillToggle(
 						selection: $perWordStartsAtZero,
 						options: [
-							(label: "Straight Away", value: true),
-							(label: "Late Start", value: false),
+							(label: String(localized: "Straight Away"), value: true),
+							(label: String(localized: "Late Start"), value: false),
 						])
 				}
 			}
@@ -106,7 +113,9 @@ struct PublishedParamsModal: View {
 								name: param.name,
 								kind: Binding(
 									get: { paramKinds[param.id] ?? .off },
-									set: { paramKinds[param.id] = $0 }))
+									set: { paramKinds[param.id] = $0 }),
+								hasOptions: param.options?.isEmpty == false,
+								hasPoint: param.defaultX != nil)
 						}
 					}
 					.onGeometryChange(for: CGFloat.self) {

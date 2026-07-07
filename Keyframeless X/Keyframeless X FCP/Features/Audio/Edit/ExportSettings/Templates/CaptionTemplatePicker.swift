@@ -10,7 +10,7 @@ import UniformTypeIdentifiers
 struct CaptionTemplatePicker: View {
 	@ObservedObject var model: AudioModel
 	let templates: [CaptionTemplate]
-	var onDropMoti: ((URL) -> Void)?
+	var hidePerWord: Bool = false
 	var onRemoveCustom: ((CaptionTemplate) -> Void)?
 
 	@ObservedObject private var favorites = TemplateFavorites.shared
@@ -34,10 +34,13 @@ struct CaptionTemplatePicker: View {
 
 	private func filtered(_ list: [CaptionTemplate]) -> [CaptionTemplate] {
 		var result = list
+		if hidePerWord {
+			result = result.filter { !$0.supportsPerWordAnimation }
+		}
 		if showFavoritesOnly {
 			result = result.filter { favorites.contains($0.id) }
 		}
-		if showPerWordOnly {
+		if showPerWordOnly && !hidePerWord {
 			result = result.filter { $0.supportsPerWordAnimation }
 		}
 		if !searchText.isEmpty {
@@ -60,7 +63,10 @@ struct CaptionTemplatePicker: View {
 	private var filteredCommunityTemplates: [CommunityTemplate] {
 		let installedNames = Set(keyframelessTemplates.map { $0.name })
 		var result = communityStore.templates.filter { !installedNames.contains($0.name) }
-		if showPerWordOnly {
+		if hidePerWord {
+			result = result.filter { !$0.perWord }
+		}
+		if showPerWordOnly && !hidePerWord {
 			result = result.filter { $0.perWord }
 		}
 		if !searchText.isEmpty {
@@ -89,37 +95,37 @@ struct CaptionTemplatePicker: View {
 		return settings.allParams.contains(where: \.isToggleable)
 	}
 
-	var body: some View {
-		VStack(alignment: .leading, spacing: KKSpacingLG) {
-			HStack(spacing: KKSpacingMD) {
-				Text("Style")
-					.font(.title3)
+	@ViewBuilder private var toolbar: some View {
+		HStack(spacing: KKSpacingMD) {
+			Text("Style")
+				.font(.title3)
+				.foregroundStyle(.secondary)
+			HStack(spacing: KKSpacingSM) {
+				Image(systemName: "magnifyingglass")
+					.font(.system(size: 10))
 					.foregroundStyle(.secondary)
-				HStack(spacing: KKSpacingSM) {
-					Image(systemName: "magnifyingglass")
-						.font(.system(size: 10))
-						.foregroundStyle(.secondary)
-					TemplateSearchField(text: $searchText)
-						.frame(height: 16)
-				}
-				.padding(.horizontal, KKPaddingLG)
-				.padding(.vertical, KKPaddingXS)
-				.kkPanel(cornerRadius: KKRadiusMD)
-				.frame(maxWidth: 120)
-				Button {
-					showFavoritesOnly.toggle()
-				} label: {
-					Image(systemName: showFavoritesOnly ? "star.fill" : "star")
-						.font(.system(size: 11))
-						.foregroundStyle(
-							showFavoritesOnly
-								? Color.kkWarning
-								: .secondary
-						)
-						.frame(maxHeight: .infinity)
-						.contentShape(Rectangle())
-				}
-				.buttonStyle(.plain)
+				TemplateSearchField(text: $searchText)
+					.frame(height: 16)
+			}
+			.padding(.horizontal, KKPaddingLG)
+			.padding(.vertical, KKPaddingXS)
+			.kkPanel(cornerRadius: KKRadiusMD)
+			.frame(maxWidth: 120)
+			Button {
+				showFavoritesOnly.toggle()
+			} label: {
+				Image(systemName: showFavoritesOnly ? "star.fill" : "star")
+					.font(.system(size: 11))
+					.foregroundStyle(
+						showFavoritesOnly
+							? Color.kkWarning
+							: .secondary
+					)
+					.frame(maxHeight: .infinity)
+					.contentShape(Rectangle())
+			}
+			.buttonStyle(.plain)
+			if !hidePerWord {
 				Button {
 					showPerWordOnly.toggle()
 				} label: {
@@ -134,122 +140,154 @@ struct CaptionTemplatePicker: View {
 						.contentShape(Rectangle())
 				}
 				.buttonStyle(.plain)
-				Button {
-					showCommunity.toggle()
-				} label: {
-					Image(systemName: "arrow.down.circle.fill")
-						.font(.system(size: 11))
-						.foregroundStyle(
-							showCommunity
-								? Color.kkAccent
-								: .secondary
-						)
-						.frame(maxHeight: .infinity)
-						.contentShape(Rectangle())
+			}
+			Button {
+				showCommunity.toggle()
+			} label: {
+				Image(systemName: "arrow.down.circle.fill")
+					.font(.system(size: 11))
+					.foregroundStyle(
+						showCommunity
+							? Color.kkAccent
+							: .secondary
+					)
+					.frame(maxHeight: .infinity)
+					.contentShape(Rectangle())
+			}
+			.buttonStyle(.plain)
+			Button {
+				communityStore.fetch()
+				model.refreshTemplates()
+			} label: {
+				Image(systemName: "arrow.clockwise")
+					.font(.system(size: 11))
+					.foregroundStyle(.secondary)
+					.frame(maxHeight: .infinity)
+					.contentShape(Rectangle())
+			}
+			.buttonStyle(.plain)
+			Spacer()
+			if hidePerWord {
+				HelperText(
+					String(localized: "SRT captions don't support per-word templates"),
+					systemImage: "info.circle"
+				)
+			}
+			if let downloadError {
+				HStack(spacing: 4) {
+					Image(systemName: "exclamationmark.triangle.fill")
+					Text(downloadError)
 				}
-				.buttonStyle(.plain)
+				.font(.system(size: 10, weight: .medium))
+				.foregroundStyle(Color.kkError)
+			}
+			if communityStore.needsFCPRestart {
+				HStack(spacing: 4) {
+					Image(systemName: "arrow.trianglehead.2.counterclockwise")
+					Text("Restart FCP")
+				}
+				.font(.system(size: 10, weight: .medium))
+				.foregroundStyle(Color.kkAccent)
+			}
+			if paramsStore.hasSessionValues(for: model.selectedTemplate.id) {
 				Button {
-					communityStore.fetch()
-					model.refreshTemplates()
+					paramsStore.resetValues(for: model.selectedTemplate.id)
 				} label: {
-					Image(systemName: "arrow.clockwise")
-						.font(.system(size: 11))
+					Label("Reset", systemImage: "arrow.uturn.backward")
+						.font(.system(size: 10))
 						.foregroundStyle(.secondary)
-						.frame(maxHeight: .infinity)
-						.contentShape(Rectangle())
+						.contentShape(Capsule())
 				}
 				.buttonStyle(.plain)
-				Spacer()
-				if let downloadError {
-					HStack(spacing: 4) {
-						Image(systemName: "exclamationmark.triangle.fill")
-						Text(downloadError)
+			}
+		}
+		.fixedSize(horizontal: false, vertical: true)
+	}
+
+	@ViewBuilder private var templateList: some View {
+		ScrollShadowView(cornerRadius: KKRadiusSM, scrollToID: model.selectedTemplate.id) {
+			VStack(alignment: .leading, spacing: KKSpacingLG) {
+				TemplateSection(title: "Keyframeless") {
+					ForEach(mergedKeyframelessItems) { item in
+						switch item {
+						case .installed(let template):
+							let community = communityStore.templates.first {
+								$0.name == template.name
+							}
+							CaptionTemplateCard(
+								template: template,
+								isSelected: template.id == model.selectedTemplate.id,
+								isFavorite: favorites.contains(template.id),
+								onSelect: { model.selectedTemplate = template },
+								onToggleFavorite: { favorites.toggle(template.id) },
+								onUpdate: community.map { c in
+									{ showUpdateModal(for: c) }
+								}
+							)
+							.id(template.id)
+						case .community(let community):
+							CommunityTemplateCard(
+								template: community,
+								isInstalled: templates.contains {
+									$0.name == community.name
+								},
+								onDownload: { downloadCommunityTemplate(community) },
+								onUpdate: { showUpdateModal(for: community) }
+							)
+						}
 					}
-					.font(.system(size: 10, weight: .medium))
-					.foregroundStyle(Color.kkError)
+					if communityStore.isLoading {
+						HStack {
+							Spacer()
+							ProgressView()
+								.controlSize(.small)
+							Text("Loading community templates...")
+								.font(.system(size: 10))
+								.foregroundStyle(.secondary)
+							Spacer()
+						}
+						.padding(.vertical, KKPaddingLG)
+					}
 				}
-				if communityStore.needsFCPRestart {
-					HStack(spacing: 4) {
-						Image(systemName: "arrow.trianglehead.2.counterclockwise")
-						Text("Restart FCP")
+				TemplateSection(title: String(localized: "Custom")) {
+					ForEach(customTemplates) { template in
+						CaptionTemplateCard(
+							template: template,
+							isSelected: template.id == model.selectedTemplate.id,
+							isFavorite: favorites.contains(template.id),
+							onSelect: { model.selectedTemplate = template },
+							onToggleFavorite: { favorites.toggle(template.id) },
+							onRemove: { onRemoveCustom?(template) },
+							onSettings: { showParamsModal(for: template) },
+							onPublish: { model.publishModalTemplate = template }
+						)
+						.id(template.id)
 					}
-					.font(.system(size: 10, weight: .medium))
-					.foregroundStyle(Color.kkAccent)
+					MotiDropTarget(onPickFile: pickMotiFile)
 				}
 			}
-			.fixedSize(horizontal: false, vertical: true)
-			HStack(spacing: KKSpacingLG) {
-				ScrollShadowView(cornerRadius: KKRadiusSM, scrollToID: model.selectedTemplate.id) {
-					VStack(alignment: .leading, spacing: KKSpacingLG) {
-						TemplateSection(title: "Keyframeless") {
-							ForEach(mergedKeyframelessItems) { item in
-								switch item {
-								case .installed(let template):
-									let community = communityStore.templates.first {
-										$0.name == template.name
-									}
-									CaptionTemplateCard(
-										template: template,
-										isSelected: template.id == model.selectedTemplate.id,
-										isFavorite: favorites.contains(template.id),
-										onSelect: { model.selectedTemplate = template },
-										onToggleFavorite: { favorites.toggle(template.id) },
-										onUpdate: community.map { c in
-											{ showUpdateModal(for: c) }
-										}
-									)
-									.id(template.id)
-								case .community(let community):
-									CommunityTemplateCard(
-										template: community,
-										isInstalled: templates.contains {
-											$0.name == community.name
-										},
-										onDownload: { downloadCommunityTemplate(community) },
-										onUpdate: { showUpdateModal(for: community) }
-									)
-								}
-							}
-							if communityStore.isLoading {
-								HStack {
-									Spacer()
-									ProgressView()
-										.controlSize(.small)
-									Text("Loading community templates...")
-										.font(.system(size: 10))
-										.foregroundStyle(.secondary)
-									Spacer()
-								}
-								.padding(.vertical, KKPaddingLG)
-							}
-						}
-						TemplateSection(title: "Custom") {
-							ForEach(customTemplates) { template in
-								CaptionTemplateCard(
-									template: template,
-									isSelected: template.id == model.selectedTemplate.id,
-									isFavorite: favorites.contains(template.id),
-									onSelect: { model.selectedTemplate = template },
-									onToggleFavorite: { favorites.toggle(template.id) },
-									onRemove: { onRemoveCustom?(template) },
-									onSettings: { showParamsModal(for: template) },
-									onPublish: { model.publishModalTemplate = template }
-								)
-								.id(template.id)
-							}
-							MotiDropTarget(onPickFile: pickMotiFile)
-						}
-					}
-					.padding(.vertical, KKPaddingXS)
-				}
+			.padding(.vertical, KKPaddingXS)
+		}
+	}
+
+	var body: some View {
+		VStack(alignment: .leading, spacing: KKSpacingLG) {
+			toolbar
+			HStack(alignment: .top, spacing: KKSpacingLG) {
+				templateList
 				TemplateParamsPanel(
 					template: model.selectedTemplate,
 					store: paramsStore
 				)
-				.frame(width: 200)
+				.frame(width: 225)
+				.frame(maxHeight: .infinity)
 			}
 		}
-		.onAppear { communityStore.fetch() }
+		.onAppear {
+			communityStore.fetch()
+			fallbackFromPerWordIfNeeded()
+		}
+		.onChange(of: hidePerWord) { fallbackFromPerWordIfNeeded() }
 		.onChange(of: communityStore.templates.map(\.id)) {
 			reconcileCommunityParams()
 		}
@@ -299,18 +337,18 @@ struct CaptionTemplatePicker: View {
 	}
 
 	private func addMotiAndDetectParams(_ url: URL) {
-		let result = PublishedParameter.parseAll(from: url)
-		onDropMoti?(url)
-		let templateID = "custom:\(url.path)"
-		if let added = model.captionTemplates.first(where: { $0.id == templateID }) {
-			// Store text ozml even if no published params
-			if let textOzml = result.textOzml {
-				paramsStore.setTextOzml(textOzml, for: templateID)
-			}
-			guard !result.customParams.isEmpty || result.hasPerWordAnimation else { return }
-			model.paramsModalParams = result.customParams
-			model.paramsModalHasPerWord = result.hasPerWordAnimation
-			model.paramsModalTemplate = added
+		switch CustomTemplateInstaller.install(from: url) {
+		case .installed(let dest):
+			downloadError = nil
+			model.finishImport(installedURL: dest)
+		case .missingMedia(let missing):
+			downloadError = nil
+			model.missingMediaModal = MissingMediaInfo(
+				sourceURL: url,
+				templateName: url.deletingPathExtension().lastPathComponent,
+				missing: missing)
+		case .failed(let message):
+			downloadError = message
 		}
 	}
 
@@ -343,6 +381,13 @@ struct CaptionTemplatePicker: View {
 				wordsInParamName: nil, wordsInKeyPath: nil,
 				isBuiltIn: false, isCustom: false)
 		model.updateModalTemplate = (template, community)
+	}
+
+	private func fallbackFromPerWordIfNeeded() {
+		guard hidePerWord, model.selectedTemplate.supportsPerWordAnimation else { return }
+		if let fallback = templates.first(where: { !$0.supportsPerWordAnimation }) {
+			model.selectedTemplate = fallback
+		}
 	}
 
 	private func reconcileCommunityParams() {
