@@ -5,16 +5,17 @@
 
 // The mini viewer's encode-effect render pass, split from
 // CanvasMiniViewerRenderer.m: composites the source frame plus the image,
-// vector-stroke, and filled layers into the preview dest - the inspector-process
-// twin of the main render (Plugin+Render.m).
+// vector-stroke, and filled layers into the preview dest - the
+// inspector-process twin of the main render (Plugin+Render.m).
 
 #import "CanvasMiniViewerRenderer_Internal.h"
 
 #import "CanvasFillProperties.h" // CanvasFillEnabledAtFraction / StyleAtFraction
-#import "CanvasFillRender.h"      // TEMP solid fill for closed paths
+#import "CanvasFillRender.h"     // TEMP solid fill for closed paths
 #import "CanvasLayerRender.h"
 #import "CanvasLayerTimeline.h"
-#import "CanvasLayerTree.h" // CanvasLayerPathWithAncestors
+#import "CanvasLayerTransform.h" // CanvasStrokeEnabledAtFraction (lane gate)
+#import "CanvasLayerTree.h"      // CanvasLayerPathWithAncestors
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <Metal/Metal.h>
 
@@ -118,14 +119,14 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
 
   [enc endEncoding]; // source base only; the layers overlay per layer below
 
-  // 2) The layer stack PER LAYER, back-to-front (array[0] = topmost, drawn LAST),
-  // each layer's image -> fill -> stroke together so z-order is correct ACROSS
-  // layers (a higher layer covers a lower one) - the inspector twin of the main
-  // render's runLayersOrdered. The mini dest is hazard-TRACKED, so sequential
-  // render passes in this ONE command buffer serialize correctly; no separate
-  // buffers / waits are needed (unlike the main render's untracked FCP dest).
-  // editFraction is the keypose / boundary time when a popover edits one layer
-  // (selectedLayerID + timeline override it) and 0 otherwise.
+  // 2) The layer stack PER LAYER, back-to-front (array[0] = topmost, drawn
+  // LAST), each layer's image -> fill -> stroke together so z-order is correct
+  // ACROSS layers (a higher layer covers a lower one) - the inspector twin of
+  // the main render's runLayersOrdered. The mini dest is hazard-TRACKED, so
+  // sequential render passes in this ONE command buffer serialize correctly; no
+  // separate buffers / waits are needed (unlike the main render's untracked FCP
+  // dest). editFraction is the keypose / boundary time when a popover edits one
+  // layer (selectedLayerID + timeline override it) and 0 otherwise.
   CanvasFillPipelines fillPipes = {0};
   CanvasFillBuildPipelines(cb.device, cb.device.registryID, fmt, &fillPipes);
   BOOL miniCanFill =
@@ -159,8 +160,8 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
         [e setRenderPipelineState:ps];
         return e;
       };
-  // Order back-to-front (same as the main render's per-layer composite): real 3D
-  // depth for separated layers, deck-facing flip for near-coincident ones.
+  // Order back-to-front (same as the main render's per-layer composite): real
+  // 3D depth for separated layers, deck-facing flip for near-coincident ones.
   NSInteger miniTotal = (NSInteger)mlayers.count;
   NSInteger *miniIdx = malloc(sizeof(NSInteger) * (size_t)MAX(miniTotal, 1));
   CanvasLayerDrawKey *miniKeys =
@@ -171,14 +172,14 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     if (lp.isGroup || lp.hidden)
       continue;
     miniIdx[miniN] = i;
-    miniKeys[miniN] = CanvasLayerComposedDrawKey(
-        mlayers, i, self.editFraction, w, h, 0.0f, 0.0f, self.selectedLayerID,
-        self.timeline);
+    miniKeys[miniN] =
+        CanvasLayerComposedDrawKey(mlayers, i, self.editFraction, w, h, 0.0f,
+                                   0.0f, self.selectedLayerID, self.timeline);
     miniN++;
   }
   NSInteger *miniOrdBuf = malloc(sizeof(NSInteger) * (size_t)MAX(miniN, 1));
-  CanvasOrderDrawablesBackToFront(miniIdx, miniKeys, miniN,
-                                  0.02f * fmaxf(w, h), miniOrdBuf);
+  CanvasOrderDrawablesBackToFront(miniIdx, miniKeys, miniN, 0.02f * fmaxf(w, h),
+                                  miniOrdBuf);
   NSMutableArray<NSNumber *> *miniOrder =
       [NSMutableArray arrayWithCapacity:(NSUInteger)miniN];
   for (NSInteger k = 0; k < miniN; k++)
@@ -194,10 +195,10 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     NSArray<KKBezierPath *> *one = CanvasLayerPathWithAncestors(p, mlayers);
     if (p.isImage && _imagePipeline) {
       id<MTLRenderCommandEncoder> ienc = miniLoadEnc(_imagePipeline);
-      CanvasEncodeImageLayers(one, ienc, cb.device, self.imageTextureCache, w, h,
-                              0.0f, 0.0f, self.editFraction, self.selectedLayerID,
-                              self.timeline, _imagePipeline, _imageTintPipeline,
-                              _imageGradTintPipeline);
+      CanvasEncodeImageLayers(
+          one, ienc, cb.device, self.imageTextureCache, w, h, 0.0f, 0.0f,
+          self.editFraction, self.selectedLayerID, self.timeline,
+          _imagePipeline, _imageTintPipeline, _imageGradTintPipeline);
       [ienc endEncoding];
     }
     // A vector shape fills; an image contributes a fill only via a (non-Solid)
@@ -205,21 +206,23 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
     if (miniCanFill &&
         CanvasFillEnabledAtFraction(p, ef, self.selectedLayerID,
                                     self.timeline) &&
-        (!p.isImage || CanvasFillStyleAtFraction(p, ef, self.selectedLayerID,
-                                                 self.timeline)
-                               .style != 0)) {
+        (!p.isImage ||
+         CanvasFillStyleAtFraction(p, ef, self.selectedLayerID, self.timeline)
+                 .style != 0)) {
       CanvasEncodeFilledLayers(one, cb.device, self.imageTextureCache, cb,
                                dstSRGB, &fillPipes, w, h, w, h, 0.0f, 0.0f,
                                self.editFraction, self.selectedLayerID,
                                self.timeline);
     }
-    if (!p.isImage && p.strokeEnabled && _strokePipeline) {
+    if (!p.isImage &&
+        CanvasStrokeEnabledAtFraction(p, ef, self.selectedLayerID,
+                                      self.timeline) &&
+        _strokePipeline) {
       id<MTLRenderCommandEncoder> senc = miniLoadEnc(_strokePipeline);
-      CanvasEncodeVectorLayers(one, senc, cb.device, w, h, 0.0f, 0.0f,
-                               self.editFraction, self.selectedLayerID,
-                               self.timeline, 1.0f, miniElapsed, -1.0,
-                               _strokePipeline, _strokeGradientPipeline,
-                               _strokeDashPipeline);
+      CanvasEncodeVectorLayers(
+          one, senc, cb.device, w, h, 0.0f, 0.0f, self.editFraction,
+          self.selectedLayerID, self.timeline, 1.0f, miniElapsed, -1.0,
+          _strokePipeline, _strokeGradientPipeline, _strokeDashPipeline);
       [senc endEncoding];
     }
   }

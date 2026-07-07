@@ -29,6 +29,12 @@ typedef struct {
   double warmupSec;
   /// Safety clamp on the output magnitude (atan already bounds it).
   double maxLeanDeg;
+  /// How long (seconds) the lean keeps decaying by its own inertia AFTER the
+  /// active run of rotate-with-motion gaps ends, spilling into the following
+  /// (toggle-off) gap so the tilt settles to rest instead of snapping to 0 at
+  /// the gap boundary. 0 restores the old hard cut-off. A few `tauAngle` is
+  /// enough for the tilt to visually reach rest.
+  double settleSec;
 } KKMotionLeanConfig;
 
 /// The tuned defaults.

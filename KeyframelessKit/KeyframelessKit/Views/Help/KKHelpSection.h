@@ -63,6 +63,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Records the guide as fully completed. Call only on genuine completion
 /// (reached the final step), not on skip/dismiss.
 - (void)markCompleted;
+
+/// Marks the guide with `identifier` completed WITHOUT a live KKHelpGuide
+/// instance - persists the same flag `-markCompleted` sets. Use when a guide
+/// runs outside the help window (e.g. the first-apply intro autostart, which
+/// has no help-row object to mark). `+isIdentifierCompleted:` reads it back.
++ (void)markIdentifierCompleted:(NSString *)identifier;
++ (BOOL)isIdentifierCompleted:(NSString *)identifier;
 /// Block evaluated each time the row is drawn or refreshed. Return NO to show
 /// the row disabled (dimmed icon, no action). Nil means always enabled.
 @property(nonatomic, copy, nullable) BOOL (^enabledProvider)(void);

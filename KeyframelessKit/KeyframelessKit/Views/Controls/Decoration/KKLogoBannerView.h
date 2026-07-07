@@ -35,6 +35,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// correct effect's header.
 - (NSRect)effectHeaderScreenRect;
 
+/// Screen rect of the leading Help (`?`) button, or NSZeroRect when the button
+/// isn't present (no `onHelpTap` set) or the banner isn't in a window. Used to
+/// spotlight the Help button from a guide's closing step.
+- (NSRect)helpButtonScreenRect;
+
 - (instancetype)initWithFrame:(NSRect)frameRect NS_UNAVAILABLE;
 - (nullable instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
 

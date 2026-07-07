@@ -8,6 +8,10 @@
 #import "GlowInspectorView+Guides.h"
 #import "GlowInspectorView_Private.h"
 #import "GlowMiniViewerRenderer.h"
+#import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // intro autostart
+
+// NSUserDefaults flag: the first-apply intro guide has been shown once.
+static NSString *const kGlowIntroSeenKey = @"GlowIntroSeen";
 
 @implementation GlowInspectorView
 
@@ -47,6 +51,15 @@
 - (void)applyTimeline:(KKTimeline *)timeline {
   [super applyTimeline:timeline];
   _miniViewerRenderer.timeline = timeline;
+}
+
+// First-apply intro: springs the Basic walkthrough once the effect is selected
+// and its on-screen control is drawn (the same gate the other plugins use), so
+// a first-time user is shown the basics rather than having to find the guides.
+- (void)viewDidMoveToWindow {
+  [super viewDidMoveToWindow];
+  if (!self.isDetachedCopy)
+    [self autostartIntroGuideOnceWithSeenKey:kGlowIntroSeenKey];
 }
 
 @end

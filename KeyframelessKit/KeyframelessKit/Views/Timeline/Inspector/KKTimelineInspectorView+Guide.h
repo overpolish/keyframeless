@@ -137,6 +137,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable)
     KKTimingGuideConfig * (^timingGuideConfigProvider)(void);
 
+/// Screen rect of the plugin's Help (`?`) button, set by the plugin (which owns
+/// the logo banner) so the intro guide's closing step can spotlight it. Wired
+/// into `KKTimingGuideConfig.helpButtonScreenRect` by -makeTimingGuideConfig.
+/// nil = no closing Help step.
+@property(nonatomic, copy, nullable)
+    NSRect (^guideHelpButtonScreenRectProvider)(void);
+
 /// Runs the shared Basic timing walkthrough using `timingGuideConfigProvider`.
 /// Forces the Basic tab + single-frame mini viewer + play-state ownership for
 /// the run and restores them on completion/skip. No-op if no provider is set.
@@ -175,11 +182,15 @@ NS_ASSUME_NONNULL_BEGIN
                          oscKeepLabels:
                              (nullable NSArray<NSString *> *)oscKeepLabels;
 
-/// First-appearance autostart of the Basic ("Introduction") guide: on the next
-/// runloop turn, if the host view is in a window, not a detached copy, no lanes
-/// exist yet, and `seenKey` isn't set, marks `seenKey` seen and runs the Basic
-/// guide via `timingGuideConfigProvider`. No-op otherwise. Call from
-/// -viewDidMoveToWindow.
+/// First-appearance autostart of the Basic ("Introduction") guide. Arms a poll
+/// that waits for the SAME gate as the help window's "guides disabled" warning
+/// - the effect selected/highlighted and its on-screen controls drawn (the
+/// config's OSC bridge `hasCanvasReference`; no bridge = enabled immediately) -
+/// then, if `seenKey` isn't set, not a detached copy, no lanes exist yet, and no
+/// guide is already running, marks `seenKey` seen and runs the Basic guide via
+/// `timingGuideConfigProvider`, firing exactly once. Idempotent and safe to call
+/// on every -viewDidMoveToWindow; tears the poll down when the view leaves its
+/// window or once the intro has run (including a manual launch from Help).
 - (void)autostartIntroGuideOnceWithSeenKey:(NSString *)seenKey;
 
 @end

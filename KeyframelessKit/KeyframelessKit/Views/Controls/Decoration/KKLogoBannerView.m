@@ -43,6 +43,15 @@ static const BOOL kKKForceUpdateBanner = NO;
                     KKInspectorRowHeight);
 }
 
+- (NSRect)helpButtonScreenRect {
+  if (!_helpButton || !_helpButton.window)
+    return NSZeroRect;
+  NSRect scr = [_helpButton.window
+      convertRectToScreen:[_helpButton convertRect:_helpButton.bounds
+                                            toView:nil]];
+  return NSIsEmptyRect(scr) ? NSZeroRect : scr;
+}
+
 - (instancetype)init {
   self = [super initWithFrame:NSMakeRect(0, 0, 0, KKInspectorRowHeight * 2)];
   if (self) {

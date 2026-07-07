@@ -167,6 +167,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// (unlike a process-global lookup).
 - (NSRect)effectHeaderScreenRect;
 
+/// Best-effort screen rect of THIS effect instance's Help (`?`) button in its
+/// logo banner. NSZeroRect if the banner isn't placed or has no Help button.
+/// Use to anchor a guide's closing step on the Help button.
+- (NSRect)helpButtonScreenRect;
+
 /// Adds a full-width informational text display occupying one parameter ID.
 /// The parameter is not animatable and stores no meaningful value - it is
 /// purely a static label in the inspector.

@@ -8,6 +8,7 @@
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineInspectorView+Guide.h"
 #import "KKTimelineInspectorView_Private.h"
+#import <KeyframelessKit/KKHelpSection.h> // KKHelpGuide completion marking
 #import <KeyframelessKit/KKJoyrideGuideHost.h>
 #import <KeyframelessKit/KKMiniViewerGuide.h>
 #import <KeyframelessKit/KKOSCGuide.h>
@@ -239,6 +240,15 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
     if (s.onBoundaryPreviewNeedsRender)
       s.onBoundaryPreviewNeedsRender();
   };
+  // Only expose a help-button rect (and so the intro guide's closing Help step)
+  // when the plugin has wired a provider.
+  if (_guideHelpButtonScreenRectProvider) {
+    cfg.helpButtonScreenRect = ^NSRect {
+      __strong typeof(weak) s = weak;
+      NSRect (^p)(void) = s.guideHelpButtonScreenRectProvider;
+      return p ? p() : NSZeroRect;
+    };
+  }
   return cfg;
 }
 
@@ -252,10 +262,24 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   _timingGuideConfigProvider = [block copy];
 }
 
+@dynamic guideHelpButtonScreenRectProvider;
+
+- (NSRect (^)(void))guideHelpButtonScreenRectProvider {
+  return _guideHelpButtonScreenRectProvider;
+}
+
+- (void)setGuideHelpButtonScreenRectProvider:(NSRect (^)(void))block {
+  _guideHelpButtonScreenRectProvider = [block copy];
+}
+
 - (void)restartBasicTimingGuide {
   KKTimingGuideConfig * (^provider)(void) = _timingGuideConfigProvider;
   if (!provider)
     return;
+  // Any launch of the Introduction guide - autostart OR a manual click of the
+  // Help window's "Introduction" row - counts as "shown", so the first-apply
+  // autostart can never spring it again afterwards.
+  [self _markIntroSeenAndDisarmAutostart];
   [self runBasicTimingGuideWithConfig:provider()];
 }
 
@@ -542,20 +566,131 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
       }];
 }
 
+// Interval of the autostart gate poll. The gate (the effect selected + its OSC
+// drawn) has no "became eligible" event we observe here, so we poll - the same
+// cadence the help window uses for its guide-enable refresh. Sub-second so the
+// intro springs promptly once the viewer shows the control.
+static const NSTimeInterval kKKIntroAutostartPollInterval = 0.5;
+
 - (void)autostartIntroGuideOnceWithSeenKey:(NSString *)seenKey {
-  __weak typeof(self) weak = self;
-  [[self timingGuideHost] autostartOnceWithSeenKey:seenKey
-      precondition:^BOOL {
-        __strong typeof(weak) s = weak;
-        return s && !s.isDetachedCopy &&
-               s.basicLanesView.currentTimeline.lanes.count == 0;
-      }
-      start:^{
-        __strong typeof(weak) s = weak;
-        [NSUserDefaults.standardUserDefaults setBool:YES forKey:seenKey];
-        [NSUserDefaults.standardUserDefaults synchronize];
-        [s restartBasicTimingGuide];
-      }];
+  if (seenKey.length == 0)
+    return;
+  // Detached copies (the pop-out timeline window) never autostart - only the
+  // real inspector does.
+  if (_isDetachedCopy)
+    return;
+  // Left the window (or never in one): drop any armed poll and wait to be
+  // re-armed on the next -viewDidMoveToWindow.
+  if (!self.window) {
+    [self _teardownIntroAutostart];
+    return;
+  }
+  // Already shown (this launch or a previous one) - nothing to do.
+  if ([NSUserDefaults.standardUserDefaults boolForKey:seenKey])
+    return;
+  _introSeenKey = [seenKey copy];
+  if (_introAutostartTimer)
+    return; // already polling
+  // Poll for the gate rather than firing here: this runs mid -viewDidMoveToWindow
+  // (the OSC hasn't drawn yet on a fresh apply anyway), so deferring to the timer
+  // keeps the guide from starting synchronously during view attachment.
+  _introAutostartTimer = [NSTimer
+      scheduledTimerWithTimeInterval:kKKIntroAutostartPollInterval
+                              target:self
+                            selector:@selector(_introAutostartPollTick:)
+                            userInfo:nil
+                             repeats:YES];
+}
+
+- (void)_introAutostartPollTick:(NSTimer *)timer {
+  [self _tryAutostartIntro];
+}
+
+// Returns YES once the poll should stop (fired, or no longer applicable); NO to
+// keep waiting for the gate.
+- (BOOL)_tryAutostartIntro {
+  NSString *seenKey = _introSeenKey;
+  if (seenKey.length == 0) {
+    [self _teardownIntroAutostart];
+    return YES;
+  }
+  // Shown via some other path (e.g. the Help window's Introduction row) - stop.
+  if ([NSUserDefaults.standardUserDefaults boolForKey:seenKey]) {
+    [self _teardownIntroAutostart];
+    return YES;
+  }
+  // Not on screen yet, or became detached: keep the arm alive but don't fire.
+  if (!self.window || _isDetachedCopy)
+    return NO;
+  // The user has already started animating - don't spring the intro on top of
+  // their work. A freshly-applied effect still lists every property as a lane,
+  // but all in the CONSTANT state (lane.enabled == NO); only an ENABLED
+  // (animated) lane means the user has begun, so gate on that, not lane count.
+  NSArray<KKLane *> *lanes = self.basicLanesView.currentTimeline.lanes;
+  NSUInteger animatedCount = 0;
+  for (KKLane *lane in lanes)
+    if (lane.enabled)
+      animatedCount++;
+  if (animatedCount != 0) {
+    [self _teardownIntroAutostart];
+    return YES;
+  }
+  // Don't interrupt a guide the user launched themselves; wait for it to end.
+  if ([self timingGuideHost].isActive)
+    return NO;
+  // The gate: the SAME condition as the help window's "guides disabled" warning
+  // - the effect is selected/highlighted and its on-screen controls have a live
+  // draw tick. Derived from the config's OSC bridge; a plugin with no bridge is
+  // treated as always eligible.
+  if (![self _introAutostartGateSatisfied])
+    return NO;
+  // Fire once. -restartBasicTimingGuide marks `seenKey` seen and tears the poll
+  // down, so this can never run twice.
+  // Mark the "Introduction" help guide completed when this run finishes. The
+  // help-window row wires this in its onStart; the autostart bypasses that, so
+  // set it here (same completion flag) or the row would never show "Completed"
+  // after a first-apply run.
+  self.onGuideCompleted = ^{
+    [KKHelpGuide markIdentifierCompleted:KKTimingIntroGuideIdentifier];
+  };
+  [self restartBasicTimingGuide];
+  return YES;
+}
+
+- (BOOL)_introAutostartGateSatisfied {
+  KKOSCGuideBridge * (^bridgeProvider)(void) = _introAutostartBridge;
+  if (!bridgeProvider) {
+    KKTimingGuideConfig * (^provider)(void) = _timingGuideConfigProvider;
+    if (!provider)
+      return NO; // no config yet - can't run the guide anyway; keep waiting
+    KKTimingGuideConfig *cfg = provider();
+    if (!cfg)
+      return NO;
+    // Cache the bridge accessor so we don't rebuild a config every tick. A nil
+    // accessor (plugin without a viewer control) stays nil and is re-resolved
+    // next tick - harmless, since a nil bridge means "eligible now" and fires
+    // this same tick.
+    bridgeProvider = [cfg.oscGuideBridge copy];
+    _introAutostartBridge = bridgeProvider;
+  }
+  KKOSCGuideBridge *bridge = bridgeProvider ? bridgeProvider() : nil;
+  return bridge ? [bridge hasCanvasReference] : YES;
+}
+
+- (void)_markIntroSeenAndDisarmAutostart {
+  if (_introSeenKey.length &&
+      ![NSUserDefaults.standardUserDefaults boolForKey:_introSeenKey]) {
+    [NSUserDefaults.standardUserDefaults setBool:YES forKey:_introSeenKey];
+    [NSUserDefaults.standardUserDefaults synchronize];
+  }
+  [self _teardownIntroAutostart];
+}
+
+- (void)_teardownIntroAutostart {
+  [_introAutostartTimer invalidate];
+  _introAutostartTimer = nil;
+  _introAutostartBridge = nil;
+  _introSeenKey = nil;
 }
 
 @end

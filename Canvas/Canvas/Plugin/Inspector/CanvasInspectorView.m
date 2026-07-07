@@ -23,6 +23,9 @@
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // timingGuideHost
 #import <KeyframelessKit/KKTimelineLanesView+Guide.h>     // basicGraph
 
+// NSUserDefaults flag: the first-apply intro guide has been shown once.
+static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
+
 @interface CanvasInspectorView ()
 /// Canvas's timing-guide data, built on -makeTimingGuideConfig. The inspector
 /// bridges (play, tabs, constants, scrub, ...) come pre-wired from the kit;
@@ -705,9 +708,7 @@
 // Install the timing-guide config provider once the view is live. Without it
 // the kit's restart machinery (restartBasicTimingGuide / Advanced / MiniViewer
 // / OSC) early-returns, so the Help-window guides do nothing - which is why
-// only the self-contained Presets guide ran before. No autostart: Canvas opens
-// to a drawing surface, so the timing walkthroughs are launched on demand from
-// the Help window, not sprung on first appearance.
+// only the self-contained Presets guide ran before.
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   if (self.isDetachedCopy)
@@ -719,6 +720,11 @@
       return s ? [s _timingGuideConfig] : nil;
     };
   }
+  // First-apply intro: springs the Basic walkthrough once the effect is
+  // selected and its on-screen controls are drawn (the same gate as the Help
+  // window's "guides disabled" warning), so a first-time user is shown the
+  // basics instead of having to discover the guides themselves.
+  [self autostartIntroGuideOnceWithSeenKey:kCanvasIntroSeenKey];
 }
 
 // Stage a demo subject before each timing guide seeds. Canvas is per-layer, so

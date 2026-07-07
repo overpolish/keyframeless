@@ -14,6 +14,7 @@ KKMotionLeanConfig KKMotionLeanConfigDefault(void) {
       .tauAngle = 0.14,
       .warmupSec = 0.8,
       .maxLeanDeg = 30.0,
+      .settleSec = 0.4, // ~3x tauAngle: the tilt reaches rest within this
   };
 }
 
@@ -54,8 +55,12 @@ static double KKMotionLeanSampleX(KKLane *lane, double frac, double fallback) {
 // Two cascaded first-order low-passes: the first cleans the velocity, the
 // second gives the angle its inertia. Neither can overshoot or oscillate, so
 // they add weight without a spring's independent ringing.
+// `holdAfterSec` freezes the sampled position at that time for the rest of the
+// window: past the active run the clip is no longer contributing motion, so the
+// low-passes relax the tilt to rest by inertia alone (no new acceleration). Pass
+// t1 for a fully live window (the normal in-run case).
 static double KKMotionLeanIntegrate(KKLane *lane, double t0, double t1,
-                                    double durationSec,
+                                    double holdAfterSec, double durationSec,
                                     KKMotionLeanConfig cfg) {
   double dtTarget = 1.0 / 120.0;
   NSInteger steps = (NSInteger)ceil((t1 - t0) / dtTarget);
@@ -65,11 +70,12 @@ static double KKMotionLeanIntegrate(KKLane *lane, double t0, double t1,
   double aVel = 1.0 - exp(-dt / cfg.tauVel);
   double aAng = 1.0 - exp(-dt / cfg.tauAngle);
 
-  double prevX = KKMotionLeanSampleX(lane, t0 / durationSec, 0.5);
+  double prevX =
+      KKMotionLeanSampleX(lane, MIN(t0, holdAfterSec) / durationSec, 0.5);
   double vSmooth = 0.0, prevVSmooth = 0.0, angle = 0.0;
   for (NSInteger s = 1; s <= steps; s++) {
-    double x =
-        KKMotionLeanSampleX(lane, MIN(1.0, (t0 + dt * s) / durationSec), prevX);
+    double ts = MIN(t0 + dt * s, holdAfterSec); // freeze position past the run
+    double x = KKMotionLeanSampleX(lane, MIN(1.0, ts / durationSec), prevX);
     double v = (x - prevX) / dt; // raw horizontal velocity
     prevX = x;
     vSmooth += (v - vSmooth) * aVel;         // low-pass 1: clean velocity
@@ -88,16 +94,52 @@ double KKMotionLeanDegrees(KKLane *lane, double frac, double durationSec,
     return 0.0;
   NSArray<KKKeyPose *> *kps = lane.keyposes;
   NSInteger idx = KKMotionLeanGapIndexAtFraction(kps, frac);
-  if (idx < 0 || (active && !active(kps[idx].outgoing)))
+  if (idx < 0)
     return 0.0;
 
-  double runStartFrac = KKMotionLeanRunStartFraction(kps, idx, active);
+  BOOL gapActive = (!active || active(kps[idx].outgoing));
+
+  // Which gap anchors the active run, and up to which fraction the clip is still
+  // feeding motion in. Inside an active gap that is the current gap and `frac`;
+  // once the run ends we keep leaning through the following toggle-off gap(s),
+  // freezing the position at the run's end so the tilt relaxes to rest by
+  // inertia (the low-passes' natural decay) instead of snapping to 0.
+  NSInteger runAnchorIdx = idx;
+  double holdEndFrac = frac;
+  if (!gapActive) {
+    if (config.settleSec <= 0.0)
+      return 0.0;
+    NSInteger k = idx;
+    while (k >= 0 && active && !active(kps[k].outgoing))
+      k--; // walk back over toggle-off gaps to the last active gap
+    if (k < 0)
+      return 0.0; // no active run precedes this gap
+    runAnchorIdx = k;
+    double runEndFrac = kps[k + 1].time; // the run ends at this keypose
+    if ((frac - runEndFrac) * durationSec > config.settleSec)
+      return 0.0; // settle window elapsed; the tilt has reached rest
+    holdEndFrac = runEndFrac;
+  }
+
+  double runStartFrac =
+      KKMotionLeanRunStartFraction(kps, runAnchorIdx, active);
   if (frac <= runStartFrac)
     return 0.0;
 
   double t1 = frac * durationSec;
   double t0 = MAX(runStartFrac * durationSec, t1 - config.warmupSec);
-  double angle = KKMotionLeanIntegrate(lane, t0, t1, durationSec, config);
+  double angle = KKMotionLeanIntegrate(lane, t0, t1, holdEndFrac * durationSec,
+                                       durationSec, config);
+
+  // Settle tail: the low-pass decay alone still leaves a small residual at the
+  // settleSec cut-off. Multiply by a smoothstep envelope (flat slope at both
+  // ends) so the tilt joins the in-run value at u=0 and reaches exactly rest at
+  // u=1 - no snap on either side. No-op inside the active run (u == 0).
+  if (!gapActive) {
+    double u = (frac - holdEndFrac) * durationSec / config.settleSec;
+    u = MAX(0.0, MIN(1.0, u));
+    angle *= 1.0 - u * u * (3.0 - 2.0 * u);
+  }
 
   if (angle > config.maxLeanDeg)
     return config.maxLeanDeg;

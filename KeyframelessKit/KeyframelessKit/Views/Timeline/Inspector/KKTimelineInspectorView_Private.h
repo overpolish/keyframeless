@@ -65,6 +65,18 @@ NS_ASSUME_NONNULL_BEGIN
   /// get a fresh KKTimingGuideConfig (plugin data + the inspector bridges from
   /// -makeTimingGuideConfig). id-typed to avoid importing KKTimingGuide here.
   id _timingGuideConfigProvider;
+  /// Guide-only: returns the screen rect of the plugin's Help (`?`) button, set
+  /// by the plugin so the intro guide's closing step can spotlight it. id-typed
+  /// (NSRect(^)(void)) to avoid extra imports here.
+  id _guideHelpButtonScreenRectProvider;
+  /// Guide-only: first-appearance intro autostart. `_introSeenKey` is the
+  /// per-plugin NSUserDefaults flag ("shown once"); `_introAutostartTimer`
+  /// polls for the guide-enable gate (the effect selected + its OSC drawn) and
+  /// fires the intro exactly once; `_introAutostartBridge` caches the config's
+  /// OSC-bridge accessor (KKOSCGuideBridge(^)(void), id-typed) used for the gate.
+  NSString *_introSeenKey;
+  NSTimer *_introAutostartTimer;
+  id _introAutostartBridge;
   /// Guide-only: OSC-visibility observation hooks, fired ALONGSIDE the plugin's
   /// own OSC callbacks (so the OSC guide advances on real user actions without
   /// clobbering persistence). Stored/read by the +Guide category; fired from

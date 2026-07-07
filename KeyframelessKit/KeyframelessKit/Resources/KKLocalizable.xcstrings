@@ -6973,6 +6973,48 @@
         }
       }
     },
+    "More interactive guides and docs live in <symbol questionmark.circle color=accent /> Help - open it anytime.": {
+      "comment": "Timing guide: closing step pointing at the Help button.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weitere interaktive Anleitungen und Dokumentation finden Sie unter <symbol questionmark.circle color=accent /> Hilfe – jederzeit zu öffnen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encontrarás más guías interactivas y documentación en <symbol questionmark.circle color=accent /> Ayuda: ábrela cuando quieras."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "D'autres guides interactifs et de la documentation se trouvent dans <symbol questionmark.circle color=accent /> Aide — ouvrez-la à tout moment."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "他のインタラクティブガイドやドキュメントは <symbol questionmark.circle color=accent /> ヘルプにあります。いつでも開けます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "더 많은 대화형 가이드와 문서는 <symbol questionmark.circle color=accent /> 도움말에 있습니다. 언제든지 열어 보세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多互动指南和文档尽在 <symbol questionmark.circle color=accent /> 帮助中，随时打开查看。"
+          }
+        }
+      }
+    },
     "Motion Blur": {
       "comment": "Section title / toggle: motion blur.",
       "extractionState": "manual",

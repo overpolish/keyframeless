@@ -256,12 +256,19 @@ static const CGFloat kSlideDistance = 12.0;
     p.contentView = glass;
   } else {
     // Pre-26 fallback: flat vibrancy + rounded mask (mask drives the shadow,
-    // so it stays rounded). No layer border.
+    // so it stays rounded). The mask alone doesn't stroke an outline, so on
+    // Sequoia the panel edge melts into the background - add a hairline border
+    // (clipped to the same rounded shape by the mask) to give it the same
+    // defined edge the Tahoe glass path and system windows have.
     NSVisualEffectView *fx =
         [[NSVisualEffectView alloc] initWithFrame:NSZeroRect];
     fx.material = NSVisualEffectMaterialContentBackground;
     fx.blendingMode = NSVisualEffectBlendingModeBehindWindow;
     fx.state = NSVisualEffectStateActive;
+    fx.wantsLayer = YES;
+    fx.layer.cornerRadius = kPanelCornerRadius;
+    fx.layer.borderColor = NSColor.separatorColor.CGColor;
+    fx.layer.borderWidth = 1.0;
     fx.maskImage = [CanvasLayerListController
         _roundedMaskImageWithRadius:kPanelCornerRadius];
     content.frame = fx.bounds;

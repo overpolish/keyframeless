@@ -433,6 +433,13 @@ static void CanvasFillEncodeStencilPass(const CanvasFillPassCtx *c,
                length:sizeof(c->viewport)
               atIndex:KKVertexInputIndex_ViewportSize];
   [enc setVertexBytes:m length:sizeof(*m) atIndex:KKVertexInputIndex_Transform];
+  // The stencil pipeline reuses KKSolidColorFragment (it writes no colour - the
+  // pass only toggles the even-odd stencil), but that fragment still DECLARES a
+  // `constant float4 *color [[buffer(0)]]`, so Metal's validation layer requires
+  // it bound before the draw. Bind a throwaway colour to satisfy it; the value
+  // is discarded by the None write mask.
+  simd_float4 unusedColor = {0, 0, 0, 0};
+  [enc setFragmentBytes:&unusedColor length:sizeof(unusedColor) atIndex:0];
   [enc drawPrimitives:MTLPrimitiveTypeTriangle
           vertexStart:0
           vertexCount:triCount * 3];

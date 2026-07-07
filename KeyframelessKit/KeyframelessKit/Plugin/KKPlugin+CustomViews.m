@@ -29,6 +29,10 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
                          : NSZeroRect;
 }
 
+- (NSRect)helpButtonScreenRect {
+  return self.logoBanner ? [self.logoBanner helpButtonScreenRect] : NSZeroRect;
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kKKParamLogoBanner) {
     KKLogoBannerView *banner = [[KKLogoBannerView alloc] init];

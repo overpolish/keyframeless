@@ -23,6 +23,8 @@
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
+NSString *const KKTimingIntroGuideIdentifier = @"timing.intro";
+
 // The Elastic curve (Linear=0, EaseIn=1, EaseOut=2, EaseInOut=3, Elastic=4,
 // Bounce=5). Its user-facing name comes from KKEasingCurveDisplayName.
 static const NSInteger kElasticCurveType = 4;
@@ -35,7 +37,12 @@ static const NSInteger kDiamondTarget = 2;
 static const double kWatchBackSeconds = 1.0;
 // Drag the In-end diamond toward 1.0s; snap windows for magnet + release.
 static const double kDragTargetSeconds = 1.0;
-static const double kDragSnapSeconds = 0.05;
+// Release-acceptance half-window (seconds) around the target. This step has NO
+// cursor magnet (the adaptive/log-warped Basic timeline fights snapping), so the
+// diamond never clicks into place - keep the window generous (+/-0.2s) so landing
+// near 1.0s advances, instead of stranding the user on a boundary that "looks
+// right" but is just outside a tight tolerance.
+static const double kDragSnapSeconds = 0.2;
 static const CGFloat kDragSnapPx = 14.0;
 
 @implementation KKTimingGuide
@@ -65,7 +72,8 @@ static const CGFloat kDragSnapPx = 14.0;
                [iv restartBasicTimingGuide];
              }];
   weakIntro = intro;
-  intro.identifier = @"timing.intro"; // stable across localized titles
+  intro.identifier =
+      KKTimingIntroGuideIdentifier; // stable across localized titles
 
   __block __weak KKHelpGuide *weakAdvanced = nil;
   KKHelpGuide *advanced = [KKHelpGuide
@@ -559,6 +567,28 @@ static const CGFloat kDragSnapPx = 14.0;
              return weakGraph;
            }];
 
+  // Introduction-only closing step: point the user at the Help button, where
+  // the other interactive guides + docs live. Appended only when the plugin
+  // supplies a help-button rect (config.helpButtonScreenRect); when present it
+  // becomes the final step, so sDone advances into it with a "Next".
+  KKJoyrideStep *sHelp = nil;
+  if (config.helpButtonScreenRect) {
+    sDone.showsNext = YES;
+    sHelp = [KKJoyrideStep
+        stepWithMessage:KKLoc(
+                            @"More interactive guides and docs live in <symbol "
+                            @"questionmark.circle color=accent /> Help - open it "
+                            @"anytime.",
+                            @"Timing guide: closing step pointing at the Help "
+                            @"button.")
+             targetView:nil];
+    sHelp.spotlightCircular = YES;
+    sHelp.targetScreenRect = ^NSRect {
+      return config.helpButtonScreenRect ? config.helpButtonScreenRect()
+                                         : NSZeroRect;
+    };
+  }
+
   // Bindings.
   [binder bindStep:sOpenConstants
            atIndex:ixOpenConstants
@@ -626,11 +656,14 @@ static const CGFloat kDragSnapPx = 14.0;
                    });
   };
 
-  return @[
+  NSMutableArray<KKJoyrideStep *> *steps = [@[
     sIntro, sOpenConstants, sEditConstant, sAdd, sAddPrimary, sPhases,
     sToggleIn, sGraphNotice, sDiamond, sEdit, sGap, sElastic, sDrag, sWatchBack,
     sDone
-  ];
+  ] mutableCopy];
+  if (sHelp)
+    [steps addObject:sHelp];
+  return steps;
 }
 
 + (NSArray<KKJoyrideStep *> *)

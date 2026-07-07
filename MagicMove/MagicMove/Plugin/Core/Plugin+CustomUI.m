@@ -763,6 +763,14 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   };
 
   self.inspectorView = view;
+
+  // Let the intro guide's closing step spotlight this effect's Help button
+  // (owned by the plugin's logo banner, resolved live).
+  __weak typeof(self) weakHelp = self;
+  view.guideHelpButtonScreenRectProvider = ^NSRect {
+    return [weakHelp helpButtonScreenRect];
+  };
+
   if (!self.playheadPoller) {
     self.playheadPoller =
         [[KKPlayheadPoller alloc] initWithAPIManager:self.apiManager

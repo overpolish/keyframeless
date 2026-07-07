@@ -80,6 +80,15 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // dismissal, so clicking into the panel (a separate window) doesn't close the
   // popover.
   BOOL _colorPanelOpen;
+  // Debounced persist for the async colour panel: while it's open, a continuous
+  // drag fires a value callback every frame. Persisting each one stacks an undo
+  // step per frame, and we can't hold a synchronous drag undo group open across
+  // the panel's own event loop (that corrupts FCP's FFUIAction nesting). So we
+  // preview live but defer the persist, coalescing a burst into ONE undoable
+  // write when the drag settles (timer) or the panel closes.
+  NSTimer *_colorPersistTimer;
+  NSString *_colorPendingLabel;
+  NSArray<NSNumber *> *_colorPendingValues;
   // Excluded ("Animate" placeholder) rows aren't in _rowsByLabel; track them so
   // the category filter can hide/show them too.
   NSMutableDictionary<NSString *, NSView *> *_excludedRowsByLabel;
@@ -152,10 +161,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // Drop the mini-viewer (an MTKView, multi-MB GPU textures/drawables) on popover
 // close. With NSPopoverBehaviorApplicationDefined the backing _NSPopoverWindow
 // can outlive the NSPopover object, stranding this content view and - via this
-// strong ivar - the mini-viewer, leaking its GPU memory. The popover layer calls
-// this on close: niling the ivar + dropping the scroll view's documentView (its
-// other strong hold) lets the mini-viewer dealloc and free that memory even
-// while the empty window shell lingers.
+// strong ivar - the mini-viewer, leaking its GPU memory. The popover layer
+// calls this on close: niling the ivar + dropping the scroll view's
+// documentView (its other strong hold) lets the mini-viewer dealloc and free
+// that memory even while the empty window shell lingers.
 - (void)releaseMiniViewer {
   _miniViewer.enclosingScrollView.documentView = nil;
   [_miniViewer removeFromSuperview];
@@ -837,6 +846,41 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // panel closes.
 - (void)_setColorEditing:(BOOL)editing {
   _colorPanelOpen = editing;
+  // Closing the panel ends the session: commit the final colour now (a pending
+  // burst may still be waiting on its debounce timer) as ONE undoable write.
+  if (!editing)
+    [self _flushColorPersist];
+}
+
+// (Re)arm the debounce: stash the latest colour and reset the timer, so a run
+// of rapid drag callbacks collapses to a single persist once they stop.
+- (void)_scheduleColorPersistForLabel:(NSString *)label
+                               values:(NSArray<NSNumber *> *)values {
+  _colorPendingLabel = label;
+  _colorPendingValues = values;
+  [_colorPersistTimer invalidate];
+  _colorPersistTimer =
+      [NSTimer scheduledTimerWithTimeInterval:0.2
+                                       target:self
+                                     selector:@selector(_flushColorPersist)
+                                     userInfo:nil
+                                      repeats:NO];
+}
+
+// Commit the pending colour as one ordinary (self-contained) undoable write.
+- (void)_flushColorPersist {
+  [_colorPersistTimer invalidate];
+  _colorPersistTimer = nil;
+  NSString *label = _colorPendingLabel;
+  NSArray<NSNumber *> *values = _colorPendingValues;
+  _colorPendingLabel = nil;
+  _colorPendingValues = nil;
+  if (values && _onHandleValue)
+    _onHandleValue(label, values);
+}
+
+- (void)dealloc {
+  [_colorPersistTimer invalidate];
 }
 
 // Presenter hook (KKTimelineLanesView+Popovers `_showPopoverWithContent`): when
@@ -917,8 +961,13 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       [s->_miniViewer setNeedsDisplay:YES];
       [s->_miniViewer setHandlesNeedDisplay];
     }
-    if (s->_onHandleValue)
-      s->_onHandleValue(label, values);
+    if (s->_onHandleValue) {
+      if (s->_colorPanelOpen)
+        // Async colour drag: preview above already ran; coalesce the persist.
+        [s _scheduleColorPersistForLabel:label values:values];
+      else
+        s->_onHandleValue(label, values);
+    }
   };
   row.onDragBegin = ^{
     __strong typeof(weak) s = weak;
@@ -1180,8 +1229,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 
 - (NSRect)guideFieldScreenRectForLabel:(NSString *)label
                              component:(NSInteger)component {
-  NSView *f = [[self _rowForLabelTolerant:label]
-      guideFieldViewForComponent:component];
+  NSView *f =
+      [[self _rowForLabelTolerant:label] guideFieldViewForComponent:component];
   NSWindow *w = f.window;
   if (!f || !w)
     return NSZeroRect;

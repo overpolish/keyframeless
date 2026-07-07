@@ -48,10 +48,15 @@
   return g;
 }
 
++ (NSString *)_completedDefaultsKeyForIdentifier:(NSString *)identifier {
+  return [@"KKHelpGuideCompleted." stringByAppendingString:identifier];
+}
+
 - (NSString *)_completedDefaultsKey {
-  return [@"KKHelpGuideCompleted."
-      stringByAppendingString:(self.identifier.length ? self.identifier
-                                                      : self.title)];
+  return [KKHelpGuide
+      _completedDefaultsKeyForIdentifier:(self.identifier.length
+                                              ? self.identifier
+                                              : self.title)];
 }
 
 - (BOOL)hasBeenCompleted {
@@ -63,6 +68,22 @@
   [NSUserDefaults.standardUserDefaults setBool:YES
                                         forKey:[self _completedDefaultsKey]];
   [NSUserDefaults.standardUserDefaults synchronize];
+}
+
++ (void)markIdentifierCompleted:(NSString *)identifier {
+  if (identifier.length == 0)
+    return;
+  [NSUserDefaults.standardUserDefaults
+      setBool:YES
+       forKey:[self _completedDefaultsKeyForIdentifier:identifier]];
+  [NSUserDefaults.standardUserDefaults synchronize];
+}
+
++ (BOOL)isIdentifierCompleted:(NSString *)identifier {
+  if (identifier.length == 0)
+    return NO;
+  return [NSUserDefaults.standardUserDefaults
+      boolForKey:[self _completedDefaultsKeyForIdentifier:identifier]];
 }
 
 @end

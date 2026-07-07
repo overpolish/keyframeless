@@ -6,7 +6,8 @@
 #import "CanvasFillProperties.h" // CanvasFillEnabledAtFraction (lane gate)
 #import "CanvasFillRender.h"     // TEMP solid fill for closed paths
 #import "CanvasLayerRender.h"
-#import "CanvasLayerTimeline.h" // CanvasSetUIStateSnapshot
+#import "CanvasLayerTimeline.h"  // CanvasSetUIStateSnapshot
+#import "CanvasLayerTransform.h" // CanvasStrokeEnabledAtFraction (lane gate)
 #import "CanvasLayerTree.h"     // CanvasLayerPathWithAncestors
 #import "CanvasMiniViewerRenderer.h"
 #import "Constants.h"
@@ -454,7 +455,8 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
                                      &fillPipes, outputWidth, outputHeight, sw, sh,
                                      tileShiftX, tileShiftY, f, nil, nil);
           }
-          if (!p.isImage && p.strokeEnabled && strokePS) {
+          if (!p.isImage && CanvasStrokeEnabledAtFraction(p, ef, nil, nil) &&
+              strokePS) {
             id<MTLRenderCommandEncoder> e = sEnc(strokePS, MTLLoadActionLoad);
             CanvasEncodeVectorLayers(one, e, device, outputWidth, outputHeight,
                                      tileShiftX, tileShiftY, f, nil, nil,

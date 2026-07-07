@@ -13,6 +13,7 @@
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKHelpSection.h>
+#import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
 #import <KeyframelessKit/KKTimelineAIMerge.h>
@@ -211,6 +212,14 @@ static NSString *_RoundedAILaneSchemaText(void) {
                                detachedWindowSize:CGSizeMake(720.0, 460.0)];
 
     self.inspectorView = view;
+
+    // Let the intro guide's closing step spotlight this effect's Help button
+    // (owned by the plugin's logo banner, resolved live).
+    __weak typeof(self) weakHelp = self;
+    view.guideHelpButtonScreenRectProvider = ^NSRect {
+      return [weakHelp helpButtonScreenRect];
+    };
+
     if (!self.playheadPoller) {
       self.playheadPoller =
           [[KKPlayheadPoller alloc] initWithAPIManager:self.apiManager

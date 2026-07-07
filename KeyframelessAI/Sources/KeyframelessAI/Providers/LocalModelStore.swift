@@ -140,10 +140,25 @@ public final class LocalModelStore: ObservableObject {
 			// an error - just fall through and clear the UI.
 			storeLog.notice("download cancelled \(id, privacy: .public)")
 		} catch {
-			lastError = error.localizedDescription
-			storeLog.error(
-				"download failed \(id, privacy: .public): \(error.localizedDescription, privacy: .public)"
-			)
+			// The progress stream can drop (socket timeout / close) during the helper's
+			// long post-download verification even though the fetch itself finished and
+			// stamped the completion marker - the helper ignores the terminal frame's
+			// write result, so a lost `done` frame leaves us pinned at 99%. Reconcile
+			// against the on-disk marker before surfacing an error, so a download that
+			// actually completed isn't frozen until the next launch.
+			refreshDownloaded()
+			if downloadedModels.contains(id) {
+				downloadProgress = 1.0
+				if selectedModelID == nil { selectedModelID = id }
+				storeLog.notice(
+					"download stream ended early but \(id, privacy: .public) is complete on disk"
+				)
+			} else {
+				lastError = error.localizedDescription
+				storeLog.error(
+					"download failed \(id, privacy: .public): \(error.localizedDescription, privacy: .public)"
+				)
+			}
 		}
 		ownsActiveDownload = false
 		downloadingModel = nil

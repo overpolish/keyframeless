@@ -614,6 +614,13 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
 
     self.inspectorView = view;
 
+    // Let the intro guide's closing step spotlight this effect's Help button
+    // (owned by the plugin's logo banner, resolved live).
+    __weak typeof(self) weakHelp = self;
+    view.guideHelpButtonScreenRectProvider = ^NSRect {
+      return [weakHelp helpButtonScreenRect];
+    };
+
     // Viewer OSC visibility: a global "show controls" toggle + per-element
     // opt-click hide/show, HIDDEN by default (master defaults OFF for Canvas).
     // nil renderer so the toggle drives only the viewer OSC's instance state

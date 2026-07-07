@@ -19,6 +19,11 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Stable identifier of the "Introduction" (Basic timing) help guide, used for
+/// its completion flag. Shared so the first-apply autostart can mark the same
+/// guide completed without a live KKHelpGuide instance.
+extern NSString *const KKTimingIntroGuideIdentifier;
+
 /// Shared, plugin-agnostic Basic + Advanced timing walkthroughs.
 ///
 /// The timing UI (Basic/Advanced graph, manage popover, gap/curve editor,
@@ -160,6 +165,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Optional: screen rect of the host viewer image, unioned into the Basic
 /// watch-back cutout when the OSC is alive. Return NSZeroRect if unavailable.
 @property(nonatomic, copy, nullable) NSRect (^viewerScreenRect)(void);
+
+/// Optional: screen rect of the plugin's Help (`?`) button. When non-nil the
+/// Basic ("Introduction") guide appends a closing step that spotlights it and
+/// points the user at the other interactive guides + docs. Return NSZeroRect
+/// if the button isn't currently on screen. nil = no closing Help step.
+@property(nonatomic, copy, nullable) NSRect (^helpButtonScreenRect)(void);
 
 /// The inspector's Constants button view, spotlighted by the opening
 /// constants step of the Basic flow. Required for the Basic guide.
