@@ -21,6 +21,7 @@ Usage:
   scripts/split-pkgproj.py <component> [<component> ...]   generate project(s)
   scripts/split-pkgproj.py all                             generate all
   scripts/split-pkgproj.py --name <component>              print the product name
+  scripts/split-pkgproj.py --version <component>           print the product version
   scripts/split-pkgproj.py --components                    list component keys
 
 Components: rounded keyframelessx magicmove glow canvas
@@ -177,6 +178,19 @@ def product_name(combined, component):
     return pkg["PACKAGE_SETTINGS"]["NAME"]
 
 
+def product_version(combined, component):
+    ident = COMPONENT_ID.get(component)
+    if not ident:
+        sys.exit(f"unknown component '{component}' (known: {', '.join(COMPONENT_ID)})")
+    pkg = next(
+        (p for p in combined["PACKAGES"] if p["PACKAGE_SETTINGS"]["IDENTIFIER"] == ident),
+        None,
+    )
+    if pkg is None:
+        sys.exit(f"no package with identifier {ident} in {COMBINED.name}")
+    return pkg["PACKAGE_SETTINGS"]["VERSION"]
+
+
 def main(argv):
     # Query modes used by build-and-sign.sh to drive generation without printing noise.
     if argv == ["--components"]:
@@ -184,6 +198,9 @@ def main(argv):
         return
     if len(argv) == 2 and argv[0] == "--name":
         print(product_name(plistlib.loads(COMBINED.read_bytes()), argv[1]))
+        return
+    if len(argv) == 2 and argv[0] == "--version":
+        print(product_version(plistlib.loads(COMBINED.read_bytes()), argv[1]))
         return
     if not argv:
         sys.exit(__doc__)

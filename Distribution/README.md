@@ -125,9 +125,10 @@ With the app selected under `Notarization`, click `Export Notarized App` and sel
 Build an installer and sign it in one step. The first argument is the target:
 
 ```sh
-scripts/build-and-sign.sh combined "<apple-id>" "<team-id>"   # all-in-one Keyframeless.pkg
-scripts/build-and-sign.sh rounded  "<apple-id>" "<team-id>"   # just Rounded.pkg
-scripts/build-and-sign.sh all      "<apple-id>" "<team-id>"   # every plugin, one .pkg each
+scripts/build-and-sign.sh combined       "<apple-id>" "<team-id>"   # all-in-one Keyframeless.pkg
+scripts/build-and-sign.sh rounded         "<apple-id>" "<team-id>"   # just Rounded.pkg
+scripts/build-and-sign.sh all             "<apple-id>" "<team-id>"   # every plugin, one .pkg each
+scripts/build-and-sign.sh keyframelessai  "<apple-id>" "<team-id>"   # the local-AI helper .pkg
 ```
 
 Per-product targets generate a single-product `.pkgproj` and a per-plugin uninstaller
@@ -135,6 +136,38 @@ from `Distribution/Keyframeless.pkgproj` + `scripts/uninstall.template` (via
 `scripts/split-pkgproj.py`), build, sign, then delete those temp files - nothing
 per-plugin is committed. `combined` builds the committed `Keyframeless.pkgproj`. Each
 runs `packagesbuild`, then signs, notarizes, staples, and verifies the resulting `.pkg`.
+
+Per-product installers are named with their version, e.g. `Rounded-v4.0.0.pkg` (the
+version comes from the package's `.pkgproj` entry, the same one `bump-version.sh`
+maintains). `combined` still emits `Keyframeless.pkg`.
+
+**Notarization credentials.** The scripts prefer a stored keychain profile named
+`keyframeless` so notarization is non-interactive. Create it once:
+
+```sh
+xcrun notarytool store-credentials keyframeless --apple-id "<apple-id>" --team-id "<team-id>"
+```
+
+After that, the `<apple-id>`/`<team-id>` args passed to `build-and-sign.sh` are only a
+fallback - the profile is used automatically. (The profile is selected by name, not by
+probing the keychain: modern notarytool stores it in the data-protection keychain that
+the legacy `security` tool can't read.) To ignore the profile and use the Apple ID +
+app-specific-password path, run with an empty profile name:
+
+```sh
+KK_NOTARY_PROFILE= scripts/build-and-sign.sh all "<apple-id>" "<team-id>"
+```
+
+**`keyframelessai` is a separate target and is NOT included in `all`.** Unlike the
+plugins (whose notarized `.app` is archived beforehand), its payload is the
+`kk-ai-helper` binary, so the target additionally runs `stage_ai_helper`: `xcodebuild`s
+the `kk-ai-helper` scheme in `KeyframelessAI/` (only the Metal toolchain compiles MLX's
+metallib), thins it to arm64 (MLX is Apple-Silicon only), Developer-ID signs it with the
+app-group + hardened-runtime entitlements, and stages it plus its SwiftPM resource
+bundles into `Distribution/helper/staging` where the `.pkgproj` payload points. Run it
+explicitly whenever the local-AI helper changes - `all` will not build it (and the
+`all` loop skips the staging step, so `keyframelessai` only builds correctly via its own
+target).
 
 To sign an already-built `.pkg` without rebuilding (base name, no `.pkg`):
 

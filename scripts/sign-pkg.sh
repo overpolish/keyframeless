@@ -39,14 +39,19 @@ productsign --sign "Developer ID Installer" "$UNSIGNED" "$SIGNED"
 
 echo ""
 echo "Notarizing..."
-# Prefer a stored keychain profile named "keyframeless" (non-interactive + more
-# robust for retries): create once with
+# A stored keychain profile is strongly preferred (non-interactive + robust for
+# retries). Create it once with:
 #   xcrun notarytool store-credentials keyframeless --apple-id <id> --team-id <team>
-# Otherwise fall back to Apple ID + Team ID (prompts for the app-specific password).
-if security find-generic-password \
-    -s "com.apple.gke.notary.tool.saved-creds.keyframeless" &>/dev/null; then
-  echo "  (using stored notary profile 'keyframeless')"
-  NOTARY_AUTH=(--keychain-profile keyframeless)
+# and this script uses it automatically. We select it by NAME rather than probing the
+# keychain: modern notarytool saves the profile in the data-protection keychain
+# (~/Library/Keychains/metadata.keychain-db), which the legacy `security` tool cannot
+# see - so a `find-generic-password` check always missed and silently dropped to the
+# password prompt. To force the Apple ID + app-specific-password path instead, run with
+# an empty profile name:  KK_NOTARY_PROFILE= scripts/build-and-sign.sh ...
+NOTARY_PROFILE="${KK_NOTARY_PROFILE-keyframeless}"
+if [[ -n "$NOTARY_PROFILE" ]]; then
+  echo "  (using stored notary profile '$NOTARY_PROFILE')"
+  NOTARY_AUTH=(--keychain-profile "$NOTARY_PROFILE")
 else
   NOTARY_AUTH=(--apple-id "$APPLE_ID" --team-id "$TEAM_ID")
 fi

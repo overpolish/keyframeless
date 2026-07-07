@@ -99,8 +99,9 @@ build_combined() {
 }
 
 build_product() {
-  local component="$1" name
+  local component="$1" name version
   name="$(python3 "$SPLIT" --name "$component")"
+  version="$(python3 "$SPLIT" --version "$component")"
 
   # Generate the single-product project + its uninstaller, then ensure they're
   # cleaned up even if the build or signing fails.
@@ -117,6 +118,10 @@ build_product() {
   }
   echo ""
   "$ROOT/scripts/sign-pkg.sh" "$name" "$APPLE_ID" "$TEAM_ID"
+
+  # Stamp the product version onto the final installer (e.g. Rounded-v4.0.0.pkg).
+  mv "$BUILD_DIR/$name.pkg" "$BUILD_DIR/$name-v$version.pkg"
+  echo "  -> $name-v$version.pkg"
 
   cleanup
 }
