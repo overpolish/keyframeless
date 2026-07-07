@@ -16,21 +16,13 @@
 <br />
 
 <div align="center">
-	Drastically speed up editing with intuitive On Screen Controls, and <i>no</i> keyframes.
+	Final Cut Pro, without the keyframes. Set where things start and end, and they move between them on their own.
 </div>
 
 <br />
 
 <div align="center">
-	<img width="200" alt="Keyframeless - One timing engine. Every plugin." src="./Assets/Marketing/keyframeless-header.png" />
-	<img width="200" alt="Canvas - Draw directly in Final Cut Pro." src="./Assets/Marketing/keyframeless-canvas.png" />
-	<img width="200" alt="Magic Move - Hold. Move. Hold. No keyframes." src="./Assets/Marketing/keyframeless-magicmove.png" />
-</div>
-
-<div align="center">
-	<img width="200" alt="AI Captions - Edit captions before they hit the timeline." src="./Assets/Marketing/keyframeless-ai-captions.png" />
-	<img width="200" alt="Glow - The glow Final Cut never shipped." src="./Assets/Marketing/keyframeless-glow.png" />
-	<img width="200" alt="Rounded - No more shape masks." src="./Assets/Marketing/keyframeless-rounded.png" />
+	<img width="440" alt="Keyframeless - One timing engine. Every plugin." src="./Assets/Marketing/keyframeless-header.png" />
 </div>
 
 <br />
@@ -42,9 +34,10 @@
 - [Supercharge Your Workflow](#️-supercharge-your-workflow)
   - [Canvas](#canvas)
   - [Magic Move](#magic-move)
-  - [AI Captions](#ai-captions)
+  - [Steno](#steno)
   - [Glow](#glow)
   - [Rounded](#rounded)
+  - [Keyframeless AI](#keyframeless-ai)
 - [Source & License](#-source--license)
 
 </details>
@@ -53,7 +46,7 @@
 
 # 🤝 Install
 
-Grab the installer from Payhip - one payment to help support continued development, all future updates included.
+Grab the installer from Payhip. One payment supports continued development, and every future update is included.
 
 <div align="center">
 	<a href="https://store.overpolish.co"><b>Buy on Payhip →</b></a>
@@ -61,45 +54,39 @@ Grab the installer from Payhip - one payment to help support continued developme
 
 <br />
 
-<br />
-
-<div align="center">
-	<img width="500" alt="Installation window showcasing the various tools available for install." src="./.github/images/installer-1.png" />
-</div>
-
-<br />
-
-If you'd rather build Keyframeless yourself than pay for the installer, you can - clone the repo, open it in Xcode, and go. Note the source is [PolyForm Noncommercial](./LICENSE), self-built use is for personal projects only. Paying gets you a signed installer with a [commercial-use license](./COMMERCIAL-LICENSE.md) for paid client work, plus all future plugins and updates.
+Rather build it yourself? Clone the repo, open it in Xcode, and go. The source is [PolyForm Noncommercial](./LICENSE), so self-built use is for personal projects only. Paying gets you a signed installer with a [commercial-use license](./COMMERCIAL-LICENSE.md) for paid client work, plus all future plugins and updates.
 
 <br />
 
 # ⚡️ Supercharge Your Workflow
 
+Plugins built on one shared timing engine. Learn the timing once and it works the same across all of them. No keyframes to place, no graph editor to fight.
+
 ## Canvas
 
-Actual vector drawing inside Final Cut Pro. Drop in SVGs or draw paths from scratch with bezier control - the drawing tool Final Cut never had.
+Actual vector drawing inside Final Cut Pro. Draw paths with a real pen tool, drop in SVGs, or trace an image down to an editable line. The drawing tool Final Cut never had.
 
-Each path animates independently with draw-on, trim, opacity, and the same timing engine the rest of the suite uses. Handwritten signatures, scribbled annotations, animated illustrations, all without leaving the timeline. Drag handles directly in the viewer for fine-tuning, `opt+click` to add points, double-click to toggle linear/curve.
+Each clip holds a stack of layers: shapes, images, and groups. Every one animates on its own, with stroke, fill, draw-on, transform, and opacity on the shared timing engine. Combine shapes with booleans, give the whole thing a hand-drawn look, and drag handles right in the viewer (`^X` for the pen, double-click a point to toggle corner or curve, `opt+click` to remove one). Describe an animation in plain words and the built-in assistant builds it for you.
 
 <div align="center">
-	<img alt="Canvas demo" src="./.github/images/canvas-demo-1.gif" />
+	<img width="400" alt="Canvas - Draw directly in Final Cut Pro." src="./Assets/Marketing/keyframeless-canvas-hero.png" />
 </div>
 
 ## Magic Move
 
-Animation built around a simple mental model - think in seconds, not keyframes. Each property (Position, Scale, Rot X/Y/Z, Opacity) gets its own lane in the sequencer, and you fill it with as many `hold` and `move` segments as you need. Drag to resize, double-click to split, `cmd-click` to delete, `shift-click` to lock a segment to an absolute duration.
+Animation built around a simple mental model: think in seconds, not keyframes. Position, Scale, Rotation, Anchor, and Opacity each get their own lane, filled with as many `hold` and `move` segments as you need. Drag to resize, double-click to split, `cmd-click` to delete.
 
-Real easing curves per transition - Linear, EaseIn/Out/InOut, Elastic, Bounce - rather than the 3 options FCP gives you. Hold segments can ride a Bounce or Wiggle effect with adjustable intensity and frequency, so static doesn't have to mean lifeless.
+Real easing curves per transition (Linear, EaseIn/Out/InOut, Elastic, Bounce), rather than the three options FCP gives you. Move along a curved path at an even speed, and flip on Rotate with Motion so the clip leans into its turns with real momentum. It tips as it speeds up and rocks back as it slows. Hold segments can wiggle or drift, so static doesn't have to mean lifeless.
 
 <div align="center">
-	<img alt="Magic Move demo" src="./.github/images/magicmove-demo-1.gif" />
+	<img width="400" alt="Magic Move - Hold. Move. Hold. No keyframes." src="./Assets/Marketing/keyframeless-magicmove-hero.png" />
 </div>
 
-## AI Captions
+## Steno
 
-Ever felt like AI caption tools are too basic? No way to edit captions before pulling them into Final Cut Pro, leaving you to fix things title-by-title? This is the first clip-based caption workflow - see your Final Cut Pro audio timeline, pick which clips to transcribe, and use different models for different clips.
+Ever felt like AI caption tools are too basic? Steno transcribes your timeline on-device and lets you edit every caption _before_ it hits Final Cut Pro. See your actual FCP audio, pick which clips to transcribe, and mix models across a batch.
 
-There's also community captions - download and use existing ones, or make your own Motion Templates, drag them in, and you're good to go. Customize published parameters **BEFORE** dragging them into Final Cut Pro so you don't have to touch titles once they're on the timeline.
+It transcribes the audio Final Cut actually plays, with your compressor, EQ, and volume applied first, and it handles compound clips the same way. Fix the text, set line breaks, and every word keeps its timing. Export as animatable Title captions with Motion templates, native FCP Subtitles, or standard iTT, SRT, and CEA-608. There's a community template repo built in, or make your own Motion Templates, customize their parameters, and drag them in.
 
 Supported Models:
 
@@ -107,14 +94,14 @@ Supported Models:
 - Parakeet
 
 <div align="center">
-	<img alt="AI Captions demo" src="./.github/images/ai-captions-demo-1.gif" />
+	<img width="400" alt="Steno - Edit captions before they hit the timeline." src="./Assets/Marketing/keyframeless-steno-hero.png" />
 </div>
 
 <br />
 
 <div align="center">
 	<a href="http://www.youtube.com/watch?v=OLCgGaR87rE" title="An Actual Caption Tool for Final Cut Pro">
-		<img src="https://img.youtube.com/vi/OLCgGaR87rE/maxresdefault.jpg" alt="AI Captions Walkthrough" width="480" />
+		<img src="https://img.youtube.com/vi/OLCgGaR87rE/maxresdefault.jpg" alt="Steno Walkthrough" width="480" />
 	</a>
 	<p>An Actual Caption Tool for Final Cut Pro</p>
 </div>
@@ -127,18 +114,26 @@ Supported Models:
 
 ## Glow
 
-Add glow effects with solid, gradient, and dynamic colour support. Also doubles as a drop shadow. Animate glow in and out with full timing control, and use outward noise for organic, evolving edges.
+Wrap any clip in a soft, glowing halo you can animate. The color is dynamic by default, borrowing from the clip underneath, or set a solid color or gradient. It also doubles as a drop shadow. Add outward noise for organic, evolving edges, and animate the whole thing in and out with full timing control.
 
 <div align="center">
-	<img alt="Glow demo" src="./.github/images/glow-demo-1.gif" />
+	<img width="400" alt="Glow - The glow Final Cut never shipped." src="./Assets/Marketing/keyframeless-glow-hero.png" />
 </div>
 
 ## Rounded
 
-Easily crop and round your video's corners.
+Round off any clip and crop it with a box you can animate. Combine the two for a rounded crop, like a circular reveal that opens from a point. It's free, and the easiest way to learn how every Keyframeless plugin animates.
 
 <div align="center">
-	<img alt="Rounded demo" src="./.github/images/rounded-demo-1.gif" />
+	<img width="400" alt="Rounded - No more shape masks." src="./Assets/Marketing/keyframeless-rounded-hero.png" />
+</div>
+
+## Keyframeless AI
+
+Every plugin has AI built in. Describe an animation in plain words, or ask how something works. Keyframeless AI runs those models entirely on your Mac: no cloud, no API key, no subscription. It's a free, optional download, and every plugin shares it. Prefer the cloud? Bring your own Claude or ChatGPT key instead.
+
+<div align="center">
+	<img width="400" alt="Keyframeless AI - Your personal guide and assistant." src="./Assets/Marketing/keyframeless-ai-hero.png" />
 </div>
 
 <br />
@@ -150,4 +145,6 @@ Keyframeless is dual-licensed:
 - **Source code:** [PolyForm Noncommercial 1.0.0](./LICENSE) enabling you to read it, learn from it, and build it for personal use.
 - **Paid installer (Payhip):** [Commercial-use license](./COMMERCIAL-LICENSE.md) granted to the named purchaser. One person, non-transferable, all current and future updates included.
 
-Older releases were distributed under GPLv3 and stay that way - [Final GPLv3 release](https://github.com/overpolish/keyframeless/releases/tag/2026-04-11)
+Older releases were distributed under GPLv3 and stay that way. [Final GPLv3 release](https://github.com/overpolish/keyframeless/releases/tag/2026-04-11)
+</content>
+</invoke>
