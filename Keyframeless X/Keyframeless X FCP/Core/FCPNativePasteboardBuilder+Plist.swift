@@ -84,8 +84,7 @@ extension FCPNativePasteboardBuilder {
 		range: String,
 		style: Style,
 		mevClassIdx: Int,
-		entries: [EffectValueEntry],
-		isBasicTitle: Bool
+		entries: [EffectValueEntry]
 	) -> Any {
 		var remap: [Int: Int] = [:]
 		let baseIdx = objects.count
@@ -95,7 +94,9 @@ extension FCPNativePasteboardBuilder {
 		for origIdx in cloneIndices {
 			objects.append(deepCopy(objects[origIdx], remap: remap))
 		}
-		if isBasicTitle { objects[remap[17]!] = displayName }
+		// Clip name = caption text for every title (templates included); otherwise FCP shows
+		// the template name until the text is edited.
+		objects[remap[17]!] = displayName
 		objects[remap[19]!] = range
 		regenerateUUIDs(in: &objects, at: Array(remap.values))
 

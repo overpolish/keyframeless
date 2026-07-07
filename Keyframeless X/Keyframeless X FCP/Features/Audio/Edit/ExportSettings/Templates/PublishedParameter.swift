@@ -44,6 +44,12 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 	/// is honored. nil when the node has no `flags` attribute.
 	var nativeFlags: Int?
 
+	/// For a normalized (0-1) param that FCP exposes in display units centered on 0 (the
+	/// Subtitle's Background Width/Height and X/Y offsets): the display half-range, so the
+	/// stored `sliderValue` (display, 0 = neutral) maps to normalized = value/(2·range)+0.5.
+	/// nil = emit the slider value unchanged.
+	var normalizedHalfRange: Double?
+
 	/// Backing store for `isTextSize`. Optional so params persisted before this field
 	/// existed still decode - synthesized `Codable` throws on a missing NON-optional key
 	/// (it ignores default values), which would wipe every saved template's settings.
@@ -114,6 +120,26 @@ struct PublishedParameter: Identifiable, Codable, Equatable {
 		// Outline sub-params
 		static let outlineColor = "32"
 		static let outlineWidth = "36"
+	}
+
+	/// Control kind inferred purely from the detected data, for built-in templates that have
+	/// no publish modal to configure kinds by hand (the Subtitle title). Mirrors the choices
+	/// a user would make: font/dropdown/color/point/toggle from structure, else a numeric field.
+	var inferredControlKind: ParamKind {
+		if defaultFont != nil { return .font }
+		if options != nil { return .dropdown }
+		if defaultR != nil { return .color }
+		if defaultX != nil { return .point }
+		if filterEnableFlags != nil { return .toggle }
+		if defaultNumber != nil { return .slider }
+		return .off
+	}
+
+	/// Convert a stored slider value to the value FCP expects. Identity unless the param has a
+	/// `normalizedHalfRange`, in which case the display value (0 = neutral) maps to normalized.
+	func emittedSliderValue(_ display: Double) -> Double {
+		guard let range = normalizedHalfRange, range > 0 else { return display }
+		return display / (2 * range) + 0.5
 	}
 
 	var isFont: Bool { kind == .font }

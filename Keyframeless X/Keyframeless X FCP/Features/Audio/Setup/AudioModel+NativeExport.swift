@@ -75,43 +75,40 @@ extension AudioModel {
 			storylines = [segments.map(makeTitleEntry)]
 			clipStarts = [0]
 		}
-		let font = FCPXMLBuilder.fontInfo(postScriptName: textStyle.textFont)
+		let activeStyle = activeTextStyle
+		let font = FCPXMLBuilder.fontInfo(postScriptName: activeStyle.textFont)
 		let style = FCPNativePasteboardBuilder.Style(
 			fontFamily: font.familyName,
-			fontPostScript: textStyle.textFont,
-			fontSize: max(10, Int(textStyle.textSize)),
-			colorR: textStyle.textColorR,
-			colorG: textStyle.textColorG,
-			colorB: textStyle.textColorB,
-			colorA: textStyle.textColorA,
-			yPositionPercent: textStyle.textYPosition
+			fontPostScript: activeStyle.textFont,
+			fontSize: max(10, Int(activeStyle.textSize)),
+			colorR: activeStyle.textColorR,
+			colorG: activeStyle.textColorG,
+			colorB: activeStyle.textColorB,
+			colorA: activeStyle.textColorA,
+			yPositionPercent: activeStyle.textYPosition
 		)
 
+		let template = activeTemplate
 		let templateInfo: FCPNativePasteboardBuilder.TemplateInfo?
 		let publishedParams: [FCPNativePasteboardBuilder.EffectValueEntry]
-		if selectedTemplate.isBuiltIn {
+		// A built-in Title (basicTitle) has no configured params, so it stays a bare title.
+		// The built-in Subtitle DOES carry a moti + params, so it goes through the template
+		// branch like any custom template.
+		if template.isBuiltIn && captionImportType != .subtitles {
 			templateInfo = nil
 			publishedParams = []
 		} else {
-			let motiPath = selectedTemplate.uid
-			let fileURL: String
-			if motiPath.hasPrefix("~/") {
-				let relative = String(motiPath.dropFirst(2))
-				let base = FileManager.default.homeDirectoryForCurrentUser
-					.appendingPathComponent("Movies/Motion Templates.localized")
-					.appendingPathComponent(relative)
-				fileURL = base.absoluteString
-			} else {
-				fileURL = URL(fileURLWithPath: motiPath).absoluteString
-			}
+			let fileURL =
+				template.resolvedMotiURL()?.absoluteString
+				?? URL(fileURLWithPath: template.uid).absoluteString
 			let store = TemplatePublishedParamsStore.shared
-			let storedSettings = store.params(for: selectedTemplate.id)
+			let storedSettings = store.params(for: template.id)
 			templateInfo = FCPNativePasteboardBuilder.TemplateInfo(
-				effectID: motiPath,
+				effectID: template.uid,
 				fileURL: fileURL,
-				name: selectedTemplate.name,
-				wordsInKeyPath: selectedTemplate.wordsInKeyPath,
-				wordsInParamName: selectedTemplate.wordsInParamName,
+				name: template.name,
+				wordsInKeyPath: template.wordsInKeyPath,
+				wordsInParamName: template.wordsInParamName,
 				perWordStartsAtZero: storedSettings?.perWordStartsAtZero ?? false,
 				textOzmlKey: storedSettings?.textOzmlKey,
 				textOzml: storedSettings?.textOzml,
@@ -128,7 +125,8 @@ extension AudioModel {
 			style: style,
 			frameDuration: exportFramerate.rawValue,
 			templateInfo: templateInfo,
-			publishedParams: publishedParams
+			publishedParams: publishedParams,
+			roleUID: activeRoleUID
 		)
 	}
 
@@ -136,20 +134,24 @@ extension AudioModel {
 	/// identified by channel path (`2/373/2`), which survives a creator renaming it.
 	private func verticalAlignmentTag() -> Int? {
 		let store = TemplatePublishedParamsStore.shared
-		guard let settings = store.params(for: selectedTemplate.id),
+		let tid = activeTemplate.id
+		guard let settings = store.params(for: tid),
 			let va = settings.allParams.first(where: {
 				$0.kind == .dropdown && $0.channelPath == "2/373/2"
 			})
 		else { return nil }
-		return store.value(paramID: va.id, for: selectedTemplate.id).enumValue
+		return store.value(paramID: va.id, for: tid).enumValue
 	}
 
 	private func buildNativePublishedParams() -> [FCPNativePasteboardBuilder.EffectValueEntry] {
 		let store = TemplatePublishedParamsStore.shared
-		guard let settings = store.params(for: selectedTemplate.id) else { return [] }
+		let tid = activeTemplate.id
+		guard let settings = store.params(for: tid) else { return [] }
+		let excluded = textStyleParamKeys
 		var entries: [FCPNativePasteboardBuilder.EffectValueEntry] = []
 		for param in settings.allParams where !param.isTextSize {
-			let val = store.value(paramID: param.id, for: selectedTemplate.id)
+			if excluded.contains("\(param.objectID)/\(param.channelPath)") { continue }
+			let val = store.value(paramID: param.id, for: tid)
 			let key = param.styleKey ?? param.effectValueKey
 			switch param.kind {
 			case .color:
@@ -178,7 +180,8 @@ extension AudioModel {
 							key: key,
 							data: OzmlBuilder.slider(
 								name: param.name, paramID: param.channelParamID,
-								value: val.sliderValue, flags: param.overrideFlags)))
+								value: param.emittedSliderValue(val.sliderValue),
+								flags: param.overrideFlags)))
 				}
 			case .percent:
 				// A percentage control (0-100) → the native 0-1 value.
@@ -230,6 +233,21 @@ extension AudioModel {
 					.init(
 						key: "\(key)/2",
 						data: OzmlBuilder.slider(name: "Y", paramID: "2", value: val.pointY / s)))
+			case .dropdown:
+				// Vertical Alignment (channel 2/373/2) is applied via the injected-scene patch
+				// (verticalAlignmentTag); every other dropdown emits a menu effect-value with the
+				// selected enum tag (matches FCP's native archive).
+				if param.channelPath == "2/373/2" { break }
+				let options = param.options ?? []
+				entries.append(
+					.init(
+						key: key,
+						data: OzmlBuilder.menu(
+							name: param.name, paramID: param.channelParamID,
+							value: val.enumValue,
+							defaultTag: param.defaultTag ?? options.first?.tag ?? 0,
+							flags: param.overrideFlags,
+							entries: options.map { (name: $0.name, tag: $0.tag) })))
 			default:
 				if let defaultFont = param.defaultFont {
 					let fontToUse =
@@ -253,17 +271,22 @@ extension AudioModel {
 		// template publishes "Size".
 		// textSizeKey is synthesized at parse; fall back to a published Size param's own
 		// key/flags so configs stored before this field existed keep working pre-reimport.
-		let sizeParam = settings.allParams.first(where: { $0.isTextSize })
-		if let sizeKey = settings.textSizeKey ?? sizeParam?.styleKey {
-			let size = Double(max(10, Int(textStyle.textSize)))
-			let flags =
-				(settings.textSizeFlags ?? sizeParam?.nativeFlags).map { $0 | 0x1_0000_0000 }
-				?? 8_589_934_608
-			entries.append(
-				.init(
-					key: sizeKey,
-					data: OzmlBuilder.slider(name: "Size", paramID: "3", value: size, flags: flags))
-			)
+		// Subtitles carry size via the injected text-scene patch (from the panel's Font Size),
+		// so skip the synthesized override there.
+		if captionImportType != .subtitles {
+			let sizeParam = settings.allParams.first(where: { $0.isTextSize })
+			if let sizeKey = settings.textSizeKey ?? sizeParam?.styleKey {
+				let size = Double(max(10, Int(textStyle.textSize)))
+				let flags =
+					(settings.textSizeFlags ?? sizeParam?.nativeFlags).map { $0 | 0x1_0000_0000 }
+					?? 8_589_934_608
+				entries.append(
+					.init(
+						key: sizeKey,
+						data: OzmlBuilder.slider(
+							name: "Size", paramID: "3", value: size, flags: flags))
+				)
+			}
 		}
 		return entries
 	}
@@ -277,7 +300,8 @@ extension AudioModel {
 	/// except width, which reads its published value.
 	func enabledTextFilterAttrs() -> String {
 		let store = TemplatePublishedParamsStore.shared
-		guard let settings = store.params(for: selectedTemplate.id) else { return "" }
+		let activeID = activeTemplate.id
+		guard let settings = store.params(for: activeID) else { return "" }
 
 		typealias TF = PublishedParameter.TextFilter
 
@@ -289,7 +313,7 @@ extension AudioModel {
 				let col = settings.allParams.first(where: { $0.channelPath == group + "/" + sub })
 			else { return base }
 			if col.kind == .color,
-				let custom = store.sessionValue(paramID: col.id, for: selectedTemplate.id)
+				let custom = store.sessionValue(paramID: col.id, for: activeID)
 			{
 				return "\(custom.r) \(custom.g) \(custom.b)"
 			}
@@ -302,14 +326,14 @@ extension AudioModel {
 			guard let p = settings.allParams.first(where: { $0.channelPath == group + "/" + sub })
 			else { return fallback }
 			if p.kind == .slider || p.kind == .rotation || p.kind == .percent {
-				return store.value(paramID: p.id, for: selectedTemplate.id).sliderValue
+				return store.value(paramID: p.id, for: activeID).sliderValue
 			}
 			return p.defaultNumber ?? fallback
 		}
 
 		var attrs = ""
 		for param in settings.allParams where param.filterEnableFlags != nil {
-			guard store.value(paramID: param.id, for: selectedTemplate.id).toggleValue else {
+			guard store.value(paramID: param.id, for: activeID).toggleValue else {
 				continue
 			}
 			// Detect by FIXED Motion channel id (rename-proof), not the published name.
@@ -341,11 +365,15 @@ extension AudioModel {
 
 	func buildPublishedParamEntries() -> [FCPXMLBuilder.PublishedParamEntry] {
 		let store = TemplatePublishedParamsStore.shared
-		guard let settings = store.params(for: selectedTemplate.id) else { return [] }
+		let tid = activeTemplate.id
+		guard let settings = store.params(for: tid) else { return [] }
+		let excluded = textStyleParamKeys
 		var entries: [FCPXMLBuilder.PublishedParamEntry] = []
 		for param in settings.allParams where param.isToggleable && !param.isTextSize {
-			let val = store.value(paramID: param.id, for: selectedTemplate.id)
+			let val = store.value(paramID: param.id, for: tid)
 			if param.isFont { continue }
+			// Font/Size/Colour ride in <text-style>, not as overrides (Subtitle only).
+			if excluded.contains("\(param.objectID)/\(param.channelPath)") { continue }
 			// Filter-enable toggles map to text-style shadow attrs in FCPXML (a
 			// different mechanism than the native group-key override); skip for now.
 			if param.filterEnableFlags != nil { continue }
@@ -362,7 +390,7 @@ extension AudioModel {
 			case .color:
 				valueStr = "\(val.r) \(val.g) \(val.b) \(val.a)"
 			case .slider, .rotation:
-				valueStr = "\(val.sliderValue)"
+				valueStr = "\(param.emittedSliderValue(val.sliderValue))"
 			case .percent:
 				// Percentage control (0-100) → FCP's 0-1 value.
 				valueStr = "\(val.sliderValue / 100)"
@@ -379,12 +407,15 @@ extension AudioModel {
 
 		// Mirror the native path: the caption's Text Size drives the text-style font size
 		// via a real override synthesized from the style, so it works even when the
-		// template doesn't publish "Size".
-		let sizeParam = settings.allParams.first(where: { $0.isTextSize })
-		if let sizeKey = settings.textSizeKey ?? sizeParam?.styleKey {
-			let size = Double(max(10, Int(textStyle.textSize)))
-			entries.append(
-				FCPXMLBuilder.PublishedParamEntry(name: "Size", key: sizeKey, value: "\(size)"))
+		// template doesn't publish "Size". Subtitles carry size directly in <text-style>
+		// (from the panel's Font Size), so skip the synthesized override there.
+		if captionImportType != .subtitles {
+			let sizeParam = settings.allParams.first(where: { $0.isTextSize })
+			if let sizeKey = settings.textSizeKey ?? sizeParam?.styleKey {
+				let size = Double(max(10, Int(textStyle.textSize)))
+				entries.append(
+					FCPXMLBuilder.PublishedParamEntry(name: "Size", key: sizeKey, value: "\(size)"))
+			}
 		}
 		return entries
 	}

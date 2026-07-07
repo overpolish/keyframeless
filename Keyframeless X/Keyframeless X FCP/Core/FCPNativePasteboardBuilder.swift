@@ -85,7 +85,8 @@ enum FCPNativePasteboardBuilder {
 		frameDuration: String = "1001/24000s",
 		mediaStartTime: Double = 3600.0,
 		templateInfo: TemplateInfo? = nil,
-		publishedParams: [EffectValueEntry] = []
+		publishedParams: [EffectValueEntry] = [],
+		roleUID: String = "VaUwsjFSHS5Cpf3PuyPV0Cw"
 	) -> Data? {
 		let allTitles = storylines.flatMap { $0 }
 		guard !allTitles.isEmpty else { return nil }
@@ -105,8 +106,9 @@ enum FCPNativePasteboardBuilder {
 			var objects = archive["$objects"] as? [Any]
 		else { return nil }
 
-		// Assign Captions role (subrole UUID from template's embedded roles data)
-		objects[59] = "VaUwsjFSHS5Cpf3PuyPV0Cw"
+		// Assign the title role (subrole UUID). Default = Captions; Subtitles pass the FCP
+		// `subtitles` role UID so pasted subtitle titles land in the Subtitles role.
+		objects[59] = roleUID
 
 		let isBasicTitle = templateInfo == nil
 
@@ -120,9 +122,9 @@ enum FCPNativePasteboardBuilder {
 			baseOzml = ozml
 		}
 
-		// Swap template URL/effectID for custom templates
+		// Swap template URL/effectID for custom templates (the clip displayName is set per
+		// title to the caption text below, not the template name).
 		if let info = templateInfo {
-			objects[17] = info.name
 			objects[24] = info.fileURL
 			objects[27] = info.effectID
 		}
@@ -196,7 +198,10 @@ enum FCPNativePasteboardBuilder {
 
 				if !usedTemplateTitle {
 					usedTemplateTitle = true
-					if templateInfo == nil { objects[17] = title.displayName }
+					// The clip name is the caption text (matching the FCPXML `name=`), for
+					// templates too - otherwise FCP shows the template name until the text is
+					// edited. objects[17] is the title's displayName.
+					objects[17] = title.displayName
 					objects[19] = range
 					regenerateUUIDs(in: &objects, at: cloneIndices)
 					addEffectValues(
@@ -208,8 +213,7 @@ enum FCPNativePasteboardBuilder {
 						cloneTitle(
 							into: &objects, displayName: title.displayName,
 							range: range, style: style,
-							mevClassIdx: mevClassIdx, entries: titleEVs,
-							isBasicTitle: isBasicTitle))
+							mevClassIdx: mevClassIdx, entries: titleEVs))
 				}
 
 				cursorFrames = titleEndFrames

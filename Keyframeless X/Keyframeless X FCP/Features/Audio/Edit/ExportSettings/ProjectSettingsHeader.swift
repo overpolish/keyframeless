@@ -41,7 +41,7 @@ struct ProjectSettingsHeader: View {
 				.buttonStyle(.plain)
 				.foregroundStyle(.secondary)
 			}
-			if model.captionImportType == .title {
+			if model.captionImportType != .caption {
 				IntegerField(
 					placeholder: String(localized: "Width"), text: $model.exportWidth, min: 60,
 					max: 7680

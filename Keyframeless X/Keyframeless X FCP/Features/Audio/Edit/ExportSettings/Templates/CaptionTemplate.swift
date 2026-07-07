@@ -32,6 +32,22 @@ struct CaptionTemplate: Identifiable, Equatable, Codable {
 		previewGifPath: nil
 	)
 
+	/// The FCP 12.3 built-in Subtitles title. uid is the relative `.../` Motion-Templates
+	/// path FCP writes into FCPXML; `resolvedMotiURL()` maps it to the host app bundle so
+	/// the published-param parser can read it. Gated on [[FCPHost.supportsSubtitles]].
+	static let subtitle = CaptionTemplate(
+		id: "builtin-subtitle",
+		name: "Subtitle",
+		uid: ".../Titles.localized/Subtitles.localized/Subtitle.localized/Subtitle.moti",
+		supportsPerWordAnimation: false,
+		wordsInParamName: nil,
+		wordsInKeyPath: nil,
+		isBuiltIn: true,
+		isCustom: false,
+		thumbnailPath: nil,
+		previewGifPath: nil
+	)
+
 	static func findThumbnail(in directory: URL) -> String? {
 		let largePNG = directory.appendingPathComponent("large.png")
 		let smallPNG = directory.appendingPathComponent("small.png")
@@ -90,6 +106,21 @@ struct CaptionTemplate: Identifiable, Equatable, Codable {
 			let base = FileManager.default.homeDirectoryForCurrentUser
 				.appendingPathComponent("Movies/Motion Templates.localized")
 			return base.appendingPathComponent(relative)
+		}
+		// `.../` = a template bundled inside the host FCP app (e.g. the built-in Subtitle).
+		// Resolve it against the running FCP's METemplates directory.
+		if uid.hasPrefix(".../") {
+			let relative = String(uid.dropFirst(4))
+			guard
+				let fcp = NSWorkspace.shared.urlForApplication(
+					withBundleIdentifier: "com.apple.FinalCut")
+			else { return nil }
+			return
+				fcp
+				.appendingPathComponent(
+					"Contents/PlugIns/MediaProviders/MotionEffect.fxp/Contents/Resources/METemplates.localized"
+				)
+				.appendingPathComponent(relative)
 		}
 		return URL(fileURLWithPath: uid)
 	}

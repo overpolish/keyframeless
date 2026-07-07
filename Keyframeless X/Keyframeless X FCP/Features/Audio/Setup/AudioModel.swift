@@ -217,7 +217,7 @@ class AudioModel: ObservableObject {
 		)
 		let publishedParams = buildPublishedParamEntries()
 		let startsAtZero =
-			TemplatePublishedParamsStore.shared.params(for: selectedTemplate.id)?
+			TemplatePublishedParamsStore.shared.params(for: activeTemplate.id)?
 			.perWordStartsAtZero ?? false
 
 		let hasOverlaps = CaptionBuilder.hasOverlaps(segments)
@@ -231,12 +231,13 @@ class AudioModel: ObservableObject {
 
 		return FCPXMLBuilder.build(
 			storylines: storylines,
-			textStyle: textStyle,
+			textStyle: activeTextStyle,
 			format: format,
-			template: selectedTemplate,
+			template: activeTemplate,
 			publishedParams: publishedParams,
 			perWordStartsAtZero: startsAtZero,
-			textStyleFilterAttrs: enabledTextFilterAttrs()
+			textStyleFilterAttrs: activeTextStyleFilterAttrs,
+			role: activeRole
 		)
 	}
 
@@ -284,10 +285,13 @@ class AudioModel: ObservableObject {
 	}
 
 	func insertTitle(rows: [AudioEditRow]) {
-		let fcpxml =
-			captionImportType == .caption
-			? buildNativeCaptionFCPXML(from: rows)
-			: buildFCPXML(from: rows)
+		let fcpxml: String
+		switch captionImportType {
+		case .caption: fcpxml = buildNativeCaptionFCPXML(from: rows)
+		// Subtitles is just a title with the subtitles role, so it reuses buildFCPXML via the
+		// active* accessors (activeTemplate / activeRole / activeTextStyle).
+		case .subtitles, .title: fcpxml = buildFCPXML(from: rows)
+		}
 		let tmpURL = FileManager.default.temporaryDirectory
 			.appendingPathComponent("keyframeless_captions.fcpxml")
 		try? fcpxml.write(to: tmpURL, atomically: true, encoding: .utf8)

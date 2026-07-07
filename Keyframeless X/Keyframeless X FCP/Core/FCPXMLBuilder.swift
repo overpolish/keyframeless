@@ -52,8 +52,10 @@ enum FCPXMLBuilder {
 		template: CaptionTemplate = .basicTitle,
 		publishedParams: [PublishedParamEntry] = [],
 		perWordStartsAtZero: Bool = false,
-		textStyleFilterAttrs: String = ""
+		textStyleFilterAttrs: String = "",
+		role: String = "subtitles.subtitles-1"
 	) -> String {
+		let escapedRole = xmlEscape(role)
 		let allSegments = storylines.flatMap { $0 }
 		guard !allSegments.isEmpty else {
 			return emptyXML(format: format)
@@ -117,7 +119,7 @@ enum FCPXMLBuilder {
 						seconds: segment.endTime - segment.startTime, frameRate: frameRate)
 				}
 				xml +=
-					"\t\t\t\t\t\t\t<title lane=\"\(lane)\" offset=\"\(offset)\" ref=\"r2\" duration=\"\(durationStr)\" start=\"\(rationalTime(seconds: mediaStart, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\" role=\"Captions.Captions-1\">\n"
+					"\t\t\t\t\t\t\t<title lane=\"\(lane)\" offset=\"\(offset)\" ref=\"r2\" duration=\"\(durationStr)\" start=\"\(rationalTime(seconds: mediaStart, frameRate: frameRate))\" name=\"\(xmlEscape(segment.lines.first ?? ""))\" role=\"\(escapedRole)\">\n"
 				let wordCount = segment.wordStarts.count
 				if wordCount > 0 && template.supportsPerWordAnimation,
 					let paramName = template.wordsInParamName,

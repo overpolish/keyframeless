@@ -309,11 +309,12 @@ struct FontModeRow: View {
 	}
 }
 
-struct ParamControlRow: View {
+/// Just the value control for a published param (no label), bound to the store. Shared by
+/// ParamControlRow and the grouped Subtitle layout.
+struct ParamControl: View {
 	let param: PublishedParameter
 	let templateID: String
 	@ObservedObject var store: TemplatePublishedParamsStore
-	var compact: Bool = false
 
 	private func binding<T>(
 		_ keyPath: WritableKeyPath<TemplatePublishedParamsStore.ParamValue, T>
@@ -326,21 +327,6 @@ struct ParamControlRow: View {
 				store.setValue(val, paramID: param.id, for: templateID)
 			}
 		)
-	}
-
-	private var labelWidth: CGFloat { compact ? 96 : 120 }
-
-	var body: some View {
-		HStack(spacing: KKSpacingMD) {
-			Text(param.name)
-				.font(compact ? .system(size: 10) : .caption)
-				.foregroundStyle(.primary)
-				.lineLimit(1)
-				.frame(width: labelWidth, alignment: .leading)
-			control
-				.frame(maxWidth: .infinity, alignment: .leading)
-		}
-		.frame(maxWidth: .infinity)
 	}
 
 	private func pointField(_ axis: String, _ value: Binding<Double>) -> some View {
@@ -364,7 +350,7 @@ struct ParamControlRow: View {
 		.frame(maxWidth: .infinity)
 	}
 
-	@ViewBuilder private var control: some View {
+	@ViewBuilder var body: some View {
 		switch param.kind {
 		case .color:
 			HStack(spacing: 0) {
@@ -446,11 +432,35 @@ struct ParamControlRow: View {
 	}
 }
 
-struct FontControlRow: View {
+struct ParamControlRow: View {
 	let param: PublishedParameter
 	let templateID: String
 	@ObservedObject var store: TemplatePublishedParamsStore
 	var compact: Bool = false
+
+	private var labelWidth: CGFloat { compact ? 96 : 120 }
+
+	var body: some View {
+		HStack(spacing: KKSpacingMD) {
+			Text(param.name)
+				.font(compact ? .system(size: 10) : .caption)
+				.foregroundStyle(.primary)
+				.lineLimit(1)
+				.frame(width: labelWidth, alignment: .leading)
+			ParamControl(param: param, templateID: templateID, store: store)
+				.frame(maxWidth: .infinity, alignment: .leading)
+		}
+		.frame(maxWidth: .infinity, alignment: .leading)
+	}
+}
+
+/// Just the font picker field (no label), bound to the store. Shared by FontControlRow and the
+/// grouped Subtitle layout.
+struct FontFieldControl: View {
+	let param: PublishedParameter
+	let templateID: String
+	@ObservedObject var store: TemplatePublishedParamsStore
+	var arrowEdge: Edge = .top
 	@State private var isFontOpen = false
 
 	private var customFont: Binding<String> {
@@ -473,29 +483,47 @@ struct FontControlRow: View {
 
 	var body: some View {
 		HStack(spacing: KKSpacingSM) {
+			Text(displayName)
+				.font(.custom(customFont.wrappedValue, size: 11))
+				.lineLimit(1)
+				.frame(maxWidth: .infinity, alignment: .leading)
+			Image(systemName: "chevron.up.chevron.down")
+				.font(.caption2)
+				.foregroundStyle(.secondary)
+		}
+		.frame(height: KKInspectorRowHeight)
+		.padding(.horizontal, KKPaddingLG)
+		.kkPanel(cornerRadius: KKRadiusMD)
+		.contentShape(RoundedRectangle(cornerRadius: KKRadiusMD))
+		.onTapGesture { isFontOpen.toggle() }
+		.popover(isPresented: $isFontOpen, arrowEdge: arrowEdge) {
+			FontListPopover(selectedFont: customFont, fonts: FontCache.families)
+				.background(PopoverBackgroundClearer())
+		}
+	}
+}
+
+struct FontControlRow: View {
+	let param: PublishedParameter
+	let templateID: String
+	@ObservedObject var store: TemplatePublishedParamsStore
+	var compact: Bool = false
+
+	private var labelWidth: CGFloat { compact ? 96 : 120 }
+
+	var body: some View {
+		HStack(spacing: KKSpacingMD) {
 			Text(param.name)
-				.font(.system(size: 10))
+				.font(.system(size: compact ? 10 : 11))
 				.foregroundStyle(.primary)
 				.lineLimit(1)
-			Spacer()
-			HStack(spacing: KKSpacingSM) {
-				Text(displayName)
-					.font(.custom(customFont.wrappedValue, size: 11))
-					.lineLimit(1)
-					.frame(maxWidth: .infinity, alignment: .leading)
-				Image(systemName: "chevron.up.chevron.down")
-					.font(.caption2)
-					.foregroundStyle(.secondary)
-			}
-			.frame(height: KKInspectorRowHeight)
-			.padding(.horizontal, KKPaddingLG)
-			.kkPanel(cornerRadius: KKRadiusMD)
-			.contentShape(RoundedRectangle(cornerRadius: KKRadiusMD))
-			.onTapGesture { isFontOpen.toggle() }
-			.popover(isPresented: $isFontOpen, arrowEdge: compact ? .leading : .top) {
-				FontListPopover(selectedFont: customFont, fonts: FontCache.families)
-					.background(PopoverBackgroundClearer())
-			}
+				.frame(width: labelWidth, alignment: .leading)
+			FontFieldControl(
+				param: param, templateID: templateID, store: store,
+				arrowEdge: compact ? .leading : .top
+			)
+			.frame(maxWidth: .infinity, alignment: .leading)
 		}
+		.frame(maxWidth: .infinity, alignment: .leading)
 	}
 }

@@ -31,13 +31,11 @@ struct TemplateParamsPanel: View {
 					VStack(alignment: .leading, spacing: KKSpacingLG) {
 						ForEach(enabledParams) { param in
 							ParamControlRow(
-								param: param, templateID: template.id,
-								store: store, compact: true)
+								param: param, templateID: template.id, store: store, compact: true)
 						}
 						ForEach(fontParams) { param in
 							FontControlRow(
-								param: param, templateID: template.id,
-								store: store, compact: true)
+								param: param, templateID: template.id, store: store, compact: true)
 						}
 					}
 					.padding(.vertical, KKPaddingXS)

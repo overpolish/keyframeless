@@ -8,6 +8,7 @@ import SwiftUI
 
 struct CaptionStyleControls: View {
 	@ObservedObject var model: AudioModel
+	@ObservedObject private var paramsStore = TemplatePublishedParamsStore.shared
 	@State private var initialTextStyle: TextStyleSettings?
 	@State private var initialCaptionStyle: CaptionStyleSettings?
 
@@ -18,6 +19,8 @@ struct CaptionStyleControls: View {
 	}
 
 	private var isCaption: Bool { model.captionImportType == .caption }
+	private var isTitle: Bool { model.captionImportType == .title }
+	private var isSubtitles: Bool { model.captionImportType == .subtitles }
 
 	private var anySelectedClipIsSrt: Bool {
 		let selected = model.editSelectedClips ?? Set(model.audioClips.indices)
@@ -29,7 +32,7 @@ struct CaptionStyleControls: View {
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingLG) {
-			if !isCaption {
+			if isTitle {
 				GeometryReader { geo in
 					let halfWidth = (geo.size.width - KKSpacingXL) / 2
 					HStack(alignment: .bottom, spacing: KKSpacingXL) {
@@ -133,7 +136,7 @@ struct CaptionStyleControls: View {
 					.foregroundStyle(.secondary)
 				}
 			}
-			if !isCaption {
+			if isTitle {
 				Divider()
 				CaptionTemplatePicker(
 					model: model,
@@ -141,6 +144,27 @@ struct CaptionStyleControls: View {
 					hidePerWord: anySelectedClipIsSrt,
 					onRemoveCustom: { model.removeCustomTemplate($0) }
 				)
+			}
+			if isSubtitles {
+				Divider()
+				HStack(spacing: KKSpacingLG) {
+					Text("Subtitle Style")
+						.font(.title3)
+						.foregroundStyle(.secondary)
+					Spacer()
+					if paramsStore.hasSessionValues(for: CaptionTemplate.subtitle.id) {
+						Button {
+							paramsStore.resetValues(for: CaptionTemplate.subtitle.id)
+						} label: {
+							Label("Reset", systemImage: "arrow.uturn.backward")
+								.font(.system(size: 10))
+								.foregroundStyle(.secondary)
+								.contentShape(Capsule())
+						}
+						.buttonStyle(.plain)
+					}
+				}
+				SubtitleStylePanel(store: paramsStore)
 			}
 		}
 		.onAppear {

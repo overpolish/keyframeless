@@ -7,6 +7,7 @@ import Foundation
 
 enum CaptionImportType: String, Codable, CaseIterable, Identifiable {
 	case title
+	case subtitles
 	case caption
 
 	var id: String { rawValue }

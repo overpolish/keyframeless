@@ -19,12 +19,12 @@ struct TextSettingsPanel: View {
 				textColorA: $model.textColorA,
 			)
 			LabeledSlider(
+				label: String(localized: "Font Size"), value: $model.textSize, range: 10...200,
+				suffix: "pt")
+			LabeledSlider(
 				label: String(localized: "Text Width"), value: $model.textWidthPercent,
 				range: 10...100,
 				suffix: "%")
-			LabeledSlider(
-				label: String(localized: "Text Size"), value: $model.textSize, range: 10...200,
-				suffix: "pt")
 			LabeledSlider(
 				label: String(localized: "Y Position"), value: $model.textYPosition, range: 0...100,
 				suffix: "%")

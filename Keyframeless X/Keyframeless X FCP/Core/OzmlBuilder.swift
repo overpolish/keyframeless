@@ -62,6 +62,25 @@ enum OzmlBuilder {
 		return wrap(channelFactory, body).data(using: .utf8)!
 	}
 
+	/// A pop-up / menu parameter (e.g. the Subtitle's Animation Style, Animate By). FCP stores
+	/// the selected enum TAG as the curve value with the full entry list embedded (verified
+	/// against a native Subtitle pasteboard).
+	static func menu(
+		name: String, paramID: String, value: Int, defaultTag: Int, flags: Int,
+		entries: [(name: String, tag: Int)]
+	) -> Data {
+		var body = "<parameter name=\"\(name)\" id=\"\(paramID)\" factoryID=\"1\">\n"
+		body += "\t<flags>\(flags)</flags>\n"
+		body += "\t<curve type=\"0\" default=\"\(defaultTag)\" value=\"\(value)\">\n"
+		body += "\t\t<min>0</min>\n\t\t<max>4294967295</max>\n"
+		body += "\t</curve>\n"
+		for entry in entries {
+			body += "\t<entry name=\"\(entry.name)\" tag=\"\(entry.tag)\"/>\n"
+		}
+		body += "</parameter>\n"
+		return wrap(channelFactory, body).data(using: .utf8)!
+	}
+
 	static func toggle(name: String, paramID: String, value: Bool) -> Data {
 		let v = value ? 1.0 : 0.0
 		let body =

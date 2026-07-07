@@ -23,12 +23,28 @@ struct AudioExportOptionsView: View {
 				model.exportFramerate = Framerate.from(frameDuration: format.frameDuration)
 				model.exportSettingsInitialized = true
 			}
+			// Host is ready by the time the view appears (init runs too early to read the
+			// FCP version), so load the built-in Subtitle params here.
+			model.loadSubtitleParamsIfSupported()
 		}
 	}
 }
 
 struct CaptionTypeSelector: View {
 	@ObservedObject var model: AudioModel
+
+	/// Title | (Subtitles) | Caption. Subtitles only appears on FCP 12.3+ where the built-in
+	/// Subtitle title exists.
+	private var typeOptions: [(label: String, value: CaptionImportType)] {
+		var options: [(label: String, value: CaptionImportType)] = [
+			(label: String(localized: "Title"), value: .title)
+		]
+		if FCPHost.supportsSubtitles {
+			options.append((label: String(localized: "Subtitles"), value: .subtitles))
+		}
+		options.append((label: String(localized: "Caption"), value: .caption))
+		return options
+	}
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: KKSpacingMD) {
@@ -37,13 +53,7 @@ struct CaptionTypeSelector: View {
 					.font(.caption)
 					.foregroundStyle(.secondary)
 				Spacer()
-				PillToggle(
-					selection: $model.captionImportType,
-					options: [
-						(label: String(localized: "Title"), value: CaptionImportType.title),
-						(label: String(localized: "Caption"), value: CaptionImportType.caption),
-					]
-				)
+				PillToggle(selection: $model.captionImportType, options: typeOptions)
 			}
 			if model.captionImportType == .caption {
 				HStack(spacing: KKSpacingSM) {
@@ -56,6 +66,12 @@ struct CaptionTypeSelector: View {
 						options: CaptionFormat.allCases.map { (label: $0.label, value: $0) }
 					)
 				}
+			}
+		}
+		.onAppear {
+			// A persisted .subtitles selection is invalid on a host without the feature.
+			if model.captionImportType == .subtitles && !FCPHost.supportsSubtitles {
+				model.captionImportType = .title
 			}
 		}
 	}
