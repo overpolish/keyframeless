@@ -41,6 +41,8 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     @"Rounded-XPC-Service" : @"rounded",
     @"co.overpolish.keyframeless.MagicMove" : @"magicmove",
     @"co.overpolish.keyframeless.MagicMove.PlugIn" : @"magicmove",
+    @"co.overpolish.keyframeless.Mesh" : @"mesh",
+    @"co.overpolish.keyframeless.Mesh.PlugIn" : @"mesh",
     @"MagicMove" : @"magicmove",
     @"MagicMove-XPC-Service" : @"magicmove",
     @"co.overpolish.keyframeless.Canvas" : @"canvas",

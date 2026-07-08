@@ -36,6 +36,12 @@
   BOOL canProcess =
       (del && [del respondsToSelector:@selector(miniViewer:processSourceTexture:
                                                 intoTexture:commandBuffer:)]);
+  // Source-less generator (no feed, produces its own pixels). Mutually
+  // exclusive with the source path per slot: a slot with a source frame always
+  // takes processSourceTexture:.
+  BOOL canGenerate =
+      (del && [del respondsToSelector:@selector(miniViewer:generateIntoTexture:
+                                                commandBuffer:)]);
   NSNumber *savedFrac =
       canProcess && n > 1
           ? [(NSObject *)del valueForKey:@"editFraction"] // nil if absent
@@ -49,10 +55,14 @@
     } @catch (...) {
     }
   }
-  if (canProcess) {
+  if (canProcess || canGenerate) {
     for (NSUInteger i = 0; i < n; i++) {
       _KKMiniFilmSlot *slot = _filmstripSlots[i];
-      if (!slot.sourceTexture)
+      // A slot with a real source frame renders through the effect path; a
+      // slot with no source, when the delegate is a generator, renders through
+      // the source-less generate path.
+      BOOL generating = (!slot.sourceTexture && canGenerate);
+      if (!slot.sourceTexture && !generating)
         continue;
       [self _ensureProcessedTextureForSlot:slot];
       if (!slot.processedTexture)
@@ -63,16 +73,22 @@
       // and lets macOS deliver scroll events at full rate.
       if (_reuseProcessedTexture)
         continue;
-      if (n > 1) {
+      if (n > 1 && !generating) {
         @try {
           [(NSObject *)del setValue:@(slot.tag) forKey:@"editFraction"];
         } @catch (...) {
         }
       }
-      [del miniViewer:self
-          processSourceTexture:slot.sourceTexture
-                   intoTexture:slot.processedTexture
-                 commandBuffer:cb];
+      if (generating) {
+        [del miniViewer:self
+            generateIntoTexture:slot.processedTexture
+                  commandBuffer:cb];
+      } else {
+        [del miniViewer:self
+            processSourceTexture:slot.sourceTexture
+                     intoTexture:slot.processedTexture
+                   commandBuffer:cb];
+      }
     }
     if (savedFrac) {
       @try {

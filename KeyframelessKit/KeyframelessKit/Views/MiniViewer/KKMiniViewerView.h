@@ -57,6 +57,16 @@ NS_ASSUME_NONNULL_BEGIN
     processSourceTexture:(id<MTLTexture>)source
              intoTexture:(id<MTLTexture>)dest
            commandBuffer:(id<MTLCommandBuffer>)commandBuffer;
+/// Generator variant: produce the preview pixels from the delegate's own state
+/// with NO input frame. A generator (e.g. a mesh gradient) has no source clip,
+/// so nothing is published into the feed; the canvas instead allocates a dest
+/// texture sized to the content rect (clip aspect) and asks the delegate to
+/// render straight into it. Implement THIS instead of (not in addition to)
+/// -processSourceTexture: for a source-less plugin. Return YES if a pass was
+/// encoded.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    generateIntoTexture:(id<MTLTexture>)dest
+          commandBuffer:(id<MTLCommandBuffer>)commandBuffer;
 /// Center of the point handle in overlay points (y-up), given the image's
 /// `contentRect` (same space). Return NO for no handle. The canvas draws it
 /// with the shared `KKPointOSC` shader so it's pixel-identical to the viewer

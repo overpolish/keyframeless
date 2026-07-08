@@ -534,8 +534,30 @@ static const NSUInteger kFilmstripGridCols = 5;
 }
 
 - (void)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot {
-  if (!slot.sourceTexture)
+  if (!slot.sourceTexture) {
+    // Generator path: no source frame. Size the target to the content rect's
+    // pixel size (clip aspect) so the delegate can render straight into it.
+    id<KKMiniViewerDelegate> genDel = self.canvasDelegate;
+    if (![genDel respondsToSelector:@selector(miniViewer:
+                                        generateIntoTexture:commandBuffer:)])
+      return;
+    CGRect content = [self _contentRectInDrawable];
+    NSUInteger gW = (NSUInteger)MAX(1.0, round(content.size.width));
+    NSUInteger gH = (NSUInteger)MAX(1.0, round(content.size.height));
+    if (slot.processedTexture && slot.processedTexture.width == gW &&
+        slot.processedTexture.height == gH)
+      return;
+    MTLTextureDescriptor *gtd = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                     width:gW
+                                    height:gH
+                                 mipmapped:NO];
+    gtd.usage = MTLTextureUsageShaderRead | MTLTextureUsageRenderTarget |
+                MTLTextureUsagePixelFormatView;
+    gtd.storageMode = MTLStorageModePrivate;
+    slot.processedTexture = [self.device newTextureWithDescriptor:gtd];
     return;
+  }
   // Render the effect at DISPLAY resolution (the content rect's pixel size in
   // the drawable), aspect-preserved and capped at the source size so we never
   // upscale. The processed texture is only ever blitted 1:1 into its cell, so

@@ -10,4 +10,7 @@
    <FileRef
       location = "group:Keyframeless X/Keyframeless X.xcodeproj">
    </FileRef>
+   <FileRef
+      location = "group:Mesh/Mesh.xcodeproj">
+   </FileRef>
 </Workspace>

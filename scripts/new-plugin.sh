@@ -121,8 +121,8 @@ mv "$DEST/Template" "$DEST/$PLUGIN_NAME"
 mv "$DEST/Template.xcodeproj" "$DEST/$PLUGIN_NAME.xcodeproj"
 
 # Rename Metal shader file
-mv "$DEST/$PLUGIN_NAME/Plugin/Template.metal" \
-   "$DEST/$PLUGIN_NAME/Plugin/$PLUGIN_NAME.metal"
+mv "$DEST/$PLUGIN_NAME/Plugin/Render/Template.metal" \
+   "$DEST/$PLUGIN_NAME/Plugin/Render/$PLUGIN_NAME.metal"
 
 ok "Renamed"
 
