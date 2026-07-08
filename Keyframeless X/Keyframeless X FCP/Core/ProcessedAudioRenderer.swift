@@ -6,6 +6,39 @@
 import AVFoundation
 import Foundation
 
+/// Bounds how many audio extractions decode concurrently. Each extraction does
+/// blocking `AVAssetReader.copyNextSampleBuffer` I/O; running one per clip (a
+/// heavily-cut project can be dozens) blocks every thread in the Swift
+/// cooperative pool at once, so no async work can make progress and the UI
+/// freezes. Capping keeps most pool threads free and cuts reader contention on
+/// the shared source file.
+actor AudioExtractionLimiter {
+	static let shared = AudioExtractionLimiter(limit: 4)
+
+	private let limit: Int
+	private var active = 0
+	private var waiters: [CheckedContinuation<Void, Never>] = []
+
+	init(limit: Int) { self.limit = limit }
+
+	func acquire() async {
+		if active < limit {
+			active += 1
+			return
+		}
+		// Resumed by release(), which hands off its slot without touching `active`.
+		await withCheckedContinuation { waiters.append($0) }
+	}
+
+	func release() {
+		if waiters.isEmpty {
+			active -= 1
+		} else {
+			waiters.removeFirst().resume()
+		}
+	}
+}
+
 actor ProcessedAudioRenderer {
 	static let shared = ProcessedAudioRenderer()
 
@@ -22,7 +55,11 @@ actor ProcessedAudioRenderer {
 		if let task = inflight[key] {
 			return try await task.value
 		}
-		let task = Task<URL, Error> { try await Self.render(clip: clip) }
+		let task = Task<URL, Error> {
+			await AudioExtractionLimiter.shared.acquire()
+			defer { Task { await AudioExtractionLimiter.shared.release() } }
+			return try await Self.render(clip: clip)
+		}
 		inflight[key] = task
 		do {
 			let url = try await task.value
