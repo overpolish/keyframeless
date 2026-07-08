@@ -115,11 +115,18 @@
   __weak typeof(self) weakSelf = self;
   __weak _KKGuideRowRefs *weakRefs = refs;
   iconBtn.actionBlock = ^{
+    __strong typeof(self) strongSelf = weakSelf;
     BOOL nowEnabled = provider ? provider() : YES;
     if (!nowEnabled)
       return;
     if (guide.activeProvider)
-      [weakSelf _startLoaderForRefs:weakRefs];
+      [strongSelf _startLoaderForRefs:weakRefs];
+    // Dismiss the help window before the guide runs so it doesn't cover the
+    // guide; the host re-opens it when the guide ends. Strong-held for the
+    // block so closing the window can't dealloc us mid-call.
+    void (^launch)(void) = strongSelf.onGuideLaunch;
+    if (launch)
+      launch();
     if (onStart)
       onStart();
     // "Completed" is gated on real completion ([guide markCompleted], called

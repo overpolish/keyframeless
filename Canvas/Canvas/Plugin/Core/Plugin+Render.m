@@ -9,10 +9,13 @@
 #import "CanvasLayerTimeline.h"  // CanvasSetUIStateSnapshot
 #import "CanvasLayerTransform.h" // CanvasStrokeEnabledAtFraction (lane gate)
 #import "CanvasLayerTree.h"     // CanvasLayerPathWithAncestors
+#import "CanvasInspectorView.h" // reloadLayerList (maintain-timing graph refresh)
 #import "CanvasMiniViewerRenderer.h"
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKTimingEvaluation.h> // LaneValueAtVisualFractionSmoothed
+#import <KeyframelessKit/KKTimingStage.h>       // KKTimelineRetimedForMediaAnchor
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMotionBlur.h>
@@ -115,6 +118,14 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
   BOOL hasTiming = KKRefreshRenderCache(
       self.apiManager, (KKTimelineInspectorView *)self.inspectorView,
       self.renderCache);
+  // Persist maintain-timing: when the clip range settles after a trim/grow,
+  // retime each layer's animationJSON so the stored keyposes (and the inspector
+  // graph) match the media-locked render. Canvas is per-layer, so it overrides
+  // -_commitMaintainTimingBakeWithTimelineParamID:uiStateParamID: to walk the
+  // layer blob instead of the single kKKParamTimelineData the base retimes.
+  [self bakeMaintainTimingForCache:self.renderCache
+                   timelineParamID:kParamLayerData
+                    uiStateParamID:kParamUIState];
   if (hasTiming) {
     KKPlayheadPoller *poller = self.playheadPoller;
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -820,6 +831,62 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
                                            enc, inputs[0], outputWidth,
                                            outputHeight, tileShiftX, tileShiftY);
                                      }];
+}
+
+// Maintain-timing persistence, Canvas flavour: Canvas keeps each layer's timing
+// in its own animationJSON inside the layer blob (kParamLayerData), not the
+// single kKKParamTimelineData the base retimes. Retime EVERY animated layer from
+// the old media anchor to the new clip range so the stored keyposes (and the
+// inspector graph) match the media-locked render. Return nil - the base's
+// single-timeline graph push doesn't fit a multi-layer graph, so we reload the
+// layer list ourselves.
+- (KKTimeline *)_retimeMaintainTimingBlobWithParamID:(UInt32)timelineParamID
+                                              getAPI:
+                                                  (id<FxParameterRetrievalAPI_v6>)
+                                                      getAPI
+                                              setAPI:
+                                                  (id<FxParameterSettingAPI_v5>)
+                                                      setAPI
+                                           fromSrcIn:(double)fromSrcIn
+                                             fromDur:(double)fromDur
+                                             toSrcIn:(double)toSrcIn
+                                               toDur:(double)toDur
+                                             edgeEps:(double)edgeEps {
+  NSString *b64 = KKReadCustomParamString(getAPI, timelineParamID);
+  if (!b64.length)
+    return nil;
+  NSMutableArray<KKBezierPath *> *paths = [KKBezierPath
+      pathsFromBlob:[[NSData alloc] initWithBase64EncodedString:b64 options:0]];
+  if (!paths.count)
+    return nil;
+  NSArray<KKLane *> *templates = [CanvasPlugin availableLanes];
+  BOOL any = NO;
+  for (KKBezierPath *path in paths) {
+    if (!path.animationJSON.length)
+      continue; // static layer: nothing to retime
+    KKTimeline *tl = CanvasLayerTimelineForPath(path, templates);
+    if (!tl)
+      continue;
+    KKTimeline *retimed = KKTimelineRetimedForMediaAnchor(
+        tl, fromSrcIn, fromDur, toSrcIn, toDur,
+        ^NSArray<NSNumber *> *(KKLane *lane, double frac) {
+          return KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+        },
+        edgeEps);
+    CanvasApplyTimelineToPath(retimed, path);
+    any = YES;
+  }
+  if (!any)
+    return nil;
+  NSData *blob = [KKBezierPath blobFromPaths:paths];
+  KKWriteCustomParamString(setAPI, [blob base64EncodedStringWithOptions:0],
+                           timelineParamID);
+  __weak typeof(self) weak = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(self) s = weak;
+    [(CanvasInspectorView *)s.inspectorView reloadLayerList];
+  });
+  return nil;
 }
 
 @end

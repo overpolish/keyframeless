@@ -10,6 +10,7 @@
 #import "KKHostInfo.h"
 #import "KKMotionBlur.h"
 #import "KKPlugin.h"
+#import "KKPluginHost.h"
 #import "KKTimelineInspectorView.h"
 #import "KKTimelineLanesView.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -250,9 +251,16 @@
     } else {
       base = CMTimeGetSeconds(es);
     }
-    if (dsec > 0.0)
-      [cmd movePlayheadToTime:CMTimeMakeWithSeconds(base + frac * dsec, 600)
-                        error:nil];
+    if (dsec > 0.0) {
+      // FCP's movePlayheadToTime: floors a time sitting on a frame seam to the
+      // previous frame, so snapping to a keypose lands one frame short and the
+      // OSC's half-frame visibility window rejects it (handle vanishes). Nudge
+      // half a frame in so it rounds onto the intended frame - same trick the
+      // loop-back path uses.
+      double frameDur = KKProcessFrameDurationSeconds();
+      double target = base + frac * dsec + frameDur * 0.5;
+      [cmd movePlayheadToTime:CMTimeMakeWithSeconds(target, 600) error:nil];
+    }
     [act endAction:strong];
   };
 

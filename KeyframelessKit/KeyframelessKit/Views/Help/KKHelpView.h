@@ -35,6 +35,12 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithFrame:(NSRect)frameRect NS_UNAVAILABLE;
 - (nullable instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
 
+/// Fired when the user taps a guide row (just before the guide's own onStart
+/// runs). The host uses it to dismiss the help window so it doesn't sit on top
+/// of the guide; it re-opens when the guide ends (see
+/// KKJoyrideRunDidEndNotification).
+@property(nonatomic, copy, nullable) void (^onGuideLaunch)(void);
+
 // refreshGuideRows / observeGuideRefreshNotificationNamed: live on the
 // KKHelpView (Guides) category - import "KKHelpView+Guides.h" to call them.
 
