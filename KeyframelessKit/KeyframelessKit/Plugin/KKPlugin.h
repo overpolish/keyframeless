@@ -586,6 +586,24 @@ typedef NS_ENUM(NSInteger, KKClipWrappingMode) {
 /// round-trip from a self-write isn't always reliable). Default nil.
 - (nullable KKTimelineInspectorView *)maintainTimingInspectorView;
 
+/// Maintain-timing persistence override point. Retime the stored animation
+/// blob(s) from the old media anchor [fromSrcIn,fromDur] to the new clip range
+/// [toSrcIn,toDur], writing the result back under `timelineParamID`. The
+/// default retimes the single kKKParamTimelineData KKTimeline. A per-layer
+/// plugin (Canvas) overrides it to retime every layer's animationJSON in its
+/// layer blob. Return the timeline to push to the inspector graph, or nil to
+/// skip that push (a plugin that refreshes its own multi-layer graph returns
+/// nil). Called inside the bake's action scope.
+- (nullable KKTimeline *)
+    _retimeMaintainTimingBlobWithParamID:(UInt32)timelineParamID
+                                  getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                                  setAPI:(id<FxParameterSettingAPI_v5>)setAPI
+                               fromSrcIn:(double)fromSrcIn
+                                 fromDur:(double)fromDur
+                                 toSrcIn:(double)toSrcIn
+                                   toDur:(double)toDur
+                                 edgeEps:(double)edgeEps;
+
 /// Override to provide help/keyboard-shortcut sections. Each section is
 /// rendered as a titled block with a tips bullet list and/or a 2-column
 /// shortcuts table. Returning a non-empty array makes the logo-banner

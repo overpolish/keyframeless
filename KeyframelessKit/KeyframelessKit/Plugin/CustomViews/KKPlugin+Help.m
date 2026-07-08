@@ -8,6 +8,7 @@
 #import "KKHelpSection.h"
 #import "KKHelpView+Guides.h"
 #import "KKHelpView.h"
+#import "KKJoyrideGuideHost.h"
 #import "KKLocalized.h"
 #import "KKLog.h"
 #import "KKMarkup.h"
@@ -196,19 +197,14 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
   if (curDur > 0 && fromDur > 0 &&
       (fabs(curSrcIn - fromSrcIn) > 1.0e-4 ||
        fabs(curDur - fromDur) > 1.0e-4)) {
-    NSString *tlJSON = KKReadCustomParamString(getAPI, timelineParamID);
-    KKTimeline *tl = tlJSON.length ? [KKTimeline timelineFromJSON:tlJSON] : nil;
-    if (tl) {
-      retimed = KKTimelineRetimedForMediaAnchor(
-          tl, fromSrcIn, fromDur, curSrcIn, curDur,
-          ^NSArray<NSNumber *> *(KKLane *lane, double frac) {
-            return KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
-          },
-          edgeEps);
-      NSString *outJSON = [KKTimeline jsonFromTimeline:retimed];
-      if (outJSON)
-        KKWriteCustomParamString(setAPI, outJSON, timelineParamID);
-    }
+    retimed = [self _retimeMaintainTimingBlobWithParamID:timelineParamID
+                                                  getAPI:getAPI
+                                                  setAPI:setAPI
+                                               fromSrcIn:fromSrcIn
+                                                 fromDur:fromDur
+                                                 toSrcIn:curSrcIn
+                                                   toDur:curDur
+                                                 edgeEps:edgeEps];
     st[@"maintainAnchorSrcIn"] = @(curSrcIn);
     st[@"maintainAnchorDur"] = @(curDur);
     NSString *stJSON = [[NSString alloc]
@@ -221,9 +217,37 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
   [actionAPI endAction:self];
 
   // Push straight to the graph so it refreshes even if the parameterChanged
-  // round-trip from this self-write is dropped (the inconsistency symptom).
+  // round-trip from this self-write is dropped (the inconsistency symptom). A
+  // per-layer plugin returns nil and refreshes its own multi-layer graph.
   if (retimed)
     [[self maintainTimingInspectorView] applyTimeline:retimed];
+}
+
+// Default: retime the single kKKParamTimelineData KKTimeline blob. Per-layer
+// plugins (Canvas) override this to retime every layer's animationJSON.
+- (KKTimeline *)
+    _retimeMaintainTimingBlobWithParamID:(UInt32)timelineParamID
+                                  getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
+                                  setAPI:(id<FxParameterSettingAPI_v5>)setAPI
+                               fromSrcIn:(double)fromSrcIn
+                                 fromDur:(double)fromDur
+                                 toSrcIn:(double)toSrcIn
+                                   toDur:(double)toDur
+                                 edgeEps:(double)edgeEps {
+  NSString *tlJSON = KKReadCustomParamString(getAPI, timelineParamID);
+  KKTimeline *tl = tlJSON.length ? [KKTimeline timelineFromJSON:tlJSON] : nil;
+  if (!tl)
+    return nil;
+  KKTimeline *retimed = KKTimelineRetimedForMediaAnchor(
+      tl, fromSrcIn, fromDur, toSrcIn, toDur,
+      ^NSArray<NSNumber *> *(KKLane *lane, double frac) {
+        return KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      },
+      edgeEps);
+  NSString *outJSON = [KKTimeline jsonFromTimeline:retimed];
+  if (outJSON)
+    KKWriteCustomParamString(setAPI, outJSON, timelineParamID);
+  return retimed;
 }
 
 - (NSArray<KKHelpSection *> *)helpSections {
@@ -471,6 +495,27 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
   return mb;
 }
 
+// One-shot: after the help window is dismissed to run a guide, re-open it when
+// that guide ends (completion OR skip - KKJoyrideRunDidEndNotification fires
+// for both). Self-removing so it never re-opens on a later, unrelated guide
+// run.
+- (void)_reopenHelpWhenGuideEnds {
+  __weak typeof(self) weakSelf = self;
+  __block id obs = [NSNotificationCenter.defaultCenter
+      addObserverForName:KKJoyrideRunDidEndNotification
+                  object:nil
+                   queue:NSOperationQueue.mainQueue
+              usingBlock:^(NSNotification *_Nonnull note) {
+                if (obs) {
+                  [NSNotificationCenter.defaultCenter removeObserver:obs];
+                  obs = nil;
+                }
+                __strong typeof(self) s = weakSelf;
+                if (s)
+                  [s openHelpRemoteWindow];
+              }];
+}
+
 - (void)openHelpRemoteWindow {
   NSMutableArray<KKHelpSection *> *sections =
       [[self helpSections] mutableCopy] ?: [NSMutableArray array];
@@ -521,6 +566,16 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
                       [s helpGuideRefreshNotificationName];
                   if (refreshName)
                     [helpView observeGuideRefreshNotificationNamed:refreshName];
+                  // Launching a guide from the help window: close the window so
+                  // it doesn't cover the guide, and re-open it when the guide
+                  // ends (completion OR skip).
+                  helpView.onGuideLaunch = ^{
+                    __strong typeof(self) s2 = weakSelf;
+                    if (!s2)
+                      return;
+                    [s2 _reopenHelpWhenGuideEnds];
+                    [s2 closeRemoteWindowIfSupported];
+                  };
                   return helpView;
                 }];
 }

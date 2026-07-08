@@ -18,6 +18,9 @@
 static const NSTimeInterval kKKOSCZoomSettleDelay = 0.6;
 static const NSTimeInterval kKKOSCRunDelay = 0.2;
 
+NSNotificationName const KKJoyrideRunDidEndNotification =
+    @"KKJoyrideRunDidEndNotification";
+
 @implementation KKJoyrideGuideHost {
   __weak NSView *_hostView;
   __weak KKTimelineLanesView *_lanesView;
@@ -210,6 +213,9 @@ static const NSTimeInterval kKKOSCRunDelay = 0.2;
                  extra();
                if (s.onRunDidEnd)
                  s.onRunDidEnd();
+               [NSNotificationCenter.defaultCenter
+                   postNotificationName:KKJoyrideRunDidEndNotification
+                                 object:nil];
                [s _teardown];
              }];
 }

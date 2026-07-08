@@ -23,6 +23,11 @@
   // Boundary-only preamble: in-place rebind / defer-if-other-popover-open /
   // mini-viewer state setup / boundary-request publish + render nudge.
   if (cfg.isBoundary) {
+    // Already-open boundary popover: rebuild rows in place (no blink, keeps the
+    // mini viewer + its overlay alive so OSC drag keeps working after a keypose
+    // switch). Reaching this requires the outside-click dismiss monitor to NOT
+    // have closed the popover on the marker mousedown - see the timeline-bounds
+    // skip in closeIfOutsidePopover (KKTimelineLanesView+Popovers.m).
     if (_openContentPopover.isShown && _openStaticIsBoundary &&
         _openStaticView) {
       [self _updateBoundaryPopoverInPlaceWithLanes:cfg.lanes

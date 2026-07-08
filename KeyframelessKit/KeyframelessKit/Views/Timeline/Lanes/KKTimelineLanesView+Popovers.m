@@ -261,16 +261,17 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
     popover = [[NSPopover alloc] init];
     // ApplicationDefined instead of Transient: Transient closes the popover if
     // ANY event targets a different window - ViewBridge-routed clicks from FCP
-    // target the inspector window, not the popover, triggering that immediately.
-    // We replicate outside-click close with local + global mouseDown monitors.
+    // target the inspector window, not the popover, triggering that
+    // immediately. We replicate outside-click close with local + global
+    // mouseDown monitors.
     popover.behavior = NSPopoverBehaviorApplicationDefined;
   }
   popover.contentViewController = vc;
   // Size the popover to THIS content before it shows. A reused instance keeps
   // the previous open's contentSize, so without this the new content (e.g. a
   // keypose mini-viewer) draws at the stale/small size and then pops to the
-  // right size on first layout. content.bounds is the caller-sized content (same
-  // value used for wrapper.frame above).
+  // right size on first layout. content.bounds is the caller-sized content
+  // (same value used for wrapper.frame above).
   if (!NSIsEmptyRect(content.bounds))
     popover.contentSize = content.bounds.size;
 
@@ -291,13 +292,13 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
     popoverPanel.styleMask |= NSWindowStyleMaskNonactivatingPanel;
     popoverPanel.becomesKeyOnlyIfNeeded = NO;
   }
-  // The event monitors below must NOT strong-capture the popover window: NSEvent
-  // retains a monitor's block until -removeMonitor:, and during a guide the
-  // popover can be torn down without NSPopoverWillCloseNotification firing (so
-  // -removeMonitors never runs). A strong capture then pins the popover window,
-  // its content view, and the mini-viewer (an MTKView) - leaking that view's
-  // multi-MB CAMetalLayer drawables every guide run. Weak so a stranded monitor
-  // can't keep the window (and the whole mini-viewer) alive.
+  // The event monitors below must NOT strong-capture the popover window:
+  // NSEvent retains a monitor's block until -removeMonitor:, and during a guide
+  // the popover can be torn down without NSPopoverWillCloseNotification firing
+  // (so -removeMonitors never runs). A strong capture then pins the popover
+  // window, its content view, and the mini-viewer (an MTKView) - leaking that
+  // view's multi-MB CAMetalLayer drawables every guide run. Weak so a stranded
+  // monitor can't keep the window (and the whole mini-viewer) alive.
   __weak NSWindow *weakPopoverWindow = popoverWindow;
   CFTimeInterval shownAt = CACurrentMediaTime();
   // Host app (FCP) is frontmost when the popover opens. Captured so an
@@ -358,14 +359,15 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                 removeMonitors();
                 if (onClose)
                   onClose();
-                // Free the closing content's mini-viewer GPU memory promptly. The
-                // backing window is NOT destroyed: _openContentPopover is reused
-                // across opens (its remote-hosted window can't be freed until
-                // inspector teardown anyway - see its declaration), so reusing one
-                // window bounds the CA layer-hosting IOSurface leak instead of
-                // creating a fresh stranded window per open. Defer one runloop so
-                // the popover's own close settles first. Target weakContent (the
-                // CLOSING content), never the reused popover's current content.
+                // Free the closing content's mini-viewer GPU memory promptly.
+                // The backing window is NOT destroyed: _openContentPopover is
+                // reused across opens (its remote-hosted window can't be freed
+                // until inspector teardown anyway - see its declaration), so
+                // reusing one window bounds the CA layer-hosting IOSurface leak
+                // instead of creating a fresh stranded window per open. Defer
+                // one runloop so the popover's own close settles first. Target
+                // weakContent (the CLOSING content), never the reused popover's
+                // current content.
                 dispatch_async(dispatch_get_main_queue(), ^{
                   __strong NSView *c = weakContent;
                   if ([c respondsToSelector:@selector(releaseMiniViewer)])
@@ -470,6 +472,21 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
     if (hostPID != 0) {
       pid_t owner = KKWindowOwnerPIDAtScreenPoint(p);
       if (owner != hostPID)
+        return;
+    }
+    // A click inside our own timeline (the graph that owns this popover) is a
+    // keypose re-target or timeline interaction, NOT a dismiss. Don't close:
+    // the graph re-presents IN PLACE on mouseUp, keeping the mini viewer + its
+    // overlay alive. Closing here tears the mini viewer down and rebuilds it
+    // into the reused ViewBridge window, where the fresh overlay loses drag
+    // tracking (OSC freezes after a keypose switch). This monitor fires on
+    // mousedown - before the graph's mouseUp re-present - so a flag set during
+    // the re-present loses the race; gate on the click LOCATION instead.
+    __strong typeof(self) s = navWeakSelf;
+    if (s && s->_openStaticIsBoundary && s.window) {
+      NSRect lanesScreen = [s.window convertRectToScreen:[s convertRect:s.bounds
+                                                                 toView:nil]];
+      if (NSPointInRect(p, lanesScreen))
         return;
     }
     [weakPopover close];

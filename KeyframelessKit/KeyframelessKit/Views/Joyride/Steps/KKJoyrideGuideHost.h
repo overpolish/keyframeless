@@ -14,6 +14,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Posted (object == nil) at the end of EVERY guide run - completion OR skip/
+/// dismiss. Lets an observer that isn't wired into the host's callbacks (e.g.
+/// the help window, which closes itself when a guide launches) react to a run
+/// finishing without contending for onRunDidEnd.
+FOUNDATION_EXPORT NSNotificationName const KKJoyrideRunDidEndNotification;
+
 /// One-per-guide owner that absorbs the boilerplate around running a guide
 /// against a KKTimelineLanesView:
 ///   - allocs the KKJoyrideController + KKJoyrideLanesBinder per run,

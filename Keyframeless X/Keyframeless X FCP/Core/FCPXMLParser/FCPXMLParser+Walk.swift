@@ -7,11 +7,24 @@ import Foundation
 
 extension FCPXMLParser {
 
+	private static let laneClipNames: Set<String> = ["clip", "asset-clip", "ref-clip", "mc-clip"]
+
 	static func dialogueAudioRef(_ el: XMLElement) -> String? {
 		let audios =
 			(try? el.nodes(forXPath: ".//audio"))?.compactMap { $0 as? XMLElement } ?? []
-		return audios.first {
-			($0.attribute(forName: "role")?.stringValue ?? "").hasPrefix("dialogue")
+		return audios.first { audio in
+			guard (audio.attribute(forName: "role")?.stringValue ?? "").hasPrefix("dialogue")
+			else { return false }
+			// Only claim audio that belongs directly to `el`. If a nested connected
+			// clip/asset-clip sits between the audio and `el`, that inner element is
+			// walked and emitted on its own - claiming it here too would double every
+			// segment (two lanes for one source) and double the decode work.
+			var node = audio.parent as? XMLElement
+			while let n = node, n !== el {
+				if laneClipNames.contains(n.name ?? "") { return false }
+				node = n.parent as? XMLElement
+			}
+			return true
 		}?.attribute(forName: "ref")?.stringValue
 	}
 
