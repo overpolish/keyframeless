@@ -26,13 +26,18 @@ extension FCPXMLParser {
 		// Channel-sources present but all inactive: audio is disabled on this clip.
 		if !channelSources.isEmpty && activeSources.isEmpty { return false }
 		let topRole = el.attribute(forName: "audioRole")?.stringValue ?? ""
-		let hasDialogueChannel = activeSources.contains {
-			($0.attribute(forName: "role")?.stringValue ?? "").hasPrefix("dialogue")
-		}
-		guard topRole.hasPrefix("dialogue") || hasDialogueChannel else { return false }
-		return !activeSources.contains {
-			($0.attribute(forName: "role")?.stringValue ?? "").hasPrefix("effects")
-		}
+		// An active `audio-channel-source` with an explicit `role` reassigns that
+		// channel's role, overriding the clip's top-level `audioRole` (which often
+		// lingers as a stale import default). Only trust `audioRole` when no active
+		// channel-source specifies a role - e.g. a music clip reassigned via
+		// `<audio-channel-source role="music.music-1"/>` must not read as dialogue
+		// just because `audioRole="dialogue"` was never cleared.
+		let channelRoles = activeSources.compactMap {
+			$0.attribute(forName: "role")?.stringValue
+		}.filter { !$0.isEmpty }
+		let effectiveRoles = channelRoles.isEmpty ? [topRole] : channelRoles
+		guard effectiveRoles.contains(where: { $0.hasPrefix("dialogue") }) else { return false }
+		return !effectiveRoles.contains(where: { $0.hasPrefix("effects") })
 	}
 
 	/// Ref-clips can disable a contained subrole via `<audio-role-source role="..." active="0"/>`.

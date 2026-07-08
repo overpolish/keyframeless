@@ -17,7 +17,7 @@ import Foundation
 enum FCPXMLParser {
 
 	private static let dialogueClipXPath =
-		"asset-clip[starts-with(@audioRole, 'dialogue') and not(audio-channel-source[starts-with(@role, 'effects') and not(@active='0')]) and not(audio-channel-source and not(audio-channel-source[not(@active='0')]))]"
+		"asset-clip[(audio-channel-source[starts-with(@role, 'dialogue') and not(@active='0')] or (starts-with(@audioRole, 'dialogue') and not(audio-channel-source[@role != '' and not(@active='0')]))) and not(audio-channel-source[starts-with(@role, 'effects') and not(@active='0')]) and not(audio-channel-source and not(audio-channel-source[not(@active='0')]))]"
 
 	static func isDeniedDrop(in doc: XMLDocument) -> Bool {
 		let children = doc.rootElement()?.children?.compactMap { $0 as? XMLElement } ?? []
