@@ -8,8 +8,7 @@
 	<img alt="Release" src="https://img.shields.io/github/v/release/overpolish/keyframeless?color=ff5000" />
     <img alt="License PolyForm Noncommercial 1.0.0" src="https://img.shields.io/badge/license-PolyForm_Noncommercial_1.0.0-ff5000" />
     <img alt="macOS 15+" src="https://img.shields.io/badge/15%2B-macOS?logo=apple&label=macOS&labelColor=5C5C5C&color=ff5000">
-    <img alt="Final Cut Pro 12.3+" src="https://img.shields.io/badge/12.3%2B-Final_Cut_Pro?label=Final%20Cut%20Pro&labelColor=5C5C5C&color=ff5000">
-    <img alt="Motion 6.3+" src="https://img.shields.io/badge/6.3%2B-Motion?label=Motion&labelColor=5C5C5C&color=ff5000">
+    <img alt="Final Cut Pro 11+" src="https://img.shields.io/badge/11%2B-Final_Cut_Pro?label=Final%20Cut%20Pro&labelColor=5C5C5C&color=ff5000">
     <img alt="Architectures - Silicon and Intel" src="https://img.shields.io/badge/Silicon_%7C_Intel-architectures?logo=apple&label=Compatible%20with&labelColor=5C5C5C&color=ff5000">
 </div>
 
