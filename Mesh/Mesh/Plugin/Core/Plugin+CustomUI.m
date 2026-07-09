@@ -28,38 +28,34 @@
 /// values-pass LLM call sees, alongside the user's prompt. No timing words,
 /// no in/out, no Basic/Advanced - just lanes and their numeric ranges.
 static NSString *_MeshAILaneSchemaText(void) {
-  NSMutableString *s = [NSMutableString string];
-  [s appendString:@"Lane labels and coordinate spaces:\n\n"];
-
-  [s appendString:
-          @"- \"Radius\": one numeric component.\n"
-          @"    Range 0..100 (percentage of the clip's shorter edge).\n"
-          @"    Default value: 20. 0 = square corners, 100 = fully mesh.\n"
-          @"\n"
-          @"- \"Crop\": four numeric components [width, height, x_offset, "
-          @"y_offset].\n"
-          @"    width, height: fractions of the clip image, range 0..1. "
-          @"1.0 = full size, 0.5 = half size.\n"
-          @"    x_offset, y_offset: center offsets in normalised SCREEN "
-          @"space (Y-down image convention), range -0.5..+0.5.\n"
-          @"    Axis convention (standard image / screen space):\n"
-          @"      +x = RIGHT, -x = LEFT.\n"
-          @"      +y = DOWN, -y = UP. (Yes, Y increases downward, like "
-          @"every image / canvas / pixel API.)\n"
-          @"    Default value: [1, 1, 0, 0] (full image, no crop).\n"
-          @"\n"
-          @"    Worked examples (verify the y_offset sign before using):\n"
-          @"      full image:              [1.0, 1.0,  0.0,   0.0]\n"
-          @"      top-left quadrant:       [0.5, 0.5, -0.25, -0.25]\n"
-          @"      top-right quadrant:      [0.5, 0.5, +0.25, -0.25]\n"
-          @"      bottom-left quadrant:    [0.5, 0.5, -0.25, +0.25]\n"
-          @"      bottom-right quadrant:   [0.5, 0.5, +0.25, +0.25]\n"
-          @"      top half:                [1.0, 0.5,  0.0,  -0.25]\n"
-          @"      bottom half:             [1.0, 0.5,  0.0,  +0.25]\n"
-          @"      left half:               [0.5, 1.0, -0.25,  0.0]\n"
-          @"      right half:              [0.5, 1.0, +0.25,  0.0]\n"
-          @"      centered square:         [0.5, 0.5,  0.0,   0.0]\n"];
-  return s;
+  return @"Lane labels and value spaces. This is an animated mesh gradient "
+         @"generator: colour spots drift on procedural paths and are blended "
+         @"by distance, warped by distortion + swirl, with a film-grain "
+         @"finish.\n\n"
+         @"- \"Distortion\": single value, percent 0..100. Organic noise warp "
+         @"of the whole field (0 = calm/smooth, higher = more churning "
+         @"folds). Default 80.\n"
+         @"- \"Swirl\": single value, percent 0..100. Vortex twist around the "
+         @"centre (0 = none, higher = more spiral). Default 10.\n"
+         @"- \"Speed\": single value, 0..3 multiplier of the animation rate "
+         @"(1 = normal, 0 = frozen, 2 = twice as fast). Animatable. "
+         @"Default 1.\n"
+         @"- \"Seed\": single integer, the animation start-frame / layout "
+         @"variation (any value; re-roll for a different look). NOT "
+         @"animatable - one constant for the clip. Default 0.\n"
+         @"- \"Grain Mixer\": single value, percent 0..100. Grain distortion "
+         @"at the colour-spot edges (0 = clean edges, higher = grainier "
+         @"blend). Default 0.\n"
+         @"- \"Grain\": single value, percent 0..100. Post film-grain overlay "
+         @"(0 = clean, higher = more grain). Default 6.\n"
+         @"- \"Color 1\", \"Color 2\", ... : the gradient's colour spots, each "
+         @"[r, g, b, a] in sRGB 0..1. The shader places and animates the "
+         @"spots, so only the colours are set (no positions). There are "
+         @"several; set as many as the user asks for. Defaults are a "
+         @"purple / pink / blue / teal palette.\n"
+         @"- \"Type\": the gradient style. A structural choice (NOT animated), "
+         @"stored as an index: 0 = Mesh (the only real option today; "
+         @"index 1 is a disabled placeholder). Default 0.\n";
 }
 
 @implementation MeshPlugin (CustomUI)
@@ -69,72 +65,92 @@ static NSString *_MeshAILaneSchemaText(void) {
 }
 
 + (NSArray<KKLane *> *)availableLanes {
-  // Lane order (top-to-bottom default): the global Flow controls first, then
-  // the per-point colour lanes. Users can reorder in the inspector, but the
-  // fresh default reads style-then-content.
+  // Lane order (top-to-bottom default): Type, then this gradient type's
+  // options, then the colour swatches last (colours are dynamic - users
+  // add/remove them). Users can reorder in the inspector.
   NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
 
-  // Freeform gradient: a set of movable colour points blended by per-point
-  // Gaussian falloff, plus a universal grain overlay. Type is the scaffold pill
-  // for future gradient types. The kit only renders a pill at 2+ choices, so
-  // for now it carries Freeform plus a disabled-in-spirit "Coming Soon"
-  // placeholder (the render ignores the Type value, so selecting it is a
-  // no-op). Replace the placeholder with the real second type when it lands.
-  // The Type pill comes first, then Grain, then the per-point lanes.
+  // Mesh Gradient (paper-design port, Apache-2.0): a flat list of colour
+  // swatches placed procedurally by the shader, plus scalar controls. Type is
+  // the scaffold pill for future gradient types - the kit only renders a pill
+  // at 2+ choices, so it carries Mesh Gradient plus a disabled-in-spirit
+  // "Coming Soon" placeholder (the render ignores the value). Replace the
+  // placeholder with the real second type when it lands.
   KKLane *type = [KKLane laneWithLabel:@"Type"];
   type.valueType = KKLaneValueTypeFloat;
-  type.choiceLabels = @[ @"Freeform", @"Coming Soon" ];
+  type.choiceLabels = @[ @"Mesh", @"Coming Soon" ];
   type.componentMin = @[ @0.0 ];
   type.componentMax = @[ @1.0 ];
   type.integerValued = YES;
   type.animatable = NO;
   type.enabled = NO;
+  type.categoryKey = @"Core";
+  type.categorySymbol = @"circle.dotted";
   [type insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
   [lanes addObject:type];
 
-  // Grain: a final overlay - the film-grain every modern gradient uses to stop
-  // the smooth field reading as flat vector mush.
-  KKLane *grain = [KKLane laneWithLabel:@"Grain"];
-  grain.valueType = KKLaneValueTypeFloat;
-  grain.componentMin = @[ @0.0 ];
-  grain.componentMax = @[ @100.0 ];
-  grain.componentUnits = @[ @"%" ]; // stored 0..100, shader wants 0..1
-  grain.animatable = YES;
-  grain.enabled = NO;
-  [grain
-      insertKeypose:[KKKeyPose
-                        keyposeAtTime:0.0
-                               values:@[ @(KK_MESH_DEFAULT_GRAIN * 100.0) ]]];
-  [lanes addObject:grain];
+  // Options for the Mesh Gradient, gated to the real type. Distortion = organic
+  // noise warp; Swirl = vortex warp; Speed = motion rate; Seed = layout
+  // variation; Grain Mixer = grain at the spot edges; Grain = post overlay.
+  // %-units store 0..100 (the shader wants 0..1); Speed is a raw multiplier;
+  // Seed is a non-animatable integer (start-time offset) with a dice field, and
+  // takes any value - the slider range is nominal, the field/dice sets it.
+  struct {
+    NSString *label;
+    double def, min, max;
+    NSString *unit; // nil = raw number (no % scaling)
+    BOOL animatable;
+    BOOL seedField;
+  } controls[] = {
+      {@"Distortion", KK_MESH_GRAD_DEFAULT_DISTORTION * 100.0, 0.0, 100.0, @"%",
+       YES, NO},
+      {@"Swirl", KK_MESH_GRAD_DEFAULT_SWIRL * 100.0, 0.0, 100.0, @"%", YES, NO},
+      {@"Speed", KK_MESH_GRAD_DEFAULT_SPEED, 0.0, 3.0, nil, YES, NO},
+      {@"Seed", KK_MESH_GRAD_DEFAULT_SEED, 0.0, 1000000.0, nil, NO, YES},
+      {@"Grain Mixer", KK_MESH_GRAD_DEFAULT_GRAINMIXER * 100.0, 0.0, 100.0,
+       @"%", YES, NO},
+      {@"Grain", KK_MESH_DEFAULT_GRAIN * 100.0, 0.0, 100.0, @"%", YES, NO},
+  };
+  for (unsigned s = 0; s < sizeof(controls) / sizeof(controls[0]); s++) {
+    KKLane *lane = [KKLane laneWithLabel:controls[s].label];
+    lane.valueType = KKLaneValueTypeFloat;
+    lane.componentMin = @[ @(controls[s].min) ];
+    lane.componentMax = @[ @(controls[s].max) ];
+    if (controls[s].unit)
+      lane.componentUnits = @[ controls[s].unit ];
+    lane.animatable = controls[s].animatable;
+    lane.seedField = controls[s].seedField;
+    lane.integerValued = controls[s].seedField; // seed is an integer
+    lane.enabled = NO;
+    lane.categoryKey = @"Core";
+    lane.categorySymbol = @"circle.dotted";
+    lane.visibleWhenLabel = @"Type";
+    lane.visibleWhenValues = @[ @0 ];
+    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(controls[s].def) ]]];
+    [lanes addObject:lane];
+  }
 
-  // One composite lane per point: [x, y, spread, r, g, b, a]. Generic "Point N"
-  // labels - a freeform set of colour points that grows/shrinks dynamically.
-  // KKLaneValueTypeColorPoint renders it as one row: X | Y | Spread fields
-  // (px, stored normalized) + an RGBA swatch. componentLabels count (3) = the
-  // number of leading numeric fields; the last 4 components are the swatch.
-  for (int i = 0; i < KK_MESH_POINT_COUNT; i++) {
-    KKLane *pt = [KKLane laneWithLabel:MeshPointLabel(i)];
-    pt.valueType = KKLaneValueTypeColorPoint;
-    pt.componentLabels = @[ @"X", @"Y", @"Spread" ];
-    pt.autoSizesComponentLabels =
-        YES; // let "Spread" grow, not truncate to "Sp"
-    // X, Y: normalized 0..1, displayed as px (media-scaled, like
-    // Crop/Position). Spread: a literal percentage 2..100% (Glow-style); the
-    // "%" unit opts it out of media scaling even on a componentsScaleWithMedia
-    // lane.
-    pt.componentMin = @[ @0.0, @0.0, @0.0, @0.0, @0.0, @0.0, @0.0 ];
-    pt.componentMax = @[ @1.0, @1.0, @100.0, @1.0, @1.0, @1.0, @1.0 ];
-    pt.componentUnits = @[ @"px", @"px", @"%" ];
-    pt.componentsScaleWithMedia = YES;
-    const float *p = kMeshDefaultPositions[i];
+  // Colour swatches LAST (dynamic - users add/remove): one [r, g, b, a] lane
+  // each, seeded from the default palette. The shader places the spots, so
+  // there are no positions to edit, just the colours.
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    KKLane *color = [KKLane laneWithLabel:MeshColorLabel(i)];
+    color.valueType = KKLaneValueTypeColor;
+    color.componentMin = @[ @0.0, @0.0, @0.0, @0.0 ];
+    color.componentMax = @[ @1.0, @1.0, @1.0, @1.0 ];
+    color.animatable = YES; // colours can be keyframed
+    color.enabled = NO;
+    color.categoryKey = @"Colors";
+    color.categorySymbol = @"paintpalette";
+    color.visibleWhenLabel = @"Type";
+    color.visibleWhenValues = @[ @0 ];
     const float *c = kMeshDefaultColorsSRGB[i];
-    [pt insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                        values:@[
-                                          @(p[0]), @(p[1]),
-                                          @(KK_MESH_DEFAULT_SPREAD * 100.0),
-                                          @(c[0]), @(c[1]), @(c[2]), @(c[3])
-                                        ]]];
-    [lanes addObject:pt];
+    [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                           values:@[
+                                             @(c[0]), @(c[1]), @(c[2]), @(c[3])
+                                           ]]];
+    [lanes addObject:color];
   }
 
   return lanes;

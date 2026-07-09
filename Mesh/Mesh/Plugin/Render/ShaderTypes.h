@@ -8,20 +8,29 @@
 #import <simd/simd.h>
 
 // Shared by the FCP render (Plugin+Render.m), the mini-viewer renderer
-// (MeshMiniViewerRenderer.m), and the Metal shader (Mesh.metal). The mesh
-// gradient is a freeform set of `count` colour points, each with a position
-// (normalized 0..1) and a colour; the shader blends them by distance. Colours
-// are carried in OKLab so the blend is perceptual, converted to sRGB at the end.
-#define KK_MESH_MAX_VERTS 25
+// (MeshMiniViewerRenderer.m), and the Metal shader (Mesh.metal).
+//
+// The gradient is the paper-design/shaders mesh-gradient (Apache-2.0), ported
+// GLSL -> MSL: up to `colorsCount` colour spots animate along procedural
+// trajectories and are blended by inverse-distance, warped by noise distortion
+// + swirl, with an in-shader grain mixer and overlay. Colours are straight
+// sRGB+alpha; the shader blends them directly (no OKLab pass) and linearises
+// only for FCP's float working buffer.
 
-typedef struct MeshGridUniforms {
-    int count;                                    // number of colour points
-    int _pad0;                                    // keep points[] 8-byte aligned
-    vector_float2 points[KK_MESH_MAX_VERTS];      // normalized 0..1
-    vector_float4 colorsOklab[KK_MESH_MAX_VERTS]; // (L, a, b, alpha)
-    float spreads[KK_MESH_MAX_VERTS];             // Gaussian falloff size (0..1)
-    float grain;                                  // final grain-overlay amount 0..1
-} MeshGridUniforms;
+// Max colour spots (the source shader blends up to 10 by inverse-distance).
+#define KK_MESH_GRAD_COLORS 10
+
+typedef struct MeshGradientUniforms {
+    vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba (straight alpha)
+    int colorsCount;                           // active colours (<= 10)
+    float time;                                // clip seconds; animates the spots
+    float distortion;                          // 0..1 organic noise warp
+    float swirl;                               // 0..1 vortex warp
+    float speed;                               // time multiplier (motion rate)
+    float seed;                                // start-time offset (initial seed)
+    float grainMixer;                          // 0..1 grain at the spot edges
+    float grainOverlay;                        // 0..1 post grain overlay
+} MeshGradientUniforms;
 
 typedef enum MeshFragmentIndex {
     MeshFragmentIndex_Grid = 0,

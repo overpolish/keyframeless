@@ -54,7 +54,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
 // work (render-cache refresh, maintain-timing, playhead poller) the timing
 // popover's live preview relies on. Runs where FxParameterRetrievalAPI is valid
 // (pluginState:), not at render time.
-- (BOOL)buildGrid:(MeshGridUniforms *)outGrid
+- (BOOL)buildGrid:(MeshGradientUniforms *)outUniforms
            atTime:(CMTime)renderTime
             error:(NSError **)error {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
@@ -110,37 +110,54 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     });
   }
 
-  // Each point's [x, y, spread, r, g, b, a] comes from its "Point N" lane at
-  // `frac`; a missing lane falls back to the default so an un-edited instance
-  // still renders.
-  float pos[KK_MESH_POINT_COUNT][2];
-  float spr[KK_MESH_POINT_COUNT];
-  float col[KK_MESH_POINT_COUNT][4];
-  for (int i = 0; i < KK_MESH_POINT_COUNT; i++) {
+  // The Mesh Gradient takes a flat list of colour swatches; the shader places
+  // the spots procedurally, so there are no positions. Each "Color N" lane
+  // gives [r, g, b, a] at `frac`; a missing lane falls back to the default
+  // palette so an un-edited instance still renders.
+  MeshGradientUniforms u;
+  memset(&u, 0, sizeof(u));
+  int count = 0;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
     NSArray<NSNumber *> *v =
-        MeshLaneValuesAtFraction(timeline, MeshPointLabel(i), frac);
-    if (v.count >= 7) {
-      pos[i][0] = v[0].floatValue;
-      pos[i][1] = v[1].floatValue;
-      spr[i] = v[2].floatValue / 100.0f; // stored as percent, shader wants 0..1
-      for (int k = 0; k < 4; k++)
-        col[i][k] = v[3 + k].floatValue;
+        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
+    if (v.count >= 4) {
+      u.colors[count++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                          v[2].floatValue, v[3].floatValue};
     } else {
-      pos[i][0] = kMeshDefaultPositions[i][0];
-      pos[i][1] = kMeshDefaultPositions[i][1];
-      spr[i] = KK_MESH_DEFAULT_SPREAD;
-      for (int k = 0; k < 4; k++)
-        col[i][k] = kMeshDefaultColorsSRGB[i][k];
+      const float *c = kMeshDefaultColorsSRGB[i];
+      u.colors[count++] = (vector_float4){c[0], c[1], c[2], c[3]};
     }
   }
-  *outGrid = MeshBuildPoints(KK_MESH_POINT_COUNT, pos, spr, col);
+  u.colorsCount = count > 0 ? count : 1;
 
-  // Grain: a global overlay lane (read at `frac` like the points; a missing
-  // lane falls back to its default so an un-edited instance still renders).
+  // Scalar controls (read at `frac` like the colours; a missing lane falls back
+  // to its default). Sliders are stored as percent, the shader wants 0..1.
+  NSArray<NSNumber *> *distV =
+      MeshLaneValuesAtFraction(timeline, @"Distortion", frac);
+  NSArray<NSNumber *> *swirlV =
+      MeshLaneValuesAtFraction(timeline, @"Swirl", frac);
+  NSArray<NSNumber *> *speedV =
+      MeshLaneValuesAtFraction(timeline, @"Speed", frac);
+  NSArray<NSNumber *> *seedV =
+      MeshLaneValuesAtFraction(timeline, @"Seed", frac);
+  NSArray<NSNumber *> *mixV =
+      MeshLaneValuesAtFraction(timeline, @"Grain Mixer", frac);
   NSArray<NSNumber *> *grainV =
       MeshLaneValuesAtFraction(timeline, @"Grain", frac);
-  outGrid->grain =
+  u.distortion = distV.count ? distV[0].floatValue / 100.0f
+                             : KK_MESH_GRAD_DEFAULT_DISTORTION;
+  u.swirl =
+      swirlV.count ? swirlV[0].floatValue / 100.0f : KK_MESH_GRAD_DEFAULT_SWIRL;
+  u.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
+  u.seed = seedV.count ? seedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SEED;
+  u.grainMixer = mixV.count ? mixV[0].floatValue / 100.0f
+                            : KK_MESH_GRAD_DEFAULT_GRAINMIXER;
+  u.grainOverlay =
       grainV.count ? grainV[0].floatValue / 100.0f : KK_MESH_DEFAULT_GRAIN;
+  // Elapsed clip seconds animates the spots (holds a still at a paused
+  // playhead).
+  u.time = (float)(frac * durSec);
+  *outUniforms = u;
   return YES;
 }
 
@@ -148,7 +165,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error {
-  MeshGridUniforms grid;
+  MeshGradientUniforms grid;
   if (![self buildGrid:&grid atTime:renderTime error:error])
     return NO;
   *pluginState = [NSData dataWithBytes:&grid length:sizeof(grid)];
@@ -173,9 +190,8 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   }
 
   // A generator has no source feed to carry the media size, so publish the
-  // output dimensions (empty slots) to this instance's descriptor. Both mini-
-  // viewers read it as `sourceMediaSize`, which the px-scaled X/Y/Spread value
-  // fields need to display pixels (values stay stored 0..1). FCP renders this
+  // output dimensions (empty slots) to this instance's descriptor. The mini-
+  // viewer reads it as `sourceMediaSize` for its OSC geometry. FCP renders this
   // same instance at MULTIPLE sizes (main viewer + tiny browser/library
   // preview, same aspect), so publish only the LARGEST size seen - the project
   // resolution is the biggest render; a small preview must not overwrite it
@@ -209,13 +225,13 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   if (!pipelineState)
     return NO;
 
-  // Grid built from the Color lanes in -pluginState: (params API is invalid
+  // Uniforms built from the Color lanes in -pluginState: (params API is invalid
   // here). Fall back to the default if the state is missing/short.
-  MeshGridUniforms grid;
+  MeshGradientUniforms grid;
   if (pluginState.length >= sizeof(grid))
     [pluginState getBytes:&grid length:sizeof(grid)];
   else
-    grid = MeshDefaultGrid();
+    grid = MeshGradientDefault();
 
   // Match the output encoding to the destination: FCP's float working buffers
   // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.

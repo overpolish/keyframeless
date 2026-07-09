@@ -50,20 +50,30 @@ static const CGFloat kHandleHitTolPt = 12.0;
   return nil;
 }
 - (NSInteger)valueTypeForLabel:(NSString *)label {
-  if ([label hasPrefix:@"Point "])
-    return KKLaneValueTypeColorPoint;
+  if ([label hasPrefix:@"Color "])
+    return KKLaneValueTypeColor;
   return KKLaneValueTypeFloat;
 }
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
-  int i = MeshIndexForLabel(label, @"Point ");
-  if (i >= 0 && i < KK_MESH_POINT_COUNT) {
-    const float *p = kMeshDefaultPositions[i];
-    const float *c = kMeshDefaultColorsSRGB[i];
-    return @[
-      @(p[0]), @(p[1]), @(KK_MESH_DEFAULT_SPREAD * 100.0), @(c[0]), @(c[1]),
-      @(c[2]), @(c[3])
-    ];
+  int ci = MeshIndexForLabel(label, @"Color ");
+  if (ci >= 0 && ci < KK_MESH_COLOR_COUNT) {
+    const float *c = kMeshDefaultColorsSRGB[ci];
+    return @[ @(c[0]), @(c[1]), @(c[2]), @(c[3]) ];
   }
+  if ([label isEqualToString:@"Distortion"])
+    return @[ @(KK_MESH_GRAD_DEFAULT_DISTORTION * 100.0) ];
+  if ([label isEqualToString:@"Swirl"])
+    return @[ @(KK_MESH_GRAD_DEFAULT_SWIRL * 100.0) ];
+  if ([label isEqualToString:@"Speed"])
+    return @[ @(KK_MESH_GRAD_DEFAULT_SPEED) ];
+  if ([label isEqualToString:@"Seed"])
+    return @[ @(KK_MESH_GRAD_DEFAULT_SEED) ];
+  if ([label isEqualToString:@"Grain Mixer"])
+    return @[ @(KK_MESH_GRAD_DEFAULT_GRAINMIXER * 100.0) ];
+  if ([label isEqualToString:@"Grain"])
+    return @[ @(KK_MESH_DEFAULT_GRAIN * 100.0) ];
+  if ([label isEqualToString:@"Type"])
+    return @[ @0.0 ];
   return [super defaultValuesForLabel:label];
 }
 
@@ -120,33 +130,40 @@ static const CGFloat kHandleHitTolPt = 12.0;
       {{W / 2, -H / 2}, {1, 1}},
   };
   simd_uint2 vpSize = {(unsigned)W, (unsigned)H};
-  // Same point set as the FCP render, from this instance's "Point N" lanes at
-  // the current edit fraction (valuesForLabel falls back to defaults).
-  float pos[KK_MESH_POINT_COUNT][2];
-  float spr[KK_MESH_POINT_COUNT];
-  float col[KK_MESH_POINT_COUNT][4];
-  for (int i = 0; i < KK_MESH_POINT_COUNT; i++) {
-    NSArray<NSNumber *> *v = [self valuesForLabel:MeshPointLabel(i)];
-    if (v.count >= 7) {
-      pos[i][0] = v[0].floatValue;
-      pos[i][1] = v[1].floatValue;
-      spr[i] = v[2].floatValue / 100.0f; // stored as percent, shader wants 0..1
-      for (int k = 0; k < 4; k++)
-        col[i][k] = v[3 + k].floatValue;
+  // Same colour swatches + controls as the FCP render, from this instance's
+  // lanes at the current edit fraction (valuesForLabel falls back to defaults).
+  MeshGradientUniforms grid;
+  memset(&grid, 0, sizeof(grid));
+  int count = 0;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
+    if (v.count >= 4) {
+      grid.colors[count++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                             v[2].floatValue, v[3].floatValue};
     } else {
-      pos[i][0] = kMeshDefaultPositions[i][0];
-      pos[i][1] = kMeshDefaultPositions[i][1];
-      spr[i] = KK_MESH_DEFAULT_SPREAD;
-      for (int k = 0; k < 4; k++)
-        col[i][k] = kMeshDefaultColorsSRGB[i][k];
+      const float *c = kMeshDefaultColorsSRGB[i];
+      grid.colors[count++] = (vector_float4){c[0], c[1], c[2], c[3]};
     }
   }
-  MeshGridUniforms grid = MeshBuildPoints(KK_MESH_POINT_COUNT, pos, spr, col);
-  // Grain: same global overlay lane as the FCP render (valuesForLabel falls
-  // back to the subclass default).
+  grid.colorsCount = count > 0 ? count : 1;
+  NSArray<NSNumber *> *distV = [self valuesForLabel:@"Distortion"];
+  NSArray<NSNumber *> *swirlV = [self valuesForLabel:@"Swirl"];
+  NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+  NSArray<NSNumber *> *seedV = [self valuesForLabel:@"Seed"];
+  NSArray<NSNumber *> *mixV = [self valuesForLabel:@"Grain Mixer"];
   NSArray<NSNumber *> *grainV = [self valuesForLabel:@"Grain"];
-  grid.grain =
+  grid.distortion = distV.count ? distV[0].floatValue / 100.0f
+                                : KK_MESH_GRAD_DEFAULT_DISTORTION;
+  grid.swirl =
+      swirlV.count ? swirlV[0].floatValue / 100.0f : KK_MESH_GRAD_DEFAULT_SWIRL;
+  grid.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
+  grid.seed = seedV.count ? seedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SEED;
+  grid.grainMixer = mixV.count ? mixV[0].floatValue / 100.0f
+                               : KK_MESH_GRAD_DEFAULT_GRAINMIXER;
+  grid.grainOverlay =
       grainV.count ? grainV[0].floatValue / 100.0f : KK_MESH_DEFAULT_GRAIN;
+  // The mini is a static preview, so time tracks the edit fraction.
+  grid.time = (float)self.editFraction;
   // The mini-viewer renders into an 8-bit unorm texture shown directly on
   // screen, so gamma-encode (unlike FCP's linear float working buffer).
   int encodeSRGB = (dest.pixelFormat == MTLPixelFormatRGBA8Unorm ||
