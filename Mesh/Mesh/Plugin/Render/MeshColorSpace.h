@@ -307,6 +307,36 @@ static inline FluidUniforms FluidDefault(void) {
   return f;
 }
 
+/// Neon ("Neon", radiant-shaders neon-drip port, wisps only) defaults.
+#define KK_NEON_DEFAULT_RADIANCE 1.0f // HDR neon gain
+#define KK_NEON_DEFAULT_WISPS 1.0f    // tendril-wisp strength / coverage
+#define KK_NEON_DEFAULT_STRANDS 1.0f  // tendril fineness (frequency)
+
+/// Fallback Neon uniforms (the default palette + dark backdrop) so an un-edited
+/// instance still renders before the colour lanes resolve. `resolution` is
+/// overwritten at render time.
+static inline NeonUniforms NeonDefault(void) {
+  NeonUniforms n;
+  memset(&n, 0, sizeof(n));
+  n.colorsCount = KK_MESH_COLOR_COUNT;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    const float *c = kMeshDefaultColorsSRGB[i];
+    n.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
+  }
+  n.colorBack = (vector_float4){0.02f, 0.015f, 0.02f, 1.0f};
+  n.resolution = (vector_float2){1920.0f, 1080.0f};
+  n.origin = (vector_float2){0.5f, 0.5f};
+  n.scale = (vector_float2){1.0f, 1.0f};
+  n.radiance = KK_NEON_DEFAULT_RADIANCE;
+  n.wisps = KK_NEON_DEFAULT_WISPS;
+  n.strands = KK_NEON_DEFAULT_STRANDS;
+  n.speed = KK_MESH_GRAD_DEFAULT_SPEED;
+  n.seed = 0.0f;
+  n.rotation = 0.0f;
+  n.time = 0.0f;
+  return n;
+}
+
 /// Generic per-swatch lane label ("Color 1", "Color 2", ...). One [r,g,b,a]
 /// colour lane per swatch. One-based to read naturally.
 static inline NSString *MeshColorLabel(int i) {

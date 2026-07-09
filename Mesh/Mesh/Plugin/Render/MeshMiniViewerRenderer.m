@@ -177,6 +177,12 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     return @[ @(KK_FLUID_DEFAULT_MARBLE * 100.0) ];
   if ([label isEqualToString:@"Vibrance"])
     return @[ @(KK_FLUID_DEFAULT_VIBRANCE * 100.0) ];
+  if ([label isEqualToString:@"Radiance"])
+    return @[ @(KK_NEON_DEFAULT_RADIANCE * 100.0) ];
+  if ([label isEqualToString:@"Wisps"])
+    return @[ @(KK_NEON_DEFAULT_WISPS * 100.0) ];
+  if ([label isEqualToString:@"Strands"])
+    return @[ @(KK_NEON_DEFAULT_STRANDS * 100.0) ];
   if ([label isEqualToString:@"Shape"])
     return @[ @0.0 ]; // simplex
   if ([label isEqualToString:@"Dither"])
@@ -261,6 +267,7 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   BOOL isMetaballs = (meshType == MeshType_Metaballs);
   BOOL isGodRays = (meshType == MeshType_GodRays);
   BOOL isFluid = (meshType == MeshType_Fluid);
+  BOOL isNeon = (meshType == MeshType_Neon);
   NSString *fragment = @"fragmentShader";
   if (isDither)
     fragment = @"ditheringFragment";
@@ -278,6 +285,8 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     fragment = @"godRaysFragment";
   else if (isFluid)
     fragment = @"fluidFragment";
+  else if (isNeon)
+    fragment = @"neonFragment";
   id<MTLRenderPipelineState> pipeline =
       [self _pipelineForDevice:dest.device
                    pixelFormat:dest.pixelFormat
@@ -627,6 +636,42 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     fl.resolution = (vector_float2){W, H};
     fl.time = timeSec;
     [e setFragmentBytes:&fl length:sizeof(fl) atIndex:MeshFragmentIndex_Grid];
+  } else if (isNeon) {
+    NeonUniforms ne = NeonDefault();
+    int neCount = 0;
+    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
+      if (v.count >= 4)
+        ne.colors[neCount++] = (vector_float4){
+            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
+      else {
+        const float *c = kMeshDefaultColorsSRGB[i];
+        ne.colors[neCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+      }
+    }
+    ne.colorsCount = neCount > 0 ? neCount : 1;
+    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
+    NSArray<NSNumber *> *radianceV = [self valuesForLabel:@"Radiance"];
+    NSArray<NSNumber *> *wispsV = [self valuesForLabel:@"Wisps"];
+    NSArray<NSNumber *> *strandsV = [self valuesForLabel:@"Strands"];
+    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+    if (backV.count >= 4)
+      ne.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                     backV[2].floatValue, backV[3].floatValue};
+    ne.radiance = radianceV.count ? radianceV[0].floatValue / 100.0f
+                                  : KK_NEON_DEFAULT_RADIANCE;
+    ne.wisps =
+        wispsV.count ? wispsV[0].floatValue / 100.0f : KK_NEON_DEFAULT_WISPS;
+    ne.strands = strandsV.count ? strandsV[0].floatValue / 100.0f
+                                : KK_NEON_DEFAULT_STRANDS;
+    ne.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
+    ne.seed = seedShared;
+    ne.origin = originShared;
+    ne.scale = scaleShared;
+    ne.rotation = rotationShared;
+    ne.resolution = (vector_float2){W, H};
+    ne.time = timeSec;
+    [e setFragmentBytes:&ne length:sizeof(ne) atIndex:MeshFragmentIndex_Grid];
   } else {
     // Same colour swatches + controls as the FCP render (valuesForLabel falls
     // back to defaults).

@@ -511,6 +511,47 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   fl.rotation = rotation;
   fl.time = timeSec;
   outState->fluid = fl;
+
+  // --- Neon: rising metaball blobs + tendrils, layered through the shared
+  // palette (glow/surface/inner/core = Color 1..4) over the Background. Melt /
+  // Radiance / Wisps are percent (shader wants 0..N); Blobs is a count.
+  // Resolution is filled at render time.
+  NeonUniforms ne = NeonDefault();
+  int neCount = 0;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    NSArray<NSNumber *> *v =
+        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
+    if (v.count >= 4)
+      ne.colors[neCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                             v[2].floatValue, v[3].floatValue};
+    else {
+      const float *c = kMeshDefaultColorsSRGB[i];
+      ne.colors[neCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+    }
+  }
+  ne.colorsCount = neCount > 0 ? neCount : 1;
+  if (backV.count >= 4)
+    ne.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                   backV[2].floatValue, backV[3].floatValue};
+  NSArray<NSNumber *> *radianceV =
+      MeshLaneValuesAtFraction(timeline, @"Radiance", frac);
+  NSArray<NSNumber *> *wispsV =
+      MeshLaneValuesAtFraction(timeline, @"Wisps", frac);
+  NSArray<NSNumber *> *strandsV =
+      MeshLaneValuesAtFraction(timeline, @"Strands", frac);
+  ne.radiance = radianceV.count ? radianceV[0].floatValue / 100.0f
+                                : KK_NEON_DEFAULT_RADIANCE;
+  ne.wisps =
+      wispsV.count ? wispsV[0].floatValue / 100.0f : KK_NEON_DEFAULT_WISPS;
+  ne.strands = strandsV.count ? strandsV[0].floatValue / 100.0f
+                              : KK_NEON_DEFAULT_STRANDS;
+  ne.speed = speed;
+  ne.seed = seed;
+  ne.origin = origin;
+  ne.scale = scale;
+  ne.rotation = rotation;
+  ne.time = timeSec;
+  outState->neon = ne;
   return YES;
 }
 
@@ -586,6 +627,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     state.metaballs = MetaballsDefault();
     state.godrays = GodRaysDefault();
     state.fluid = FluidDefault();
+    state.neon = NeonDefault();
   }
 
   // Dispatch on the active type. Each type is a separate fragment function; the
@@ -599,6 +641,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   BOOL isMetaballs = (state.type == MeshType_Metaballs);
   BOOL isGodRays = (state.type == MeshType_GodRays);
   BOOL isFluid = (state.type == MeshType_Fluid);
+  BOOL isNeon = (state.type == MeshType_Neon);
   NSString *pluginID = kPluginID;
   NSString *fragment = @"fragmentShader";
   if (isDither) {
@@ -625,6 +668,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isFluid) {
     pluginID = [kPluginID stringByAppendingString:@".fluid"];
     fragment = @"fluidFragment";
+  } else if (isNeon) {
+    pluginID = [kPluginID stringByAppendingString:@".neon"];
+    fragment = @"neonFragment";
   }
 
   id<MTLRenderPipelineState> pipelineState =
@@ -646,6 +692,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   state.metaballs.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.godrays.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.fluid.resolution = (vector_float2){(float)mediaW, (float)mediaH};
+  state.neon.resolution = (vector_float2){(float)mediaW, (float)mediaH};
 
   // Match the output encoding to the destination: FCP's float working buffers
   // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.
@@ -681,6 +728,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isFluid) {
     uniformBytes = (const void *)&state.fluid;
     uniformLen = sizeof(state.fluid);
+  } else if (isNeon) {
+    uniformBytes = (const void *)&state.neon;
+    uniformLen = sizeof(state.neon);
   }
 
   // sourceImages is empty for a generator; encodeRenderCommands handles that

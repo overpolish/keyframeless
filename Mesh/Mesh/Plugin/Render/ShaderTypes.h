@@ -203,6 +203,27 @@ typedef struct FluidUniforms {
     float rotation;                            // common rotation, radians
 } FluidUniforms;
 
+// Neon type ("Neon"): ported from radiant-shaders "Neon Drip" (pbakaus/radiant,
+// MIT) GLSL -> MSL, then reduced to just the glowing tendril WISPS (the source's
+// metaball blobs were dropped by request). The tendril field is layered through
+// a 4-stop HDR neon ramp (glow/surface/inner/core) and ACES tone-mapped over a
+// dark backdrop. resolution is filled at render time.
+typedef struct NeonUniforms {
+    vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba (glow, surface, inner, core = 1..4)
+    int colorsCount;                           // active colours (<= 10; ~4 used)
+    vector_float4 colorBack;                   // rgba dark backdrop
+    vector_float2 resolution;                  // destination pixel dims (render time)
+    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
+    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
+    float radiance;                            // HDR neon gain (bloom punch)
+    float wisps;                               // tendril-wisp strength / coverage
+    float strands;                             // tendril fineness (frequency; higher = finer strands)
+    float time;                                // clip seconds
+    float speed;                               // time multiplier (motion rate)
+    float seed;                                // start-time offset (shared)
+    float rotation;                            // common rotation, radians
+} NeonUniforms;
+
 // The Type choice-pill order. Kept in sync with the "Type" pill labels.
 typedef enum MeshType {
     MeshType_Mesh = 0,          // paper-design animated mesh gradient
@@ -214,6 +235,7 @@ typedef enum MeshType {
     MeshType_Metaballs = 6,     // paper-design metaballs ("Metaballs")
     MeshType_GodRays = 7,       // paper-design god-rays ("God Rays")
     MeshType_Fluid = 8,         // radiant-shaders fluid-amber ("Fluid")
+    MeshType_Neon = 9,          // radiant-shaders neon-drip ("Neon")
 } MeshType;
 
 // The full render state packed into pluginState: the active type plus each
@@ -231,6 +253,7 @@ typedef struct MeshPluginState {
     MetaballsUniforms metaballs;
     GodRaysUniforms godrays;
     FluidUniforms fluid;
+    NeonUniforms neon;
 } MeshPluginState;
 
 typedef enum MeshFragmentIndex {

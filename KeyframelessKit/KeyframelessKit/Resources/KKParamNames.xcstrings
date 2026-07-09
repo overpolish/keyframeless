@@ -2863,6 +2863,48 @@
         }
       }
     },
+    "Radiance": {
+      "comment": "Property/category name (display only; English label is the stable identity key). Translators may localize or keep it per language.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strahlung"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resplandor"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Éclat"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "輝き"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "광채"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辐射"
+          }
+        }
+      }
+    },
     "Radius": {
       "comment": "Property name (display only; English label is the stable identity key). Translators may localize or keep it per language.",
       "extractionState": "manual",
@@ -3793,6 +3835,48 @@
         }
       }
     },
+    "Strands": {
+      "comment": "Property/category name (display only; English label is the stable identity key). Translators may localize or keep it per language.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stränge"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hebras"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brins"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ストランド"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가닥"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "丝线"
+          }
+        }
+      }
+    },
     "Stroke": {
       "comment": "Property/category name (display only; English label is the stable identity key). Translators may localize or keep it per language.",
       "extractionState": "manual",
@@ -4209,6 +4293,90 @@
           "stringUnit": {
             "state": "translated",
             "value": "自然饱和度"
+          }
+        }
+      }
+    },
+    "Wisp": {
+      "comment": "Property/category name (display only; English label is the stable identity key). Translators may localize or keep it per language.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schwaden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voluta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volute"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ウィスプ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "위습"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缕烟"
+          }
+        }
+      }
+    },
+    "Wisps": {
+      "comment": "Property/category name (display only; English label is the stable identity key). Translators may localize or keep it per language.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schlieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hilos"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volutes"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ウィスプ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가닥"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缕丝"
           }
         }
       }
