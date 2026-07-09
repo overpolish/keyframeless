@@ -9,9 +9,9 @@ section here for each third-party component you incorporate.
 ## paper-design/shaders
 
 Portions of the Mesh generator's fragment shaders
-(`Mesh/Mesh/Plugin/Render/Mesh.metal` — the `Mesh` and `Dithering` types) are
-derived from the `mesh-gradient` and `dithering` shaders in
-**paper-design/shaders**.
+(`Mesh/Mesh/Plugin/Render/Mesh.metal` — the `Mesh`, `Dithering`, and `Grainy`
+types) are derived from the `mesh-gradient`, `dithering`, and `grain-gradient`
+shaders in **paper-design/shaders**.
 
 - Source: https://github.com/paper-design/shaders
 - Copyright the paper-design/shaders authors.

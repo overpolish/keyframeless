@@ -205,6 +205,51 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   d.origin = origin;
   d.time = timeSec;
   outState->dithering = d;
+
+  // --- Grain Gradient ("Grainy"): the shared colour swatches index a ramp,
+  // distorted by noise (intensity) with a grainy overlay (noise), over the
+  // Background. Sliders store percent; the shader wants 0..1. Resolution is
+  // filled at render time.
+  GrainGradientUniforms g = GrainGradientDefault();
+  int gCount = 0;
+  int gMax = KK_MESH_COLOR_COUNT < KK_GRAIN_GRAD_COLORS ? KK_MESH_COLOR_COUNT
+                                                        : KK_GRAIN_GRAD_COLORS;
+  for (int i = 0; i < gMax; i++) {
+    NSArray<NSNumber *> *v =
+        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
+    if (v.count >= 4)
+      g.colors[gCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                           v[2].floatValue, v[3].floatValue};
+    else {
+      const float *c = kMeshDefaultColorsSRGB[i];
+      g.colors[gCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+    }
+  }
+  g.colorsCount = gCount > 0 ? gCount : 1;
+  if (backV.count >= 4)
+    g.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                  backV[2].floatValue, backV[3].floatValue};
+  NSArray<NSNumber *> *softV =
+      MeshLaneValuesAtFraction(timeline, @"Softness", frac);
+  NSArray<NSNumber *> *intenV =
+      MeshLaneValuesAtFraction(timeline, @"Intensity", frac);
+  NSArray<NSNumber *> *noiseV =
+      MeshLaneValuesAtFraction(timeline, @"Noise", frac);
+  NSArray<NSNumber *> *patternV =
+      MeshLaneValuesAtFraction(timeline, @"Pattern", frac);
+  g.softness =
+      softV.count ? softV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_SOFTNESS;
+  g.intensity =
+      intenV.count ? intenV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_INTENSITY;
+  g.noise =
+      noiseV.count ? noiseV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_NOISE;
+  if (patternV.count)
+    g.shape = (int)lround(patternV[0].doubleValue) + 1; // pill is 0-based
+  g.speed = speed;
+  g.seed = seed;
+  g.origin = origin;
+  g.time = timeSec;
+  outState->grain = g;
   return YES;
 }
 
@@ -273,15 +318,23 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     state.type = MeshType_Mesh;
     state.mesh = MeshGradientDefault();
     state.dithering = DitheringDefault();
+    state.grain = GrainGradientDefault();
   }
 
   // Dispatch on the active type. Each type is a separate fragment function; the
   // pipeline cache keys on plugin ID + pixel format (NOT the shader name), so a
   // distinct ID per type keeps their pipelines from colliding.
   BOOL isDither = (state.type == MeshType_Dithering);
-  NSString *pluginID =
-      isDither ? [kPluginID stringByAppendingString:@".dithering"] : kPluginID;
-  NSString *fragment = isDither ? @"ditheringFragment" : @"fragmentShader";
+  BOOL isGrain = (state.type == MeshType_GrainGradient);
+  NSString *pluginID = kPluginID;
+  NSString *fragment = @"fragmentShader";
+  if (isDither) {
+    pluginID = [kPluginID stringByAppendingString:@".dithering"];
+    fragment = @"ditheringFragment";
+  } else if (isGrain) {
+    pluginID = [kPluginID stringByAppendingString:@".grain"];
+    fragment = @"grainGradientFragment";
+  }
 
   id<MTLRenderPipelineState> pipelineState =
       [self pipelineStateForPluginID:pluginID
@@ -292,8 +345,10 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   if (!pipelineState)
     return NO;
 
-  // Dithering's pixel grid needs the destination pixel dims.
+  // The dither pixel grid + grain reference frame both need the dest pixel
+  // dims.
   state.dithering.resolution = (vector_float2){(float)mediaW, (float)mediaH};
+  state.grain.resolution = (vector_float2){(float)mediaW, (float)mediaH};
 
   // Match the output encoding to the destination: FCP's float working buffers
   // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.
@@ -303,9 +358,15 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
 
   // Point at the active type's uniform block (synchronous encode, so a pointer
   // into the local `state` is valid inside the block).
-  const void *uniformBytes =
-      isDither ? (const void *)&state.dithering : (const void *)&state.mesh;
-  size_t uniformLen = isDither ? sizeof(state.dithering) : sizeof(state.mesh);
+  const void *uniformBytes = (const void *)&state.mesh;
+  size_t uniformLen = sizeof(state.mesh);
+  if (isDither) {
+    uniformBytes = (const void *)&state.dithering;
+    uniformLen = sizeof(state.dithering);
+  } else if (isGrain) {
+    uniformBytes = (const void *)&state.grain;
+    uniformLen = sizeof(state.grain);
+  }
 
   // sourceImages is empty for a generator; encodeRenderCommands handles that
   // (empty inputTextures) and still builds the full-screen quad + dest texture.

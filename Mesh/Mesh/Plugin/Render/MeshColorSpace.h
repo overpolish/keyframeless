@@ -85,6 +85,41 @@ static inline DitheringUniforms DitheringDefault(void) {
   return d;
 }
 
+/// Grain Gradient ("Grainy", paper-design port) defaults.
+#define KK_GRAIN_DEFAULT_SOFTNESS                                              \
+  0.90f // band-edge smoothness (0 hard, 1 smooth)
+#define KK_GRAIN_DEFAULT_INTENSITY 0.40f // distortion between bands
+#define KK_GRAIN_DEFAULT_NOISE 0.25f     // grainy overlay amount
+#define KK_GRAIN_DEFAULT_SHAPE 1         // wave
+#define KK_GRAIN_DEFAULT_SPEED 1.0f
+
+/// Fallback Grain Gradient uniforms so an un-edited instance still renders
+/// before the lanes resolve. Colours share the Mesh default palette (the same
+/// "Color N" lanes drive both types). `resolution` is overwritten at render
+/// time.
+static inline GrainGradientUniforms GrainGradientDefault(void) {
+  GrainGradientUniforms g;
+  memset(&g, 0, sizeof(g));
+  int n = KK_MESH_COLOR_COUNT < KK_GRAIN_GRAD_COLORS ? KK_MESH_COLOR_COUNT
+                                                     : KK_GRAIN_GRAD_COLORS;
+  g.colorsCount = n;
+  for (int i = 0; i < n; i++) {
+    const float *c = kMeshDefaultColorsSRGB[i];
+    g.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
+  }
+  g.colorBack = (vector_float4){0.04f, 0.04f, 0.07f, 1.0f};
+  g.resolution = (vector_float2){1920.0f, 1080.0f};
+  g.origin = (vector_float2){0.5f, 0.5f};
+  g.softness = KK_GRAIN_DEFAULT_SOFTNESS;
+  g.intensity = KK_GRAIN_DEFAULT_INTENSITY;
+  g.noise = KK_GRAIN_DEFAULT_NOISE;
+  g.shape = KK_GRAIN_DEFAULT_SHAPE;
+  g.speed = KK_GRAIN_DEFAULT_SPEED;
+  g.seed = 0.0f;
+  g.time = 0.0f;
+  return g;
+}
+
 /// Generic per-swatch lane label ("Color 1", "Color 2", ...). One [r,g,b,a]
 /// colour lane per swatch. One-based to read naturally.
 static inline NSString *MeshColorLabel(int i) {

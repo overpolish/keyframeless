@@ -50,10 +50,33 @@ typedef struct DitheringUniforms {
     int type;                 // 1..4 dither (random, 2x2, 4x4, 8x8 Bayer)
 } DitheringUniforms;
 
+// Grain Gradient type ("Grainy"): also ported from paper-design/shaders
+// (Apache-2.0). A procedural shape field (u_shape) indexes a multi-colour ramp,
+// distorted by noise (intensity) with a grainy overlay (noise), composited over
+// a background. resolution is filled at render time (the grain is computed from
+// fragCoord / resolution, like Dithering).
+#define KK_GRAIN_GRAD_COLORS 7
+
+typedef struct GrainGradientUniforms {
+    vector_float4 colors[KK_GRAIN_GRAD_COLORS]; // rgba (straight alpha)
+    int colorsCount;                            // active colours (<= 7)
+    vector_float4 colorBack;                    // rgba background
+    vector_float2 resolution;                   // destination pixel dims (render time)
+    vector_float2 origin;                       // field centre (normalized; 0.5,0.5 = centre)
+    float softness;                             // 0..1 band-edge sharpness
+    float intensity;                            // 0..1 distortion between bands
+    float noise;                                // 0..1 grainy overlay
+    float time;                                 // clip seconds
+    float speed;                                // time multiplier (motion rate)
+    float seed;                                 // start-time offset (shared)
+    int shape;                                  // 1..7 (wave, dots, truchet, corners, ripple, blob, sphere)
+} GrainGradientUniforms;
+
 // The Type choice-pill order. Kept in sync with the "Type" pill labels.
 typedef enum MeshType {
-    MeshType_Mesh = 0,      // paper-design animated mesh gradient
-    MeshType_Dithering = 1, // paper-design dithered procedural shapes
+    MeshType_Mesh = 0,          // paper-design animated mesh gradient
+    MeshType_Dithering = 1,     // paper-design dithered procedural shapes
+    MeshType_GrainGradient = 2, // paper-design grain gradient ("Grainy")
 } MeshType;
 
 // The full render state packed into pluginState: the active type plus each
@@ -64,6 +87,7 @@ typedef struct MeshPluginState {
     int _pad0;
     MeshGradientUniforms mesh;
     DitheringUniforms dithering;
+    GrainGradientUniforms grain;
 } MeshPluginState;
 
 typedef enum MeshFragmentIndex {

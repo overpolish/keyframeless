@@ -29,22 +29,25 @@
 /// no in/out, no Basic/Advanced - just lanes and their numeric ranges.
 static NSString *_MeshAILaneSchemaText(void) {
   return @"Lane labels and value spaces. This is a procedural generator with "
-         @"two "
+         @"three "
          @"styles selected by \"Type\": Mesh (animated colour spots blended "
          @"into "
-         @"a soft gradient) and Dithering (a procedural shape rendered through "
+         @"a soft gradient), Dithering (a procedural shape rendered through "
          @"a "
-         @"dither into two colours). Set the lanes for the chosen type.\n\n"
+         @"dither into two colours), and Grainy (a procedural shape field "
+         @"indexing a multi-colour ramp with a grainy overlay). Set the lanes "
+         @"for the chosen type.\n\n"
          @"- \"Type\": the generator style. A structural choice (NOT "
          @"animated), "
-         @"stored as an index: 0 = Mesh, 1 = Dithering. Default 0.\n"
+         @"stored as an index: 0 = Mesh, 1 = Dithering, 2 = Grainy. Default "
+         @"0.\n"
          @"- \"Speed\": single value, 0..3 multiplier of the animation rate "
-         @"(1 = normal, 0 = frozen, 2 = twice as fast). Shared by both types. "
+         @"(1 = normal, 0 = frozen, 2 = twice as fast). Shared by all types. "
          @"Animatable. Default 1.\n"
          @"- \"Seed\": integer, the animation start-frame / layout variation "
-         @"(any value). Shared by both types. NOT animatable. Default 0.\n"
+         @"(any value). Shared by all types. NOT animatable. Default 0.\n"
          @"- \"Origin\": two components [X, Y] normalised 0..1 (0.5,0.5 = "
-         @"centre, Y up). Shifts the pattern within the frame. Shared by both "
+         @"centre, Y up). Shifts the pattern within the frame. Shared by all "
          @"types. Default [0.5, 0.5].\n"
          @"\nMesh (Type 0):\n"
          @"- \"Distortion\": percent 0..100. Organic noise warp of the field "
@@ -68,7 +71,22 @@ static NSString *_MeshAILaneSchemaText(void) {
          @"1..20 "
          @"(higher = chunkier). Default 2.\n"
          @"- \"Background\": the base colour [r, g, b, a] in sRGB 0..1.\n"
-         @"- \"Foreground\": the ink colour [r, g, b, a] in sRGB 0..1.\n";
+         @"- \"Foreground\": the ink colour [r, g, b, a] in sRGB 0..1.\n"
+         @"\nGrainy (Type 2):\n"
+         @"- \"Pattern\": the procedural shape field. Structural choice (NOT "
+         @"animated), index: 0 = Wave, 1 = Dots, 2 = Truchet, 3 = Corners, "
+         @"4 = Ripple, 5 = Blob. Default 0.\n"
+         @"- \"Softness\": percent 0..100. Colour-band edge smoothness "
+         @"(0 = hard steps, 100 = smooth gradient). Default 90.\n"
+         @"- \"Intensity\": percent 0..100. Noise distortion between the "
+         @"colour "
+         @"bands. Default 40.\n"
+         @"- \"Noise\": percent 0..100. Grainy overlay amount. Default 25.\n"
+         @"- \"Color 1\", \"Color 2\", ... : the ramp colours (shared with "
+         @"Mesh), each [r, g, b, a] in sRGB 0..1. Set as many as the user "
+         @"asks for (up to 7 used).\n"
+         @"- \"Background\": the base colour [r, g, b, a] in sRGB 0..1 "
+         @"(shared with Dithering).\n";
 }
 
 @implementation MeshPlugin (CustomUI)
@@ -89,9 +107,9 @@ static NSString *_MeshAILaneSchemaText(void) {
   // (Core), then the colours (Colors) last.
   KKLane *type = [KKLane laneWithLabel:@"Type"];
   type.valueType = KKLaneValueTypeFloat;
-  type.choiceLabels = @[ @"Mesh", @"Dithering" ];
+  type.choiceLabels = @[ @"Mesh", @"Dithering", @"Grainy" ];
   type.componentMin = @[ @0.0 ];
-  type.componentMax = @[ @1.0 ];
+  type.componentMax = @[ @2.0 ];
   type.integerValued = YES;
   type.animatable = NO;
   type.enabled = NO;
@@ -99,6 +117,27 @@ static NSString *_MeshAILaneSchemaText(void) {
   type.categorySymbol = @"circle.dotted";
   [type insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
   [lanes addObject:type];
+
+  // Grainy shape field, right under the Type pill (distinct label from
+  // Dithering's "Shape": lanes are keyed by label). 0-based pill; the shader
+  // wants 1-based.
+  KKLane *pattern = [KKLane laneWithLabel:@"Pattern"];
+  pattern.valueType = KKLaneValueTypeFloat;
+  pattern.choiceLabels =
+      @[ @"Wave", @"Dots", @"Truchet", @"Corners", @"Ripple", @"Blob" ];
+  pattern.componentMin = @[ @0.0 ];
+  pattern.componentMax = @[ @5.0 ];
+  pattern.integerValued = YES;
+  pattern.animatable = NO;
+  pattern.enabled = NO;
+  pattern.categoryKey = @"Core";
+  pattern.categorySymbol = @"circle.dotted";
+  pattern.visibleWhenLabel = @"Type";
+  pattern.visibleWhenValues = @[ @2 ];
+  [pattern insertKeypose:[KKKeyPose
+                             keyposeAtTime:0.0
+                                    values:@[ @(KK_GRAIN_DEFAULT_SHAPE - 1) ]]];
+  [lanes addObject:pattern];
 
   // Speed: shared motion-rate multiplier, visible for both types.
   KKLane *speed = [KKLane laneWithLabel:@"Speed"];
@@ -110,7 +149,7 @@ static NSString *_MeshAILaneSchemaText(void) {
   speed.categoryKey = @"Core";
   speed.categorySymbol = @"circle.dotted";
   speed.visibleWhenLabel = @"Type";
-  speed.visibleWhenValues = @[ @0, @1 ];
+  speed.visibleWhenValues = @[ @0, @1, @2 ];
   [speed insertKeypose:[KKKeyPose
                            keyposeAtTime:0.0
                                   values:@[ @(KK_MESH_GRAD_DEFAULT_SPEED) ]]];
@@ -129,7 +168,7 @@ static NSString *_MeshAILaneSchemaText(void) {
   seed.categoryKey = @"Core";
   seed.categorySymbol = @"circle.dotted";
   seed.visibleWhenLabel = @"Type";
-  seed.visibleWhenValues = @[ @0, @1 ];
+  seed.visibleWhenValues = @[ @0, @1, @2 ];
   [seed insertKeypose:[KKKeyPose
                           keyposeAtTime:0.0
                                  values:@[ @(KK_MESH_GRAD_DEFAULT_SEED) ]]];
@@ -240,28 +279,36 @@ static NSString *_MeshAILaneSchemaText(void) {
                                       values:@[ @(KK_DITHER_DEFAULT_PXSIZE) ]]];
   [lanes addObject:pxSize];
 
-  // --- Mesh colours (Type 0, dynamic - users add/remove): one [r,g,b,a] swatch
-  // each, seeded from the default palette.
-  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-    KKLane *color = [KKLane laneWithLabel:MeshColorLabel(i)];
-    color.valueType = KKLaneValueTypeColor;
-    color.componentMin = @[ @0.0, @0.0, @0.0, @0.0 ];
-    color.componentMax = @[ @1.0, @1.0, @1.0, @1.0 ];
-    color.animatable = YES; // colours can be keyframed
-    color.enabled = NO;
-    color.categoryKey = @"Colors";
-    color.categorySymbol = @"paintpalette";
-    color.visibleWhenLabel = @"Type";
-    color.visibleWhenValues = @[ @0 ];
-    const float *c = kMeshDefaultColorsSRGB[i];
-    [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                           values:@[
-                                             @(c[0]), @(c[1]), @(c[2]), @(c[3])
-                                           ]]];
-    [lanes addObject:color];
+  // --- Grainy controls (Type 2). %-units store 0..100 (the shader wants 0..1).
+  struct {
+    NSString *label;
+    double def;
+  } grainControls[] = {
+      {@"Softness", KK_GRAIN_DEFAULT_SOFTNESS * 100.0},
+      {@"Intensity", KK_GRAIN_DEFAULT_INTENSITY * 100.0},
+      {@"Noise", KK_GRAIN_DEFAULT_NOISE * 100.0},
+  };
+  for (unsigned s = 0; s < sizeof(grainControls) / sizeof(grainControls[0]);
+       s++) {
+    KKLane *lane = [KKLane laneWithLabel:grainControls[s].label];
+    lane.valueType = KKLaneValueTypeFloat;
+    lane.componentMin = @[ @0.0 ];
+    lane.componentMax = @[ @100.0 ];
+    lane.componentUnits = @[ @"%" ];
+    lane.animatable = YES;
+    lane.enabled = NO;
+    lane.categoryKey = @"Core";
+    lane.categorySymbol = @"circle.dotted";
+    lane.visibleWhenLabel = @"Type";
+    lane.visibleWhenValues = @[ @2 ];
+    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(grainControls[s].def) ]]];
+    [lanes addObject:lane];
   }
 
-  // --- Dithering colours (Type 1): background + foreground (ink).
+  // --- Fixed colours first (not removable, so they sit above the dynamic
+  // swatches): the Dithering background + foreground (ink). Background is
+  // shared by Dithering + Grainy; Foreground is Dithering-only.
   struct {
     NSString *label;
     float r, g, b, a;
@@ -280,7 +327,9 @@ static NSString *_MeshAILaneSchemaText(void) {
     color.categoryKey = @"Colors";
     color.categorySymbol = @"paintpalette";
     color.visibleWhenLabel = @"Type";
-    color.visibleWhenValues = @[ @1 ];
+    color.visibleWhenValues =
+        [ditherColors[c].label isEqualToString:@"Background"] ? @[ @1, @2 ]
+                                                              : @[ @1 ];
     [color
         insertKeypose:[KKKeyPose
                           keyposeAtTime:0.0
@@ -288,6 +337,27 @@ static NSString *_MeshAILaneSchemaText(void) {
                                    @(ditherColors[c].r), @(ditherColors[c].g),
                                    @(ditherColors[c].b), @(ditherColors[c].a)
                                  ]]];
+    [lanes addObject:color];
+  }
+
+  // --- Mesh + Grainy colours (dynamic - users add/remove): one [r,g,b,a]
+  // swatch each, seeded from the default palette. Below the fixed colours.
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    KKLane *color = [KKLane laneWithLabel:MeshColorLabel(i)];
+    color.valueType = KKLaneValueTypeColor;
+    color.componentMin = @[ @0.0, @0.0, @0.0, @0.0 ];
+    color.componentMax = @[ @1.0, @1.0, @1.0, @1.0 ];
+    color.animatable = YES; // colours can be keyframed
+    color.enabled = NO;
+    color.categoryKey = @"Colors";
+    color.categorySymbol = @"paintpalette";
+    color.visibleWhenLabel = @"Type";
+    color.visibleWhenValues = @[ @0, @2 ]; // Mesh + Grainy share the palette
+    const float *c = kMeshDefaultColorsSRGB[i];
+    [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                           values:@[
+                                             @(c[0]), @(c[1]), @(c[2]), @(c[3])
+                                           ]]];
     [lanes addObject:color];
   }
 

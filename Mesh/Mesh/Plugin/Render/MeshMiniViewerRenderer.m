@@ -104,6 +104,14 @@ static const CGFloat kHandleHitTolPt = 12.0;
     return @[ @3.0 ]; // 8x8 Bayer
   if ([label isEqualToString:@"Pixel Size"])
     return @[ @(KK_DITHER_DEFAULT_PXSIZE) ];
+  if ([label isEqualToString:@"Softness"])
+    return @[ @(KK_GRAIN_DEFAULT_SOFTNESS * 100.0) ];
+  if ([label isEqualToString:@"Intensity"])
+    return @[ @(KK_GRAIN_DEFAULT_INTENSITY * 100.0) ];
+  if ([label isEqualToString:@"Noise"])
+    return @[ @(KK_GRAIN_DEFAULT_NOISE * 100.0) ];
+  if ([label isEqualToString:@"Pattern"])
+    return @[ @(KK_GRAIN_DEFAULT_SHAPE - 1) ]; // pill is 0-based
   if ([label isEqualToString:@"Origin"])
     return @[ @0.5, @0.5 ];
   return [super defaultValuesForLabel:label];
@@ -152,9 +160,15 @@ static const CGFloat kHandleHitTolPt = 12.0;
           commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
   // Dispatch on the active type, same as the FCP render.
   NSArray<NSNumber *> *typeV = [self valuesForLabel:@"Type"];
-  BOOL isDither =
-      (typeV.count && lround(typeV[0].doubleValue) == MeshType_Dithering);
-  NSString *fragment = isDither ? @"ditheringFragment" : @"fragmentShader";
+  int meshType =
+      typeV.count ? (int)lround(typeV[0].doubleValue) : MeshType_Mesh;
+  BOOL isDither = (meshType == MeshType_Dithering);
+  BOOL isGrain = (meshType == MeshType_GrainGradient);
+  NSString *fragment = @"fragmentShader";
+  if (isDither)
+    fragment = @"ditheringFragment";
+  else if (isGrain)
+    fragment = @"grainGradientFragment";
   id<MTLRenderPipelineState> pipeline =
       [self _pipelineForDevice:dest.device
                    pixelFormat:dest.pixelFormat
@@ -232,6 +246,46 @@ static const CGFloat kHandleHitTolPt = 12.0;
     d.resolution = (vector_float2){W, H};
     d.time = timeSec;
     [e setFragmentBytes:&d length:sizeof(d) atIndex:MeshFragmentIndex_Grid];
+  } else if (isGrain) {
+    GrainGradientUniforms g = GrainGradientDefault();
+    int gCount = 0;
+    int gMax = KK_MESH_COLOR_COUNT < KK_GRAIN_GRAD_COLORS
+                   ? KK_MESH_COLOR_COUNT
+                   : KK_GRAIN_GRAD_COLORS;
+    for (int i = 0; i < gMax; i++) {
+      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
+      if (v.count >= 4)
+        g.colors[gCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                             v[2].floatValue, v[3].floatValue};
+      else {
+        const float *c = kMeshDefaultColorsSRGB[i];
+        g.colors[gCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+      }
+    }
+    g.colorsCount = gCount > 0 ? gCount : 1;
+    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
+    NSArray<NSNumber *> *softV = [self valuesForLabel:@"Softness"];
+    NSArray<NSNumber *> *intenV = [self valuesForLabel:@"Intensity"];
+    NSArray<NSNumber *> *noiseV = [self valuesForLabel:@"Noise"];
+    NSArray<NSNumber *> *patternV = [self valuesForLabel:@"Pattern"];
+    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+    if (backV.count >= 4)
+      g.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                    backV[2].floatValue, backV[3].floatValue};
+    g.softness =
+        softV.count ? softV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_SOFTNESS;
+    g.intensity = intenV.count ? intenV[0].floatValue / 100.0f
+                               : KK_GRAIN_DEFAULT_INTENSITY;
+    g.noise =
+        noiseV.count ? noiseV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_NOISE;
+    if (patternV.count)
+      g.shape = (int)lround(patternV[0].doubleValue) + 1;
+    g.speed = speedV.count ? speedV[0].floatValue : KK_GRAIN_DEFAULT_SPEED;
+    g.seed = seedShared;
+    g.origin = originShared;
+    g.resolution = (vector_float2){W, H};
+    g.time = timeSec;
+    [e setFragmentBytes:&g length:sizeof(g) atIndex:MeshFragmentIndex_Grid];
   } else {
     // Same colour swatches + controls as the FCP render (valuesForLabel falls
     // back to defaults).
