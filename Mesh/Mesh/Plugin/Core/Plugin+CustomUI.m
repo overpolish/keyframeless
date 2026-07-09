@@ -68,12 +68,72 @@ static NSString *_MeshAILaneSchemaText(void) {
 }
 
 + (NSArray<KKLane *> *)availableLanes {
+  // Lane order (top-to-bottom default): the global Flow controls first, then the
+  // per-point colour lanes. Users can reorder in the inspector, but the fresh
+  // default reads style-then-content.
+  NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
+
+  // --- Flow: global procedural style + motion (the shared "field, then shaper"
+  // model). Type selects the shaper (Mesh = soft blend, Liquid = FBM domain
+  // warp); Seed / Warp Amount / Speed drive Liquid and only appear for it. All
+  // are structural constants (motion comes from clip time, not keyframes), so
+  // they live together in the constants popover as radio pill + seed + sliders.
+  KKLane *type = [KKLane laneWithLabel:@"Type"];
+  type.valueType = KKLaneValueTypeFloat;
+  type.choiceLabels = @[ @"Mesh", @"Liquid" ];
+  type.componentMin = @[ @0.0 ];
+  type.componentMax = @[ @1.0 ];
+  type.integerValued = YES;
+  type.animatable = NO;
+  type.enabled = NO;
+  [type insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
+  [lanes addObject:type];
+
+  KKLane *seed = [KKLane laneWithLabel:@"Seed"];
+  seed.valueType = KKLaneValueTypeFloat;
+  seed.seedField = YES;
+  seed.componentMin = @[ @0.0 ];
+  seed.componentMax = @[ @1000000.0 ];
+  seed.integerValued = YES;
+  seed.animatable = NO;
+  seed.enabled = NO;
+  seed.visibleWhenLabel = @"Type";
+  seed.visibleWhenValues = @[ @1 ]; // Liquid only
+  [seed insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                        values:@[ @(KK_MESH_DEFAULT_SEED) ]]];
+  [lanes addObject:seed];
+
+  KKLane *warp = [KKLane laneWithLabel:@"Warp Amount"];
+  warp.valueType = KKLaneValueTypeFloat;
+  warp.componentMin = @[ @0.0 ];
+  warp.componentMax = @[ @100.0 ];
+  warp.componentUnits = @[ @"%" ]; // stored 0..100, shader wants 0..1
+  warp.animatable = YES; // keyframeable (ramp the fold intensity over time)
+  warp.enabled = NO;     // starts constant; user opts into animation
+  warp.visibleWhenLabel = @"Type";
+  warp.visibleWhenValues = @[ @1 ];
+  [warp insertKeypose:[KKKeyPose
+                          keyposeAtTime:0.0
+                                 values:@[ @(KK_MESH_DEFAULT_WARP * 100.0) ]]];
+  [lanes addObject:warp];
+
+  KKLane *speed = [KKLane laneWithLabel:@"Speed"];
+  speed.valueType = KKLaneValueTypeFloat;
+  speed.componentMin = @[ @0.0 ];
+  speed.componentMax = @[ @3.0 ];
+  speed.animatable = YES; // keyframeable (speed up / slow down the flow)
+  speed.enabled = NO;     // starts constant; user opts into animation
+  speed.visibleWhenLabel = @"Type";
+  speed.visibleWhenValues = @[ @1 ];
+  [speed insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                         values:@[ @(KK_MESH_DEFAULT_SPEED) ]]];
+  [lanes addObject:speed];
+
   // One composite lane per point: [x, y, spread, r, g, b, a]. Generic "Point N"
   // labels - a freeform set of colour points that grows/shrinks dynamically.
   // KKLaneValueTypeColorPoint renders it as one row: X | Y | Spread fields
   // (px, stored normalized) + an RGBA swatch. componentLabels count (3) = the
   // number of leading numeric fields; the last 4 components are the swatch.
-  NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
   for (int i = 0; i < KK_MESH_POINT_COUNT; i++) {
     KKLane *pt = [KKLane laneWithLabel:MeshPointLabel(i)];
     pt.valueType = KKLaneValueTypeColorPoint;
@@ -98,6 +158,7 @@ static NSString *_MeshAILaneSchemaText(void) {
                                         ]]];
     [lanes addObject:pt];
   }
+
   return lanes;
 }
 

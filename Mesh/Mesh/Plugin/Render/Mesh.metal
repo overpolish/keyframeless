@@ -51,6 +51,29 @@ static float3 linear_to_srgb(float3 c) {
 
 static float rand01(float2 p) { return fract(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453); }
 
+// Value-noise FBM, for domain-warping the sample coordinate (Liquid type). Cheap
+// (4 octaves of smoothstepped lattice noise) and seamless enough for a soft
+// gradient. rand01 doubles as the lattice hash.
+static float vnoise(float2 p) {
+    float2 i = floor(p), f = fract(p);
+    float2 u = f * f * (3.0 - 2.0 * f);
+    float a = rand01(i + float2(0.0, 0.0));
+    float b = rand01(i + float2(1.0, 0.0));
+    float c = rand01(i + float2(0.0, 1.0));
+    float d = rand01(i + float2(1.0, 1.0));
+    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
+}
+
+static float fbm(float2 p) {
+    float v = 0.0, amp = 0.5;
+    for (int i = 0; i < 4; i++) {
+        v += amp * vnoise(p);
+        p *= 2.0;
+        amp *= 0.5;
+    }
+    return v;
+}
+
 // Mesh gradient: bilinearly interpolate the rows x cols control colours in
 // OKLab across the output, convert to sRGB, and add a touch of dither to break
 // up banding. (Bilinear/Gouraud for now; bicubic smoothing + point warp land in
@@ -59,6 +82,24 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                constant MeshGridUniforms &grid [[buffer(MeshFragmentIndex_Grid)]],
                                constant int &encodeSRGB [[buffer(MeshFragmentIndex_EncodeSRGB)]]) {
     float2 uv = clamp(in.textureCoordinate, 0.0, 1.0);
+
+    // Liquid: domain-warp the sample coordinate by FBM before the point blend, so
+    // the colour regions swirl and fold (the Stripe/aurora "flow" look). Seed
+    // offsets the field; timeSec*speed scrolls it for auto-motion during
+    // playback. Type 0 (Mesh) leaves uv untouched -> the plain soft blend.
+    if (grid.type >= 1) {
+        float t = grid.timeSec * grid.speed;
+        // Hash the seed to a BOUNDED offset (0..128) so ANY seed magnitude - even
+        // 1e6+ - keeps full noise resolution. Adding seed*k straight into the uv
+        // would swamp the sub-pixel detail at float32 precision and freeze the
+        // field into flat cells.
+        float2 seedOff = fract(sin(float2(grid.seed * 12.9898 + 4.1, grid.seed * 78.233 + 1.7)) * 43758.5453) * 128.0;
+        float2 fp = uv * 3.5 + seedOff;
+        float2 q = float2(fbm(fp + float2(t, 0.0)), fbm(fp + float2(5.2, 1.3) + float2(0.0, t * 1.3)));
+        // Warp gain (2.0) pushes the useful range down so ~5% already reads as
+        // flowing, instead of the effect only kicking in past ~10%.
+        uv = clamp(uv + grid.warpAmount * 2.0 * (q - 0.5), 0.0, 1.0);
+    }
 
     // Freeform blend: per-point Gaussian falloff in OKLab. Each point's Spread
     // sets how far its colour reaches (big = broad wash, small = tight blob).

@@ -63,6 +63,13 @@ static const float kMeshDefaultPositions[KK_MESH_POINT_COUNT][2] = {
 /// Default Gaussian falloff size (normalized 0..1) for a fresh point.
 #define KK_MESH_DEFAULT_SPREAD 0.42f
 
+/// Flow defaults. Type starts on Mesh (soft blend); Warp/Speed are pre-seeded
+/// to sensible values so switching Type -> Liquid flows immediately without
+/// hunting for a value. Seed 0 = the canonical noise field.
+#define KK_MESH_DEFAULT_WARP 0.30f
+#define KK_MESH_DEFAULT_SPEED 0.50f
+#define KK_MESH_DEFAULT_SEED 0.0f
+
 /// Build a freeform point set from `count` positions (0..1), per-point spreads
 /// (NULL = default), and gamma-sRGB+alpha colours. Colours -> OKLab; the shader
 /// blends by per-point Gaussian falloff.
