@@ -114,7 +114,8 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
 }
 - (NSInteger)valueTypeForLabel:(NSString *)label {
   if ([label hasPrefix:@"Color "] || [label isEqualToString:@"Background"] ||
-      [label isEqualToString:@"Foreground"] || [label isEqualToString:@"Mid"])
+      [label isEqualToString:@"Foreground"] || [label isEqualToString:@"Mid"] ||
+      [label isEqualToString:@"Bloom Color"])
     return KKLaneValueTypeColor;
   if ([label isEqualToString:@"Origin"] || [label isEqualToString:@"Scale"])
     return KKLaneValueTypeGeneric;
@@ -156,6 +157,20 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     return @[ @(KK_METABALLS_DEFAULT_COUNT) ];
   if ([label isEqualToString:@"Size"])
     return @[ @(KK_METABALLS_DEFAULT_SIZE * 100.0) ];
+  if ([label isEqualToString:@"Bloom Color"])
+    return @[ @1.0, @0.9, @0.7, @1.0 ];
+  if ([label isEqualToString:@"Density"])
+    return @[ @(KK_GODRAYS_DEFAULT_DENSITY * 100.0) ];
+  if ([label isEqualToString:@"Spots"])
+    return @[ @(KK_GODRAYS_DEFAULT_SPOTTY * 100.0) ];
+  if ([label isEqualToString:@"Glow Size"])
+    return @[ @(KK_GODRAYS_DEFAULT_MIDSIZE * 100.0) ];
+  if ([label isEqualToString:@"Glow"])
+    return @[ @(KK_GODRAYS_DEFAULT_MIDINTENSITY * 100.0) ];
+  if ([label isEqualToString:@"Rays"])
+    return @[ @(KK_GODRAYS_DEFAULT_INTENSITY * 100.0) ];
+  if ([label isEqualToString:@"Bloom"])
+    return @[ @(KK_GODRAYS_DEFAULT_BLOOM * 100.0) ];
   if ([label isEqualToString:@"Shape"])
     return @[ @0.0 ]; // simplex
   if ([label isEqualToString:@"Dither"])
@@ -238,6 +253,7 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   BOOL isNeuro = (meshType == MeshType_Neuro);
   BOOL isSimplex = (meshType == MeshType_Simplex);
   BOOL isMetaballs = (meshType == MeshType_Metaballs);
+  BOOL isGodRays = (meshType == MeshType_GodRays);
   NSString *fragment = @"fragmentShader";
   if (isDither)
     fragment = @"ditheringFragment";
@@ -251,6 +267,8 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     fragment = @"simplexNoiseFragment";
   else if (isMetaballs)
     fragment = @"metaballsFragment";
+  else if (isGodRays)
+    fragment = @"godRaysFragment";
   id<MTLRenderPipelineState> pipeline =
       [self _pipelineForDevice:dest.device
                    pixelFormat:dest.pixelFormat
@@ -517,6 +535,57 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     mb.resolution = (vector_float2){W, H};
     mb.time = timeSec;
     [e setFragmentBytes:&mb length:sizeof(mb) atIndex:MeshFragmentIndex_Grid];
+  } else if (isGodRays) {
+    GodRaysUniforms gr = GodRaysDefault();
+    int grCount = 0;
+    int grMax = KK_MESH_COLOR_COUNT < 5 ? KK_MESH_COLOR_COUNT : 5;
+    for (int i = 0; i < grMax; i++) {
+      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
+      if (v.count >= 4)
+        gr.colors[grCount++] = (vector_float4){
+            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
+      else {
+        const float *c = kMeshDefaultColorsSRGB[i];
+        gr.colors[grCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+      }
+    }
+    gr.colorsCount = grCount > 0 ? grCount : 1;
+    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
+    NSArray<NSNumber *> *bloomColorV = [self valuesForLabel:@"Bloom Color"];
+    NSArray<NSNumber *> *densityV = [self valuesForLabel:@"Density"];
+    NSArray<NSNumber *> *spottyV = [self valuesForLabel:@"Spots"];
+    NSArray<NSNumber *> *midSizeV = [self valuesForLabel:@"Glow Size"];
+    NSArray<NSNumber *> *midIntenV = [self valuesForLabel:@"Glow"];
+    NSArray<NSNumber *> *raysV = [self valuesForLabel:@"Rays"];
+    NSArray<NSNumber *> *bloomV = [self valuesForLabel:@"Bloom"];
+    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+    if (backV.count >= 4)
+      gr.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                     backV[2].floatValue, backV[3].floatValue};
+    if (bloomColorV.count >= 4)
+      gr.colorBloom =
+          (vector_float4){bloomColorV[0].floatValue, bloomColorV[1].floatValue,
+                          bloomColorV[2].floatValue, bloomColorV[3].floatValue};
+    gr.density = densityV.count ? densityV[0].floatValue / 100.0f
+                                : KK_GODRAYS_DEFAULT_DENSITY;
+    gr.spotty = spottyV.count ? spottyV[0].floatValue / 100.0f
+                              : KK_GODRAYS_DEFAULT_SPOTTY;
+    gr.midSize = midSizeV.count ? midSizeV[0].floatValue / 100.0f
+                                : KK_GODRAYS_DEFAULT_MIDSIZE;
+    gr.midIntensity = midIntenV.count ? midIntenV[0].floatValue / 100.0f
+                                      : KK_GODRAYS_DEFAULT_MIDINTENSITY;
+    gr.intensity = raysV.count ? raysV[0].floatValue / 100.0f
+                               : KK_GODRAYS_DEFAULT_INTENSITY;
+    gr.bloom =
+        bloomV.count ? bloomV[0].floatValue / 100.0f : KK_GODRAYS_DEFAULT_BLOOM;
+    gr.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
+    gr.seed = seedShared;
+    gr.origin = originShared;
+    gr.scale = scaleShared;
+    gr.rotation = rotationShared;
+    gr.resolution = (vector_float2){W, H};
+    gr.time = timeSec;
+    [e setFragmentBytes:&gr length:sizeof(gr) atIndex:MeshFragmentIndex_Grid];
   } else {
     // Same colour swatches + controls as the FCP render (valuesForLabel falls
     // back to defaults).

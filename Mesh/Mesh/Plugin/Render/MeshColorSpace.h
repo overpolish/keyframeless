@@ -240,6 +240,44 @@ static inline MetaballsUniforms MetaballsDefault(void) {
   return m;
 }
 
+/// God Rays ("God Rays", paper-design port) defaults.
+#define KK_GODRAYS_DEFAULT_DENSITY 0.06f
+#define KK_GODRAYS_DEFAULT_SPOTTY 0.01f
+#define KK_GODRAYS_DEFAULT_MIDSIZE 0.22f
+#define KK_GODRAYS_DEFAULT_MIDINTENSITY 0.28f
+#define KK_GODRAYS_DEFAULT_INTENSITY 0.20f
+#define KK_GODRAYS_DEFAULT_BLOOM 0.015f
+
+/// Fallback God Rays uniforms (the default palette + a dark background + a warm
+/// bloom overlay) so an un-edited instance still renders before the colour
+/// lanes resolve. `resolution` is overwritten at render time.
+static inline GodRaysUniforms GodRaysDefault(void) {
+  GodRaysUniforms g;
+  memset(&g, 0, sizeof(g));
+  int rays = KK_MESH_COLOR_COUNT < 5 ? KK_MESH_COLOR_COUNT : 5;
+  g.colorsCount = rays;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    const float *c = kMeshDefaultColorsSRGB[i];
+    g.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
+  }
+  g.colorBack = (vector_float4){0.04f, 0.04f, 0.07f, 1.0f};
+  g.colorBloom = (vector_float4){1.0f, 0.9f, 0.7f, 1.0f};
+  g.resolution = (vector_float2){1920.0f, 1080.0f};
+  g.origin = (vector_float2){0.5f, 0.5f};
+  g.scale = (vector_float2){1.0f, 1.0f};
+  g.density = KK_GODRAYS_DEFAULT_DENSITY;
+  g.spotty = KK_GODRAYS_DEFAULT_SPOTTY;
+  g.midSize = KK_GODRAYS_DEFAULT_MIDSIZE;
+  g.midIntensity = KK_GODRAYS_DEFAULT_MIDINTENSITY;
+  g.intensity = KK_GODRAYS_DEFAULT_INTENSITY;
+  g.bloom = KK_GODRAYS_DEFAULT_BLOOM;
+  g.speed = KK_MESH_GRAD_DEFAULT_SPEED;
+  g.seed = 0.0f;
+  g.rotation = 0.0f;
+  g.time = 0.0f;
+  return g;
+}
+
 /// Generic per-swatch lane label ("Color 1", "Color 2", ...). One [r,g,b,a]
 /// colour lane per swatch. One-based to read naturally.
 static inline NSString *MeshColorLabel(int i) {

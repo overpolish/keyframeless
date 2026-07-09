@@ -10,9 +10,9 @@ section here for each third-party component you incorporate.
 
 Portions of the Mesh generator's fragment shaders
 (`Mesh/Mesh/Plugin/Render/Mesh.metal` — the `Mesh`, `Dithering`, `Grainy`,
-`Warp`, `Neuro`, `Simplex`, and `Metaballs` types) are derived from the
-`mesh-gradient`, `dithering`, `grain-gradient`, `warp`, `neuro-noise`,
-`simplex-noise`, and `metaballs` shaders in **paper-design/shaders**.
+`Warp`, `Neuro`, `Simplex`, `Metaballs`, and `God Rays` types) are derived from
+the `mesh-gradient`, `dithering`, `grain-gradient`, `warp`, `neuro-noise`,
+`simplex-noise`, `metaballs`, and `god-rays` shaders in **paper-design/shaders**.
 
 - Source: https://github.com/paper-design/shaders
 - Copyright the paper-design/shaders authors.

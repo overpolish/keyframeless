@@ -414,6 +414,66 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   mb.rotation = rotation;
   mb.time = timeSec;
   outState->metaballs = mb;
+
+  // --- God Rays: the shared colour swatches (up to 5) are the ray colours over
+  // the Background, with a Bloom Color overlay. Density / Spots / Glow Size /
+  // Glow / Rays / Bloom are percent lanes; the shader wants 0..1. Resolution is
+  // filled at render time.
+  GodRaysUniforms gr = GodRaysDefault();
+  int grCount = 0;
+  int grMax = KK_MESH_COLOR_COUNT < 5 ? KK_MESH_COLOR_COUNT : 5;
+  for (int i = 0; i < grMax; i++) {
+    NSArray<NSNumber *> *v =
+        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
+    if (v.count >= 4)
+      gr.colors[grCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                             v[2].floatValue, v[3].floatValue};
+    else {
+      const float *c = kMeshDefaultColorsSRGB[i];
+      gr.colors[grCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+    }
+  }
+  gr.colorsCount = grCount > 0 ? grCount : 1;
+  if (backV.count >= 4)
+    gr.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                   backV[2].floatValue, backV[3].floatValue};
+  NSArray<NSNumber *> *bloomColorV =
+      MeshLaneValuesAtFraction(timeline, @"Bloom Color", frac);
+  if (bloomColorV.count >= 4)
+    gr.colorBloom =
+        (vector_float4){bloomColorV[0].floatValue, bloomColorV[1].floatValue,
+                        bloomColorV[2].floatValue, bloomColorV[3].floatValue};
+  NSArray<NSNumber *> *densityV =
+      MeshLaneValuesAtFraction(timeline, @"Density", frac);
+  NSArray<NSNumber *> *spottyV =
+      MeshLaneValuesAtFraction(timeline, @"Spots", frac);
+  NSArray<NSNumber *> *midSizeV =
+      MeshLaneValuesAtFraction(timeline, @"Glow Size", frac);
+  NSArray<NSNumber *> *midIntenV =
+      MeshLaneValuesAtFraction(timeline, @"Glow", frac);
+  NSArray<NSNumber *> *raysV =
+      MeshLaneValuesAtFraction(timeline, @"Rays", frac);
+  NSArray<NSNumber *> *bloomV =
+      MeshLaneValuesAtFraction(timeline, @"Bloom", frac);
+  gr.density = densityV.count ? densityV[0].floatValue / 100.0f
+                              : KK_GODRAYS_DEFAULT_DENSITY;
+  gr.spotty = spottyV.count ? spottyV[0].floatValue / 100.0f
+                            : KK_GODRAYS_DEFAULT_SPOTTY;
+  gr.midSize = midSizeV.count ? midSizeV[0].floatValue / 100.0f
+                              : KK_GODRAYS_DEFAULT_MIDSIZE;
+  gr.midIntensity = midIntenV.count ? midIntenV[0].floatValue / 100.0f
+                                    : KK_GODRAYS_DEFAULT_MIDINTENSITY;
+  gr.intensity =
+      raysV.count ? raysV[0].floatValue / 100.0f : KK_GODRAYS_DEFAULT_INTENSITY;
+  gr.bloom =
+      bloomV.count ? bloomV[0].floatValue / 100.0f : KK_GODRAYS_DEFAULT_BLOOM;
+  gr.speed = speed;
+  gr.seed = seed;
+  gr.origin = origin;
+  gr.scale = scale;
+  gr.rotation = rotation;
+  gr.time = timeSec;
+  outState->godrays = gr;
   return YES;
 }
 
@@ -487,6 +547,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     state.neuro = NeuroNoiseDefault();
     state.simplex = SimplexNoiseDefault();
     state.metaballs = MetaballsDefault();
+    state.godrays = GodRaysDefault();
   }
 
   // Dispatch on the active type. Each type is a separate fragment function; the
@@ -498,6 +559,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   BOOL isNeuro = (state.type == MeshType_Neuro);
   BOOL isSimplex = (state.type == MeshType_Simplex);
   BOOL isMetaballs = (state.type == MeshType_Metaballs);
+  BOOL isGodRays = (state.type == MeshType_GodRays);
   NSString *pluginID = kPluginID;
   NSString *fragment = @"fragmentShader";
   if (isDither) {
@@ -518,6 +580,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isMetaballs) {
     pluginID = [kPluginID stringByAppendingString:@".metaballs"];
     fragment = @"metaballsFragment";
+  } else if (isGodRays) {
+    pluginID = [kPluginID stringByAppendingString:@".godrays"];
+    fragment = @"godRaysFragment";
   }
 
   id<MTLRenderPipelineState> pipelineState =
@@ -537,6 +602,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   state.neuro.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.simplex.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.metaballs.resolution = (vector_float2){(float)mediaW, (float)mediaH};
+  state.godrays.resolution = (vector_float2){(float)mediaW, (float)mediaH};
 
   // Match the output encoding to the destination: FCP's float working buffers
   // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.
@@ -566,6 +632,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isMetaballs) {
     uniformBytes = (const void *)&state.metaballs;
     uniformLen = sizeof(state.metaballs);
+  } else if (isGodRays) {
+    uniformBytes = (const void *)&state.godrays;
+    uniformLen = sizeof(state.godrays);
   }
 
   // sourceImages is empty for a generator; encodeRenderCommands handles that
