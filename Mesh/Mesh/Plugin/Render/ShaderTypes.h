@@ -20,19 +20,8 @@ typedef struct MeshGridUniforms {
     vector_float2 points[KK_MESH_MAX_VERTS];      // normalized 0..1
     vector_float4 colorsOklab[KK_MESH_MAX_VERTS]; // (L, a, b, alpha)
     float spreads[KK_MESH_MAX_VERTS];             // Gaussian falloff size (0..1)
-    // --- Flow: procedural style + motion (shared "field, then shaper" model) ---
-    int type;         // MeshType: 0 = Mesh (soft blend), 1 = Liquid (FBM warp)
-    float seed;       // offsets the noise field so each seed is a variation
-    float warpAmount; // 0..1 domain-warp strength (Liquid)
-    float speed;      // noise phase advance per second (auto-motion)
-    float timeSec;    // elapsed clip seconds; drives the phase
+    float grain;                                  // final grain-overlay amount 0..1
 } MeshGridUniforms;
-
-// The `type` field above. Kept in sync with the "Type" choice-pill lane order.
-typedef enum MeshType {
-    MeshType_Mesh = 0,   // soft weighted blend (the baseline)
-    MeshType_Liquid = 1, // FBM domain-warp of the sample coords (flowing)
-} MeshType;
 
 typedef enum MeshFragmentIndex {
     MeshFragmentIndex_Grid = 0,

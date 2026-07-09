@@ -51,88 +51,48 @@ static float3 linear_to_srgb(float3 c) {
 
 static float rand01(float2 p) { return fract(sin(dot(p, float2(12.9898, 78.233))) * 43758.5453); }
 
-// Value-noise FBM, for domain-warping the sample coordinate (Liquid type). Cheap
-// (4 octaves of smoothstepped lattice noise) and seamless enough for a soft
-// gradient. rand01 doubles as the lattice hash.
-static float vnoise(float2 p) {
-    float2 i = floor(p), f = fract(p);
-    float2 u = f * f * (3.0 - 2.0 * f);
-    float a = rand01(i + float2(0.0, 0.0));
-    float b = rand01(i + float2(1.0, 0.0));
-    float c = rand01(i + float2(0.0, 1.0));
-    float d = rand01(i + float2(1.0, 1.0));
-    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);
-}
-
-static float fbm(float2 p) {
-    float v = 0.0, amp = 0.5;
-    for (int i = 0; i < 4; i++) {
-        v += amp * vnoise(p);
-        p *= 2.0;
-        amp *= 0.5;
-    }
-    return v;
-}
-
-// Mesh gradient: bilinearly interpolate the rows x cols control colours in
-// OKLab across the output, convert to sRGB, and add a touch of dither to break
-// up banding. (Bilinear/Gouraud for now; bicubic smoothing + point warp land in
-// later increments.) Premultiplied-alpha blend, so output rgb*a.
+// Freeform gradient: positional Gaussian blend of the colour POINTS (the
+// soft-blob look), in OKLab so the blend is perceptual, converted to sRGB at
+// the end. Normalized by the weight sum so the whole frame stays covered; the
+// s2 amplitude lets a point fade to nothing as Spread -> 0. Premultiplied-alpha
+// blend, so output rgb*a.
 fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                constant MeshGridUniforms &grid [[buffer(MeshFragmentIndex_Grid)]],
                                constant int &encodeSRGB [[buffer(MeshFragmentIndex_EncodeSRGB)]]) {
     float2 uv = clamp(in.textureCoordinate, 0.0, 1.0);
-
-    // Liquid: domain-warp the sample coordinate by FBM before the point blend, so
-    // the colour regions swirl and fold (the Stripe/aurora "flow" look). Seed
-    // offsets the field; timeSec*speed scrolls it for auto-motion during
-    // playback. Type 0 (Mesh) leaves uv untouched -> the plain soft blend.
-    if (grid.type >= 1) {
-        float t = grid.timeSec * grid.speed;
-        // Hash the seed to a BOUNDED offset (0..128) so ANY seed magnitude - even
-        // 1e6+ - keeps full noise resolution. Adding seed*k straight into the uv
-        // would swamp the sub-pixel detail at float32 precision and freeze the
-        // field into flat cells.
-        float2 seedOff = fract(sin(float2(grid.seed * 12.9898 + 4.1, grid.seed * 78.233 + 1.7)) * 43758.5453) * 128.0;
-        float2 fp = uv * 3.5 + seedOff;
-        float2 q = float2(fbm(fp + float2(t, 0.0)), fbm(fp + float2(5.2, 1.3) + float2(0.0, t * 1.3)));
-        // Warp gain (2.0) pushes the useful range down so ~5% already reads as
-        // flowing, instead of the effect only kicking in past ~10%.
-        uv = clamp(uv + grid.warpAmount * 2.0 * (q - 0.5), 0.0, 1.0);
-    }
-
-    // Freeform blend: per-point Gaussian falloff in OKLab. Each point's Spread
-    // sets how far its colour reaches (big = broad wash, small = tight blob).
-    // Normalized by the weight sum so the whole frame stays covered.
     int n = clamp(grid.count, 1, KK_MESH_MAX_VERTS);
+
     float4 acc = float4(0.0);
     float wsum = 0.0;
     for (int i = 0; i < n; i++) {
         float2 d = uv - grid.points[i];
         float s = max(grid.spreads[i], 0.0);
         float s2 = s * s;
-        // Area-weighted Gaussian: the amplitude scales with Spread so a point
-        // fades to nothing as Spread -> 0 (lets points animate in/out cleanly,
-        // instead of leaving a hard dot at the centre where exp(0)==1). With
-        // equal spreads the s2 factor cancels in the normalize below, so the
-        // default look is unchanged; it only matters when spreads differ.
         float w = s2 * exp(-dot(d, d) / max(s2, 1e-6));
         acc += grid.colorsOklab[i] * w;
         wsum += w;
     }
     float4 lab = acc / max(wsum, 1e-5);
-
-    // Blend perceptually in OKLab, then match the output encoding to the
-    // target: gamma for 8-bit unorm buffers, linear for FCP's float working
-    // buffers. Dither only helps the 8-bit path.
     float3 lin = oklab_to_linear_srgb(lab.xyz);
+    float alpha = lab.w;
+
     float3 outRGB;
     if (encodeSRGB) {
         outRGB = linear_to_srgb(lin);
-        outRGB = clamp(outRGB + (rand01(in.clipSpacePosition.xy) - 0.5) / 255.0, 0.0, 1.0);
     } else {
         outRGB = clamp(lin, 0.0, 1.0);
     }
-    float a = lab.w;
-    return float4(outRGB * a, a);
+
+    // Grain: a final monochrome noise overlay across the whole field (what stops
+    // a smooth gradient reading as flat vector mush - every reference uses it).
+    // Static (seeded by pixel, not time) so it reads as film emulsion, and
+    // slightly luminance-weighted so it eases off in the brightest highlights.
+    if (grid.grain > 0.0) {
+        float gn = rand01(in.clipSpacePosition.xy * 0.5) - 0.5;
+        float luma = dot(outRGB, float3(0.2126, 0.7152, 0.0722));
+        float lumWeight = 1.0 - 0.5 * luma;
+        outRGB = clamp(outRGB + gn * grid.grain * lumWeight, 0.0, 1.0);
+    }
+
+    return float4(outRGB * alpha, alpha);
 }

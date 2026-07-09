@@ -142,20 +142,11 @@ static const CGFloat kHandleHitTolPt = 12.0;
     }
   }
   MeshGridUniforms grid = MeshBuildPoints(KK_MESH_POINT_COUNT, pos, spr, col);
-  // Flow: same global lanes as the FCP render (valuesForLabel falls back to the
-  // subclass default). The mini is a static preview, so timeSec just tracks the
-  // edit fraction (seed + warp already show without motion); playback animation
-  // is a main-viewer thing.
-  NSArray<NSNumber *> *typeV = [self valuesForLabel:@"Type"];
-  NSArray<NSNumber *> *seedV = [self valuesForLabel:@"Seed"];
-  NSArray<NSNumber *> *warpV = [self valuesForLabel:@"Warp Amount"];
-  NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-  grid.type = typeV.count ? (int)lround(typeV[0].doubleValue) : MeshType_Mesh;
-  grid.seed = seedV.count ? seedV[0].floatValue : KK_MESH_DEFAULT_SEED;
-  grid.warpAmount =
-      warpV.count ? warpV[0].floatValue / 100.0f : KK_MESH_DEFAULT_WARP;
-  grid.speed = speedV.count ? speedV[0].floatValue : KK_MESH_DEFAULT_SPEED;
-  grid.timeSec = (float)self.editFraction;
+  // Grain: same global overlay lane as the FCP render (valuesForLabel falls
+  // back to the subclass default).
+  NSArray<NSNumber *> *grainV = [self valuesForLabel:@"Grain"];
+  grid.grain =
+      grainV.count ? grainV[0].floatValue / 100.0f : KK_MESH_DEFAULT_GRAIN;
   // The mini-viewer renders into an 8-bit unorm texture shown directly on
   // screen, so gamma-encode (unlike FCP's linear float working buffer).
   int encodeSRGB = (dest.pixelFormat == MTLPixelFormatRGBA8Unorm ||

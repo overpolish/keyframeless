@@ -135,26 +135,12 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   }
   *outGrid = MeshBuildPoints(KK_MESH_POINT_COUNT, pos, spr, col);
 
-  // Flow: global style + motion lanes (read at `frac` like the points; a
-  // missing lane falls back to its default so an un-edited instance still
-  // renders).
-  NSArray<NSNumber *> *typeV =
-      MeshLaneValuesAtFraction(timeline, @"Type", frac);
-  NSArray<NSNumber *> *seedV =
-      MeshLaneValuesAtFraction(timeline, @"Seed", frac);
-  NSArray<NSNumber *> *warpV =
-      MeshLaneValuesAtFraction(timeline, @"Warp Amount", frac);
-  NSArray<NSNumber *> *speedV =
-      MeshLaneValuesAtFraction(timeline, @"Speed", frac);
-  outGrid->type =
-      typeV.count ? (int)lround(typeV[0].doubleValue) : MeshType_Mesh;
-  outGrid->seed = seedV.count ? seedV[0].floatValue : KK_MESH_DEFAULT_SEED;
-  outGrid->warpAmount =
-      warpV.count ? warpV[0].floatValue / 100.0f : KK_MESH_DEFAULT_WARP;
-  outGrid->speed = speedV.count ? speedV[0].floatValue : KK_MESH_DEFAULT_SPEED;
-  // Elapsed clip seconds drives the noise phase, so a Liquid mesh flows on its
-  // own during playback (and holds a still frame at a paused playhead).
-  outGrid->timeSec = (float)(frac * durSec);
+  // Grain: a global overlay lane (read at `frac` like the points; a missing
+  // lane falls back to its default so an un-edited instance still renders).
+  NSArray<NSNumber *> *grainV =
+      MeshLaneValuesAtFraction(timeline, @"Grain", frac);
+  outGrid->grain =
+      grainV.count ? grainV[0].floatValue / 100.0f : KK_MESH_DEFAULT_GRAIN;
   return YES;
 }
 

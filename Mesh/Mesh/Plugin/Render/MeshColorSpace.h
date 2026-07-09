@@ -41,10 +41,10 @@ static inline vector_float4 MeshSRGBToOklab(float r, float g, float b,
   return out;
 }
 
-/// Default aurora colours (purple / pink / blue / teal), gamma sRGB + alpha,
-/// index-aligned with kMeshDefaultPositions. Seeds the lane templates and the
-/// render fallback so an un-edited instance and the inspector agree. Until
-/// KKPalette generates them.
+/// Default freeform point colours (purple / pink / blue / teal), gamma sRGB +
+/// alpha, index-aligned with kMeshDefaultPositions. Seeds the lane templates
+/// and the render fallback so an un-edited instance and the inspector agree.
+/// Until KKPalette generates them.
 static const float kMeshDefaultColorsSRGB[KK_MESH_POINT_COUNT][4] = {
     {0.55f, 0.36f, 0.96f, 1.0f}, // purple
     {0.98f, 0.45f, 0.65f, 1.0f}, // pink
@@ -63,12 +63,9 @@ static const float kMeshDefaultPositions[KK_MESH_POINT_COUNT][2] = {
 /// Default Gaussian falloff size (normalized 0..1) for a fresh point.
 #define KK_MESH_DEFAULT_SPREAD 0.42f
 
-/// Flow defaults. Type starts on Mesh (soft blend); Warp/Speed are pre-seeded
-/// to sensible values so switching Type -> Liquid flows immediately without
-/// hunting for a value. Seed 0 = the canonical noise field.
-#define KK_MESH_DEFAULT_WARP 0.30f
-#define KK_MESH_DEFAULT_SPEED 0.50f
-#define KK_MESH_DEFAULT_SEED 0.0f
+/// Final grain overlay amount (0..1). A subtle default so a fresh instance has
+/// the tasteful film grain every reference gradient uses, out of the box.
+#define KK_MESH_DEFAULT_GRAIN 0.06f
 
 /// Build a freeform point set from `count` positions (0..1), per-point spreads
 /// (NULL = default), and gamma-sRGB+alpha colours. Colours -> OKLab; the shader

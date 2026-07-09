@@ -12,6 +12,7 @@
 #import "MeshOSCRadiusMath.h"
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKHelpSection.h>
 #import <KeyframelessKit/KKLog.h>
@@ -68,19 +69,21 @@ static NSString *_MeshAILaneSchemaText(void) {
 }
 
 + (NSArray<KKLane *> *)availableLanes {
-  // Lane order (top-to-bottom default): the global Flow controls first, then the
-  // per-point colour lanes. Users can reorder in the inspector, but the fresh
-  // default reads style-then-content.
+  // Lane order (top-to-bottom default): the global Flow controls first, then
+  // the per-point colour lanes. Users can reorder in the inspector, but the
+  // fresh default reads style-then-content.
   NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
 
-  // --- Flow: global procedural style + motion (the shared "field, then shaper"
-  // model). Type selects the shaper (Mesh = soft blend, Liquid = FBM domain
-  // warp); Seed / Warp Amount / Speed drive Liquid and only appear for it. All
-  // are structural constants (motion comes from clip time, not keyframes), so
-  // they live together in the constants popover as radio pill + seed + sliders.
+  // Freeform gradient: a set of movable colour points blended by per-point
+  // Gaussian falloff, plus a universal grain overlay. Type is the scaffold pill
+  // for future gradient types. The kit only renders a pill at 2+ choices, so
+  // for now it carries Freeform plus a disabled-in-spirit "Coming Soon"
+  // placeholder (the render ignores the Type value, so selecting it is a
+  // no-op). Replace the placeholder with the real second type when it lands.
+  // The Type pill comes first, then Grain, then the per-point lanes.
   KKLane *type = [KKLane laneWithLabel:@"Type"];
   type.valueType = KKLaneValueTypeFloat;
-  type.choiceLabels = @[ @"Mesh", @"Liquid" ];
+  type.choiceLabels = @[ @"Freeform", @"Coming Soon" ];
   type.componentMin = @[ @0.0 ];
   type.componentMax = @[ @1.0 ];
   type.integerValued = YES;
@@ -89,45 +92,20 @@ static NSString *_MeshAILaneSchemaText(void) {
   [type insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
   [lanes addObject:type];
 
-  KKLane *seed = [KKLane laneWithLabel:@"Seed"];
-  seed.valueType = KKLaneValueTypeFloat;
-  seed.seedField = YES;
-  seed.componentMin = @[ @0.0 ];
-  seed.componentMax = @[ @1000000.0 ];
-  seed.integerValued = YES;
-  seed.animatable = NO;
-  seed.enabled = NO;
-  seed.visibleWhenLabel = @"Type";
-  seed.visibleWhenValues = @[ @1 ]; // Liquid only
-  [seed insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                        values:@[ @(KK_MESH_DEFAULT_SEED) ]]];
-  [lanes addObject:seed];
-
-  KKLane *warp = [KKLane laneWithLabel:@"Warp Amount"];
-  warp.valueType = KKLaneValueTypeFloat;
-  warp.componentMin = @[ @0.0 ];
-  warp.componentMax = @[ @100.0 ];
-  warp.componentUnits = @[ @"%" ]; // stored 0..100, shader wants 0..1
-  warp.animatable = YES; // keyframeable (ramp the fold intensity over time)
-  warp.enabled = NO;     // starts constant; user opts into animation
-  warp.visibleWhenLabel = @"Type";
-  warp.visibleWhenValues = @[ @1 ];
-  [warp insertKeypose:[KKKeyPose
-                          keyposeAtTime:0.0
-                                 values:@[ @(KK_MESH_DEFAULT_WARP * 100.0) ]]];
-  [lanes addObject:warp];
-
-  KKLane *speed = [KKLane laneWithLabel:@"Speed"];
-  speed.valueType = KKLaneValueTypeFloat;
-  speed.componentMin = @[ @0.0 ];
-  speed.componentMax = @[ @3.0 ];
-  speed.animatable = YES; // keyframeable (speed up / slow down the flow)
-  speed.enabled = NO;     // starts constant; user opts into animation
-  speed.visibleWhenLabel = @"Type";
-  speed.visibleWhenValues = @[ @1 ];
-  [speed insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                         values:@[ @(KK_MESH_DEFAULT_SPEED) ]]];
-  [lanes addObject:speed];
+  // Grain: a final overlay - the film-grain every modern gradient uses to stop
+  // the smooth field reading as flat vector mush.
+  KKLane *grain = [KKLane laneWithLabel:@"Grain"];
+  grain.valueType = KKLaneValueTypeFloat;
+  grain.componentMin = @[ @0.0 ];
+  grain.componentMax = @[ @100.0 ];
+  grain.componentUnits = @[ @"%" ]; // stored 0..100, shader wants 0..1
+  grain.animatable = YES;
+  grain.enabled = NO;
+  [grain
+      insertKeypose:[KKKeyPose
+                        keyposeAtTime:0.0
+                               values:@[ @(KK_MESH_DEFAULT_GRAIN * 100.0) ]]];
+  [lanes addObject:grain];
 
   // One composite lane per point: [x, y, spread, r, g, b, a]. Generic "Point N"
   // labels - a freeform set of colour points that grows/shrinks dynamically.
