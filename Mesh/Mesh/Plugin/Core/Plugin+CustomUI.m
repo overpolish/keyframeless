@@ -29,18 +29,19 @@
 /// no in/out, no Basic/Advanced - just lanes and their numeric ranges.
 static NSString *_MeshAILaneSchemaText(void) {
   return @"Lane labels and value spaces. This is a procedural generator with "
-         @"three "
+         @"four "
          @"styles selected by \"Type\": Mesh (animated colour spots blended "
          @"into "
          @"a soft gradient), Dithering (a procedural shape rendered through "
          @"a "
-         @"dither into two colours), and Grainy (a procedural shape field "
-         @"indexing a multi-colour ramp with a grainy overlay). Set the lanes "
-         @"for the chosen type.\n\n"
+         @"dither into two colours), Grainy (a procedural shape field "
+         @"indexing a multi-colour ramp with a grainy overlay), and Warp "
+         @"(colour fields warped by noise + swirl over a base pattern). Set "
+         @"the lanes for the chosen type.\n\n"
          @"- \"Type\": the generator style. A structural choice (NOT "
          @"animated), "
-         @"stored as an index: 0 = Mesh, 1 = Dithering, 2 = Grainy. Default "
-         @"0.\n"
+         @"stored as an index: 0 = Mesh, 1 = Dithering, 2 = Grainy, 3 = Warp. "
+         @"Default 0.\n"
          @"- \"Speed\": single value, 0..3 multiplier of the animation rate "
          @"(1 = normal, 0 = frozen, 2 = twice as fast). Shared by all types. "
          @"Animatable. Default 1.\n"
@@ -86,7 +87,24 @@ static NSString *_MeshAILaneSchemaText(void) {
          @"Mesh), each [r, g, b, a] in sRGB 0..1. Set as many as the user "
          @"asks for (up to 7 used).\n"
          @"- \"Background\": the base colour [r, g, b, a] in sRGB 0..1 "
-         @"(shared with Dithering).\n";
+         @"(shared with Dithering).\n"
+         @"\nWarp (Type 3):\n"
+         @"- \"Base\": the base pattern under the warp. Structural choice (NOT "
+         @"animated), index: 0 = Checks, 1 = Stripes, 2 = Edge. Default 0.\n"
+         @"- \"Proportion\": percent 0..100. Blend point between colours "
+         @"(50 = equal distribution). Default 50.\n"
+         @"- \"Softness\": percent 0..100. Colour-transition sharpness "
+         @"(0 = hard edge, 100 = smooth). Shared with Grainy. Default 90.\n"
+         @"- \"Shape Scale\": percent 0..100. Zoom of the base pattern. "
+         @"Default 50.\n"
+         @"- \"Distortion\": percent 0..100. Noise distortion strength. Shared "
+         @"with Mesh. Default 80.\n"
+         @"- \"Swirl\": percent 0..100. Swirl distortion strength. Shared with "
+         @"Mesh. Default 10.\n"
+         @"- \"Swirl Iterations\": integer 0..20, layered swirl passes "
+         @"(effective with Swirl > 0). Default 8.\n"
+         @"- \"Color 1\", \"Color 2\", ... : the warped colours (shared with "
+         @"Mesh), each [r, g, b, a] in sRGB 0..1. Up to 10 used.\n";
 }
 
 @implementation MeshPlugin (CustomUI)
@@ -107,9 +125,9 @@ static NSString *_MeshAILaneSchemaText(void) {
   // (Core), then the colours (Colors) last.
   KKLane *type = [KKLane laneWithLabel:@"Type"];
   type.valueType = KKLaneValueTypeFloat;
-  type.choiceLabels = @[ @"Mesh", @"Dithering", @"Grainy" ];
+  type.choiceLabels = @[ @"Mesh", @"Dithering", @"Grainy", @"Warp" ];
   type.componentMin = @[ @0.0 ];
-  type.componentMax = @[ @2.0 ];
+  type.componentMax = @[ @3.0 ];
   type.integerValued = YES;
   type.animatable = NO;
   type.enabled = NO;
@@ -139,6 +157,25 @@ static NSString *_MeshAILaneSchemaText(void) {
                                     values:@[ @(KK_GRAIN_DEFAULT_SHAPE - 1) ]]];
   [lanes addObject:pattern];
 
+  // Warp base pattern, also right under the Type pill (distinct label from
+  // Dithering's "Shape" / Grainy's "Pattern": lanes are keyed by label).
+  // 0-based pill, matching the shader's 0..2.
+  KKLane *base = [KKLane laneWithLabel:@"Base"];
+  base.valueType = KKLaneValueTypeFloat;
+  base.choiceLabels = @[ @"Checks", @"Stripes", @"Edge" ];
+  base.componentMin = @[ @0.0 ];
+  base.componentMax = @[ @2.0 ];
+  base.integerValued = YES;
+  base.animatable = NO;
+  base.enabled = NO;
+  base.categoryKey = @"Core";
+  base.categorySymbol = @"circle.dotted";
+  base.visibleWhenLabel = @"Type";
+  base.visibleWhenValues = @[ @3 ];
+  [base insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                        values:@[ @(KK_WARP_DEFAULT_SHAPE) ]]];
+  [lanes addObject:base];
+
   // Speed: shared motion-rate multiplier, visible for both types.
   KKLane *speed = [KKLane laneWithLabel:@"Speed"];
   speed.valueType = KKLaneValueTypeFloat;
@@ -149,7 +186,7 @@ static NSString *_MeshAILaneSchemaText(void) {
   speed.categoryKey = @"Core";
   speed.categorySymbol = @"circle.dotted";
   speed.visibleWhenLabel = @"Type";
-  speed.visibleWhenValues = @[ @0, @1, @2 ];
+  speed.visibleWhenValues = @[ @0, @1, @2, @3 ];
   [speed insertKeypose:[KKKeyPose
                            keyposeAtTime:0.0
                                   values:@[ @(KK_MESH_GRAD_DEFAULT_SPEED) ]]];
@@ -168,7 +205,7 @@ static NSString *_MeshAILaneSchemaText(void) {
   seed.categoryKey = @"Core";
   seed.categorySymbol = @"circle.dotted";
   seed.visibleWhenLabel = @"Type";
-  seed.visibleWhenValues = @[ @0, @1, @2 ];
+  seed.visibleWhenValues = @[ @0, @1, @2, @3 ];
   [seed insertKeypose:[KKKeyPose
                           keyposeAtTime:0.0
                                  values:@[ @(KK_MESH_GRAD_DEFAULT_SEED) ]]];
@@ -223,7 +260,12 @@ static NSString *_MeshAILaneSchemaText(void) {
     lane.categoryKey = @"Core";
     lane.categorySymbol = @"circle.dotted";
     lane.visibleWhenLabel = @"Type";
-    lane.visibleWhenValues = @[ @0 ];
+    // Distortion + Swirl are shared with Warp (same 0..1 noise/swirl controls);
+    // Grain Mixer + Grain stay Mesh-only.
+    BOOL sharedWithWarp =
+        [meshControls[s].label isEqualToString:@"Distortion"] ||
+        [meshControls[s].label isEqualToString:@"Swirl"];
+    lane.visibleWhenValues = sharedWithWarp ? @[ @0, @3 ] : @[ @0 ];
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                           values:@[ @(meshControls[s].def) ]]];
     [lanes addObject:lane];
@@ -300,9 +342,47 @@ static NSString *_MeshAILaneSchemaText(void) {
     lane.categoryKey = @"Core";
     lane.categorySymbol = @"circle.dotted";
     lane.visibleWhenLabel = @"Type";
-    lane.visibleWhenValues = @[ @2 ];
+    // Softness is shared with Warp (same 0..1 colour-transition control);
+    // Intensity + Noise stay Grainy-only.
+    lane.visibleWhenValues =
+        [grainControls[s].label isEqualToString:@"Softness"] ? @[ @2, @3 ]
+                                                             : @[ @2 ];
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                           values:@[ @(grainControls[s].def) ]]];
+    [lanes addObject:lane];
+  }
+
+  // --- Warp controls (Type 3). Proportion + Shape Scale are %-units (0..100 ->
+  // 0..1); Swirl Iterations is an integer count. Distortion / Swirl / Softness
+  // are the lanes shared with Mesh / Grainy above.
+  struct {
+    NSString *label;
+    double def, min, max;
+    NSString *unit; // nil = raw number
+    BOOL integer;
+  } warpControls[] = {
+      {@"Proportion", KK_WARP_DEFAULT_PROPORTION * 100.0, 0.0, 100.0, @"%", NO},
+      {@"Shape Scale", KK_WARP_DEFAULT_SHAPESCALE * 100.0, 0.0, 100.0, @"%",
+       NO},
+      {@"Swirl Iterations", KK_WARP_DEFAULT_SWIRLITER, 0.0, 20.0, nil, YES},
+  };
+  for (unsigned s = 0; s < sizeof(warpControls) / sizeof(warpControls[0]);
+       s++) {
+    KKLane *lane = [KKLane laneWithLabel:warpControls[s].label];
+    lane.valueType = KKLaneValueTypeFloat;
+    lane.componentMin = @[ @(warpControls[s].min) ];
+    lane.componentMax = @[ @(warpControls[s].max) ];
+    if (warpControls[s].unit)
+      lane.componentUnits = @[ warpControls[s].unit ];
+    lane.integerValued = warpControls[s].integer;
+    lane.animatable = YES;
+    lane.enabled = NO;
+    lane.categoryKey = @"Core";
+    lane.categorySymbol = @"circle.dotted";
+    lane.visibleWhenLabel = @"Type";
+    lane.visibleWhenValues = @[ @3 ];
+    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(warpControls[s].def) ]]];
     [lanes addObject:lane];
   }
 
@@ -352,7 +432,8 @@ static NSString *_MeshAILaneSchemaText(void) {
     color.categoryKey = @"Colors";
     color.categorySymbol = @"paintpalette";
     color.visibleWhenLabel = @"Type";
-    color.visibleWhenValues = @[ @0, @2 ]; // Mesh + Grainy share the palette
+    color.visibleWhenValues =
+        @[ @0, @2, @3 ]; // Mesh + Grainy + Warp share the palette
     const float *c = kMeshDefaultColorsSRGB[i];
     [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                            values:@[

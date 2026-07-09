@@ -72,11 +72,33 @@ typedef struct GrainGradientUniforms {
     int shape;                                  // 1..7 (wave, dots, truchet, corners, ripple, blob, sphere)
 } GrainGradientUniforms;
 
+// Warp type: also ported from paper-design/shaders (Apache-2.0). Animated colour
+// fields warped by noise + iterative swirl over a base pattern (checks / stripes
+// / edge). resolution is filled at render time (aspect for the pattern frame +
+// the colour-banding dither).
+typedef struct WarpUniforms {
+    vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba (straight alpha), up to 10
+    int colorsCount;                           // active colours (<= 10)
+    vector_float2 resolution;                  // destination pixel dims (render time)
+    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
+    float proportion;                          // 0..1 blend point between colours
+    float softness;                            // 0..1 colour-transition sharpness
+    float shapeScale;                          // 0..1 base-pattern zoom
+    float distortion;                          // 0..1 noise distortion strength
+    float swirl;                               // 0..1 swirl strength
+    float swirlIterations;                     // 0..20 layered swirl passes
+    float time;                                // clip seconds
+    float speed;                               // time multiplier (motion rate)
+    float seed;                                // start-time offset (shared)
+    int shape;                                 // 0..2 (checks, stripes, edge)
+} WarpUniforms;
+
 // The Type choice-pill order. Kept in sync with the "Type" pill labels.
 typedef enum MeshType {
     MeshType_Mesh = 0,          // paper-design animated mesh gradient
     MeshType_Dithering = 1,     // paper-design dithered procedural shapes
     MeshType_GrainGradient = 2, // paper-design grain gradient ("Grainy")
+    MeshType_Warp = 3,          // paper-design warp
 } MeshType;
 
 // The full render state packed into pluginState: the active type plus each
@@ -88,6 +110,7 @@ typedef struct MeshPluginState {
     MeshGradientUniforms mesh;
     DitheringUniforms dithering;
     GrainGradientUniforms grain;
+    WarpUniforms warp;
 } MeshPluginState;
 
 typedef enum MeshFragmentIndex {

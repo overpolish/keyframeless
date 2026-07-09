@@ -120,6 +120,39 @@ static inline GrainGradientUniforms GrainGradientDefault(void) {
   return g;
 }
 
+/// Warp (paper-design port) defaults. Distortion/Swirl/Softness are the lanes
+/// shared with Mesh/Grainy, so their fallbacks match those shared defaults.
+#define KK_WARP_DEFAULT_PROPORTION 0.50f
+#define KK_WARP_DEFAULT_SHAPESCALE 0.50f
+#define KK_WARP_DEFAULT_SWIRLITER 8.0f
+#define KK_WARP_DEFAULT_SHAPE 0 // checks
+
+/// Fallback Warp uniforms so an un-edited instance still renders before the
+/// lanes resolve. Colours share the Mesh default palette. `resolution` is
+/// overwritten at render time.
+static inline WarpUniforms WarpDefault(void) {
+  WarpUniforms w;
+  memset(&w, 0, sizeof(w));
+  w.colorsCount = KK_MESH_COLOR_COUNT;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    const float *c = kMeshDefaultColorsSRGB[i];
+    w.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
+  }
+  w.resolution = (vector_float2){1920.0f, 1080.0f};
+  w.origin = (vector_float2){0.5f, 0.5f};
+  w.proportion = KK_WARP_DEFAULT_PROPORTION;
+  w.softness = KK_GRAIN_DEFAULT_SOFTNESS; // shared "Softness" lane
+  w.shapeScale = KK_WARP_DEFAULT_SHAPESCALE;
+  w.distortion = KK_MESH_GRAD_DEFAULT_DISTORTION; // shared "Distortion" lane
+  w.swirl = KK_MESH_GRAD_DEFAULT_SWIRL;           // shared "Swirl" lane
+  w.swirlIterations = KK_WARP_DEFAULT_SWIRLITER;
+  w.shape = KK_WARP_DEFAULT_SHAPE;
+  w.speed = KK_MESH_GRAD_DEFAULT_SPEED;
+  w.seed = 0.0f;
+  w.time = 0.0f;
+  return w;
+}
+
 /// Generic per-swatch lane label ("Color 1", "Color 2", ...). One [r,g,b,a]
 /// colour lane per swatch. One-based to read naturally.
 static inline NSString *MeshColorLabel(int i) {

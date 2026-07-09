@@ -250,6 +250,52 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   g.origin = origin;
   g.time = timeSec;
   outState->grain = g;
+
+  // --- Warp: the shared colour swatches blended over a base pattern, warped by
+  // noise + iterative swirl. Distortion / Swirl (shared with Mesh) and Softness
+  // (shared with Grainy) are read above. Sliders store percent; the shader
+  // wants 0..1. Resolution is filled at render time.
+  WarpUniforms w = WarpDefault();
+  int wCount = 0;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    NSArray<NSNumber *> *v =
+        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
+    if (v.count >= 4)
+      w.colors[wCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                           v[2].floatValue, v[3].floatValue};
+    else {
+      const float *c = kMeshDefaultColorsSRGB[i];
+      w.colors[wCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+    }
+  }
+  w.colorsCount = wCount > 0 ? wCount : 1;
+  NSArray<NSNumber *> *propV =
+      MeshLaneValuesAtFraction(timeline, @"Proportion", frac);
+  NSArray<NSNumber *> *shapeScaleV =
+      MeshLaneValuesAtFraction(timeline, @"Shape Scale", frac);
+  NSArray<NSNumber *> *swirlIterV =
+      MeshLaneValuesAtFraction(timeline, @"Swirl Iterations", frac);
+  NSArray<NSNumber *> *baseV =
+      MeshLaneValuesAtFraction(timeline, @"Base", frac);
+  w.proportion =
+      propV.count ? propV[0].floatValue / 100.0f : KK_WARP_DEFAULT_PROPORTION;
+  w.softness =
+      softV.count ? softV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_SOFTNESS;
+  w.shapeScale = shapeScaleV.count ? shapeScaleV[0].floatValue / 100.0f
+                                   : KK_WARP_DEFAULT_SHAPESCALE;
+  w.distortion = distV.count ? distV[0].floatValue / 100.0f
+                             : KK_MESH_GRAD_DEFAULT_DISTORTION;
+  w.swirl =
+      swirlV.count ? swirlV[0].floatValue / 100.0f : KK_MESH_GRAD_DEFAULT_SWIRL;
+  w.swirlIterations =
+      swirlIterV.count ? swirlIterV[0].floatValue : KK_WARP_DEFAULT_SWIRLITER;
+  if (baseV.count)
+    w.shape = (int)lround(baseV[0].doubleValue); // pill is 0-based (0..2)
+  w.speed = speed;
+  w.seed = seed;
+  w.origin = origin;
+  w.time = timeSec;
+  outState->warp = w;
   return YES;
 }
 
@@ -319,6 +365,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     state.mesh = MeshGradientDefault();
     state.dithering = DitheringDefault();
     state.grain = GrainGradientDefault();
+    state.warp = WarpDefault();
   }
 
   // Dispatch on the active type. Each type is a separate fragment function; the
@@ -326,6 +373,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   // distinct ID per type keeps their pipelines from colliding.
   BOOL isDither = (state.type == MeshType_Dithering);
   BOOL isGrain = (state.type == MeshType_GrainGradient);
+  BOOL isWarp = (state.type == MeshType_Warp);
   NSString *pluginID = kPluginID;
   NSString *fragment = @"fragmentShader";
   if (isDither) {
@@ -334,6 +382,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isGrain) {
     pluginID = [kPluginID stringByAppendingString:@".grain"];
     fragment = @"grainGradientFragment";
+  } else if (isWarp) {
+    pluginID = [kPluginID stringByAppendingString:@".warp"];
+    fragment = @"warpFragment";
   }
 
   id<MTLRenderPipelineState> pipelineState =
@@ -345,10 +396,11 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   if (!pipelineState)
     return NO;
 
-  // The dither pixel grid + grain reference frame both need the dest pixel
-  // dims.
+  // The dither pixel grid + the grain / warp reference frames all need the dest
+  // pixel dims.
   state.dithering.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.grain.resolution = (vector_float2){(float)mediaW, (float)mediaH};
+  state.warp.resolution = (vector_float2){(float)mediaW, (float)mediaH};
 
   // Match the output encoding to the destination: FCP's float working buffers
   // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.
@@ -363,6 +415,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   if (isDither) {
     uniformBytes = (const void *)&state.dithering;
     uniformLen = sizeof(state.dithering);
+  } else if (isWarp) {
+    uniformBytes = (const void *)&state.warp;
+    uniformLen = sizeof(state.warp);
   } else if (isGrain) {
     uniformBytes = (const void *)&state.grain;
     uniformLen = sizeof(state.grain);

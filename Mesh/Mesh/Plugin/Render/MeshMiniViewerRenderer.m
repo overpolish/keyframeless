@@ -112,6 +112,14 @@ static const CGFloat kHandleHitTolPt = 12.0;
     return @[ @(KK_GRAIN_DEFAULT_NOISE * 100.0) ];
   if ([label isEqualToString:@"Pattern"])
     return @[ @(KK_GRAIN_DEFAULT_SHAPE - 1) ]; // pill is 0-based
+  if ([label isEqualToString:@"Proportion"])
+    return @[ @(KK_WARP_DEFAULT_PROPORTION * 100.0) ];
+  if ([label isEqualToString:@"Shape Scale"])
+    return @[ @(KK_WARP_DEFAULT_SHAPESCALE * 100.0) ];
+  if ([label isEqualToString:@"Swirl Iterations"])
+    return @[ @(KK_WARP_DEFAULT_SWIRLITER) ];
+  if ([label isEqualToString:@"Base"])
+    return @[ @(KK_WARP_DEFAULT_SHAPE) ];
   if ([label isEqualToString:@"Origin"])
     return @[ @0.5, @0.5 ];
   return [super defaultValuesForLabel:label];
@@ -164,11 +172,14 @@ static const CGFloat kHandleHitTolPt = 12.0;
       typeV.count ? (int)lround(typeV[0].doubleValue) : MeshType_Mesh;
   BOOL isDither = (meshType == MeshType_Dithering);
   BOOL isGrain = (meshType == MeshType_GrainGradient);
+  BOOL isWarp = (meshType == MeshType_Warp);
   NSString *fragment = @"fragmentShader";
   if (isDither)
     fragment = @"ditheringFragment";
   else if (isGrain)
     fragment = @"grainGradientFragment";
+  else if (isWarp)
+    fragment = @"warpFragment";
   id<MTLRenderPipelineState> pipeline =
       [self _pipelineForDevice:dest.device
                    pixelFormat:dest.pixelFormat
@@ -286,6 +297,48 @@ static const CGFloat kHandleHitTolPt = 12.0;
     g.resolution = (vector_float2){W, H};
     g.time = timeSec;
     [e setFragmentBytes:&g length:sizeof(g) atIndex:MeshFragmentIndex_Grid];
+  } else if (isWarp) {
+    WarpUniforms w = WarpDefault();
+    int wCount = 0;
+    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
+      if (v.count >= 4)
+        w.colors[wCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                             v[2].floatValue, v[3].floatValue};
+      else {
+        const float *c = kMeshDefaultColorsSRGB[i];
+        w.colors[wCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+      }
+    }
+    w.colorsCount = wCount > 0 ? wCount : 1;
+    NSArray<NSNumber *> *propV = [self valuesForLabel:@"Proportion"];
+    NSArray<NSNumber *> *softV = [self valuesForLabel:@"Softness"];
+    NSArray<NSNumber *> *scaleV = [self valuesForLabel:@"Shape Scale"];
+    NSArray<NSNumber *> *distV = [self valuesForLabel:@"Distortion"];
+    NSArray<NSNumber *> *swirlV = [self valuesForLabel:@"Swirl"];
+    NSArray<NSNumber *> *swirlIterV = [self valuesForLabel:@"Swirl Iterations"];
+    NSArray<NSNumber *> *baseV = [self valuesForLabel:@"Base"];
+    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+    w.proportion =
+        propV.count ? propV[0].floatValue / 100.0f : KK_WARP_DEFAULT_PROPORTION;
+    w.softness =
+        softV.count ? softV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_SOFTNESS;
+    w.shapeScale = scaleV.count ? scaleV[0].floatValue / 100.0f
+                                : KK_WARP_DEFAULT_SHAPESCALE;
+    w.distortion = distV.count ? distV[0].floatValue / 100.0f
+                               : KK_MESH_GRAD_DEFAULT_DISTORTION;
+    w.swirl = swirlV.count ? swirlV[0].floatValue / 100.0f
+                           : KK_MESH_GRAD_DEFAULT_SWIRL;
+    w.swirlIterations =
+        swirlIterV.count ? swirlIterV[0].floatValue : KK_WARP_DEFAULT_SWIRLITER;
+    if (baseV.count)
+      w.shape = (int)lround(baseV[0].doubleValue);
+    w.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
+    w.seed = seedShared;
+    w.origin = originShared;
+    w.resolution = (vector_float2){W, H};
+    w.time = timeSec;
+    [e setFragmentBytes:&w length:sizeof(w) atIndex:MeshFragmentIndex_Grid];
   } else {
     // Same colour swatches + controls as the FCP render (valuesForLabel falls
     // back to defaults).
