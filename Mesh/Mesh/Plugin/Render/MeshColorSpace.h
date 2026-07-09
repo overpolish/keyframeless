@@ -161,6 +161,30 @@ static inline WarpUniforms WarpDefault(void) {
   return w;
 }
 
+/// Neuro Noise ("Neuro", paper-design port) defaults.
+#define KK_NEURO_DEFAULT_BRIGHTNESS 0.20f
+#define KK_NEURO_DEFAULT_CONTRAST 0.30f
+
+/// Fallback Neuro Noise uniforms so an un-edited instance still renders before
+/// the lanes resolve. `resolution` is overwritten at render time.
+static inline NeuroNoiseUniforms NeuroNoiseDefault(void) {
+  NeuroNoiseUniforms n;
+  memset(&n, 0, sizeof(n));
+  n.colorFront = (vector_float4){0.85f, 0.92f, 1.0f, 1.0f}; // highlight
+  n.colorMid = (vector_float4){0.25f, 0.45f, 0.95f, 1.0f};  // lines
+  n.colorBack = (vector_float4){0.02f, 0.03f, 0.08f, 1.0f}; // background
+  n.resolution = (vector_float2){1920.0f, 1080.0f};
+  n.origin = (vector_float2){0.5f, 0.5f};
+  n.scale = (vector_float2){1.0f, 1.0f};
+  n.brightness = KK_NEURO_DEFAULT_BRIGHTNESS;
+  n.contrast = KK_NEURO_DEFAULT_CONTRAST;
+  n.speed = 1.0f;
+  n.seed = 0.0f;
+  n.rotation = 0.0f;
+  n.time = 0.0f;
+  return n;
+}
+
 /// Generic per-swatch lane label ("Color 1", "Color 2", ...). One [r,g,b,a]
 /// colour lane per swatch. One-based to read naturally.
 static inline NSString *MeshColorLabel(int i) {

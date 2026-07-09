@@ -316,6 +316,37 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   w.rotation = rotation;
   w.time = timeSec;
   outState->warp = w;
+
+  // --- Neuro Noise: a web of glowing lines blended between the Mid + Front
+  // colours over the Background. Front = Foreground, Back = Background
+  // (shared), Mid is its own lane. Sliders store percent; the shader wants
+  // 0..1.
+  NeuroNoiseUniforms nn = NeuroNoiseDefault();
+  NSArray<NSNumber *> *midV = MeshLaneValuesAtFraction(timeline, @"Mid", frac);
+  NSArray<NSNumber *> *brightV =
+      MeshLaneValuesAtFraction(timeline, @"Brightness", frac);
+  NSArray<NSNumber *> *contrastV =
+      MeshLaneValuesAtFraction(timeline, @"Contrast", frac);
+  if (frontV.count >= 4)
+    nn.colorFront = (vector_float4){frontV[0].floatValue, frontV[1].floatValue,
+                                    frontV[2].floatValue, frontV[3].floatValue};
+  if (midV.count >= 4)
+    nn.colorMid = (vector_float4){midV[0].floatValue, midV[1].floatValue,
+                                  midV[2].floatValue, midV[3].floatValue};
+  if (backV.count >= 4)
+    nn.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                   backV[2].floatValue, backV[3].floatValue};
+  nn.brightness = brightV.count ? brightV[0].floatValue / 100.0f
+                                : KK_NEURO_DEFAULT_BRIGHTNESS;
+  nn.contrast = contrastV.count ? contrastV[0].floatValue / 100.0f
+                                : KK_NEURO_DEFAULT_CONTRAST;
+  nn.speed = speed;
+  nn.seed = seed;
+  nn.origin = origin;
+  nn.scale = scale;
+  nn.rotation = rotation;
+  nn.time = timeSec;
+  outState->neuro = nn;
   return YES;
 }
 
@@ -386,6 +417,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     state.dithering = DitheringDefault();
     state.grain = GrainGradientDefault();
     state.warp = WarpDefault();
+    state.neuro = NeuroNoiseDefault();
   }
 
   // Dispatch on the active type. Each type is a separate fragment function; the
@@ -394,6 +426,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   BOOL isDither = (state.type == MeshType_Dithering);
   BOOL isGrain = (state.type == MeshType_GrainGradient);
   BOOL isWarp = (state.type == MeshType_Warp);
+  BOOL isNeuro = (state.type == MeshType_Neuro);
   NSString *pluginID = kPluginID;
   NSString *fragment = @"fragmentShader";
   if (isDither) {
@@ -405,6 +438,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isWarp) {
     pluginID = [kPluginID stringByAppendingString:@".warp"];
     fragment = @"warpFragment";
+  } else if (isNeuro) {
+    pluginID = [kPluginID stringByAppendingString:@".neuro"];
+    fragment = @"neuroNoiseFragment";
   }
 
   id<MTLRenderPipelineState> pipelineState =
@@ -421,6 +457,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   state.dithering.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.grain.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.warp.resolution = (vector_float2){(float)mediaW, (float)mediaH};
+  state.neuro.resolution = (vector_float2){(float)mediaW, (float)mediaH};
 
   // Match the output encoding to the destination: FCP's float working buffers
   // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.
@@ -441,6 +478,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isGrain) {
     uniformBytes = (const void *)&state.grain;
     uniformLen = sizeof(state.grain);
+  } else if (isNeuro) {
+    uniformBytes = (const void *)&state.neuro;
+    uniformLen = sizeof(state.neuro);
   }
 
   // sourceImages is empty for a generator; encodeRenderCommands handles that

@@ -101,12 +101,33 @@ typedef struct WarpUniforms {
     float rotation;                            // common rotation, radians
 } WarpUniforms;
 
+// Neuro Noise type ("Neuro"): also ported from paper-design/shaders
+// (Apache-2.0). A glowing, web-like structure of fluid lines (accumulated
+// rotated sine layers) blended between a mid + front colour over a background.
+// resolution is filled at render time (aspect for the pattern frame + the
+// colour-banding dither).
+typedef struct NeuroNoiseUniforms {
+    vector_float4 colorFront; // rgba highlight (crossing points)
+    vector_float4 colorMid;   // rgba main line colour
+    vector_float4 colorBack;  // rgba background
+    vector_float2 resolution; // destination pixel dims (render time)
+    vector_float2 origin;     // field centre (normalized; 0.5,0.5 = centre)
+    vector_float2 scale;      // common zoom factor per axis (1 = 100%)
+    float brightness;         // 0..1 luminosity of the crossings
+    float contrast;           // 0..1 bright-dark sharpness
+    float time;               // clip seconds
+    float speed;              // time multiplier (motion rate)
+    float seed;               // start-time offset (shared)
+    float rotation;           // common rotation, radians
+} NeuroNoiseUniforms;
+
 // The Type choice-pill order. Kept in sync with the "Type" pill labels.
 typedef enum MeshType {
     MeshType_Mesh = 0,          // paper-design animated mesh gradient
     MeshType_Dithering = 1,     // paper-design dithered procedural shapes
     MeshType_GrainGradient = 2, // paper-design grain gradient ("Grainy")
     MeshType_Warp = 3,          // paper-design warp
+    MeshType_Neuro = 4,         // paper-design neuro-noise ("Neuro")
 } MeshType;
 
 // The full render state packed into pluginState: the active type plus each
@@ -119,6 +140,7 @@ typedef struct MeshPluginState {
     DitheringUniforms dithering;
     GrainGradientUniforms grain;
     WarpUniforms warp;
+    NeuroNoiseUniforms neuro;
 } MeshPluginState;
 
 typedef enum MeshFragmentIndex {

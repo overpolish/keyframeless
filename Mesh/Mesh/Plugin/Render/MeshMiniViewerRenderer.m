@@ -114,7 +114,7 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
 }
 - (NSInteger)valueTypeForLabel:(NSString *)label {
   if ([label hasPrefix:@"Color "] || [label isEqualToString:@"Background"] ||
-      [label isEqualToString:@"Foreground"])
+      [label isEqualToString:@"Foreground"] || [label isEqualToString:@"Mid"])
     return KKLaneValueTypeColor;
   if ([label isEqualToString:@"Origin"] || [label isEqualToString:@"Scale"])
     return KKLaneValueTypeGeneric;
@@ -144,6 +144,12 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     return @[ @0.04, @0.04, @0.07, @1.0 ];
   if ([label isEqualToString:@"Foreground"])
     return @[ @0.85, @0.90, @0.98, @1.0 ];
+  if ([label isEqualToString:@"Mid"])
+    return @[ @0.25, @0.45, @0.95, @1.0 ];
+  if ([label isEqualToString:@"Brightness"])
+    return @[ @(KK_NEURO_DEFAULT_BRIGHTNESS * 100.0) ];
+  if ([label isEqualToString:@"Contrast"])
+    return @[ @(KK_NEURO_DEFAULT_CONTRAST * 100.0) ];
   if ([label isEqualToString:@"Shape"])
     return @[ @0.0 ]; // simplex
   if ([label isEqualToString:@"Dither"])
@@ -223,6 +229,7 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   BOOL isDither = (meshType == MeshType_Dithering);
   BOOL isGrain = (meshType == MeshType_GrainGradient);
   BOOL isWarp = (meshType == MeshType_Warp);
+  BOOL isNeuro = (meshType == MeshType_Neuro);
   NSString *fragment = @"fragmentShader";
   if (isDither)
     fragment = @"ditheringFragment";
@@ -230,6 +237,8 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     fragment = @"grainGradientFragment";
   else if (isWarp)
     fragment = @"warpFragment";
+  else if (isNeuro)
+    fragment = @"neuroNoiseFragment";
   id<MTLRenderPipelineState> pipeline =
       [self _pipelineForDevice:dest.device
                    pixelFormat:dest.pixelFormat
@@ -404,6 +413,36 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     w.resolution = (vector_float2){W, H};
     w.time = timeSec;
     [e setFragmentBytes:&w length:sizeof(w) atIndex:MeshFragmentIndex_Grid];
+  } else if (isNeuro) {
+    NeuroNoiseUniforms nn = NeuroNoiseDefault();
+    NSArray<NSNumber *> *frontV = [self valuesForLabel:@"Foreground"];
+    NSArray<NSNumber *> *midV = [self valuesForLabel:@"Mid"];
+    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
+    NSArray<NSNumber *> *brightV = [self valuesForLabel:@"Brightness"];
+    NSArray<NSNumber *> *contrastV = [self valuesForLabel:@"Contrast"];
+    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+    if (frontV.count >= 4)
+      nn.colorFront =
+          (vector_float4){frontV[0].floatValue, frontV[1].floatValue,
+                          frontV[2].floatValue, frontV[3].floatValue};
+    if (midV.count >= 4)
+      nn.colorMid = (vector_float4){midV[0].floatValue, midV[1].floatValue,
+                                    midV[2].floatValue, midV[3].floatValue};
+    if (backV.count >= 4)
+      nn.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                     backV[2].floatValue, backV[3].floatValue};
+    nn.brightness = brightV.count ? brightV[0].floatValue / 100.0f
+                                  : KK_NEURO_DEFAULT_BRIGHTNESS;
+    nn.contrast = contrastV.count ? contrastV[0].floatValue / 100.0f
+                                  : KK_NEURO_DEFAULT_CONTRAST;
+    nn.speed = speedV.count ? speedV[0].floatValue : 1.0f;
+    nn.seed = seedShared;
+    nn.origin = originShared;
+    nn.scale = scaleShared;
+    nn.rotation = rotationShared;
+    nn.resolution = (vector_float2){W, H};
+    nn.time = timeSec;
+    [e setFragmentBytes:&nn length:sizeof(nn) atIndex:MeshFragmentIndex_Grid];
   } else {
     // Same colour swatches + controls as the FCP render (valuesForLabel falls
     // back to defaults).
