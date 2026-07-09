@@ -6,9 +6,10 @@
 #import "MeshMiniViewerRenderer.h"
 
 #import "MeshColorSpace.h"
-#import "MeshOSCRadiusMath.h"
 #import "ShaderTypes.h"
+#import <KeyframelessKit/KKPositionMiniController.h>
 #import <KeyframelessKit/KKShaderTypes.h>
+#import <KeyframelessKit/KeyframelessKit.h>
 #import <Metal/Metal.h>
 #import <simd/simd.h>
 
@@ -37,21 +38,40 @@ static inline CGFloat MiniOscSize(void) { return 4.5; }
 static const CGFloat kHandleHitTolPt = 12.0;
 
 @implementation MeshMiniViewerRenderer {
-  id<MTLRenderPipelineState> _pipeline;
+  NSMutableDictionary<NSString *, id<MTLRenderPipelineState>> *_pipelines;
   MTLPixelFormat _pipelineFormat;
+  KKPositionMiniController *_originMini;
 }
 
-// No viewer handles yet - colours only. The draggable-vertex OSC lands with the
-// warp/OSC increment; until then suppress the inherited radius/crop handles.
+// Mini-viewer Origin handle: the reusable Position controller, keyed on the
+// "Origin" lane (mirrors the main viewer's KKPositionOSC). Built lazily (no
+// -init override) so the renderer is fully constructed before the controller
+// weak-refs it back.
+- (KKPositionMiniController *)originMini {
+  if (!_originMini)
+    _originMini = [[KKPositionMiniController alloc] initWithRenderer:self
+                                                           laneLabel:@"Origin"
+                                                           pathLabel:@"Path"];
+  return _originMini;
+}
+
+// The Origin handle is the reusable Position control (arc glyph); the base
+// renderer draws + drags it keyed on `pointLabel`. No crop handle.
 - (NSString *)cropLabel {
   return nil;
 }
 - (NSString *)pointLabel {
-  return nil;
+  return @"Origin";
+}
+- (KKMiniHandleStyle)pointHandleStyle {
+  return KKMiniHandleStyleArc;
 }
 - (NSInteger)valueTypeForLabel:(NSString *)label {
-  if ([label hasPrefix:@"Color "])
+  if ([label hasPrefix:@"Color "] || [label isEqualToString:@"Background"] ||
+      [label isEqualToString:@"Foreground"])
     return KKLaneValueTypeColor;
+  if ([label isEqualToString:@"Origin"])
+    return KKLaneValueTypeGeneric;
   return KKLaneValueTypeFloat;
 }
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
@@ -74,34 +94,55 @@ static const CGFloat kHandleHitTolPt = 12.0;
     return @[ @(KK_MESH_DEFAULT_GRAIN * 100.0) ];
   if ([label isEqualToString:@"Type"])
     return @[ @0.0 ];
+  if ([label isEqualToString:@"Background"])
+    return @[ @0.04, @0.04, @0.07, @1.0 ];
+  if ([label isEqualToString:@"Foreground"])
+    return @[ @0.85, @0.90, @0.98, @1.0 ];
+  if ([label isEqualToString:@"Shape"])
+    return @[ @0.0 ]; // simplex
+  if ([label isEqualToString:@"Dither"])
+    return @[ @3.0 ]; // 8x8 Bayer
+  if ([label isEqualToString:@"Pixel Size"])
+    return @[ @(KK_DITHER_DEFAULT_PXSIZE) ];
+  if ([label isEqualToString:@"Origin"])
+    return @[ @0.5, @0.5 ];
   return [super defaultValuesForLabel:label];
 }
 
-- (BOOL)_ensurePipelineForDevice:(id<MTLDevice>)device
-                     pixelFormat:(MTLPixelFormat)format {
-  if (_pipeline && _pipelineFormat == format)
-    return YES;
+// Builds (and caches per fragment + format) the pipeline for the active type's
+// fragment function, so the mini preview matches the FCP render.
+- (id<MTLRenderPipelineState>)_pipelineForDevice:(id<MTLDevice>)device
+                                     pixelFormat:(MTLPixelFormat)format
+                                  fragmentShader:(NSString *)fragmentName {
+  if (_pipelineFormat != format) {
+    _pipelines = nil;
+    _pipelineFormat = format;
+  }
+  if (!_pipelines)
+    _pipelines = [NSMutableDictionary dictionary];
+  id<MTLRenderPipelineState> existing = _pipelines[fragmentName];
+  if (existing)
+    return existing;
   NSError *err = nil;
   id<MTLLibrary> lib =
       [device newDefaultLibraryWithBundle:[NSBundle bundleForClass:self.class]
                                     error:&err];
   if (!lib) {
     KKLogError(@"MeshMiniViewerRenderer: no metal library: %@", err);
-    return NO;
+    return nil;
   }
   MTLRenderPipelineDescriptor *pd = [[MTLRenderPipelineDescriptor alloc] init];
   pd.vertexFunction = [lib newFunctionWithName:@"vertexShader"];
-  pd.fragmentFunction = [lib newFunctionWithName:@"fragmentShader"];
+  pd.fragmentFunction = [lib newFunctionWithName:fragmentName];
   pd.colorAttachments[0].pixelFormat = format;
   id<MTLRenderPipelineState> ps =
       [device newRenderPipelineStateWithDescriptor:pd error:&err];
   if (!ps) {
     KKLogError(@"MeshMiniViewerRenderer: pipeline failed: %@", err);
-    return NO;
+    return nil;
   }
-  _pipeline = ps;
-  _pipelineFormat = format;
-  return YES;
+  _pipelines[fragmentName] = ps;
+  return ps;
 }
 
 // Generator render: no source. Runs the same Metal pipeline as the FCP render
@@ -109,7 +150,16 @@ static const CGFloat kHandleHitTolPt = 12.0;
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     generateIntoTexture:(id<MTLTexture>)dest
           commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
-  if (![self _ensurePipelineForDevice:dest.device pixelFormat:dest.pixelFormat])
+  // Dispatch on the active type, same as the FCP render.
+  NSArray<NSNumber *> *typeV = [self valuesForLabel:@"Type"];
+  BOOL isDither =
+      (typeV.count && lround(typeV[0].doubleValue) == MeshType_Dithering);
+  NSString *fragment = isDither ? @"ditheringFragment" : @"fragmentShader";
+  id<MTLRenderPipelineState> pipeline =
+      [self _pipelineForDevice:dest.device
+                   pixelFormat:dest.pixelFormat
+                fragmentShader:fragment];
+  if (!pipeline)
     return NO;
 
   MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
@@ -130,54 +180,98 @@ static const CGFloat kHandleHitTolPt = 12.0;
       {{W / 2, -H / 2}, {1, 1}},
   };
   simd_uint2 vpSize = {(unsigned)W, (unsigned)H};
-  // Same colour swatches + controls as the FCP render, from this instance's
-  // lanes at the current edit fraction (valuesForLabel falls back to defaults).
-  MeshGradientUniforms grid;
-  memset(&grid, 0, sizeof(grid));
-  int count = 0;
-  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-    NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
-    if (v.count >= 4) {
-      grid.colors[count++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                             v[2].floatValue, v[3].floatValue};
-    } else {
-      const float *c = kMeshDefaultColorsSRGB[i];
-      grid.colors[count++] = (vector_float4){c[0], c[1], c[2], c[3]};
-    }
-  }
-  grid.colorsCount = count > 0 ? count : 1;
-  NSArray<NSNumber *> *distV = [self valuesForLabel:@"Distortion"];
-  NSArray<NSNumber *> *swirlV = [self valuesForLabel:@"Swirl"];
-  NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-  NSArray<NSNumber *> *seedV = [self valuesForLabel:@"Seed"];
-  NSArray<NSNumber *> *mixV = [self valuesForLabel:@"Grain Mixer"];
-  NSArray<NSNumber *> *grainV = [self valuesForLabel:@"Grain"];
-  grid.distortion = distV.count ? distV[0].floatValue / 100.0f
-                                : KK_MESH_GRAD_DEFAULT_DISTORTION;
-  grid.swirl =
-      swirlV.count ? swirlV[0].floatValue / 100.0f : KK_MESH_GRAD_DEFAULT_SWIRL;
-  grid.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
-  grid.seed = seedV.count ? seedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SEED;
-  grid.grainMixer = mixV.count ? mixV[0].floatValue / 100.0f
-                               : KK_MESH_GRAD_DEFAULT_GRAINMIXER;
-  grid.grainOverlay =
-      grainV.count ? grainV[0].floatValue / 100.0f : KK_MESH_DEFAULT_GRAIN;
-  // The mini is a static preview, so time tracks the edit fraction.
-  grid.time = (float)self.editFraction;
   // The mini-viewer renders into an 8-bit unorm texture shown directly on
-  // screen, so gamma-encode (unlike FCP's linear float working buffer).
+  // screen, so gamma-encode (unlike FCP's linear float working buffer). The
+  // mini is a static preview, so time tracks the edit fraction.
   int encodeSRGB = (dest.pixelFormat == MTLPixelFormatRGBA8Unorm ||
                     dest.pixelFormat == MTLPixelFormatBGRA8Unorm)
                        ? 1
                        : 0;
-  [e setRenderPipelineState:_pipeline];
+  float timeSec = (float)self.editFraction;
+  NSArray<NSNumber *> *seedV = [self valuesForLabel:@"Seed"];
+  float seedShared =
+      seedV.count ? seedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SEED;
+  NSArray<NSNumber *> *originV = [self valuesForLabel:@"Origin"];
+  vector_float2 originShared =
+      (originV.count >= 2)
+          ? (vector_float2){originV[0].floatValue, originV[1].floatValue}
+          : (vector_float2){0.5f, 0.5f};
+
+  [e setRenderPipelineState:pipeline];
   [e setVertexBytes:verts
              length:sizeof(verts)
             atIndex:KKVertexInputIndex_Vertices];
   [e setVertexBytes:&vpSize
              length:sizeof(vpSize)
             atIndex:KKVertexInputIndex_ViewportSize];
-  [e setFragmentBytes:&grid length:sizeof(grid) atIndex:MeshFragmentIndex_Grid];
+
+  if (isDither) {
+    DitheringUniforms d = DitheringDefault();
+    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
+    NSArray<NSNumber *> *frontV = [self valuesForLabel:@"Foreground"];
+    NSArray<NSNumber *> *shapeV = [self valuesForLabel:@"Shape"];
+    NSArray<NSNumber *> *ditherV = [self valuesForLabel:@"Dither"];
+    NSArray<NSNumber *> *pxV = [self valuesForLabel:@"Pixel Size"];
+    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+    if (backV.count >= 4)
+      d.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                    backV[2].floatValue, backV[3].floatValue};
+    if (frontV.count >= 4)
+      d.colorFront =
+          (vector_float4){frontV[0].floatValue, frontV[1].floatValue,
+                          frontV[2].floatValue, frontV[3].floatValue};
+    if (shapeV.count)
+      d.shape = (int)lround(shapeV[0].doubleValue) + 1;
+    if (ditherV.count)
+      d.type = (int)lround(ditherV[0].doubleValue) + 1;
+    if (pxV.count)
+      d.pxSize = pxV[0].floatValue;
+    d.speed = speedV.count ? speedV[0].floatValue : KK_DITHER_DEFAULT_SPEED;
+    d.seed = seedShared;
+    d.origin = originShared;
+    d.resolution = (vector_float2){W, H};
+    d.time = timeSec;
+    [e setFragmentBytes:&d length:sizeof(d) atIndex:MeshFragmentIndex_Grid];
+  } else {
+    // Same colour swatches + controls as the FCP render (valuesForLabel falls
+    // back to defaults).
+    MeshGradientUniforms grid;
+    memset(&grid, 0, sizeof(grid));
+    int count = 0;
+    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
+      if (v.count >= 4) {
+        grid.colors[count++] = (vector_float4){
+            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
+      } else {
+        const float *c = kMeshDefaultColorsSRGB[i];
+        grid.colors[count++] = (vector_float4){c[0], c[1], c[2], c[3]};
+      }
+    }
+    grid.colorsCount = count > 0 ? count : 1;
+    NSArray<NSNumber *> *distV = [self valuesForLabel:@"Distortion"];
+    NSArray<NSNumber *> *swirlV = [self valuesForLabel:@"Swirl"];
+    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+    NSArray<NSNumber *> *mixV = [self valuesForLabel:@"Grain Mixer"];
+    NSArray<NSNumber *> *grainV = [self valuesForLabel:@"Grain"];
+    grid.distortion = distV.count ? distV[0].floatValue / 100.0f
+                                  : KK_MESH_GRAD_DEFAULT_DISTORTION;
+    grid.swirl = swirlV.count ? swirlV[0].floatValue / 100.0f
+                              : KK_MESH_GRAD_DEFAULT_SWIRL;
+    grid.speed =
+        speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
+    grid.seed = seedShared;
+    grid.origin = originShared;
+    grid.grainMixer = mixV.count ? mixV[0].floatValue / 100.0f
+                                 : KK_MESH_GRAD_DEFAULT_GRAINMIXER;
+    grid.grainOverlay =
+        grainV.count ? grainV[0].floatValue / 100.0f : KK_MESH_DEFAULT_GRAIN;
+    grid.time = timeSec;
+    [e setFragmentBytes:&grid
+                 length:sizeof(grid)
+                atIndex:MeshFragmentIndex_Grid];
+  }
+
   [e setFragmentBytes:&encodeSRGB
                length:sizeof(encodeSRGB)
               atIndex:MeshFragmentIndex_EncodeSRGB];
@@ -195,66 +289,180 @@ static const CGFloat kHandleHitTolPt = 12.0;
   return NO;
 }
 
-- (double)_currentRadius {
-  return [[self valuesForLabel:@"Radius"] firstObject].doubleValue;
-}
-
-// The radius handle is linked to the crop box: inset diagonally from the
-// crop rect's top-right corner by `MiniOscSize + paddingForRadius(radius,
-// minDim)` (minDim = crop's min edge; the shader rounds corners relative to
-// crop size). Full-image crop ⇒ crop rect == content rect ⇒ fixed corner.
-- (CGRect)_anchorRectForContentRect:(CGRect)cr {
-  CGRect crop = [self cropRectForContentRect:cr];
-  return CGRectIsEmpty(crop) ? cr : crop;
-}
-
-- (CGPoint)_handlePointForContentRect:(CGRect)cr radius:(double)radius {
-  CGRect a = [self _anchorRectForContentRect:cr];
-  float minDim = (float)MIN(a.size.width, a.size.height);
-  float off = (float)MiniOscSize() + paddingForRadius(radius, minDim);
-  return CGPointMake(CGRectGetMaxX(a) - off, CGRectGetMaxY(a) - off);
-}
-
+// Base point-handle overrides forwarded to the reusable Position controller.
+// The base drives the constant-lane Origin handle's draw / hit / drag lifecycle
+// (gated by _pointActiveForContentRect -> isConstantLabel); these place it,
+// hit-test it, and commit its drag through the controller.
 - (BOOL)pointHandleCenter:(out CGPoint *)outCenter forContentRect:(CGRect)cr {
-  *outCenter = [self _handlePointForContentRect:cr
-                                         radius:[self _currentRadius]];
-  return YES;
+  return [self.originMini pointHandleCenter:outCenter forContentRect:cr];
 }
-
 - (BOOL)pointHandleCenter:(out CGPoint *)outCenter
-                 forValue:(double)radius
+                forValues:(NSArray<NSNumber *> *)values
            forContentRect:(CGRect)cr {
-  *outCenter = [self _handlePointForContentRect:cr radius:radius];
-  return YES;
+  return [self.originMini pointHandleCenter:outCenter
+                                  forValues:values
+                             forContentRect:cr];
 }
-
 - (BOOL)pointHandleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
-  CGPoint hp = [self _handlePointForContentRect:cr
-                                         radius:[self _currentRadius]];
-  return hypot(p.x - hp.x, p.y - hp.y) <= kHandleHitTolPt;
+  return [self.originMini pointHandleHitAtPoint:p contentRect:cr];
 }
-
 - (void)applyPointDragToPoint:(CGPoint)p
                   contentRect:(CGRect)cr
                        canvas:(KKMiniViewerView *)canvas {
-  CGRect a = [self _anchorRectForContentRect:cr];
-  float minDim = (float)MIN(a.size.width, a.size.height);
-  if (minDim <= 0)
+  // The no-modifier form is only called on drag begin (base
+  // beginHandleDragAtPoint): capture the press state, then apply.
+  [self.originMini beginPointDragAtPoint:p contentRect:cr];
+  [self.originMini applyPointDragToPoint:p
+                             contentRect:cr
+                                  canvas:canvas
+                               modifiers:0];
+}
+- (void)applyPointDragToPoint:(CGPoint)p
+                  contentRect:(CGRect)cr
+                       canvas:(KKMiniViewerView *)canvas
+                    modifiers:(NSEventModifierFlags)modifiers {
+  [self.originMini applyPointDragToPoint:p
+                             contentRect:cr
+                                  canvas:canvas
+                               modifiers:modifiers];
+}
+
+// Motion-path overlay (animated Origin): keypose anchors + tangent handles,
+// owned by the controller. The base hides the point handle for a non-constant
+// lane, so the path takes over.
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
+    motionPathPolylineForContentRect:(CGRect)cr {
+  return [self.originMini motionPathPolylineForContentRect:cr];
+}
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
+    motionPathAnchorsForContentRect:(CGRect)cr {
+  return [self.originMini motionPathAnchorsForContentRect:cr];
+}
+- (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
+    motionPathHandleSegmentsForContentRect:(CGRect)cr {
+  return [self.originMini motionPathHandleSegmentsForContentRect:cr];
+}
+- (CGFloat)motionPathGhostAlpha {
+  return [self ghostAlphaForLabel:@"Path"];
+}
+
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    handleHitAtPoint:(CGPoint)p
+         contentRect:(CGRect)cr {
+  self.canvas = canvas;
+  // Constant Origin handle first, then the motion-path tangents / anchors,
+  // then the base (crop/rotation - none here).
+  if ([self pointHandleHitAtPoint:p contentRect:cr])
+    return YES;
+  if ([self.originMini pathHandleHitAtPoint:p contentRect:cr])
+    return YES;
+  if ([self.originMini pathAnchorHitAtPoint:p contentRect:cr])
+    return YES;
+  return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
+}
+
+- (NSCursor *)miniViewer:(KKMiniViewerView *)canvas
+           cursorAtPoint:(CGPoint)p
+             contentRect:(CGRect)cr {
+  if (CGRectIsEmpty(cr))
+    return nil;
+  self.canvas = canvas;
+  if ([self pointHandleHitAtPoint:p contentRect:cr])
+    return [self kkVisibilityCursorForLabel:self.pointLabel]
+               ?: KKPointMoveCursor();
+  if ([self.originMini pathHandleHitAtPoint:p contentRect:cr] ||
+      [self.originMini pathAnchorHitAtPoint:p contentRect:cr])
+    return [self kkVisibilityCursorForLabel:@"Path"] ?: KKPointMoveCursor();
+  return [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
+}
+
+- (void)miniViewer:(KKMiniViewerView *)canvas
+    beginHandleDragAtPoint:(CGPoint)p
+               contentRect:(CGRect)cr {
+  self.canvas = canvas;
+  // Constant Origin handle takes the grab first (base sets _pointGrabbed +
+  // applies), else the motion-path anchors / tangents.
+  if ([self pointHandleHitAtPoint:p contentRect:cr]) {
+    [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
     return;
-  // Exact inverse of the viewer-OSC drag: project the cursor onto the corner
-  // diagonal, then bisect paddingForRadius to recover the radius.
-  double trx = CGRectGetMaxX(a), tryy = CGRectGetMaxY(a);
-  double mouseDist = ((trx - p.x) + (tryy - p.y)) * 0.5 - MiniOscSize();
-  float lo = 0.0f, hi = 100.0f;
-  for (int i = 0; i < 32; i++) {
-    float mid = (lo + hi) * 0.5f;
-    if (paddingForRadius(mid, minDim) < mouseDist)
-      lo = mid;
-    else
-      hi = mid;
   }
-  double radius = MAX(0.0, MIN(100.0, (lo + hi) * 0.5));
-  [self commitValues:@[ @(radius) ] forLabel:@"Radius" canvas:canvas];
+  if ([self.originMini beginPathDragAtPoint:p contentRect:cr])
+    return;
+  [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
+}
+
+- (void)miniViewer:(KKMiniViewerView *)canvas
+    dragHandleToPoint:(CGPoint)p
+          contentRect:(CGRect)cr
+            modifiers:(NSEventModifierFlags)modifiers {
+  if (self.originMini.pathGrabbed) {
+    [self.originMini applyPathDragToPoint:p contentRect:cr modifiers:modifiers];
+    return;
+  }
+  if (![self pointHandleIsActive]) {
+    [super miniViewer:canvas
+        dragHandleToPoint:p
+              contentRect:cr
+                modifiers:modifiers];
+    return;
+  }
+  [self applyPointDragToPoint:p
+                  contentRect:cr
+                       canvas:canvas
+                    modifiers:modifiers];
+}
+
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    doubleClickAtPoint:(CGPoint)p
+           contentRect:(CGRect)cr {
+  self.canvas = canvas;
+  return [self.originMini toggleSmoothAtPoint:p contentRect:cr];
+}
+
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    optClickHandleAtPoint:(CGPoint)p
+              contentRect:(CGRect)cr {
+  self.canvas = canvas;
+  // Base claims the Origin point handle first; then the path anchors/handles.
+  if ([super miniViewer:canvas optClickHandleAtPoint:p contentRect:cr])
+    return YES;
+  if (self.onHandleVisibilityToggled &&
+      ([self.originMini pathHandleHitAtPoint:p contentRect:cr] ||
+       [self.originMini pathAnchorHitAtPoint:p contentRect:cr])) {
+    self.onHandleVisibilityToggled(@"Path");
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return YES;
+  }
+  return NO;
+}
+
+- (void)miniViewer:(KKMiniViewerView *)canvas
+     snapGuideHasX:(out BOOL *)hasX
+                 X:(out CGFloat *)outX
+      fromKeyposeX:(out BOOL *)fromKeyposeX
+              hasY:(out BOOL *)hasY
+                 Y:(out CGFloat *)outY
+      fromKeyposeY:(out BOOL *)fromKeyposeY {
+  [self.originMini snapGuideHasX:hasX
+                               X:outX
+                    fromKeyposeX:fromKeyposeX
+                            hasY:hasY
+                               Y:outY
+                    fromKeyposeY:fromKeyposeY];
+}
+
+- (void)miniViewerEndHandleDrag:(KKMiniViewerView *)canvas {
+  // endDrag resets the snap engine and reports whether a motion-path drag was
+  // active (so the host persists the full blob).
+  if ([self.originMini endDrag]) {
+    if (self.onTimelinePersist)
+      self.onTimelinePersist(self.timeline);
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return;
+  }
+  [super miniViewerEndHandleDrag:canvas];
 }
 
 @end

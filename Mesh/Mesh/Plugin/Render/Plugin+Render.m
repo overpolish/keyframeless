@@ -50,13 +50,14 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   return YES;
 }
 
-// Builds the mesh grid from the Color lanes at renderTime, and does the timing
-// work (render-cache refresh, maintain-timing, playhead poller) the timing
-// popover's live preview relies on. Runs where FxParameterRetrievalAPI is valid
-// (pluginState:), not at render time.
-- (BOOL)buildGrid:(MeshGradientUniforms *)outUniforms
-           atTime:(CMTime)renderTime
-            error:(NSError **)error {
+// Builds the full plugin state (active type + both types' uniform blocks) from
+// the lanes at renderTime, and does the timing work (render-cache refresh,
+// maintain-timing, playhead poller) the timing popover's live preview relies
+// on. Runs where FxParameterRetrievalAPI is valid (pluginState:), not at render
+// time.
+- (BOOL)buildState:(MeshPluginState *)outState
+            atTime:(CMTime)renderTime
+             error:(NSError **)error {
   id<FxParameterRetrievalAPI_v6> paramGetAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   if (paramGetAPI == nil) {
@@ -110,10 +111,32 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     });
   }
 
-  // The Mesh Gradient takes a flat list of colour swatches; the shader places
-  // the spots procedurally, so there are no positions. Each "Color N" lane
-  // gives [r, g, b, a] at `frac`; a missing lane falls back to the default
-  // palette so an un-edited instance still renders.
+  memset(outState, 0, sizeof(*outState));
+
+  // Active type + the shared controls (Speed / Seed / Origin apply to every
+  // type; elapsed clip seconds drives the animation).
+  NSArray<NSNumber *> *typeV =
+      MeshLaneValuesAtFraction(timeline, @"Type", frac);
+  outState->type =
+      typeV.count ? (int)lround(typeV[0].doubleValue) : MeshType_Mesh;
+  NSArray<NSNumber *> *speedV =
+      MeshLaneValuesAtFraction(timeline, @"Speed", frac);
+  float speed =
+      speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
+  NSArray<NSNumber *> *seedV =
+      MeshLaneValuesAtFraction(timeline, @"Seed", frac);
+  float seed = seedV.count ? seedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SEED;
+  NSArray<NSNumber *> *originV =
+      MeshLaneValuesAtFraction(timeline, @"Origin", frac);
+  vector_float2 origin =
+      (originV.count >= 2)
+          ? (vector_float2){originV[0].floatValue, originV[1].floatValue}
+          : (vector_float2){0.5f, 0.5f};
+  float timeSec = (float)(frac * durSec);
+
+  // --- Mesh: a flat list of colour swatches (the shader places the spots) +
+  // scalar controls. A missing lane falls back to its default. Sliders are
+  // stored as percent, the shader wants 0..1.
   MeshGradientUniforms u;
   memset(&u, 0, sizeof(u));
   int count = 0;
@@ -129,17 +152,10 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     }
   }
   u.colorsCount = count > 0 ? count : 1;
-
-  // Scalar controls (read at `frac` like the colours; a missing lane falls back
-  // to its default). Sliders are stored as percent, the shader wants 0..1.
   NSArray<NSNumber *> *distV =
       MeshLaneValuesAtFraction(timeline, @"Distortion", frac);
   NSArray<NSNumber *> *swirlV =
       MeshLaneValuesAtFraction(timeline, @"Swirl", frac);
-  NSArray<NSNumber *> *speedV =
-      MeshLaneValuesAtFraction(timeline, @"Speed", frac);
-  NSArray<NSNumber *> *seedV =
-      MeshLaneValuesAtFraction(timeline, @"Seed", frac);
   NSArray<NSNumber *> *mixV =
       MeshLaneValuesAtFraction(timeline, @"Grain Mixer", frac);
   NSArray<NSNumber *> *grainV =
@@ -148,16 +164,47 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
                              : KK_MESH_GRAD_DEFAULT_DISTORTION;
   u.swirl =
       swirlV.count ? swirlV[0].floatValue / 100.0f : KK_MESH_GRAD_DEFAULT_SWIRL;
-  u.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
-  u.seed = seedV.count ? seedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SEED;
+  u.speed = speed;
+  u.seed = seed;
+  u.origin = origin;
   u.grainMixer = mixV.count ? mixV[0].floatValue / 100.0f
                             : KK_MESH_GRAD_DEFAULT_GRAINMIXER;
   u.grainOverlay =
       grainV.count ? grainV[0].floatValue / 100.0f : KK_MESH_DEFAULT_GRAIN;
-  // Elapsed clip seconds animates the spots (holds a still at a paused
-  // playhead).
-  u.time = (float)(frac * durSec);
-  *outUniforms = u;
+  u.time = timeSec;
+  outState->mesh = u;
+
+  // --- Dithering: two colours + a procedural shape through a dither. Choice
+  // pills store a 0-based index; the shader wants 1-based shape/type.
+  // Resolution is filled at render time (it needs the destination pixel dims).
+  DitheringUniforms d = DitheringDefault();
+  NSArray<NSNumber *> *backV =
+      MeshLaneValuesAtFraction(timeline, @"Background", frac);
+  NSArray<NSNumber *> *frontV =
+      MeshLaneValuesAtFraction(timeline, @"Foreground", frac);
+  NSArray<NSNumber *> *shapeV =
+      MeshLaneValuesAtFraction(timeline, @"Shape", frac);
+  NSArray<NSNumber *> *ditherV =
+      MeshLaneValuesAtFraction(timeline, @"Dither", frac);
+  NSArray<NSNumber *> *pxV =
+      MeshLaneValuesAtFraction(timeline, @"Pixel Size", frac);
+  if (backV.count >= 4)
+    d.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                  backV[2].floatValue, backV[3].floatValue};
+  if (frontV.count >= 4)
+    d.colorFront = (vector_float4){frontV[0].floatValue, frontV[1].floatValue,
+                                   frontV[2].floatValue, frontV[3].floatValue};
+  if (shapeV.count)
+    d.shape = (int)lround(shapeV[0].doubleValue) + 1;
+  if (ditherV.count)
+    d.type = (int)lround(ditherV[0].doubleValue) + 1;
+  if (pxV.count)
+    d.pxSize = pxV[0].floatValue;
+  d.speed = speed;
+  d.seed = seed;
+  d.origin = origin;
+  d.time = timeSec;
+  outState->dithering = d;
   return YES;
 }
 
@@ -165,10 +212,10 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error {
-  MeshGradientUniforms grid;
-  if (![self buildGrid:&grid atTime:renderTime error:error])
+  MeshPluginState state;
+  if (![self buildState:&state atTime:renderTime error:error])
     return NO;
-  *pluginState = [NSData dataWithBytes:&grid length:sizeof(grid)];
+  *pluginState = [NSData dataWithBytes:&state length:sizeof(state)];
   return (*pluginState != nil);
 }
 
@@ -216,28 +263,49 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     }
   }
 
+  // State built in -pluginState: (params API is invalid here). Fall back to
+  // defaults if it's missing/short.
+  MeshPluginState state;
+  if (pluginState.length >= sizeof(state)) {
+    [pluginState getBytes:&state length:sizeof(state)];
+  } else {
+    memset(&state, 0, sizeof(state));
+    state.type = MeshType_Mesh;
+    state.mesh = MeshGradientDefault();
+    state.dithering = DitheringDefault();
+  }
+
+  // Dispatch on the active type. Each type is a separate fragment function; the
+  // pipeline cache keys on plugin ID + pixel format (NOT the shader name), so a
+  // distinct ID per type keeps their pipelines from colliding.
+  BOOL isDither = (state.type == MeshType_Dithering);
+  NSString *pluginID =
+      isDither ? [kPluginID stringByAppendingString:@".dithering"] : kPluginID;
+  NSString *fragment = isDither ? @"ditheringFragment" : @"fragmentShader";
+
   id<MTLRenderPipelineState> pipelineState =
-      [self pipelineStateForPluginID:kPluginID
+      [self pipelineStateForPluginID:pluginID
                     destinationImage:destinationImage
                         vertexShader:@"vertexShader"
-                      fragmentShader:@"fragmentShader"
+                      fragmentShader:fragment
                            blendMode:KKBlendModePremultipliedAlpha];
   if (!pipelineState)
     return NO;
 
-  // Uniforms built from the Color lanes in -pluginState: (params API is invalid
-  // here). Fall back to the default if the state is missing/short.
-  MeshGradientUniforms grid;
-  if (pluginState.length >= sizeof(grid))
-    [pluginState getBytes:&grid length:sizeof(grid)];
-  else
-    grid = MeshGradientDefault();
+  // Dithering's pixel grid needs the destination pixel dims.
+  state.dithering.resolution = (vector_float2){(float)mediaW, (float)mediaH};
 
   // Match the output encoding to the destination: FCP's float working buffers
   // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.
   int encodeSRGB =
       (destinationImage.ioSurface.pixelFormat == kCVPixelFormatType_32BGRA) ? 1
                                                                             : 0;
+
+  // Point at the active type's uniform block (synchronous encode, so a pointer
+  // into the local `state` is valid inside the block).
+  const void *uniformBytes =
+      isDither ? (const void *)&state.dithering : (const void *)&state.mesh;
+  size_t uniformLen = isDither ? sizeof(state.dithering) : sizeof(state.mesh);
 
   // sourceImages is empty for a generator; encodeRenderCommands handles that
   // (empty inputTextures) and still builds the full-screen quad + dest texture.
@@ -251,8 +319,8 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
                                        [encoder setRenderPipelineState:
                                                     pipelineState];
                                        [encoder
-                                           setFragmentBytes:&grid
-                                                     length:sizeof(grid)
+                                           setFragmentBytes:uniformBytes
+                                                     length:uniformLen
                                                     atIndex:
                                                         MeshFragmentIndex_Grid];
                                        [encoder

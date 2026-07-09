@@ -5,28 +5,13 @@
 
 #import "Constants.h"
 #import "OSC_Internal.h"
-#import "MeshOSCRadiusMath.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
-#define CLAMP(x, lo, hi) MAX((lo), MIN((hi), (x)))
-
-// Returns the KKCropOSC part for a Mesh activePart, or KKCropPartNone if
-// it's not crop-related. Keeps the Mesh-side enum constants out of the KK
-// header.
-static NSInteger _kkCropPartForMeshActive(NSInteger activePart) {
-  if (activePart == kOSCCropRectPart)
-    return KKCropPartRect;
-  if (activePart >= kOSCCropPointBase &&
-      activePart < kOSCCropPointBase + KKCropPointCount)
-    return KKCropPartPointBase + (activePart - kOSCCropPointBase);
-  return KKCropPartNone;
-}
-
 @implementation MeshOSC (MouseHandlers)
 
-// Hover carries the modifier bit reliably: track opt-reveal here (and reset the
-// per-press opt-hide arming). Shared machinery on KKOnScreenControl.
+// Hover carries the modifier bit reliably: track opt-reveal here. Shared
+// machinery on KKOnScreenControl.
 - (void)mouseMovedAtPositionX:(double)positionX
                     positionY:(double)positionY
                    activePart:(NSInteger)activePart
@@ -54,39 +39,36 @@ static NSInteger _kkCropPartForMeshActive(NSInteger activePart) {
                  forceUpdate:(BOOL *)forceUpdate
                       atTime:(CMTime)time {
   // Opt-click an on-screen control to hide it (shared machinery on
-  // KKOnScreenControl). Bails before any drag/crop routing.
+  // KKOnScreenControl). Bails before any drag routing.
   if ([self kkArmOptHideForActivePart:activePart modifiers:modifiers]) {
     if (forceUpdate)
       *forceUpdate = YES;
     return;
   }
-  // Route crop-handle / crop-rect presses to the embedded KKCropOSC, which
-  // owns its own drag state. The radius super-handler ignores parts it
-  // doesn't recognise.
-  NSInteger cropPart = _kkCropPartForMeshActive(activePart);
-  if (cropPart != KKCropPartNone) {
-    [_cropOSC mouseDownForPart:cropPart
-                     positionX:positionX
-                     positionY:positionY
-                        atTime:time];
-    return;
-  }
-
   [super mouseDownAtPositionX:positionX
                     positionY:positionY
                    activePart:activePart
                     modifiers:modifiers
                   forceUpdate:forceUpdate
                        atTime:time];
-
-  if (activePart == 0)
-    return;
-
-  _dragStartPosition = CGPointMake(positionX, positionY);
-  _dragStartRadius =
-      MeshSnapshotRadiusAtFraction([self fractionAtTime:time]);
-  _dragCurrentRadius = _dragStartRadius;
-
+  // Origin handle / keypose anchor + the motion-path tangent handles are owned
+  // by the Position controller (press capture, double-click smooth toggle,
+  // grab-value capture all live there). The hit-test already set
+  // hoverTargetIsAnchor, so map the part to a KKPositionHit.
+  if (activePart == kOSCPositionPart || activePart == kOSCPathHandlePart) {
+    KKPositionHit hit = (activePart == kOSCPathHandlePart)
+                            ? KKPositionHitTangentHandle
+                            : (self.originController.hoverTargetIsAnchor
+                                   ? KKPositionHitAnchorDot
+                                   : KKPositionHitHandle);
+    [self.originController mouseDownAtX:positionX
+                                      y:positionY
+                                    hit:hit
+                              modifiers:modifiers
+                            forceUpdate:forceUpdate
+                                 atTime:time];
+  }
+  // Advance the inspector timing guide (legacy plumbing, harmless when idle).
   if (MeshSharedOSCGuideBridge().guideStep == 1) {
     MeshSharedOSCGuideBridge().guideStep = 2;
     *forceUpdate = YES;
@@ -105,99 +87,25 @@ static NSInteger _kkCropPartForMeshActive(NSInteger activePart) {
       *forceUpdate = YES;
     return;
   }
-  // Crop-part drag → delegate to the embedded KKCropOSC.
-  NSInteger cropPart = _kkCropPartForMeshActive(activePart);
-  if (cropPart != KKCropPartNone) {
-    [_cropOSC mouseDraggedForPart:cropPart
-                        positionX:positionX
-                        positionY:positionY
-                      forceUpdate:forceUpdate
-                           atTime:time];
+  if (activePart == kOSCPathHandlePart) {
+    [self.originController mouseDraggedAtX:positionX
+                                         y:positionY
+                                       hit:KKPositionHitTangentHandle
+                                 modifiers:modifiers
+                               forceUpdate:forceUpdate
+                                    atTime:time];
     return;
   }
-
-  if (activePart == 0)
+  if (activePart != kOSCPositionPart)
     return;
-
-  // Mirror oscPositionAtTime: drag math projects from the crop TR with the
-  // crop's minDim (not the full-canvas anchor), so the cursor tracks the
-  // handle 1:1 even with a non-default crop.
-  double frac = [self fractionAtTime:time];
-  CGPoint cropTR = CGPointZero;
-  BOOL isFlippedX = NO, isFlippedY = NO;
-  float minDim = 0.0f;
-  // Use the cached crop-anchor helper on the OSC (declared in OSC.m's @impl).
-  if (![self _cropAnchorCornerForFraction:frac
-                                outCorner:&cropTR
-                              outFlippedX:&isFlippedX
-                              outFlippedY:&isFlippedY
-                                outMinDim:&minDim] ||
-      minDim <= 0)
-    return;
-
-  double dx = positionX - cropTR.x;
-  double dy = positionY - cropTR.y;
-  double signX = isFlippedX ? -1.0 : 1.0;
-  double signY = isFlippedY ? -1.0 : 1.0;
-
-  double mouseDist = (-dx * signX + -dy * signY) * 0.5 - self.oscSize;
-
-  float lo = 0.0f, hi = 100.0f;
-  for (int i = 0; i < 32; i++) {
-    float mid = (lo + hi) * 0.5f;
-    float padding = paddingForRadius(mid, minDim);
-    if (padding < mouseDist)
-      lo = mid;
-    else
-      hi = mid;
-  }
-
-  double newRadius = CLAMP((lo + hi) * 0.5, 0.0, 100.0);
-  if (MeshSharedOSCGuideBridge().guideStep == 2 &&
-      fabs(newRadius - kOSCGuideTargetRadius) < 8.0)
-    newRadius = kOSCGuideTargetRadius;
-  _dragCurrentRadius = newRadius;
-
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI) {
-    [actionAPI endAction:self];
-    return;
-  }
-
-  // KKReadCustomParamString returns empty for kKKParamTimelineData in the OSC
-  // mouse-drag action scope (verified via logs: jsonLen=0 even with getAPI
-  // resolved). The parameterChanged-driven snapshot is canonical anyway -
-  // start from it so the radius edit doesn't wipe In/Hold/Out structure.
-  // Set the Radius keypose nearest the playhead, preserving In/Hold/Out
-  // structure + hold-links (see KKTimelineSettingValuesNearestFraction).
-  NSArray<NSNumber *> *newValues = @[ @(newRadius) ];
-  KKTimeline *snap = MeshTimelineSnapshot();
-  KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
-                              snap, @"Radius", frac, newValues)
-                        : nil;
-  if (!tl) {
-    // No snapshot, or no Radius lane yet (a fresh constant - the OSC was
-    // reachable precisely because there was no lane). Seed one keypose at t=0.
-    tl = snap ? [snap copy] : [KKTimeline timeline];
-    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-    KKLane *radiusLane = [KKLane laneWithLabel:@"Radius"];
-    radiusLane.enabled = NO;
-    radiusLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
-    [lanes addObject:radiusLane];
-    tl.lanes = lanes;
-  }
-
-  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                           kKKParamTimelineData);
-  [actionAPI endAction:self];
-  *forceUpdate = YES;
+  [self.originController
+      mouseDraggedAtX:positionX
+                    y:positionY
+                  hit:(self.originController.hoverTargetIsAnchor
+                           ? KKPositionHitAnchorDot
+                           : KKPositionHitHandle)modifiers:modifiers
+          forceUpdate:forceUpdate
+               atTime:time];
 }
 
 - (void)mouseUpAtPositionX:(double)positionX
@@ -207,9 +115,7 @@ static NSInteger _kkCropPartForMeshActive(NSInteger activePart) {
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
   [self kkResetOptHideArming];
-  // Always reset crop drag state on mouseUp (cheap; no-op when not dragging).
-  [_cropOSC mouseUp];
-
+  [self.originController mouseUp];
   if (MeshSharedOSCGuideBridge().guideStep == 2 && self.isDragging) {
     MeshSharedOSCGuideBridge().guideStep = 3;
     *forceUpdate = YES;

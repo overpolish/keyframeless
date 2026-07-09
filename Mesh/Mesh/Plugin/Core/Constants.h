@@ -9,10 +9,10 @@
 
 static NSString *const kPluginID = @"co.overpolish.keyframeless.Mesh";
 
-static const NSInteger kOSCRadiusPart = 100;
-// Crop part IDs: rect-drag = 200, 8 handles = 201..208.
-static const NSInteger kOSCCropRectPart = 200;
-static const NSInteger kOSCCropPointBase = 201;
+// Origin Position OSC parts (main viewer): the handle / keypose anchor dot, and
+// the motion-path tangent handle.
+static const NSInteger kOSCPositionPart = 100;
+static const NSInteger kOSCPathHandlePart = 101;
 
 /// Posted on the main queue when the OSC handle's screen position updates;
 /// the plugin returns this as its help-guide refresh notification.

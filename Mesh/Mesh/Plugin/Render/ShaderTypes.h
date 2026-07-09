@@ -30,7 +30,41 @@ typedef struct MeshGradientUniforms {
     float seed;                                // start-time offset (initial seed)
     float grainMixer;                          // 0..1 grain at the spot edges
     float grainOverlay;                        // 0..1 post grain overlay
+    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
 } MeshGradientUniforms;
+
+// Dithering type: also ported from paper-design/shaders (Apache-2.0). A
+// procedural shape (u_shape) rendered through an ordered/random dither
+// (u_type) into two colours. resolution is filled at render time (it needs the
+// destination pixel dims for the pixel grid).
+typedef struct DitheringUniforms {
+    vector_float4 colorBack;  // rgba background
+    vector_float4 colorFront; // rgba ink
+    vector_float2 resolution; // destination pixel dims (set at render time)
+    vector_float2 origin;     // swirl/ripple centre (normalized 0..1)
+    float time;               // clip seconds
+    float speed;              // time multiplier (motion rate)
+    float seed;               // start-time offset (shared with Mesh)
+    float pxSize;             // dither grid size in reference pixels
+    int shape;                // 1..6 (simplex, warp, dots, wave, ripple, swirl)
+    int type;                 // 1..4 dither (random, 2x2, 4x4, 8x8 Bayer)
+} DitheringUniforms;
+
+// The Type choice-pill order. Kept in sync with the "Type" pill labels.
+typedef enum MeshType {
+    MeshType_Mesh = 0,      // paper-design animated mesh gradient
+    MeshType_Dithering = 1, // paper-design dithered procedural shapes
+} MeshType;
+
+// The full render state packed into pluginState: the active type plus each
+// type's uniform block (only the active one is filled). render/mini-viewer
+// pick the pipeline + uniform bytes off `type`.
+typedef struct MeshPluginState {
+    int type;
+    int _pad0;
+    MeshGradientUniforms mesh;
+    DitheringUniforms dithering;
+} MeshPluginState;
 
 typedef enum MeshFragmentIndex {
     MeshFragmentIndex_Grid = 0,

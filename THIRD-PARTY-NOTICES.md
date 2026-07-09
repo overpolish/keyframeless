@@ -8,18 +8,19 @@ section here for each third-party component you incorporate.
 
 ## paper-design/shaders
 
-Portions of the Mesh generator's fragment shader
-(`Mesh/Mesh/Plugin/Render/Mesh.metal` — the `Mesh` gradient) are derived from the
-`mesh-gradient` shader in **paper-design/shaders**.
+Portions of the Mesh generator's fragment shaders
+(`Mesh/Mesh/Plugin/Render/Mesh.metal` — the `Mesh` and `Dithering` types) are
+derived from the `mesh-gradient` and `dithering` shaders in
+**paper-design/shaders**.
 
 - Source: https://github.com/paper-design/shaders
 - Copyright the paper-design/shaders authors.
 - Licensed under the Apache License, Version 2.0 (full text below).
 
-**Modifications:** the original GLSL fragment shader was translated to Metal
+**Modifications:** the original GLSL fragment shaders were translated to Metal
 Shading Language (MSL) and adapted for the FxPlug render pipeline — uniform
-layout, colour/output-encoding handling, and seed precision handling changed.
-The original algorithm and parameters are otherwise preserved.
+layout, colour/output-encoding handling, seed precision, and the sizing model
+changed. The original algorithms and parameters are otherwise preserved.
 
 ### Apache License, Version 2.0
 

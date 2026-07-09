@@ -56,8 +56,33 @@ static inline MeshGradientUniforms MeshGradientDefault(void) {
   g.seed = KK_MESH_GRAD_DEFAULT_SEED;
   g.grainMixer = KK_MESH_GRAD_DEFAULT_GRAINMIXER;
   g.grainOverlay = KK_MESH_DEFAULT_GRAIN;
+  g.origin = (vector_float2){0.5f, 0.5f};
   g.time = 0.0f;
   return g;
+}
+
+/// Dithering (paper-design port) defaults.
+#define KK_DITHER_DEFAULT_PXSIZE 2.0f
+#define KK_DITHER_DEFAULT_SHAPE 1 // simplex
+#define KK_DITHER_DEFAULT_TYPE 4  // 8x8 Bayer
+#define KK_DITHER_DEFAULT_SPEED 1.0f
+
+/// Fallback Dithering uniforms so an un-edited instance still renders before
+/// the lanes resolve. `resolution` is overwritten at render time.
+static inline DitheringUniforms DitheringDefault(void) {
+  DitheringUniforms d;
+  memset(&d, 0, sizeof(d));
+  d.colorBack = (vector_float4){0.04f, 0.04f, 0.07f, 1.0f};
+  d.colorFront = (vector_float4){0.85f, 0.90f, 0.98f, 1.0f};
+  d.resolution = (vector_float2){1920.0f, 1080.0f};
+  d.origin = (vector_float2){0.5f, 0.5f};
+  d.pxSize = KK_DITHER_DEFAULT_PXSIZE;
+  d.shape = KK_DITHER_DEFAULT_SHAPE;
+  d.type = KK_DITHER_DEFAULT_TYPE;
+  d.speed = KK_DITHER_DEFAULT_SPEED;
+  d.seed = 0.0f;
+  d.time = 0.0f;
+  return d;
 }
 
 /// Generic per-swatch lane label ("Color 1", "Color 2", ...). One [r,g,b,a]

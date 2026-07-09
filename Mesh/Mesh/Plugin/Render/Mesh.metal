@@ -87,8 +87,10 @@ static float2 mg_getPosition(int i, float t) {
 fragment float4 fragmentShader(RasterizerData in [[stage_in]],
                                constant MeshGradientUniforms &u [[buffer(MeshFragmentIndex_Grid)]],
                                constant int &encodeSRGB [[buffer(MeshFragmentIndex_EncodeSRGB)]]) {
-    float2 uv = clamp(in.textureCoordinate, 0.0, 1.0);
-    float2 grainUV = uv * 1000.0;
+    float2 grainUV = in.textureCoordinate * 1000.0; // screen-fixed grain
+    // Origin shifts the whole field. Matches the OSC drag direction (uv here is
+    // y-down, so no y-flip on the origin offset).
+    float2 uv = in.textureCoordinate - (u.origin - 0.5);
 
     float grain = mg_noise(grainUV, float2(0.0));
     float mixerGrain = 0.4 * u.grainMixer * (grain - 0.5);
@@ -157,4 +159,197 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
     // `color` is gamma-sRGB. 8-bit dest wants gamma; FCP float dest wants linear.
     float3 outRGB = encodeSRGB ? color : srgb_to_linear(color);
     return float4(outRGB * opacity, opacity);
+}
+
+// --- Dithering: ported from paper-design/shaders (Apache-2.0), GLSL -> MSL.
+// A procedural shape (simplex/warp/dots/wave/ripple/swirl/sphere) rendered
+// through a random or ordered-Bayer dither into two colours. See
+// THIRD-PARTY-NOTICES.md. Pure generator, no input. The FxPlug port drops the
+// source's fit/scale/rotation/offset sizing (full-frame, centred).
+
+constant float DTH_TWO_PI = 6.28318530718;
+
+constant int dth_bayer2x2[4] = {0, 2, 3, 1};
+constant int dth_bayer4x4[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+constant int dth_bayer8x8[64] = {0,  32, 8,  40, 2,  34, 10, 42, 48, 16, 56, 24, 50, 18, 58, 26, 12, 44, 4,  36, 14, 46,
+                                 6,  38, 60, 28, 52, 20, 62, 30, 54, 22, 3,  35, 11, 43, 1,  33, 9,  41, 51, 19, 59, 27,
+                                 49, 17, 57, 25, 15, 47, 7,  39, 13, 45, 5,  37, 63, 31, 55, 23, 61, 29, 53, 21};
+
+static float dth_hash11(float p) {
+    p = fract(p * 0.1031);
+    p *= p + 33.33;
+    p *= p + p;
+    return fract(p);
+}
+
+static float dth_hash21(float2 p) {
+    p = fract(p * float2(0.3183099, 0.3678794)) + 0.1;
+    p += dot(p, p + 19.19);
+    return fract(p.x * p.y);
+}
+
+static float3 dth_mod289(float3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+static float3 dth_permute(float3 x) { return dth_mod289(((x * 34.0) + 1.0) * x); }
+
+static float dth_snoise(float2 v) {
+    const float4 C = float4(0.211324865405187, 0.366025403784439, -0.577350269189626, 0.024390243902439);
+    float2 i = floor(v + dot(v, C.yy));
+    float2 x0 = v - i + dot(i, C.xx);
+    float2 i1 = (x0.x > x0.y) ? float2(1.0, 0.0) : float2(0.0, 1.0);
+    float4 x12 = x0.xyxy + C.xxzz;
+    x12.xy -= i1;
+    i = i - floor(i * (1.0 / 289.0)) * 289.0;
+    float3 p = dth_permute(dth_permute(i.y + float3(0.0, i1.y, 1.0)) + i.x + float3(0.0, i1.x, 1.0));
+    float3 m = max(0.5 - float3(dot(x0, x0), dot(x12.xy, x12.xy), dot(x12.zw, x12.zw)), 0.0);
+    m = m * m;
+    m = m * m;
+    float3 x = 2.0 * fract(p * C.www) - 1.0;
+    float3 h = abs(x) - 0.5;
+    float3 ox = floor(x + 0.5);
+    float3 a0 = x - ox;
+    m *= 1.79284291400159 - 0.85373472095314 * (a0 * a0 + h * h);
+    float3 g;
+    g.x = a0.x * x0.x + h.x * x0.y;
+    g.yz = a0.yz * x12.xz + h.yz * x12.yw;
+    return 130.0 * dot(m, g);
+}
+
+static float dth_getSimplexNoise(float2 uv, float t) {
+    float noise = 0.5 * dth_snoise(uv - float2(0.0, 0.3 * t));
+    noise += 0.5 * dth_snoise(2.0 * uv + float2(0.0, 0.32 * t));
+    return noise;
+}
+
+static float dth_getBayerValue(float2 uv, int size) {
+    int2 pos = int2(fract(uv / float(size)) * float(size));
+    int index = pos.y * size + pos.x;
+    if (size == 2)
+        return float(dth_bayer2x2[index]) / 4.0;
+    else if (size == 4)
+        return float(dth_bayer4x4[index]) / 16.0;
+    else if (size == 8)
+        return float(dth_bayer8x8[index]) / 64.0;
+    return 0.0;
+}
+
+// One dithered sample (0 or 1 = background or ink) at a reference-space
+// coordinate. Everything is computed in the fixed reference frame so the dither
+// is proportional and identical across render sizes; the fragment supersamples
+// this to downscale cleanly for the small viewers.
+static float dth_evaluate(float2 fragCoord, float2 refRes, float t, float pxSize, int shapeType, int ditherType,
+                          float2 origin) {
+    float2 pxSizeUV = (fragCoord - 0.5 * refRes) / pxSize;
+    float2 canvasPixelizedUV = (floor(pxSizeUV) + 0.5) * pxSize;
+    float2 normalizedUV = canvasPixelizedUV / refRes;
+    float2 ditheringNoiseUV = canvasPixelizedUV;
+
+    // Origin shifts the shape (normalizedUV is y-up, so flip the origin y to
+    // match the OSC drag direction). 0.5,0.5 = centre.
+    normalizedUV -= float2(origin.x - 0.5, 0.5 - origin.y);
+
+    // Pattern shapes (1..3) in centred ref-pixel space; object shapes (4..6)
+    // aspect-scaled.
+    float2 shapeUV;
+    if (shapeType > 3) {
+        float minRef = min(refRes.x, refRes.y);
+        shapeUV = normalizedUV * (refRes / minRef);
+    } else {
+        shapeUV = normalizedUV * refRes + 0.5;
+    }
+
+    float shape = 0.0;
+    if (shapeType == 1) {
+        shapeUV *= 0.001;
+        shape = 0.5 + 0.5 * dth_getSimplexNoise(shapeUV, t);
+        shape = smoothstep(0.3, 0.9, shape);
+    } else if (shapeType == 2) {
+        shapeUV *= 0.003;
+        for (float i = 1.0; i < 6.0; i++) {
+            shapeUV.x += 0.6 / i * cos(i * 2.5 * shapeUV.y + t);
+            shapeUV.y += 0.6 / i * cos(i * 1.5 * shapeUV.x + t);
+        }
+        shape = 0.15 / max(0.001, abs(sin(t - shapeUV.y - shapeUV.x)));
+        shape = smoothstep(0.02, 1.0, shape);
+    } else if (shapeType == 3) {
+        shapeUV *= 0.05;
+        float stripeIdx = floor(2.0 * shapeUV.x / DTH_TWO_PI);
+        float rnd = dth_hash11(stripeIdx * 10.0);
+        rnd = sign(rnd - 0.5) * pow(0.1 + abs(rnd), 0.4);
+        shape = sin(shapeUV.x) * cos(shapeUV.y - 5.0 * rnd * t);
+        shape = pow(abs(shape), 6.0);
+    } else if (shapeType == 4) {
+        shapeUV *= 4.0;
+        float wave = cos(0.5 * shapeUV.x - 2.0 * t) * sin(1.5 * shapeUV.x + t) * (0.75 + 0.25 * cos(3.0 * t));
+        shape = 1.0 - smoothstep(-1.0, 1.0, shapeUV.y + wave);
+    } else if (shapeType == 5) {
+        float dist = length(shapeUV);
+        shape = sin(pow(dist, 1.7) * 7.0 - 3.0 * t) * 0.5 + 0.5;
+    } else {
+        // Swirl (radial), centred at the Origin.
+        float l = length(shapeUV);
+        float angle = 6.0 * atan2(shapeUV.y, shapeUV.x) + 4.0 * t;
+        float twist = 1.2;
+        float offset = 1.0 / pow(max(l, 1e-6), twist) + angle / DTH_TWO_PI;
+        float mid = smoothstep(0.0, 1.0, pow(l, twist));
+        shape = mix(0.0, fract(offset), mid);
+    }
+
+    float dithering = 0.0;
+    if (ditherType == 1)
+        dithering = step(dth_hash21(ditheringNoiseUV), shape);
+    else if (ditherType == 2)
+        dithering = dth_getBayerValue(pxSizeUV, 2);
+    else if (ditherType == 3)
+        dithering = dth_getBayerValue(pxSizeUV, 4);
+    else
+        dithering = dth_getBayerValue(pxSizeUV, 8);
+
+    dithering -= 0.5;
+    return step(0.5, shape + dithering);
+}
+
+fragment float4 ditheringFragment(RasterizerData in [[stage_in]],
+                                  constant DitheringUniforms &u [[buffer(MeshFragmentIndex_Grid)]],
+                                  constant int &encodeSRGB [[buffer(MeshFragmentIndex_EncodeSRGB)]]) {
+    float2 res = max(u.resolution, float2(1.0));
+    float aspect = res.x / res.y;
+    const float refH = 1080.0;
+    float2 refRes = float2(aspect * refH, refH); // project reference (aspect only)
+
+    // Seed offsets the animation time (a "start frame"), wrapped so the trig
+    // stays precise. Shared with Mesh.
+    float t = 0.5 * (u.time * u.speed + fmod(u.seed, 10000.0));
+    float pxSize = max(u.pxSize, 1.0);
+
+    // The dither is proportional (computed at the fixed reference resolution), so
+    // it is identical across viewers. When the render is SMALLER than the
+    // reference (mini-viewer, thumbnail) supersample and average, so the
+    // proportional dither downscales cleanly instead of aliasing - i.e. the main
+    // viewer, just scaled. At project size ss = 1 (crisp 1:1, no cost).
+    // Source gl_FragCoord is bottom-left origin (y up); our UV is y-down.
+    float2 uvyup = float2(in.textureCoordinate.x, 1.0 - in.textureCoordinate.y);
+    int ss = clamp((int)ceil(refRes.y / res.y), 1, 4);
+    float cov = 0.0;
+    for (int j = 0; j < ss; j++) {
+        for (int i = 0; i < ss; i++) {
+            float2 sub = (float2(float(i), float(j)) + 0.5) / float(ss) - 0.5;
+            float2 uvss = uvyup + sub / res; // offset within this output pixel
+            cov += dth_evaluate(uvss * refRes, refRes, t, pxSize, u.shape, u.type, u.origin);
+        }
+    }
+    cov /= float(ss * ss); // fractional ink coverage 0..1
+
+    float3 fgColor = u.colorFront.rgb * u.colorFront.a;
+    float fgOpacity = u.colorFront.a;
+    float3 bgColor = u.colorBack.rgb * u.colorBack.a;
+    float bgOpacity = u.colorBack.a;
+
+    float3 color = fgColor * cov;
+    float opacity = fgOpacity * cov;
+    color += bgColor * (1.0 - opacity);
+    opacity += bgOpacity * (1.0 - opacity);
+
+    // Already premultiplied. 8-bit dest wants gamma; float dest wants linear.
+    float3 outRGB = encodeSRGB ? clamp(color, 0.0, 1.0) : srgb_to_linear(color);
+    return float4(outRGB, opacity);
 }

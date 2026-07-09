@@ -28,34 +28,47 @@
 /// values-pass LLM call sees, alongside the user's prompt. No timing words,
 /// no in/out, no Basic/Advanced - just lanes and their numeric ranges.
 static NSString *_MeshAILaneSchemaText(void) {
-  return @"Lane labels and value spaces. This is an animated mesh gradient "
-         @"generator: colour spots drift on procedural paths and are blended "
-         @"by distance, warped by distortion + swirl, with a film-grain "
-         @"finish.\n\n"
-         @"- \"Distortion\": single value, percent 0..100. Organic noise warp "
-         @"of the whole field (0 = calm/smooth, higher = more churning "
-         @"folds). Default 80.\n"
-         @"- \"Swirl\": single value, percent 0..100. Vortex twist around the "
-         @"centre (0 = none, higher = more spiral). Default 10.\n"
+  return @"Lane labels and value spaces. This is a procedural generator with "
+         @"two "
+         @"styles selected by \"Type\": Mesh (animated colour spots blended "
+         @"into "
+         @"a soft gradient) and Dithering (a procedural shape rendered through "
+         @"a "
+         @"dither into two colours). Set the lanes for the chosen type.\n\n"
+         @"- \"Type\": the generator style. A structural choice (NOT "
+         @"animated), "
+         @"stored as an index: 0 = Mesh, 1 = Dithering. Default 0.\n"
          @"- \"Speed\": single value, 0..3 multiplier of the animation rate "
-         @"(1 = normal, 0 = frozen, 2 = twice as fast). Animatable. "
-         @"Default 1.\n"
-         @"- \"Seed\": single integer, the animation start-frame / layout "
-         @"variation (any value; re-roll for a different look). NOT "
-         @"animatable - one constant for the clip. Default 0.\n"
-         @"- \"Grain Mixer\": single value, percent 0..100. Grain distortion "
-         @"at the colour-spot edges (0 = clean edges, higher = grainier "
-         @"blend). Default 0.\n"
-         @"- \"Grain\": single value, percent 0..100. Post film-grain overlay "
-         @"(0 = clean, higher = more grain). Default 6.\n"
+         @"(1 = normal, 0 = frozen, 2 = twice as fast). Shared by both types. "
+         @"Animatable. Default 1.\n"
+         @"- \"Seed\": integer, the animation start-frame / layout variation "
+         @"(any value). Shared by both types. NOT animatable. Default 0.\n"
+         @"- \"Origin\": two components [X, Y] normalised 0..1 (0.5,0.5 = "
+         @"centre, Y up). Shifts the pattern within the frame. Shared by both "
+         @"types. Default [0.5, 0.5].\n"
+         @"\nMesh (Type 0):\n"
+         @"- \"Distortion\": percent 0..100. Organic noise warp of the field "
+         @"(0 = calm, higher = more churning folds). Default 80.\n"
+         @"- \"Swirl\": percent 0..100. Vortex twist around the centre. "
+         @"Default 10.\n"
+         @"- \"Grain Mixer\": percent 0..100. Grain at the colour-spot edges. "
+         @"Default 0.\n"
+         @"- \"Grain\": percent 0..100. Post film-grain overlay. Default 6.\n"
          @"- \"Color 1\", \"Color 2\", ... : the gradient's colour spots, each "
-         @"[r, g, b, a] in sRGB 0..1. The shader places and animates the "
-         @"spots, so only the colours are set (no positions). There are "
-         @"several; set as many as the user asks for. Defaults are a "
-         @"purple / pink / blue / teal palette.\n"
-         @"- \"Type\": the gradient style. A structural choice (NOT animated), "
-         @"stored as an index: 0 = Mesh (the only real option today; "
-         @"index 1 is a disabled placeholder). Default 0.\n";
+         @"[r, g, b, a] in sRGB 0..1. Positions are procedural, so only the "
+         @"colours are set. Set as many as the user asks for.\n"
+         @"\nDithering (Type 1):\n"
+         @"- \"Shape\": the procedural pattern. Structural choice (NOT "
+         @"animated), index: 0 = Simplex, 1 = Warp, 2 = Dots, 3 = Wave, "
+         @"4 = Ripple, 5 = Swirl. Default 0.\n"
+         @"- \"Dither\": the dither matrix. Structural choice, index: "
+         @"0 = Random, 1 = 2x2, 2 = 4x4, 3 = 8x8 (higher = finer/smoother). "
+         @"Default 3.\n"
+         @"- \"Pixel Size\": the dither grid cell size in pixels, integer "
+         @"1..20 "
+         @"(higher = chunkier). Default 2.\n"
+         @"- \"Background\": the base colour [r, g, b, a] in sRGB 0..1.\n"
+         @"- \"Foreground\": the ink colour [r, g, b, a] in sRGB 0..1.\n";
 }
 
 @implementation MeshPlugin (CustomUI)
@@ -70,15 +83,13 @@ static NSString *_MeshAILaneSchemaText(void) {
   // add/remove them). Users can reorder in the inspector.
   NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
 
-  // Mesh Gradient (paper-design port, Apache-2.0): a flat list of colour
-  // swatches placed procedurally by the shader, plus scalar controls. Type is
-  // the scaffold pill for future gradient types - the kit only renders a pill
-  // at 2+ choices, so it carries Mesh Gradient plus a disabled-in-spirit
-  // "Coming Soon" placeholder (the render ignores the value). Replace the
-  // placeholder with the real second type when it lands.
+  // Two procedural generator types (both ported from paper-design/shaders,
+  // Apache-2.0), selected by the Type pill. Each type's controls + colours gate
+  // to its Type index; Speed is shared. Order: Type, shared + per-type controls
+  // (Core), then the colours (Colors) last.
   KKLane *type = [KKLane laneWithLabel:@"Type"];
   type.valueType = KKLaneValueTypeFloat;
-  type.choiceLabels = @[ @"Mesh", @"Coming Soon" ];
+  type.choiceLabels = @[ @"Mesh", @"Dithering" ];
   type.componentMin = @[ @0.0 ];
   type.componentMax = @[ @1.0 ];
   type.integerValued = YES;
@@ -89,51 +100,148 @@ static NSString *_MeshAILaneSchemaText(void) {
   [type insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
   [lanes addObject:type];
 
-  // Options for the Mesh Gradient, gated to the real type. Distortion = organic
-  // noise warp; Swirl = vortex warp; Speed = motion rate; Seed = layout
-  // variation; Grain Mixer = grain at the spot edges; Grain = post overlay.
-  // %-units store 0..100 (the shader wants 0..1); Speed is a raw multiplier;
-  // Seed is a non-animatable integer (start-time offset) with a dice field, and
-  // takes any value - the slider range is nominal, the field/dice sets it.
+  // Speed: shared motion-rate multiplier, visible for both types.
+  KKLane *speed = [KKLane laneWithLabel:@"Speed"];
+  speed.valueType = KKLaneValueTypeFloat;
+  speed.componentMin = @[ @0.0 ];
+  speed.componentMax = @[ @3.0 ];
+  speed.animatable = YES;
+  speed.enabled = NO;
+  speed.categoryKey = @"Core";
+  speed.categorySymbol = @"circle.dotted";
+  speed.visibleWhenLabel = @"Type";
+  speed.visibleWhenValues = @[ @0, @1 ];
+  [speed insertKeypose:[KKKeyPose
+                           keyposeAtTime:0.0
+                                  values:@[ @(KK_MESH_GRAD_DEFAULT_SPEED) ]]];
+  [lanes addObject:speed];
+
+  // Seed: shared start-time offset (a "start frame"), non-animatable integer
+  // with a dice field. Any value; the slider range is nominal.
+  KKLane *seed = [KKLane laneWithLabel:@"Seed"];
+  seed.valueType = KKLaneValueTypeFloat;
+  seed.seedField = YES;
+  seed.integerValued = YES;
+  seed.componentMin = @[ @0.0 ];
+  seed.componentMax = @[ @1000000.0 ];
+  seed.animatable = NO;
+  seed.enabled = NO;
+  seed.categoryKey = @"Core";
+  seed.categorySymbol = @"circle.dotted";
+  seed.visibleWhenLabel = @"Type";
+  seed.visibleWhenValues = @[ @0, @1 ];
+  [seed insertKeypose:[KKKeyPose
+                          keyposeAtTime:0.0
+                                 values:@[ @(KK_MESH_GRAD_DEFAULT_SEED) ]]];
+  [lanes addObject:seed];
+
+  // Origin: shared field centre, an [X, Y] point (0.5,0.5 = centre, Y up).
+  // Moves the pattern; allowed off-frame, so no min/max (empty =
+  // unconstrained). Stored 0..1, displayed as pixels (media-scaled), like
+  // MagicMove's Position.
+  KKLane *origin = [KKLane laneWithLabel:@"Origin"];
+  origin.valueType = KKLaneValueTypeGeneric;
+  origin.componentLabels = @[ @"X", @"Y" ];
+  origin.componentMin = @[];
+  origin.componentMax = @[];
+  origin.componentUnits = @[ @"px", @"px" ];
+  origin.componentsScaleWithMedia = YES;
+  origin.spatialCurvable = YES; // 2D path, keyposes can be smooth (curved)
+  origin.animatable = YES;
+  origin.enabled = NO;
+  origin.categoryKey = @"Core";
+  origin.categorySymbol = @"circle.dotted";
+  [origin insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
+  [lanes addObject:origin];
+
+  // --- Mesh controls (Type 0). %-units store 0..100 (the shader wants 0..1).
   struct {
     NSString *label;
     double def, min, max;
     NSString *unit; // nil = raw number (no % scaling)
     BOOL animatable;
     BOOL seedField;
-  } controls[] = {
+  } meshControls[] = {
       {@"Distortion", KK_MESH_GRAD_DEFAULT_DISTORTION * 100.0, 0.0, 100.0, @"%",
        YES, NO},
       {@"Swirl", KK_MESH_GRAD_DEFAULT_SWIRL * 100.0, 0.0, 100.0, @"%", YES, NO},
-      {@"Speed", KK_MESH_GRAD_DEFAULT_SPEED, 0.0, 3.0, nil, YES, NO},
-      {@"Seed", KK_MESH_GRAD_DEFAULT_SEED, 0.0, 1000000.0, nil, NO, YES},
       {@"Grain Mixer", KK_MESH_GRAD_DEFAULT_GRAINMIXER * 100.0, 0.0, 100.0,
        @"%", YES, NO},
       {@"Grain", KK_MESH_DEFAULT_GRAIN * 100.0, 0.0, 100.0, @"%", YES, NO},
   };
-  for (unsigned s = 0; s < sizeof(controls) / sizeof(controls[0]); s++) {
-    KKLane *lane = [KKLane laneWithLabel:controls[s].label];
+  for (unsigned s = 0; s < sizeof(meshControls) / sizeof(meshControls[0]);
+       s++) {
+    KKLane *lane = [KKLane laneWithLabel:meshControls[s].label];
     lane.valueType = KKLaneValueTypeFloat;
-    lane.componentMin = @[ @(controls[s].min) ];
-    lane.componentMax = @[ @(controls[s].max) ];
-    if (controls[s].unit)
-      lane.componentUnits = @[ controls[s].unit ];
-    lane.animatable = controls[s].animatable;
-    lane.seedField = controls[s].seedField;
-    lane.integerValued = controls[s].seedField; // seed is an integer
+    lane.componentMin = @[ @(meshControls[s].min) ];
+    lane.componentMax = @[ @(meshControls[s].max) ];
+    if (meshControls[s].unit)
+      lane.componentUnits = @[ meshControls[s].unit ];
+    lane.animatable = meshControls[s].animatable;
+    lane.seedField = meshControls[s].seedField;
+    lane.integerValued = meshControls[s].seedField; // seed is an integer
     lane.enabled = NO;
     lane.categoryKey = @"Core";
     lane.categorySymbol = @"circle.dotted";
     lane.visibleWhenLabel = @"Type";
     lane.visibleWhenValues = @[ @0 ];
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                          values:@[ @(controls[s].def) ]]];
+                                          values:@[ @(meshControls[s].def) ]]];
     [lanes addObject:lane];
   }
 
-  // Colour swatches LAST (dynamic - users add/remove): one [r, g, b, a] lane
-  // each, seeded from the default palette. The shader places the spots, so
-  // there are no positions to edit, just the colours.
+  // --- Dithering controls (Type 1): Shape + Dither are structural choice
+  // pills; Pixel Size is the dither grid size in pixels.
+  KKLane *shape = [KKLane laneWithLabel:@"Shape"];
+  shape.valueType = KKLaneValueTypeFloat;
+  shape.choiceLabels =
+      @[ @"Simplex", @"Warp", @"Dots", @"Wave", @"Ripple", @"Swirl" ];
+  shape.componentMin = @[ @0.0 ];
+  shape.componentMax = @[ @5.0 ];
+  shape.integerValued = YES;
+  shape.animatable = NO;
+  shape.enabled = NO;
+  shape.categoryKey = @"Core";
+  shape.categorySymbol = @"circle.dotted";
+  shape.visibleWhenLabel = @"Type";
+  shape.visibleWhenValues = @[ @1 ];
+  [shape insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
+  [lanes addObject:shape];
+
+  KKLane *dither = [KKLane laneWithLabel:@"Dither"];
+  dither.valueType = KKLaneValueTypeFloat;
+  dither.choiceLabels = @[ @"Random", @"2×2", @"4×4", @"8×8" ];
+  dither.componentMin = @[ @0.0 ];
+  dither.componentMax = @[ @3.0 ];
+  dither.integerValued = YES;
+  dither.animatable = NO;
+  dither.enabled = NO;
+  dither.categoryKey = @"Core";
+  dither.categorySymbol = @"circle.dotted";
+  dither.visibleWhenLabel = @"Type";
+  dither.visibleWhenValues = @[ @1 ];
+  [dither insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @3.0 ]]]; // 8×8
+  [lanes addObject:dither];
+
+  KKLane *pxSize = [KKLane laneWithLabel:@"Pixel Size"];
+  pxSize.valueType = KKLaneValueTypeFloat;
+  pxSize.componentMin = @[ @1.0 ];
+  pxSize.componentMax = @[ @20.0 ];
+  pxSize.componentUnits = @[ @"px" ];
+  pxSize.integerValued = YES;
+  pxSize.animatable = YES;
+  pxSize.enabled = NO;
+  pxSize.categoryKey = @"Core";
+  pxSize.categorySymbol = @"circle.dotted";
+  pxSize.visibleWhenLabel = @"Type";
+  pxSize.visibleWhenValues = @[ @1 ];
+  [pxSize
+      insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                      values:@[ @(KK_DITHER_DEFAULT_PXSIZE) ]]];
+  [lanes addObject:pxSize];
+
+  // --- Mesh colours (Type 0, dynamic - users add/remove): one [r,g,b,a] swatch
+  // each, seeded from the default palette.
   for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
     KKLane *color = [KKLane laneWithLabel:MeshColorLabel(i)];
     color.valueType = KKLaneValueTypeColor;
@@ -150,6 +258,36 @@ static NSString *_MeshAILaneSchemaText(void) {
                                            values:@[
                                              @(c[0]), @(c[1]), @(c[2]), @(c[3])
                                            ]]];
+    [lanes addObject:color];
+  }
+
+  // --- Dithering colours (Type 1): background + foreground (ink).
+  struct {
+    NSString *label;
+    float r, g, b, a;
+  } ditherColors[] = {
+      {@"Background", 0.04f, 0.04f, 0.07f, 1.0f},
+      {@"Foreground", 0.85f, 0.90f, 0.98f, 1.0f},
+  };
+  for (unsigned c = 0; c < sizeof(ditherColors) / sizeof(ditherColors[0]);
+       c++) {
+    KKLane *color = [KKLane laneWithLabel:ditherColors[c].label];
+    color.valueType = KKLaneValueTypeColor;
+    color.componentMin = @[ @0.0, @0.0, @0.0, @0.0 ];
+    color.componentMax = @[ @1.0, @1.0, @1.0, @1.0 ];
+    color.animatable = YES;
+    color.enabled = NO;
+    color.categoryKey = @"Colors";
+    color.categorySymbol = @"paintpalette";
+    color.visibleWhenLabel = @"Type";
+    color.visibleWhenValues = @[ @1 ];
+    [color
+        insertKeypose:[KKKeyPose
+                          keyposeAtTime:0.0
+                                 values:@[
+                                   @(ditherColors[c].r), @(ditherColors[c].g),
+                                   @(ditherColors[c].b), @(ditherColors[c].a)
+                                 ]]];
     [lanes addObject:color];
   }
 
@@ -241,13 +379,15 @@ static NSString *_MeshAILaneSchemaText(void) {
                             samples:motionBlurSamples];
     [view setMotionBlurTechnique:(KKMotionBlurTechnique)motionBlurTechnique];
 
-    // On-screen-control visibility: master tick + per-element pills (Radius,
-    // Crop) + opt-click-hide + opt-reveal. Shared glue in KKPlugin
-    // (OSCVisibility); the renderer is the view's mini-viewer delegate.
+    // On-screen-control visibility: master tick + per-element pills (Origin,
+    // Path) + opt-click-hide + opt-reveal. The element key is the lane label
+    // (KKPositionOSC / the mini controller key their visibility on it). Shared
+    // glue in KKPlugin (OSCVisibility); the renderer is the mini-viewer
+    // delegate.
     KKMiniViewerRenderer *oscRenderer =
         (KKMiniViewerRenderer *)view.miniViewerDelegate;
     NSArray<NSArray<NSString *> *> *oscCompounds =
-        @[ @[ @"Radius" ], @[ @"Crop" ] ];
+        @[ @[ @"Origin" ], @[ @"Path" ] ];
     oscRenderer.handlesHidden = !oscMasterVisible;
     [self kkApplyOSCVisibilityFromState:uiState
                             elementKeys:[KKPlugin kkOSCElementKeysForCompounds:
@@ -272,7 +412,7 @@ static NSString *_MeshAILaneSchemaText(void) {
     [self kkWireStandardInspectorCallbacksForView:view
                                    uiStateParamID:kParamUIState
                                renderNudgeParamID:kParamRenderNudge
-                                    dragUndoLabel:@"Adjust Radius"
+                                    dragUndoLabel:@"Adjust Origin"
                                detachedWindowSize:CGSizeMake(720.0, 460.0)];
 
     self.inspectorView = view;
