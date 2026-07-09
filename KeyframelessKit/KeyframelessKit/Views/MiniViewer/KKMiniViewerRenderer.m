@@ -485,6 +485,34 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   return [self defaultValuesForLabel:label];
 }
 
+// Filmstrip/onion fan-out for a generator: the distinct keypose times across
+// the ANIMATED lanes. Mirrors what the boundary popover collects for a source
+// plugin (every kp.time on enabled lanes, snapped + de-duplicated), but derived
+// straight from our own timeline - a generator has no FCP source round-trip.
+// A constant-only timeline yields [0] (one cell).
+- (NSArray<NSNumber *> *)miniViewerKeyposeFractions:(KKMiniViewerView *)canvas {
+  NSMutableArray<NSNumber *> *fracs = [NSMutableArray array];
+  for (KKLane *lane in self.timeline.lanes) {
+    if (!lane.enabled) // constants (single t=0 keypose) don't fan out
+      continue;
+    for (KKKeyPose *kp in lane.keyposes) {
+      double t = MAX(0.0, MIN(1.0, kp.time));
+      BOOL dup = NO;
+      for (NSNumber *f in fracs)
+        if (fabs(f.doubleValue - t) < 1e-4) {
+          dup = YES;
+          break;
+        }
+      if (!dup)
+        [fracs addObject:@(t)];
+    }
+  }
+  if (fracs.count == 0)
+    return @[ @0.0 ];
+  [fracs sortUsingSelector:@selector(compare:)];
+  return fracs;
+}
+
 - (void)setLiveValues:(NSArray<NSNumber *> *)values
              forLabel:(NSString *)label
            atFraction:(double)fraction {
@@ -525,8 +553,8 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 - (KKTimeline *)_timelineBySettingValues:(NSArray<NSNumber *> *)values
                                 forLabel:(NSString *)label {
   // The boundary (keypose) popover in a multi-owner timeline passes a
-  // LAYER-TAGGED label ("Stroke Width\x1f<id>"), but this renderer's timeline is
-  // single-owner with PLAIN labels - so match on the plain label or the live
+  // LAYER-TAGGED label ("Stroke Width\x1f<id>"), but this renderer's timeline
+  // is single-owner with PLAIN labels - so match on the plain label or the live
   // value edit finds no lane and the mini never re-renders (it worked in
   // Constants only because that popover is single-owner / plain). No-op for
   // single-owner plugins (plain == plain).

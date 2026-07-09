@@ -136,8 +136,20 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_syncSlot0Aliases;
 - (CGRect)_contentRectInDrawable;
 - (CGRect)_filmstripCellRectInDrawable:(NSUInteger)i ofTotal:(NSUInteger)n;
-- (void)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot;
+// Returns YES if it (re)created the slot's processed texture this call (size
+// changed / first use), NO if it reused the existing one. Callers that skip the
+// effect/generate pass during an interaction frame must still run it when a new
+// (blank) texture was just made, or a resized slot draws black.
+- (BOOL)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot;
 - (void)_ensureProcessedTexture;
+// A source-less generator delegate: implements generateIntoTexture: and NOT
+// processSourceTexture:. Such a delegate publishes no feed slots, so filmstrip/
+// onion slots are built from its keypose fractions instead of the descriptor.
+- (BOOL)_isGeneratorDelegate;
+// Rebuild _filmstripSlots as one surfaceless slot per keypose fraction (from
+// the generator delegate) when renderMode != Off, else a single slot. Returns
+// YES if the slot set changed. No-op for non-generator delegates.
+- (BOOL)_rebuildGeneratorSlots;
 - (void)_installKeyMonitor;
 
 @end

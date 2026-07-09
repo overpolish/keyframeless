@@ -190,7 +190,10 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   BOOL _isToggle;                  // value row is a single checkbox (0/1)
   BOOL _autoSizesComponentLabels;  // prefix captions hug text (Start/End)
   BOOL _oscEditedOnly; // geometry-style lane: message instead of value fields
-  KKColorWellView *_colorWell;         // swatch, KKLaneValueTypeColor only
+  KKColorWellView *_colorWell; // swatch: Color (offset 0) or ColorPoint
+  NSInteger
+      _swatchOffset; // first RGBA component index for _colorWell (0 for a
+                     // plain Color lane; = #leading fields for ColorPoint)
   KKGradientControl *_gradientControl; // KKLaneValueTypeGradient only
   BOOL
       _suppressGradientRefresh; // mid own-edit: don't reset the control's stops
@@ -1008,6 +1011,49 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
         [arranged addObject:div];
       }
     }
+    // ColorPoint: a trailing RGBA swatch after the numeric fields. The leading
+    // fields cover components [0..n-1]; the swatch edits [n..n+3].
+    if (_valueType == KKLaneValueTypeColorPoint) {
+      _swatchOffset = n;
+      NSView *div = [[NSView alloc] init];
+      div.translatesAutoresizingMaskIntoConstraints = NO;
+      div.wantsLayer = YES;
+      div.layer.backgroundColor =
+          [[NSColor inspectorLabel] colorWithAlphaComponent:0.25].CGColor;
+      [div.widthAnchor constraintEqualToConstant:1.0].active = YES;
+      [div.heightAnchor constraintEqualToConstant:16.0].active = YES;
+      [arranged addObject:div];
+
+      _colorWell = [[KKColorWellView alloc] initWithFrame:NSZeroRect];
+      _colorWell.translatesAutoresizingMaskIntoConstraints = NO;
+      [_colorWell.widthAnchor constraintEqualToConstant:28.0].active = YES;
+      [_colorWell.heightAnchor constraintEqualToConstant:16.0].active = YES;
+      __weak typeof(self) weakCP = self;
+      _colorWell.onColorChanged = ^(NSColor *c) {
+        __strong typeof(weakCP) ss = weakCP;
+        if (!ss)
+          return;
+        NSColor *sc =
+            [c colorUsingColorSpace:[NSColorSpace sRGBColorSpace]] ?: c;
+        CGFloat r = 0, g = 0, b = 0, a = 1;
+        [sc getRed:&r green:&g blue:&b alpha:&a];
+        NSMutableArray<NSNumber *> *v = [ss->_values mutableCopy];
+        NSInteger o = ss->_swatchOffset;
+        while ((NSInteger)v.count < o + 4)
+          [v addObject:@0];
+        v[o] = @(r);
+        v[o + 1] = @(g);
+        v[o + 2] = @(b);
+        v[o + 3] = @(a);
+        [ss _setValues:v emit:YES];
+      };
+      _colorWell.onColorEditingChanged = ^(BOOL editing) {
+        __strong typeof(weakCP) ss = weakCP;
+        if (ss.onColorEditing)
+          ss.onColorEditing(editing);
+      };
+      [arranged addObject:_colorWell];
+    }
     // Curve toggle rides just left of the X/Y fields (reset stays trailing).
     if (showsSmooth) {
       _smoothOn =
@@ -1201,11 +1247,13 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   }
   if (_toggleCheckbox && _values.count)
     _toggleCheckbox.isChecked = llround(_values[0].doubleValue) != 0;
-  if (_colorWell && _values.count >= 3) {
-    CGFloat a = _values.count >= 4 ? _values[3].doubleValue : 1.0;
-    _colorWell.color = [NSColor colorWithSRGBRed:_values[0].doubleValue
-                                           green:_values[1].doubleValue
-                                            blue:_values[2].doubleValue
+  if (_colorWell && (NSInteger)_values.count >= _swatchOffset + 3) {
+    NSInteger o = _swatchOffset;
+    CGFloat a =
+        (NSInteger)_values.count >= o + 4 ? _values[o + 3].doubleValue : 1.0;
+    _colorWell.color = [NSColor colorWithSRGBRed:_values[o].doubleValue
+                                           green:_values[o + 1].doubleValue
+                                            blue:_values[o + 2].doubleValue
                                            alpha:a];
   }
   if (_gradientControl) {
@@ -1393,7 +1441,8 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   NSWindow *w = _addBtn.window;
   if (!_addBtn || !w)
     return NSZeroRect;
-  return [w convertRectToScreen:[_addBtn convertRect:_addBtn.bounds toView:nil]];
+  return [w convertRectToScreen:[_addBtn convertRect:_addBtn.bounds
+                                              toView:nil]];
 }
 
 // Return commits and fully defocuses. Returning YES suppresses AppKit's

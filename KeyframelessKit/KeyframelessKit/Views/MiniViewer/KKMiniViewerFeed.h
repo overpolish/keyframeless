@@ -57,6 +57,13 @@ NS_ASSUME_NONNULL_BEGIN
                device:(id<MTLDevice>)device
          commandQueue:(id<MTLCommandQueue>)commandQueue;
 
+/// Output media pixel size, for a GENERATOR with no source frames to carry it.
+/// When set (and there are no published slots), `publishDescriptor` writes a
+/// dims-only descriptor (`srcWidth`/`srcHeight`, empty `slots`) so a consuming
+/// `KKMiniViewerView` resolves `sourceMediaSize` - which px-scaled value fields
+/// need. Ignored once real source slots are published (they carry their own).
+@property(nonatomic) CGSize mediaSize;
+
 /// Publish whatever state the feed currently has (no surface update). Used
 /// when only `slotCount` changes - consumers need a fresh descriptor.
 - (void)publishDescriptor;

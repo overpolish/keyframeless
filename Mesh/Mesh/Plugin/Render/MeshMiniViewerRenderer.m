@@ -5,14 +5,14 @@
 
 #import "MeshMiniViewerRenderer.h"
 
+#import "MeshColorSpace.h"
 #import "MeshOSCRadiusMath.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <Metal/Metal.h>
 #import <simd/simd.h>
 
-NSString *const MeshMiniViewerDescriptorPath =
-    @"/tmp/mesh-miniviewer.json";
+NSString *const MeshMiniViewerDescriptorPath = @"/tmp/mesh-miniviewer.json";
 
 NSString *const MeshMiniViewerRequestPath =
     @"/tmp/mesh-miniviewer-request.json";
@@ -26,8 +26,8 @@ NSString *MeshMiniViewerDescriptorPathForUUID(NSString *uuid) {
 NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   if (!uuid.length)
     return MeshMiniViewerRequestPath;
-  return [NSString
-      stringWithFormat:@"/tmp/mesh-miniviewer-request-%@.json", uuid];
+  return
+      [NSString stringWithFormat:@"/tmp/mesh-miniviewer-request-%@.json", uuid];
 }
 
 // Mini-viewer analog of the viewer OSC's `oscSize` (KKPointOSC oscRadius +
@@ -41,31 +41,29 @@ static const CGFloat kHandleHitTolPt = 12.0;
   MTLPixelFormat _pipelineFormat;
 }
 
+// No viewer handles yet - colours only. The draggable-vertex OSC lands with the
+// warp/OSC increment; until then suppress the inherited radius/crop handles.
 - (NSString *)cropLabel {
-  return @"Crop";
+  return nil;
 }
 - (NSString *)pointLabel {
-  return @"Radius";
-}
-- (KKMiniHandleStyle)pointHandleStyle {
-  // The radius handle draws as the shared ring glyph (matches the viewer OSC +
-  // Canvas's corner widget), not the default dot.
-  return KKMiniHandleStyleRing;
-}
-- (CGFloat)pointHandleSizeScale {
-  // Match Magic Move's path-anchor KKPointOSC dot in the mini-viewer (0.6),
-  // for both the radius handle and the crop corners.
-  return 0.6;
+  return nil;
 }
 - (NSInteger)valueTypeForLabel:(NSString *)label {
-  return [label isEqualToString:@"Crop"] ? KKLaneValueTypeCrop
-                                         : KKLaneValueTypeFloat;
+  if ([label hasPrefix:@"Point "])
+    return KKLaneValueTypeColorPoint;
+  return KKLaneValueTypeFloat;
 }
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
-  if ([label isEqualToString:@"Crop"])
-    return @[ @1.0, @1.0, @0.0, @0.0 ];
-  if ([label isEqualToString:@"Radius"])
-    return @[ @20.0 ];
+  int i = MeshIndexForLabel(label, @"Point ");
+  if (i >= 0 && i < KK_MESH_POINT_COUNT) {
+    const float *p = kMeshDefaultPositions[i];
+    const float *c = kMeshDefaultColorsSRGB[i];
+    return @[
+      @(p[0]), @(p[1]), @(KK_MESH_DEFAULT_SPREAD * 100.0), @(c[0]), @(c[1]),
+      @(c[2]), @(c[3])
+    ];
+  }
   return [super defaultValuesForLabel:label];
 }
 
@@ -122,6 +120,34 @@ static const CGFloat kHandleHitTolPt = 12.0;
       {{W / 2, -H / 2}, {1, 1}},
   };
   simd_uint2 vpSize = {(unsigned)W, (unsigned)H};
+  // Same point set as the FCP render, from this instance's "Point N" lanes at
+  // the current edit fraction (valuesForLabel falls back to defaults).
+  float pos[KK_MESH_POINT_COUNT][2];
+  float spr[KK_MESH_POINT_COUNT];
+  float col[KK_MESH_POINT_COUNT][4];
+  for (int i = 0; i < KK_MESH_POINT_COUNT; i++) {
+    NSArray<NSNumber *> *v = [self valuesForLabel:MeshPointLabel(i)];
+    if (v.count >= 7) {
+      pos[i][0] = v[0].floatValue;
+      pos[i][1] = v[1].floatValue;
+      spr[i] = v[2].floatValue / 100.0f; // stored as percent, shader wants 0..1
+      for (int k = 0; k < 4; k++)
+        col[i][k] = v[3 + k].floatValue;
+    } else {
+      pos[i][0] = kMeshDefaultPositions[i][0];
+      pos[i][1] = kMeshDefaultPositions[i][1];
+      spr[i] = KK_MESH_DEFAULT_SPREAD;
+      for (int k = 0; k < 4; k++)
+        col[i][k] = kMeshDefaultColorsSRGB[i][k];
+    }
+  }
+  MeshGridUniforms grid = MeshBuildPoints(KK_MESH_POINT_COUNT, pos, spr, col);
+  // The mini-viewer renders into an 8-bit unorm texture shown directly on
+  // screen, so gamma-encode (unlike FCP's linear float working buffer).
+  int encodeSRGB = (dest.pixelFormat == MTLPixelFormatRGBA8Unorm ||
+                    dest.pixelFormat == MTLPixelFormatBGRA8Unorm)
+                       ? 1
+                       : 0;
   [e setRenderPipelineState:_pipeline];
   [e setVertexBytes:verts
              length:sizeof(verts)
@@ -129,71 +155,22 @@ static const CGFloat kHandleHitTolPt = 12.0;
   [e setVertexBytes:&vpSize
              length:sizeof(vpSize)
             atIndex:KKVertexInputIndex_ViewportSize];
+  [e setFragmentBytes:&grid length:sizeof(grid) atIndex:MeshFragmentIndex_Grid];
+  [e setFragmentBytes:&encodeSRGB
+               length:sizeof(encodeSRGB)
+              atIndex:MeshFragmentIndex_EncodeSRGB];
   [e drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
   [e endEncoding];
   return YES;
 }
 
+// Dead for the generator: no source is ever published to the mini-viewer feed,
+// so the source path never runs (see -miniViewer:generateIntoTexture:). Kept as
+// a no-op to satisfy the KKMiniViewerRenderer contract.
 - (BOOL)encodeEffectFromSource:(id<MTLTexture>)source
                           into:(id<MTLTexture>)dest
                  commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
-  if (![self _ensurePipelineForDevice:dest.device pixelFormat:dest.pixelFormat])
-    return NO;
-
-  NSArray<NSNumber *> *cv = [self valuesForLabel:@"Crop"];
-  float fragRadius =
-      (float)[[self valuesForLabel:@"Radius"] firstObject].doubleValue;
-
-  simd_float2 imageSize = {(float)dest.width, (float)dest.height};
-  simd_float2 cropCenter, cropSize;
-  KKCropModelToShader(cv[0].doubleValue, cv[1].doubleValue, cv[2].doubleValue,
-                      cv[3].doubleValue, imageSize, &cropCenter, &cropSize);
-  simd_float2 tileOffset = {0.0f, 0.0f};
-
-  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
-  rpd.colorAttachments[0].texture = dest;
-  rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
-  rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
-  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
-
-  id<MTLRenderCommandEncoder> e =
-      [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-  float W = imageSize.x, H = imageSize.y;
-  MTLViewport vp = {0, 0, W, H, -1.0, 1.0};
-  [e setViewport:vp];
-  KKVertex2D verts[4] = {
-      {{-W / 2, H / 2}, {0, 0}},
-      {{-W / 2, -H / 2}, {0, 1}},
-      {{W / 2, H / 2}, {1, 0}},
-      {{W / 2, -H / 2}, {1, 1}},
-  };
-  simd_uint2 vpSize = {(unsigned)W, (unsigned)H};
-  [e setRenderPipelineState:_pipeline];
-  [e setVertexBytes:verts
-             length:sizeof(verts)
-            atIndex:KKVertexInputIndex_Vertices];
-  [e setVertexBytes:&vpSize
-             length:sizeof(vpSize)
-            atIndex:KKVertexInputIndex_ViewportSize];
-  [e setFragmentTexture:source atIndex:KKTextureIndex_InputImage];
-  [e setFragmentBytes:&fragRadius
-               length:sizeof(fragRadius)
-              atIndex:FragmentIndex_Radius];
-  [e setFragmentBytes:&imageSize
-               length:sizeof(imageSize)
-              atIndex:FragmentIndex_ImageSize];
-  [e setFragmentBytes:&tileOffset
-               length:sizeof(tileOffset)
-              atIndex:FragmentIndex_TileOffsetPx];
-  [e setFragmentBytes:&cropCenter
-               length:sizeof(cropCenter)
-              atIndex:FragmentIndex_CropCenter];
-  [e setFragmentBytes:&cropSize
-               length:sizeof(cropSize)
-              atIndex:FragmentIndex_CropSize];
-  [e drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
-  [e endEncoding];
-  return YES;
+  return NO;
 }
 
 - (double)_currentRadius {

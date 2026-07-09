@@ -5,8 +5,8 @@
 
 #pragma once
 
-#import "Plugin.h"
 #import "MeshInspectorView.h"
+#import "Plugin.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
 @class KKPlayheadPoller;
@@ -34,25 +34,11 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSArray<KKLane *> *)availableLanes;
 @end
 
-typedef struct {
-  double radius;
-  double cropW; // 0..1 fraction of image width
-  double cropH; // 0..1 fraction of image height
-  double cropX; // center offset, -0.5..0.5 (+ = right)
-  double cropY; // center offset, -0.5..0.5 (+ = up)
-} MeshPluginState;
-
 @interface MeshPlugin (Render)
 - (BOOL)pluginState:(NSData *_Nullable *_Nonnull)pluginState
              atTime:(CMTime)renderTime
             quality:(FxQuality)qualityLevel
               error:(NSError **)error;
-/// Computes the per-frame mesh params at `time`. Used by both the
-/// normal render path (via pluginState:atTime:) and the motion blur
-/// sub-frame sample loop.
-- (BOOL)meshParams:(MeshPluginState *)outParams
-               atTime:(CMTime)time
-                error:(NSError **)error;
 - (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
                   sourceImages:(NSArray<FxImageTile *> *)sourceImages
                    pluginState:(NSData *)pluginState

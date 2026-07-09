@@ -67,6 +67,16 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     generateIntoTexture:(id<MTLTexture>)dest
           commandBuffer:(id<MTLCommandBuffer>)commandBuffer;
+/// Filmstrip / onion support for a source-less generator. A source-based plugin
+/// gets its N keypose frames from FCP (the feed publishes one slot per boundary
+/// time); a generator has no feed, so the canvas asks the delegate directly for
+/// the sorted, de-duplicated keypose fractions (0..1) to fan out. Return the
+/// distinct keypose times across the animated lanes, or nil/empty (or a single
+/// [0]) for a constant-only timeline (one cell). Only consulted for generators
+/// (delegates that implement -generateIntoTexture:) when renderMode != Off. The
+/// canvas renders each returned fraction by setting `editFraction` to it before
+/// the per-slot -generateIntoTexture: call.
+- (NSArray<NSNumber *> *)miniViewerKeyposeFractions:(KKMiniViewerView *)canvas;
 /// Center of the point handle in overlay points (y-up), given the image's
 /// `contentRect` (same space). Return NO for no handle. The canvas draws it
 /// with the shared `KKPointOSC` shader so it's pixel-identical to the viewer
@@ -173,8 +183,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSCursor *)miniViewer:(KKMiniViewerView *)canvas
               toolbarCursorForTag:(NSInteger)tag;
 /// Rect (overlay view points, y-up) of the toolbar item with `tag`, or
-/// `NSZeroRect` if absent. Lets a guide spotlight a specific toolbar button (the
-/// view maps it to screen via -guideToolbarButtonScreenRectForTag:). Optional.
+/// `NSZeroRect` if absent. Lets a guide spotlight a specific toolbar button
+/// (the view maps it to screen via -guideToolbarButtonScreenRectForTag:).
+/// Optional.
 - (NSRect)miniViewer:(KKMiniViewerView *)canvas
     toolbarButtonViewRectForTag:(NSInteger)tag;
 /// A key was pressed while the mini is the key window (the toolbar's tool
@@ -212,8 +223,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// The in-progress pen point count (a held first point counts as 1), 0 when the
 /// pen is idle or has just finished a path. Lets a guide advance per click.
 - (NSInteger)miniViewerGuidePenPointCount:(KKMiniViewerView *)canvas;
-/// The last placed in-progress pen point in view points (NSZeroPoint when idle),
-/// so a guide can target the finish click on the actual anchor.
+/// The last placed in-progress pen point in view points (NSZeroPoint when
+/// idle), so a guide can target the finish click on the actual anchor.
 - (NSPoint)miniViewerGuideLastPenPointView:(KKMiniViewerView *)canvas;
 /// Draw the tool's in-progress overlay (pen anchors / handles / curve / ghost)
 /// in the Metal pass, on top of everything. The delegate encodes via the
@@ -538,13 +549,13 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 - (NSRect)pointHandleScreenRect;
 
 /// Screen-space rect of the floating toolbar button with `tag` (e.g. the Pen
-/// tool), or `NSZeroRect` if the delegate exposes none. Lets a guide spotlight a
-/// mini toolbar button.
+/// tool), or `NSZeroRect` if the delegate exposes none. Lets a guide spotlight
+/// a mini toolbar button.
 - (NSRect)guideToolbarButtonScreenRectForTag:(NSInteger)tag;
 
-/// Synthesize a toolbar press at `screenPoint` (the XPC overlay swallows the raw
-/// click, exactly as the handle-drag methods), performing the item's action.
-/// Returns YES if a toolbar item was hit. Use from a guide's
+/// Synthesize a toolbar press at `screenPoint` (the XPC overlay swallows the
+/// raw click, exactly as the handle-drag methods), performing the item's
+/// action. Returns YES if a toolbar item was hit. Use from a guide's
 /// `spotlightMouseDown` to drive a tool/button selection in the mini.
 - (BOOL)guidePressToolbarAtScreenPoint:(NSPoint)screenPoint;
 

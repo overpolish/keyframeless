@@ -933,7 +933,12 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // raw pixels (Glow Radius). Returns 0 until the feed resolves, which the row
   // treats as "fall back to raw norm".
   if (lane.componentsScaleWithMedia) {
+    NSArray<NSString *> *units = lane.componentUnits;
     row.componentScale = ^double(NSInteger i) {
+      // A "%" component is a literal percentage - never media-scaled. Lets one
+      // lane mix px positions (X/Y) with a % size (a mesh point's Spread).
+      if (i < (NSInteger)units.count && [units[i] isEqualToString:@"%"])
+        return 1.0;
       __strong typeof(weak) s = weak;
       CGSize m = s ? s->_miniViewer.sourceMediaSize : CGSizeZero;
       double scale = (i % 2 == 0) ? m.width : m.height;
@@ -992,7 +997,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
         s->_onLinkToggled(label, on);
     };
   if (lane.valueType == KKLaneValueTypeColor ||
-      lane.valueType == KKLaneValueTypeGradient)
+      lane.valueType == KKLaneValueTypeGradient ||
+      lane.valueType == KKLaneValueTypeColorPoint)
     row.onColorEditing = ^(BOOL editing) {
       __strong typeof(weak) s = weak;
       [s _setColorEditing:editing];

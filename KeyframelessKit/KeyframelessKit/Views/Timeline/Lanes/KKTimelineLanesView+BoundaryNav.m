@@ -276,6 +276,16 @@
     if (self.onBoundaryPreviewNeedsRender)
       self.onBoundaryPreviewNeedsRender();
   }
+  // Redraw the mini on ANY in-place update, not just a fraction change. Source
+  // plugins redraw as a side effect of the feed re-publishing, but a generator
+  // publishes nothing to the feed, so nothing wakes its paused MTKView. This
+  // path runs on keypose nav (fraction changed), add/remove, AND an external
+  // timeline change like cmd-Z / redo (SAME fraction, reverted values) - the
+  // last case is why this must sit OUTSIDE the fracChanged guard, or an undo
+  // updates the popover rows but leaves the generator preview stale. The
+  // renderer's editFraction is already current (KKSetBoundaryEditing above);
+  // harmless for source plugins (a redundant redraw).
+  [_openStaticView.miniViewer setNeedsDisplay:YES];
   [self _refreshBoundaryPopoverNavEnabled];
 }
 

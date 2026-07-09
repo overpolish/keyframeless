@@ -22,6 +22,11 @@ typedef NS_ENUM(NSInteger, KKLaneValueType) {
   KKLaneValueTypeAngle = 6,    // single value, degrees; row renders a circular
                                // knob + numeric field (unit "°") instead of
                                // the standard slider + field used for Float.
+  KKLaneValueTypeColorPoint =
+      7, // leading numeric fields + a trailing RGBA
+         // swatch on one row: [<field comps...>, r,g,b,a]
+         // (last 4 are the swatch). componentLabels
+         // count = the number of leading fields.
 };
 
 typedef NS_ENUM(NSInteger, KKIntervalCurve) {

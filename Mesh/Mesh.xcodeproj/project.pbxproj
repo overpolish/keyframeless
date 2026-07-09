@@ -10,12 +10,9 @@
 		F21396022F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F21396032F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
-		F220BFE42F4E07EB0034AF77 /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F23EF0142FC971CD00AFBA1E /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = F23EF0132FC971CD00AFBA1E /* KeyframelessAI */; };
 		F26E024F2F4DE56D009D949A /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
 		F26E02502F4DE56D009D949A /* KeyframelessKit.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		F2BE956E2FD766B100B5DF6A /* KeyframelessAI in Frameworks */ = {isa = PBXBuildFile; productRef = F2BE956D2FD766B100B5DF6A /* KeyframelessAI */; };
-		F2BE95722FD766CB00B5DF6A /* kk-ai-helper in CopyFiles */ = {isa = PBXBuildFile; fileRef = F2BE95662FD7669D00B5DF6A /* kk-ai-helper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		F2E2ED792F4CA530008620D9 /* Cocoa.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED782F4CA530008620D9 /* Cocoa.framework */; };
 		F2E2ED812F4CA530008620D9 /* Mesh XPC Service.pluginkit in Embed PlugIns */ = {isa = PBXBuildFile; fileRef = F2E2ED802F4CA530008620D9 /* Mesh XPC Service.pluginkit */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		F2E2ED852F4CA530008620D9 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F2E2ED842F4CA530008620D9 /* Foundation.framework */; };
@@ -26,13 +23,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		F2BE956F2FD766C200B5DF6A /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = F2E2ED6D2F4CA530008620D9 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = F2BE95652FD7669D00B5DF6A;
-			remoteInfo = "kk-ai-helper";
-		};
 		F2E2ED822F4CA530008620D9 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = F2E2ED6D2F4CA530008620D9 /* Project object */;
@@ -71,25 +61,6 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		F2BE95642FD7669D00B5DF6A /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = /usr/share/man/man1/;
-			dstSubfolderSpec = 0;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 1;
-		};
-		F2BE95712FD766C400B5DF6A /* CopyFiles */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 6;
-			files = (
-				F2BE95722FD766CB00B5DF6A /* kk-ai-helper in CopyFiles */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		F2E2EDB92F4CA530008620D9 /* Embed PlugIns */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -124,21 +95,21 @@
 			membershipExceptions = (
 				"/Localized: Plugin/InfoPlist.strings",
 				Plugin/Core/main.m,
+				Plugin/Core/MeshLocalized.m,
 				Plugin/Core/Plugin.m,
 				"Plugin/Core/Plugin+CustomUI.m",
 				"Plugin/Core/Plugin+Parameters.m",
-				Plugin/Core/MeshLocalized.m,
 				Plugin/Info.plist,
 				Plugin/Inspector/MeshInspectorView.m,
 				"Plugin/Inspector/MeshInspectorView+BasicTimingGuide.m",
 				Plugin/Localizable.xcstrings,
-				Plugin/OSC/OSC.m,
+				Plugin/MeshUI.xcstrings,
 				"Plugin/OSC/MeshOSC+MouseHandlers.m",
 				Plugin/OSC/MeshOSCRadiusMath.m,
-				"Plugin/Render/Plugin+Render.m",
+				Plugin/OSC/OSC.m,
 				Plugin/Render/Mesh.metal,
 				Plugin/Render/MeshMiniViewerRenderer.m,
-				Plugin/MeshUI.xcstrings,
+				"Plugin/Render/Plugin+Render.m",
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;
@@ -176,14 +147,6 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		F2BE95632FD7669D00B5DF6A /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				F2BE956E2FD766B100B5DF6A /* KeyframelessAI in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		F2E2ED722F4CA530008620D9 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -249,29 +212,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		F2BE95652FD7669D00B5DF6A /* kk-ai-helper */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = F2BE956C2FD7669D00B5DF6A /* Build configuration list for PBXNativeTarget "kk-ai-helper" */;
-			buildPhases = (
-				F2BE95622FD7669D00B5DF6A /* Sources */,
-				F2BE95632FD7669D00B5DF6A /* Frameworks */,
-				F2BE95642FD7669D00B5DF6A /* CopyFiles */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				F2BE95672FD7669D00B5DF6A /* kk-ai-helper */,
-			);
-			name = "kk-ai-helper";
-			packageProductDependencies = (
-				F2BE956D2FD766B100B5DF6A /* KeyframelessAI */,
-			);
-			productName = "kk-ai-helper";
-			productReference = F2BE95662FD7669D00B5DF6A /* kk-ai-helper */;
-			productType = "com.apple.product-type.tool";
-		};
 		F2E2ED742F4CA530008620D9 /* Wrapper Application */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = F2E2EDBA2F4CA530008620D9 /* Build configuration list for PBXNativeTarget "Wrapper Application" */;
@@ -334,9 +274,6 @@
 				LastSwiftUpdateCheck = 2650;
 				LastUpgradeCheck = 2650;
 				TargetAttributes = {
-					F2BE95652FD7669D00B5DF6A = {
-						CreatedOnToolsVersion = 26.5;
-					};
 					F2E2ED742F4CA530008620D9 = {
 						CreatedOnToolsVersion = 26.0.1;
 					};
@@ -432,13 +369,6 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		F2BE95622FD7669D00B5DF6A /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		F2E2ED712F4CA530008620D9 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -456,11 +386,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		F2BE95702FD766C200B5DF6A /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = F2BE95652FD7669D00B5DF6A /* kk-ai-helper */;
-			targetProxy = F2BE956F2FD766C200B5DF6A /* PBXContainerItemProxy */;
-		};
 		F2E2ED832F4CA530008620D9 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = F2E2ED7F2F4CA530008620D9 /* XPC Service */;
@@ -474,39 +399,6 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		F2BE956A2FD7669D00B5DF6A /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "Mesh/Plugin/MeshPluginEntitlements.entitlements";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 378WQ9W95U;
-				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Debug;
-		};
-		F2BE956B2FD7669D00B5DF6A /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = "Mesh/Plugin/MeshPluginEntitlements.entitlements";
-				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = 378WQ9W95U;
-				ENABLE_HARDENED_RUNTIME = YES;
-				MACOSX_DEPLOYMENT_TARGET = 15.6;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
 		F2E2EDB72F4CA530008620D9 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -747,15 +639,6 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		F2BE956C2FD7669D00B5DF6A /* Build configuration list for PBXNativeTarget "kk-ai-helper" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				F2BE956A2FD7669D00B5DF6A /* Debug */,
-				F2BE956B2FD7669D00B5DF6A /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		F2E2ED702F4CA530008620D9 /* Build configuration list for PBXProject "Mesh" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -787,10 +670,6 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		F23EF0132FC971CD00AFBA1E /* KeyframelessAI */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = KeyframelessAI;
-		};
-		F2BE956D2FD766B100B5DF6A /* KeyframelessAI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KeyframelessAI;
 		};

@@ -49,7 +49,60 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   if (_renderMode == mode)
     return;
   _renderMode = mode;
+  // A generator drives its own slot count from keypose fractions (no feed), so
+  // the filmstrip/onion fan-out must be (re)built the instant the pill flips
+  // rather than waiting for the next descriptor poll.
+  if ([self _isGeneratorDelegate])
+    [self _rebuildGeneratorSlots];
   [self setNeedsDisplay:YES];
+}
+
+- (BOOL)_isGeneratorDelegate {
+  // A generator is any delegate that implements -generateIntoTexture:. Do NOT
+  // also require !processSourceTexture: - the base KKMiniViewerRenderer
+  // provides processSourceTexture: as a passthrough default, so EVERY renderer
+  // responds to it; only a real source-less generator (Mesh) implements
+  // generateIntoTexture: (the base does not).
+  id<KKMiniViewerDelegate> del = self.canvasDelegate;
+  return del &&
+         [del respondsToSelector:
+                  @selector(miniViewer:generateIntoTexture:commandBuffer:)];
+}
+
+- (BOOL)_rebuildGeneratorSlots {
+  if (![self _isGeneratorDelegate])
+    return NO;
+  id<KKMiniViewerDelegate> del = self.canvasDelegate;
+  NSArray<NSNumber *> *fracs = nil;
+  if (_renderMode != 0 &&
+      [del respondsToSelector:@selector(miniViewerKeyposeFractions:)])
+    fracs = [del miniViewerKeyposeFractions:self];
+  if (fracs.count == 0)
+    fracs = @[ @0.0 ]; // Off, or a constant-only timeline: a single cell
+  NSUInteger n = fracs.count;
+  BOOL changed = (_filmstripSlots.count != n);
+  while (_filmstripSlots.count < n)
+    [_filmstripSlots addObject:[[_KKMiniFilmSlot alloc] init]];
+  while (_filmstripSlots.count > n)
+    [_filmstripSlots removeLastObject];
+  for (NSUInteger i = 0; i < n; i++) {
+    _KKMiniFilmSlot *s = _filmstripSlots[i];
+    double tag = fracs[i].doubleValue;
+    if (fabs(s.tag - tag) > 1e-9)
+      changed = YES;
+    s.tag = tag;
+    // Surfaceless: the generate path fills processedTexture per slot. Clear any
+    // stale source so a slot never wanders down the effect path.
+    if (s.surface) {
+      CFRelease(s.surface);
+      s.surface = NULL;
+    }
+    s.sourceTexture = nil;
+    s.sid = 0;
+    s.generation = 0;
+  }
+  [self _syncSlot0Aliases];
+  return changed;
 }
 
 - (instancetype)initWithFrame:(NSRect)frameRect {
@@ -132,11 +185,11 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
   [_pollTimer invalidate];
   [self _teardownKeyMonitors];
   // NOTE: do NOT CFRelease(_sourceSurface) here. It is only ever an unowned
-  // alias of the active filmstrip slot's surface (-_selectActiveSlot:); the slot
-  // owns that +1 and releases it in -[_KKMiniFilmSlot dealloc]. Releasing it here
-  // too is an over-release - latent for as long as this view leaked (never
-  // deallocated), and the crash that surfaced once the popover-close path started
-  // freeing the view.
+  // alias of the active filmstrip slot's surface (-_selectActiveSlot:); the
+  // slot owns that +1 and releases it in -[_KKMiniFilmSlot dealloc]. Releasing
+  // it here too is an over-release - latent for as long as this view leaked
+  // (never deallocated), and the crash that surfaced once the popover-close
+  // path started freeing the view.
 }
 
 - (void)_teardownKeyMonitors {
@@ -421,6 +474,18 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
       _sourceMediaSize.width > 0 && self.onSourceResolved)
     self.onSourceResolved();
 
+  // Generator: the descriptor carries only the media size (empty `slots`),
+  // because there is no source feed. Build the filmstrip/onion slots from the
+  // delegate's keypose fractions instead of the descriptor, and take the clip
+  // aspect from the published media size (no slot-0 surface to read it from).
+  if ([self _isGeneratorDelegate]) {
+    if (_sourceMediaSize.width > 0 && _sourceMediaSize.height > 0)
+      _clipAspect = _sourceMediaSize.width / _sourceMediaSize.height;
+    if ([self _rebuildGeneratorSlots])
+      [self setNeedsDisplay:YES];
+    return;
+  }
+
   // Walk the multi-slot array if present; fall back to the top-level
   // single-slot keys (descriptor format pre-onion-skin).
   NSArray *slotEntries = desc[@"slots"];
@@ -533,20 +598,30 @@ static const NSUInteger kFilmstripGridCols = 5;
                     cellH);
 }
 
-- (void)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot {
+- (BOOL)_ensureProcessedTextureForSlot:(_KKMiniFilmSlot *)slot {
   if (!slot.sourceTexture) {
     // Generator path: no source frame. Size the target to the content rect's
     // pixel size (clip aspect) so the delegate can render straight into it.
     id<KKMiniViewerDelegate> genDel = self.canvasDelegate;
-    if (![genDel respondsToSelector:@selector(miniViewer:
-                                        generateIntoTexture:commandBuffer:)])
-      return;
+    if (![genDel respondsToSelector:
+                     @selector(miniViewer:generateIntoTexture:commandBuffer:)])
+      return NO;
     CGRect content = [self _contentRectInDrawable];
-    NSUInteger gW = (NSUInteger)MAX(1.0, round(content.size.width));
-    NSUInteger gH = (NSUInteger)MAX(1.0, round(content.size.height));
+    // Cap to the drawable (visible) size. Zooming in grows the content rect
+    // without bound; sizing the texture to it would exceed Metal's max texture
+    // dimension and abort in -[MTLTextureDescriptorInternal
+    // validateWithDevice:] (the zoom-in crash). The gradient is smooth, so
+    // rendering at viewport resolution and mapping it across the (larger)
+    // content-rect quad is visually identical. Zoomed out, content < drawable,
+    // so use content.
+    CGSize dr = self.drawableSize;
+    double capW = dr.width > 0 ? dr.width : content.size.width;
+    double capH = dr.height > 0 ? dr.height : content.size.height;
+    NSUInteger gW = (NSUInteger)MAX(1.0, round(MIN(content.size.width, capW)));
+    NSUInteger gH = (NSUInteger)MAX(1.0, round(MIN(content.size.height, capH)));
     if (slot.processedTexture && slot.processedTexture.width == gW &&
         slot.processedTexture.height == gH)
-      return;
+      return NO;
     MTLTextureDescriptor *gtd = [MTLTextureDescriptor
         texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
                                      width:gW
@@ -556,7 +631,7 @@ static const NSUInteger kFilmstripGridCols = 5;
                 MTLTextureUsagePixelFormatView;
     gtd.storageMode = MTLStorageModePrivate;
     slot.processedTexture = [self.device newTextureWithDescriptor:gtd];
-    return;
+    return YES;
   }
   // Render the effect at DISPLAY resolution (the content rect's pixel size in
   // the drawable), aspect-preserved and capped at the source size so we never
@@ -589,7 +664,7 @@ static const NSUInteger kFilmstripGridCols = 5;
   }
   if (slot.processedTexture && slot.processedTexture.width == tW &&
       slot.processedTexture.height == tH)
-    return;
+    return NO;
   MTLTextureDescriptor *td = [MTLTextureDescriptor
       texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
                                    width:tW
@@ -599,6 +674,7 @@ static const NSUInteger kFilmstripGridCols = 5;
              MTLTextureUsagePixelFormatView;
   td.storageMode = MTLStorageModePrivate;
   slot.processedTexture = [self.device newTextureWithDescriptor:td];
+  return YES;
 }
 
 - (void)_ensureProcessedTexture {

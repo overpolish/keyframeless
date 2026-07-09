@@ -164,8 +164,26 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
       @"tag" : @(s.tag),
     }];
   }
-  if (slotEntries.count == 0)
+  if (slotEntries.count == 0) {
+    // Generator: no source frames, but publish the output media size so a
+    // consumer resolves `sourceMediaSize` (px-scaled value fields need it). The
+    // consumer synthesizes one source-less slot from the empty array and draws
+    // it via its own generate path.
+    if (_mediaSize.width > 0 && _mediaSize.height > 0) {
+      NSDictionary *dimsOnly = @{
+        @"srcWidth" : @(_mediaSize.width),
+        @"srcHeight" : @(_mediaSize.height),
+        @"ts" : @([NSDate timeIntervalSinceReferenceDate]),
+        @"slots" : @[],
+      };
+      NSData *json = [NSJSONSerialization dataWithJSONObject:dimsOnly
+                                                     options:0
+                                                       error:nil];
+      if (![json writeToFile:_descriptorPath atomically:YES])
+        KKLogWarn(@"KKMiniViewerFeed: failed to write %@", _descriptorPath);
+    }
     return;
+  }
 
   // Top-level keys at slot 0 stay for the single-slot fast path (so existing
   // consumers that don't know about `slots` keep working). New consumers

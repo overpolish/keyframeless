@@ -43,7 +43,7 @@
       (del && [del respondsToSelector:@selector(miniViewer:generateIntoTexture:
                                                 commandBuffer:)]);
   NSNumber *savedFrac =
-      canProcess && n > 1
+      (canProcess || canGenerate) && n > 1
           ? [(NSObject *)del valueForKey:@"editFraction"] // nil if absent
           : nil;
   // Tell the renderer how many slots it's about to iterate so subclasses
@@ -64,16 +64,24 @@
       BOOL generating = (!slot.sourceTexture && canGenerate);
       if (!slot.sourceTexture && !generating)
         continue;
-      [self _ensureProcessedTextureForSlot:slot];
+      BOOL recreatedTexture = [self _ensureProcessedTextureForSlot:slot];
       if (!slot.processedTexture)
         continue;
       // Interaction frame: the content can't have changed (only the view
       // transform), so skip the plugin effect re-render and reuse last frame's
       // processed texture. This is the big pan win - it nearly halves the frame
-      // and lets macOS deliver scroll events at full rate.
-      if (_reuseProcessedTexture)
+      // and lets macOS deliver scroll events at full rate. BUT if the texture
+      // was just (re)created this frame (zoom changed the content-rect pixel
+      // size, so the old texture was thrown away), the reused texture is blank
+      // - it MUST be re-rendered or the slot flashes black on zoom. Pan keeps
+      // the size, so it reuses intact.
+      if (_reuseProcessedTexture && !recreatedTexture)
         continue;
-      if (n > 1 && !generating) {
+      // Each slot renders its own keypose: point the renderer's editFraction at
+      // this slot's tag before the per-slot render. Applies to BOTH the source
+      // effect path and the generator path (a generator fans out its keyposes
+      // the same way, just with no source frame).
+      if (n > 1) {
         @try {
           [(NSObject *)del setValue:@(slot.tag) forKey:@"editFraction"];
         } @catch (...) {
@@ -426,9 +434,9 @@
                               encoder:enc];
       } else if (style == KKMiniHandleStyleRing) {
         // Haloed KKRingOSC ring (the shared radius-widget glyph). White fill +
-        // dark outline for legibility on any background (matches Canvas's corner
-        // ring), scaled with the OSC sizing ratio like the dot. Sizes match
-        // Canvas's corner-radius ring (CanvasMiniViewerRenderer+Pen.m
+        // dark outline for legibility on any background (matches Canvas's
+        // corner ring), scaled with the OSC sizing ratio like the dot. Sizes
+        // match Canvas's corner-radius ring (CanvasMiniViewerRenderer+Pen.m
         // penDrawRingAtObj:) so the two read identically in the mini-viewer,
         // as they already do in the main viewer.
         CGFloat cs = [self _canvasScale];

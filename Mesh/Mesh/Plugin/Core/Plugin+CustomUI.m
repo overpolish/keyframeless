@@ -4,19 +4,20 @@
  */
 
 #import "Constants.h"
-#import "Plugin_Private.h"
+#import "MeshColorSpace.h"
 #import "MeshInspectorView+Guides.h"
 #import "MeshInspectorView.h"
 #import "MeshLocalized.h"
 #import "MeshMiniViewerRenderer.h" // per-instance mini-viewer rendezvous paths
 #import "MeshOSCRadiusMath.h"
+#import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKHelpSection.h>
-#import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
 #import <KeyframelessKit/KKTimelineAIMerge.h>
+#import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
 #import <KeyframelessKit/KKTimingCompat.h>
 #import <KeyframelessKit/KKTimingStage.h>
 @import KeyframelessAI;
@@ -67,29 +68,37 @@ static NSString *_MeshAILaneSchemaText(void) {
 }
 
 + (NSArray<KKLane *> *)availableLanes {
-  KKLane *radius = [KKLane laneWithLabel:@"Radius"];
-  radius.valueType = KKLaneValueTypeFloat;
-  radius.componentMin = @[ @0.0 ];
-  radius.componentMax = @[ @100.0 ];
-  radius.componentUnits = @[ @"%" ];
-  // 0..100% shown with decimals: scrub by 1%/step, not the 0.01 the auto rule
-  // would pick for a 2-decimal field.
-  radius.scrubStep = 1.0;
-  // Template default == the product default constant (seeded when the
-  // property has no lane yet; keeps the constants editor in sync with the
-  // render fallback).
-  [radius insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @20.0 ]]];
-
-  KKLane *crop = [KKLane laneWithLabel:@"Crop"];
-  crop.valueType = KKLaneValueTypeCrop;
-  crop.componentMin = @[ @0.0, @0.0, @-0.5, @-0.5 ];
-  crop.componentMax = @[ @1.0, @1.0, @0.5, @0.5 ];
-  crop.componentUnits = @[ @"px", @"px", @"px", @"px" ];
-  crop.componentsScaleWithMedia = YES; // stored 0..1, displayed as pixels
-  [crop insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                        values:@[ @1.0, @1.0, @0.0, @0.0 ]]];
-
-  return @[ radius, crop ];
+  // One composite lane per point: [x, y, spread, r, g, b, a]. Generic "Point N"
+  // labels - a freeform set of colour points that grows/shrinks dynamically.
+  // KKLaneValueTypeColorPoint renders it as one row: X | Y | Spread fields
+  // (px, stored normalized) + an RGBA swatch. componentLabels count (3) = the
+  // number of leading numeric fields; the last 4 components are the swatch.
+  NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
+  for (int i = 0; i < KK_MESH_POINT_COUNT; i++) {
+    KKLane *pt = [KKLane laneWithLabel:MeshPointLabel(i)];
+    pt.valueType = KKLaneValueTypeColorPoint;
+    pt.componentLabels = @[ @"X", @"Y", @"Spread" ];
+    pt.autoSizesComponentLabels =
+        YES; // let "Spread" grow, not truncate to "Sp"
+    // X, Y: normalized 0..1, displayed as px (media-scaled, like
+    // Crop/Position). Spread: a literal percentage 2..100% (Glow-style); the
+    // "%" unit opts it out of media scaling even on a componentsScaleWithMedia
+    // lane.
+    pt.componentMin = @[ @0.0, @0.0, @0.0, @0.0, @0.0, @0.0, @0.0 ];
+    pt.componentMax = @[ @1.0, @1.0, @100.0, @1.0, @1.0, @1.0, @1.0 ];
+    pt.componentUnits = @[ @"px", @"px", @"%" ];
+    pt.componentsScaleWithMedia = YES;
+    const float *p = kMeshDefaultPositions[i];
+    const float *c = kMeshDefaultColorsSRGB[i];
+    [pt insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                        values:@[
+                                          @(p[0]), @(p[1]),
+                                          @(KK_MESH_DEFAULT_SPREAD * 100.0),
+                                          @(c[0]), @(c[1]), @(c[2]), @(c[3])
+                                        ]]];
+    [lanes addObject:pt];
+  }
+  return lanes;
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
@@ -150,13 +159,13 @@ static NSString *_MeshAILaneSchemaText(void) {
     [actionAPI endAction:self];
 
     NSArray<KKLane *> *available = [MeshPlugin availableLanes];
-    MeshInspectorView *view = [[MeshInspectorView alloc]
-           initWithAPIManager:self.apiManager
-                  loopEnabled:loopEnabled
-        maintainTimingEnabled:st.maintainTimingEnabled
-                    activeTab:activeTab
-               availableLanes:available
-                     timeline:timeline];
+    MeshInspectorView *view =
+        [[MeshInspectorView alloc] initWithAPIManager:self.apiManager
+                                          loopEnabled:loopEnabled
+                                maintainTimingEnabled:st.maintainTimingEnabled
+                                            activeTab:activeTab
+                                       availableLanes:available
+                                             timeline:timeline];
     // Per-instance rendezvous paths (keyed by the instance UUID minted above)
     // so two stacked Mesh clips read/write distinct /tmp files instead of the
     // clip below showing the top clip's source in its mini-viewer.
@@ -268,8 +277,7 @@ static NSString *_MeshAILaneSchemaText(void) {
                        [NSBundle bundleForClass:[KKOnScreenControl class]]];
     [KKAIKnowledge
         registerBundleDocsWithName:@"Mesh"
-                            bundle:[NSBundle
-                                       bundleForClass:[MeshPlugin class]]
+                            bundle:[NSBundle bundleForClass:[MeshPlugin class]]
                       subdirectory:@"AIKnowledge"];
     // Shared on-screen-control docs live in the kit framework (flattened to its
     // Resources root). Filter to just the topics Mesh actually uses - it has
@@ -377,87 +385,88 @@ static NSString *_MeshAILaneSchemaText(void) {
 
   __weak typeof(self) weakSelf = self;
   [KKAIPluginAgent
-             runWithPrompt:prompt
-            productContext:productContext
-            laneSchemaText:schema
-       currentTimelineJSON:currentJSON
-       clipDurationSeconds:clipDurSec
-      currentInspectorMode:currentMode
-     supportsLayerCreation:NO
-                completion:^(KKAIPluginResult *result, NSError *err) {
-                  dispatch_async(dispatch_get_main_queue(), ^{
-                    __strong typeof(weakSelf) strong = weakSelf;
-                    if (!strong)
-                      return;
-                    [KKAIDraft setRouting:NO];
-                    if (err) {
-                      KKLogError(@"AI[err] %@", err.localizedDescription);
-                      [KKAIDraft setError:err.localizedDescription];
-                      return;
-                    }
-                    if (!result) {
-                      KKLogError(@"AI[err] empty result");
-                      [KKAIDraft setError:@"Empty AI response."];
-                      return;
-                    }
-                    if (result.kind == KKAIPluginResultKindAnswer) {
-                      [KKAIDraft setAnswer:result.answer];
-                      return;
-                    }
-                    // The merge also snaps final keyposes to the last
-                    // renderable frame (FCP's last frame is one frame before
-                    // the clip end, so a keypose at 1.0 is never reached) -
-                    // clipDur from the prompt, frameDur from the process cache.
-                    NSString *merged = KKTimelineAIMergeMutationJSON(
-                        currentJSON, result.mutationJSON, clipDurSec,
-                        KKProcessFrameDurationSeconds());
-                    if (!merged) {
-                      KKLogError(@"AI[err] merge returned nil");
-                      [KKAIDraft
-                          setError:
-                              @"AI returned an invalid timeline mutation."];
-                      return;
-                    }
-                    id<FxCustomParameterActionAPI_v4> writeAct =
-                        [strong.apiManager
-                            apiForProtocol:@protocol(
-                                               FxCustomParameterActionAPI_v4)];
-                    if (!writeAct) {
-                      [KKAIDraft
-                          setError:@"Couldn't open the FCP action scope to "
-                                   @"apply the mutation."];
-                      return;
-                    }
-                    [writeAct startAction:strong];
-                    id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
-                        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-                    KKWriteCustomParamString(setAPI, merged,
-                                             kKKParamTimelineData);
+              runWithPrompt:prompt
+             productContext:productContext
+             laneSchemaText:schema
+        currentTimelineJSON:currentJSON
+        clipDurationSeconds:clipDurSec
+       currentInspectorMode:currentMode
+      supportsLayerCreation:NO
+                 completion:^(KKAIPluginResult *result, NSError *err) {
+                   dispatch_async(dispatch_get_main_queue(), ^{
+                     __strong typeof(weakSelf) strong = weakSelf;
+                     if (!strong)
+                       return;
+                     [KKAIDraft setRouting:NO];
+                     if (err) {
+                       KKLogError(@"AI[err] %@", err.localizedDescription);
+                       [KKAIDraft setError:err.localizedDescription];
+                       return;
+                     }
+                     if (!result) {
+                       KKLogError(@"AI[err] empty result");
+                       [KKAIDraft setError:@"Empty AI response."];
+                       return;
+                     }
+                     if (result.kind == KKAIPluginResultKindAnswer) {
+                       [KKAIDraft setAnswer:result.answer];
+                       return;
+                     }
+                     // The merge also snaps final keyposes to the last
+                     // renderable frame (FCP's last frame is one frame before
+                     // the clip end, so a keypose at 1.0 is never reached) -
+                     // clipDur from the prompt, frameDur from the process
+                     // cache.
+                     NSString *merged = KKTimelineAIMergeMutationJSON(
+                         currentJSON, result.mutationJSON, clipDurSec,
+                         KKProcessFrameDurationSeconds());
+                     if (!merged) {
+                       KKLogError(@"AI[err] merge returned nil");
+                       [KKAIDraft
+                           setError:
+                               @"AI returned an invalid timeline mutation."];
+                       return;
+                     }
+                     id<FxCustomParameterActionAPI_v4> writeAct =
+                         [strong.apiManager
+                             apiForProtocol:@protocol(
+                                                FxCustomParameterActionAPI_v4)];
+                     if (!writeAct) {
+                       [KKAIDraft
+                           setError:@"Couldn't open the FCP action scope to "
+                                    @"apply the mutation."];
+                       return;
+                     }
+                     [writeAct startAction:strong];
+                     id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
+                         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+                     KKWriteCustomParamString(setAPI, merged,
+                                              kKKParamTimelineData);
 
-                    // If the new timeline isn't representable in Basic, force
-                    // the inspector to Advanced so the user sees the actual
-                    // structure. Keeping the activeTab on Basic when the data
-                    // is Advanced-only shows the compatibility banner instead
-                    // of the new animation.
-                    KKTimeline *resultTimeline =
-                        [KKTimeline timelineFromJSON:merged];
-                    double mergeFrameDur = KKProcessFrameDurationSeconds();
-                    double aiEndFrac =
-                        (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
-                         mergeFrameDur < clipDurSec)
-                            ? (clipDurSec - mergeFrameDur) / clipDurSec
-                            : 1.0;
-                    if (resultTimeline && !KKTimelineIsBasicCompatible(
-                                              resultTimeline, aiEndFrac)) {
-                      [strong patchUIStateKey:@"activeTab"
-                                        value:@(1)
-                                      paramID:kParamUIState];
-                    }
-                    [writeAct endAction:strong];
-                    [KKAIDraft setAnswer:nil];
-                    [KKAIDraft clearPrompt];
-                  });
-                }];
+                     // If the new timeline isn't representable in Basic, force
+                     // the inspector to Advanced so the user sees the actual
+                     // structure. Keeping the activeTab on Basic when the data
+                     // is Advanced-only shows the compatibility banner instead
+                     // of the new animation.
+                     KKTimeline *resultTimeline =
+                         [KKTimeline timelineFromJSON:merged];
+                     double mergeFrameDur = KKProcessFrameDurationSeconds();
+                     double aiEndFrac =
+                         (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
+                          mergeFrameDur < clipDurSec)
+                             ? (clipDurSec - mergeFrameDur) / clipDurSec
+                             : 1.0;
+                     if (resultTimeline && !KKTimelineIsBasicCompatible(
+                                               resultTimeline, aiEndFrac)) {
+                       [strong patchUIStateKey:@"activeTab"
+                                         value:@(1)
+                                       paramID:kParamUIState];
+                     }
+                     [writeAct endAction:strong];
+                     [KKAIDraft setAnswer:nil];
+                     [KKAIDraft clearPrompt];
+                   });
+                 }];
 }
 
 - (nullable NSString *)helpHeaderTitle {
