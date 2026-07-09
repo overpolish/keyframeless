@@ -41,8 +41,10 @@ static float3 srgb_to_linear(float3 c) {
     return select(hi, lo, c <= 0.04045);
 }
 
-// --- Mesh Gradient: ported from paper-design/shaders (Apache-2.0), GLSL ->
-// MSL. Animated colour spots warped by noise distortion + swirl, blended by
+// --- Mesh Gradient: translated (GLSL -> MSL) and modified from the
+// mesh-gradient shader in paper-design/shaders (Apache-2.0). See
+// THIRD-PARTY-NOTICES.md at the repo root for the licence text + attribution.
+// Animated colour spots warped by noise distortion + swirl, blended by
 // inverse-distance, with an in-shader grain mixer + overlay. Colours are
 // straight sRGB; all maths stay in gamma space (as the source does), then the
 // final colour is linearised for FCP's float buffer via the EncodeSRGB path.
