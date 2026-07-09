@@ -91,6 +91,15 @@ fragment float4 fragmentShader(RasterizerData in [[stage_in]],
     // Origin shifts the whole field. Matches the OSC drag direction (uv here is
     // y-down, so no y-flip on the origin offset).
     float2 uv = in.textureCoordinate - (u.origin - 0.5);
+    // Common Scale (zoom) + Rotation transform the field about its centre. This
+    // shader samples in y-down UV (no y-flip), so negate the rotation to match
+    // the other (y-up) types' direction.
+    {
+        float2 c = uv - 0.5;
+        c = mg_rotate(c, -u.rotation);
+        c /= max(u.scale, float2(0.01));
+        uv = c + 0.5;
+    }
 
     float grain = mg_noise(grainUV, float2(0.0));
     float mixerGrain = 0.4 * u.grainMixer * (grain - 0.5);
@@ -237,7 +246,7 @@ static float dth_getBayerValue(float2 uv, int size) {
 // is proportional and identical across render sizes; the fragment supersamples
 // this to downscale cleanly for the small viewers.
 static float dth_evaluate(float2 fragCoord, float2 refRes, float t, float pxSize, int shapeType, int ditherType,
-                          float2 origin) {
+                          float2 origin, float2 scale, float rotation) {
     float2 pxSizeUV = (fragCoord - 0.5 * refRes) / pxSize;
     float2 canvasPixelizedUV = (floor(pxSizeUV) + 0.5) * pxSize;
     float2 normalizedUV = canvasPixelizedUV / refRes;
@@ -246,6 +255,11 @@ static float dth_evaluate(float2 fragCoord, float2 refRes, float t, float pxSize
     // Origin shifts the shape (normalizedUV is y-up, so flip the origin y to
     // match the OSC drag direction). 0.5,0.5 = centre.
     normalizedUV -= float2(origin.x - 0.5, 0.5 - origin.y);
+
+    // Common Scale (zoom) + Rotation about the centre. normalizedUV is centred
+    // near 0, so transform it directly.
+    normalizedUV = mg_rotate(normalizedUV, rotation);
+    normalizedUV /= max(scale, float2(0.01));
 
     // Pattern shapes (1..3) in centred ref-pixel space; object shapes (4..6)
     // aspect-scaled.
@@ -334,7 +348,7 @@ fragment float4 ditheringFragment(RasterizerData in [[stage_in]],
         for (int i = 0; i < ss; i++) {
             float2 sub = (float2(float(i), float(j)) + 0.5) / float(ss) - 0.5;
             float2 uvss = uvyup + sub / res; // offset within this output pixel
-            cov += dth_evaluate(uvss * refRes, refRes, t, pxSize, u.shape, u.type, u.origin);
+            cov += dth_evaluate(uvss * refRes, refRes, t, pxSize, u.shape, u.type, u.origin, u.scale, u.rotation);
         }
     }
     cov /= float(ss * ss); // fractional ink coverage 0..1
@@ -436,6 +450,9 @@ fragment float4 grainGradientFragment(RasterizerData in [[stage_in]],
     // 4..7. v_patternUV: a tiled pattern coordinate for shapes 1..3.
     float2 vObjectUV = uv - 0.5;
     vObjectUV.x *= aspect;
+    // Common Scale (zoom) + Rotation about the centre.
+    vObjectUV = mg_rotate(vObjectUV, u.rotation);
+    vObjectUV /= max(u.scale, float2(0.01));
     float2 vPatternUV = vObjectUV * GG_PATTERN_TILES;
 
     int shapeType = u.shape;
@@ -594,6 +611,9 @@ fragment float4 warpFragment(RasterizerData in [[stage_in]],
     uvn -= float2(u.origin.x - 0.5, 0.5 - u.origin.y);
     float2 vPatternUV = uvn - 0.5;
     vPatternUV.x *= aspect;
+    // Common Scale (zoom) + Rotation about the centre.
+    vPatternUV = mg_rotate(vPatternUV, u.rotation);
+    vPatternUV /= max(u.scale, float2(0.01));
     vPatternUV *= WARP_PATTERN_TILES;
 
     float2 uv = vPatternUV;

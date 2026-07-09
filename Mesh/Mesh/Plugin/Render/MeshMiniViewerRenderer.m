@@ -8,6 +8,7 @@
 #import "MeshColorSpace.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKPositionMiniController.h>
+#import <KeyframelessKit/KKScaleMiniController.h>
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <Metal/Metal.h>
@@ -31,16 +32,11 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
       [NSString stringWithFormat:@"/tmp/mesh-miniviewer-request-%@.json", uuid];
 }
 
-// Mini-viewer analog of the viewer OSC's `oscSize` (KKPointOSC oscRadius +
-// outline). Kept in sync with KKMiniViewerView's kKKMiniHandleOuterPt so
-// placement, hit-test and the drawn glyph all agree.
-static inline CGFloat MiniOscSize(void) { return 4.5; }
-static const CGFloat kHandleHitTolPt = 12.0;
-
 @implementation MeshMiniViewerRenderer {
   NSMutableDictionary<NSString *, id<MTLRenderPipelineState>> *_pipelines;
   MTLPixelFormat _pipelineFormat;
   KKPositionMiniController *_originMini;
+  KKScaleMiniController *_scaleMini;
 }
 
 // Mini-viewer Origin handle: the reusable Position controller, keyed on the
@@ -55,6 +51,37 @@ static const CGFloat kHandleHitTolPt = 12.0;
   return _originMini;
 }
 
+// Mini-viewer Scale box: the reusable Scale controller, keyed on the "Scale"
+// lane (mirrors the main viewer's KKScaleOSC). Concentric with the Origin pivot
+// (see -rotationCenterForContentRect:).
+- (KKScaleMiniController *)scaleMini {
+  if (!_scaleMini)
+    _scaleMini = [[KKScaleMiniController alloc] initWithRenderer:self
+                                                       laneLabel:@"Scale"];
+  return _scaleMini;
+}
+
+// The Scale box centres on the Origin point. Reuse the Origin controller's
+// placement for the current Origin value.
+- (CGPoint)rotationCenterForContentRect:(CGRect)cr {
+  CGPoint c = CGPointZero;
+  NSArray<NSNumber *> *o = [self valuesForLabel:@"Origin"];
+  if (o.count >= 2 && [self.originMini pointHandleCenter:&c
+                                               forValues:o
+                                          forContentRect:cr])
+    return c;
+  if ([self.originMini pointHandleCenter:&c forContentRect:cr])
+    return c;
+  return CGPointMake(CGRectGetMidX(cr), CGRectGetMidY(cr));
+}
+
+- (KKLane *)templateLaneForLabel:(NSString *)label {
+  for (KKLane *l in self.laneTemplates)
+    if ([l.label isEqualToString:label])
+      return l;
+  return [super templateLaneForLabel:label];
+}
+
 // The Origin handle is the reusable Position control (arc glyph); the base
 // renderer draws + drags it keyed on `pointLabel`. No crop handle.
 - (NSString *)cropLabel {
@@ -66,11 +93,30 @@ static const CGFloat kHandleHitTolPt = 12.0;
 - (KKMiniHandleStyle)pointHandleStyle {
   return KKMiniHandleStyleArc;
 }
+// The Origin handle is the arc (above); this only sizes the Scale box's corner
+// handles - shrink them so they aren't oversized (matches MagicMove).
+- (CGFloat)pointHandleSizeScale {
+  return 0.6;
+}
+// The Origin arc draws on top of the Scale box + rotation ring, so the
+// hit-test / drag prefer it where they overlap.
+- (BOOL)pointHandleBeatsRotation {
+  return YES;
+}
+// Opt into the base mini rotation gizmo, Z axis only (2D pattern), keyed on the
+// 1-component "Rotation" lane and centred on the Origin pivot (see
+// -rotationCenterForContentRect:).
+- (NSString *)rotationLabel {
+  return @"Rotation";
+}
+- (KKRotationAxes)rotationEnabledAxes {
+  return KKRotationAxisZ;
+}
 - (NSInteger)valueTypeForLabel:(NSString *)label {
   if ([label hasPrefix:@"Color "] || [label isEqualToString:@"Background"] ||
       [label isEqualToString:@"Foreground"])
     return KKLaneValueTypeColor;
-  if ([label isEqualToString:@"Origin"])
+  if ([label isEqualToString:@"Origin"] || [label isEqualToString:@"Scale"])
     return KKLaneValueTypeGeneric;
   return KKLaneValueTypeFloat;
 }
@@ -120,6 +166,10 @@ static const CGFloat kHandleHitTolPt = 12.0;
     return @[ @(KK_WARP_DEFAULT_SWIRLITER) ];
   if ([label isEqualToString:@"Base"])
     return @[ @(KK_WARP_DEFAULT_SHAPE) ];
+  if ([label isEqualToString:@"Scale"])
+    return @[ @100.0, @100.0 ];
+  if ([label isEqualToString:@"Rotation"])
+    return @[ @0.0 ];
   if ([label isEqualToString:@"Origin"])
     return @[ @0.5, @0.5 ];
   return [super defaultValuesForLabel:label];
@@ -221,6 +271,15 @@ static const CGFloat kHandleHitTolPt = 12.0;
       (originV.count >= 2)
           ? (vector_float2){originV[0].floatValue, originV[1].floatValue}
           : (vector_float2){0.5f, 0.5f};
+  // Common transforms: Scale stored as percent (100 = 1x), Rotation in degrees.
+  NSArray<NSNumber *> *scaleV = [self valuesForLabel:@"Scale"];
+  NSArray<NSNumber *> *rotV = [self valuesForLabel:@"Rotation"];
+  vector_float2 scaleShared =
+      (scaleV.count >= 2) ? (vector_float2){scaleV[0].floatValue / 100.0f,
+                                            scaleV[1].floatValue / 100.0f}
+                          : (vector_float2){1.0f, 1.0f};
+  float rotationShared =
+      rotV.count ? rotV[0].floatValue * (float)(M_PI / 180.0) : 0.0f;
 
   [e setRenderPipelineState:pipeline];
   [e setVertexBytes:verts
@@ -254,6 +313,8 @@ static const CGFloat kHandleHitTolPt = 12.0;
     d.speed = speedV.count ? speedV[0].floatValue : KK_DITHER_DEFAULT_SPEED;
     d.seed = seedShared;
     d.origin = originShared;
+    d.scale = scaleShared;
+    d.rotation = rotationShared;
     d.resolution = (vector_float2){W, H};
     d.time = timeSec;
     [e setFragmentBytes:&d length:sizeof(d) atIndex:MeshFragmentIndex_Grid];
@@ -294,6 +355,8 @@ static const CGFloat kHandleHitTolPt = 12.0;
     g.speed = speedV.count ? speedV[0].floatValue : KK_GRAIN_DEFAULT_SPEED;
     g.seed = seedShared;
     g.origin = originShared;
+    g.scale = scaleShared;
+    g.rotation = rotationShared;
     g.resolution = (vector_float2){W, H};
     g.time = timeSec;
     [e setFragmentBytes:&g length:sizeof(g) atIndex:MeshFragmentIndex_Grid];
@@ -313,7 +376,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
     w.colorsCount = wCount > 0 ? wCount : 1;
     NSArray<NSNumber *> *propV = [self valuesForLabel:@"Proportion"];
     NSArray<NSNumber *> *softV = [self valuesForLabel:@"Softness"];
-    NSArray<NSNumber *> *scaleV = [self valuesForLabel:@"Shape Scale"];
+    NSArray<NSNumber *> *shapeScaleV = [self valuesForLabel:@"Shape Scale"];
     NSArray<NSNumber *> *distV = [self valuesForLabel:@"Distortion"];
     NSArray<NSNumber *> *swirlV = [self valuesForLabel:@"Swirl"];
     NSArray<NSNumber *> *swirlIterV = [self valuesForLabel:@"Swirl Iterations"];
@@ -323,8 +386,8 @@ static const CGFloat kHandleHitTolPt = 12.0;
         propV.count ? propV[0].floatValue / 100.0f : KK_WARP_DEFAULT_PROPORTION;
     w.softness =
         softV.count ? softV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_SOFTNESS;
-    w.shapeScale = scaleV.count ? scaleV[0].floatValue / 100.0f
-                                : KK_WARP_DEFAULT_SHAPESCALE;
+    w.shapeScale = shapeScaleV.count ? shapeScaleV[0].floatValue / 100.0f
+                                     : KK_WARP_DEFAULT_SHAPESCALE;
     w.distortion = distV.count ? distV[0].floatValue / 100.0f
                                : KK_MESH_GRAD_DEFAULT_DISTORTION;
     w.swirl = swirlV.count ? swirlV[0].floatValue / 100.0f
@@ -336,6 +399,8 @@ static const CGFloat kHandleHitTolPt = 12.0;
     w.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
     w.seed = seedShared;
     w.origin = originShared;
+    w.scale = scaleShared;
+    w.rotation = rotationShared;
     w.resolution = (vector_float2){W, H};
     w.time = timeSec;
     [e setFragmentBytes:&w length:sizeof(w) atIndex:MeshFragmentIndex_Grid];
@@ -373,6 +438,8 @@ static const CGFloat kHandleHitTolPt = 12.0;
                                  : KK_MESH_GRAD_DEFAULT_GRAINMIXER;
     grid.grainOverlay =
         grainV.count ? grainV[0].floatValue / 100.0f : KK_MESH_DEFAULT_GRAIN;
+    grid.scale = scaleShared;
+    grid.rotation = rotationShared;
     grid.time = timeSec;
     [e setFragmentBytes:&grid
                  length:sizeof(grid)
@@ -453,17 +520,36 @@ static const CGFloat kHandleHitTolPt = 12.0;
   return [self ghostAlphaForLabel:@"Path"];
 }
 
+// Scale transform box: geometry + hit-test + drag live in the reusable
+// KKScaleMiniController; these are the thin delegate forwards.
+- (NSArray<KKMiniBox *> *)miniViewer:(KKMiniViewerView *)canvas
+                 boxesForContentRect:(CGRect)cr {
+  NSMutableArray<KKMiniBox *> *boxes = [[super miniViewer:canvas
+                                      boxesForContentRect:cr] mutableCopy];
+  CGRect sb;
+  if ([self.scaleMini boxRect:&sb forContentRect:cr]) {
+    [boxes addObject:[KKMiniBox boxWithRect:sb
+                              handleCenters:[self.scaleMini
+                                                handleCentersForContentRect:cr]
+                                    readout:[self.scaleMini readoutText]
+                                 ghostAlpha:[self.scaleMini ghostAlpha]]];
+  }
+  return boxes;
+}
+
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     handleHitAtPoint:(CGPoint)p
          contentRect:(CGRect)cr {
   self.canvas = canvas;
   // Constant Origin handle first, then the motion-path tangents / anchors,
-  // then the base (crop/rotation - none here).
+  // then the Scale box, then the base (crop/rotation - none here).
   if ([self pointHandleHitAtPoint:p contentRect:cr])
     return YES;
   if ([self.originMini pathHandleHitAtPoint:p contentRect:cr])
     return YES;
   if ([self.originMini pathAnchorHitAtPoint:p contentRect:cr])
+    return YES;
+  if ([self.scaleMini handleHitAtPoint:p contentRect:cr outIndex:NULL])
     return YES;
   return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
 }
@@ -480,6 +566,10 @@ static const CGFloat kHandleHitTolPt = 12.0;
   if ([self.originMini pathHandleHitAtPoint:p contentRect:cr] ||
       [self.originMini pathAnchorHitAtPoint:p contentRect:cr])
     return [self kkVisibilityCursorForLabel:@"Path"] ?: KKPointMoveCursor();
+  NSInteger scaleIdx;
+  if ([self.scaleMini handleHitAtPoint:p contentRect:cr outIndex:&scaleIdx])
+    return [self kkVisibilityCursorForLabel:@"Scale"]
+               ?: KKResizeCursorForBoxHandle(scaleIdx);
   return [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
 }
 
@@ -495,6 +585,8 @@ static const CGFloat kHandleHitTolPt = 12.0;
   }
   if ([self.originMini beginPathDragAtPoint:p contentRect:cr])
     return;
+  if ([self.scaleMini beginDragAtPoint:p contentRect:cr])
+    return;
   [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
 }
 
@@ -504,6 +596,13 @@ static const CGFloat kHandleHitTolPt = 12.0;
             modifiers:(NSEventModifierFlags)modifiers {
   if (self.originMini.pathGrabbed) {
     [self.originMini applyPathDragToPoint:p contentRect:cr modifiers:modifiers];
+    return;
+  }
+  if (self.scaleMini.isDragging) {
+    [self.scaleMini applyDragToPoint:p
+                         contentRect:cr
+                           modifiers:modifiers
+                              canvas:canvas];
     return;
   }
   if (![self pointHandleIsActive]) {
@@ -541,6 +640,13 @@ static const CGFloat kHandleHitTolPt = 12.0;
     [canvas setHandlesNeedDisplay];
     return YES;
   }
+  if (self.onHandleVisibilityToggled &&
+      [self.scaleMini handleHitAtPoint:p contentRect:cr outIndex:NULL]) {
+    self.onHandleVisibilityToggled(@"Scale");
+    [canvas setNeedsDisplay:YES];
+    [canvas setHandlesNeedDisplay];
+    return YES;
+  }
   return NO;
 }
 
@@ -560,6 +666,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
 }
 
 - (void)miniViewerEndHandleDrag:(KKMiniViewerView *)canvas {
+  [self.scaleMini endDrag];
   // endDrag resets the snap engine and reports whether a motion-path drag was
   // active (so the host persists the full blob).
   if ([self.originMini endDrag]) {

@@ -13,6 +13,10 @@ static NSString *const kPluginID = @"co.overpolish.keyframeless.Mesh";
 // the motion-path tangent handle.
 static const NSInteger kOSCPositionPart = 100;
 static const NSInteger kOSCPathHandlePart = 101;
+// Scale transform-box OSC (main viewer), centred on the Origin pivot.
+static const NSInteger kOSCScalePart = 102;
+// Rotation ring gizmo (main viewer, Z axis only), centred on the Origin pivot.
+static const NSInteger kOSCRotationPart = 103;
 
 /// Posted on the main queue when the OSC handle's screen position updates;
 /// the plugin returns this as its help-guide refresh notification.

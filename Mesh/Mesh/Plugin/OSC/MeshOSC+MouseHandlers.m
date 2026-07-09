@@ -68,6 +68,25 @@
                             forceUpdate:forceUpdate
                                  atTime:time];
   }
+  // The Scale box owns its own press capture; centre it on the Origin pivot
+  // first (mouseDown reads the hit handle from the preceding hit-test).
+  if (activePart == kOSCScalePart) {
+    self.scaleControl.center = [self oscPositionAtTime:time];
+    self.scaleControl.frameMin = [self onScreenFrameMin];
+    [self.scaleControl mouseDownAtX:positionX
+                                  y:positionY
+                          modifiers:modifiers
+                        forceUpdate:forceUpdate
+                             atTime:time];
+  }
+  if (activePart == kOSCRotationPart) {
+    self.rotationControl.center = [self oscPositionAtTime:time];
+    [self.rotationControl mouseDownAtX:positionX
+                                     y:positionY
+                             modifiers:modifiers
+                           forceUpdate:forceUpdate
+                                atTime:time];
+  }
   // Advance the inspector timing guide (legacy plumbing, harmless when idle).
   if (MeshSharedOSCGuideBridge().guideStep == 1) {
     MeshSharedOSCGuideBridge().guideStep = 2;
@@ -96,6 +115,25 @@
                                     atTime:time];
     return;
   }
+  if (activePart == kOSCScalePart) {
+    self.scaleControl.center = [self oscPositionAtTime:time];
+    self.scaleControl.frameMin = [self onScreenFrameMin];
+    [self.scaleControl mouseDraggedAtX:positionX
+                                     y:positionY
+                             modifiers:modifiers
+                           forceUpdate:forceUpdate
+                                atTime:time];
+    return;
+  }
+  if (activePart == kOSCRotationPart) {
+    self.rotationControl.center = [self oscPositionAtTime:time];
+    [self.rotationControl mouseDraggedAtX:positionX
+                                        y:positionY
+                                modifiers:modifiers
+                              forceUpdate:forceUpdate
+                                   atTime:time];
+    return;
+  }
   if (activePart != kOSCPositionPart)
     return;
   [self.originController
@@ -116,6 +154,8 @@
                     atTime:(CMTime)time {
   [self kkResetOptHideArming];
   [self.originController mouseUp];
+  [self.scaleControl mouseUp];
+  [self.rotationControl mouseUp];
   if (MeshSharedOSCGuideBridge().guideStep == 2 && self.isDragging) {
     MeshSharedOSCGuideBridge().guideStep = 3;
     *forceUpdate = YES;

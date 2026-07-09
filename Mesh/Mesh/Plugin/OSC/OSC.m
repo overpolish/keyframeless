@@ -106,9 +106,27 @@ double MeshGuideRadiusForScreenPoint(NSPoint screenPt) {
                                                         pathLabel:@"Path"];
     _originController.positionActivePart = kOSCPositionPart;
     _originController.tangentActivePart = kOSCPathHandlePart;
-    for (KKLane *l in [MeshPlugin availableLanes])
+    // The Scale transform box is the reusable KKScaleOSC, keyed on the "Scale"
+    // lane. It centres on the Origin pivot and scales symmetrically (no anchor
+    // lane), matching the shader's about-the-Origin zoom.
+    _scaleControl = [[KKScaleOSC alloc] initWithAPIManager:apiManager
+                                                 laneLabel:@"Scale"];
+    _scaleControl.scaleActivePart = kOSCScalePart;
+    _scaleControl.anchorLaneLabel = nil;
+    // Rotation ring gizmo, Z axis only (2D pattern), keyed on the 1-component
+    // "Rotation" lane.
+    _rotationControl = [[KKRotationOSC alloc] initWithAPIManager:apiManager
+                                                       laneLabel:@"Rotation"];
+    _rotationControl.rotationActivePart = kOSCRotationPart;
+    _rotationControl.enabledAxes = KKRotationAxisZ;
+    for (KKLane *l in [MeshPlugin availableLanes]) {
       if ([l.label isEqualToString:@"Origin"])
         _originController.templateLane = l;
+      if ([l.label isEqualToString:@"Scale"])
+        _scaleControl.templateLane = l;
+      if ([l.label isEqualToString:@"Rotation"])
+        _rotationControl.templateLane = l;
+    }
     sCurrentOSC = self;
   }
   return self;
@@ -167,8 +185,17 @@ double MeshGuideRadiusForScreenPoint(NSPoint screenPt) {
   return [self.originController positionCanvasAtTime:time];
 }
 
+// The on-screen frame's min side in canvas units, sizing the Scale gizmo. The
+// object rect [0,1]x[0,1] maps to canvas at bottom-left / top-right.
+- (double)onScreenFrameMin {
+  CGPoint tr = {0, 0}, bl = {0, 0};
+  if (![self getCanvasTopRight:&tr bottomLeft:&bl])
+    return 0.0;
+  return fmin(fabs(tr.x - bl.x), fabs(tr.y - bl.y));
+}
+
 - (NSArray<NSString *> *)oscElementKeys {
-  return @[ @"Origin", @"Path" ];
+  return @[ @"Origin", @"Path", @"Scale", @"Rotation" ];
 }
 
 - (nullable NSString *)oscElementKeyForActivePart:(NSInteger)activePart {
@@ -176,6 +203,10 @@ double MeshGuideRadiusForScreenPoint(NSPoint screenPt) {
     return @"Origin";
   if (activePart == kOSCPathHandlePart)
     return @"Path";
+  if (activePart == kOSCScalePart)
+    return @"Scale";
+  if (activePart == kOSCRotationPart)
+    return @"Rotation";
   return nil;
 }
 
@@ -219,6 +250,22 @@ double MeshGuideRadiusForScreenPoint(NSPoint screenPt) {
   [self.originController drawPathInDestination:destinationImage
                                         atTime:time
                                     activePart:activePart];
+  // The Scale box centres on the Origin pivot; draw it under the arc handle so
+  // the arc stays easy to grab.
+  self.scaleControl.center = handlePos;
+  self.scaleControl.frameMin = [self onScreenFrameMin];
+  self.scaleControl.dragging = self.isDragging;
+  self.scaleControl.optRevealActive = self.optRevealActive;
+  [self.scaleControl drawInDestination:destinationImage
+                                atTime:time
+                            activePart:activePart];
+  // The Rotation ring gizmo, also centred on the Origin pivot.
+  self.rotationControl.center = handlePos;
+  self.rotationControl.dragging = self.isDragging;
+  self.rotationControl.optRevealActive = self.optRevealActive;
+  [self.rotationControl drawInDestination:destinationImage
+                                   atTime:time
+                               activePart:activePart];
   [self.originController drawHandleInDestination:destinationImage
                                           atTime:time
                                       activePart:activePart];
@@ -238,6 +285,26 @@ double MeshGuideRadiusForScreenPoint(NSPoint screenPt) {
   if (ph != KKPositionHitNone)
     *activePart = (ph == KKPositionHitTangentHandle) ? kOSCPathHandlePart
                                                      : kOSCPositionPart;
+
+  // The Origin handle wins over the gizmos; only hit them when the Origin
+  // controller didn't claim the point. Scale box before the rotation ring.
+  if (*activePart == 0) {
+    self.scaleControl.center = [self oscPositionAtTime:time];
+    self.scaleControl.frameMin = [self onScreenFrameMin];
+    self.scaleControl.optRevealActive = self.optRevealActive;
+    if ([self.scaleControl hitTestHandleAtX:positionX
+                                          y:positionY
+                                     atTime:time] >= 0)
+      *activePart = kOSCScalePart;
+  }
+  if (*activePart == 0) {
+    self.rotationControl.center = [self oscPositionAtTime:time];
+    self.rotationControl.optRevealActive = self.optRevealActive;
+    if ([self.rotationControl hitTestRingAtX:positionX
+                                           y:positionY
+                                      atTime:time] >= 0)
+      *activePart = kOSCRotationPart;
+  }
 
   // The only place screen + canvas coords arrive together: feed the guide
   // bridge (velocity-gated re-anchor + viewer-rect recompute + position

@@ -144,6 +144,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// subclass must also override the rotation hooks below.
 @property(nonatomic, readonly, nullable) NSString *rotationLabel;
 
+/// Which Euler axes the rotation lane drives (see KKRotationAxes). Default
+/// `KKRotationAxesAll` (classic 3-component [X,Y,Z] lane). A 2D plugin
+/// overrides this to `KKRotationAxisZ` so the mini gizmo shows only the Z ring
+/// and reads/writes a 1-component lane - matching the viewer `KKRotationOSC`.
+- (KKRotationAxes)rotationEnabledAxes;
+
 /// Persist a full mutated timeline. Mini-viewer motion-path edits (dragging an
 /// arbitrary keypose anchor or a tangent handle) rewrite the whole blob, unlike
 /// `commitValues:forLabel:` which writes a single label's value at

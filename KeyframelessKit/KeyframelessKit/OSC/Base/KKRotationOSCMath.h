@@ -21,6 +21,19 @@ typedef struct {
   simd_float3 col2;
 } KKRotMatrix3;
 
+/// Which Euler axes a rotation control drives. The bound lane carries one
+/// component per enabled axis, in X, Y, Z order (Z-only = a 1-component lane
+/// holding the Z angle; the default X|Y|Z = the classic 3-component lane). A
+/// disabled axis is never drawn, hit-tested, or written - so a 2D plugin can
+/// reuse the gizmo (viewer `KKRotationOSC` + mini-viewer renderer) with a
+/// single Z rotation. Shared here so both the viewer + mini sides agree.
+typedef enum {
+  KKRotationAxisX = 1 << 0,
+  KKRotationAxisY = 1 << 1,
+  KKRotationAxisZ = 1 << 2,
+  KKRotationAxesAll = KKRotationAxisX | KKRotationAxisY | KKRotationAxisZ,
+} KKRotationAxes;
+
 /// World matrix R = Ry * Rx * Rz (matches MagicMove.metal's order).
 static inline KKRotMatrix3 KKBuildRotationMatrix(float rx, float ry, float rz) {
   float cx = cosf(rx), sx = sinf(rx);

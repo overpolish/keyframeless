@@ -31,6 +31,10 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// the Mesh shader render and the radius point-handle (its OSC math).
 /// MRR (non-ARC).
 @interface MeshMiniViewerRenderer : KKMiniViewerRenderer
+/// The plugin's lane templates (`+[MeshPlugin availableLanes]`), set by the
+/// inspector. Used by `-templateLaneForLabel:` so the Scale box reads the
+/// aspect-link default for an untouched (not-yet-in-timeline) constant Scale.
+@property(nonatomic, copy, nullable) NSArray<KKLane *> *laneTemplates;
 @end
 
 NS_ASSUME_NONNULL_END

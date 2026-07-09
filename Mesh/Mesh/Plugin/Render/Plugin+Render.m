@@ -132,6 +132,18 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
       (originV.count >= 2)
           ? (vector_float2){originV[0].floatValue, originV[1].floatValue}
           : (vector_float2){0.5f, 0.5f};
+  // Common transforms (all types): Scale stored as percent (100 = 1x), Rotation
+  // stored in degrees; the shaders want a factor + radians.
+  NSArray<NSNumber *> *scaleV =
+      MeshLaneValuesAtFraction(timeline, @"Scale", frac);
+  NSArray<NSNumber *> *rotV =
+      MeshLaneValuesAtFraction(timeline, @"Rotation", frac);
+  vector_float2 scale = (scaleV.count >= 2)
+                            ? (vector_float2){scaleV[0].floatValue / 100.0f,
+                                              scaleV[1].floatValue / 100.0f}
+                            : (vector_float2){1.0f, 1.0f};
+  float rotation =
+      rotV.count ? rotV[0].floatValue * (float)(M_PI / 180.0) : 0.0f;
   float timeSec = (float)(frac * durSec);
 
   // --- Mesh: a flat list of colour swatches (the shader places the spots) +
@@ -171,6 +183,8 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
                             : KK_MESH_GRAD_DEFAULT_GRAINMIXER;
   u.grainOverlay =
       grainV.count ? grainV[0].floatValue / 100.0f : KK_MESH_DEFAULT_GRAIN;
+  u.scale = scale;
+  u.rotation = rotation;
   u.time = timeSec;
   outState->mesh = u;
 
@@ -203,6 +217,8 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   d.speed = speed;
   d.seed = seed;
   d.origin = origin;
+  d.scale = scale;
+  d.rotation = rotation;
   d.time = timeSec;
   outState->dithering = d;
 
@@ -248,6 +264,8 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   g.speed = speed;
   g.seed = seed;
   g.origin = origin;
+  g.scale = scale;
+  g.rotation = rotation;
   g.time = timeSec;
   outState->grain = g;
 
@@ -294,6 +312,8 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   w.speed = speed;
   w.seed = seed;
   w.origin = origin;
+  w.scale = scale;
+  w.rotation = rotation;
   w.time = timeSec;
   outState->warp = w;
   return YES;

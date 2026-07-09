@@ -15,6 +15,49 @@
 #import <KeyframelessKit/KKRenderPrimitives.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
+KKLane *KKRotationLaneWithLabel(NSString *label, KKRotationAxes axes) {
+  if (axes == 0)
+    axes = KKRotationAxesAll;
+  // Standard 3D-axis tint convention (Motion / Blender / Maya): X=red, Y=green,
+  // Z=blue, slightly desaturated for the inspector.
+  NSColor *cx = [NSColor colorWithSRGBRed:0.95 green:0.35 blue:0.35 alpha:1.0];
+  NSColor *cy = [NSColor colorWithSRGBRed:0.40 green:0.85 blue:0.45 alpha:1.0];
+  NSColor *cz = [NSColor colorWithSRGBRed:0.40 green:0.60 blue:0.95 alpha:1.0];
+  NSMutableArray<NSString *> *units = [NSMutableArray array];
+  NSMutableArray<NSString *> *labels = [NSMutableArray array];
+  NSMutableArray<NSColor *> *colors = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *zeros = [NSMutableArray array];
+  if (axes & KKRotationAxisX) {
+    [units addObject:@"°"];
+    [labels addObject:@"X"];
+    [colors addObject:cx];
+    [zeros addObject:@0.0];
+  }
+  if (axes & KKRotationAxisY) {
+    [units addObject:@"°"];
+    [labels addObject:@"Y"];
+    [colors addObject:cy];
+    [zeros addObject:@0.0];
+  }
+  if (axes & KKRotationAxisZ) {
+    [units addObject:@"°"];
+    [labels addObject:@"Z"];
+    [colors addObject:cz];
+    [zeros addObject:@0.0];
+  }
+  KKLane *lane = [KKLane laneWithLabel:label];
+  lane.valueType = KKLaneValueTypeAngle;
+  // Knobs cover one revolution visually but values accumulate past 360°
+  // (2 turns = 720°). Empty min/max = unconstrained.
+  lane.componentMin = @[];
+  lane.componentMax = @[];
+  lane.componentUnits = units;
+  lane.componentLabels = labels;
+  lane.componentLabelColors = colors;
+  [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:zeros]];
+  return lane;
+}
+
 static const int kRingSamples = 192;
 static const float kHitThresholdPixels = 10.0f;
 // Cmd snaps the per-axis drag delta to 15° steps (applied to the OBJECT-axis
@@ -52,6 +95,7 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
     _outlineWidth = 1.0f;
     _backDim = 0.3f;
     _activeAxis = -1;
+    _enabledAxes = KKRotationAxesAll;
     _showX = YES;
     _showY = YES;
     _showZ = YES;
@@ -254,6 +298,33 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
                                  KKProcessFrameDurationSeconds());
 }
 
+// Expand a lane value (one component per enabled axis, X/Y/Z order) to a full
+// [X,Y,Z] Euler in degrees; disabled axes read 0.
+- (NSArray<NSNumber *> *)_eulerDegFromLaneValues:(NSArray<NSNumber *> *)v {
+  double xyz[3] = {0.0, 0.0, 0.0};
+  NSUInteger idx = 0;
+  if (self.enabledAxes & KKRotationAxisX)
+    xyz[0] = (idx < v.count) ? v[idx++].doubleValue : 0.0;
+  if (self.enabledAxes & KKRotationAxisY)
+    xyz[1] = (idx < v.count) ? v[idx++].doubleValue : 0.0;
+  if (self.enabledAxes & KKRotationAxisZ)
+    xyz[2] = (idx < v.count) ? v[idx++].doubleValue : 0.0;
+  return @[ @(xyz[0]), @(xyz[1]), @(xyz[2]) ];
+}
+
+// Collapse a full [X,Y,Z] Euler back to the lane's components (only the enabled
+// axes, in X/Y/Z order).
+- (NSArray<NSNumber *> *)_laneValuesFromEulerDeg:(NSArray<NSNumber *> *)e {
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  if (self.enabledAxes & KKRotationAxisX)
+    [out addObject:e[0]];
+  if (self.enabledAxes & KKRotationAxisY)
+    [out addObject:e[1]];
+  if (self.enabledAxes & KKRotationAxisZ)
+    [out addObject:e[2]];
+  return out;
+}
+
 // 3-axis Euler [X,Y,Z] in DEGREES, smoothed (what's on screen). Always 3 comps.
 - (NSArray<NSNumber *> *)_rotationValuesAtFraction:(double)frac {
   KKLane *lane = [self _rotationLane];
@@ -261,10 +332,7 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
     return @[ @0.0, @0.0, @0.0 ];
   NSArray<NSNumber *> *v =
       KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
-  NSMutableArray<NSNumber *> *out = [NSMutableArray arrayWithArray:v ?: @[]];
-  while (out.count < 3)
-    [out addObject:@0.0];
-  return out;
+  return [self _eulerDegFromLaneValues:v];
 }
 
 // Per-ring visibility + ghost alpha from the OSC-visibility state (master
@@ -287,9 +355,9 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
       (yEn && activeHere) || (reveal && [self kkOSCRevealEligible:yKey]);
   BOOL zShow =
       (zEn && activeHere) || (reveal && [self kkOSCRevealEligible:zKey]);
-  self.showX = xShow;
-  self.showY = yShow;
-  self.showZ = zShow;
+  self.showX = xShow && (self.enabledAxes & KKRotationAxisX) != 0;
+  self.showY = yShow && (self.enabledAxes & KKRotationAxisY) != 0;
+  self.showZ = zShow && (self.enabledAxes & KKRotationAxisZ) != 0;
   float ghost = [self kkRevealGhostAlpha];
   self.ringAlphaX = xEn ? 1.0f : ghost;
   self.ringAlphaY = yEn ? 1.0f : ghost;
@@ -301,11 +369,16 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
 // matches the inspector.
 - (void)_syncColorsFromLane {
   KKLane *lane = [self _rotationLane];
-  if (lane.componentLabelColors.count >= 3) {
-    self.colorX = lane.componentLabelColors[0];
-    self.colorY = lane.componentLabelColors[1];
-    self.colorZ = lane.componentLabelColors[2];
-  }
+  // Colours map to the lane's components in enabled-axis order (a 1-component
+  // Z lane's single colour becomes the Z ring).
+  NSArray<NSColor *> *cols = lane.componentLabelColors;
+  NSUInteger idx = 0;
+  if ((self.enabledAxes & KKRotationAxisX) && idx < cols.count)
+    self.colorX = cols[idx++];
+  if ((self.enabledAxes & KKRotationAxisY) && idx < cols.count)
+    self.colorY = cols[idx++];
+  if ((self.enabledAxes & KKRotationAxisZ) && idx < cols.count)
+    self.colorZ = cols[idx++];
 }
 
 // Sync the drawn/hit pose (radians) to the smoothed on-screen values.
@@ -374,8 +447,7 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
   NSArray<NSNumber *> *r = nil;
   if (lane.keyposes.count > 0)
     r = lane.keyposes[KKLaneNearestKeyposeIndex(lane, frac)].values;
-  if (r.count < 3)
-    r = @[ @0.0, @0.0, @0.0 ];
+  r = [self _eulerDegFromLaneValues:r ?: @[]];
   _rotPressKpX = r[0].doubleValue * M_PI / 180.0;
   _rotPressKpY = r[1].doubleValue * M_PI / 180.0;
   _rotPressKpZ = r[2].doubleValue * M_PI / 180.0;
@@ -423,9 +495,12 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
   _rotLastWrittenY = lastRy;
   _rotLastWrittenZ = lastRz;
   const double kRadToDeg = 180.0 / M_PI;
-  NSArray<NSNumber *> *newValues =
+  NSArray<NSNumber *> *euler =
       @[ @(rx * kRadToDeg), @(ry * kRadToDeg), @(rz * kRadToDeg) ];
-  [self _writeRotationValues:newValues atTime:time forceUpdate:forceUpdate];
+  // Persist only the enabled axes (the lane carries one component per axis).
+  [self _writeRotationValues:[self _laneValuesFromEulerDeg:euler]
+                      atTime:time
+                 forceUpdate:forceUpdate];
 }
 
 - (void)_writeRotationValues:(NSArray<NSNumber *> *)newValues
@@ -476,11 +551,15 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
 - (NSArray<NSString *> *)oscElementKeys {
   if (!self.laneLabel)
     return @[];
-  return @[
-    self.laneLabel, [self.laneLabel stringByAppendingString:@".X"],
-    [self.laneLabel stringByAppendingString:@".Y"],
-    [self.laneLabel stringByAppendingString:@".Z"]
-  ];
+  NSMutableArray<NSString *> *keys =
+      [NSMutableArray arrayWithObject:self.laneLabel];
+  if (self.enabledAxes & KKRotationAxisX)
+    [keys addObject:[self.laneLabel stringByAppendingString:@".X"]];
+  if (self.enabledAxes & KKRotationAxisY)
+    [keys addObject:[self.laneLabel stringByAppendingString:@".Y"]];
+  if (self.enabledAxes & KKRotationAxisZ)
+    [keys addObject:[self.laneLabel stringByAppendingString:@".Z"]];
+  return keys;
 }
 
 @end

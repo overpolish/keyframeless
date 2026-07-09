@@ -17,6 +17,7 @@
 #import <KeyframelessKit/KKHelpSection.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
+#import <KeyframelessKit/KKRotationOSC.h> // KKRotationLaneWithLabel + axis flag
 #import <KeyframelessKit/KKTimelineAIMerge.h>
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
 #import <KeyframelessKit/KKTimingCompat.h>
@@ -50,6 +51,10 @@ static NSString *_MeshAILaneSchemaText(void) {
          @"- \"Origin\": two components [X, Y] normalised 0..1 (0.5,0.5 = "
          @"centre, Y up). Shifts the pattern within the frame. Shared by all "
          @"types. Default [0.5, 0.5].\n"
+         @"- \"Scale\": percent zoom of the pattern, 100 = 1x (slider caps at "
+         @"400, field allows more). Shared by all types. Default 100.\n"
+         @"- \"Rotation\": degrees 0..360, rotates the pattern. Shared by all "
+         @"types. Default 0.\n"
          @"\nMesh (Type 0):\n"
          @"- \"Distortion\": percent 0..100. Organic noise warp of the field "
          @"(0 = calm, higher = more churning folds). Default 80.\n"
@@ -136,46 +141,6 @@ static NSString *_MeshAILaneSchemaText(void) {
   [type insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
   [lanes addObject:type];
 
-  // Grainy shape field, right under the Type pill (distinct label from
-  // Dithering's "Shape": lanes are keyed by label). 0-based pill; the shader
-  // wants 1-based.
-  KKLane *pattern = [KKLane laneWithLabel:@"Pattern"];
-  pattern.valueType = KKLaneValueTypeFloat;
-  pattern.choiceLabels =
-      @[ @"Wave", @"Dots", @"Truchet", @"Corners", @"Ripple", @"Blob" ];
-  pattern.componentMin = @[ @0.0 ];
-  pattern.componentMax = @[ @5.0 ];
-  pattern.integerValued = YES;
-  pattern.animatable = NO;
-  pattern.enabled = NO;
-  pattern.categoryKey = @"Core";
-  pattern.categorySymbol = @"circle.dotted";
-  pattern.visibleWhenLabel = @"Type";
-  pattern.visibleWhenValues = @[ @2 ];
-  [pattern insertKeypose:[KKKeyPose
-                             keyposeAtTime:0.0
-                                    values:@[ @(KK_GRAIN_DEFAULT_SHAPE - 1) ]]];
-  [lanes addObject:pattern];
-
-  // Warp base pattern, also right under the Type pill (distinct label from
-  // Dithering's "Shape" / Grainy's "Pattern": lanes are keyed by label).
-  // 0-based pill, matching the shader's 0..2.
-  KKLane *base = [KKLane laneWithLabel:@"Base"];
-  base.valueType = KKLaneValueTypeFloat;
-  base.choiceLabels = @[ @"Checks", @"Stripes", @"Edge" ];
-  base.componentMin = @[ @0.0 ];
-  base.componentMax = @[ @2.0 ];
-  base.integerValued = YES;
-  base.animatable = NO;
-  base.enabled = NO;
-  base.categoryKey = @"Core";
-  base.categorySymbol = @"circle.dotted";
-  base.visibleWhenLabel = @"Type";
-  base.visibleWhenValues = @[ @3 ];
-  [base insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                        values:@[ @(KK_WARP_DEFAULT_SHAPE) ]]];
-  [lanes addObject:base];
-
   // Speed: shared motion-rate multiplier, visible for both types.
   KKLane *speed = [KKLane laneWithLabel:@"Speed"];
   speed.valueType = KKLaneValueTypeFloat;
@@ -230,6 +195,80 @@ static NSString *_MeshAILaneSchemaText(void) {
   [origin insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
   [lanes addObject:origin];
 
+  // Scale: common zoom, shared by all types, driven by the reusable Scale box
+  // OSC (2-axis, aspect-linked like Glow's Radius). Stored as percent per axis
+  // (100 = 1x). The slider tops out at 400% but the field accepts larger values
+  // (sliderMax decoupled from the value clamp).
+  KKLane *scale = [KKLane laneWithLabel:@"Scale"];
+  scale.valueType = KKLaneValueTypeFloat;
+  scale.componentMin = @[ @1.0, @1.0 ];
+  scale.componentMax = @[ @2000.0, @2000.0 ];
+  scale.sliderMax = @400.0;
+  scale.componentUnits = @[ @"%", @"%" ];
+  scale.componentLabels = @[ @"X", @"Y" ];
+  scale.aspectLinkable = YES;
+  scale.aspectLinked = YES;
+  scale.integerValued = YES; // whole percents; the gizmo snaps to integers too
+  scale.scrubStep = 1.0;
+  scale.animatable = YES;
+  scale.enabled = NO;
+  scale.categoryKey = @"Core";
+  scale.categorySymbol = @"circle.dotted";
+  [scale insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                         values:@[ @100.0, @100.0 ]]];
+  [lanes addObject:scale];
+
+  // Rotation: common Z rotation, shared by all types, driven by the reusable
+  // Z-ring gizmo. The kit factory builds the standard angle-dial lane (NOT a
+  // slider) for just the Z axis.
+  KKLane *rotation = KKRotationLaneWithLabel(@"Rotation", KKRotationAxisZ);
+  rotation.animatable = YES;
+  rotation.enabled = NO;
+  rotation.categoryKey = @"Core";
+  rotation.categorySymbol = @"circle.dotted";
+  [lanes addObject:rotation];
+
+  // --- Shader Props: each type's own controls (gated by Type). The type-shape
+  // pills come first so they head their type's section.
+
+  // Grainy shape field (distinct label from Dithering's "Shape": lanes are
+  // keyed by label). 0-based pill; the shader wants 1-based.
+  KKLane *pattern = [KKLane laneWithLabel:@"Pattern"];
+  pattern.valueType = KKLaneValueTypeFloat;
+  pattern.choiceLabels =
+      @[ @"Wave", @"Dots", @"Truchet", @"Corners", @"Ripple", @"Blob" ];
+  pattern.componentMin = @[ @0.0 ];
+  pattern.componentMax = @[ @5.0 ];
+  pattern.integerValued = YES;
+  pattern.animatable = NO;
+  pattern.enabled = NO;
+  pattern.categoryKey = @"Shader";
+  pattern.categorySymbol = @"slider.horizontal.3";
+  pattern.visibleWhenLabel = @"Type";
+  pattern.visibleWhenValues = @[ @2 ];
+  [pattern insertKeypose:[KKKeyPose
+                             keyposeAtTime:0.0
+                                    values:@[ @(KK_GRAIN_DEFAULT_SHAPE - 1) ]]];
+  [lanes addObject:pattern];
+
+  // Warp base pattern (distinct label from Dithering's "Shape" / Grainy's
+  // "Pattern"). 0-based pill, matching the shader's 0..2.
+  KKLane *base = [KKLane laneWithLabel:@"Base"];
+  base.valueType = KKLaneValueTypeFloat;
+  base.choiceLabels = @[ @"Checks", @"Stripes", @"Edge" ];
+  base.componentMin = @[ @0.0 ];
+  base.componentMax = @[ @2.0 ];
+  base.integerValued = YES;
+  base.animatable = NO;
+  base.enabled = NO;
+  base.categoryKey = @"Shader";
+  base.categorySymbol = @"slider.horizontal.3";
+  base.visibleWhenLabel = @"Type";
+  base.visibleWhenValues = @[ @3 ];
+  [base insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                        values:@[ @(KK_WARP_DEFAULT_SHAPE) ]]];
+  [lanes addObject:base];
+
   // --- Mesh controls (Type 0). %-units store 0..100 (the shader wants 0..1).
   struct {
     NSString *label;
@@ -257,8 +296,8 @@ static NSString *_MeshAILaneSchemaText(void) {
     lane.seedField = meshControls[s].seedField;
     lane.integerValued = meshControls[s].seedField; // seed is an integer
     lane.enabled = NO;
-    lane.categoryKey = @"Core";
-    lane.categorySymbol = @"circle.dotted";
+    lane.categoryKey = @"Shader";
+    lane.categorySymbol = @"slider.horizontal.3";
     lane.visibleWhenLabel = @"Type";
     // Distortion + Swirl are shared with Warp (same 0..1 noise/swirl controls);
     // Grain Mixer + Grain stay Mesh-only.
@@ -282,8 +321,8 @@ static NSString *_MeshAILaneSchemaText(void) {
   shape.integerValued = YES;
   shape.animatable = NO;
   shape.enabled = NO;
-  shape.categoryKey = @"Core";
-  shape.categorySymbol = @"circle.dotted";
+  shape.categoryKey = @"Shader";
+  shape.categorySymbol = @"slider.horizontal.3";
   shape.visibleWhenLabel = @"Type";
   shape.visibleWhenValues = @[ @1 ];
   [shape insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
@@ -297,8 +336,8 @@ static NSString *_MeshAILaneSchemaText(void) {
   dither.integerValued = YES;
   dither.animatable = NO;
   dither.enabled = NO;
-  dither.categoryKey = @"Core";
-  dither.categorySymbol = @"circle.dotted";
+  dither.categoryKey = @"Shader";
+  dither.categorySymbol = @"slider.horizontal.3";
   dither.visibleWhenLabel = @"Type";
   dither.visibleWhenValues = @[ @1 ];
   [dither insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @3.0 ]]]; // 8×8
@@ -312,8 +351,8 @@ static NSString *_MeshAILaneSchemaText(void) {
   pxSize.integerValued = YES;
   pxSize.animatable = YES;
   pxSize.enabled = NO;
-  pxSize.categoryKey = @"Core";
-  pxSize.categorySymbol = @"circle.dotted";
+  pxSize.categoryKey = @"Shader";
+  pxSize.categorySymbol = @"slider.horizontal.3";
   pxSize.visibleWhenLabel = @"Type";
   pxSize.visibleWhenValues = @[ @1 ];
   [pxSize
@@ -339,8 +378,8 @@ static NSString *_MeshAILaneSchemaText(void) {
     lane.componentUnits = @[ @"%" ];
     lane.animatable = YES;
     lane.enabled = NO;
-    lane.categoryKey = @"Core";
-    lane.categorySymbol = @"circle.dotted";
+    lane.categoryKey = @"Shader";
+    lane.categorySymbol = @"slider.horizontal.3";
     lane.visibleWhenLabel = @"Type";
     // Softness is shared with Warp (same 0..1 colour-transition control);
     // Intensity + Noise stay Grainy-only.
@@ -377,8 +416,8 @@ static NSString *_MeshAILaneSchemaText(void) {
     lane.integerValued = warpControls[s].integer;
     lane.animatable = YES;
     lane.enabled = NO;
-    lane.categoryKey = @"Core";
-    lane.categorySymbol = @"circle.dotted";
+    lane.categoryKey = @"Shader";
+    lane.categorySymbol = @"slider.horizontal.3";
     lane.visibleWhenLabel = @"Type";
     lane.visibleWhenValues = @[ @3 ];
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
@@ -537,8 +576,12 @@ static NSString *_MeshAILaneSchemaText(void) {
     // delegate.
     KKMiniViewerRenderer *oscRenderer =
         (KKMiniViewerRenderer *)view.miniViewerDelegate;
+    // The Scale mini box reads the plugin's lane templates for the aspect-link
+    // default of an untouched (not-yet-in-timeline) constant Scale.
+    if ([oscRenderer isKindOfClass:[MeshMiniViewerRenderer class]])
+      ((MeshMiniViewerRenderer *)oscRenderer).laneTemplates = available;
     NSArray<NSArray<NSString *> *> *oscCompounds =
-        @[ @[ @"Origin" ], @[ @"Path" ] ];
+        @[ @[ @"Origin" ], @[ @"Path" ], @[ @"Scale" ], @[ @"Rotation" ] ];
     oscRenderer.handlesHidden = !oscMasterVisible;
     [self kkApplyOSCVisibilityFromState:uiState
                             elementKeys:[KKPlugin kkOSCElementKeysForCompounds:

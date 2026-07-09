@@ -57,6 +57,8 @@ static inline MeshGradientUniforms MeshGradientDefault(void) {
   g.grainMixer = KK_MESH_GRAD_DEFAULT_GRAINMIXER;
   g.grainOverlay = KK_MESH_DEFAULT_GRAIN;
   g.origin = (vector_float2){0.5f, 0.5f};
+  g.scale = (vector_float2){1.0f, 1.0f};
+  g.rotation = 0.0f;
   g.time = 0.0f;
   return g;
 }
@@ -81,6 +83,8 @@ static inline DitheringUniforms DitheringDefault(void) {
   d.type = KK_DITHER_DEFAULT_TYPE;
   d.speed = KK_DITHER_DEFAULT_SPEED;
   d.seed = 0.0f;
+  d.scale = (vector_float2){1.0f, 1.0f};
+  d.rotation = 0.0f;
   d.time = 0.0f;
   return d;
 }
@@ -116,6 +120,8 @@ static inline GrainGradientUniforms GrainGradientDefault(void) {
   g.shape = KK_GRAIN_DEFAULT_SHAPE;
   g.speed = KK_GRAIN_DEFAULT_SPEED;
   g.seed = 0.0f;
+  g.scale = (vector_float2){1.0f, 1.0f};
+  g.rotation = 0.0f;
   g.time = 0.0f;
   return g;
 }
@@ -149,6 +155,8 @@ static inline WarpUniforms WarpDefault(void) {
   w.shape = KK_WARP_DEFAULT_SHAPE;
   w.speed = KK_MESH_GRAD_DEFAULT_SPEED;
   w.seed = 0.0f;
+  w.scale = (vector_float2){1.0f, 1.0f};
+  w.rotation = 0.0f;
   w.time = 0.0f;
   return w;
 }

@@ -43,8 +43,8 @@ NS_ASSUME_NONNULL_BEGIN
 @interface _KKMiniFilmSlot : NSObject
 @property(nonatomic) uint32_t sid;
 @property(nonatomic) uint64_t generation;
-@property(nonatomic) IOSurfaceRef surface;
-@property(nonatomic, strong) id<MTLTexture> sourceTexture;
+@property(nonatomic, nullable) IOSurfaceRef surface;
+@property(nonatomic, strong, nullable) id<MTLTexture> sourceTexture;
 @property(nonatomic, strong, nullable) id<MTLTexture> processedTexture;
 @property(nonatomic) double tag; // the slot's clip fraction
 @end

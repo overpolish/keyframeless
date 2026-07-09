@@ -31,6 +31,8 @@ typedef struct MeshGradientUniforms {
     float grainMixer;                          // 0..1 grain at the spot edges
     float grainOverlay;                        // 0..1 post grain overlay
     vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
+    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
+    float rotation;                            // common rotation, radians
 } MeshGradientUniforms;
 
 // Dithering type: also ported from paper-design/shaders (Apache-2.0). A
@@ -48,6 +50,8 @@ typedef struct DitheringUniforms {
     float pxSize;             // dither grid size in reference pixels
     int shape;                // 1..6 (simplex, warp, dots, wave, ripple, swirl)
     int type;                 // 1..4 dither (random, 2x2, 4x4, 8x8 Bayer)
+    vector_float2 scale;      // common zoom factor per axis (1 = 100%)
+    float rotation;           // common rotation, radians
 } DitheringUniforms;
 
 // Grain Gradient type ("Grainy"): also ported from paper-design/shaders
@@ -70,6 +74,8 @@ typedef struct GrainGradientUniforms {
     float speed;                                // time multiplier (motion rate)
     float seed;                                 // start-time offset (shared)
     int shape;                                  // 1..7 (wave, dots, truchet, corners, ripple, blob, sphere)
+    vector_float2 scale;                        // common zoom factor per axis (1 = 100%)
+    float rotation;                             // common rotation, radians
 } GrainGradientUniforms;
 
 // Warp type: also ported from paper-design/shaders (Apache-2.0). Animated colour
@@ -91,6 +97,8 @@ typedef struct WarpUniforms {
     float speed;                               // time multiplier (motion rate)
     float seed;                                // start-time offset (shared)
     int shape;                                 // 0..2 (checks, stripes, edge)
+    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
+    float rotation;                            // common rotation, radians
 } WarpUniforms;
 
 // The Type choice-pill order. Kept in sync with the "Type" pill labels.

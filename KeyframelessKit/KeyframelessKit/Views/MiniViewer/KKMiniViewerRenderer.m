@@ -166,18 +166,44 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 
 #pragma mark - Rotation gizmo: small accessor defaults
 
+- (KKRotationAxes)rotationEnabledAxes {
+  return KKRotationAxesAll;
+}
+
+// Expand a lane value (one component per enabled axis, X/Y/Z order) to a full
+// [X,Y,Z] Euler in degrees; disabled axes read 0.
+- (NSArray<NSNumber *> *)_eulerDegFromLaneValues:(NSArray<NSNumber *> *)v {
+  KKRotationAxes axes = [self rotationEnabledAxes];
+  double xyz[3] = {0.0, 0.0, 0.0};
+  NSUInteger idx = 0;
+  if (axes & KKRotationAxisX)
+    xyz[0] = (idx < v.count) ? v[idx++].doubleValue : 0.0;
+  if (axes & KKRotationAxisY)
+    xyz[1] = (idx < v.count) ? v[idx++].doubleValue : 0.0;
+  if (axes & KKRotationAxisZ)
+    xyz[2] = (idx < v.count) ? v[idx++].doubleValue : 0.0;
+  return @[ @(xyz[0]), @(xyz[1]), @(xyz[2]) ];
+}
+
+// Collapse a full [X,Y,Z] Euler back to the lane's components (enabled axes
+// only, X/Y/Z order).
+- (NSArray<NSNumber *> *)_laneValuesFromEulerDeg:(NSArray<NSNumber *> *)e {
+  KKRotationAxes axes = [self rotationEnabledAxes];
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  if (axes & KKRotationAxisX)
+    [out addObject:e[0]];
+  if (axes & KKRotationAxisY)
+    [out addObject:e[1]];
+  if (axes & KKRotationAxisZ)
+    [out addObject:e[2]];
+  return out;
+}
+
 - (NSArray<NSNumber *> *)rotationEulerDegrees {
   NSString *label = self.rotationLabel;
   if (!label)
     return @[ @0.0, @0.0, @0.0 ];
-  NSArray<NSNumber *> *v = [self valuesForLabel:label];
-  if (v.count >= 3)
-    return v;
-  // Pad short lanes to length 3.
-  return @[
-    v.count > 0 ? v[0] : @0.0, v.count > 1 ? v[1] : @0.0,
-    v.count > 2 ? v[2] : @0.0
-  ];
+  return [self _eulerDegFromLaneValues:[self valuesForLabel:label]];
 }
 
 - (CGPoint)rotationCenterForContentRect:(CGRect)cr {
@@ -309,6 +335,10 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 // peek shows only the rings left enabled.
 - (BOOL)_ringShownAtAxis:(int)k {
   if (_handlesLocked)
+    return NO;
+  // A disabled axis (e.g. X/Y on a 2D plugin's Z-only rotation) never shows or
+  // hit-tests.
+  if (!([self rotationEnabledAxes] & (1 << k)))
     return NO;
   BOOL hidden = [self _ringIndividuallyHiddenAtAxis:k];
   if (_handlesHidden)
@@ -446,9 +476,12 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                              &_rotLastWrittenRy, &_rotLastWrittenRz, &rx, &ry,
                              &rz);
   const double kRadToDeg = 180.0 / M_PI;
-  NSArray<NSNumber *> *newValues =
+  NSArray<NSNumber *> *euler =
       @[ @(rx * kRadToDeg), @(ry * kRadToDeg), @(rz * kRadToDeg) ];
-  [self commitValues:newValues forLabel:label canvas:canvas];
+  // Persist only the enabled axes (the lane carries one component per axis).
+  [self commitValues:[self _laneValuesFromEulerDeg:euler]
+            forLabel:label
+              canvas:canvas];
 }
 
 #pragma mark - Provided to subclasses
