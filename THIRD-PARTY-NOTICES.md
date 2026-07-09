@@ -9,9 +9,9 @@ section here for each third-party component you incorporate.
 ## radiant (radiant-shaders)
 
 Portions of the Mesh generator's fragment shaders
-(`Mesh/Mesh/Plugin/Render/Mesh.metal` — the `Fluid` and `Neon` types) are
-derived from the `fluid-amber` and `neon-drip` shaders in **pbakaus/radiant**
-(radiant-shaders.com).
+(`Mesh/Mesh/Plugin/Render/Mesh.metal` — the `Fluid`, `Neon`, and `Silk` types)
+are derived from the `fluid-amber`, `neon-drip`, and `silk-cascade` shaders in
+**pbakaus/radiant** (radiant-shaders.com).
 
 - Source: https://github.com/pbakaus/radiant
 - Copyright (c) 2025 Paul Bakaus.

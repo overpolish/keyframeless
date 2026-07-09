@@ -224,6 +224,28 @@ typedef struct NeonUniforms {
     float rotation;                            // common rotation, radians
 } NeonUniforms;
 
+// Silk type ("Silk"): ported from radiant-shaders "Silk Cascade" (pbakaus/
+// radiant, MIT) GLSL -> MSL. Three domain-warped fabric-fold layers with
+// Kajiya-Kay anisotropic specular (silk sheen), lit + 3-tone shaded and
+// composited back-to-front over a dark backdrop. Each layer takes ONE palette
+// hue (Color 1..3); its dark/mid/bright/sheen tones are derived from that hue.
+// resolution is filled at render time.
+typedef struct SilkUniforms {
+    vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba; Color 1..3 = the 3 layer hues
+    int colorsCount;                           // active colours (<= 10; ~3 used)
+    vector_float4 colorBack;                   // rgba dark backdrop
+    vector_float2 resolution;                  // destination pixel dims (render time)
+    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
+    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
+    float sheen;                               // silk specular / sheen intensity
+    float folds;                               // fold frequency scale (density of the folds)
+    float drape;                               // domain-warp strength (how much folds curve/flow)
+    float time;                                // clip seconds
+    float speed;                               // time multiplier (motion rate)
+    float seed;                                // start-time offset (shared)
+    float rotation;                            // common rotation, radians
+} SilkUniforms;
+
 // The Type choice-pill order. Kept in sync with the "Type" pill labels.
 typedef enum MeshType {
     MeshType_Mesh = 0,          // paper-design animated mesh gradient
@@ -235,7 +257,8 @@ typedef enum MeshType {
     MeshType_Metaballs = 6,     // paper-design metaballs ("Metaballs")
     MeshType_GodRays = 7,       // paper-design god-rays ("God Rays")
     MeshType_Fluid = 8,         // radiant-shaders fluid-amber ("Fluid")
-    MeshType_Neon = 9,          // radiant-shaders neon-drip ("Neon")
+    MeshType_Neon = 9,          // radiant-shaders neon-drip ("Wisp")
+    MeshType_Silk = 10,         // radiant-shaders silk-cascade ("Silk")
 } MeshType;
 
 // The full render state packed into pluginState: the active type plus each
@@ -254,6 +277,7 @@ typedef struct MeshPluginState {
     GodRaysUniforms godrays;
     FluidUniforms fluid;
     NeonUniforms neon;
+    SilkUniforms silk;
 } MeshPluginState;
 
 typedef enum MeshFragmentIndex {

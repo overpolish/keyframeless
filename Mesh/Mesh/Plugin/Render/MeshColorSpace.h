@@ -337,6 +337,36 @@ static inline NeonUniforms NeonDefault(void) {
   return n;
 }
 
+/// Silk ("Silk", radiant-shaders silk-cascade port) defaults.
+#define KK_SILK_DEFAULT_SHEEN 1.0f // silk specular intensity
+#define KK_SILK_DEFAULT_FOLDS 0.5f // fold frequency scale
+#define KK_SILK_DEFAULT_DRAPE 1.0f // domain-warp strength
+
+/// Fallback Silk uniforms (the default palette as the 3 layer hues + a dark
+/// backdrop) so an un-edited instance still renders before the colour lanes
+/// resolve. `resolution` is overwritten at render time.
+static inline SilkUniforms SilkDefault(void) {
+  SilkUniforms s;
+  memset(&s, 0, sizeof(s));
+  s.colorsCount = KK_MESH_COLOR_COUNT;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    const float *c = kMeshDefaultColorsSRGB[i];
+    s.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
+  }
+  s.colorBack = (vector_float4){0.03f, 0.015f, 0.04f, 1.0f};
+  s.resolution = (vector_float2){1920.0f, 1080.0f};
+  s.origin = (vector_float2){0.5f, 0.5f};
+  s.scale = (vector_float2){1.0f, 1.0f};
+  s.sheen = KK_SILK_DEFAULT_SHEEN;
+  s.folds = KK_SILK_DEFAULT_FOLDS;
+  s.drape = KK_SILK_DEFAULT_DRAPE;
+  s.speed = KK_MESH_GRAD_DEFAULT_SPEED;
+  s.seed = 0.0f;
+  s.rotation = 0.0f;
+  s.time = 0.0f;
+  return s;
+}
+
 /// Generic per-swatch lane label ("Color 1", "Color 2", ...). One [r,g,b,a]
 /// colour lane per swatch. One-based to read naturally.
 static inline NSString *MeshColorLabel(int i) {

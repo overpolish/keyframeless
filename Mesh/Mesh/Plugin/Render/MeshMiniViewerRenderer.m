@@ -183,6 +183,12 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     return @[ @(KK_NEON_DEFAULT_WISPS * 100.0) ];
   if ([label isEqualToString:@"Strands"])
     return @[ @(KK_NEON_DEFAULT_STRANDS * 100.0) ];
+  if ([label isEqualToString:@"Sheen"])
+    return @[ @(KK_SILK_DEFAULT_SHEEN * 100.0) ];
+  if ([label isEqualToString:@"Folds"])
+    return @[ @(KK_SILK_DEFAULT_FOLDS * 100.0) ];
+  if ([label isEqualToString:@"Drape"])
+    return @[ @(KK_SILK_DEFAULT_DRAPE * 100.0) ];
   if ([label isEqualToString:@"Shape"])
     return @[ @0.0 ]; // simplex
   if ([label isEqualToString:@"Dither"])
@@ -268,6 +274,7 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   BOOL isGodRays = (meshType == MeshType_GodRays);
   BOOL isFluid = (meshType == MeshType_Fluid);
   BOOL isNeon = (meshType == MeshType_Neon);
+  BOOL isSilk = (meshType == MeshType_Silk);
   NSString *fragment = @"fragmentShader";
   if (isDither)
     fragment = @"ditheringFragment";
@@ -287,6 +294,8 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     fragment = @"fluidFragment";
   else if (isNeon)
     fragment = @"neonFragment";
+  else if (isSilk)
+    fragment = @"silkFragment";
   id<MTLRenderPipelineState> pipeline =
       [self _pipelineForDevice:dest.device
                    pixelFormat:dest.pixelFormat
@@ -672,6 +681,42 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     ne.resolution = (vector_float2){W, H};
     ne.time = timeSec;
     [e setFragmentBytes:&ne length:sizeof(ne) atIndex:MeshFragmentIndex_Grid];
+  } else if (isSilk) {
+    SilkUniforms sk = SilkDefault();
+    int skCount = 0;
+    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
+      if (v.count >= 4)
+        sk.colors[skCount++] = (vector_float4){
+            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
+      else {
+        const float *c = kMeshDefaultColorsSRGB[i];
+        sk.colors[skCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+      }
+    }
+    sk.colorsCount = skCount > 0 ? skCount : 1;
+    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
+    NSArray<NSNumber *> *sheenV = [self valuesForLabel:@"Sheen"];
+    NSArray<NSNumber *> *foldsV = [self valuesForLabel:@"Folds"];
+    NSArray<NSNumber *> *drapeV = [self valuesForLabel:@"Drape"];
+    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+    if (backV.count >= 4)
+      sk.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                     backV[2].floatValue, backV[3].floatValue};
+    sk.sheen =
+        sheenV.count ? sheenV[0].floatValue / 100.0f : KK_SILK_DEFAULT_SHEEN;
+    sk.folds =
+        foldsV.count ? foldsV[0].floatValue / 100.0f : KK_SILK_DEFAULT_FOLDS;
+    sk.drape =
+        drapeV.count ? drapeV[0].floatValue / 100.0f : KK_SILK_DEFAULT_DRAPE;
+    sk.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
+    sk.seed = seedShared;
+    sk.origin = originShared;
+    sk.scale = scaleShared;
+    sk.rotation = rotationShared;
+    sk.resolution = (vector_float2){W, H};
+    sk.time = timeSec;
+    [e setFragmentBytes:&sk length:sizeof(sk) atIndex:MeshFragmentIndex_Grid];
   } else {
     // Same colour swatches + controls as the FCP render (valuesForLabel falls
     // back to defaults).

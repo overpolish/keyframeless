@@ -30,7 +30,7 @@
 /// no in/out, no Basic/Advanced - just lanes and their numeric ranges.
 static NSString *_MeshAILaneSchemaText(void) {
   return @"Lane labels and value spaces. This is a procedural generator with "
-         @"ten "
+         @"eleven "
          @"styles selected by \"Type\": Mesh (animated colour spots blended "
          @"into "
          @"a soft gradient), Dithering (a procedural shape rendered through "
@@ -44,14 +44,15 @@ static NSString *_MeshAILaneSchemaText(void) {
          @"into organic blobs), God Rays (animated rays of light "
          @"radiating from the centre with a central glow), Fluid (a "
          @"molten, "
-         @"marbled flow from an iterative domain warp), and Wisp (glowing "
-         @"neon tendril wisps drifting over a dark backdrop). Set "
+         @"marbled flow from an iterative domain warp), Wisp (glowing "
+         @"neon tendril wisps drifting over a dark backdrop), and Silk "
+         @"(flowing draped silk fabric with anisotropic sheen). Set "
          @"the lanes for the chosen type.\n\n"
          @"- \"Type\": the generator style. A structural choice (NOT "
          @"animated), "
          @"stored as an index: 0 = Mesh, 1 = Dithering, 2 = Grainy, 3 = Warp, "
          @"4 = Neuro, 5 = Simplex, 6 = Metaballs, 7 = God Rays, 8 = Fluid, "
-         @"9 = Wisp. Default 0.\n"
+         @"9 = Wisp, 10 = Silk. Default 0.\n"
          @"- \"Speed\": single value, 0..3 multiplier of the animation rate "
          @"(1 = normal, 0 = frozen, 2 = twice as fast). Shared by all types. "
          @"Animatable. Default 1.\n"
@@ -188,6 +189,19 @@ static NSString *_MeshAILaneSchemaText(void) {
          @"each [r, g, b, a] in sRGB 0..1, ordered outer glow -> surface -> "
          @"inner -> hot core. Up to 4 used.\n"
          @"- \"Background\": the dark backdrop [r, g, b, a] in sRGB 0..1 "
+         @"(shared with Dithering + Grainy + Neuro).\n"
+         @"\nSilk (Type 10):\n"
+         @"- \"Sheen\": percent 0..200. Silk specular / sheen intensity (the "
+         @"sharp anisotropic highlight streaks). Default 100.\n"
+         @"- \"Folds\": percent 0..300. Fold density (higher = more, finer "
+         @"fabric folds). Default 50.\n"
+         @"- \"Drape\": percent 0..200. Domain-warp strength (how much the "
+         @"folds curve and flow). Default 100.\n"
+         @"- \"Color 1\", \"Color 2\", \"Color 3\": the three fabric-layer "
+         @"hues (shared with Mesh), each [r, g, b, a] in sRGB 0..1 (back to "
+         @"front). Each layer's dark/mid/bright/sheen tones derive from its "
+         @"hue. 3 used.\n"
+         @"- \"Background\": the dark backdrop [r, g, b, a] in sRGB 0..1 "
          @"(shared with Dithering + Grainy + Neuro).\n";
 }
 
@@ -211,10 +225,10 @@ static NSString *_MeshAILaneSchemaText(void) {
   type.valueType = KKLaneValueTypeFloat;
   type.choiceLabels = @[
     @"Mesh", @"Dithering", @"Grainy", @"Warp", @"Neuro", @"Simplex",
-    @"Metaballs", @"God Rays", @"Fluid", @"Wisp"
+    @"Metaballs", @"God Rays", @"Fluid", @"Wisp", @"Silk"
   ];
   type.componentMin = @[ @0.0 ];
-  type.componentMax = @[ @9.0 ];
+  type.componentMax = @[ @10.0 ];
   type.integerValued = YES;
   type.wrapsChoicePills =
       YES; // 8 types - wrap onto multiple lines, not overflow
@@ -235,7 +249,7 @@ static NSString *_MeshAILaneSchemaText(void) {
   speed.categoryKey = @"Core";
   speed.categorySymbol = @"circle.dotted";
   speed.visibleWhenLabel = @"Type";
-  speed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9 ];
+  speed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10 ];
   [speed insertKeypose:[KKKeyPose
                            keyposeAtTime:0.0
                                   values:@[ @(KK_MESH_GRAD_DEFAULT_SPEED) ]]];
@@ -254,7 +268,7 @@ static NSString *_MeshAILaneSchemaText(void) {
   seed.categoryKey = @"Core";
   seed.categorySymbol = @"circle.dotted";
   seed.visibleWhenLabel = @"Type";
-  seed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9 ];
+  seed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10 ];
   [seed insertKeypose:[KKKeyPose
                           keyposeAtTime:0.0
                                  values:@[ @(KK_MESH_GRAD_DEFAULT_SEED) ]]];
@@ -680,6 +694,34 @@ static NSString *_MeshAILaneSchemaText(void) {
     [lanes addObject:lane];
   }
 
+  // --- Silk controls (Type 10). Sheen = silk specular intensity; Folds = fold
+  // density; Drape = domain-warp strength (curve/flow of the folds).
+  struct {
+    NSString *label;
+    double def, max;
+  } silkControls[] = {
+      {@"Sheen", KK_SILK_DEFAULT_SHEEN * 100.0, 200.0},
+      {@"Folds", KK_SILK_DEFAULT_FOLDS * 100.0, 300.0},
+      {@"Drape", KK_SILK_DEFAULT_DRAPE * 100.0, 200.0},
+  };
+  for (unsigned s = 0; s < sizeof(silkControls) / sizeof(silkControls[0]);
+       s++) {
+    KKLane *lane = [KKLane laneWithLabel:silkControls[s].label];
+    lane.valueType = KKLaneValueTypeFloat;
+    lane.componentMin = @[ @0.0 ];
+    lane.componentMax = @[ @(silkControls[s].max) ];
+    lane.componentUnits = @[ @"%" ];
+    lane.animatable = YES;
+    lane.enabled = NO;
+    lane.categoryKey = @"Shader";
+    lane.categorySymbol = @"slider.horizontal.3";
+    lane.visibleWhenLabel = @"Type";
+    lane.visibleWhenValues = @[ @10 ];
+    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(silkControls[s].def) ]]];
+    [lanes addObject:lane];
+  }
+
   // --- Fixed colours first (not removable, so they sit above the dynamic
   // swatches): Dithering background + foreground (ink), the Neuro Mid line
   // colour. Background is shared by Dithering + Grainy + Neuro; Foreground by
@@ -689,7 +731,8 @@ static NSString *_MeshAILaneSchemaText(void) {
     float r, g, b, a;
     NSArray<NSNumber *> *visibleWhen;
   } fixedColors[] = {
-      {@"Background", 0.04f, 0.04f, 0.07f, 1.0f, @[ @1, @2, @4, @6, @7, @9 ]},
+      {@"Background", 0.04f, 0.04f, 0.07f, 1.0f,
+       @[ @1, @2, @4, @6, @7, @9, @10 ]},
       {@"Foreground", 0.85f, 0.90f, 0.98f, 1.0f, @[ @1, @4 ]},
       {@"Mid", 0.25f, 0.45f, 0.95f, 1.0f, @[ @4 ]},
       {@"Bloom Color", 1.0f, 0.9f, 0.7f, 1.0f, @[ @7 ]},
@@ -727,9 +770,9 @@ static NSString *_MeshAILaneSchemaText(void) {
     color.categorySymbol = @"paintpalette";
     color.visibleWhenLabel = @"Type";
     color.visibleWhenValues = @[
-      @0, @2, @3, @5, @6, @7, @8, @9
-    ]; // Mesh + Grainy + Warp + Simplex + Metaballs + God Rays + Fluid + Neon
-       // share the palette
+      @0, @2, @3, @5, @6, @7, @8, @9, @10
+    ]; // Mesh + Grainy + Warp + Simplex + Metaballs + God Rays + Fluid + Neon +
+       // Silk share the palette
     const float *c = kMeshDefaultColorsSRGB[i];
     [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                            values:@[

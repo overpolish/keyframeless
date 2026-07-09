@@ -552,6 +552,46 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   ne.rotation = rotation;
   ne.time = timeSec;
   outState->neon = ne;
+
+  // --- Silk: three fabric-fold layers taking the shared palette hues (Color
+  // 1..3) over the Background. Sheen / Folds / Drape are percent (shader wants
+  // 0..N). Resolution is filled at render time.
+  SilkUniforms sk = SilkDefault();
+  int skCount = 0;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    NSArray<NSNumber *> *v =
+        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
+    if (v.count >= 4)
+      sk.colors[skCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                             v[2].floatValue, v[3].floatValue};
+    else {
+      const float *c = kMeshDefaultColorsSRGB[i];
+      sk.colors[skCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+    }
+  }
+  sk.colorsCount = skCount > 0 ? skCount : 1;
+  if (backV.count >= 4)
+    sk.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                   backV[2].floatValue, backV[3].floatValue};
+  NSArray<NSNumber *> *sheenV =
+      MeshLaneValuesAtFraction(timeline, @"Sheen", frac);
+  NSArray<NSNumber *> *foldsV =
+      MeshLaneValuesAtFraction(timeline, @"Folds", frac);
+  NSArray<NSNumber *> *drapeV =
+      MeshLaneValuesAtFraction(timeline, @"Drape", frac);
+  sk.sheen =
+      sheenV.count ? sheenV[0].floatValue / 100.0f : KK_SILK_DEFAULT_SHEEN;
+  sk.folds =
+      foldsV.count ? foldsV[0].floatValue / 100.0f : KK_SILK_DEFAULT_FOLDS;
+  sk.drape =
+      drapeV.count ? drapeV[0].floatValue / 100.0f : KK_SILK_DEFAULT_DRAPE;
+  sk.speed = speed;
+  sk.seed = seed;
+  sk.origin = origin;
+  sk.scale = scale;
+  sk.rotation = rotation;
+  sk.time = timeSec;
+  outState->silk = sk;
   return YES;
 }
 
@@ -628,6 +668,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     state.godrays = GodRaysDefault();
     state.fluid = FluidDefault();
     state.neon = NeonDefault();
+    state.silk = SilkDefault();
   }
 
   // Dispatch on the active type. Each type is a separate fragment function; the
@@ -642,6 +683,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   BOOL isGodRays = (state.type == MeshType_GodRays);
   BOOL isFluid = (state.type == MeshType_Fluid);
   BOOL isNeon = (state.type == MeshType_Neon);
+  BOOL isSilk = (state.type == MeshType_Silk);
   NSString *pluginID = kPluginID;
   NSString *fragment = @"fragmentShader";
   if (isDither) {
@@ -671,6 +713,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isNeon) {
     pluginID = [kPluginID stringByAppendingString:@".neon"];
     fragment = @"neonFragment";
+  } else if (isSilk) {
+    pluginID = [kPluginID stringByAppendingString:@".silk"];
+    fragment = @"silkFragment";
   }
 
   id<MTLRenderPipelineState> pipelineState =
@@ -693,6 +738,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   state.godrays.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.fluid.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.neon.resolution = (vector_float2){(float)mediaW, (float)mediaH};
+  state.silk.resolution = (vector_float2){(float)mediaW, (float)mediaH};
 
   // Match the output encoding to the destination: FCP's float working buffers
   // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.
@@ -731,6 +777,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isNeon) {
     uniformBytes = (const void *)&state.neon;
     uniformLen = sizeof(state.neon);
+  } else if (isSilk) {
+    uniformBytes = (const void *)&state.silk;
+    uniformLen = sizeof(state.silk);
   }
 
   // sourceImages is empty for a generator; encodeRenderCommands handles that
