@@ -30,20 +30,21 @@
 /// no in/out, no Basic/Advanced - just lanes and their numeric ranges.
 static NSString *_MeshAILaneSchemaText(void) {
   return @"Lane labels and value spaces. This is a procedural generator with "
-         @"five "
+         @"six "
          @"styles selected by \"Type\": Mesh (animated colour spots blended "
          @"into "
          @"a soft gradient), Dithering (a procedural shape rendered through "
          @"a "
          @"dither into two colours), Grainy (a procedural shape field "
          @"indexing a multi-colour ramp with a grainy overlay), Warp "
-         @"(colour fields warped by noise + swirl over a base pattern), and "
-         @"Neuro (a glowing web of fluid lines). Set "
+         @"(colour fields warped by noise + swirl over a base pattern), "
+         @"Neuro (a glowing web of fluid lines), and Simplex (a multi-colour "
+         @"gradient mapped through Simplex noise into stepped bands). Set "
          @"the lanes for the chosen type.\n\n"
          @"- \"Type\": the generator style. A structural choice (NOT "
          @"animated), "
          @"stored as an index: 0 = Mesh, 1 = Dithering, 2 = Grainy, 3 = Warp, "
-         @"4 = Neuro. Default 0.\n"
+         @"4 = Neuro, 5 = Simplex. Default 0.\n"
          @"- \"Speed\": single value, 0..3 multiplier of the animation rate "
          @"(1 = normal, 0 = frozen, 2 = twice as fast). Shared by all types. "
          @"Animatable. Default 1.\n"
@@ -121,7 +122,14 @@ static NSString *_MeshAILaneSchemaText(void) {
          @"(shared with Dithering).\n"
          @"- \"Mid\": the main line colour [r, g, b, a] in sRGB 0..1.\n"
          @"- \"Background\": the base colour [r, g, b, a] in sRGB 0..1 "
-         @"(shared with Dithering + Grainy).\n";
+         @"(shared with Dithering + Grainy).\n"
+         @"\nSimplex (Type 5):\n"
+         @"- \"Steps\": integer 1..10, extra colour bands between the base "
+         @"colours (1 = smooth, higher = more stepped). Default 1.\n"
+         @"- \"Softness\": percent 0..100. Band-edge sharpness (0 = hard, "
+         @"100 = smooth). Shared with Grainy / Warp. Default 90.\n"
+         @"- \"Color 1\", \"Color 2\", ... : the gradient colours (shared with "
+         @"Mesh), each [r, g, b, a] in sRGB 0..1. Up to 10 used.\n";
 }
 
 @implementation MeshPlugin (CustomUI)
@@ -142,9 +150,10 @@ static NSString *_MeshAILaneSchemaText(void) {
   // (Core), then the colours (Colors) last.
   KKLane *type = [KKLane laneWithLabel:@"Type"];
   type.valueType = KKLaneValueTypeFloat;
-  type.choiceLabels = @[ @"Mesh", @"Dithering", @"Grainy", @"Warp", @"Neuro" ];
+  type.choiceLabels =
+      @[ @"Mesh", @"Dithering", @"Grainy", @"Warp", @"Neuro", @"Simplex" ];
   type.componentMin = @[ @0.0 ];
-  type.componentMax = @[ @4.0 ];
+  type.componentMax = @[ @5.0 ];
   type.integerValued = YES;
   type.animatable = NO;
   type.enabled = NO;
@@ -163,7 +172,7 @@ static NSString *_MeshAILaneSchemaText(void) {
   speed.categoryKey = @"Core";
   speed.categorySymbol = @"circle.dotted";
   speed.visibleWhenLabel = @"Type";
-  speed.visibleWhenValues = @[ @0, @1, @2, @3, @4 ];
+  speed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5 ];
   [speed insertKeypose:[KKKeyPose
                            keyposeAtTime:0.0
                                   values:@[ @(KK_MESH_GRAD_DEFAULT_SPEED) ]]];
@@ -182,7 +191,7 @@ static NSString *_MeshAILaneSchemaText(void) {
   seed.categoryKey = @"Core";
   seed.categorySymbol = @"circle.dotted";
   seed.visibleWhenLabel = @"Type";
-  seed.visibleWhenValues = @[ @0, @1, @2, @3, @4 ];
+  seed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5 ];
   [seed insertKeypose:[KKKeyPose
                           keyposeAtTime:0.0
                                  values:@[ @(KK_MESH_GRAD_DEFAULT_SEED) ]]];
@@ -396,7 +405,7 @@ static NSString *_MeshAILaneSchemaText(void) {
     // Softness is shared with Warp (same 0..1 colour-transition control);
     // Intensity + Noise stay Grainy-only.
     lane.visibleWhenValues =
-        [grainControls[s].label isEqualToString:@"Softness"] ? @[ @2, @3 ]
+        [grainControls[s].label isEqualToString:@"Softness"] ? @[ @2, @3, @5 ]
                                                              : @[ @2 ];
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                           values:@[ @(grainControls[s].def) ]]];
@@ -463,6 +472,24 @@ static NSString *_MeshAILaneSchemaText(void) {
     [lanes addObject:lane];
   }
 
+  // --- Simplex controls (Type 5). Steps = extra colour bands between the base
+  // colours (integer). Softness is the lane shared with Grainy / Warp above.
+  KKLane *steps = [KKLane laneWithLabel:@"Steps"];
+  steps.valueType = KKLaneValueTypeFloat;
+  steps.componentMin = @[ @1.0 ];
+  steps.componentMax = @[ @10.0 ];
+  steps.integerValued = YES;
+  steps.animatable = YES;
+  steps.enabled = NO;
+  steps.categoryKey = @"Shader";
+  steps.categorySymbol = @"slider.horizontal.3";
+  steps.visibleWhenLabel = @"Type";
+  steps.visibleWhenValues = @[ @5 ];
+  [steps
+      insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                      values:@[ @(KK_SIMPLEX_DEFAULT_STEPS) ]]];
+  [lanes addObject:steps];
+
   // --- Fixed colours first (not removable, so they sit above the dynamic
   // swatches): Dithering background + foreground (ink), the Neuro Mid line
   // colour. Background is shared by Dithering + Grainy + Neuro; Foreground by
@@ -509,7 +536,7 @@ static NSString *_MeshAILaneSchemaText(void) {
     color.categorySymbol = @"paintpalette";
     color.visibleWhenLabel = @"Type";
     color.visibleWhenValues =
-        @[ @0, @2, @3 ]; // Mesh + Grainy + Warp share the palette
+        @[ @0, @2, @3, @5 ]; // Mesh + Grainy + Warp + Simplex share the palette
     const float *c = kMeshDefaultColorsSRGB[i];
     [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                            values:@[

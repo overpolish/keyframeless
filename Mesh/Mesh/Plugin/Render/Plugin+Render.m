@@ -347,6 +347,37 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   nn.rotation = rotation;
   nn.time = timeSec;
   outState->neuro = nn;
+
+  // --- Simplex Noise: the shared colour swatches mapped through two Simplex
+  // noises, stepped into bands. Softness (shared with Grainy/Warp) is read
+  // above. Resolution is filled at render time.
+  SimplexNoiseUniforms sn = SimplexNoiseDefault();
+  int snCount = 0;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    NSArray<NSNumber *> *v =
+        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
+    if (v.count >= 4)
+      sn.colors[snCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                             v[2].floatValue, v[3].floatValue};
+    else {
+      const float *c = kMeshDefaultColorsSRGB[i];
+      sn.colors[snCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+    }
+  }
+  sn.colorsCount = snCount > 0 ? snCount : 1;
+  NSArray<NSNumber *> *stepsV =
+      MeshLaneValuesAtFraction(timeline, @"Steps", frac);
+  sn.stepsPerColor =
+      stepsV.count ? stepsV[0].floatValue : KK_SIMPLEX_DEFAULT_STEPS;
+  sn.softness =
+      softV.count ? softV[0].floatValue / 100.0f : KK_SIMPLEX_DEFAULT_SOFTNESS;
+  sn.speed = speed;
+  sn.seed = seed;
+  sn.origin = origin;
+  sn.scale = scale;
+  sn.rotation = rotation;
+  sn.time = timeSec;
+  outState->simplex = sn;
   return YES;
 }
 
@@ -418,6 +449,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     state.grain = GrainGradientDefault();
     state.warp = WarpDefault();
     state.neuro = NeuroNoiseDefault();
+    state.simplex = SimplexNoiseDefault();
   }
 
   // Dispatch on the active type. Each type is a separate fragment function; the
@@ -427,6 +459,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   BOOL isGrain = (state.type == MeshType_GrainGradient);
   BOOL isWarp = (state.type == MeshType_Warp);
   BOOL isNeuro = (state.type == MeshType_Neuro);
+  BOOL isSimplex = (state.type == MeshType_Simplex);
   NSString *pluginID = kPluginID;
   NSString *fragment = @"fragmentShader";
   if (isDither) {
@@ -441,6 +474,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isNeuro) {
     pluginID = [kPluginID stringByAppendingString:@".neuro"];
     fragment = @"neuroNoiseFragment";
+  } else if (isSimplex) {
+    pluginID = [kPluginID stringByAppendingString:@".simplex"];
+    fragment = @"simplexNoiseFragment";
   }
 
   id<MTLRenderPipelineState> pipelineState =
@@ -458,6 +494,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   state.grain.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.warp.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.neuro.resolution = (vector_float2){(float)mediaW, (float)mediaH};
+  state.simplex.resolution = (vector_float2){(float)mediaW, (float)mediaH};
 
   // Match the output encoding to the destination: FCP's float working buffers
   // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.
@@ -481,6 +518,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isNeuro) {
     uniformBytes = (const void *)&state.neuro;
     uniformLen = sizeof(state.neuro);
+  } else if (isSimplex) {
+    uniformBytes = (const void *)&state.simplex;
+    uniformLen = sizeof(state.simplex);
   }
 
   // sourceImages is empty for a generator; encodeRenderCommands handles that

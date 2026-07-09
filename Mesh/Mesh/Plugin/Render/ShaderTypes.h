@@ -121,6 +121,24 @@ typedef struct NeuroNoiseUniforms {
     float rotation;           // common rotation, radians
 } NeuroNoiseUniforms;
 
+// Simplex Noise type ("Simplex"): also ported from paper-design/shaders
+// (Apache-2.0). A multi-colour gradient mapped into smooth animated curves from
+// a combination of two Simplex noises, stepped into bands. resolution is filled
+// at render time (aspect for the pattern frame + the colour-banding dither).
+typedef struct SimplexNoiseUniforms {
+    vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba (straight alpha), up to 10
+    int colorsCount;                           // active colours (<= 10)
+    vector_float2 resolution;                  // destination pixel dims (render time)
+    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
+    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
+    float stepsPerColor;                       // 1..10 extra colours between base colours
+    float softness;                            // 0..1 colour-transition sharpness
+    float time;                                // clip seconds
+    float speed;                               // time multiplier (motion rate)
+    float seed;                                // start-time offset (shared)
+    float rotation;                            // common rotation, radians
+} SimplexNoiseUniforms;
+
 // The Type choice-pill order. Kept in sync with the "Type" pill labels.
 typedef enum MeshType {
     MeshType_Mesh = 0,          // paper-design animated mesh gradient
@@ -128,6 +146,7 @@ typedef enum MeshType {
     MeshType_GrainGradient = 2, // paper-design grain gradient ("Grainy")
     MeshType_Warp = 3,          // paper-design warp
     MeshType_Neuro = 4,         // paper-design neuro-noise ("Neuro")
+    MeshType_Simplex = 5,       // paper-design simplex-noise ("Simplex")
 } MeshType;
 
 // The full render state packed into pluginState: the active type plus each
@@ -141,6 +160,7 @@ typedef struct MeshPluginState {
     GrainGradientUniforms grain;
     WarpUniforms warp;
     NeuroNoiseUniforms neuro;
+    SimplexNoiseUniforms simplex;
 } MeshPluginState;
 
 typedef enum MeshFragmentIndex {

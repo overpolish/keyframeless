@@ -185,6 +185,33 @@ static inline NeuroNoiseUniforms NeuroNoiseDefault(void) {
   return n;
 }
 
+/// Simplex Noise ("Simplex", paper-design port) defaults.
+#define KK_SIMPLEX_DEFAULT_STEPS 1.0f
+#define KK_SIMPLEX_DEFAULT_SOFTNESS 0.0f
+
+/// Fallback Simplex Noise uniforms (the default palette) so an un-edited
+/// instance still renders before the colour lanes resolve. `resolution` is
+/// overwritten at render time.
+static inline SimplexNoiseUniforms SimplexNoiseDefault(void) {
+  SimplexNoiseUniforms s;
+  memset(&s, 0, sizeof(s));
+  s.colorsCount = KK_MESH_COLOR_COUNT;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    const float *c = kMeshDefaultColorsSRGB[i];
+    s.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
+  }
+  s.resolution = (vector_float2){1920.0f, 1080.0f};
+  s.origin = (vector_float2){0.5f, 0.5f};
+  s.scale = (vector_float2){1.0f, 1.0f};
+  s.stepsPerColor = KK_SIMPLEX_DEFAULT_STEPS;
+  s.softness = KK_SIMPLEX_DEFAULT_SOFTNESS;
+  s.speed = KK_MESH_GRAD_DEFAULT_SPEED;
+  s.seed = 0.0f;
+  s.rotation = 0.0f;
+  s.time = 0.0f;
+  return s;
+}
+
 /// Generic per-swatch lane label ("Color 1", "Color 2", ...). One [r,g,b,a]
 /// colour lane per swatch. One-based to read naturally.
 static inline NSString *MeshColorLabel(int i) {

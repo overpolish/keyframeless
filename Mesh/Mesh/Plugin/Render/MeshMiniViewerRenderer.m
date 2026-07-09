@@ -150,6 +150,8 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     return @[ @(KK_NEURO_DEFAULT_BRIGHTNESS * 100.0) ];
   if ([label isEqualToString:@"Contrast"])
     return @[ @(KK_NEURO_DEFAULT_CONTRAST * 100.0) ];
+  if ([label isEqualToString:@"Steps"])
+    return @[ @(KK_SIMPLEX_DEFAULT_STEPS) ];
   if ([label isEqualToString:@"Shape"])
     return @[ @0.0 ]; // simplex
   if ([label isEqualToString:@"Dither"])
@@ -230,6 +232,7 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   BOOL isGrain = (meshType == MeshType_GrainGradient);
   BOOL isWarp = (meshType == MeshType_Warp);
   BOOL isNeuro = (meshType == MeshType_Neuro);
+  BOOL isSimplex = (meshType == MeshType_Simplex);
   NSString *fragment = @"fragmentShader";
   if (isDither)
     fragment = @"ditheringFragment";
@@ -239,6 +242,8 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     fragment = @"warpFragment";
   else if (isNeuro)
     fragment = @"neuroNoiseFragment";
+  else if (isSimplex)
+    fragment = @"simplexNoiseFragment";
   id<MTLRenderPipelineState> pipeline =
       [self _pipelineForDevice:dest.device
                    pixelFormat:dest.pixelFormat
@@ -443,6 +448,36 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     nn.resolution = (vector_float2){W, H};
     nn.time = timeSec;
     [e setFragmentBytes:&nn length:sizeof(nn) atIndex:MeshFragmentIndex_Grid];
+  } else if (isSimplex) {
+    SimplexNoiseUniforms sn = SimplexNoiseDefault();
+    int snCount = 0;
+    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
+      if (v.count >= 4)
+        sn.colors[snCount++] =
+            (vector_float4){v[0].floatValue, v[1].floatValue, v[2].floatValue,
+                            v[3].floatValue};
+      else {
+        const float *c = kMeshDefaultColorsSRGB[i];
+        sn.colors[snCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+      }
+    }
+    sn.colorsCount = snCount > 0 ? snCount : 1;
+    NSArray<NSNumber *> *stepsV = [self valuesForLabel:@"Steps"];
+    NSArray<NSNumber *> *softV = [self valuesForLabel:@"Softness"];
+    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+    sn.stepsPerColor =
+        stepsV.count ? stepsV[0].floatValue : KK_SIMPLEX_DEFAULT_STEPS;
+    sn.softness = softV.count ? softV[0].floatValue / 100.0f
+                              : KK_SIMPLEX_DEFAULT_SOFTNESS;
+    sn.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
+    sn.seed = seedShared;
+    sn.origin = originShared;
+    sn.scale = scaleShared;
+    sn.rotation = rotationShared;
+    sn.resolution = (vector_float2){W, H};
+    sn.time = timeSec;
+    [e setFragmentBytes:&sn length:sizeof(sn) atIndex:MeshFragmentIndex_Grid];
   } else {
     // Same colour swatches + controls as the FCP render (valuesForLabel falls
     // back to defaults).
