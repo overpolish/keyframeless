@@ -189,6 +189,12 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     return @[ @(KK_SILK_DEFAULT_FOLDS * 100.0) ];
   if ([label isEqualToString:@"Drape"])
     return @[ @(KK_SILK_DEFAULT_DRAPE * 100.0) ];
+  if ([label isEqualToString:@"Layers"])
+    return @[ @(KK_STRATA_DEFAULT_LAYERS) ];
+  if ([label isEqualToString:@"Tectonics"])
+    return @[ @(KK_STRATA_DEFAULT_TECTONICS * 100.0) ];
+  if ([label isEqualToString:@"Texture"])
+    return @[ @(KK_STRATA_DEFAULT_TEXTURE * 100.0) ];
   if ([label isEqualToString:@"Shape"])
     return @[ @0.0 ]; // simplex
   if ([label isEqualToString:@"Dither"])
@@ -275,6 +281,7 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   BOOL isFluid = (meshType == MeshType_Fluid);
   BOOL isNeon = (meshType == MeshType_Neon);
   BOOL isSilk = (meshType == MeshType_Silk);
+  BOOL isStrata = (meshType == MeshType_Strata);
   NSString *fragment = @"fragmentShader";
   if (isDither)
     fragment = @"ditheringFragment";
@@ -296,6 +303,8 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     fragment = @"neonFragment";
   else if (isSilk)
     fragment = @"silkFragment";
+  else if (isStrata)
+    fragment = @"strataFragment";
   id<MTLRenderPipelineState> pipeline =
       [self _pipelineForDevice:dest.device
                    pixelFormat:dest.pixelFormat
@@ -717,6 +726,38 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     sk.resolution = (vector_float2){W, H};
     sk.time = timeSec;
     [e setFragmentBytes:&sk length:sizeof(sk) atIndex:MeshFragmentIndex_Grid];
+  } else if (isStrata) {
+    StrataUniforms st = StrataDefault();
+    int stCount = 0;
+    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
+      if (v.count >= 4)
+        st.colors[stCount++] = (vector_float4){
+            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
+      else {
+        const float *c = kMeshDefaultColorsSRGB[i];
+        st.colors[stCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+      }
+    }
+    st.colorsCount = stCount > 0 ? stCount : 1;
+    NSArray<NSNumber *> *layersV = [self valuesForLabel:@"Layers"];
+    NSArray<NSNumber *> *tectonicsV = [self valuesForLabel:@"Tectonics"];
+    NSArray<NSNumber *> *textureV = [self valuesForLabel:@"Texture"];
+    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+    st.layers =
+        layersV.count ? layersV[0].floatValue : KK_STRATA_DEFAULT_LAYERS;
+    st.tectonics = tectonicsV.count ? tectonicsV[0].floatValue / 100.0f
+                                    : KK_STRATA_DEFAULT_TECTONICS;
+    st.texture = textureV.count ? textureV[0].floatValue / 100.0f
+                                : KK_STRATA_DEFAULT_TEXTURE;
+    st.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
+    st.seed = seedShared;
+    st.origin = originShared;
+    st.scale = scaleShared;
+    st.rotation = rotationShared;
+    st.resolution = (vector_float2){W, H};
+    st.time = timeSec;
+    [e setFragmentBytes:&st length:sizeof(st) atIndex:MeshFragmentIndex_Grid];
   } else {
     // Same colour swatches + controls as the FCP render (valuesForLabel falls
     // back to defaults).

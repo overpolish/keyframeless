@@ -30,7 +30,7 @@
 /// no in/out, no Basic/Advanced - just lanes and their numeric ranges.
 static NSString *_MeshAILaneSchemaText(void) {
   return @"Lane labels and value spaces. This is a procedural generator with "
-         @"eleven "
+         @"twelve "
          @"styles selected by \"Type\": Mesh (animated colour spots blended "
          @"into "
          @"a soft gradient), Dithering (a procedural shape rendered through "
@@ -45,14 +45,15 @@ static NSString *_MeshAILaneSchemaText(void) {
          @"radiating from the centre with a central glow), Fluid (a "
          @"molten, "
          @"marbled flow from an iterative domain warp), Wisp (glowing "
-         @"neon tendril wisps drifting over a dark backdrop), and Silk "
-         @"(flowing draped silk fabric with anisotropic sheen). Set "
+         @"neon tendril wisps drifting over a dark backdrop), Silk "
+         @"(flowing draped silk fabric with anisotropic sheen), and Strata "
+         @"(stacked geological layers with folded boundaries). Set "
          @"the lanes for the chosen type.\n\n"
          @"- \"Type\": the generator style. A structural choice (NOT "
          @"animated), "
          @"stored as an index: 0 = Mesh, 1 = Dithering, 2 = Grainy, 3 = Warp, "
          @"4 = Neuro, 5 = Simplex, 6 = Metaballs, 7 = God Rays, 8 = Fluid, "
-         @"9 = Wisp, 10 = Silk. Default 0.\n"
+         @"9 = Wisp, 10 = Silk, 11 = Strata. Default 0.\n"
          @"- \"Speed\": single value, 0..3 multiplier of the animation rate "
          @"(1 = normal, 0 = frozen, 2 = twice as fast). Shared by all types. "
          @"Animatable. Default 1.\n"
@@ -202,7 +203,17 @@ static NSString *_MeshAILaneSchemaText(void) {
          @"front). Each layer's dark/mid/bright/sheen tones derive from its "
          @"hue. 3 used.\n"
          @"- \"Background\": the dark backdrop [r, g, b, a] in sRGB 0..1 "
-         @"(shared with Dithering + Grainy + Neuro).\n";
+         @"(shared with Dithering + Grainy + Neuro).\n"
+         @"\nStrata (Type 11):\n"
+         @"- \"Layers\": integer 2..24, the number of geological strata bands. "
+         @"Animatable. Default 16.\n"
+         @"- \"Tectonics\": percent 0..250. Deformation strength (how much the "
+         @"strata fold, warp and buckle). Default 100.\n"
+         @"- \"Texture\": percent 0..200. Washi-paper grain intensity. "
+         @"Default 100.\n"
+         @"- \"Color 1\", \"Color 2\", ... : the strata colours (shared with "
+         @"Mesh), each [r, g, b, a] in sRGB 0..1. Each layer hashes to one of "
+         @"these swatches. Add more for more variety.\n";
 }
 
 @implementation MeshPlugin (CustomUI)
@@ -225,10 +236,10 @@ static NSString *_MeshAILaneSchemaText(void) {
   type.valueType = KKLaneValueTypeFloat;
   type.choiceLabels = @[
     @"Mesh", @"Dithering", @"Grainy", @"Warp", @"Neuro", @"Simplex",
-    @"Metaballs", @"God Rays", @"Fluid", @"Wisp", @"Silk"
+    @"Metaballs", @"God Rays", @"Fluid", @"Wisp", @"Silk", @"Strata"
   ];
   type.componentMin = @[ @0.0 ];
-  type.componentMax = @[ @10.0 ];
+  type.componentMax = @[ @11.0 ];
   type.integerValued = YES;
   type.wrapsChoicePills =
       YES; // 8 types - wrap onto multiple lines, not overflow
@@ -249,7 +260,8 @@ static NSString *_MeshAILaneSchemaText(void) {
   speed.categoryKey = @"Core";
   speed.categorySymbol = @"circle.dotted";
   speed.visibleWhenLabel = @"Type";
-  speed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10 ];
+  speed.visibleWhenValues =
+      @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11 ];
   [speed insertKeypose:[KKKeyPose
                            keyposeAtTime:0.0
                                   values:@[ @(KK_MESH_GRAD_DEFAULT_SPEED) ]]];
@@ -268,7 +280,8 @@ static NSString *_MeshAILaneSchemaText(void) {
   seed.categoryKey = @"Core";
   seed.categorySymbol = @"circle.dotted";
   seed.visibleWhenLabel = @"Type";
-  seed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10 ];
+  seed.visibleWhenValues =
+      @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11 ];
   [seed insertKeypose:[KKKeyPose
                           keyposeAtTime:0.0
                                  values:@[ @(KK_MESH_GRAD_DEFAULT_SEED) ]]];
@@ -722,6 +735,50 @@ static NSString *_MeshAILaneSchemaText(void) {
     [lanes addObject:lane];
   }
 
+  // --- Strata controls (Type 11). Layers = strata count (integer 2..24);
+  // Tectonics = deformation strength; Texture = washi-paper grain intensity.
+  KKLane *strataLayers = [KKLane laneWithLabel:@"Layers"];
+  strataLayers.valueType = KKLaneValueTypeFloat;
+  strataLayers.componentMin = @[ @2.0 ];
+  strataLayers.componentMax = @[ @24.0 ];
+  strataLayers.integerValued = YES;
+  strataLayers.animatable = YES;
+  strataLayers.enabled = NO;
+  strataLayers.categoryKey = @"Shader";
+  strataLayers.categorySymbol = @"slider.horizontal.3";
+  strataLayers.visibleWhenLabel = @"Type";
+  strataLayers.visibleWhenValues = @[ @11 ];
+  [strataLayers
+      insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                      values:@[ @(KK_STRATA_DEFAULT_LAYERS) ]]];
+  [lanes addObject:strataLayers];
+
+  struct {
+    NSString *label;
+    double def, max;
+  } strataControls[] = {
+      {@"Tectonics", KK_STRATA_DEFAULT_TECTONICS * 100.0, 250.0},
+      {@"Texture", KK_STRATA_DEFAULT_TEXTURE * 100.0, 200.0},
+  };
+  for (unsigned s = 0; s < sizeof(strataControls) / sizeof(strataControls[0]);
+       s++) {
+    KKLane *lane = [KKLane laneWithLabel:strataControls[s].label];
+    lane.valueType = KKLaneValueTypeFloat;
+    lane.componentMin = @[ @0.0 ];
+    lane.componentMax = @[ @(strataControls[s].max) ];
+    lane.componentUnits = @[ @"%" ];
+    lane.animatable = YES;
+    lane.enabled = NO;
+    lane.categoryKey = @"Shader";
+    lane.categorySymbol = @"slider.horizontal.3";
+    lane.visibleWhenLabel = @"Type";
+    lane.visibleWhenValues = @[ @11 ];
+    [lane
+        insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                        values:@[ @(strataControls[s].def) ]]];
+    [lanes addObject:lane];
+  }
+
   // --- Fixed colours first (not removable, so they sit above the dynamic
   // swatches): Dithering background + foreground (ink), the Neuro Mid line
   // colour. Background is shared by Dithering + Grainy + Neuro; Foreground by
@@ -770,9 +827,9 @@ static NSString *_MeshAILaneSchemaText(void) {
     color.categorySymbol = @"paintpalette";
     color.visibleWhenLabel = @"Type";
     color.visibleWhenValues = @[
-      @0, @2, @3, @5, @6, @7, @8, @9, @10
+      @0, @2, @3, @5, @6, @7, @8, @9, @10, @11
     ]; // Mesh + Grainy + Warp + Simplex + Metaballs + God Rays + Fluid + Neon +
-       // Silk share the palette
+       // Silk + Strata share the palette
     const float *c = kMeshDefaultColorsSRGB[i];
     [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                            values:@[

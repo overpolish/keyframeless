@@ -592,6 +592,42 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   sk.rotation = rotation;
   sk.time = timeSec;
   outState->silk = sk;
+
+  // --- Strata: stacked geological layers, each hashing to a shared palette
+  // swatch. Tectonics / Texture are percent (shader wants 0..N); Layers is a
+  // count. Resolution is filled at render time.
+  StrataUniforms st = StrataDefault();
+  int stCount = 0;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    NSArray<NSNumber *> *v =
+        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
+    if (v.count >= 4)
+      st.colors[stCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                             v[2].floatValue, v[3].floatValue};
+    else {
+      const float *c = kMeshDefaultColorsSRGB[i];
+      st.colors[stCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+    }
+  }
+  st.colorsCount = stCount > 0 ? stCount : 1;
+  NSArray<NSNumber *> *layersV =
+      MeshLaneValuesAtFraction(timeline, @"Layers", frac);
+  NSArray<NSNumber *> *tectonicsV =
+      MeshLaneValuesAtFraction(timeline, @"Tectonics", frac);
+  NSArray<NSNumber *> *textureV =
+      MeshLaneValuesAtFraction(timeline, @"Texture", frac);
+  st.layers = layersV.count ? layersV[0].floatValue : KK_STRATA_DEFAULT_LAYERS;
+  st.tectonics = tectonicsV.count ? tectonicsV[0].floatValue / 100.0f
+                                  : KK_STRATA_DEFAULT_TECTONICS;
+  st.texture = textureV.count ? textureV[0].floatValue / 100.0f
+                              : KK_STRATA_DEFAULT_TEXTURE;
+  st.speed = speed;
+  st.seed = seed;
+  st.origin = origin;
+  st.scale = scale;
+  st.rotation = rotation;
+  st.time = timeSec;
+  outState->strata = st;
   return YES;
 }
 
@@ -669,6 +705,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     state.fluid = FluidDefault();
     state.neon = NeonDefault();
     state.silk = SilkDefault();
+    state.strata = StrataDefault();
   }
 
   // Dispatch on the active type. Each type is a separate fragment function; the
@@ -684,6 +721,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   BOOL isFluid = (state.type == MeshType_Fluid);
   BOOL isNeon = (state.type == MeshType_Neon);
   BOOL isSilk = (state.type == MeshType_Silk);
+  BOOL isStrata = (state.type == MeshType_Strata);
   NSString *pluginID = kPluginID;
   NSString *fragment = @"fragmentShader";
   if (isDither) {
@@ -716,6 +754,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isSilk) {
     pluginID = [kPluginID stringByAppendingString:@".silk"];
     fragment = @"silkFragment";
+  } else if (isStrata) {
+    pluginID = [kPluginID stringByAppendingString:@".strata"];
+    fragment = @"strataFragment";
   }
 
   id<MTLRenderPipelineState> pipelineState =
@@ -739,6 +780,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   state.fluid.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.neon.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.silk.resolution = (vector_float2){(float)mediaW, (float)mediaH};
+  state.strata.resolution = (vector_float2){(float)mediaW, (float)mediaH};
 
   // Match the output encoding to the destination: FCP's float working buffers
   // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.
@@ -780,6 +822,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isSilk) {
     uniformBytes = (const void *)&state.silk;
     uniformLen = sizeof(state.silk);
+  } else if (isStrata) {
+    uniformBytes = (const void *)&state.strata;
+    uniformLen = sizeof(state.strata);
   }
 
   // sourceImages is empty for a generator; encodeRenderCommands handles that

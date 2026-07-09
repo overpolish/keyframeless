@@ -246,6 +246,26 @@ typedef struct SilkUniforms {
     float rotation;                            // common rotation, radians
 } SilkUniforms;
 
+// Strata type ("Strata"): ported from radiant-shaders "Painted Strata" (pbakaus/
+// radiant, MIT) GLSL -> MSL. Stacked geological strata layers with wavy folded
+// boundaries, a tectonic domain warp, per-layer palette colours and washi-paper
+// grain. Each layer hashes to a palette swatch. resolution is filled at render
+// time.
+typedef struct StrataUniforms {
+    vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba; layers pick from these by hash
+    int colorsCount;                           // active colours (<= 10)
+    vector_float2 resolution;                  // destination pixel dims (render time)
+    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
+    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
+    float layers;                              // 2..24 strata layer count
+    float tectonics;                           // deformation strength (warp + boundary fold)
+    float texture;                             // washi-paper grain intensity
+    float time;                                // clip seconds
+    float speed;                               // time multiplier (motion rate)
+    float seed;                                // start-time offset (shared)
+    float rotation;                            // common rotation, radians
+} StrataUniforms;
+
 // The Type choice-pill order. Kept in sync with the "Type" pill labels.
 typedef enum MeshType {
     MeshType_Mesh = 0,          // paper-design animated mesh gradient
@@ -259,6 +279,7 @@ typedef enum MeshType {
     MeshType_Fluid = 8,         // radiant-shaders fluid-amber ("Fluid")
     MeshType_Neon = 9,          // radiant-shaders neon-drip ("Wisp")
     MeshType_Silk = 10,         // radiant-shaders silk-cascade ("Silk")
+    MeshType_Strata = 11,       // radiant-shaders painted-strata ("Strata")
 } MeshType;
 
 // The full render state packed into pluginState: the active type plus each
@@ -278,6 +299,7 @@ typedef struct MeshPluginState {
     FluidUniforms fluid;
     NeonUniforms neon;
     SilkUniforms silk;
+    StrataUniforms strata;
 } MeshPluginState;
 
 typedef enum MeshFragmentIndex {
