@@ -152,6 +152,10 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     return @[ @(KK_NEURO_DEFAULT_CONTRAST * 100.0) ];
   if ([label isEqualToString:@"Steps"])
     return @[ @(KK_SIMPLEX_DEFAULT_STEPS) ];
+  if ([label isEqualToString:@"Count"])
+    return @[ @(KK_METABALLS_DEFAULT_COUNT) ];
+  if ([label isEqualToString:@"Size"])
+    return @[ @(KK_METABALLS_DEFAULT_SIZE * 100.0) ];
   if ([label isEqualToString:@"Shape"])
     return @[ @0.0 ]; // simplex
   if ([label isEqualToString:@"Dither"])
@@ -233,6 +237,7 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   BOOL isWarp = (meshType == MeshType_Warp);
   BOOL isNeuro = (meshType == MeshType_Neuro);
   BOOL isSimplex = (meshType == MeshType_Simplex);
+  BOOL isMetaballs = (meshType == MeshType_Metaballs);
   NSString *fragment = @"fragmentShader";
   if (isDither)
     fragment = @"ditheringFragment";
@@ -244,6 +249,8 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     fragment = @"neuroNoiseFragment";
   else if (isSimplex)
     fragment = @"simplexNoiseFragment";
+  else if (isMetaballs)
+    fragment = @"metaballsFragment";
   id<MTLRenderPipelineState> pipeline =
       [self _pipelineForDevice:dest.device
                    pixelFormat:dest.pixelFormat
@@ -454,9 +461,8 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
       NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
       if (v.count >= 4)
-        sn.colors[snCount++] =
-            (vector_float4){v[0].floatValue, v[1].floatValue, v[2].floatValue,
-                            v[3].floatValue};
+        sn.colors[snCount++] = (vector_float4){
+            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
       else {
         const float *c = kMeshDefaultColorsSRGB[i];
         sn.colors[snCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
@@ -478,6 +484,39 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     sn.resolution = (vector_float2){W, H};
     sn.time = timeSec;
     [e setFragmentBytes:&sn length:sizeof(sn) atIndex:MeshFragmentIndex_Grid];
+  } else if (isMetaballs) {
+    MetaballsUniforms mb = MetaballsDefault();
+    int mbCount = 0;
+    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
+      if (v.count >= 4)
+        mb.colors[mbCount++] = (vector_float4){
+            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
+      else {
+        const float *c = kMeshDefaultColorsSRGB[i];
+        mb.colors[mbCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+      }
+    }
+    mb.colorsCount = mbCount > 0 ? mbCount : 1;
+    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
+    NSArray<NSNumber *> *countV = [self valuesForLabel:@"Count"];
+    NSArray<NSNumber *> *sizeV = [self valuesForLabel:@"Size"];
+    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+    if (backV.count >= 4)
+      mb.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                     backV[2].floatValue, backV[3].floatValue};
+    mb.ballCount =
+        countV.count ? countV[0].floatValue : KK_METABALLS_DEFAULT_COUNT;
+    mb.ballSize =
+        sizeV.count ? sizeV[0].floatValue / 100.0f : KK_METABALLS_DEFAULT_SIZE;
+    mb.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
+    mb.seed = seedShared;
+    mb.origin = originShared;
+    mb.scale = scaleShared;
+    mb.rotation = rotationShared;
+    mb.resolution = (vector_float2){W, H};
+    mb.time = timeSec;
+    [e setFragmentBytes:&mb length:sizeof(mb) atIndex:MeshFragmentIndex_Grid];
   } else {
     // Same colour swatches + controls as the FCP render (valuesForLabel falls
     // back to defaults).

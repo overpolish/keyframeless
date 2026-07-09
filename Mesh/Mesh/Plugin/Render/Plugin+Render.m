@@ -378,6 +378,42 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   sn.rotation = rotation;
   sn.time = timeSec;
   outState->simplex = sn;
+
+  // --- Metaballs: the shared colour swatches (indexed modulo count) over the
+  // Background. Count = active balls (integer), Size = ball size (percent).
+  // Resolution is filled at render time.
+  MetaballsUniforms mb = MetaballsDefault();
+  int mbCount = 0;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    NSArray<NSNumber *> *v =
+        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
+    if (v.count >= 4)
+      mb.colors[mbCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                             v[2].floatValue, v[3].floatValue};
+    else {
+      const float *c = kMeshDefaultColorsSRGB[i];
+      mb.colors[mbCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+    }
+  }
+  mb.colorsCount = mbCount > 0 ? mbCount : 1;
+  if (backV.count >= 4)
+    mb.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
+                                   backV[2].floatValue, backV[3].floatValue};
+  NSArray<NSNumber *> *ballCountV =
+      MeshLaneValuesAtFraction(timeline, @"Count", frac);
+  NSArray<NSNumber *> *ballSizeV =
+      MeshLaneValuesAtFraction(timeline, @"Size", frac);
+  mb.ballCount =
+      ballCountV.count ? ballCountV[0].floatValue : KK_METABALLS_DEFAULT_COUNT;
+  mb.ballSize = ballSizeV.count ? ballSizeV[0].floatValue / 100.0f
+                                : KK_METABALLS_DEFAULT_SIZE;
+  mb.speed = speed;
+  mb.seed = seed;
+  mb.origin = origin;
+  mb.scale = scale;
+  mb.rotation = rotation;
+  mb.time = timeSec;
+  outState->metaballs = mb;
   return YES;
 }
 
@@ -450,6 +486,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     state.warp = WarpDefault();
     state.neuro = NeuroNoiseDefault();
     state.simplex = SimplexNoiseDefault();
+    state.metaballs = MetaballsDefault();
   }
 
   // Dispatch on the active type. Each type is a separate fragment function; the
@@ -460,6 +497,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   BOOL isWarp = (state.type == MeshType_Warp);
   BOOL isNeuro = (state.type == MeshType_Neuro);
   BOOL isSimplex = (state.type == MeshType_Simplex);
+  BOOL isMetaballs = (state.type == MeshType_Metaballs);
   NSString *pluginID = kPluginID;
   NSString *fragment = @"fragmentShader";
   if (isDither) {
@@ -477,6 +515,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isSimplex) {
     pluginID = [kPluginID stringByAppendingString:@".simplex"];
     fragment = @"simplexNoiseFragment";
+  } else if (isMetaballs) {
+    pluginID = [kPluginID stringByAppendingString:@".metaballs"];
+    fragment = @"metaballsFragment";
   }
 
   id<MTLRenderPipelineState> pipelineState =
@@ -495,6 +536,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   state.warp.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.neuro.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.simplex.resolution = (vector_float2){(float)mediaW, (float)mediaH};
+  state.metaballs.resolution = (vector_float2){(float)mediaW, (float)mediaH};
 
   // Match the output encoding to the destination: FCP's float working buffers
   // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.
@@ -521,6 +563,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isSimplex) {
     uniformBytes = (const void *)&state.simplex;
     uniformLen = sizeof(state.simplex);
+  } else if (isMetaballs) {
+    uniformBytes = (const void *)&state.metaballs;
+    uniformLen = sizeof(state.metaballs);
   }
 
   // sourceImages is empty for a generator; encodeRenderCommands handles that

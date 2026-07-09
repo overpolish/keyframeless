@@ -30,7 +30,7 @@
 /// no in/out, no Basic/Advanced - just lanes and their numeric ranges.
 static NSString *_MeshAILaneSchemaText(void) {
   return @"Lane labels and value spaces. This is a procedural generator with "
-         @"six "
+         @"seven "
          @"styles selected by \"Type\": Mesh (animated colour spots blended "
          @"into "
          @"a soft gradient), Dithering (a procedural shape rendered through "
@@ -38,13 +38,15 @@ static NSString *_MeshAILaneSchemaText(void) {
          @"dither into two colours), Grainy (a procedural shape field "
          @"indexing a multi-colour ramp with a grainy overlay), Warp "
          @"(colour fields warped by noise + swirl over a base pattern), "
-         @"Neuro (a glowing web of fluid lines), and Simplex (a multi-colour "
-         @"gradient mapped through Simplex noise into stepped bands). Set "
+         @"Neuro (a glowing web of fluid lines), Simplex (a multi-colour "
+         @"gradient mapped through Simplex noise into stepped bands), and "
+         @"Metaballs (gooey coloured balls roaming the centre and merging "
+         @"into organic blobs). Set "
          @"the lanes for the chosen type.\n\n"
          @"- \"Type\": the generator style. A structural choice (NOT "
          @"animated), "
          @"stored as an index: 0 = Mesh, 1 = Dithering, 2 = Grainy, 3 = Warp, "
-         @"4 = Neuro, 5 = Simplex. Default 0.\n"
+         @"4 = Neuro, 5 = Simplex, 6 = Metaballs. Default 0.\n"
          @"- \"Speed\": single value, 0..3 multiplier of the animation rate "
          @"(1 = normal, 0 = frozen, 2 = twice as fast). Shared by all types. "
          @"Animatable. Default 1.\n"
@@ -129,7 +131,16 @@ static NSString *_MeshAILaneSchemaText(void) {
          @"- \"Softness\": percent 0..100. Band-edge sharpness (0 = hard, "
          @"100 = smooth). Shared with Grainy / Warp. Default 90.\n"
          @"- \"Color 1\", \"Color 2\", ... : the gradient colours (shared with "
-         @"Mesh), each [r, g, b, a] in sRGB 0..1. Up to 10 used.\n";
+         @"Mesh), each [r, g, b, a] in sRGB 0..1. Up to 10 used.\n"
+         @"\nMetaballs (Type 6):\n"
+         @"- \"Count\": integer 1..20, the number of gooey balls. Animatable. "
+         @"Default 6.\n"
+         @"- \"Size\": percent 0..100, the ball size (higher = larger, more "
+         @"merging). Default 100.\n"
+         @"- \"Color 1\", \"Color 2\", ... : the ball colours (shared with "
+         @"Mesh), each [r, g, b, a] in sRGB 0..1. Cycled across the balls.\n"
+         @"- \"Background\": the base colour [r, g, b, a] in sRGB 0..1 "
+         @"(shared with Dithering + Grainy + Neuro).\n";
 }
 
 @implementation MeshPlugin (CustomUI)
@@ -150,10 +161,12 @@ static NSString *_MeshAILaneSchemaText(void) {
   // (Core), then the colours (Colors) last.
   KKLane *type = [KKLane laneWithLabel:@"Type"];
   type.valueType = KKLaneValueTypeFloat;
-  type.choiceLabels =
-      @[ @"Mesh", @"Dithering", @"Grainy", @"Warp", @"Neuro", @"Simplex" ];
+  type.choiceLabels = @[
+    @"Mesh", @"Dithering", @"Grainy", @"Warp", @"Neuro", @"Simplex",
+    @"Metaballs"
+  ];
   type.componentMin = @[ @0.0 ];
-  type.componentMax = @[ @5.0 ];
+  type.componentMax = @[ @6.0 ];
   type.integerValued = YES;
   type.animatable = NO;
   type.enabled = NO;
@@ -172,7 +185,7 @@ static NSString *_MeshAILaneSchemaText(void) {
   speed.categoryKey = @"Core";
   speed.categorySymbol = @"circle.dotted";
   speed.visibleWhenLabel = @"Type";
-  speed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5 ];
+  speed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5, @6 ];
   [speed insertKeypose:[KKKeyPose
                            keyposeAtTime:0.0
                                   values:@[ @(KK_MESH_GRAD_DEFAULT_SPEED) ]]];
@@ -191,7 +204,7 @@ static NSString *_MeshAILaneSchemaText(void) {
   seed.categoryKey = @"Core";
   seed.categorySymbol = @"circle.dotted";
   seed.visibleWhenLabel = @"Type";
-  seed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5 ];
+  seed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5, @6 ];
   [seed insertKeypose:[KKKeyPose
                           keyposeAtTime:0.0
                                  values:@[ @(KK_MESH_GRAD_DEFAULT_SEED) ]]];
@@ -490,6 +503,42 @@ static NSString *_MeshAILaneSchemaText(void) {
                                       values:@[ @(KK_SIMPLEX_DEFAULT_STEPS) ]]];
   [lanes addObject:steps];
 
+  // --- Metaballs controls (Type 6). Count = active balls (integer 1..20);
+  // Size = ball size (percent 0..100 -> 0..1).
+  KKLane *ballCount = [KKLane laneWithLabel:@"Count"];
+  ballCount.valueType = KKLaneValueTypeFloat;
+  ballCount.componentMin = @[ @1.0 ];
+  ballCount.componentMax = @[ @20.0 ];
+  ballCount.integerValued = YES;
+  ballCount.animatable = YES;
+  ballCount.enabled = NO;
+  ballCount.categoryKey = @"Shader";
+  ballCount.categorySymbol = @"slider.horizontal.3";
+  ballCount.visibleWhenLabel = @"Type";
+  ballCount.visibleWhenValues = @[ @6 ];
+  [ballCount
+      insertKeypose:[KKKeyPose
+                        keyposeAtTime:0.0
+                               values:@[ @(KK_METABALLS_DEFAULT_COUNT) ]]];
+  [lanes addObject:ballCount];
+
+  KKLane *ballSize = [KKLane laneWithLabel:@"Size"];
+  ballSize.valueType = KKLaneValueTypeFloat;
+  ballSize.componentMin = @[ @0.0 ];
+  ballSize.componentMax = @[ @100.0 ];
+  ballSize.componentUnits = @[ @"%" ];
+  ballSize.animatable = YES;
+  ballSize.enabled = NO;
+  ballSize.categoryKey = @"Shader";
+  ballSize.categorySymbol = @"slider.horizontal.3";
+  ballSize.visibleWhenLabel = @"Type";
+  ballSize.visibleWhenValues = @[ @6 ];
+  [ballSize
+      insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                      values:@[ @(KK_METABALLS_DEFAULT_SIZE *
+                                                  100.0) ]]];
+  [lanes addObject:ballSize];
+
   // --- Fixed colours first (not removable, so they sit above the dynamic
   // swatches): Dithering background + foreground (ink), the Neuro Mid line
   // colour. Background is shared by Dithering + Grainy + Neuro; Foreground by
@@ -499,7 +548,7 @@ static NSString *_MeshAILaneSchemaText(void) {
     float r, g, b, a;
     NSArray<NSNumber *> *visibleWhen;
   } fixedColors[] = {
-      {@"Background", 0.04f, 0.04f, 0.07f, 1.0f, @[ @1, @2, @4 ]},
+      {@"Background", 0.04f, 0.04f, 0.07f, 1.0f, @[ @1, @2, @4, @6 ]},
       {@"Foreground", 0.85f, 0.90f, 0.98f, 1.0f, @[ @1, @4 ]},
       {@"Mid", 0.25f, 0.45f, 0.95f, 1.0f, @[ @4 ]},
   };
@@ -535,8 +584,9 @@ static NSString *_MeshAILaneSchemaText(void) {
     color.categoryKey = @"Colors";
     color.categorySymbol = @"paintpalette";
     color.visibleWhenLabel = @"Type";
-    color.visibleWhenValues =
-        @[ @0, @2, @3, @5 ]; // Mesh + Grainy + Warp + Simplex share the palette
+    color.visibleWhenValues = @[
+      @0, @2, @3, @5, @6
+    ]; // Mesh + Grainy + Warp + Simplex + Metaballs share the palette
     const float *c = kMeshDefaultColorsSRGB[i];
     [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                            values:@[

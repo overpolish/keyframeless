@@ -212,6 +212,34 @@ static inline SimplexNoiseUniforms SimplexNoiseDefault(void) {
   return s;
 }
 
+/// Metaballs ("Metaballs", paper-design port) defaults.
+#define KK_METABALLS_DEFAULT_COUNT 6.0f
+#define KK_METABALLS_DEFAULT_SIZE 1.0f
+
+/// Fallback Metaballs uniforms (the default palette + a dark background) so an
+/// un-edited instance still renders before the colour lanes resolve.
+/// `resolution` is overwritten at render time.
+static inline MetaballsUniforms MetaballsDefault(void) {
+  MetaballsUniforms m;
+  memset(&m, 0, sizeof(m));
+  m.colorsCount = KK_MESH_COLOR_COUNT;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    const float *c = kMeshDefaultColorsSRGB[i];
+    m.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
+  }
+  m.colorBack = (vector_float4){0.04f, 0.04f, 0.07f, 1.0f};
+  m.resolution = (vector_float2){1920.0f, 1080.0f};
+  m.origin = (vector_float2){0.5f, 0.5f};
+  m.scale = (vector_float2){1.0f, 1.0f};
+  m.ballCount = KK_METABALLS_DEFAULT_COUNT;
+  m.ballSize = KK_METABALLS_DEFAULT_SIZE;
+  m.speed = KK_MESH_GRAD_DEFAULT_SPEED;
+  m.seed = 0.0f;
+  m.rotation = 0.0f;
+  m.time = 0.0f;
+  return m;
+}
+
 /// Generic per-swatch lane label ("Color 1", "Color 2", ...). One [r,g,b,a]
 /// colour lane per swatch. One-based to read naturally.
 static inline NSString *MeshColorLabel(int i) {

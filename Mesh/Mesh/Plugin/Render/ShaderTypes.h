@@ -139,6 +139,25 @@ typedef struct SimplexNoiseUniforms {
     float rotation;                            // common rotation, radians
 } SimplexNoiseUniforms;
 
+// Metaballs type ("Metaballs"): also ported from paper-design/shaders
+// (Apache-2.0). Up to 20 coloured gooey balls roam the centre and merge into
+// smooth organic shapes over a background. resolution is filled at render time
+// (aspect for the pattern frame + the colour-banding dither).
+typedef struct MetaballsUniforms {
+    vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba (straight alpha), indexed modulo colorsCount
+    int colorsCount;                           // active colours (<= 10; shader wraps by count)
+    vector_float4 colorBack;                   // rgba background
+    vector_float2 resolution;                  // destination pixel dims (render time)
+    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
+    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
+    float ballCount;                           // 1..20 active balls
+    float ballSize;                            // 0..1 ball size
+    float time;                                // clip seconds
+    float speed;                               // time multiplier (motion rate)
+    float seed;                                // start-time offset (shared)
+    float rotation;                            // common rotation, radians
+} MetaballsUniforms;
+
 // The Type choice-pill order. Kept in sync with the "Type" pill labels.
 typedef enum MeshType {
     MeshType_Mesh = 0,          // paper-design animated mesh gradient
@@ -147,6 +166,7 @@ typedef enum MeshType {
     MeshType_Warp = 3,          // paper-design warp
     MeshType_Neuro = 4,         // paper-design neuro-noise ("Neuro")
     MeshType_Simplex = 5,       // paper-design simplex-noise ("Simplex")
+    MeshType_Metaballs = 6,     // paper-design metaballs ("Metaballs")
 } MeshType;
 
 // The full render state packed into pluginState: the active type plus each
@@ -161,6 +181,7 @@ typedef struct MeshPluginState {
     WarpUniforms warp;
     NeuroNoiseUniforms neuro;
     SimplexNoiseUniforms simplex;
+    MetaballsUniforms metaballs;
 } MeshPluginState;
 
 typedef enum MeshFragmentIndex {
