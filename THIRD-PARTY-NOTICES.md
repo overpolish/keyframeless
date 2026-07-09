@@ -6,6 +6,50 @@ section here for each third-party component you incorporate.
 
 ---
 
+## radiant (radiant-shaders)
+
+Portions of the Mesh generator's fragment shaders
+(`Mesh/Mesh/Plugin/Render/Mesh.metal` — the `Fluid` type) are derived from the
+`fluid-amber` shader in **pbakaus/radiant** (radiant-shaders.com).
+
+- Source: https://github.com/pbakaus/radiant
+- Copyright (c) 2025 Paul Bakaus.
+- Licensed under the MIT License (full text below).
+
+**Modifications:** the original GLSL fragment shader was translated to Metal
+Shading Language (MSL) and adapted for the FxPlug render pipeline — the fixed
+colour palette was replaced with the plugin's dynamic colour swatches, the
+mouse interaction was removed, and the sizing model changed. The original
+algorithm (iterative domain-warp fbm) is otherwise preserved.
+
+### MIT License
+
+```text
+MIT License
+
+Copyright (c) 2025 Paul Bakaus
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+
 ## paper-design/shaders
 
 Portions of the Mesh generator's fragment shaders

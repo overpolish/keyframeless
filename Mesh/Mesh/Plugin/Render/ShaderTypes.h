@@ -183,6 +183,26 @@ typedef struct GodRaysUniforms {
     float rotation;                            // common rotation, radians
 } GodRaysUniforms;
 
+// Fluid type ("Fluid"): ported from radiant-shaders "Fluid Amber" (pbakaus/
+// radiant, MIT) GLSL -> MSL. Iterative IQ domain warp (fbm feeding fbm) whose
+// field values composite the palette swatches in layers, giving a molten,
+// marbled flow. resolution is filled at render time (aspect for the pattern
+// frame + the banding dither).
+typedef struct FluidUniforms {
+    vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba (straight alpha), up to 10 (~4 used)
+    int colorsCount;                           // active colours (<= 10)
+    vector_float2 resolution;                  // destination pixel dims (render time)
+    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
+    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
+    float detail;                              // fbm amplitude persistence (0..1; higher = richer)
+    float marble;                              // domain-warp strength (0 = smooth, 1 = source, higher = intense)
+    float vibrance;                            // colour-layer separation (1 = source; higher = punchier)
+    float time;                                // clip seconds
+    float speed;                               // time multiplier (motion rate)
+    float seed;                                // start-time offset (shared)
+    float rotation;                            // common rotation, radians
+} FluidUniforms;
+
 // The Type choice-pill order. Kept in sync with the "Type" pill labels.
 typedef enum MeshType {
     MeshType_Mesh = 0,          // paper-design animated mesh gradient
@@ -193,6 +213,7 @@ typedef enum MeshType {
     MeshType_Simplex = 5,       // paper-design simplex-noise ("Simplex")
     MeshType_Metaballs = 6,     // paper-design metaballs ("Metaballs")
     MeshType_GodRays = 7,       // paper-design god-rays ("God Rays")
+    MeshType_Fluid = 8,         // radiant-shaders fluid-amber ("Fluid")
 } MeshType;
 
 // The full render state packed into pluginState: the active type plus each
@@ -209,6 +230,7 @@ typedef struct MeshPluginState {
     SimplexNoiseUniforms simplex;
     MetaballsUniforms metaballs;
     GodRaysUniforms godrays;
+    FluidUniforms fluid;
 } MeshPluginState;
 
 typedef enum MeshFragmentIndex {

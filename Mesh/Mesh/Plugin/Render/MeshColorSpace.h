@@ -278,6 +278,35 @@ static inline GodRaysUniforms GodRaysDefault(void) {
   return g;
 }
 
+/// Fluid ("Fluid", radiant-shaders fluid-amber port) defaults.
+#define KK_FLUID_DEFAULT_DETAIL 0.48f  // fbm amplitude persistence
+#define KK_FLUID_DEFAULT_MARBLE 1.0f   // domain-warp strength (1 = source)
+#define KK_FLUID_DEFAULT_VIBRANCE 1.0f // colour-layer separation (1 = source)
+
+/// Fallback Fluid uniforms (the default palette) so an un-edited instance still
+/// renders before the colour lanes resolve. `resolution` is overwritten at
+/// render time.
+static inline FluidUniforms FluidDefault(void) {
+  FluidUniforms f;
+  memset(&f, 0, sizeof(f));
+  f.colorsCount = KK_MESH_COLOR_COUNT;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    const float *c = kMeshDefaultColorsSRGB[i];
+    f.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
+  }
+  f.resolution = (vector_float2){1920.0f, 1080.0f};
+  f.origin = (vector_float2){0.5f, 0.5f};
+  f.scale = (vector_float2){1.0f, 1.0f};
+  f.detail = KK_FLUID_DEFAULT_DETAIL;
+  f.marble = KK_FLUID_DEFAULT_MARBLE;
+  f.vibrance = KK_FLUID_DEFAULT_VIBRANCE;
+  f.speed = KK_MESH_GRAD_DEFAULT_SPEED;
+  f.seed = 0.0f;
+  f.rotation = 0.0f;
+  f.time = 0.0f;
+  return f;
+}
+
 /// Generic per-swatch lane label ("Color 1", "Color 2", ...). One [r,g,b,a]
 /// colour lane per swatch. One-based to read naturally.
 static inline NSString *MeshColorLabel(int i) {

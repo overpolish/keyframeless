@@ -474,6 +474,43 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   gr.rotation = rotation;
   gr.time = timeSec;
   outState->godrays = gr;
+
+  // --- Fluid: the shared colour swatches composited in layers by an iterative
+  // domain warp. Detail = fbm persistence (percent -> 0..1). Resolution is
+  // filled at render time.
+  FluidUniforms fl = FluidDefault();
+  int flCount = 0;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    NSArray<NSNumber *> *v =
+        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
+    if (v.count >= 4)
+      fl.colors[flCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
+                                             v[2].floatValue, v[3].floatValue};
+    else {
+      const float *c = kMeshDefaultColorsSRGB[i];
+      fl.colors[flCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+    }
+  }
+  fl.colorsCount = flCount > 0 ? flCount : 1;
+  NSArray<NSNumber *> *detailV =
+      MeshLaneValuesAtFraction(timeline, @"Detail", frac);
+  NSArray<NSNumber *> *marbleV =
+      MeshLaneValuesAtFraction(timeline, @"Marble", frac);
+  NSArray<NSNumber *> *vibranceV =
+      MeshLaneValuesAtFraction(timeline, @"Vibrance", frac);
+  fl.detail =
+      detailV.count ? detailV[0].floatValue / 100.0f : KK_FLUID_DEFAULT_DETAIL;
+  fl.marble =
+      marbleV.count ? marbleV[0].floatValue / 100.0f : KK_FLUID_DEFAULT_MARBLE;
+  fl.vibrance = vibranceV.count ? vibranceV[0].floatValue / 100.0f
+                                : KK_FLUID_DEFAULT_VIBRANCE;
+  fl.speed = speed;
+  fl.seed = seed;
+  fl.origin = origin;
+  fl.scale = scale;
+  fl.rotation = rotation;
+  fl.time = timeSec;
+  outState->fluid = fl;
   return YES;
 }
 
@@ -548,6 +585,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     state.simplex = SimplexNoiseDefault();
     state.metaballs = MetaballsDefault();
     state.godrays = GodRaysDefault();
+    state.fluid = FluidDefault();
   }
 
   // Dispatch on the active type. Each type is a separate fragment function; the
@@ -560,6 +598,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   BOOL isSimplex = (state.type == MeshType_Simplex);
   BOOL isMetaballs = (state.type == MeshType_Metaballs);
   BOOL isGodRays = (state.type == MeshType_GodRays);
+  BOOL isFluid = (state.type == MeshType_Fluid);
   NSString *pluginID = kPluginID;
   NSString *fragment = @"fragmentShader";
   if (isDither) {
@@ -583,6 +622,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isGodRays) {
     pluginID = [kPluginID stringByAppendingString:@".godrays"];
     fragment = @"godRaysFragment";
+  } else if (isFluid) {
+    pluginID = [kPluginID stringByAppendingString:@".fluid"];
+    fragment = @"fluidFragment";
   }
 
   id<MTLRenderPipelineState> pipelineState =
@@ -603,6 +645,7 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   state.simplex.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.metaballs.resolution = (vector_float2){(float)mediaW, (float)mediaH};
   state.godrays.resolution = (vector_float2){(float)mediaW, (float)mediaH};
+  state.fluid.resolution = (vector_float2){(float)mediaW, (float)mediaH};
 
   // Match the output encoding to the destination: FCP's float working buffers
   // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.
@@ -635,6 +678,9 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   } else if (isGodRays) {
     uniformBytes = (const void *)&state.godrays;
     uniformLen = sizeof(state.godrays);
+  } else if (isFluid) {
+    uniformBytes = (const void *)&state.fluid;
+    uniformLen = sizeof(state.fluid);
   }
 
   // sourceImages is empty for a generator; encodeRenderCommands handles that

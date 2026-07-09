@@ -30,7 +30,7 @@
 /// no in/out, no Basic/Advanced - just lanes and their numeric ranges.
 static NSString *_MeshAILaneSchemaText(void) {
   return @"Lane labels and value spaces. This is a procedural generator with "
-         @"eight "
+         @"nine "
          @"styles selected by \"Type\": Mesh (animated colour spots blended "
          @"into "
          @"a soft gradient), Dithering (a procedural shape rendered through "
@@ -41,13 +41,16 @@ static NSString *_MeshAILaneSchemaText(void) {
          @"Neuro (a glowing web of fluid lines), Simplex (a multi-colour "
          @"gradient mapped through Simplex noise into stepped bands), and "
          @"Metaballs (gooey coloured balls roaming the centre and merging "
-         @"into organic blobs), and God Rays (animated rays of light "
-         @"radiating from the centre with a central glow). Set "
+         @"into organic blobs), God Rays (animated rays of light "
+         @"radiating from the centre with a central glow), and Fluid (a "
+         @"molten, "
+         @"marbled flow from an iterative domain warp). Set "
          @"the lanes for the chosen type.\n\n"
          @"- \"Type\": the generator style. A structural choice (NOT "
          @"animated), "
          @"stored as an index: 0 = Mesh, 1 = Dithering, 2 = Grainy, 3 = Warp, "
-         @"4 = Neuro, 5 = Simplex, 6 = Metaballs, 7 = God Rays. Default 0.\n"
+         @"4 = Neuro, 5 = Simplex, 6 = Metaballs, 7 = God Rays, 8 = Fluid. "
+         @"Default 0.\n"
          @"- \"Speed\": single value, 0..3 multiplier of the animation rate "
          @"(1 = normal, 0 = frozen, 2 = twice as fast). Shared by all types. "
          @"Animatable. Default 1.\n"
@@ -160,7 +163,19 @@ static NSString *_MeshAILaneSchemaText(void) {
          @"- \"Bloom Color\": the overlay colour blended with the rays "
          @"[r, g, b, a] in sRGB 0..1.\n"
          @"- \"Background\": the base colour [r, g, b, a] in sRGB 0..1 "
-         @"(shared with Dithering + Grainy + Neuro).\n";
+         @"(shared with Dithering + Grainy + Neuro).\n"
+         @"\nFluid (Type 8):\n"
+         @"- \"Marble\": percent 0..300. Domain-warp strength (0 = smooth soft "
+         @"blobs, 100 = default, higher = intense folded marbling). Default "
+         @"100.\n"
+         @"- \"Detail\": percent 0..100. Fbm persistence (how much fine, "
+         @"high-frequency marbling survives; higher = busier). Default 48.\n"
+         @"- \"Vibrance\": percent 0..200. Colour-layer separation (low = "
+         @"muted / base-dominant, high = punchy). Default 100.\n"
+         @"- \"Color 1\", \"Color 2\", ... : the flow colours (shared with "
+         @"Mesh), each [r, g, b, a] in sRGB 0..1. Composited in layers "
+         @"(1 = base, then mid, then bright, then a glow tint). Up to 4 "
+         @"used.\n";
 }
 
 @implementation MeshPlugin (CustomUI)
@@ -183,10 +198,10 @@ static NSString *_MeshAILaneSchemaText(void) {
   type.valueType = KKLaneValueTypeFloat;
   type.choiceLabels = @[
     @"Mesh", @"Dithering", @"Grainy", @"Warp", @"Neuro", @"Simplex",
-    @"Metaballs", @"God Rays"
+    @"Metaballs", @"God Rays", @"Fluid"
   ];
   type.componentMin = @[ @0.0 ];
-  type.componentMax = @[ @7.0 ];
+  type.componentMax = @[ @8.0 ];
   type.integerValued = YES;
   type.wrapsChoicePills =
       YES; // 8 types - wrap onto multiple lines, not overflow
@@ -207,7 +222,7 @@ static NSString *_MeshAILaneSchemaText(void) {
   speed.categoryKey = @"Core";
   speed.categorySymbol = @"circle.dotted";
   speed.visibleWhenLabel = @"Type";
-  speed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5, @6, @7 ];
+  speed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5, @6, @7, @8 ];
   [speed insertKeypose:[KKKeyPose
                            keyposeAtTime:0.0
                                   values:@[ @(KK_MESH_GRAD_DEFAULT_SPEED) ]]];
@@ -226,7 +241,7 @@ static NSString *_MeshAILaneSchemaText(void) {
   seed.categoryKey = @"Core";
   seed.categorySymbol = @"circle.dotted";
   seed.visibleWhenLabel = @"Type";
-  seed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5, @6, @7 ];
+  seed.visibleWhenValues = @[ @0, @1, @2, @3, @4, @5, @6, @7, @8 ];
   [seed insertKeypose:[KKKeyPose
                           keyposeAtTime:0.0
                                  values:@[ @(KK_MESH_GRAD_DEFAULT_SEED) ]]];
@@ -594,6 +609,36 @@ static NSString *_MeshAILaneSchemaText(void) {
     [lanes addObject:lane];
   }
 
+  // --- Fluid controls (Type 8). Marble = domain-warp strength (0 = smooth,
+  // higher = intense marbling); Detail = fbm persistence; Vibrance = colour-
+  // layer separation. All percent (shader wants 0..N). Distinct labels (not the
+  // shared Swirl / Distortion / Contrast) to keep per-type defaults.
+  struct {
+    NSString *label;
+    double def, max;
+  } fluidControls[] = {
+      {@"Marble", KK_FLUID_DEFAULT_MARBLE * 100.0, 300.0},
+      {@"Detail", KK_FLUID_DEFAULT_DETAIL * 100.0, 100.0},
+      {@"Vibrance", KK_FLUID_DEFAULT_VIBRANCE * 100.0, 200.0},
+  };
+  for (unsigned s = 0; s < sizeof(fluidControls) / sizeof(fluidControls[0]);
+       s++) {
+    KKLane *lane = [KKLane laneWithLabel:fluidControls[s].label];
+    lane.valueType = KKLaneValueTypeFloat;
+    lane.componentMin = @[ @0.0 ];
+    lane.componentMax = @[ @(fluidControls[s].max) ];
+    lane.componentUnits = @[ @"%" ];
+    lane.animatable = YES;
+    lane.enabled = NO;
+    lane.categoryKey = @"Shader";
+    lane.categorySymbol = @"slider.horizontal.3";
+    lane.visibleWhenLabel = @"Type";
+    lane.visibleWhenValues = @[ @8 ];
+    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                          values:@[ @(fluidControls[s].def) ]]];
+    [lanes addObject:lane];
+  }
+
   // --- Fixed colours first (not removable, so they sit above the dynamic
   // swatches): Dithering background + foreground (ink), the Neuro Mid line
   // colour. Background is shared by Dithering + Grainy + Neuro; Foreground by
@@ -641,9 +686,9 @@ static NSString *_MeshAILaneSchemaText(void) {
     color.categorySymbol = @"paintpalette";
     color.visibleWhenLabel = @"Type";
     color.visibleWhenValues = @[
-      @0, @2, @3, @5, @6, @7
-    ]; // Mesh + Grainy + Warp + Simplex + Metaballs + God Rays share the
-       // palette
+      @0, @2, @3, @5, @6, @7, @8
+    ]; // Mesh + Grainy + Warp + Simplex + Metaballs + God Rays + Fluid share
+       // the palette
     const float *c = kMeshDefaultColorsSRGB[i];
     [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                            values:@[

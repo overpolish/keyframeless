@@ -171,6 +171,12 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     return @[ @(KK_GODRAYS_DEFAULT_INTENSITY * 100.0) ];
   if ([label isEqualToString:@"Bloom"])
     return @[ @(KK_GODRAYS_DEFAULT_BLOOM * 100.0) ];
+  if ([label isEqualToString:@"Detail"])
+    return @[ @(KK_FLUID_DEFAULT_DETAIL * 100.0) ];
+  if ([label isEqualToString:@"Marble"])
+    return @[ @(KK_FLUID_DEFAULT_MARBLE * 100.0) ];
+  if ([label isEqualToString:@"Vibrance"])
+    return @[ @(KK_FLUID_DEFAULT_VIBRANCE * 100.0) ];
   if ([label isEqualToString:@"Shape"])
     return @[ @0.0 ]; // simplex
   if ([label isEqualToString:@"Dither"])
@@ -254,6 +260,7 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   BOOL isSimplex = (meshType == MeshType_Simplex);
   BOOL isMetaballs = (meshType == MeshType_Metaballs);
   BOOL isGodRays = (meshType == MeshType_GodRays);
+  BOOL isFluid = (meshType == MeshType_Fluid);
   NSString *fragment = @"fragmentShader";
   if (isDither)
     fragment = @"ditheringFragment";
@@ -269,6 +276,8 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     fragment = @"metaballsFragment";
   else if (isGodRays)
     fragment = @"godRaysFragment";
+  else if (isFluid)
+    fragment = @"fluidFragment";
   id<MTLRenderPipelineState> pipeline =
       [self _pipelineForDevice:dest.device
                    pixelFormat:dest.pixelFormat
@@ -586,6 +595,38 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     gr.resolution = (vector_float2){W, H};
     gr.time = timeSec;
     [e setFragmentBytes:&gr length:sizeof(gr) atIndex:MeshFragmentIndex_Grid];
+  } else if (isFluid) {
+    FluidUniforms fl = FluidDefault();
+    int flCount = 0;
+    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
+      if (v.count >= 4)
+        fl.colors[flCount++] = (vector_float4){
+            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
+      else {
+        const float *c = kMeshDefaultColorsSRGB[i];
+        fl.colors[flCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
+      }
+    }
+    fl.colorsCount = flCount > 0 ? flCount : 1;
+    NSArray<NSNumber *> *detailV = [self valuesForLabel:@"Detail"];
+    NSArray<NSNumber *> *marbleV = [self valuesForLabel:@"Marble"];
+    NSArray<NSNumber *> *vibranceV = [self valuesForLabel:@"Vibrance"];
+    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+    fl.detail = detailV.count ? detailV[0].floatValue / 100.0f
+                              : KK_FLUID_DEFAULT_DETAIL;
+    fl.marble = marbleV.count ? marbleV[0].floatValue / 100.0f
+                              : KK_FLUID_DEFAULT_MARBLE;
+    fl.vibrance = vibranceV.count ? vibranceV[0].floatValue / 100.0f
+                                  : KK_FLUID_DEFAULT_VIBRANCE;
+    fl.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
+    fl.seed = seedShared;
+    fl.origin = originShared;
+    fl.scale = scaleShared;
+    fl.rotation = rotationShared;
+    fl.resolution = (vector_float2){W, H};
+    fl.time = timeSec;
+    [e setFragmentBytes:&fl length:sizeof(fl) atIndex:MeshFragmentIndex_Grid];
   } else {
     // Same colour swatches + controls as the FCP render (valuesForLabel falls
     // back to defaults).
