@@ -791,6 +791,28 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
         catHidden(label) || ![condVisible containsObject:label];
   for (NSString *label in _excludedRowsByLabel)
     _excludedRowsByLabel[label].hidden = catHidden(label);
+  [self _refreshDynamicMaxRows];
+}
+
+// Rows built once at open keep the slider max they were built with; a lane
+// whose max tracks another lane (maxControllerLabel, e.g. Mesh's colour count
+// vs Type) needs its slider re-bounded whenever the controller changes. Runs on
+// every visibility pass (which re-fires on any gating edit), so the max stays
+// live.
+- (void)_refreshDynamicMaxRows {
+  for (KKLane *l in _lanes) {
+    if (l.maxControllerLabel.length == 0 ||
+        l.componentMaxByControllerValue.count == 0)
+      continue;
+    _KKStaticValueRow *row = _rowsByLabel[l.label];
+    if (!row)
+      continue;
+    KKLane *adjusted = [self _laneWithDynamicMaxApplied:l];
+    double effMax = adjusted.componentMax.count
+                        ? adjusted.componentMax[0].doubleValue
+                        : 0.0;
+    [row applySliderMax:effMax];
+  }
 }
 
 // The popover content's natural (unclamped) size for the current lanes /
@@ -895,7 +917,37 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   return _colorPanelOpen;
 }
 
+// A lane whose slider max reacts to another lane (maxControllerLabel): returns
+// a copy with componentMax[0] swapped for the value looked up from the
+// controller lane's current value, so the range tracks e.g. Mesh's Type.
+// Unchanged lanes are returned as-is. Rebuilt whenever rows rebuild (Type
+// change re-runs the visibility cascade), so the max stays reactive.
+- (KKLane *)_laneWithDynamicMaxApplied:(KKLane *)lane {
+  if (lane.maxControllerLabel.length == 0 ||
+      lane.componentMaxByControllerValue.count == 0)
+    return lane;
+  NSArray<NSNumber *> *cv = _currentValuesByLabel[lane.maxControllerLabel];
+  if (cv.count == 0)
+    return lane;
+  NSInteger idx = (NSInteger)llround(cv[0].doubleValue);
+  if (idx < 0 || idx >= (NSInteger)lane.componentMaxByControllerValue.count)
+    return lane;
+  double effMax = lane.componentMaxByControllerValue[idx].doubleValue;
+  double minV =
+      lane.componentMin.count ? lane.componentMin[0].doubleValue : 0.0;
+  if (effMax < minV)
+    effMax = minV;
+  double curMax =
+      lane.componentMax.count ? lane.componentMax[0].doubleValue : effMax;
+  if (effMax == curMax)
+    return lane;
+  KKLane *adjusted = [lane copy];
+  adjusted.componentMax = @[ @(effMax) ];
+  return adjusted;
+}
+
 - (_KKStaticValueRow *)_makeRowForLane:(KKLane *)lane {
+  lane = [self _laneWithDynamicMaxApplied:lane];
   BOOL showsRemove = (_rowRemoveHandler != nil);
   // Non-animatable lanes are value-only: no "make animatable" gutter button.
   BOOL showsAdd = (_rowAddToAnimatedHandler != nil && lane.animatable);

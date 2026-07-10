@@ -48,15 +48,17 @@ typedef struct MeshGradientUniforms {
 } MeshGradientUniforms;
 
 // Dithering type: also ported from paper-design/shaders (Apache-2.0). A
-// procedural shape (u_shape) rendered through an ordered/random dither
-// (u_type) into two colours. resolution is filled at render time (it needs the
-// destination pixel dims for the pixel grid).
+// procedural shape (u_shape) drives a POSITION along the colour palette; the
+// ordered/random dither (u_type) stipples the transitions between adjacent
+// palette colours (a retro dithered multi-colour gradient). Color 1 is the low
+// end (the base/background), Color N the high end. resolution is filled at
+// render time (it needs the destination pixel dims for the pixel grid).
 typedef struct DitheringUniforms {
-    vector_float4 colorBack;  // rgba background
-    vector_float4 colorFront; // rgba ink
-    float pxSize;             // dither grid size in reference pixels
-    int shape;                // 1..6 (simplex, warp, dots, wave, ripple, swirl)
-    int type;                 // 1..4 dither (random, 2x2, 4x4, 8x8 Bayer)
+    vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba palette ramp (straight alpha)
+    int colorsCount;                           // active colours (<= 10)
+    float pxSize;                              // dither grid size in reference pixels
+    int shape;                                 // 1..6 (simplex, warp, dots, wave, ripple, swirl)
+    int type;                                  // 1..4 dither (random, 2x2, 4x4, 8x8 Bayer)
 } DitheringUniforms;
 
 // Grain Gradient type ("Grainy"): also ported from paper-design/shaders
@@ -94,15 +96,15 @@ typedef struct WarpUniforms {
 
 // Neuro Noise type ("Neuro"): also ported from paper-design/shaders
 // (Apache-2.0). A glowing, web-like structure of fluid lines (accumulated
-// rotated sine layers) blended between a mid + front colour over a background.
-// resolution is filled at render time (aspect for the pattern frame + the
-// colour-banding dither).
+// rotated sine layers). The line intensity drives a POSITION along the palette:
+// Color 1 is the base (background), brighter crossings climb the ramp (smooth
+// glow blend). resolution is filled at render time (aspect for the pattern
+// frame + the colour-banding dither).
 typedef struct NeuroNoiseUniforms {
-    vector_float4 colorFront; // rgba highlight (crossing points)
-    vector_float4 colorMid;   // rgba main line colour
-    vector_float4 colorBack;  // rgba background
-    float brightness;         // 0..1 luminosity of the crossings
-    float contrast;           // 0..1 bright-dark sharpness
+    vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba palette ramp (straight alpha)
+    int colorsCount;                           // active colours (<= 10)
+    float brightness;                          // 0..1 luminosity of the crossings
+    float contrast;                            // 0..1 bright-dark sharpness
 } NeuroNoiseUniforms;
 
 // Simplex Noise type ("Simplex"): also ported from paper-design/shaders

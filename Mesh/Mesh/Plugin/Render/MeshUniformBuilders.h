@@ -28,12 +28,21 @@ NS_ASSUME_NONNULL_BEGIN
 
 // ── Small read helpers ──
 
-/// Fill up to `maxN` swatches from the dynamic "Color N" palette (falling back
-/// to the default palette). Returns the active count (>= 1).
+/// The stored swatch count ("Color Count" lane, component-0), or the default
+/// count if the lane is absent.
+static inline int MeshReadStoredColorCount(MeshLaneReader read) {
+  NSArray<NSNumber *> *v = read(KK_MESH_COLOR_COUNT_LABEL);
+  return v.count ? (int)lround(v[0].doubleValue) : KK_MESH_COLOR_COUNT;
+}
+
+/// Fill the dynamic "Color N" palette for `type`: the stored swatch count
+/// clamped to the Type's cap (MeshMaxColorsForType), each swatch read from its
+/// lane (falling back to the default palette). Returns the active count (>= 1).
 static inline int MeshReadPalette(MeshLaneReader read, vector_float4 *colors,
-                                  int maxN) {
+                                  int type) {
+  int n = MeshEffectiveColorCount(MeshReadStoredColorCount(read), type);
   int count = 0;
-  for (int i = 0; i < maxN; i++) {
+  for (int i = 0; i < n && i < KK_MESH_COLOR_MAX; i++) {
     NSArray<NSNumber *> *v = read(MeshColorLabel(i));
     if (v.count >= 4)
       colors[count++] = (vector_float4){v[0].floatValue, v[1].floatValue,
@@ -82,7 +91,7 @@ static inline int MeshReadPill(MeshLaneReader read, NSString *label,
 static inline MeshGradientUniforms MeshBuildMesh(MeshLaneReader read) {
   MeshGradientUniforms u;
   memset(&u, 0, sizeof(u));
-  u.colorsCount = MeshReadPalette(read, u.colors, KK_MESH_COLOR_COUNT);
+  u.colorsCount = MeshReadPalette(read, u.colors, MeshType_Mesh);
   u.distortion =
       MeshReadPercent(read, @"Distortion", KK_MESH_GRAD_DEFAULT_DISTORTION);
   u.swirl = MeshReadPercent(read, @"Swirl", KK_MESH_GRAD_DEFAULT_SWIRL);
@@ -91,8 +100,7 @@ static inline MeshGradientUniforms MeshBuildMesh(MeshLaneReader read) {
 
 static inline DitheringUniforms MeshBuildDithering(MeshLaneReader read) {
   DitheringUniforms d = DitheringDefault();
-  MeshReadColor(read, @"Background", &d.colorBack);
-  MeshReadColor(read, @"Foreground", &d.colorFront);
+  d.colorsCount = MeshReadPalette(read, d.colors, MeshType_Dithering);
   d.shape = MeshReadPill(read, @"Shape", KK_DITHER_DEFAULT_SHAPE, 1);
   d.type = MeshReadPill(read, @"Dither", KK_DITHER_DEFAULT_TYPE, 1);
   d.pxSize = MeshReadScalar(read, @"Pixel Size", KK_DITHER_DEFAULT_PXSIZE);
@@ -101,10 +109,9 @@ static inline DitheringUniforms MeshBuildDithering(MeshLaneReader read) {
 
 static inline GrainGradientUniforms MeshBuildGrainy(MeshLaneReader read) {
   GrainGradientUniforms g = GrainGradientDefault();
-  int gMax = KK_MESH_COLOR_COUNT < KK_GRAIN_GRAD_COLORS ? KK_MESH_COLOR_COUNT
-                                                        : KK_GRAIN_GRAD_COLORS;
-  g.colorsCount = MeshReadPalette(read, g.colors, gMax);
-  MeshReadColor(read, @"Background", &g.colorBack);
+  g.colorsCount = MeshReadPalette(read, g.colors, MeshType_GrainGradient);
+  g.colorBack = g.colors[0]; // Color 1 is the base/background
+
   g.softness = MeshReadPercent(read, @"Softness", KK_GRAIN_DEFAULT_SOFTNESS);
   g.intensity = MeshReadPercent(read, @"Intensity", KK_GRAIN_DEFAULT_INTENSITY);
   g.noise = MeshReadPercent(read, @"Noise", KK_GRAIN_DEFAULT_NOISE);
@@ -114,7 +121,7 @@ static inline GrainGradientUniforms MeshBuildGrainy(MeshLaneReader read) {
 
 static inline WarpUniforms MeshBuildWarp(MeshLaneReader read) {
   WarpUniforms w = WarpDefault();
-  w.colorsCount = MeshReadPalette(read, w.colors, KK_MESH_COLOR_COUNT);
+  w.colorsCount = MeshReadPalette(read, w.colors, MeshType_Warp);
   w.proportion =
       MeshReadPercent(read, @"Proportion", KK_WARP_DEFAULT_PROPORTION);
   w.softness = MeshReadPercent(read, @"Softness", KK_GRAIN_DEFAULT_SOFTNESS);
@@ -131,9 +138,7 @@ static inline WarpUniforms MeshBuildWarp(MeshLaneReader read) {
 
 static inline NeuroNoiseUniforms MeshBuildNeuro(MeshLaneReader read) {
   NeuroNoiseUniforms nn = NeuroNoiseDefault();
-  MeshReadColor(read, @"Foreground", &nn.colorFront);
-  MeshReadColor(read, @"Mid", &nn.colorMid);
-  MeshReadColor(read, @"Background", &nn.colorBack);
+  nn.colorsCount = MeshReadPalette(read, nn.colors, MeshType_Neuro);
   nn.brightness =
       MeshReadPercent(read, @"Brightness", KK_NEURO_DEFAULT_BRIGHTNESS);
   nn.contrast = MeshReadPercent(read, @"Contrast", KK_NEURO_DEFAULT_CONTRAST);
@@ -142,7 +147,7 @@ static inline NeuroNoiseUniforms MeshBuildNeuro(MeshLaneReader read) {
 
 static inline SimplexNoiseUniforms MeshBuildSimplex(MeshLaneReader read) {
   SimplexNoiseUniforms sn = SimplexNoiseDefault();
-  sn.colorsCount = MeshReadPalette(read, sn.colors, KK_MESH_COLOR_COUNT);
+  sn.colorsCount = MeshReadPalette(read, sn.colors, MeshType_Simplex);
   sn.stepsPerColor = MeshReadScalar(read, @"Steps", KK_SIMPLEX_DEFAULT_STEPS);
   sn.softness = MeshReadPercent(read, @"Softness", KK_SIMPLEX_DEFAULT_SOFTNESS);
   return sn;
@@ -150,8 +155,9 @@ static inline SimplexNoiseUniforms MeshBuildSimplex(MeshLaneReader read) {
 
 static inline MetaballsUniforms MeshBuildMetaballs(MeshLaneReader read) {
   MetaballsUniforms mb = MetaballsDefault();
-  mb.colorsCount = MeshReadPalette(read, mb.colors, KK_MESH_COLOR_COUNT);
-  MeshReadColor(read, @"Background", &mb.colorBack);
+  mb.colorsCount = MeshReadPalette(read, mb.colors, MeshType_Metaballs);
+  mb.colorBack = mb.colors[0]; // Color 1 is the base/background
+
   mb.ballCount = MeshReadScalar(read, @"Count", KK_METABALLS_DEFAULT_COUNT);
   mb.ballSize = MeshReadPercent(read, @"Size", KK_METABALLS_DEFAULT_SIZE);
   return mb;
@@ -159,9 +165,8 @@ static inline MetaballsUniforms MeshBuildMetaballs(MeshLaneReader read) {
 
 static inline GodRaysUniforms MeshBuildGodRays(MeshLaneReader read) {
   GodRaysUniforms gr = GodRaysDefault();
-  int grMax = KK_MESH_COLOR_COUNT < 5 ? KK_MESH_COLOR_COUNT : 5;
-  gr.colorsCount = MeshReadPalette(read, gr.colors, grMax);
-  MeshReadColor(read, @"Background", &gr.colorBack);
+  gr.colorsCount = MeshReadPalette(read, gr.colors, MeshType_GodRays);
+  gr.colorBack = gr.colors[0]; // Color 1 is the base/background
   MeshReadColor(read, @"Bloom Color", &gr.colorBloom);
   gr.density = MeshReadPercent(read, @"Density", KK_GODRAYS_DEFAULT_DENSITY);
   gr.spotty = MeshReadPercent(read, @"Spots", KK_GODRAYS_DEFAULT_SPOTTY);
@@ -175,7 +180,7 @@ static inline GodRaysUniforms MeshBuildGodRays(MeshLaneReader read) {
 
 static inline FluidUniforms MeshBuildFluid(MeshLaneReader read) {
   FluidUniforms fl = FluidDefault();
-  fl.colorsCount = MeshReadPalette(read, fl.colors, KK_MESH_COLOR_COUNT);
+  fl.colorsCount = MeshReadPalette(read, fl.colors, MeshType_Fluid);
   fl.detail = MeshReadPercent(read, @"Detail", KK_FLUID_DEFAULT_DETAIL);
   fl.marble = MeshReadPercent(read, @"Marble", KK_FLUID_DEFAULT_MARBLE);
   fl.vibrance = MeshReadPercent(read, @"Vibrance", KK_FLUID_DEFAULT_VIBRANCE);
@@ -184,8 +189,9 @@ static inline FluidUniforms MeshBuildFluid(MeshLaneReader read) {
 
 static inline NeonUniforms MeshBuildNeon(MeshLaneReader read) {
   NeonUniforms ne = NeonDefault();
-  ne.colorsCount = MeshReadPalette(read, ne.colors, KK_MESH_COLOR_COUNT);
-  MeshReadColor(read, @"Background", &ne.colorBack);
+  ne.colorsCount = MeshReadPalette(read, ne.colors, MeshType_Neon);
+  ne.colorBack = ne.colors[0]; // Color 1 is the base/background
+
   ne.radiance = MeshReadPercent(read, @"Radiance", KK_NEON_DEFAULT_RADIANCE);
   ne.wisps = MeshReadPercent(read, @"Wisps", KK_NEON_DEFAULT_WISPS);
   ne.strands = MeshReadPercent(read, @"Strands", KK_NEON_DEFAULT_STRANDS);
@@ -194,8 +200,9 @@ static inline NeonUniforms MeshBuildNeon(MeshLaneReader read) {
 
 static inline SilkUniforms MeshBuildSilk(MeshLaneReader read) {
   SilkUniforms sk = SilkDefault();
-  sk.colorsCount = MeshReadPalette(read, sk.colors, KK_MESH_COLOR_COUNT);
-  MeshReadColor(read, @"Background", &sk.colorBack);
+  sk.colorsCount = MeshReadPalette(read, sk.colors, MeshType_Silk);
+  sk.colorBack = sk.colors[0]; // Color 1 is the base/background
+
   sk.sheen = MeshReadPercent(read, @"Sheen", KK_SILK_DEFAULT_SHEEN);
   sk.folds = MeshReadPercent(read, @"Folds", KK_SILK_DEFAULT_FOLDS);
   sk.drape = MeshReadPercent(read, @"Drape", KK_SILK_DEFAULT_DRAPE);
@@ -204,7 +211,7 @@ static inline SilkUniforms MeshBuildSilk(MeshLaneReader read) {
 
 static inline StrataUniforms MeshBuildStrata(MeshLaneReader read) {
   StrataUniforms st = StrataDefault();
-  st.colorsCount = MeshReadPalette(read, st.colors, KK_MESH_COLOR_COUNT);
+  st.colorsCount = MeshReadPalette(read, st.colors, MeshType_Strata);
   st.layers = MeshReadScalar(read, @"Layers", KK_STRATA_DEFAULT_LAYERS);
   st.tectonics =
       MeshReadPercent(read, @"Tectonics", KK_STRATA_DEFAULT_TECTONICS);

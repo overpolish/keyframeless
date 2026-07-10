@@ -615,48 +615,63 @@ static inline NSArray<KKLane *> *MeshBuildAvailableLanes(void) {
     [lanes addObject:bar];
   }
 
-  // --- Fixed colours first (not removable, so they sit above the dynamic
-  // swatches): Dithering background + foreground (ink), the Neuro Mid line
-  // colour. Background is shared by Dithering + Grainy + Neuro; Foreground by
-  // Dithering + Neuro; Mid is Neuro-only.
-  struct {
-    NSString *label;
-    float r, g, b, a;
-    NSArray<NSNumber *> *visibleWhen;
-  } fixedColors[] = {
-      {@"Background", 0.04f, 0.04f, 0.07f, 1.0f,
-       @[ @1, @2, @4, @6, @7, @9, @10 ]},
-      {@"Foreground", 0.85f, 0.90f, 0.98f, 1.0f, @[ @1, @4 ]},
-      {@"Mid", 0.25f, 0.45f, 0.95f, 1.0f, @[ @4 ]},
-      {@"Bloom Color", 1.0f, 0.9f, 0.7f, 1.0f, @[ @7 ]},
-  };
-  for (unsigned c = 0; c < sizeof(fixedColors) / sizeof(fixedColors[0]); c++) {
-    KKLane *color = [KKLane laneWithLabel:fixedColors[c].label];
-    color.valueType = KKLaneValueTypeColor;
-    color.componentMin = @[ @0.0, @0.0, @0.0, @0.0 ];
-    color.componentMax = @[ @1.0, @1.0, @1.0, @1.0 ];
-    color.animatable = YES;
-    color.enabled = NO;
-    // Dithering (bg/fg) and Neuro (bg/fg/mid) reroll through the generator too;
-    // Bloom is a God Rays accent, left out of the palette.
-    color.paletteLockable =
-        ![fixedColors[c].label isEqualToString:@"Bloom Color"];
-    color.categoryKey = @"Colors";
-    color.categorySymbol = @"paintpalette";
-    color.visibleWhenLabel = @"Type";
-    color.visibleWhenValues = fixedColors[c].visibleWhen;
-    [color insertKeypose:[KKKeyPose
-                             keyposeAtTime:0.0
-                                    values:@[
-                                      @(fixedColors[c].r), @(fixedColors[c].g),
-                                      @(fixedColors[c].b), @(fixedColors[c].a)
-                                    ]]];
-    [lanes addObject:color];
+  // --- Fixed colours: only God Rays' Bloom accent remains. Every Type's
+  // background is now Color 1 (the first palette swatch), so there is no shared
+  // Background / Foreground / Mid lane. Bloom is a distinct additive overlay,
+  // so it stays separate and out of the palette generator.
+  {
+    KKLane *bloom = [KKLane laneWithLabel:@"Bloom Color"];
+    bloom.valueType = KKLaneValueTypeColor;
+    bloom.componentMin = @[ @0.0, @0.0, @0.0, @0.0 ];
+    bloom.componentMax = @[ @1.0, @1.0, @1.0, @1.0 ];
+    bloom.animatable = YES;
+    bloom.enabled = NO;
+    bloom.paletteLockable = NO;
+    bloom.categoryKey = @"Colors";
+    bloom.categorySymbol = @"paintpalette";
+    bloom.visibleWhenLabel = @"Type";
+    bloom.visibleWhenValues = @[ @7 ]; // God Rays only
+    [bloom insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                           values:@[ @1.0, @0.9, @0.7, @1.0 ]]];
+    [lanes addObject:bloom];
   }
 
-  // --- Mesh + Grainy colours (dynamic - users add/remove): one [r,g,b,a]
-  // swatch each, seeded from the default palette. Below the fixed colours.
-  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+  // --- Colour count: how many dynamic swatches are active (2..max). Drives
+  // both how many "Color N" rows show AND how many the render reads (per-Type
+  // capped by MeshMaxColorsForType). Hidden for Dithering/Neuro (cap 0).
+  // Editable here directly; the +/- affordance in the Colors section writes
+  // this too.
+  {
+    KKLane *count = [KKLane laneWithLabel:KK_MESH_COLOR_COUNT_LABEL];
+    count.animatable = NO;
+    count.enabled = NO;
+    count.integerValued = YES; // whole swatch counts, no decimals
+    count.scrubStep = 1.0;
+    count.componentMin = @[ @2.0 ];
+    count.componentMax = @[ @(KK_MESH_COLOR_MAX) ];
+    count.categoryKey = @"Colors";
+    count.categorySymbol = @"paintpalette";
+    count.visibleWhenLabel = @"Type";
+    count.visibleWhenValues = MeshTypesWithColorCap(2);
+    // The slider max tracks the current Type's palette cap (Grainy 7, God Rays
+    // 5, rest 10) - one easy slider whose top reacts to the Type.
+    count.maxControllerLabel = @"Type";
+    NSMutableArray<NSNumber *> *caps = [NSMutableArray array];
+    for (int t = 0; t < MESH_TYPE_COUNT; t++)
+      [caps addObject:@(MeshMaxColorsForType(t))];
+    count.componentMaxByControllerValue = caps;
+    [count insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                           values:@[ @(KK_MESH_COLOR_COUNT) ]]];
+    [lanes addObject:count];
+  }
+
+  // --- Dynamic swatches "Color 1".."Color 10": one [r,g,b,a] each, seeded from
+  // the default palette. A swatch shows only when BOTH the Type supports that
+  // many colours (per-Type cap, primary rule) AND the colour-count lane is >=
+  // its index (second AND condition) - so lanes above the count / the Type cap
+  // hide and are untouched by the palette generator.
+  for (int i = 0; i < KK_MESH_COLOR_MAX; i++) {
+    int n = i + 1; // 1-based swatch number
     KKLane *color = [KKLane laneWithLabel:MeshColorLabel(i)];
     color.valueType = KKLaneValueTypeColor;
     color.componentMin = @[ @0.0, @0.0, @0.0, @0.0 ];
@@ -667,10 +682,9 @@ static inline NSArray<KKLane *> *MeshBuildAvailableLanes(void) {
     color.categoryKey = @"Colors";
     color.categorySymbol = @"paintpalette";
     color.visibleWhenLabel = @"Type";
-    color.visibleWhenValues = @[
-      @0, @2, @3, @5, @6, @7, @8, @9, @10, @11
-    ]; // Mesh + Grainy + Warp + Simplex + Metaballs + God Rays + Fluid + Neon +
-       // Silk + Strata share the palette
+    color.visibleWhenValues = MeshTypesWithColorCap(n);
+    color.visibleWhenAndLabel = KK_MESH_COLOR_COUNT_LABEL;
+    color.visibleWhenAndValues = MeshColorCountAtLeast(n);
     const float *c = kMeshDefaultColorsSRGB[i];
     [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                            values:@[

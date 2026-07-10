@@ -183,12 +183,29 @@ static KKHsl kkSynthAnchor(double hue, KKModeCfg cfg, BOOL lightEnd) {
   NSMutableArray<NSColor *> *out = [NSMutableArray arrayWithCapacity:count];
 
   if (k == 0) {
-    // No anchors pinned: invent the whole journey from the mode.
+    // No anchors pinned: invent the whole journey from the mode. The anchor
+    // count scales with the palette length (~one per two colours, capped) so a
+    // long palette gets more hue waypoints and a proportionally wider sweep -
+    // otherwise a fixed 2-anchor journey stretched over many swatches reads as
+    // a flat single-hue "shades" ramp. Shades keeps its 2-anchor single-hue
+    // ramp.
     double startHue = kkRand(0, 360);
     double dir = arc4random_uniform(2) ? 1.0 : -1.0;
-    double px[3], py[3], pz[3];
+    int nAnchors = cfg.anchors;
+    if (!cfg.sameHue) {
+      int scaled = (int)lround((double)count / 2.0) + 1;
+      if (scaled > nAnchors)
+        nAnchors = scaled;
+      if (nAnchors > 6)
+        nAnchors = 6;
+    }
+    if (nAnchors < 2)
+      nAnchors = 2;
+    double *px = calloc((size_t)nAnchors, sizeof(double));
+    double *py = calloc((size_t)nAnchors, sizeof(double));
+    double *pz = calloc((size_t)nAnchors, sizeof(double));
     double h = startHue;
-    for (int a = 0; a < cfg.anchors; a++) {
+    for (int a = 0; a < nAnchors; a++) {
       if (a > 0 && !cfg.sameHue)
         h += kkRand(cfg.hueGapLo, cfg.hueGapHi) * dir;
       double al;
@@ -204,10 +221,10 @@ static KKHsl kkSynthAnchor(double hue, KKModeCfg cfg, BOOL lightEnd) {
     }
     for (NSInteger i = 0; i < count; i++) {
       double t = count > 1 ? (double)i / (count - 1) : 0.5;
-      double scaled = t * (cfg.anchors - 1);
+      double scaled = t * (nAnchors - 1);
       int seg = (int)floor(scaled);
-      if (seg > cfg.anchors - 2)
-        seg = cfg.anchors - 2;
+      if (seg > nAnchors - 2)
+        seg = nAnchors - 2;
       if (seg < 0)
         seg = 0;
       double te = kkEase(cfg.easing, scaled - seg);
@@ -216,6 +233,9 @@ static KKHsl kkSynthAnchor(double hue, KKModeCfg cfg, BOOL lightEnd) {
                                       kkLerp(py[seg], py[seg + 1], te),
                                       kkLerp(pz[seg], pz[seg + 1], te)))];
     }
+    free(px);
+    free(py);
+    free(pz);
   } else {
     // Locked colours are the anchors; unlocked colours interpolate between
     // them. Endpoints not pinned get a synthetic anchor extending the journey.

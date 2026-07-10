@@ -17,18 +17,45 @@
 
 #import "ShaderTypes.h"
 
-/// The default number of colour swatches (until dynamic add/remove lands).
+/// The default number of colour swatches a fresh instance starts with. Users
+/// add/remove swatches (2..KK_MESH_COLOR_MAX) via the Colors section; the live
+/// count is stored in the "Color Count" lane.
 #define KK_MESH_COLOR_COUNT 4
 
-/// Default swatch colours (purple / pink / blue / teal), gamma sRGB + alpha.
-/// Seeds the lane templates and the render fallback so an un-edited instance
-/// and the inspector agree. Until KKPalette generates them.
-static const float kMeshDefaultColorsSRGB[KK_MESH_COLOR_COUNT][4] = {
+/// Absolute maximum number of swatch lanes ("Color 1".."Color 10"). Matches the
+/// widest shader palette array (KK_MESH_GRAD_COLORS). Per-Type caps below may
+/// be lower (see MeshMaxColorsForType).
+#define KK_MESH_COLOR_MAX KK_MESH_GRAD_COLORS
+
+/// Default swatch colours, gamma sRGB + alpha. The first four (purple / pink /
+/// blue / teal) seed a fresh 4-colour instance; 5..10 extend the palette so
+/// newly-added swatches get a sensible starting hue. Seeds the lane templates
+/// and the render fallback so an un-edited instance and the inspector agree.
+static const float kMeshDefaultColorsSRGB[KK_MESH_COLOR_MAX][4] = {
     {0.55f, 0.36f, 0.96f, 1.0f}, // purple
     {0.98f, 0.45f, 0.65f, 1.0f}, // pink
     {0.30f, 0.55f, 0.98f, 1.0f}, // blue
     {0.40f, 0.85f, 0.80f, 1.0f}, // teal
+    {0.98f, 0.70f, 0.35f, 1.0f}, // amber
+    {0.55f, 0.85f, 0.45f, 1.0f}, // green
+    {0.98f, 0.85f, 0.40f, 1.0f}, // yellow
+    {0.95f, 0.40f, 0.45f, 1.0f}, // coral
+    {0.65f, 0.45f, 0.90f, 1.0f}, // violet
+    {0.35f, 0.80f, 0.95f, 1.0f}, // cyan
 };
+
+/// The maximum number of palette swatches a given Type actually consumes. Most
+/// Types use the full 10; Grainy's array caps at 7 and God Rays uses up to 5.
+static inline int MeshMaxColorsForType(int type) {
+  switch (type) {
+  case MeshType_GrainGradient:
+    return KK_GRAIN_GRAD_COLORS; // 7
+  case MeshType_GodRays:
+    return 5;
+  default:
+    return KK_MESH_GRAD_COLORS; // 10
+  }
+}
 
 /// Mesh Gradient (paper-design port) scalar defaults.
 #define KK_MESH_GRAD_DEFAULT_DISTORTION 0.80f
@@ -96,8 +123,11 @@ static inline MeshGradientUniforms MeshGradientDefault(void) {
 static inline DitheringUniforms DitheringDefault(void) {
   DitheringUniforms d;
   memset(&d, 0, sizeof(d));
-  d.colorBack = (vector_float4){0.04f, 0.04f, 0.07f, 1.0f};
-  d.colorFront = (vector_float4){0.85f, 0.90f, 0.98f, 1.0f};
+  d.colorsCount = KK_MESH_COLOR_COUNT;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    const float *c = kMeshDefaultColorsSRGB[i];
+    d.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
+  }
   d.pxSize = KK_DITHER_DEFAULT_PXSIZE;
   d.shape = KK_DITHER_DEFAULT_SHAPE;
   d.type = KK_DITHER_DEFAULT_TYPE;
@@ -171,9 +201,11 @@ static inline WarpUniforms WarpDefault(void) {
 static inline NeuroNoiseUniforms NeuroNoiseDefault(void) {
   NeuroNoiseUniforms n;
   memset(&n, 0, sizeof(n));
-  n.colorFront = (vector_float4){0.85f, 0.92f, 1.0f, 1.0f}; // highlight
-  n.colorMid = (vector_float4){0.25f, 0.45f, 0.95f, 1.0f};  // lines
-  n.colorBack = (vector_float4){0.02f, 0.03f, 0.08f, 1.0f}; // background
+  n.colorsCount = KK_MESH_COLOR_COUNT;
+  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
+    const float *c = kMeshDefaultColorsSRGB[i];
+    n.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
+  }
   n.brightness = KK_NEURO_DEFAULT_BRIGHTNESS;
   n.contrast = KK_NEURO_DEFAULT_CONTRAST;
   return n;
@@ -345,6 +377,46 @@ static inline StrataUniforms StrataDefault(void) {
 /// colour lane per swatch. One-based to read naturally.
 static inline NSString *MeshColorLabel(int i) {
   return [NSString stringWithFormat:@"Color %d", i + 1];
+}
+
+/// Label of the swatch-count lane: component-0 holds the active swatch count
+/// (2..KK_MESH_COLOR_MAX). Drives both how many "Color N" rows show and how
+/// many swatches the render reads (clamped per-Type by MeshMaxColorsForType).
+#define KK_MESH_COLOR_COUNT_LABEL @"Color Count"
+
+/// The effective swatch count for `type`: the stored count clamped to the
+/// Type's palette cap. `storedCount` <= 0 falls back to the default count.
+static inline int MeshEffectiveColorCount(int storedCount, int type) {
+  int n = storedCount > 0 ? storedCount : KK_MESH_COLOR_COUNT;
+  int cap = MeshMaxColorsForType(type);
+  if (n > cap)
+    n = cap;
+  if (n > KK_MESH_COLOR_MAX)
+    n = KK_MESH_COLOR_MAX;
+  return n < 0 ? 0 : n;
+}
+
+/// Number of Types (choice-pill entries). Keep in sync with the MeshType enum.
+#define MESH_TYPE_COUNT 12
+
+/// Type indices (as NSNumbers) whose palette cap is >= `minCap` - i.e. the
+/// Types for which swatch #minCap is meaningful. Used to gate a swatch row's
+/// primary (Type) visibility so e.g. Color 8 never shows for God Rays (cap 5).
+static inline NSArray<NSNumber *> *MeshTypesWithColorCap(int minCap) {
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  for (int t = 0; t < MESH_TYPE_COUNT; t++)
+    if (MeshMaxColorsForType(t) >= minCap)
+      [out addObject:@(t)];
+  return out;
+}
+
+/// Count values (as NSNumbers) satisfying "count >= n": n, n+1, .. max. Used as
+/// a swatch row's second AND condition against the "Color Count" lane.
+static inline NSArray<NSNumber *> *MeshColorCountAtLeast(int n) {
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  for (int c = n; c <= KK_MESH_COLOR_MAX; c++)
+    [out addObject:@(c)];
+  return out;
 }
 /// 0-based index if `label` is "<prefix> N", else -1.
 static inline int MeshIndexForLabel(NSString *label, NSString *prefix) {

@@ -39,12 +39,14 @@ static float dth_getBayerValue(float2 uv, int size) {
     return 0.0;
 }
 
-// One dithered sample (0 or 1 = background or ink) at a reference-space
-// coordinate. Everything is computed in the fixed reference frame so the dither
-// is proportional and identical across render sizes; the fragment supersamples
-// this to downscale cleanly for the small viewers.
-static float dth_evaluate(float2 fragCoord, float2 refRes, float t, float pxSize, int shapeType, int ditherType,
-                          float2 origin, float2 scale, float rotation) {
+// The shape field (0..1) at a reference-space coordinate, plus the dither
+// threshold (0..1) for this cell. Everything is computed in the fixed reference
+// frame so the dither is proportional and identical across render sizes; the
+// fragment supersamples this to downscale cleanly for the small viewers. The
+// palette mapping happens in the fragment (shape -> palette position, dithered
+// between adjacent colours by the threshold).
+static float2 dth_shapeAndDither(float2 fragCoord, float2 refRes, float t, float pxSize, int shapeType, int ditherType,
+                                 float2 origin, float2 scale, float rotation) {
     float2 pxSizeUV = (fragCoord - 0.5 * refRes) / pxSize;
     float2 canvasPixelizedUV = (floor(pxSizeUV) + 0.5) * pxSize;
     float2 normalizedUV = canvasPixelizedUV / refRes;
@@ -106,24 +108,39 @@ static float dth_evaluate(float2 fragCoord, float2 refRes, float t, float pxSize
         shape = mix(0.0, fract(offset), mid);
     }
 
-    float dithering = 0.0;
+    // Dither threshold (0..1) for this cell: a random hash or an ordered Bayer
+    // value. The fragment compares the palette-band fraction against it.
+    float d;
     if (ditherType == 1)
-        dithering = step(dth_hash21(ditheringNoiseUV), shape);
+        d = dth_hash21(ditheringNoiseUV);
     else if (ditherType == 2)
-        dithering = dth_getBayerValue(pxSizeUV, 2);
+        d = dth_getBayerValue(pxSizeUV, 2);
     else if (ditherType == 3)
-        dithering = dth_getBayerValue(pxSizeUV, 4);
+        d = dth_getBayerValue(pxSizeUV, 4);
     else
-        dithering = dth_getBayerValue(pxSizeUV, 8);
+        d = dth_getBayerValue(pxSizeUV, 8);
 
-    dithering -= 0.5;
-    return step(0.5, shape + dithering);
+    return float2(clamp(shape, 0.0, 1.0), d);
+}
+
+// Map a shape value (0..1) to a palette colour, dithering the transition between
+// the two straddling swatches by the ordered/random threshold `d` - so instead
+// of a smooth blend the band edges stipple (the classic dithered gradient).
+// Returns a premultiplied rgba.
+static float4 dth_paletteColor(float shape, float d, constant float4 *colors, int count) {
+    int n = max(count, 1);
+    float fp = shape * float(n - 1);
+    int lo = clamp(int(floor(fp)), 0, n - 1);
+    int hi = min(lo + 1, n - 1);
+    float frac = fp - float(lo);
+    float4 c = (frac > d) ? colors[hi] : colors[lo];
+    return float4(c.rgb * c.a, c.a);
 }
 
 fragment float4 ditheringFragment(RasterizerData in [[stage_in]],
                                   constant DitheringUniforms &u [[buffer(MeshFragmentIndex_Grid)]],
                                   constant int &encodeSRGB [[buffer(MeshFragmentIndex_EncodeSRGB)]],
-                               constant MeshCommonUniforms &cm [[buffer(MeshFragmentIndex_Common)]]) {
+                                  constant MeshCommonUniforms &cm [[buffer(MeshFragmentIndex_Common)]]) {
     float2 res = max(cm.resolution, float2(1.0));
     float aspect = res.x / res.y;
     const float refH = 1080.0;
@@ -142,25 +159,22 @@ fragment float4 ditheringFragment(RasterizerData in [[stage_in]],
     // Source gl_FragCoord is bottom-left origin (y up); our UV is y-down.
     float2 uvyup = float2(in.textureCoordinate.x, 1.0 - in.textureCoordinate.y);
     int ss = clamp((int)ceil(refRes.y / res.y), 1, 4);
-    float cov = 0.0;
+    float4 acc = float4(0.0); // premultiplied dithered palette colour
     for (int j = 0; j < ss; j++) {
         for (int i = 0; i < ss; i++) {
             float2 sub = (float2(float(i), float(j)) + 0.5) / float(ss) - 0.5;
             float2 uvss = uvyup + sub / res; // offset within this output pixel
-            cov += dth_evaluate(uvss * refRes, refRes, t, pxSize, u.shape, u.type, cm.origin, cm.scale, cm.rotation);
+            float2 sd =
+                dth_shapeAndDither(uvss * refRes, refRes, t, pxSize, u.shape, u.type, cm.origin, cm.scale, cm.rotation);
+            acc += dth_paletteColor(sd.x, sd.y, u.colors, u.colorsCount);
         }
     }
-    cov /= float(ss * ss); // fractional ink coverage 0..1
+    acc /= float(ss * ss); // averaged premultiplied palette colour
 
-    float3 fgColor = u.colorFront.rgb * u.colorFront.a;
-    float fgOpacity = u.colorFront.a;
-    float3 bgColor = u.colorBack.rgb * u.colorBack.a;
-    float bgOpacity = u.colorBack.a;
-
-    float3 color = fgColor * cov;
-    float opacity = fgOpacity * cov;
-    color += bgColor * (1.0 - opacity);
-    opacity += bgOpacity * (1.0 - opacity);
+    // Color 1 is the low end (the base), so the palette fills the frame - no
+    // separate background. Translucent swatches simply premultiply toward clear.
+    float3 color = acc.rgb;
+    float opacity = acc.a;
 
     // Shared core film grain + anti-band dither.
     color = mesh_applyGrain(color, in.clipSpacePosition.xy, cm);

@@ -32,6 +32,18 @@ static float neuro_shape(float2 uv, float t) {
     return res.x + res.y;
 }
 
+// Smooth palette sample at position `pos` (0..1): Color 1 at 0 (the base),
+// Color N at 1. Returns a premultiplied rgba.
+static float4 neuro_paletteColor(float pos, constant float4 *colors, int count) {
+    int n = max(count, 1);
+    float fp = clamp(pos, 0.0, 1.0) * float(n - 1);
+    int lo = clamp(int(floor(fp)), 0, n - 1);
+    int hi = min(lo + 1, n - 1);
+    float f = fp - float(lo);
+    float4 c = mix(colors[lo], colors[hi], f);
+    return float4(c.rgb * c.a, c.a);
+}
+
 fragment float4 neuroNoiseFragment(RasterizerData in [[stage_in]],
                                    constant NeuroNoiseUniforms &u [[buffer(MeshFragmentIndex_Grid)]],
                                    constant int &encodeSRGB [[buffer(MeshFragmentIndex_EncodeSRGB)]],
@@ -54,20 +66,13 @@ fragment float4 neuroNoiseFragment(RasterizerData in [[stage_in]],
     noise = (1.0 + u.brightness) * noise * noise;
     noise = pow(noise, 0.7 + 6.0 * u.contrast);
     noise = min(1.4, noise);
-    float blend = smoothstep(0.7, 1.4, noise);
 
-    float4 frontC = u.colorFront;
-    frontC.rgb *= frontC.a;
-    float4 midC = u.colorMid;
-    midC.rgb *= midC.a;
-    float4 blendFront = mix(midC, frontC, blend);
-
-    float safeNoise = max(noise, 0.0);
-    float3 color = blendFront.rgb * safeNoise;
-    float opacity = clamp(blendFront.a * safeNoise, 0.0, 1.0);
-    float3 bgColor = u.colorBack.rgb * u.colorBack.a;
-    color = color + bgColor * (1.0 - opacity);
-    opacity = opacity + u.colorBack.a * (1.0 - opacity);
+    // The line intensity is the palette position: dark background (low noise) =
+    // Color 1, glowing crossings (high noise) climb to Color N. Smooth blend.
+    float q = clamp(noise / 1.4, 0.0, 1.0);
+    float4 col = neuro_paletteColor(q, u.colors, u.colorsCount);
+    float3 color = col.rgb;
+    float opacity = col.a;
 
     // Shared core film grain + anti-band dither.
     color = mesh_applyGrain(color, in.clipSpacePosition.xy, cm);

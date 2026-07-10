@@ -191,6 +191,10 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// the callback. Used to restore the row's lock state after a rebuild.
 - (void)applyPaletteLock:(BOOL)locked;
 - (void)applyLane:(KKLane *)lane;
+/// Update the slider's upper bound live (e.g. a `maxControllerLabel` lane whose
+/// max tracks another lane) without rebuilding the row. Re-clamps the slider
+/// thumb; the typed field keeps the stored value.
+- (void)applySliderMax:(double)maxValue;
 /// Re-render fields/slider from the stored values (e.g. after the display
 /// scale changes when the feed resolves its media size).
 - (void)refreshDisplay;

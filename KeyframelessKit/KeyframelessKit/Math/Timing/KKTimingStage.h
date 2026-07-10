@@ -373,6 +373,27 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy, nullable) NSString *visibleWhenOrLabel;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *visibleWhenOrValues;
 
+/// Optional second AND condition, combined with the primary rule: when set, the
+/// lane is visible only if the primary rule (or the primary-OR pair, if that is
+/// used) holds AND this named lane's component-0 value (rounded) is in
+/// `visibleWhenAndValues`. An absent controller counts as this side being false
+/// (the lane hides). Used for Mesh's dynamic colour swatches, which show only
+/// when both the Type supports swatch N AND the colour-count lane is >= N.
+/// Serialized.
+@property(nonatomic, copy, nullable) NSString *visibleWhenAndLabel;
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *visibleWhenAndValues;
+
+/// Optional dynamic upper bound for the value slider: when set, the row's max
+/// (componentMax[0]) is looked up from `componentMaxByControllerValue` using
+/// the rounded component-0 value of the lane named `maxControllerLabel` as the
+/// index
+/// - so the slider's range reacts to another lane (e.g. Mesh's Type caps the
+/// colour count, keeping one easy slider whose max tracks the Type). Falls back
+/// to the static `componentMax` when unset / out of range. Serialized.
+@property(nonatomic, copy, nullable) NSString *maxControllerLabel;
+@property(nonatomic, copy, nullable)
+    NSArray<NSNumber *> *componentMaxByControllerValue;
+
 /// For a KKLaneValueTypeGradient lane: when YES the row also shows an inline
 /// radial/linear type toggle and (for linear) an angle knob, all in one row,
 /// and the lane value is laid out as `[type, angleDegrees, <flat stops...>]`

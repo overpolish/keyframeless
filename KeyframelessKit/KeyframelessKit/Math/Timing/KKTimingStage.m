@@ -339,6 +339,10 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   _visibleWhenValues = [tmpl.visibleWhenValues copy];
   _visibleWhenOrLabel = [tmpl.visibleWhenOrLabel copy];
   _visibleWhenOrValues = [tmpl.visibleWhenOrValues copy];
+  _visibleWhenAndLabel = [tmpl.visibleWhenAndLabel copy];
+  _visibleWhenAndValues = [tmpl.visibleWhenAndValues copy];
+  _maxControllerLabel = [tmpl.maxControllerLabel copy];
+  _componentMaxByControllerValue = [tmpl.componentMaxByControllerValue copy];
   _gradientShowsTypeAngle = tmpl.gradientShowsTypeAngle;
   _paletteLockable = tmpl.paletteLockable;
   _paletteGeneratorBar = tmpl.paletteGeneratorBar;
@@ -419,6 +423,10 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.visibleWhenValues = [_visibleWhenValues copy];
   c.visibleWhenOrLabel = [_visibleWhenOrLabel copy];
   c.visibleWhenOrValues = [_visibleWhenOrValues copy];
+  c.visibleWhenAndLabel = [_visibleWhenAndLabel copy];
+  c.visibleWhenAndValues = [_visibleWhenAndValues copy];
+  c.maxControllerLabel = [_maxControllerLabel copy];
+  c.componentMaxByControllerValue = [_componentMaxByControllerValue copy];
   c.gradientShowsTypeAngle = _gradientShowsTypeAngle;
   c.paletteLockable = _paletteLockable;
   c.paletteGeneratorBar = _paletteGeneratorBar;
@@ -489,6 +497,14 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
     d[@"visible_when_or_label"] = _visibleWhenOrLabel;
     d[@"visible_when_or_values"] = _visibleWhenOrValues ?: @[];
   }
+  if (_visibleWhenAndLabel) {
+    d[@"visible_when_and_label"] = _visibleWhenAndLabel;
+    d[@"visible_when_and_values"] = _visibleWhenAndValues ?: @[];
+  }
+  if (_maxControllerLabel) {
+    d[@"max_controller_label"] = _maxControllerLabel;
+    d[@"max_by_controller_value"] = _componentMaxByControllerValue ?: @[];
+  }
   if (_gradientShowsTypeAngle)
     d[@"gradient_type_angle"] = @YES;
   return d;
@@ -542,6 +558,12 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   l.visibleWhenOrLabel = d[@"visible_when_or_label"];
   if ([d[@"visible_when_or_values"] isKindOfClass:[NSArray class]])
     l.visibleWhenOrValues = d[@"visible_when_or_values"];
+  l.visibleWhenAndLabel = d[@"visible_when_and_label"];
+  if ([d[@"visible_when_and_values"] isKindOfClass:[NSArray class]])
+    l.visibleWhenAndValues = d[@"visible_when_and_values"];
+  l.maxControllerLabel = d[@"max_controller_label"];
+  if ([d[@"max_by_controller_value"] isKindOfClass:[NSArray class]])
+    l.componentMaxByControllerValue = d[@"max_by_controller_value"];
   l.gradientShowsTypeAngle = [d[@"gradient_type_angle"] boolValue];
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {
@@ -1163,7 +1185,9 @@ static BOOL _KKLaneCondVisible(
     KKLane *lane, NSDictionary<NSString *, KKLane *> *byLabel,
     NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel,
     NSMutableDictionary<NSString *, NSNumber *> *memo) {
-  if (lane.visibleWhenLabel.length == 0 && lane.visibleWhenOrLabel.length == 0)
+  if (lane.visibleWhenLabel.length == 0 &&
+      lane.visibleWhenOrLabel.length == 0 &&
+      lane.visibleWhenAndLabel.length == 0)
     return YES;
   NSNumber *cached = memo[lane.label];
   if (cached)
@@ -1176,6 +1200,9 @@ static BOOL _KKLaneCondVisible(
                             byLabel, valuesByLabel, memo) ||
           _KKLaneCondClause(lane.visibleWhenOrLabel, lane.visibleWhenOrValues,
                             lane, byLabel, valuesByLabel, memo);
+  } else if (lane.visibleWhenLabel.length == 0) {
+    // No primary rule (AND-only lane): the primary side is unconstrained.
+    vis = YES;
   } else if (!byLabel[lane.visibleWhenLabel]) {
     // Single rule, controller absent: can't evaluate, so don't filter.
     vis = YES;
@@ -1183,6 +1210,11 @@ static BOOL _KKLaneCondVisible(
     vis = _KKLaneCondClause(lane.visibleWhenLabel, lane.visibleWhenValues, lane,
                             byLabel, valuesByLabel, memo);
   }
+  // Optional second AND gate: an absent controller counts as false (hide), like
+  // the OR clause, so a lane can require both a Type match AND a count >= N.
+  if (vis && lane.visibleWhenAndLabel.length > 0)
+    vis = _KKLaneCondClause(lane.visibleWhenAndLabel, lane.visibleWhenAndValues,
+                            lane, byLabel, valuesByLabel, memo);
   memo[lane.label] = @(vis);
   return vis;
 }

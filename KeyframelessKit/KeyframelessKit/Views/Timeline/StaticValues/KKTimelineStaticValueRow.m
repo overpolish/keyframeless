@@ -174,6 +174,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   NSButton *_linkBtn; // aspect-link toggle, left of the value fields
   BOOL _linkOn;
   BOOL _integerValued;            // fields display + round to whole numbers
+  BOOL _clampsDisplayToMax;       // clamp field + thumb to _cmax (dynamic-max)
   BOOL _componentsScaleWithMedia; // display = norm x media px
                                   // (Position/Anchor/Crop)
   double _laneScrubStep;          // lane's explicit scrub increment (0 = auto)
@@ -639,6 +640,10 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   _cmax = lane.componentMax ?: @[];
   _cunits = lane.componentUnits ?: @[];
   _integerValued = lane.integerValued;
+  // A dynamic-max lane (its slider top tracks another lane) also clamps its
+  // displayed value to that max - unlike normal lanes, whose field may exceed
+  // the slider's end. Keeps the readout consistent with the reactive track.
+  _clampsDisplayToMax = lane.maxControllerLabel.length > 0;
   _componentsScaleWithMedia = lane.componentsScaleWithMedia;
   _laneScrubStep = lane.scrubStep;
   _seedField = lane.seedField;
@@ -1378,15 +1383,21 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
 // field the user is editing (or mid end-editing) so typing isn't clobbered and
 // a stringValue write can't re-grab focus on the field that's resigning.
 - (void)refreshDisplay {
+  double dispMax =
+      (_clampsDisplayToMax && _cmax.count) ? _cmax[0].doubleValue : INFINITY;
   for (NSInteger i = 0;
        i < (NSInteger)_fields.count && i < (NSInteger)_values.count; i++) {
     if ([self _fieldEditing:_fields[i]])
       continue;
-    _fields[i].stringValue = [self _displayForNorm:_values[i].doubleValue
-                                             index:i];
+    double v = _values[i].doubleValue;
+    if (v > dispMax)
+      v = dispMax;
+    _fields[i].stringValue = [self _displayForNorm:v index:i];
   }
-  if (_slider && _values.count && ![self _fieldEditing:_fields[0]])
-    _slider.doubleValue = _values[0].doubleValue;
+  if (_slider && _values.count && ![self _fieldEditing:_fields[0]]) {
+    double v = _values[0].doubleValue;
+    _slider.doubleValue = v > dispMax ? dispMax : v;
+  }
   if (_seedView && _values.count)
     _seedView.seed = (uint32_t)llround(_values[0].doubleValue);
   if (_choicePill && _values.count) {
@@ -1564,6 +1575,16 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   // also reflects the current lock state.
   _locked = lane.locked;
   self.alphaValue = _locked ? 0.5 : 1.0;
+}
+
+- (void)applySliderMax:(double)maxValue {
+  if (!_slider || (_cmax.count && _cmax[0].doubleValue == maxValue))
+    return;
+  _cmax = @[ @(maxValue) ];
+  _slider.maxValue = maxValue;
+  // Re-clamp the field + thumb to the new range (stored _values is preserved,
+  // so a wider Type later restores the original count).
+  [self refreshDisplay];
 }
 
 - (NSView *)guideSliderView {

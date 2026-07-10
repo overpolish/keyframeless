@@ -120,9 +120,7 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   return KKRotationAxisZ;
 }
 - (NSInteger)valueTypeForLabel:(NSString *)label {
-  if ([label hasPrefix:@"Color "] || [label isEqualToString:@"Background"] ||
-      [label isEqualToString:@"Foreground"] || [label isEqualToString:@"Mid"] ||
-      [label isEqualToString:@"Bloom Color"])
+  if ([label hasPrefix:@"Color "] || [label isEqualToString:@"Bloom Color"])
     return KKLaneValueTypeColor;
   if ([label isEqualToString:@"Origin"] || [label isEqualToString:@"Scale"])
     return KKLaneValueTypeGeneric;
@@ -130,10 +128,12 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
 }
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
   int ci = MeshIndexForLabel(label, @"Color ");
-  if (ci >= 0 && ci < KK_MESH_COLOR_COUNT) {
+  if (ci >= 0 && ci < KK_MESH_COLOR_MAX) {
     const float *c = kMeshDefaultColorsSRGB[ci];
     return @[ @(c[0]), @(c[1]), @(c[2]), @(c[3]) ];
   }
+  if ([label isEqualToString:KK_MESH_COLOR_COUNT_LABEL])
+    return @[ @(KK_MESH_COLOR_COUNT) ];
   if ([label isEqualToString:@"Distortion"])
     return @[ @(KK_MESH_GRAD_DEFAULT_DISTORTION * 100.0) ];
   if ([label isEqualToString:@"Swirl"])
@@ -148,12 +148,6 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     return @[ @(KK_CORE_GRAINSIZE_DEFAULT) ];
   if ([label isEqualToString:@"Type"])
     return @[ @0.0 ];
-  if ([label isEqualToString:@"Background"])
-    return @[ @0.04, @0.04, @0.07, @1.0 ];
-  if ([label isEqualToString:@"Foreground"])
-    return @[ @0.85, @0.90, @0.98, @1.0 ];
-  if ([label isEqualToString:@"Mid"])
-    return @[ @0.25, @0.45, @0.95, @1.0 ];
   if ([label isEqualToString:@"Brightness"])
     return @[ @(KK_NEURO_DEFAULT_BRIGHTNESS * 100.0) ];
   if ([label isEqualToString:@"Contrast"])
