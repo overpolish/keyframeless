@@ -20,19 +20,31 @@
 // Max colour spots (the source shader blends up to 10 by inverse-distance).
 #define KK_MESH_GRAD_COLORS 10
 
+// Shared params common to every Type, passed in their own fragment buffer
+// (MeshFragmentIndex_Common) so the per-Type uniform structs don't each
+// re-declare them. Filled once per render. `grain` is the core film-grain
+// overlay (also anti-banding); `grainScale` is the per-Type multiplier so e.g.
+// Grainy reads stylistically grainy by default while others stay subtle.
+typedef struct MeshCommonUniforms {
+    // Shared transforms + timing (identical for every Type, read once per render).
+    vector_float2 origin; // field centre (normalized; 0.5,0.5 = centre)
+    vector_float2 scale;  // common zoom factor per axis (1 = 100%)
+    float rotation;       // common rotation, radians
+    float time;           // clip seconds
+    float speed;          // time multiplier (motion rate)
+    float seed;           // start-time offset (shared)
+    // Core film grain.
+    float grain;              // 0..1 core film-grain amount (nonzero default = anti-band)
+    float grainSize;          // grain cell size in reference pixels (higher = coarser)
+    float grainScale;         // per-Type multiplier applied to `grain` (set at build)
+    vector_float2 resolution; // destination pixel dims (for reference-res grain + supersample)
+} MeshCommonUniforms;
+
 typedef struct MeshGradientUniforms {
     vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba (straight alpha)
     int colorsCount;                           // active colours (<= 10)
-    float time;                                // clip seconds; animates the spots
     float distortion;                          // 0..1 organic noise warp
     float swirl;                               // 0..1 vortex warp
-    float speed;                               // time multiplier (motion rate)
-    float seed;                                // start-time offset (initial seed)
-    float grainMixer;                          // 0..1 grain at the spot edges
-    float grainOverlay;                        // 0..1 post grain overlay
-    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
-    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
-    float rotation;                            // common rotation, radians
 } MeshGradientUniforms;
 
 // Dithering type: also ported from paper-design/shaders (Apache-2.0). A
@@ -42,16 +54,9 @@ typedef struct MeshGradientUniforms {
 typedef struct DitheringUniforms {
     vector_float4 colorBack;  // rgba background
     vector_float4 colorFront; // rgba ink
-    vector_float2 resolution; // destination pixel dims (set at render time)
-    vector_float2 origin;     // swirl/ripple centre (normalized 0..1)
-    float time;               // clip seconds
-    float speed;              // time multiplier (motion rate)
-    float seed;               // start-time offset (shared with Mesh)
     float pxSize;             // dither grid size in reference pixels
     int shape;                // 1..6 (simplex, warp, dots, wave, ripple, swirl)
     int type;                 // 1..4 dither (random, 2x2, 4x4, 8x8 Bayer)
-    vector_float2 scale;      // common zoom factor per axis (1 = 100%)
-    float rotation;           // common rotation, radians
 } DitheringUniforms;
 
 // Grain Gradient type ("Grainy"): also ported from paper-design/shaders
@@ -65,17 +70,10 @@ typedef struct GrainGradientUniforms {
     vector_float4 colors[KK_GRAIN_GRAD_COLORS]; // rgba (straight alpha)
     int colorsCount;                            // active colours (<= 7)
     vector_float4 colorBack;                    // rgba background
-    vector_float2 resolution;                   // destination pixel dims (render time)
-    vector_float2 origin;                       // field centre (normalized; 0.5,0.5 = centre)
     float softness;                             // 0..1 band-edge sharpness
     float intensity;                            // 0..1 distortion between bands
     float noise;                                // 0..1 grainy overlay
-    float time;                                 // clip seconds
-    float speed;                                // time multiplier (motion rate)
-    float seed;                                 // start-time offset (shared)
     int shape;                                  // 1..7 (wave, dots, truchet, corners, ripple, blob, sphere)
-    vector_float2 scale;                        // common zoom factor per axis (1 = 100%)
-    float rotation;                             // common rotation, radians
 } GrainGradientUniforms;
 
 // Warp type: also ported from paper-design/shaders (Apache-2.0). Animated colour
@@ -85,20 +83,13 @@ typedef struct GrainGradientUniforms {
 typedef struct WarpUniforms {
     vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba (straight alpha), up to 10
     int colorsCount;                           // active colours (<= 10)
-    vector_float2 resolution;                  // destination pixel dims (render time)
-    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
     float proportion;                          // 0..1 blend point between colours
     float softness;                            // 0..1 colour-transition sharpness
     float shapeScale;                          // 0..1 base-pattern zoom
     float distortion;                          // 0..1 noise distortion strength
     float swirl;                               // 0..1 swirl strength
     float swirlIterations;                     // 0..20 layered swirl passes
-    float time;                                // clip seconds
-    float speed;                               // time multiplier (motion rate)
-    float seed;                                // start-time offset (shared)
     int shape;                                 // 0..2 (checks, stripes, edge)
-    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
-    float rotation;                            // common rotation, radians
 } WarpUniforms;
 
 // Neuro Noise type ("Neuro"): also ported from paper-design/shaders
@@ -110,15 +101,8 @@ typedef struct NeuroNoiseUniforms {
     vector_float4 colorFront; // rgba highlight (crossing points)
     vector_float4 colorMid;   // rgba main line colour
     vector_float4 colorBack;  // rgba background
-    vector_float2 resolution; // destination pixel dims (render time)
-    vector_float2 origin;     // field centre (normalized; 0.5,0.5 = centre)
-    vector_float2 scale;      // common zoom factor per axis (1 = 100%)
     float brightness;         // 0..1 luminosity of the crossings
     float contrast;           // 0..1 bright-dark sharpness
-    float time;               // clip seconds
-    float speed;              // time multiplier (motion rate)
-    float seed;               // start-time offset (shared)
-    float rotation;           // common rotation, radians
 } NeuroNoiseUniforms;
 
 // Simplex Noise type ("Simplex"): also ported from paper-design/shaders
@@ -128,15 +112,8 @@ typedef struct NeuroNoiseUniforms {
 typedef struct SimplexNoiseUniforms {
     vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba (straight alpha), up to 10
     int colorsCount;                           // active colours (<= 10)
-    vector_float2 resolution;                  // destination pixel dims (render time)
-    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
-    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
     float stepsPerColor;                       // 1..10 extra colours between base colours
     float softness;                            // 0..1 colour-transition sharpness
-    float time;                                // clip seconds
-    float speed;                               // time multiplier (motion rate)
-    float seed;                                // start-time offset (shared)
-    float rotation;                            // common rotation, radians
 } SimplexNoiseUniforms;
 
 // Metaballs type ("Metaballs"): also ported from paper-design/shaders
@@ -147,15 +124,8 @@ typedef struct MetaballsUniforms {
     vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba (straight alpha), indexed modulo colorsCount
     int colorsCount;                           // active colours (<= 10; shader wraps by count)
     vector_float4 colorBack;                   // rgba background
-    vector_float2 resolution;                  // destination pixel dims (render time)
-    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
-    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
     float ballCount;                           // 1..20 active balls
     float ballSize;                            // 0..1 ball size
-    float time;                                // clip seconds
-    float speed;                               // time multiplier (motion rate)
-    float seed;                                // start-time offset (shared)
-    float rotation;                            // common rotation, radians
 } MetaballsUniforms;
 
 // God Rays type ("God Rays"): also ported from paper-design/shaders
@@ -168,19 +138,12 @@ typedef struct GodRaysUniforms {
     int colorsCount;                           // active ray colours (<= 5)
     vector_float4 colorBack;                   // rgba background
     vector_float4 colorBloom;                  // rgba overlay blended with the rays
-    vector_float2 resolution;                  // destination pixel dims (render time)
-    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
-    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
     float density;                             // 0..1 number of rays
     float spotty;                              // 0..1 ray length (higher = shorter/spottier)
     float midSize;                             // 0..1 central glow size
     float midIntensity;                        // 0..1 central glow brightness
     float intensity;                           // 0..1 ray visibility/strength
     float bloom;                               // 0..1 alpha->additive blend of the rays + overlay
-    float time;                                // clip seconds
-    float speed;                               // time multiplier (motion rate)
-    float seed;                                // start-time offset (shared)
-    float rotation;                            // common rotation, radians
 } GodRaysUniforms;
 
 // Fluid type ("Fluid"): ported from radiant-shaders "Fluid Amber" (pbakaus/
@@ -191,16 +154,9 @@ typedef struct GodRaysUniforms {
 typedef struct FluidUniforms {
     vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba (straight alpha), up to 10 (~4 used)
     int colorsCount;                           // active colours (<= 10)
-    vector_float2 resolution;                  // destination pixel dims (render time)
-    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
-    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
     float detail;                              // fbm amplitude persistence (0..1; higher = richer)
     float marble;                              // domain-warp strength (0 = smooth, 1 = source, higher = intense)
     float vibrance;                            // colour-layer separation (1 = source; higher = punchier)
-    float time;                                // clip seconds
-    float speed;                               // time multiplier (motion rate)
-    float seed;                                // start-time offset (shared)
-    float rotation;                            // common rotation, radians
 } FluidUniforms;
 
 // Neon type ("Neon"): ported from radiant-shaders "Neon Drip" (pbakaus/radiant,
@@ -212,16 +168,9 @@ typedef struct NeonUniforms {
     vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba (glow, surface, inner, core = 1..4)
     int colorsCount;                           // active colours (<= 10; ~4 used)
     vector_float4 colorBack;                   // rgba dark backdrop
-    vector_float2 resolution;                  // destination pixel dims (render time)
-    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
-    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
     float radiance;                            // HDR neon gain (bloom punch)
     float wisps;                               // tendril-wisp strength / coverage
     float strands;                             // tendril fineness (frequency; higher = finer strands)
-    float time;                                // clip seconds
-    float speed;                               // time multiplier (motion rate)
-    float seed;                                // start-time offset (shared)
-    float rotation;                            // common rotation, radians
 } NeonUniforms;
 
 // Silk type ("Silk"): ported from radiant-shaders "Silk Cascade" (pbakaus/
@@ -234,16 +183,9 @@ typedef struct SilkUniforms {
     vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba; Color 1..3 = the 3 layer hues
     int colorsCount;                           // active colours (<= 10; ~3 used)
     vector_float4 colorBack;                   // rgba dark backdrop
-    vector_float2 resolution;                  // destination pixel dims (render time)
-    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
-    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
     float sheen;                               // silk specular / sheen intensity
     float folds;                               // fold frequency scale (density of the folds)
     float drape;                               // domain-warp strength (how much folds curve/flow)
-    float time;                                // clip seconds
-    float speed;                               // time multiplier (motion rate)
-    float seed;                                // start-time offset (shared)
-    float rotation;                            // common rotation, radians
 } SilkUniforms;
 
 // Strata type ("Strata"): ported from radiant-shaders "Painted Strata" (pbakaus/
@@ -254,16 +196,9 @@ typedef struct SilkUniforms {
 typedef struct StrataUniforms {
     vector_float4 colors[KK_MESH_GRAD_COLORS]; // rgba; layers pick from these by hash
     int colorsCount;                           // active colours (<= 10)
-    vector_float2 resolution;                  // destination pixel dims (render time)
-    vector_float2 origin;                      // field centre (normalized; 0.5,0.5 = centre)
-    vector_float2 scale;                       // common zoom factor per axis (1 = 100%)
     float layers;                              // 2..24 strata layer count
     float tectonics;                           // deformation strength (warp + boundary fold)
     float texture;                             // washi-paper grain intensity
-    float time;                                // clip seconds
-    float speed;                               // time multiplier (motion rate)
-    float seed;                                // start-time offset (shared)
-    float rotation;                            // common rotation, radians
 } StrataUniforms;
 
 // The Type choice-pill order. Kept in sync with the "Type" pill labels.
@@ -300,6 +235,7 @@ typedef struct MeshPluginState {
     NeonUniforms neon;
     SilkUniforms silk;
     StrataUniforms strata;
+    MeshCommonUniforms common;
 } MeshPluginState;
 
 typedef enum MeshFragmentIndex {
@@ -307,5 +243,7 @@ typedef enum MeshFragmentIndex {
     // 1 => gamma-encode the output (8-bit unorm target, e.g. the mini-viewer or
     // an SDR 8-bit FCP buffer); 0 => leave it linear (FCP float working buffers
     // are linear-light, so an sRGB-encoded value there reads as washed out).
-    MeshFragmentIndex_EncodeSRGB = 1
+    MeshFragmentIndex_EncodeSRGB = 1,
+    // Shared params (MeshCommonUniforms) - grain + time, common to all Types.
+    MeshFragmentIndex_Common = 2
 } MeshFragmentIndex;

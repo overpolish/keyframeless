@@ -6,6 +6,7 @@
 #import "Constants.h"
 #import "MeshColorSpace.h"
 #import "MeshMiniViewerRenderer.h" // per-instance descriptor path
+#import "MeshUniformBuilders.h" // per-Type uniform builders (shared with mini)
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKMiniViewerFeed.h>
@@ -146,488 +147,33 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
       rotV.count ? rotV[0].floatValue * (float)(M_PI / 180.0) : 0.0f;
   float timeSec = (float)(frac * durSec);
 
-  // --- Mesh: a flat list of colour swatches (the shader places the spots) +
-  // scalar controls. A missing lane falls back to its default. Sliders are
-  // stored as percent, the shader wants 0..1.
-  MeshGradientUniforms u;
-  memset(&u, 0, sizeof(u));
-  int count = 0;
-  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-    NSArray<NSNumber *> *v =
-        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
-    if (v.count >= 4) {
-      u.colors[count++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                          v[2].floatValue, v[3].floatValue};
-    } else {
-      const float *c = kMeshDefaultColorsSRGB[i];
-      u.colors[count++] = (vector_float4){c[0], c[1], c[2], c[3]};
-    }
-  }
-  u.colorsCount = count > 0 ? count : 1;
-  NSArray<NSNumber *> *distV =
-      MeshLaneValuesAtFraction(timeline, @"Distortion", frac);
-  NSArray<NSNumber *> *swirlV =
-      MeshLaneValuesAtFraction(timeline, @"Swirl", frac);
-  NSArray<NSNumber *> *mixV =
-      MeshLaneValuesAtFraction(timeline, @"Grain Mixer", frac);
+  // Core film grain (shared by every type, applied in the shader epilogue). The
+  // per-type multiplier keeps Grainy stylistic while others stay subtle.
   NSArray<NSNumber *> *grainV =
       MeshLaneValuesAtFraction(timeline, @"Grain", frac);
-  u.distortion = distV.count ? distV[0].floatValue / 100.0f
-                             : KK_MESH_GRAD_DEFAULT_DISTORTION;
-  u.swirl =
-      swirlV.count ? swirlV[0].floatValue / 100.0f : KK_MESH_GRAD_DEFAULT_SWIRL;
-  u.speed = speed;
-  u.seed = seed;
-  u.origin = origin;
-  u.grainMixer = mixV.count ? mixV[0].floatValue / 100.0f
-                            : KK_MESH_GRAD_DEFAULT_GRAINMIXER;
-  u.grainOverlay =
-      grainV.count ? grainV[0].floatValue / 100.0f : KK_MESH_DEFAULT_GRAIN;
-  u.scale = scale;
-  u.rotation = rotation;
-  u.time = timeSec;
-  outState->mesh = u;
+  NSArray<NSNumber *> *grainSizeV =
+      MeshLaneValuesAtFraction(timeline, @"Grain Size", frac);
+  MeshCommonUniforms common = MeshCommonDefault();
+  common.origin = origin;
+  common.scale = scale;
+  common.rotation = rotation;
+  common.speed = speed;
+  common.seed = seed;
+  common.time = timeSec;
+  common.grain =
+      grainV.count ? grainV[0].floatValue / 100.0f : KK_CORE_GRAIN_DEFAULT;
+  common.grainSize =
+      grainSizeV.count ? grainSizeV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
+  common.grainScale = MeshGrainScaleForType(outState->type);
+  outState->common = common;
 
-  // --- Dithering: two colours + a procedural shape through a dither. Choice
-  // pills store a 0-based index; the shader wants 1-based shape/type.
-  // Resolution is filled at render time (it needs the destination pixel dims).
-  DitheringUniforms d = DitheringDefault();
-  NSArray<NSNumber *> *backV =
-      MeshLaneValuesAtFraction(timeline, @"Background", frac);
-  NSArray<NSNumber *> *frontV =
-      MeshLaneValuesAtFraction(timeline, @"Foreground", frac);
-  NSArray<NSNumber *> *shapeV =
-      MeshLaneValuesAtFraction(timeline, @"Shape", frac);
-  NSArray<NSNumber *> *ditherV =
-      MeshLaneValuesAtFraction(timeline, @"Dither", frac);
-  NSArray<NSNumber *> *pxV =
-      MeshLaneValuesAtFraction(timeline, @"Pixel Size", frac);
-  if (backV.count >= 4)
-    d.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                  backV[2].floatValue, backV[3].floatValue};
-  if (frontV.count >= 4)
-    d.colorFront = (vector_float4){frontV[0].floatValue, frontV[1].floatValue,
-                                   frontV[2].floatValue, frontV[3].floatValue};
-  if (shapeV.count)
-    d.shape = (int)lround(shapeV[0].doubleValue) + 1;
-  if (ditherV.count)
-    d.type = (int)lround(ditherV[0].doubleValue) + 1;
-  if (pxV.count)
-    d.pxSize = pxV[0].floatValue;
-  d.speed = speed;
-  d.seed = seed;
-  d.origin = origin;
-  d.scale = scale;
-  d.rotation = rotation;
-  d.time = timeSec;
-  outState->dithering = d;
-
-  // --- Grain Gradient ("Grainy"): the shared colour swatches index a ramp,
-  // distorted by noise (intensity) with a grainy overlay (noise), over the
-  // Background. Sliders store percent; the shader wants 0..1. Resolution is
-  // filled at render time.
-  GrainGradientUniforms g = GrainGradientDefault();
-  int gCount = 0;
-  int gMax = KK_MESH_COLOR_COUNT < KK_GRAIN_GRAD_COLORS ? KK_MESH_COLOR_COUNT
-                                                        : KK_GRAIN_GRAD_COLORS;
-  for (int i = 0; i < gMax; i++) {
-    NSArray<NSNumber *> *v =
-        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
-    if (v.count >= 4)
-      g.colors[gCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                           v[2].floatValue, v[3].floatValue};
-    else {
-      const float *c = kMeshDefaultColorsSRGB[i];
-      g.colors[gCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-    }
-  }
-  g.colorsCount = gCount > 0 ? gCount : 1;
-  if (backV.count >= 4)
-    g.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                  backV[2].floatValue, backV[3].floatValue};
-  NSArray<NSNumber *> *softV =
-      MeshLaneValuesAtFraction(timeline, @"Softness", frac);
-  NSArray<NSNumber *> *intenV =
-      MeshLaneValuesAtFraction(timeline, @"Intensity", frac);
-  NSArray<NSNumber *> *noiseV =
-      MeshLaneValuesAtFraction(timeline, @"Noise", frac);
-  NSArray<NSNumber *> *patternV =
-      MeshLaneValuesAtFraction(timeline, @"Pattern", frac);
-  g.softness =
-      softV.count ? softV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_SOFTNESS;
-  g.intensity =
-      intenV.count ? intenV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_INTENSITY;
-  g.noise =
-      noiseV.count ? noiseV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_NOISE;
-  if (patternV.count)
-    g.shape = (int)lround(patternV[0].doubleValue) + 1; // pill is 0-based
-  g.speed = speed;
-  g.seed = seed;
-  g.origin = origin;
-  g.scale = scale;
-  g.rotation = rotation;
-  g.time = timeSec;
-  outState->grain = g;
-
-  // --- Warp: the shared colour swatches blended over a base pattern, warped by
-  // noise + iterative swirl. Distortion / Swirl (shared with Mesh) and Softness
-  // (shared with Grainy) are read above. Sliders store percent; the shader
-  // wants 0..1. Resolution is filled at render time.
-  WarpUniforms w = WarpDefault();
-  int wCount = 0;
-  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-    NSArray<NSNumber *> *v =
-        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
-    if (v.count >= 4)
-      w.colors[wCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                           v[2].floatValue, v[3].floatValue};
-    else {
-      const float *c = kMeshDefaultColorsSRGB[i];
-      w.colors[wCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-    }
-  }
-  w.colorsCount = wCount > 0 ? wCount : 1;
-  NSArray<NSNumber *> *propV =
-      MeshLaneValuesAtFraction(timeline, @"Proportion", frac);
-  NSArray<NSNumber *> *shapeScaleV =
-      MeshLaneValuesAtFraction(timeline, @"Shape Scale", frac);
-  NSArray<NSNumber *> *swirlIterV =
-      MeshLaneValuesAtFraction(timeline, @"Swirl Iterations", frac);
-  NSArray<NSNumber *> *baseV =
-      MeshLaneValuesAtFraction(timeline, @"Base", frac);
-  w.proportion =
-      propV.count ? propV[0].floatValue / 100.0f : KK_WARP_DEFAULT_PROPORTION;
-  w.softness =
-      softV.count ? softV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_SOFTNESS;
-  w.shapeScale = shapeScaleV.count ? shapeScaleV[0].floatValue / 100.0f
-                                   : KK_WARP_DEFAULT_SHAPESCALE;
-  w.distortion = distV.count ? distV[0].floatValue / 100.0f
-                             : KK_MESH_GRAD_DEFAULT_DISTORTION;
-  w.swirl =
-      swirlV.count ? swirlV[0].floatValue / 100.0f : KK_MESH_GRAD_DEFAULT_SWIRL;
-  w.swirlIterations =
-      swirlIterV.count ? swirlIterV[0].floatValue : KK_WARP_DEFAULT_SWIRLITER;
-  if (baseV.count)
-    w.shape = (int)lround(baseV[0].doubleValue); // pill is 0-based (0..2)
-  w.speed = speed;
-  w.seed = seed;
-  w.origin = origin;
-  w.scale = scale;
-  w.rotation = rotation;
-  w.time = timeSec;
-  outState->warp = w;
-
-  // --- Neuro Noise: a web of glowing lines blended between the Mid + Front
-  // colours over the Background. Front = Foreground, Back = Background
-  // (shared), Mid is its own lane. Sliders store percent; the shader wants
-  // 0..1.
-  NeuroNoiseUniforms nn = NeuroNoiseDefault();
-  NSArray<NSNumber *> *midV = MeshLaneValuesAtFraction(timeline, @"Mid", frac);
-  NSArray<NSNumber *> *brightV =
-      MeshLaneValuesAtFraction(timeline, @"Brightness", frac);
-  NSArray<NSNumber *> *contrastV =
-      MeshLaneValuesAtFraction(timeline, @"Contrast", frac);
-  if (frontV.count >= 4)
-    nn.colorFront = (vector_float4){frontV[0].floatValue, frontV[1].floatValue,
-                                    frontV[2].floatValue, frontV[3].floatValue};
-  if (midV.count >= 4)
-    nn.colorMid = (vector_float4){midV[0].floatValue, midV[1].floatValue,
-                                  midV[2].floatValue, midV[3].floatValue};
-  if (backV.count >= 4)
-    nn.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                   backV[2].floatValue, backV[3].floatValue};
-  nn.brightness = brightV.count ? brightV[0].floatValue / 100.0f
-                                : KK_NEURO_DEFAULT_BRIGHTNESS;
-  nn.contrast = contrastV.count ? contrastV[0].floatValue / 100.0f
-                                : KK_NEURO_DEFAULT_CONTRAST;
-  nn.speed = speed;
-  nn.seed = seed;
-  nn.origin = origin;
-  nn.scale = scale;
-  nn.rotation = rotation;
-  nn.time = timeSec;
-  outState->neuro = nn;
-
-  // --- Simplex Noise: the shared colour swatches mapped through two Simplex
-  // noises, stepped into bands. Softness (shared with Grainy/Warp) is read
-  // above. Resolution is filled at render time.
-  SimplexNoiseUniforms sn = SimplexNoiseDefault();
-  int snCount = 0;
-  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-    NSArray<NSNumber *> *v =
-        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
-    if (v.count >= 4)
-      sn.colors[snCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                             v[2].floatValue, v[3].floatValue};
-    else {
-      const float *c = kMeshDefaultColorsSRGB[i];
-      sn.colors[snCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-    }
-  }
-  sn.colorsCount = snCount > 0 ? snCount : 1;
-  NSArray<NSNumber *> *stepsV =
-      MeshLaneValuesAtFraction(timeline, @"Steps", frac);
-  sn.stepsPerColor =
-      stepsV.count ? stepsV[0].floatValue : KK_SIMPLEX_DEFAULT_STEPS;
-  sn.softness =
-      softV.count ? softV[0].floatValue / 100.0f : KK_SIMPLEX_DEFAULT_SOFTNESS;
-  sn.speed = speed;
-  sn.seed = seed;
-  sn.origin = origin;
-  sn.scale = scale;
-  sn.rotation = rotation;
-  sn.time = timeSec;
-  outState->simplex = sn;
-
-  // --- Metaballs: the shared colour swatches (indexed modulo count) over the
-  // Background. Count = active balls (integer), Size = ball size (percent).
-  // Resolution is filled at render time.
-  MetaballsUniforms mb = MetaballsDefault();
-  int mbCount = 0;
-  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-    NSArray<NSNumber *> *v =
-        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
-    if (v.count >= 4)
-      mb.colors[mbCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                             v[2].floatValue, v[3].floatValue};
-    else {
-      const float *c = kMeshDefaultColorsSRGB[i];
-      mb.colors[mbCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-    }
-  }
-  mb.colorsCount = mbCount > 0 ? mbCount : 1;
-  if (backV.count >= 4)
-    mb.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                   backV[2].floatValue, backV[3].floatValue};
-  NSArray<NSNumber *> *ballCountV =
-      MeshLaneValuesAtFraction(timeline, @"Count", frac);
-  NSArray<NSNumber *> *ballSizeV =
-      MeshLaneValuesAtFraction(timeline, @"Size", frac);
-  mb.ballCount =
-      ballCountV.count ? ballCountV[0].floatValue : KK_METABALLS_DEFAULT_COUNT;
-  mb.ballSize = ballSizeV.count ? ballSizeV[0].floatValue / 100.0f
-                                : KK_METABALLS_DEFAULT_SIZE;
-  mb.speed = speed;
-  mb.seed = seed;
-  mb.origin = origin;
-  mb.scale = scale;
-  mb.rotation = rotation;
-  mb.time = timeSec;
-  outState->metaballs = mb;
-
-  // --- God Rays: the shared colour swatches (up to 5) are the ray colours over
-  // the Background, with a Bloom Color overlay. Density / Spots / Glow Size /
-  // Glow / Rays / Bloom are percent lanes; the shader wants 0..1. Resolution is
-  // filled at render time.
-  GodRaysUniforms gr = GodRaysDefault();
-  int grCount = 0;
-  int grMax = KK_MESH_COLOR_COUNT < 5 ? KK_MESH_COLOR_COUNT : 5;
-  for (int i = 0; i < grMax; i++) {
-    NSArray<NSNumber *> *v =
-        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
-    if (v.count >= 4)
-      gr.colors[grCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                             v[2].floatValue, v[3].floatValue};
-    else {
-      const float *c = kMeshDefaultColorsSRGB[i];
-      gr.colors[grCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-    }
-  }
-  gr.colorsCount = grCount > 0 ? grCount : 1;
-  if (backV.count >= 4)
-    gr.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                   backV[2].floatValue, backV[3].floatValue};
-  NSArray<NSNumber *> *bloomColorV =
-      MeshLaneValuesAtFraction(timeline, @"Bloom Color", frac);
-  if (bloomColorV.count >= 4)
-    gr.colorBloom =
-        (vector_float4){bloomColorV[0].floatValue, bloomColorV[1].floatValue,
-                        bloomColorV[2].floatValue, bloomColorV[3].floatValue};
-  NSArray<NSNumber *> *densityV =
-      MeshLaneValuesAtFraction(timeline, @"Density", frac);
-  NSArray<NSNumber *> *spottyV =
-      MeshLaneValuesAtFraction(timeline, @"Spots", frac);
-  NSArray<NSNumber *> *midSizeV =
-      MeshLaneValuesAtFraction(timeline, @"Glow Size", frac);
-  NSArray<NSNumber *> *midIntenV =
-      MeshLaneValuesAtFraction(timeline, @"Glow", frac);
-  NSArray<NSNumber *> *raysV =
-      MeshLaneValuesAtFraction(timeline, @"Rays", frac);
-  NSArray<NSNumber *> *bloomV =
-      MeshLaneValuesAtFraction(timeline, @"Bloom", frac);
-  gr.density = densityV.count ? densityV[0].floatValue / 100.0f
-                              : KK_GODRAYS_DEFAULT_DENSITY;
-  gr.spotty = spottyV.count ? spottyV[0].floatValue / 100.0f
-                            : KK_GODRAYS_DEFAULT_SPOTTY;
-  gr.midSize = midSizeV.count ? midSizeV[0].floatValue / 100.0f
-                              : KK_GODRAYS_DEFAULT_MIDSIZE;
-  gr.midIntensity = midIntenV.count ? midIntenV[0].floatValue / 100.0f
-                                    : KK_GODRAYS_DEFAULT_MIDINTENSITY;
-  gr.intensity =
-      raysV.count ? raysV[0].floatValue / 100.0f : KK_GODRAYS_DEFAULT_INTENSITY;
-  gr.bloom =
-      bloomV.count ? bloomV[0].floatValue / 100.0f : KK_GODRAYS_DEFAULT_BLOOM;
-  gr.speed = speed;
-  gr.seed = seed;
-  gr.origin = origin;
-  gr.scale = scale;
-  gr.rotation = rotation;
-  gr.time = timeSec;
-  outState->godrays = gr;
-
-  // --- Fluid: the shared colour swatches composited in layers by an iterative
-  // domain warp. Detail = fbm persistence (percent -> 0..1). Resolution is
-  // filled at render time.
-  FluidUniforms fl = FluidDefault();
-  int flCount = 0;
-  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-    NSArray<NSNumber *> *v =
-        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
-    if (v.count >= 4)
-      fl.colors[flCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                             v[2].floatValue, v[3].floatValue};
-    else {
-      const float *c = kMeshDefaultColorsSRGB[i];
-      fl.colors[flCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-    }
-  }
-  fl.colorsCount = flCount > 0 ? flCount : 1;
-  NSArray<NSNumber *> *detailV =
-      MeshLaneValuesAtFraction(timeline, @"Detail", frac);
-  NSArray<NSNumber *> *marbleV =
-      MeshLaneValuesAtFraction(timeline, @"Marble", frac);
-  NSArray<NSNumber *> *vibranceV =
-      MeshLaneValuesAtFraction(timeline, @"Vibrance", frac);
-  fl.detail =
-      detailV.count ? detailV[0].floatValue / 100.0f : KK_FLUID_DEFAULT_DETAIL;
-  fl.marble =
-      marbleV.count ? marbleV[0].floatValue / 100.0f : KK_FLUID_DEFAULT_MARBLE;
-  fl.vibrance = vibranceV.count ? vibranceV[0].floatValue / 100.0f
-                                : KK_FLUID_DEFAULT_VIBRANCE;
-  fl.speed = speed;
-  fl.seed = seed;
-  fl.origin = origin;
-  fl.scale = scale;
-  fl.rotation = rotation;
-  fl.time = timeSec;
-  outState->fluid = fl;
-
-  // --- Neon: rising metaball blobs + tendrils, layered through the shared
-  // palette (glow/surface/inner/core = Color 1..4) over the Background. Melt /
-  // Radiance / Wisps are percent (shader wants 0..N); Blobs is a count.
-  // Resolution is filled at render time.
-  NeonUniforms ne = NeonDefault();
-  int neCount = 0;
-  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-    NSArray<NSNumber *> *v =
-        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
-    if (v.count >= 4)
-      ne.colors[neCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                             v[2].floatValue, v[3].floatValue};
-    else {
-      const float *c = kMeshDefaultColorsSRGB[i];
-      ne.colors[neCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-    }
-  }
-  ne.colorsCount = neCount > 0 ? neCount : 1;
-  if (backV.count >= 4)
-    ne.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                   backV[2].floatValue, backV[3].floatValue};
-  NSArray<NSNumber *> *radianceV =
-      MeshLaneValuesAtFraction(timeline, @"Radiance", frac);
-  NSArray<NSNumber *> *wispsV =
-      MeshLaneValuesAtFraction(timeline, @"Wisps", frac);
-  NSArray<NSNumber *> *strandsV =
-      MeshLaneValuesAtFraction(timeline, @"Strands", frac);
-  ne.radiance = radianceV.count ? radianceV[0].floatValue / 100.0f
-                                : KK_NEON_DEFAULT_RADIANCE;
-  ne.wisps =
-      wispsV.count ? wispsV[0].floatValue / 100.0f : KK_NEON_DEFAULT_WISPS;
-  ne.strands = strandsV.count ? strandsV[0].floatValue / 100.0f
-                              : KK_NEON_DEFAULT_STRANDS;
-  ne.speed = speed;
-  ne.seed = seed;
-  ne.origin = origin;
-  ne.scale = scale;
-  ne.rotation = rotation;
-  ne.time = timeSec;
-  outState->neon = ne;
-
-  // --- Silk: three fabric-fold layers taking the shared palette hues (Color
-  // 1..3) over the Background. Sheen / Folds / Drape are percent (shader wants
-  // 0..N). Resolution is filled at render time.
-  SilkUniforms sk = SilkDefault();
-  int skCount = 0;
-  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-    NSArray<NSNumber *> *v =
-        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
-    if (v.count >= 4)
-      sk.colors[skCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                             v[2].floatValue, v[3].floatValue};
-    else {
-      const float *c = kMeshDefaultColorsSRGB[i];
-      sk.colors[skCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-    }
-  }
-  sk.colorsCount = skCount > 0 ? skCount : 1;
-  if (backV.count >= 4)
-    sk.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                   backV[2].floatValue, backV[3].floatValue};
-  NSArray<NSNumber *> *sheenV =
-      MeshLaneValuesAtFraction(timeline, @"Sheen", frac);
-  NSArray<NSNumber *> *foldsV =
-      MeshLaneValuesAtFraction(timeline, @"Folds", frac);
-  NSArray<NSNumber *> *drapeV =
-      MeshLaneValuesAtFraction(timeline, @"Drape", frac);
-  sk.sheen =
-      sheenV.count ? sheenV[0].floatValue / 100.0f : KK_SILK_DEFAULT_SHEEN;
-  sk.folds =
-      foldsV.count ? foldsV[0].floatValue / 100.0f : KK_SILK_DEFAULT_FOLDS;
-  sk.drape =
-      drapeV.count ? drapeV[0].floatValue / 100.0f : KK_SILK_DEFAULT_DRAPE;
-  sk.speed = speed;
-  sk.seed = seed;
-  sk.origin = origin;
-  sk.scale = scale;
-  sk.rotation = rotation;
-  sk.time = timeSec;
-  outState->silk = sk;
-
-  // --- Strata: stacked geological layers, each hashing to a shared palette
-  // swatch. Tectonics / Texture are percent (shader wants 0..N); Layers is a
-  // count. Resolution is filled at render time.
-  StrataUniforms st = StrataDefault();
-  int stCount = 0;
-  for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-    NSArray<NSNumber *> *v =
-        MeshLaneValuesAtFraction(timeline, MeshColorLabel(i), frac);
-    if (v.count >= 4)
-      st.colors[stCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                             v[2].floatValue, v[3].floatValue};
-    else {
-      const float *c = kMeshDefaultColorsSRGB[i];
-      st.colors[stCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-    }
-  }
-  st.colorsCount = stCount > 0 ? stCount : 1;
-  NSArray<NSNumber *> *layersV =
-      MeshLaneValuesAtFraction(timeline, @"Layers", frac);
-  NSArray<NSNumber *> *tectonicsV =
-      MeshLaneValuesAtFraction(timeline, @"Tectonics", frac);
-  NSArray<NSNumber *> *textureV =
-      MeshLaneValuesAtFraction(timeline, @"Texture", frac);
-  st.layers = layersV.count ? layersV[0].floatValue : KK_STRATA_DEFAULT_LAYERS;
-  st.tectonics = tectonicsV.count ? tectonicsV[0].floatValue / 100.0f
-                                  : KK_STRATA_DEFAULT_TECTONICS;
-  st.texture = textureV.count ? textureV[0].floatValue / 100.0f
-                              : KK_STRATA_DEFAULT_TEXTURE;
-  st.speed = speed;
-  st.seed = seed;
-  st.origin = origin;
-  st.scale = scale;
-  st.rotation = rotation;
-  st.time = timeSec;
-  outState->strata = st;
+  // Build every Type's uniform from its lanes. Shared transforms + grain are
+  // in the common block above; each Type's own fields come from its builder.
+  // See MeshUniformBuilders.h (one builder per Type, shared with the mini).
+  MeshLaneReader read = ^NSArray<NSNumber *> *(NSString *label) {
+    return MeshLaneValuesAtFraction(timeline, label, frac);
+  };
+  MeshBuildAllTypes(read, outState);
   return YES;
 }
 
@@ -706,58 +252,18 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
     state.neon = NeonDefault();
     state.silk = SilkDefault();
     state.strata = StrataDefault();
+    state.common = MeshCommonDefault();
   }
 
-  // Dispatch on the active type. Each type is a separate fragment function; the
-  // pipeline cache keys on plugin ID + pixel format (NOT the shader name), so a
-  // distinct ID per type keeps their pipelines from colliding.
-  BOOL isDither = (state.type == MeshType_Dithering);
-  BOOL isGrain = (state.type == MeshType_GrainGradient);
-  BOOL isWarp = (state.type == MeshType_Warp);
-  BOOL isNeuro = (state.type == MeshType_Neuro);
-  BOOL isSimplex = (state.type == MeshType_Simplex);
-  BOOL isMetaballs = (state.type == MeshType_Metaballs);
-  BOOL isGodRays = (state.type == MeshType_GodRays);
-  BOOL isFluid = (state.type == MeshType_Fluid);
-  BOOL isNeon = (state.type == MeshType_Neon);
-  BOOL isSilk = (state.type == MeshType_Silk);
-  BOOL isStrata = (state.type == MeshType_Strata);
-  NSString *pluginID = kPluginID;
-  NSString *fragment = @"fragmentShader";
-  if (isDither) {
-    pluginID = [kPluginID stringByAppendingString:@".dithering"];
-    fragment = @"ditheringFragment";
-  } else if (isGrain) {
-    pluginID = [kPluginID stringByAppendingString:@".grain"];
-    fragment = @"grainGradientFragment";
-  } else if (isWarp) {
-    pluginID = [kPluginID stringByAppendingString:@".warp"];
-    fragment = @"warpFragment";
-  } else if (isNeuro) {
-    pluginID = [kPluginID stringByAppendingString:@".neuro"];
-    fragment = @"neuroNoiseFragment";
-  } else if (isSimplex) {
-    pluginID = [kPluginID stringByAppendingString:@".simplex"];
-    fragment = @"simplexNoiseFragment";
-  } else if (isMetaballs) {
-    pluginID = [kPluginID stringByAppendingString:@".metaballs"];
-    fragment = @"metaballsFragment";
-  } else if (isGodRays) {
-    pluginID = [kPluginID stringByAppendingString:@".godrays"];
-    fragment = @"godRaysFragment";
-  } else if (isFluid) {
-    pluginID = [kPluginID stringByAppendingString:@".fluid"];
-    fragment = @"fluidFragment";
-  } else if (isNeon) {
-    pluginID = [kPluginID stringByAppendingString:@".neon"];
-    fragment = @"neonFragment";
-  } else if (isSilk) {
-    pluginID = [kPluginID stringByAppendingString:@".silk"];
-    fragment = @"silkFragment";
-  } else if (isStrata) {
-    pluginID = [kPluginID stringByAppendingString:@".strata"];
-    fragment = @"strataFragment";
-  }
+  // Dispatch on the active type via the registry (MeshUniformBuilders.h): one
+  // row per Type gives the fragment function, the pipeline cache-key suffix and
+  // where its uniform lives in `state`.
+  const MeshTypeInfo *info = MeshTypeInfoForType(state.type);
+  NSString *pluginID =
+      info->pluginSuffix[0]
+          ? [kPluginID stringByAppendingString:@(info->pluginSuffix)]
+          : kPluginID;
+  NSString *fragment = @(info->fragment);
 
   id<MTLRenderPipelineState> pipelineState =
       [self pipelineStateForPluginID:pluginID
@@ -768,64 +274,20 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
   if (!pipelineState)
     return NO;
 
-  // The dither pixel grid + the grain / warp reference frames all need the dest
-  // pixel dims.
-  state.dithering.resolution = (vector_float2){(float)mediaW, (float)mediaH};
-  state.grain.resolution = (vector_float2){(float)mediaW, (float)mediaH};
-  state.warp.resolution = (vector_float2){(float)mediaW, (float)mediaH};
-  state.neuro.resolution = (vector_float2){(float)mediaW, (float)mediaH};
-  state.simplex.resolution = (vector_float2){(float)mediaW, (float)mediaH};
-  state.metaballs.resolution = (vector_float2){(float)mediaW, (float)mediaH};
-  state.godrays.resolution = (vector_float2){(float)mediaW, (float)mediaH};
-  state.fluid.resolution = (vector_float2){(float)mediaW, (float)mediaH};
-  state.neon.resolution = (vector_float2){(float)mediaW, (float)mediaH};
-  state.silk.resolution = (vector_float2){(float)mediaW, (float)mediaH};
-  state.strata.resolution = (vector_float2){(float)mediaW, (float)mediaH};
+  // The dither pixel grid + grain / warp reference frames need the dest dims.
+  state.common.resolution = (vector_float2){(float)mediaW, (float)mediaH};
 
-  // Match the output encoding to the destination: FCP's float working buffers
-  // are linear-light (RGBA16/32Float); only the 8-bit BGRA path wants gamma.
+  // Match the output encoding to the destination: FCP float buffers are linear;
+  // only the 8-bit BGRA path wants gamma.
   int encodeSRGB =
       (destinationImage.ioSurface.pixelFormat == kCVPixelFormatType_32BGRA) ? 1
                                                                             : 0;
 
   // Point at the active type's uniform block (synchronous encode, so a pointer
   // into the local `state` is valid inside the block).
-  const void *uniformBytes = (const void *)&state.mesh;
-  size_t uniformLen = sizeof(state.mesh);
-  if (isDither) {
-    uniformBytes = (const void *)&state.dithering;
-    uniformLen = sizeof(state.dithering);
-  } else if (isWarp) {
-    uniformBytes = (const void *)&state.warp;
-    uniformLen = sizeof(state.warp);
-  } else if (isGrain) {
-    uniformBytes = (const void *)&state.grain;
-    uniformLen = sizeof(state.grain);
-  } else if (isNeuro) {
-    uniformBytes = (const void *)&state.neuro;
-    uniformLen = sizeof(state.neuro);
-  } else if (isSimplex) {
-    uniformBytes = (const void *)&state.simplex;
-    uniformLen = sizeof(state.simplex);
-  } else if (isMetaballs) {
-    uniformBytes = (const void *)&state.metaballs;
-    uniformLen = sizeof(state.metaballs);
-  } else if (isGodRays) {
-    uniformBytes = (const void *)&state.godrays;
-    uniformLen = sizeof(state.godrays);
-  } else if (isFluid) {
-    uniformBytes = (const void *)&state.fluid;
-    uniformLen = sizeof(state.fluid);
-  } else if (isNeon) {
-    uniformBytes = (const void *)&state.neon;
-    uniformLen = sizeof(state.neon);
-  } else if (isSilk) {
-    uniformBytes = (const void *)&state.silk;
-    uniformLen = sizeof(state.silk);
-  } else if (isStrata) {
-    uniformBytes = (const void *)&state.strata;
-    uniformLen = sizeof(state.strata);
-  }
+  const void *uniformBytes = (const char *)&state + info->uniformOffset;
+  size_t uniformLen = info->uniformSize;
+  const void *commonBytes = (const void *)&state.common;
 
   // sourceImages is empty for a generator; encodeRenderCommands handles that
   // (empty inputTextures) and still builds the full-screen quad + dest texture.
@@ -848,6 +310,13 @@ MeshLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
                                                      length:sizeof(encodeSRGB)
                                                     atIndex:
                                                         MeshFragmentIndex_EncodeSRGB];
+                                       [encoder
+                                           setFragmentBytes:commonBytes
+                                                     length:
+                                                         sizeof(
+                                                             MeshCommonUniforms)
+                                                    atIndex:
+                                                        MeshFragmentIndex_Common];
                                        [encoder
                                            drawPrimitives:
                                                MTLPrimitiveTypeTriangleStrip

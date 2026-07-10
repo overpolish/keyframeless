@@ -35,10 +35,40 @@ static const float kMeshDefaultColorsSRGB[KK_MESH_COLOR_COUNT][4] = {
 #define KK_MESH_GRAD_DEFAULT_SWIRL 0.10f
 #define KK_MESH_GRAD_DEFAULT_SPEED 1.0f // time multiplier (1 = source rate)
 #define KK_MESH_GRAD_DEFAULT_SEED 0.0f
-#define KK_MESH_GRAD_DEFAULT_GRAINMIXER 0.0f
-/// Final grain overlay amount (0..1). A subtle default so a fresh instance has
-/// the tasteful film grain every reference gradient uses, out of the box.
-#define KK_MESH_DEFAULT_GRAIN 0.06f
+
+/// Core film-grain overlay, shared by every Type (MeshCommonUniforms). A subtle
+/// nonzero default so a fresh instance has tasteful grain that also breaks up
+/// 8-bit banding out of the box.
+#define KK_CORE_GRAIN_DEFAULT 0.06f    // amount (0..1)
+#define KK_CORE_GRAINSIZE_DEFAULT 2.0f // grain cell size in whole pixels
+
+/// Per-Type grain multiplier: Grainy reads stylistically grainy by default;
+/// everyone else stays subtle (anti-band). Applied to the shared `grain` value.
+static inline float MeshGrainScaleForType(int type) {
+  switch (type) {
+  case MeshType_GrainGradient:
+    return 3.0f; // stylistic film grain to match the grainy look
+  default:
+    return 1.0f;
+  }
+}
+
+/// Fallback shared-params block (transforms + timing + grain).
+static inline MeshCommonUniforms MeshCommonDefault(void) {
+  MeshCommonUniforms c;
+  memset(&c, 0, sizeof(c));
+  c.origin = (vector_float2){0.5f, 0.5f};
+  c.scale = (vector_float2){1.0f, 1.0f};
+  c.rotation = 0.0f;
+  c.time = 0.0f;
+  c.speed = KK_MESH_GRAD_DEFAULT_SPEED;
+  c.seed = 0.0f;
+  c.grain = KK_CORE_GRAIN_DEFAULT;
+  c.grainSize = KK_CORE_GRAINSIZE_DEFAULT;
+  c.grainScale = 1.0f;
+  c.resolution = (vector_float2){1920.0f, 1080.0f};
+  return c;
+}
 
 /// Fallback Mesh Gradient uniforms (the default palette as spots) so an
 /// un-edited instance still renders before the colour lanes resolve.
@@ -52,14 +82,6 @@ static inline MeshGradientUniforms MeshGradientDefault(void) {
   }
   g.distortion = KK_MESH_GRAD_DEFAULT_DISTORTION;
   g.swirl = KK_MESH_GRAD_DEFAULT_SWIRL;
-  g.speed = KK_MESH_GRAD_DEFAULT_SPEED;
-  g.seed = KK_MESH_GRAD_DEFAULT_SEED;
-  g.grainMixer = KK_MESH_GRAD_DEFAULT_GRAINMIXER;
-  g.grainOverlay = KK_MESH_DEFAULT_GRAIN;
-  g.origin = (vector_float2){0.5f, 0.5f};
-  g.scale = (vector_float2){1.0f, 1.0f};
-  g.rotation = 0.0f;
-  g.time = 0.0f;
   return g;
 }
 
@@ -76,16 +98,9 @@ static inline DitheringUniforms DitheringDefault(void) {
   memset(&d, 0, sizeof(d));
   d.colorBack = (vector_float4){0.04f, 0.04f, 0.07f, 1.0f};
   d.colorFront = (vector_float4){0.85f, 0.90f, 0.98f, 1.0f};
-  d.resolution = (vector_float2){1920.0f, 1080.0f};
-  d.origin = (vector_float2){0.5f, 0.5f};
   d.pxSize = KK_DITHER_DEFAULT_PXSIZE;
   d.shape = KK_DITHER_DEFAULT_SHAPE;
   d.type = KK_DITHER_DEFAULT_TYPE;
-  d.speed = KK_DITHER_DEFAULT_SPEED;
-  d.seed = 0.0f;
-  d.scale = (vector_float2){1.0f, 1.0f};
-  d.rotation = 0.0f;
-  d.time = 0.0f;
   return d;
 }
 
@@ -112,17 +127,10 @@ static inline GrainGradientUniforms GrainGradientDefault(void) {
     g.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
   }
   g.colorBack = (vector_float4){0.04f, 0.04f, 0.07f, 1.0f};
-  g.resolution = (vector_float2){1920.0f, 1080.0f};
-  g.origin = (vector_float2){0.5f, 0.5f};
   g.softness = KK_GRAIN_DEFAULT_SOFTNESS;
   g.intensity = KK_GRAIN_DEFAULT_INTENSITY;
   g.noise = KK_GRAIN_DEFAULT_NOISE;
   g.shape = KK_GRAIN_DEFAULT_SHAPE;
-  g.speed = KK_GRAIN_DEFAULT_SPEED;
-  g.seed = 0.0f;
-  g.scale = (vector_float2){1.0f, 1.0f};
-  g.rotation = 0.0f;
-  g.time = 0.0f;
   return g;
 }
 
@@ -144,8 +152,6 @@ static inline WarpUniforms WarpDefault(void) {
     const float *c = kMeshDefaultColorsSRGB[i];
     w.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
   }
-  w.resolution = (vector_float2){1920.0f, 1080.0f};
-  w.origin = (vector_float2){0.5f, 0.5f};
   w.proportion = KK_WARP_DEFAULT_PROPORTION;
   w.softness = KK_GRAIN_DEFAULT_SOFTNESS; // shared "Softness" lane
   w.shapeScale = KK_WARP_DEFAULT_SHAPESCALE;
@@ -153,11 +159,6 @@ static inline WarpUniforms WarpDefault(void) {
   w.swirl = KK_MESH_GRAD_DEFAULT_SWIRL;           // shared "Swirl" lane
   w.swirlIterations = KK_WARP_DEFAULT_SWIRLITER;
   w.shape = KK_WARP_DEFAULT_SHAPE;
-  w.speed = KK_MESH_GRAD_DEFAULT_SPEED;
-  w.seed = 0.0f;
-  w.scale = (vector_float2){1.0f, 1.0f};
-  w.rotation = 0.0f;
-  w.time = 0.0f;
   return w;
 }
 
@@ -173,15 +174,8 @@ static inline NeuroNoiseUniforms NeuroNoiseDefault(void) {
   n.colorFront = (vector_float4){0.85f, 0.92f, 1.0f, 1.0f}; // highlight
   n.colorMid = (vector_float4){0.25f, 0.45f, 0.95f, 1.0f};  // lines
   n.colorBack = (vector_float4){0.02f, 0.03f, 0.08f, 1.0f}; // background
-  n.resolution = (vector_float2){1920.0f, 1080.0f};
-  n.origin = (vector_float2){0.5f, 0.5f};
-  n.scale = (vector_float2){1.0f, 1.0f};
   n.brightness = KK_NEURO_DEFAULT_BRIGHTNESS;
   n.contrast = KK_NEURO_DEFAULT_CONTRAST;
-  n.speed = 1.0f;
-  n.seed = 0.0f;
-  n.rotation = 0.0f;
-  n.time = 0.0f;
   return n;
 }
 
@@ -200,15 +194,8 @@ static inline SimplexNoiseUniforms SimplexNoiseDefault(void) {
     const float *c = kMeshDefaultColorsSRGB[i];
     s.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
   }
-  s.resolution = (vector_float2){1920.0f, 1080.0f};
-  s.origin = (vector_float2){0.5f, 0.5f};
-  s.scale = (vector_float2){1.0f, 1.0f};
   s.stepsPerColor = KK_SIMPLEX_DEFAULT_STEPS;
   s.softness = KK_SIMPLEX_DEFAULT_SOFTNESS;
-  s.speed = KK_MESH_GRAD_DEFAULT_SPEED;
-  s.seed = 0.0f;
-  s.rotation = 0.0f;
-  s.time = 0.0f;
   return s;
 }
 
@@ -228,15 +215,8 @@ static inline MetaballsUniforms MetaballsDefault(void) {
     m.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
   }
   m.colorBack = (vector_float4){0.04f, 0.04f, 0.07f, 1.0f};
-  m.resolution = (vector_float2){1920.0f, 1080.0f};
-  m.origin = (vector_float2){0.5f, 0.5f};
-  m.scale = (vector_float2){1.0f, 1.0f};
   m.ballCount = KK_METABALLS_DEFAULT_COUNT;
   m.ballSize = KK_METABALLS_DEFAULT_SIZE;
-  m.speed = KK_MESH_GRAD_DEFAULT_SPEED;
-  m.seed = 0.0f;
-  m.rotation = 0.0f;
-  m.time = 0.0f;
   return m;
 }
 
@@ -262,19 +242,12 @@ static inline GodRaysUniforms GodRaysDefault(void) {
   }
   g.colorBack = (vector_float4){0.04f, 0.04f, 0.07f, 1.0f};
   g.colorBloom = (vector_float4){1.0f, 0.9f, 0.7f, 1.0f};
-  g.resolution = (vector_float2){1920.0f, 1080.0f};
-  g.origin = (vector_float2){0.5f, 0.5f};
-  g.scale = (vector_float2){1.0f, 1.0f};
   g.density = KK_GODRAYS_DEFAULT_DENSITY;
   g.spotty = KK_GODRAYS_DEFAULT_SPOTTY;
   g.midSize = KK_GODRAYS_DEFAULT_MIDSIZE;
   g.midIntensity = KK_GODRAYS_DEFAULT_MIDINTENSITY;
   g.intensity = KK_GODRAYS_DEFAULT_INTENSITY;
   g.bloom = KK_GODRAYS_DEFAULT_BLOOM;
-  g.speed = KK_MESH_GRAD_DEFAULT_SPEED;
-  g.seed = 0.0f;
-  g.rotation = 0.0f;
-  g.time = 0.0f;
   return g;
 }
 
@@ -294,16 +267,9 @@ static inline FluidUniforms FluidDefault(void) {
     const float *c = kMeshDefaultColorsSRGB[i];
     f.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
   }
-  f.resolution = (vector_float2){1920.0f, 1080.0f};
-  f.origin = (vector_float2){0.5f, 0.5f};
-  f.scale = (vector_float2){1.0f, 1.0f};
   f.detail = KK_FLUID_DEFAULT_DETAIL;
   f.marble = KK_FLUID_DEFAULT_MARBLE;
   f.vibrance = KK_FLUID_DEFAULT_VIBRANCE;
-  f.speed = KK_MESH_GRAD_DEFAULT_SPEED;
-  f.seed = 0.0f;
-  f.rotation = 0.0f;
-  f.time = 0.0f;
   return f;
 }
 
@@ -324,16 +290,9 @@ static inline NeonUniforms NeonDefault(void) {
     n.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
   }
   n.colorBack = (vector_float4){0.02f, 0.015f, 0.02f, 1.0f};
-  n.resolution = (vector_float2){1920.0f, 1080.0f};
-  n.origin = (vector_float2){0.5f, 0.5f};
-  n.scale = (vector_float2){1.0f, 1.0f};
   n.radiance = KK_NEON_DEFAULT_RADIANCE;
   n.wisps = KK_NEON_DEFAULT_WISPS;
   n.strands = KK_NEON_DEFAULT_STRANDS;
-  n.speed = KK_MESH_GRAD_DEFAULT_SPEED;
-  n.seed = 0.0f;
-  n.rotation = 0.0f;
-  n.time = 0.0f;
   return n;
 }
 
@@ -354,16 +313,9 @@ static inline SilkUniforms SilkDefault(void) {
     s.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
   }
   s.colorBack = (vector_float4){0.03f, 0.015f, 0.04f, 1.0f};
-  s.resolution = (vector_float2){1920.0f, 1080.0f};
-  s.origin = (vector_float2){0.5f, 0.5f};
-  s.scale = (vector_float2){1.0f, 1.0f};
   s.sheen = KK_SILK_DEFAULT_SHEEN;
   s.folds = KK_SILK_DEFAULT_FOLDS;
   s.drape = KK_SILK_DEFAULT_DRAPE;
-  s.speed = KK_MESH_GRAD_DEFAULT_SPEED;
-  s.seed = 0.0f;
-  s.rotation = 0.0f;
-  s.time = 0.0f;
   return s;
 }
 
@@ -383,16 +335,9 @@ static inline StrataUniforms StrataDefault(void) {
     const float *c = kMeshDefaultColorsSRGB[i];
     s.colors[i] = (vector_float4){c[0], c[1], c[2], c[3]};
   }
-  s.resolution = (vector_float2){1920.0f, 1080.0f};
-  s.origin = (vector_float2){0.5f, 0.5f};
-  s.scale = (vector_float2){1.0f, 1.0f};
   s.layers = KK_STRATA_DEFAULT_LAYERS;
   s.tectonics = KK_STRATA_DEFAULT_TECTONICS;
   s.texture = KK_STRATA_DEFAULT_TEXTURE;
-  s.speed = KK_MESH_GRAD_DEFAULT_SPEED;
-  s.seed = 0.0f;
-  s.rotation = 0.0f;
-  s.time = 0.0f;
   return s;
 }
 

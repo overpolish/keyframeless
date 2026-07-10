@@ -6,6 +6,7 @@
 #import "MeshMiniViewerRenderer.h"
 
 #import "MeshColorSpace.h"
+#import "MeshUniformBuilders.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKPositionMiniController.h>
 #import <KeyframelessKit/KKScaleMiniController.h>
@@ -37,6 +38,12 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   MTLPixelFormat _pipelineFormat;
   KKPositionMiniController *_originMini;
   KKScaleMiniController *_scaleMini;
+  // Render-at-reference-resolution + downscale (so the small mini texture shows
+  // a proper minified copy of a full-res render: grain, dither, everything).
+  id<MTLTexture> _hiResTex;
+  id<MTLRenderPipelineState> _blitPipeline;
+  MTLPixelFormat _blitFormat;
+  id<MTLSamplerState> _linearSampler;
 }
 
 // Mini-viewer Origin handle: the reusable Position controller, keyed on the
@@ -135,10 +142,10 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
     return @[ @(KK_MESH_GRAD_DEFAULT_SPEED) ];
   if ([label isEqualToString:@"Seed"])
     return @[ @(KK_MESH_GRAD_DEFAULT_SEED) ];
-  if ([label isEqualToString:@"Grain Mixer"])
-    return @[ @(KK_MESH_GRAD_DEFAULT_GRAINMIXER * 100.0) ];
   if ([label isEqualToString:@"Grain"])
-    return @[ @(KK_MESH_DEFAULT_GRAIN * 100.0) ];
+    return @[ @(KK_CORE_GRAIN_DEFAULT * 100.0) ];
+  if ([label isEqualToString:@"Grain Size"])
+    return @[ @(KK_CORE_GRAINSIZE_DEFAULT) ];
   if ([label isEqualToString:@"Type"])
     return @[ @0.0 ];
   if ([label isEqualToString:@"Background"])
@@ -262,6 +269,90 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   return ps;
 }
 
+// A cached reference-resolution (1080-tall, dest aspect) intermediate render
+// target, or nil when `dest` is already tall enough that rendering direct is
+// fine. The type is rendered into this at full resolution and then downscaled
+// into the small mini texture, so grain / dither / any resolution-dependent
+// effect looks like a proper minified copy of the FCP render.
+- (id<MTLTexture>)hiResTargetForDest:(id<MTLTexture>)dest {
+  NSUInteger dh = dest.height;
+  const NSUInteger refH = 1080;
+  if (dh == 0 || dh >= refH)
+    return nil; // already high enough, render straight in
+  NSUInteger refW = (NSUInteger)llround((double)refH * dest.width / (double)dh);
+  if (refW < 1)
+    refW = 1;
+  if (!_hiResTex || _hiResTex.width != refW || _hiResTex.height != refH ||
+      _hiResTex.pixelFormat != dest.pixelFormat) {
+    MTLTextureDescriptor *td = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:dest.pixelFormat
+                                     width:refW
+                                    height:refH
+                                 mipmapped:NO];
+    td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    td.storageMode = MTLStorageModePrivate;
+    _hiResTex = [dest.device newTextureWithDescriptor:td];
+  }
+  return _hiResTex;
+}
+
+- (id<MTLRenderPipelineState>)blitPipelineForDevice:(id<MTLDevice>)device
+                                             format:(MTLPixelFormat)format {
+  if (_blitPipeline && _blitFormat == format)
+    return _blitPipeline;
+  NSError *err = nil;
+  id<MTLLibrary> lib =
+      [device newDefaultLibraryWithBundle:[NSBundle bundleForClass:self.class]
+                                    error:&err];
+  if (!lib)
+    return nil;
+  MTLRenderPipelineDescriptor *pd = [[MTLRenderPipelineDescriptor alloc] init];
+  pd.vertexFunction = [lib newFunctionWithName:@"meshBlitVertex"];
+  pd.fragmentFunction = [lib newFunctionWithName:@"meshBlitFragment"];
+  pd.colorAttachments[0].pixelFormat = format;
+  _blitPipeline = [device newRenderPipelineStateWithDescriptor:pd error:&err];
+  _blitFormat = format;
+  if (!_blitPipeline)
+    KKLogError(@"MeshMiniViewerRenderer: blit pipeline failed: %@", err);
+  return _blitPipeline;
+}
+
+- (id<MTLSamplerState>)linearSamplerForDevice:(id<MTLDevice>)device {
+  if (_linearSampler)
+    return _linearSampler;
+  MTLSamplerDescriptor *sd = [[MTLSamplerDescriptor alloc] init];
+  sd.minFilter = MTLSamplerMinMagFilterLinear;
+  sd.magFilter = MTLSamplerMinMagFilterLinear;
+  sd.sAddressMode = MTLSamplerAddressModeClampToEdge;
+  sd.tAddressMode = MTLSamplerAddressModeClampToEdge;
+  _linearSampler = [device newSamplerStateWithDescriptor:sd];
+  return _linearSampler;
+}
+
+// Downscale the reference-res intermediate into the mini dest with linear
+// filtering (averages the fine grain instead of showing raw coarse pixels).
+- (void)blitFrom:(id<MTLTexture>)src
+             into:(id<MTLTexture>)dest
+    commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
+  id<MTLRenderPipelineState> bp = [self blitPipelineForDevice:dest.device
+                                                       format:dest.pixelFormat];
+  if (!bp)
+    return;
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0].texture = dest;
+  rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+  rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+  id<MTLRenderCommandEncoder> e =
+      [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+  [e setRenderPipelineState:bp];
+  [e setFragmentTexture:src atIndex:0];
+  [e setFragmentSamplerState:[self linearSamplerForDevice:dest.device]
+                     atIndex:0];
+  [e drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+  [e endEncoding];
+}
+
 // Generator render: no source. Runs the same Metal pipeline as the FCP render
 // (vertexShader + solid-blue fragmentShader) straight into the preview dest.
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
@@ -271,40 +362,8 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   NSArray<NSNumber *> *typeV = [self valuesForLabel:@"Type"];
   int meshType =
       typeV.count ? (int)lround(typeV[0].doubleValue) : MeshType_Mesh;
-  BOOL isDither = (meshType == MeshType_Dithering);
-  BOOL isGrain = (meshType == MeshType_GrainGradient);
-  BOOL isWarp = (meshType == MeshType_Warp);
-  BOOL isNeuro = (meshType == MeshType_Neuro);
-  BOOL isSimplex = (meshType == MeshType_Simplex);
-  BOOL isMetaballs = (meshType == MeshType_Metaballs);
-  BOOL isGodRays = (meshType == MeshType_GodRays);
-  BOOL isFluid = (meshType == MeshType_Fluid);
-  BOOL isNeon = (meshType == MeshType_Neon);
-  BOOL isSilk = (meshType == MeshType_Silk);
-  BOOL isStrata = (meshType == MeshType_Strata);
-  NSString *fragment = @"fragmentShader";
-  if (isDither)
-    fragment = @"ditheringFragment";
-  else if (isGrain)
-    fragment = @"grainGradientFragment";
-  else if (isWarp)
-    fragment = @"warpFragment";
-  else if (isNeuro)
-    fragment = @"neuroNoiseFragment";
-  else if (isSimplex)
-    fragment = @"simplexNoiseFragment";
-  else if (isMetaballs)
-    fragment = @"metaballsFragment";
-  else if (isGodRays)
-    fragment = @"godRaysFragment";
-  else if (isFluid)
-    fragment = @"fluidFragment";
-  else if (isNeon)
-    fragment = @"neonFragment";
-  else if (isSilk)
-    fragment = @"silkFragment";
-  else if (isStrata)
-    fragment = @"strataFragment";
+  const MeshTypeInfo *info = MeshTypeInfoForType(meshType);
+  NSString *fragment = @(info->fragment);
   id<MTLRenderPipelineState> pipeline =
       [self _pipelineForDevice:dest.device
                    pixelFormat:dest.pixelFormat
@@ -312,15 +371,23 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   if (!pipeline)
     return NO;
 
+  // Render the type at reference resolution into an intermediate, then
+  // downscale into the (small) mini dest below - so grain / dither look like a
+  // proper minified full-res render rather than raw low-res pixels.
+  id<MTLTexture> renderTex = [self hiResTargetForDest:dest];
+  BOOL downscale = (renderTex != nil);
+  if (!renderTex)
+    renderTex = dest;
+
   MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
-  rpd.colorAttachments[0].texture = dest;
+  rpd.colorAttachments[0].texture = renderTex;
   rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
   rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
   rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
 
   id<MTLRenderCommandEncoder> e =
       [commandBuffer renderCommandEncoderWithDescriptor:rpd];
-  float W = (float)dest.width, H = (float)dest.height;
+  float W = (float)renderTex.width, H = (float)renderTex.height;
   MTLViewport vp = {0, 0, W, H, -1.0, 1.0};
   [e setViewport:vp];
   KKVertex2D verts[4] = {
@@ -355,6 +422,9 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
                           : (vector_float2){1.0f, 1.0f};
   float rotationShared =
       rotV.count ? rotV[0].floatValue * (float)(M_PI / 180.0) : 0.0f;
+  NSArray<NSNumber *> *speedShV = [self valuesForLabel:@"Speed"];
+  float speedShared =
+      speedShV.count ? speedShV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
 
   [e setRenderPipelineState:pipeline];
   [e setVertexBytes:verts
@@ -364,447 +434,47 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
              length:sizeof(vpSize)
             atIndex:KKVertexInputIndex_ViewportSize];
 
-  if (isDither) {
-    DitheringUniforms d = DitheringDefault();
-    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
-    NSArray<NSNumber *> *frontV = [self valuesForLabel:@"Foreground"];
-    NSArray<NSNumber *> *shapeV = [self valuesForLabel:@"Shape"];
-    NSArray<NSNumber *> *ditherV = [self valuesForLabel:@"Dither"];
-    NSArray<NSNumber *> *pxV = [self valuesForLabel:@"Pixel Size"];
-    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-    if (backV.count >= 4)
-      d.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                    backV[2].floatValue, backV[3].floatValue};
-    if (frontV.count >= 4)
-      d.colorFront =
-          (vector_float4){frontV[0].floatValue, frontV[1].floatValue,
-                          frontV[2].floatValue, frontV[3].floatValue};
-    if (shapeV.count)
-      d.shape = (int)lround(shapeV[0].doubleValue) + 1;
-    if (ditherV.count)
-      d.type = (int)lround(ditherV[0].doubleValue) + 1;
-    if (pxV.count)
-      d.pxSize = pxV[0].floatValue;
-    d.speed = speedV.count ? speedV[0].floatValue : KK_DITHER_DEFAULT_SPEED;
-    d.seed = seedShared;
-    d.origin = originShared;
-    d.scale = scaleShared;
-    d.rotation = rotationShared;
-    d.resolution = (vector_float2){W, H};
-    d.time = timeSec;
-    [e setFragmentBytes:&d length:sizeof(d) atIndex:MeshFragmentIndex_Grid];
-  } else if (isGrain) {
-    GrainGradientUniforms g = GrainGradientDefault();
-    int gCount = 0;
-    int gMax = KK_MESH_COLOR_COUNT < KK_GRAIN_GRAD_COLORS
-                   ? KK_MESH_COLOR_COUNT
-                   : KK_GRAIN_GRAD_COLORS;
-    for (int i = 0; i < gMax; i++) {
-      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
-      if (v.count >= 4)
-        g.colors[gCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                             v[2].floatValue, v[3].floatValue};
-      else {
-        const float *c = kMeshDefaultColorsSRGB[i];
-        g.colors[gCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-      }
-    }
-    g.colorsCount = gCount > 0 ? gCount : 1;
-    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
-    NSArray<NSNumber *> *softV = [self valuesForLabel:@"Softness"];
-    NSArray<NSNumber *> *intenV = [self valuesForLabel:@"Intensity"];
-    NSArray<NSNumber *> *noiseV = [self valuesForLabel:@"Noise"];
-    NSArray<NSNumber *> *patternV = [self valuesForLabel:@"Pattern"];
-    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-    if (backV.count >= 4)
-      g.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                    backV[2].floatValue, backV[3].floatValue};
-    g.softness =
-        softV.count ? softV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_SOFTNESS;
-    g.intensity = intenV.count ? intenV[0].floatValue / 100.0f
-                               : KK_GRAIN_DEFAULT_INTENSITY;
-    g.noise =
-        noiseV.count ? noiseV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_NOISE;
-    if (patternV.count)
-      g.shape = (int)lround(patternV[0].doubleValue) + 1;
-    g.speed = speedV.count ? speedV[0].floatValue : KK_GRAIN_DEFAULT_SPEED;
-    g.seed = seedShared;
-    g.origin = originShared;
-    g.scale = scaleShared;
-    g.rotation = rotationShared;
-    g.resolution = (vector_float2){W, H};
-    g.time = timeSec;
-    [e setFragmentBytes:&g length:sizeof(g) atIndex:MeshFragmentIndex_Grid];
-  } else if (isWarp) {
-    WarpUniforms w = WarpDefault();
-    int wCount = 0;
-    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
-      if (v.count >= 4)
-        w.colors[wCount++] = (vector_float4){v[0].floatValue, v[1].floatValue,
-                                             v[2].floatValue, v[3].floatValue};
-      else {
-        const float *c = kMeshDefaultColorsSRGB[i];
-        w.colors[wCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-      }
-    }
-    w.colorsCount = wCount > 0 ? wCount : 1;
-    NSArray<NSNumber *> *propV = [self valuesForLabel:@"Proportion"];
-    NSArray<NSNumber *> *softV = [self valuesForLabel:@"Softness"];
-    NSArray<NSNumber *> *shapeScaleV = [self valuesForLabel:@"Shape Scale"];
-    NSArray<NSNumber *> *distV = [self valuesForLabel:@"Distortion"];
-    NSArray<NSNumber *> *swirlV = [self valuesForLabel:@"Swirl"];
-    NSArray<NSNumber *> *swirlIterV = [self valuesForLabel:@"Swirl Iterations"];
-    NSArray<NSNumber *> *baseV = [self valuesForLabel:@"Base"];
-    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-    w.proportion =
-        propV.count ? propV[0].floatValue / 100.0f : KK_WARP_DEFAULT_PROPORTION;
-    w.softness =
-        softV.count ? softV[0].floatValue / 100.0f : KK_GRAIN_DEFAULT_SOFTNESS;
-    w.shapeScale = shapeScaleV.count ? shapeScaleV[0].floatValue / 100.0f
-                                     : KK_WARP_DEFAULT_SHAPESCALE;
-    w.distortion = distV.count ? distV[0].floatValue / 100.0f
-                               : KK_MESH_GRAD_DEFAULT_DISTORTION;
-    w.swirl = swirlV.count ? swirlV[0].floatValue / 100.0f
-                           : KK_MESH_GRAD_DEFAULT_SWIRL;
-    w.swirlIterations =
-        swirlIterV.count ? swirlIterV[0].floatValue : KK_WARP_DEFAULT_SWIRLITER;
-    if (baseV.count)
-      w.shape = (int)lround(baseV[0].doubleValue);
-    w.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
-    w.seed = seedShared;
-    w.origin = originShared;
-    w.scale = scaleShared;
-    w.rotation = rotationShared;
-    w.resolution = (vector_float2){W, H};
-    w.time = timeSec;
-    [e setFragmentBytes:&w length:sizeof(w) atIndex:MeshFragmentIndex_Grid];
-  } else if (isNeuro) {
-    NeuroNoiseUniforms nn = NeuroNoiseDefault();
-    NSArray<NSNumber *> *frontV = [self valuesForLabel:@"Foreground"];
-    NSArray<NSNumber *> *midV = [self valuesForLabel:@"Mid"];
-    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
-    NSArray<NSNumber *> *brightV = [self valuesForLabel:@"Brightness"];
-    NSArray<NSNumber *> *contrastV = [self valuesForLabel:@"Contrast"];
-    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-    if (frontV.count >= 4)
-      nn.colorFront =
-          (vector_float4){frontV[0].floatValue, frontV[1].floatValue,
-                          frontV[2].floatValue, frontV[3].floatValue};
-    if (midV.count >= 4)
-      nn.colorMid = (vector_float4){midV[0].floatValue, midV[1].floatValue,
-                                    midV[2].floatValue, midV[3].floatValue};
-    if (backV.count >= 4)
-      nn.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                     backV[2].floatValue, backV[3].floatValue};
-    nn.brightness = brightV.count ? brightV[0].floatValue / 100.0f
-                                  : KK_NEURO_DEFAULT_BRIGHTNESS;
-    nn.contrast = contrastV.count ? contrastV[0].floatValue / 100.0f
-                                  : KK_NEURO_DEFAULT_CONTRAST;
-    nn.speed = speedV.count ? speedV[0].floatValue : 1.0f;
-    nn.seed = seedShared;
-    nn.origin = originShared;
-    nn.scale = scaleShared;
-    nn.rotation = rotationShared;
-    nn.resolution = (vector_float2){W, H};
-    nn.time = timeSec;
-    [e setFragmentBytes:&nn length:sizeof(nn) atIndex:MeshFragmentIndex_Grid];
-  } else if (isSimplex) {
-    SimplexNoiseUniforms sn = SimplexNoiseDefault();
-    int snCount = 0;
-    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
-      if (v.count >= 4)
-        sn.colors[snCount++] = (vector_float4){
-            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
-      else {
-        const float *c = kMeshDefaultColorsSRGB[i];
-        sn.colors[snCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-      }
-    }
-    sn.colorsCount = snCount > 0 ? snCount : 1;
-    NSArray<NSNumber *> *stepsV = [self valuesForLabel:@"Steps"];
-    NSArray<NSNumber *> *softV = [self valuesForLabel:@"Softness"];
-    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-    sn.stepsPerColor =
-        stepsV.count ? stepsV[0].floatValue : KK_SIMPLEX_DEFAULT_STEPS;
-    sn.softness = softV.count ? softV[0].floatValue / 100.0f
-                              : KK_SIMPLEX_DEFAULT_SOFTNESS;
-    sn.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
-    sn.seed = seedShared;
-    sn.origin = originShared;
-    sn.scale = scaleShared;
-    sn.rotation = rotationShared;
-    sn.resolution = (vector_float2){W, H};
-    sn.time = timeSec;
-    [e setFragmentBytes:&sn length:sizeof(sn) atIndex:MeshFragmentIndex_Grid];
-  } else if (isMetaballs) {
-    MetaballsUniforms mb = MetaballsDefault();
-    int mbCount = 0;
-    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
-      if (v.count >= 4)
-        mb.colors[mbCount++] = (vector_float4){
-            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
-      else {
-        const float *c = kMeshDefaultColorsSRGB[i];
-        mb.colors[mbCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-      }
-    }
-    mb.colorsCount = mbCount > 0 ? mbCount : 1;
-    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
-    NSArray<NSNumber *> *countV = [self valuesForLabel:@"Count"];
-    NSArray<NSNumber *> *sizeV = [self valuesForLabel:@"Size"];
-    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-    if (backV.count >= 4)
-      mb.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                     backV[2].floatValue, backV[3].floatValue};
-    mb.ballCount =
-        countV.count ? countV[0].floatValue : KK_METABALLS_DEFAULT_COUNT;
-    mb.ballSize =
-        sizeV.count ? sizeV[0].floatValue / 100.0f : KK_METABALLS_DEFAULT_SIZE;
-    mb.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
-    mb.seed = seedShared;
-    mb.origin = originShared;
-    mb.scale = scaleShared;
-    mb.rotation = rotationShared;
-    mb.resolution = (vector_float2){W, H};
-    mb.time = timeSec;
-    [e setFragmentBytes:&mb length:sizeof(mb) atIndex:MeshFragmentIndex_Grid];
-  } else if (isGodRays) {
-    GodRaysUniforms gr = GodRaysDefault();
-    int grCount = 0;
-    int grMax = KK_MESH_COLOR_COUNT < 5 ? KK_MESH_COLOR_COUNT : 5;
-    for (int i = 0; i < grMax; i++) {
-      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
-      if (v.count >= 4)
-        gr.colors[grCount++] = (vector_float4){
-            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
-      else {
-        const float *c = kMeshDefaultColorsSRGB[i];
-        gr.colors[grCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-      }
-    }
-    gr.colorsCount = grCount > 0 ? grCount : 1;
-    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
-    NSArray<NSNumber *> *bloomColorV = [self valuesForLabel:@"Bloom Color"];
-    NSArray<NSNumber *> *densityV = [self valuesForLabel:@"Density"];
-    NSArray<NSNumber *> *spottyV = [self valuesForLabel:@"Spots"];
-    NSArray<NSNumber *> *midSizeV = [self valuesForLabel:@"Glow Size"];
-    NSArray<NSNumber *> *midIntenV = [self valuesForLabel:@"Glow"];
-    NSArray<NSNumber *> *raysV = [self valuesForLabel:@"Rays"];
-    NSArray<NSNumber *> *bloomV = [self valuesForLabel:@"Bloom"];
-    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-    if (backV.count >= 4)
-      gr.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                     backV[2].floatValue, backV[3].floatValue};
-    if (bloomColorV.count >= 4)
-      gr.colorBloom =
-          (vector_float4){bloomColorV[0].floatValue, bloomColorV[1].floatValue,
-                          bloomColorV[2].floatValue, bloomColorV[3].floatValue};
-    gr.density = densityV.count ? densityV[0].floatValue / 100.0f
-                                : KK_GODRAYS_DEFAULT_DENSITY;
-    gr.spotty = spottyV.count ? spottyV[0].floatValue / 100.0f
-                              : KK_GODRAYS_DEFAULT_SPOTTY;
-    gr.midSize = midSizeV.count ? midSizeV[0].floatValue / 100.0f
-                                : KK_GODRAYS_DEFAULT_MIDSIZE;
-    gr.midIntensity = midIntenV.count ? midIntenV[0].floatValue / 100.0f
-                                      : KK_GODRAYS_DEFAULT_MIDINTENSITY;
-    gr.intensity = raysV.count ? raysV[0].floatValue / 100.0f
-                               : KK_GODRAYS_DEFAULT_INTENSITY;
-    gr.bloom =
-        bloomV.count ? bloomV[0].floatValue / 100.0f : KK_GODRAYS_DEFAULT_BLOOM;
-    gr.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
-    gr.seed = seedShared;
-    gr.origin = originShared;
-    gr.scale = scaleShared;
-    gr.rotation = rotationShared;
-    gr.resolution = (vector_float2){W, H};
-    gr.time = timeSec;
-    [e setFragmentBytes:&gr length:sizeof(gr) atIndex:MeshFragmentIndex_Grid];
-  } else if (isFluid) {
-    FluidUniforms fl = FluidDefault();
-    int flCount = 0;
-    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
-      if (v.count >= 4)
-        fl.colors[flCount++] = (vector_float4){
-            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
-      else {
-        const float *c = kMeshDefaultColorsSRGB[i];
-        fl.colors[flCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-      }
-    }
-    fl.colorsCount = flCount > 0 ? flCount : 1;
-    NSArray<NSNumber *> *detailV = [self valuesForLabel:@"Detail"];
-    NSArray<NSNumber *> *marbleV = [self valuesForLabel:@"Marble"];
-    NSArray<NSNumber *> *vibranceV = [self valuesForLabel:@"Vibrance"];
-    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-    fl.detail = detailV.count ? detailV[0].floatValue / 100.0f
-                              : KK_FLUID_DEFAULT_DETAIL;
-    fl.marble = marbleV.count ? marbleV[0].floatValue / 100.0f
-                              : KK_FLUID_DEFAULT_MARBLE;
-    fl.vibrance = vibranceV.count ? vibranceV[0].floatValue / 100.0f
-                                  : KK_FLUID_DEFAULT_VIBRANCE;
-    fl.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
-    fl.seed = seedShared;
-    fl.origin = originShared;
-    fl.scale = scaleShared;
-    fl.rotation = rotationShared;
-    fl.resolution = (vector_float2){W, H};
-    fl.time = timeSec;
-    [e setFragmentBytes:&fl length:sizeof(fl) atIndex:MeshFragmentIndex_Grid];
-  } else if (isNeon) {
-    NeonUniforms ne = NeonDefault();
-    int neCount = 0;
-    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
-      if (v.count >= 4)
-        ne.colors[neCount++] = (vector_float4){
-            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
-      else {
-        const float *c = kMeshDefaultColorsSRGB[i];
-        ne.colors[neCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-      }
-    }
-    ne.colorsCount = neCount > 0 ? neCount : 1;
-    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
-    NSArray<NSNumber *> *radianceV = [self valuesForLabel:@"Radiance"];
-    NSArray<NSNumber *> *wispsV = [self valuesForLabel:@"Wisps"];
-    NSArray<NSNumber *> *strandsV = [self valuesForLabel:@"Strands"];
-    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-    if (backV.count >= 4)
-      ne.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                     backV[2].floatValue, backV[3].floatValue};
-    ne.radiance = radianceV.count ? radianceV[0].floatValue / 100.0f
-                                  : KK_NEON_DEFAULT_RADIANCE;
-    ne.wisps =
-        wispsV.count ? wispsV[0].floatValue / 100.0f : KK_NEON_DEFAULT_WISPS;
-    ne.strands = strandsV.count ? strandsV[0].floatValue / 100.0f
-                                : KK_NEON_DEFAULT_STRANDS;
-    ne.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
-    ne.seed = seedShared;
-    ne.origin = originShared;
-    ne.scale = scaleShared;
-    ne.rotation = rotationShared;
-    ne.resolution = (vector_float2){W, H};
-    ne.time = timeSec;
-    [e setFragmentBytes:&ne length:sizeof(ne) atIndex:MeshFragmentIndex_Grid];
-  } else if (isSilk) {
-    SilkUniforms sk = SilkDefault();
-    int skCount = 0;
-    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
-      if (v.count >= 4)
-        sk.colors[skCount++] = (vector_float4){
-            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
-      else {
-        const float *c = kMeshDefaultColorsSRGB[i];
-        sk.colors[skCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-      }
-    }
-    sk.colorsCount = skCount > 0 ? skCount : 1;
-    NSArray<NSNumber *> *backV = [self valuesForLabel:@"Background"];
-    NSArray<NSNumber *> *sheenV = [self valuesForLabel:@"Sheen"];
-    NSArray<NSNumber *> *foldsV = [self valuesForLabel:@"Folds"];
-    NSArray<NSNumber *> *drapeV = [self valuesForLabel:@"Drape"];
-    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-    if (backV.count >= 4)
-      sk.colorBack = (vector_float4){backV[0].floatValue, backV[1].floatValue,
-                                     backV[2].floatValue, backV[3].floatValue};
-    sk.sheen =
-        sheenV.count ? sheenV[0].floatValue / 100.0f : KK_SILK_DEFAULT_SHEEN;
-    sk.folds =
-        foldsV.count ? foldsV[0].floatValue / 100.0f : KK_SILK_DEFAULT_FOLDS;
-    sk.drape =
-        drapeV.count ? drapeV[0].floatValue / 100.0f : KK_SILK_DEFAULT_DRAPE;
-    sk.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
-    sk.seed = seedShared;
-    sk.origin = originShared;
-    sk.scale = scaleShared;
-    sk.rotation = rotationShared;
-    sk.resolution = (vector_float2){W, H};
-    sk.time = timeSec;
-    [e setFragmentBytes:&sk length:sizeof(sk) atIndex:MeshFragmentIndex_Grid];
-  } else if (isStrata) {
-    StrataUniforms st = StrataDefault();
-    int stCount = 0;
-    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
-      if (v.count >= 4)
-        st.colors[stCount++] = (vector_float4){
-            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
-      else {
-        const float *c = kMeshDefaultColorsSRGB[i];
-        st.colors[stCount++] = (vector_float4){c[0], c[1], c[2], c[3]};
-      }
-    }
-    st.colorsCount = stCount > 0 ? stCount : 1;
-    NSArray<NSNumber *> *layersV = [self valuesForLabel:@"Layers"];
-    NSArray<NSNumber *> *tectonicsV = [self valuesForLabel:@"Tectonics"];
-    NSArray<NSNumber *> *textureV = [self valuesForLabel:@"Texture"];
-    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-    st.layers =
-        layersV.count ? layersV[0].floatValue : KK_STRATA_DEFAULT_LAYERS;
-    st.tectonics = tectonicsV.count ? tectonicsV[0].floatValue / 100.0f
-                                    : KK_STRATA_DEFAULT_TECTONICS;
-    st.texture = textureV.count ? textureV[0].floatValue / 100.0f
-                                : KK_STRATA_DEFAULT_TEXTURE;
-    st.speed = speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
-    st.seed = seedShared;
-    st.origin = originShared;
-    st.scale = scaleShared;
-    st.rotation = rotationShared;
-    st.resolution = (vector_float2){W, H};
-    st.time = timeSec;
-    [e setFragmentBytes:&st length:sizeof(st) atIndex:MeshFragmentIndex_Grid];
-  } else {
-    // Same colour swatches + controls as the FCP render (valuesForLabel falls
-    // back to defaults).
-    MeshGradientUniforms grid;
-    memset(&grid, 0, sizeof(grid));
-    int count = 0;
-    for (int i = 0; i < KK_MESH_COLOR_COUNT; i++) {
-      NSArray<NSNumber *> *v = [self valuesForLabel:MeshColorLabel(i)];
-      if (v.count >= 4) {
-        grid.colors[count++] = (vector_float4){
-            v[0].floatValue, v[1].floatValue, v[2].floatValue, v[3].floatValue};
-      } else {
-        const float *c = kMeshDefaultColorsSRGB[i];
-        grid.colors[count++] = (vector_float4){c[0], c[1], c[2], c[3]};
-      }
-    }
-    grid.colorsCount = count > 0 ? count : 1;
-    NSArray<NSNumber *> *distV = [self valuesForLabel:@"Distortion"];
-    NSArray<NSNumber *> *swirlV = [self valuesForLabel:@"Swirl"];
-    NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
-    NSArray<NSNumber *> *mixV = [self valuesForLabel:@"Grain Mixer"];
-    NSArray<NSNumber *> *grainV = [self valuesForLabel:@"Grain"];
-    grid.distortion = distV.count ? distV[0].floatValue / 100.0f
-                                  : KK_MESH_GRAD_DEFAULT_DISTORTION;
-    grid.swirl = swirlV.count ? swirlV[0].floatValue / 100.0f
-                              : KK_MESH_GRAD_DEFAULT_SWIRL;
-    grid.speed =
-        speedV.count ? speedV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
-    grid.seed = seedShared;
-    grid.origin = originShared;
-    grid.grainMixer = mixV.count ? mixV[0].floatValue / 100.0f
-                                 : KK_MESH_GRAD_DEFAULT_GRAINMIXER;
-    grid.grainOverlay =
-        grainV.count ? grainV[0].floatValue / 100.0f : KK_MESH_DEFAULT_GRAIN;
-    grid.scale = scaleShared;
-    grid.rotation = rotationShared;
-    grid.time = timeSec;
-    [e setFragmentBytes:&grid
-                 length:sizeof(grid)
-                atIndex:MeshFragmentIndex_Grid];
-  }
+  // Build every Type's uniform from the lanes, then bind the active Type's
+  // block (offset/size from the registry). Same builders as the FCP render.
+  MeshPluginState state;
+  memset(&state, 0, sizeof(state));
+  MeshLaneReader read = ^NSArray<NSNumber *> *(NSString *label) {
+    return [self valuesForLabel:label];
+  };
+  MeshBuildAllTypes(read, &state);
+  [e setFragmentBytes:(const char *)&state + info->uniformOffset
+               length:info->uniformSize
+              atIndex:MeshFragmentIndex_Grid];
+
+  // Shared params (transforms + timing + grain), same as the FCP render path.
+  MeshCommonUniforms common = MeshCommonDefault();
+  NSArray<NSNumber *> *grainV = [self valuesForLabel:@"Grain"];
+  NSArray<NSNumber *> *grainSizeV = [self valuesForLabel:@"Grain Size"];
+  common.origin = originShared;
+  common.scale = scaleShared;
+  common.rotation = rotationShared;
+  common.speed = speedShared;
+  common.seed = seedShared;
+  common.time = timeSec;
+  common.grain =
+      grainV.count ? grainV[0].floatValue / 100.0f : KK_CORE_GRAIN_DEFAULT;
+  common.grainSize =
+      grainSizeV.count ? grainSizeV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
+  common.grainScale = MeshGrainScaleForType(meshType);
+  common.resolution = (vector_float2){W, H};
+  [e setFragmentBytes:&common
+               length:sizeof(common)
+              atIndex:MeshFragmentIndex_Common];
 
   [e setFragmentBytes:&encodeSRGB
                length:sizeof(encodeSRGB)
               atIndex:MeshFragmentIndex_EncodeSRGB];
   [e drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
   [e endEncoding];
+
+  // Downscale the reference-res intermediate into the actual mini texture.
+  if (downscale)
+    [self blitFrom:renderTex into:dest commandBuffer:commandBuffer];
   return YES;
 }
 
