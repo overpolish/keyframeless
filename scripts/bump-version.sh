@@ -16,6 +16,7 @@
 #   mesh         Mesh plugin
 #   canvas         Canvas plugin
 #   glow           Glow plugin
+#   ai             Keyframeless AI (standalone local helper)
 
 set -euo pipefail
 
@@ -31,6 +32,7 @@ usage() {
   echo "  mesh         Mesh plugin"
   echo "  canvas         Canvas plugin"
   echo "  glow           Glow plugin"
+  echo "  ai             Keyframeless AI (standalone local helper)"
   echo ""
   echo "Version format: BREAKING.MAJOR.MINOR[-vN]"
   echo ""
@@ -51,7 +53,7 @@ COMPONENT="$1"
 BUMP="$2"
 
 case "$COMPONENT" in
-  rounded | magicmove | glow | canvas | keyframelessx) ;;
+  rounded | magicmove | glow | canvas | mesh | keyframelessx | ai) ;;
   *)
     echo "Unknown component: $COMPONENT"
     usage
@@ -67,6 +69,7 @@ plist_for_component() {
     glow)          echo "Glow/Glow/Plugin/Info.plist" ;;
     canvas)        echo "Canvas/Canvas/Plugin/Info.plist" ;;
     mesh) echo "Mesh/Mesh/Plugin/Info.plist" ;;
+    ai) echo "Distribution/helper/kk-ai-helper.plist" ;;
     keyframelessx) echo "" ;;
   esac
 }
@@ -219,6 +222,13 @@ case "$COMPONENT" in
     bump_plist "Mesh/Mesh/Plugin/Info.plist"
     bump_fxplug "Mesh/Mesh/Plugin/Info.plist"
     bump_pkgproj "co.overpolish.keyframeless.Mesh"
+    ;;
+
+  ai)
+    # Standalone "Keyframeless AI" helper: the version manifest (staged beside
+    # the helper, read by KKUpdateChecker) + the pkg component version.
+    bump_plist "Distribution/helper/kk-ai-helper.plist"
+    bump_pkgproj "co.overpolish.keyframeless.KeyframelessAI"
     ;;
   keyframelessx)
     proj="Keyframeless X/Keyframeless X.xcodeproj/project.pbxproj"

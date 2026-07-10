@@ -27,6 +27,11 @@
       "name": "Keyframeless X",
       "kind": "workflow extension",
       "payhip": "https://store.overpolish.co/b/pDFf6"
+    },
+    "ai": {
+      "name": "Keyframeless AI",
+      "kind": "local AI helper",
+      "payhip": "https://store.overpolish.co/b/ESy4d"
     }
   }
 }

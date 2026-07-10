@@ -117,6 +117,15 @@ struct AppShell: View {
 					return
 				}
 			#endif
+			// Keyframeless AI (its own installer) update check: the AI popover
+			// fires this on open; run the helper's check + push into that banner.
+			AIUpdateBridge.setCheckHandler {
+				KKUpdateChecker.shared().checkAIUpdate { _ in
+					let c = KKUpdateChecker.shared()
+					AIUpdateBridge.setAvailableVersion(
+						c.aiAvailableVersion, notesURL: c.aiNotesURL?.absoluteString)
+				}
+			}
 			KKUpdateChecker.shared().check { available in
 				let checker = KKUpdateChecker.shared()
 				guard available, let version = checker.availableVersion else { return }

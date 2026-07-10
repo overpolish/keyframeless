@@ -206,7 +206,10 @@ public final class AIPluginAgent: NSObject {
 			prompt: prompt,
 			productContext: productContext,
 			laneSchemaText: laneSchemaText,
-			currentTimelineJSON: currentTimelineJSON,
+			// Compact timeline (labels + keyposes only) - the passes read only
+			// those, so dropping lane metadata keeps this, the one prompt that
+			// embeds the whole timeline, lean: fewer tokens, faster local prefill.
+			currentTimelineJSON: compactTimelineForAI(currentTimelineJSON),
 			clipDurationSeconds: clipDurationSeconds,
 			currentInspectorMode: currentInspectorMode,
 			enableThinking: classification.complexity == "complex"

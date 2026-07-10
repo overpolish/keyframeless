@@ -79,12 +79,16 @@ stage_ai_helper() {
   # mlx-swift_Cmlx (default.metallib), swift-transformers_Hub, swift-crypto_Crypto.
   # Ship the exact set xcodebuild produced.
   cp -R "$prod"/*.bundle "$AI_STAGE/"
+  # Version manifest: installs beside the helper so KKUpdateChecker can read the
+  # installed CFBundleShortVersionString (the "Keyframeless AI" update check).
+  cp "$ROOT/Distribution/helper/kk-ai-helper.plist" "$AI_STAGE/kk-ai-helper.plist"
   codesign -dvv "$AI_STAGE/kk-ai-helper" 2>&1 | grep -m1 Authority || true
   rm -rf "$dd"
 }
 
 unstage_ai_helper() {
-  rm -f "$AI_STAGE/kk-ai-helper" "$AI_STAGE/mlx.metallib"
+  rm -f "$AI_STAGE/kk-ai-helper" "$AI_STAGE/mlx.metallib" \
+    "$AI_STAGE/kk-ai-helper.plist"
 }
 
 build_combined() {

@@ -56,9 +56,16 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
   };
 }
 
+// The standalone "Keyframeless AI" helper installs its version manifest beside
+// the binary (staged in build-and-sign.sh, installed by the pkg). Reading it
+// tells us the INSTALLED helper version, independent of the running plugin.
+static NSString *const kAIHelperVersionPlist =
+    @"/Library/Application Support/Keyframeless/kk-ai-helper.plist";
+
 @implementation KKUpdateChecker {
   NSString *_componentKey;
   BOOL _checkedThisSession;
+  BOOL _aiCheckedThisSession;
 }
 
 + (instancetype)shared {
@@ -243,6 +250,76 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     if (completion)
       completion(NO);
   });
+}
+
+- (nullable NSString *)readInstalledAIVersion {
+  NSDictionary *manifest =
+      [NSDictionary dictionaryWithContentsOfFile:kAIHelperVersionPlist];
+  NSString *v = manifest[@"CFBundleShortVersionString"];
+  return v.length ? v : nil;
+}
+
+- (void)checkAIUpdateWithCompletion:(void (^)(BOOL))completion {
+  NSString *installed = [self readInstalledAIVersion];
+  self->_aiCurrentVersion = installed;
+  self->_aiNotesURL = [NSURL
+      URLWithString:[NSString stringWithFormat:@"%@/ai/", KKUpdateBaseURL()]];
+
+  // No manifest = the Keyframeless AI helper isn't installed, so there's
+  // nothing to update. (Cloud-only / BYOK users never install it.)
+  if (!installed) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      self->_aiAvailableVersion = nil;
+      self->_aiUpdateAvailable = NO;
+      if (completion)
+        completion(NO);
+    });
+    return;
+  }
+
+  // Once per session: the shipped version doesn't change mid-session, and the
+  // popover can open repeatedly. Report the cached result on subsequent opens.
+  if (_aiCheckedThisSession) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+      if (completion)
+        completion(self.aiUpdateAvailable);
+    });
+    return;
+  }
+  _aiCheckedThisSession = YES;
+
+  NSMutableURLRequest *request =
+      [NSMutableURLRequest requestWithURL:self->_aiNotesURL];
+  request.cachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+  KKLogInfo(@"Checking for Keyframeless AI updates at %@", self->_aiNotesURL);
+
+  NSURLSessionDataTask *task = [[NSURLSession sharedSession]
+      dataTaskWithRequest:request
+        completionHandler:^(NSData *data, NSURLResponse *response,
+                            NSError *error) {
+          NSString *latest = nil;
+          if (error) {
+            KKLogWarn(@"Keyframeless AI update check failed: %@",
+                      error.localizedDescription);
+          } else if (((NSHTTPURLResponse *)response).statusCode == 200) {
+            NSString *body =
+                [[NSString alloc] initWithData:data
+                                      encoding:NSUTF8StringEncoding];
+            latest = [self versionFromHTML:body];
+          }
+          BOOL hasUpdate = latest && [self isVersion:latest
+                                           newerThan:installed];
+          if (hasUpdate)
+            KKLogInfo(@"Keyframeless AI update available: %@ -> %@", installed,
+                      latest);
+          dispatch_async(dispatch_get_main_queue(), ^{
+            self->_aiAvailableVersion = hasUpdate ? latest : nil;
+            self->_aiUpdateAvailable = hasUpdate;
+            if (completion)
+              completion(hasUpdate);
+          });
+        }];
+  [task resume];
 }
 
 - (BOOL)isVersion:(nullable NSString *)a newerThan:(nullable NSString *)b {

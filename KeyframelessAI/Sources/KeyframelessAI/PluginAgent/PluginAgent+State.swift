@@ -71,6 +71,28 @@ extension AIPluginAgent {
 		return lanes
 	}
 
+	/// Strip a timeline JSON down to what the passes actually read: each lane's
+	/// `label` + `keyposes` (times / values / outgoing). Drops all build-time
+	/// lane metadata - visibility rules, component ranges, choice labels,
+	/// category, controller maps, etc. - which no pass consumes but which bloats
+	/// the Pass 1 prompt (and, on device, its prefill time / memory). The host
+	/// keeps the full JSON for the merge; this compact form is prompt-only.
+	static func compactTimelineForAI(_ json: String) -> String {
+		guard let lanes = decodeLanes(json) else { return json }
+		let slim: [[String: Any]] = lanes.compactMap { lane in
+			guard let label = lane["label"] else { return nil }
+			var out: [String: Any] = ["label": label]
+			if let kps = lane["keyposes"] { out["keyposes"] = kps }
+			return out
+		}
+		guard
+			let data = try? JSONSerialization.data(
+				withJSONObject: ["lanes": slim]),
+			let s = String(data: data, encoding: .utf8)
+		else { return json }
+		return s
+	}
+
 	@MainActor
 	static func renderDocs(for prompt: String) async -> String {
 		// Local models prefill slowly, so retrieve only the topics relevant to the

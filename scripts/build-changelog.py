@@ -292,10 +292,19 @@ def build():
                 f"        Changelog begins at {esc(oldest)}. {tail}\n"
                 "      </div>"
             )
+        if "helper" in info["kind"].lower():
+            foot = (
+                f'{esc(info["name"])} is the {esc(info["kind"])} for the '
+                '<a href="../">Keyframeless suite</a>.'
+            )
+        else:
+            foot = (
+                f'{esc(info["name"])} is a Final Cut Pro {esc(info["kind"])}, '
+                'part of the <a href="../">Keyframeless suite</a>.'
+            )
         parts.append(
             '      <footer class="foot">\n'
-            f'        {esc(info["name"])} is a Final Cut Pro {esc(info["kind"])}, '
-            'part of the <a href="../">Keyframeless suite</a>.\n'
+            f"        {foot}\n"
             "      </footer>"
         )
         write_page(
@@ -311,7 +320,13 @@ def build():
     rows = [render_topbar(meta.get("siteTitle", "Keyframeless"), "Release notes", site_payhip, "assets/apple-touch-icon.png")]
     rows.append('      <ul class="entries">')
     for pid, info in plugins.items():
-        kind = "Extension" if "extension" in info["kind"].lower() else "Plugin"
+        kl = info["kind"].lower()
+        if "helper" in kl:
+            kind = "AI"
+        elif "extension" in kl:
+            kind = "Extension"
+        else:
+            kind = "Plugin"
         rows.append("        <li>")
         rows.append(f'          <span class="tag kind">{kind}</span>')
         rows.append(

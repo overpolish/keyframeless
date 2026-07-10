@@ -13,12 +13,13 @@
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKDataBlob.h>
 #import <KeyframelessKit/KKHelpSection.h>
-#import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
 #import <KeyframelessKit/KKTimelineAIMerge.h>
+#import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
 #import <KeyframelessKit/KKTimingCompat.h>
 #import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKUpdateChecker.h>
 @import KeyframelessAI;
 
 /// Plain-text coordinate-space description used by the AI agent's value
@@ -158,8 +159,8 @@ static NSString *_RoundedAILaneSchemaText(void) {
                availableLanes:available
                      timeline:timeline];
     // Per-instance rendezvous paths (keyed by the instance UUID minted above)
-    // so two stacked Rounded clips read/write distinct /tmp files instead of the
-    // clip below showing the top clip's source in its mini-viewer.
+    // so two stacked Rounded clips read/write distinct /tmp files instead of
+    // the clip below showing the top clip's source in its mini-viewer.
     NSString *instUUID = KKInstanceUUIDForAPI(self.apiManager);
     view.miniViewerDescriptorPath =
         RoundedMiniViewerDescriptorPathForUUID(instUUID);
@@ -318,6 +319,18 @@ static NSString *_RoundedAILaneSchemaText(void) {
   NSString *placeholder = RLoc(@"Ask a question or describe an animation…",
                                @"AI prompt field placeholder for Rounded.");
 
+  // Wire the "Keyframeless AI update available" banner: the popover fires this
+  // when it opens, we run the standalone-helper update check (its own installer
+  // + version, read by KKUpdateChecker) and push the result into the popover.
+  // This is the one spot that links both KeyframelessKit and KeyframelessAI.
+  [KKAIUpdate setCheckHandler:^{
+    [[KKUpdateChecker shared] checkAIUpdateWithCompletion:^(BOOL avail) {
+      KKUpdateChecker *checker = [KKUpdateChecker shared];
+      [KKAIUpdate setAvailableVersion:checker.aiAvailableVersion
+                             notesURL:checker.aiNotesURL.absoluteString];
+    }];
+  }];
+
   __weak typeof(self) weakSelf = self;
   return [KKAIBannerHost
       makePluginButtonWithProductContext:productContext
@@ -377,87 +390,88 @@ static NSString *_RoundedAILaneSchemaText(void) {
 
   __weak typeof(self) weakSelf = self;
   [KKAIPluginAgent
-             runWithPrompt:prompt
-            productContext:productContext
-            laneSchemaText:schema
-       currentTimelineJSON:currentJSON
-       clipDurationSeconds:clipDurSec
-      currentInspectorMode:currentMode
-     supportsLayerCreation:NO
-                completion:^(KKAIPluginResult *result, NSError *err) {
-                  dispatch_async(dispatch_get_main_queue(), ^{
-                    __strong typeof(weakSelf) strong = weakSelf;
-                    if (!strong)
-                      return;
-                    [KKAIDraft setRouting:NO];
-                    if (err) {
-                      KKLogError(@"AI[err] %@", err.localizedDescription);
-                      [KKAIDraft setError:err.localizedDescription];
-                      return;
-                    }
-                    if (!result) {
-                      KKLogError(@"AI[err] empty result");
-                      [KKAIDraft setError:@"Empty AI response."];
-                      return;
-                    }
-                    if (result.kind == KKAIPluginResultKindAnswer) {
-                      [KKAIDraft setAnswer:result.answer];
-                      return;
-                    }
-                    // The merge also snaps final keyposes to the last
-                    // renderable frame (FCP's last frame is one frame before
-                    // the clip end, so a keypose at 1.0 is never reached) -
-                    // clipDur from the prompt, frameDur from the process cache.
-                    NSString *merged = KKTimelineAIMergeMutationJSON(
-                        currentJSON, result.mutationJSON, clipDurSec,
-                        KKProcessFrameDurationSeconds());
-                    if (!merged) {
-                      KKLogError(@"AI[err] merge returned nil");
-                      [KKAIDraft
-                          setError:
-                              @"AI returned an invalid timeline mutation."];
-                      return;
-                    }
-                    id<FxCustomParameterActionAPI_v4> writeAct =
-                        [strong.apiManager
-                            apiForProtocol:@protocol(
-                                               FxCustomParameterActionAPI_v4)];
-                    if (!writeAct) {
-                      [KKAIDraft
-                          setError:@"Couldn't open the FCP action scope to "
-                                   @"apply the mutation."];
-                      return;
-                    }
-                    [writeAct startAction:strong];
-                    id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
-                        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-                    KKWriteCustomParamString(setAPI, merged,
-                                             kKKParamTimelineData);
+              runWithPrompt:prompt
+             productContext:productContext
+             laneSchemaText:schema
+        currentTimelineJSON:currentJSON
+        clipDurationSeconds:clipDurSec
+       currentInspectorMode:currentMode
+      supportsLayerCreation:NO
+                 completion:^(KKAIPluginResult *result, NSError *err) {
+                   dispatch_async(dispatch_get_main_queue(), ^{
+                     __strong typeof(weakSelf) strong = weakSelf;
+                     if (!strong)
+                       return;
+                     [KKAIDraft setRouting:NO];
+                     if (err) {
+                       KKLogError(@"AI[err] %@", err.localizedDescription);
+                       [KKAIDraft setError:err.localizedDescription];
+                       return;
+                     }
+                     if (!result) {
+                       KKLogError(@"AI[err] empty result");
+                       [KKAIDraft setError:@"Empty AI response."];
+                       return;
+                     }
+                     if (result.kind == KKAIPluginResultKindAnswer) {
+                       [KKAIDraft setAnswer:result.answer];
+                       return;
+                     }
+                     // The merge also snaps final keyposes to the last
+                     // renderable frame (FCP's last frame is one frame before
+                     // the clip end, so a keypose at 1.0 is never reached) -
+                     // clipDur from the prompt, frameDur from the process
+                     // cache.
+                     NSString *merged = KKTimelineAIMergeMutationJSON(
+                         currentJSON, result.mutationJSON, clipDurSec,
+                         KKProcessFrameDurationSeconds());
+                     if (!merged) {
+                       KKLogError(@"AI[err] merge returned nil");
+                       [KKAIDraft
+                           setError:
+                               @"AI returned an invalid timeline mutation."];
+                       return;
+                     }
+                     id<FxCustomParameterActionAPI_v4> writeAct =
+                         [strong.apiManager
+                             apiForProtocol:@protocol(
+                                                FxCustomParameterActionAPI_v4)];
+                     if (!writeAct) {
+                       [KKAIDraft
+                           setError:@"Couldn't open the FCP action scope to "
+                                    @"apply the mutation."];
+                       return;
+                     }
+                     [writeAct startAction:strong];
+                     id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
+                         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+                     KKWriteCustomParamString(setAPI, merged,
+                                              kKKParamTimelineData);
 
-                    // If the new timeline isn't representable in Basic, force
-                    // the inspector to Advanced so the user sees the actual
-                    // structure. Keeping the activeTab on Basic when the data
-                    // is Advanced-only shows the compatibility banner instead
-                    // of the new animation.
-                    KKTimeline *resultTimeline =
-                        [KKTimeline timelineFromJSON:merged];
-                    double mergeFrameDur = KKProcessFrameDurationSeconds();
-                    double aiEndFrac =
-                        (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
-                         mergeFrameDur < clipDurSec)
-                            ? (clipDurSec - mergeFrameDur) / clipDurSec
-                            : 1.0;
-                    if (resultTimeline && !KKTimelineIsBasicCompatible(
-                                              resultTimeline, aiEndFrac)) {
-                      [strong patchUIStateKey:@"activeTab"
-                                        value:@(1)
-                                      paramID:kParamUIState];
-                    }
-                    [writeAct endAction:strong];
-                    [KKAIDraft setAnswer:nil];
-                    [KKAIDraft clearPrompt];
-                  });
-                }];
+                     // If the new timeline isn't representable in Basic, force
+                     // the inspector to Advanced so the user sees the actual
+                     // structure. Keeping the activeTab on Basic when the data
+                     // is Advanced-only shows the compatibility banner instead
+                     // of the new animation.
+                     KKTimeline *resultTimeline =
+                         [KKTimeline timelineFromJSON:merged];
+                     double mergeFrameDur = KKProcessFrameDurationSeconds();
+                     double aiEndFrac =
+                         (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
+                          mergeFrameDur < clipDurSec)
+                             ? (clipDurSec - mergeFrameDur) / clipDurSec
+                             : 1.0;
+                     if (resultTimeline && !KKTimelineIsBasicCompatible(
+                                               resultTimeline, aiEndFrac)) {
+                       [strong patchUIStateKey:@"activeTab"
+                                         value:@(1)
+                                       paramID:kParamUIState];
+                     }
+                     [writeAct endAction:strong];
+                     [KKAIDraft setAnswer:nil];
+                     [KKAIDraft clearPrompt];
+                   });
+                 }];
 }
 
 - (nullable NSString *)helpHeaderTitle {

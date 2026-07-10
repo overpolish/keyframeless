@@ -17,8 +17,18 @@ PLIST="/Library/LaunchAgents/$LABEL.plist"
 CONSOLE_USER=$(stat -f "%Su" /dev/console)
 if [ -n "$CONSOLE_USER" ] && [ "$CONSOLE_USER" != "root" ] && [ -f "$PLIST" ]; then
 	USER_UID=$(id -u "$CONSOLE_USER")
-	# Replace any prior registration, then bootstrap into the user's GUI domain.
+	# Unregister any prior job (bootout SIGTERMs it) then FORCE-kill any survivor.
+	# On an update the new binary is already on disk, but a helper wedged in MLX
+	# compute (holding many GB) can ignore/lag SIGTERM - it must be gone before the
+	# fresh binary serves the next request, or the stale process keeps answering.
 	launchctl bootout "gui/$USER_UID/$LABEL" 2>/dev/null || true
+	pkill -TERM -f 'Keyframeless/kk-ai-helper' 2>/dev/null || true
+	for _ in 1 2 3 4 5; do
+		pgrep -f 'Keyframeless/kk-ai-helper' >/dev/null 2>&1 || break
+		sleep 0.3
+	done
+	pkill -KILL -f 'Keyframeless/kk-ai-helper' 2>/dev/null || true
+	# Re-register the (new) binary into the user's GUI domain.
 	launchctl bootstrap "gui/$USER_UID" "$PLIST" 2>/dev/null || true
 fi
 

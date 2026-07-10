@@ -379,44 +379,44 @@
         }
       }
     },
-    "Calm drifting neon": {
-      "comment": "AI example chip: calm drifting neon.",
+    "Calm drifting wisps": {
+      "comment": "AI example chip: calm drifting wisps.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ruhig treibendes Neon"
+            "value": "Ruhig treibende Wisp"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Neón a la deriva y tranquilo"
+            "value": "Wisp a la deriva y tranquilo"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Néon dérivant et calme"
+            "value": "Wisp dérivant et calme"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "静かに漂うネオン"
+            "value": "静かに漂うWisp"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "잔잔하게 흐르는 네온"
+            "value": "잔잔하게 흐르는 Wisp"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "缓慢漂移的霓虹"
+            "value": "缓慢漂移的 Wisp"
           }
         }
       }
@@ -2605,44 +2605,44 @@
         }
       }
     },
-    "Use the Neon style, slow and calm, in cool blues.": {
-      "comment": "AI example value: calm drifting neon.",
+    "Use the Wisp style, slow and calm, in cool blues.": {
+      "comment": "AI example value: calm drifting wisps.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verwende den Neon-Stil, langsam und ruhig, in kühlen Blautönen."
+            "value": "Verwende den Wisp-Stil, langsam und ruhig, in kühlen Blautönen."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usa el estilo Neón, lento y tranquilo, en azules fríos."
+            "value": "Usa el estilo Wisp, lento y tranquilo, en azules fríos."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Utilise le style Néon, lent et calme, dans des bleus froids."
+            "value": "Utilise le style Wisp, lent et calme, dans des bleus froids."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ネオンスタイルを使って、ゆっくり穏やかに、クールなブルーで。"
+            "value": "Wispスタイルを使って、ゆっくり穏やかに、クールなブルーで。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "네온 스타일로, 느리고 잔잔하게, 시원한 블루 톤으로."
+            "value": "Wisp 스타일로, 느리고 잔잔하게, 시원한 블루 톤으로."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "使用霓虹样式，缓慢平静，采用冷蓝色调。"
+            "value": "使用 Wisp 样式，缓慢平静，采用冷蓝色调。"
           }
         }
       }

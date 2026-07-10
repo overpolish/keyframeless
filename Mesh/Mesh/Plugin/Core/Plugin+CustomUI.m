@@ -24,6 +24,7 @@
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
 #import <KeyframelessKit/KKTimingCompat.h>
 #import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKUpdateChecker.h>
 @import KeyframelessAI;
 
 @implementation MeshPlugin (CustomUI)
@@ -255,9 +256,9 @@
            @"AI example value: warm sunset gradient.")
     ],
     @[
-      RLoc(@"Calm drifting neon", @"AI example chip: calm drifting neon."),
-      RLoc(@"Use the Neon style, slow and calm, in cool blues.",
-           @"AI example value: calm drifting neon.")
+      RLoc(@"Calm drifting wisps", @"AI example chip: calm drifting wisps."),
+      RLoc(@"Use the Wisp style, slow and calm, in cool blues.",
+           @"AI example value: calm drifting wisps.")
     ],
     @[
       RLoc(@"Keep one colour", @"AI example chip: keep one colour."),
@@ -274,6 +275,18 @@
 
   NSString *placeholder = RLoc(@"Ask a question or describe an animation…",
                                @"AI prompt field placeholder for Mesh.");
+
+  // Wire the "Keyframeless AI update available" banner: the popover fires this
+  // when it opens, we run the standalone-helper update check (its own installer
+  // + version, read by KKUpdateChecker) and push the result into the popover.
+  // This is the one spot that links both KeyframelessKit and KeyframelessAI.
+  [KKAIUpdate setCheckHandler:^{
+    [[KKUpdateChecker shared] checkAIUpdateWithCompletion:^(BOOL avail) {
+      KKUpdateChecker *checker = [KKUpdateChecker shared];
+      [KKAIUpdate setAvailableVersion:checker.aiAvailableVersion
+                             notesURL:checker.aiNotesURL.absoluteString];
+    }];
+  }];
 
   __weak typeof(self) weakSelf = self;
   return [KKAIBannerHost

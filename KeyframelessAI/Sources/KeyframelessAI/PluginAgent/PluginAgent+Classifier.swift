@@ -70,7 +70,8 @@ extension AIPluginAgent {
 			? "  \"create\"   - user wants to ADD a NEW shape / drawing / layer that doesn't exist yet (\"draw a line\", \"add a circle\", \"put an arrow in the corner\", \"create a box\"). Even when they also describe animating or styling it, choose \"create\" - the new shape must be made first.\n"
 			: ""
 		let system = """
-			Route a user message for \(productContext)'s AI animation assistant. \
+			Route a user message for \(productContext)'s AI animation and styling \
+			assistant. \
 			Output a kind, complexity, optional clarification, and optional template \
 			fast-path.
 
@@ -79,13 +80,20 @@ extension AIPluginAgent {
 			kind:
 			  "answer"   - user is asking a QUESTION about the tool.
 			\(createKindLine)\
-			  "mutation" - user describes a SPECIFIC change to EXISTING content's \
-			               animation or properties. Has enough detail to act on (some \
-			               combination of lane, value, time range, or a known \
-			               modulation/style intent).
-			  "vague"    - user wants a mutation but it's not actionable: missing \
-			               which lane, what value/direction, or what time range. \
-			               Examples: "make it cool", "animate something", "improve it".
+			  "mutation" - user wants to CHANGE the content: its animation, its \
+			               properties, OR its overall look. It is actionable when it \
+			               gives ANY of: a lane, a value, a direction, a time range, a \
+			               known modulation/style intent, OR a described visual style, \
+			               mood, colour, or palette (e.g. "warm sunset", "ocean tones", \
+			               "neon cyberpunk", "make it fiery", "moody and dark", "pastel \
+			               gradient"). The assistant picks the concrete lanes and \
+			               values itself, so a described LOOK is enough to act on - do \
+			               NOT ask for specifics when a style, mood, or colour is given.
+			  "vague"    - user wants a change but gives NO actionable content at all: \
+			               no lane, value, direction, time range, style, mood, or \
+			               colour cue. Examples: "make it cool", "improve it", "do \
+			               something", "animate something", "make it better". A \
+			               described look / mood / colour scheme is NOT vague.
 
 			complexity (only relevant for mutations; pick "simple" otherwise):
 			  "simple"  - matches a known pattern on ONE lane: "from A to B", \
@@ -132,7 +140,9 @@ extension AIPluginAgent {
 			  "oscillate" - explicit oscillation, swinging back and forth, sine-like
 			  "handheld"  - camera-shake, handheld feel, organic drift
 
-			When uncertain between "answer" and "vague", prefer "vague".
+			When uncertain between "answer" and "vague", prefer "vague". But when \
+			the message names or describes ANY colour, palette, style, mood, look, \
+			value, lane, direction, or time, it is a "mutation" - not "vague".
 
 			The effect is always implicit (single live instance); never ask the \
 			user to select anything.
