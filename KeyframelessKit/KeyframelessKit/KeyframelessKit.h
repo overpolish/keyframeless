@@ -68,6 +68,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKOSCShaderTypes.h>
 #import <KeyframelessKit/KKOnScreenControl+CoordinateSpace.h>
 #import <KeyframelessKit/KKPaddedScrollView.h>
+#import <KeyframelessKit/KKPaletteGenerator.h>
 #import <KeyframelessKit/KKParameterRowView.h>
 #import <KeyframelessKit/KKPathBoolean.h>
 #import <KeyframelessKit/KKPathMorph.h>
@@ -83,12 +84,12 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPluginInstanceState.h>
 #import <KeyframelessKit/KKPointOSC.h>
 #import <KeyframelessKit/KKPointRowView.h>
-#import <KeyframelessKit/KKPresets.h>
 #import <KeyframelessKit/KKPopoverExtraRow.h>
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKPopupSelectView.h>
 #import <KeyframelessKit/KKPositionMiniController.h>
 #import <KeyframelessKit/KKPositionOSC.h>
+#import <KeyframelessKit/KKPresets.h>
 #import <KeyframelessKit/KKRandomRowView.h>
 #import <KeyframelessKit/KKRectBorderOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>

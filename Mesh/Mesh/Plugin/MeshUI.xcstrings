@@ -295,132 +295,6 @@
         }
       }
     },
-    "Animate radius 0→100% with bounce": {
-      "comment": "AI example chip: animate radius with bounce.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Radius 0→100 % mit Sprung animieren"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Animar radio 0→100 % con rebote"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Animer le rayon 0→100 % avec rebond"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "半径を0→100%でバウンドさせる"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "반경을 0→100%로 튀게 애니메이션"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将半径从 0→100% 弹跳动画"
-          }
-        }
-      }
-    },
-    "Animate the crop in from the top right and back out at the end, while the radius rounds over the whole clip.": {
-      "comment": "AI example value: in/out crop animation.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Animiere den Zuschnitt von oben rechts herein und am Ende wieder hinaus, während der Radius über den gesamten Clip abrundet."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anima el recorte entrando desde la esquina superior derecha y saliendo al final, mientras el radio se redondea durante todo el clip."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Animez le rognage en entrée depuis le coin supérieur droit puis en sortie à la fin, pendant que le rayon s'arrondit sur tout le plan."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "半径がクリップ全体で丸くなる間に、クロップを右上から入れ、最後に戻すようにアニメーションする。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "반경이 클립 전체에 걸쳐 둥글어지는 동안, 자르기를 오른쪽 위에서 들어왔다가 끝에서 다시 나가도록 애니메이션합니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "让裁剪从右上角进入并在结尾退出，同时半径在整个片段中变圆。"
-          }
-        }
-      }
-    },
-    "Animate the radius from 0% to 100% over 1 second with bounce.": {
-      "comment": "AI example value: animate radius with bounce.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Animiere den Radius über 1 Sekunde von 0 % auf 100 % mit einem Sprung."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Anima el radio de 0 % a 100 % durante 1 segundo con un rebote."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Animez le rayon de 0 % à 100 % sur 1 seconde avec un rebond."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "半径を1秒かけて0%から100%までバウンドさせながらアニメーションする。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "반경을 1초 동안 0%에서 100%로 튀는 효과와 함께 애니메이션합니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在 1 秒内让半径从 0% 弹跳动画到 100%。"
-          }
-        }
-      }
-    },
     "Ask a question or describe an animation…": {
       "comment": "AI prompt field placeholder for Mesh.",
       "extractionState": "manual",
@@ -501,6 +375,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "基本计时有三个阶段：<accent>进入</accent>、<accent>保持</accent>和<accent>退出</accent>"
+          }
+        }
+      }
+    },
+    "Calm drifting neon": {
+      "comment": "AI example chip: calm drifting neon.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ruhig treibendes Neon"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neón a la deriva y tranquilo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Néon dérivant et calme"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "静かに漂うネオン"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "잔잔하게 흐르는 네온"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓慢漂移的霓虹"
           }
         }
       }
@@ -879,90 +795,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "从该侧裁剪"
-          }
-        }
-      }
-    },
-    "Crop to the top right quadrant.": {
-      "comment": "AI example value: crop to top right.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auf das obere rechte Viertel zuschneiden."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recorta al cuadrante superior derecho."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rognez sur le quadrant supérieur droit."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "右上の四分の一にクロップする。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "오른쪽 위 사분면으로 자릅니다."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "裁剪到右上象限。"
-          }
-        }
-      }
-    },
-    "Crop to top right": {
-      "comment": "AI example chip: crop to top right.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auf oben rechts zuschneiden"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Recortar a la esquina superior derecha"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rogner en haut à droite"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "右上にクロップ"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "오른쪽 위로 자르기"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "裁剪到右上角"
           }
         }
       }
@@ -1639,6 +1471,48 @@
         }
       }
     },
+    "How do I keep one colour and reroll the rest?": {
+      "comment": "AI example value: keep one colour.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie behalte ich eine Farbe und würfle den Rest neu?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cómo mantengo un color y regenero el resto?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment conserver une couleur et régénérer les autres ?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1色を保持して残りを再生成するには？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한 색상을 유지하고 나머지를 다시 생성하려면?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如何保留一种颜色并重新生成其余颜色？"
+          }
+        }
+      }
+    },
     "Inspector and on-screen control, end to end": {
       "comment": "Help guide subtitle: Full Walkthrough.",
       "extractionState": "manual",
@@ -1723,6 +1597,48 @@
         }
       }
     },
+    "Keep one colour": {
+      "comment": "AI example chip: keep one colour.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Farbe behalten"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener un color"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conserver une couleur"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1色をキープ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "한 색상 유지"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留一种颜色"
+          }
+        }
+      }
+    },
     "Learn how the on-screen control works": {
       "comment": "Help guide subtitle: OSC Basics.",
       "extractionState": "manual",
@@ -1803,6 +1719,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "让我们<accent>回放看看</accent>--点按播放"
+          }
+        }
+      }
+    },
+    "Make a warm sunset mesh gradient.": {
+      "comment": "AI example value: warm sunset gradient.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstelle einen warmen Sonnenuntergangs-Mesh-Verlauf."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un degradado de malla de atardecer cálido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crée un dégradé mesh coucher de soleil chaud."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暖かい夕焼けのメッシュグラデーションを作成して。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "따뜻한 노을 메시 그러데이션을 만들어 줘."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "制作一个温暖的日落网格渐变。"
           }
         }
       }
@@ -1971,48 +1929,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "参数："
-          }
-        }
-      }
-    },
-    "Reveal then hide": {
-      "comment": "AI example chip: in/out crop animation.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Einblenden, dann ausblenden"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mostrar y luego ocultar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Révéler puis masquer"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表示してから隠す"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "나타냈다가 숨기기"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "先显示再隐藏"
           }
         }
       }
@@ -2689,6 +2605,48 @@
         }
       }
     },
+    "Use the Neon style, slow and calm, in cool blues.": {
+      "comment": "AI example value: calm drifting neon.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwende den Neon-Stil, langsam und ruhig, in kühlen Blautönen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usa el estilo Neón, lento y tranquilo, en azules fríos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Utilise le style Néon, lent et calme, dans des bleus froids."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ネオンスタイルを使って、ゆっくり穏やかに、クールなブルーで。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "네온 스타일로, 느리고 잔잔하게, 시원한 블루 톤으로."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用霓虹样式，缓慢平静，采用冷蓝色调。"
+          }
+        }
+      }
+    },
     "Walk through the basics again": {
       "comment": "Help guide subtitle: Introduction.",
       "extractionState": "manual",
@@ -2727,6 +2685,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "再次浏览基础内容"
+          }
+        }
+      }
+    },
+    "Warm sunset gradient": {
+      "comment": "AI example chip: warm sunset gradient.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warmer Sonnenuntergangs-Verlauf"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Degradado de atardecer cálido"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dégradé coucher de soleil chaud"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暖かい夕焼けグラデーション"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "따뜻한 노을 그러데이션"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温暖的日落渐变"
           }
         }
       }

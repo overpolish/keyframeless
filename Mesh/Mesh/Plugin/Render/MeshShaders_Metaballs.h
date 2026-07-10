@@ -28,8 +28,7 @@ static float mb_valueNoise(float x) {
     float b = dth_hash21(float2(i, 0.0));
     float c = dth_hash21(float2(i + 1.0, 0.0));
     float d = dth_hash21(float2(i + 2.0, 0.0));
-    return 0.5 * (2.0 * b + (-a + c) * f +
-                  (2.0 * a - 5.0 * b + 4.0 * c - d) * f * f +
+    return 0.5 * (2.0 * b + (-a + c) * f + (2.0 * a - 5.0 * b + 4.0 * c - d) * f * f +
                   (-a + 3.0 * b - 3.0 * c + d) * f * f * f);
 }
 
@@ -43,14 +42,19 @@ static float mb_ballShape(float2 uv, float2 c, float p) {
 fragment float4 metaballsFragment(RasterizerData in [[stage_in]],
                                   constant MetaballsUniforms &u [[buffer(MeshFragmentIndex_Grid)]],
                                   constant int &encodeSRGB [[buffer(MeshFragmentIndex_EncodeSRGB)]],
-                               constant MeshCommonUniforms &cm [[buffer(MeshFragmentIndex_Common)]]) {
+                                  constant MeshCommonUniforms &cm [[buffer(MeshFragmentIndex_Common)]]) {
     float2 res = max(cm.resolution, float2(1.0));
     float aspect = res.x / res.y;
 
-    // firstFrameOffset (paper) shifts the noise so frame 0 isn't degenerate;
-    // Seed offsets the animation time (a "start frame"), wrapped so the trig
-    // stays precise. Shared with the other types.
-    float t = 0.2 * (cm.time * cm.speed + fmod(cm.seed, 10000.0) + 2503.4);
+    // Metaballs animates via VALUE NOISE, not trig, so it can't wrap its phase
+    // into 0..2pi the way the other types do. A large argument (the shared
+    // "0.2 * (time + seed + 2503)" form) loses float32 precision in fract(),
+    // quantising the motion into a low-Speed stagger that worsens with Seed.
+    // Keep the animated phase small (grows from ~0) and fold Seed in as a
+    // BOUNDED offset instead - enough for a distinct start / non-degenerate
+    // frame 0 without inflating the argument.
+    float tAnim = 0.2 * cm.time * cm.speed;
+    float seedOff = fmod(cm.seed, 991.0) * 0.037 + 3.1;
 
     // Synthesize the object-box UV: aspect-correct (round balls), centred,
     // origin-shifted, common Scale + Rotation applied about the centre. Adding
@@ -74,8 +78,8 @@ fragment float4 metaballsFragment(RasterizerData in [[stage_in]],
         float angle = 6.28318530718 * idxFract;
 
         float speed = 1.0 - 0.2 * idxFract;
-        float noiseX = mb_valueNoise(angle * 10.0 + float(i) + t * speed);
-        float noiseY = mb_valueNoise(angle * 20.0 + float(i) - t * speed);
+        float noiseX = mb_valueNoise(angle * 10.0 + float(i) + seedOff + tAnim * speed);
+        float noiseY = mb_valueNoise(angle * 20.0 + float(i) + seedOff - tAnim * speed);
 
         float2 pos = float2(0.5) + 1e-4 + 0.9 * (float2(noiseX, noiseY) - 0.5);
 

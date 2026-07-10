@@ -232,29 +232,34 @@
   });
 
   NSString *productContext = RLoc(
-      @"Mesh, a Final Cut Pro plugin that rounds corners, crops with a box, "
-      @"and animates with the shared Keyframeless timeline system (Basic and "
-      @"Advanced timing, easing, motion blur). Always refer to yourself as "
-      @"Mesh. Detailed feature information is in the reference docs below.",
+      @"Mesh, a Final Cut Pro generator that builds animated gradient and "
+      @"pattern backgrounds in twelve styles (mesh gradient, dithering, "
+      @"grainy, "
+      @"warp, neuro, simplex, metaballs, god rays, fluid, wisp, silk, strata) "
+      @"selected by Type. Each style has its own colours plus shared controls "
+      @"(Speed, Seed, Origin, Scale, Rotation, Grain), animated with the "
+      @"shared "
+      @"Keyframeless timeline (Basic and Advanced timing, easing). The Colours "
+      @"section has a built-in palette generator (mode buttons, per-swatch "
+      @"lock, Vary). Always refer to yourself as Mesh. Detailed feature "
+      @"information is in the reference docs below.",
       @"AI assistant product context for Mesh plugin.");
 
   NSArray<NSArray<NSString *> *> *examples = @[
     @[
-      RLoc(@"Animate radius 0→100% with bounce",
-           @"AI example chip: animate radius with bounce."),
-      RLoc(@"Animate the radius from 0% to 100% over 1 second with bounce.",
-           @"AI example value: animate radius with bounce.")
+      RLoc(@"Warm sunset gradient", @"AI example chip: warm sunset gradient."),
+      RLoc(@"Make a warm sunset mesh gradient.",
+           @"AI example value: warm sunset gradient.")
     ],
     @[
-      RLoc(@"Crop to top right", @"AI example chip: crop to top right."),
-      RLoc(@"Crop to the top right quadrant.",
-           @"AI example value: crop to top right.")
+      RLoc(@"Calm drifting neon", @"AI example chip: calm drifting neon."),
+      RLoc(@"Use the Neon style, slow and calm, in cool blues.",
+           @"AI example value: calm drifting neon.")
     ],
     @[
-      RLoc(@"Reveal then hide", @"AI example chip: in/out crop animation."),
-      RLoc(@"Animate the crop in from the top right and back out at the "
-           @"end, while the radius rounds over the whole clip.",
-           @"AI example value: in/out crop animation.")
+      RLoc(@"Keep one colour", @"AI example chip: keep one colour."),
+      RLoc(@"How do I keep one colour and reroll the rest?",
+           @"AI example value: keep one colour.")
     ],
     @[
       RLoc(@"What's Basic vs Advanced?",

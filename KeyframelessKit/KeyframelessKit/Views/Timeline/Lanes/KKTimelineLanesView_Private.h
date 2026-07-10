@@ -130,6 +130,18 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// editable once the gradient is animated.
 @property(nonatomic, copy, nullable) void (^onGradientTypeChanged)
     (NSInteger type);
+/// A `paletteLockable` colour row carries a small lock toggle beside its
+/// swatch. Fires with the new state; the host tracks which colour labels are
+/// locked so a palette reroll can skip them. Transient UI state (not
+/// persisted).
+@property(nonatomic, copy, nullable) void (^onPaletteLockToggled)(BOOL locked);
+/// A `paletteGeneratorBar` row fires this with the chosen mode index
+/// (`KKPaletteMode`) when a mode button is tapped. The host regenerates the
+/// visible palette colours, keeping the locked ones.
+@property(nonatomic, copy, nullable) void (^onPaletteGenerate)(NSInteger mode);
+/// A `paletteGeneratorBar` row's "vary" button fires this; the host nudges the
+/// current colours slightly (see `KKPaletteGenerator refinedPaletteFrom:`).
+@property(nonatomic, copy, nullable) void (^onPaletteRefine)(void);
 - (instancetype)initWithLane:(KKLane *)lane
                  showsRemove:(BOOL)showsRemove
           showsAddToAnimated:(BOOL)showsAddToAnimated
@@ -175,6 +187,9 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 - (void)applyLink:(BOOL)on;
 /// Refresh the smooth-toggle glyph state (e.g. after cmd-Z) without rebuilding.
 - (void)applySmooth:(BOOL)on;
+/// Refresh the palette lock toggle (padlock open/closed + tint) without firing
+/// the callback. Used to restore the row's lock state after a rebuild.
+- (void)applyPaletteLock:(BOOL)locked;
 - (void)applyLane:(KKLane *)lane;
 /// Re-render fields/slider from the stored values (e.g. after the display
 /// scale changes when the feed resolves its media size).
@@ -217,6 +232,14 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// remember the last tab). Not fired for the initial selection.
 @property(nonatomic, copy, nullable) void (^onCategoryChanged)
     (NSString *category);
+
+/// Persist several lane constants at once, as ONE undo entry. Used by the
+/// palette generator (rerolling N colours) - the per-lane drag path can only
+/// commit one label per bracket, so a multi-lane write needs this. The host
+/// wraps the writes in a single undo group. `labels[i]` pairs with
+/// `valuesList[i]`. nil = fall back to per-label discrete commits.
+@property(nonatomic, copy, nullable) void (^onCommitBatch)
+    (NSArray<NSString *> *labels, NSArray<NSArray<NSNumber *> *> *valuesList);
 
 /// Wire the per-keypose smooth toggle (shown on `spatialCurvable` lane rows in
 /// the keypose popover). Fired with the lane label + new state; the host

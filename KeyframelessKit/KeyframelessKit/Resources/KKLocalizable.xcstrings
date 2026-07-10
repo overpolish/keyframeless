@@ -6721,6 +6721,48 @@
         }
       }
     },
+    "Lock this colour (kept when the palette regenerates)": {
+      "comment": "Tooltip: per-colour lock toggle for the palette generator.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Farbe sperren (bleibt beim Neugenerieren der Palette erhalten)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bloquear este color (se mantiene al regenerar la paleta)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verrouiller cette couleur (conservée lors de la régénération de la palette)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この色をロック（パレット再生成時も保持）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 색상 잠금 (팔레트 재생성 시 유지)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锁定此颜色（重新生成调色板时保留）"
+          }
+        }
+      }
+    },
     "Maintain Timing": {
       "comment": "Toolbar toggle: pin the animation to absolute time so trimming or splitting the clip keeps each keypose where it is.",
       "extractionState": "manual",

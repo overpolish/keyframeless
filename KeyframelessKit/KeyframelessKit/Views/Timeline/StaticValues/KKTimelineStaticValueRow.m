@@ -192,8 +192,12 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   BOOL _oscEditedOnly; // geometry-style lane: message instead of value fields
   KKColorWellView *_colorWell; // swatch: Color (offset 0) or ColorPoint
   NSInteger
-      _swatchOffset; // first RGBA component index for _colorWell (0 for a
-                     // plain Color lane; = #leading fields for ColorPoint)
+      _swatchOffset;     // first RGBA component index for _colorWell (0 for a
+                         // plain Color lane; = #leading fields for ColorPoint)
+  NSButton *_lockBtn;    // palette lock toggle, left of a lockable swatch
+  BOOL _paletteLockable; // lane opted into the lock toggle
+  BOOL _paletteLocked;   // current (transient) lock state
+  BOOL _paletteGeneratorBar; // row is the 5 mode buttons, not a value editor
   KKGradientControl *_gradientControl; // KKLaneValueTypeGradient only
   BOOL
       _suppressGradientRefresh; // mid own-edit: don't reset the control's stops
@@ -343,6 +347,94 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 - (void)applyLink:(BOOL)on {
   _linkOn = on;
   [self _updateLinkTint];
+}
+
+// Padlock toggle beside a lockable colour swatch. Closed/accent = locked (a
+// palette reroll skips this colour), open/dim = unlocked. Borderless glyph
+// styled like the row's other gutter toggles.
+- (NSButton *)_makePaletteLockToggle {
+  NSButton *b = [NSButton buttonWithImage:[[NSImage alloc] init]
+                                   target:self
+                                   action:@selector(_paletteLockTapped:)];
+  b.translatesAutoresizingMaskIntoConstraints = NO;
+  b.bordered = NO;
+  b.bezelStyle = NSBezelStyleShadowlessSquare;
+  b.imageScaling = NSImageScaleProportionallyDown;
+  b.toolTip =
+      KKLoc(@"Lock this colour (kept when the palette regenerates)",
+            @"Tooltip: per-colour lock toggle for the palette generator.");
+  [NSLayoutConstraint activateConstraints:@[
+    [b.widthAnchor constraintEqualToConstant:15.0],
+    [b.heightAnchor constraintEqualToConstant:15.0],
+  ]];
+  return b;
+}
+
+- (void)_updatePaletteLockAppearance {
+  NSImage *img = [NSImage
+      imageWithSystemSymbolName:(_paletteLocked ? @"lock.fill" : @"lock.open")
+       accessibilityDescription:nil];
+  if (img)
+    _lockBtn.image = img;
+  _lockBtn.contentTintColor =
+      _paletteLocked ? [NSColor accentMatchingHost]
+                     : [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
+}
+
+- (void)_paletteLockTapped:(id)sender {
+  [self.window makeFirstResponder:nil];
+  _paletteLocked = !_paletteLocked;
+  [self _updatePaletteLockAppearance];
+  if (self.onPaletteLockToggled)
+    self.onPaletteLockToggled(_paletteLocked);
+}
+
+- (void)applyPaletteLock:(BOOL)locked {
+  _paletteLocked = locked;
+  [self _updatePaletteLockAppearance];
+}
+
+// One momentary palette-bar button (glyph, with a text fallback if the SF
+// symbol is unavailable).
+- (NSButton *)_makePaletteButtonSymbol:(NSString *)symbol
+                                  name:(NSString *)englishName
+                                   tag:(NSInteger)tag
+                                action:(SEL)action {
+  NSString *loc = KKLocalizedParamName(englishName);
+  NSImage *img = [NSImage imageWithSystemSymbolName:symbol
+                           accessibilityDescription:loc];
+  NSButton *b = img ? [NSButton buttonWithImage:img target:self action:action]
+                    : [NSButton buttonWithTitle:loc target:self action:action];
+  b.translatesAutoresizingMaskIntoConstraints = NO;
+  b.bezelStyle = NSBezelStyleRoundRect;
+  b.controlSize = NSControlSizeSmall;
+  b.imageScaling = NSImageScaleProportionallyDown;
+  b.tag = tag;
+  b.toolTip = loc;
+  [b.heightAnchor constraintEqualToConstant:18.0].active = YES;
+  return b;
+}
+
+// Tag = mode index; tapping rerolls in that mode.
+- (NSButton *)_makePaletteModeButton:(NSInteger)mode
+                              symbol:(NSString *)symbol
+                                name:(NSString *)englishName {
+  return [self _makePaletteButtonSymbol:symbol
+                                   name:englishName
+                                    tag:mode
+                                 action:@selector(_paletteModeTapped:)];
+}
+
+- (void)_paletteModeTapped:(id)sender {
+  [self.window makeFirstResponder:nil];
+  if (self.onPaletteGenerate)
+    self.onPaletteGenerate([(NSButton *)sender tag]);
+}
+
+- (void)_paletteRefineTapped:(id)sender {
+  [self.window makeFirstResponder:nil];
+  if (self.onPaletteRefine)
+    self.onPaletteRefine();
 }
 
 // A toggle row is one big click target (like KKCheckboxRowView): the inner
@@ -555,6 +647,8 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   _isToggle = lane.isToggle;
   _autoSizesComponentLabels = lane.autoSizesComponentLabels;
   _oscEditedOnly = lane.oscEditedOnly;
+  _paletteLockable = lane.paletteLockable;
+  _paletteGeneratorBar = lane.paletteGeneratorBar;
   _labelColumnW = labelColumnWidth;
 
   NSTextField *title = _KKMakeCaption(KKLocalizedParamName(lane.label));
@@ -673,7 +767,43 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
 
   NSArray<NSString *> *caps = KKLaneComponentLabels(lane);
   NSArray<NSColor *> *capColors = lane.componentLabelColors;
-  if (_isToggle) {
+  if (_paletteGeneratorBar) {
+    // Not a value editor: a row of momentary mode buttons that reroll the
+    // palette. Each tap fires onPaletteGenerate(mode); the host regenerates the
+    // visible colour lanes (keeping locked swatches).
+    _reset.hidden = YES;
+    NSArray<NSString *> *syms =
+        @[ @"sun.max", @"cloud", @"circle.lefthalf.filled", @"dice" ];
+    NSArray<NSString *> *names = @[ @"Bright", @"Dull", @"Shades", @"Chaotic" ];
+    NSMutableArray<NSView *> *btns = [NSMutableArray array];
+    for (NSInteger m = 0; m < (NSInteger)names.count; m++)
+      [btns addObject:[self _makePaletteModeButton:m
+                                            symbol:syms[m]
+                                              name:names[m]]];
+    // "Vary" button: nudges the current palette instead of rerolling.
+    NSButton *vary =
+        [self _makePaletteButtonSymbol:@"wand.and.stars"
+                                  name:@"Vary"
+                                   tag:0
+                                action:@selector(_paletteRefineTapped:)];
+    [btns addObject:vary];
+    NSStackView *hs = [NSStackView stackViewWithViews:btns];
+    hs.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    hs.alignment = NSLayoutAttributeCenterY;
+    hs.distribution = NSStackViewDistributionFillEqually;
+    hs.spacing = KKPaddingSM;
+    hs.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:hs];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [hs.leadingAnchor constraintEqualToAnchor:title.trailingAnchor
+                                       constant:KKPaddingMD],
+      [hs.trailingAnchor constraintEqualToAnchor:_reset.trailingAnchor],
+      [hs.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+    ]];
+  } else if (_isToggle) {
     // A structural on/off: a single right-aligned checkbox (the shared
     // KKCheckboxView, same glyph as the global-settings / motion-blur rows -
     // not a raw AppKit checkbox). The lane's single value is 0 (off) or 1 (on);
@@ -775,19 +905,38 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
         ss.onColorEditing(editing);
     };
     [self addSubview:_colorWell];
-    [NSLayoutConstraint activateConstraints:@[
+    NSMutableArray<NSLayoutConstraint *> *cc = [NSMutableArray arrayWithArray:@[
       [title.leadingAnchor constraintEqualToAnchor:titleLead
                                           constant:titleLeadInset],
       [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       [_colorWell.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
                                                 constant:-KKPaddingLG],
-      [_colorWell.leadingAnchor
-          constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
-                                      constant:KKPaddingMD],
       [_colorWell.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
       [_colorWell.widthAnchor constraintEqualToConstant:28.0],
       [_colorWell.heightAnchor constraintEqualToConstant:16.0],
     ]];
+    if (_paletteLockable) {
+      // Padlock just left of the swatch: pins this colour so a palette reroll
+      // leaves it untouched. State is transient (the host popover tracks it).
+      _lockBtn = [self _makePaletteLockToggle];
+      [self _updatePaletteLockAppearance];
+      [self addSubview:_lockBtn];
+      [cc addObjectsFromArray:@[
+        [_lockBtn.trailingAnchor
+            constraintEqualToAnchor:_colorWell.leadingAnchor
+                           constant:-KKPaddingSM],
+        [_lockBtn.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+        [_lockBtn.leadingAnchor
+            constraintGreaterThanOrEqualToAnchor:title.trailingAnchor
+                                        constant:KKPaddingMD],
+      ]];
+    } else {
+      [cc addObject:[_colorWell.leadingAnchor
+                        constraintGreaterThanOrEqualToAnchor:title
+                                                                 .trailingAnchor
+                                                    constant:KKPaddingMD]];
+    }
+    [NSLayoutConstraint activateConstraints:cc];
   } else if (_valueType == KKLaneValueTypeGradient) {
     // The shared gradient editor (bar + favourites/reverse/distribute). Stored
     // as a flat [pos, r, g, b, mid] per stop; the row converts to/from

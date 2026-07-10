@@ -79,6 +79,7 @@
 				Plugin/Support/KKConstants.h,
 				Plugin/Support/KKDataBlob.h,
 				Plugin/Support/KKHostInfo.h,
+				Plugin/Support/KKPaletteGenerator.h,
 				Plugin/Support/KKPlayheadPoller.h,
 				Plugin/Support/KKPluginHost.h,
 				Plugin/Support/KKPluginInstanceState.h,

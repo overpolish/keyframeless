@@ -7,6 +7,7 @@
 #import "KKLocalized.h"
 #import "KKMiniViewerView.h"
 #import "KKPaddedScrollView.h"
+#import "KKPaletteGenerator.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
 #import "KKSliderView.h"
@@ -92,6 +93,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // Excluded ("Animate" placeholder) rows aren't in _rowsByLabel; track them so
   // the category filter can hide/show them too.
   NSMutableDictionary<NSString *, NSView *> *_excludedRowsByLabel;
+  // Colour labels the user has pinned via the per-swatch lock toggle. Transient
+  // (never persisted): a palette reroll skips these. Survives row rebuilds
+  // because it lives on the long-lived popover, keyed by lane label.
+  NSMutableSet<NSString *> *_lockedColorLabels;
   CGFloat _labelColumnWidth; // uniform across rows (widest localized name)
   NSArray<KKLane *> *_lanes; // last lanes laid out (for per-category resize)
   // The anchor the category pill (and, when there's no pill, the row stack)
@@ -1013,7 +1018,133 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       if (s->_onGradientTypeChanged)
         s->_onGradientTypeChanged(label, type);
     };
+  // A lockable colour row: restore its transient lock state (survives rebuilds
+  // via the popover's label set) and track toggles for a later palette reroll.
+  if (lane.paletteLockable) {
+    if (!_lockedColorLabels)
+      _lockedColorLabels = [NSMutableSet set];
+    [row applyPaletteLock:[_lockedColorLabels containsObject:label]];
+    row.onPaletteLockToggled = ^(BOOL locked) {
+      __strong typeof(weak) s = weak;
+      if (!s)
+        return;
+      if (locked)
+        [s->_lockedColorLabels addObject:label];
+      else
+        [s->_lockedColorLabels removeObject:label];
+    };
+  }
+  if (lane.paletteGeneratorBar) {
+    row.onPaletteGenerate = ^(NSInteger mode) {
+      __strong typeof(weak) s = weak;
+      [s _generatePaletteWithMode:mode];
+    };
+    row.onPaletteRefine = ^{
+      __strong typeof(weak) s = weak;
+      [s _refinePalette];
+    };
+  }
   return row;
+}
+
+// The conditionally-visible, lockable colour lanes, in row order - the set the
+// generator acts on.
+- (NSArray<NSString *> *)_visiblePaletteLabels {
+  NSSet<NSString *> *visible =
+      KKConditionalVisibleLaneLabels(_lanes, _currentValuesByLabel);
+  NSMutableArray<NSString *> *labels = [NSMutableArray array];
+  for (KKLane *lane in _lanes)
+    if (lane.valueType == KKLaneValueTypeColor && lane.paletteLockable &&
+        [visible containsObject:lane.label])
+      [labels addObject:lane.label];
+  return labels;
+}
+
+- (NSColor *)_currentColorForLabel:(NSString *)label {
+  NSArray<NSNumber *> *v = _currentValuesByLabel[label];
+  if (v.count < 3)
+    return [NSColor whiteColor];
+  return [NSColor colorWithSRGBRed:v[0].doubleValue
+                             green:v[1].doubleValue
+                              blue:v[2].doubleValue
+                             alpha:v.count > 3 ? v[3].doubleValue : 1.0];
+}
+
+// Parallel to `labels`: the locked colour (NSColor) or NSNull for each.
+- (NSArray *)_lockedArrayForLabels:(NSArray<NSString *> *)labels {
+  NSMutableArray *locked = [NSMutableArray arrayWithCapacity:labels.count];
+  for (NSString *label in labels)
+    [locked addObject:([_lockedColorLabels containsObject:label]
+                           ? (id)[self _currentColorForLabel:label]
+                           : (id)[NSNull null])];
+  return locked;
+}
+
+// Write `colors[i]` into `labels[i]` (skipping locked labels): preview + row
+// swatch now, then persist every changed swatch as ONE undo entry. The per-lane
+// drag path can't be used - it defers to a single pending label per bracket, so
+// only the last write would survive; the batch committer exists for this.
+- (void)_commitPaletteColors:(NSArray<NSColor *> *)colors
+                   forLabels:(NSArray<NSString *> *)labels {
+  id<KKMiniViewerDelegate> del = _miniViewer.canvasDelegate;
+  BOOL previews = [del
+      respondsToSelector:@selector(miniViewer:applyConstantValues:forLabel:)];
+  NSMutableArray<NSString *> *changed = [NSMutableArray array];
+  NSMutableArray<NSArray<NSNumber *> *> *changedVals = [NSMutableArray array];
+  for (NSInteger i = 0; i < (NSInteger)labels.count; i++) {
+    NSString *label = labels[i];
+    if ([_lockedColorLabels containsObject:label])
+      continue;
+    NSColor *c = [colors[i] colorUsingColorSpace:[NSColorSpace sRGBColorSpace]]
+                     ?: colors[i];
+    CGFloat r = 0, g = 0, b = 0, a = 1;
+    [c getRed:&r green:&g blue:&b alpha:&a];
+    NSArray<NSNumber *> *vals = @[ @(r), @(g), @(b), @(a) ];
+    _currentValuesByLabel[label] = vals;
+    [_rowsByLabel[label] applyValues:vals];
+    if (previews)
+      [del miniViewer:_miniViewer applyConstantValues:vals forLabel:label];
+    [changed addObject:label];
+    [changedVals addObject:vals];
+  }
+  if (previews) {
+    [_miniViewer setNeedsDisplay:YES];
+    [_miniViewer setHandlesNeedDisplay];
+  }
+  if (changed.count == 0)
+    return;
+  if (_onCommitBatch)
+    _onCommitBatch(changed, changedVals);
+  else if (_onHandleValue)
+    for (NSInteger i = 0; i < (NSInteger)changed.count; i++)
+      _onHandleValue(changed[i], changedVals[i]);
+}
+
+// Reroll the visible palette in `mode`. Locked swatches act as anchors that the
+// regenerated colours interpolate between (see KKPaletteGenerator).
+- (void)_generatePaletteWithMode:(NSInteger)mode {
+  NSArray<NSString *> *labels = [self _visiblePaletteLabels];
+  if (labels.count == 0)
+    return;
+  NSArray<NSColor *> *palette =
+      [KKPaletteGenerator paletteWithMode:(KKPaletteMode)mode
+                                    count:(NSInteger)labels.count
+                                   locked:[self _lockedArrayForLabels:labels]];
+  [self _commitPaletteColors:palette forLabels:labels];
+}
+
+// Nudge the current visible palette instead of rerolling (locked kept).
+- (void)_refinePalette {
+  NSArray<NSString *> *labels = [self _visiblePaletteLabels];
+  if (labels.count == 0)
+    return;
+  NSMutableArray<NSColor *> *current = [NSMutableArray array];
+  for (NSString *label in labels)
+    [current addObject:[self _currentColorForLabel:label]];
+  NSArray<NSColor *> *palette = [KKPaletteGenerator
+      refinedPaletteFrom:current
+                  locked:[self _lockedArrayForLabels:labels]];
+  [self _commitPaletteColors:palette forLabels:labels];
 }
 
 - (void)applyDefaultsProvider:

@@ -597,6 +597,24 @@ static inline NSArray<KKLane *> *MeshBuildAvailableLanes(void) {
     [lanes addObject:lane];
   }
 
+  // --- Palette generator bar: momentary Bright / Dull / Shades / Chaotic /
+  // Golden buttons that reroll the dynamic swatches (keeping any the user has
+  // locked). Sits at the top of the Colours section for every palette-sharing
+  // Type. Carries no value - it is a pure action row.
+  {
+    KKLane *bar = [KKLane laneWithLabel:@"Palette"];
+    bar.paletteGeneratorBar = YES;
+    bar.animatable = NO;
+    bar.enabled = NO;
+    bar.categoryKey = @"Colors";
+    bar.categorySymbol = @"paintpalette";
+    bar.visibleWhenLabel = @"Type";
+    // Every Type has colours (Dithering + Neuro use the fixed lanes below).
+    bar.visibleWhenValues =
+        @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11 ];
+    [lanes addObject:bar];
+  }
+
   // --- Fixed colours first (not removable, so they sit above the dynamic
   // swatches): Dithering background + foreground (ink), the Neuro Mid line
   // colour. Background is shared by Dithering + Grainy + Neuro; Foreground by
@@ -619,6 +637,10 @@ static inline NSArray<KKLane *> *MeshBuildAvailableLanes(void) {
     color.componentMax = @[ @1.0, @1.0, @1.0, @1.0 ];
     color.animatable = YES;
     color.enabled = NO;
+    // Dithering (bg/fg) and Neuro (bg/fg/mid) reroll through the generator too;
+    // Bloom is a God Rays accent, left out of the palette.
+    color.paletteLockable =
+        ![fixedColors[c].label isEqualToString:@"Bloom Color"];
     color.categoryKey = @"Colors";
     color.categorySymbol = @"paintpalette";
     color.visibleWhenLabel = @"Type";
@@ -641,6 +663,7 @@ static inline NSArray<KKLane *> *MeshBuildAvailableLanes(void) {
     color.componentMax = @[ @1.0, @1.0, @1.0, @1.0 ];
     color.animatable = YES; // colours can be keyframed
     color.enabled = NO;
+    color.paletteLockable = YES; // per-swatch lock for the palette generator
     color.categoryKey = @"Colors";
     color.categorySymbol = @"paintpalette";
     color.visibleWhenLabel = @"Type";

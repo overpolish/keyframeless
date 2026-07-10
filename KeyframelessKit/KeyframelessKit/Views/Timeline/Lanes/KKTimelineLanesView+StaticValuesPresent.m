@@ -196,6 +196,18 @@
          editsKeypose:cfg.isBoundary
       initialCategory:cfg.initialCategory];
   staticView.onCategoryChanged = cfg.onCategoryChanged;
+  // Palette reroll: commit every changed swatch inside one drag-undo bracket so
+  // the whole set persists as a single undo entry (the per-lane drag path only
+  // commits one label per bracket, which is why the batch path exists).
+  staticView.onCommitBatch = ^(NSArray<NSString *> *labels,
+                               NSArray<NSArray<NSNumber *> *> *valuesList) {
+    if (cfg.onDragBegin)
+      cfg.onDragBegin();
+    for (NSInteger i = 0; i < (NSInteger)labels.count; i++)
+      commit(labels[i], valuesList[i]);
+    if (cfg.onDragEnd)
+      cfg.onDragEnd();
+  };
   __weak typeof(self) weakSize = self;
   staticView.onSizeChanged = ^(NSInteger sizeIndex) {
     [weakSize _miniViewerSizeDidChange:sizeIndex];

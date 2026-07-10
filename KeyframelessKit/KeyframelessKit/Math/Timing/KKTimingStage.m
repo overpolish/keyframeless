@@ -61,8 +61,8 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   if (self) {
     _curve = KKIntervalCurveEaseInOut;
     // Midpoint defaults (the documented neutral per KKEasing.h) - not max, so a
-    // freshly-picked easing / hold effect starts gentle and is dialed UP, rather
-    // than maxed out and needing to be dialed down. Saved animations are
+    // freshly-picked easing / hold effect starts gentle and is dialed UP,
+    // rather than maxed out and needing to be dialed down. Saved animations are
     // unaffected: the JSON always carries explicit values that override these.
     _intensity = 0.5;
     _frequency = 0.5;
@@ -340,6 +340,8 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   _visibleWhenOrLabel = [tmpl.visibleWhenOrLabel copy];
   _visibleWhenOrValues = [tmpl.visibleWhenOrValues copy];
   _gradientShowsTypeAngle = tmpl.gradientShowsTypeAngle;
+  _paletteLockable = tmpl.paletteLockable;
+  _paletteGeneratorBar = tmpl.paletteGeneratorBar;
   // Slider-only bounds (decoupled from the value clamp) are display metadata
   // too: a rebuilt keypose / boundary lane must carry them or its slider falls
   // back to the wide componentMin/Max (e.g. draw-on Offset's unbounded field ->
@@ -418,6 +420,8 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.visibleWhenOrLabel = [_visibleWhenOrLabel copy];
   c.visibleWhenOrValues = [_visibleWhenOrValues copy];
   c.gradientShowsTypeAngle = _gradientShowsTypeAngle;
+  c.paletteLockable = _paletteLockable;
+  c.paletteGeneratorBar = _paletteGeneratorBar;
   return c;
 }
 

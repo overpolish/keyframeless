@@ -380,6 +380,22 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// Build- time metadata.
 @property(nonatomic) BOOL gradientShowsTypeAngle;
 
+/// When YES a `KKLaneValueTypeColor` row shows a small lock toggle beside its
+/// swatch. A palette generator (see `KKPaletteGenerator`) skips locked colours
+/// when it rerolls, so the user can pin one or more swatches and regenerate the
+/// rest. Default NO, so existing colour lanes are unaffected. The lock STATE is
+/// transient UI (held by the constants popover), not stored on the lane; this
+/// flag only opts the row into showing the control. Build-time metadata.
+@property(nonatomic) BOOL paletteLockable;
+
+/// When YES the row is not a value editor but a palette-generator bar: a set of
+/// momentary mode buttons (Bright / Dull / Shades / Chaotic / Golden). Tapping
+/// one rerolls the visible `paletteLockable` colour lanes via
+/// `KKPaletteGenerator`, keeping any locked swatches. The lane carries no value
+/// (valueType Generic, not animatable). Place it first in the colour category
+/// so it sits above the swatches. Build-time metadata.
+@property(nonatomic) BOOL paletteGeneratorBar;
+
 + (instancetype)laneWithLabel:(NSString *)label;
 
 /// Standard FCP-style opacity lane (one whole-percentage component 0..100,
