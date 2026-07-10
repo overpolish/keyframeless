@@ -64,6 +64,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// need. Ignored once real source slots are published (they carry their own).
 @property(nonatomic) CGSize mediaSize;
 
+/// Largest source frame size seen by the publish gate, for a FILTER path. FCP
+/// re-runs the same instance at a tiny project-library / browser-thumbnail size
+/// (~112x64, ~same aspect as the timeline), which the aspect gate can't catch;
+/// publishing it would size the mini-viewer's media + OSC to the thumbnail and
+/// draw it upscaled/blurry. The publish gate tracks the largest seen here and
+/// skips materially-smaller frames. Not persisted.
+@property(nonatomic) CGSize largestSourceSizeSeen;
+
 /// Publish whatever state the feed currently has (no surface update). Used
 /// when only `slotCount` changes - consumers need a fresh descriptor.
 - (void)publishDescriptor;

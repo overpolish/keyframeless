@@ -84,6 +84,21 @@
                       sTile.top == sImg.top && sTile.bottom == sImg.bottom);
     if (!fullFrame)
       continue;
+    int sW = sImg.right - sImg.left, sH = sImg.top - sImg.bottom;
+    // Size gate: FCP re-runs this instance for the tiny project-library /
+    // browser thumbnail (~112x64, ~same aspect as the timeline), which the
+    // aspect gate below can't catch. Publishing it would size the mini-viewer's
+    // media + OSC/crop to the thumbnail and draw it upscaled/blurry. Track the
+    // largest source seen and skip any frame materially smaller in either
+    // dimension (< 1/4 - allows half/quarter-res proxy renders, rejects the
+    // thumbnail). Covers the changesOutputSize path too (it skips the aspect
+    // gate). Mirrors the generator's largest-size-seen guard.
+    CGSize maxSrc = self.miniViewerFeed.largestSourceSizeSeen;
+    if (maxSrc.width > 0 && maxSrc.height > 0 &&
+        (sW < maxSrc.width / 4.0 || sH < maxSrc.height / 4.0))
+      continue;
+    if ((double)sW * sH > (double)maxSrc.width * maxSrc.height)
+      self.miniViewerFeed.largestSourceSizeSeen = CGSizeMake(sW, sH);
     // FCP's project-library preview re-runs the effect into a browser-thumb
     // destination while passing the same source → aspect ping-pong. Gate on
     // dest aspect matching the source within a generous tolerance. SKIP this
@@ -92,7 +107,6 @@
     // and the feed would never publish (IOSurfaceLookup failures downstream).
     if (!changesOutputSize) {
       FxRect dImg = destinationImage.imagePixelBounds;
-      int sW = sImg.right - sImg.left, sH = sImg.top - sImg.bottom;
       int dW = dImg.right - dImg.left, dH = dImg.top - dImg.bottom;
       double sAsp = (sH > 0) ? fabs((double)sW / (double)sH) : 0;
       double dAsp = (dH > 0) ? fabs((double)dW / (double)dH) : 0;
