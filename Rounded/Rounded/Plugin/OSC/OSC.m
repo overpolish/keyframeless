@@ -108,8 +108,8 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
 
 @implementation RoundedOSC {
   // Radius handle glyph: the shared KKRingOSC, so it matches Canvas's corner
-  // widget + Glow's radius ring. RoundedOSC stays a KKPointOSC for hit-testing /
-  // drag / guide logic; only the drawn glyph changes.
+  // widget + Glow's radius ring. RoundedOSC stays a KKPointOSC for hit-testing
+  // / drag / guide logic; only the drawn glyph changes.
   KKRingOSC *_ringGlyph;
 }
 
@@ -124,11 +124,12 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
     // White for legibility on any background, matching the mini-viewer radius
     // handle + Canvas's corner ring.
     self.fillColorOverride = [NSColor whiteColor];
-    // The radius handle draws as the shared ring glyph (see -drawAtCanvasPosition
-    // override) - white, crisp ring shader. Sized to the old point's footprint
-    // so hit-testing (still KKPointOSC) stays aligned.
+    // The radius handle draws as the shared ring glyph (see
+    // -drawAtCanvasPosition override) - white, crisp ring shader. Sized to the
+    // old point's footprint so hit-testing (still KKPointOSC) stays aligned.
     _ringGlyph = [[KKRingOSC alloc] initWithAPIManager:apiManager];
-    [_ringGlyph applyRadiusWidgetStyle]; // shared style with Canvas's corner widget
+    [_ringGlyph
+        applyRadiusWidgetStyle]; // shared style with Canvas's corner widget
     _ringGlyph.tintColor = [NSColor whiteColor];
 
     // Crop OSC: model-agnostic block-based I/O. Reads from / writes to the
@@ -480,6 +481,10 @@ double RoundedGuideRadiusForScreenPoint(NSPoint screenPt) {
       }
     }
   }
+  // Motion full-preview Opt-reveal fallback (shared kit machinery): claim a
+  // background part over empty canvas so Motion keeps reporting OPTION on
+  // hover.
+  *activePart = [self kkOSCBackgroundPartFallbackForActivePart:*activePart];
   // The only place screen + canvas coords arrive together. Hand it to the
   // bridge: it velocity-gates the sample, re-anchors the screen↔canvas map,
   // recomputes the viewer rect, and posts the position notification. The

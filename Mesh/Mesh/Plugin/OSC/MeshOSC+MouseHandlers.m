@@ -10,8 +10,9 @@
 
 @implementation MeshOSC (MouseHandlers)
 
-// Hover carries the modifier bit reliably: track opt-reveal here. Shared
-// machinery on KKOnScreenControl.
+// Track opt-reveal on hover (shared KKOnScreenControl machinery). Motion only
+// reports the OPTION modifier while the hit-test claims a part; the hit-test's
+// full-preview background-part fallback keeps that true over empty canvas too.
 - (void)mouseMovedAtPositionX:(double)positionX
                     positionY:(double)positionY
                    activePart:(NSInteger)activePart

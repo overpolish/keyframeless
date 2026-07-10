@@ -10,6 +10,7 @@
 #import <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKPluginInstanceState.h>
@@ -280,6 +281,21 @@
 
 - (void)kkResetOptHideArming {
   _kkInteractionArmed = NO;
+}
+
+const NSInteger KKOSCBackgroundPart = NSIntegerMax - 1;
+
+- (NSInteger)kkOSCBackgroundPartFallbackForActivePart:(NSInteger)activePart {
+  if (activePart != 0 || [KKHostInfo isRunningInFinalCut])
+    return activePart;
+  // Nothing hittable under the cursor and we're in Motion: reset any stale
+  // reveal/eye cursor a control left behind, then claim the background part so
+  // the host keeps a "part" under the cursor everywhere and reports OPTION on
+  // hover (Motion only reports it while the hit-test claims a part).
+  id<FxOnScreenControlAPI_v4> oscAPI =
+      [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  [oscAPI setCursor:[NSCursor arrowCursor]];
+  return KKOSCBackgroundPart;
 }
 
 // FCP doesn't hand the viewer a reliable mouseDown, but it drives the press /

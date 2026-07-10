@@ -416,6 +416,9 @@ NSArray<NSNumber *> *GlowGuideRadiusValuesForScreenPoint(NSPoint screenPt) {
   }
   if (*activePart != kOSCRadiusPart)
     [_radiusRing clearCursorIfSet];
+  // Motion full-preview Opt-reveal fallback (shared kit machinery): claim a
+  // background part over empty canvas so Motion keeps reporting OPTION on hover.
+  *activePart = [self kkOSCBackgroundPartFallbackForActivePart:*activePart];
 
   // The only place screen + canvas coords arrive together. Feed the bridge: it
   // velocity-gates the sample, re-anchors the screen↔canvas map, recomputes the

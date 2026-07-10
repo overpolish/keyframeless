@@ -306,6 +306,11 @@ double MeshGuideRadiusForScreenPoint(NSPoint screenPt) {
       *activePart = kOSCRotationPart;
   }
 
+  // Motion-only full-preview Opt-reveal fallback (shared kit machinery): claims
+  // a background part when nothing real was hit so the OPTION modifier keeps
+  // being reported on hover over empty canvas, and clears any stale eye cursor.
+  *activePart = [self kkOSCBackgroundPartFallbackForActivePart:*activePart];
+
   // The only place screen + canvas coords arrive together: feed the guide
   // bridge (velocity-gated re-anchor + viewer-rect recompute + position
   // notification).

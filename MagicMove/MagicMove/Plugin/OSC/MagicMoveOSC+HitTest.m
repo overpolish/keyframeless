@@ -73,6 +73,10 @@
   self.rotationOSC.optRevealActive = self.optRevealActive;
   if ([self.rotationOSC hitTestRingAtX:positionX y:positionY atTime:time] >= 0)
     *activePart = kOSCRotationPart;
+  // Motion full-preview Opt-reveal fallback (shared kit machinery): claim a
+  // background part over empty canvas so Motion keeps reporting OPTION on
+  // hover.
+  *activePart = [self kkOSCBackgroundPartFallbackForActivePart:*activePart];
 }
 
 @end
