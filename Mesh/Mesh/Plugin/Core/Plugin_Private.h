@@ -32,6 +32,11 @@ NS_ASSUME_NONNULL_BEGIN
 @interface MeshPlugin (CustomUI)
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED;
 + (NSArray<KKLane *> *)availableLanes;
+/// The OSC-visibility compound groups (Origin / Path / Scale / Rotation).
+/// Single source of truth: createView wires these and parameterChanged
+/// refreshes from them, so the element-key list can't drift out of sync (which
+/// silently breaks OSC hide persistence + opt-click).
++ (NSArray<NSArray<NSString *> *> *)oscCompounds;
 @end
 
 @interface MeshPlugin (Render)

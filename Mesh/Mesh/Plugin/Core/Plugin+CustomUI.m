@@ -36,6 +36,10 @@
   return MeshBuildAvailableLanes();
 }
 
++ (NSArray<NSArray<NSString *> *> *)oscCompounds {
+  return @[ @[ @"Origin" ], @[ @"Path" ], @[ @"Scale" ], @[ @"Rotation" ] ];
+}
+
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kParamInspectorUI) {
     id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
@@ -132,8 +136,7 @@
     // default of an untouched (not-yet-in-timeline) constant Scale.
     if ([oscRenderer isKindOfClass:[MeshMiniViewerRenderer class]])
       ((MeshMiniViewerRenderer *)oscRenderer).laneTemplates = available;
-    NSArray<NSArray<NSString *> *> *oscCompounds =
-        @[ @[ @"Origin" ], @[ @"Path" ], @[ @"Scale" ], @[ @"Rotation" ] ];
+    NSArray<NSArray<NSString *> *> *oscCompounds = [MeshPlugin oscCompounds];
     oscRenderer.handlesHidden = !oscMasterVisible;
     [self kkApplyOSCVisibilityFromState:uiState
                             elementKeys:[KKPlugin kkOSCElementKeysForCompounds:

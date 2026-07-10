@@ -946,10 +946,20 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   } else if ([self _rotationActiveForContentRect:cr] &&
              [self rotationHitTestAtPoint:p contentRect:cr] &&
              self.rotationLabel) {
-    NSString *axis = (_rotActiveAxis == 0)   ? @"X"
-                     : (_rotActiveAxis == 1) ? @"Y"
-                                             : @"Z";
-    label = [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
+    // A single-axis rotation gizmo is keyed on the FLAT label (matching the
+    // viewer OSC's -oscElementKeyForActivePart:); only a multi-axis gizmo
+    // qualifies the key by axis. Emitting "Rotation.Z" for a single-axis lane
+    // would toggle a key nothing else checks, so the hide would silently no-op.
+    KKRotationAxes axes = [self rotationEnabledAxes];
+    BOOL singleAxis = axes != 0 && (axes & (axes - 1)) == 0;
+    if (singleAxis) {
+      label = self.rotationLabel;
+    } else {
+      NSString *axis = (_rotActiveAxis == 0)   ? @"X"
+                       : (_rotActiveAxis == 1) ? @"Y"
+                                               : @"Z";
+      label = [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
+    }
   } else if ([self _pointActiveForContentRect:cr] &&
              [self pointHandleHitAtPoint:p contentRect:cr] && self.pointLabel) {
     label = self.pointLabel;

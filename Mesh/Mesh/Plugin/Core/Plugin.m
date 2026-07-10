@@ -4,8 +4,8 @@
  */
 
 #import "Constants.h"
-#import "Plugin_Private.h"
 #import "MeshOSCRadiusMath.h"
+#import "Plugin_Private.h"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wprotocol"
@@ -69,7 +69,9 @@
                                      view:self.inspectorView
                                  renderer:(KKMiniViewerRenderer *)self
                                               .inspectorView.miniViewerDelegate
-                              elementKeys:@[ @"Radius", @"Crop" ]];
+                              elementKeys:[KKPlugin
+                                              kkOSCElementKeysForCompounds:
+                                                  [MeshPlugin oscCompounds]]];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];
