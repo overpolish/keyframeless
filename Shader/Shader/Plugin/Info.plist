@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>ShaderXPCService</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<key>CFBundleShortVersionString</key>
+	<string>4.0.1</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>NSHumanReadableCopyright</key>
+	<string></string>
+	<key>PlugInKit</key>
+	<dict>
+		<key>Attributes</key>
+		<dict>
+			<key>com.apple.protocol</key>
+			<string>FxPlug</string>
+			<key>com.apple.version</key>
+			<string>1.1</string>
+		</dict>
+		<key>PrincipalClass</key>
+		<string>FxPrincipal</string>
+		<key>Protocol</key>
+		<string>PROXPCProtocol</string>
+		<key>Subsystems</key>
+		<array>
+			<string>NSViewService_PKSubsystem</string>
+		</array>
+	</dict>
+	<key>ProPlugDictionaryVersion</key>
+	<string>1.0</string>
+	<key>ProPlugDynamicRegistration</key>
+	<false/>
+	<key>ProPlugPlugInGroupList</key>
+	<array>
+		<dict>
+			<key>groupName</key>
+			<string>Shader Group</string>
+			<key>uuid</key>
+			<string>FA5E9AB4-5D09-4388-ACA3-73FD0BE2426D</string>
+		</dict>
+	</array>
+	<key>ProPlugPlugInList</key>
+	<array>
+		<dict>
+			<key>className</key>
+			<string>ShaderPlugin</string>
+			<key>displayName</key>
+			<string>Shader::FxPlug Name</string>
+			<key>group</key>
+			<string>FA5E9AB4-5D09-4388-ACA3-73FD0BE2426D</string>
+			<key>infoString</key>
+			<string>Shader::FxPlug Description</string>
+			<key>protocolNames</key>
+			<array>
+				<string>FxGenerator</string>
+			</array>
+			<key>uuid</key>
+			<string>BDEF9781-199A-4BA3-989E-37D8C605EE1B</string>
+			<key>version</key>
+			<string>1.0</string>
+		</dict>
+		<dict>
+			<key>className</key>
+			<string>ShaderOSC</string>
+			<key>displayName</key>
+			<string>Shader OSC</string>
+			<key>group</key>
+			<string>FA5E9AB4-5D09-4388-ACA3-73FD0BE2426D</string>
+			<key>infoString</key>
+			<string>Shader On-Screen Control</string>
+			<key>protocolNames</key>
+			<array>
+				<string>FxOnScreenControl</string>
+			</array>
+			<key>supportedPlugins</key>
+			<array>
+				<string>BDEF9781-199A-4BA3-989E-37D8C605EE1B</string>
+			</array>
+			<key>uuid</key>
+			<string>A62BFBC2-D38E-4EA3-809B-9B0FB3E2EB99</string>
+			<key>version</key>
+			<string>1.0</string>
+		</dict>
+	</array>
+	<key>XPCService</key>
+	<dict>
+		<key>JoinExistingSession</key>
+		<true/>
+		<key>RunLoopType</key>
+		<string>_NSApplicationMain</string>
+		<key>ServiceType</key>
+		<string>Application</string>
+		<key>_AdditionalSubServices</key>
+		<dict>
+			<key>viewbridge</key>
+			<true/>
+		</dict>
+	</dict>
+</dict>
+</plist>

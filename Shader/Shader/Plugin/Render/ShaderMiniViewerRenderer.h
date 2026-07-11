@@ -1,0 +1,39 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#pragma once
+
+#import <Foundation/Foundation.h>
+#import <KeyframelessKit/KeyframelessKit.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+/// Cross-process rendezvous path: the render side's `KKMiniViewerFeed`
+/// publishes here and the inspector's `KKMiniViewerView` consumes it.
+extern NSString *const ShaderMiniViewerDescriptorPath;
+
+/// Reverse channel: the boundary-value popover (ViewBridge side) writes the
+/// requested clip fraction here; the render side reads it in
+/// `-scheduleInputs:` to also pull that frame for the preview.
+extern NSString *const ShaderMiniViewerRequestPath;
+
+/// Per-instance rendezvous paths keyed by the instance UUID. Two stacked
+/// Shader clips must read/write distinct `/tmp` files, otherwise the top
+/// clip's render pollutes the feed the clip below reads (its mini-viewer shows
+/// the wrong source). Falls back to the static path when `uuid` is empty.
+NSString *ShaderMiniViewerDescriptorPathForUUID(NSString *_Nullable uuid);
+NSString *ShaderMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
+
+/// Shader's mini-viewer delegate: the generic handle/timeline scaffolding lives
+/// in `KKMiniViewerRenderer`; this subclass only supplies the Shader render and
+/// its on-screen controls (Origin / Scale / Rotation). MRR (non-ARC).
+@interface ShaderMiniViewerRenderer : KKMiniViewerRenderer
+/// The plugin's lane templates (`+[ShaderPlugin availableLanes]`), set by the
+/// inspector. Used by `-templateLaneForLabel:` so the Scale box reads the
+/// aspect-link default for an untouched (not-yet-in-timeline) constant Scale.
+@property(nonatomic, copy, nullable) NSArray<KKLane *> *laneTemplates;
+@end
+
+NS_ASSUME_NONNULL_END
