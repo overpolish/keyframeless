@@ -40,14 +40,18 @@ extern BOOL MeshHasCanvasReference(void);
 /// with the OSC handle's current canvas position. Call on the press so the
 /// drag uses a mapping that survived zoom-to-fit. No-op until drawOSC has run.
 extern void MeshOSCCaptureGuideAnchorAtScreen(NSPoint screenPt);
-/// Pushes the live radius the guide drag is writing so the OSC handle can
-/// track it from the drawOSC tick (the blob is unreadable there).
-extern void MeshSetGuideRadius(double radius);
-/// Maps a screen point to the radius that would place the OSC handle under it,
-/// using the OSC's own geometry. Gives the guide drag the exact 1:1 scale of
-/// a native OSC drag. Falls back to the last guide radius until geometry is
-/// cached by the bridge.
-extern double MeshGuideRadiusForScreenPoint(NSPoint screenPt);
+/// Pushes the live Origin position (object [0,1] space) the guide drag is
+/// writing so the OSC handle can track it from the drawOSC tick (the blob is
+/// unreadable there). Mirrors MagicMove's Position guide plumbing.
+extern void MeshSetGuidePosition(double objX, double objY);
+/// The object-space Origin position the OSC guide's interactive drag targets.
+extern CGPoint MeshGuideTargetObjectPosition(void);
+/// Maps a screen point to the Origin position (object [0,1] space) under it,
+/// via the bridge's cached viewer rect. Returns NO until that geometry is
+/// available. Gives the guide drag the same 1:1 mapping a native Origin drag
+/// uses.
+extern BOOL MeshGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
+                                            double *outY);
 
 static const UInt32 kParamInspectorUI = 200;
 static const UInt32 kParamUIState = 201;
@@ -56,7 +60,3 @@ static const UInt32 kParamUIState = 201;
 /// re-runs -scheduleInputs: for the (otherwise cached) static frame, letting
 /// the boundary preview resolve without manual scrubbing.
 static const UInt32 kParamRenderNudge = 202;
-
-/// Radius value (in radius units) that the OSC guide targets during the
-/// interactive drag step. Shared between OSC.m and MeshInspectorView.m.
-static const double kOSCGuideTargetRadius = 60.0;

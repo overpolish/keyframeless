@@ -11,7 +11,7 @@
 #import "MeshLaneCatalog.h"
 #import "MeshLocalized.h"
 #import "MeshMiniViewerRenderer.h" // per-instance mini-viewer rendezvous paths
-#import "MeshOSCRadiusMath.h"
+#import "MeshOSCRadiusMath.h" // OSC timeline snapshot + frame-duration statics
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKColorLanes.h>
@@ -65,9 +65,9 @@
 
     // Cold-boot seed for the OSC. Without this, the first drawOSC tick after
     // FCP relaunch sees an empty snapshot → falls through to "no lane =
-    // constant", radius reads default 20, crop reads [1,1,0,0] → handle is
-    // visible at the canvas TR regardless of saved state. parameterChanged
-    // eventually catches up, but only after a redraw nudge.
+    // constant", Origin reads default 0.5,0.5 → the handle sits at frame
+    // centre regardless of saved state. parameterChanged eventually catches
+    // up, but only after a redraw nudge.
     MeshSetTimelineSnapshot(timeline);
 
     // Frame + clip duration for the keypose-snap epsilon AND the basic-view
@@ -446,8 +446,7 @@
 
 - (NSArray<KKHelpSection *> *)helpSections {
   // Quick reference: short overview + parameter list (single-sourced from
-  // mesh.md), then an on-screen-control shortcuts table. The per-property
-  // deep docs (radius/box-crop.md) stay AI-only.
+  // mesh.md), then an on-screen-control shortcuts table.
   KKHelpSection *overview = [self
       helpSectionFromKnowledgeTopic:@"mesh"
                               title:RLoc(@"Mesh",
@@ -460,14 +459,17 @@
 
   NSMutableArray<KKHelpShortcut *> *rows = [@[
     [KKHelpShortcut
-        shortcutWithKeysMarkup:RLoc(@"Drag the Radius handle",
+        shortcutWithKeysMarkup:RLoc(@"Drag the centre handle",
                                     @"Shortcut keys.")
-                    descMarkup:RLoc(@"Set the corner rounding on the canvas",
+                    descMarkup:RLoc(@"Move the pattern's origin on the canvas",
                                     @"Help shortcut.")],
     [KKHelpShortcut
-        shortcutWithKeysMarkup:RLoc(@"Drag a Crop edge or corner",
+        shortcutWithKeysMarkup:RLoc(@"Drag the scale box", @"Shortcut keys.")
+                    descMarkup:RLoc(@"Resize the pattern", @"Help shortcut.")],
+    [KKHelpShortcut
+        shortcutWithKeysMarkup:RLoc(@"Drag the rotation ring",
                                     @"Shortcut keys.")
-                    descMarkup:RLoc(@"Crop from that side", @"Help shortcut.")],
+                    descMarkup:RLoc(@"Rotate the pattern", @"Help shortcut.")],
   ] mutableCopy];
   [rows addObjectsFromArray:[KKPlugin sharedOnScreenControlShortcuts]];
 

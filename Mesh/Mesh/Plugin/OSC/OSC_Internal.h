@@ -13,7 +13,7 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface MeshOSC ()
+@interface MeshOSC () <KKPositionGuideProvider>
 /// The reusable Origin Position control (arc handle + motion path). MeshOSC is
 /// the single FxPlug control and forwards draw / hit-test / mouse to it.
 @property(nonatomic, retain) KKPositionOSC *originController;

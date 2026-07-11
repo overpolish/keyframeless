@@ -14,111 +14,121 @@
 #import <KeyframelessKit/KKTimingGuide.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
-// Tolerance (radius units) within which the drag snaps to / counts as on the
+// Object-space tolerance within which the drag snaps to / counts as on the
 // glowing target.
-static const double kMeshOSCGuideTargetSnap = 4.0;
+static const double kMeshOSCGuideTargetSnap = 0.04;
 
-// Build a single-keypose Radius timeline at `radius` - the live value the
-// interactive OSC drag applies.
-static KKTimeline *MeshGuideTimelineWithRadius(double radius) {
+// Build a single-keypose Origin timeline at object-space (objX, objY) - the
+// live value the interactive OSC drag applies.
+static KKTimeline *MeshGuideOriginTimeline(double objX, double objY) {
   KKTimeline *tl = [KKTimeline timeline];
-  KKLane *radiusLane = [KKLane laneWithLabel:@"Radius"];
-  radiusLane.enabled = YES;
-  radiusLane.valueType = KKLaneValueTypeFloat;
-  radiusLane.componentMin = @[ @0.0 ];
-  radiusLane.componentMax = @[ @100.0 ];
-  radiusLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
-                                             values:@[ @(radius) ]] ];
-  tl.lanes = @[ radiusLane ];
+  KKLane *lane = [KKLane laneWithLabel:@"Origin"];
+  lane.enabled = YES;
+  lane.valueType = KKLaneValueTypeGeneric;
+  lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                       values:@[ @(objX), @(objY) ]] ];
+  tl.lanes = @[ lane ];
   return tl;
 }
 
-static double MeshGuideCurrentRadius(KKTimelineLanesView *lanes) {
+static NSPoint MeshGuideCurrentOrigin(KKTimelineLanesView *lanes) {
   for (KKLane *lane in lanes.currentTimeline.lanes) {
-    if ([lane.label isEqualToString:@"Radius"] && lane.keyposes.count > 0) {
+    if ([lane.label isEqualToString:@"Origin"] && lane.keyposes.count > 0) {
       KKKeyPose *kp = lane.keyposes.firstObject;
-      if (kp.values.count > 0)
-        return [kp.values.firstObject doubleValue];
+      if (kp.values.count >= 2)
+        return NSMakePoint(kp.values[0].doubleValue, kp.values[1].doubleValue);
     }
   }
-  return 20.0;
+  return NSMakePoint(0.5, 0.5);
+}
+
+static BOOL MeshGuideOriginNearTarget(NSPoint p) {
+  CGPoint t = MeshGuideTargetObjectPosition();
+  return hypot(p.x - t.x, p.y - t.y) < kMeshOSCGuideTargetSnap;
 }
 
 @implementation MeshInspectorView (BasicTimingGuide)
 
-// Mesh's timing-guide data: it teaches Radius (with Crop as the second
-// Advanced-seed lane). The inspector-level bridges (play button, tabs, scrub,
-// play-accent, preview) come pre-wired from -makeTimingGuideConfig; only the
-// plugin data + the viewer rect (from Mesh's OSC bridge) are filled here.
+// Mesh's timing-guide data: it teaches the Origin lane (with Scale as the
+// second Advanced-seed lane). The inspector-level bridges (play button, tabs,
+// scrub, play-accent, preview) come pre-wired from -makeTimingGuideConfig; only
+// the plugin data + the viewer rect (from Mesh's OSC bridge) are filled here.
 // Installed as the inspector's timingGuideConfigProvider in -init.
 - (KKTimingGuideConfig *)_timingGuideConfig {
   KKTimingGuideConfig *cfg = [self makeTimingGuideConfig];
-  cfg.primaryLabel = @"Radius";
-  cfg.secondaryLabel = @"Crop";
+  cfg.primaryLabel = @"Origin";
   // OSCs to keep visible while this guide runs (the rest are hidden).
-  cfg.oscKeepLabels = @[ @"Radius" ];
-  cfg.primaryComponentCount = 1;
-  cfg.primaryValueType = KKLaneValueTypeFloat;
-  cfg.primarySeedValues = @[ @20.0 ];
-  // Destination the constants step drags the Radius dot to.
-  cfg.primaryTargetValues = @[ @40.0 ];
-  // A different value for the keypose-edit drag so the dot visibly moves.
-  cfg.keyposeTargetValues = @[ @70.0 ];
-  cfg.secondaryValueType = KKLaneValueTypeCrop;
-  cfg.secondarySeedValues = @[ @1.0, @1.0, @0.0, @0.0 ];
-  // Mini-viewer guide: four visibly distinct radii (sharp -> fully mesh) so
-  // the filmstrip / onion-skin frames are clearly different.
+  cfg.oscKeepLabels = @[ @"Origin" ];
+  cfg.primaryComponentCount = 2;
+  cfg.primaryValueType = KKLaneValueTypeGeneric;
+  cfg.primarySeedValues = @[ @0.5, @0.5 ];
+  // Second lane in the Advanced seed, so the per-property timeline + marquee
+  // multi-select are taught across two rows. Scale is a non-featured lane (not
+  // in the Origin-only keypose mini-viewer), so seeding it can't disturb the
+  // featured Origin handle.
+  cfg.secondaryLabel = @"Scale";
+  cfg.secondaryValueType = KKLaneValueTypeFloat;
+  cfg.secondarySeedValues = @[ @100.0, @100.0 ];
+  // Destination the constants step drags Origin to (off-centre from the seeded
+  // centre, normalized 0..1).
+  cfg.primaryTargetValues = @[ @0.7, @0.35 ];
+  // A different spot for the keypose-edit drag so the handle visibly moves.
+  cfg.keyposeTargetValues = @[ @0.3, @0.62 ];
+  // Mini-viewer guide: four corner positions so the pattern visibly moves
+  // around the frame across the filmstrip / onion-skin frames.
   cfg.miniViewerSeedValues =
-      @[ @[ @5.0 ], @[ @35.0 ], @[ @70.0 ], @[ @100.0 ] ];
+      @[ @[ @0.3, @0.3 ], @[ @0.7, @0.3 ], @[ @0.7, @0.7 ], @[ @0.3, @0.7 ] ];
   cfg.viewerScreenRect = ^NSRect {
     return MeshSharedOSCGuideBridge().estimatedViewerScreenRect;
   };
   cfg.oscGuideBridge = ^KKOSCGuideBridge * {
     return MeshSharedOSCGuideBridge();
   };
-  // The pill step disables Crop (not Radius), so the keypose mini-viewer (which
-  // shows only the featured Radius lane) stays populated for the later steps.
-  cfg.oscDisableLabel = @"Crop";
-  // The OSC-shape strategy: how a viewer drag maps to the Radius value and back
-  // (pure math; the shared guide owns the copy). Radius is scalar, so values
-  // box as NSNumber.
+  // The pill step disables Scale (not Origin), so the keypose mini-viewer
+  // (which shows only the featured Origin lane) stays populated for the later
+  // steps.
+  cfg.oscDisableLabel = @"Scale";
+  // The OSC-shape strategy: how a viewer drag maps to the 2D Origin value and
+  // back (pure math; the shared guide owns the copy). Origin is a point, so
+  // values box as NSValue.
   __weak KKTimelineLanesView *weakLanes = self.basicLanesView;
   __weak typeof(self) weakSelf = self;
   cfg.oscGuideStrategy = ^KKOSCGuideStrategy * {
     KKOSCGuideStrategy *s = [[KKOSCGuideStrategy alloc] init];
-    s.captureAnchorAtScreen = ^(NSPoint pt) {
-      MeshOSCCaptureGuideAnchorAtScreen(pt);
-    };
     s.currentValue = ^id {
-      return @(MeshGuideCurrentRadius(weakLanes));
+      return [NSValue valueWithPoint:MeshGuideCurrentOrigin(weakLanes)];
     };
     s.setLiveValue = ^(id v) {
-      MeshSetGuideRadius([v doubleValue]); // OSC handle tracks the drag
+      NSPoint p = [v pointValue];
+      MeshSetGuidePosition(p.x, p.y); // OSC handle tracks the drag
     };
     s.valueForScreenPoint = ^id(NSPoint pt) {
-      return @(MeshGuideRadiusForScreenPoint(pt));
+      double x = 0.5, y = 0.5;
+      MeshGuidePositionForScreenPoint(pt, &x, &y);
+      return [NSValue valueWithPoint:NSMakePoint(x, y)];
     };
     s.applyValue = ^(id v) {
-      double radius = [v doubleValue];
-      MeshSetGuideRadius(radius);
+      NSPoint p = [v pointValue];
+      MeshSetGuidePosition(p.x, p.y);
       KKTimelineLanesView *lanes = weakLanes;
-      KKTimeline *tl = MeshGuideTimelineWithRadius(radius);
+      KKTimeline *tl = MeshGuideOriginTimeline(p.x, p.y);
       [lanes applyTimeline:tl];
       __strong typeof(weakSelf) strong = weakSelf;
       if (strong.onTimelineMutated)
         strong.onTimelineMutated(tl);
     };
     s.valueOnTarget = ^BOOL(id v) {
-      return fabs([v doubleValue] - kOSCGuideTargetRadius) <
-             kMeshOSCGuideTargetSnap;
+      return MeshGuideOriginNearTarget([v pointValue]);
     };
     s.snapValue = ^id(id v) {
-      return (fabs([v doubleValue] - kOSCGuideTargetRadius) <
-              kMeshOSCGuideTargetSnap)
-                 ? @(kOSCGuideTargetRadius)
-                 : v;
+      NSPoint p = [v pointValue];
+      if (MeshGuideOriginNearTarget(p)) {
+        CGPoint t = MeshGuideTargetObjectPosition();
+        return [NSValue valueWithPoint:NSMakePoint(t.x, t.y)];
+      }
+      return v;
     };
-    // The Radius handle's hover cursor (same as the real OSC's
+    // The Origin handle's hover cursor (same as the real OSC's
     // KKPointMoveCursor), presented through the pass-through overlay.
     s.cursorForScreenPoint = ^NSCursor *(NSPoint pt) {
       return KKPointMoveCursor();

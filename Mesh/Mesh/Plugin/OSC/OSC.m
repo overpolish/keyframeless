@@ -5,7 +5,6 @@
 
 #import "OSC.h"
 #import "Constants.h"
-#import "MeshOSCRadiusMath.h"
 #import "OSC_Internal.h"
 #import "Plugin_Private.h" // +[MeshPlugin availableLanes] (Origin template lane)
 #import <FxPlug/FxPlugSDK.h>
@@ -60,36 +59,38 @@ void MeshOSCCaptureGuideAnchorAtScreen(NSPoint screenPt) {
               @"(drawOSC has not run)");
 }
 
-// Guide-scoped value push (legacy radius-guide plumbing; kept so the inspector
-// timing guide keeps compiling until it is reworked onto the Origin handle).
-static double sGuideRadius = 20.0;
+// Guide-scoped Origin position (object [0,1] space). The OSC can't read the
+// timeline blob from the drawOSC tick (FxParameterRetrievalAPI is nil there),
+// so during the OSC guide the inspector drag pushes the live position here and
+// the handle tracks it - mirrors MagicMove's sGuidePosition.
+static CGPoint sGuidePosition = {0.5, 0.5};
 
-void MeshSetGuideRadius(double radius) { sGuideRadius = radius; }
+// Object-space target the interactive drag nudges the Origin handle toward
+// (offset from the 0.5,0.5 seed so the move is clearly visible).
+static const CGPoint kMeshGuideTargetObject = {0.7, 0.35};
 
-double MeshGuideRadiusForScreenPoint(NSPoint screenPt) {
+void MeshSetGuidePosition(double objX, double objY) {
+  sGuidePosition = CGPointMake(objX, objY);
+}
+
+CGPoint MeshGuideTargetObjectPosition(void) { return kMeshGuideTargetObject; }
+
+// Inverse map: a screen point → object-space Origin position via the bridge's
+// cached viewer rect. Object [0,1]^2 maps to the viewer rect corners, so the
+// value is the normalized position within that rect - the canvas terms cancel.
+BOOL MeshGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
+                                     double *outY) {
   KKOSCGuideBridge *b = MeshGuideBridge();
   NSRect vr = b.estimatedViewerScreenRect;
-  CGPoint tr = b.currentCanvasTopRight, bl = b.currentCanvasBottomLeft;
-  if (!b.geometryValid || NSIsEmptyRect(vr) || fabs(tr.x - bl.x) < 1e-3 ||
-      fabs(tr.y - bl.y) < 1e-3)
-    return sGuideRadius;
-  double oscSize = sCurrentOSC ? sCurrentOSC.oscSize : 0.0;
-  double minDim = fmin(fabs(tr.x - bl.x), fabs(tr.y - bl.y));
-  double cx = bl.x + (screenPt.x - NSMinX(vr)) / NSWidth(vr) * (tr.x - bl.x);
-  double cy = bl.y + (screenPt.y - NSMinY(vr)) / NSHeight(vr) * (tr.y - bl.y);
-  double signX = (tr.x - bl.x) < 0 ? -1.0 : 1.0;
-  double signY = (tr.y - bl.y) < 0 ? -1.0 : 1.0;
-  double dx = cx - tr.x, dy = cy - tr.y;
-  double mouseDist = (-dx * signX + -dy * signY) * 0.5 - oscSize;
-  float lo = 0.0f, hi = 100.0f;
-  for (int i = 0; i < 32; i++) {
-    float mid = (lo + hi) * 0.5f;
-    if (paddingForRadius(mid, (float)minDim) < mouseDist)
-      lo = mid;
-    else
-      hi = mid;
-  }
-  return MAX(0.0, MIN(100.0, (lo + hi) * 0.5));
+  if (!b.geometryValid || NSIsEmptyRect(vr))
+    return NO;
+  double x = (screenPt.x - NSMinX(vr)) / NSWidth(vr);
+  double y = (screenPt.y - NSMinY(vr)) / NSHeight(vr);
+  if (outX)
+    *outX = MAX(0.0, MIN(1.0, x));
+  if (outY)
+    *outY = MAX(0.0, MIN(1.0, y));
+  return YES;
 }
 
 @implementation MeshOSC
@@ -106,6 +107,10 @@ double MeshGuideRadiusForScreenPoint(NSPoint screenPt) {
                                                         pathLabel:@"Path"];
     _originController.positionActivePart = kOSCPositionPart;
     _originController.tangentActivePart = kOSCPathHandlePart;
+    // During the timing guide the blob is unreadable from the drawOSC tick, so
+    // the controller reads the guide-pushed Origin (sGuidePosition) through
+    // this provider - the handle then tracks the inspector drag live.
+    _originController.guideProvider = self;
     // The Scale transform box is the reusable KKScaleOSC, keyed on the "Scale"
     // lane. It centres on the Origin pivot and scales symmetrically (no anchor
     // lane), matching the shader's about-the-Origin zoom.
@@ -185,6 +190,17 @@ double MeshGuideRadiusForScreenPoint(NSPoint screenPt) {
   return [self.originController positionCanvasAtTime:time];
 }
 
+// KKPositionGuideProvider: the Position controller reads the guide bridge + the
+// guide-pushed Origin through these, so it stays plugin-agnostic while Mesh
+// keeps its singleton bridge + sGuidePosition.
+- (KKOSCGuideBridge *)positionGuideBridge {
+  return MeshGuideBridge();
+}
+
+- (CGPoint)positionGuideObjectValue {
+  return sGuidePosition;
+}
+
 // The on-screen frame's min side in canvas units, sizing the Scale gizmo. The
 // object rect [0,1]x[0,1] maps to canvas at bottom-left / top-right.
 - (double)onScreenFrameMin {
@@ -234,12 +250,27 @@ double MeshGuideRadiusForScreenPoint(NSPoint screenPt) {
   double displayScale = [[NSScreen mainScreen] backingScaleFactor];
   double spC =
       (rawZoom > 0.0 && displayScale > 0.0) ? rawZoom / displayScale : 0.0;
+  // During the OSC guide, feed the drag target (object-space -> canvas) so the
+  // bridge can spotlight the glowing destination; otherwise there's no target.
+  BOOL inGuide = MeshGuideBridge().guideStep > 0;
+  CGPoint targetCanvas = CGPointZero;
+  if (inGuide) {
+    id<FxOnScreenControlAPI_v4> oscAPI4 =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    CGPoint tgt = MeshGuideTargetObjectPosition();
+    [oscAPI4 convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                             fromX:tgt.x
+                             fromY:tgt.y
+                           toSpace:kFxDrawingCoordinates_CANVAS
+                               toX:&targetCanvas.x
+                               toY:&targetCanvas.y];
+  }
   [MeshGuideBridge() ingestDrawTickWithCanvasTopRight:trC
                                            bottomLeft:blC
                                           canvasScale:spC
                                       handleCanvasPos:handlePos
-                                      targetCanvasPos:handlePos
-                                            hasTarget:YES];
+                                      targetCanvasPos:targetCanvas
+                                            hasTarget:inGuide];
 
   // The Origin handle + motion path are owned by the Position controller.
   // Mirror our FxPlug drag / opt-reveal state, then draw the path FIRST (under)

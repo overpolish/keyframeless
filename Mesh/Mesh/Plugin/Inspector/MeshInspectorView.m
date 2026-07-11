@@ -33,7 +33,7 @@ static NSString *const kMeshIntroSeenKey = @"MeshIntroSeen";
     self.miniViewerDelegate = _miniViewerRenderer;
     self.miniViewerDescriptorPath = MeshMiniViewerDescriptorPath;
     self.miniViewerRequestPath = MeshMiniViewerRequestPath;
-    self.managePopoverSpotlightLabel = @"Radius";
+    self.managePopoverSpotlightLabel = @"Origin";
     // The kit's restart/autostart machinery pulls a fresh config from here.
     __weak typeof(self) weak = self;
     self.timingGuideConfigProvider = ^KKTimingGuideConfig * {
