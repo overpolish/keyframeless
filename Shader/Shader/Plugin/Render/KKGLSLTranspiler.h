@@ -18,6 +18,7 @@ typedef struct KKGLSLUniforms {
   simd_float4 date;    // iDate
   simd_float4 extra;   // x=iTimeDelta, y=float(iFrame), z=flipY, w=encodeSRGB
   simd_float4 grain;   // x=grain 0..1, y=grainSize px (shared core film grain)
+  simd_float4 chanRes[4]; // iChannelResolution[0..3]: xyz = px size, z = 1
 } KKGLSLUniforms;
 
 // Result of transpiling a Shadertoy-style GLSL body to a full MSL unit.
@@ -60,11 +61,18 @@ KKGLSLTranspileResult *KKTranspileShadertoyGLSL(NSString *userGLSL);
 // device. Shared by the main render and the mini-viewer.
 id<MTLTexture> KKCustomChannelNoiseTexture(id<MTLDevice> device);
 id<MTLSamplerState> KKCustomChannelSampler(id<MTLDevice> device);
-// Bind the noise texture + sampler to every channel `tr` uses, at the MSL
-// indices SPIRV-Cross assigned.
+// A clamp-to-edge / linear sampler for the source clip bound to iChannel0, so
+// footage doesn't wrap when the shader samples outside [0,1]. Cached per
+// device.
+id<MTLSamplerState> KKCustomSourceSampler(id<MTLDevice> device);
+// Bind textures to every channel `tr` uses, at the MSL indices SPIRV-Cross
+// assigned. iChannel0 gets `source` (the effect's clip) when non-nil, falling
+// back to `noise`; iChannel1-3 always get `noise`.
 void KKBindCustomChannels(id<MTLRenderCommandEncoder> encoder,
-                          KKGLSLTranspileResult *tr, id<MTLTexture> noise,
-                          id<MTLSamplerState> sampler);
+                          KKGLSLTranspileResult *tr,
+                          id<MTLTexture> _Nullable source,
+                          id<MTLSamplerState> _Nullable sourceSampler,
+                          id<MTLTexture> noise, id<MTLSamplerState> sampler);
 #ifdef __cplusplus
 }
 #endif

@@ -24,11 +24,12 @@ static NSString *KKWrapShadertoyGLSL(NSString *userSource, NSUInteger channelMas
   [s appendString:@"layout(location = 0) out vec4 kk_outColor;\n"
                   @"layout(std140, binding = 0) uniform KKUniforms {\n"
                   @"  vec4 kkResTime;\n  vec4 iMouse;\n  vec4 iDate;\n"
-                  @"  vec4 kkExtra;\n  vec4 kkGrain;\n};\n"
+                  @"  vec4 kkExtra;\n  vec4 kkGrain;\n  vec4 kkChanRes[4];\n};\n"
                   @"#define iResolution (kkResTime.xyz)\n"
                   @"#define iTime (kkResTime.w)\n"
                   @"#define iTimeDelta (kkExtra.x)\n"
-                  @"#define iFrame (int(kkExtra.y))\n"];
+                  @"#define iFrame (int(kkExtra.y))\n"
+                  @"#define iChannelResolution kkChanRes\n"];
   for (NSUInteger ch = 0; ch < 4; ch++) {
     if (channelMask & (1u << ch))
       [s appendFormat:@"layout(binding = %lu) uniform sampler2D iChannel%lu;\n",
@@ -254,17 +255,48 @@ id<MTLSamplerState> KKCustomChannelSampler(id<MTLDevice> device) {
   return s;
 }
 
+id<MTLSamplerState> KKCustomSourceSampler(id<MTLDevice> device) {
+  static NSMapTable<id<MTLDevice>, id<MTLSamplerState>> *cache;
+  static NSLock *lock;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    cache = [NSMapTable strongToStrongObjectsMapTable];
+    lock = [NSLock new];
+  });
+  [lock lock];
+  id<MTLSamplerState> s = [cache objectForKey:device];
+  [lock unlock];
+  if (s)
+    return s;
+  MTLSamplerDescriptor *sd = [MTLSamplerDescriptor new];
+  sd.minFilter = MTLSamplerMinMagFilterLinear;
+  sd.magFilter = MTLSamplerMinMagFilterLinear;
+  sd.sAddressMode = MTLSamplerAddressModeClampToEdge;
+  sd.tAddressMode = MTLSamplerAddressModeClampToEdge;
+  s = [device newSamplerStateWithDescriptor:sd];
+  [lock lock];
+  [cache setObject:s forKey:device];
+  [lock unlock];
+  return s;
+}
+
 void KKBindCustomChannels(id<MTLRenderCommandEncoder> encoder,
-                          KKGLSLTranspileResult *tr, id<MTLTexture> noise,
-                          id<MTLSamplerState> sampler) {
+                          KKGLSLTranspileResult *tr, id<MTLTexture> source,
+                          id<MTLSamplerState> sourceSampler,
+                          id<MTLTexture> noise, id<MTLSamplerState> sampler) {
   for (NSUInteger ch = 0; ch < 4; ch++) {
     NSInteger ti = [tr textureIndexForChannel:ch];
     if (ti == NSNotFound)
       continue;
-    [encoder setFragmentTexture:noise atIndex:(NSUInteger)ti];
+    BOOL useSource = (ch == 0 && source != nil);
+    [encoder setFragmentTexture:(useSource ? source : noise)
+                        atIndex:(NSUInteger)ti];
     NSInteger si = [tr samplerIndexForChannel:ch];
-    if (si != NSNotFound)
-      [encoder setFragmentSamplerState:sampler atIndex:(NSUInteger)si];
+    if (si != NSNotFound) {
+      id<MTLSamplerState> smp =
+          (useSource && sourceSampler) ? sourceSampler : sampler;
+      [encoder setFragmentSamplerState:smp atIndex:(NSUInteger)si];
+    }
   }
 }
 

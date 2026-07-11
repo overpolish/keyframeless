@@ -5,12 +5,12 @@
 
 #import "Constants.h"
 #import "KKGLSLTranspiler.h" // Shadertoy GLSL -> MSL (glslang + SPIRV-Cross)
+#import "Plugin_Private.h"
 #import "ShaderColorSpace.h"
 #import "ShaderCustomShader.h" // KKCustomUniforms + ShaderCustomFullSource (shared)
 #import "ShaderMiniViewerRenderer.h" // per-instance descriptor path
-#import "ShaderUniformBuilders.h" // per-Type uniform builders (shared with mini)
-#import "Plugin_Private.h"
 #import "ShaderTypes.h"
+#import "ShaderUniformBuilders.h" // per-Type uniform builders (shared with mini)
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKMotionBlur.h>
@@ -46,7 +46,7 @@ ShaderLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
 // timing/cache work) so a caller can refresh the render cache once and evaluate
 // many sub-frame fractions cheaply (motion blur samples).
 static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
-                                double durSec, ShaderPluginState *outState) {
+                                  double durSec, ShaderPluginState *outState) {
   memset(outState, 0, sizeof(*outState));
 
   NSArray<NSNumber *> *typeV =
@@ -106,9 +106,9 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
 // (its uniform block + shared common block + sRGB flag). Shared by the plain
 // render and every motion-blur sample pass.
 static void ShaderEncodeTypeDraw(id<MTLRenderCommandEncoder> encoder,
-                               const ShaderPluginState *state,
-                               id<MTLRenderPipelineState> pipeline,
-                               int encodeSRGB) {
+                                 const ShaderPluginState *state,
+                                 id<MTLRenderPipelineState> pipeline,
+                                 int encodeSRGB) {
   const ShaderTypeInfo *info = ShaderTypeInfoForType(state->type);
   const void *uniformBytes = (const char *)state + info->uniformOffset;
   [encoder setRenderPipelineState:pipeline];
@@ -219,27 +219,25 @@ NSString *ShaderCustomErrorShaderSource(void) {
   return ps;
 }
 
-// Generator: no input clip, so nothing to schedule. FCP still calls
-// -renderDestinationImage: with an empty sourceImages array.
+// Effect: request the clip we're applied to as the source (bound to iChannel0
+// in the Custom render path). Motion blur averages the shader over a single
+// source frame, so no sub-frame source requests. The boundary-value popover
+// additionally pulls its requested clip fraction for the mini-viewer preview.
 - (BOOL)scheduleInputs:(NSArray<FxImageTileRequest *> *_Nullable *_Nullable)
                            inputImageRequests
        withPluginState:(NSData *)pluginState
                 atTime:(CMTime)renderTime
                  error:(NSError **)error {
-  *inputImageRequests = @[];
-  return YES;
-}
-
-// The base implementation derives the output bounds from sourceImages[0], which
-// a generator doesn't have. Output at the destination image's own bounds (FCP
-// sizes it to the timeline/canvas).
-- (BOOL)destinationImageRect:(FxRect *)destinationImageRect
-                sourceImages:(NSArray<FxImageTile *> *)sourceImages
-            destinationImage:(FxImageTile *)destinationImage
-                 pluginState:(NSData *)pluginState
-                      atTime:(CMTime)renderTime
-                       error:(NSError *_Nullable *)outError {
-  *destinationImageRect = destinationImage.imagePixelBounds;
+  *inputImageRequests = KKBuildSourceRequests(
+      renderTime,
+      ShaderMiniViewerRequestPathForUUID(KKInstanceUUIDForAPI(self.apiManager)),
+      self.renderCache, ^id(CMTime t) {
+        return [[FxImageTileRequest alloc]
+            initWithSource:kFxImageTileRequestSourceEffectClip
+                      time:t
+            includeFilters:YES
+               parameterID:0];
+      });
   return YES;
 }
 
@@ -331,7 +329,8 @@ NSString *ShaderCustomErrorShaderSource(void) {
   // so instead of requesting extra source frames we re-render the shader at N
   // sub-frame times across the shutter and average them (KKMotionBlur). Layout:
   // [KKMotionBlurState][state@sample0 == renderTime][state@sample1]... Render
-  // reads sample `sampleIndex` at sizeof(mbState) + i*sizeof(ShaderPluginState).
+  // reads sample `sampleIndex` at sizeof(mbState) +
+  // i*sizeof(ShaderPluginState).
   id<FxParameterRetrievalAPI_v6> paramAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxTimingAPI_v4> timingAPI =
@@ -360,8 +359,8 @@ NSString *ShaderCustomErrorShaderSource(void) {
     return NO;
   }
 
-  // Shader's motion is the shader's own time (Speed), not a keyposed lane, so the
-  // timeline-based gates can't see it. Blur only when the pattern actually
+  // Shader's motion is the shader's own time (Speed), not a keyposed lane, so
+  // the timeline-based gates can't see it. Blur only when the pattern actually
   // moves; a frozen generator (Speed ~ 0) skips the N-pass cost. The Custom
   // type owns its own animation and its source rides in the blob tail, so it
   // never uses the sample-accumulate path.
@@ -408,44 +407,39 @@ NSString *ShaderCustomErrorShaderSource(void) {
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError {
-  if (!destinationImage.ioSurface) {
+  if (sourceImages.count == 0 || !sourceImages[0].ioSurface ||
+      !destinationImage.ioSurface) {
     if (outError != NULL) {
-      *outError = [NSError
-          errorWithDomain:FxPlugErrorDomain
-                     code:kFxError_InvalidParameter
-                 userInfo:@{
-                   NSLocalizedDescriptionKey : @"No destination IOSurface"
-                 }];
+      *outError = [NSError errorWithDomain:FxPlugErrorDomain
+                                      code:kFxError_InvalidParameter
+                                  userInfo:@{
+                                    NSLocalizedDescriptionKey :
+                                        @"No source/destination IOSurface"
+                                  }];
     }
     return NO;
   }
 
-  // A generator has no source feed to carry the media size, so publish the
-  // output dimensions (empty slots) to this instance's descriptor. The mini-
-  // viewer reads it as `sourceMediaSize` for its OSC geometry. FCP renders this
-  // same instance at MULTIPLE sizes (main viewer + tiny browser/library
-  // preview, same aspect), so publish only the LARGEST size seen - the project
-  // resolution is the biggest render; a small preview must not overwrite it
-  // (that made the fields flip between 1920 and ~112).
+  // Mini-viewer source feed: publish the raw source per slot (single-slot =
+  // playhead, multi-slot = boundary preview / filmstrip / onion). Shared glue
+  // in KKPlugin (MiniViewerFeed); the renderer applies the shader locally.
+  [self
+      kkPublishMiniViewerFeedForDestination:destinationImage
+                               sourceImages:sourceImages
+                             descriptorPath:
+                                 ShaderMiniViewerDescriptorPathForUUID(
+                                     KKInstanceUUIDForAPI(self.apiManager))
+                            boundaryReqSecs:self.renderCache.boundaryReqSecs
+                           boundaryReqFracs:self.renderCache.boundaryReqFracs
+                            multiSlotActive:self.renderCache.boundaryFeedActive
+                          changesOutputSize:NO
+                                 defaultTag:0.0];
+
+  // Output dimensions drive the shader's resolution uniform (iResolution etc.).
   CGFloat mediaW = destinationImage.imagePixelBounds.right -
                    destinationImage.imagePixelBounds.left;
   CGFloat mediaH = destinationImage.imagePixelBounds.top -
                    destinationImage.imagePixelBounds.bottom;
-  if (mediaW > 0 && mediaH > 0) {
-    NSString *descPath = ShaderMiniViewerDescriptorPathForUUID(
-        KKInstanceUUIDForAPI(self.apiManager));
-    if (!self.miniViewerFeed ||
-        ![self.miniViewerFeedPath isEqualToString:descPath]) {
-      self.miniViewerFeed =
-          [[KKMiniViewerFeed alloc] initWithDescriptorPath:descPath];
-      self.miniViewerFeedPath = descPath;
-    }
-    CGSize cur = self.miniViewerFeed.mediaSize;
-    if (mediaW * mediaH > cur.width * cur.height) {
-      self.miniViewerFeed.mediaSize = CGSizeMake(mediaW, mediaH);
-      [self.miniViewerFeed publishDescriptor];
-    }
-  }
 
   // State(s) built in -pluginState: (params API is invalid here). Layout is
   // [KKMotionBlurState][state@sample0]...; read the header + the base sample.
@@ -496,6 +490,11 @@ NSString *ShaderCustomErrorShaderSource(void) {
     // Core film grain (Grain / Grain Size lanes), same as the built-in Types.
     u.grain =
         (simd_float4){base.common.grain, base.common.grainSize, 0.0f, 0.0f};
+    // iChannelResolution: 0 = source clip (filled from the bound texture
+    // below), 1-3 = the 256x256 noise texture.
+    u.chanRes[0] = (simd_float4){(float)mediaW, (float)mediaH, 1.0f, 0.0f};
+    for (int c = 1; c < 4; c++)
+      u.chanRes[c] = (simd_float4){256.0f, 256.0f, 1.0f, 0.0f};
     // The user source follows the single state sample in the blob (appended in
     // pluginState:). Empty tail = fall back to the baked default.
     NSString *userSource = nil;
@@ -528,6 +527,8 @@ NSString *ShaderCustomErrorShaderSource(void) {
         tr.usedChannelMask ? KKCustomChannelNoiseTexture(device) : nil;
     id<MTLSamplerState> chSampler =
         tr.usedChannelMask ? KKCustomChannelSampler(device) : nil;
+    id<MTLSamplerState> srcSampler =
+        tr.usedChannelMask ? KKCustomSourceSampler(device) : nil;
     return [self
         encodeRenderCommandsForDestinationImage:destinationImage
                                    sourceImages:sourceImages
@@ -537,11 +538,27 @@ NSString *ShaderCustomErrorShaderSource(void) {
                                                *inputTextures) {
                                          [encoder
                                              setRenderPipelineState:customPS];
-                                         [encoder setFragmentBytes:&u
-                                                            length:sizeof(u)
+                                         // Source clip -> iChannel0, noise ->
+                                         // iChannel1-3.
+                                         id<MTLTexture> src =
+                                             inputTextures.count
+                                                 ? inputTextures[0]
+                                                 : nil;
+                                         // iChannelResolution[0] tracks the
+                                         // actual source texture size (differs
+                                         // from dest at thumbnail/library
+                                         // scale).
+                                         KKGLSLUniforms uu = u;
+                                         if (src)
+                                           uu.chanRes[0] = (simd_float4){
+                                               (float)src.width,
+                                               (float)src.height, 1.0f, 0.0f};
+                                         [encoder setFragmentBytes:&uu
+                                                            length:sizeof(uu)
                                                            atIndex:0];
                                          KKBindCustomChannels(
-                                             encoder, tr, noiseTex, chSampler);
+                                             encoder, tr, src, srcSampler,
+                                             noiseTex, chSampler);
                                          [encoder
                                              drawPrimitives:
                                                  MTLPrimitiveTypeTriangleStrip
@@ -550,8 +567,9 @@ NSString *ShaderCustomErrorShaderSource(void) {
                                        }];
   }
 
-  // Dispatch on the active type via the registry (ShaderUniformBuilders.h). Type
-  // is structural (never animated), so one pipeline serves every MB sample.
+  // Dispatch on the active type via the registry (ShaderUniformBuilders.h).
+  // Type is structural (never animated), so one pipeline serves every MB
+  // sample.
   const ShaderTypeInfo *info = ShaderTypeInfoForType(base.type);
   NSString *pluginID =
       info->pluginSuffix[0]
@@ -599,14 +617,15 @@ NSString *ShaderCustomErrorShaderSource(void) {
                       if (off + sizeof(ShaderPluginState) > blob.length)
                         return NO;
                       ShaderPluginState sample;
-                      [blob getBytes:&sample
-                               range:NSMakeRange(off, sizeof(ShaderPluginState))];
+                      [blob
+                          getBytes:&sample
+                             range:NSMakeRange(off, sizeof(ShaderPluginState))];
                       sample.common.resolution = resolution;
                       return [s
                           encodeFullScreenQuadIntoTexture:sampleDest
                                          destinationImage:destinationImage
                                             commandBuffer:commandBuffer
-                                           sourceTextures:@[]
+                                           sourceTextures:inputTextures
                                                  commands:^(
                                                      id<MTLRenderCommandEncoder>
                                                          enc,
@@ -623,7 +642,6 @@ NSString *ShaderCustomErrorShaderSource(void) {
   }
 
   // Plain single pass (MB off, gated off as static, or accumulate failed).
-  // sourceImages is empty for a generator; encodeRenderCommands handles that.
   base.common.resolution = resolution;
   return [self
       encodeRenderCommandsForDestinationImage:destinationImage
@@ -633,8 +651,8 @@ NSString *ShaderCustomErrorShaderSource(void) {
                                          NSArray<id<MTLTexture>>
                                              *inputTextures) {
                                        ShaderEncodeTypeDraw(encoder, &base,
-                                                          pipelineState,
-                                                          encodeSRGB);
+                                                            pipelineState,
+                                                            encodeSRGB);
                                      }];
 }
 

@@ -9,8 +9,8 @@
 #import "KKGLSLTranspiler.h" // Shadertoy GLSL -> MSL + channel binding
 #import "ShaderColorSpace.h"
 #import "ShaderCustomShader.h" // ShaderCustomErrorShaderSource
-#import "ShaderUniformBuilders.h"
 #import "ShaderTypes.h"
+#import "ShaderUniformBuilders.h"
 #import <KeyframelessKit/KKPositionMiniController.h>
 #import <KeyframelessKit/KKScaleMiniController.h>
 #import <KeyframelessKit/KKShaderTypes.h>
@@ -276,15 +276,16 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
 }
 
 // Runtime-compiled pipeline for a Custom shader: the Shadertoy GLSL is
-// transpiled to MSL via glslang + SPIRV-Cross (the same shared, memoised path as
-// the FCP render), then cached in _pipelines on the emitted MSL hash. Returns
-// nil (logged) on failure; the caller falls back to the error pattern.
+// transpiled to MSL via glslang + SPIRV-Cross (the same shared, memoised path
+// as the FCP render), then cached in _pipelines on the emitted MSL hash.
+// Returns nil (logged) on failure; the caller falls back to the error pattern.
 - (id<MTLRenderPipelineState>)_customPipelineForDevice:(id<MTLDevice>)device
                                            pixelFormat:(MTLPixelFormat)format
                                                 source:(NSString *)userSource {
   KKGLSLTranspileResult *tr = KKTranspileShadertoyGLSL(userSource);
   if (!tr.msl) {
-    KKLogError(@"ShaderMiniViewerRenderer: GLSL transpile failed: %@", tr.errorLog);
+    KKLogError(@"ShaderMiniViewerRenderer: GLSL transpile failed: %@",
+               tr.errorLog);
     return nil;
   }
   if (_pipelineFormat != format) {
@@ -299,7 +300,9 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   if (existing)
     return existing;
   NSError *err = nil;
-  id<MTLLibrary> lib = [device newLibraryWithSource:tr.msl options:nil error:&err];
+  id<MTLLibrary> lib = [device newLibraryWithSource:tr.msl
+                                            options:nil
+                                              error:&err];
   if (!lib) {
     KKLogError(@"ShaderMiniViewerRenderer: custom MSL compile failed: %@", err);
     return nil;
@@ -402,11 +405,12 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   [e endEncoding];
 }
 
-// Generator render: no source. Runs the same Metal pipeline as the FCP render
-// (vertexShader + solid-blue fragmentShader) straight into the preview dest.
-- (BOOL)miniViewer:(KKMiniViewerView *)canvas
-    generateIntoTexture:(id<MTLTexture>)dest
-          commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
+// Effect render: runs the same type/custom pipeline as the FCP render into the
+// preview dest. `source` is the mini-viewer's source frame (bound as iChannel0
+// in the Custom path); the built-in types are procedural and ignore it.
+- (BOOL)encodeEffectFromSource:(id<MTLTexture>)source
+                          into:(id<MTLTexture>)dest
+                 commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
   // Dispatch on the active type, same as the FCP render.
   NSArray<NSNumber *> *typeV = [self valuesForLabel:@"Type"];
   int meshType =
@@ -501,7 +505,8 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
     u.resTime = (simd_float4){W, H, 1.0f, iTime};
     u.mouse = (simd_float4){0.0f, 0.0f, 0.0f, 0.0f};
     u.date = (simd_float4){0.0f, 0.0f, 0.0f, 0.0f};
-    u.extra = (simd_float4){1.0f / 60.0f, iTime * 60.0f, 0.0f, (float)encodeSRGB};
+    u.extra =
+        (simd_float4){1.0f / 60.0f, iTime * 60.0f, 0.0f, (float)encodeSRGB};
     NSArray<NSNumber *> *grV = [self valuesForLabel:@"Grain"];
     NSArray<NSNumber *> *grSzV = [self valuesForLabel:@"Grain Size"];
     float grain =
@@ -509,10 +514,18 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
     float grainSize =
         grSzV.count ? grSzV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
     u.grain = (simd_float4){grain, grainSize, 0.0f, 0.0f};
+    // iChannelResolution: 0 = source clip, 1-3 = 256x256 noise.
+    u.chanRes[0] = source ? (simd_float4){(float)source.width,
+                                          (float)source.height, 1.0f, 0.0f}
+                          : (simd_float4){W, H, 1.0f, 0.0f};
+    for (int c = 1; c < 4; c++)
+      u.chanRes[c] = (simd_float4){256.0f, 256.0f, 1.0f, 0.0f};
     [e setFragmentBytes:&u length:sizeof(u) atIndex:0];
     KKGLSLTranspileResult *tr = KKTranspileShadertoyGLSL(customSource);
     if (tr.usedChannelMask)
-      KKBindCustomChannels(e, tr, KKCustomChannelNoiseTexture(dest.device),
+      // Source clip -> iChannel0, noise -> iChannel1-3 (matches FCP render).
+      KKBindCustomChannels(e, tr, source, KKCustomSourceSampler(dest.device),
+                           KKCustomChannelNoiseTexture(dest.device),
                            KKCustomChannelSampler(dest.device));
   } else {
     [e setVertexBytes:verts
@@ -565,15 +578,6 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   if (downscale)
     [self blitFrom:renderTex into:dest commandBuffer:commandBuffer];
   return YES;
-}
-
-// Dead for the generator: no source is ever published to the mini-viewer feed,
-// so the source path never runs (see -miniViewer:generateIntoTexture:). Kept as
-// a no-op to satisfy the KKMiniViewerRenderer contract.
-- (BOOL)encodeEffectFromSource:(id<MTLTexture>)source
-                          into:(id<MTLTexture>)dest
-                 commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
-  return NO;
 }
 
 // Base point-handle overrides forwarded to the reusable Position controller.

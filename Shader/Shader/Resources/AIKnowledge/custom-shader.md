@@ -20,15 +20,16 @@ Shadertoy, it almost always runs here unchanged.
 
 Use them exactly as on Shadertoy:
 
-| Name                     | Type        | Meaning                                                        |
-| ------------------------ | ----------- | -------------------------------------------------------------- |
-| `iResolution`            | `vec3`      | output size in px (`.xy`), `.z` = 1                            |
-| `iTime`                  | `float`     | seconds, scaled by the shared **Speed** and offset by **Seed** |
-| `iTimeDelta`             | `float`     | seconds/frame (approx)                                         |
-| `iFrame`                 | `int`       | frame index (approx)                                           |
-| `iMouse`                 | `vec4`      | present but currently always 0 (no mouse input wired yet)      |
-| `iDate`                  | `vec4`      | present but currently always 0                                 |
-| `iChannel0`..`iChannel3` | `sampler2D` | bound to a repeating value-noise texture                       |
+| Name                     | Type        | Meaning                                                                                   |
+| ------------------------ | ----------- | ----------------------------------------------------------------------------------------- |
+| `iResolution`            | `vec3`      | output size in px (`.xy`), `.z` = 1                                                       |
+| `iTime`                  | `float`     | seconds, scaled by the shared **Speed** and offset by **Seed**                            |
+| `iTimeDelta`             | `float`     | seconds/frame (approx)                                                                    |
+| `iFrame`                 | `int`       | frame index (approx)                                                                      |
+| `iMouse`                 | `vec4`      | present but currently always 0 (no mouse input wired yet)                                 |
+| `iDate`                  | `vec4`      | present but currently always 0                                                            |
+| `iChannel0`              | `sampler2D` | **the source clip** Shader is applied to (the footage / adjustment-layer composite below) |
+| `iChannel1`..`iChannel3` | `sampler2D` | bound to a repeating value-noise texture                                                  |
 
 ## What works, what doesn't
 
@@ -44,9 +45,16 @@ deliberately:
 - **Output is forced opaque.** Shadertoy ignores `fragColor.a`; so does this. A
   shader can't punch a hole in the clip by writing a low alpha.
 
-**Not supported yet:** real image or video inputs on the channels (they read
-procedural noise, not your media), multi-pass shaders (Buffer A/B/C/D), cubemaps,
-audio, and keyboard input.
+**Source footage on `iChannel0`:** Shader is a Final Cut effect, so the clip it's
+applied to is bound to `iChannel0`. A pasted shader that samples `iChannel0` (e.g.
+`texture(iChannel0, uv)`) processes your footage - blur, displace, tint, feed it
+into a reaction-diffusion, etc. Apply Shader to an **adjustment layer** to run the
+shader over everything beneath it. `iChannel1`..`iChannel3` still read procedural
+noise.
+
+**Not supported yet:** extra image/video inputs beyond the source on `iChannel1-3`
+(they read noise, not your own media), multi-pass shaders (Buffer A/B/C/D),
+cubemaps, audio, and keyboard input.
 
 ## Shared controls that affect a Custom shader
 

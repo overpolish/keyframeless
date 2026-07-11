@@ -3,7 +3,7 @@ id: shader
 summary: What Shader does
 ---
 
-- Shader is an animated generator: it fills a clip (or generator) with a moving, procedural look. Drop it from the Effects/Generators browser. Everything animates on the keyframeless timeline, so the Timing sections cover Basic, Advanced, easing, and motion blur.
+- Shader is an animated effect: apply it to a clip from the Effects browser and it fills the clip with a moving, procedural look. To use it as a generator (nothing underneath), apply it to an adjustment layer or a solid. Everything animates on the keyframeless timeline, so the Timing sections cover Basic, Advanced, easing, and motion blur. The **Custom** type can also read the clip it's applied to as `iChannel0` (see the custom-shader doc), so it can process footage, not just overlay it.
 - Pick a look with **Type**. There are 12 built-in generative types plus **Custom**:
   - **Mesh** (a smooth multi-colour mesh gradient), **Dithering**, **Grainy**, **Warp**, **Neuro**, **Simplex**, **Metaballs**, **God Rays**, **Fluid**, **Wisp**, **Silk**, **Strata**.
   - **Custom** turns Shader into a blank canvas for a pasted Shadertoy/GLSL shader - see the custom-shader doc for that whole feature.
