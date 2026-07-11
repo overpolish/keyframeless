@@ -4,6 +4,7 @@
  */
 
 #import "KKCheckboxView.h"
+#import "KKCodeEditorView.h"
 #import "KKColorWellView.h"
 #import "KKGradientBarView.h"
 #import "KKGradientControl.h"
@@ -25,6 +26,8 @@
 const CGFloat kFloatRowH = 30.0;
 static const CGFloat kCropRowH = 30.0;     // single-line W/H/X/Y hstack
 static const CGFloat kGradientRowH = 42.0; // 36pt gradient control + padding
+static const CGFloat kCodeRowH =
+    258.0; // multi-line code editor (title + ~9 lines)
 static const CGFloat kStaticFieldW = 40.0;
 static const CGFloat kWrapLineExtra =
     25.0; // +height per extra wrapped pill line
@@ -230,8 +233,8 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 // Reset is only meaningful when a default exists AND the current value
 // differs from it - hidden otherwise so a row at default has no clutter.
 - (void)_updateResetVisibility {
-  if (_oscEditedOnly) {
-    _reset.hidden = YES; // geometry lane: nothing to reset
+  if (_oscEditedOnly || _valueType == KKLaneValueTypeCode) {
+    _reset.hidden = YES; // geometry / code lane: nothing scalar to reset
     return;
   }
   BOOL atDefault =
@@ -505,6 +508,8 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 + (CGFloat)heightForLane:(KKLane *)lane {
   if (lane.valueType == KKLaneValueTypeGradient)
     return kGradientRowH;
+  if (lane.valueType == KKLaneValueTypeCode)
+    return kCodeRowH;
   return KKLaneComponentLabels(lane).count >= 2 ? kCropRowH : kFloatRowH;
 }
 
@@ -765,6 +770,43 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     // lock state here too - otherwise a freshly-built geometry row (e.g.
     // Points created on a multi-select refresh) never reads `locked` and its
     // gutter button stays clickable while every value row is read-only.
+    _locked = lane.locked;
+    self.alphaValue = _locked ? 0.5 : 1.0;
+    return self;
+  }
+
+  // Code lane: a tall, full-width multi-line editor (no numeric value fields).
+  // The text is the lane's `codeString`; edits fire onCodeChanged (debounced).
+  if (_valueType == KKLaneValueTypeCode) {
+    _reset.hidden = YES; // no scalar value to reset
+    KKCodeEditorView *editor =
+        [[KKCodeEditorView alloc] initWithFrame:NSZeroRect];
+    editor.translatesAutoresizingMaskIntoConstraints = NO;
+    editor.codeValidator =
+        lane.codeValidator; // set before text so it validates
+    editor.codeText = lane.codeString ?: @"";
+    __weak typeof(self) weak = self;
+    editor.onChange = ^(NSString *code) {
+      __strong typeof(weak) s = weak;
+      if (s.onCodeChanged)
+        s.onCodeChanged(code);
+    };
+    [self addSubview:editor];
+    // Title sits top-left; the editor fills the row below it, edge to edge.
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
+      [title.topAnchor constraintEqualToAnchor:self.topAnchor
+                                      constant:KKPaddingSM],
+      [editor.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                           constant:KKPaddingLG],
+      [editor.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                            constant:-KKPaddingLG],
+      [editor.topAnchor constraintEqualToAnchor:title.bottomAnchor
+                                       constant:KKPaddingSM],
+      [editor.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
+                                          constant:-KKPaddingSM],
+    ]];
     _locked = lane.locked;
     self.alphaValue = _locked ? 0.5 : 1.0;
     return self;

@@ -5,7 +5,10 @@
 
 #import "MeshMiniViewerRenderer.h"
 
+#import "Constants.h"        // MeshCustomDefaultShaderSource
+#import "KKGLSLTranspiler.h" // Shadertoy GLSL -> MSL + channel binding
 #import "MeshColorSpace.h"
+#import "MeshCustomShader.h" // MeshCustomErrorShaderSource
 #import "MeshUniformBuilders.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKPositionMiniController.h>
@@ -263,6 +266,58 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   return ps;
 }
 
+// The Custom type's user shader source from the timeline's "Shader" code lane
+// (the default plasma when empty), mirroring the FCP render read.
+- (NSString *)_customShaderSource {
+  for (KKLane *lane in self.timeline.lanes)
+    if ([lane.label isEqualToString:@"Shader"] && lane.codeString.length)
+      return lane.codeString;
+  return MeshCustomDefaultShaderSource();
+}
+
+// Runtime-compiled pipeline for a Custom shader: the Shadertoy GLSL is
+// transpiled to MSL via glslang + SPIRV-Cross (the same shared, memoised path as
+// the FCP render), then cached in _pipelines on the emitted MSL hash. Returns
+// nil (logged) on failure; the caller falls back to the error pattern.
+- (id<MTLRenderPipelineState>)_customPipelineForDevice:(id<MTLDevice>)device
+                                           pixelFormat:(MTLPixelFormat)format
+                                                source:(NSString *)userSource {
+  KKGLSLTranspileResult *tr = KKTranspileShadertoyGLSL(userSource);
+  if (!tr.msl) {
+    KKLogError(@"MeshMiniViewerRenderer: GLSL transpile failed: %@", tr.errorLog);
+    return nil;
+  }
+  if (_pipelineFormat != format) {
+    _pipelines = nil;
+    _pipelineFormat = format;
+  }
+  if (!_pipelines)
+    _pipelines = [NSMutableDictionary dictionary];
+  NSString *key =
+      [NSString stringWithFormat:@"custom:%lu", (unsigned long)tr.msl.hash];
+  id<MTLRenderPipelineState> existing = _pipelines[key];
+  if (existing)
+    return existing;
+  NSError *err = nil;
+  id<MTLLibrary> lib = [device newLibraryWithSource:tr.msl options:nil error:&err];
+  if (!lib) {
+    KKLogError(@"MeshMiniViewerRenderer: custom MSL compile failed: %@", err);
+    return nil;
+  }
+  MTLRenderPipelineDescriptor *pd = [[MTLRenderPipelineDescriptor alloc] init];
+  pd.vertexFunction = [lib newFunctionWithName:tr.vertexName];
+  pd.fragmentFunction = [lib newFunctionWithName:tr.fragmentName];
+  pd.colorAttachments[0].pixelFormat = format;
+  id<MTLRenderPipelineState> ps =
+      [device newRenderPipelineStateWithDescriptor:pd error:&err];
+  if (!ps) {
+    KKLogError(@"MeshMiniViewerRenderer: custom pipeline failed: %@", err);
+    return nil;
+  }
+  _pipelines[key] = ps;
+  return ps;
+}
+
 // A cached reference-resolution (1080-tall, dest aspect) intermediate render
 // target, or nil when `dest` is already tall enough that rendering direct is
 // fine. The type is rendered into this at full resolution and then downscaled
@@ -356,12 +411,28 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
   NSArray<NSNumber *> *typeV = [self valuesForLabel:@"Type"];
   int meshType =
       typeV.count ? (int)lround(typeV[0].doubleValue) : MeshType_Mesh;
+  BOOL isCustom = (meshType == MeshType_Custom);
   const MeshTypeInfo *info = MeshTypeInfoForType(meshType);
-  NSString *fragment = @(info->fragment);
-  id<MTLRenderPipelineState> pipeline =
-      [self _pipelineForDevice:dest.device
-                   pixelFormat:dest.pixelFormat
-                fragmentShader:fragment];
+  id<MTLRenderPipelineState> pipeline;
+  NSString *customSource = nil;
+  if (isCustom) {
+    // Runtime-compiled user shader; on a transpile error fall back to the error
+    // pattern (matches the FCP render).
+    customSource = [self _customShaderSource];
+    pipeline = [self _customPipelineForDevice:dest.device
+                                  pixelFormat:dest.pixelFormat
+                                       source:customSource];
+    if (!pipeline) {
+      customSource = MeshCustomErrorShaderSource();
+      pipeline = [self _customPipelineForDevice:dest.device
+                                    pixelFormat:dest.pixelFormat
+                                         source:customSource];
+    }
+  } else {
+    pipeline = [self _pipelineForDevice:dest.device
+                            pixelFormat:dest.pixelFormat
+                         fragmentShader:@(info->fragment)];
+  }
   if (!pipeline)
     return NO;
 
@@ -421,48 +492,72 @@ NSString *MeshMiniViewerRequestPathForUUID(NSString *uuid) {
       speedShV.count ? speedShV[0].floatValue : KK_MESH_GRAD_DEFAULT_SPEED;
 
   [e setRenderPipelineState:pipeline];
-  [e setVertexBytes:verts
-             length:sizeof(verts)
-            atIndex:KKVertexInputIndex_Vertices];
-  [e setVertexBytes:&vpSize
-             length:sizeof(vpSize)
-            atIndex:KKVertexInputIndex_ViewportSize];
+  if (isCustom) {
+    // The transpiled vertex builds its own quad from vertexID (no vertex
+    // buffers); the fragment reads one KKGLSLUniforms (all-vec4) at buffer 0.
+    // iTime respects the shared Speed/Seed; flipY=0 matches the main viewer.
+    float iTime = timeSec * speedShared + fmodf(seedShared, 10000.0f);
+    KKGLSLUniforms u;
+    u.resTime = (simd_float4){W, H, 1.0f, iTime};
+    u.mouse = (simd_float4){0.0f, 0.0f, 0.0f, 0.0f};
+    u.date = (simd_float4){0.0f, 0.0f, 0.0f, 0.0f};
+    u.extra = (simd_float4){1.0f / 60.0f, iTime * 60.0f, 0.0f, (float)encodeSRGB};
+    NSArray<NSNumber *> *grV = [self valuesForLabel:@"Grain"];
+    NSArray<NSNumber *> *grSzV = [self valuesForLabel:@"Grain Size"];
+    float grain =
+        grV.count ? grV[0].floatValue / 100.0f : KK_CORE_GRAIN_DEFAULT;
+    float grainSize =
+        grSzV.count ? grSzV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
+    u.grain = (simd_float4){grain, grainSize, 0.0f, 0.0f};
+    [e setFragmentBytes:&u length:sizeof(u) atIndex:0];
+    KKGLSLTranspileResult *tr = KKTranspileShadertoyGLSL(customSource);
+    if (tr.usedChannelMask)
+      KKBindCustomChannels(e, tr, KKCustomChannelNoiseTexture(dest.device),
+                           KKCustomChannelSampler(dest.device));
+  } else {
+    [e setVertexBytes:verts
+               length:sizeof(verts)
+              atIndex:KKVertexInputIndex_Vertices];
+    [e setVertexBytes:&vpSize
+               length:sizeof(vpSize)
+              atIndex:KKVertexInputIndex_ViewportSize];
 
-  // Build every Type's uniform from the lanes, then bind the active Type's
-  // block (offset/size from the registry). Same builders as the FCP render.
-  MeshPluginState state;
-  memset(&state, 0, sizeof(state));
-  MeshLaneReader read = ^NSArray<NSNumber *> *(NSString *label) {
-    return [self valuesForLabel:label];
-  };
-  MeshBuildAllTypes(read, &state);
-  [e setFragmentBytes:(const char *)&state + info->uniformOffset
-               length:info->uniformSize
-              atIndex:MeshFragmentIndex_Grid];
+    // Build every Type's uniform from the lanes, then bind the active Type's
+    // block (offset/size from the registry). Same builders as the FCP render.
+    MeshPluginState state;
+    memset(&state, 0, sizeof(state));
+    MeshLaneReader read = ^NSArray<NSNumber *> *(NSString *label) {
+      return [self valuesForLabel:label];
+    };
+    MeshBuildAllTypes(read, &state);
+    [e setFragmentBytes:(const char *)&state + info->uniformOffset
+                 length:info->uniformSize
+                atIndex:MeshFragmentIndex_Grid];
 
-  // Shared params (transforms + timing + grain), same as the FCP render path.
-  MeshCommonUniforms common = MeshCommonDefault();
-  NSArray<NSNumber *> *grainV = [self valuesForLabel:@"Grain"];
-  NSArray<NSNumber *> *grainSizeV = [self valuesForLabel:@"Grain Size"];
-  common.origin = originShared;
-  common.scale = scaleShared;
-  common.rotation = rotationShared;
-  common.speed = speedShared;
-  common.seed = seedShared;
-  common.time = timeSec;
-  common.grain =
-      grainV.count ? grainV[0].floatValue / 100.0f : KK_CORE_GRAIN_DEFAULT;
-  common.grainSize =
-      grainSizeV.count ? grainSizeV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
-  common.grainScale = MeshGrainScaleForType(meshType);
-  common.resolution = (vector_float2){W, H};
-  [e setFragmentBytes:&common
-               length:sizeof(common)
-              atIndex:MeshFragmentIndex_Common];
+    // Shared params (transforms + timing + grain), same as the FCP render path.
+    MeshCommonUniforms common = MeshCommonDefault();
+    NSArray<NSNumber *> *grainV = [self valuesForLabel:@"Grain"];
+    NSArray<NSNumber *> *grainSizeV = [self valuesForLabel:@"Grain Size"];
+    common.origin = originShared;
+    common.scale = scaleShared;
+    common.rotation = rotationShared;
+    common.speed = speedShared;
+    common.seed = seedShared;
+    common.time = timeSec;
+    common.grain =
+        grainV.count ? grainV[0].floatValue / 100.0f : KK_CORE_GRAIN_DEFAULT;
+    common.grainSize =
+        grainSizeV.count ? grainSizeV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
+    common.grainScale = MeshGrainScaleForType(meshType);
+    common.resolution = (vector_float2){W, H};
+    [e setFragmentBytes:&common
+                 length:sizeof(common)
+                atIndex:MeshFragmentIndex_Common];
 
-  [e setFragmentBytes:&encodeSRGB
-               length:sizeof(encodeSRGB)
-              atIndex:MeshFragmentIndex_EncodeSRGB];
+    [e setFragmentBytes:&encodeSRGB
+                 length:sizeof(encodeSRGB)
+                atIndex:MeshFragmentIndex_EncodeSRGB];
+  }
   [e drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
   [e endEncoding];
 

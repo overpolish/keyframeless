@@ -60,3 +60,8 @@ static const UInt32 kParamUIState = 201;
 /// re-runs -scheduleInputs: for the (otherwise cached) static frame, letting
 /// the boundary preview resolve without manual scrubbing.
 static const UInt32 kParamRenderNudge = 202;
+
+/// The baked default Custom shader (animated cosine plasma). Rendered when the
+/// Shader lane's codeString is empty, and seeds the "Shader" lane in the
+/// catalog. Defined in Plugin+Render.
+extern NSString *MeshCustomDefaultShaderSource(void);

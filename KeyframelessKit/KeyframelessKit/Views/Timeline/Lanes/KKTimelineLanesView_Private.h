@@ -90,6 +90,9 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// New constant values for the lane (Float: [v]; Crop: [w,h,x,y]).
 @property(nonatomic, copy, nullable) void (^onValue)
     (NSArray<NSNumber *> *values);
+/// For a `KKLaneValueTypeCode` row: fired (debounced) when the user edits the
+/// code editor. The host writes the new string to the lane's `codeString`.
+@property(nonatomic, copy, nullable) void (^onCodeChanged)(NSString *code);
 /// Bracket a continuous slider drag so the host coalesces it to one undo /
 /// one persist (mirrors the mini viewer).
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
@@ -236,6 +239,11 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// remember the last tab). Not fired for the initial selection.
 @property(nonatomic, copy, nullable) void (^onCategoryChanged)
     (NSString *category);
+
+/// Fired (debounced) when a `KKLaneValueTypeCode` row's editor is edited. The
+/// host commits the new string to the lane's `codeString`.
+@property(nonatomic, copy, nullable) void (^onHandleCode)
+    (NSString *label, NSString *code);
 
 /// Persist several lane constants at once, as ONE undo entry. Used by the
 /// palette generator (rerolling N colours) - the per-lane drag path can only

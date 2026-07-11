@@ -4,6 +4,22 @@
 
 - Install [workflow extension SDK](https://developer.apple.com/download/all/?q=WorkflowExtensions)
 
+### Mesh custom-shader transpiler (git submodules)
+
+The Mesh generator's **Custom** shader type transpiles Shadertoy GLSL to Metal at
+runtime via vendored **glslang + SPIRV-Cross** (git submodules under
+`ThirdParty/`). They build into one static library the Mesh XPC service links.
+On a fresh clone, before building Mesh, run once:
+
+```sh
+git submodule update --init --recursive
+ThirdParty/build-transpiler.sh universal      # -> ThirdParty/build/lib/libkktranspiler.a
+```
+
+`ThirdParty/build/` is git-ignored; re-run the script only after the pinned
+submodule tags change (or a clean). CI that builds Mesh must run both steps.
+Details in `ThirdParty/README.md`.
+
 ...
 
 ## Plugin structure

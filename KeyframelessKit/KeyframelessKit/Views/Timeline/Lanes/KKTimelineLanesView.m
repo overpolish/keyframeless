@@ -716,6 +716,12 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       fixed.componentLabels = tmpl.componentLabels;
       fixed.componentLabelColors = tmpl.componentLabelColors;
       fixed.componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
+      // codeString is user data (a code lane's text), so keep the saved value;
+      // only fall back to the template default when it's missing (older blob).
+      if (!fixed.codeString.length)
+        fixed.codeString = tmpl.codeString;
+      fixed.codeValidator =
+          tmpl.codeValidator;                 // static config, never persisted
       [fixed kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
       lanes[presentIdx] = fixed;
       continue;
@@ -745,6 +751,8 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.spatialCurvable = tmpl.spatialCurvable;
     lane.integerValued = tmpl.integerValued;
     lane.isToggle = tmpl.isToggle;
+    lane.codeString = tmpl.codeString; // seed a code lane with its default text
+    lane.codeValidator = tmpl.codeValidator;
     [lane kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     lane.enabled = NO; // constant until the dropdown makes it animatable
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
@@ -876,10 +884,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 
 - (NSArray<NSString *> *)allOrderedParamLabels {
   // Every available lane label, sorted the same way _timelineSeededFrom: sorts
-  // lanes (paramOrder first, then template order, then alphabetical) but WITHOUT
-  // the per-timeline / conditional-visibility filtering orderedParamLabels does.
-  // The reorder popover edits one global ordering, so it must list the full
-  // parameter set even when the selected layer doesn't carry those lanes.
+  // lanes (paramOrder first, then template order, then alphabetical) but
+  // WITHOUT the per-timeline / conditional-visibility filtering
+  // orderedParamLabels does. The reorder popover edits one global ordering, so
+  // it must list the full parameter set even when the selected layer doesn't
+  // carry those lanes.
   NSArray<NSString *> *order = _timeline.paramOrder;
   NSMutableDictionary<NSString *, NSNumber *> *rank =
       [NSMutableDictionary dictionaryWithCapacity:order.count];

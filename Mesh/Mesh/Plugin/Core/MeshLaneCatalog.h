@@ -12,7 +12,10 @@
 #import <KeyframelessKit/KKRotationOSC.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
+#import "Constants.h"        // MeshCustomDefaultShaderSource
+#import "KKGLSLTranspiler.h" // live shader validation (XPC-only includers)
 #import "MeshColorSpace.h"
+#import "MeshLocalized.h" // RLoc
 
 static inline NSArray<KKLane *> *MeshBuildAvailableLanes(void) {
   // Lane order (top-to-bottom default): Type, then this gradient type's
@@ -28,10 +31,10 @@ static inline NSArray<KKLane *> *MeshBuildAvailableLanes(void) {
   type.valueType = KKLaneValueTypeFloat;
   type.choiceLabels = @[
     @"Mesh", @"Dithering", @"Grainy", @"Warp", @"Neuro", @"Simplex",
-    @"Metaballs", @"God Rays", @"Fluid", @"Wisp", @"Silk", @"Strata"
+    @"Metaballs", @"God Rays", @"Fluid", @"Wisp", @"Silk", @"Strata", @"Custom"
   ];
   type.componentMin = @[ @0.0 ];
-  type.componentMax = @[ @11.0 ];
+  type.componentMax = @[ @12.0 ];
   type.integerValued = YES;
   type.wrapsChoicePills =
       YES; // 8 types - wrap onto multiple lines, not overflow
@@ -53,7 +56,7 @@ static inline NSArray<KKLane *> *MeshBuildAvailableLanes(void) {
   speed.categorySymbol = @"circle.dotted";
   speed.visibleWhenLabel = @"Type";
   speed.visibleWhenValues =
-      @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11 ];
+      @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12 ]; // + Custom
   [speed insertKeypose:[KKKeyPose
                            keyposeAtTime:0.0
                                   values:@[ @(KK_MESH_GRAD_DEFAULT_SPEED) ]]];
@@ -73,7 +76,7 @@ static inline NSArray<KKLane *> *MeshBuildAvailableLanes(void) {
   seed.categorySymbol = @"circle.dotted";
   seed.visibleWhenLabel = @"Type";
   seed.visibleWhenValues =
-      @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11 ];
+      @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12 ]; // + Custom
   [seed insertKeypose:[KKKeyPose
                           keyposeAtTime:0.0
                                  values:@[ @(KK_MESH_GRAD_DEFAULT_SEED) ]]];
@@ -135,8 +138,9 @@ static inline NSArray<KKLane *> *MeshBuildAvailableLanes(void) {
   // subtle nonzero default breaks 8-bit banding out of the box and scales up to
   // stylistic grain; applied in the shader epilogue with a per-type multiplier
   // (Grainy reads grainier by default).
-  NSArray<NSNumber *> *allTypes =
-      @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11 ];
+  NSArray<NSNumber *> *allTypes = @[
+    @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12
+  ]; // incl. Custom
   struct {
     NSString *label;
     double def, min, max;
@@ -163,6 +167,43 @@ static inline NSArray<KKLane *> *MeshBuildAvailableLanes(void) {
                                           values:@[ @(coreGrain[s].def) ]]];
     [lanes addObject:lane];
   }
+
+  // Custom shader source: a full-width code editor row at the bottom of Core,
+  // shown only for the Custom Type. Non-animatable; the text lives in the
+  // lane's codeString (not a keypose) and flows through the timeline. Seeded
+  // with the baked default so the editor opens on something runnable.
+  KKLane *shader = [KKLane laneWithLabel:@"Shader"];
+  shader.valueType = KKLaneValueTypeCode;
+  shader.codeString = MeshCustomDefaultShaderSource();
+  shader.animatable = NO;
+  shader.enabled = NO;
+  shader.categoryKey = @"Core";
+  shader.categorySymbol = @"chevron.left.forwardslash.chevron.right";
+  shader.visibleWhenLabel = @"Type";
+  shader.visibleWhenValues = @[ @(MeshType_Custom) ];
+  // Live validation in the editor: transpile on edit (memoised) and surface the
+  // first glslang error as a bar + flagged line. Only compiled into the XPC
+  // service (the sole includer of this catalog), where the transpiler is
+  // linked.
+  shader.codeValidator = ^NSString *(NSString *code, NSInteger *outLine) {
+    KKGLSLTranspileResult *r = KKTranspileShadertoyGLSL(code);
+    if (r.msl)
+      return nil; // compiled clean
+    NSString *msg = nil;
+    NSInteger line = 0;
+    [r firstError:&msg line:&line];
+    if (outLine)
+      *outLine = line;
+    if (!msg.length)
+      return RLoc(@"Shader failed to compile",
+                  @"Custom shader fallback error.");
+    return line > 0
+               ? [NSString stringWithFormat:RLoc(@"Line %ld: %@",
+                                                 @"Shader error with line."),
+                                            (long)line, msg]
+               : msg;
+  };
+  [lanes addObject:shader];
 
   // --- Shader Props: each type's own controls (gated by Type). The type-shape
   // pills come first so they head their type's section.

@@ -27,6 +27,11 @@ typedef NS_ENUM(NSInteger, KKLaneValueType) {
          // swatch on one row: [<field comps...>, r,g,b,a]
          // (last 4 are the swatch). componentLabels
          // count = the number of leading fields.
+  KKLaneValueTypeCode =
+      8, // a non-numeric lane whose row hosts a multi-line code editor
+         // (KKCodeEditorView). The text is NOT a keypose value - it is held in
+         // `lane.codeString` and flows through the timeline like any lane. Used
+         // for a user-supplied shader source.
 };
 
 typedef NS_ENUM(NSInteger, KKIntervalCurve) {
@@ -170,6 +175,17 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy, nullable) NSString *groupKey;
 @property(nonatomic) BOOL enabled;
 @property(nonatomic) KKLaneValueType valueType; // default: Generic
+/// For a `KKLaneValueTypeCode` lane only: the multi-line source the editor row
+/// shows and edits. Held on the lane (not a keypose) and serialized with the
+/// timeline, so it travels the same path as every other lane's data.
+@property(nonatomic, copy, nullable) NSString *codeString;
+/// For a `KKLaneValueTypeCode` lane: an optional validator the editor runs
+/// (debounced) to surface an error bar + flagged line. Return an error message
+/// or nil; set `*outLine` to the 1-based line to flag (0 = none). Not
+/// serialized (a block can't be), so it is carried template->reconciled in
+/// -seededFrom: like a piece of static config, not clip data.
+@property(nonatomic, copy, nullable) NSString *_Nullable (^codeValidator)
+    (NSString *code, NSInteger *outLine);
 @property(nonatomic, copy) NSArray<NSNumber *>
     *componentMin; // one per component, empty = unconstrained
 @property(nonatomic, copy) NSArray<NSNumber *>

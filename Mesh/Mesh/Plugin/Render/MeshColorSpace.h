@@ -52,6 +52,8 @@ static inline int MeshMaxColorsForType(int type) {
     return KK_GRAIN_GRAD_COLORS; // 7
   case MeshType_GodRays:
     return 5;
+  case MeshType_Custom:
+    return 0; // the user shader owns its own colours (no palette lanes yet)
   default:
     return KK_MESH_GRAD_COLORS; // 10
   }
@@ -397,7 +399,7 @@ static inline int MeshEffectiveColorCount(int storedCount, int type) {
 }
 
 /// Number of Types (choice-pill entries). Keep in sync with the MeshType enum.
-#define MESH_TYPE_COUNT 12
+#define MESH_TYPE_COUNT 13
 
 /// Type indices (as NSNumbers) whose palette cap is >= `minCap` - i.e. the
 /// Types for which swatch #minCap is meaningful. Used to gate a swatch row's

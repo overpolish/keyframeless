@@ -207,13 +207,25 @@
   [self _replaceLane:lane forLabel:label];
 }
 
+// Commit a code-lane edit: replace the lane's `codeString` (its value is text,
+// not keyposes) and route through the same lane-replace / timeline-commit path.
+- (void)_setLaneCode:(NSString *)code forLabel:(NSString *)label {
+  KKLane *existing = [self _laneForLabel:label];
+  if (!existing)
+    return;
+  KKLane *lane = [existing copy];
+  lane.codeString = code;
+  [self _replaceLane:lane forLabel:label];
+}
+
 - (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label {
   // The CONSTANTS popover edits the lanes view's own _timeline, not a graph, so
   // its aspect-link toggle persists here (the keypose popover routes to the
-  // active graph instead). Reuse the same helper the graphs use so the behaviour
-  // matches, then persist through onTimelineMutated like a value edit - without
-  // this the toggle only updated the row, so the next constant scrub's _refresh
-  // re-read the stale (template-default linked) lane and relocked it.
+  // active graph instead). Reuse the same helper the graphs use so the
+  // behaviour matches, then persist through onTimelineMutated like a value edit
+  // - without this the toggle only updated the row, so the next constant
+  // scrub's _refresh re-read the stale (template-default linked) lane and
+  // relocked it.
   KKTimeline *t = KKTimelineSettingAspectLinked(_timeline, label, on);
   if (!t)
     return;

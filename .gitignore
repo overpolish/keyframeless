@@ -24,3 +24,5 @@ Distribution/helper/staging/
 CLAUDE.md
 .compile
 .cache
+# Vendored transpiler build artifacts (run ThirdParty/build-transpiler.sh)
+ThirdParty/build/

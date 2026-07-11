@@ -196,6 +196,12 @@
          editsKeypose:cfg.isBoundary
       initialCategory:cfg.initialCategory];
   staticView.onCategoryChanged = cfg.onCategoryChanged;
+  // Code-lane edits (e.g. a shader source) are discrete text commits: write the
+  // new string to the lane's codeString through the standard lane-replace path.
+  staticView.onHandleCode = ^(NSString *label, NSString *code) {
+    __strong typeof(weak) s = weak;
+    [s _setLaneCode:code forLabel:label];
+  };
   // Palette reroll: commit every changed swatch inside one drag-undo bracket so
   // the whole set persists as a single undo entry (the per-lane drag path only
   // commits one label per bracket, which is why the batch path exists).

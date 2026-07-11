@@ -1009,6 +1009,48 @@
         }
       }
     },
+    "Drag the centre handle": {
+      "comment": "Help shortcut keys: origin handle.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehe den Mittelgriff"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra el tirador central"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser la poignée centrale"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中央のハンドルをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "중앙 핸들을 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动中心手柄"
+          }
+        }
+      }
+    },
     "Drag the corner toward the <warn>glowing target</warn>": {
       "comment": "Constants guide: drag message for the crop corner.",
       "extractionState": "manual",
@@ -1047,6 +1089,90 @@
           "stringUnit": {
             "state": "translated",
             "value": "将角拖向<warn>发光目标</warn>"
+          }
+        }
+      }
+    },
+    "Drag the rotation ring": {
+      "comment": "Help shortcut keys: rotation ring.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehe den Rotationsring"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra el anillo de rotación"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser l'anneau de rotation"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回転リングをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "회전 링을 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动旋转环"
+          }
+        }
+      }
+    },
+    "Drag the scale box": {
+      "comment": "Help shortcut keys: scale box.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ziehe den Skalierungsrahmen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrastra el cuadro de escala"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Faites glisser le cadre d'échelle"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スケールボックスをドラッグ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "크기 조절 상자를 드래그"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动缩放框"
           }
         }
       }
@@ -1723,6 +1849,48 @@
         }
       }
     },
+    "Line %ld: %@": {
+      "comment": "Custom shader: error prefixed with its line number.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeile %ld: %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Línea %ld: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ligne %ld : %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%ld 行目: %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%ld번째 줄: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %ld 行：%@"
+          }
+        }
+      }
+    },
     "Make a warm sunset mesh gradient.": {
       "comment": "AI example value: warm sunset gradient.",
       "extractionState": "manual",
@@ -1761,6 +1929,132 @@
           "stringUnit": {
             "state": "translated",
             "value": "制作一个温暖的日落网格渐变。"
+          }
+        }
+      }
+    },
+    "Mesh": {
+      "comment": "Help section title (the plugin name).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesh"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesh"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesh"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesh"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesh"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesh"
+          }
+        }
+      }
+    },
+    "Mesh rounds off the corners of any clip and crops it with a box you can animate. Drop it on a clip from the Effects browser. It animates with the timeline, so the Timing sections cover how Basic, Advanced, easing, and motion blur work.": {
+      "comment": "Mesh help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesh rundet die Ecken eines beliebigen Clips ab und beschneidet ihn mit einem Rahmen, den du animieren kannst. Zieh es aus dem Effekte-Browser auf einen Clip. Es animiert mit der Timeline, daher erklären die Timing-Abschnitte, wie Basic, Erweitert, Easing und Bewegungsunschärfe funktionieren."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesh redondea las esquinas de cualquier clip y lo recorta con un marco que puedes animar. Suéltalo en un clip desde el navegador de Efectos. Se anima con la línea de tiempo, así que las secciones de Sincronización explican cómo funcionan Básico, Avanzado, la suavización y el desenfoque de movimiento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesh arrondit les coins de n'importe quel clip et le rogne avec un cadre que vous pouvez animer. Faites-le glisser sur un clip depuis le navigateur d'Effets. Il s'anime avec la timeline, donc les sections Minutage expliquent comment fonctionnent Basique, Avancé, le lissage et le flou de mouvement."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesh は、どんなクリップでも角を丸め、アニメーションできる枠で切り抜きます。エフェクトブラウザからクリップにドロップします。タイムラインでアニメートするので、タイミングのセクションでベーシック、アドバンス、イージング、モーションブラーの仕組みを説明しています。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesh는 어떤 클립이든 모서리를 둥글게 다듬고 애니메이션할 수 있는 상자로 잘라냅니다. 효과 브라우저에서 클립에 놓으세요. 타임라인으로 애니메이션되므로 타이밍 섹션에서 베이식, 고급, 이징, 모션 블러가 어떻게 작동하는지 다룹니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mesh 会把任何片段的角磨圆，并用一个你可以添加动画的框来裁剪它。从效果浏览器把它拖到片段上。它随时间线播放动画，因此计时部分讲解了基础、高级、缓动和运动模糊如何工作。"
+          }
+        }
+      }
+    },
+    "Move the pattern's origin on the canvas": {
+      "comment": "Help shortcut description: origin handle.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschiebe den Ursprung des Musters auf der Leinwand"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mueve el origen del patrón en el lienzo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déplacez l'origine du motif sur le canevas"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンバス上でパターンの原点を移動"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "캔버스에서 패턴의 원점을 이동"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在画布上移动图案的原点"
           }
         }
       }
@@ -1933,86 +2227,86 @@
         }
       }
     },
-    "Mesh": {
-      "comment": "Help section title (the plugin name).",
+    "Resize the pattern": {
+      "comment": "Help shortcut description: scale box.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesh"
+            "value": "Größe des Musters ändern"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesh"
+            "value": "Cambia el tamaño del patrón"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesh"
+            "value": "Redimensionnez le motif"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesh"
+            "value": "パターンのサイズを変更"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesh"
+            "value": "패턴 크기 조절"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesh"
+            "value": "调整图案大小"
           }
         }
       }
     },
-    "Mesh rounds off the corners of any clip and crops it with a box you can animate. Drop it on a clip from the Effects browser. It animates with the timeline, so the Timing sections cover how Basic, Advanced, easing, and motion blur work.": {
-      "comment": "Mesh help text.",
+    "Rotate the pattern": {
+      "comment": "Help shortcut description: rotation ring.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesh rundet die Ecken eines beliebigen Clips ab und beschneidet ihn mit einem Rahmen, den du animieren kannst. Zieh es aus dem Effekte-Browser auf einen Clip. Es animiert mit der Timeline, daher erklären die Timing-Abschnitte, wie Basic, Erweitert, Easing und Bewegungsunschärfe funktionieren."
+            "value": "Muster drehen"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesh redondea las esquinas de cualquier clip y lo recorta con un marco que puedes animar. Suéltalo en un clip desde el navegador de Efectos. Se anima con la línea de tiempo, así que las secciones de Sincronización explican cómo funcionan Básico, Avanzado, la suavización y el desenfoque de movimiento."
+            "value": "Gira el patrón"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesh arrondit les coins de n'importe quel clip et le rogne avec un cadre que vous pouvez animer. Faites-le glisser sur un clip depuis le navigateur d'Effets. Il s'anime avec la timeline, donc les sections Minutage expliquent comment fonctionnent Basique, Avancé, le lissage et le flou de mouvement."
+            "value": "Faites pivoter le motif"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesh は、どんなクリップでも角を丸め、アニメーションできる枠で切り抜きます。エフェクトブラウザからクリップにドロップします。タイムラインでアニメートするので、タイミングのセクションでベーシック、アドバンス、イージング、モーションブラーの仕組みを説明しています。"
+            "value": "パターンを回転"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesh는 어떤 클립이든 모서리를 둥글게 다듬고 애니메이션할 수 있는 상자로 잘라냅니다. 효과 브라우저에서 클립에 놓으세요. 타임라인으로 애니메이션되므로 타이밍 섹션에서 베이식, 고급, 이징, 모션 블러가 어떻게 작동하는지 다룹니다."
+            "value": "패턴을 회전"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mesh 会把任何片段的角磨圆，并用一个你可以添加动画的框来裁剪它。从效果浏览器把它拖到片段上。它随时间线播放动画，因此计时部分讲解了基础、高级、缓动和运动模糊如何工作。"
+            "value": "旋转图案"
           }
         }
       }
@@ -2097,6 +2391,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "在画布上设置边角圆度"
+          }
+        }
+      }
+    },
+    "Shader failed to compile": {
+      "comment": "Custom shader: fallback error when no message parses.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shader konnte nicht kompiliert werden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo compilar el shader"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Échec de la compilation du shader"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シェーダーのコンパイルに失敗しました"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "셰이더 컴파일 실패"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "着色器编译失败"
           }
         }
       }

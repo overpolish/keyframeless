@@ -96,10 +96,10 @@
 				"/Localized: Plugin/InfoPlist.strings",
 				Plugin/Core/main.m,
 				Plugin/Core/MeshLocalized.m,
+				Plugin/Core/MeshPresets.m,
 				Plugin/Core/Plugin.m,
 				"Plugin/Core/Plugin+CustomUI.m",
 				"Plugin/Core/Plugin+Parameters.m",
-				Plugin/Core/MeshPresets.m,
 				Plugin/Info.plist,
 				Plugin/Inspector/MeshInspectorView.m,
 				"Plugin/Inspector/MeshInspectorView+BasicTimingGuide.m",
@@ -108,6 +108,7 @@
 				"Plugin/OSC/MeshOSC+MouseHandlers.m",
 				Plugin/OSC/MeshOSCRadiusMath.m,
 				Plugin/OSC/OSC.m,
+				Plugin/Render/KKGLSLTranspiler.mm,
 				Plugin/Render/Mesh.metal,
 				Plugin/Render/MeshMiniViewerRenderer.m,
 				"Plugin/Render/Plugin+Render.m",
@@ -411,14 +412,27 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../ThirdParty/build/include",
+				);
 				INFOPLIST_FILE = Mesh/Plugin/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
 					"@loader_path/../../../../Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../ThirdParty/build/lib",
+				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lkktranspiler",
+					"-lc++",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Mesh.PlugIn;
 				PRODUCT_NAME = "Mesh $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -437,14 +451,27 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GCC_PRECOMPILE_PREFIX_HEADER = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../ThirdParty/build/include",
+				);
 				INFOPLIST_FILE = Mesh/Plugin/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@loader_path/../Frameworks",
 					"@loader_path/../../../../Frameworks",
 				);
+				LIBRARY_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/../ThirdParty/build/lib",
+				);
 				MACH_O_TYPE = mh_execute;
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-lkktranspiler",
+					"-lc++",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = co.overpolish.keyframeless.Mesh.PlugIn;
 				PRODUCT_NAME = "Mesh $(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

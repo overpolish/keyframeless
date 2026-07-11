@@ -42,11 +42,11 @@ NS_ASSUME_NONNULL_BEGIN
   __weak _KKManagePopoverView *_openManageView;
   __weak NSPopover *_openManagePopover;
   // The reused popover shown via _showPopoverWithContent: (gap/hold/boundary).
-  // STRONG + reused across opens: a ViewBridge XPC remote-hosts each NSPopover's
-  // backing window and FCP never releases it until inspector teardown, so a NEW
-  // popover per open leaks its CA layer-hosting IOSurfaces (~13 MB each) every
-  // time. Reusing one instance reuses its backing window (and surfaces), bounding
-  // it. Closed (not destroyed) before a new one opens.
+  // STRONG + reused across opens: a ViewBridge XPC remote-hosts each
+  // NSPopover's backing window and FCP never releases it until inspector
+  // teardown, so a NEW popover per open leaks its CA layer-hosting IOSurfaces
+  // (~13 MB each) every time. Reusing one instance reuses its backing window
+  // (and surfaces), bounding it. Closed (not destroyed) before a new one opens.
   NSPopover *_openContentPopover;
   __weak _KKStaticValuesPopoverView *_openStaticView;
   // YES when _openStaticView is a boundary-value popover (caller-supplied
@@ -160,6 +160,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSArray<NSNumber *> *)_defaultValuesForLabel:(NSString *)label;
 - (void)_setLaneAnimatable:(BOOL)animatable forLabel:(NSString *)label;
 - (void)_setLaneValues:(NSArray<NSNumber *> *)values forLabel:(NSString *)label;
+- (void)_setLaneCode:(NSString *)code forLabel:(NSString *)label;
 - (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label;
 @end
 

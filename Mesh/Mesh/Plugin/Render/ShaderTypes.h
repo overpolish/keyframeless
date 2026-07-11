@@ -217,6 +217,7 @@ typedef enum MeshType {
     MeshType_Neon = 9,          // radiant-shaders neon-drip ("Wisp")
     MeshType_Silk = 10,         // radiant-shaders silk-cascade ("Silk")
     MeshType_Strata = 11,       // radiant-shaders painted-strata ("Strata")
+    MeshType_Custom = 12,       // user-supplied shader, runtime-compiled
 } MeshType;
 
 // The full render state packed into pluginState: the active type plus each

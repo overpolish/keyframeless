@@ -4,13 +4,17 @@
  */
 
 #import "Constants.h"
+#import "KKGLSLTranspiler.h" // Shadertoy GLSL -> MSL (glslang + SPIRV-Cross)
 #import "MeshColorSpace.h"
+#import "MeshCustomShader.h" // KKCustomUniforms + MeshCustomFullSource (shared)
 #import "MeshMiniViewerRenderer.h" // per-instance descriptor path
 #import "MeshUniformBuilders.h" // per-Type uniform builders (shared with mini)
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
+#import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKMotionBlur.h>
+#import <KeyframelessKit/KKRenderPrimitives.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -122,7 +126,98 @@ static void MeshEncodeTypeDraw(id<MTLRenderCommandEncoder> encoder,
               vertexCount:4];
 }
 
+// ── Custom (user-supplied) shader ──
+// Runtime-compiled shader for MeshType_Custom. The user writes a
+// Shadertoy-style GLSL Image shader (`void mainImage(out vec4, in vec2)`, bare
+// iTime / iResolution / iChannelN). KKGLSLTranspiler wraps it into a full GLSL
+// unit and transpiles it to MSL with glslang + SPIRV-Cross, so the real GLSL
+// dialect (not a regex approximation) drives the result. The pipeline is cached
+// on the emitted MSL hash. The default / error sources below are shared with
+// the mini-viewer renderer (via MeshCustomShader.h / Constants.h).
+
+// The default shader: the classic Shadertoy cosine-palette plasma, so Custom
+// renders something alive out of the box (and seeds the editor). Shared with
+// the inspector via Constants.h.
+NSString *MeshCustomDefaultShaderSource(void) {
+  return @"void mainImage( out vec4 fragColor, in vec2 fragCoord ) {\n"
+         @"    vec2 uv = fragCoord / iResolution.xy;\n"
+         @"    vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx * 3.0 + "
+         @"vec3(0.0, 2.0, 4.0));\n"
+         @"    fragColor = vec4(col, 1.0);\n"
+         @"}\n";
+}
+
+// Shown when the user's shader fails to compile (e.g. uses iChannel textures or
+// has a syntax error): animated dark-red hazard stripes, so a broken shader
+// reads as clearly broken instead of a stale / blank frame. Always valid.
+NSString *MeshCustomErrorShaderSource(void) {
+  return @"void mainImage( out vec4 fragColor, in vec2 fragCoord ) {\n"
+         @"    vec2 uv = fragCoord / iResolution.xy;\n"
+         @"    float s = step(0.5, fract((uv.x + uv.y) * 10.0 - iTime));\n"
+         @"    vec3 col = mix(vec3(0.22,0.0,0.0), vec3(0.5,0.02,0.02), s);\n"
+         @"    fragColor = vec4(col, 1.0);\n"
+         @"}\n";
+}
+
 @implementation MeshPlugin (Render)
+
+// Build (or fetch the cached) runtime-compiled pipeline for `userSource`. The
+// GLSL is transpiled to MSL via glslang + SPIRV-Cross (memoised), then compiled
+// and cached per device+pixel-format keyed on the emitted MSL hash. Returns nil
+// (and logs) on a bad shader; the caller then draws the error pattern.
+- (id<MTLRenderPipelineState>)customPipelineForSource:(NSString *)userSource
+                                     destinationImage:
+                                         (FxImageTile *)destinationImage {
+  KKGLSLTranspileResult *tr = KKTranspileShadertoyGLSL(userSource);
+  if (!tr.msl) {
+    KKLogError(@"[Custom] GLSL transpile failed: %@", tr.errorLog);
+    return nil;
+  }
+  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  uint64_t registryID = destinationImage.deviceRegistryID;
+  MTLPixelFormat pf =
+      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+  NSString *pluginID = [NSString
+      stringWithFormat:@"%@.custom.%lu", kPluginID, (unsigned long)tr.msl.hash];
+  id<MTLRenderPipelineState> existing =
+      [cache pipelineStateForPluginID:pluginID
+                           registryID:registryID
+                          pixelFormat:pf];
+  if (existing)
+    return existing;
+
+  id<MTLDevice> device = [cache deviceWithRegistryID:registryID];
+  if (!device)
+    return nil;
+  NSError *err = nil;
+  id<MTLLibrary> lib = [device newLibraryWithSource:tr.msl
+                                            options:nil
+                                              error:&err];
+  if (!lib) {
+    KKLogError(@"[Custom] MSL compile failed: %@", err);
+    return nil;
+  }
+  id<MTLFunction> vfn = [lib newFunctionWithName:tr.vertexName];
+  id<MTLFunction> ffn = [lib newFunctionWithName:tr.fragmentName];
+  if (!vfn || !ffn)
+    return nil;
+  MTLRenderPipelineDescriptor *desc = [KKRenderPrimitives
+      createPipelineDescriptorWithVertexFunction:vfn
+                                fragmentFunction:ffn
+                                     pixelFormat:pf
+                                       blendMode:KKBlendModePremultipliedAlpha];
+  id<MTLRenderPipelineState> ps =
+      [device newRenderPipelineStateWithDescriptor:desc error:&err];
+  if (!ps) {
+    KKLogError(@"[Custom] pipeline build failed: %@", err);
+    return nil;
+  }
+  [cache registerPipelineState:ps
+                   forPluginID:pluginID
+                    registryID:registryID
+                   pixelFormat:pf];
+  return ps;
+}
 
 // Generator: no input clip, so nothing to schedule. FCP still calls
 // -renderDestinationImage: with an empty sourceImages array.
@@ -267,8 +362,11 @@ static void MeshEncodeTypeDraw(id<MTLRenderCommandEncoder> encoder,
 
   // Mesh's motion is the shader's own time (Speed), not a keyposed lane, so the
   // timeline-based gates can't see it. Blur only when the pattern actually
-  // moves; a frozen generator (Speed ~ 0) skips the N-pass cost.
-  if (mbState.enabled && states[0].common.speed <= 1e-3f)
+  // moves; a frozen generator (Speed ~ 0) skips the N-pass cost. The Custom
+  // type owns its own animation and its source rides in the blob tail, so it
+  // never uses the sample-accumulate path.
+  BOOL isCustom = (states[0].type == MeshType_Custom);
+  if (isCustom || (mbState.enabled && states[0].common.speed <= 1e-3f))
     mbState.enabled = NO;
 
   NSMutableData *data = [NSMutableData
@@ -280,6 +378,26 @@ static void MeshEncodeTypeDraw(id<MTLRenderCommandEncoder> encoder,
     for (NSInteger i = 1; i < n; i++)
       [data appendBytes:&states[i] length:sizeof(MeshPluginState)];
   free(states);
+
+  // Custom type: append the user shader source (UTF-8) after the single state
+  // sample. The source lives in the timeline's "Shader" code lane (codeString).
+  // MB is forced off above, so the layout is a fixed
+  // [mbState][state][source...] and render reads the tail from a known offset.
+  // Empty = the baked default.
+  if (isCustom) {
+    NSString *timelineJSON =
+        KKReadCustomParamString(paramAPI, kKKParamTimelineData);
+    KKTimeline *tl =
+        timelineJSON.length ? [KKTimeline timelineFromJSON:timelineJSON] : nil;
+    NSString *src = nil;
+    for (KKLane *lane in tl.lanes)
+      if ([lane.label isEqualToString:@"Shader"]) {
+        src = lane.codeString;
+        break;
+      }
+    if (src.length)
+      [data appendData:[src dataUsingEncoding:NSUTF8StringEncoding]];
+  }
 
   *pluginState = data;
   return (*pluginState != nil);
@@ -355,6 +473,81 @@ static void MeshEncodeTypeDraw(id<MTLRenderCommandEncoder> encoder,
     base.silk = SilkDefault();
     base.strata = StrataDefault();
     base.common = MeshCommonDefault();
+  }
+
+  // Custom (user-supplied) shader: runtime-compiled, bypasses the static Type
+  // registry and motion blur. Increment 1 renders a baked default source; the
+  // editor + a persisted source string arrive next. iTime respects the shared
+  // Speed / Seed so it animates like the built-in Types.
+  if (base.type == MeshType_Custom) {
+    float iTime = base.common.time * base.common.speed +
+                  fmodf(base.common.seed, 10000.0f);
+    KKGLSLUniforms u;
+    u.resTime = (simd_float4){(float)mediaW, (float)mediaH, 1.0f, iTime};
+    u.mouse = (simd_float4){0.0f, 0.0f, 0.0f, 0.0f};
+    u.date = (simd_float4){0.0f, 0.0f, 0.0f, 0.0f};
+    float encodeSRGB =
+        (destinationImage.ioSurface.pixelFormat == kCVPixelFormatType_32BGRA)
+            ? 1.0f
+            : 0.0f;
+    // x=iTimeDelta (approx), y=float(iFrame) (approx), z=flipY (FCP dest is
+    // reverse-Y, no flip), w=encodeSRGB.
+    u.extra = (simd_float4){1.0f / 60.0f, iTime * 60.0f, 0.0f, encodeSRGB};
+    // Core film grain (Grain / Grain Size lanes), same as the built-in Types.
+    u.grain =
+        (simd_float4){base.common.grain, base.common.grainSize, 0.0f, 0.0f};
+    // The user source follows the single state sample in the blob (appended in
+    // pluginState:). Empty tail = fall back to the baked default.
+    NSString *userSource = nil;
+    NSUInteger head = sizeof(mbState) + sizeof(MeshPluginState);
+    if (pluginState.length > head) {
+      NSData *srcData = [pluginState
+          subdataWithRange:NSMakeRange(head, pluginState.length - head)];
+      userSource = [[NSString alloc] initWithData:srcData
+                                         encoding:NSUTF8StringEncoding];
+    }
+    if (userSource.length == 0)
+      userSource = MeshCustomDefaultShaderSource();
+    NSString *effectiveSource = userSource;
+    id<MTLRenderPipelineState> customPS =
+        [self customPipelineForSource:userSource
+                     destinationImage:destinationImage];
+    if (!customPS) {
+      // Transpile/compile failed - render the error pattern so it's visibly
+      // broken (the failure itself is logged in customPipelineForSource:).
+      effectiveSource = MeshCustomErrorShaderSource();
+      customPS = [self customPipelineForSource:effectiveSource
+                              destinationImage:destinationImage];
+    }
+    if (!customPS)
+      return NO;
+    KKGLSLTranspileResult *tr = KKTranspileShadertoyGLSL(effectiveSource);
+    id<MTLDevice> device = [[KKMetalDeviceCache sharedCache]
+        deviceWithRegistryID:destinationImage.deviceRegistryID];
+    id<MTLTexture> noiseTex =
+        tr.usedChannelMask ? KKCustomChannelNoiseTexture(device) : nil;
+    id<MTLSamplerState> chSampler =
+        tr.usedChannelMask ? KKCustomChannelSampler(device) : nil;
+    return [self
+        encodeRenderCommandsForDestinationImage:destinationImage
+                                   sourceImages:sourceImages
+                                       commands:^(
+                                           id<MTLRenderCommandEncoder> encoder,
+                                           NSArray<id<MTLTexture>>
+                                               *inputTextures) {
+                                         [encoder
+                                             setRenderPipelineState:customPS];
+                                         [encoder setFragmentBytes:&u
+                                                            length:sizeof(u)
+                                                           atIndex:0];
+                                         KKBindCustomChannels(
+                                             encoder, tr, noiseTex, chSampler);
+                                         [encoder
+                                             drawPrimitives:
+                                                 MTLPrimitiveTypeTriangleStrip
+                                                vertexStart:0
+                                                vertexCount:4];
+                                       }];
   }
 
   // Dispatch on the active type via the registry (MeshUniformBuilders.h). Type

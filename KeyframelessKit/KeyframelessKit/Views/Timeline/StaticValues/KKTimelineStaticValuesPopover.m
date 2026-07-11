@@ -1031,6 +1031,11 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
         s->_onHandleValue(label, values);
     }
   };
+  row.onCodeChanged = ^(NSString *code) {
+    __strong typeof(weak) s = weak;
+    if (s.onHandleCode)
+      s.onHandleCode(label, code);
+  };
   row.onDragBegin = ^{
     __strong typeof(weak) s = weak;
     if (s->_onDragBegin)

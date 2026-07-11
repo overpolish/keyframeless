@@ -386,6 +386,8 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.groupKey = [_groupKey copy];
   c.enabled = _enabled;
   c.valueType = _valueType;
+  c.codeString = [_codeString copy];
+  c.codeValidator = _codeValidator; // block, copied by the property setter
   c.componentMin = [_componentMin copy];
   c.componentMax = [_componentMax copy];
   c.sliderMax = [_sliderMax copy];
@@ -441,6 +443,8 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
     d[@"group_key"] = _groupKey;
   d[@"enabled"] = @(_enabled);
   d[@"value_type"] = @(_valueType);
+  if (_codeString)
+    d[@"code_string"] = _codeString;
   if (_componentMin)
     d[@"component_min"] = _componentMin;
   if (_componentMax)
@@ -522,6 +526,8 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   l.enabled = d[@"enabled"] ? [d[@"enabled"] boolValue] : YES;
   if (d[@"value_type"])
     l.valueType = (KKLaneValueType)[d[@"value_type"] integerValue];
+  if ([d[@"code_string"] isKindOfClass:[NSString class]])
+    l.codeString = d[@"code_string"];
   if ([d[@"component_min"] isKindOfClass:[NSArray class]])
     l.componentMin = d[@"component_min"];
   if ([d[@"component_max"] isKindOfClass:[NSArray class]])
