@@ -128,6 +128,12 @@ extension AIPluginAgent {
 			               Only use when ONE lane from the available list is clearly \
 			               named or strongly implied. If the lane is ambiguous, do \
 			               NOT pick this template - set kind = "vague" instead.
+			  "style"    - user wants to set an overall LOOK for a generator: a \
+			               colour palette, mood, or a named visual style, with NO \
+			               animation. E.g. "warm sunset gradient", "a neon look", \
+			               "make it moody and dark", "ocean colours", "a grainy \
+			               retro palette". A single STATIC appearance - if the \
+			               request animates or names a time range, it is NOT this.
 			  "none"     - everything else (multipass will handle).
 
 			template_lane (only when template = "modulate"): EXACT lane label from \
@@ -163,7 +169,7 @@ extension AIPluginAgent {
 				],
 				"complexity": ["type": "string", "enum": ["simple", "complex"]],
 				"clarification": ["type": "string"],
-				"template": ["type": "string", "enum": ["none", "modulate"]],
+				"template": ["type": "string", "enum": ["none", "modulate", "style"]],
 				"template_lane": ["type": "string"],
 				"template_modulation": [
 					"type": "string",
@@ -213,6 +219,13 @@ extension AIPluginAgent {
 			preambles, no apologies. Plain prose only - no markup, XML/HTML tags, \
 			or <...> style symbols; the answer is shown as plain text. If the docs \
 			don't cover the question, say so briefly.
+
+			This is NOT a conversation and you have NO memory of anything before \
+			this message - each request is standalone and answered fresh. Never \
+			reference an earlier question or answer, never imply continuity ("as I \
+			mentioned", "as we discussed", "like before", "still"), and never \
+			invite follow-up ("let me know if…", "feel free to ask", "anything \
+			else?"). Just answer the single question, self-contained, then stop.
 			"""
 		// Local: answer as PLAIN TEXT. Small models reliably write good prose but
 		// routinely fail to wrap it in a {answer:...} JSON envelope - which surfaces

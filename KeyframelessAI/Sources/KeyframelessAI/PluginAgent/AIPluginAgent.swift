@@ -105,6 +105,41 @@ public final class AIPluginAgent: NSObject {
 		}
 	}
 
+	/// Generator variant of `run`: the host also passes its Type catalog (an
+	/// "index = name (blurb)" list) and palette cap, which enables the styling
+	/// fast-path for "make a look" prompts (one call sets Type + the whole
+	/// palette). Q&A, animation, and vague prompts route exactly as `run` does.
+	@MainActor
+	@objc public static func runGenerator(
+		prompt: String,
+		productContext: String,
+		laneSchemaText: String,
+		currentTimelineJSON: String,
+		clipDurationSeconds: Double,
+		currentInspectorMode: String,
+		typeCatalog: String,
+		maxColors: Int,
+		completion: @escaping (AIPluginResult?, Error?) -> Void
+	) {
+		Task { @MainActor in
+			do {
+				let result = try await runAsync(
+					prompt: prompt,
+					productContext: productContext,
+					laneSchemaText: laneSchemaText,
+					currentTimelineJSON: currentTimelineJSON,
+					clipDurationSeconds: clipDurationSeconds,
+					currentInspectorMode: currentInspectorMode,
+					supportsCreate: false,
+					generatorTypeCatalog: typeCatalog,
+					generatorMaxColors: maxColors)
+				completion(result, nil)
+			} catch {
+				completion(nil, error)
+			}
+		}
+	}
+
 	/// Canvas targeted routing (see `runCanvasTargetedAsync`). Declared in the
 	/// main class body - not an extension - so the `@objc` entry point reliably
 	/// lands in the generated ObjC header the plugin imports.
@@ -141,7 +176,9 @@ public final class AIPluginAgent: NSObject {
 		currentTimelineJSON: String,
 		clipDurationSeconds: Double,
 		currentInspectorMode: String,
-		supportsCreate: Bool = false
+		supportsCreate: Bool = false,
+		generatorTypeCatalog: String? = nil,
+		generatorMaxColors: Int = 0
 	) async throws -> AIPluginResult {
 		AIDraftState.shared.routingStatus = AILoc("Reading prompt")
 		// Pass 0a: classify. No docs in this prompt - classifier is just a
@@ -168,6 +205,7 @@ public final class AIPluginAgent: NSObject {
 		}
 		if classification.kind == "answer" {
 			let docs = await renderDocs(for: prompt)
+			AIDraftState.shared.routingStatus = AILoc("Answering")
 			let reply = try await answerQuestion(
 				prompt: prompt, productContext: productContext, docs: docs)
 			return AIPluginResult(answer: reply)
@@ -184,6 +222,24 @@ public final class AIPluginAgent: NSObject {
 				? "Could you be a bit more specific about what you'd like to change?"
 				: clarification
 			return AIPluginResult(answer: reply)
+		}
+
+		// Generator styling fast-path: a "make a look" request (a Type + a
+		// palette) resolves in ONE focused call instead of the per-lane timing
+		// pipeline - fast on local, and it sets the Type reliably. Only when the
+		// host is a generator (it passed its Type catalog + palette cap).
+		if classification.template == "style",
+			let catalog = generatorTypeCatalog, generatorMaxColors > 0
+		{
+			AIDraftState.shared.routingStatus = AILoc("Choosing a look")
+			if let mutation = try await resolveGeneratorStyle(
+				prompt: prompt, productContext: productContext,
+				typeCatalog: catalog, maxColors: generatorMaxColors,
+				enableThinking: classification.complexity == "complex")
+			{
+				return AIPluginResult(mutationJSON: mutation)
+			}
+			// Resolver returned nothing usable - fall through to the full pipeline.
 		}
 
 		// Template fast-path: classifier resolved a known shape, Swift builds

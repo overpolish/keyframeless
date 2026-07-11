@@ -10,6 +10,31 @@
 // the original comment below.
 #import <Foundation/Foundation.h>
 
+// Compact "index = name (look)" catalog for the AI styling fast-path: a single
+// call picks a Type index from this list plus a palette. Keep the blurbs short
+// - this is all the model sees to map "make a neon look" -> the right index.
+static inline NSString *MeshAITypeCatalogText(void) {
+  return @"0 = Mesh (animated colour spots blended into a soft gradient)\n"
+         @"1 = Dithering (a procedural shape as a dithered gradient across the "
+         @"palette)\n"
+         @"2 = Grainy (a shape field indexing a multi-colour ramp with a "
+         @"grainy "
+         @"overlay)\n"
+         @"3 = Warp (colour fields warped by noise + swirl over a base "
+         @"pattern)\n"
+         @"4 = Neuro (a glowing web of fluid lines coloured by the palette)\n"
+         @"5 = Simplex (a multi-colour gradient through Simplex noise, stepped "
+         @"into bands)\n"
+         @"6 = Metaballs (gooey coloured balls roaming the centre and "
+         @"merging)\n"
+         @"7 = God Rays (animated rays of light radiating with a central "
+         @"glow)\n"
+         @"8 = Fluid (a molten, marbled flow from an iterative domain warp)\n"
+         @"9 = Wisp (glowing neon tendril wisps over a dark backdrop)\n"
+         @"10 = Silk (flowing draped silk fabric with anisotropic sheen)\n"
+         @"11 = Strata (stacked geological layers with folded boundaries)\n";
+}
+
 static inline NSString *MeshAILaneSchemaText(void) {
   return @"Lane labels and value spaces. This is a procedural generator with "
          @"twelve "

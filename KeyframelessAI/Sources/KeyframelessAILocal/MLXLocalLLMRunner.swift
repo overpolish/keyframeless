@@ -88,12 +88,11 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 		let container = try await loadContainer(model: model)
 		localLog.notice("load done in \(Self.ms(loadStart), privacy: .public)ms")
 
-		// On-device generation is slow enough that the pipeline's cloud-oriented
-		// per-pass label (e.g. "Reading prompt…") sits frozen for a minute, which
-		// reads as a hang. Replace it with an honest "Thinking…" once the model is
-		// actually generating. Only the local path hits this; cloud keeps its
-		// granular labels (its passes are fast HTTP calls).
-		await LocalRunnerStatus.report(AILoc("Thinking"))
+		// Leave the pipeline's per-pass label ("Planning timing", "Choosing a
+		// look", "Resolving Color 1", …) showing while we generate - it changes as
+		// passes complete, so the user sees real progress, same as cloud. (We used
+		// to overwrite it with "Thinking" here, but that raced the pipeline's label
+		// and just made it flash a step then snap back to "Thinking".)
 
 		// Qwen3 non-thinking recommended sampling (temp 0.7 / top_p 0.8 / top_k 20).
 		// NOT greedy/low-temp - Qwen warns that degrades quality + repeats. The
@@ -187,7 +186,8 @@ public actor MLXLocalLLMRunner: LocalLLMRunner {
 						throw RunnerError.unknownModel(modelID)
 					}
 					let container = try await loadContainer(model: model)
-					await LocalRunnerStatus.report(AILoc("Thinking"))
+					// Keep the pipeline's label (e.g. "Answering") showing; the
+					// answer also streams into the card, so progress is visible.
 					let params = GenerateParameters(
 						maxTokens: 4096, temperature: 0.7, topP: 0.8, topK: 20)
 					let session = ChatSession(
