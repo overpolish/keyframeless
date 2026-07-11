@@ -12,6 +12,7 @@
 #import "MeshLocalized.h"
 #import "MeshMiniViewerRenderer.h" // per-instance mini-viewer rendezvous paths
 #import "MeshOSCRadiusMath.h" // OSC timeline snapshot + frame-duration statics
+#import "MeshPresets.h"       // MeshBuiltinPresets (built-in look presets)
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKColorLanes.h>
@@ -19,6 +20,7 @@
 #import <KeyframelessKit/KKHelpSection.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
+#import <KeyframelessKit/KKPresets.h>
 #import <KeyframelessKit/KKRotationOSC.h> // KKRotationLaneWithLabel + axis flag
 #import <KeyframelessKit/KKTimelineAIMerge.h>
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
@@ -164,6 +166,12 @@
                                renderNudgeParamID:kParamRenderNudge
                                     dragUndoLabel:@"Adjust Origin"
                                detachedWindowSize:CGSizeMake(720.0, 460.0)];
+
+    // Built-in "look" presets (Type + curated palette) for the shared Presets
+    // popover, under this plugin's preset key (set by kkWire above, the key the
+    // popover queries). Idempotent - re-registering replaces the same set.
+    [[KKPresets shared] registerBuiltinPresets:MeshBuiltinPresets()
+                                  forPluginKey:[self presetPluginKey]];
 
     self.inspectorView = view;
 

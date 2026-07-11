@@ -195,6 +195,13 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
+		F255431630022D0600438901 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
 		F26E01AC2F4DE280009D949A = {
 			isa = PBXGroup;
 			children = (
@@ -327,6 +334,10 @@
 				{
 					ProductGroup = F20816252F73D0A6004260DF /* Products */;
 					ProjectRef = F20815D82F73D0A6004260DF /* MagicMove.xcodeproj */;
+				},
+				{
+					ProductGroup = F255431630022D0600438901 /* Products */;
+					ProjectRef = F2553C292FFEF17D00438901 /* Mesh.xcodeproj */;
 				},
 				{
 					ProductGroup = F26E02462F4DE539009D949A /* Products */;

@@ -99,6 +99,7 @@
 				Plugin/Core/Plugin.m,
 				"Plugin/Core/Plugin+CustomUI.m",
 				"Plugin/Core/Plugin+Parameters.m",
+				Plugin/Core/MeshPresets.m,
 				Plugin/Info.plist,
 				Plugin/Inspector/MeshInspectorView.m,
 				"Plugin/Inspector/MeshInspectorView+BasicTimingGuide.m",
