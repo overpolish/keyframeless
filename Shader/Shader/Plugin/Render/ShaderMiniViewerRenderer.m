@@ -405,6 +405,26 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   [e endEncoding];
 }
 
+// The mini feed publishes the source sRGB-encoded (KKMiniViewerFeed writes
+// FCP's linear source through a BGRA8_sRGB texture), so a plain BGRA8 read
+// samples GAMMA. Return an _sRGB-typed view of the same IOSurface so sampling
+// returns LINEAR, matching the main render (which samples FCP's linear source).
+// Falls back to `source` when it has no backing IOSurface or isn't plain BGRA8.
+- (id<MTLTexture>)_linearSourceView:(id<MTLTexture>)source {
+  if (!source.iosurface || source.pixelFormat != MTLPixelFormatBGRA8Unorm)
+    return source;
+  MTLTextureDescriptor *d = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm_sRGB
+                                   width:source.width
+                                  height:source.height
+                               mipmapped:NO];
+  d.usage = MTLTextureUsageShaderRead;
+  id<MTLTexture> v = [source.device newTextureWithDescriptor:d
+                                                   iosurface:source.iosurface
+                                                       plane:0];
+  return v ?: source;
+}
+
 // Effect render: runs the same type/custom pipeline as the FCP render into the
 // preview dest. `source` is the mini-viewer's source frame (bound as iChannel0
 // in the Custom path); the built-in types are procedural and ignore it.
@@ -524,7 +544,14 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
     KKGLSLTranspileResult *tr = KKTranspileShadertoyGLSL(customSource);
     if (tr.usedChannelMask)
       // Source clip -> iChannel0, noise -> iChannel1-3 (matches FCP render).
-      KKBindCustomChannels(e, tr, source, KKCustomSourceSampler(dest.device),
+      // The mini feed stores the source sRGB-encoded (KKMiniViewerFeed writes
+      // FCP's linear source through a BGRA8_sRGB texture), so reading it back
+      // as plain BGRA8 samples GAMMA - brighter than the main render, which
+      // samples FCP's LINEAR source. Read the same IOSurface through an _sRGB
+      // view so the sample linearises and the mini colour matches the main
+      // viewer.
+      KKBindCustomChannels(e, tr, [self _linearSourceView:source],
+                           KKCustomSourceSampler(dest.device),
                            KKCustomChannelNoiseTexture(dest.device),
                            KKCustomChannelSampler(dest.device));
   } else {
