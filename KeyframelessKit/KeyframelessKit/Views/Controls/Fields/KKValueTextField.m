@@ -5,6 +5,7 @@
 
 #import "KKValueTextField.h"
 
+#import "KKFieldEditorSupport.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 
@@ -188,30 +189,9 @@ static NSCursor *KKBlankCursor(void) {
     [self.window makeFirstResponder:nil];
     return YES;
   }
-  // In an FxPlug ViewBridge popover there's no Edit menu, so the standard
-  // Cmd-A / C / V / X key equivalents never route to the field editor. Dispatch
-  // them to it explicitly while we're being edited.
-  if (editor &&
-      (event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask) ==
-          NSEventModifierFlagCommand) {
-    NSString *key = event.charactersIgnoringModifiers.lowercaseString;
-    if ([key isEqualToString:@"a"]) {
-      [editor selectAll:nil];
-      return YES;
-    }
-    if ([key isEqualToString:@"c"]) {
-      [editor copy:nil];
-      return YES;
-    }
-    if ([key isEqualToString:@"v"]) {
-      [editor paste:nil];
-      return YES;
-    }
-    if ([key isEqualToString:@"x"]) {
-      [editor cut:nil];
-      return YES;
-    }
-  }
+  // Cmd-A/C/V/X (no Edit menu in a ViewBridge popover to route them).
+  if (KKHandleEditMenuKeyEquivalent(editor, event))
+    return YES;
   if (editor) {
     [editor keyDown:event];
     return YES;
@@ -239,16 +219,7 @@ static NSCursor *KKBlankCursor(void) {
   return ok;
 }
 - (void)_styleFieldEditor {
-  NSText *ed = self.currentEditor;
-  if (![ed isKindOfClass:[NSTextView class]])
-    return;
-  NSTextView *editor = (NSTextView *)ed;
-  NSColor *accent = [NSColor accentMatchingHost];
-  editor.insertionPointColor = accent;
-  editor.selectedTextAttributes = @{
-    NSBackgroundColorAttributeName : [accent colorWithAlphaComponent:0.3],
-    NSForegroundColorAttributeName : [NSColor labelColor],
-  };
+  KKStyleFieldEditorAccent(self.currentEditor);
 }
 
 // While editing, a click outside this field ends the edit (drops focus). The

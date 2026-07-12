@@ -60,7 +60,7 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
   NSArray<NSNumber *> *typeV =
       ShaderLaneValuesAtFraction(timeline, @"Type", frac);
   outState->type =
-      typeV.count ? (int)lround(typeV[0].doubleValue) : ShaderType_Mesh;
+      typeV.count ? (int)lround(typeV[0].doubleValue) : ShaderType_Custom;
   NSArray<NSNumber *> *speedV =
       ShaderLaneValuesAtFraction(timeline, @"Speed", frac);
   float speed =
@@ -840,6 +840,17 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
     if (shaderLane.codeString.length) {
       ShaderAppendLenString(data, @"Image");
       ShaderAppendLenString(data, shaderLane.codeString);
+    } else if (!shaderLane) {
+      // Fresh instance: the timeline blob hasn't been persisted yet (default is
+      // an empty blob, written only on the first param change / UI edit). The
+      // constants editor already shows the catalog default (plasma) because it
+      // rebuilds its lanes from the catalog, so seed that same default here to
+      // match — otherwise the first render falls to passthrough and the plasma
+      // only appears after the user nudges a param. A present-but-empty
+      // codeString means the user explicitly cleared it => passthrough, so only
+      // fall back when the Shader lane is absent entirely.
+      ShaderAppendLenString(data, @"Image");
+      ShaderAppendLenString(data, ShaderCustomDefaultShaderSource());
     }
     for (NSDictionary *t in shaderLane.codeTabs) {
       NSString *n =
@@ -908,7 +919,7 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
   } else {
     memset(&mbState, 0, sizeof(mbState)); // disabled
     memset(&base, 0, sizeof(base));
-    base.type = ShaderType_Mesh;
+    base.type = ShaderType_Custom;
     base.mesh = ShaderGradientDefault();
     base.dithering = DitheringDefault();
     base.grain = GrainGradientDefault();
@@ -960,7 +971,10 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
     NSString *common = sections[@"Common"] ?: @"";
     NSString *imageSrc = sections[@"Image"];
     if (imageSrc.length == 0)
-      imageSrc = ShaderCustomDefaultShaderSource();
+      // Cleared code = passthrough (show the source unchanged), not the plasma
+      // default.
+      imageSrc = @"void mainImage(out vec4 O, in vec2 fc){ O = "
+                 @"texture(iChannel0, fc / iResolution.xy); }";
     NSString * (^withCommon)(NSString *) = ^NSString *(NSString *s) {
       return common.length ? [NSString stringWithFormat:@"%@\n%@", common, s]
                            : s;

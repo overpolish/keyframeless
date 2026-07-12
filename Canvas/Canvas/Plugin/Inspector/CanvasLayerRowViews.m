@@ -5,6 +5,7 @@
 
 #import "CanvasLayerRowViews.h"
 
+#import <KeyframelessKit/KKFieldEditorSupport.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
 
@@ -36,61 +37,28 @@
 - (BOOL)acceptsFirstResponder {
   return YES;
 }
-// In a ViewBridge popover key events arrive as key equivalents to the window,
-// not normal keyDown to the field editor - forward them (matches
-// KKValueTextField), incl. the Cmd-A/C/V/X the missing Edit menu would handle.
+// The Edit-menu combos (Cmd-A/C/V/X) arrive as key equivalents in the
+// ViewBridge popover; handle those. Do NOT [editor keyDown:]-forward anything
+// else - in this child panel it bounces back out as another
+// performKeyEquivalent and spins (the Esc-after-rename runaway that aborts the
+// OSC render). Regular typing reaches the field editor via the normal key path
+// (the panel is really key); Enter/Esc are handled in
+// control:textView:doCommandBySelector:.
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
-  NSText *editor = self.currentEditor;
-  if (editor) {
-    NSEventModifierFlags m =
-        event.modifierFlags & NSEventModifierFlagDeviceIndependentFlagsMask;
-    if (m == NSEventModifierFlagCommand) {
-      NSString *key = event.charactersIgnoringModifiers.lowercaseString;
-      if ([key isEqualToString:@"a"]) {
-        [editor selectAll:nil];
-        return YES;
-      }
-      if ([key isEqualToString:@"c"]) {
-        [(id)editor copy:nil];
-        return YES;
-      }
-      if ([key isEqualToString:@"v"]) {
-        [(id)editor paste:nil];
-        return YES;
-      }
-      if ([key isEqualToString:@"x"]) {
-        [(id)editor cut:nil];
-        return YES;
-      }
-    }
-    [editor keyDown:event];
+  if (KKHandleEditMenuKeyEquivalent(self.currentEditor, event))
     return YES;
-  }
   return [super performKeyEquivalent:event];
 }
 - (BOOL)becomeFirstResponder {
   BOOL ok = [super becomeFirstResponder];
   if (ok) {
-    [self _styleEditor];
+    KKStyleFieldEditorAccent(self.currentEditor);
     __weak typeof(self) weak = self;
     dispatch_async(dispatch_get_main_queue(), ^{
-      [weak _styleEditor];
+      KKStyleFieldEditorAccent(weak.currentEditor);
     });
   }
   return ok;
-}
-// Accent caret + selection, matching KKValueTextField.
-- (void)_styleEditor {
-  NSText *ed = self.currentEditor;
-  if (![ed isKindOfClass:[NSTextView class]])
-    return;
-  NSTextView *editor = (NSTextView *)ed;
-  NSColor *accent = [NSColor accentMatchingHost];
-  editor.insertionPointColor = accent;
-  editor.selectedTextAttributes = @{
-    NSBackgroundColorAttributeName : [accent colorWithAlphaComponent:0.3],
-    NSForegroundColorAttributeName : NSColor.labelColor,
-  };
 }
 @end
 

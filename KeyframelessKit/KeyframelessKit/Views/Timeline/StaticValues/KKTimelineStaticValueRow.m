@@ -513,7 +513,9 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   if (lane.valueType == KKLaneValueTypeGradient)
     return kGradientRowH;
   if (lane.valueType == KKLaneValueTypeCode)
-    return kCodeRowH;
+    // A savable code lane adds the save bar (name + Save) below the editor;
+    // grow the row so the code area keeps its full height.
+    return kCodeRowH + (lane.codeSavable ? 34.0 : 0.0);
   return KKLaneComponentLabels(lane).count >= 2 ? kCropRowH : kFloatRowH;
 }
 
@@ -788,6 +790,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     editor.translatesAutoresizingMaskIntoConstraints = NO;
     editor.codeValidator =
         lane.codeValidator; // set before text so it validates
+    editor.savable = lane.codeSavable;
     __weak typeof(self) weak = self;
     if (lane.codeTabs.count > 0 || lane.codeTabCatalog.count > 0) {
       // Tabbed: section 0 is Image (the lane's codeString), then any added

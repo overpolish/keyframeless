@@ -198,6 +198,12 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// Static template config (not user data) - carried template->reconciled like
 /// `codeValidator`, never serialized. `codeTabs` holds the ones actually added.
 @property(nonatomic, copy, nullable) NSArray<NSString *> *codeTabCatalog;
+/// For a `KKLaneValueTypeCode` lane: when YES the editor shows a save bar (name
+/// field + Save button) under the code. Save posts
+/// `KKCodeEditorSaveRequestedNotification` for a host to persist / publish the
+/// code. Static template config (not serialized), carried template->reconciled
+/// like `codeValidator`. Default NO.
+@property(nonatomic) BOOL codeSavable;
 @property(nonatomic, copy) NSArray<NSNumber *>
     *componentMin; // one per component, empty = unconstrained
 @property(nonatomic, copy) NSArray<NSNumber *>
@@ -463,6 +469,22 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 - (void)removeKeyposeAtIndex:(NSUInteger)index;
 
 @end
+
+/// Posted (by the code editor) when a `codeSavable` lane's save bar Save button
+/// is pressed. `object` is the KKCodeEditorView; userInfo has
+/// `KKCodeEditorSaveNameKey` (NSString) + `KKCodeEditorSaveSectionsKey`
+/// (NSArray of @{@"name",@"code"}). Declared in this public header so a plugin
+/// host can observe it (the editor view's own header is framework-internal).
+FOUNDATION_EXPORT NSNotificationName const
+    KKCodeEditorSaveRequestedNotification;
+FOUNDATION_EXPORT NSString *const KKCodeEditorSaveNameKey;
+FOUNDATION_EXPORT NSString *const KKCodeEditorSaveSectionsKey;
+
+/// Post this to make an open savable code editor reload its sections (e.g.
+/// after a host loads a different shader). userInfo:
+/// `KKCodeEditorSaveSectionsKey` (NSArray of @{@"name",@"code"}). Only
+/// `savable` editors respond.
+FOUNDATION_EXPORT NSNotificationName const KKCodeEditorReloadNotification;
 
 /// Display labels for a lane's value components, derived from its valueType.
 /// Used in per-component selection UI (modulation popover's component pills).

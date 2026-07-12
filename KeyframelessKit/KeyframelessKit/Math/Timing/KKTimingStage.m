@@ -390,6 +390,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.codeTabs = [_codeTabs copy];
   c.codeTabCatalog = [_codeTabCatalog copy]; // static config, not serialized
   c.codeValidator = _codeValidator; // block, copied by the property setter
+  c.codeSavable = _codeSavable;     // static config, not serialized
   c.componentMin = [_componentMin copy];
   c.componentMax = [_componentMax copy];
   c.sliderMax = [_sliderMax copy];

@@ -95,6 +95,7 @@
 				Views/Controls/Decoration/KKSeparatorView.h,
 				Views/Controls/Fields/KKCheckboxView.h,
 				Views/Controls/Fields/KKColorWellView.h,
+				Views/Controls/Fields/KKFieldEditorSupport.h,
 				Views/Controls/Fields/KKPopupSelectView.h,
 				Views/Controls/Fields/KKSeedView.h,
 				Views/Controls/Popover/KKGapPopoverTypes.h,

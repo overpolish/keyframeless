@@ -150,7 +150,7 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   if ([label isEqualToString:@"Grain Size"])
     return @[ @(KK_CORE_GRAINSIZE_DEFAULT) ];
   if ([label isEqualToString:@"Type"])
-    return @[ @0.0 ];
+    return @[ @(ShaderType_Custom) ]; // Custom-only plugin (no Type lane)
   if ([label isEqualToString:@"Brightness"])
     return @[ @(KK_NEURO_DEFAULT_BRIGHTNESS * 100.0) ];
   if ([label isEqualToString:@"Contrast"])
@@ -269,10 +269,22 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
 // The Custom type's user shader source from the timeline's "Shader" code lane
 // (the default plasma when empty), mirroring the FCP render read.
 - (NSString *)_customShaderSource {
+  KKLane *shaderLane = nil;
   for (KKLane *lane in self.timeline.lanes)
-    if ([lane.label isEqualToString:@"Shader"] && lane.codeString.length)
-      return lane.codeString;
-  return ShaderCustomDefaultShaderSource();
+    if ([lane.label isEqualToString:@"Shader"]) {
+      shaderLane = lane;
+      break;
+    }
+  if (shaderLane.codeString.length)
+    return shaderLane.codeString;
+  if (!shaderLane)
+    // Fresh instance: timeline not yet seeded. Mirror the FCP render and use
+    // the baked plasma default so the mini matches. A present-but-empty
+    // codeString means the user cleared it => passthrough.
+    return ShaderCustomDefaultShaderSource();
+  return @"void mainImage(out vec4 O, in vec2 fc){ O = "
+         @"texture(iChannel0, fc / iResolution.xy); }"; // passthrough when
+                                                        // empty
 }
 
 // All Custom sections from the Shader lane: Image (codeString) + non-empty
@@ -281,18 +293,25 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
 - (NSDictionary<NSString *, NSString *> *)_customSections {
   NSMutableDictionary<NSString *, NSString *> *out =
       [NSMutableDictionary dictionary];
+  KKLane *shaderLane = nil;
   for (KKLane *lane in self.timeline.lanes)
     if ([lane.label isEqualToString:@"Shader"]) {
-      if (lane.codeString.length)
-        out[@"Image"] = lane.codeString;
-      for (NSDictionary *t in lane.codeTabs) {
-        NSString *n = t[@"name"], *c = t[@"code"];
-        if ([n isKindOfClass:[NSString class]] &&
-            [c isKindOfClass:[NSString class]] && c.length)
-          out[n] = c;
-      }
+      shaderLane = lane;
       break;
     }
+  if (!shaderLane) {
+    // Fresh instance: seed the baked plasma default (mirrors the FCP render).
+    out[@"Image"] = ShaderCustomDefaultShaderSource();
+    return out;
+  }
+  if (shaderLane.codeString.length)
+    out[@"Image"] = shaderLane.codeString;
+  for (NSDictionary *t in shaderLane.codeTabs) {
+    NSString *n = t[@"name"], *c = t[@"code"];
+    if ([n isKindOfClass:[NSString class]] &&
+        [c isKindOfClass:[NSString class]] && c.length)
+      out[n] = c;
+  }
   return out;
 }
 
@@ -474,7 +493,8 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   NSString *common = sections[@"Common"] ?: @"";
   NSString *image = sections[@"Image"];
   if (image.length == 0)
-    image = ShaderCustomDefaultShaderSource();
+    image = @"void mainImage(out vec4 O, in vec2 fc){ O = "
+            @"texture(iChannel0, fc / iResolution.xy); }"; // passthrough
   NSString * (^withCommon)(NSString *) = ^NSString *(NSString *s) {
     return common.length ? [NSString stringWithFormat:@"%@\n%@", common, s] : s;
   };
@@ -682,7 +702,7 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   // Dispatch on the active type, same as the FCP render.
   NSArray<NSNumber *> *typeV = [self valuesForLabel:@"Type"];
   int meshType =
-      typeV.count ? (int)lround(typeV[0].doubleValue) : ShaderType_Mesh;
+      typeV.count ? (int)lround(typeV[0].doubleValue) : ShaderType_Custom;
   // Custom (single- or multi-pass) has its own dedicated path (Common +
   // buffers).
   if (meshType == ShaderType_Custom)

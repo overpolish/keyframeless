@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C0AAC0AAC0AAC0AAC0AA0001 /* KKCommunity in Frameworks */ = {isa = PBXBuildFile; productRef = C0AAC0AAC0AAC0AAC0AA0002 /* KKCommunity */; };
 		F21396022F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F21396032F649EF900E1EC03 /* keyframeless.icon in Resources */ = {isa = PBXBuildFile; fileRef = F21396012F649EF900E1EC03 /* keyframeless.icon */; };
 		F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */; };
@@ -95,23 +96,29 @@
 			membershipExceptions = (
 				"/Localized: Plugin/InfoPlist.strings",
 				Plugin/Core/main.m,
-				Plugin/Core/ShaderLocalized.m,
-				Plugin/Core/ShaderPresets.m,
 				Plugin/Core/Plugin.m,
 				"Plugin/Core/Plugin+CustomUI.m",
 				"Plugin/Core/Plugin+Parameters.m",
+				Plugin/Core/ShaderLocalCatalog.m,
+				Plugin/Core/ShaderLocalized.m,
+				Plugin/Core/ShaderPresets.m,
+				Plugin/Core/ShaderThumbnailRenderer.m,
 				Plugin/Info.plist,
+				Plugin/Inspector/ShaderBrowserController.m,
+				Plugin/Inspector/ShaderBrowserFields.m,
+				Plugin/Inspector/ShaderBrowserView.m,
+				Plugin/Inspector/ShaderCard.m,
 				Plugin/Inspector/ShaderInspectorView.m,
 				"Plugin/Inspector/ShaderInspectorView+BasicTimingGuide.m",
 				Plugin/Localizable.xcstrings,
-				Plugin/ShaderUI.xcstrings,
+				Plugin/OSC/OSC.m,
 				"Plugin/OSC/ShaderOSC+MouseHandlers.m",
 				Plugin/OSC/ShaderOSCSnapshot.m,
-				Plugin/OSC/OSC.m,
 				Plugin/Render/KKGLSLTranspiler.mm,
+				"Plugin/Render/Plugin+Render.m",
 				Plugin/Render/Shader.metal,
 				Plugin/Render/ShaderMiniViewerRenderer.m,
-				"Plugin/Render/Plugin+Render.m",
+				Plugin/ShaderUI.xcstrings,
 				"Wrapper Application/Info.plist",
 			);
 			target = F2E2ED742F4CA530008620D9 /* Wrapper Application */;
@@ -167,6 +174,7 @@
 				F220BFE32F4E07EB0034AF77 /* KeyframelessKit.framework in Frameworks */,
 				F2E2ED852F4CA530008620D9 /* Foundation.framework in Frameworks */,
 				F23EF0142FC971CD00AFBA1E /* KeyframelessAI in Frameworks */,
+				C0AAC0AAC0AAC0AAC0AA0001 /* KKCommunity in Frameworks */,
 				F2E2ED872F4CA530008620D9 /* AppKit.framework in Frameworks */,
 				F2E2ED8D2F4CA530008620D9 /* FxPlug.framework in Frameworks */,
 			);
@@ -261,6 +269,7 @@
 			name = "XPC Service";
 			packageProductDependencies = (
 				F23EF0132FC971CD00AFBA1E /* KeyframelessAI */,
+				C0AAC0AAC0AAC0AAC0AA0002 /* KKCommunity */,
 			);
 			productName = "XPC Service";
 			productReference = F2E2ED802F4CA530008620D9 /* Shader XPC Service.pluginkit */;
@@ -697,6 +706,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		C0AAC0AAC0AAC0AAC0AA0002 /* KKCommunity */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = KKCommunity;
+		};
 		F23EF0132FC971CD00AFBA1E /* KeyframelessAI */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = KeyframelessAI;

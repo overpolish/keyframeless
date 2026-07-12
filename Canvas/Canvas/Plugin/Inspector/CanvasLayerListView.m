@@ -311,6 +311,8 @@
   [NSNotificationCenter.defaultCenter removeObserver:self];
   if (_keyMonitor)
     [NSEvent removeMonitor:_keyMonitor];
+  if (_renameClickMon)
+    [NSEvent removeMonitor:_renameClickMon];
   if (_hoverMonitorLocal)
     [NSEvent removeMonitor:_hoverMonitorLocal];
   if (_hoverMonitorGlobal)
@@ -585,6 +587,33 @@
     _hoverMonitorGlobal = nil;
     [self hoverRowAtIndex:-1]; // clear any stuck highlight when detached
     _hoveredRowIndex = -1;
+  }
+  // While a rename is live, a click outside the field (empty space, another
+  // panel) drops focus -> ends editing -> commit. Clicking another row already
+  // commits via selectIndex; this covers everything else.
+  if (self.window && !_renameClickMon) {
+    __weak typeof(self) weak = self;
+    _renameClickMon = [NSEvent
+        addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown |
+                                             NSEventMaskRightMouseDown
+                                     handler:^NSEvent *(NSEvent *e) {
+                                       __strong typeof(weak) s = weak;
+                                       if (!s || s->_editingIndex < 0)
+                                         return e;
+                                       NSTextField *f = s->_editingField;
+                                       if (!f.currentEditor)
+                                         return e;
+                                       NSRect r = [f convertRect:f.bounds
+                                                          toView:nil];
+                                       if (!(e.window == f.window &&
+                                             NSPointInRect(e.locationInWindow,
+                                                           r)))
+                                         [f.window makeFirstResponder:nil];
+                                       return e;
+                                     }];
+  } else if (!self.window && _renameClickMon) {
+    [NSEvent removeMonitor:_renameClickMon];
+    _renameClickMon = nil;
   }
 }
 

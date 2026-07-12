@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKFieldEditorSupport.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
@@ -83,17 +84,8 @@ static void _clearPopoverBackground(NSView *view) {
 
 - (BOOL)becomeFirstResponder {
   BOOL r = [super becomeFirstResponder];
-  if (r) {
-    NSTextView *ed = (NSTextView *)[self currentEditor];
-    if ([ed isKindOfClass:[NSTextView class]]) {
-      ed.insertionPointColor = [NSColor accentMatchingHost];
-      ed.selectedTextAttributes = @{
-        NSBackgroundColorAttributeName :
-            [[NSColor accentMatchingHost] colorWithAlphaComponent:0.2],
-        NSForegroundColorAttributeName : [NSColor inspectorLabel],
-      };
-    }
-  }
+  if (r)
+    KKStyleFieldEditorAccent([self currentEditor]);
   return r;
 }
 @end

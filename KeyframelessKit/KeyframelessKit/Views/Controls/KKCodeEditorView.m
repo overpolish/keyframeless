@@ -5,10 +5,19 @@
 
 #import "KKCodeEditorView.h"
 #import "KKCodeGutterView.h"
+#import "KKFieldEditorSupport.h"
 #import "KKGLSLSyntax.h"
 #import "KKLocalized.h"
+#import "KKTimingStage.h" // KKCodeEditorSave* notification constant declarations
 #import "NSColor+KKColors.h"
 #import <QuartzCore/QuartzCore.h>
+
+NSNotificationName const KKCodeEditorSaveRequestedNotification =
+    @"KKCodeEditorSaveRequestedNotification";
+NSString *const KKCodeEditorSaveNameKey = @"name";
+NSString *const KKCodeEditorSaveSectionsKey = @"sections";
+NSNotificationName const KKCodeEditorReloadNotification =
+    @"KKCodeEditorReloadNotification";
 
 // The code editor lives in a nonactivating FxPlug ViewBridge popover where the
 // host window stays key, so key events arrive as key EQUIVALENTS, not keyDown -
@@ -162,7 +171,55 @@
 }
 @end
 
-@interface KKCodeEditorView () <NSTextViewDelegate, NSTextStorageDelegate>
+// The save-bar name field: same first-responder gating as _KKCodeTextView so a
+// freshly-shown popover doesn't auto-focus it (the key-view loop asks
+// acceptsFirstResponder on open; only a real click in our bounds should grab
+// it).
+@interface _KKNameField : NSTextField
+@end
+@implementation _KKNameField
+- (BOOL)acceptsFirstResponder {
+  NSEvent *cur = NSApp.currentEvent;
+  BOOL fromClick = cur && (cur.type == NSEventTypeLeftMouseDown ||
+                           cur.type == NSEventTypeRightMouseDown);
+  if (!fromClick || cur.window != self.window)
+    return NO;
+  NSPoint p = [self convertPoint:cur.locationInWindow fromView:nil];
+  return NSPointInRect(p, self.bounds);
+}
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES;
+}
+// ViewBridge popover: key events arrive as key equivalents, not keyDown, so a
+// plain field never sees typing. Forward them to the field editor (matches
+// KKValueTextField / the code text view).
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+  NSText *editor = self.currentEditor;
+  if (!editor)
+    return [super performKeyEquivalent:event];
+  if (KKHandleEditMenuKeyEquivalent(editor, event))
+    return YES;
+  [editor keyDown:event];
+  return YES;
+}
+// Accent caret + selection from the FIRST tick (styling in the delegate's
+// controlTextDidBeginEditing doesn't repaint until the first keystroke). Apply
+// on focus AND next tick once the field editor is wired.
+- (BOOL)becomeFirstResponder {
+  BOOL ok = [super becomeFirstResponder];
+  if (ok) {
+    KKStyleFieldEditorAccent(self.currentEditor);
+    __weak typeof(self) weak = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      KKStyleFieldEditorAccent(weak.currentEditor);
+    });
+  }
+  return ok;
+}
+@end
+
+@interface KKCodeEditorView () <NSTextViewDelegate, NSTextStorageDelegate,
+                                NSTextFieldDelegate>
 @end
 
 @implementation KKCodeEditorView {
@@ -180,6 +237,11 @@
       *_errorScrollHeight; // = label line height, centered in strip
   NSLayoutConstraint *_errorBarHeight;
   NSInteger _errorLine; // 1-based line to flag, 0 = none
+  NSView *_saveBar;     // optional name + Save strip (height toggled 0/on)
+  NSTextField *_saveNameField;
+  NSButton *_saveButton;
+  NSLayoutConstraint *_saveBarHeight;
+  id _nameOutsideClickMon; // blur the name field on an outside click
   // Tabbed sections: parallel names/codes, the active one shown in _textView.
   // A single (default) section behaves exactly like the plain editor - the tab
   // strip stays collapsed.
@@ -366,6 +428,46 @@
       [errRight.widthAnchor constraintEqualToConstant:16.0],
     ]];
 
+    // Optional save bar at the very bottom: a name field + Save button (Save
+    // disabled until a name is typed). Collapsed to height 0 unless `savable`.
+    _saveBar = [NSView new];
+    _saveBar.translatesAutoresizingMaskIntoConstraints = NO;
+    _saveBar.wantsLayer = YES;
+    _saveBar.layer.backgroundColor = KKHex(0x161b22).CGColor;
+    _saveBar.hidden = YES;
+    [self addSubview:_saveBar];
+    _saveBarHeight = [_saveBar.heightAnchor constraintEqualToConstant:0.0];
+
+    _saveNameField = [_KKNameField new];
+    _saveNameField.translatesAutoresizingMaskIntoConstraints = NO;
+    _saveNameField.font = [NSFont systemFontOfSize:11.0];
+    _saveNameField.placeholderString =
+        KKLoc(@"Shader name", @"Save-shader name field placeholder.");
+    _saveNameField.bezelStyle = NSTextFieldRoundedBezel;
+    _saveNameField.focusRingType = NSFocusRingTypeNone;
+    _saveNameField.delegate = self;
+    // Blur on a click outside the field (persistent monitor, gated on editing;
+    // begin/end-editing fires too late for the first click-away).
+    _nameOutsideClickMon = KKMakeFieldOutsideClickMonitor(_saveNameField);
+    [_saveBar addSubview:_saveNameField];
+
+    _saveButton =
+        [NSButton buttonWithTitle:KKLoc(@"Save", @"Save-shader button.")
+                           target:self
+                           action:@selector(_saveClicked:)];
+    _saveButton.translatesAutoresizingMaskIntoConstraints = NO;
+    _saveButton.bezelStyle = NSBezelStyleRegularSquare; // fills its height
+    _saveButton.enabled = NO;
+    [_saveBar addSubview:_saveButton];
+
+    // A host can post this to reload the editor after loading a different
+    // shader.
+    [[NSNotificationCenter defaultCenter]
+        addObserver:self
+           selector:@selector(_reloadRequested:)
+               name:KKCodeEditorReloadNotification
+             object:nil];
+
     // Tab strip across the top: a row of section buttons. Collapsed to height 0
     // until a host sets 2+ sections (single-section editing looks unchanged).
     _tabBar = [NSStackView new];
@@ -393,8 +495,31 @@
       [scroll.bottomAnchor constraintEqualToAnchor:_errorBar.topAnchor],
       [_errorBar.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
       [_errorBar.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-      [_errorBar.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+      [_errorBar.bottomAnchor constraintEqualToAnchor:_saveBar.topAnchor],
       _errorBarHeight,
+      [_saveBar.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+      [_saveBar.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+      [_saveBar.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+      _saveBarHeight,
+      // Field pinned with equal top/bottom insets (symmetric padding); the Save
+      // button matches the field's height and centre.
+      [_saveNameField.leadingAnchor
+          constraintEqualToAnchor:_saveBar.leadingAnchor
+                         constant:8.0],
+      [_saveNameField.topAnchor constraintEqualToAnchor:_saveBar.topAnchor
+                                               constant:6.0],
+      [_saveNameField.bottomAnchor constraintEqualToAnchor:_saveBar.bottomAnchor
+                                                  constant:-6.0],
+      [_saveNameField.trailingAnchor
+          constraintEqualToAnchor:_saveButton.leadingAnchor
+                         constant:-6.0],
+      [_saveButton.trailingAnchor
+          constraintEqualToAnchor:_saveBar.trailingAnchor
+                         constant:-8.0],
+      [_saveButton.centerYAnchor
+          constraintEqualToAnchor:_saveNameField.centerYAnchor],
+      [_saveButton.heightAnchor
+          constraintEqualToAnchor:_saveNameField.heightAnchor],
       [_errorCopyButton.trailingAnchor
           constraintEqualToAnchor:_errorBar.trailingAnchor
                          constant:-6.0],
@@ -425,6 +550,8 @@
 
 - (void)dealloc {
   [NSNotificationCenter.defaultCenter removeObserver:self];
+  if (_nameOutsideClickMon)
+    [NSEvent removeMonitor:_nameOutsideClickMon];
 }
 
 - (NSString *)codeText {
@@ -694,6 +821,59 @@
   NSPasteboard *pb = NSPasteboard.generalPasteboard;
   [pb clearContents];
   [pb setString:msg forType:NSPasteboardTypeString];
+}
+
+- (void)setSavable:(BOOL)savable {
+  _savable = savable;
+  _saveBar.hidden = !savable;
+  _saveBarHeight.constant = savable ? 34.0 : 0.0;
+}
+
+- (void)controlTextDidChange:(NSNotification *)note {
+  if (note.object == _saveNameField)
+    _saveButton.enabled =
+        [_saveNameField.stringValue
+            stringByTrimmingCharactersInSet:
+                NSCharacterSet.whitespaceAndNewlineCharacterSet]
+            .length > 0;
+}
+
+// Esc / Enter drop focus (blur), matching the code editor + value fields.
+- (BOOL)control:(NSControl *)control
+               textView:(NSTextView *)textView
+    doCommandBySelector:(SEL)selector {
+  if (control != _saveNameField)
+    return NO;
+  if (selector == @selector(insertNewline:) ||
+      selector == @selector(cancelOperation:)) {
+    [_saveNameField.window makeFirstResponder:nil];
+    return YES;
+  }
+  return NO;
+}
+
+- (void)_reloadRequested:(NSNotification *)note {
+  if (!_savable) // only the shader (savable) editor responds
+    return;
+  NSArray<NSDictionary<NSString *, NSString *> *> *sections =
+      note.userInfo[KKCodeEditorSaveSectionsKey];
+  if (sections.count)
+    [self setSections:sections];
+}
+
+- (void)_saveClicked:(id)sender {
+  NSString *name = [_saveNameField.stringValue
+      stringByTrimmingCharactersInSet:NSCharacterSet
+                                          .whitespaceAndNewlineCharacterSet];
+  if (!name.length)
+    return;
+  [[NSNotificationCenter defaultCenter]
+      postNotificationName:KKCodeEditorSaveRequestedNotification
+                    object:self
+                  userInfo:@{
+                    KKCodeEditorSaveNameKey : name,
+                    KKCodeEditorSaveSectionsKey : [self sections]
+                  }];
 }
 
 // Fade the overflow edges in/out with scroll position (0 when the message

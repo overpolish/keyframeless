@@ -5,6 +5,7 @@
 
 #pragma once
 
+#import "ShaderBrowserController.h"
 #import "ShaderInspectorView.h"
 #import "ShaderMiniViewerRenderer.h"
 
@@ -17,6 +18,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ShaderInspectorView () {
 @protected
   ShaderMiniViewerRenderer *_miniViewerRenderer;
+  ShaderBrowserController *_browserController;
 }
 @end
 
