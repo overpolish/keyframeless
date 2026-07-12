@@ -28,7 +28,8 @@ NSColor *KKCodeError(void); // red (error bar / flagged line)
 /// identifiers (capture groups 1..4 respectively).
 NSRegularExpression *KKGLSLTokenizer(void);
 
-/// Colour for an identifier by word only (keywords/types -> coral, Shadertoy
-/// uniforms -> orange). Returns nil for anything else; the caller then colours
-/// it as a function call when it's followed by `(`, else leaves it default.
+/// Colour for an identifier by word only (keywords/types -> coral, built-in
+/// shader uniforms -> orange). Returns nil for anything else; the caller then
+/// colours it as a function call when it's followed by `(`, else leaves it
+/// default.
 NSColor *KKGLSLWordColor(NSString *w);

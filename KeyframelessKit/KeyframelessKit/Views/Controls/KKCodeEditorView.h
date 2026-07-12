@@ -19,8 +19,31 @@ NS_ASSUME_NONNULL_BEGIN
 /// Set/replace the editor text without firing `onChange`.
 @property(nonatomic, copy) NSString *codeText;
 
-/// Fired ~0.4s after the last keystroke with the current text.
+/// Fired ~0.4s after the last keystroke with the current text (single-section
+/// hosts). Tabbed hosts use `onSectionsChange` instead.
 @property(nonatomic, copy, nullable) void (^onChange)(NSString *code);
+
+/// Multi-section (tabbed) editing. Each section is
+/// @{ @"name": display, @"code": source }. Setting 2+ sections shows a tab
+/// strip above the editor; 0 or 1 leaves the plain single editor unchanged. The
+/// active tab's text is what `codeText` reflects and what the validator runs
+/// on.
+- (void)setSections:(NSArray<NSDictionary<NSString *, NSString *> *> *)sections;
+
+/// The current sections, with the active tab's live edits folded in.
+- (NSArray<NSDictionary<NSString *, NSString *> *> *)sections;
+
+/// Fired ~0.4s after an edit with the full current section set. Tabbed hosts
+/// use this to persist every section (the plain `onChange` fires too, with the
+/// active tab's text). Also fires immediately when a tab is added or removed.
+@property(nonatomic, copy, nullable) void (^onSectionsChange)
+    (NSArray<NSDictionary<NSString *, NSString *> *> *sections);
+
+/// The ordered catalog of EXTRA section names a "+" button offers to add (e.g.
+/// @[@"Common", @"Buffer A"]). When non-empty the editor shows a tab strip with
+/// the current sections + a "+" menu of the not-yet-added catalog names; added
+/// (non-first) tabs get a close button. Empty = no "+" (plain / fixed tabs).
+@property(nonatomic, copy, nullable) NSArray<NSString *> *addableTabNames;
 
 /// Optional validator run (debounced) after edits and on first load. Return an
 /// error message to surface in a bar under the editor, or nil when the code is

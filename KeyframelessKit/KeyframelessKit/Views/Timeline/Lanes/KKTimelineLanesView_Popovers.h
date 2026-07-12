@@ -161,6 +161,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)_setLaneAnimatable:(BOOL)animatable forLabel:(NSString *)label;
 - (void)_setLaneValues:(NSArray<NSNumber *> *)values forLabel:(NSString *)label;
 - (void)_setLaneCode:(NSString *)code forLabel:(NSString *)label;
+- (void)_setLaneCodeSections:
+            (NSArray<NSDictionary<NSString *, NSString *> *> *)sections
+                    forLabel:(NSString *)label;
 - (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label;
 @end
 

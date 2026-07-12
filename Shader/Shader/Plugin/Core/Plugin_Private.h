@@ -5,8 +5,8 @@
 
 #pragma once
 
-#import "ShaderInspectorView.h"
 #import "Plugin.h"
+#import "ShaderInspectorView.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
 @class KKPlayheadPoller;
@@ -16,6 +16,11 @@
 // miniViewerFeed + miniDragUndoStarted now live on the KKPlugin base.
 @property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
 @property(nonatomic, strong, nullable) KKPlayheadPoller *playheadPoller;
+/// Persistent feedback-buffer state for Custom multi-pass shaders that read
+/// their own (or a later) buffer's previous frame. Keyed by "WxH" so the main
+/// viewer, thumbnails, and library previews keep independent ping-pong sets.
+/// Holds `_ShaderFeedbackSet` values (private to Plugin+Render.m).
+@property(nonatomic, strong, nullable) NSMutableDictionary *feedbackSets;
 /// Returns a copy of `timeline` with every lane's lastKnownClipDuration set
 /// to the current effect duration (seconds), so the Basic ruler/hover have a
 /// duration without extra plumbing. Must be called inside an action scope.

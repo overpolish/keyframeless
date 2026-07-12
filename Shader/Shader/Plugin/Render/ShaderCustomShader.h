@@ -13,6 +13,6 @@
 #import <Foundation/Foundation.h>
 
 /// The error-pattern shader (animated dark-red hazard stripes) rendered when a
-/// user shader fails to transpile/compile. A trivial Shadertoy body, so it
+/// user shader fails to transpile/compile. A trivial GLSL body, so it
 /// always transpiles.
 extern NSString *ShaderCustomErrorShaderSource(void);

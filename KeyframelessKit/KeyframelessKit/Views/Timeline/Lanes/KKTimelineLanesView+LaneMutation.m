@@ -218,6 +218,23 @@
   [self _replaceLane:lane forLabel:label];
 }
 
+// Commit a tabbed code-lane edit: section 0 -> codeString (the Image pass), the
+// rest -> codeTabs (Common / Buffer A). Same lane-replace / commit path.
+- (void)_setLaneCodeSections:
+            (NSArray<NSDictionary<NSString *, NSString *> *> *)sections
+                    forLabel:(NSString *)label {
+  KKLane *existing = [self _laneForLabel:label];
+  if (!existing || sections.count == 0)
+    return;
+  KKLane *lane = [existing copy];
+  lane.codeString = sections[0][@"code"] ?: @"";
+  lane.codeTabs =
+      sections.count > 1
+          ? [sections subarrayWithRange:NSMakeRange(1, sections.count - 1)]
+          : nil;
+  [self _replaceLane:lane forLabel:label];
+}
+
 - (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label {
   // The CONSTANTS popover edits the lanes view's own _timeline, not a graph, so
   // its aspect-link toggle persists here (the keypose popover routes to the

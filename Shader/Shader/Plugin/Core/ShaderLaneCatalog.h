@@ -175,6 +175,13 @@ static inline NSArray<KKLane *> *ShaderBuildAvailableLanes(void) {
   KKLane *shader = [KKLane laneWithLabel:@"Shader"];
   shader.valueType = KKLaneValueTypeCode;
   shader.codeString = ShaderCustomDefaultShaderSource();
+  // Multi-pass: the editor starts on the single Image tab (codeString above)
+  // and a "+" menu offers these extra sections on demand - Common (shared code
+  // prepended to every pass) and Buffer A (an offscreen pass bound to
+  // iChannel0). codeTabs stays empty until the user adds one = single-pass by
+  // default.
+  shader.codeTabCatalog =
+      @[ @"Common", @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ];
   shader.animatable = NO;
   shader.enabled = NO;
   shader.categoryKey = @"Core";
@@ -186,7 +193,29 @@ static inline NSArray<KKLane *> *ShaderBuildAvailableLanes(void) {
   // service (the sole includer of this catalog), where the transpiler is
   // linked.
   shader.codeValidator = ^NSString *(NSString *code, NSInteger *outLine) {
-    KKGLSLTranspileResult *r = KKTranspileShadertoyGLSL(code);
+    // Only full Image/Buffer shaders validate standalone; an empty tab or the
+    // Common shared-code fragment has no entry point, so skip it (no false
+    // error bar). An entry point is either the image `mainImage` or a raw-GL
+    // `main()` / `gl_FragColor` (which the transpiler's compat shim rewrites) -
+    // validate both so a raw paste with an unmapped uniform surfaces its error
+    // in the editor, not just as a render failure.
+    NSString *trimmed = [code
+        stringByTrimmingCharactersInSet:NSCharacterSet
+                                            .whitespaceAndNewlineCharacterSet];
+    BOOL hasEntry =
+        [code rangeOfString:@"mainImage"].location != NSNotFound ||
+        [code rangeOfString:@"gl_FragColor"].location != NSNotFound ||
+        [code rangeOfString:@"gl_FragData"].location != NSNotFound ||
+        [[NSRegularExpression
+            regularExpressionWithPattern:@"\\bvoid\\s+main\\s*\\("
+                                 options:0
+                                   error:nil]
+            firstMatchInString:code
+                       options:0
+                         range:NSMakeRange(0, code.length)] != nil;
+    if (trimmed.length == 0 || !hasEntry)
+      return nil;
+    KKGLSLTranspileResult *r = KKTranspileGLSL(code);
     if (r.msl)
       return nil; // compiled clean
     NSString *msg = nil;
@@ -254,9 +283,10 @@ static inline NSArray<KKLane *> *ShaderBuildAvailableLanes(void) {
     BOOL animatable;
     BOOL seedField;
   } meshControls[] = {
-      {@"Distortion", KK_SHADER_GRAD_DEFAULT_DISTORTION * 100.0, 0.0, 100.0, @"%",
-       YES, NO},
-      {@"Swirl", KK_SHADER_GRAD_DEFAULT_SWIRL * 100.0, 0.0, 100.0, @"%", YES, NO},
+      {@"Distortion", KK_SHADER_GRAD_DEFAULT_DISTORTION * 100.0, 0.0, 100.0,
+       @"%", YES, NO},
+      {@"Swirl", KK_SHADER_GRAD_DEFAULT_SWIRL * 100.0, 0.0, 100.0, @"%", YES,
+       NO},
   };
   for (unsigned s = 0; s < sizeof(meshControls) / sizeof(meshControls[0]);
        s++) {
@@ -701,8 +731,9 @@ static inline NSArray<KKLane *> *ShaderBuildAvailableLanes(void) {
     for (int t = 0; t < SHADER_TYPE_COUNT; t++)
       [caps addObject:@(ShaderMaxColorsForType(t))];
     count.componentMaxByControllerValue = caps;
-    [count insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                           values:@[ @(KK_SHADER_COLOR_COUNT) ]]];
+    [count
+        insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                        values:@[ @(KK_SHADER_COLOR_COUNT) ]]];
     [lanes addObject:count];
   }
 

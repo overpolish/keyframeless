@@ -7,6 +7,13 @@
 #import <Metal/Metal.h>
 #import <simd/simd.h>
 
+/// Longest dimension (px) a FEEDBACK sim buffer is capped to.
+/// Reaction-diffusion / fluid patterns are a few cells wide, so they only
+/// develop at a coarse grid; this also cuts per-pass cost + checkpoint memory.
+/// The main render and the mini-viewer share it so a feedback shader looks the
+/// same in both.
+#define KK_FEEDBACK_SIM_MAXDIM 360
+
 NS_ASSUME_NONNULL_BEGIN
 
 // Uniform block bound at buffer(0) for a transpiled custom shader. Every member
@@ -21,7 +28,7 @@ typedef struct KKGLSLUniforms {
   simd_float4 chanRes[4]; // iChannelResolution[0..3]: xyz = px size, z = 1
 } KKGLSLUniforms;
 
-// Result of transpiling a Shadertoy-style GLSL body to a full MSL unit.
+// Result of transpiling a GLSL image-shader body to a full MSL unit.
 @interface KKGLSLTranspileResult : NSObject
 // Complete MSL (the SPIRV-Cross fragment plus an appended full-screen vertex),
 // or nil when transpilation failed - then errorLog explains why.
@@ -29,6 +36,12 @@ typedef struct KKGLSLUniforms {
 @property(nonatomic, copy) NSString *fragmentName; // MSL fragment function name
 @property(nonatomic, copy) NSString *vertexName;   // MSL vertex function name
 @property(nonatomic, copy, nullable) NSString *errorLog;
+// YES when the raw-GL compatibility shim rewrote a non-image-shader entry point
+// (main()/gl_FragColor) into the mainImage convention. Used to turn an
+// otherwise cryptic "undeclared identifier" into a hint that an unusual host
+// uniform name went unmapped and needs a hand edit to iChannel0 / iResolution /
+// iTime.
+@property(nonatomic) BOOL shimmedFromRawGL;
 // Lines the wrapper prepends before the user's source, so a glslang error line
 // (wrapped coordinates) maps back to the editor as `wrappedLine - offset`.
 @property(nonatomic) NSInteger userLineOffset;
@@ -45,7 +58,7 @@ typedef struct KKGLSLUniforms {
 - (NSInteger)samplerIndexForChannel:(NSUInteger)ch;
 @end
 
-// Transpile a Shadertoy-style GLSL body (mainImage + helpers +
+// Transpile a GLSL image-shader body (mainImage + helpers +
 // iTime/iResolution /iMouse/iChannelN globals) into a complete MSL translation
 // unit via glslang (GLSL->SPIR-V) then SPIRV-Cross (SPIR-V->MSL). The pipeline
 // is serialized behind a lock and glslang is process-initialized once. C
@@ -54,10 +67,16 @@ typedef struct KKGLSLUniforms {
 #ifdef __cplusplus
 extern "C" {
 #endif
-KKGLSLTranspileResult *KKTranspileShadertoyGLSL(NSString *userGLSL);
+KKGLSLTranspileResult *KKTranspileGLSL(NSString *userGLSL);
+
+// Buffer-pass variant: emits the raw `mainImage` output (all four components,
+// no grain / sRGB-encode / clamp / forced-opaque), because a Buffer A-D pass
+// stores DATA a later pass samples, not display pixels. Memoised separately
+// from the display variant.
+KKGLSLTranspileResult *KKTranspileGLSLBuffer(NSString *userGLSL);
 
 // A repeating value-noise texture / repeat-linear sampler for the iChannelN a
-// shader samples (Shadertoy's "iChannel = noise" default). Both cached per
+// shader samples (the common "iChannel = noise" default). Both cached per
 // device. Shared by the main render and the mini-viewer.
 id<MTLTexture> KKCustomChannelNoiseTexture(id<MTLDevice> device);
 id<MTLSamplerState> KKCustomChannelSampler(id<MTLDevice> device);
@@ -73,6 +92,15 @@ void KKBindCustomChannels(id<MTLRenderCommandEncoder> encoder,
                           id<MTLTexture> _Nullable source,
                           id<MTLSamplerState> _Nullable sourceSampler,
                           id<MTLTexture> noise, id<MTLSamplerState> sampler);
+// Like KKBindCustomChannels but with an explicit per-channel texture array
+// (`chTex` = 4 entries, NSNull = none -> noise). For multi-buffer routing
+// (iChannel0->Buffer A, 1->B, ...). Shared by the FCP render and the
+// mini-viewer.
+void KKBindCustomChannelTextures(id<MTLRenderCommandEncoder> encoder,
+                                 KKGLSLTranspileResult *tr, NSArray *chTex,
+                                 id<MTLSamplerState> _Nullable sampler,
+                                 id<MTLTexture> noise,
+                                 id<MTLSamplerState> noiseSampler);
 #ifdef __cplusplus
 }
 #endif

@@ -1036,6 +1036,12 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     if (s.onHandleCode)
       s.onHandleCode(label, code);
   };
+  row.onCodeSectionsChanged =
+      ^(NSArray<NSDictionary<NSString *, NSString *> *> *sections) {
+        __strong typeof(weak) s = weak;
+        if (s.onHandleCodeSections)
+          s.onHandleCodeSections(label, sections);
+      };
   row.onDragBegin = ^{
     __strong typeof(weak) s = weak;
     if (s->_onDragBegin)
@@ -1261,9 +1267,19 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // excluded to editable always fits; no resize needed.
 - (void)rebuildRowsWithLanes:(NSArray<KKLane *> *)lanes
               excludedLabels:(NSArray<NSString *> *)excluded {
+  // Preserve code-editor rows across the rebuild: their editor holds live tab
+  // state (active tab + unsaved text) that recreating would destroy, and a code
+  // row is non-animatable so nothing about its appearance changes here.
+  NSMutableDictionary<NSString *, _KKStaticValueRow *> *keepCode =
+      [NSMutableDictionary dictionary];
+  for (NSString *label in _rowsByLabel)
+    if (_rowsByLabel[label].isCodeRow)
+      keepCode[label] = _rowsByLabel[label];
+  NSArray *kept = keepCode.allValues;
   for (NSView *v in [_stack.arrangedSubviews copy]) {
     [_stack removeArrangedSubview:v];
-    [v removeFromSuperview];
+    if (![kept containsObject:v])
+      [v removeFromSuperview];
   }
   [_rowsByLabel removeAllObjects];
   [_excludedRowsByLabel removeAllObjects];
@@ -1273,9 +1289,11 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   NSMutableDictionary<NSString *, NSString *> *catByLabel =
       [NSMutableDictionary dictionary];
   for (KKLane *lane in lanes) {
-    _KKStaticValueRow *row = [self _makeRowForLane:lane];
+    _KKStaticValueRow *reused = keepCode[lane.label];
+    _KKStaticValueRow *row = reused ?: [self _makeRowForLane:lane];
     [_stack addArrangedSubview:row];
-    [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
+    if (!reused) // a reused row already has its stack-width constraint
+      [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
     _rowsByLabel[lane.label] = row;
     if (lane.categoryKey.length)
       catByLabel[lane.label] = lane.categoryKey;

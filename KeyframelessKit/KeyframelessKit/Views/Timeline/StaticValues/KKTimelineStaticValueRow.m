@@ -221,6 +221,10 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return _locked ? nil : [super hitTest:point];
 }
 
+- (BOOL)isCodeRow {
+  return _valueType == KKLaneValueTypeCode;
+}
+
 - (void)setDefaultValues:(NSArray<NSNumber *> *)defaultValues {
   _defaultValues = [defaultValues copy];
   [self _updateResetVisibility];
@@ -784,13 +788,32 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     editor.translatesAutoresizingMaskIntoConstraints = NO;
     editor.codeValidator =
         lane.codeValidator; // set before text so it validates
-    editor.codeText = lane.codeString ?: @"";
     __weak typeof(self) weak = self;
-    editor.onChange = ^(NSString *code) {
-      __strong typeof(weak) s = weak;
-      if (s.onCodeChanged)
-        s.onCodeChanged(code);
-    };
+    if (lane.codeTabs.count > 0 || lane.codeTabCatalog.count > 0) {
+      // Tabbed: section 0 is Image (the lane's codeString), then any added
+      // extra sections from codeTabs. `codeTabCatalog` feeds the "+" menu.
+      // Edits + tab add/remove persist the whole section set.
+      NSMutableArray<NSDictionary<NSString *, NSString *> *> *sections =
+          [NSMutableArray array];
+      [sections
+          addObject:@{@"name" : @"Image", @"code" : lane.codeString ?: @""}];
+      [sections addObjectsFromArray:lane.codeTabs ?: @[]];
+      editor.addableTabNames = lane.codeTabCatalog;
+      [editor setSections:sections];
+      editor.onSectionsChange =
+          ^(NSArray<NSDictionary<NSString *, NSString *> *> *secs) {
+            __strong typeof(weak) s = weak;
+            if (s.onCodeSectionsChanged)
+              s.onCodeSectionsChanged(secs);
+          };
+    } else {
+      editor.codeText = lane.codeString ?: @"";
+      editor.onChange = ^(NSString *code) {
+        __strong typeof(weak) s = weak;
+        if (s.onCodeChanged)
+          s.onCodeChanged(code);
+      };
+    }
     [self addSubview:editor];
     // Title sits top-left; the editor fills the row below it, edge to edge.
     [NSLayoutConstraint activateConstraints:@[

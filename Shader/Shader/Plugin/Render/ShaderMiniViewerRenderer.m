@@ -6,7 +6,7 @@
 #import "ShaderMiniViewerRenderer.h"
 
 #import "Constants.h"        // ShaderCustomDefaultShaderSource
-#import "KKGLSLTranspiler.h" // Shadertoy GLSL -> MSL + channel binding
+#import "KKGLSLTranspiler.h" // GLSL -> MSL + channel binding
 #import "ShaderColorSpace.h"
 #import "ShaderCustomShader.h" // ShaderCustomErrorShaderSource
 #import "ShaderTypes.h"
@@ -275,14 +275,37 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   return ShaderCustomDefaultShaderSource();
 }
 
-// Runtime-compiled pipeline for a Custom shader: the Shadertoy GLSL is
+// All Custom sections from the Shader lane: Image (codeString) + non-empty
+// extra tabs (Common / Buffer A-D) by name. Mirrors the FCP render's blob
+// sections.
+- (NSDictionary<NSString *, NSString *> *)_customSections {
+  NSMutableDictionary<NSString *, NSString *> *out =
+      [NSMutableDictionary dictionary];
+  for (KKLane *lane in self.timeline.lanes)
+    if ([lane.label isEqualToString:@"Shader"]) {
+      if (lane.codeString.length)
+        out[@"Image"] = lane.codeString;
+      for (NSDictionary *t in lane.codeTabs) {
+        NSString *n = t[@"name"], *c = t[@"code"];
+        if ([n isKindOfClass:[NSString class]] &&
+            [c isKindOfClass:[NSString class]] && c.length)
+          out[n] = c;
+      }
+      break;
+    }
+  return out;
+}
+
+// Runtime-compiled pipeline for a Custom shader: the GLSL is
 // transpiled to MSL via glslang + SPIRV-Cross (the same shared, memoised path
 // as the FCP render), then cached in _pipelines on the emitted MSL hash.
 // Returns nil (logged) on failure; the caller falls back to the error pattern.
 - (id<MTLRenderPipelineState>)_customPipelineForDevice:(id<MTLDevice>)device
                                            pixelFormat:(MTLPixelFormat)format
-                                                source:(NSString *)userSource {
-  KKGLSLTranspileResult *tr = KKTranspileShadertoyGLSL(userSource);
+                                                source:(NSString *)userSource
+                                            bufferMode:(BOOL)bufferMode {
+  KKGLSLTranspileResult *tr = bufferMode ? KKTranspileGLSLBuffer(userSource)
+                                         : KKTranspileGLSL(userSource);
   if (!tr.msl) {
     KKLogError(@"ShaderMiniViewerRenderer: GLSL transpile failed: %@",
                tr.errorLog);
@@ -336,11 +359,14 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
     refW = 1;
   if (!_hiResTex || _hiResTex.width != refW || _hiResTex.height != refH ||
       _hiResTex.pixelFormat != dest.pixelFormat) {
+    // Mipmapped so the down-blit can area-average the whole minification
+    // footprint (trilinear) instead of a single bilinear tap. Without this a
+    // fine per-channel dither aliases into chroma speckle when shrunk.
     MTLTextureDescriptor *td = [MTLTextureDescriptor
         texture2DDescriptorWithPixelFormat:dest.pixelFormat
                                      width:refW
                                     height:refH
-                                 mipmapped:NO];
+                                 mipmapped:YES];
     td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
     td.storageMode = MTLStorageModePrivate;
     _hiResTex = [dest.device newTextureWithDescriptor:td];
@@ -375,6 +401,7 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   MTLSamplerDescriptor *sd = [[MTLSamplerDescriptor alloc] init];
   sd.minFilter = MTLSamplerMinMagFilterLinear;
   sd.magFilter = MTLSamplerMinMagFilterLinear;
+  sd.mipFilter = MTLSamplerMipFilterLinear; // trilinear: area-average on shrink
   sd.sAddressMode = MTLSamplerAddressModeClampToEdge;
   sd.tAddressMode = MTLSamplerAddressModeClampToEdge;
   _linearSampler = [device newSamplerStateWithDescriptor:sd];
@@ -390,6 +417,12 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
                                                        format:dest.pixelFormat];
   if (!bp)
     return;
+  // Build the mip chain so the trilinear sampler averages the full footprint.
+  if (src.mipmapLevelCount > 1) {
+    id<MTLBlitCommandEncoder> mip = [commandBuffer blitCommandEncoder];
+    [mip generateMipmapsForTexture:src];
+    [mip endEncoding];
+  }
   MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
   rpd.colorAttachments[0].texture = dest;
   rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
@@ -425,6 +458,221 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   return v ?: source;
 }
 
+// Custom mini render: Buffer A-D render into offscreen RGBA16F textures on the
+// shared command buffer, then the Image pass draws into the hi-res intermediate
+// (downscaled to dest). Mirrors the FCP render's multi-pass routing
+// (iChannelN->Buffer[N], source/noise fallback); Common is prepended to each. A
+// FEEDBACK shader (a buffer reading itself / a later buffer) re-simulates a
+// short window at capped resolution so the static preview accumulates; others
+// do a single full-res step. The mini keeps no state across renders (unlike the
+// FCP render), so this is an approximate preview, not a frame-exact match.
+- (BOOL)_encodeCustomEffectFromSource:(id<MTLTexture>)source
+                                 into:(id<MTLTexture>)dest
+                        commandBuffer:(id<MTLCommandBuffer>)commandBuffer {
+  id<MTLDevice> device = dest.device;
+  NSDictionary<NSString *, NSString *> *sections = [self _customSections];
+  NSString *common = sections[@"Common"] ?: @"";
+  NSString *image = sections[@"Image"];
+  if (image.length == 0)
+    image = ShaderCustomDefaultShaderSource();
+  NSString * (^withCommon)(NSString *) = ^NSString *(NSString *s) {
+    return common.length ? [NSString stringWithFormat:@"%@\n%@", common, s] : s;
+  };
+
+  id<MTLTexture> renderTex = [self hiResTargetForDest:dest];
+  BOOL downscale = (renderTex != nil);
+  if (!renderTex)
+    renderTex = dest;
+  MTLPixelFormat fmt = renderTex.pixelFormat;
+  float W = (float)renderTex.width, H = (float)renderTex.height;
+  int encodeSRGB = (dest.pixelFormat == MTLPixelFormatRGBA8Unorm ||
+                    dest.pixelFormat == MTLPixelFormatBGRA8Unorm)
+                       ? 1
+                       : 0;
+  float timeSec = (float)self.editFraction;
+  NSArray<NSNumber *> *seedV = [self valuesForLabel:@"Seed"];
+  float seed = seedV.count ? seedV[0].floatValue : KK_SHADER_GRAD_DEFAULT_SEED;
+  NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];
+  float speed =
+      speedV.count ? speedV[0].floatValue : KK_SHADER_GRAD_DEFAULT_SPEED;
+  float iTime = timeSec * speed + fmodf(seed, 10000.0f);
+  NSArray<NSNumber *> *grV = [self valuesForLabel:@"Grain"];
+  NSArray<NSNumber *> *grSzV = [self valuesForLabel:@"Grain Size"];
+  float grain = grV.count ? grV[0].floatValue / 100.0f : KK_CORE_GRAIN_DEFAULT;
+  float grainSize =
+      grSzV.count ? grSzV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
+
+  KKGLSLUniforms base;
+  base.resTime = (simd_float4){W, H, 1.0f, iTime};
+  base.mouse = (simd_float4){0, 0, 0, 0};
+  base.date = (simd_float4){0, 0, 0, 0};
+  base.extra =
+      (simd_float4){1.0f / 60.0f, iTime * 60.0f, 0.0f, (float)encodeSRGB};
+  base.grain = (simd_float4){grain, grainSize, 0.0f, 0.0f};
+  for (int c = 0; c < 4; c++)
+    base.chanRes[c] = (simd_float4){256.0f, 256.0f, 1.0f, 0.0f};
+
+  id<MTLTexture> srcLin = [self _linearSourceView:source];
+  id<MTLSamplerState> srcSampler = KKCustomSourceSampler(device);
+  id<MTLTexture> noiseTex = KKCustomChannelNoiseTexture(device);
+  id<MTLSamplerState> noiseSampler = KKCustomChannelSampler(device);
+
+  // Precompile buffer pipelines + transpile; detect FEEDBACK (a buffer reading
+  // itself or a later buffer, i.e. any channel c >= its own index).
+  NSArray<NSString *> *bufNames =
+      @[ @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ];
+  id<MTLRenderPipelineState> bufPS[4] = {nil, nil, nil, nil};
+  KKGLSLTranspileResult *bufTR[4] = {nil, nil, nil, nil};
+  BOOL present[4] = {NO, NO, NO, NO};
+  BOOL needsFeedback = NO;
+  for (int k = 0; k < 4; k++) {
+    NSString *bs = sections[bufNames[k]];
+    if (bs.length == 0 || W == 0 || H == 0)
+      continue;
+    NSString *bsrc = withCommon(bs);
+    bufPS[k] = [self _customPipelineForDevice:device
+                                  pixelFormat:MTLPixelFormatRGBA16Float
+                                       source:bsrc
+                                   bufferMode:YES];
+    if (!bufPS[k])
+      continue;
+    present[k] = YES;
+    bufTR[k] = KKTranspileGLSLBuffer(bsrc);
+    for (int c = k; c < 4; c++)
+      if (bufTR[k].usedChannelMask & (1u << c))
+        needsFeedback = YES;
+  }
+
+  // Feedback shaders re-sim a short window (so the static preview accumulates)
+  // at a capped resolution (the mini is a preview - keep it cheap).
+  // Non-feedback buffers do a single full-res step. `srcLin` is only bound to a
+  // channel that has no buffer, so re-sim reads its own previous frame, not the
+  // source.
+  NSUInteger bufW = (NSUInteger)W, bufH = (NSUInteger)H;
+  if (needsFeedback && bufH > (NSUInteger)KK_FEEDBACK_SIM_MAXDIM) {
+    bufH = KK_FEEDBACK_SIM_MAXDIM;
+    bufW = (NSUInteger)llround((double)W * (double)KK_FEEDBACK_SIM_MAXDIM /
+                               (double)H);
+  }
+  NSInteger frames = needsFeedback ? 48 : 1;
+  float dt = (1.0f / 60.0f) * speed; // approximate per-frame iTime step
+
+  id<MTLTexture> setTex[2][4] = {{nil, nil, nil, nil}, {nil, nil, nil, nil}};
+  int prevI = 0;
+  for (NSInteger f = 0; f < frames; f++) {
+    int curI = 1 - prevI;
+    BOOL first = (f == 0);
+    KKGLSLUniforms fu = base;
+    fu.resTime = (simd_float4){(float)bufW, (float)bufH, 1.0f,
+                               iTime - (float)(frames - 1 - f) * dt};
+    fu.extra.y = (float)f; // iFrame: 0 on the first step (seed-on-frame-0 sims)
+    fu.extra.w = 1.0f;     // buffers store raw data (no sRGB encode)
+    for (int k = 0; k < 4; k++) {
+      if (!bufPS[k])
+        continue;
+      id<MTLTexture> cur = setTex[curI][k];
+      if (!cur) {
+        MTLTextureDescriptor *td = [MTLTextureDescriptor
+            texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA16Float
+                                         width:bufW
+                                        height:bufH
+                                     mipmapped:NO];
+        td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+        td.storageMode = MTLStorageModePrivate;
+        cur = [device newTextureWithDescriptor:td];
+        setTex[curI][k] = cur;
+      }
+      if (!cur)
+        continue;
+      NSMutableArray *chArr = [NSMutableArray arrayWithCapacity:4];
+      KKGLSLUniforms bufU = fu;
+      for (int c = 0; c < 4; c++) {
+        id<MTLTexture> ct = nil;
+        if (present[c]) {
+          if (c < k)
+            ct = setTex[curI][c];
+          else if (!first)
+            ct = setTex[prevI][c];
+        } else if (c == 0) {
+          ct = srcLin;
+        }
+        [chArr addObject:ct ?: (id)[NSNull null]];
+        if (ct)
+          bufU.chanRes[c] =
+              (simd_float4){(float)ct.width, (float)ct.height, 1.0f, 0.0f};
+      }
+      MTLRenderPassDescriptor *rpd =
+          [MTLRenderPassDescriptor renderPassDescriptor];
+      rpd.colorAttachments[0].texture = cur;
+      rpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+      rpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+      rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+      id<MTLRenderCommandEncoder> be =
+          [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+      [be setViewport:(MTLViewport){0, 0, (double)bufW, (double)bufH, -1.0,
+                                    1.0}];
+      [be setRenderPipelineState:bufPS[k]];
+      [be setFragmentBytes:&bufU length:sizeof(bufU) atIndex:0];
+      KKBindCustomChannelTextures(be, bufTR[k], chArr, srcSampler, noiseTex,
+                                  noiseSampler);
+      [be drawPrimitives:MTLPrimitiveTypeTriangleStrip
+             vertexStart:0
+             vertexCount:4];
+      [be endEncoding];
+    }
+    prevI = curI;
+  }
+  id<MTLTexture> bufTex[4];
+  for (int c = 0; c < 4; c++)
+    bufTex[c] = setTex[prevI][c];
+
+  NSString *imgSrc = withCommon(image);
+  id<MTLRenderPipelineState> imagePS = [self _customPipelineForDevice:device
+                                                          pixelFormat:fmt
+                                                               source:imgSrc
+                                                           bufferMode:NO];
+  if (!imagePS) {
+    imgSrc = withCommon(ShaderCustomErrorShaderSource());
+    imagePS = [self _customPipelineForDevice:device
+                                 pixelFormat:fmt
+                                      source:imgSrc
+                                  bufferMode:NO];
+  }
+  if (!imagePS)
+    return NO;
+  KKGLSLTranspileResult *imgTR = KKTranspileGLSL(imgSrc);
+  NSMutableArray *imgCh = [NSMutableArray arrayWithCapacity:4];
+  KKGLSLUniforms imgU = base;
+  for (int c = 0; c < 4; c++) {
+    id<MTLTexture> ct = bufTex[c];
+    if (!ct && c == 0)
+      ct = srcLin;
+    [imgCh addObject:ct ?: (id)[NSNull null]];
+    if (ct)
+      imgU.chanRes[c] =
+          (simd_float4){(float)ct.width, (float)ct.height, 1.0f, 0.0f};
+  }
+  MTLRenderPassDescriptor *irpd =
+      [MTLRenderPassDescriptor renderPassDescriptor];
+  irpd.colorAttachments[0].texture = renderTex;
+  irpd.colorAttachments[0].loadAction = MTLLoadActionClear;
+  irpd.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 0);
+  irpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+  id<MTLRenderCommandEncoder> e =
+      [commandBuffer renderCommandEncoderWithDescriptor:irpd];
+  [e setViewport:(MTLViewport){0, 0, W, H, -1.0, 1.0}];
+  [e setRenderPipelineState:imagePS];
+  [e setFragmentBytes:&imgU length:sizeof(imgU) atIndex:0];
+  KKBindCustomChannelTextures(e, imgTR, imgCh, srcSampler, noiseTex,
+                              noiseSampler);
+  [e drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+  [e endEncoding];
+
+  if (downscale)
+    [self blitFrom:renderTex into:dest commandBuffer:commandBuffer];
+  return YES;
+}
+
 // Effect render: runs the same type/custom pipeline as the FCP render into the
 // preview dest. `source` is the mini-viewer's source frame (bound as iChannel0
 // in the Custom path); the built-in types are procedural and ignore it.
@@ -435,28 +683,17 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   NSArray<NSNumber *> *typeV = [self valuesForLabel:@"Type"];
   int meshType =
       typeV.count ? (int)lround(typeV[0].doubleValue) : ShaderType_Mesh;
-  BOOL isCustom = (meshType == ShaderType_Custom);
+  // Custom (single- or multi-pass) has its own dedicated path (Common +
+  // buffers).
+  if (meshType == ShaderType_Custom)
+    return [self _encodeCustomEffectFromSource:source
+                                          into:dest
+                                 commandBuffer:commandBuffer];
   const ShaderTypeInfo *info = ShaderTypeInfoForType(meshType);
-  id<MTLRenderPipelineState> pipeline;
-  NSString *customSource = nil;
-  if (isCustom) {
-    // Runtime-compiled user shader; on a transpile error fall back to the error
-    // pattern (matches the FCP render).
-    customSource = [self _customShaderSource];
-    pipeline = [self _customPipelineForDevice:dest.device
-                                  pixelFormat:dest.pixelFormat
-                                       source:customSource];
-    if (!pipeline) {
-      customSource = ShaderCustomErrorShaderSource();
-      pipeline = [self _customPipelineForDevice:dest.device
-                                    pixelFormat:dest.pixelFormat
-                                         source:customSource];
-    }
-  } else {
-    pipeline = [self _pipelineForDevice:dest.device
-                            pixelFormat:dest.pixelFormat
-                         fragmentShader:@(info->fragment)];
-  }
+  id<MTLRenderPipelineState> pipeline =
+      [self _pipelineForDevice:dest.device
+                   pixelFormat:dest.pixelFormat
+                fragmentShader:@(info->fragment)];
   if (!pipeline)
     return NO;
 
@@ -516,45 +753,7 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
       speedShV.count ? speedShV[0].floatValue : KK_SHADER_GRAD_DEFAULT_SPEED;
 
   [e setRenderPipelineState:pipeline];
-  if (isCustom) {
-    // The transpiled vertex builds its own quad from vertexID (no vertex
-    // buffers); the fragment reads one KKGLSLUniforms (all-vec4) at buffer 0.
-    // iTime respects the shared Speed/Seed; flipY=0 matches the main viewer.
-    float iTime = timeSec * speedShared + fmodf(seedShared, 10000.0f);
-    KKGLSLUniforms u;
-    u.resTime = (simd_float4){W, H, 1.0f, iTime};
-    u.mouse = (simd_float4){0.0f, 0.0f, 0.0f, 0.0f};
-    u.date = (simd_float4){0.0f, 0.0f, 0.0f, 0.0f};
-    u.extra =
-        (simd_float4){1.0f / 60.0f, iTime * 60.0f, 0.0f, (float)encodeSRGB};
-    NSArray<NSNumber *> *grV = [self valuesForLabel:@"Grain"];
-    NSArray<NSNumber *> *grSzV = [self valuesForLabel:@"Grain Size"];
-    float grain =
-        grV.count ? grV[0].floatValue / 100.0f : KK_CORE_GRAIN_DEFAULT;
-    float grainSize =
-        grSzV.count ? grSzV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
-    u.grain = (simd_float4){grain, grainSize, 0.0f, 0.0f};
-    // iChannelResolution: 0 = source clip, 1-3 = 256x256 noise.
-    u.chanRes[0] = source ? (simd_float4){(float)source.width,
-                                          (float)source.height, 1.0f, 0.0f}
-                          : (simd_float4){W, H, 1.0f, 0.0f};
-    for (int c = 1; c < 4; c++)
-      u.chanRes[c] = (simd_float4){256.0f, 256.0f, 1.0f, 0.0f};
-    [e setFragmentBytes:&u length:sizeof(u) atIndex:0];
-    KKGLSLTranspileResult *tr = KKTranspileShadertoyGLSL(customSource);
-    if (tr.usedChannelMask)
-      // Source clip -> iChannel0, noise -> iChannel1-3 (matches FCP render).
-      // The mini feed stores the source sRGB-encoded (KKMiniViewerFeed writes
-      // FCP's linear source through a BGRA8_sRGB texture), so reading it back
-      // as plain BGRA8 samples GAMMA - brighter than the main render, which
-      // samples FCP's LINEAR source. Read the same IOSurface through an _sRGB
-      // view so the sample linearises and the mini colour matches the main
-      // viewer.
-      KKBindCustomChannels(e, tr, [self _linearSourceView:source],
-                           KKCustomSourceSampler(dest.device),
-                           KKCustomChannelNoiseTexture(dest.device),
-                           KKCustomChannelSampler(dest.device));
-  } else {
+  {
     [e setVertexBytes:verts
                length:sizeof(verts)
               atIndex:KKVertexInputIndex_Vertices];

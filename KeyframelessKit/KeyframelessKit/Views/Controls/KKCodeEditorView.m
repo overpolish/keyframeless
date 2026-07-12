@@ -6,7 +6,9 @@
 #import "KKCodeEditorView.h"
 #import "KKCodeGutterView.h"
 #import "KKGLSLSyntax.h"
+#import "KKLocalized.h"
 #import "NSColor+KKColors.h"
+#import <QuartzCore/QuartzCore.h>
 
 // The code editor lives in a nonactivating FxPlug ViewBridge popover where the
 // host window stays key, so key events arrive as key EQUIVALENTS, not keyDown -
@@ -150,6 +152,16 @@
 }
 @end
 
+// Draw-only, hit-transparent edge fade hinting horizontal overflow in the error
+// strip, matching the pill bars' overflow shadow.
+@interface _KKErrEdgeShadow : NSView
+@end
+@implementation _KKErrEdgeShadow
+- (NSView *)hitTest:(NSPoint)point {
+  return nil;
+}
+@end
+
 @interface KKCodeEditorView () <NSTextViewDelegate, NSTextStorageDelegate>
 @end
 
@@ -158,15 +170,35 @@
   NSTimer *_debounce;
   BOOL _highlightScheduled;
   KKCodeGutterView *_lineGutter;
-  NSTextField *_errorBar;
+  NSView *_errorBar;             // red strip container (height toggled 0/on)
+  NSScrollView *_errorScroll;    // horizontal scroll so long messages fit
+  NSTextField *_errorLabel;      // the message (document view of _errorScroll)
+  NSButton *_errorCopyButton;    // floats on the right, copies the message
+  CAGradientLayer *_errLeftGrad; // overflow edge fades (opacity = scroll pos)
+  CAGradientLayer *_errRightGrad;
+  NSLayoutConstraint
+      *_errorScrollHeight; // = label line height, centered in strip
   NSLayoutConstraint *_errorBarHeight;
   NSInteger _errorLine; // 1-based line to flag, 0 = none
+  // Tabbed sections: parallel names/codes, the active one shown in _textView.
+  // A single (default) section behaves exactly like the plain editor - the tab
+  // strip stays collapsed.
+  NSMutableArray<NSString *> *_sectionNames;
+  NSMutableArray<NSString *> *_sectionCodes;
+  NSInteger _activeTab;
+  NSStackView *_tabBar;
+  NSLayoutConstraint *_tabBarHeight;
 }
 @synthesize codeValidator = _codeValidator;
 
 - (instancetype)initWithFrame:(NSRect)frame {
   self = [super initWithFrame:frame];
   if (self) {
+    // One implicit "Image" section until a host sets more (keeps the plain
+    // single-editor behaviour + tab strip collapsed).
+    _sectionNames = [@[ @"Image" ] mutableCopy];
+    _sectionCodes = [@[ @"" ] mutableCopy];
+    _activeTab = 0;
     // Solid GitHub-Dark box, forced dark so scrollers / caret render for a dark
     // theme regardless of the host inspector's appearance.
     self.appearance = [NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
@@ -231,32 +263,157 @@
     [self addSubview:scroll];
 
     // Error bar under the editor: collapsed (height 0) until a validator
-    // reports a problem, then a one-line red strip with the message.
-    _errorBar = [NSTextField labelWithString:@""];
+    // reports a problem. Compiler messages can be long, so the text lives in a
+    // horizontal scroll view (read the whole thing, no truncation) with a copy
+    // button pinned on the right.
+    _errorBar = [NSView new];
     _errorBar.translatesAutoresizingMaskIntoConstraints = NO;
-    _errorBar.font = [NSFont monospacedSystemFontOfSize:8.5
-                                                 weight:NSFontWeightMedium];
-    _errorBar.textColor = KKCodeError();
-    _errorBar.lineBreakMode = NSLineBreakByTruncatingTail;
-    _errorBar.maximumNumberOfLines = 1;
-    _errorBar.drawsBackground = YES;
-    _errorBar.backgroundColor = KKHex(0x2d1214);
+    _errorBar.wantsLayer = YES;
+    _errorBar.layer.backgroundColor = KKHex(0x2d1214).CGColor;
     [self addSubview:_errorBar];
     _errorBarHeight = [_errorBar.heightAnchor constraintEqualToConstant:0.0];
 
+    _errorLabel = [NSTextField labelWithString:@""];
+    _errorLabel.font = [NSFont monospacedSystemFontOfSize:8.5
+                                                   weight:NSFontWeightMedium];
+    _errorLabel.textColor = KKCodeError();
+    _errorLabel.lineBreakMode = NSLineBreakByClipping;
+    _errorLabel.maximumNumberOfLines = 1;
+    _errorLabel.drawsBackground = NO;
+    _errorLabel.selectable = YES;
+
+    _errorScroll = [NSScrollView new];
+    _errorScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    _errorScroll.drawsBackground = NO;
+    _errorScroll.hasHorizontalScroller = YES;
+    _errorScroll.hasVerticalScroller = NO;
+    _errorScroll.horizontalScrollElasticity = NSScrollElasticityAllowed;
+    _errorScroll.verticalScrollElasticity = NSScrollElasticityNone;
+    _errorScroll.scrollerStyle = NSScrollerStyleOverlay;
+    _errorScroll.automaticallyAdjustsContentInsets = NO;
+    _errorScroll.documentView = _errorLabel;
+    _errorScrollHeight =
+        [_errorScroll.heightAnchor constraintEqualToConstant:12.0];
+    _errorScroll.contentView.postsBoundsChangedNotifications = YES;
+    [[NSNotificationCenter defaultCenter]
+        addObserver:self
+           selector:@selector(_errorScrolled)
+               name:NSViewBoundsDidChangeNotification
+             object:_errorScroll.contentView];
+    [_errorBar addSubview:_errorScroll];
+
+    // Overflow edge fades over the scroll (opacity driven by scroll position),
+    // same idiom as the pill bars.
+    _KKErrEdgeShadow *errLeft = [_KKErrEdgeShadow new];
+    _KKErrEdgeShadow *errRight = [_KKErrEdgeShadow new];
+    errLeft.translatesAutoresizingMaskIntoConstraints = NO;
+    errRight.translatesAutoresizingMaskIntoConstraints = NO;
+    id fadeOpaque =
+        (__bridge id)[[NSColor blackColor] colorWithAlphaComponent:0.3].CGColor;
+    id fadeClear = (__bridge id)[NSColor clearColor].CGColor;
+    _errLeftGrad = [CAGradientLayer layer];
+    _errLeftGrad.colors = @[ fadeOpaque, fadeClear ];
+    _errLeftGrad.startPoint = CGPointMake(0, 0.5);
+    _errLeftGrad.endPoint = CGPointMake(1, 0.5);
+    _errLeftGrad.opacity = 0.0;
+    errLeft.wantsLayer = YES;
+    errLeft.layer = _errLeftGrad;
+    _errRightGrad = [CAGradientLayer layer];
+    _errRightGrad.colors = @[ fadeClear, fadeOpaque ];
+    _errRightGrad.startPoint = CGPointMake(0, 0.5);
+    _errRightGrad.endPoint = CGPointMake(1, 0.5);
+    _errRightGrad.opacity = 0.0;
+    errRight.wantsLayer = YES;
+    errRight.layer = _errRightGrad;
+    [_errorBar addSubview:errLeft];
+    [_errorBar addSubview:errRight];
+
+    NSImage *copyImg = [NSImage imageWithSystemSymbolName:@"doc.on.doc"
+                                 accessibilityDescription:@"Copy"];
+    copyImg = [copyImg imageWithSymbolConfiguration:
+                           [NSImageSymbolConfiguration
+                               configurationWithPointSize:9.5
+                                                   weight:NSFontWeightRegular]];
+    _errorCopyButton =
+        copyImg
+            ? [NSButton buttonWithImage:copyImg
+                                 target:self
+                                 action:@selector(_copyError:)]
+            : [NSButton
+                  buttonWithTitle:KKLoc(@"Copy",
+                                        @"Copy button (error bar fallback).")
+                           target:self
+                           action:@selector(_copyError:)];
+    _errorCopyButton.translatesAutoresizingMaskIntoConstraints = NO;
+    _errorCopyButton.bordered = NO;
+    _errorCopyButton.imagePosition = copyImg ? NSImageOnly : NSNoImage;
+    _errorCopyButton.imageScaling = NSImageScaleProportionallyDown;
+    _errorCopyButton.contentTintColor = KKCodeError();
+    _errorCopyButton.toolTip =
+        KKLoc(@"Copy error message", @"Error-bar copy button tooltip.");
+    [_errorBar addSubview:_errorCopyButton];
+
     [NSLayoutConstraint activateConstraints:@[
+      [errLeft.leadingAnchor
+          constraintEqualToAnchor:_errorScroll.leadingAnchor],
+      [errLeft.topAnchor constraintEqualToAnchor:_errorBar.topAnchor],
+      [errLeft.bottomAnchor constraintEqualToAnchor:_errorBar.bottomAnchor],
+      [errLeft.widthAnchor constraintEqualToConstant:16.0],
+      [errRight.trailingAnchor
+          constraintEqualToAnchor:_errorScroll.trailingAnchor],
+      [errRight.topAnchor constraintEqualToAnchor:_errorBar.topAnchor],
+      [errRight.bottomAnchor constraintEqualToAnchor:_errorBar.bottomAnchor],
+      [errRight.widthAnchor constraintEqualToConstant:16.0],
+    ]];
+
+    // Tab strip across the top: a row of section buttons. Collapsed to height 0
+    // until a host sets 2+ sections (single-section editing looks unchanged).
+    _tabBar = [NSStackView new];
+    _tabBar.translatesAutoresizingMaskIntoConstraints = NO;
+    _tabBar.orientation = NSUserInterfaceLayoutOrientationHorizontal;
+    _tabBar.alignment = NSLayoutAttributeCenterY;
+    _tabBar.spacing = 2.0;
+    _tabBar.edgeInsets = NSEdgeInsetsMake(0, 6, 0, 6);
+    _tabBar.hidden = YES;
+    [self addSubview:_tabBar];
+    _tabBarHeight = [_tabBar.heightAnchor constraintEqualToConstant:0.0];
+
+    [NSLayoutConstraint activateConstraints:@[
+      [_tabBar.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+      [_tabBar.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+      [_tabBar.topAnchor constraintEqualToAnchor:self.topAnchor],
+      _tabBarHeight,
       [_lineGutter.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-      [_lineGutter.topAnchor constraintEqualToAnchor:self.topAnchor],
+      [_lineGutter.topAnchor constraintEqualToAnchor:_tabBar.bottomAnchor],
       [_lineGutter.bottomAnchor constraintEqualToAnchor:_errorBar.topAnchor],
       [_lineGutter.widthAnchor constraintEqualToConstant:34.0],
       [scroll.leadingAnchor constraintEqualToAnchor:_lineGutter.trailingAnchor],
       [scroll.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-      [scroll.topAnchor constraintEqualToAnchor:self.topAnchor],
+      [scroll.topAnchor constraintEqualToAnchor:_tabBar.bottomAnchor],
       [scroll.bottomAnchor constraintEqualToAnchor:_errorBar.topAnchor],
       [_errorBar.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
       [_errorBar.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
       [_errorBar.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
       _errorBarHeight,
+      [_errorCopyButton.trailingAnchor
+          constraintEqualToAnchor:_errorBar.trailingAnchor
+                         constant:-6.0],
+      [_errorCopyButton.centerYAnchor
+          constraintEqualToAnchor:_errorBar.centerYAnchor
+                         constant:-1.0], // optical nudge up (SF symbol sits
+                                         // low)
+      [_errorCopyButton.widthAnchor constraintEqualToConstant:16.0],
+      [_errorScroll.leadingAnchor
+          constraintEqualToAnchor:_errorBar.leadingAnchor
+                         constant:6.0],
+      [_errorScroll.trailingAnchor
+          constraintEqualToAnchor:_errorCopyButton.leadingAnchor
+                         constant:-6.0],
+      // Clip = one line tall, centered in the strip, so the message reads
+      // vertically centered (a full-height clip would top-align the text).
+      [_errorScroll.centerYAnchor
+          constraintEqualToAnchor:_errorBar.centerYAnchor],
+      _errorScrollHeight,
     ]];
   }
   return self;
@@ -271,13 +428,17 @@
 }
 
 - (NSString *)codeText {
-  return _textView.string;
+  // -[NSTextView string] returns the LIVE mutable backing store, not a
+  // snapshot; copy so callers (and our section array) hold stable text that
+  // doesn't mutate when the editor content later changes.
+  return [_textView.string copy];
 }
 
 - (void)setCodeText:(NSString *)codeText {
   if ([_textView.string isEqualToString:codeText])
     return;
   _textView.string = codeText ?: @"";
+  _sectionCodes[_activeTab] = [_textView.string copy];
   [self _runValidator];
 }
 
@@ -287,23 +448,272 @@
   [self _runValidator];
 }
 
+- (void)setSections:
+    (NSArray<NSDictionary<NSString *, NSString *> *> *)sections {
+  if (sections.count == 0)
+    return;
+  NSMutableArray<NSString *> *names = [NSMutableArray array];
+  NSMutableArray<NSString *> *codes = [NSMutableArray array];
+  for (NSDictionary *s in sections) {
+    [names addObject:[s[@"name"] isKindOfClass:[NSString class]] ? s[@"name"]
+                                                                 : @""];
+    [codes addObject:[s[@"code"] isKindOfClass:[NSString class]] ? s[@"code"]
+                                                                 : @""];
+  }
+  _sectionNames = names;
+  _sectionCodes = codes;
+  if (_activeTab >= (NSInteger)codes.count)
+    _activeTab = 0;
+  _textView.string = _sectionCodes[_activeTab] ?: @"";
+  [self _rebuildTabBar];
+  [self _runValidator];
+}
+
+- (NSArray<NSDictionary<NSString *, NSString *> *> *)sections {
+  _sectionCodes[_activeTab] =
+      [_textView.string copy]; // fold active tab's edits
+  NSMutableArray<NSDictionary<NSString *, NSString *> *> *out =
+      [NSMutableArray array];
+  for (NSInteger i = 0; i < (NSInteger)_sectionNames.count; i++)
+    [out addObject:@{
+      @"name" : _sectionNames[i],
+      @"code" : _sectionCodes[i] ?: @""
+    }];
+  return out;
+}
+
+// A borderless text button styled for the strip.
+- (NSButton *)_stripButton:(NSString *)title
+                    action:(SEL)action
+                       tag:(NSInteger)tag
+                     color:(NSColor *)color
+                      size:(CGFloat)size
+                    weight:(NSFontWeight)weight {
+  NSButton *b = [NSButton buttonWithTitle:title target:self action:action];
+  b.tag = tag;
+  b.bordered = NO;
+  b.attributedTitle = [[NSAttributedString alloc]
+      initWithString:title
+          attributes:@{
+            NSForegroundColorAttributeName : color,
+            NSFontAttributeName : [NSFont monospacedSystemFontOfSize:size
+                                                              weight:weight]
+          }];
+  return b;
+}
+
+// Rebuild the tab strip: current sections (active bright + semibold), a close
+// button on each added (non-first) tab, and a "+" menu of not-yet-added catalog
+// names. Collapses to nothing when there's a single tab and nothing to add.
+- (void)_rebuildTabBar {
+  for (NSView *v in [_tabBar.arrangedSubviews copy]) {
+    [_tabBar removeArrangedSubview:v];
+    [v removeFromSuperview];
+  }
+  NSMutableArray<NSString *> *addable = [NSMutableArray array];
+  for (NSString *n in _addableTabNames)
+    if (![_sectionNames containsObject:n])
+      [addable addObject:n];
+  BOOL show = (_sectionNames.count > 1) || (addable.count > 0);
+  _tabBar.hidden = !show;
+  _tabBarHeight.constant = show ? 22.0 : 0.0;
+  if (!show)
+    return;
+  for (NSInteger i = 0; i < (NSInteger)_sectionNames.count; i++) {
+    BOOL active = (i == _activeTab);
+    [_tabBar addArrangedSubview:
+                 [self _stripButton:_sectionNames[i]
+                             action:@selector(_tabClicked:)
+                                tag:i
+                              color:active ? KKCodeText()
+                                           : [KKCodeText()
+                                                 colorWithAlphaComponent:0.45]
+                               size:9.5
+                             weight:active ? NSFontWeightSemibold
+                                           : NSFontWeightRegular]];
+    if (i > 0) // Image (0) is permanent; added tabs get a close button
+      [_tabBar
+          addArrangedSubview:[self
+                                 _stripButton:@"✕"
+                                       action:@selector(_tabCloseClicked:)
+                                          tag:i
+                                        color:[KKCodeText()
+                                                  colorWithAlphaComponent:0.35]
+                                         size:8.5
+                                       weight:NSFontWeightRegular]];
+  }
+  if (addable.count > 0)
+    [_tabBar
+        addArrangedSubview:[self _stripButton:@"+"
+                                       action:@selector(_plusClicked:)
+                                          tag:-1
+                                        color:[KKCodeText()
+                                                  colorWithAlphaComponent:0.6]
+                                         size:13.0
+                                       weight:NSFontWeightMedium]];
+}
+
+- (void)_tabClicked:(NSButton *)sender {
+  [self _selectTab:sender.tag];
+}
+
+// "+" menu: the catalog names not yet present. Selecting one adds that section.
+- (void)_plusClicked:(NSButton *)sender {
+  NSMenu *menu = [[NSMenu alloc] init];
+  for (NSString *n in _addableTabNames) {
+    if ([_sectionNames containsObject:n])
+      continue;
+    NSMenuItem *it =
+        [[NSMenuItem alloc] initWithTitle:n
+                                   action:@selector(_addTabFromMenu:)
+                            keyEquivalent:@""];
+    it.target = self;
+    it.representedObject = n;
+    [menu addItem:it];
+  }
+  [menu popUpMenuPositioningItem:nil
+                      atLocation:NSMakePoint(0, NSHeight(sender.bounds))
+                          inView:sender];
+}
+
+- (void)_addTabFromMenu:(NSMenuItem *)item {
+  NSString *name = item.representedObject;
+  if (!name.length || [_sectionNames containsObject:name])
+    return;
+  // Insert keeping catalog order among the extra tabs (Image stays first).
+  NSInteger catIdx = (NSInteger)[_addableTabNames indexOfObject:name];
+  NSInteger insertAt = (NSInteger)_sectionNames.count;
+  for (NSInteger i = 1; i < (NSInteger)_sectionNames.count; i++) {
+    NSInteger ci = (NSInteger)[_addableTabNames indexOfObject:_sectionNames[i]];
+    if (ci != NSNotFound && ci > catIdx) {
+      insertAt = i;
+      break;
+    }
+  }
+  _sectionCodes[_activeTab] = [_textView.string copy]; // stash current
+  [_sectionNames insertObject:name atIndex:insertAt];
+  [_sectionCodes insertObject:@"" atIndex:insertAt];
+  _activeTab = insertAt;
+  _textView.string = @"";
+  [self _rebuildTabBar];
+  [self _runValidator];
+  if (self.onSectionsChange)
+    self.onSectionsChange([self sections]);
+}
+
+- (void)_tabCloseClicked:(NSButton *)sender {
+  NSInteger i = sender.tag;
+  if (i <= 0 || i >= (NSInteger)_sectionNames.count)
+    return; // never remove the first (Image) tab
+  [_sectionNames removeObjectAtIndex:i];
+  [_sectionCodes removeObjectAtIndex:i];
+  if (_activeTab >= (NSInteger)_sectionNames.count)
+    _activeTab = (NSInteger)_sectionNames.count - 1;
+  if (_activeTab < 0)
+    _activeTab = 0;
+  _textView.string = _sectionCodes[_activeTab] ?: @"";
+  [self _rebuildTabBar];
+  [self _runValidator];
+  if (self.onSectionsChange)
+    self.onSectionsChange([self sections]);
+}
+
+// Switch the visible tab: stash the current text, load the target's,
+// revalidate.
+- (void)_selectTab:(NSInteger)i {
+  if (i < 0 || i >= (NSInteger)_sectionCodes.count || i == _activeTab)
+    return;
+  _sectionCodes[_activeTab] = [_textView.string copy];
+  _activeTab = i;
+  _textView.string = _sectionCodes[i] ?: @"";
+  [self _rebuildTabBar]; // restyle the active button
+  [self _runValidator];
+}
+
 // Run the owner's validator over the current text and reflect the result: a
 // one-line red bar and a flagged line, or clear both when it's valid / absent.
 - (void)_runValidator {
+  // Multi-pass: validate the tab WITH the Common section prepended (so shared
+  // decls resolve), mirroring the render. The Common tab itself is validated
+  // with a dummy entry point so its own syntax is still checked. `prependLines`
+  // maps a reported error back to this tab; an error inside Common is
+  // suppressed here (it surfaces on the Common tab).
+  NSString *code = _textView.string;
+  NSInteger prependLines = 0;
+  NSString *activeName = (_activeTab < (NSInteger)_sectionNames.count)
+                             ? _sectionNames[_activeTab]
+                             : @"";
+  NSUInteger ci = [_sectionNames indexOfObject:@"Common"];
+  NSString *commonCode = (ci != NSNotFound) ? _sectionCodes[ci] : nil;
+  if ([activeName isEqualToString:@"Common"]) {
+    code = [code stringByAppendingString:
+                     @"\nvoid mainImage(out vec4 kkO, in vec2 kkC){ kkO = "
+                     @"vec4(0.0); }\n"];
+  } else if (commonCode.length) {
+    prependLines =
+        (NSInteger)[commonCode componentsSeparatedByString:@"\n"].count;
+    code = [NSString stringWithFormat:@"%@\n%@", commonCode, code];
+  }
   NSInteger line = 0;
-  NSString *err =
-      _codeValidator ? _codeValidator(_textView.string, &line) : nil;
+  NSString *err = _codeValidator ? _codeValidator(code, &line) : nil;
+  if (err.length && prependLines > 0) {
+    line -= prependLines;
+    if (line < 1) { // error lives in Common; it's flagged on the Common tab
+      err = nil;
+      line = 0;
+    }
+  }
   _errorLine = err.length ? line : 0;
   if (err.length) {
-    _errorBar.stringValue = [@"  " stringByAppendingString:err];
-    _errorBarHeight.constant = 18.0;
+    _errorLabel.stringValue = err;
+    [_errorLabel sizeToFit];
+    // Document view = the text's own size so the scroll can pan a wide message
+    // and the single line stays vertically centered (clip height == line
+    // height).
+    NSSize fit = _errorLabel.fittingSize;
+    CGFloat lineH = ceil(fit.height);
+    _errorLabel.frame = NSMakeRect(0, 0, ceil(fit.width) + 4.0, lineH);
+    _errorScrollHeight.constant = lineH;
+    [_errorScroll.contentView scrollToPoint:NSZeroPoint]; // reset to start
+    _errorBarHeight.constant = 20.0;
   } else {
-    _errorBar.stringValue = @"";
+    _errorLabel.stringValue = @"";
     _errorBarHeight.constant = 0.0;
   }
+  _errorCopyButton.hidden = (err.length == 0);
+  [self _errorScrolled]; // refresh overflow fades for the new message width
   _lineGutter.errorLine = _errorLine;
   [self _applyHighlighting]; // repaint the flagged-line background
   [_lineGutter setNeedsDisplay:YES];
+}
+
+- (void)_copyError:(id)sender {
+  NSString *msg = _errorLabel.stringValue;
+  if (!msg.length)
+    return;
+  NSPasteboard *pb = NSPasteboard.generalPasteboard;
+  [pb clearContents];
+  [pb setString:msg forType:NSPasteboardTypeString];
+}
+
+// Fade the overflow edges in/out with scroll position (0 when the message
+// fits).
+- (void)_errorScrolled {
+  CGFloat docW = NSWidth(_errorLabel.frame);
+  CGFloat visW = _errorScroll.contentView.bounds.size.width;
+  CGFloat offX = _errorScroll.contentView.bounds.origin.x;
+  CGFloat scrollable = docW - visW;
+  [CATransaction begin];
+  [CATransaction setDisableActions:YES];
+  if (scrollable <= 0.5) {
+    _errLeftGrad.opacity = 0.0;
+    _errRightGrad.opacity = 0.0;
+  } else {
+    _errLeftGrad.opacity = (float)MAX(0.0, MIN(1.0, offX / 16.0));
+    _errRightGrad.opacity =
+        (float)MAX(0.0, MIN(1.0, (scrollable - offX) / 16.0));
+  }
+  [CATransaction commit];
 }
 
 // Character range of 1-based `line` in `s`, or {NSNotFound,0}.
@@ -429,9 +839,13 @@
                                           __strong typeof(weak) s = weak;
                                           if (!s)
                                             return;
+                                          s->_sectionCodes[s->_activeTab] =
+                                              [s->_textView.string copy];
                                           [s _runValidator];
                                           if (s.onChange)
                                             s.onChange(s->_textView.string);
+                                          if (s.onSectionsChange)
+                                            s.onSectionsChange([s sections]);
                                         }];
 }
 

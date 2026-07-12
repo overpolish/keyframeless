@@ -14,12 +14,173 @@
 
 #import <KeyframelessKit/KKLog.h>
 
-// Shadertoy body -> full core-450 GLSL. No #version (forced via the API): the
+// GLSL body -> full core-450 GLSL. No #version (forced via the API): the
 // uniform block is all-vec4 so std140 maps 1:1 to KKGLSLUniforms; iResolution /
 // iTime / iTimeDelta / iFrame are aliased onto its lanes. flipY, sRGB-encode and
 // premultiply live in main() driven by kkExtra so they stay runtime choices.
-static NSString *KKWrapShadertoyGLSL(NSString *userSource, NSUInteger channelMask,
-                                     NSInteger *outUserLineOffset) {
+// GLSL permits identifiers like `or`, `and`, `xor`, `compl` that are reserved
+// OPERATOR tokens in MSL/C++ (Metal is C++-based). SPIRV-Cross carries the
+// source name straight into the MSL, where it fails the Metal compile. Rename
+// them (word-boundary) in the user source before wrapping. `not` is DELIBERATELY
+// excluded - it's a GLSL built-in function (`not(bvec)`); renaming it would break
+// shaders that use it. Line count is preserved (word -> word), so the glslang
+// error-line mapping is unaffected.
+static NSString *KKRenameReservedIdentifiers(NSString *src) {
+  if (!src.length)
+    return src ?: @"";
+  static NSRegularExpression *re;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    re = [NSRegularExpression
+        regularExpressionWithPattern:
+            @"\\b(and|and_eq|bitand|bitor|compl|not_eq|or|or_eq|xor|xor_eq|new|"
+            @"delete|operator|friend|mutable|typename|register|namespace|using|"
+            @"private|protected|public|class|template|this)\\b"
+                             options:0
+                               error:nil];
+  });
+  return [re stringByReplacingMatchesInString:src
+                                      options:0
+                                        range:NSMakeRange(0, src.length)
+                                 withTemplate:@"kk_$1"];
+}
+
+// Best-effort compatibility shim. Plenty of shaders online are written for a raw
+// WebGL / three.js / glslCanvas / Book-of-Shaders pipeline: a `void main()` +
+// `gl_FragColor` (or a GLSL3 `out vec4`) fragment that reads host-named uniforms
+// (uTexture, vUv, u_time, ...). This engine speaks the image-shader convention
+// (`mainImage(out vec4, in vec2)` with iChannel0 / iResolution / iTime), so those
+// shaders would collide on `main` and reference undeclared names. This pass
+// rewrites the common cases into our convention: it maps the well-known host
+// uniform / varying names, converts the entry point + output, neutralises the
+// gl_ builtins, and drops declarations we supply ourselves. Line-count preserving
+// so a glslang error still maps to the editor line. A shader already using
+// `mainImage` passes through untouched; uncommon custom uniform names still need
+// a hand edit (the validator points at them).
+static NSString *KKShimRawGLSL(NSString *src) {
+  if (!src.length)
+    return src ?: @"";
+  if ([src rangeOfString:@"mainImage"].location != NSNotFound)
+    return src; // already an image shader
+
+  NSRegularExpression *mainRe = [NSRegularExpression
+      regularExpressionWithPattern:@"\\bvoid\\s+main\\s*\\("
+                           options:0
+                             error:nil];
+  BOOL looksRaw =
+      [src rangeOfString:@"gl_FragColor"].location != NSNotFound ||
+      [src rangeOfString:@"gl_FragData"].location != NSNotFound ||
+      [mainRe firstMatchInString:src
+                         options:0
+                           range:NSMakeRange(0, src.length)] != nil;
+  if (!looksRaw)
+    return src; // a bare helper snippet: leave it be
+
+  NSMutableString *s = [src mutableCopy];
+  NSString *(^find)(NSString *) = ^NSString *(NSString *pat) {
+    NSRegularExpression *re =
+        [NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil];
+    NSTextCheckingResult *m = [re firstMatchInString:s
+                                             options:0
+                                               range:NSMakeRange(0, s.length)];
+    return (m && m.numberOfRanges > 1) ? [s substringWithRange:[m rangeAtIndex:1]]
+                                       : nil;
+  };
+  void (^sub)(NSString *, NSString *) = ^(NSString *pat, NSString *repl) {
+    NSRegularExpression *re =
+        [NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil];
+    [re replaceMatchesInString:s
+                       options:0
+                         range:NSMakeRange(0, s.length)
+                  withTemplate:repl];
+  };
+  void (^mapNames)(NSArray<NSString *> *, NSString *) =
+      ^(NSArray<NSString *> *names, NSString *repl) {
+        NSMutableArray *esc = [NSMutableArray array];
+        for (NSString *n in names)
+          [esc addObject:[NSRegularExpression escapedPatternForString:n]];
+        sub([NSString stringWithFormat:@"\\b(?:%@)\\b",
+                                       [esc componentsJoinedByString:@"|"]],
+            repl);
+      };
+
+  // GLSL3 shaders name their output arbitrarily: capture `out vec4 <name>;`
+  // before we strip declarations so we can route <name> to our out param.
+  NSString *outName = find(@"(?m)^[ \\t]*out\\s+vec4\\s+(\\w+)\\s*;");
+
+  // Capture every declared sampler2D uniform (before we strip declarations). Our
+  // engine has one real texture input (iChannel0 = source), so mapping declared
+  // samplers to iChannel0..3 in order lets a single-texture raw shader work
+  // whatever the sampler is named - no hardcoded name list needed.
+  NSMutableArray<NSString *> *samplerNames = [NSMutableArray array];
+  {
+    NSRegularExpression *sre = [NSRegularExpression
+        regularExpressionWithPattern:
+            @"(?m)^[ \\t]*uniform\\s+sampler2D\\s+(\\w+)"
+                             options:0
+                               error:nil];
+    [sre enumerateMatchesInString:s
+                          options:0
+                            range:NSMakeRange(0, s.length)
+                       usingBlock:^(NSTextCheckingResult *m, NSMatchingFlags flg,
+                                    BOOL *stop) {
+                         if (m.numberOfRanges > 1)
+                           [samplerNames
+                               addObject:[s substringWithRange:[m rangeAtIndex:1]]];
+                       }];
+  }
+
+  // Drop declarations we provide (or can't bind) + #version / precision. Content
+  // only, newline kept, so error-line mapping survives.
+  sub(@"(?m)^[ \\t]*(?:uniform|varying|attribute|in|out)\\b[^;\\n]*;", @"");
+  sub(@"(?m)^[ \\t]*precision\\b[^;\\n]*;", @"");
+  sub(@"(?m)^[ \\t]*#version\\b[^\\n]*", @"");
+
+  // Declared samplers -> iChannel0..3 in declaration order (the primary texture
+  // becomes the source clip). Handles any name, so `videoTex`, `myFunkyTex`, etc.
+  // work without appearing in the list below.
+  for (NSUInteger i = 0; i < samplerNames.count && i < 4; i++)
+    mapNames(@[ samplerNames[i] ],
+             [NSString stringWithFormat:@"iChannel%lu", (unsigned long)i]);
+
+  // Map the well-known host names onto our globals (covers a texture used without
+  // an explicit declaration). Deliberately conservative: only distinctive,
+  // prefixed names (never bare `time` / `uv` / `resolution`) so a local variable
+  // is never clobbered.
+  mapNames(@[
+    @"uTexture", @"u_texture", @"tDiffuse", @"texture0", @"tex0", @"uSampler",
+    @"uTex", @"u_tex", @"uImage", @"uMainTex", @"inputTexture", @"backbuffer",
+    @"uDiffuse", @"uSource"
+  ],
+           @"iChannel0");
+  // Raw-GL resolution / mouse uniforms are vec2; iResolution is vec3 and iMouse
+  // vec4, so map to the .xy swizzle or a `vec2 / iResolution` divide fails to
+  // type-check. `.xy.x` / `.xy.xy` chains stay legal for the `.x` access case.
+  mapNames(@[ @"u_resolution", @"uResolution", @"uRes", @"u_res" ],
+           @"iResolution.xy");
+  mapNames(@[ @"u_time", @"uTime", @"iGlobalTime", @"uElapsedTime" ], @"iTime");
+  mapNames(@[ @"u_mouse", @"uMouse" ], @"iMouse.xy");
+  mapNames(@[ @"vUv", @"vUV", @"v_uv", @"vTexCoord", @"vTextureCoord", @"vST" ],
+           @"(kk_fragCoord.xy / iResolution.xy)");
+
+  // Output + coordinate builtins. gl_FragCoord becomes the incoming coord (its
+  // .z/.w are effectively unused by image shaders).
+  if (outName.length)
+    mapNames(@[ outName ], @"kk_fragColor");
+  sub(@"gl_FragData\\s*\\[\\s*0\\s*\\]", @"kk_fragColor");
+  mapNames(@[ @"gl_FragColor", @"gl_FragData" ], @"kk_fragColor");
+  mapNames(@[ @"gl_FragCoord" ], @"vec4(kk_fragCoord, 0.0, 1.0)");
+  mapNames(@[ @"texture2D", @"textureCube" ], @"texture");
+
+  // The entry point itself (kept on one line to preserve mapping).
+  sub(@"\\bvoid\\s+main\\s*\\([^)\\n]*\\)",
+      @"void mainImage(out vec4 kk_fragColor, in vec2 kk_fragCoord)");
+  return s;
+}
+
+static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
+                                     NSInteger *outUserLineOffset,
+                                     BOOL bufferMode) {
   NSMutableString *s = [NSMutableString string];
   [s appendString:@"layout(location = 0) out vec4 kk_outColor;\n"
                   @"layout(std140, binding = 0) uniform KKUniforms {\n"
@@ -60,7 +221,7 @@ static NSString *KKWrapShadertoyGLSL(NSString *userSource, NSUInteger channelMas
          @"color=mix(color,gc,0.35*st);"
          @"float d=(kkGrainHash(fc)-kkGrainHash(fc.yx+7.0))/255.0;"
          @"return clamp(color+d,0.0,1.0);}\n"];
-  // Strip any leading Shadertoy-illegal #version the user pasted (rare); our
+  // Strip any leading unsupported #version the user pasted (rare); our
   // forced version must be the effective one.
   [s appendString:@"\n"];
   // The user's source begins on the next line: a glslang error at wrapped line L
@@ -72,23 +233,30 @@ static NSString *KKWrapShadertoyGLSL(NSString *userSource, NSUInteger channelMas
         n++;
     *outUserLineOffset = n;
   }
-  [s appendString:userSource];
+  [s appendString:KKRenameReservedIdentifiers(userSource)];
   [s appendString:@"\nvoid main() {\n"
                   @"  vec2 fragCoord = gl_FragCoord.xy;\n"
                   @"  if (kkExtra.z != 0.0) fragCoord.y = kkResTime.y - "
                   @"fragCoord.y;\n"
                   @"  vec4 kkColor = vec4(0.0, 0.0, 0.0, 1.0);\n"
-                  @"  mainImage(kkColor, fragCoord);\n"
-                  // Grain in gamma/display space (screen-fixed, raw gl_FragCoord)
-                  // before the sRGB encode, matching the built-in Types.
-                  @"  vec3 disp = kkApplyGrain(clamp(kkColor.rgb, 0.0, 1.0), "
-                  @"gl_FragCoord.xy);\n"
-                  @"  vec3 rgb = (kkExtra.w == 0.0) ? kkSrgbToLinear(disp) "
-                  @": disp;\n"
-                  // Shadertoy ignores fragColor.a and always displays opaque;
-                  // golfed shaders accumulate garbage into alpha. Force opaque
-                  // (premultiplied output with a=1 is just rgb).
-                  @"  kk_outColor = vec4(rgb, 1.0);\n}\n"];
+                  @"  mainImage(kkColor, fragCoord);\n"];
+  if (bufferMode) {
+    // A Buffer pass stores raw DATA a later pass samples (e.g. a distance /
+    // position packed into RGBA). No grain, no sRGB, no clamp, no forced-opaque
+    // - pass mainImage's output straight through.
+    [s appendString:@"  kk_outColor = kkColor;\n}\n"];
+  } else {
+    [s appendString:
+           // Grain in gamma/display space (screen-fixed, raw gl_FragCoord)
+           // before the sRGB encode, matching the built-in Types.
+           @"  vec3 disp = kkApplyGrain(clamp(kkColor.rgb, 0.0, 1.0), "
+           @"gl_FragCoord.xy);\n"
+           @"  vec3 rgb = (kkExtra.w == 0.0) ? kkSrgbToLinear(disp) : disp;\n"
+           // The image convention ignores fragColor.a (always opaque); golfed
+           // shaders accumulate garbage into alpha. Force opaque (premultiplied
+           // output with a=1 is just rgb).
+           @"  kk_outColor = vec4(rgb, 1.0);\n}\n"];
+  }
   return s;
 }
 
@@ -162,6 +330,14 @@ static NSString *const kKKVertexMSL =
                   ? [NSString stringWithFormat:@"%@: %@", token, desc]
                   : desc;
       }
+      // A raw-GL paste whose entry point we shimmed, but that still trips
+      // "undeclared identifier", almost always names a uniform the shim doesn't
+      // know. Point the user at the fix instead of a bare compiler error.
+      if (self.shimmedFromRawGL &&
+          [raw rangeOfString:@"undeclared identifier"].location != NSNotFound)
+        raw = [raw stringByAppendingString:
+                       @" - looks like a uniform from another shader host; "
+                       @"rename it to iChannel0 / iResolution / iTime"];
       *outMessage = raw;
     }
     return YES;
@@ -300,9 +476,29 @@ void KKBindCustomChannels(id<MTLRenderCommandEncoder> encoder,
   }
 }
 
+void KKBindCustomChannelTextures(id<MTLRenderCommandEncoder> encoder,
+                                 KKGLSLTranspileResult *tr, NSArray *chTex,
+                                 id<MTLSamplerState> sampler,
+                                 id<MTLTexture> noise,
+                                 id<MTLSamplerState> noiseSampler) {
+  for (NSUInteger ch = 0; ch < 4; ch++) {
+    NSInteger ti = [tr textureIndexForChannel:ch];
+    if (ti == NSNotFound)
+      continue;
+    id t = (ch < chTex.count) ? chTex[ch] : (id)[NSNull null];
+    BOOL real = (t != [NSNull null]);
+    [encoder setFragmentTexture:(real ? (id<MTLTexture>)t : noise)
+                        atIndex:(NSUInteger)ti];
+    NSInteger si = [tr samplerIndexForChannel:ch];
+    if (si != NSNotFound)
+      [encoder setFragmentSamplerState:(real ? sampler : noiseSampler)
+                               atIndex:(NSUInteger)si];
+  }
+}
+
 // SPIRV-Cross's force-zero-init misses some loop-hoisted variables - a C-style
 // `for (O *= i; i < n; i++)` leaves the counter as a bare `float i;`, the exact
-// uninitialised-read UB Shadertoy relies on ANGLE to zero. Backstop it: give
+// uninitialised-read UB that WebGL/ANGLE zero-inits. Backstop it: give
 // every bare local declaration inside a function body a `= {}` initialiser.
 // Struct members look identical, so skip them by tracking brace scope (SPIRV-
 // Cross emits all structs before any function and puts braces on their own
@@ -363,12 +559,14 @@ static NSUInteger KKChannelMask(NSString *src) {
   return mask;
 }
 
-static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL);
+static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL,
+                                                  BOOL bufferMode);
 
 // Memoise by source hash: the MSL, entry names and channel bindings are
 // device-independent, so both the main render and the mini-viewer share one
 // cache and a given shader is transpiled once.
-KKGLSLTranspileResult *KKTranspileShadertoyGLSL(NSString *userGLSL) {
+static KKGLSLTranspileResult *KKTranspileMemoized(NSString *userGLSL,
+                                                  BOOL bufferMode) {
   static NSMutableDictionary<NSNumber *, KKGLSLTranspileResult *> *cache;
   static NSLock *cacheLock;
   static dispatch_once_t once;
@@ -376,20 +574,29 @@ KKGLSLTranspileResult *KKTranspileShadertoyGLSL(NSString *userGLSL) {
     cache = [NSMutableDictionary dictionary];
     cacheLock = [NSLock new];
   });
-  NSNumber *key = @(userGLSL.hash);
+  NSNumber *key = @(userGLSL.hash * 2u + (bufferMode ? 1u : 0u));
   [cacheLock lock];
   KKGLSLTranspileResult *hit = cache[key];
   [cacheLock unlock];
   if (hit)
     return hit;
-  KKGLSLTranspileResult *r = KKTranspileUncached(userGLSL);
+  KKGLSLTranspileResult *r = KKTranspileUncached(userGLSL, bufferMode);
   [cacheLock lock];
   cache[key] = r;
   [cacheLock unlock];
   return r;
 }
 
-static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL) {
+KKGLSLTranspileResult *KKTranspileGLSL(NSString *userGLSL) {
+  return KKTranspileMemoized(userGLSL, NO);
+}
+
+KKGLSLTranspileResult *KKTranspileGLSLBuffer(NSString *userGLSL) {
+  return KKTranspileMemoized(userGLSL, YES);
+}
+
+static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL,
+                                                  BOOL bufferMode) {
   static NSLock *lock;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -398,10 +605,16 @@ static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL) {
   });
 
   KKGLSLTranspileResult *result = [KKGLSLTranspileResult new];
+  BOOL hadMainImage = [userGLSL rangeOfString:@"mainImage"].location != NSNotFound;
+  userGLSL = KKShimRawGLSL(userGLSL); // raw-GL -> image-shader convention
+  result.shimmedFromRawGL =
+      !hadMainImage &&
+      [userGLSL rangeOfString:@"mainImage"].location != NSNotFound;
   NSUInteger channelMask = KKChannelMask(userGLSL);
   result.usedChannelMask = channelMask;
   NSInteger lineOffset = 0;
-  NSString *glsl = KKWrapShadertoyGLSL(userGLSL, channelMask, &lineOffset);
+  NSString *glsl =
+      KKWrapGLSL(userGLSL, channelMask, &lineOffset, bufferMode);
   result.userLineOffset = lineOffset;
   std::string glslStr = glsl.UTF8String;
 
@@ -466,7 +679,7 @@ static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL) {
   spvc_compiler_create_compiler_options(compiler, &options);
   spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_VERSION, 20300);
   spvc_compiler_options_set_uint(options, SPVC_COMPILER_OPTION_MSL_PLATFORM, 1);
-  // Zero-initialise all locals, matching Chrome/ANGLE (which Shadertoy runs on).
+  // Zero-initialise all locals, matching Chrome/ANGLE (WebGL).
   // A lot of golfed shaders rely on `float i;` starting at 0 (`for(O*=i; i<n;
   // i++)`); without this those read garbage and render differently per compile.
   spvc_compiler_options_set_uint(

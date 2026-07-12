@@ -186,6 +186,18 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// -seededFrom: like a piece of static config, not clip data.
 @property(nonatomic, copy, nullable) NSString *_Nullable (^codeValidator)
     (NSString *code, NSInteger *outLine);
+/// For a `KKLaneValueTypeCode` lane: optional extra named code sections beyond
+/// `codeString` (the primary/Image section), presented as tabs in the editor.
+/// Each entry is @{ @"name": display, @"code": source }. nil/empty = a single
+/// section (no tab bar). Serialized with the timeline like `codeString`, so the
+/// sections travel the same path as every other lane's data.
+@property(nonatomic, copy, nullable)
+    NSArray<NSDictionary<NSString *, NSString *> *> *codeTabs;
+/// For a `KKLaneValueTypeCode` lane: the ordered catalog of EXTRA section names
+/// a user can add via the editor's "+" menu (e.g. @[@"Common", @"Buffer A"]).
+/// Static template config (not user data) - carried template->reconciled like
+/// `codeValidator`, never serialized. `codeTabs` holds the ones actually added.
+@property(nonatomic, copy, nullable) NSArray<NSString *> *codeTabCatalog;
 @property(nonatomic, copy) NSArray<NSNumber *>
     *componentMin; // one per component, empty = unconstrained
 @property(nonatomic, copy) NSArray<NSNumber *>

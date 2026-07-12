@@ -87,12 +87,20 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 
 @interface _KKStaticValueRow : KKLaneRowView <NSTextFieldDelegate>
 @property(nonatomic, copy) NSString *laneLabel;
+/// YES for a `KKLaneValueTypeCode` row (a code editor). The host reuses these
+/// across a rows rebuild so the editor's live tab state isn't destroyed.
+@property(nonatomic, readonly) BOOL isCodeRow;
 /// New constant values for the lane (Float: [v]; Crop: [w,h,x,y]).
 @property(nonatomic, copy, nullable) void (^onValue)
     (NSArray<NSNumber *> *values);
 /// For a `KKLaneValueTypeCode` row: fired (debounced) when the user edits the
 /// code editor. The host writes the new string to the lane's `codeString`.
 @property(nonatomic, copy, nullable) void (^onCodeChanged)(NSString *code);
+/// For a tabbed `KKLaneValueTypeCode` row: fired (debounced) with the full
+/// section set (@{@"name",@"code"} each). The host writes section 0 to
+/// `codeString` and the rest to `codeTabs`.
+@property(nonatomic, copy, nullable) void (^onCodeSectionsChanged)
+    (NSArray<NSDictionary<NSString *, NSString *> *> *sections);
 /// Bracket a continuous slider drag so the host coalesces it to one undo /
 /// one persist (mirrors the mini viewer).
 @property(nonatomic, copy, nullable) void (^onDragBegin)(void);
@@ -244,6 +252,12 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// host commits the new string to the lane's `codeString`.
 @property(nonatomic, copy, nullable) void (^onHandleCode)
     (NSString *label, NSString *code);
+
+/// Fired (debounced) when a tabbed `KKLaneValueTypeCode` row is edited. The
+/// host commits section 0 to `codeString` and the rest to `codeTabs`.
+@property(nonatomic, copy, nullable) void (^onHandleCodeSections)
+    (NSString *label, NSArray<NSDictionary<NSString *, NSString *> *> *sections)
+        ;
 
 /// Persist several lane constants at once, as ONE undo entry. Used by the
 /// palette generator (rerolling N colours) - the per-lane drag path can only

@@ -720,6 +720,13 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       // only fall back to the template default when it's missing (older blob).
       if (!fixed.codeString.length)
         fixed.codeString = tmpl.codeString;
+      // codeTabs (Common / Buffer A sections) are user data too; keep the saved
+      // sections, falling back to the template's tab scaffold for a blob that
+      // predates them.
+      if (fixed.codeTabs.count == 0)
+        fixed.codeTabs = tmpl.codeTabs;
+      fixed.codeTabCatalog =
+          tmpl.codeTabCatalog; // static config, not persisted
       fixed.codeValidator =
           tmpl.codeValidator;                 // static config, never persisted
       [fixed kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
@@ -752,6 +759,8 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.integerValued = tmpl.integerValued;
     lane.isToggle = tmpl.isToggle;
     lane.codeString = tmpl.codeString; // seed a code lane with its default text
+    lane.codeTabs = tmpl.codeTabs; // any added extra sections (empty default)
+    lane.codeTabCatalog = tmpl.codeTabCatalog; // the "+" menu catalog
     lane.codeValidator = tmpl.codeValidator;
     [lane kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     lane.enabled = NO; // constant until the dropdown makes it animatable
