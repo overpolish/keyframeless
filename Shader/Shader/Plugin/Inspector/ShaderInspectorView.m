@@ -44,7 +44,7 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
     self.miniViewerDelegate = _miniViewerRenderer;
     self.miniViewerDescriptorPath = ShaderMiniViewerDescriptorPath;
     self.miniViewerRequestPath = ShaderMiniViewerRequestPath;
-    self.managePopoverSpotlightLabel = @"Origin";
+    self.managePopoverSpotlightLabel = @"Speed";
     // The kit's restart/autostart machinery pulls a fresh config from here.
     __weak typeof(self) weak = self;
     self.timingGuideConfigProvider = ^KKTimingGuideConfig * {

@@ -37,10 +37,11 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ShaderPlugin (CustomUI)
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED;
 + (NSArray<KKLane *> *)availableLanes;
-/// The OSC-visibility compound groups (Origin / Path / Scale / Rotation).
-/// Single source of truth: createView wires these and parameterChanged
-/// refreshes from them, so the element-key list can't drift out of sync (which
-/// silently breaks OSC hide persistence + opt-click).
+/// The OSC-visibility compound groups (empty for now - the legacy Origin /
+/// Scale / Rotation controls are gone pending shader-exposed OSCs). Single
+/// source of truth: createView wires these and parameterChanged refreshes from
+/// them, so the element-key list can't drift out of sync (which silently breaks
+/// OSC hide persistence + opt-click).
 + (NSArray<NSArray<NSString *> *> *)oscCompounds;
 @end
 

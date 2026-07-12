@@ -9,7 +9,6 @@
 // Type's Shader lanes + the colour swatches). Extracted from Plugin+CustomUI.m
 // (which just returns ShaderBuildAvailableLanes()). One function, cohesive.
 #import <AppKit/AppKit.h>
-#import <KeyframelessKit/KKRotationOSC.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
 #import "Constants.h"        // ShaderCustomDefaultShaderSource
@@ -67,58 +66,6 @@ static inline NSArray<KKLane *> *ShaderBuildAvailableLanes(void) {
                                  values:@[ @(KK_SHADER_GRAD_DEFAULT_SEED) ]]];
   [lanes addObject:seed];
 
-  // Origin: shared field centre, an [X, Y] point (0.5,0.5 = centre, Y up).
-  // Moves the pattern; allowed off-frame, so no min/max (empty =
-  // unconstrained). Stored 0..1, displayed as pixels (media-scaled), like
-  // MagicMove's Position.
-  KKLane *origin = [KKLane laneWithLabel:@"Origin"];
-  origin.valueType = KKLaneValueTypeGeneric;
-  origin.componentLabels = @[ @"X", @"Y" ];
-  origin.componentMin = @[];
-  origin.componentMax = @[];
-  origin.componentUnits = @[ @"px", @"px" ];
-  origin.componentsScaleWithMedia = YES;
-  origin.spatialCurvable = YES; // 2D path, keyposes can be smooth (curved)
-  origin.animatable = YES;
-  origin.enabled = NO;
-  origin.categoryKey = @"Core";
-  origin.categorySymbol = @"circle.dotted";
-  [origin insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
-  [lanes addObject:origin];
-
-  // Scale: common zoom, shared by all types, driven by the reusable Scale box
-  // OSC (2-axis, aspect-linked). Stored as percent per axis
-  // (100 = 1x). The slider tops out at 400% but the field accepts larger values
-  // (sliderMax decoupled from the value clamp).
-  KKLane *scale = [KKLane laneWithLabel:@"Scale"];
-  scale.valueType = KKLaneValueTypeFloat;
-  scale.componentMin = @[ @1.0, @1.0 ];
-  scale.componentMax = @[ @2000.0, @2000.0 ];
-  scale.sliderMax = @400.0;
-  scale.componentUnits = @[ @"%", @"%" ];
-  scale.componentLabels = @[ @"X", @"Y" ];
-  scale.aspectLinkable = YES;
-  scale.aspectLinked = YES;
-  scale.integerValued = YES; // whole percents; the gizmo snaps to integers too
-  scale.scrubStep = 1.0;
-  scale.animatable = YES;
-  scale.enabled = NO;
-  scale.categoryKey = @"Core";
-  scale.categorySymbol = @"circle.dotted";
-  [scale insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                         values:@[ @100.0, @100.0 ]]];
-  [lanes addObject:scale];
-
-  // Rotation: common Z rotation, shared by all types, driven by the reusable
-  // Z-ring gizmo. The kit factory builds the standard angle-dial lane (NOT a
-  // slider) for just the Z axis.
-  KKLane *rotation = KKRotationLaneWithLabel(@"Rotation", KKRotationAxisZ);
-  rotation.animatable = YES;
-  rotation.enabled = NO;
-  rotation.categoryKey = @"Core";
-  rotation.categorySymbol = @"circle.dotted";
-  [lanes addObject:rotation];
-
   // Grain + Grain Size: the core film-grain overlay, shared by every type. A
   // subtle nonzero default breaks 8-bit banding out of the box and scales up to
   // stylistic grain; applied in the shader epilogue with a per-type multiplier
@@ -153,10 +100,10 @@ static inline NSArray<KKLane *> *ShaderBuildAvailableLanes(void) {
     [lanes addObject:lane];
   }
 
-  // Custom shader source: a full-width code editor row at the bottom of Core,
-  // shown only for the Custom Type. Non-animatable; the text lives in the
-  // lane's codeString (not a keypose) and flows through the timeline. Seeded
-  // with the baked default so the editor opens on something runnable.
+  // Custom shader source: a full-width code editor row at the bottom of Core.
+  // Non-animatable; the text lives in the lane's codeString (not a keypose) and
+  // flows through the timeline. Seeded with the baked default so the editor
+  // opens on something runnable.
   KKLane *shader = [KKLane laneWithLabel:@"Shader"];
   shader.valueType = KKLaneValueTypeCode;
   shader.codeString = ShaderCustomDefaultShaderSource();
@@ -172,8 +119,6 @@ static inline NSArray<KKLane *> *ShaderBuildAvailableLanes(void) {
   shader.enabled = NO;
   shader.categoryKey = @"Core";
   shader.categorySymbol = @"chevron.left.forwardslash.chevron.right";
-  shader.visibleWhenLabel = @"Type";
-  shader.visibleWhenValues = @[ @(ShaderType_Custom) ];
   // Live validation in the editor: transpile on edit (memoised) and surface the
   // first glslang error as a bar + flagged line. Only compiled into the XPC
   // service (the sole includer of this catalog), where the transpiler is

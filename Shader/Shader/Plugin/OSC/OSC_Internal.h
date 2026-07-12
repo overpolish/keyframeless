@@ -7,37 +7,19 @@
 
 #import "OSC.h"
 #import <FxPlug/FxPlugSDK.h>
-#import <KeyframelessKit/KKPositionOSC.h>
-#import <KeyframelessKit/KKRotationOSC.h>
-#import <KeyframelessKit/KKScaleOSC.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface ShaderOSC () <KKPositionGuideProvider>
-/// The reusable Origin Position control (arc handle + motion path). ShaderOSC is
-/// the single FxPlug control and forwards draw / hit-test / mouse to it.
-@property(nonatomic, retain) KKPositionOSC *originController;
-/// The reusable Scale transform-box control, centred on the Origin pivot (the
-/// shader scales the pattern about the Origin). Symmetric scaling (no anchor
-/// lane).
-@property(nonatomic, retain) KKScaleOSC *scaleControl;
-/// The reusable Rotation ring gizmo, Z axis only (the pattern is 2D), centred
-/// on the Origin pivot. Reads/writes the 1-component "Rotation" lane via
-/// `enabledAxes = KKRotationAxisZ`.
-@property(nonatomic, retain) KKRotationOSC *rotationControl;
-// Geometry/time helpers implemented in the primary @implementation (OSC.m);
-// called by the MouseHandlers category.
+@interface ShaderOSC ()
+// The [0,1] object rect's canvas corners, feeding the guide bridge's
+// zoom-invariant screen<->canvas map. Implemented in OSC.m.
 - (BOOL)getCanvasTopRight:(CGPoint *)outTopRight
                bottomLeft:(CGPoint *)outBottomLeft;
-- (double)fractionAtTime:(CMTime)time;
-/// The on-screen frame's min side in canvas units (sizes the scale gizmo).
-- (double)onScreenFrameMin;
 @end
 
-/// Pointer/key event handlers (mouseDown/Dragged/Up + keyDown). Split out of
-/// OSC.m for file size; implemented in ShaderOSC+MouseHandlers.m. The
-/// mouseDragged writes the timeline blob inside an FxCustomParameterAction
-/// scope (the only API that resolves outside a host callback).
+/// Pointer/key event handlers. The legacy Origin/Scale/Rotation controls are
+/// gone, so these only track opt-reveal and advance the (dormant) timing-guide
+/// step machine. Implemented in ShaderOSC+MouseHandlers.m.
 @interface ShaderOSC (MouseHandlers)
 @end
 

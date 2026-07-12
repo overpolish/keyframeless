@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import "Plugin_Private.h"
 #import "ShaderAISchema.h"
 #import "ShaderColorSpace.h"
 #import "ShaderInspectorView+Guides.h"
@@ -12,8 +13,7 @@
 #import "ShaderLocalized.h"
 #import "ShaderMiniViewerRenderer.h" // per-instance mini-viewer rendezvous paths
 #import "ShaderOSCSnapshot.h" // OSC timeline snapshot + frame-duration setters
-#import "ShaderPresets.h"       // ShaderBuiltinPresets (built-in look presets)
-#import "Plugin_Private.h"
+#import "ShaderPresets.h"     // ShaderBuiltinPresets (built-in look presets)
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKDataBlob.h>
@@ -21,7 +21,6 @@
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
 #import <KeyframelessKit/KKPresets.h>
-#import <KeyframelessKit/KKRotationOSC.h> // KKRotationLaneWithLabel + axis flag
 #import <KeyframelessKit/KKTimelineAIMerge.h>
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
 #import <KeyframelessKit/KKTimingCompat.h>
@@ -40,7 +39,9 @@
 }
 
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {
-  return @[ @[ @"Origin" ], @[ @"Path" ], @[ @"Scale" ], @[ @"Rotation" ] ];
+  // The legacy Origin / Scale / Rotation on-screen controls are gone; no OSC
+  // elements until shader-exposed OSCs land.
+  return @[];
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
@@ -103,11 +104,11 @@
     NSArray<KKLane *> *available = [ShaderPlugin availableLanes];
     ShaderInspectorView *view =
         [[ShaderInspectorView alloc] initWithAPIManager:self.apiManager
-                                          loopEnabled:loopEnabled
-                                maintainTimingEnabled:st.maintainTimingEnabled
-                                            activeTab:activeTab
-                                       availableLanes:available
-                                             timeline:timeline];
+                                            loopEnabled:loopEnabled
+                                  maintainTimingEnabled:st.maintainTimingEnabled
+                                              activeTab:activeTab
+                                         availableLanes:available
+                                               timeline:timeline];
     // Per-instance rendezvous paths (keyed by the instance UUID minted above)
     // so two stacked Shader clips read/write distinct /tmp files instead of the
     // clip below showing the top clip's source in its mini-viewer.
@@ -164,7 +165,7 @@
     [self kkWireStandardInspectorCallbacksForView:view
                                    uiStateParamID:kParamUIState
                                renderNudgeParamID:kParamRenderNudge
-                                    dragUndoLabel:@"Adjust Origin"
+                                    dragUndoLabel:@"Adjust Shader"
                                detachedWindowSize:CGSizeMake(720.0, 460.0)];
 
     // Built-in "look" presets (Type + curated palette) for the shared Presets
@@ -230,7 +231,8 @@
                        [NSBundle bundleForClass:[KKOnScreenControl class]]];
     [KKAIKnowledge
         registerBundleDocsWithName:@"Shader"
-                            bundle:[NSBundle bundleForClass:[ShaderPlugin class]]
+                            bundle:[NSBundle
+                                       bundleForClass:[ShaderPlugin class]]
                       subdirectory:@"AIKnowledge"];
     // Shared on-screen-control docs live in the kit framework (flattened to its
     // Resources root). Filter to just the topics Shader actually uses - it has
@@ -244,16 +246,12 @@
   });
 
   NSString *productContext = RLoc(
-      @"Shader, a Final Cut Pro generator that builds animated gradient and "
-      @"pattern backgrounds in twelve styles (mesh gradient, dithering, "
-      @"grainy, "
-      @"warp, neuro, simplex, metaballs, god rays, fluid, wisp, silk, strata) "
-      @"selected by Type. Each style has its own colours plus shared controls "
-      @"(Speed, Seed, Origin, Scale, Rotation, Grain), animated with the "
-      @"shared "
-      @"Keyframeless timeline (Basic and Advanced timing, easing). The Colours "
-      @"section has a built-in palette generator (mode buttons, per-swatch "
-      @"lock, Vary). Always refer to yourself as Shader. Detailed feature "
+      @"Shader, a Final Cut Pro generator that runs a Shadertoy-style GLSL "
+      @"shader to build animated backgrounds. The look is driven by the shader "
+      @"source (the \"Shader\" code lane); shared controls (Speed, Seed, "
+      @"Grain) "
+      @"are animated with the shared Keyframeless timeline (Basic and Advanced "
+      @"timing, easing). Always refer to yourself as Shader. Detailed feature "
       @"information is in the reference docs below.",
       @"AI assistant product context for Shader plugin.");
 
@@ -354,93 +352,91 @@
   NSString *schema = ShaderAILaneSchemaText();
 
   __weak typeof(self) weakSelf = self;
-  // Generator entry: passes the Type catalog + palette cap so a "make a look"
-  // prompt takes the styling fast-path (one call -> Type + palette) instead of
-  // the per-lane pipeline. Q&A / animation prompts route as normal.
+  // Custom-only plugin: no Type/palette styling fast-path anymore, so the
+  // prompt routes through the standard per-lane / Q&A pipeline.
   [KKAIPluginAgent
-      runGeneratorWithPrompt:prompt
-              productContext:productContext
-              laneSchemaText:schema
-         currentTimelineJSON:currentJSON
-         clipDurationSeconds:clipDurSec
-        currentInspectorMode:currentMode
-                 typeCatalog:ShaderAITypeCatalogText()
-                   maxColors:KK_SHADER_COLOR_MAX
-                  completion:^(KKAIPluginResult *result, NSError *err) {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                      __strong typeof(weakSelf) strong = weakSelf;
-                      if (!strong)
-                        return;
-                      [KKAIDraft setRouting:NO];
-                      if (err) {
-                        KKLogError(@"AI[err] %@", err.localizedDescription);
-                        [KKAIDraft setError:err.localizedDescription];
-                        return;
-                      }
-                      if (!result) {
-                        KKLogError(@"AI[err] empty result");
-                        [KKAIDraft setError:@"Empty AI response."];
-                        return;
-                      }
-                      if (result.kind == KKAIPluginResultKindAnswer) {
-                        [KKAIDraft setAnswer:result.answer];
-                        return;
-                      }
-                      // The merge also snaps final keyposes to the last
-                      // renderable frame (FCP's last frame is one frame before
-                      // the clip end, so a keypose at 1.0 is never reached) -
-                      // clipDur from the prompt, frameDur from the process
-                      // cache.
-                      NSString *merged = KKTimelineAIMergeMutationJSON(
-                          currentJSON, result.mutationJSON, clipDurSec,
-                          KKProcessFrameDurationSeconds());
-                      if (!merged) {
-                        KKLogError(@"AI[err] merge returned nil");
-                        [KKAIDraft
-                            setError:
-                                @"AI returned an invalid timeline mutation."];
-                        return;
-                      }
-                      id<FxCustomParameterActionAPI_v4> writeAct =
-                          [strong.apiManager
-                              apiForProtocol:
-                                  @protocol(FxCustomParameterActionAPI_v4)];
-                      if (!writeAct) {
-                        [KKAIDraft
-                            setError:@"Couldn't open the FCP action scope to "
-                                     @"apply the mutation."];
-                        return;
-                      }
-                      [writeAct startAction:strong];
-                      id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
-                          apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-                      KKWriteCustomParamString(setAPI, merged,
-                                               kKKParamTimelineData);
+              runWithPrompt:prompt
+             productContext:productContext
+             laneSchemaText:schema
+        currentTimelineJSON:currentJSON
+        clipDurationSeconds:clipDurSec
+       currentInspectorMode:currentMode
+      supportsLayerCreation:NO
+                 completion:^(KKAIPluginResult *result, NSError *err) {
+                   dispatch_async(dispatch_get_main_queue(), ^{
+                     __strong typeof(weakSelf) strong = weakSelf;
+                     if (!strong)
+                       return;
+                     [KKAIDraft setRouting:NO];
+                     if (err) {
+                       KKLogError(@"AI[err] %@", err.localizedDescription);
+                       [KKAIDraft setError:err.localizedDescription];
+                       return;
+                     }
+                     if (!result) {
+                       KKLogError(@"AI[err] empty result");
+                       [KKAIDraft setError:@"Empty AI response."];
+                       return;
+                     }
+                     if (result.kind == KKAIPluginResultKindAnswer) {
+                       [KKAIDraft setAnswer:result.answer];
+                       return;
+                     }
+                     // The merge also snaps final keyposes to the last
+                     // renderable frame (FCP's last frame is one frame before
+                     // the clip end, so a keypose at 1.0 is never reached) -
+                     // clipDur from the prompt, frameDur from the process
+                     // cache.
+                     NSString *merged = KKTimelineAIMergeMutationJSON(
+                         currentJSON, result.mutationJSON, clipDurSec,
+                         KKProcessFrameDurationSeconds());
+                     if (!merged) {
+                       KKLogError(@"AI[err] merge returned nil");
+                       [KKAIDraft
+                           setError:
+                               @"AI returned an invalid timeline mutation."];
+                       return;
+                     }
+                     id<FxCustomParameterActionAPI_v4> writeAct =
+                         [strong.apiManager
+                             apiForProtocol:@protocol(
+                                                FxCustomParameterActionAPI_v4)];
+                     if (!writeAct) {
+                       [KKAIDraft
+                           setError:@"Couldn't open the FCP action scope to "
+                                    @"apply the mutation."];
+                       return;
+                     }
+                     [writeAct startAction:strong];
+                     id<FxParameterSettingAPI_v5> setAPI = [strong.apiManager
+                         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+                     KKWriteCustomParamString(setAPI, merged,
+                                              kKKParamTimelineData);
 
-                      // If the new timeline isn't representable in Basic, force
-                      // the inspector to Advanced so the user sees the actual
-                      // structure. Keeping the activeTab on Basic when the data
-                      // is Advanced-only shows the compatibility banner instead
-                      // of the new animation.
-                      KKTimeline *resultTimeline =
-                          [KKTimeline timelineFromJSON:merged];
-                      double mergeFrameDur = KKProcessFrameDurationSeconds();
-                      double aiEndFrac =
-                          (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
-                           mergeFrameDur < clipDurSec)
-                              ? (clipDurSec - mergeFrameDur) / clipDurSec
-                              : 1.0;
-                      if (resultTimeline && !KKTimelineIsBasicCompatible(
-                                                resultTimeline, aiEndFrac)) {
-                        [strong patchUIStateKey:@"activeTab"
-                                          value:@(1)
-                                        paramID:kParamUIState];
-                      }
-                      [writeAct endAction:strong];
-                      [KKAIDraft setAnswer:nil];
-                      [KKAIDraft clearPrompt];
-                    });
-                  }];
+                     // If the new timeline isn't representable in Basic, force
+                     // the inspector to Advanced so the user sees the actual
+                     // structure. Keeping the activeTab on Basic when the data
+                     // is Advanced-only shows the compatibility banner instead
+                     // of the new animation.
+                     KKTimeline *resultTimeline =
+                         [KKTimeline timelineFromJSON:merged];
+                     double mergeFrameDur = KKProcessFrameDurationSeconds();
+                     double aiEndFrac =
+                         (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
+                          mergeFrameDur < clipDurSec)
+                             ? (clipDurSec - mergeFrameDur) / clipDurSec
+                             : 1.0;
+                     if (resultTimeline && !KKTimelineIsBasicCompatible(
+                                               resultTimeline, aiEndFrac)) {
+                       [strong patchUIStateKey:@"activeTab"
+                                         value:@(1)
+                                       paramID:kParamUIState];
+                     }
+                     [writeAct endAction:strong];
+                     [KKAIDraft setAnswer:nil];
+                     [KKAIDraft clearPrompt];
+                   });
+                 }];
 }
 
 - (nullable NSString *)helpHeaderTitle {
@@ -465,21 +461,8 @@
                                              @"AIKnowledge markdown).");
                           }];
 
-  NSMutableArray<KKHelpShortcut *> *rows = [@[
-    [KKHelpShortcut
-        shortcutWithKeysMarkup:RLoc(@"Drag the centre handle",
-                                    @"Shortcut keys.")
-                    descMarkup:RLoc(@"Move the pattern's origin on the canvas",
-                                    @"Help shortcut.")],
-    [KKHelpShortcut
-        shortcutWithKeysMarkup:RLoc(@"Drag the scale box", @"Shortcut keys.")
-                    descMarkup:RLoc(@"Resize the pattern", @"Help shortcut.")],
-    [KKHelpShortcut
-        shortcutWithKeysMarkup:RLoc(@"Drag the rotation ring",
-                                    @"Shortcut keys.")
-                    descMarkup:RLoc(@"Rotate the pattern", @"Help shortcut.")],
-  ] mutableCopy];
-  [rows addObjectsFromArray:[KKPlugin sharedOnScreenControlShortcuts]];
+  NSMutableArray<KKHelpShortcut *> *rows =
+      [[KKPlugin sharedOnScreenControlShortcuts] mutableCopy];
 
   KKHelpSection *shortcuts =
       [KKHelpSection sectionWithTitle:RLoc(@"On-screen control shortcuts",

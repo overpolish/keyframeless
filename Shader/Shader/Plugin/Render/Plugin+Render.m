@@ -10,7 +10,6 @@
 #import "ShaderCustomShader.h" // KKCustomUniforms + ShaderCustomFullSource (shared)
 #import "ShaderMiniViewerRenderer.h" // per-instance descriptor path
 #import "ShaderTypes.h"
-#import "ShaderUniformBuilders.h" // per-Type uniform builders (shared with mini)
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKMotionBlur.h>
@@ -57,10 +56,6 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
                                   double durSec, ShaderPluginState *outState) {
   memset(outState, 0, sizeof(*outState));
 
-  NSArray<NSNumber *> *typeV =
-      ShaderLaneValuesAtFraction(timeline, @"Type", frac);
-  outState->type =
-      typeV.count ? (int)lround(typeV[0].doubleValue) : ShaderType_Custom;
   NSArray<NSNumber *> *speedV =
       ShaderLaneValuesAtFraction(timeline, @"Speed", frac);
   float speed =
@@ -68,32 +63,15 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
   NSArray<NSNumber *> *seedV =
       ShaderLaneValuesAtFraction(timeline, @"Seed", frac);
   float seed = seedV.count ? seedV[0].floatValue : KK_SHADER_GRAD_DEFAULT_SEED;
-  NSArray<NSNumber *> *originV =
-      ShaderLaneValuesAtFraction(timeline, @"Origin", frac);
-  vector_float2 origin =
-      (originV.count >= 2)
-          ? (vector_float2){originV[0].floatValue, originV[1].floatValue}
-          : (vector_float2){0.5f, 0.5f};
-  NSArray<NSNumber *> *scaleV =
-      ShaderLaneValuesAtFraction(timeline, @"Scale", frac);
-  NSArray<NSNumber *> *rotV =
-      ShaderLaneValuesAtFraction(timeline, @"Rotation", frac);
-  vector_float2 scale = (scaleV.count >= 2)
-                            ? (vector_float2){scaleV[0].floatValue / 100.0f,
-                                              scaleV[1].floatValue / 100.0f}
-                            : (vector_float2){1.0f, 1.0f};
-  float rotation =
-      rotV.count ? rotV[0].floatValue * (float)(M_PI / 180.0) : 0.0f;
   float timeSec = (float)(frac * durSec);
 
   NSArray<NSNumber *> *grainV =
       ShaderLaneValuesAtFraction(timeline, @"Grain", frac);
   NSArray<NSNumber *> *grainSizeV =
       ShaderLaneValuesAtFraction(timeline, @"Grain Size", frac);
+  // Only the shared params survive (Speed / Seed / Grain / Grain Size + time).
+  // The user shader source drives everything else and rides in the blob tail.
   ShaderCommonUniforms common = ShaderCommonDefault();
-  common.origin = origin;
-  common.scale = scale;
-  common.rotation = rotation;
   common.speed = speed;
   common.seed = seed;
   common.time = timeSec;
@@ -101,41 +79,11 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
       grainV.count ? grainV[0].floatValue / 100.0f : KK_CORE_GRAIN_DEFAULT;
   common.grainSize =
       grainSizeV.count ? grainSizeV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
-  common.grainScale = ShaderGrainScaleForType(outState->type);
   outState->common = common;
-
-  ShaderLaneReader read = ^NSArray<NSNumber *> *(NSString *label) {
-    return ShaderLaneValuesAtFraction(timeline, label, frac);
-  };
-  ShaderBuildAllTypes(read, outState);
-}
-
-// Encode one full-screen draw of the active type into `encoder` from `state`
-// (its uniform block + shared common block + sRGB flag). Shared by the plain
-// render and every motion-blur sample pass.
-static void ShaderEncodeTypeDraw(id<MTLRenderCommandEncoder> encoder,
-                                 const ShaderPluginState *state,
-                                 id<MTLRenderPipelineState> pipeline,
-                                 int encodeSRGB) {
-  const ShaderTypeInfo *info = ShaderTypeInfoForType(state->type);
-  const void *uniformBytes = (const char *)state + info->uniformOffset;
-  [encoder setRenderPipelineState:pipeline];
-  [encoder setFragmentBytes:uniformBytes
-                     length:info->uniformSize
-                    atIndex:ShaderFragmentIndex_Grid];
-  [encoder setFragmentBytes:&encodeSRGB
-                     length:sizeof(encodeSRGB)
-                    atIndex:ShaderFragmentIndex_EncodeSRGB];
-  [encoder setFragmentBytes:&state->common
-                     length:sizeof(ShaderCommonUniforms)
-                    atIndex:ShaderFragmentIndex_Common];
-  [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
-              vertexStart:0
-              vertexCount:4];
 }
 
 // ── Custom (user-supplied) shader ──
-// Runtime-compiled shader for ShaderType_Custom. The user writes a
+// Runtime-compiled user shader (the only render path). The user writes a
 // GLSL Image shader (`void mainImage(out vec4, in vec2)`, bare
 // iTime / iResolution / iChannelN). KKGLSLTranspiler wraps it into a full GLSL
 // unit and transpiles it to MSL with glslang + SPIRV-Cross, so the real GLSL
@@ -800,14 +748,10 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
     return NO;
   }
 
-  // Shader's motion is the shader's own time (Speed), not a keyposed lane, so
-  // the timeline-based gates can't see it. Blur only when the pattern actually
-  // moves; a frozen generator (Speed ~ 0) skips the N-pass cost. The Custom
-  // type owns its own animation and its source rides in the blob tail, so it
-  // never uses the sample-accumulate path.
-  BOOL isCustom = (states[0].type == ShaderType_Custom);
-  if (isCustom || (mbState.enabled && states[0].common.speed <= 1e-3f))
-    mbState.enabled = NO;
+  // The Custom (GLSL) path is the only render path now: it owns its own
+  // animation (the shader's own time via Speed) and its source rides in the
+  // blob tail, so it never uses the sample-accumulate motion-blur path.
+  mbState.enabled = NO;
 
   NSMutableData *data = [NSMutableData
       dataWithCapacity:sizeof(mbState) + sizeof(ShaderPluginState) *
@@ -819,12 +763,11 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
       [data appendBytes:&states[i] length:sizeof(ShaderPluginState)];
   free(states);
 
-  // Custom type: append the user shader source (UTF-8) after the single state
-  // sample. The source lives in the timeline's "Shader" code lane (codeString).
-  // MB is forced off above, so the layout is a fixed
-  // [mbState][state][source...] and render reads the tail from a known offset.
-  // Empty = the baked default.
-  if (isCustom) {
+  // Append the user shader source (UTF-8) after the single state sample. The
+  // source lives in the timeline's "Shader" code lane (codeString). MB is
+  // forced off above, so the layout is a fixed [mbState][state][source...] and
+  // render reads the tail from a known offset. Empty = the baked default.
+  {
     NSString *timelineJSON =
         KKReadCustomParamString(paramAPI, kKKParamTimelineData);
     KKTimeline *tl =
@@ -919,28 +862,14 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
   } else {
     memset(&mbState, 0, sizeof(mbState)); // disabled
     memset(&base, 0, sizeof(base));
-    base.type = ShaderType_Custom;
-    base.mesh = ShaderGradientDefault();
-    base.dithering = DitheringDefault();
-    base.grain = GrainGradientDefault();
-    base.warp = WarpDefault();
-    base.neuro = NeuroNoiseDefault();
-    base.simplex = SimplexNoiseDefault();
-    base.metaballs = MetaballsDefault();
-    base.godrays = GodRaysDefault();
-    base.fluid = FluidDefault();
-    base.neon = NeonDefault();
-    base.silk = SilkDefault();
-    base.strata = StrataDefault();
     base.common = ShaderCommonDefault();
   }
 
-  // Custom (user-supplied) shader(s): runtime-compiled, bypassing the static
-  // Type registry and motion blur. Multi-pass: an optional Buffer A renders
-  // into a texture bound as the Image pass's iChannel0; Common is prepended to
-  // each. iTime respects the shared Speed / Seed so it animates like the
-  // built-in Types.
-  if (base.type == ShaderType_Custom) {
+  // Custom (user-supplied) shader(s): runtime-compiled. The only render path
+  // now. Multi-pass: an optional Buffer A renders into a texture bound as the
+  // Image pass's iChannel0; Common is prepended to each. iTime respects the
+  // shared Speed / Seed.
+  {
     float iTime = base.common.time * base.common.speed +
                   fmodf(base.common.seed, 10000.0f);
     KKGLSLUniforms u;
@@ -1067,94 +996,6 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
                                                 vertexCount:4];
                                        }];
   }
-
-  // Dispatch on the active type via the registry (ShaderUniformBuilders.h).
-  // Type is structural (never animated), so one pipeline serves every MB
-  // sample.
-  const ShaderTypeInfo *info = ShaderTypeInfoForType(base.type);
-  NSString *pluginID =
-      info->pluginSuffix[0]
-          ? [kPluginID stringByAppendingString:@(info->pluginSuffix)]
-          : kPluginID;
-  NSString *fragment = @(info->fragment);
-  id<MTLRenderPipelineState> pipelineState =
-      [self pipelineStateForPluginID:pluginID
-                    destinationImage:destinationImage
-                        vertexShader:@"vertexShader"
-                      fragmentShader:fragment
-                           blendMode:KKBlendModePremultipliedAlpha];
-  if (!pipelineState)
-    return NO;
-
-  // Match the output encoding to the destination: FCP float buffers are linear;
-  // only the 8-bit BGRA path wants gamma. The dither/grain/warp frames need
-  // dims.
-  int encodeSRGB =
-      (destinationImage.ioSurface.pixelFormat == kCVPixelFormatType_32BGRA) ? 1
-                                                                            : 0;
-  vector_float2 resolution = (vector_float2){(float)mediaW, (float)mediaH};
-
-  // Motion blur (Accurate): re-render the type shader at each sub-frame sample
-  // into a pooled texture, averaged into dest. Each sample's state (its own
-  // shader time) is at sizeof(mbState) + sampleIndex*sizeof(ShaderPluginState).
-  if (mbState.enabled) {
-    __weak typeof(self) weakSelf = self;
-    NSData *blob = pluginState;
-    BOOL applied = [KKMotionBlur
-        applyToDestinationImage:destinationImage
-                   sourceImages:sourceImages
-                          state:mbState
-                     renderTime:renderTime
-                    renderBlock:^BOOL(int sampleIndex,
-                                      id<MTLTexture> sampleDest,
-                                      id<MTLCommandBuffer> commandBuffer,
-                                      NSArray<id<MTLTexture>> *inputTextures) {
-                      __strong typeof(weakSelf) s = weakSelf;
-                      if (!s)
-                        return NO;
-                      NSUInteger off =
-                          sizeof(KKMotionBlurState) +
-                          (NSUInteger)sampleIndex * sizeof(ShaderPluginState);
-                      if (off + sizeof(ShaderPluginState) > blob.length)
-                        return NO;
-                      ShaderPluginState sample;
-                      [blob
-                          getBytes:&sample
-                             range:NSMakeRange(off, sizeof(ShaderPluginState))];
-                      sample.common.resolution = resolution;
-                      return [s
-                          encodeFullScreenQuadIntoTexture:sampleDest
-                                         destinationImage:destinationImage
-                                            commandBuffer:commandBuffer
-                                           sourceTextures:inputTextures
-                                                 commands:^(
-                                                     id<MTLRenderCommandEncoder>
-                                                         enc,
-                                                     NSArray<id<MTLTexture>>
-                                                         *texs) {
-                                                   ShaderEncodeTypeDraw(
-                                                       enc, &sample,
-                                                       pipelineState,
-                                                       encodeSRGB);
-                                                 }];
-                    }];
-    if (applied)
-      return YES;
-  }
-
-  // Plain single pass (MB off, gated off as static, or accumulate failed).
-  base.common.resolution = resolution;
-  return [self
-      encodeRenderCommandsForDestinationImage:destinationImage
-                                 sourceImages:sourceImages
-                                     commands:^(
-                                         id<MTLRenderCommandEncoder> encoder,
-                                         NSArray<id<MTLTexture>>
-                                             *inputTextures) {
-                                       ShaderEncodeTypeDraw(encoder, &base,
-                                                            pipelineState,
-                                                            encodeSRGB);
-                                     }];
 }
 
 @end

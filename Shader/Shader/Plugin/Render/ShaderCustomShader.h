@@ -5,7 +5,7 @@
 
 #pragma once
 
-// The always-valid fallback source for ShaderType_Custom, shared by the FCP
+// The always-valid fallback shader source, shared by the FCP
 // render (Plugin+Render.m) and the inspector mini-viewer
 // (ShaderMiniViewerRenderer.m). The transpile itself lives in KKGLSLTranspiler;
 // the default source is in Constants.h.

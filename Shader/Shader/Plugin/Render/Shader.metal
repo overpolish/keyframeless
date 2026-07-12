@@ -3,7 +3,20 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#include "ShaderCommon.h"
+// The plugin is Custom-only (runtime-compiled GLSL); this file only holds the
+// vertex + downscale-blit functions. The shared per-Type Metal helpers
+// (ShaderCommon.h) and the 12 built-in Type fragments live on disk as reference
+// but are no longer compiled, so RasterizerData is declared inline here.
+#include <KeyframelessKit/KKShaderTypes.h>
+#include <metal_stdlib>
+#include <simd/simd.h>
+
+using namespace metal;
+
+typedef struct {
+    float4 clipSpacePosition [[position]];
+    float2 textureCoordinate;
+} RasterizerData;
 
 vertex RasterizerData vertexShader(uint vertexID [[vertex_id]],
                                    constant KKVertex2D *vertexArray [[buffer(KKVertexInputIndex_Vertices)]],
@@ -45,16 +58,7 @@ fragment float4 meshBlitFragment(ShaderBlitData in [[stage_in]], texture2d<float
     return src.sample(samp, in.uv);
 }
 
-// Per-Type fragment shaders (each includes ShaderCommon.h).
-#include "Shaders_Dithering.h"
-#include "Shaders_Fluid.h"
-#include "Shaders_GodRays.h"
-#include "Shaders_Grainy.h"
-#include "Shaders_Mesh.h"
-#include "Shaders_Metaballs.h"
-#include "Shaders_Neon.h"
-#include "Shaders_Neuro.h"
-#include "Shaders_Silk.h"
-#include "Shaders_Simplex.h"
-#include "Shaders_Strata.h"
-#include "Shaders_Warp.h"
+// The 12 built-in per-Type fragment shaders (Shaders_*.h) were retired with the
+// Type system; the plugin is Custom-only (runtime-compiled GLSL). The MSL files
+// remain on disk as reference for the planned GLSL community-shader ports, but
+// are no longer compiled into the plugin.

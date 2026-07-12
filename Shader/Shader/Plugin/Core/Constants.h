@@ -9,15 +9,6 @@
 
 static NSString *const kPluginID = @"co.overpolish.keyframeless.Shader";
 
-// Origin Position OSC parts (main viewer): the handle / keypose anchor dot, and
-// the motion-path tangent handle.
-static const NSInteger kOSCPositionPart = 100;
-static const NSInteger kOSCPathHandlePart = 101;
-// Scale transform-box OSC (main viewer), centred on the Origin pivot.
-static const NSInteger kOSCScalePart = 102;
-// Rotation ring gizmo (main viewer, Z axis only), centred on the Origin pivot.
-static const NSInteger kOSCRotationPart = 103;
-
 /// Posted on the main queue when the OSC handle's screen position updates;
 /// the plugin returns this as its help-guide refresh notification.
 extern NSNotificationName const kShaderOSCPositionNotification;
@@ -36,10 +27,6 @@ extern void ShaderSetOSCGuideStep(NSInteger step);
 /// deselect callback, so this is a staleness heuristic: idle and deselected
 /// both stop drawOSC. NO before the first drawOSC or ~15s after deselect.
 extern BOOL ShaderHasCanvasReference(void);
-/// Re-anchors the bridge's screen↔canvas map by pairing the given screen point
-/// with the OSC handle's current canvas position. Call on the press so the
-/// drag uses a mapping that survived zoom-to-fit. No-op until drawOSC has run.
-extern void ShaderOSCCaptureGuideAnchorAtScreen(NSPoint screenPt);
 /// Pushes the live Origin position (object [0,1] space) the guide drag is
 /// writing so the OSC handle can track it from the drawOSC tick (the blob is
 /// unreadable there). Mirrors MagicMove's Position guide plumbing.
@@ -51,7 +38,7 @@ extern CGPoint ShaderGuideTargetObjectPosition(void);
 /// available. Gives the guide drag the same 1:1 mapping a native Origin drag
 /// uses.
 extern BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
-                                            double *outY);
+                                              double *outY);
 
 static const UInt32 kParamInspectorUI = 200;
 static const UInt32 kParamUIState = 201;

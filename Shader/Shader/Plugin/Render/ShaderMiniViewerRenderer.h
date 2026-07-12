@@ -27,12 +27,13 @@ NSString *ShaderMiniViewerDescriptorPathForUUID(NSString *_Nullable uuid);
 NSString *ShaderMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 
 /// Shader's mini-viewer delegate: the generic handle/timeline scaffolding lives
-/// in `KKMiniViewerRenderer`; this subclass only supplies the Shader render and
-/// its on-screen controls (Origin / Scale / Rotation). MRR (non-ARC).
+/// in `KKMiniViewerRenderer`; this subclass only supplies the Shader render.
+/// The legacy Origin / Scale / Rotation on-screen controls have been removed
+/// pending shader-exposed OSCs. MRR (non-ARC).
 @interface ShaderMiniViewerRenderer : KKMiniViewerRenderer
 /// The plugin's lane templates (`+[ShaderPlugin availableLanes]`), set by the
-/// inspector. Used by `-templateLaneForLabel:` so the Scale box reads the
-/// aspect-link default for an untouched (not-yet-in-timeline) constant Scale.
+/// inspector. Used by `-templateLaneForLabel:` for not-yet-in-timeline constant
+/// lane defaults.
 @property(nonatomic, copy, nullable) NSArray<KKLane *> *laneTemplates;
 @end
 
