@@ -1529,13 +1529,12 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // existing ones.
   for (KKLane *lane in lanes) {
     _KKStaticValueRow *existing = _rowsByLabel[lane.label];
-    // A reused row whose rendering STRUCTURE changed (value editor <-> palette
-    // mode-button bar, or code <-> non-code) can't be updated in place - drop
-    // it so it is remade below. Metadata-only changes (range, values) are
-    // handled by applyLane.
-    if (existing &&
-        (existing.isPaletteBar != lane.paletteGeneratorBar ||
-         existing.isCodeRow != (lane.valueType == KKLaneValueTypeCode))) {
+    // A reused row whose rendering STRUCTURE changed (palette bar <-> value
+    // editor, code <-> non-code, seed <-> field, float <-> percent/choice, unit
+    // or field-count change) can't be updated in place - drop it so it is
+    // remade below. Metadata-only changes (range, values) are handled by
+    // applyLane.
+    if (existing && ![existing renderShapeMatchesLane:lane]) {
       [_stack removeArrangedSubview:existing];
       [existing removeFromSuperview];
       [_rowsByLabel removeObjectForKey:lane.label];

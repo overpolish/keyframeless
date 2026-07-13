@@ -252,6 +252,224 @@ ShaderFillColorPool(NSString *source, vector_float4 *pool,
   return poolCount;
 }
 
+// --- Scalar properties (`// #float`, `// #choice`) -----------------------
+// Same declaration-annotated pattern as `// #color`, but for a `uniform float`
+// (slider lane) or `uniform int` (choice-pill lane). Each occupies ONE vec4 in
+// the pool (value in .x), appended AFTER the colour props so the colour path is
+// unchanged. The transpiler folds them into the block with `#define <name>
+// (<name>_kk.x)` (float) / `(int(<name>_kk.x))` (choice).
+#define KK_SHADER_MAX_SCALAR_PROPS 12
+typedef struct ShaderScalarProp {
+  int isChoice;   // 0 = float slider, 1 = choice (int pills)
+  int isPercent;  // float shown as % (0..100 lane); pool gets value / 100
+  int isSeed;     // random-seed field (dice, integer, non-animatable)
+  int isPoint;    // 2D point (vec2 uniform; xy of the pool vec4)
+  int isBool;     // on/off checkbox (bool uniform; .x > 0.5)
+  int isInt;      // integer slider (int uniform)
+  int isAngle;    // rotation knob, degrees lane; uniform gets radians
+  int hasMax;     // `max=` was specified (else the field is unbounded)
+  char name[64];  // GLSL uniform name
+  char label[80]; // display label
+  int poolOffset; // vec4 index in the pool (value in .x, or xy for a point)
+  double fmin, fmax,
+      fdefault;        // float (percent: in 0..100); fmax = nominal when
+                       // !hasMax (slider cap; the field is unbounded)
+  double pdefx, pdefy; // point default (normalized 0..1)
+  char options[256];   // choice: comma-separated pill labels
+  int choiceCount;     // number of options
+  int cdefault;        // choice default index
+} ShaderScalarProp;
+
+static inline double ShaderAttrDouble(NSString *s, NSString *pattern,
+                                      double fallback) {
+  NSTextCheckingResult *m =
+      [[NSRegularExpression regularExpressionWithPattern:pattern
+                                                 options:0
+                                                   error:nil]
+          firstMatchInString:s
+                     options:0
+                       range:NSMakeRange(0, s.length)];
+  if (!m || [m rangeAtIndex:1].location == NSNotFound)
+    return fallback;
+  return [s substringWithRange:[m rangeAtIndex:1]].doubleValue;
+}
+
+/// Parse every `// #float` / `// #choice` directive + its `uniform float|int
+/// <name>;` (before the next directive), in source order. Pool offsets start at
+/// `startOffset` (the colour pool count). Returns the count; `outUsed` = vec4s
+/// used (one per prop).
+static inline int ShaderParseScalarProps(NSString *source,
+                                         ShaderScalarProp *props, int maxProps,
+                                         int startOffset, int *outUsed) {
+  int n = 0, pool = startOffset;
+  if (outUsed)
+    *outUsed = 0;
+  if (!source.length || maxProps <= 0)
+    return 0;
+  NSRegularExpression *dirRe = [NSRegularExpression
+      regularExpressionWithPattern:
+          @"(?m)^[ \\t]*//[ "
+          @"\\t]*#(float|percent|seed|point|int|angle|bool|choice)\\b([^\\n]*)$"
+                           options:0
+                             error:nil];
+  NSRegularExpression *uniRe = [NSRegularExpression
+      regularExpressionWithPattern:
+          @"\\buniform\\s+(float|int|vec2|bool)\\s+(\\w+)\\s*;"
+                           options:0
+                             error:nil];
+  NSArray<NSTextCheckingResult *> *dirs =
+      [dirRe matchesInString:source
+                     options:0
+                       range:NSMakeRange(0, source.length)];
+  for (int di = 0; di < (int)dirs.count && n < maxProps; di++) {
+    if (pool + 1 > KK_SHADER_COLOR_POOL)
+      break;
+    NSTextCheckingResult *dm = dirs[di];
+    NSString *kind = [source substringWithRange:[dm rangeAtIndex:1]];
+    NSString *attrs = [source substringWithRange:[dm rangeAtIndex:2]];
+    NSUInteger after = NSMaxRange(dm.range);
+    NSUInteger limit = (di + 1 < (int)dirs.count) ? dirs[di + 1].range.location
+                                                  : source.length;
+    NSTextCheckingResult *um =
+        [uniRe firstMatchInString:source
+                          options:0
+                            range:NSMakeRange(after, limit - after)];
+    if (!um || [um rangeAtIndex:2].location == NSNotFound)
+      continue;
+    NSString *nm = [source substringWithRange:[um rangeAtIndex:2]];
+    ShaderScalarProp p;
+    memset(&p, 0, sizeof(p));
+    p.isChoice = [kind isEqualToString:@"choice"];
+    p.isPercent = [kind isEqualToString:@"percent"];
+    p.isSeed = [kind isEqualToString:@"seed"];
+    p.isPoint = [kind isEqualToString:@"point"];
+    p.isBool = [kind isEqualToString:@"bool"];
+    p.isInt = [kind isEqualToString:@"int"];
+    p.isAngle = [kind isEqualToString:@"angle"];
+    strncpy(p.name, nm.UTF8String ?: "", sizeof(p.name) - 1);
+    NSTextCheckingResult *lm = [[NSRegularExpression
+        regularExpressionWithPattern:@"\\blabel\\s*=\\s*\"([^\"]*)\""
+                             options:0
+                               error:nil]
+        firstMatchInString:attrs
+                   options:0
+                     range:NSMakeRange(0, attrs.length)];
+    NSString *label =
+        (lm && [lm rangeAtIndex:1].location != NSNotFound && lm.range.length)
+            ? [attrs substringWithRange:[lm rangeAtIndex:1]]
+            : ShaderPrettifyColorName(nm);
+    strncpy(p.label, label.UTF8String ?: "", sizeof(p.label) - 1);
+    p.poolOffset = pool;
+    if (p.isChoice) {
+      NSTextCheckingResult *om = [[NSRegularExpression
+          regularExpressionWithPattern:@"\\boptions\\s*=\\s*\"([^\"]*)\""
+                               options:0
+                                 error:nil]
+          firstMatchInString:attrs
+                     options:0
+                       range:NSMakeRange(0, attrs.length)];
+      NSString *opts = (om && [om rangeAtIndex:1].location != NSNotFound)
+                           ? [attrs substringWithRange:[om rangeAtIndex:1]]
+                           : @"";
+      strncpy(p.options, opts.UTF8String ?: "", sizeof(p.options) - 1);
+      int cnt = opts.length ? 1 : 0;
+      for (NSUInteger i = 0; i < opts.length; i++)
+        if ([opts characterAtIndex:i] == ',')
+          cnt++;
+      p.choiceCount = cnt;
+      int def = ShaderColorAttrInt(attrs, @"\\bdefault\\s*=\\s*(\\d+)", 0);
+      if (def < 0)
+        def = 0;
+      if (cnt > 0 && def >= cnt)
+        def = cnt - 1;
+      p.cdefault = def;
+    } else if (p.isSeed) {
+      // A random seed: any integer, non-animatable, dice-rerolled. Passes
+      // straight to the float uniform (no normalization).
+      p.fmin = 0.0;
+      p.fmax = 1000000.0;
+      p.fdefault = ShaderColorAttrInt(attrs, @"\\bdefault\\s*=\\s*(\\d+)", 0);
+    } else if (p.isBool) {
+      p.fdefault =
+          ShaderColorAttrInt(attrs, @"\\bdefault\\s*=\\s*(\\d+)", 0) ? 1 : 0;
+    } else if (p.isAngle) {
+      // Rotation knob, degrees; unconstrained (accumulates past 360).
+      p.fdefault =
+          ShaderAttrDouble(attrs, @"\\bdefault\\s*=\\s*(-?[0-9.]+)", 0);
+    } else if (p.isPoint) {
+      // A 2D point (vec2), normalized 0..1. Default center, or default="x,y".
+      p.pdefx = 0.5;
+      p.pdefy = 0.5;
+      NSTextCheckingResult *pm = [[NSRegularExpression
+          regularExpressionWithPattern:@"\\bdefault\\s*=\\s*\"([^\"]*)\""
+                               options:0
+                                 error:nil]
+          firstMatchInString:attrs
+                     options:0
+                       range:NSMakeRange(0, attrs.length)];
+      if (pm && [pm rangeAtIndex:1].location != NSNotFound) {
+        NSArray<NSString *> *xy =
+            [[attrs substringWithRange:[pm rangeAtIndex:1]]
+                componentsSeparatedByString:@","];
+        if (xy.count >= 2) {
+          p.pdefx = xy[0].doubleValue;
+          p.pdefy = xy[1].doubleValue;
+        }
+      }
+    } else {
+      double defMax = p.isPercent ? 100.0 : (p.isInt ? 10.0 : 1.0);
+      double mn = ShaderAttrDouble(attrs, @"\\bmin\\s*=\\s*(-?[0-9.]+)", 0.0);
+      double mx = ShaderAttrDouble(attrs, @"\\bmax\\s*=\\s*(-?[0-9.]+)", NAN);
+      p.hasMax = !isnan(mx);
+      if (!p.hasMax)
+        mx = defMax; // nominal slider cap; the field stays unbounded
+      double df =
+          ShaderAttrDouble(attrs, @"\\bdefault\\s*=\\s*(-?[0-9.]+)", mn);
+      if (mx < mn)
+        mx = mn;
+      if (df < mn)
+        df = mn;
+      if (df > mx)
+        df = mx;
+      p.fmin = mn;
+      p.fmax = mx;
+      p.fdefault = df;
+    }
+    props[n++] = p;
+    pool += 1;
+  }
+  if (outUsed)
+    *outUsed = pool - startOffset;
+  return n;
+}
+
+/// Fill the scalar props into the pool (each = one vec4, value in .x), starting
+/// at `startOffset` (the colour pool count). Returns the new total vec4 count.
+static inline int
+ShaderFillScalarPool(NSString *source, vector_float4 *pool, int startOffset,
+                     NSArray<NSNumber *> * (^valuesForLabel)(NSString *)) {
+  ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
+  int used = 0;
+  int nProps = ShaderParseScalarProps(source, props, KK_SHADER_MAX_SCALAR_PROPS,
+                                      startOffset, &used);
+  for (int pi = 0; pi < nProps; pi++) {
+    ShaderScalarProp *p = &props[pi];
+    NSArray<NSNumber *> *v = valuesForLabel(@(p->label));
+    if (p->isPoint) {
+      double x = v.count >= 1 ? v[0].doubleValue : p->pdefx;
+      double y = v.count >= 2 ? v[1].doubleValue : p->pdefy;
+      pool[p->poolOffset] = (vector_float4){(float)x, (float)y, 0, 0};
+      continue;
+    }
+    double val = v.count ? v[0].doubleValue
+                         : (p->isChoice ? (double)p->cdefault : p->fdefault);
+    if (p->isPercent)
+      val /= 100.0; // lane is 0..100 %, shader wants 0..1
+    pool[p->poolOffset] = (vector_float4){(float)val, 0, 0, 0};
+  }
+  return startOffset + used;
+}
+
 /// Fallback shared-params block (timing + grain). `origin`/`scale`/`rotation`
 /// are vestigial identity values (the legacy transform lanes are gone).
 static inline ShaderCommonUniforms ShaderCommonDefault(void) {

@@ -94,6 +94,12 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// reused row whose structure flips (bar <-> value editor) must be remade, not
 /// updated in place.
 @property(nonatomic, readonly) BOOL isPaletteBar;
+/// YES when `lane` would build the SAME row structure this row was made with
+/// (same value type, seed/toggle/choice/palette shape, integer + unit + field
+/// count). NO means the row must be REMADE, not `applyLane:`d - e.g. a shader
+/// directive edited from `// #float` to `// #percent` (adds a % unit + integer
+/// formatting) or `// #seed` to `// #float` (dice control <-> number field).
+- (BOOL)renderShapeMatchesLane:(KKLane *)lane;
 /// New constant values for the lane (Float: [v]; Crop: [w,h,x,y]).
 @property(nonatomic, copy, nullable) void (^onValue)
     (NSArray<NSNumber *> *values);

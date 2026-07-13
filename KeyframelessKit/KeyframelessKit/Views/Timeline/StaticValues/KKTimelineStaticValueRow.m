@@ -229,6 +229,31 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return _paletteGeneratorBar;
 }
 
+- (BOOL)renderShapeMatchesLane:(KKLane *)lane {
+  // The field editors, seed control, choice pill, checkbox, and unit/decimal
+  // formatting are all built once from the lane. A directive edit that changes
+  // any of these (float->percent adds % + integer; seed->float swaps the dice
+  // for a field; ->choice swaps in a pill) can't be applyLane'd in place - the
+  // caller must remake the row.
+  if (_valueType != lane.valueType)
+    return NO;
+  if (_paletteGeneratorBar != lane.paletteGeneratorBar)
+    return NO;
+  if (_seedField != lane.seedField)
+    return NO;
+  if (_isToggle != lane.isToggle)
+    return NO;
+  if (_integerValued != lane.integerValued)
+    return NO;
+  if (![(_choiceLabels ?: @[]) isEqualToArray:(lane.choiceLabels ?: @[])])
+    return NO;
+  if (![(_cunits ?: @[]) isEqualToArray:(lane.componentUnits ?: @[])])
+    return NO;
+  if (_cmax.count != (lane.componentMax ?: @[]).count)
+    return NO;
+  return YES;
+}
+
 - (void)setDefaultValues:(NSArray<NSNumber *> *)defaultValues {
   _defaultValues = [defaultValues copy];
   [self _updateResetVisibility];

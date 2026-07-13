@@ -93,10 +93,13 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
       shaderSrc = l.codeString;
       break;
     }
-  outState->colorPoolCount = ShaderFillColorPool(
-      shaderSrc, outState->colorPool, ^NSArray<NSNumber *> *(NSString *label) {
-        return ShaderLaneValuesAtFraction(timeline, label, frac);
-      });
+  NSArray<NSNumber *> * (^values)(NSString *) =
+      ^NSArray<NSNumber *> *(NSString *label) {
+    return ShaderLaneValuesAtFraction(timeline, label, frac);
+  };
+  int poolN = ShaderFillColorPool(shaderSrc, outState->colorPool, values);
+  poolN = ShaderFillScalarPool(shaderSrc, outState->colorPool, poolN, values);
+  outState->colorPoolCount = poolN;
 }
 
 // ── Custom (user-supplied) shader ──

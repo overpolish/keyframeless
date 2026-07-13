@@ -215,6 +215,54 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
                   withTemplate:@""];
   }
 
+  // `// #float`/`// #choice` scalar props: each folds into ONE vec4 block member
+  // (value in .x), appended after the colour members. Float -> `#define <name>
+  // (<name>_kk.x)`; choice -> `(int(<name>_kk.x))`. Strip the standalone
+  // `uniform float|int <name>;` (blank line keeps error lines aligned).
+  ShaderScalarProp scalars[KK_SHADER_MAX_SCALAR_PROPS];
+  int scalarUsed = 0;
+  int nScalars = ShaderParseScalarProps(userSource, scalars,
+                                        KK_SHADER_MAX_SCALAR_PROPS, poolCount,
+                                        &scalarUsed);
+  for (int i = 0; i < nScalars; i++) {
+    NSString *nm = @(scalars[i].name);
+    [colorMembers appendFormat:@"  vec4 %@_kk;\n", nm];
+    NSString *ty;
+    if (scalars[i].isChoice || scalars[i].isInt) {
+      [colorDefines appendFormat:@"#define %@ (int(%@_kk.x))\n", nm, nm];
+      ty = @"int";
+    } else if (scalars[i].isBool) {
+      [colorDefines appendFormat:@"#define %@ (%@_kk.x > 0.5)\n", nm, nm];
+      ty = @"bool";
+    } else if (scalars[i].isAngle) {
+      // Lane is degrees; the shader gets radians. Negated so a clockwise knob
+      // turn reads as a clockwise on-screen rotation (the knob increases CW, but
+      // a standard rotation matrix turns CCW for a positive angle in the shader's
+      // y-up coordinate space).
+      [colorDefines appendFormat:@"#define %@ (radians(-%@_kk.x))\n", nm, nm];
+      ty = @"float";
+    } else if (scalars[i].isPoint) {
+      // Delivered in PIXELS (fragCoord space), not normalized: scale by
+      // iResolution. No Y flip - the shader's fragCoord is bottom-origin
+      // (Shadertoy convention), the SAME origin as the object-space lane, so the
+      // point lines up directly. Per-pass iResolution keeps it correct in smaller
+      // buffer passes.
+      [colorDefines
+          appendFormat:@"#define %@ (%@_kk.xy * iResolution.xy)\n", nm, nm];
+      ty = @"vec2";
+    } else {
+      [colorDefines appendFormat:@"#define %@ (%@_kk.x)\n", nm, nm];
+      ty = @"float";
+    }
+    NSString *pat = [NSString
+        stringWithFormat:@"(?m)^[ \\t]*uniform\\s+%@\\s+%@\\s*;[ \\t]*$", ty, nm];
+    [[NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil]
+        replaceMatchesInString:body
+                       options:0
+                         range:NSMakeRange(0, body.length)
+                  withTemplate:@""];
+  }
+
   NSMutableString *s = [NSMutableString string];
   [s appendString:@"layout(location = 0) out vec4 kk_outColor;\n"
                   @"layout(std140, binding = 0) uniform KKUniforms {\n"
@@ -228,8 +276,17 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
                   @"#define iFrame (int(kkExtra.y))\n"
                   @"#define iChannelResolution kkChanRes\n"];
   [s appendString:colorDefines];
+  // Alpha is honoured by DEFAULT for a shader that does NOT sample the source
+  // itself: its transparent areas composite over iChannel0 (the footage) so a
+  // generator-style shader never renders a black background. That needs
+  // iChannel0 bound even when the shader never references it, so force channel 0
+  // on. A shader that DOES sample iChannel0 manages the source itself (that use
+  // wins), so it keeps the opaque image convention (a=1) - which also protects
+  // golfed Shadertoy pastes that leave garbage in fragColor.a.
+  BOOL honorAlpha = !bufferMode && !(channelMask & 1u);
+  NSUInteger declMask = channelMask | (honorAlpha ? 1u : 0u);
   for (NSUInteger ch = 0; ch < 4; ch++) {
-    if (channelMask & (1u << ch))
+    if (declMask & (1u << ch))
       [s appendFormat:@"layout(binding = %lu) uniform sampler2D iChannel%lu;\n",
                       (unsigned long)(ch + 1), (unsigned long)ch];
   }
@@ -282,16 +339,29 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
     // position packed into RGBA). No grain, no sRGB, no clamp, no forced-opaque
     // - pass mainImage's output straight through.
     [s appendString:@"  kk_outColor = kkColor;\n}\n"];
-  } else {
+  } else if (honorAlpha) {
+    // Composite the shader over the source using its own alpha, so transparent
+    // areas show the footage (iChannel0) rather than black - the shader is a
+    // filter, and its source IS the background. Grain then sRGB, same as the
+    // opaque path. Output is opaque (over the footage); where the source itself
+    // is transparent its alpha carries through so lower layers still show.
     [s appendString:
-           // Grain in gamma/display space (screen-fixed, raw gl_FragCoord)
-           // before the sRGB encode, matching the built-in Types.
+           @"  vec3 disp = kkApplyGrain(clamp(kkColor.rgb, 0.0, 1.0), "
+           @"gl_FragCoord.xy);\n"
+           @"  float kka = clamp(kkColor.a, 0.0, 1.0);\n"
+           @"  vec4 kkSrc = texture(iChannel0, fragCoord / iResolution.xy);\n"
+           @"  vec3 comp = mix(kkSrc.rgb, disp, kka);\n"
+           @"  vec3 rgb = (kkExtra.w == 0.0) ? kkSrgbToLinear(comp) : comp;\n"
+           @"  float outA = max(kka, kkSrc.a);\n"
+           @"  kk_outColor = vec4(rgb * outA, outA);\n}\n"];
+  } else {
+    // The image convention ignores fragColor.a (always opaque): golfed shaders
+    // accumulate garbage into alpha, so forcing a=1 is safest. Grain in gamma/
+    // display space (screen-fixed, raw gl_FragCoord) before the sRGB encode.
+    [s appendString:
            @"  vec3 disp = kkApplyGrain(clamp(kkColor.rgb, 0.0, 1.0), "
            @"gl_FragCoord.xy);\n"
            @"  vec3 rgb = (kkExtra.w == 0.0) ? kkSrgbToLinear(disp) : disp;\n"
-           // The image convention ignores fragColor.a (always opaque); golfed
-           // shaders accumulate garbage into alpha. Force opaque (premultiplied
-           // output with a=1 is just rgb).
            @"  kk_outColor = vec4(rgb, 1.0);\n}\n"];
   }
   return s;

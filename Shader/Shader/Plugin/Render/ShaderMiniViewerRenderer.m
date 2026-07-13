@@ -65,6 +65,44 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
     return @[ @(KK_CORE_GRAIN_DEFAULT * 100.0) ];
   if ([label isEqualToString:@"Grain Size"])
     return @[ @(KK_CORE_GRAINSIZE_DEFAULT) ];
+
+  // Dynamic props declared by the shader. Right after a paste the timeline
+  // isn't seeded with these lanes yet, so valuesForLabel lands here. Return the
+  // shader-DECLARED default (not super's @[@0], which would drive a `// #float`
+  // uniform to 0 and flatten the preview) so the mini matches the first render.
+  NSString *src = [self _customShaderSource];
+  ShaderScalarProp sp[KK_SHADER_MAX_SCALAR_PROPS];
+  int used = 0;
+  int ns =
+      ShaderParseScalarProps(src, sp, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
+  for (int i = 0; i < ns; i++)
+    if ([label isEqualToString:@(sp[i].label)]) {
+      if (sp[i].isPoint)
+        return @[ @(sp[i].pdefx), @(sp[i].pdefy) ];
+      return @[ @(sp[i].isChoice ? (double)sp[i].cdefault : sp[i].fdefault) ];
+    }
+
+  ShaderColorProp cp[KK_SHADER_MAX_COLOR_PROPS];
+  int pool = 0;
+  int nc = ShaderParseColorProps(src, cp, KK_SHADER_MAX_COLOR_PROPS, &pool);
+  for (int i = 0; i < nc; i++) {
+    NSString *lbl = @(cp[i].label);
+    if (!cp[i].isArray) {
+      if ([label isEqualToString:lbl]) {
+        const float *d = kShaderDefaultPalette[0];
+        return @[ @(d[0]), @(d[1]), @(d[2]), @(d[3]) ];
+      }
+      continue;
+    }
+    if ([label isEqualToString:[NSString stringWithFormat:@"%@ Count", lbl]])
+      return @[ @(cp[i].defaultCount) ];
+    for (int n = 1; n <= cp[i].maxCount; n++)
+      if ([label
+              isEqualToString:[NSString stringWithFormat:@"%@ %d", lbl, n]]) {
+        const float *d = kShaderDefaultPalette[(n - 1) % 10];
+        return @[ @(d[0]), @(d[1]), @(d[2]), @(d[3]) ];
+      }
+  }
   return [super defaultValuesForLabel:label];
 }
 
@@ -336,10 +374,12 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   // A shader's `// #color` properties -> the colour pool (bound after the fixed
   // uniforms, same as the FCP render).
   simd_float4 colorPool[KK_SHADER_COLOR_POOL];
-  int colorPoolN = ShaderFillColorPool(image, colorPool,
-                                       ^NSArray<NSNumber *> *(NSString *label) {
-                                         return [self valuesForLabel:label];
-                                       });
+  NSArray<NSNumber *> * (^values)(NSString *) =
+      ^NSArray<NSNumber *> *(NSString *label) {
+    return [self valuesForLabel:label];
+  };
+  int colorPoolN = ShaderFillColorPool(image, colorPool, values);
+  colorPoolN = ShaderFillScalarPool(image, colorPool, colorPoolN, values);
 
   id<MTLTexture> srcLin = [self _linearSourceView:source];
   // srcLin is linear (FCP's float source, or the sRGB view that linearises the

@@ -116,6 +116,107 @@ static inline void ShaderAppendColorLanes(NSMutableArray<KKLane *> *lanes,
   }
 }
 
+// Append the shader's `// #float` (slider) and `// #choice` (int pill) props as
+// lanes in their own "Shader" params group (distinct from Core and Colours). A
+// float lane is an animatable slider bounded by min/max; a choice lane is a
+// structural (non-animatable, integer) radio pill from options=. Value flows to
+// the shader via the pool tail (ShaderFillScalarPool), same as colours.
+static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
+                                           NSString *source) {
+  ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
+  int used = 0;
+  int nProps = ShaderParseScalarProps(source, props, KK_SHADER_MAX_SCALAR_PROPS,
+                                      0, &used);
+  for (int pi = 0; pi < nProps; pi++) {
+    ShaderScalarProp *p = &props[pi];
+    KKLane *lane = [KKLane laneWithLabel:@(p->label)];
+    lane.valueType = KKLaneValueTypeFloat;
+    lane.enabled = NO;
+    lane.categoryKey = @"Shader";
+    lane.categorySymbol = @"slider.horizontal.3";
+    if (p->isChoice) {
+      lane.integerValued = YES;
+      lane.animatable = NO; // structural enum
+      NSMutableArray<NSString *> *opts = [NSMutableArray array];
+      for (NSString *o in [@(p->options) componentsSeparatedByString:@","]) {
+        NSString *t =
+            [o stringByTrimmingCharactersInSet:NSCharacterSet
+                                                   .whitespaceCharacterSet];
+        if (t.length)
+          [opts addObject:t];
+      }
+      lane.choiceLabels = opts;
+      lane.componentMin = @[ @0.0 ];
+      lane.componentMax = @[ @(opts.count ? (NSInteger)opts.count - 1 : 0) ];
+      [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                            values:@[ @(p->cdefault) ]]];
+    } else if (p->isSeed) {
+      lane.seedField = YES; // dice reroll
+      lane.integerValued = YES;
+      lane.animatable = NO; // structural like the core Seed
+      lane.scrubStep = 1.0;
+      lane.componentMin = @[ @(p->fmin) ];
+      lane.componentMax = @[ @(p->fmax) ];
+      [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                            values:@[ @(p->fdefault) ]]];
+    } else if (p->isPoint) {
+      lane.animatable = YES;
+      // Allowed off-scene (negative / past full res), so no min/max - empty =
+      // unconstrained, the same as Position in Canvas/MagicMove.
+      lane.componentMin = @[];
+      lane.componentMax = @[];
+      lane.componentUnits = @[ @"px", @"px" ];
+      lane.componentLabels = @[ @"X", @"Y" ];
+      // Stored normalized 0..1, displayed as pixels (X * media width, Y * media
+      // height) - the same as Position/Anchor in Canvas/MagicMove.
+      lane.componentsScaleWithMedia = YES;
+      [lane insertKeypose:[KKKeyPose
+                              keyposeAtTime:0.0
+                                     values:@[ @(p->pdefx), @(p->pdefy) ]]];
+    } else if (p->isBool) {
+      lane.isToggle = YES;
+      lane.integerValued = YES;
+      lane.animatable = NO; // structural on/off
+      lane.componentMin = @[ @0.0 ];
+      lane.componentMax = @[ @1.0 ];
+      [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                            values:@[ @(p->fdefault) ]]];
+    } else if (p->isAngle) {
+      lane.valueType = KKLaneValueTypeAngle; // circular knob, degrees
+      lane.animatable = YES;
+      // Unconstrained (accumulates past 360), like MagicMove's Rotation.
+      lane.componentMin = @[];
+      lane.componentMax = @[];
+      [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                            values:@[ @(p->fdefault) ]]];
+    } else {
+      lane.animatable = YES;
+      lane.componentMin = @[ @(p->fmin) ];
+      if (p->hasMax) {
+        lane.componentMax = @[ @(p->fmax) ]; // field + slider cap at max
+      } else {
+        // No max=: the field is unbounded (large cap so line-625 clamp is a
+        // no-op in practice) while the slider keeps the nominal range.
+        lane.componentMax = @[ @1000000.0 ];
+        lane.sliderMax = @(p->fmax);
+      }
+      if (p->isPercent) {
+        // Match the canonical percentage lane (opacityLane): whole-number %
+        // with a "%" unit, not a raw decimal float.
+        lane.componentUnits = @[ @"%" ];
+        lane.integerValued = YES;
+      }
+      if (p->isInt) {
+        lane.integerValued = YES; // whole-number slider
+        lane.scrubStep = 1.0;
+      }
+      [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                            values:@[ @(p->fdefault) ]]];
+    }
+    [lanes addObject:lane];
+  }
+}
+
 static inline NSArray<KKLane *> *
 ShaderBuildAvailableLanesForSource(NSString *shaderSource) {
   // Lane order (top-to-bottom default): the Core lanes, then the dynamic colour
@@ -199,6 +300,10 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource) {
                                           values:@[ @(coreGrain[s].def) ]]];
     [lanes addObject:lane];
   }
+
+  // Dynamic scalar params (`// #float` sliders, `// #choice` pills) declared by
+  // the shader, in their own "Shader" group (distinct from Core).
+  ShaderAppendScalarLanes(lanes, shaderSource);
 
   // Custom shader source: a full-width code editor row at the bottom of Core.
   // Non-animatable; the text lives in the lane's codeString (not a keypose) and
