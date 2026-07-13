@@ -456,6 +456,143 @@ id<MTLSamplerState> KKCustomSourceSampler(id<MTLDevice> device) {
   return s;
 }
 
+// Cached render pipeline (fullscreen quad, vertex + fragment) that samples a
+// linear source and writes its sRGB/gamma encode. Sampling (not compute .read)
+// matches exactly how the shader reads the source, so any texture the shader can
+// sample this pass can sample too. Built once per device.
+static id<MTLRenderPipelineState> KKGammaEncodePipeline(id<MTLDevice> device) {
+  static NSMapTable<id<MTLDevice>, id<MTLRenderPipelineState>> *cache;
+  static NSLock *lock;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    cache = [NSMapTable strongToStrongObjectsMapTable];
+    lock = [NSLock new];
+  });
+  [lock lock];
+  id<MTLRenderPipelineState> ps = [cache objectForKey:device];
+  [lock unlock];
+  if (ps)
+    return ps;
+  NSString *src =
+      @"#include <metal_stdlib>\n"
+      @"using namespace metal;\n"
+      @"struct KKGEOut { float4 pos [[position]]; float2 uv; };\n"
+      @"vertex KKGEOut kkGammaVS(uint vid [[vertex_id]]) {\n"
+      @"  float2 c[4] = { float2(-1,-1), float2(-1,1), float2(1,-1), "
+      @"float2(1,1) };\n"
+      @"  float2 p = c[vid];\n"
+      @"  KKGEOut o;\n"
+      @"  o.pos = float4(p, 0.0, 1.0);\n"
+      @"  o.uv = float2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5);\n"
+      @"  return o;\n"
+      @"}\n"
+      @"static inline float3 kk_lin2srgb(float3 c) {\n"
+      @"  c = clamp(c, 0.0, 1.0);\n"
+      @"  float3 lo = c * 12.92;\n"
+      @"  float3 hi = 1.055 * pow(c, 1.0 / 2.4) - 0.055;\n"
+      @"  return select(hi, lo, c <= 0.0031308);\n"
+      @"}\n"
+      @"fragment float4 kkGammaFS(KKGEOut in [[stage_in]],\n"
+      @"                          texture2d<float> tex [[texture(0)]],\n"
+      @"                          sampler smp [[sampler(0)]]) {\n"
+      @"  float4 c = tex.sample(smp, in.uv);\n"
+      @"  return float4(kk_lin2srgb(c.rgb), c.a);\n"
+      @"}\n";
+  NSError *err = nil;
+  id<MTLLibrary> lib = [device newLibraryWithSource:src options:nil error:&err];
+  id<MTLFunction> vfn = [lib newFunctionWithName:@"kkGammaVS"];
+  id<MTLFunction> ffn = [lib newFunctionWithName:@"kkGammaFS"];
+  if (!vfn || !ffn) {
+    KKLogError(@"[Custom] gamma-encode shader build failed: %@", err);
+    return nil;
+  }
+  MTLRenderPipelineDescriptor *desc = [MTLRenderPipelineDescriptor new];
+  desc.vertexFunction = vfn;
+  desc.fragmentFunction = ffn;
+  desc.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA16Float;
+  ps = [device newRenderPipelineStateWithDescriptor:desc error:&err];
+  if (!ps) {
+    KKLogError(@"[Custom] gamma-encode pipeline build failed: %@", err);
+    return nil;
+  }
+  [lock lock];
+  [cache setObject:ps forKey:device];
+  [lock unlock];
+  return ps;
+}
+
+static id<MTLSamplerState> KKGammaEncodeSampler(id<MTLDevice> device) {
+  static NSMapTable<id<MTLDevice>, id<MTLSamplerState>> *cache;
+  static NSLock *lock;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    cache = [NSMapTable strongToStrongObjectsMapTable];
+    lock = [NSLock new];
+  });
+  [lock lock];
+  id<MTLSamplerState> s = [cache objectForKey:device];
+  [lock unlock];
+  if (s)
+    return s;
+  MTLSamplerDescriptor *sd = [MTLSamplerDescriptor new];
+  sd.minFilter = MTLSamplerMinMagFilterNearest;
+  sd.magFilter = MTLSamplerMinMagFilterNearest;
+  sd.sAddressMode = MTLSamplerAddressModeClampToEdge;
+  sd.tAddressMode = MTLSamplerAddressModeClampToEdge;
+  s = [device newSamplerStateWithDescriptor:sd];
+  [lock lock];
+  [cache setObject:s forKey:device];
+  [lock unlock];
+  return s;
+}
+
+id<MTLTexture> KKGammaEncodeSourceTextureOnBuffer(
+    id<MTLCommandBuffer> commandBuffer, id<MTLTexture> src) {
+  if (!commandBuffer || !src)
+    return src;
+  id<MTLDevice> device = commandBuffer.device;
+  id<MTLRenderPipelineState> ps = KKGammaEncodePipeline(device);
+  if (!ps)
+    return src;
+  MTLTextureDescriptor *td = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA16Float
+                                   width:src.width
+                                  height:src.height
+                               mipmapped:NO];
+  td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  td.storageMode = MTLStorageModePrivate;
+  id<MTLTexture> dst = [device newTextureWithDescriptor:td];
+  if (!dst)
+    return src;
+  MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
+  rpd.colorAttachments[0].texture = dst;
+  rpd.colorAttachments[0].loadAction = MTLLoadActionDontCare;
+  rpd.colorAttachments[0].storeAction = MTLStoreActionStore;
+  id<MTLRenderCommandEncoder> e =
+      [commandBuffer renderCommandEncoderWithDescriptor:rpd];
+  [e setViewport:(MTLViewport){0, 0, (double)src.width, (double)src.height, -1.0,
+                               1.0}];
+  [e setRenderPipelineState:ps];
+  [e setFragmentTexture:src atIndex:0];
+  [e setFragmentSamplerState:KKGammaEncodeSampler(device) atIndex:0];
+  [e drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];
+  [e endEncoding];
+  return dst;
+}
+
+id<MTLTexture> KKGammaEncodeSourceTexture(id<MTLCommandQueue> queue,
+                                          id<MTLTexture> src) {
+  if (!queue || !src)
+    return src;
+  id<MTLCommandBuffer> cb = [queue commandBuffer];
+  id<MTLTexture> dst = KKGammaEncodeSourceTextureOnBuffer(cb, src);
+  if (dst == src)
+    return src;
+  [cb commit];
+  [cb waitUntilCompleted];
+  return dst;
+}
+
 void KKBindCustomChannels(id<MTLRenderCommandEncoder> encoder,
                           KKGLSLTranspileResult *tr, id<MTLTexture> source,
                           id<MTLSamplerState> sourceSampler,

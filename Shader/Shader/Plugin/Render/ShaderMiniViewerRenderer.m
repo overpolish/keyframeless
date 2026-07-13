@@ -335,6 +335,12 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
     base.chanRes[c] = (simd_float4){256.0f, 256.0f, 1.0f, 0.0f};
 
   id<MTLTexture> srcLin = [self _linearSourceView:source];
+  // srcLin is linear (FCP's float source, or the sRGB view that linearises the
+  // mini's gamma surface). Shadertoy wants gamma-space input and the output
+  // wrapper re-decodes for a float dest, so encode to gamma here to match the
+  // main render - otherwise the source double-decodes and the preview darkens.
+  // Encodes onto the shared command buffer, ahead of the buffer/image passes.
+  srcLin = KKGammaEncodeSourceTextureOnBuffer(commandBuffer, srcLin);
   id<MTLSamplerState> srcSampler = KKCustomSourceSampler(device);
   id<MTLTexture> noiseTex = KKCustomChannelNoiseTexture(device);
   id<MTLSamplerState> noiseSampler = KKCustomChannelSampler(device);

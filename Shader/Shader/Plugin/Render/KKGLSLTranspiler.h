@@ -84,6 +84,19 @@ id<MTLSamplerState> KKCustomChannelSampler(id<MTLDevice> device);
 // footage doesn't wrap when the shader samples outside [0,1]. Cached per
 // device.
 id<MTLSamplerState> KKCustomSourceSampler(id<MTLDevice> device);
+// Gamma-encode (linear->sRGB) a LINEAR source texture into a new RGBA16F
+// texture of the same size. A Shadertoy shader assumes its iChannel input is
+// display / gamma space (Shadertoy never linearises); our output wrapper
+// re-decodes with kkSrgbToLinear for a float dest. Feeding the shader FCP's
+// linear source therefore double-decodes it and darkens the clip - so encode
+// the source to gamma first and a passthrough round-trips exactly. Returns
+// `src` unchanged on any failure. `OnBuffer` encodes onto an existing command
+// buffer (the caller commits it); the queue form runs its own command buffer
+// and blocks until done.
+id<MTLTexture> _Nullable KKGammaEncodeSourceTextureOnBuffer(
+    id<MTLCommandBuffer> commandBuffer, id<MTLTexture> _Nullable src);
+id<MTLTexture> _Nullable KKGammaEncodeSourceTexture(
+    id<MTLCommandQueue> queue, id<MTLTexture> _Nullable src);
 // Bind textures to every channel `tr` uses, at the MSL indices SPIRV-Cross
 // assigned. iChannel0 gets `source` (the effect's clip) when non-nil, falling
 // back to `noise`; iChannel1-3 always get `noise`.

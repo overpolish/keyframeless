@@ -392,6 +392,20 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
   if (W == 0 || H == 0)
     return NO;
 
+  // Shadertoy expects gamma/display-space iChannel input; the output wrapper
+  // re-decodes it (kkSrgbToLinear) for a float dest. FCP's linear source would
+  // therefore double-decode and darken, so gamma-encode it first. u.extra.w==0
+  // marks the float/linear dest (an 8-bit dest already carries gamma source).
+  if (srcTex && u.extra.w == 0.0f) {
+    id<MTLCommandQueue> gq = [cache commandQueueWithRegistryID:registryID
+                                                   pixelFormat:pf];
+    id<MTLTexture> g = KKGammaEncodeSourceTexture(gq, srcTex);
+    if (gq)
+      [cache returnCommandQueueToCache:gq];
+    if (g)
+      srcTex = g;
+  }
+
   BOOL present[4];
   for (int c = 0; c < 4; c++)
     present[c] =
@@ -965,6 +979,25 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
         tr.usedChannelMask ? KKCustomChannelSampler(device) : nil;
     id<MTLSamplerState> srcSampler =
         tr.usedChannelMask ? KKCustomSourceSampler(device) : nil;
+    // Gamma-encode the linear source so a Shadertoy shader (gamma-space input,
+    // output re-decoded for the float dest) round-trips it instead of
+    // double-decoding + darkening. encodeSRGB==0 == float/linear dest; an 8-bit
+    // dest already carries gamma source, so leave it untouched.
+    id<MTLTexture> gammaSrc = nil;
+    if (encodeSRGB == 0.0f && sourceImages.count) {
+      id<MTLTexture> rawSrc = [sourceImages[0] metalTextureForDevice:device];
+      if (rawSrc) {
+        KKMetalDeviceCache *dc = [KKMetalDeviceCache sharedCache];
+        id<MTLCommandQueue> gq = [dc
+            commandQueueWithRegistryID:destinationImage.deviceRegistryID
+                           pixelFormat:
+                               [KKMetalDeviceCache
+                                   pixelFormatForImageTile:destinationImage]];
+        gammaSrc = KKGammaEncodeSourceTexture(gq, rawSrc);
+        if (gq)
+          [dc returnCommandQueueToCache:gq];
+      }
+    }
     return [self
         encodeRenderCommandsForDestinationImage:destinationImage
                                    sourceImages:sourceImages
@@ -975,9 +1008,10 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
                                          [encoder
                                              setRenderPipelineState:customPS];
                                          id<MTLTexture> src =
-                                             inputTextures.count
-                                                 ? inputTextures[0]
-                                                 : nil;
+                                             gammaSrc
+                                                 ?: (inputTextures.count
+                                                         ? inputTextures[0]
+                                                         : nil);
                                          KKGLSLUniforms uu = u;
                                          if (src)
                                            uu.chanRes[0] = (simd_float4){
