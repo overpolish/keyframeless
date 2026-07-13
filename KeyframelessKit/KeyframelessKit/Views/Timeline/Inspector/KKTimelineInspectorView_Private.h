@@ -73,7 +73,8 @@ NS_ASSUME_NONNULL_BEGIN
   /// per-plugin NSUserDefaults flag ("shown once"); `_introAutostartTimer`
   /// polls for the guide-enable gate (the effect selected + its OSC drawn) and
   /// fires the intro exactly once; `_introAutostartBridge` caches the config's
-  /// OSC-bridge accessor (KKOSCGuideBridge(^)(void), id-typed) used for the gate.
+  /// OSC-bridge accessor (KKOSCGuideBridge(^)(void), id-typed) used for the
+  /// gate.
   NSString *_introSeenKey;
   NSTimer *_introAutostartTimer;
   id _introAutostartBridge;
@@ -139,6 +140,7 @@ NS_ASSUME_NONNULL_BEGIN
   NSInteger _mbSamples;
   KKMotionBlurTechnique _mbTechnique;
   NSArray<KKLane *> *_availableLanes;
+  NSString *_lastDerivedCode; // last code source the availableLanesProvider ran
   BOOL _isDetachedCopy;
   BOOL _detachedAttached;
   __weak KKTimelineInspectorView *_detachedOwner;

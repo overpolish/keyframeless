@@ -4,6 +4,7 @@
  */
 
 #import "KKGLSLTranspiler.h"
+#import "ShaderColorSpace.h" // ShaderParseColorProps (`// #color` block injection)
 
 #include <string>
 #include <vector>
@@ -181,16 +182,52 @@ static NSString *KKShimRawGLSL(NSString *src) {
 static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
                                      NSInteger *outUserLineOffset,
                                      BOOL bufferMode) {
+  // A shader's `// #color`-annotated `uniform vec4 <name>[N]?;` declarations move
+  // INTO our std140 block (Vulkan-GLSL forbids non-opaque uniforms outside a
+  // block). Parse them, strip the standalone declarations (leaving blank lines so
+  // error line numbers stay aligned), and inject each as a block member - plus a
+  // count-meta vec4 and a `<name>Count` define for arrays.
+  ShaderColorProp props[KK_SHADER_MAX_COLOR_PROPS];
+  int poolCount = 0;
+  int nProps = ShaderParseColorProps(userSource, props,
+                                     KK_SHADER_MAX_COLOR_PROPS, &poolCount);
+  NSMutableString *colorMembers = [NSMutableString string];
+  NSMutableString *colorDefines = [NSMutableString string];
+  NSMutableString *body = [userSource mutableCopy];
+  for (int i = 0; i < nProps; i++) {
+    NSString *nm = @(props[i].name);
+    if (props[i].isArray) {
+      [colorMembers appendFormat:@"  vec4 %@[%d];\n  vec4 %@_kkmeta;\n", nm,
+                                 props[i].count, nm];
+      [colorDefines appendFormat:@"#define %@Count (int(%@_kkmeta.x))\n", nm,
+                                 nm];
+    } else {
+      [colorMembers appendFormat:@"  vec4 %@;\n", nm];
+    }
+    NSString *pat = [NSString
+        stringWithFormat:
+            @"(?m)^[ \\t]*uniform\\s+vec4\\s+%@\\s*(\\[[^\\]]*\\])?\\s*;[ \\t]*$",
+            nm];
+    [[NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil]
+        replaceMatchesInString:body
+                       options:0
+                         range:NSMakeRange(0, body.length)
+                  withTemplate:@""];
+  }
+
   NSMutableString *s = [NSMutableString string];
   [s appendString:@"layout(location = 0) out vec4 kk_outColor;\n"
                   @"layout(std140, binding = 0) uniform KKUniforms {\n"
                   @"  vec4 kkResTime;\n  vec4 iMouse;\n  vec4 iDate;\n"
-                  @"  vec4 kkExtra;\n  vec4 kkGrain;\n  vec4 kkChanRes[4];\n};\n"
+                  @"  vec4 kkExtra;\n  vec4 kkGrain;\n  vec4 kkChanRes[4];\n"];
+  [s appendString:colorMembers]; // the shader's own colour uniforms
+  [s appendString:@"};\n"
                   @"#define iResolution (kkResTime.xyz)\n"
                   @"#define iTime (kkResTime.w)\n"
                   @"#define iTimeDelta (kkExtra.x)\n"
                   @"#define iFrame (int(kkExtra.y))\n"
                   @"#define iChannelResolution kkChanRes\n"];
+  [s appendString:colorDefines];
   for (NSUInteger ch = 0; ch < 4; ch++) {
     if (channelMask & (1u << ch))
       [s appendFormat:@"layout(binding = %lu) uniform sampler2D iChannel%lu;\n",
@@ -233,7 +270,7 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
         n++;
     *outUserLineOffset = n;
   }
-  [s appendString:KKRenameReservedIdentifiers(userSource)];
+  [s appendString:KKRenameReservedIdentifiers(body)];
   [s appendString:@"\nvoid main() {\n"
                   @"  vec2 fragCoord = gl_FragCoord.xy;\n"
                   @"  if (kkExtra.z != 0.0) fragCoord.y = kkResTime.y - "
@@ -258,6 +295,22 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
            @"  kk_outColor = vec4(rgb, 1.0);\n}\n"];
   }
   return s;
+}
+
+void KKBindGLSLUniforms(id<MTLRenderCommandEncoder> encoder,
+                        const KKGLSLUniforms *u, const simd_float4 *pool,
+                        int poolCount) {
+  if (poolCount <= 0 || !pool) {
+    [encoder setFragmentBytes:u length:sizeof(*u) atIndex:0];
+    return;
+  }
+  size_t poolBytes = (size_t)poolCount * sizeof(simd_float4);
+  size_t total = sizeof(*u) + poolBytes;
+  void *buf = malloc(total);
+  memcpy(buf, u, sizeof(*u));
+  memcpy((char *)buf + sizeof(*u), pool, poolBytes);
+  [encoder setFragmentBytes:buf length:total atIndex:0];
+  free(buf);
 }
 
 // Full-screen vertex appended after the SPIRV-Cross fragment: emits the quad and

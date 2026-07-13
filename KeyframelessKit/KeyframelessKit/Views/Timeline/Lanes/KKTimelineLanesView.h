@@ -139,6 +139,15 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// Fired when the Basic graph zoom/pan changes (YES = zoomed in, not fit).
 @property(nonatomic, copy, nullable) void (^onZoomChanged)(BOOL zoomed);
 
+/// Fired (debounced) after a `KKLaneValueTypeCode` lane's text is committed. A
+/// host whose lane set is derived from that source (e.g. a shader's `// #color`
+/// directive) uses this to re-derive and swap the available lanes live.
+@property(nonatomic, copy, nullable) void (^onCodeCommitted)(NSString *code);
+
+/// Swap the available-lanes template set and rebuild the visible rows, so
+/// source-derived lanes can appear/disappear live without a reselect.
+- (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes;
+
 /// Reset the Basic graph's pinch-zoom/pan back to fit.
 - (void)resetZoom;
 
@@ -305,10 +314,10 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 @property(nonatomic, weak, nullable) id<KKMiniViewerDelegate>
     miniViewerDelegate;
 
-/// Forwarded to the popover mini's -grabsKeyFocusOnClick: when YES, clicking the
-/// mini makes it the key window so bare keys (e.g. Delete) are handled inside the
-/// popover instead of reaching the host. Default NO. Opt in from a plugin whose
-/// mini handles keys (e.g. Canvas's delete-selected-layer).
+/// Forwarded to the popover mini's -grabsKeyFocusOnClick: when YES, clicking
+/// the mini makes it the key window so bare keys (e.g. Delete) are handled
+/// inside the popover instead of reaching the host. Default NO. Opt in from a
+/// plugin whose mini handles keys (e.g. Canvas's delete-selected-layer).
 @property(nonatomic) BOOL miniGrabsKeyFocusOnClick;
 
 @end
@@ -371,15 +380,16 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 - (void)commitGuideConstantFieldForLabel:(NSString *)label
                                component:(NSInteger)component;
 /// Screen rect of the choice-pill segment at `index` in `label`'s constant row
-/// (a radio enum, e.g. an end-marker type), NSZeroRect if the popover isn't open
-/// or the row has no choice pill. Spotlight target.
+/// (a radio enum, e.g. an end-marker type), NSZeroRect if the popover isn't
+/// open or the row has no choice pill. Spotlight target.
 - (NSRect)guideConstantChoicePillScreenRectForLabel:(NSString *)label
                                             atIndex:(NSInteger)index;
 /// Screen rect of the constant popover's category-nav pill for `key` (e.g.
 /// @"Stroke"), NSZeroRect if the popover isn't open or has no such category.
 - (NSRect)guideConstantCategoryPillScreenRectForKey:(NSString *)key;
-/// Screen rect of `label`'s "add to animated" gutter button in the open constant
-/// popover, NSZeroRect if not open or the row has none. Spotlight target.
+/// Screen rect of `label`'s "add to animated" gutter button in the open
+/// constant popover, NSZeroRect if not open or the row has none. Spotlight
+/// target.
 - (NSRect)guideConstantAddToAnimatedButtonScreenRectForLabel:(NSString *)label;
 /// Scroll `label`'s constant row into the popover's visible area (no-op if the
 /// popover isn't open or the row is hidden by the current category tab).

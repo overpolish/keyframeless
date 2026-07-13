@@ -106,11 +106,19 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
      KKMotionBlurTechnique technique);
 @property(nonatomic, copy, nullable) void (^onTimelineMutated)
     (KKTimeline *updated);
+/// Source-derived lanes: when set, the inspector re-derives its available-lanes
+/// set from a code lane's committed text and refreshes the rows live (no
+/// reselect). Return the full lane set for the given shader/code source. Used
+/// by generators whose lanes are declared in the shader (e.g. a `// #color`
+/// directive). Not set == the lane set is fixed at init.
+@property(nonatomic, copy, nullable)
+    NSArray<KKLane *> * (^availableLanesProvider)(NSString *code);
 /// A CONTENT preset was applied (one carrying a `payloadKind`): the plugin
 /// inserts the decoded content rather than applying a timeline curve (e.g.
 /// Canvas decodes a `"canvasLayers"` payload into a new layer). Only fired for
-/// presets with a payload; timeline presets use the normal apply path. `atPlayhead`
-/// mirrors the preset apply intent (the plugin decides what it means).
+/// presets with a payload; timeline presets use the normal apply path.
+/// `atPlayhead` mirrors the preset apply intent (the plugin decides what it
+/// means).
 @property(nonatomic, copy, nullable) void (^onApplyPresetPayload)
     (NSString *payloadKind, NSString *payloadJSON, BOOL atPlayhead);
 /// Fired right before the Constants popover opens (button tap), so a
@@ -221,10 +229,11 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 - (BOOL)showsMotionBlurRow;
 
 /// Whether the host plugin can render the Fast (velocity-reconstruction)
-/// technique. Default NO (only the universal Accurate accumulate path). Override
-/// to YES in a plugin that emits a velocity buffer (per-object analytic motion,
-/// e.g. Canvas / MagicMove); the settings popover then shows the Fast/Accurate
-/// Quality pill. A NO host always runs Accurate and hides the pill.
+/// technique. Default NO (only the universal Accurate accumulate path).
+/// Override to YES in a plugin that emits a velocity buffer (per-object
+/// analytic motion, e.g. Canvas / MagicMove); the settings popover then shows
+/// the Fast/Accurate Quality pill. A NO host always runs Accurate and hides the
+/// pill.
 - (BOOL)motionBlurSupportsFastTechnique;
 
 /// The default Accurate-path sample count (2–128) for this plugin - the initial

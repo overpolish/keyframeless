@@ -38,6 +38,22 @@
   return ShaderBuildAvailableLanes();
 }
 
+// Source-aware lane set: the Core lanes plus whatever dynamic lanes the given
+// shader source declares (e.g. the `// #color` Colours group).
++ (NSArray<KKLane *> *)availableLanesForShaderSource:(NSString *)source {
+  return ShaderBuildAvailableLanesForSource(
+      source.length ? source : ShaderCustomDefaultShaderSource());
+}
+
+// The current shader source from a timeline's "Shader" code lane (the baked
+// default when absent/empty), for deriving the source-aware lane set.
++ (NSString *)shaderSourceFromTimeline:(KKTimeline *)timeline {
+  for (KKLane *l in timeline.lanes)
+    if ([l.label isEqualToString:@"Shader"] && l.codeString.length)
+      return l.codeString;
+  return ShaderCustomDefaultShaderSource();
+}
+
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {
   // The legacy Origin / Scale / Rotation on-screen controls are gone; no OSC
   // elements until shader-exposed OSCs land.
@@ -101,7 +117,12 @@
 
     [actionAPI endAction:self];
 
-    NSArray<KKLane *> *available = [ShaderPlugin availableLanes];
+    // Source-aware: derive the lane set (incl. the dynamic Colours group) from
+    // the current shader source, so a shader's `// #color` directive surfaces
+    // its swatches + palette generator.
+    NSArray<KKLane *> *available = [ShaderPlugin
+        availableLanesForShaderSource:[ShaderPlugin
+                                          shaderSourceFromTimeline:timeline]];
     ShaderInspectorView *view =
         [[ShaderInspectorView alloc] initWithAPIManager:self.apiManager
                                             loopEnabled:loopEnabled
@@ -116,6 +137,12 @@
     view.miniViewerDescriptorPath =
         ShaderMiniViewerDescriptorPathForUUID(instUUID);
     view.miniViewerRequestPath = ShaderMiniViewerRequestPathForUUID(instUUID);
+    // Live source-derived lanes: when the shader code commits (debounced), the
+    // inspector re-derives the lane set from the new source so a `// #color`
+    // directive's Colours group appears/updates without a clip reselect.
+    view.availableLanesProvider = ^NSArray<KKLane *> *(NSString *code) {
+      return [ShaderPlugin availableLanesForShaderSource:code];
+    };
     // Seed the basic-view scrubber clamp immediately. Plugin+Render's
     // dispatch_async push runs once on first render - if it raced ahead
     // and weakSelf.inspectorView was still nil, the basic view would

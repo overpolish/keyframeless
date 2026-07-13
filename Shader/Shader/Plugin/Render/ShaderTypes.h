@@ -9,16 +9,19 @@
 
 // Shared by the FCP render (Plugin+Render.m), the mini-viewer renderer
 // (ShaderMiniViewerRenderer.m), and the Metal shader (Shader.metal).
-//
-// The gradient is the paper-design/shaders mesh-gradient (Apache-2.0), ported
-// GLSL -> MSL: up to `colorsCount` colour spots animate along procedural
-// trajectories and are blended by inverse-distance, warped by noise distortion
-// + swirl, with an in-shader grain mixer and overlay. Colours are straight
-// sRGB+alpha; the shader blends them directly (no OKLab pass) and linearises
-// only for FCP's float working buffer.
 
-// Max colour spots (the source shader blends up to 10 by inverse-distance).
+// Max colour spots (legacy built-in gradient array width).
 #define KK_SHADER_GRAD_COLORS 10
+
+// Absolute ceiling for a single `// #color` array property's swatch count
+// (slider/field cap + swatch visibility in the catalog).
+#define KK_SHADER_MAX_COLORS 32
+
+// Total vec4 slots across ALL of a shader's `// #color` properties (each single
+// = 1 vec4; each array[N] = N + 1 meta vec4). This is the std140 tail appended
+// to the transpiled shader's uniform block. Shared by the render blob and the
+// bind path.
+#define KK_SHADER_COLOR_POOL 48
 
 // Shared params common to every Type, passed in their own fragment buffer
 // (ShaderFragmentIndex_Common) so the per-Type uniform structs don't each
@@ -45,6 +48,13 @@ typedef struct ShaderCommonUniforms {
 // shader source rides in the blob tail after this struct.
 typedef struct ShaderPluginState {
     ShaderCommonUniforms common;
+    // The transpiled shader's colour-block tail: one vec4 per single `// #color`
+    // property, N + 1 (swatches + count meta) per array property, in directive
+    // order. Evaluated from the timeline at build time; appended after the fixed
+    // uniforms at bind time. `colorPoolCount` is the number of vec4s used.
+    vector_float4 colorPool[KK_SHADER_COLOR_POOL];
+    int colorPoolCount;
+    int _colorPad;
 } ShaderPluginState;
 
 typedef enum ShaderFragmentIndex {

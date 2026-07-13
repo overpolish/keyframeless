@@ -17,10 +17,109 @@
 #import "ShaderColorSpace.h"
 #import "ShaderLocalized.h" // RLoc
 
-static inline NSArray<KKLane *> *ShaderBuildAvailableLanes(void) {
-  // Lane order (top-to-bottom default): Type, then this gradient type's
-  // options, then the colour swatches last (colours are dynamic - users
-  // add/remove them). Users can reorder in the inspector.
+// --- Dynamic colour lanes ------------------------------------------------
+// A shader declares colour properties by annotating standalone uniforms:
+//     // #color                            uniform vec4 uBackground;
+//     // #color label="Accent"             uniform vec4 uForeground;
+//     // #color min=1 max=10 default=4      uniform vec4 uPalette[10];
+// Each single-vec4 property is one colour lane; each array is a palette bar + a
+// "<Label> Count" lane + "<Label> N" swatches. The kit palette machinery drives
+// the arrays via paletteGeneratorBar / paletteLockable.
+
+// NSNumbers n..maxCount, for a "<Label> Count >= n" visibility gate.
+static inline NSArray<NSNumber *> *ShaderCountAtLeast(NSInteger n,
+                                                      NSInteger maxCount) {
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  for (NSInteger c = n; c <= maxCount; c++)
+    [out addObject:@(c)];
+  return out;
+}
+
+static inline KKLane *ShaderMakeColorLane(NSString *label, NSString *group,
+                                          const float *rgba) {
+  KKLane *color = [KKLane laneWithLabel:label];
+  color.valueType = KKLaneValueTypeColor;
+  color.componentMin = @[ @0.0, @0.0, @0.0, @0.0 ];
+  color.componentMax = @[ @1.0, @1.0, @1.0, @1.0 ];
+  color.animatable = YES;
+  color.enabled = NO;
+  color.paletteLockable = YES; // every colour joins the palette generator
+  color.paletteGroup = group;  // ...but each property rerolls independently
+  color.categoryKey = @"Colors";
+  color.categorySymbol = @"paintpalette";
+  [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                         values:@[
+                                           @(rgba[0]), @(rgba[1]), @(rgba[2]),
+                                           @(rgba[3])
+                                         ]]];
+  return color;
+}
+
+// Append one lane group per `// #color` property the shader declares, under a
+// single shared palette-generator bar (rerolls EVERY colour lane - both arrays'
+// swatches and the single colours - since all are paletteLockable).
+static inline void ShaderAppendColorLanes(NSMutableArray<KKLane *> *lanes,
+                                          NSString *source) {
+  const float (*pal)[4] = kShaderDefaultPalette;
+  const NSInteger kSliderCap =
+      10; // slider tops out here; the field goes higher
+  ShaderColorProp props[KK_SHADER_MAX_COLOR_PROPS];
+  int poolCount = 0;
+  int nProps = ShaderParseColorProps(source, props, KK_SHADER_MAX_COLOR_PROPS,
+                                     &poolCount);
+  if (nProps == 0)
+    return;
+  // One palette-generator bar for the whole Colours group.
+  KKLane *bar = [KKLane laneWithLabel:@"Palette"];
+  bar.paletteGeneratorBar = YES;
+  bar.animatable = NO;
+  bar.enabled = NO;
+  bar.categoryKey = @"Colors";
+  bar.categorySymbol = @"paintpalette";
+  [lanes addObject:bar];
+
+  for (int pi = 0; pi < nProps; pi++) {
+    ShaderColorProp *p = &props[pi];
+    NSString *label = @(p->label);
+    if (!p->isArray) {
+      // A single named colour - its own one-colour journey, distinct hue.
+      [lanes addObject:ShaderMakeColorLane(label, label, pal[pi % 10])];
+      continue;
+    }
+    // An array: count lane + N swatches (the shared bar above rerolls them).
+    NSString *countLabel = [NSString stringWithFormat:@"%@ Count", label];
+    KKLane *count = [KKLane laneWithLabel:countLabel];
+    count.animatable = NO;
+    count.enabled = NO;
+    count.integerValued = YES;
+    count.scrubStep = 1.0;
+    count.componentMin = @[ @(p->minCount) ];
+    count.componentMax = @[ @(p->maxCount) ]; // field up to the directive max
+    count.sliderMax = @(MIN((NSInteger)p->maxCount, kSliderCap));
+    count.categoryKey = @"Colors";
+    count.categorySymbol = @"paintpalette";
+    [count insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                           values:@[ @(p->defaultCount) ]]];
+    [lanes addObject:count];
+
+    for (int i = 0; i < p->maxCount; i++) {
+      NSInteger n = i + 1;
+      KKLane *color = ShaderMakeColorLane(
+          [NSString stringWithFormat:@"%@ %ld", label, (long)n], label,
+          pal[i % 10]);
+      // "count >= n" via the absolute ceiling, so a swatch still reveals when
+      // the stored count is transiently above a just-lowered max.
+      color.visibleWhenLabel = countLabel;
+      color.visibleWhenValues = ShaderCountAtLeast(n, KK_SHADER_MAX_COLORS);
+      [lanes addObject:color];
+    }
+  }
+}
+
+static inline NSArray<KKLane *> *
+ShaderBuildAvailableLanesForSource(NSString *shaderSource) {
+  // Lane order (top-to-bottom default): the Core lanes, then the dynamic colour
+  // swatches last (parsed from the shader). Users can reorder in the inspector.
   NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
 
   // The plugin is Custom-only (GLSL). The Type pill and the built-in per-type
@@ -172,5 +271,14 @@ static inline NSArray<KKLane *> *ShaderBuildAvailableLanes(void) {
   };
   [lanes addObject:shader];
 
+  // Dynamic colour group parsed from the shader's `// #color` directive.
+  ShaderAppendColorLanes(lanes, shaderSource);
+
   return lanes;
+}
+
+// Back-compat entry: the default-shader lane set. Source-specific dynamic lanes
+// only appear when the default shader itself declares a directive.
+static inline NSArray<KKLane *> *ShaderBuildAvailableLanes(void) {
+  return ShaderBuildAvailableLanesForSource(ShaderCustomDefaultShaderSource());
 }

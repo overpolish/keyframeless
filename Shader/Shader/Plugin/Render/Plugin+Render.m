@@ -29,6 +29,8 @@
               count:(NSInteger)count
               error:(NSError **)error;
 - (BOOL)renderCustomMultipassWithUniforms:(KKGLSLUniforms)u
+                                colorPool:(const simd_float4 *)colorPool
+                                poolCount:(int)poolCount
                               imageSource:(NSString *)imageSource
                             bufferSources:(NSArray<NSString *> *)bufferSources
                                frameIndex:(NSInteger)frameIndex
@@ -80,6 +82,21 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
   common.grainSize =
       grainSizeV.count ? grainSizeV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
   outState->common = common;
+
+  // A shader's `// #color` properties -> the colour pool (the transpiled
+  // block's std140 tail). Values come from the per-property lanes (fallback:
+  // directive default count + the default palette). The directives are parsed
+  // from the "Shader" code lane.
+  NSString *shaderSrc = nil;
+  for (KKLane *l in timeline.lanes)
+    if ([l.label isEqualToString:@"Shader"] && l.codeString.length) {
+      shaderSrc = l.codeString;
+      break;
+    }
+  outState->colorPoolCount = ShaderFillColorPool(
+      shaderSrc, outState->colorPool, ^NSArray<NSNumber *> *(NSString *label) {
+        return ShaderLaneValuesAtFraction(timeline, label, frac);
+      });
 }
 
 // ── Custom (user-supplied) shader ──
@@ -355,6 +372,8 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
 // reused, a seek re-simulates a bounded window from a clean start. (Checkpoints
 // to make deep seeks exact + bounded are the next increment.)
 - (BOOL)renderCustomMultipassWithUniforms:(KKGLSLUniforms)u
+                                colorPool:(const simd_float4 *)colorPool
+                                poolCount:(int)poolCount
                               imageSource:(NSString *)imageSource
                             bufferSources:(NSArray<NSString *> *)bufferSources
                                frameIndex:(NSInteger)frameIndex
@@ -556,9 +575,8 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
                                      commands:^(id<MTLRenderCommandEncoder> enc,
                                                 NSArray<id<MTLTexture>> *texs) {
                                        [enc setRenderPipelineState:ps];
-                                       [enc setFragmentBytes:&bufU
-                                                      length:sizeof(bufU)
-                                                     atIndex:0];
+                                       KKBindGLSLUniforms(enc, &bufU, colorPool,
+                                                          poolCount);
                                        KKBindCustomChannelTextures(
                                            enc, tr, chArr, srcSampler, noiseTex,
                                            chSampler);
@@ -605,9 +623,8 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
                                          NSArray<id<MTLTexture>>
                                              *inputTextures) {
                                        [encoder setRenderPipelineState:imagePS];
-                                       [encoder setFragmentBytes:&imgU
-                                                          length:sizeof(imgU)
-                                                         atIndex:0];
+                                       KKBindGLSLUniforms(encoder, &imgU,
+                                                          colorPool, poolCount);
                                        KKBindCustomChannelTextures(
                                            encoder, imgTR, imgCh, srcSampler,
                                            noiseTex, chSampler);
@@ -950,6 +967,8 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
                            : -1;
       float dtPerFrame = (float)(frameDur * base.common.speed);
       return [self renderCustomMultipassWithUniforms:u
+                                           colorPool:base.colorPool
+                                           poolCount:base.colorPoolCount
                                          imageSource:withCommon(imageSrc)
                                        bufferSources:bufSources
                                           frameIndex:frameIndex
@@ -1017,9 +1036,9 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
                                            uu.chanRes[0] = (simd_float4){
                                                (float)src.width,
                                                (float)src.height, 1.0f, 0.0f};
-                                         [encoder setFragmentBytes:&uu
-                                                            length:sizeof(uu)
-                                                           atIndex:0];
+                                         KKBindGLSLUniforms(
+                                             encoder, &uu, base.colorPool,
+                                             base.colorPoolCount);
                                          KKBindCustomChannels(
                                              encoder, tr, src, srcSampler,
                                              noiseTex, chSampler);

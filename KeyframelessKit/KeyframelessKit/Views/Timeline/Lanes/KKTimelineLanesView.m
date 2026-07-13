@@ -503,6 +503,13 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   _hintLabel.hidden = anyOptedIn && !allFiltered;
 }
 
+- (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes {
+  _availableLanes = [availableLanes copy];
+  // Rebuild the visible rows from the new template set (same path the pill
+  // visibleWhen toggles use), so source-derived lanes appear/disappear live.
+  [self _refresh];
+}
+
 - (void)_refresh {
   // Opted-in lanes in parameter order (_timeline.lanes is already sorted),
   // filtered by the Mode-gating visibleWhen rule - a lane hidden by the current
@@ -844,19 +851,23 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     KKLane *tmpl = tmplByLabel[tlLane.label];
     if (!tmpl || tlLane.enabled)
       continue; // only available, non-animatable (constant) properties
-    KKLane *lane = tlLane;
-    // aspectLinkable is template metadata (an older persisted blob may lack
-    // it), so source it from the template like the keypose popover does -
-    // otherwise the constants popover hides the link glyph. aspectLinked is
-    // user state and stays the lane's own. Copy so the shared persisted lane
-    // isn't mutated.
-    if ((tmpl.aspectLinkable && !lane.aspectLinkable) ||
-        (tmpl.integerValued && !lane.integerValued)) {
-      KKLane *l = [lane copy];
-      l.aspectLinkable = tmpl.aspectLinkable;
-      l.integerValued = tmpl.integerValued;
-      lane = l;
-    }
+    // Display metadata (paletteLockable / paletteGeneratorBar / decoupled
+    // sliderMax / visibleWhen gating / aspect / integer / component bounds) is
+    // template-defined and NOT persisted in the timeline blob, so re-inject it
+    // from the template here - otherwise a constant lane rebuilt from the blob
+    // (or a source-derived lane, e.g. a shader `// #color` swatch that appeared
+    // after a directive edit) loses its lock swatches, generator bar, decoupled
+    // slider cap, and its count-gated visibility. aspectLinked is user state
+    // and stays the lane's own. Copy so the shared persisted lane isn't
+    // mutated.
+    KKLane *lane = [tlLane copy];
+    [lane kkApplyPickerMetadataFrom:tmpl];
+    lane.aspectLinkable = tmpl.aspectLinkable;
+    lane.integerValued = tmpl.integerValued;
+    if (tmpl.componentMin.count)
+      lane.componentMin = tmpl.componentMin;
+    if (tmpl.componentMax.count)
+      lane.componentMax = tmpl.componentMax;
     [result addObject:lane];
   }
   return result;
@@ -986,7 +997,28 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 // The lane set the GRAPHS render/edit: the multi-owner graphTimeline when set,
 // else the single-owner _timeline.
 - (KKTimeline *)_graphTimeline {
-  return _graphTimeline ?: _timeline;
+  KKTimeline *gt = _graphTimeline ?: _timeline;
+  // Single-owner: drop animated lanes the plugin no longer declares (e.g. a
+  // shader whose `// #color` directive was removed) so the timing graph, the
+  // opted-in count, the dropdown AND the "No animated properties" empty state
+  // all agree. A constant already hides via _unoptedLanes' template filter, but
+  // an animated lane lives in _timeline and would otherwise linger. Multi-owner
+  // (Canvas) merges OTHER owners' lanes into the `_graphTimeline` ivar, so skip
+  // it there; an empty template set is a transient pre-seed state.
+  if (!_graphTimeline && _availableLanes.count) {
+    NSSet<NSString *> *declared =
+        [NSSet setWithArray:[_availableLanes valueForKey:@"label"]];
+    NSMutableArray<KKLane *> *kept = [NSMutableArray array];
+    for (KKLane *l in gt.lanes)
+      if ([declared containsObject:l.label])
+        [kept addObject:l];
+    if (kept.count != gt.lanes.count) {
+      KKTimeline *filtered = [gt copy];
+      filtered.lanes = kept;
+      gt = filtered;
+    }
+  }
+  return gt;
 }
 
 - (void)setGraphTimeline:(KKTimeline *)graphTimeline {

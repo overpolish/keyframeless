@@ -135,6 +135,13 @@ static const CGFloat kSlideDistance = 12.0;
 }
 
 - (void)_popoverDidOpen:(NSNotification *)note {
+  // The browser is a shader SWITCHER, only useful beside the constants / code
+  // editor popover. Skip the animated-dropdown ("manage") and lane-filter
+  // ("filter") popovers - single-owner, nothing to switch there (Canvas
+  // attaches its layer list to those because it is per-layer; Shader is not).
+  NSString *kind = note.userInfo[@"kind"];
+  if ([kind isEqualToString:@"manage"] || [kind isEqualToString:@"filter"])
+    return;
   NSWindow *popoverWindow = note.userInfo[@"window"];
   if (![popoverWindow isKindOfClass:[NSWindow class]])
     return;

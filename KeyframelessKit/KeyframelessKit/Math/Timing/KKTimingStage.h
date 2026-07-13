@@ -457,6 +457,14 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// so it sits above the swatches. Build-time metadata.
 @property(nonatomic) BOOL paletteGeneratorBar;
 
+/// Palette-generator scope: `paletteLockable` colour lanes sharing a non-nil
+/// `paletteGroup` reroll together as ONE independent palette journey; different
+/// groups are unrelated. Lanes with a nil group all reroll as a single shared
+/// journey (the legacy behaviour). Used by a host that exposes several distinct
+/// colour properties (e.g. a shader's separate `// #color` arrays + singles) so
+/// each stays its own cohesive palette. Build-time metadata.
+@property(nonatomic, copy, nullable) NSString *paletteGroup;
+
 + (instancetype)laneWithLabel:(NSString *)label;
 
 /// Standard FCP-style opacity lane (one whole-percentage component 0..100,

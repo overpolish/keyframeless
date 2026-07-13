@@ -225,6 +225,10 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return _valueType == KKLaneValueTypeCode;
 }
 
+- (BOOL)isPaletteBar {
+  return _paletteGeneratorBar;
+}
+
 - (void)setDefaultValues:(NSArray<NSNumber *> *)defaultValues {
   _defaultValues = [defaultValues copy];
   [self _updateResetVisibility];
@@ -1638,7 +1642,25 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
 }
 
 - (void)applyLane:(KKLane *)lane {
+  // Re-bound the field + slider to the lane's CURRENT range before applying the
+  // value, so a row reused across an updateUnoptedLanes rebuild picks up a
+  // source-derived range change (e.g. a shader `// #color max=` edit) instead
+  // of keeping its build-time bounds. The field clamp tracks componentMax; the
+  // slider cap tracks sliderMax (decoupled - the field may exceed the slider).
+  if (lane.componentMin.count)
+    _cmin = lane.componentMin;
+  if (lane.componentMax.count)
+    _cmax = lane.componentMax;
+  if (_slider) {
+    _slider.minValue = lane.sliderMin
+                           ? lane.sliderMin.doubleValue
+                           : (_cmin.count ? _cmin[0].doubleValue : 0.0);
+    _slider.maxValue = lane.sliderMax
+                           ? lane.sliderMax.doubleValue
+                           : (_cmax.count ? _cmax[0].doubleValue : 1.0);
+  }
   [self applyValues:lane.keyposes.firstObject.values];
+  [self refreshDisplay];
   // Locked lane = read-only: dim + swallow input (handled in hitTest:). Set
   // here (not just init) so a row reused across an updateUnoptedLanes / rebuild
   // also reflects the current lock state.

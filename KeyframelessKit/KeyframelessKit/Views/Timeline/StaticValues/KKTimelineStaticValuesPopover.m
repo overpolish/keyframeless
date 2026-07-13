@@ -1123,6 +1123,40 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   return labels;
 }
 
+// The visible lockable colour labels split into INDEPENDENT palette journeys by
+// `paletteGroup` (in first-seen row order). Lanes with a nil group share one
+// journey (legacy). A host with several distinct colour properties gives each a
+// group so they reroll as separate cohesive palettes.
+- (NSArray<NSArray<NSString *> *> *)_visiblePaletteGroups {
+  NSSet<NSString *> *visible =
+      KKConditionalVisibleLaneLabels(_lanes, _currentValuesByLabel);
+  NSMutableArray<NSMutableArray<NSString *> *> *groups = [NSMutableArray array];
+  NSMutableDictionary<NSString *, NSMutableArray<NSString *> *> *byGroup =
+      [NSMutableDictionary dictionary];
+  NSMutableArray<NSString *> *legacy = nil;
+  for (KKLane *lane in _lanes) {
+    if (lane.valueType != KKLaneValueTypeColor || !lane.paletteLockable ||
+        ![visible containsObject:lane.label])
+      continue;
+    if (lane.paletteGroup.length) {
+      NSMutableArray<NSString *> *g = byGroup[lane.paletteGroup];
+      if (!g) {
+        g = [NSMutableArray array];
+        byGroup[lane.paletteGroup] = g;
+        [groups addObject:g];
+      }
+      [g addObject:lane.label];
+    } else {
+      if (!legacy) {
+        legacy = [NSMutableArray array];
+        [groups addObject:legacy];
+      }
+      [legacy addObject:lane.label];
+    }
+  }
+  return groups;
+}
+
 - (NSColor *)_currentColorForLabel:(NSString *)label {
   NSArray<NSNumber *> *v = _currentValuesByLabel[label];
   if (v.count < 3)
@@ -1186,28 +1220,42 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // Reroll the visible palette in `mode`. Locked swatches act as anchors that the
 // regenerated colours interpolate between (see KKPaletteGenerator).
 - (void)_generatePaletteWithMode:(NSInteger)mode {
-  NSArray<NSString *> *labels = [self _visiblePaletteLabels];
-  if (labels.count == 0)
-    return;
-  NSArray<NSColor *> *palette =
-      [KKPaletteGenerator paletteWithMode:(KKPaletteMode)mode
-                                    count:(NSInteger)labels.count
-                                   locked:[self _lockedArrayForLabels:labels]];
-  [self _commitPaletteColors:palette forLabels:labels];
+  NSMutableArray<NSString *> *allLabels = [NSMutableArray array];
+  NSMutableArray<NSColor *> *allColors = [NSMutableArray array];
+  for (NSArray<NSString *> *labels in [self _visiblePaletteGroups]) {
+    if (labels.count == 0)
+      continue;
+    // Each group is its own independent journey.
+    NSArray<NSColor *> *palette = [KKPaletteGenerator
+        paletteWithMode:(KKPaletteMode)mode
+                  count:(NSInteger)labels.count
+                 locked:[self _lockedArrayForLabels:labels]];
+    [allLabels addObjectsFromArray:labels];
+    [allColors addObjectsFromArray:palette];
+  }
+  if (allLabels.count)
+    [self _commitPaletteColors:allColors forLabels:allLabels];
 }
 
-// Nudge the current visible palette instead of rerolling (locked kept).
+// Nudge the current visible palette instead of rerolling (locked kept). Per
+// group, so each colour property stays its own palette.
 - (void)_refinePalette {
-  NSArray<NSString *> *labels = [self _visiblePaletteLabels];
-  if (labels.count == 0)
-    return;
-  NSMutableArray<NSColor *> *current = [NSMutableArray array];
-  for (NSString *label in labels)
-    [current addObject:[self _currentColorForLabel:label]];
-  NSArray<NSColor *> *palette = [KKPaletteGenerator
-      refinedPaletteFrom:current
-                  locked:[self _lockedArrayForLabels:labels]];
-  [self _commitPaletteColors:palette forLabels:labels];
+  NSMutableArray<NSString *> *allLabels = [NSMutableArray array];
+  NSMutableArray<NSColor *> *allColors = [NSMutableArray array];
+  for (NSArray<NSString *> *labels in [self _visiblePaletteGroups]) {
+    if (labels.count == 0)
+      continue;
+    NSMutableArray<NSColor *> *current = [NSMutableArray array];
+    for (NSString *label in labels)
+      [current addObject:[self _currentColorForLabel:label]];
+    NSArray<NSColor *> *palette = [KKPaletteGenerator
+        refinedPaletteFrom:current
+                    locked:[self _lockedArrayForLabels:labels]];
+    [allLabels addObjectsFromArray:labels];
+    [allColors addObjectsFromArray:palette];
+  }
+  if (allLabels.count)
+    [self _commitPaletteColors:allColors forLabels:allLabels];
 }
 
 - (void)applyDefaultsProvider:
@@ -1480,8 +1528,21 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // Make a row for each newly-constant lane (append for now) and refresh the
   // existing ones.
   for (KKLane *lane in lanes) {
-    if (_rowsByLabel[lane.label]) {
-      [_rowsByLabel[lane.label] applyLane:lane]; // reflect external edits
+    _KKStaticValueRow *existing = _rowsByLabel[lane.label];
+    // A reused row whose rendering STRUCTURE changed (value editor <-> palette
+    // mode-button bar, or code <-> non-code) can't be updated in place - drop
+    // it so it is remade below. Metadata-only changes (range, values) are
+    // handled by applyLane.
+    if (existing &&
+        (existing.isPaletteBar != lane.paletteGeneratorBar ||
+         existing.isCodeRow != (lane.valueType == KKLaneValueTypeCode))) {
+      [_stack removeArrangedSubview:existing];
+      [existing removeFromSuperview];
+      [_rowsByLabel removeObjectForKey:lane.label];
+      existing = nil;
+    }
+    if (existing) {
+      [existing applyLane:lane]; // reflect external edits (values + range)
       continue;
     }
     _KKStaticValueRow *row = [self _makeRowForLane:lane];
@@ -1502,6 +1563,13 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     [_stack removeArrangedSubview:row];
     [_stack insertArrangedSubview:row atIndex:pos++];
   }
+
+  // Refresh each row's template default (drives the reset button) so a changed
+  // default - e.g. a shader `// #color default=` edit - re-evaluates the reset
+  // affordance on the reused rows. Mirrors rebuildRowsWithLanes:.
+  if (_defaultsProvider)
+    for (NSString *label in _rowsByLabel)
+      _rowsByLabel[label].defaultValues = _defaultsProvider(label);
 
   // Rebuild the category nav so a tab disappears the moment its last constant
   // lane is moved to animated (and the selection falls back to a populated

@@ -333,6 +333,13 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   base.grain = (simd_float4){grain, grainSize, 0.0f, 0.0f};
   for (int c = 0; c < 4; c++)
     base.chanRes[c] = (simd_float4){256.0f, 256.0f, 1.0f, 0.0f};
+  // A shader's `// #color` properties -> the colour pool (bound after the fixed
+  // uniforms, same as the FCP render).
+  simd_float4 colorPool[KK_SHADER_COLOR_POOL];
+  int colorPoolN = ShaderFillColorPool(image, colorPool,
+                                       ^NSArray<NSNumber *> *(NSString *label) {
+                                         return [self valuesForLabel:label];
+                                       });
 
   id<MTLTexture> srcLin = [self _linearSourceView:source];
   // srcLin is linear (FCP's float source, or the sRGB view that linearises the
@@ -440,7 +447,7 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
       [be setViewport:(MTLViewport){0, 0, (double)bufW, (double)bufH, -1.0,
                                     1.0}];
       [be setRenderPipelineState:bufPS[k]];
-      [be setFragmentBytes:&bufU length:sizeof(bufU) atIndex:0];
+      KKBindGLSLUniforms(be, &bufU, colorPool, colorPoolN);
       KKBindCustomChannelTextures(be, bufTR[k], chArr, srcSampler, noiseTex,
                                   noiseSampler);
       [be drawPrimitives:MTLPrimitiveTypeTriangleStrip
@@ -490,7 +497,7 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
       [commandBuffer renderCommandEncoderWithDescriptor:irpd];
   [e setViewport:(MTLViewport){0, 0, W, H, -1.0, 1.0}];
   [e setRenderPipelineState:imagePS];
-  [e setFragmentBytes:&imgU length:sizeof(imgU) atIndex:0];
+  KKBindGLSLUniforms(e, &imgU, colorPool, colorPoolN);
   KKBindCustomChannelTextures(e, imgTR, imgCh, srcSampler, noiseTex,
                               noiseSampler);
   [e drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4];

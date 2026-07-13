@@ -37,6 +37,12 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ShaderPlugin (CustomUI)
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED;
 + (NSArray<KKLane *> *)availableLanes;
+/// Source-aware lane set: Core lanes + the dynamic lanes the given shader
+/// source declares (e.g. the `// #color` Colours group).
++ (NSArray<KKLane *> *)availableLanesForShaderSource:(NSString *)source;
+/// The current shader source from a timeline's "Shader" code lane (baked
+/// default when absent).
++ (NSString *)shaderSourceFromTimeline:(KKTimeline *)timeline;
 /// The OSC-visibility compound groups (empty for now - the legacy Origin /
 /// Scale / Rotation controls are gone pending shader-exposed OSCs). Single
 /// source of truth: createView wires these and parameterChanged refreshes from

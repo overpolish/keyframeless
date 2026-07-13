@@ -90,6 +90,10 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// YES for a `KKLaneValueTypeCode` row (a code editor). The host reuses these
 /// across a rows rebuild so the editor's live tab state isn't destroyed.
 @property(nonatomic, readonly) BOOL isCodeRow;
+/// YES for a palette-generator mode-button bar row (paletteGeneratorBar). A
+/// reused row whose structure flips (bar <-> value editor) must be remade, not
+/// updated in place.
+@property(nonatomic, readonly) BOOL isPaletteBar;
 /// New constant values for the lane (Float: [v]; Crop: [w,h,x,y]).
 @property(nonatomic, copy, nullable) void (^onValue)
     (NSArray<NSNumber *> *values);

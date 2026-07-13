@@ -26,6 +26,9 @@ typedef struct KKGLSLUniforms {
   simd_float4 extra;   // x=iTimeDelta, y=float(iFrame), z=flipY, w=encodeSRGB
   simd_float4 grain;   // x=grain 0..1, y=grainSize px (shared core film grain)
   simd_float4 chanRes[4]; // iChannelResolution[0..3]: xyz = px size, z = 1
+  // A shader's `// #color` properties append their vec4s to this block's std140
+  // tail (see KKWrapGLSL); the render supplies those bytes right after this
+  // struct at bind time.
 } KKGLSLUniforms;
 
 // Result of transpiling a GLSL image-shader body to a full MSL unit.
@@ -68,6 +71,13 @@ typedef struct KKGLSLUniforms {
 extern "C" {
 #endif
 KKGLSLTranspileResult *KKTranspileGLSL(NSString *userGLSL);
+
+// Bind the fixed KKGLSLUniforms at buffer(0), followed by a shader's `//
+// #color` property pool (the std140 tail: `poolCount` vec4s) as one contiguous
+// buffer. `poolCount <= 0` binds just the fixed struct.
+void KKBindGLSLUniforms(id<MTLRenderCommandEncoder> encoder,
+                        const KKGLSLUniforms *u, const simd_float4 *pool,
+                        int poolCount);
 
 // Buffer-pass variant: emits the raw `mainImage` output (all four components,
 // no grain / sRGB-encode / clamp / forced-opaque), because a Buffer A-D pass

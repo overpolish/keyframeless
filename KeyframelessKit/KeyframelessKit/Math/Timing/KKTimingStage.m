@@ -346,6 +346,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   _gradientShowsTypeAngle = tmpl.gradientShowsTypeAngle;
   _paletteLockable = tmpl.paletteLockable;
   _paletteGeneratorBar = tmpl.paletteGeneratorBar;
+  _paletteGroup = [tmpl.paletteGroup copy];
   // Slider-only bounds (decoupled from the value clamp) are display metadata
   // too: a rebuilt keypose / boundary lane must carry them or its slider falls
   // back to the wide componentMin/Max (e.g. draw-on Offset's unbounded field ->
@@ -436,6 +437,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.gradientShowsTypeAngle = _gradientShowsTypeAngle;
   c.paletteLockable = _paletteLockable;
   c.paletteGeneratorBar = _paletteGeneratorBar;
+  c.paletteGroup = [_paletteGroup copy];
   return c;
 }
 

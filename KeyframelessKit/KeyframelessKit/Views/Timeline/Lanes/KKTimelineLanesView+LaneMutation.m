@@ -216,6 +216,11 @@
   KKLane *lane = [existing copy];
   lane.codeString = code;
   [self _replaceLane:lane forLabel:label];
+  // Notify the host that the code changed (debounced upstream), so a host with
+  // source-derived lanes (e.g. a shader `// #color` directive) can re-derive
+  // and refresh the lane set live.
+  if (self.onCodeCommitted)
+    self.onCodeCommitted(code);
 }
 
 // Commit a tabbed code-lane edit: section 0 -> codeString (the Image pass), the
@@ -233,6 +238,8 @@
           ? [sections subarrayWithRange:NSMakeRange(1, sections.count - 1)]
           : nil;
   [self _replaceLane:lane forLabel:label];
+  if (self.onCodeCommitted)
+    self.onCodeCommitted(lane.codeString);
 }
 
 - (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label {

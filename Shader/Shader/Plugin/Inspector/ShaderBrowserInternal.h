@@ -5,13 +5,15 @@
 
 // Private declarations shared between the Shader browser's parts: the item
 // model, the card view, its field subclasses, and the owner protocol. Not a
-// public header - only ShaderBrowserView.m / ShaderCard.m / ShaderBrowserFields.m
-// include it.
+// public header - only ShaderBrowserView.m / ShaderCard.m /
+// ShaderBrowserFields.m include it.
 
 #import <Cocoa/Cocoa.h>
 
 @class ShaderCatalogEntry;
 @class KKCommunityEntry;
+
+NS_ASSUME_NONNULL_BEGIN
 
 /// The card's name-row height. Both the card layout and the grid's per-card
 /// height need it, so it's declared here and defined in each.
@@ -30,7 +32,8 @@ typedef NS_ENUM(NSInteger, _ShaderItemKind) {
 @property(nonatomic, copy) NSString *name;
 @property(nonatomic, copy) NSString *author;
 @property(nonatomic, strong, nullable) NSImage *thumbnail;
-@property(nonatomic) BOOL updateAvailable; // installed + remote has newer version
+@property(nonatomic)
+    BOOL updateAvailable; // installed + remote has newer version
 @property(nonatomic, strong, nullable) ShaderCatalogEntry *localEntry;
 @property(nonatomic, strong, nullable) KKCommunityEntry *communityEntry;
 @end
@@ -72,3 +75,5 @@ typedef NS_ENUM(NSInteger, _ShaderItemKind) {
 - (void)setHovered:(BOOL)hovered;
 - (void)setThumbnail:(NSImage *)image;
 @end
+
+NS_ASSUME_NONNULL_END

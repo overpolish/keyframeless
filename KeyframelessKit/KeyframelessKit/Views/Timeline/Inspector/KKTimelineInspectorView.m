@@ -323,6 +323,18 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     KKTimelineInspectorView *strong = weak;
     strong->_resetButton.zoomed = zoomed;
   };
+  // Live source-derived lanes: on a code commit, re-derive the available-lanes
+  // set (if the host provided a provider) and swap it into the rows live.
+  _basicView.onCodeCommitted = ^(NSString *code) {
+    KKTimelineInspectorView *strong = weak;
+    if (!strong || !strong.availableLanesProvider)
+      return;
+    NSArray<KKLane *> *lanes = strong.availableLanesProvider(code);
+    if (!lanes)
+      return;
+    strong->_availableLanes = [lanes copy];
+    [strong->_basicView updateAvailableLanes:lanes];
+  };
   _basicView.onBoundaryPreviewNeedsRender = ^{
     if (weak.onBoundaryPreviewNeedsRender)
       weak.onBoundaryPreviewNeedsRender();
@@ -535,6 +547,26 @@ const CGFloat kMBCheckboxTrailing = 23.0;
 }
 
 - (void)applyTimeline:(KKTimeline *)timeline {
+  // Re-derive source-declared lanes from the timeline's code lane, so a shader
+  // SWAP / undo updates the lane set the same as a live directive edit (which
+  // routes through onCodeCommitted). Cached on the source so this is a no-op
+  // when the code didn't change (applyTimeline runs on ordinary edits too).
+  if (_availableLanesProvider) {
+    NSString *code = @"";
+    for (KKLane *l in timeline.lanes)
+      if (l.valueType == KKLaneValueTypeCode && l.codeString.length) {
+        code = l.codeString;
+        break;
+      }
+    if (![code isEqualToString:(_lastDerivedCode ?: @"")]) {
+      _lastDerivedCode = [code copy];
+      NSArray<KKLane *> *lanes = _availableLanesProvider(code);
+      if (lanes) {
+        _availableLanes = [lanes copy];
+        [_basicView updateAvailableLanes:lanes];
+      }
+    }
+  }
   [_basicView applyTimeline:timeline];
   _constantsButton.hidden = !_basicView.hasUnoptedLanes;
   [_detachedView applyTimeline:timeline];
