@@ -4,7 +4,8 @@
  */
 
 #import "ShaderLocalCatalog.h"
-#import "Constants.h" // ShaderCustomDefaultShaderSource
+#import "Constants.h"       // ShaderCustomDefaultShaderSource
+#import "KKGLSLFormatter.h" // auto-format sections on publish
 #import <KeyframelessKit/KeyframelessKit.h>
 
 static NSMutableDictionary<NSString *, NSImage *> *sBuiltinThumbnails;
@@ -316,8 +317,25 @@ static NSString *const kFavKey = @"ShaderFavorites";
     NSData *data = [NSData
         dataWithContentsOfFile:[entry.folderPath
                                    stringByAppendingPathComponent:file]];
-    if (data)
-      files[file] = data;
+    if (!data)
+      continue;
+    // Auto-format GLSL sections on publish so community shaders are clean and
+    // consistent whether or not the author ran Format (and this catches
+    // entries saved before the Format button existed). Non-code payloads
+    // (preview.png) and any undecodable source ship unchanged; KKFormatGLSL
+    // itself returns the input untouched on an astyle error, and is idempotent
+    // so re-publishing a version is stable.
+    if ([file.pathExtension isEqualToString:@"glsl"]) {
+      NSString *code = [[NSString alloc] initWithData:data
+                                             encoding:NSUTF8StringEncoding];
+      if (code.length) {
+        NSData *formatted =
+            [KKFormatGLSL(code) dataUsingEncoding:NSUTF8StringEncoding];
+        if (formatted)
+          data = formatted;
+      }
+    }
+    files[file] = data;
   }
   return files;
 }

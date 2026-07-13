@@ -186,6 +186,12 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// -seededFrom: like a piece of static config, not clip data.
 @property(nonatomic, copy, nullable) NSString *_Nullable (^codeValidator)
     (NSString *code, NSInteger *outLine);
+/// For a `KKLaneValueTypeCode` lane: optional formatter powering a "Format"
+/// button in the editor's tab strip. Given a section's text, return the
+/// reformatted text (nil / unchanged = no-op). Not serialized (a block), so it
+/// is carried template->reconciled in -seededFrom: like `codeValidator`.
+@property(nonatomic, copy, nullable) NSString *_Nullable (^codeFormatter)
+    (NSString *code);
 /// For a `KKLaneValueTypeCode` lane: optional extra named code sections beyond
 /// `codeString` (the primary/Image section), presented as tabs in the editor.
 /// Each entry is @{ @"name": display, @"code": source }. nil/empty = a single

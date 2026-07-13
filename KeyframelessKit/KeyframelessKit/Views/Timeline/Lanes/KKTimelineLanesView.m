@@ -728,7 +728,9 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       fixed.codeTabCatalog =
           tmpl.codeTabCatalog; // static config, not persisted
       fixed.codeValidator =
-          tmpl.codeValidator;                 // static config, never persisted
+          tmpl.codeValidator; // static config, never persisted
+      fixed.codeFormatter =
+          tmpl.codeFormatter;                 // static config, never persisted
       fixed.codeSavable = tmpl.codeSavable;   // static config, never persisted
       [fixed kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
       lanes[presentIdx] = fixed;
@@ -763,6 +765,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.codeTabs = tmpl.codeTabs; // any added extra sections (empty default)
     lane.codeTabCatalog = tmpl.codeTabCatalog; // the "+" menu catalog
     lane.codeValidator = tmpl.codeValidator;
+    lane.codeFormatter = tmpl.codeFormatter;
     lane.codeSavable = tmpl.codeSavable;
     [lane kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
     lane.enabled = NO; // constant until the dropdown makes it animatable

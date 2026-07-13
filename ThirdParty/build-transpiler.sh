@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Build glslang + SPIRV-Cross as static libs and merge them into a single fat
-# archive (libkktranspiler.a) plus a headers tree, for linking the runtime
-# GLSL->MSL transpiler into the Mesh XPC service.
+# Build glslang + SPIRV-Cross + astyle as static libs and merge them into a
+# single fat archive (libkktranspiler.a) plus a headers tree, for linking the
+# runtime GLSL->MSL transpiler and the GLSL code formatter into the Shader XPC
+# service.
 #
 # Usage: ./build-transpiler.sh [arm64|x86_64|universal]   (default: arm64)
 #
@@ -58,9 +59,18 @@ cmake -S "$HERE/SPIRV-Cross" -B "$BUILD/spirv-cross" -G Ninja "${CMAKE_COMMON[@]
   -DSPIRV_CROSS_ENABLE_UTIL=ON
 cmake --build "$BUILD/spirv-cross"
 
+# astyle: the GLSL code formatter. BUILD_STATIC_LIBS defines ASTYLE_LIB, which
+# exposes the extern "C" AStyleMain entry the KKGLSLFormatter bridge links
+# against (the bridge self-declares the C ABI, so no headers are harvested).
+echo "==> Building astyle ($ARCHS)"
+cmake -S "$HERE/astyle/AStyle" -B "$BUILD/astyle" -G Ninja "${CMAKE_COMMON[@]}" \
+  -DBUILD_STATIC_LIBS=ON \
+  -DBUILD_JAVA_LIBS=OFF
+cmake --build "$BUILD/astyle" --target astyle
+
 echo "==> Merging static archives"
 ARCHIVES=()
-while IFS= read -r a; do ARCHIVES+=("$a"); done < <(find "$BUILD/glslang" "$BUILD/spirv-cross" -name '*.a')
+while IFS= read -r a; do ARCHIVES+=("$a"); done < <(find "$BUILD/glslang" "$BUILD/spirv-cross" "$BUILD/astyle" -name '*.a')
 printf '   %s\n' "${ARCHIVES[@]}"
 libtool -static -o "$OUT_LIB/libkktranspiler.a" "${ARCHIVES[@]}"
 

@@ -12,6 +12,7 @@
 #import <KeyframelessKit/KKTimingStage.h>
 
 #import "Constants.h"        // ShaderCustomDefaultShaderSource
+#import "KKGLSLFormatter.h"  // Format button (XPC-only includers)
 #import "KKGLSLTranspiler.h" // live shader validation (XPC-only includers)
 #import "ShaderColorSpace.h"
 #import "ShaderLocalized.h" // RLoc
@@ -162,6 +163,12 @@ static inline NSArray<KKLane *> *ShaderBuildAvailableLanes(void) {
                                                  @"Shader error with line."),
                                             (long)line, msg]
                : msg;
+  };
+  // Format button: reformat the section to the house style (astyle, the
+  // SPIRV-Cross .clang-format translated). Pure and self-contained; leaves the
+  // text unchanged if astyle errors.
+  shader.codeFormatter = ^NSString *(NSString *code) {
+    return KKFormatGLSL(code);
   };
   [lanes addObject:shader];
 

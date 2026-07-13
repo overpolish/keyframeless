@@ -114,6 +114,7 @@
 				Plugin/OSC/OSC.m,
 				"Plugin/OSC/ShaderOSC+MouseHandlers.m",
 				Plugin/OSC/ShaderOSCSnapshot.m,
+				Plugin/Render/KKGLSLFormatter.mm,
 				Plugin/Render/KKGLSLTranspiler.mm,
 				"Plugin/Render/Plugin+Render.m",
 				Plugin/Render/Shader.metal,

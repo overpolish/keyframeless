@@ -252,6 +252,7 @@ NSNotificationName const KKCodeEditorReloadNotification =
   NSLayoutConstraint *_tabBarHeight;
 }
 @synthesize codeValidator = _codeValidator;
+@synthesize codeFormatter = _codeFormatter;
 
 - (instancetype)initWithFrame:(NSRect)frame {
   self = [super initWithFrame:frame];
@@ -575,6 +576,11 @@ NSNotificationName const KKCodeEditorReloadNotification =
   [self _runValidator];
 }
 
+- (void)setCodeFormatter:(NSString * (^)(NSString *))codeFormatter {
+  _codeFormatter = [codeFormatter copy];
+  [self _rebuildTabBar]; // show / hide the Format button
+}
+
 - (void)setSections:
     (NSArray<NSDictionary<NSString *, NSString *> *> *)sections {
   if (sections.count == 0)
@@ -641,9 +647,15 @@ NSNotificationName const KKCodeEditorReloadNotification =
   for (NSString *n in _addableTabNames)
     if (![_sectionNames containsObject:n])
       [addable addObject:n];
-  BOOL show = (_sectionNames.count > 1) || (addable.count > 0);
+  BOOL show = (_sectionNames.count > 1) || (addable.count > 0) ||
+              (_codeFormatter != nil);
   _tabBar.hidden = !show;
   _tabBarHeight.constant = show ? 22.0 : 0.0;
+  // Fill only when the Format button is present, so a spacer can push it to the
+  // trailing edge; otherwise gravity-areas keeps the tabs left-packed at their
+  // natural size.
+  _tabBar.distribution = _codeFormatter ? NSStackViewDistributionFill
+                                        : NSStackViewDistributionGravityAreas;
   if (!show)
     return;
   for (NSInteger i = 0; i < (NSInteger)_sectionNames.count; i++) {
@@ -678,6 +690,47 @@ NSNotificationName const KKCodeEditorReloadNotification =
                                                   colorWithAlphaComponent:0.6]
                                          size:13.0
                                        weight:NSFontWeightMedium]];
+  if (_codeFormatter) {
+    // A greedy spacer (lowest hugging in a fill stack) eats the slack so the
+    // Format button sits at the trailing edge, whatever the tab count.
+    NSView *spacer = [NSView new];
+    [spacer setContentHuggingPriority:1
+                       forOrientation:NSLayoutConstraintOrientationHorizontal];
+    [_tabBar addArrangedSubview:spacer];
+    NSButton *fmt =
+        [self _stripButton:KKLoc(@"Format", @"Code editor: reformat button.")
+                    action:@selector(_formatClicked:)
+                       tag:-2
+                     color:[KKCodeText() colorWithAlphaComponent:0.6]
+                      size:9.5
+                    weight:NSFontWeightMedium];
+    fmt.toolTip = KKLoc(@"Reformat the code to the house style",
+                        @"Code editor: Format button tooltip.");
+    [_tabBar addArrangedSubview:fmt];
+  }
+}
+
+// Run the owner's formatter over the active section and replace the editor
+// content with the result, as a single undoable edit. The change flows through
+// the normal textDidChange debounce (stash / validate / commit), so the host
+// persists the formatted text just like a typed edit. No-op when the formatter
+// returns nil or text that is already formatted.
+- (void)_formatClicked:(id)sender {
+  if (!_codeFormatter)
+    return;
+  NSString *current = [_textView.string copy];
+  NSString *formatted = _codeFormatter(current);
+  if (formatted.length == 0 || [formatted isEqualToString:current])
+    return;
+  NSRange full = NSMakeRange(0, current.length);
+  if (![_textView shouldChangeTextInRange:full replacementString:formatted])
+    return;
+  NSUInteger caret = _textView.selectedRange.location;
+  [_textView replaceCharactersInRange:full withString:formatted];
+  [_textView didChangeText]; // fires textDidChange: -> debounce -> commit
+  NSUInteger newLen = _textView.string.length;
+  _textView.selectedRange = NSMakeRange(MIN(caret, newLen), 0);
+  [self _runValidator]; // snappier than waiting for the debounce
 }
 
 - (void)_tabClicked:(NSButton *)sender {

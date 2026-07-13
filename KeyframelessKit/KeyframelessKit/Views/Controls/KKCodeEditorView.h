@@ -52,6 +52,15 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) NSString *_Nullable (^codeValidator)
     (NSString *code, NSInteger *outLine);
 
+/// Optional formatter. When set, a "Format" button appears at the trailing end
+/// of the top tab strip; pressing it passes the active section's text through
+/// this block and replaces the editor content with the result (or no-ops when
+/// the block returns nil / unchanged text). The replacement is a single
+/// undoable edit and commits through `onChange` / `onSectionsChange` like a
+/// normal edit. Runs on the main thread; keep it reasonably quick.
+@property(nonatomic, copy, nullable) NSString *_Nullable (^codeFormatter)
+    (NSString *code);
+
 /// When YES, shows a save bar under the editor: a name field + Save button
 /// (disabled until a name is entered). Pressing Save posts
 /// `KKCodeEditorSaveRequestedNotification` (declared in KKTimingStage.h, the

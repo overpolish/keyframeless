@@ -790,6 +790,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     editor.translatesAutoresizingMaskIntoConstraints = NO;
     editor.codeValidator =
         lane.codeValidator; // set before text so it validates
+    editor.codeFormatter = lane.codeFormatter;
     editor.savable = lane.codeSavable;
     __weak typeof(self) weak = self;
     if (lane.codeTabs.count > 0 || lane.codeTabCatalog.count > 0) {
