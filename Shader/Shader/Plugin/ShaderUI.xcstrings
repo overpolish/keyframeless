@@ -253,6 +253,48 @@
         }
       }
     },
+    "Control \"%@\": osc={..} needs one x/y/z axis per value: a #angle float, or a vec2/vec3 #multi with a matching axis count": {
+      "comment": "Shader rotate-OSC type error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerung „%@“: osc={..} benötigt eine x/y/z-Achse pro Wert: ein #angle-float oder ein vec2-/vec3-#multi mit passender Achsenanzahl"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control «%@»: osc={..} necesita un eje x/y/z por valor: un float #angle, o un #multi vec2/vec3 con un número de ejes coincidente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrôle « %@ » : osc={..} nécessite un axe x/y/z par valeur : un float #angle, ou un #multi vec2/vec3 avec un nombre d’axes correspondant"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール「%@」: osc={..} は値ごとに 1 つの x/y/z 軸が必要です: #angle float、または軸数が一致する vec2/vec3 の #multi"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 \"%@\": osc={..}에는 값마다 하나의 x/y/z 축이 필요합니다: #angle float 또는 축 개수가 일치하는 vec2/vec3 #multi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件“%@”：osc={..} 每个值需要一个 x/y/z 轴：#angle float，或轴数量匹配的 vec2/vec3 #multi"
+          }
+        }
+      }
+    },
     "Drag the centre handle": {
       "comment": "Help shortcut keys: origin handle.",
       "extractionState": "manual",

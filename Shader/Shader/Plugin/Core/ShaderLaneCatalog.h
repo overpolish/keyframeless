@@ -133,6 +133,20 @@ static inline void ShaderAppendColorLanes(NSMutableArray<KKLane *> *lanes,
 // float lane is an animatable slider bounded by min/max; a choice lane is a
 // structural (non-animatable, integer) radio pill from options=. Value flows to
 // the shader via the pool tail (ShaderFillScalarPool), same as colours.
+/// The standard 3D-axis inspector tint (matching KKRotationLaneWithLabel /
+/// Motion / Blender): X=red, Y=green, Z=blue. Used so a rotate OSC lane's dials
+/// and its KKRotationOSC rings agree.
+static inline NSColor *ShaderRotationAxisColor(char axis) {
+  switch (axis) {
+  case 'x':
+    return [NSColor colorWithSRGBRed:0.95 green:0.35 blue:0.35 alpha:1.0];
+  case 'y':
+    return [NSColor colorWithSRGBRed:0.40 green:0.85 blue:0.45 alpha:1.0];
+  default:
+    return [NSColor colorWithSRGBRed:0.40 green:0.60 blue:0.95 alpha:1.0];
+  }
+}
+
 static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
                                            NSString *source) {
   ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
@@ -200,6 +214,48 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       lane.componentMax = @[ @1.0 ];
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                             values:@[ @(p->fdefault) ]]];
+    } else if (ShaderScalarOSCIsRotate(p)) {
+      // A rotation OSC lane: one euler-angle (degrees) component per active
+      // axis, in CANONICAL X<Y<Z order (KKRotationOSC's contract - the gizmo
+      // maps enabledAxes bits to components in that order). The braced order
+      // (which axis drives which shader vec component) is applied later by the
+      // transpiler swizzle, not here. Circular + unconstrained (accumulates
+      // past 360), tinted red/green/blue by axis so the inspector dials and the
+      // KKRotationOSC rings agree. A single-axis `#angle` gets one dial; a
+      // vec2/vec3 `#multi` gets N. `default=` (parsed in braced order) is
+      // permuted back to canonical order.
+      lane.valueType = KKLaneValueTypeAngle;
+      lane.animatable = YES;
+      lane.componentMin = @[];
+      lane.componentMax = @[];
+      NSMutableArray<NSString *> *labels = [NSMutableArray array];
+      NSMutableArray<NSString *> *units = [NSMutableArray array];
+      NSMutableArray<NSColor *> *colors = [NSMutableArray array];
+      NSMutableArray<NSNumber *> *defs = [NSMutableArray array];
+      const char *canon = "xyz";
+      for (int a = 0; a < 3; a++) {
+        char axis = canon[a];
+        // The braced-order slot this canonical axis occupies (its shader
+        // component), or -1 if the axis isn't part of this control.
+        int slot = -1;
+        for (int k = 0; k < p->oscAxisCount; k++)
+          if (p->oscAxes[k] == axis) {
+            slot = k;
+            break;
+          }
+        if (slot < 0)
+          continue;
+        [labels
+            addObject:[NSString stringWithFormat:@"%c", (char)toupper(axis)]];
+        [units addObject:@"°"];
+        [colors addObject:ShaderRotationAxisColor(axis)];
+        [defs addObject:@(p->isMulti ? p->mdef[slot] : p->fdefault)];
+      }
+      lane.componentLabels = labels;
+      lane.componentUnits = units;
+      lane.componentLabelColors = colors;
+      lane.autoSizesComponentLabels = YES;
+      [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:defs]];
     } else if (p->isAngle) {
       lane.valueType = KKLaneValueTypeAngle; // circular knob, degrees
       lane.animatable = YES;
@@ -430,22 +486,29 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource) {
                                @"Shader duplicate-uniform validation error."),
                            dupU];
     // An OSC opt-in on an incompatible uniform: osc=point needs a vec2, a
-    // radial OSC (osc=ring / osc=box) needs a float/int slider or a vec2 #multi
-    // (a radial extent has no meaning on anything else).
-    BOOL badRing = NO;
-    NSString *badOSC = ShaderFirstInvalidOSC(code, &badRing);
-    if (badOSC.length)
-      return badRing ? [NSString stringWithFormat:
-                                     RLoc(@"Control \"%@\": osc=ring / osc=box "
-                                          @"needs a float, percent, int, or "
-                                          @"2-field (vec2) #multi uniform",
-                                          @"Shader radial-OSC type error."),
-                                     badOSC]
-                     : [NSString stringWithFormat:
-                                     RLoc(@"Control \"%@\": osc=point needs a "
-                                          @"vec2 uniform",
-                                          @"Shader point-OSC type error."),
-                                     badOSC];
+    // radial OSC (osc=ring / osc=box) needs a float/int slider or a vec2
+    // #multi, a rotate osc={..} needs one distinct x/y/z axis per value
+    // component (a radial extent / rotation has no meaning on anything else).
+    int badKind = ShaderOSCErrorPoint;
+    NSString *badOSC = ShaderFirstInvalidOSC(code, &badKind);
+    if (badOSC.length) {
+      NSString *fmt;
+      if (badKind == ShaderOSCErrorRadial)
+        fmt =
+            RLoc(@"Control \"%@\": osc=ring / osc=box needs a float, percent, "
+                 @"int, or 2-field (vec2) #multi uniform",
+                 @"Shader radial-OSC type error.");
+      else if (badKind == ShaderOSCErrorRotate)
+        fmt =
+            RLoc(@"Control \"%@\": osc={..} needs one x/y/z axis per value: a "
+                 @"#angle float, or a vec2/vec3 #multi with a matching axis "
+                 @"count",
+                 @"Shader rotate-OSC type error.");
+      else
+        fmt = RLoc(@"Control \"%@\": osc=point needs a vec2 uniform",
+                   @"Shader point-OSC type error.");
+      return [NSString stringWithFormat:fmt, badOSC];
+    }
     KKGLSLTranspileResult *r = KKTranspileGLSL(code);
     if (r.msl)
       return nil; // compiled clean

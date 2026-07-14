@@ -286,10 +286,15 @@ typedef struct ShaderScalarProp {
   // On-screen control opt-in (`osc` attribute). oscKind: "" = none, "point"
   // (position handle, #point), "ring"/"box" (radial-extent OSC editing the
   // normalized value as an ellipse ring or a rectangle box,
-  // #float/#percent/#int/#multi), "scale", "rotate" (#angle osc).
-  // oscAxis: 'x'/'y'/'z' ring plane for rotate (default 'z').
+  // #float/#percent/#int/#multi), "scale", "rotate" (#angle / vec2|vec3 #multi
+  // osc). oscAxis: 'x'/'y'/'z' ring plane for a legacy single-axis rotate
+  // (default 'z'). oscAxes/oscAxisCount: the ORDERED active-axis set for a
+  // multi-axis rotate (`osc={z}`/`osc={y,x}`/`osc={z,x,y}`) - the Nth listed
+  // axis drives value component N, so order is meaningful.
   char oscKind[16];
   char oscAxis;
+  char oscAxes[4]; // ordered axis chars ("z"/"yx"/"zxy"), NUL-terminated
+  int oscAxisCount;
   char uniformType[8]; // declared GLSL type: float/int/vec2/vec3/vec4/bool
   double rcenterx, rcentery; // ring OSC center, object space 0..1 (default 0.5)
   char linkName[64];     // ring OSC: `link=<uniform>` -> centre follows that
@@ -319,6 +324,63 @@ static inline BOOL ShaderScalarRadialOSC(const ShaderScalarProp *p) {
 }
 static inline BOOL ShaderScalarOSCIsBox(const ShaderScalarProp *p) {
   return strcmp(p->oscKind, "box") == 0;
+}
+
+/// A multi-axis rotation OSC (`osc={z}` / `osc={y,x}` / `osc={z,x,y}`): a
+/// KKRotationOSC ring gizmo editing one euler angle (degrees) per listed axis.
+/// The listed order maps axis N -> value component N. A single-axis rotate on a
+/// `#angle` float; a 2-/3-axis rotate on a vec2/vec3 `#multi`.
+static inline BOOL ShaderScalarOSCIsRotate(const ShaderScalarProp *p) {
+  return strcmp(p->oscKind, "rotate") == 0;
+}
+
+/// The value-component count a rotate OSC expects: 1 for a `#angle` float, else
+/// the `#multi` field count.
+static inline int ShaderScalarRotateArity(const ShaderScalarProp *p) {
+  return p->isMulti ? p->fieldCount : 1;
+}
+
+/// The active-axis bitmask (bit 0=X, 1=Y, 2=Z, matching KKRotationAxisX/Y/Z) a
+/// rotate OSC drives, from its ordered `osc={..}` set. 0 when none are listed;
+/// callers building a gizmo default a 0 mask to Z.
+static inline int ShaderScalarRotationAxisMask(const ShaderScalarProp *p) {
+  int mask = 0;
+  for (int k = 0; k < p->oscAxisCount; k++) {
+    char a = p->oscAxes[k];
+    if (a == 'x')
+      mask |= (1 << 0);
+    else if (a == 'y')
+      mask |= (1 << 1);
+    else if (a == 'z')
+      mask |= (1 << 2);
+  }
+  return mask;
+}
+
+/// The GLSL swizzle mapping a rotate OSC's CANONICAL-order lane components
+/// (packed X<Y<Z into the pool vec4's .xyz) onto the shader vec's braced order
+/// (shader component N = the axis listed Nth). E.g. `osc={y,x}` -> "yx",
+/// `osc={z,x,y}` -> "zxy", a single axis -> "x". The transpiler folds this into
+/// the `#define` so `uRot.x` is the first-listed axis's angle.
+static inline NSString *
+ShaderRotateCanonicalSwizzle(const ShaderScalarProp *p) {
+  const char *canon = "xyz";
+  NSMutableString *sw = [NSMutableString string];
+  for (int i = 0; i < p->oscAxisCount; i++) {
+    char axis = p->oscAxes[i];
+    int pos = 0; // count of present axes that sort before `axis` in X<Y<Z
+    for (int a = 0; a < 3; a++) {
+      if (canon[a] == axis)
+        break;
+      for (int k = 0; k < p->oscAxisCount; k++)
+        if (p->oscAxes[k] == canon[a]) {
+          pos++;
+          break;
+        }
+    }
+    [sw appendFormat:@"%c", canon[pos]];
+  }
+  return sw.length ? sw : @"x";
 }
 
 static inline double ShaderAttrDouble(NSString *s, NSString *pattern,
@@ -417,16 +479,40 @@ static inline int ShaderParseScalarProps(NSString *source,
             firstMatchInString:attrs
                        options:0
                          range:NSMakeRange(0, attrs.length)]) {
-      NSTextCheckingResult *ov = [[NSRegularExpression
-          regularExpressionWithPattern:@"\\bosc\\s*=\\s*(\\w+)"
+      // A braced axis set (`osc={z,x,y}`) is a multi-axis rotate: the listed
+      // order maps axis N -> value component N. Parse it before the plain
+      // `osc=<word>` form (which can't match `{...}`).
+      NSTextCheckingResult *bm = [[NSRegularExpression
+          regularExpressionWithPattern:@"\\bosc\\s*=\\s*\\{([^}]*)\\}"
                                options:0
                                  error:nil]
           firstMatchInString:attrs
                      options:0
                        range:NSMakeRange(0, attrs.length)];
-      NSString *val = (ov && [ov rangeAtIndex:1].location != NSNotFound)
-                          ? [attrs substringWithRange:[ov rangeAtIndex:1]]
-                          : nil;
+      NSString *val = nil;
+      if (bm && [bm rangeAtIndex:1].location != NSNotFound) {
+        NSString *set = [attrs substringWithRange:[bm rangeAtIndex:1]];
+        int ac = 0;
+        for (NSUInteger i = 0; i < set.length && ac < 3; i++) {
+          unichar c = (unichar)tolower([set characterAtIndex:i]);
+          if (c == 'x' || c == 'y' || c == 'z')
+            p.oscAxes[ac++] = (char)c;
+        }
+        p.oscAxes[ac] = 0;
+        p.oscAxisCount = ac;
+        val = @"rotate";
+      } else {
+        NSTextCheckingResult *ov = [[NSRegularExpression
+            regularExpressionWithPattern:@"\\bosc\\s*=\\s*(\\w+)"
+                                 options:0
+                                   error:nil]
+            firstMatchInString:attrs
+                       options:0
+                         range:NSMakeRange(0, attrs.length)];
+        val = (ov && [ov rangeAtIndex:1].location != NSNotFound)
+                  ? [attrs substringWithRange:[ov rangeAtIndex:1]]
+                  : nil;
+      }
       NSString *kindStr =
           val ? val.lowercaseString
               : (p.isPoint ? @"point" : (p.isAngle ? @"rotate" : @""));
@@ -441,9 +527,18 @@ static inline int ShaderParseScalarProps(NSString *source,
       if (am && [am rangeAtIndex:1].location != NSNotFound)
         p.oscAxis = (char)tolower([[attrs
             substringWithRange:[am rangeAtIndex:1]] characterAtIndex:0]);
-      // A radial OSC (ring or box) is placed at `center=x,y` (object space
-      // 0..1) unless it is linked to a #point. Default is the clip centre.
-      if (ShaderScalarRadialOSC(&p)) {
+      // A bare `#angle osc` / `osc=rotate` / `axis=` (no braced set) defaults
+      // to a single-axis rotate on `oscAxis`.
+      if (ShaderScalarOSCIsRotate(&p) && p.oscAxisCount == 0) {
+        p.oscAxes[0] = p.oscAxis;
+        p.oscAxes[1] = 0;
+        p.oscAxisCount = 1;
+      }
+      // A radial (ring / box) or rotate OSC is placed at `center=x,y` (object
+      // space 0..1) unless it is `link=`ed to a #point. Default is the clip
+      // centre. Rotate shares the same placement so several rotation gizmos can
+      // sit at distinct points instead of stacking at the middle.
+      if (ShaderScalarRadialOSC(&p) || ShaderScalarOSCIsRotate(&p)) {
         NSTextCheckingResult *cm = [[NSRegularExpression
             regularExpressionWithPattern:
                 @"\\bcenter\\s*=\\s*\"?(-?[0-9.]+)\\s*,\\s*(-?[0-9.]+)\"?"
@@ -458,8 +553,8 @@ static inline int ShaderParseScalarProps(NSString *source,
           p.rcentery =
               [attrs substringWithRange:[cm rangeAtIndex:2]].doubleValue;
         }
-        // `link=<uniform>`: the ring centre tracks that #point's live value
-        // instead of the fixed `center=`.
+        // `link=<uniform>`: the centre tracks that #point's live value instead
+        // of the fixed `center=`.
         NSTextCheckingResult *lk = [[NSRegularExpression
             regularExpressionWithPattern:@"\\blink\\s*=\\s*(\\w+)"
                                  options:0
@@ -723,15 +818,20 @@ static inline NSString *ShaderFirstDuplicateUniform(NSString *source) {
   return nil;
 }
 
+/// The `osc` kinds a directive can carry, for validation-error messaging.
+typedef enum ShaderOSCErrorKind {
+  ShaderOSCErrorPoint = 0,  // osc=point on a non-vec2
+  ShaderOSCErrorRadial = 1, // osc=ring / osc=box on an unsupported type
+  ShaderOSCErrorRotate = 2, // osc={..} axis set mismatched to the value arity
+} ShaderOSCErrorKind;
+
 /// The first directive whose `osc` kind is incompatible with its uniform type,
-/// or nil when every OSC opt-in is valid. `osc=point` needs a `vec2`;
-/// `osc=ring` needs a single-value numeric slider (`float`/`int`, i.e.
-/// #float/#percent/#int)
-/// - a radius has no meaning for a vec2/vec3/vec4, a bool, a choice or a seed.
-/// `outIsRing` distinguishes the two cases so the caller picks the right
-/// message.
-static inline NSString *ShaderFirstInvalidOSC(NSString *source,
-                                              BOOL *outIsRing) {
+/// or nil when every OSC opt-in is valid. `osc=point` needs a `vec2`; a radial
+/// `osc=ring`/`osc=box` needs a single numeric slider (`float`/`int`) or a
+/// 2-field vec2 `#multi`; a rotate `osc={..}` needs one distinct x/y/z axis per
+/// value component (a `#angle` float = 1 axis, a vec2/vec3 `#multi` = 2/3).
+/// `outKind` (a ShaderOSCErrorKind) tells the caller which message to show.
+static inline NSString *ShaderFirstInvalidOSC(NSString *source, int *outKind) {
   if (!source.length)
     return nil;
   ShaderScalarProp sp[KK_SHADER_MAX_SCALAR_PROPS];
@@ -741,8 +841,8 @@ static inline NSString *ShaderFirstInvalidOSC(NSString *source,
   for (int i = 0; i < ns; i++) {
     if (strcmp(sp[i].oscKind, "point") == 0 &&
         strcmp(sp[i].uniformType, "vec2") != 0) {
-      if (outIsRing)
-        *outIsRing = NO;
+      if (outKind)
+        *outKind = ShaderOSCErrorPoint;
       return @(sp[i].name);
     }
     if (ShaderScalarRadialOSC(&sp[i])) {
@@ -750,8 +850,27 @@ static inline NSString *ShaderFirstInvalidOSC(NSString *source,
                       strcmp(sp[i].uniformType, "int") == 0;
       BOOL multiOK = sp[i].isMulti && strcmp(sp[i].uniformType, "vec2") == 0;
       if (!ShaderScalarRingEligible(&sp[i]) || !(scalarOK || multiOK)) {
-        if (outIsRing)
-          *outIsRing = YES;
+        if (outKind)
+          *outKind = ShaderOSCErrorRadial;
+        return @(sp[i].name);
+      }
+    }
+    if (ShaderScalarOSCIsRotate(&sp[i])) {
+      int arity = ShaderScalarRotateArity(&sp[i]);
+      // One distinct axis per component: #angle float = 1, vec2 = 2, vec3 = 3.
+      BOOL typeOK =
+          (sp[i].isAngle && strcmp(sp[i].uniformType, "float") == 0) ||
+          (sp[i].isMulti && (strcmp(sp[i].uniformType, "vec2") == 0 ||
+                             strcmp(sp[i].uniformType, "vec3") == 0));
+      BOOL distinct =
+          (sp[i].oscAxisCount == 1) ||
+          (sp[i].oscAxisCount == 2 && sp[i].oscAxes[0] != sp[i].oscAxes[1]) ||
+          (sp[i].oscAxisCount == 3 && sp[i].oscAxes[0] != sp[i].oscAxes[1] &&
+           sp[i].oscAxes[0] != sp[i].oscAxes[2] &&
+           sp[i].oscAxes[1] != sp[i].oscAxes[2]);
+      if (!typeOK || sp[i].oscAxisCount != arity || !distinct) {
+        if (outKind)
+          *outKind = ShaderOSCErrorRotate;
         return @(sp[i].name);
       }
     }

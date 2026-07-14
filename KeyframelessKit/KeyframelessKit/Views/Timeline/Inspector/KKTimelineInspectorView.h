@@ -113,6 +113,13 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// directive). Not set == the lane set is fixed at init.
 @property(nonatomic, copy, nullable)
     NSArray<KKLane *> * (^availableLanesProvider)(NSString *code);
+/// Fired AFTER a code lane commit re-derives the available-lanes set (see
+/// `availableLanesProvider`), on the main thread, with the committed source.
+/// Lets a host whose ON-SCREEN-CONTROL set is also source-derived (e.g. a
+/// shader declaring `osc` directives) re-wire its OSC-visibility checklist to
+/// the new element set so it doesn't go stale. Not set == no extra work on
+/// commit.
+@property(nonatomic, copy, nullable) void (^onCodeCommitted)(NSString *code);
 /// A CONTENT preset was applied (one carrying a `payloadKind`): the plugin
 /// inserts the decoded content rather than applying a timeline curve (e.g.
 /// Canvas decodes a `"canvasLayers"` payload into a new layer). Only fired for

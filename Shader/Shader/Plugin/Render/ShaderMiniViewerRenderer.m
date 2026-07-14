@@ -50,6 +50,8 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   NSString *_radialSyncedSource;
   KKRingOSCSet *_ringSet;
   KKBoxOSCSet *_boxSet;
+  NSString *_rotSyncedSource;
+  KKRotationOSCSet *_rotSet;
 }
 
 // All point OSCs draw + drag uniformly through the KKPointOSCSet (via the
@@ -96,6 +98,45 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   if (!_boxSet)
     _boxSet = [[KKBoxOSCSet alloc] initWithRenderer:self];
   return _boxSet;
+}
+
+- (KKRotationOSCSet *)rotSet {
+  if (!_rotSet)
+    _rotSet = [[KKRotationOSCSet alloc] initWithRenderer:self];
+  return _rotSet;
+}
+
+// Feed the rotation set the shader's current `osc={..}` lanes: one spec per
+// rotate directive (label + active-axis bitmask + clip-centre). Cheap string
+// compare skips the parse when the source is unchanged.
+- (void)_syncMiniRotController {
+  NSString *src = [self _customShaderSource] ?: @"";
+  if ([src isEqualToString:_rotSyncedSource])
+    return;
+  _rotSyncedSource = [src copy];
+  NSMutableArray<NSDictionary<NSString *, id> *> *rots = [NSMutableArray array];
+  if (src.length) {
+    ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
+    int used = 0;
+    int n = ShaderParseScalarProps(src, props, KK_SHADER_MAX_SCALAR_PROPS, 0,
+                                   &used);
+    for (int i = 0; i < n; i++) {
+      if (!ShaderScalarOSCIsRotate(&props[i]))
+        continue;
+      // Axis bitmask (KKRotationAxisX/Y/Z = 1/2/4) from the braced set; the
+      // lane stores its components in canonical X<Y<Z order, which the set
+      // expands.
+      int axes = ShaderScalarRotationAxisMask(&props[i]);
+      [rots addObject:@{
+        @"label" : @(props[i].name),
+        @"axes" : @(axes),
+        @"centerX" : @(props[i].rcenterx),
+        @"centerY" : @(props[i].rcentery),
+        @"linkLabel" : @(props[i].linkName),
+      }];
+    }
+  }
+  [self.rotSet setRotations:rots];
 }
 
 // Feed the ring + box sets the shader's current `osc=ring` / `osc=box` scalar

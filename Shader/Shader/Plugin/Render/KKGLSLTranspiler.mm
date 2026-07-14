@@ -231,6 +231,15 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
       [colorDefines appendFormat:@"#define %@ (int(%@_kk.x))\n", nm, nm];
     } else if (scalars[i].isBool) {
       [colorDefines appendFormat:@"#define %@ (%@_kk.x > 0.5)\n", nm, nm];
+    } else if (ShaderScalarOSCIsRotate(&scalars[i])) {
+      // A rotation OSC (`osc={..}`): each euler component is delivered as
+      // radians(-deg), matching #angle's sign (a CW ring reads as a CW turn).
+      // The lane stores components in canonical X<Y<Z order; the braced axis
+      // order maps onto the shader vec via a swizzle (uRot.x = first-listed
+      // axis). A single-axis rotate reduces to `radians(-uRot_kk.x)`.
+      NSString *swizzle = ShaderRotateCanonicalSwizzle(&scalars[i]);
+      [colorDefines appendFormat:@"#define %@ (radians(-%@_kk.%@))\n", nm, nm,
+                                 swizzle];
     } else if (scalars[i].isAngle) {
       // Lane is degrees; the shader gets radians. Negated so a clockwise knob
       // turn reads as a clockwise on-screen rotation (the knob increases CW, but

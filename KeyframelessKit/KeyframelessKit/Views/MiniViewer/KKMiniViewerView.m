@@ -32,6 +32,18 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 }
 @end
 
+@implementation KKMiniRotation
++ (instancetype)rotationWithCenter:(CGPoint)center
+                          radiusPx:(CGFloat)radiusPx
+                            params:(KKRotationOSCParams)params {
+  KKMiniRotation *r = [[KKMiniRotation alloc] init];
+  r.center = center;
+  r.radiusPx = radiusPx;
+  r.params = params;
+  return r;
+}
+@end
+
 @implementation _KKMiniFilmSlot
 - (void)dealloc {
   if (_surface)

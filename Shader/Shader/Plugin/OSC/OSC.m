@@ -31,6 +31,21 @@ static const NSInteger kShaderBoxPartBase = 3000;
 // at high extent), matching KKScaleOSC.
 static const double kShaderBoxFineFactor = 0.2;
 
+// Base for the `osc={..}` rotation activePart numbers. Each rotate lane claims
+// ONE part (the grabbed axis is tracked inside KKRotationOSC.activeAxis); kept
+// clear of the box range (box order stays well under 1000, so 4000+idx never
+// overlaps). The gizmo is the shared kit KKRotationOSC (3-ring sphere), so the
+// drag math / compose / persist all live in the control.
+static const NSInteger kShaderRotPartBase = 4000;
+
+// The KKRotationAxes bitmask a rotate prop drives (union of its listed x/y/z
+// axes), defaulting an empty set to Z. The lane stores those components in
+// canonical X<Y<Z order, matching the gizmo's contract; the braced order is a
+// shader-side swizzle, not a lane order.
+static KKRotationAxes ShaderRotationAxesForProp(const ShaderScalarProp *p) {
+  return (KKRotationAxes)(ShaderScalarRotationAxisMask(p) ?: KKRotationAxisZ);
+}
+
 // The ring's radius encodes the scalar's value NORMALIZED to 0..1 across its
 // [min,max], via the shared KKRingOSCExtentForNorm curve - so the in-viewer
 // ring here and the mini-viewer's KKRingOSCSet draw at the identical size, and
@@ -149,6 +164,15 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   CGPoint _boxDragLast;     // last raw cursor, for the per-tick delta
   NSArray<NSNumber *>
       *_boxDragPressNorms; // per-axis normalized values at press
+  // Rotation gizmos built from `osc={..}` lanes, keyed on lane label;
+  // `_rotOrder` fixes the label -> activePart mapping. Each is a self-contained
+  // KKRotationOSC (reads the snapshot lane by label, owns its drag + persist
+  // via kKKParamTimelineData - the same param Shader writes); Shader only sets
+  // the enabled axes + canvas centre + forwards draw/hit/mouse. `_rotDragLabel`
+  // is the lane being dragged (nil = no rotate drag).
+  NSMutableDictionary<NSString *, KKRotationOSC *> *_rotControllers;
+  NSArray<NSString *> *_rotOrder;
+  NSString *_rotDragLabel;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -166,6 +190,8 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
     _boxOrder = @[];
     _boxHitHandle = -1;
     _boxDragHandle = -1;
+    _rotControllers = [NSMutableDictionary dictionary];
+    _rotOrder = @[];
   }
   return self;
 }
@@ -186,6 +212,11 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   NSMutableArray<NSString *> *pointLabels = [NSMutableArray array];
   NSMutableArray<NSString *> *ringLabels = [NSMutableArray array];
   NSMutableArray<NSString *> *boxLabels = [NSMutableArray array];
+  NSMutableArray<NSString *> *rotLabels = [NSMutableArray array];
+  // The rotate signature carries each lane's axis SET, so editing `osc={z}` ->
+  // `osc={y}` (same uniform, different axis) changes the signature and forces a
+  // rebuild - the label alone is unchanged and would look stale.
+  NSMutableArray<NSString *> *rotSig = [NSMutableArray array];
   ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
   int nProps = 0;
   if (src.length) {
@@ -196,7 +227,17 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
       if (props[i].isPoint && strcmp(props[i].oscKind, "point") == 0)
         [pointLabels
             addObject:@(props[i].name)]; // uniform name = lane identity
-      else if (!ShaderScalarRingEligible(&props[i]))
+      else if (ShaderScalarOSCIsRotate(&props[i])) {
+        [rotLabels addObject:@(props[i].name)];
+        // Axis set + centre + link all feed the gizmo, so an edit to any of
+        // them must change the signature and force a rebuild.
+        [rotSig addObject:[NSString stringWithFormat:@"%s=%s|%.4f,%.4f|%s",
+                                                     props[i].name,
+                                                     props[i].oscAxes,
+                                                     props[i].rcenterx,
+                                                     props[i].rcentery,
+                                                     props[i].linkName]];
+      } else if (!ShaderScalarRingEligible(&props[i]))
         continue;
       else if (strcmp(props[i].oscKind, "ring") == 0)
         [ringLabels addObject:@(props[i].name)];
@@ -207,7 +248,8 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   NSString *sig = [@[
     [pointLabels componentsJoinedByString:@"\n"],
     [ringLabels componentsJoinedByString:@"\n"],
-    [boxLabels componentsJoinedByString:@"\n"]
+    [boxLabels componentsJoinedByString:@"\n"],
+    [rotSig componentsJoinedByString:@"\n"]
   ] componentsJoinedByString:@"\x1f"];
   if ([sig isEqualToString:_oscSig])
     return;
@@ -215,6 +257,7 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   _posOrder = [pointLabels copy];
   _ringOrder = [ringLabels copy];
   _boxOrder = [boxLabels copy];
+  _rotOrder = [rotLabels copy];
   NSArray<KKLane *> *avail =
       src.length ? [ShaderPlugin availableLanesForShaderSource:src] : @[];
 
@@ -297,9 +340,59 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   }
   _ringControllers = nextRing;
   _boxControllers = nextBox;
-  _ringMeta = nextMeta;
   _ringTemplates = nextTpl;
+
+  // Rotation gizmos: one self-contained KKRotationOSC per `osc={..}` lane, with
+  // its enabled axes from the braced set and its template from availableLanes.
+  // It reads/writes the snapshot lane (canonical X/Y/Z components) itself, so
+  // Shader only sets enabledAxes/templateLane/activePart and forwards events.
+  // The rotate gizmo's centre reuses the radial `center=`/`link=` machinery, so
+  // its cx/cy + link go into the shared `_ringMeta`/`_ringLink` dicts (its
+  // label never overlaps a ring/box label).
+  NSMutableDictionary<NSString *, KKRotationOSC *> *nextRot =
+      [NSMutableDictionary dictionary];
+  for (int i = 0; i < nProps; i++) {
+    if (!ShaderScalarOSCIsRotate(&props[i]))
+      continue;
+    NSString *label = @(props[i].name);
+    KKRotationOSC *rot =
+        _rotControllers[label]
+            ?: [[KKRotationOSC alloc] initWithAPIManager:self.apiManager
+                                               laneLabel:label];
+    rot.clearsOnDraw = NO; // draw over the other controls, don't wipe the tile
+    rot.enabledAxes = ShaderRotationAxesForProp(&props[i]);
+    for (KKLane *l in avail)
+      if ([l.label isEqualToString:label]) {
+        rot.templateLane = l;
+        break;
+      }
+    nextMeta[label] =
+        @{@"cx" : @(props[i].rcenterx), @"cy" : @(props[i].rcentery)};
+    nextLink[label] = @(props[i].linkName);
+    nextRot[label] = rot;
+  }
+  _rotControllers = nextRot;
+  _ringMeta = nextMeta;
   _ringLink = nextLink;
+}
+
+// activePart -> rotation lane label, or nil when the part isn't a rotate gizmo.
+- (nullable NSString *)rotLabelForActivePart:(NSInteger)part {
+  if (part < kShaderRotPartBase)
+    return nil;
+  NSInteger idx = part - kShaderRotPartBase;
+  if (idx < 0 || idx >= (NSInteger)_rotOrder.count)
+    return nil;
+  return _rotOrder[idx];
+}
+
+// The rotation gizmo's canvas centre for a label: its `center=` object point
+// (or the `link=`ed #point's live value), via the shared radial-centre helper,
+// so several rotation gizmos can sit at distinct points instead of stacking.
+- (CGPoint)_rotationCenterForLabel:(NSString *)label atFraction:(double)frac {
+  CGPoint oc = [self _ringObjectCenterForLabel:label atFraction:frac];
+  return
+      [self canvasPointFromObjectPoint:(simd_float2){(float)oc.x, (float)oc.y}];
 }
 
 // The ring centre in object space 0..1: the linked #point's live value when
@@ -558,6 +651,21 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
       *forceUpdate = YES;
     return YES;
   }
+  NSString *rotLabel = [self rotLabelForActivePart:part];
+  if (rotLabel) {
+    _rotDragLabel = rotLabel;
+    KKRotationOSC *rot = _rotControllers[rotLabel];
+    rot.center = [self _rotationCenterForLabel:rotLabel
+                                    atFraction:[self fractionAtTime:time]];
+    // mouseDown reads the axis captured by the preceding hitTest + the press
+    // pose; the control owns the compose + persist.
+    [rot mouseDownAtX:x
+                    y:y
+            modifiers:modifiers
+          forceUpdate:forceUpdate
+               atTime:time];
+    return YES;
+  }
   BOOL isPath = NO;
   KKPositionOSC *c = [self controllerForActivePart:part isPath:&isPath];
   if (!c)
@@ -647,6 +755,17 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                forceUpdate:forceUpdate];
     return YES;
   }
+  if (_rotDragLabel) {
+    KKRotationOSC *rot = _rotControllers[_rotDragLabel];
+    rot.center = [self _rotationCenterForLabel:_rotDragLabel
+                                    atFraction:[self fractionAtTime:time]];
+    [rot mouseDraggedAtX:x
+                       y:y
+               modifiers:modifiers
+             forceUpdate:forceUpdate
+                  atTime:time];
+    return YES;
+  }
   if (!_dragController)
     return NO;
   [_dragController mouseDraggedAtX:x
@@ -675,6 +794,10 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
     _boxControllers[_boxDragLabel].hoveredIndex = -1;
     _boxDragLabel = nil;
     _boxDragHandle = -1;
+  }
+  if (_rotDragLabel) {
+    [_rotControllers[_rotDragLabel] mouseUp];
+    _rotDragLabel = nil;
   }
 }
 
@@ -727,6 +850,17 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
     if (props[i].isPoint && strcmp(props[i].oscKind, "point") == 0) {
       [keys addObject:label];
       [keys addObject:[label stringByAppendingString:@" Path"]];
+    } else if (ShaderScalarOSCIsRotate(&props[i])) {
+      // A rotation gizmo: a master element + one per-axis ring, each hideable
+      // apart (matching Canvas/MagicMove's Rotation + Rotation.X/Y/Z).
+      [keys addObject:label];
+      KKRotationAxes axes = ShaderRotationAxesForProp(&props[i]);
+      if (axes & KKRotationAxisX)
+        [keys addObject:[label stringByAppendingString:@".X"]];
+      if (axes & KKRotationAxisY)
+        [keys addObject:[label stringByAppendingString:@".Y"]];
+      if (axes & KKRotationAxisZ)
+        [keys addObject:[label stringByAppendingString:@".Z"]];
     } else if (ShaderScalarRingEligible(&props[i]) &&
                (strcmp(props[i].oscKind, "ring") == 0 ||
                 ShaderScalarOSCIsBox(&props[i]))) {
@@ -743,6 +877,18 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   NSString *boxLabel = [self boxLabelForActivePart:activePart];
   if (boxLabel)
     return boxLabel;
+  NSString *rotLabel = [self rotLabelForActivePart:activePart];
+  if (rotLabel) {
+    // Opt-click the ring under the cursor: the controller's last-hit-test axis
+    // (0=X/1=Y/2=Z) picks the per-axis element so a single ring hides; fall
+    // back to the master when no ring is active.
+    NSInteger axis = _rotControllers[rotLabel].activeAxis;
+    NSString *suffix = axis == 0   ? @".X"
+                       : axis == 1 ? @".Y"
+                       : axis == 2 ? @".Z"
+                                   : nil;
+    return suffix ? [rotLabel stringByAppendingString:suffix] : rotLabel;
+  }
   BOOL isPath = NO;
   KKPositionOSC *c = [self controllerForActivePart:activePart isPath:&isPath];
   if (!c)
@@ -768,10 +914,27 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                                                   CGPoint p, simd_uint2 v){
                                        }];
 
+  [self _syncOSCControllers];
+  double ringFrac = [self fractionAtTime:time];
+
+  // Draw each `osc={..}` rotation gizmo (KKRotationOSC 3-ring sphere) FIRST, so
+  // the small position handle + rings/boxes stay on top (and grabbable) -
+  // matching the mini-viewer's layering. It reads its own pose + ring colours
+  // from the snapshot lane and gates per-axis visibility (master + .X/.Y/.Z +
+  // opt-reveal) internally; Shader just sets the canvas centre + drag/reveal.
+  for (NSUInteger i = 0; i < _rotOrder.count; i++) {
+    NSString *label = _rotOrder[i];
+    KKRotationOSC *rot = _rotControllers[label];
+    rot.center = [self _rotationCenterForLabel:label atFraction:ringFrac];
+    rot.rotationActivePart = kShaderRotPartBase + (NSInteger)i;
+    rot.dragging = self.isDragging;
+    rot.optRevealActive = self.optRevealActive;
+    [rot drawInDestination:destinationImage atTime:time activePart:activePart];
+  }
+
   // Draw each shader-declared position handle: motion path (under) then the
   // playhead arc handle (over). The controllers read the process snapshot for
   // their value and manage their own coordinate conversion.
-  [self _syncOSCControllers];
   for (NSString *label in _posOrder) {
     KKPositionOSC *c = _posControllers[label];
     c.dragging = self.isDragging;
@@ -788,7 +951,6 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   // set its center + radius from the scalar value each tick, then draw with the
   // shared visibility gating (Opt-hidden -> dim ghost while Opt-reveal is
   // held).
-  double ringFrac = [self fractionAtTime:time];
   for (NSUInteger i = 0; i < _ringOrder.count; i++) {
     NSString *label = _ringOrder[i];
     KKRingOSC *ring = _ringControllers[label];
@@ -943,6 +1105,24 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
       if (part >= KKBoxPartHandleBase) {
         _boxHitHandle = part - KKBoxPartHandleBase;
         *activePart = kShaderBoxPartBase + (NSInteger)i;
+        self.pointCursorSet = YES;
+        break;
+      }
+    }
+  }
+  // Rotation rings hit-test last (points/rings/boxes win where they overlap).
+  // KKRotationOSC returns the active axis (0/1/2) or -1 and sets its own rotate
+  // / visibility cursor; the gizmo owns per-axis visibility gating.
+  if (*activePart == 0) {
+    double rotFrac = [self fractionAtTime:time];
+    for (NSUInteger i = 0; i < _rotOrder.count; i++) {
+      NSString *label = _rotOrder[i];
+      KKRotationOSC *rot = _rotControllers[label];
+      rot.center = [self _rotationCenterForLabel:label atFraction:rotFrac];
+      rot.rotationActivePart = kShaderRotPartBase + (NSInteger)i;
+      rot.optRevealActive = self.optRevealActive;
+      if ([rot hitTestRingAtX:positionX y:positionY atTime:time] >= 0) {
+        *activePart = kShaderRotPartBase + (NSInteger)i;
         self.pointCursorSet = YES;
         break;
       }

@@ -74,6 +74,25 @@
   for (int i = 0; i < n; i++)
     if (props[i].oscKind[0] != '\0') {
       NSString *name = @(props[i].name); // uniform name = lane identity
+      // A rotation gizmo is ONE compound of its master + per-axis rings, so the
+      // checklist shows a "Rotation" group with X/Y/Z children (matching
+      // Canvas/MagicMove). The axis suffixes mirror the viewer's
+      // oscElementKeys.
+      if (strcmp(props[i].oscKind, "rotate") == 0) {
+        NSMutableArray<NSString *> *group =
+            [NSMutableArray arrayWithObject:name];
+        // Canonical X<Y<Z child order, matching the viewer's oscElementKeys so
+        // the checklist states line up (a per-axis suffix per active axis).
+        const char *canon = "XYZ";
+        for (int a = 0; a < 3; a++)
+          for (int k = 0; k < props[i].oscAxisCount; k++)
+            if ((char)toupper(props[i].oscAxes[k]) == canon[a]) {
+              [group addObject:[name stringByAppendingFormat:@".%c", canon[a]]];
+              break;
+            }
+        [out addObject:group];
+        continue;
+      }
       [out addObject:@[ name ]];
       // A #point osc also owns a motion-PATH element, toggleable independently
       // of its handle (matching MagicMove's separate Position + Path). The key
@@ -202,6 +221,28 @@
                             renderer:oscRenderer
                            compounds:oscCompounds
                              paramID:kParamUIState];
+    // The OSC element set is source-derived (each `osc` directive is a
+    // compound), so a code edit that adds/removes an OSC or changes a rotate's
+    // axis set must re-wire the visibility checklist - otherwise the dropdown
+    // keeps the old axes/handles. Re-derive the compounds on every code commit
+    // and re-wire (the wire re-captures the compounds so the toggle indexing
+    // stays aligned).
+    __weak __typeof(self) weakSelf = self;
+    __weak KKTimelineInspectorView *weakView = view;
+    __weak KKMiniViewerRenderer *weakOscRenderer = oscRenderer;
+    view.onCodeCommitted = ^(NSString *code) {
+      __strong __typeof(weakSelf) strongSelf = weakSelf;
+      KKTimelineInspectorView *v = weakView;
+      KKMiniViewerRenderer *r = weakOscRenderer;
+      if (!strongSelf || !v || !r)
+        return;
+      NSArray<NSArray<NSString *> *> *freshCompounds =
+          [ShaderPlugin oscCompoundsForShaderSource:code];
+      [strongSelf kkWireOSCVisibilityForView:v
+                                    renderer:r
+                                   compounds:freshCompounds
+                                     paramID:kParamUIState];
+    };
     [view setOSCVisible:oscMasterVisible];
     [view setRenderMode:renderMode];
 

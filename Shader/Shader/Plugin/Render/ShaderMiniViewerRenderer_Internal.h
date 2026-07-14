@@ -11,6 +11,7 @@
 @class KKPointOSCSet;
 @class KKRingOSCSet;
 @class KKBoxOSCSet;
+@class KKRotationOSCSet;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -31,6 +32,11 @@ NS_ASSUME_NONNULL_BEGIN
 // generic handle methods here; Shader feeds it the box specs (same radial specs
 // as the rings, plus the field type for the readout) from the source.
 @property(nonatomic, strong, readonly) KKBoxOSCSet *boxSet;
+// The reusable mini-viewer rotation set - the mini sibling of the viewer's
+// KKRotationOSC loop, one 3-ring gizmo per `osc={..}` lane. Interaction
+// forwards the rotation draw + generic handle methods here; Shader feeds it the
+// rotate specs (label + active-axis bitmask + clip-centre) from the source.
+@property(nonatomic, strong, readonly) KKRotationOSCSet *rotSet;
 // Re-derive the set's lane labels from the current shader source. Cheap no-op
 // when the source is unchanged.
 - (void)_syncMiniPointController;
@@ -38,6 +44,9 @@ NS_ASSUME_NONNULL_BEGIN
 // one parse (a ring and a box share the same radial spec; only the osc kind and
 // the target set differ). Cheap no-op when the source is unchanged.
 - (void)_syncMiniRadialControllers;
+// Re-derive the rotation set's specs from the current shader source. Cheap
+// no-op when the source is unchanged.
+- (void)_syncMiniRotController;
 @end
 
 @interface ShaderMiniViewerRenderer (Interaction)

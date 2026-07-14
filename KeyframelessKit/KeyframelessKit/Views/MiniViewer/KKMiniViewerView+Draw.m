@@ -511,6 +511,20 @@
       }
     }
 
+    // Multi-rotation path: a plugin with several independent rotation OSCs
+    // returns one KKMiniRotation per gizmo (each already carrying its centre,
+    // radius + params), drawn through the same encode as the single path above.
+    if (_rotationPipeline &&
+        [del respondsToSelector:@selector(
+                                    miniViewer:rotationOSCsForContentRect:)]) {
+      for (KKMiniRotation *r in [del miniViewer:self
+                     rotationOSCsForContentRect:cr])
+        [self _encodeRotationOSCAt:r.center
+                          radiusPx:r.radiusPx
+                            params:r.params
+                           encoder:enc];
+    }
+
     // Position handle, drawn above the rotation rings + scale box so it stays
     // on top (matches the viewer's layering).
     CGPoint handleCenterPts;

@@ -327,13 +327,20 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   // set (if the host provided a provider) and swap it into the rows live.
   _basicView.onCodeCommitted = ^(NSString *code) {
     KKTimelineInspectorView *strong = weak;
-    if (!strong || !strong.availableLanesProvider)
+    if (!strong)
       return;
-    NSArray<KKLane *> *lanes = strong.availableLanesProvider(code);
-    if (!lanes)
-      return;
-    strong->_availableLanes = [lanes copy];
-    [strong->_basicView updateAvailableLanes:lanes];
+    if (strong.availableLanesProvider) {
+      NSArray<KKLane *> *lanes = strong.availableLanesProvider(code);
+      if (lanes) {
+        strong->_availableLanes = [lanes copy];
+        [strong->_basicView updateAvailableLanes:lanes];
+      }
+    }
+    // Let a host with a source-derived OSC set re-wire its visibility checklist
+    // to the new element set (the lane re-derive above doesn't touch OSC
+    // wiring).
+    if (strong.onCodeCommitted)
+      strong.onCodeCommitted(code);
   };
   _basicView.onBoundaryPreviewNeedsRender = ^{
     if (weak.onBoundaryPreviewNeedsRender)

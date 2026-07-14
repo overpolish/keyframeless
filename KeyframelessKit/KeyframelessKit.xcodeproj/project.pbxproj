@@ -131,6 +131,7 @@
 				Views/MiniViewer/KKPositionMiniController.h,
 				Views/MiniViewer/KKRadialOSCSet.h,
 				Views/MiniViewer/KKRingOSCSet.h,
+				Views/MiniViewer/KKRotationOSCSet.h,
 				Views/MiniViewer/KKScaleMiniController.h,
 				Views/Rows/KKCheckboxRowView.h,
 				Views/Rows/KKLaneRowView.h,

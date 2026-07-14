@@ -102,6 +102,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKRingOSCSet.h>
 #import <KeyframelessKit/KKRotationOSC.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>
+#import <KeyframelessKit/KKRotationOSCSet.h>
 #import <KeyframelessKit/KKSVGParser.h>
 #import <KeyframelessKit/KKScaleGizmo.h>
 #import <KeyframelessKit/KKScaleMiniController.h>

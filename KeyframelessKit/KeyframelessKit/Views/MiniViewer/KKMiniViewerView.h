@@ -37,6 +37,21 @@ NS_ASSUME_NONNULL_BEGIN
                  ghostAlpha:(CGFloat)ghostAlpha;
 @end
 
+/// One 3-ring rotation gizmo, as a drawable descriptor. The mini-viewer's
+/// built-in single rotation path fills a `KKRotationOSCParams` from renderer
+/// accessors; a plugin with MANY independent rotation OSCs (e.g. a shader
+/// declaring several `osc={..}` uniforms) instead returns an array of these via
+/// -miniViewer:rotationOSCsForContentRect:, each drawn through the same encode.
+/// Center is in overlay points (y-up); radiusPx in overlay points.
+@interface KKMiniRotation : NSObject
+@property(nonatomic) CGPoint center;
+@property(nonatomic) CGFloat radiusPx;
+@property(nonatomic) KKRotationOSCParams params;
++ (instancetype)rotationWithCenter:(CGPoint)center
+                          radiusPx:(CGFloat)radiusPx
+                            params:(KKRotationOSCParams)params;
+@end
+
 /// Plugin-supplied interaction delegate. Hooks are declared now and wired in
 /// later phases (handle drawing, hit-testing, drag deltas reported as value
 /// mutations). Points are clip-normalized: (0,0) top-left, (1,1) bottom-right.
@@ -163,6 +178,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// nil/empty for none.
 - (NSArray<KKMiniBox *> *)miniViewer:(KKMiniViewerView *)canvas
                  boxesForContentRect:(CGRect)contentRect;
+/// All 3-ring rotation gizmos to draw, as `KKMiniRotation` descriptors. Use
+/// this (instead of the single -miniViewer:rotationOSCCenter:... path) when a
+/// plugin has MANY independent rotation OSCs. Drawn through the same encode as
+/// the single path. nil/empty for none.
+- (NSArray<KKMiniRotation *> *)miniViewer:(KKMiniViewerView *)canvas
+               rotationOSCsForContentRect:(CGRect)contentRect;
 /// An optional alignment grid to draw UNDER the OSC handles, matching the in-
 /// viewer grid. Return NO for no grid. `outSpacingX`/`outSpacingY` are the cell
 /// size as a FRACTION of the content rect (already adaptively adjusted by the

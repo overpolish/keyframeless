@@ -32,6 +32,11 @@
   return self.boxSet;
 }
 
+- (KKRotationOSCSet *)_syncedRotSet {
+  [self _syncMiniRotController];
+  return self.rotSet;
+}
+
 - (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
                                                  (KKMiniViewerView *)canvas
                    extraPointHandleGlyphsForContentRect:(CGRect)cr {
@@ -55,6 +60,11 @@
   return [base arrayByAddingObjectsFromArray:mine];
 }
 
+- (NSArray<KKMiniRotation *> *)miniViewer:(KKMiniViewerView *)canvas
+               rotationOSCsForContentRect:(CGRect)cr {
+  return [[self _syncedRotSet] rotationsForContentRect:cr canvas:canvas];
+}
+
 - (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
                                                  (KKMiniViewerView *)canvas
                          extraMotionPathsForContentRect:(CGRect)cr {
@@ -64,12 +74,18 @@
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     handleHitAtPoint:(CGPoint)p
          contentRect:(CGRect)cr {
-  // Points foreground, then rings, then boxes (matching the viewer precedence).
+  // The rotation set sizes its rings from the renderer's live canvas; set it
+  // before the sets run (super would set it, but we call the sets first).
+  self.canvas = canvas;
+  // Points foreground, then rings, then boxes, then rotation rings (matching
+  // the viewer precedence).
   if ([[self _syncedSet] handleHitAtPoint:p contentRect:cr])
     return YES;
   if ([[self _syncedRingSet] handleHitAtPoint:p contentRect:cr])
     return YES;
   if ([[self _syncedBoxSet] handleHitAtPoint:p contentRect:cr])
+    return YES;
+  if ([[self _syncedRotSet] handleHitAtPoint:p contentRect:cr])
     return YES;
   return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
 }
@@ -79,6 +95,7 @@
              contentRect:(CGRect)cr {
   if (CGRectIsEmpty(cr))
     return nil;
+  self.canvas = canvas; // rotation set reads the canvas for ring sizing
   NSCursor *c = [[self _syncedSet] cursorAtPoint:p contentRect:cr];
   if (c)
     return c;
@@ -86,6 +103,9 @@
   if (c)
     return c;
   c = [[self _syncedBoxSet] cursorAtPoint:p contentRect:cr];
+  if (c)
+    return c;
+  c = [[self _syncedRotSet] cursorAtPoint:p contentRect:cr];
   return c ?: [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
 }
 
@@ -97,6 +117,8 @@
   if ([[self _syncedRingSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
     return;
   if ([[self _syncedBoxSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
+    return;
+  if ([[self _syncedRotSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
     return;
   [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
 }
@@ -120,6 +142,11 @@
                                  canvas:canvas
                               modifiers:modifiers])
     return;
+  if ([[self _syncedRotSet] dragToPoint:p
+                            contentRect:cr
+                                 canvas:canvas
+                              modifiers:modifiers])
+    return;
   [super miniViewer:canvas
       dragHandleToPoint:p
             contentRect:cr
@@ -132,6 +159,8 @@
   if ([self.ringSet endDragOnCanvas:canvas])
     return;
   if ([self.boxSet endDragOnCanvas:canvas])
+    return;
+  if ([self.rotSet endDragOnCanvas:canvas])
     return;
   [super miniViewerEndHandleDrag:canvas];
 }
@@ -151,7 +180,9 @@
     return YES;
   if ([[self _syncedRingSet] optClickAtPoint:p contentRect:cr canvas:canvas])
     return YES;
-  return [[self _syncedBoxSet] optClickAtPoint:p contentRect:cr canvas:canvas];
+  if ([[self _syncedBoxSet] optClickAtPoint:p contentRect:cr canvas:canvas])
+    return YES;
+  return [[self _syncedRotSet] optClickAtPoint:p contentRect:cr canvas:canvas];
 }
 
 - (void)miniViewer:(KKMiniViewerView *)canvas
