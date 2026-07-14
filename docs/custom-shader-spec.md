@@ -1,4 +1,4 @@
-# Mesh Custom Shader — mini spec
+# Mesh Custom Shader - mini spec
 
 The **Custom** type turns Mesh into an empty, animation-aware shader vessel. The
 user pastes a Shadertoy shader (or writes their own), and any value they _mark_
@@ -121,7 +121,7 @@ float style;    //! choice "Style" [Soft, Hard, Wild] = Hard
 int   seed;     //! seed   "Seed" = 7
 ```
 
-## Shadertoy paste — what actually works
+## Shadertoy paste - what actually works
 
 Copy a single-pass Shadertoy _Image_ shader, paste it, it runs. Since it goes
 through the real glslang + SPIRV-Cross toolchain (not a text substitution), the
@@ -149,7 +149,7 @@ The workflow: **paste, it runs with `iTime` animating, then the user adds `//!`
 markers to the numbers they want to control.** A pasted shader starts with zero
 knobs and gains them as the user annotates. That is the whole loop.
 
-### Worked example — paste, then annotate
+### Worked example - paste, then annotate
 
 Pasted verbatim from Shadertoy (runs immediately, no knobs yet):
 

@@ -1,0 +1,120 @@
+---
+id: directives
+summary: Declaring inspector controls and on-screen controls in a Custom shader with // # directives
+---
+
+# Custom controls: `// #` directives
+
+A Custom shader can expose its own **inspector controls** and **on-screen controls (OSCs)** by annotating its uniforms. Put a `// #<kind>` comment on the line **before** a `uniform` declaration, and Shader builds a matching, fully keyframeable timeline lane for it. The uniform's value then comes from that lane (and its keyposes / OSC) instead of being a fixed constant.
+
+```glsl
+// #float label="Amount" min=0 max=2 default=0.5
+uniform float uAmount;
+```
+
+That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the inspector, and inside the shader `uAmount` reads the live value. Everything a built-in property can do - keyposes, easing, Basic/Advanced timing, motion blur - works on a declared control automatically.
+
+**Rules that always hold:**
+
+- The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search).
+- The **uniform name is the identity** of the control (its keyframes follow the name). `label=` is display-only - renaming the label keeps the animation; renaming the uniform starts a fresh control.
+- Each control needs a **unique uniform name and a unique label** - duplicates are a compile error surfaced in the editor.
+- These directives only apply to the **Custom** type (the whole shader system is Custom-only). See the custom-shader doc for the shader language itself.
+
+## Control kinds
+
+| Directive  | Uniform type       | Inspector control         | What the shader receives                           |
+| ---------- | ------------------ | ------------------------- | -------------------------------------------------- |
+| `#color`   | `vec4 n;`          | colour swatch             | `vec4` RGBA (from the Colours-style swatch)        |
+| `#color`   | `vec4 n[N];`       | palette bar (up to N)     | `vec4 n[N]` + `nCount` (int) active count          |
+| `#float`   | `float n;`         | slider                    | the raw value                                      |
+| `#percent` | `float n;`         | slider shown as `%`       | **0..1** (the inspector shows 0-100%)              |
+| `#int`     | `float n;`         | integer slider            | `int`                                              |
+| `#seed`    | `float n;`         | dice/seed field (no anim) | the raw integer value                              |
+| `#angle`   | `float n;`         | rotation dial (degrees)   | **radians, negated** (`radians(-deg)`)             |
+| `#bool`    | `bool n;`          | checkbox                  | `bool`                                             |
+| `#choice`  | `int n;`           | segmented pills           | `int` selected index (0-based)                     |
+| `#point`   | `vec2 n;`          | 2D point                  | pixels (`value * iResolution.xy`, fragCoord space) |
+| `#multi`   | `vec2` / `vec3 n;` | N-component field         | the raw vector                                     |
+
+The uniform TYPE is folded away by the compiler - you use `uAmount` directly as a `float`, `uColor` as a `vec4`, etc. A mistyped uniform type is tolerated (the `#`-kind wins), so `#int` over a `uniform float` still delivers an int.
+
+### Common attributes
+
+- `label="Nice Name"` - inspector display name (defaults to a prettified uniform name: `uCornerRadius` -> "Corner Radius").
+- `min=` / `max=` - value range. Omit `max=` to leave the field unbounded (the slider still uses a nominal cap).
+- `default=` - starting value. `#point` / `#multi` take `default="x,y"` / `default="a,b,c"`.
+- `#choice` adds `options="One,Two,Three"` (the pill labels; `default=` is the 0-based index).
+- `#multi` adds `fields={Width,Height}` (names + counts the components) and `lockaspect` (components aspect-linked, ratio preserved on an OSC drag).
+
+## On-screen controls (`osc`)
+
+Add `osc` (or `osc=<kind>`) to a directive to also draw a **draggable control on the viewer and mini-viewer**. The control edits the same lane, so dragging is just another way to keyframe the value.
+
+| `osc` value         | Valid on                                                   | On-screen control                                       |
+| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------- |
+| `osc` / `osc=point` | `#point` (vec2)                                            | a position handle at the point                          |
+| `osc=ring`          | `#float` / `#percent` / `#int`, or 2-field `#multi` (vec2) | a radius **ellipse**; drag its edge to set the value(s) |
+| `osc=box`           | same as `osc=ring`                                         | a **rectangle** with 8 handles + a value readout        |
+| `osc={z}`           | `#angle` (float)                                           | a single **rotation ring** on the Z axis                |
+| `osc={y,x}`         | 2-field `#multi` (vec2)                                    | two rotation rings (Y and X axes)                       |
+| `osc={z,x,y}`       | 3-field `#multi` (vec3)                                    | three rotation rings (Z, X, Y axes)                     |
+
+A bare `osc` on `#point` defaults to a point handle; a bare `osc` on `#angle` defaults to a single-axis (Z) rotation ring.
+
+### Ring vs box
+
+`osc=ring` and `osc=box` are the same control in two shapes - both size the value across `[min, max]`. A single-value field is a circle / square; a 2-field `#multi` (vec2) is an ellipse / rectangle with an independent radius per component. Drag a handle to resize; with `lockaspect` on the `#multi`, the ratio is held (Shift inverts the lock; Cmd = fine drag). The box also shows a readout in the field's units (e.g. `40%`, `5`, `0.4 x 0.2`).
+
+### Rotation: `osc={...}`
+
+The braces list the axes AND their order, and **the Nth listed axis drives value component N**:
+
+- `#angle ... osc={z}` on a `uniform float` -> one Z ring; the float is the Z angle.
+- `#multi ... osc={y,x}` on a `uniform vec2` -> `value.x` is the Y-axis angle, `value.y` is the X-axis angle.
+- `#multi ... osc={z,x,y}` on a `uniform vec3` -> `value` is (Z, X, Y) angles.
+
+Each axis angle reaches the shader as **radians, negated** (a clockwise ring reads as a clockwise turn), so a `#multi` rotation vector is ready to drop into rotation matrices. Rings are tinted X=red, Y=green, Z=blue (matching the inspector dials), and the drag composes per-axis (Cmd snaps to 15°).
+
+### Placing the control: `center=` and `link=`
+
+`osc=ring`, `osc=box` and `osc={...}` sit at the clip centre by default. Move them with:
+
+- `center=0.3,0.7` - a fixed object-space point (0..1, origin bottom-left).
+- `link=uPivot` - centre tracks another `#point` uniform's **live value**, so the control follows a draggable point. Useful for centring a ring / rotation on a position handle.
+
+(`#point` handles sit at their own value, so they don't take `center=` / `link=`.)
+
+### Hiding OSCs
+
+Every declared OSC is a hideable element in the viewer's On-Screen Controls settings (Option-click a control to hide it; Option-hold reveals hidden ones as dimmed ghosts). A rotation gizmo is one group with per-axis X/Y/Z children, each hideable on its own.
+
+## Worked example
+
+```glsl
+// A pivot the rotation + a ring both follow.
+// #point label="Pivot" osc default="0.5,0.5"
+uniform vec2 uPivot;
+
+// A vec3 of euler angles, driven by 3 rotation rings centred on the pivot.
+// #multi fields={Yaw,Pitch,Roll} osc={z,x,y} link=uPivot label="Orient"
+uniform vec3 uOrient;
+
+// A scalar radius, shown as a draggable circle centred on the pivot.
+// #float label="Radius" min=0 max=1 default=0.3 osc=ring link=uPivot
+uniform float uRadius;
+
+// A palette of up to 5 colours (built-in palette generator + swatches).
+// #color min=1 max=5 default=3
+uniform vec4 uPalette[5];
+
+void mainImage(out vec4 O, in vec2 I) {
+  // uOrient is (Z,X,Y) in radians; uRadius in 0..1; uPivot in pixels; ...
+}
+```
+
+## Tips
+
+- Reach for an OSC when a value is spatial (a position, a size, an angle) - it's faster than typing and reads at a glance. Keep purely numeric knobs as plain `#float` / `#int` sliders.
+- `#percent` is the friendliest way to expose a 0..1 factor: the artist sees 0-100%, the shader gets 0..1.
+- Editing a directive live re-derives the control set (and its OSCs) without a clip reselect - add / rename / re-`osc` a uniform and the inspector + viewer update on the next commit.

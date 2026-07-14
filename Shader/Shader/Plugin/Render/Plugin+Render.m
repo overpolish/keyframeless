@@ -822,7 +822,7 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
       // an empty blob, written only on the first param change / UI edit). The
       // constants editor already shows the catalog default (plasma) because it
       // rebuilds its lanes from the catalog, so seed that same default here to
-      // match — otherwise the first render falls to passthrough and the plasma
+      // match - otherwise the first render falls to passthrough and the plasma
       // only appears after the user nudges a param. A present-but-empty
       // codeString means the user explicitly cleared it => passthrough, so only
       // fall back when the Shader lane is absent entirely.

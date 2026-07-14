@@ -61,7 +61,7 @@
 
 // The OSC element set the current shader declares, for the visibility popover /
 // settings cog. Each `osc`-annotated lane is one compound (single element for a
-// point handle; rotation gizmos will be one compound of per-axis rings).
+// point handle; a rotation gizmo is one compound of its master + per-axis rings).
 + (NSArray<NSArray<NSString *> *> *)oscCompoundsForShaderSource:
     (NSString *)source {
   NSMutableArray<NSArray<NSString *> *> *out = [NSMutableArray array];
@@ -328,8 +328,9 @@
                                        bundleForClass:[ShaderPlugin class]]
                       subdirectory:@"AIKnowledge"];
     // Shared on-screen-control docs live in the kit framework (flattened to its
-    // Resources root). Filter to just the topics Shader actually uses - it has
-    // no rotation OSC, so only the visibility doc.
+    // Resources root). Shader's own OSCs are directive-driven (see the
+    // directives doc), not the standard lane-bound Rotation/Scale controls
+    // those kit docs describe, so pull in only the shared visibility behaviour.
     [KKAIKnowledge
         registerBundleDocsWithName:@"On-Screen Controls"
                             bundle:[NSBundle

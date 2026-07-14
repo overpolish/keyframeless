@@ -9,7 +9,7 @@ section here for each third-party component you incorporate.
 ## radiant (radiant-shaders)
 
 Portions of the Mesh generator's fragment shaders
-(`Mesh/Mesh/Plugin/Render/Mesh.metal` — the `Fluid`, `Neon`, `Silk`, and
+(`Mesh/Mesh/Plugin/Render/Mesh.metal` - the `Fluid`, `Neon`, `Silk`, and
 `Strata` types) are derived from the `fluid-amber`, `neon-drip`, `silk-cascade`,
 and `painted-strata` shaders in **pbakaus/radiant** (radiant-shaders.com).
 
@@ -18,7 +18,7 @@ and `painted-strata` shaders in **pbakaus/radiant** (radiant-shaders.com).
 - Licensed under the MIT License (full text below).
 
 **Modifications:** the original GLSL fragment shader was translated to Metal
-Shading Language (MSL) and adapted for the FxPlug render pipeline — the fixed
+Shading Language (MSL) and adapted for the FxPlug render pipeline - the fixed
 colour palette was replaced with the plugin's dynamic colour swatches, the
 mouse interaction was removed, and the sizing model changed. The original
 algorithm (iterative domain-warp fbm) is otherwise preserved.
@@ -54,7 +54,7 @@ SOFTWARE.
 ## paper-design/shaders
 
 Portions of the Mesh generator's fragment shaders
-(`Mesh/Mesh/Plugin/Render/Mesh.metal` — the `Mesh`, `Dithering`, `Grainy`,
+(`Mesh/Mesh/Plugin/Render/Mesh.metal` - the `Mesh`, `Dithering`, `Grainy`,
 `Warp`, `Neuro`, `Simplex`, `Metaballs`, and `God Rays` types) are derived from
 the `mesh-gradient`, `dithering`, `grain-gradient`, `warp`, `neuro-noise`,
 `simplex-noise`, `metaballs`, and `god-rays` shaders in **paper-design/shaders**.
@@ -64,7 +64,7 @@ the `mesh-gradient`, `dithering`, `grain-gradient`, `warp`, `neuro-noise`,
 - Licensed under the Apache License, Version 2.0 (full text below).
 
 **Modifications:** the original GLSL fragment shaders were translated to Metal
-Shading Language (MSL) and adapted for the FxPlug render pipeline — uniform
+Shading Language (MSL) and adapted for the FxPlug render pipeline - uniform
 layout, colour/output-encoding handling, seed precision, and the sizing model
 changed. The original algorithms and parameters are otherwise preserved.
 
