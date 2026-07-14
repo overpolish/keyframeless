@@ -33,7 +33,8 @@
 #import <KeyframelessKit/KKJoyrideGuideHost.h>
 #import <KeyframelessKit/KKTimingCompat.h>
 
-// Cap the reorder list height; beyond this it scrolls inside KKPaddedScrollView.
+// Cap the reorder list height; beyond this it scrolls inside
+// KKPaddedScrollView.
 static const CGFloat kParamOrderMaxListH = 200.0;
 
 @implementation KKTimelineInspectorView (ParameterRows)
@@ -263,9 +264,10 @@ static const CGFloat kParamOrderMaxListH = 200.0;
     // shrink so the inner scroll takes over on overflow (vs clipping).
     [pillBar setContentHuggingPriority:NSLayoutPriorityRequired - 1
                         forOrientation:NSLayoutConstraintOrientationHorizontal];
-    [pillBar setContentCompressionResistancePriority:1
-                                      forOrientation:
-                                          NSLayoutConstraintOrientationHorizontal];
+    [pillBar
+        setContentCompressionResistancePriority:1
+                                 forOrientation:
+                                     NSLayoutConstraintOrientationHorizontal];
     [content addSubview:pillBar];
 
     NSView *listContainer = [[NSView alloc] initWithFrame:NSZeroRect];
@@ -283,14 +285,13 @@ static const CGFloat kParamOrderMaxListH = 200.0;
     // The reorder list has a fixed intrinsic width that used to drive the
     // popover width; pinned inside the scroll it no longer does, so carry that
     // width up to the scroll explicitly (set from the list in the rebuild).
-    _paramOrderScrollWidth =
-        [scroll.widthAnchor constraintEqualToConstant:0.0];
+    _paramOrderScrollWidth = [scroll.widthAnchor constraintEqualToConstant:0.0];
 
     [NSLayoutConstraint activateConstraints:@[
       [pillBar.centerXAnchor constraintEqualToAnchor:content.centerXAnchor],
       [pillBar.leadingAnchor
           constraintGreaterThanOrEqualToAnchor:content.leadingAnchor
-                                       constant:KKPaddingMD],
+                                      constant:KKPaddingMD],
       [pillBar.trailingAnchor
           constraintLessThanOrEqualToAnchor:content.trailingAnchor
                                    constant:-KKPaddingMD],
@@ -313,7 +314,7 @@ static const CGFloat kParamOrderMaxListH = 200.0;
     NSMutableArray<NSString *> *titles =
         [NSMutableArray arrayWithCapacity:labels.count];
     for (NSString *label in labels)
-      [titles addObject:KKLocalizedParamName(label)];
+      [titles addObject:[self _paramOrderTitleForLabel:label]];
     KKReorderListView *list =
         [[KKReorderListView alloc] initWithItemIDs:labels titles:titles];
     list.translatesAutoresizingMaskIntoConstraints = NO;
@@ -356,6 +357,17 @@ static const CGFloat kParamOrderMaxListH = 200.0;
   return c.length ? c : _paramOrderCategoryKeys.firstObject;
 }
 
+// The reorder ROW title is the user-facing display name (a dynamic plugin's
+// separate identity vs label - e.g. a shader uniform's "Center"), while the row
+// ID stays the stable `label`. Resolve from the templates since the display
+// label lives there.
+- (NSString *)_paramOrderTitleForLabel:(NSString *)label {
+  for (KKLane *l in _availableLanes)
+    if ([l.label isEqualToString:label])
+      return KKLocalizedParamName(l.displayName);
+  return KKLocalizedParamName(label);
+}
+
 - (void)_rebuildParamOrderList {
   if (!_paramOrderListContainer)
     return;
@@ -367,7 +379,7 @@ static const CGFloat kParamOrderMaxListH = 200.0;
     if ([[self _paramOrderEffectiveCategory:label]
             isEqualToString:_paramOrderSelectedCategory]) {
       [ids addObject:label];
-      [titles addObject:KKLocalizedParamName(label)];
+      [titles addObject:[self _paramOrderTitleForLabel:label]];
     }
 
   KKReorderListView *list = [[KKReorderListView alloc] initWithItemIDs:ids
@@ -438,9 +450,30 @@ static const CGFloat kParamOrderMaxListH = 200.0;
   // (e.g. @"Rotation.X" -> "X") and localizes it itself.
   NSArray<NSArray<NSNumber *> *> *states =
       self.oscVisibilityElementStates ? self.oscVisibilityElementStates() : nil;
+  // Map each element key to the lane's display name (e.g. a shader's stable
+  // uniform-name key -> its "Center" label), else fall back to the key's leaf.
+  NSArray<KKLane *> *avail = _availableLanes;
   KKOSCChecklistView *list = [[KKOSCChecklistView alloc]
       initWithCompounds:compounds
-                 states:(states.count == compounds.count ? states : @[])];
+                 states:(states.count == compounds.count ? states : @[])
+          displayForKey:^NSString *(NSString *key) {
+            for (KKLane *l in avail)
+              if ([l.label isEqualToString:key])
+                return KKLocalizedParamName(l.displayName);
+            // A Position OSC's motion-path element ("<lane> Path") has no lane
+            // of its own; show "<display> Path" from the base lane's display
+            // name (a dynamic plugin's key may be a uniform name, not "Path").
+            if ([key hasSuffix:@" Path"]) {
+              NSString *base = [key substringToIndex:key.length - 5];
+              for (KKLane *l in avail)
+                if ([l.label isEqualToString:base])
+                  return [NSString
+                      stringWithFormat:@"%@ %@",
+                                       KKLocalizedParamName(l.displayName),
+                                       KKLocalizedParamName(@"Path")];
+            }
+            return nil;
+          }];
   list.translatesAutoresizingMaskIntoConstraints = NO;
   _oscPillBar = list; // guide spotlight anchor (weak; lives in the popover)
   __weak typeof(self) weak = self;
@@ -519,8 +552,8 @@ static const CGFloat kParamOrderMaxListH = 200.0;
   _mbShutterAngle = shutterAngle;
   _mbSamples = samples;
   [_mbSettingsView applyShutterAngle:shutterAngle
-                            samples:samples
-                          technique:_mbTechnique];
+                             samples:samples
+                           technique:_mbTechnique];
 }
 
 - (void)setMotionBlurTechnique:(KKMotionBlurTechnique)technique {
@@ -529,8 +562,8 @@ static const CGFloat kParamOrderMaxListH = 200.0;
                      ? technique
                      : KKMotionBlurTechniqueAccurate;
   [_mbSettingsView applyShutterAngle:_mbShutterAngle
-                            samples:_mbSamples
-                          technique:_mbTechnique];
+                             samples:_mbSamples
+                           technique:_mbTechnique];
 }
 
 - (void)_mbSettingsClicked:(id)sender {
@@ -545,18 +578,18 @@ static const CGFloat kParamOrderMaxListH = 200.0;
               supportsFast:[self motionBlurSupportsFastTechnique]
             defaultSamples:[self motionBlurDefaultSamples]];
   __weak typeof(self) weak = self;
-  content.onChanged =
-      ^(double shutterAngle, NSInteger samples, KKMotionBlurTechnique technique) {
-        KKTimelineInspectorView *strong = weak;
-        if (!strong)
-          return;
-        strong->_mbShutterAngle = shutterAngle;
-        strong->_mbSamples = samples;
-        strong->_mbTechnique = technique;
-        if (strong.onMotionBlurChanged)
-          strong.onMotionBlurChanged(strong->_mbCheckbox.isChecked,
-                                     shutterAngle, samples, technique);
-      };
+  content.onChanged = ^(double shutterAngle, NSInteger samples,
+                        KKMotionBlurTechnique technique) {
+    KKTimelineInspectorView *strong = weak;
+    if (!strong)
+      return;
+    strong->_mbShutterAngle = shutterAngle;
+    strong->_mbSamples = samples;
+    strong->_mbTechnique = technique;
+    if (strong.onMotionBlurChanged)
+      strong.onMotionBlurChanged(strong->_mbCheckbox.isChecked, shutterAngle,
+                                 samples, technique);
+  };
   content.onDragBegin = ^{
     if (weak.onDragBegin)
       weak.onDragBegin();

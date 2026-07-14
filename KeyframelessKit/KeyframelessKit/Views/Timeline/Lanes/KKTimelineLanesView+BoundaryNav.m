@@ -79,6 +79,26 @@
 
 // Time-sorted, eps-deduped list of every KP fraction across animatable
 // lanes - the navigable set behind the popover's prev/next buttons.
+// Snap a boundary fraction to the nearest animatable keypose time before it
+// becomes the mini renderer's editFraction. BASIC represents the final boundary
+// as the visual clip end (frac 1.0), while its keypose is stored one frame in
+// (lastFrameFrac); the mini's on-keypose arc gate (KKLaneKeyedAtFraction) then
+// misses it and shows only the anchor dot. Snapping to the actual keypose time
+// makes BASIC match Advanced (which already passes the stored time). No-op when
+// the fraction already sits on a keypose (interior boundaries).
+- (double)_snapEditFractionToKeypose:(double)fraction {
+  NSArray<NSNumber *> *fracs = [self _animatableKPFractions];
+  double best = fraction, bestDist = INFINITY;
+  for (NSNumber *f in fracs) {
+    double d = fabs(f.doubleValue - fraction);
+    if (d < bestDist) {
+      bestDist = d;
+      best = f.doubleValue;
+    }
+  }
+  return best;
+}
+
 - (NSArray<NSNumber *> *)_animatableKPFractions {
   NSSet<NSString *> *scope = [self _scopedLaneLabelsForOpenPopover];
   NSMutableArray<NSNumber *> *kpTimes = [NSMutableArray array];
@@ -252,7 +272,8 @@
         _openStaticView))
     return;
   BOOL fracChanged = fabs(fraction - _openStaticBoundaryFraction) > 1e-6;
-  KKSetBoundaryEditing(self.miniViewerDelegate, YES, fraction);
+  KKSetBoundaryEditing(self.miniViewerDelegate, YES,
+                       [self _snapEditFractionToKeypose:fraction]);
   KKSetSuppressedHandles(self.miniViewerDelegate, excludedLabels);
   // Full row rebuild (not just value rebind): the editable↔Animate split can
   // change between fractions (navigate) or after add/remove, and the one-way

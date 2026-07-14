@@ -187,6 +187,11 @@
     // across all layers, so freezing one layer here has no meaning. Lock is an
     // Advanced-only (per-lane) concept - so don't mark the Basic row read-only.
     [dl kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
+    // Display label lives on the TEMPLATE, not the serialized timeline lane, so
+    // `lane.displayLabel` is nil and would clobber the value just copied from
+    // tmpl. Prefer the template; fall back to the source lane only when no
+    // template resolved (matches Advanced).
+    dl.displayLabel = tmpl.displayLabel ?: lane.displayLabel;
     KKKeyPose *dlKp = [KKKeyPose keyposeAtTime:0.0 values:vals ?: @[ @0.0 ]];
     // Carry the curve state from the keypose nearest this boundary (matches the
     // nearest-match write) so the row's toggle reflects it.

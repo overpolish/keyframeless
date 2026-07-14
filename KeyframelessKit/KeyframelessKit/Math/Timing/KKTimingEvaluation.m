@@ -498,7 +498,14 @@ KKTimelineLaneValueAtVisualFractionSmoothed(KKLane *lane, double visualFrac) {
       lane, _kkVisualToDataFrac(lane, visualFrac));
 }
 
-BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
+// Shared core for KKLaneVisibleAtFraction / KKLaneKeyedAtFraction. When
+// `includeEdges` is YES the flat lead-in (before the first kp) and lead-out
+// (after the last kp) also count as visible - the grabbable-across-the-hold
+// behaviour the viewer handle wants. When NO, only a fraction sitting ON a
+// keypose counts, so a lane parked in its lead-out doesn't read as "keyed
+// here".
+static BOOL _kkLaneAtFraction(KKLane *lane, double frac, double frameDurSec,
+                              BOOL includeEdges) {
   // Constants (disabled / no kps) - always show. Callers that want a
   // different "constant" rule should branch before calling.
   if (!lane || !lane.enabled)
@@ -565,9 +572,18 @@ BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
   // starts/ends mid-clip stays editable across its holds, not only at the
   // projected timeline ends. The interior transition (between first and last)
   // stays hidden - only the on-keypose checks above light it up there.
-  if (n >= 2 && (frac <= kps.firstObject.time || frac >= kps.lastObject.time))
+  if (includeEdges && n >= 2 &&
+      (frac <= kps.firstObject.time || frac >= kps.lastObject.time))
     return YES;
   return NO;
+}
+
+BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
+  return _kkLaneAtFraction(lane, frac, frameDurSec, /*includeEdges=*/YES);
+}
+
+BOOL KKLaneKeyedAtFraction(KKLane *lane, double frac, double frameDurSec) {
+  return _kkLaneAtFraction(lane, frac, frameDurSec, /*includeEdges=*/NO);
 }
 
 NSArray<NSNumber *> *KKTimingLaneValueAtFraction(KKTimingLane *lane,

@@ -356,6 +356,52 @@
     }
   }
 
+  // Extra motion paths (multi-point plugins, e.g. Shader): each additional
+  // point OSC draws its OWN trajectory, so an animated point lane shows a path
+  // whether or not it happens to be the first one. Same style as the primary
+  // path above, drawn beneath the handles.
+  if ((_linePipeline || _pointPipeline) && del &&
+      [del
+          respondsToSelector:@selector(
+                                 miniViewer:extraMotionPathsForContentRect:)]) {
+    CGRect cr = [self contentRectInViewPoints];
+    for (NSDictionary<NSString *, id> *b in [del miniViewer:self
+                             extraMotionPathsForContentRect:cr]) {
+      NSArray<NSValue *> *poly = b[@"poly"];
+      NSArray<NSValue *> *segs = b[@"segs"];
+      NSArray<NSValue *> *anchors = b[@"anchors"];
+      float pg = b[@"alpha"] ? [b[@"alpha"] floatValue] : 1.0f;
+      if (_linePipeline && poly.count >= 2) {
+        simd_float4 red = {1.0f, 0.25f, 0.25f, 0.9f * pg};
+        [self _encodeMotionLineStrip:poly
+                               color:red
+                         halfWidthPt:1.0
+                             encoder:enc];
+      }
+      if (_linePipeline) {
+        simd_float4 white = {1.0f, 1.0f, 1.0f, 0.85f * pg};
+        for (NSUInteger i = 0; i + 1 < segs.count; i += 2)
+          [self _encodeMotionLineStrip:@[ segs[i], segs[i + 1] ]
+                                 color:white
+                           halfWidthPt:0.75
+                               encoder:enc];
+      }
+      if (_pointPipeline) {
+        simd_float4 white = {1.0f, 1.0f, 1.0f, 1.0f * pg};
+        for (NSValue *v in anchors)
+          [self _encodeHandleGlyphAt:v.pointValue
+                           fillColor:white
+                           sizeScale:0.6
+                             encoder:enc];
+        for (NSUInteger i = 1; i < segs.count; i += 2)
+          [self _encodeHandleGlyphAt:segs[i].pointValue
+                           fillColor:white
+                           sizeScale:0.5
+                             encoder:enc];
+      }
+    }
+  }
+
   if (_pointPipeline && del) {
     CGRect cr = [self contentRectInViewPoints];
     // Radius handle uses the host accent (same as Canvas's Rotate OSC) so
@@ -459,6 +505,39 @@
                          fillColor:f
                          sizeScale:pointSizeScale
                            encoder:enc];
+      }
+    }
+
+    // Additional point handles (a dynamic plugin with more than one point OSC,
+    // e.g. Shader's multiple `#point osc` lanes). Each drawn with the same
+    // glyph as the primary handle above; the delegate owns hit-test / drag.
+    // Uses pointHandleCenter-style centres (fraction-based), so animatable
+    // point lanes render their handle too, not only constant ones.
+    if ([del respondsToSelector:
+                 @selector(miniViewer:extraPointHandleGlyphsForContentRect:)]) {
+      KKMiniHandleStyle exStyle =
+          [del isKindOfClass:[KKMiniViewerRenderer class]]
+              ? [(KKMiniViewerRenderer *)del pointHandleStyle]
+              : KKMiniHandleStylePoint;
+      for (NSDictionary<NSString *, id> *g in [del miniViewer:self
+                         extraPointHandleGlyphsForContentRect:cr]) {
+        CGPoint c = [g[@"center"] pointValue];
+        CGFloat ga = g[@"alpha"] ? [g[@"alpha"] doubleValue] : 1.0;
+        if (exStyle == KKMiniHandleStyleNone)
+          continue;
+        if (exStyle == KKMiniHandleStyleArc)
+          [self _encodeArcHandleGlyphAt:c
+                               isActive:NO
+                             ghostAlpha:ga
+                                encoder:enc];
+        else {
+          simd_float4 f = accentFill;
+          f.w *= (float)ga;
+          [self _encodeHandleGlyphAt:c
+                           fillColor:f
+                           sizeScale:pointSizeScale
+                             encoder:enc];
+        }
       }
     }
 

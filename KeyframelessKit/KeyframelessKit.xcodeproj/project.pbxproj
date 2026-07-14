@@ -126,6 +126,7 @@
 				Views/MiniViewer/KKMiniViewerGuideScroll.h,
 				Views/MiniViewer/KKMiniViewerRenderer.h,
 				Views/MiniViewer/KKMiniViewerView.h,
+				Views/MiniViewer/KKPointOSCSet.h,
 				Views/MiniViewer/KKPositionMiniController.h,
 				Views/MiniViewer/KKScaleMiniController.h,
 				Views/Rows/KKCheckboxRowView.h,

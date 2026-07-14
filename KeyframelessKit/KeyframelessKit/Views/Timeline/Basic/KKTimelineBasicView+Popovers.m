@@ -441,8 +441,8 @@
         compLabels.count > 1 && compCount > 1) {
       showsLinked = YES;
       NSIndexSet *mask = liv.modulationComponents;
-      NSMutableArray<NSString *> *segLabels =
-          [NSMutableArray arrayWithObject:lane.label];
+      NSMutableArray<NSString *> *segLabels = [NSMutableArray
+          arrayWithObject:KKLocalizedParamName(lane.displayName)];
       NSMutableArray<NSNumber *> *segStates =
           [NSMutableArray arrayWithObject:@(laneModActive)];
       [partLaneLabels addObject:lane.label];
@@ -462,7 +462,8 @@
       [partCompoundStates addObject:segStates];
     } else {
       // The gradient's lone toggle reads "Angle" but still targets its lane.
-      NSString *disp = isGradient ? KKLocalizedParamName(@"Angle") : lane.label;
+      NSString *disp = isGradient ? KKLocalizedParamName(@"Angle")
+                                  : KKLocalizedParamName(lane.displayName);
       [partCompoundLabels addObject:@[ disp ]];
       [partCompoundStates addObject:@[ @(laneModActive) ]];
       [partLaneLabels addObject:lane.label];

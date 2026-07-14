@@ -140,7 +140,8 @@ static const CGFloat kSlideDistance = 12.0;
   // ("filter") popovers - single-owner, nothing to switch there (Canvas
   // attaches its layer list to those because it is per-layer; Shader is not).
   NSString *kind = note.userInfo[@"kind"];
-  if ([kind isEqualToString:@"manage"] || [kind isEqualToString:@"filter"])
+  if ([kind isEqualToString:@"manage"] || [kind isEqualToString:@"filter"] ||
+      [kind isEqualToString:@"osc"] || [kind isEqualToString:@"appliesTo"])
     return;
   NSWindow *popoverWindow = note.userInfo[@"window"];
   if (![popoverWindow isKindOfClass:[NSWindow class]])

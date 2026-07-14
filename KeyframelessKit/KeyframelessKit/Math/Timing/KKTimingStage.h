@@ -172,6 +172,17 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 
 @property(nonatomic, readonly) NSUUID *laneID;
 @property(nonatomic, copy) NSString *label;
+/// Optional user-facing name shown INSTEAD of `label` (which stays the stable
+/// identity used for value lookup / OSC / persistence). Lets a dynamic plugin
+/// key a lane on something stable (e.g. a shader's GLSL uniform name) while the
+/// UI shows a free-to-rename label - so renaming or reordering never rebinds
+/// values. nil = show `label` (localized). Mirrors `layerLabel` for the layer
+/// level. Build-time metadata; re-asserted via `kkApplyPickerMetadataFrom:`.
+@property(nonatomic, copy, nullable) NSString *displayLabel;
+/// The name to SHOW for this lane: `displayLabel` when set, else the localized
+/// `label`. Every lane-name render site uses this so identity vs display stay
+/// separate.
+- (NSString *)displayName;
 @property(nonatomic, copy, nullable) NSString *groupKey;
 @property(nonatomic) BOOL enabled;
 @property(nonatomic) KKLaneValueType valueType; // default: Generic

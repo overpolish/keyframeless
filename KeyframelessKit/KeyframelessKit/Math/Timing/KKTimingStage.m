@@ -306,6 +306,13 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   return l;
 }
 
+// The raw name to show (display sites still run it through
+// KKLocalizedParamName, which is a no-op for a custom display label). Identity
+// stays on `label`.
+- (NSString *)displayName {
+  return _displayLabel.length ? _displayLabel : _label;
+}
+
 + (instancetype)opacityLane {
   // Standard FCP-style opacity: one whole-percentage component, 0..100 (no
   // overshoot), identity 100 = fully opaque. Shared by every plugin that has an
@@ -326,6 +333,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
     return;
   _categoryKey = [tmpl.categoryKey copy];
   _categorySymbol = [tmpl.categorySymbol copy];
+  _displayLabel = [tmpl.displayLabel copy];
   _animatable = tmpl.animatable;
   _seedField = tmpl.seedField;
   _oscEditedOnly = tmpl.oscEditedOnly;
@@ -384,6 +392,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   KKLane *c = [[[self class] allocWithZone:zone] init];
   c.laneID = _laneID;
   c.label = [_label copy];
+  c.displayLabel = [_displayLabel copy];
   c.groupKey = [_groupKey copy];
   c.enabled = _enabled;
   c.valueType = _valueType;

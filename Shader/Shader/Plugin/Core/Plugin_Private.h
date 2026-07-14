@@ -49,6 +49,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// them, so the element-key list can't drift out of sync (which silently breaks
 /// OSC hide persistence + opt-click).
 + (NSArray<NSArray<NSString *> *> *)oscCompounds;
+/// Per-shader OSC-visibility compounds: one element per `osc`-annotated lane
+/// the given source declares (point handle / rotation gizmo / ...). Drives the
+/// settings-cog popover + hide persistence for the current shader.
++ (NSArray<NSArray<NSString *> *> *)oscCompoundsForShaderSource:
+    (NSString *)source;
 @end
 
 @interface ShaderPlugin (Render)

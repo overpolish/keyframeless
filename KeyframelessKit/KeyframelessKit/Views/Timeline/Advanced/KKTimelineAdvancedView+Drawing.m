@@ -289,7 +289,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       [[[NSColor inspectorLabel] colorWithAlphaComponent:0.05] setFill];
       [hi fill];
     }
-    NSString *label = KKLocalizedParamName(lane.label ?: @"");
+    NSString *label = KKLocalizedParamName(lane.displayName ?: @"");
     NSSize lsz = [label sizeWithAttributes:labelAttrs];
     NSPoint lp =
         NSMakePoint(NSMinX(g) + kRowLabelInset, NSMidY(row) - lsz.height * 0.5);
@@ -626,8 +626,9 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   // out-of-range edits expand the visual scale instead of clipping into the row
   // edges). Prefer the SLIDER bounds when set: they're the intended display
   // range, decoupled from a deliberately huge value clamp (draw-on Offset's
-  // field is ~unbounded so it can spin past 100 %, but the curve must plot on the
-  // 0..100 % scale, not a million-wide one that renders every transition flat).
+  // field is ~unbounded so it can spin past 100 %, but the curve must plot on
+  // the 0..100 % scale, not a million-wide one that renders every transition
+  // flat).
   NSMutableArray<NSNumber *> *plotMin =
       lane.sliderMin ? [@[ lane.sliderMin ] mutableCopy]
                      : (lane.componentMin ? [lane.componentMin mutableCopy]

@@ -4,6 +4,7 @@
  */
 
 #import "ShaderMiniViewerRenderer.h"
+#import "ShaderMiniViewerRenderer_Internal.h"
 
 #import "Constants.h"        // ShaderCustomDefaultShaderSource
 #import "KKGLSLTranspiler.h" // GLSL -> MSL + channel binding
@@ -42,6 +43,44 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   id<MTLRenderPipelineState> _blitPipeline;
   MTLPixelFormat _blitFormat;
   id<MTLSamplerState> _linearSampler;
+  // Source last fed to -_syncMiniPointController, so the per-draw sync is a
+  // cheap string compare instead of re-running the directive parse each frame.
+  NSString *_pointSyncedSource;
+  KKPointOSCSet *_pointSet;
+}
+
+// All point OSCs draw + drag uniformly through the KKPointOSCSet (via the
+// Interaction category's extra-handle / extra-path forwards), so the base
+// renderer has no single "primary" handle of its own.
+- (NSString *)pointLabel {
+  return nil;
+}
+
+- (KKPointOSCSet *)pointSet {
+  if (!_pointSet)
+    _pointSet = [[KKPointOSCSet alloc] initWithRenderer:self];
+  return _pointSet;
+}
+
+// Feed the set the shader's current `#point osc` uniform names (its lane
+// identities). Cheap string compare skips the directive parse when the source
+// is unchanged; the set itself no-ops when the label list is unchanged.
+- (void)_syncMiniPointController {
+  NSString *src = [self _customShaderSource] ?: @"";
+  if ([src isEqualToString:_pointSyncedSource])
+    return;
+  _pointSyncedSource = [src copy];
+  NSMutableArray<NSString *> *labels = [NSMutableArray array];
+  if (src.length) {
+    ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
+    int used = 0;
+    int n = ShaderParseScalarProps(src, props, KK_SHADER_MAX_SCALAR_PROPS, 0,
+                                   &used);
+    for (int i = 0; i < n; i++)
+      if (props[i].isPoint && strcmp(props[i].oscKind, "point") == 0)
+        [labels addObject:@(props[i].name)]; // uniform name = lane identity
+  }
+  [self.pointSet setLaneLabels:labels];
 }
 
 - (KKLane *)templateLaneForLabel:(NSString *)label {
@@ -54,6 +93,12 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
 // No crop box in the mini viewer.
 - (NSString *)cropLabel {
   return nil;
+}
+
+// Match the viewer's `#point osc` handle (KKPositionOSC draws an arc), so the
+// mini-viewer point control looks the same as the on-screen one.
+- (KKMiniHandleStyle)pointHandleStyle {
+  return KKMiniHandleStyleArc;
 }
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
   // The plugin is Custom-only now; only the shared lanes have defaults here.
@@ -76,7 +121,7 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   int ns =
       ShaderParseScalarProps(src, sp, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
   for (int i = 0; i < ns; i++)
-    if ([label isEqualToString:@(sp[i].label)]) {
+    if ([label isEqualToString:@(sp[i].name)]) { // uniform name = identity
       if (sp[i].isPoint)
         return @[ @(sp[i].pdefx), @(sp[i].pdefy) ];
       return @[ @(sp[i].isChoice ? (double)sp[i].cdefault : sp[i].fdefault) ];
@@ -86,10 +131,12 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   int pool = 0;
   int nc = ShaderParseColorProps(src, cp, KK_SHADER_MAX_COLOR_PROPS, &pool);
   for (int i = 0; i < nc; i++) {
-    NSString *lbl = @(cp[i].label);
+    NSString *lbl = @(cp[i].name); // uniform name = identity
     if (!cp[i].isArray) {
       if ([label isEqualToString:lbl]) {
-        const float *d = kShaderDefaultPalette[0];
+        // Per-index palette colour (matches the catalog + render fallback), not
+        // pal[0] for every single colour.
+        const float *d = kShaderDefaultPalette[i % 10];
         return @[ @(d[0]), @(d[1]), @(d[2]), @(d[3]) ];
       }
       continue;

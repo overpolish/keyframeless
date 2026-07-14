@@ -35,9 +35,11 @@ static inline NSArray<NSNumber *> *ShaderCountAtLeast(NSInteger n,
   return out;
 }
 
-static inline KKLane *ShaderMakeColorLane(NSString *label, NSString *group,
-                                          const float *rgba) {
-  KKLane *color = [KKLane laneWithLabel:label];
+static inline KKLane *ShaderMakeColorLane(NSString *idLabel,
+                                          NSString *displayLabel,
+                                          NSString *group, const float *rgba) {
+  KKLane *color = [KKLane laneWithLabel:idLabel];
+  color.displayLabel = displayLabel;
   color.valueType = KKLaneValueTypeColor;
   color.componentMin = @[ @0.0, @0.0, @0.0, @0.0 ];
   color.componentMax = @[ @1.0, @1.0, @1.0, @1.0 ];
@@ -45,6 +47,10 @@ static inline KKLane *ShaderMakeColorLane(NSString *label, NSString *group,
   color.enabled = NO;
   color.paletteLockable = YES; // every colour joins the palette generator
   color.paletteGroup = group;  // ...but each property rerolls independently
+  // Keypose-popover scope: a single colour is its own group; an array's
+  // swatches share the array's group (so they co-edit), keeping unrelated
+  // shader lanes out of each other's keypose popover.
+  color.groupKey = group;
   color.categoryKey = @"Colors";
   color.categorySymbol = @"paintpalette";
   [color insertKeypose:[KKKeyPose keyposeAtTime:0.0
@@ -80,15 +86,19 @@ static inline void ShaderAppendColorLanes(NSMutableArray<KKLane *> *lanes,
 
   for (int pi = 0; pi < nProps; pi++) {
     ShaderColorProp *p = &props[pi];
+    // Identity = the uniform name (+ " N"/" Count" for arrays); display = the
+    // label. The palette group is the uniform name so it stays stable too.
+    NSString *name = @(p->name);
     NSString *label = @(p->label);
     if (!p->isArray) {
       // A single named colour - its own one-colour journey, distinct hue.
-      [lanes addObject:ShaderMakeColorLane(label, label, pal[pi % 10])];
+      [lanes addObject:ShaderMakeColorLane(name, label, name, pal[pi % 10])];
       continue;
     }
     // An array: count lane + N swatches (the shared bar above rerolls them).
-    NSString *countLabel = [NSString stringWithFormat:@"%@ Count", label];
-    KKLane *count = [KKLane laneWithLabel:countLabel];
+    NSString *countId = [NSString stringWithFormat:@"%@ Count", name];
+    KKLane *count = [KKLane laneWithLabel:countId];
+    count.displayLabel = [NSString stringWithFormat:@"%@ Count", label];
     count.animatable = NO;
     count.enabled = NO;
     count.integerValued = YES;
@@ -96,6 +106,7 @@ static inline void ShaderAppendColorLanes(NSMutableArray<KKLane *> *lanes,
     count.componentMin = @[ @(p->minCount) ];
     count.componentMax = @[ @(p->maxCount) ]; // field up to the directive max
     count.sliderMax = @(MIN((NSInteger)p->maxCount, kSliderCap));
+    count.groupKey = name; // joins its array's keypose-popover group
     count.categoryKey = @"Colors";
     count.categorySymbol = @"paintpalette";
     [count insertKeypose:[KKKeyPose keyposeAtTime:0.0
@@ -105,11 +116,12 @@ static inline void ShaderAppendColorLanes(NSMutableArray<KKLane *> *lanes,
     for (int i = 0; i < p->maxCount; i++) {
       NSInteger n = i + 1;
       KKLane *color = ShaderMakeColorLane(
-          [NSString stringWithFormat:@"%@ %ld", label, (long)n], label,
+          [NSString stringWithFormat:@"%@ %ld", name, (long)n],
+          [NSString stringWithFormat:@"%@ %ld", label, (long)n], name,
           pal[i % 10]);
       // "count >= n" via the absolute ceiling, so a swatch still reveals when
       // the stored count is transiently above a just-lowered max.
-      color.visibleWhenLabel = countLabel;
+      color.visibleWhenLabel = countId;
       color.visibleWhenValues = ShaderCountAtLeast(n, KK_SHADER_MAX_COLORS);
       [lanes addObject:color];
     }
@@ -129,9 +141,16 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
                                       0, &used);
   for (int pi = 0; pi < nProps; pi++) {
     ShaderScalarProp *p = &props[pi];
-    KKLane *lane = [KKLane laneWithLabel:@(p->label)];
+    // Identity = the GLSL uniform name (stable across rename/reorder); the
+    // label is display-only. So the value/keyframes follow the uniform, not the
+    // label.
+    KKLane *lane = [KKLane laneWithLabel:@(p->name)];
+    lane.displayLabel = @(p->label);
     lane.valueType = KKLaneValueTypeFloat;
     lane.enabled = NO;
+    // Each scalar/point is independent: its own keypose-popover group, so a
+    // point OSC's keypose popover doesn't list every other shader uniform.
+    lane.groupKey = @(p->name);
     lane.categoryKey = @"Shader";
     lane.categorySymbol = @"slider.horizontal.3";
     if (p->isChoice) {
@@ -351,6 +370,24 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource) {
                          range:NSMakeRange(0, code.length)] != nil;
     if (trimmed.length == 0 || !hasEntry)
       return nil;
+    // Two directives sharing a label would collapse into one lane (the label is
+    // the identity key), so reject it: the user must give each a unique label.
+    NSString *dup = ShaderFirstDuplicateLabel(code);
+    if (dup.length)
+      return [NSString
+          stringWithFormat:RLoc(
+                               @"Duplicate control \"%@\": give each directive "
+                               @"a unique label",
+                               @"Shader duplicate-label validation error."),
+                           dup];
+    NSString *dupU = ShaderFirstDuplicateUniform(code);
+    if (dupU.length)
+      return [NSString
+          stringWithFormat:RLoc(
+                               @"Duplicate uniform \"%@\": give each directive "
+                               @"a unique uniform name",
+                               @"Shader duplicate-uniform validation error."),
+                           dupU];
     KKGLSLTranspileResult *r = KKTranspileGLSL(code);
     if (r.msl)
       return nil; // compiled clean

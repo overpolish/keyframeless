@@ -119,6 +119,7 @@
 				"Plugin/Render/Plugin+Render.m",
 				Plugin/Render/Shader.metal,
 				Plugin/Render/ShaderMiniViewerRenderer.m,
+				"Plugin/Render/ShaderMiniViewerRenderer+Interaction.m",
 				Plugin/ShaderUI.xcstrings,
 				"Wrapper Application/Info.plist",
 			);

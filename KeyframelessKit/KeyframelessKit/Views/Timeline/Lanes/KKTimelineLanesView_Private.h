@@ -446,7 +446,10 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// in.
 @interface _KKExcludedRow : NSView
 @property(nonatomic, copy, nullable) void (^onAnimate)(void);
+// `displayLabel` is the user-facing name shown in the row (a dynamic plugin's
+// separate identity vs label); pass nil to fall back to `label`.
 - (instancetype)initWithLabel:(NSString *)label
+                 displayLabel:(nullable NSString *)displayLabel
                       message:(NSString *)message
                        gutter:(BOOL)gutter;
 @end

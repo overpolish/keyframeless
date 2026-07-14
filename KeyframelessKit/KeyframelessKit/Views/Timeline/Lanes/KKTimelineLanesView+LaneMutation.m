@@ -216,6 +216,12 @@
   KKLane *lane = [existing copy];
   lane.codeString = code;
   [self _replaceLane:lane forLabel:label];
+  // Persist the code to the timeline param, else the render never sees it: the
+  // in-memory edit + onCodeCommitted refresh only the inspector, so a pasted
+  // shader stayed invisible to the render until an unrelated value edit
+  // serialized the whole timeline.
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(_timeline);
   // Notify the host that the code changed (debounced upstream), so a host with
   // source-derived lanes (e.g. a shader `// #color` directive) can re-derive
   // and refresh the lane set live.
@@ -238,6 +244,10 @@
           ? [sections subarrayWithRange:NSMakeRange(1, sections.count - 1)]
           : nil;
   [self _replaceLane:lane forLabel:label];
+  // Persist to the timeline param so the render picks up the edit (see
+  // _setLaneCode: for why the onCodeCommitted-only path left it stale).
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(_timeline);
   if (self.onCodeCommitted)
     self.onCodeCommitted(lane.codeString);
 }

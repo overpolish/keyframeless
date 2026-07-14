@@ -300,6 +300,7 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
 @interface KKTimelineLanesView (BoundaryNav)
 - (void)_publishBoundaryRequestForFraction:(double)fraction;
 - (NSArray<NSNumber *> *)_animatableKPFractions;
+- (double)_snapEditFractionToKeypose:(double)fraction;
 - (void)_refreshBoundaryPopoverNavEnabled;
 - (void)_navigateBoundaryPopoverDirection:(NSInteger)direction;
 - (void)_renderModeDidChange:(KKMiniViewerRenderMode)mode;

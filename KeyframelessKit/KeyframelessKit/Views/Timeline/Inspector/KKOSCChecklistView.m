@@ -30,6 +30,7 @@ static const NSInteger kOSCMaxVisibleRows = 6;
   // spotlight maps straight back to the inspector's compound coordinates.
   NSMutableArray<NSNumber *> *_rowCompound;
   NSMutableArray<NSNumber *> *_rowSegment;
+  NSString * (^_displayForKey)(NSString *);
 }
 
 + (CGFloat)preferredWidth {
@@ -56,9 +57,16 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
 
 - (instancetype)initWithCompounds:(NSArray<NSArray<NSString *> *> *)compounds
                            states:(NSArray<NSArray<NSNumber *> *> *)states {
+  return [self initWithCompounds:compounds states:states displayForKey:nil];
+}
+
+- (instancetype)initWithCompounds:(NSArray<NSArray<NSString *> *> *)compounds
+                           states:(NSArray<NSArray<NSNumber *> *> *)states
+                    displayForKey:(NSString * (^)(NSString *))displayForKey {
   self = [super initWithFrame:NSZeroRect];
   if (!self)
     return nil;
+  _displayForKey = [displayForKey copy];
   _compounds = [compounds copy];
   _states = [NSMutableArray array];
   for (NSArray<NSNumber *> *s in states)
@@ -128,6 +136,11 @@ static NSInteger KKOSCIndentForKey(NSArray<NSString *> *compound,
       // draw time, like the manage dropdown's rows.
       row.rowLabel = [compound[si] componentsSeparatedByString:@"."].lastObject
                          ?: compound[si];
+      // rowLabel stays the identity (guide reporting keys on it); show the
+      // plugin's display name for this element when provided.
+      NSString *disp = _displayForKey ? _displayForKey(compound[si]) : nil;
+      if (disp.length)
+        row.displayOverride = disp;
       row.checked =
           (si < (NSInteger)_states[ci].count) ? _states[ci][si].boolValue : NO;
       row.indentLevel = KKOSCIndentForKey(compound, si);

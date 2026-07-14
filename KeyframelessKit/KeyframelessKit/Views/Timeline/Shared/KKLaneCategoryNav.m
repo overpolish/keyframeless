@@ -75,11 +75,11 @@ static NSArray<NSString *> *_kkCategoryUnits(NSArray<KKLane *> *lanes) {
     NSString *cat = l.categoryKey;
     if (cat.length) {
       NSMutableArray<NSString *> *labels =
-          [NSMutableArray arrayWithObject:KKLocalizedParamName(l.label)];
+          [NSMutableArray arrayWithObject:KKLocalizedParamName(l.displayName)];
       NSInteger j = i + 1;
       while (j < (NSInteger)lanes.count && [lanes[j].categoryKey
                                                isEqualToString:cat]) {
-        [labels addObject:KKLocalizedParamName(lanes[j].label)];
+        [labels addObject:KKLocalizedParamName(lanes[j].displayName)];
         j++;
       }
       [units
@@ -89,7 +89,7 @@ static NSArray<NSString *> *_kkCategoryUnits(NSArray<KKLane *> *lanes) {
                                              componentsJoinedByString:@", "]]];
       i = j;
     } else {
-      [units addObject:KKLocalizedParamName(l.label)];
+      [units addObject:KKLocalizedParamName(l.displayName)];
       i++;
     }
   }

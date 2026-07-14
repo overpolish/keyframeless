@@ -180,6 +180,12 @@
     display.oscEditedOnly = tmpl ? tmpl.oscEditedOnly : l.oscEditedOnly;
     display.locked = l.locked; // locked layer -> read-only value row
     [display kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
+    // Display label lives on the TEMPLATE (a dynamic plugin's separate identity
+    // vs label) - it isn't serialized on the timeline lane, so `l.displayLabel`
+    // is nil here and would clobber the good value kkApplyPickerMetadataFrom
+    // just copied from tmpl. Prefer the template; fall back to the source lane
+    // only when no template resolved.
+    display.displayLabel = tmpl.displayLabel ?: l.displayLabel;
     KKKeyPose *displayKp = [KKKeyPose keyposeAtTime:0.0
                                              values:vals ?: @[ @0.0 ]];
     // Carry the curve state so the row's toggle reflects this keypose.

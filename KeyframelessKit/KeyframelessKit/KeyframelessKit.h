@@ -84,6 +84,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPluginHost.h>
 #import <KeyframelessKit/KKPluginInstanceState.h>
 #import <KeyframelessKit/KKPointOSC.h>
+#import <KeyframelessKit/KKPointOSCSet.h>
 #import <KeyframelessKit/KKPointRowView.h>
 #import <KeyframelessKit/KKPopoverExtraRow.h>
 #import <KeyframelessKit/KKPopoverKeepAlive.h>

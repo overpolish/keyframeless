@@ -46,7 +46,8 @@
     }
     [_openContentPopover close];
 
-    KKSetBoundaryEditing(self.miniViewerDelegate, YES, cfg.fraction);
+    KKSetBoundaryEditing(self.miniViewerDelegate, YES,
+                         [self _snapEditFractionToKeypose:cfg.fraction]);
     KKSetSuppressedHandles(self.miniViewerDelegate, cfg.excludedLabels);
     _openStaticBoundaryFraction = cfg.fraction;
     _openStaticBoundaryLanes = [cfg.lanes copy];

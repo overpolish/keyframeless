@@ -300,6 +300,9 @@ static const CGFloat kChecklistPillH = 24.0;
     _KKManageRow *row = [self appendRowWithLabel:lane.label
                                      categoryKey:_rowCategoryByLabel[lane.label]
                                      indentLevel:0];
+    // rowLabel stays the identity (used for checked-state / search); show the
+    // lane's displayName so a dynamic plugin's stable key isn't user-facing.
+    row.displayOverride = KKLocalizedParamName(lane.displayName);
     [self configureRow:row forLane:lane];
   }
   [self refilterAndResize];

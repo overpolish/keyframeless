@@ -170,6 +170,13 @@
     NSString *json = [KKTimeline jsonFromTimeline:updated];
     if (json)
       KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
+    // Writing the timeline blob alone doesn't re-render: FCP serves a cached
+    // frame for a static playhead until a scratch param changes. Nudge so a
+    // persisted change (e.g. a pasted shader source, which never touches a
+    // value field) reaches the render immediately instead of waiting for the
+    // next unrelated param write.
+    KKWriteCustomParamString(setAPI, [[NSUUID UUID] UUIDString],
+                             renderNudgeParamID);
     [act endAction:strong];
   };
 

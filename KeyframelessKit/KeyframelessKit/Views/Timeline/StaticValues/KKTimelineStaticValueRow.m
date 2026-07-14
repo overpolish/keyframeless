@@ -183,6 +183,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   double _laneScrubStep;          // lane's explicit scrub increment (0 = auto)
   KKSeedView *_seedView; // seed control (value + re-roll), seedField lanes only
   BOOL _seedField;
+  NSTextField *_titleField; // the lane-name caption; refreshed by applyLane:
   KKPillToggleRowView *_choicePill;   // grouped radio pill, choiceLabels only
   NSArray<NSString *> *_choiceLabels; // English identifiers (count >= 2)
   NSArray<NSImage *> *_choiceIcons;   // optional per-choice glyphs (display)
@@ -649,7 +650,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   };
   CGFloat w = 0;
   for (KKLane *lane in lanes) {
-    NSString *name = KKLocalizedParamName(lane.label);
+    NSString *name = KKLocalizedParamName(lane.displayName);
     w = MAX(w, ceil([name sizeWithAttributes:attrs].width));
   }
   // Trailing breathing room so the value controls never butt up against the
@@ -696,12 +697,13 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   _paletteGeneratorBar = lane.paletteGeneratorBar;
   _labelColumnW = labelColumnWidth;
 
-  NSTextField *title = _KKMakeCaption(KKLocalizedParamName(lane.label));
+  NSTextField *title = _KKMakeCaption(KKLocalizedParamName(lane.displayName));
+  _titleField = title;
   // Truncate a too-long localized name to an ellipsis (the column is capped);
   // the full name is on hover so nothing is lost.
   title.lineBreakMode = NSLineBreakByTruncatingTail;
   title.usesSingleLineMode = YES;
-  title.toolTip = KKLocalizedParamName(lane.label);
+  title.toolTip = KKLocalizedParamName(lane.displayName);
   [self addSubview:title];
   // Uniform label column so the value controls line up across rows regardless
   // of label length (widest localized name); 54 is the legacy fallback.
@@ -1686,6 +1688,11 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   }
   [self applyValues:lane.keyposes.firstObject.values];
   [self refreshDisplay];
+  // Refresh the shown name so a display-label edit (identity unchanged, so the
+  // row is reused not remade) updates live instead of going stale.
+  NSString *shown = KKLocalizedParamName(lane.displayName);
+  _titleField.stringValue = shown ?: @"";
+  _titleField.toolTip = shown;
   // Locked lane = read-only: dim + swallow input (handled in hitTest:). Set
   // here (not just init) so a row reused across an updateUnoptedLanes / rebuild
   // also reflects the current lock state.

@@ -100,25 +100,32 @@
     KKLane *l = lanes[i];
     NSString *cat = l.categoryKey;
     if (cat.length) {
-      NSMutableArray<NSString *> *grp =
-          [NSMutableArray arrayWithObject:l.label];
+      // Hold the lanes, not just labels: `targets` needs the stable identity
+      // (`label`) while `display` needs the user-facing `displayName` - a
+      // shader groups every lane under one category, so using the label for
+      // both showed uniform names for the whole run.
+      NSMutableArray<KKLane *> *grp = [NSMutableArray arrayWithObject:l];
       NSInteger j = i + 1;
       while (j < (NSInteger)lanes.count && [lanes[j].categoryKey
                                                isEqualToString:cat]) {
-        [grp addObject:lanes[j].label];
+        [grp addObject:lanes[j]];
         j++;
       }
+      NSMutableArray<NSString *> *grpLabels =
+          [NSMutableArray arrayWithCapacity:grp.count];
+      for (KKLane *gl in grp)
+        [grpLabels addObject:gl.label];
       [display addObject:KKLocalizedParamName(cat)];
-      [targets addObject:[grp copy]];
+      [targets addObject:[grpLabels copy]];
       [isMaster addObject:@YES];
-      for (NSString *lab in grp) {
-        [display addObject:KKLocalizedParamName(lab)];
-        [targets addObject:@[ lab ]];
+      for (KKLane *gl in grp) {
+        [display addObject:KKLocalizedParamName(gl.displayName)];
+        [targets addObject:@[ gl.label ]];
         [isMaster addObject:@NO];
       }
       i = j;
     } else {
-      [display addObject:KKLocalizedParamName(l.label)];
+      [display addObject:KKLocalizedParamName(l.displayName)];
       [targets addObject:@[ l.label ]];
       [isMaster addObject:@NO];
       i++;

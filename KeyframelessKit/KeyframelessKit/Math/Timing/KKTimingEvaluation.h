@@ -138,6 +138,15 @@ NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtVisualFractionSmoothed(
 FOUNDATION_EXPORT BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac,
                                                double frameDurSec);
 
+/// Like KKLaneVisibleAtFraction, but the flat lead-in (before the first kp) and
+/// lead-out (after the last kp) do NOT count - only a fraction sitting ON a
+/// keypose returns YES for an animated lane (constants still always YES). Use
+/// this where "the handle sits exactly on a keypose" is the question (e.g. an
+/// OSC arc that should appear only at keyposes, and the anchor dot it covers),
+/// so a lane parked past its final keypose still shows every anchor.
+FOUNDATION_EXPORT BOOL KKLaneKeyedAtFraction(KKLane *lane, double frac,
+                                             double frameDurSec);
+
 /// Look-back window (seconds) used by both Canvas and MagicMove for the
 /// rotate-with-motion velocity sample.
 FOUNDATION_EXPORT const double KKRotateWithMotionWindowSeconds;

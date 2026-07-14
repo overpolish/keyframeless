@@ -26,6 +26,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithCompounds:(NSArray<NSArray<NSString *> *> *)compounds
                            states:(NSArray<NSArray<NSNumber *> *> *)states;
 
+/// Maps an element key to the user-facing name to SHOW for it (else the key's
+/// localized leaf is used). Lets a dynamic plugin key elements on a stable id
+/// (e.g. a shader uniform name) while the checklist shows the display label.
+/// Set BEFORE the view is added; applied at build time.
+- (instancetype)initWithCompounds:(NSArray<NSArray<NSString *> *> *)compounds
+                           states:(NSArray<NSArray<NSNumber *> *> *)states
+                    displayForKey:
+                        (nullable NSString * (^)(NSString *key))displayForKey;
+
 /// Fired when a row's checkbox toggles, with the element's position in
 /// `compounds` and its new state.
 @property(nonatomic, copy, nullable) void (^onToggled)

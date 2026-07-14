@@ -180,7 +180,7 @@
   for (KKLane *lane in [self _animatableLanes]) {
     if (lane.headerPlaceholder)
       continue; // header rows draw a full-width name, not a gutter label
-    NSString *label = KKLocalizedParamName(lane.label ?: @"");
+    NSString *label = KKLocalizedParamName(lane.displayName ?: @"");
     maxW = MAX(maxW, ceil([label sizeWithAttributes:attrs].width));
   }
   // inset (left) + label + inset (gap before tracks)

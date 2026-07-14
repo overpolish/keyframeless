@@ -60,6 +60,15 @@
     // same timeline) gets a category-less placeholder so the checklist still
     // renders rather than silently falling back to a pill bar.
     KKLane *lane = byLabel[label] ?: [KKLane laneWithLabel:label];
+    // displayLabel isn't serialized on the timeline lane, so re-apply it from
+    // the template - else the applies-to checklist shows the stable identity
+    // (e.g. a shader uniform name) instead of the user's label.
+    for (KKLane *t in _availableLanes)
+      if ([t.label isEqualToString:lane.label] && t.displayLabel) {
+        lane = [lane copy];
+        lane.displayLabel = t.displayLabel;
+        break;
+      }
     [out addObject:lane];
   }
   return out;

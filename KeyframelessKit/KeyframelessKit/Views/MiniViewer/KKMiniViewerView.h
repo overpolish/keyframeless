@@ -89,6 +89,28 @@ NS_ASSUME_NONNULL_BEGIN
 /// shared `KKPointOSC` glyph. Return nil/empty for none.
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     extraHandleCentersForContentRect:(CGRect)contentRect;
+/// Additional PRIMARY-style point handles beyond the single
+/// `pointHandleCenter`, for a dynamic plugin that exposes more than one point
+/// OSC at once (e.g. Shader's multiple `#point osc` lanes - the mini sibling of
+/// the viewer drawing every KKPositionOSC). Each is drawn with the delegate's
+/// `pointHandleStyle` glyph (arc / dot), same as the primary handle; the
+/// delegate owns their hit-test / drag. Each element is a bundle: `@"center"` =
+/// NSValue point (overlay points, y-up), `@"alpha"` = NSNumber ghost alpha
+/// (< 1 dims an Opt-revealed hidden handle). Return nil/empty for none.
+- (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
+                                                 (KKMiniViewerView *)canvas
+                   extraPointHandleGlyphsForContentRect:(CGRect)contentRect;
+/// Additional motion paths (one per extra point OSC), so every animated point
+/// lane draws its OWN trajectory - not just the first. Sibling of
+/// `extraPointHandleGlyphsForContentRect:`; without it, whichever lane is first
+/// would own the single motion path and the rest would look constant. Each
+/// element is a bundle: `@"poly"` = polyline `NSArray<NSValue*>` (empty for a
+/// constant lane), `@"segs"` = flattened tangent segments, `@"anchors"` =
+/// keypose dots (all overlay points, y-up), and optional `@"alpha"` = NSNumber
+/// ghost alpha for an Opt-revealed hidden path. Return nil/empty for none.
+- (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
+                                                 (KKMiniViewerView *)canvas
+                         extraMotionPathsForContentRect:(CGRect)contentRect;
 /// Scale-box handle centres (overlay points, y-up): 0-3 corners BL/BR/TR/TL,
 /// 4-7 edges. Empty/nil if the delegate draws no scale box. Lets a guide
 /// spotlight a scale handle; the drag itself reuses the generic handle path.

@@ -25,14 +25,18 @@
   return NSMakeSize(NSViewNoIntrinsicMetric, kFloatRowH);
 }
 - (instancetype)initWithLabel:(NSString *)label
+                 displayLabel:(NSString *)displayLabel
                       message:(NSString *)message
                        gutter:(BOOL)gutter {
   self = [super initWithFrame:NSMakeRect(0, 0, kCanvasPopoverW, kFloatRowH)];
   if (!self)
     return nil;
   // Localize (also strips the `␟<layerID>` tag on multi-owner timelines) so the
-  // excluded row reads "Scale", not "Scale␟<uuid>", like the editable rows.
-  NSTextField *title = _KKMakeCaption(KKLocalizedParamName(label));
+  // excluded row reads "Scale", not "Scale␟<uuid>", like the editable rows. Use
+  // the display label when the plugin gave the lane a separate one (e.g. a
+  // shader uniform's "Center"), else fall back to the identity.
+  NSTextField *title = _KKMakeCaption(
+      KKLocalizedParamName(displayLabel.length ? displayLabel : label));
   NSTextField *msg = _KKMakeCaption(message);
   msg.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.4];
 

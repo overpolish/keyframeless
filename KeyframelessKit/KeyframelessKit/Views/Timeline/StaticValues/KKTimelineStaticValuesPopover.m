@@ -1288,8 +1288,18 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     [old removeFromSuperview];
     [_rowsByLabel removeObjectForKey:label];
 
+    // The lane carries the user-facing display label (its identity `label` may
+    // be a stable key like a shader uniform name); resolve it so the excluded
+    // row reads the same name as the editable row it replaced.
+    NSString *displayLabel = nil;
+    for (KKLane *l in _lanes)
+      if ([l.label isEqualToString:label]) {
+        displayLabel = l.displayLabel;
+        break;
+      }
     _KKExcludedRow *row =
         [[_KKExcludedRow alloc] initWithLabel:label
+                                 displayLabel:displayLabel
                                       message:message
                                        gutter:(_rowRemoveHandler != nil)];
     row.translatesAutoresizingMaskIntoConstraints = NO;

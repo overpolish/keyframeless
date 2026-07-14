@@ -63,14 +63,22 @@
     BOOL enabled = [state[@"loopEnabled"] boolValue];
     NSInteger tab = [state[@"activeTab"] integerValue];
     // Shared glue: refresh OSC master + lastUIState + hidden set, and push the
-    // tick + mini-viewer (undo/redo of the tick or a pill repaints live).
-    [self kkRefreshOSCVisibilityFromState:state
-                                     view:self.inspectorView
-                                 renderer:(KKMiniViewerRenderer *)self
-                                              .inspectorView.miniViewerDelegate
-                              elementKeys:[KKPlugin
-                                              kkOSCElementKeysForCompounds:
-                                                  [ShaderPlugin oscCompounds]]];
+    // tick + mini-viewer (undo/redo of the tick or a pill repaints live). Use
+    // the SOURCE-AWARE element keys (the shader's `osc` lanes) - the static
+    // oscCompounds is empty, so passing it would rebuild the hidden set from no
+    // keys and wipe an opt-click hide the instant it persists.
+    NSString *oscSrc =
+        [ShaderPlugin shaderSourceFromTimeline:KKProcessTimelineSnapshot()];
+    [self
+        kkRefreshOSCVisibilityFromState:state
+                                   view:self.inspectorView
+                               renderer:(KKMiniViewerRenderer *)self
+                                            .inspectorView.miniViewerDelegate
+                            elementKeys:[KKPlugin
+                                            kkOSCElementKeysForCompounds:
+                                                [ShaderPlugin
+                                                    oscCompoundsForShaderSource:
+                                                        oscSrc]]];
     dispatch_async(dispatch_get_main_queue(), ^{
       [self.inspectorView setLoopEnabled:enabled];
       [self.inspectorView setActiveTab:tab];

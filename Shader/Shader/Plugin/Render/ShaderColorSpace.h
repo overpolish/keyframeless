@@ -12,6 +12,7 @@
 #ifndef __METAL_VERSION__
 
 #import <Foundation/Foundation.h>
+#import <ctype.h>
 #import <math.h>
 #import <string.h>
 
@@ -217,8 +218,9 @@ ShaderFillColorPool(NSString *source, vector_float4 *pool,
   for (int pi = 0; pi < nProps; pi++) {
     ShaderColorProp *p = &props[pi];
     if (p->isArray) {
+      // Look up by the uniform NAME (lane identity), not the display label.
       NSArray<NSNumber *> *ccV =
-          valuesForLabel([NSString stringWithFormat:@"%s Count", p->label]);
+          valuesForLabel([NSString stringWithFormat:@"%s Count", p->name]);
       int cc = ccV.count ? (int)lround(ccV[0].doubleValue) : p->defaultCount;
       if (cc < 0)
         cc = 0;
@@ -226,7 +228,7 @@ ShaderFillColorPool(NSString *source, vector_float4 *pool,
         cc = p->count;
       for (int i = 0; i < p->count; i++) {
         NSArray<NSNumber *> *cv = valuesForLabel(
-            [NSString stringWithFormat:@"%s %d", p->label, i + 1]);
+            [NSString stringWithFormat:@"%s %d", p->name, i + 1]);
         if (cv.count >= 4)
           pool[p->poolOffset + i] =
               (vector_float4){cv[0].floatValue, cv[1].floatValue,
@@ -238,13 +240,16 @@ ShaderFillColorPool(NSString *source, vector_float4 *pool,
       }
       pool[p->poolOffset + p->count] = (vector_float4){(float)cc, 0, 0, 0};
     } else {
-      NSArray<NSNumber *> *cv = valuesForLabel(@(p->label));
+      NSArray<NSNumber *> *cv = valuesForLabel(@(p->name));
       if (cv.count >= 4)
         pool[p->poolOffset] =
             (vector_float4){cv[0].floatValue, cv[1].floatValue,
                             cv[2].floatValue, cv[3].floatValue};
       else {
-        const float *d = kShaderDefaultPalette[0];
+        // Fall back to the SAME per-index palette colour the catalog seeds the
+        // lane with (pal[pi % 10]); using pal[0] for every single colour made
+        // an un-seeded first render collapse all colours to one (purple).
+        const float *d = kShaderDefaultPalette[pi % 10];
         pool[p->poolOffset] = (vector_float4){d[0], d[1], d[2], d[3]};
       }
     }
@@ -278,6 +283,11 @@ typedef struct ShaderScalarProp {
   char options[256];   // choice: comma-separated pill labels
   int choiceCount;     // number of options
   int cdefault;        // choice default index
+  // On-screen control opt-in (`osc` attribute). oscKind: "" = none, "point"
+  // (position handle, #point), "ring"/"scale" (#float osc=ring|scale), "rotate"
+  // (#angle osc). oscAxis: 'x'/'y'/'z' ring plane for rotate (default 'z').
+  char oscKind[16];
+  char oscAxis;
 } ShaderScalarProp;
 
 static inline double ShaderAttrDouble(NSString *s, NSString *pattern,
@@ -360,6 +370,41 @@ static inline int ShaderParseScalarProps(NSString *source,
             : ShaderPrettifyColorName(nm);
     strncpy(p.label, label.UTF8String ?: "", sizeof(p.label) - 1);
     p.poolOffset = pool;
+    // On-screen control opt-in: `osc` (bare) or `osc=<ring|scale>`. #point ->
+    // position handle; #angle -> rotation ring (axis=x|y|z, default z); #float
+    // -> ring or scale per the osc value.
+    p.oscAxis = 'z';
+    if ([[NSRegularExpression regularExpressionWithPattern:@"\\bosc\\b"
+                                                   options:0
+                                                     error:nil]
+            firstMatchInString:attrs
+                       options:0
+                         range:NSMakeRange(0, attrs.length)]) {
+      NSTextCheckingResult *ov = [[NSRegularExpression
+          regularExpressionWithPattern:@"\\bosc\\s*=\\s*(\\w+)"
+                               options:0
+                                 error:nil]
+          firstMatchInString:attrs
+                     options:0
+                       range:NSMakeRange(0, attrs.length)];
+      NSString *val = (ov && [ov rangeAtIndex:1].location != NSNotFound)
+                          ? [attrs substringWithRange:[ov rangeAtIndex:1]]
+                          : nil;
+      NSString *kindStr =
+          val ? val.lowercaseString
+              : (p.isPoint ? @"point" : (p.isAngle ? @"rotate" : @""));
+      strncpy(p.oscKind, kindStr.UTF8String ?: "", sizeof(p.oscKind) - 1);
+      NSTextCheckingResult *am = [[NSRegularExpression
+          regularExpressionWithPattern:@"\\baxis\\s*=\\s*([xyzXYZ])"
+                               options:0
+                                 error:nil]
+          firstMatchInString:attrs
+                     options:0
+                       range:NSMakeRange(0, attrs.length)];
+      if (am && [am rangeAtIndex:1].location != NSNotFound)
+        p.oscAxis = (char)tolower([[attrs
+            substringWithRange:[am rangeAtIndex:1]] characterAtIndex:0]);
+    }
     if (p.isChoice) {
       NSTextCheckingResult *om = [[NSRegularExpression
           regularExpressionWithPattern:@"\\boptions\\s*=\\s*\"([^\"]*)\""
@@ -454,7 +499,8 @@ ShaderFillScalarPool(NSString *source, vector_float4 *pool, int startOffset,
                                       startOffset, &used);
   for (int pi = 0; pi < nProps; pi++) {
     ShaderScalarProp *p = &props[pi];
-    NSArray<NSNumber *> *v = valuesForLabel(@(p->label));
+    // Look up by the uniform NAME (the lane identity), not the display label.
+    NSArray<NSNumber *> *v = valuesForLabel(@(p->name));
     if (p->isPoint) {
       double x = v.count >= 1 ? v[0].doubleValue : p->pdefx;
       double y = v.count >= 2 ? v[1].doubleValue : p->pdefy;
@@ -468,6 +514,66 @@ ShaderFillScalarPool(NSString *source, vector_float4 *pool, int startOffset,
     pool[p->poolOffset] = (vector_float4){(float)val, 0, 0, 0};
   }
   return startOffset + used;
+}
+
+/// The first control label used by more than one directive (colour or scalar),
+/// or nil when all are unique. The label is the lane identity (values, OSC,
+/// pool fill all key on it), so a duplicate is a compile error - the editor
+/// surfaces this rather than silently merging two controls into one.
+static inline NSString *ShaderFirstDuplicateLabel(NSString *source) {
+  if (!source.length)
+    return nil;
+  NSMutableSet<NSString *> *seen = [NSMutableSet set];
+  ShaderColorProp cp[KK_SHADER_MAX_COLOR_PROPS];
+  int cpool = 0;
+  int nc = ShaderParseColorProps(source, cp, KK_SHADER_MAX_COLOR_PROPS, &cpool);
+  for (int i = 0; i < nc; i++) {
+    NSString *l = @(cp[i].label);
+    if ([seen containsObject:l])
+      return l;
+    [seen addObject:l];
+  }
+  ShaderScalarProp sp[KK_SHADER_MAX_SCALAR_PROPS];
+  int used = 0;
+  int ns =
+      ShaderParseScalarProps(source, sp, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
+  for (int i = 0; i < ns; i++) {
+    NSString *l = @(sp[i].label);
+    if ([seen containsObject:l])
+      return l;
+    [seen addObject:l];
+  }
+  return nil;
+}
+
+/// The first uniform NAME declared by more than one directive, or nil when all
+/// are unique. Two same-named uniforms produce two identically-named block
+/// members (`<name>_kk`) and a cryptic glslang "duplicate member name" - catch
+/// it here for a clear editor error instead.
+static inline NSString *ShaderFirstDuplicateUniform(NSString *source) {
+  if (!source.length)
+    return nil;
+  NSMutableSet<NSString *> *seen = [NSMutableSet set];
+  ShaderColorProp cp[KK_SHADER_MAX_COLOR_PROPS];
+  int cpool = 0;
+  int nc = ShaderParseColorProps(source, cp, KK_SHADER_MAX_COLOR_PROPS, &cpool);
+  for (int i = 0; i < nc; i++) {
+    NSString *nm = @(cp[i].name);
+    if ([seen containsObject:nm])
+      return nm;
+    [seen addObject:nm];
+  }
+  ShaderScalarProp sp[KK_SHADER_MAX_SCALAR_PROPS];
+  int used = 0;
+  int ns =
+      ShaderParseScalarProps(source, sp, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
+  for (int i = 0; i < ns; i++) {
+    NSString *nm = @(sp[i].name);
+    if ([seen containsObject:nm])
+      return nm;
+    [seen addObject:nm];
+  }
+  return nil;
 }
 
 /// Fallback shared-params block (timing + grain). `origin`/`scale`/`rotation`

@@ -5,8 +5,10 @@
 
 #import "KKPositionMiniController.h"
 
+#import <KeyframelessKit/KKPluginHost.h> // KKProcessFrameDurationSeconds
 #import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKSpatialCurve.h>
+#import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneVisibleAtFraction
 #import <KeyframelessKit/KKTimingStage.h>
 #import <simd/simd.h>
 
@@ -134,7 +136,8 @@ static const CGFloat kHandleHitTolPt = 12.0;
     return;
   double nx, ny;
   if (self.viewToValue) {
-    simd_float2 v = self.viewToValue(p, cr); // cursor in member-local value space
+    simd_float2 v =
+        self.viewToValue(p, cr); // cursor in member-local value space
     nx = v.x;
     ny = v.y;
   } else {
@@ -243,6 +246,15 @@ static const CGFloat kHandleHitTolPt = 12.0;
   if ([self.renderer ghostAlphaForLabel:self.laneLabel] < 0.999)
     return -1;
   if (lane.keyposes.count == 0)
+    return -1;
+  // Only skip the anchor the ARC handle actually covers - i.e. when the handle
+  // sits exactly ON a keypose at editFraction. Use KKLaneKeyedAtFraction (NOT
+  // ...VisibleAtFraction) so the flat lead-in / lead-out - where the handle
+  // parks on the first/last keypose's held value but the fraction isn't AT it -
+  // doesn't skip that boundary anchor. Between keyposes and across the holds,
+  // every anchor shows (matching the main viewer once its handle is off).
+  if (!KKLaneKeyedAtFraction(lane, self.renderer.editFraction,
+                             KKProcessFrameDurationSeconds()))
     return -1;
   return KKLaneNearestKeyposeIndex(lane, self.renderer.editFraction);
 }

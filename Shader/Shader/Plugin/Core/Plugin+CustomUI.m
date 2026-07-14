@@ -55,9 +55,33 @@
 }
 
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {
-  // The legacy Origin / Scale / Rotation on-screen controls are gone; no OSC
-  // elements until shader-exposed OSCs land.
+  // Static fallback: the real set is per-shader (oscCompoundsForShaderSource:).
   return @[];
+}
+
+// The OSC element set the current shader declares, for the visibility popover /
+// settings cog. Each `osc`-annotated lane is one compound (single element for a
+// point handle; rotation gizmos will be one compound of per-axis rings).
++ (NSArray<NSArray<NSString *> *> *)oscCompoundsForShaderSource:
+    (NSString *)source {
+  NSMutableArray<NSArray<NSString *> *> *out = [NSMutableArray array];
+  if (!source.length)
+    return out;
+  ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
+  int used = 0;
+  int n = ShaderParseScalarProps(source, props, KK_SHADER_MAX_SCALAR_PROPS, 0,
+                                 &used);
+  for (int i = 0; i < n; i++)
+    if (props[i].oscKind[0] != '\0') {
+      NSString *name = @(props[i].name); // uniform name = lane identity
+      [out addObject:@[ name ]];
+      // A #point osc also owns a motion-PATH element, toggleable independently
+      // of its handle (matching MagicMove's separate Position + Path). The key
+      // is "<name> Path", the same pathLabel the viewer/mini controllers use.
+      if (props[i].isPoint && strcmp(props[i].oscKind, "point") == 0)
+        [out addObject:@[ [name stringByAppendingString:@" Path"] ]];
+    }
+  return out;
 }
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
@@ -120,9 +144,9 @@
     // Source-aware: derive the lane set (incl. the dynamic Colours group) from
     // the current shader source, so a shader's `// #color` directive surfaces
     // its swatches + palette generator.
-    NSArray<KKLane *> *available = [ShaderPlugin
-        availableLanesForShaderSource:[ShaderPlugin
-                                          shaderSourceFromTimeline:timeline]];
+    NSString *shaderSrc = [ShaderPlugin shaderSourceFromTimeline:timeline];
+    NSArray<KKLane *> *available =
+        [ShaderPlugin availableLanesForShaderSource:shaderSrc];
     ShaderInspectorView *view =
         [[ShaderInspectorView alloc] initWithAPIManager:self.apiManager
                                             loopEnabled:loopEnabled
@@ -167,7 +191,8 @@
     // default of an untouched (not-yet-in-timeline) constant Scale.
     if ([oscRenderer isKindOfClass:[ShaderMiniViewerRenderer class]])
       ((ShaderMiniViewerRenderer *)oscRenderer).laneTemplates = available;
-    NSArray<NSArray<NSString *> *> *oscCompounds = [ShaderPlugin oscCompounds];
+    NSArray<NSArray<NSString *> *> *oscCompounds =
+        [ShaderPlugin oscCompoundsForShaderSource:shaderSrc];
     oscRenderer.handlesHidden = !oscMasterVisible;
     [self kkApplyOSCVisibilityFromState:uiState
                             elementKeys:[KKPlugin kkOSCElementKeysForCompounds:
