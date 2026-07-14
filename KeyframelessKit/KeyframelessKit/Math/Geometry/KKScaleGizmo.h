@@ -111,6 +111,36 @@ KKRingOSCDragValues(int fields, BOOL linked, double startX, double startY,
                     double dragStartDist, double dx, double dy, double minDim,
                     double mn, double mx, BOOL bounded, BOOL isInt);
 
+/// New box-OSC lane values for a scale-box HANDLE drag - the box sibling of
+/// KKRingOSCDragValues. The box is the ring's twin: it sizes through the SAME
+/// KKRingOSCExtentForNorm curve (so a `#float`/`#percent`/`#int`/vec2 `#multi`
+/// field is a square/rectangle of the same extent as its ring), but is edited
+/// via KKBoxOSC's 8 handles instead of a radial drag, and shows a value
+/// readout.
+///
+/// `handle` 0-7 (classified by KKScaleHandleIsCorner/ControlsX/ControlsY).
+/// `fields` = component count (1 = square: any handle resizes the one value; 2
+/// = rectangle). `pressNormX`/`pressNormY` = the per-axis NORMALIZED values at
+/// press; `candNormX`/`candNormY` = the candidate norms the cursor's per-axis
+/// distance from the box centre maps to (via KKRingOSCNormForExtent). `linked`
+/// = the EFFECTIVE aspect lock (caller already XORs the lane lock with Shift).
+///
+/// Corner drives both axes (one geometric-mean factor when linked, else free);
+/// edge drives one axis (the other follows by ratio when linked). Returns
+/// `fields` final values (norm mapped through min/max, clamped when bounded,
+/// rounded when integer).
+FOUNDATION_EXPORT NSArray<NSNumber *> *
+KKBoxOSCDragValues(NSInteger handle, int fields, BOOL linked, double pressNormX,
+                   double pressNormY, double candNormX, double candNormY,
+                   double mn, double mx, BOOL bounded, BOOL isInt);
+
+/// The "X" / "X x Y" readout of a box OSC's raw value(s), formatted by field
+/// type: a percent shows "%", an integer a whole number, a float one decimal.
+/// Shared by the in-viewer box and the mini-viewer box so they read
+/// identically.
+FOUNDATION_EXPORT NSString *KKBoxOSCReadoutString(NSArray<NSNumber *> *values,
+                                                  BOOL isPercent, BOOL isInt);
+
 /// Canvas/overlay positions of the 8 scale-box handles, sized through the gizmo
 /// curve (`e0`, `span`). `center` is the ANCHOR (the scale fixed point);
 /// `anchorFrac` is the anchor's normalised position within the content box per

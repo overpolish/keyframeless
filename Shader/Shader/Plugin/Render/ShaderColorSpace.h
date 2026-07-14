@@ -284,8 +284,9 @@ typedef struct ShaderScalarProp {
   int choiceCount;     // number of options
   int cdefault;        // choice default index
   // On-screen control opt-in (`osc` attribute). oscKind: "" = none, "point"
-  // (position handle, #point), "ring" (radius ring editing the normalized
-  // value, #float/#percent/#int osc=ring), "scale", "rotate" (#angle osc).
+  // (position handle, #point), "ring"/"box" (radial-extent OSC editing the
+  // normalized value as an ellipse ring or a rectangle box,
+  // #float/#percent/#int/#multi), "scale", "rotate" (#angle osc).
   // oscAxis: 'x'/'y'/'z' ring plane for rotate (default 'z').
   char oscKind[16];
   char oscAxis;
@@ -306,6 +307,18 @@ typedef struct ShaderScalarProp {
 /// have no 0..1 value to map onto a radius, so `osc=ring` on them is rejected.
 static inline BOOL ShaderScalarRingEligible(const ShaderScalarProp *p) {
   return !p->isPoint && !p->isBool && !p->isChoice && !p->isSeed && !p->isAngle;
+}
+
+/// A radial-extent OSC: a draggable ring or box editing the value(s) normalized
+/// 0..1. `osc=ring` (ellipse) and `osc=box` (rectangle) share EVERY behaviour -
+/// value model, drag math, linking, `lockaspect`, opt-hide - and differ only in
+/// the drawn/hit-tested outline. Callers that build the OSC treat them alike;
+/// only the shape flag differs.
+static inline BOOL ShaderScalarRadialOSC(const ShaderScalarProp *p) {
+  return strcmp(p->oscKind, "ring") == 0 || strcmp(p->oscKind, "box") == 0;
+}
+static inline BOOL ShaderScalarOSCIsBox(const ShaderScalarProp *p) {
+  return strcmp(p->oscKind, "box") == 0;
 }
 
 static inline double ShaderAttrDouble(NSString *s, NSString *pattern,
@@ -428,9 +441,9 @@ static inline int ShaderParseScalarProps(NSString *source,
       if (am && [am rangeAtIndex:1].location != NSNotFound)
         p.oscAxis = (char)tolower([[attrs
             substringWithRange:[am rangeAtIndex:1]] characterAtIndex:0]);
-      // A ring OSC is placed at `center=x,y` (object space 0..1) unless it is
-      // linked to a #point (increment 2). Default is the clip centre.
-      if (strcmp(p.oscKind, "ring") == 0) {
+      // A radial OSC (ring or box) is placed at `center=x,y` (object space
+      // 0..1) unless it is linked to a #point. Default is the clip centre.
+      if (ShaderScalarRadialOSC(&p)) {
         NSTextCheckingResult *cm = [[NSRegularExpression
             regularExpressionWithPattern:
                 @"\\bcenter\\s*=\\s*\"?(-?[0-9.]+)\\s*,\\s*(-?[0-9.]+)\"?"
@@ -732,7 +745,7 @@ static inline NSString *ShaderFirstInvalidOSC(NSString *source,
         *outIsRing = NO;
       return @(sp[i].name);
     }
-    if (strcmp(sp[i].oscKind, "ring") == 0) {
+    if (ShaderScalarRadialOSC(&sp[i])) {
       BOOL scalarOK = strcmp(sp[i].uniformType, "float") == 0 ||
                       strcmp(sp[i].uniformType, "int") == 0;
       BOOL multiOK = sp[i].isMulti && strcmp(sp[i].uniformType, "vec2") == 0;

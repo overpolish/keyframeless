@@ -169,6 +169,90 @@
         }
       }
     },
+    "Control \"%@\": osc=point needs a vec2 uniform": {
+      "comment": "Shader point-OSC type error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerung „%@“: osc=point benötigt ein vec2-Uniform"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control «%@»: osc=point necesita un uniform vec2"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrôle « %@ » : osc=point nécessite un uniform vec2"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール「%@」: osc=point には vec2 の uniform が必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 \"%@\": osc=point에는 vec2 uniform이 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件“%@”：osc=point 需要 vec2 uniform"
+          }
+        }
+      }
+    },
+    "Control \"%@\": osc=ring / osc=box needs a float, percent, int, or 2-field (vec2) #multi uniform": {
+      "comment": "Shader radial-OSC type error.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerung „%@“: osc=ring / osc=box benötigt ein float-, percent-, int- oder 2-Feld-(vec2-)#multi-Uniform"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control «%@»: osc=ring / osc=box necesita un uniform float, percent, int o #multi de 2 campos (vec2)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrôle « %@ » : osc=ring / osc=box nécessite un uniform float, percent, int ou #multi à 2 champs (vec2)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール「%@」: osc=ring / osc=box には float、percent、int、または 2 フィールド (vec2) の #multi uniform が必要です"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 \"%@\": osc=ring / osc=box에는 float, percent, int 또는 2필드(vec2) #multi uniform이 필요합니다"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件“%@”：osc=ring / osc=box 需要 float、percent、int 或 2 字段 (vec2) #multi uniform"
+          }
+        }
+      }
+    },
     "Drag the centre handle": {
       "comment": "Help shortcut keys: origin handle.",
       "extractionState": "manual",

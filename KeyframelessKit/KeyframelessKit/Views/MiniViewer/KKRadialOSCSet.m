@@ -1,0 +1,118 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#import "KKRadialOSCSet_Protected.h"
+
+#import <KeyframelessKit/KKTimingStage.h> // KKLane / KKTimeline (aspectLinked)
+#import <math.h>
+
+@implementation KKRadialOSCSet {
+  NSDictionary<NSString *, NSDictionary<NSString *, id> *> *_specByLabel;
+}
+
+- (instancetype)initWithRenderer:(KKMiniViewerRenderer *)renderer {
+  self = [super init];
+  if (self) {
+    _renderer = renderer;
+    _specs = @[];
+    _specByLabel = @{};
+  }
+  return self;
+}
+
+- (void)setSpecs:(NSArray<NSDictionary<NSString *, id> *> *)specs {
+  _specs = [specs copy] ?: @[];
+  NSMutableDictionary *byLabel = [NSMutableDictionary dictionary];
+  for (NSDictionary *s in _specs) {
+    NSString *label = s[@"label"];
+    if (label.length)
+      byLabel[label] = s;
+  }
+  _specByLabel = byLabel;
+  // Drop a drag whose spec vanished.
+  if (self.activeLabel && !_specByLabel[self.activeLabel])
+    self.activeLabel = nil;
+}
+
+- (NSDictionary<NSString *, id> *)specForLabel:(NSString *)label {
+  return label.length ? _specByLabel[label] : nil;
+}
+
+- (NSArray<NSString *> *)labels {
+  NSMutableArray<NSString *> *out = [NSMutableArray array];
+  for (NSDictionary *s in _specs)
+    if (((NSString *)s[@"label"]).length)
+      [out addObject:s[@"label"]];
+  return out;
+}
+
+- (BOOL)isActiveLabel:(NSString *)label forContentRect:(CGRect)cr {
+  return !CGRectIsEmpty(cr) && label.length &&
+         ![_renderer.suppressedHandleLabels containsObject:label] &&
+         [_renderer isConstantLabel:label] &&
+         [_renderer labelVisibleOrRevealing:label];
+}
+
+- (NSArray<NSNumber *> *)valuesForLabel:(NSString *)label {
+  NSArray<NSNumber *> *v = [_renderer valuesForLabel:label];
+  if (v.count)
+    return v;
+  NSDictionary *s = _specByLabel[label];
+  int fields = MAX(1, [s[@"fields"] intValue]);
+  double mn = [s[@"min"] doubleValue];
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  for (int k = 0; k < fields; k++)
+    [out addObject:@(mn)];
+  return out;
+}
+
+- (NSArray<NSNumber *> *)normsForLabel:(NSString *)label {
+  NSDictionary *s = _specByLabel[label];
+  double mn = [s[@"min"] doubleValue], mx = [s[@"max"] doubleValue];
+  double span = mx - mn;
+  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+  for (NSNumber *n in [self valuesForLabel:label])
+    [out
+        addObject:@(span > 0.0 ? fmax(0.0, (n.doubleValue - mn) / span) : 0.0)];
+  return out;
+}
+
+- (BOOL)laneLinkedForLabel:(NSString *)label {
+  // Use the timeline lane's persisted lock ONLY when it carries aspect metadata
+  // (a properly template-merged lane reflecting the user's toggle). The mini's
+  // timeline is usually the raw blob-derived one where aspectLinkable isn't
+  // serialized (=0) and aspectLinked is the un-materialized default (0) rather
+  // than the directive's lock; there, fall back to the template's aspectLinked
+  // so the OSC honours the directive default and matches the main viewer.
+  for (KKLane *l in _renderer.timeline.lanes)
+    if ([l.label isEqualToString:label]) {
+      if (l.aspectLinkable)
+        return l.aspectLinked;
+      break;
+    }
+  KKLane *tmpl = [_renderer templateLaneForLabel:label];
+  return tmpl ? tmpl.aspectLinked : YES;
+}
+
+- (CGPoint)centerForSpec:(NSDictionary<NSString *, id> *)s
+             contentRect:(CGRect)cr {
+  NSString *link = s[@"linkLabel"];
+  double cx, cy;
+  if ([link isKindOfClass:NSString.class] && link.length) {
+    NSArray<NSNumber *> *pv = [_renderer valuesForLabel:link];
+    cx = pv.count >= 1 ? pv[0].doubleValue : 0.5;
+    cy = pv.count >= 2 ? pv[1].doubleValue : 0.5;
+  } else {
+    cx = [s[@"centerX"] doubleValue];
+    cy = [s[@"centerY"] doubleValue];
+  }
+  return [_renderer handlePointForContentRect:cr position:@[ @(cx), @(cy) ]];
+}
+
+- (CGFloat)ghostAlphaForLabel:(NSString *)label {
+  return [_renderer ghostAlphaForLabel:label];
+}
+
+@end

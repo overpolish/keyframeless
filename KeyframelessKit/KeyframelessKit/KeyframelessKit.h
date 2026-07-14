@@ -18,6 +18,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKArcOSC.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKBoxOSC.h>
+#import <KeyframelessKit/KKBoxOSCSet.h>
 #import <KeyframelessKit/KKCheckboxRowView.h>
 #import <KeyframelessKit/KKCheckboxView.h>
 #import <KeyframelessKit/KKChevronView.h>
@@ -92,6 +93,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKPositionMiniController.h>
 #import <KeyframelessKit/KKPositionOSC.h>
 #import <KeyframelessKit/KKPresets.h>
+#import <KeyframelessKit/KKRadialOSCSet.h>
 #import <KeyframelessKit/KKRandomRowView.h>
 #import <KeyframelessKit/KKRectBorderOSC.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>

@@ -47,8 +47,9 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   // cheap string compare instead of re-running the directive parse each frame.
   NSString *_pointSyncedSource;
   KKPointOSCSet *_pointSet;
-  NSString *_ringSyncedSource;
+  NSString *_radialSyncedSource;
   KKRingOSCSet *_ringSet;
+  KKBoxOSCSet *_boxSet;
 }
 
 // All point OSCs draw + drag uniformly through the KKPointOSCSet (via the
@@ -91,15 +92,25 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   return _ringSet;
 }
 
-// Feed the ring set the shader's current `osc=ring` scalar lanes (label + value
-// range + object-space centre), mirroring the viewer's ring controllers. Cheap
-// string compare skips the parse when the source is unchanged.
-- (void)_syncMiniRingController {
+- (KKBoxOSCSet *)boxSet {
+  if (!_boxSet)
+    _boxSet = [[KKBoxOSCSet alloc] initWithRenderer:self];
+  return _boxSet;
+}
+
+// Feed the ring + box sets the shader's current `osc=ring` / `osc=box` scalar
+// lanes in ONE parse. A ring and a box share the exact same radial spec (label
+// + value range + object-space centre + aspect-lock); only the osc kind picks
+// the target set. Cheap string compare skips the parse when the source is
+// unchanged.
+- (void)_syncMiniRadialControllers {
   NSString *src = [self _customShaderSource] ?: @"";
-  if ([src isEqualToString:_ringSyncedSource])
+  if ([src isEqualToString:_radialSyncedSource])
     return;
-  _ringSyncedSource = [src copy];
+  _radialSyncedSource = [src copy];
   NSMutableArray<NSDictionary<NSString *, id> *> *rings =
+      [NSMutableArray array];
+  NSMutableArray<NSDictionary<NSString *, id> *> *boxes =
       [NSMutableArray array];
   if (src.length) {
     ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
@@ -107,28 +118,34 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
     int n = ShaderParseScalarProps(src, props, KK_SHADER_MAX_SCALAR_PROPS, 0,
                                    &used);
     for (int i = 0; i < n; i++) {
-      if (strcmp(props[i].oscKind, "ring") != 0 ||
-          !ShaderScalarRingEligible(&props[i]))
+      if (!ShaderScalarRingEligible(&props[i]))
+        continue;
+      BOOL isRing = strcmp(props[i].oscKind, "ring") == 0;
+      BOOL isBox = ShaderScalarOSCIsBox(&props[i]);
+      if (!isRing && !isBox)
         continue;
       BOOL isInt = props[i].isInt || props[i].isPercent;
       int fields = props[i].isMulti
                        ? (props[i].fieldCount > 0 ? props[i].fieldCount : 2)
                        : 1;
-      [rings addObject:@{
+      NSDictionary<NSString *, id> *spec = @{
         @"label" : @(props[i].name),
         @"min" : @(props[i].fmin),
         @"max" : @(props[i].fmax),
         @"isInt" : @(isInt),
+        @"isPercent" : @(props[i].isPercent != 0),
         @"bounded" : @(props[i].hasMax != 0),
         @"fields" : @(fields),
         @"linked" : @(props[i].aspectLinked != 0),
         @"centerX" : @(props[i].rcenterx),
         @"centerY" : @(props[i].rcentery),
         @"linkLabel" : @(props[i].linkName),
-      }];
+      };
+      [(isRing ? rings : boxes) addObject:spec];
     }
   }
   [self.ringSet setRings:rings];
+  [self.boxSet setBoxes:boxes];
 }
 
 - (KKLane *)templateLaneForLabel:(NSString *)label {
@@ -147,6 +164,13 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
 // mini-viewer point control looks the same as the on-screen one.
 - (KKMiniHandleStyle)pointHandleStyle {
   return KKMiniHandleStyleArc;
+}
+
+// Match the other plugins' mini-viewer dot handles (Rounded / Canvas /
+// MagicMove all use 0.6): the `osc=box` handle glyphs read lighter. The #point
+// handles are arc-style, so this doesn't touch them.
+- (CGFloat)pointHandleSizeScale {
+  return 0.6;
 }
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
   // The plugin is Custom-only now; only the shared lanes have defaults here.

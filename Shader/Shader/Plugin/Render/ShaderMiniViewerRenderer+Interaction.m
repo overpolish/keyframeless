@@ -23,8 +23,13 @@
 }
 
 - (KKRingOSCSet *)_syncedRingSet {
-  [self _syncMiniRingController];
+  [self _syncMiniRadialControllers];
   return self.ringSet;
+}
+
+- (KKBoxOSCSet *)_syncedBoxSet {
+  [self _syncMiniRadialControllers];
+  return self.boxSet;
 }
 
 - (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
@@ -39,6 +44,17 @@
   return [[self _syncedRingSet] ringBundlesForContentRect:cr];
 }
 
+- (NSArray<KKMiniBox *> *)miniViewer:(KKMiniViewerView *)canvas
+                 boxesForContentRect:(CGRect)cr {
+  NSArray<KKMiniBox *> *base = [super miniViewer:canvas boxesForContentRect:cr];
+  NSArray<KKMiniBox *> *mine = [[self _syncedBoxSet] boxesForContentRect:cr];
+  if (!base.count)
+    return mine;
+  if (!mine.count)
+    return base;
+  return [base arrayByAddingObjectsFromArray:mine];
+}
+
 - (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
                                                  (KKMiniViewerView *)canvas
                          extraMotionPathsForContentRect:(CGRect)cr {
@@ -48,10 +64,12 @@
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     handleHitAtPoint:(CGPoint)p
          contentRect:(CGRect)cr {
-  // Points foreground, then rings (matching the viewer's precedence).
+  // Points foreground, then rings, then boxes (matching the viewer precedence).
   if ([[self _syncedSet] handleHitAtPoint:p contentRect:cr])
     return YES;
   if ([[self _syncedRingSet] handleHitAtPoint:p contentRect:cr])
+    return YES;
+  if ([[self _syncedBoxSet] handleHitAtPoint:p contentRect:cr])
     return YES;
   return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
 }
@@ -65,6 +83,9 @@
   if (c)
     return c;
   c = [[self _syncedRingSet] cursorAtPoint:p contentRect:cr];
+  if (c)
+    return c;
+  c = [[self _syncedBoxSet] cursorAtPoint:p contentRect:cr];
   return c ?: [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
 }
 
@@ -74,6 +95,8 @@
   if ([[self _syncedSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
     return;
   if ([[self _syncedRingSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
+    return;
+  if ([[self _syncedBoxSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
     return;
   [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
 }
@@ -92,6 +115,11 @@
                                   canvas:canvas
                                modifiers:modifiers])
     return;
+  if ([[self _syncedBoxSet] dragToPoint:p
+                            contentRect:cr
+                                 canvas:canvas
+                              modifiers:modifiers])
+    return;
   [super miniViewer:canvas
       dragHandleToPoint:p
             contentRect:cr
@@ -102,6 +130,8 @@
   if ([self.pointSet endDragOnCanvas:canvas])
     return;
   if ([self.ringSet endDragOnCanvas:canvas])
+    return;
+  if ([self.boxSet endDragOnCanvas:canvas])
     return;
   [super miniViewerEndHandleDrag:canvas];
 }
@@ -119,7 +149,9 @@
     return YES;
   if ([[self _syncedSet] optClickAtPoint:p contentRect:cr canvas:canvas])
     return YES;
-  return [[self _syncedRingSet] optClickAtPoint:p contentRect:cr canvas:canvas];
+  if ([[self _syncedRingSet] optClickAtPoint:p contentRect:cr canvas:canvas])
+    return YES;
+  return [[self _syncedBoxSet] optClickAtPoint:p contentRect:cr canvas:canvas];
 }
 
 - (void)miniViewer:(KKMiniViewerView *)canvas

@@ -124,6 +124,69 @@ NSArray<NSNumber *> *KKRingOSCDragValues(int fields, BOOL linked, double startX,
   return @[ @(vx), @(vy) ];
 }
 
+NSArray<NSNumber *> *KKBoxOSCDragValues(NSInteger handle, int fields,
+                                        BOOL linked, double pressNormX,
+                                        double pressNormY, double candNormX,
+                                        double candNormY, double mn, double mx,
+                                        BOOL bounded, BOOL isInt) {
+  if (fields < 2) {
+    // Square: one value, so any handle resizes it - a corner takes the
+    // geometric mean of its two axis candidates, an edge takes its own axis.
+    double cand;
+    if (KKScaleHandleIsCorner(handle))
+      cand = sqrt(fmax(candNormX, 0.0) * fmax(candNormY, 0.0));
+    else if (KKScaleHandleControlsX(handle))
+      cand = candNormX;
+    else
+      cand = candNormY;
+    return @[ @(kkRingValueForNorm(cand, mn, mx, bounded, isInt)) ];
+  }
+  // Rectangle: the scale-box coupling on normalized values. Corner drives both
+  // axes (one geometric-mean factor when linked, else free); edge drives one
+  // axis (the other follows by ratio when linked, else holds at press).
+  double newNX = pressNormX, newNY = pressNormY;
+  BOOL haveRatio = (pressNormX > 1e-6 && pressNormY > 1e-6);
+  if (KKScaleHandleIsCorner(handle)) {
+    if (linked && haveRatio) {
+      double f = sqrt((candNormX / pressNormX) * (candNormY / pressNormY));
+      newNX = pressNormX * f;
+      newNY = pressNormY * f;
+    } else {
+      newNX = candNormX;
+      newNY = candNormY;
+    }
+  } else if (KKScaleHandleControlsX(handle)) {
+    newNX = candNormX;
+    newNY =
+        linked ? (haveRatio ? pressNormY * (candNormX / pressNormX) : candNormX)
+               : pressNormY;
+  } else if (KKScaleHandleControlsY(handle)) {
+    newNY = candNormY;
+    newNX =
+        linked ? (haveRatio ? pressNormX * (candNormY / pressNormY) : candNormY)
+               : pressNormX;
+  }
+  return @[
+    @(kkRingValueForNorm(newNX, mn, mx, bounded, isInt)),
+    @(kkRingValueForNorm(newNY, mn, mx, bounded, isInt))
+  ];
+}
+
+NSString *KKBoxOSCReadoutString(NSArray<NSNumber *> *values, BOOL isPercent,
+                                BOOL isInt) {
+  NSMutableArray<NSString *> *parts = [NSMutableArray array];
+  for (NSNumber *n in values) {
+    double v = n.doubleValue;
+    if (isPercent)
+      [parts addObject:[NSString stringWithFormat:@"%.0f%%", v]];
+    else if (isInt)
+      [parts addObject:[NSString stringWithFormat:@"%.0f", v]];
+    else
+      [parts addObject:[NSString stringWithFormat:@"%.1f", v]];
+  }
+  return [parts componentsJoinedByString:@" x "];
+}
+
 void KKScaleHandlePositions(CGPoint center, double sclX, double sclY, double e0,
                             double span, CGPoint anchorFrac, CGPoint out[8]) {
   double halfW = KKScaleGizmoExtentForPercent(sclX, e0, span);

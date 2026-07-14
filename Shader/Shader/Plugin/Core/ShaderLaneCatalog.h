@@ -429,24 +429,23 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource) {
                                @"a unique uniform name",
                                @"Shader duplicate-uniform validation error."),
                            dupU];
-    // An OSC opt-in on an incompatible uniform: osc=point needs a vec2,
-    // osc=ring needs a float/int slider (a radius has no meaning on anything
-    // else).
+    // An OSC opt-in on an incompatible uniform: osc=point needs a vec2, a
+    // radial OSC (osc=ring / osc=box) needs a float/int slider or a vec2 #multi
+    // (a radial extent has no meaning on anything else).
     BOOL badRing = NO;
     NSString *badOSC = ShaderFirstInvalidOSC(code, &badRing);
     if (badOSC.length)
-      return badRing
-                 ? [NSString
-                       stringWithFormat:RLoc(
-                                            @"Control \"%@\": osc=ring needs a "
-                                            @"float, percent or int uniform",
-                                            @"Shader ring-OSC type error."),
-                                        badOSC]
-                 : [NSString stringWithFormat:
-                                 RLoc(@"Control \"%@\": osc=point needs a "
-                                      @"vec2 uniform",
-                                      @"Shader point-OSC type error."),
-                                 badOSC];
+      return badRing ? [NSString stringWithFormat:
+                                     RLoc(@"Control \"%@\": osc=ring / osc=box "
+                                          @"needs a float, percent, int, or "
+                                          @"2-field (vec2) #multi uniform",
+                                          @"Shader radial-OSC type error."),
+                                     badOSC]
+                     : [NSString stringWithFormat:
+                                     RLoc(@"Control \"%@\": osc=point needs a "
+                                          @"vec2 uniform",
+                                          @"Shader point-OSC type error."),
+                                     badOSC];
     KKGLSLTranspileResult *r = KKTranspileGLSL(code);
     if (r.msl)
       return nil; // compiled clean

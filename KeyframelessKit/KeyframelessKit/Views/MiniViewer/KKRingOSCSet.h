@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMiniViewerRenderer.h>
 #import <KeyframelessKit/KKMiniViewerView.h>
+#import <KeyframelessKit/KKRadialOSCSet.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -29,11 +30,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// `commitValues:forLabel:canvas:`, `isConstantLabel:`,
 /// `labelVisibleOrRevealing:`, `ghostAlphaForLabel:`,
 /// `handlePointForContentRect:position:`, `onHandleVisibilityToggled`).
-@interface KKRingOSCSet : NSObject
-
-- (instancetype)initWithRenderer:(KKMiniViewerRenderer *)renderer
-    NS_DESIGNATED_INITIALIZER;
-- (instancetype)init NS_UNAVAILABLE;
+@interface KKRingOSCSet : KKRadialOSCSet
 
 /// Rebuild the rings. Each spec is a dict: `@"label"` (NSString, the lane
 /// identity), `@"min"`/`@"max"` (NSNumber, the value range the ring normalizes
@@ -43,17 +40,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// to clear.
 - (void)setRings:(NSArray<NSDictionary<NSString *, id> *> *)rings;
 
-/// The ring lane labels, in order.
-@property(nonatomic, copy, readonly) NSArray<NSString *> *labels;
-
-#pragma mark Draw (forward -miniViewer:extraRingsForContentRect: here)
-
 /// One `@{@"center", @"radiusX", @"radiusY", @"emphasis", @"alpha"}` bundle per
-/// ring active in the current context.
+/// ring active in the current context. Forward
+/// -miniViewer:extraRingsForContentRect: here.
 - (NSArray<NSDictionary<NSString *, id> *> *)ringBundlesForContentRect:
     (CGRect)cr;
-
-#pragma mark Interaction (forward the matching delegate methods here)
 
 - (BOOL)handleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr;
 - (nullable NSCursor *)cursorAtPoint:(CGPoint)p contentRect:(CGRect)cr;

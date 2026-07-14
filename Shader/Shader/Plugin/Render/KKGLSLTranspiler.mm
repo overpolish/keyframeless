@@ -227,25 +227,20 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
   for (int i = 0; i < nScalars; i++) {
     NSString *nm = @(scalars[i].name);
     [colorMembers appendFormat:@"  vec4 %@_kk;\n", nm];
-    NSString *ty;
     if (scalars[i].isChoice || scalars[i].isInt) {
       [colorDefines appendFormat:@"#define %@ (int(%@_kk.x))\n", nm, nm];
-      ty = @"int";
     } else if (scalars[i].isBool) {
       [colorDefines appendFormat:@"#define %@ (%@_kk.x > 0.5)\n", nm, nm];
-      ty = @"bool";
     } else if (scalars[i].isAngle) {
       // Lane is degrees; the shader gets radians. Negated so a clockwise knob
       // turn reads as a clockwise on-screen rotation (the knob increases CW, but
       // a standard rotation matrix turns CCW for a positive angle in the shader's
       // y-up coordinate space).
       [colorDefines appendFormat:@"#define %@ (radians(-%@_kk.x))\n", nm, nm];
-      ty = @"float";
     } else if (scalars[i].isMulti) {
       // An N-component numeric field, delivered RAW (the shader owns the units):
       // vec2 -> `.xy`, vec3 -> `.xyz`. One pool vec4 member as usual.
       const char *uty = scalars[i].uniformType;
-      ty = @(uty[0] ? uty : "vec2");
       NSString *swizzle = (strcmp(uty, "vec3") == 0)   ? @"xyz"
                           : (strcmp(uty, "vec4") == 0) ? @"xyzw"
                                                        : @"xy";
@@ -258,13 +253,15 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
       // buffer passes.
       [colorDefines
           appendFormat:@"#define %@ (%@_kk.xy * iResolution.xy)\n", nm, nm];
-      ty = @"vec2";
     } else {
       [colorDefines appendFormat:@"#define %@ (%@_kk.x)\n", nm, nm];
-      ty = @"float";
     }
+    // Strip the standalone declaration regardless of its declared GLSL type: the
+    // `#define` above owns the real access, so an `#int` fed a `uniform float`
+    // (or any type/name match) is still removed instead of surviving to collide
+    // with the macro (a cryptic "unexpected LEFT_PAREN" from glslang).
     NSString *pat = [NSString
-        stringWithFormat:@"(?m)^[ \\t]*uniform\\s+%@\\s+%@\\s*;[ \\t]*$", ty, nm];
+        stringWithFormat:@"(?m)^[ \\t]*uniform\\s+\\w+\\s+%@\\s*;[ \\t]*$", nm];
     [[NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil]
         replaceMatchesInString:body
                        options:0
