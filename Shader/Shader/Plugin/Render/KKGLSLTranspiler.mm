@@ -241,6 +241,15 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
       // y-up coordinate space).
       [colorDefines appendFormat:@"#define %@ (radians(-%@_kk.x))\n", nm, nm];
       ty = @"float";
+    } else if (scalars[i].isMulti) {
+      // An N-component numeric field, delivered RAW (the shader owns the units):
+      // vec2 -> `.xy`, vec3 -> `.xyz`. One pool vec4 member as usual.
+      const char *uty = scalars[i].uniformType;
+      ty = @(uty[0] ? uty : "vec2");
+      NSString *swizzle = (strcmp(uty, "vec3") == 0)   ? @"xyz"
+                          : (strcmp(uty, "vec4") == 0) ? @"xyzw"
+                                                       : @"xy";
+      [colorDefines appendFormat:@"#define %@ (%@_kk.%@)\n", nm, nm, swizzle];
     } else if (scalars[i].isPoint) {
       // Delivered in PIXELS (fragCoord space), not normalized: scale by
       // iResolution. No Y flip - the shader's fragCoord is bottom-origin

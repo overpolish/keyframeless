@@ -208,6 +208,47 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       lane.componentMax = @[];
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                             values:@[ @(p->fdefault) ]]];
+    } else if (p->isMulti) {
+      // An N-component numeric field (vec2/vec3): one lane, `fields={}` names
+      // the components, `linked` makes them aspect-linkable. Unbounded unless
+      // max=.
+      lane.animatable = YES;
+      NSMutableArray<NSString *> *fieldLabels = [NSMutableArray array];
+      for (NSString *f in
+           [@(p->fieldLabels) componentsSeparatedByString:@","]) {
+        NSString *t =
+            [f stringByTrimmingCharactersInSet:NSCharacterSet
+                                                   .whitespaceCharacterSet];
+        if (t.length)
+          [fieldLabels addObject:t];
+      }
+      int n = p->fieldCount > 0 ? p->fieldCount : (int)fieldLabels.count;
+      if (n < 1)
+        n = 2;
+      while ((int)fieldLabels.count < n)
+        [fieldLabels
+            addObject:[NSString
+                          stringWithFormat:@"%d", (int)fieldLabels.count + 1]];
+      lane.componentLabels = [fieldLabels subarrayWithRange:NSMakeRange(0, n)];
+      NSMutableArray<NSNumber *> *mins = [NSMutableArray array];
+      NSMutableArray<NSNumber *> *maxs = [NSMutableArray array];
+      NSMutableArray<NSNumber *> *defs = [NSMutableArray array];
+      for (int k = 0; k < n; k++) {
+        [mins addObject:@(p->fmin)];
+        [maxs addObject:p->hasMax ? @(p->fmax) : @1000000.0];
+        [defs addObject:@(p->mdef[k])];
+      }
+      lane.componentMin = mins;
+      lane.componentMax = maxs;
+      if (!p->hasMax)
+        lane.sliderMax =
+            @(p->fmax); // nominal slider cap; field stays unbounded
+      // Multi-word component captions (e.g. "Width"/"Height") size to fit
+      // instead of the fixed one-char slot that truncates them to "Wi"/"Hi".
+      lane.autoSizesComponentLabels = YES;
+      lane.aspectLinkable = p->aspectLinked ? YES : NO;
+      lane.aspectLinked = p->aspectLinked ? YES : NO;
+      [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:defs]];
     } else {
       lane.animatable = YES;
       lane.componentMin = @[ @(p->fmin) ];
@@ -388,6 +429,24 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource) {
                                @"a unique uniform name",
                                @"Shader duplicate-uniform validation error."),
                            dupU];
+    // An OSC opt-in on an incompatible uniform: osc=point needs a vec2,
+    // osc=ring needs a float/int slider (a radius has no meaning on anything
+    // else).
+    BOOL badRing = NO;
+    NSString *badOSC = ShaderFirstInvalidOSC(code, &badRing);
+    if (badOSC.length)
+      return badRing
+                 ? [NSString
+                       stringWithFormat:RLoc(
+                                            @"Control \"%@\": osc=ring needs a "
+                                            @"float, percent or int uniform",
+                                            @"Shader ring-OSC type error."),
+                                        badOSC]
+                 : [NSString stringWithFormat:
+                                 RLoc(@"Control \"%@\": osc=point needs a "
+                                      @"vec2 uniform",
+                                      @"Shader point-OSC type error."),
+                                 badOSC];
     KKGLSLTranspileResult *r = KKTranspileGLSL(code);
     if (r.msl)
       return nil; // compiled clean

@@ -8,6 +8,7 @@
 #import "KKLaneCategoryNav.h"
 #import "KKLaneFilterBar.h"
 #import "KKLocalized.h"
+#import "KKMiniViewerRenderer.h"
 #import "KKSegmentEditView.h"
 #import "KKTimelineAdvancedView.h"
 #import "KKTimelineBasicView.h"
@@ -505,6 +506,15 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 
 - (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes {
   _availableLanes = [availableLanes copy];
+  // Re-seed _timeline so a newly source-derived lane (e.g. a shader directive's
+  // lane) materializes as a constant carrying the template's build-time
+  // defaults
+  // - its aspect lock, auto-sized labels, etc. This restores the post-seed
+  // invariant that _timeline holds every available property; without it the new
+  // lane enters _timeline later via a route that drops those defaults, so e.g.
+  // an aspect-linkable lane reads UNLOCKED until the user first interacts.
+  // Present lanes keep their user state (the present branch preserves it).
+  _timeline = [self _timelineSeededFrom:_timeline];
   // Rebuild the visible rows from the new template set (same path the pill
   // visibleWhen toggles use), so source-derived lanes appear/disappear live.
   [self _refresh];
@@ -642,6 +652,13 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     // coupling stayed stale from the prior layer. applyValues is focus-safe
     // (skips an in-progress field edit), so this won't clobber active editing.
     [_openStaticView rebindLanes:_timeline.lanes];
+    // The popover's OWN mini viewer must read the SAME corrected timeline the
+    // rows do (template-seeded aspectLinked / aspectLinkable), not the stale
+    // applyTimeline copy - otherwise its OSC overlay (e.g. a ring's aspect
+    // lock) disagrees with the row's link glyph. The delegate is always a
+    // KKMiniViewerRenderer (plugins subclass it).
+    if ([self.miniViewerDelegate isKindOfClass:[KKMiniViewerRenderer class]])
+      ((KKMiniViewerRenderer *)self.miniViewerDelegate).timeline = _timeline;
   }
 
   // A boundary/value popover is built from a snapshot at open; an external
@@ -723,6 +740,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       fixed.componentLabels = tmpl.componentLabels;
       fixed.componentLabelColors = tmpl.componentLabelColors;
       fixed.componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
+      // Build-time display metadata (like the bounds above): whether components
+      // can aspect-lock and whether multi-word captions auto-size. NOT the lock
+      // STATE (aspectLinked), which is user data kept below.
+      fixed.aspectLinkable = tmpl.aspectLinkable;
+      fixed.autoSizesComponentLabels = tmpl.autoSizesComponentLabels;
       // codeString is user data (a code lane's text), so keep the saved value;
       // only fall back to the template default when it's missing (older blob).
       if (!fixed.codeString.length)
@@ -863,6 +885,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     KKLane *lane = [tlLane copy];
     [lane kkApplyPickerMetadataFrom:tmpl];
     lane.aspectLinkable = tmpl.aspectLinkable;
+    lane.autoSizesComponentLabels = tmpl.autoSizesComponentLabels;
     lane.integerValued = tmpl.integerValued;
     if (tmpl.componentMin.count)
       lane.componentMin = tmpl.componentMin;

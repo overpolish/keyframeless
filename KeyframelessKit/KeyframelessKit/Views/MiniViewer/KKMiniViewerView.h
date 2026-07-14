@@ -276,6 +276,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// revealed ghost of a hidden ring, so the canvas dims it like the other ghost
 /// handles. Default 1.0 when the delegate doesn't implement it.
 - (CGFloat)miniViewerRingGhostAlpha:(KKMiniViewerView *)canvas;
+/// Multiple ring OSCs to draw at once - the mini sibling of a viewer drawing
+/// every KKRingOSC in a loop (e.g. Shader's `osc=ring` scalar lanes). Each
+/// element is a bundle: `@"center"` = NSValue point (overlay points, y-up),
+/// `@"radiusX"`/`@"radiusY"` = NSNumber pixel radii, `@"emphasis"` = NSNumber
+/// (0 idle / 1 hover / 2 active), `@"alpha"` = NSNumber ghost alpha (< 1 dims
+/// an Opt-revealed hidden ring). The canvas strokes each like the single ring;
+/// the delegate owns hit-test + drag through the generic handle methods.
+/// Sibling of `extraPointHandleGlyphsForContentRect:`. Return nil/empty for
+/// none.
+- (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
+                                                 (KKMiniViewerView *)canvas
+                               extraRingsForContentRect:(CGRect)contentRect;
 /// Push externally-edited constant values (slider/field) into the delegate
 /// so the preview updates live, without persisting (the host coalesces the
 /// real write). `values` is the lane's value array (Float: [v]; Crop:

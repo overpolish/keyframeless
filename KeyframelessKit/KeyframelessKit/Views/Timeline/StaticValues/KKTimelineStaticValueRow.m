@@ -161,7 +161,9 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   NSArray<NSNumber *> *_cmin;
   NSArray<NSNumber *> *_cmax;
   NSArray<NSString *> *_cunits;
-  KKSliderView *_slider;            // Float only
+  NSArray<NSString *>
+      *_clabels;         // per-component captions (built once, line ~874)
+  KKSliderView *_slider; // Float only
   NSArray<NSSlider *> *_angleKnobs; // Angle only - one per component
   NSMutableArray<NSNumber *>
       *_prevKnobValues; // last seen knob position per knob
@@ -251,6 +253,17 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   if (![(_cunits ?: @[]) isEqualToArray:(lane.componentUnits ?: @[])])
     return NO;
   if (_cmax.count != (lane.componentMax ?: @[]).count)
+    return NO;
+  // Per-component captions are built once in the row init; a directive edit
+  // that renames them (e.g. #multi fields={Width,Height} -> {W,H}) can't be
+  // applyLane'd in place, so treat it as a shape change and remake the row.
+  if (![(_clabels ?: @[]) isEqualToArray:(KKLaneComponentLabels(lane) ?: @[])])
+    return NO;
+  // The aspect-link toggle is created once (only when aspectLinkable); adding
+  // or removing `linked` flips whether the button exists, which can't be
+  // applied in place. `_linkBtn` is non-nil iff the row was built
+  // aspect-linkable.
+  if ((_linkBtn != nil) != lane.aspectLinkable)
     return NO;
   return YES;
 }
@@ -871,6 +884,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   }
 
   NSArray<NSString *> *caps = KKLaneComponentLabels(lane);
+  _clabels = caps; // remembered so a later componentLabels edit remakes the row
   NSArray<NSColor *> *capColors = lane.componentLabelColors;
   if (_paletteGeneratorBar) {
     // Not a value editor: a row of momentary mode buttons that reroll the

@@ -74,11 +74,48 @@ FOUNDATION_EXPORT double KKScaleGizmoExtentForPercent(double percent, double e0,
 FOUNDATION_EXPORT double KKScaleGizmoPercentForExtent(double extent, double e0,
                                                       double span);
 
+/// Half-extent for a radius-ring OSC whose value is NORMALIZED against its
+/// range
+/// (`(value - min) / (refMax - min)`, where refMax is the lane's `max` when
+/// bounded, else its nominal range). Shares the scale-gizmo curve so the sweep
+/// is a visible ring, and so the in-viewer KKRingOSC and the mini-viewer
+/// KKRingOSCSet draw at the identical size. `minDim` is the surface's reference
+/// dimension (viewer frame min / mini content-rect min). `norm` is clamped only
+/// at 0, NOT at 1: an unbounded field past its nominal range keeps growing via
+/// the curve's sqrt branch rather than pegging at a max radius.
+FOUNDATION_EXPORT double KKRingOSCExtentForNorm(double norm, double minDim);
+
+/// Inverse of KKRingOSCExtentForNorm: the normalized 0..1 value that puts the
+/// ring edge at half-extent `extent`. Used by a drag to turn the cursor's
+/// distance from centre back into a value.
+FOUNDATION_EXPORT double KKRingOSCNormForExtent(double extent, double minDim);
+
+/// New ring-OSC lane values for a drag - the linked/unlinked ellipse (and
+/// single-value circle) math shared by the in-viewer ring and the mini-viewer
+/// ring, so both feel identical.
+///
+/// `fields` = component count (1 = circle, 2 = ellipse). `linked` is the
+/// EFFECTIVE aspect lock (the caller already XORs the lane's lock with Shift).
+/// `startX`/`startY` are the component values at press;
+/// `dragStartDx`/`Dy`/`Dist` the cursor offset from the ring centre at press
+/// (for the unlinked cardinal-hold). `dx`/`dy` = current cursor offset from the
+/// centre; `minDim` the surface reference dimension.
+/// `mn`/`mx`/`bounded`/`isInt` = the field's range and integer-ness.
+///
+/// Linked: both components scale by ONE ellipse-scale factor (ratio preserved,
+/// well-defined at every grab angle). Unlinked: per-axis, an axis grabbed near
+/// its cardinal is held at its press value. Returns `fields` values.
+FOUNDATION_EXPORT NSArray<NSNumber *> *
+KKRingOSCDragValues(int fields, BOOL linked, double startX, double startY,
+                    double dragStartDx, double dragStartDy,
+                    double dragStartDist, double dx, double dy, double minDim,
+                    double mn, double mx, BOOL bounded, BOOL isInt);
+
 /// Canvas/overlay positions of the 8 scale-box handles, sized through the gizmo
 /// curve (`e0`, `span`). `center` is the ANCHOR (the scale fixed point);
 /// `anchorFrac` is the anchor's normalised position within the content box per
-/// axis ([-1,1]; 0 = content centre, +-1 = an edge/corner). The box is offset by
-/// -half*anchorFrac so the anchor stays put as the scale changes: a centred
+/// axis ([-1,1]; 0 = content centre, +-1 = an edge/corner). The box is offset
+/// by -half*anchorFrac so the anchor stays put as the scale changes: a centred
 /// anchor (0,0) is symmetric, a corner anchor keeps that corner fixed and grows
 /// the opposite one. Fills `out[0..7]` in canonical KKBoxOSC order (0-3 corners
 /// BL/BR/TR/TL, 4-7 edges bottom/right/top/left). Shared by viewer + mini.
@@ -99,12 +136,12 @@ FOUNDATION_EXPORT double KKScaleGizmoPercentForHandle(double effCoord,
                                                       double sign, double frac,
                                                       double e0, double span);
 
-/// The anchor's normalised position within the content box, per axis ([-1,1]; 0 =
-/// centre, +-1 = an edge/corner): `(anchor - reference) / half`, clamped. The
-/// scale box keeps the anchor fixed by offsetting `center - half*frac`. No Y flip
-/// (the box offset is applied in the lane-aligned space the pivot maps through).
-/// A degenerate (zero) half yields 0 on that axis. Shared by the viewer
-/// (KKScaleOSC) and the mini (host `scaleAnchorFrac`).
+/// The anchor's normalised position within the content box, per axis ([-1,1]; 0
+/// = centre, +-1 = an edge/corner): `(anchor - reference) / half`, clamped. The
+/// scale box keeps the anchor fixed by offsetting `center - half*frac`. No Y
+/// flip (the box offset is applied in the lane-aligned space the pivot maps
+/// through). A degenerate (zero) half yields 0 on that axis. Shared by the
+/// viewer (KKScaleOSC) and the mini (host `scaleAnchorFrac`).
 FOUNDATION_EXPORT CGPoint KKScaleGizmoAnchorFrac(double ax, double ay,
                                                  double refX, double refY,
                                                  double halfX, double halfY);

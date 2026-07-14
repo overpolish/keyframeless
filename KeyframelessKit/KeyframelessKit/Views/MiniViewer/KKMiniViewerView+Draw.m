@@ -307,6 +307,63 @@
     }
   }
 
+  // Extra ring OSCs (multiple, dynamic - e.g. Shader's `osc=ring` lanes): the
+  // same shader + VERBATIM viewer colors as the single ring above, but with
+  // per-bundle emphasis + ghost alpha so each ring hovers/drags independently.
+  if (_ringPipeline && del &&
+      [del
+          respondsToSelector:@selector(miniViewer:extraRingsForContentRect:)]) {
+    CGRect ringCR = [self contentRectInViewPoints];
+    CGSize src = [self sourceMediaSize];
+    CGFloat srcMin = MIN(src.width, src.height);
+    CGFloat crMin = MIN(ringCR.size.width, ringCR.size.height);
+    CGFloat srcScale = (srcMin > 0.5) ? crMin / srcMin : [self _canvasScale];
+    for (NSDictionary<NSString *, id> *b in [del miniViewer:self
+                                   extraRingsForContentRect:ringCR]) {
+      CGPoint rc = [b[@"center"] pointValue];
+      CGFloat rrx = [b[@"radiusX"] doubleValue];
+      CGFloat rry = [b[@"radiusY"] doubleValue];
+      if (rrx <= 0.5 || rry <= 0.5)
+        continue;
+      NSInteger emphasis = [b[@"emphasis"] integerValue];
+      CGFloat alpha = b[@"alpha"] ? [b[@"alpha"] doubleValue] : 1.0;
+      simd_float4 fillColor, strokeColor;
+      CGFloat viewerFillPx, viewerOutlinePx;
+      if (emphasis >= 2) { // active
+        fillColor = (simd_float4){1.0f, 1.0f, 1.0f, 1.0f};
+        strokeColor = (simd_float4){0.0f, 0.0f, 0.0f, 1.0f};
+        viewerFillPx = 2.5;
+        viewerOutlinePx = 1.5;
+      } else if (emphasis >= 1) { // hover
+        fillColor = (simd_float4){0xD0 / 255.0f, 0xCA / 255.0f, 0xCD / 255.0f,
+                                  0xB2 / 255.0f};
+        strokeColor = (simd_float4){0x09 / 255.0f, 0x07 / 255.0f, 0x0A / 255.0f,
+                                    0xAD / 255.0f};
+        viewerFillPx = 2.5;
+        viewerOutlinePx = 1.5;
+      } else { // idle
+        fillColor = (simd_float4){0xCE / 255.0f, 0xCB / 255.0f, 0xCE / 255.0f,
+                                  0xB1 / 255.0f};
+        strokeColor = (simd_float4){0x1B / 255.0f, 0x18 / 255.0f, 0x1D / 255.0f,
+                                    0x9F / 255.0f};
+        viewerFillPx = 2.0;
+        viewerOutlinePx = 1.0;
+      }
+      fillColor.w *= (float)alpha;
+      strokeColor.w *= (float)alpha;
+      CGFloat outlineBoostPt = (emphasis >= 1) ? 0.35 : 0.0;
+      CGFloat fillBoostPt = (emphasis == 0) ? 0.6 : 0.5;
+      [self _encodeRingOSCAt:rc
+                   radiusXPt:rrx
+                   radiusYPt:rry
+                   fillColor:fillColor
+                 strokeColor:strokeColor
+                 fillWidthPt:viewerFillPx * srcScale + fillBoostPt
+              outlineWidthPt:viewerOutlinePx * srcScale + outlineBoostPt
+                     encoder:enc];
+    }
+  }
+
   // Motion path (Magic Move): red trajectory line + tangent connectors under
   // the dots, then anchor + handle dots. Drawn beneath the position handle.
   if (del &&

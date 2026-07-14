@@ -180,6 +180,12 @@
       s.onStaticValueDragEnded(endedLabel, endedValues);
   };
 
+  // Feed the popover's mini viewer the SAME corrected timeline the rows read
+  // (template-seeded aspectLinked / aspectLinkable), so the mini's OSC overlay
+  // agrees with the value rows instead of a stale applyTimeline copy.
+  if ([self.miniViewerDelegate isKindOfClass:[KKMiniViewerRenderer class]])
+    ((KKMiniViewerRenderer *)self.miniViewerDelegate).timeline = _timeline;
+
   _KKStaticValuesPopoverView *staticView = [[_KKStaticValuesPopoverView alloc]
         initWithLanes:cfg.lanes
        descriptorPath:self.miniViewerDescriptorPath

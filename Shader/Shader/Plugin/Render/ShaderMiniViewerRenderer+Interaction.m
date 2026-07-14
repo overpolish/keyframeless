@@ -22,10 +22,21 @@
   return self.pointSet;
 }
 
+- (KKRingOSCSet *)_syncedRingSet {
+  [self _syncMiniRingController];
+  return self.ringSet;
+}
+
 - (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
                                                  (KKMiniViewerView *)canvas
                    extraPointHandleGlyphsForContentRect:(CGRect)cr {
   return [[self _syncedSet] handleGlyphsForContentRect:cr];
+}
+
+- (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
+                                                 (KKMiniViewerView *)canvas
+                               extraRingsForContentRect:(CGRect)cr {
+  return [[self _syncedRingSet] ringBundlesForContentRect:cr];
 }
 
 - (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
@@ -37,7 +48,10 @@
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     handleHitAtPoint:(CGPoint)p
          contentRect:(CGRect)cr {
+  // Points foreground, then rings (matching the viewer's precedence).
   if ([[self _syncedSet] handleHitAtPoint:p contentRect:cr])
+    return YES;
+  if ([[self _syncedRingSet] handleHitAtPoint:p contentRect:cr])
     return YES;
   return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
 }
@@ -48,6 +62,9 @@
   if (CGRectIsEmpty(cr))
     return nil;
   NSCursor *c = [[self _syncedSet] cursorAtPoint:p contentRect:cr];
+  if (c)
+    return c;
+  c = [[self _syncedRingSet] cursorAtPoint:p contentRect:cr];
   return c ?: [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
 }
 
@@ -55,6 +72,8 @@
     beginHandleDragAtPoint:(CGPoint)p
                contentRect:(CGRect)cr {
   if ([[self _syncedSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
+    return;
+  if ([[self _syncedRingSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
     return;
   [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
 }
@@ -68,6 +87,11 @@
                               canvas:canvas
                            modifiers:modifiers])
     return;
+  if ([[self _syncedRingSet] dragToPoint:p
+                             contentRect:cr
+                                  canvas:canvas
+                               modifiers:modifiers])
+    return;
   [super miniViewer:canvas
       dragHandleToPoint:p
             contentRect:cr
@@ -76,6 +100,8 @@
 
 - (void)miniViewerEndHandleDrag:(KKMiniViewerView *)canvas {
   if ([self.pointSet endDragOnCanvas:canvas])
+    return;
+  if ([self.ringSet endDragOnCanvas:canvas])
     return;
   [super miniViewerEndHandleDrag:canvas];
 }
@@ -91,7 +117,9 @@
               contentRect:(CGRect)cr {
   if ([super miniViewer:canvas optClickHandleAtPoint:p contentRect:cr])
     return YES;
-  return [[self _syncedSet] optClickAtPoint:p contentRect:cr canvas:canvas];
+  if ([[self _syncedSet] optClickAtPoint:p contentRect:cr canvas:canvas])
+    return YES;
+  return [[self _syncedRingSet] optClickAtPoint:p contentRect:cr canvas:canvas];
 }
 
 - (void)miniViewer:(KKMiniViewerView *)canvas

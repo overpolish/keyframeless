@@ -284,11 +284,29 @@ typedef struct ShaderScalarProp {
   int choiceCount;     // number of options
   int cdefault;        // choice default index
   // On-screen control opt-in (`osc` attribute). oscKind: "" = none, "point"
-  // (position handle, #point), "ring"/"scale" (#float osc=ring|scale), "rotate"
-  // (#angle osc). oscAxis: 'x'/'y'/'z' ring plane for rotate (default 'z').
+  // (position handle, #point), "ring" (radius ring editing the normalized
+  // value, #float/#percent/#int osc=ring), "scale", "rotate" (#angle osc).
+  // oscAxis: 'x'/'y'/'z' ring plane for rotate (default 'z').
   char oscKind[16];
   char oscAxis;
+  char uniformType[8]; // declared GLSL type: float/int/vec2/vec3/vec4/bool
+  double rcenterx, rcentery; // ring OSC center, object space 0..1 (default 0.5)
+  char linkName[64];     // ring OSC: `link=<uniform>` -> centre follows that
+                         // #point's live value (empty = fixed `center=`)
+  int isMulti;           // `#multi`: an N-component numeric field (vec2/vec3)
+  int fieldCount;        // number of components (from fields={} / arity)
+  char fieldLabels[256]; // comma-separated per-component field names
+  int aspectLinked;      // `lockaspect` flag: components aspect-linkable (+
+                         // locked by default) so an OSC drag keeps their ratio
+  double mdef[4];        // per-component defaults (#multi)
 } ShaderScalarProp;
+
+/// A scalar prop editable by a radius ring: a bounded numeric slider (the
+/// `#float`/`#percent`/`#int` family). Points, bools, choices, seeds and angles
+/// have no 0..1 value to map onto a radius, so `osc=ring` on them is rejected.
+static inline BOOL ShaderScalarRingEligible(const ShaderScalarProp *p) {
+  return !p->isPoint && !p->isBool && !p->isChoice && !p->isSeed && !p->isAngle;
+}
 
 static inline double ShaderAttrDouble(NSString *s, NSString *pattern,
                                       double fallback) {
@@ -319,12 +337,13 @@ static inline int ShaderParseScalarProps(NSString *source,
   NSRegularExpression *dirRe = [NSRegularExpression
       regularExpressionWithPattern:
           @"(?m)^[ \\t]*//[ "
-          @"\\t]*#(float|percent|seed|point|int|angle|bool|choice)\\b([^\\n]*)$"
+          @"\\t]*#(float|percent|seed|point|int|angle|bool|choice|multi)\\b([^"
+          @"\\n]*)$"
                            options:0
                              error:nil];
   NSRegularExpression *uniRe = [NSRegularExpression
       regularExpressionWithPattern:
-          @"\\buniform\\s+(float|int|vec2|bool)\\s+(\\w+)\\s*;"
+          @"\\buniform\\s+(float|int|vec2|vec3|vec4|bool)\\s+(\\w+)\\s*;"
                            options:0
                              error:nil];
   NSArray<NSTextCheckingResult *> *dirs =
@@ -356,7 +375,12 @@ static inline int ShaderParseScalarProps(NSString *source,
     p.isBool = [kind isEqualToString:@"bool"];
     p.isInt = [kind isEqualToString:@"int"];
     p.isAngle = [kind isEqualToString:@"angle"];
+    p.isMulti = [kind isEqualToString:@"multi"];
     strncpy(p.name, nm.UTF8String ?: "", sizeof(p.name) - 1);
+    NSString *uty = [source substringWithRange:[um rangeAtIndex:1]];
+    strncpy(p.uniformType, uty.UTF8String ?: "", sizeof(p.uniformType) - 1);
+    p.rcenterx = 0.5;
+    p.rcentery = 0.5;
     NSTextCheckingResult *lm = [[NSRegularExpression
         regularExpressionWithPattern:@"\\blabel\\s*=\\s*\"([^\"]*)\""
                              options:0
@@ -404,6 +428,38 @@ static inline int ShaderParseScalarProps(NSString *source,
       if (am && [am rangeAtIndex:1].location != NSNotFound)
         p.oscAxis = (char)tolower([[attrs
             substringWithRange:[am rangeAtIndex:1]] characterAtIndex:0]);
+      // A ring OSC is placed at `center=x,y` (object space 0..1) unless it is
+      // linked to a #point (increment 2). Default is the clip centre.
+      if (strcmp(p.oscKind, "ring") == 0) {
+        NSTextCheckingResult *cm = [[NSRegularExpression
+            regularExpressionWithPattern:
+                @"\\bcenter\\s*=\\s*\"?(-?[0-9.]+)\\s*,\\s*(-?[0-9.]+)\"?"
+                                 options:0
+                                   error:nil]
+            firstMatchInString:attrs
+                       options:0
+                         range:NSMakeRange(0, attrs.length)];
+        if (cm && [cm rangeAtIndex:2].location != NSNotFound) {
+          p.rcenterx =
+              [attrs substringWithRange:[cm rangeAtIndex:1]].doubleValue;
+          p.rcentery =
+              [attrs substringWithRange:[cm rangeAtIndex:2]].doubleValue;
+        }
+        // `link=<uniform>`: the ring centre tracks that #point's live value
+        // instead of the fixed `center=`.
+        NSTextCheckingResult *lk = [[NSRegularExpression
+            regularExpressionWithPattern:@"\\blink\\s*=\\s*(\\w+)"
+                                 options:0
+                                   error:nil]
+            firstMatchInString:attrs
+                       options:0
+                         range:NSMakeRange(0, attrs.length)];
+        if (lk && [lk rangeAtIndex:1].location != NSNotFound)
+          strncpy(p.linkName,
+                  [attrs substringWithRange:[lk rangeAtIndex:1]].UTF8String
+                      ?: "",
+                  sizeof(p.linkName) - 1);
+      }
     }
     if (p.isChoice) {
       NSTextCheckingResult *om = [[NSRegularExpression
@@ -461,6 +517,75 @@ static inline int ShaderParseScalarProps(NSString *source,
           p.pdefy = xy[1].doubleValue;
         }
       }
+    } else if (p.isMulti) {
+      // An N-component numeric field (vec2/vec3). Component count from
+      // `fields={A,B}` (which also names the components), else the uniform
+      // arity.
+      int arity = (strcmp(p.uniformType, "vec3") == 0)   ? 3
+                  : (strcmp(p.uniformType, "vec4") == 0) ? 4
+                  : (strcmp(p.uniformType, "vec2") == 0) ? 2
+                                                         : 0;
+      NSTextCheckingResult *fm = [[NSRegularExpression
+          regularExpressionWithPattern:@"\\bfields\\s*=\\s*\\{([^}]*)\\}"
+                               options:0
+                                 error:nil]
+          firstMatchInString:attrs
+                     options:0
+                       range:NSMakeRange(0, attrs.length)];
+      NSString *fieldsStr = (fm && [fm rangeAtIndex:1].location != NSNotFound)
+                                ? [attrs substringWithRange:[fm rangeAtIndex:1]]
+                                : @"";
+      strncpy(p.fieldLabels, fieldsStr.UTF8String ?: "",
+              sizeof(p.fieldLabels) - 1);
+      int cnt = 0;
+      if (fieldsStr.length) {
+        cnt = 1;
+        for (NSUInteger i = 0; i < fieldsStr.length; i++)
+          if ([fieldsStr characterAtIndex:i] == ',')
+            cnt++;
+      }
+      p.fieldCount = cnt > 0 ? cnt : (arity > 0 ? arity : 2);
+      p.aspectLinked =
+          ([[NSRegularExpression
+               regularExpressionWithPattern:@"\\blockaspect\\b"
+                                    options:0
+                                      error:nil]
+               firstMatchInString:attrs
+                          options:0
+                            range:NSMakeRange(0, attrs.length)] != nil)
+              ? 1
+              : 0;
+      double mn = ShaderAttrDouble(attrs, @"\\bmin\\s*=\\s*(-?[0-9.]+)", 0.0);
+      double mx = ShaderAttrDouble(attrs, @"\\bmax\\s*=\\s*(-?[0-9.]+)", NAN);
+      p.hasMax = !isnan(mx);
+      if (!p.hasMax)
+        mx = 1.0; // nominal range (the field stays unbounded)
+      if (mx < mn)
+        mx = mn;
+      p.fmin = mn;
+      p.fmax = mx;
+      for (int k = 0; k < 4; k++)
+        p.mdef[k] = mn;
+      NSTextCheckingResult *dm = [[NSRegularExpression
+          regularExpressionWithPattern:
+              @"\\bdefault\\s*=\\s*\"?([-0-9.]+(?:\\s*,\\s*[-0-9.]+)*)\"?"
+                               options:0
+                                 error:nil]
+          firstMatchInString:attrs
+                     options:0
+                       range:NSMakeRange(0, attrs.length)];
+      if (dm && [dm rangeAtIndex:1].location != NSNotFound) {
+        NSArray<NSString *> *parts =
+            [[attrs substringWithRange:[dm rangeAtIndex:1]]
+                componentsSeparatedByString:@","];
+        for (int k = 0; k < 4; k++) {
+          if (k < (int)parts.count)
+            p.mdef[k] = parts[k].doubleValue;
+          else if (parts.count == 1)
+            p.mdef[k] =
+                parts[0].doubleValue; // single default -> all components
+        }
+      }
     } else {
       double defMax = p.isPercent ? 100.0 : (p.isInt ? 10.0 : 1.0);
       double mn = ShaderAttrDouble(attrs, @"\\bmin\\s*=\\s*(-?[0-9.]+)", 0.0);
@@ -505,6 +630,15 @@ ShaderFillScalarPool(NSString *source, vector_float4 *pool, int startOffset,
       double x = v.count >= 1 ? v[0].doubleValue : p->pdefx;
       double y = v.count >= 2 ? v[1].doubleValue : p->pdefy;
       pool[p->poolOffset] = (vector_float4){(float)x, (float)y, 0, 0};
+      continue;
+    }
+    if (p->isMulti) {
+      // N components packed into .xyz (one pool vec4). Missing components fall
+      // back to the per-component default.
+      float c[4] = {0, 0, 0, 0};
+      for (int k = 0; k < p->fieldCount && k < 4; k++)
+        c[k] = (float)(v.count > k ? v[k].doubleValue : p->mdef[k]);
+      pool[p->poolOffset] = (vector_float4){c[0], c[1], c[2], c[3]};
       continue;
     }
     double val = v.count ? v[0].doubleValue
@@ -572,6 +706,42 @@ static inline NSString *ShaderFirstDuplicateUniform(NSString *source) {
     if ([seen containsObject:nm])
       return nm;
     [seen addObject:nm];
+  }
+  return nil;
+}
+
+/// The first directive whose `osc` kind is incompatible with its uniform type,
+/// or nil when every OSC opt-in is valid. `osc=point` needs a `vec2`;
+/// `osc=ring` needs a single-value numeric slider (`float`/`int`, i.e.
+/// #float/#percent/#int)
+/// - a radius has no meaning for a vec2/vec3/vec4, a bool, a choice or a seed.
+/// `outIsRing` distinguishes the two cases so the caller picks the right
+/// message.
+static inline NSString *ShaderFirstInvalidOSC(NSString *source,
+                                              BOOL *outIsRing) {
+  if (!source.length)
+    return nil;
+  ShaderScalarProp sp[KK_SHADER_MAX_SCALAR_PROPS];
+  int used = 0;
+  int ns =
+      ShaderParseScalarProps(source, sp, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
+  for (int i = 0; i < ns; i++) {
+    if (strcmp(sp[i].oscKind, "point") == 0 &&
+        strcmp(sp[i].uniformType, "vec2") != 0) {
+      if (outIsRing)
+        *outIsRing = NO;
+      return @(sp[i].name);
+    }
+    if (strcmp(sp[i].oscKind, "ring") == 0) {
+      BOOL scalarOK = strcmp(sp[i].uniformType, "float") == 0 ||
+                      strcmp(sp[i].uniformType, "int") == 0;
+      BOOL multiOK = sp[i].isMulti && strcmp(sp[i].uniformType, "vec2") == 0;
+      if (!ShaderScalarRingEligible(&sp[i]) || !(scalarOK || multiOK)) {
+        if (outIsRing)
+          *outIsRing = YES;
+        return @(sp[i].name);
+      }
+    }
   }
   return nil;
 }

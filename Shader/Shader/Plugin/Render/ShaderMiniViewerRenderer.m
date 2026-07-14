@@ -47,6 +47,8 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   // cheap string compare instead of re-running the directive parse each frame.
   NSString *_pointSyncedSource;
   KKPointOSCSet *_pointSet;
+  NSString *_ringSyncedSource;
+  KKRingOSCSet *_ringSet;
 }
 
 // All point OSCs draw + drag uniformly through the KKPointOSCSet (via the
@@ -81,6 +83,52 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
         [labels addObject:@(props[i].name)]; // uniform name = lane identity
   }
   [self.pointSet setLaneLabels:labels];
+}
+
+- (KKRingOSCSet *)ringSet {
+  if (!_ringSet)
+    _ringSet = [[KKRingOSCSet alloc] initWithRenderer:self];
+  return _ringSet;
+}
+
+// Feed the ring set the shader's current `osc=ring` scalar lanes (label + value
+// range + object-space centre), mirroring the viewer's ring controllers. Cheap
+// string compare skips the parse when the source is unchanged.
+- (void)_syncMiniRingController {
+  NSString *src = [self _customShaderSource] ?: @"";
+  if ([src isEqualToString:_ringSyncedSource])
+    return;
+  _ringSyncedSource = [src copy];
+  NSMutableArray<NSDictionary<NSString *, id> *> *rings =
+      [NSMutableArray array];
+  if (src.length) {
+    ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
+    int used = 0;
+    int n = ShaderParseScalarProps(src, props, KK_SHADER_MAX_SCALAR_PROPS, 0,
+                                   &used);
+    for (int i = 0; i < n; i++) {
+      if (strcmp(props[i].oscKind, "ring") != 0 ||
+          !ShaderScalarRingEligible(&props[i]))
+        continue;
+      BOOL isInt = props[i].isInt || props[i].isPercent;
+      int fields = props[i].isMulti
+                       ? (props[i].fieldCount > 0 ? props[i].fieldCount : 2)
+                       : 1;
+      [rings addObject:@{
+        @"label" : @(props[i].name),
+        @"min" : @(props[i].fmin),
+        @"max" : @(props[i].fmax),
+        @"isInt" : @(isInt),
+        @"bounded" : @(props[i].hasMax != 0),
+        @"fields" : @(fields),
+        @"linked" : @(props[i].aspectLinked != 0),
+        @"centerX" : @(props[i].rcenterx),
+        @"centerY" : @(props[i].rcentery),
+        @"linkLabel" : @(props[i].linkName),
+      }];
+    }
+  }
+  [self.ringSet setRings:rings];
 }
 
 - (KKLane *)templateLaneForLabel:(NSString *)label {
@@ -124,6 +172,12 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
     if ([label isEqualToString:@(sp[i].name)]) { // uniform name = identity
       if (sp[i].isPoint)
         return @[ @(sp[i].pdefx), @(sp[i].pdefy) ];
+      if (sp[i].isMulti) {
+        NSMutableArray<NSNumber *> *d = [NSMutableArray array];
+        for (int k = 0; k < sp[i].fieldCount && k < 4; k++)
+          [d addObject:@(sp[i].mdef[k])];
+        return d;
+      }
       return @[ @(sp[i].isChoice ? (double)sp[i].cdefault : sp[i].fdefault) ];
     }
 
