@@ -36,7 +36,6 @@ NS_ASSUME_NONNULL_BEGIN
   NSView *_centeredArea;
   KKTimelineBasicView *_basicGraph;
   KKTimelineAdvancedView *_advancedGraph;
-  NSTextField *_hintLabel;
   _KKDropdownTrigger *_dropdownTrigger;
   NSView *_footerRow;
 

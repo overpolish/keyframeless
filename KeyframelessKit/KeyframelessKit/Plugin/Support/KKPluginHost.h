@@ -72,6 +72,13 @@ double KKProcessFrameDurationSeconds(void);
 @property(nonatomic) double lastBoundaryReqSec;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *boundaryReqSecs;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *boundaryReqFracs;
+/// Clip fraction (0..1) for an absolute render-time in seconds, from the cached
+/// effect start/duration. The mini-viewer feed tags each published source frame
+/// with this so a live-playback consumer evaluates the effect at exactly that
+/// frame's own playhead time - the transform stays locked to the footage the
+/// feed delivered, instead of a separately-polled playhead that drifts behind
+/// it. 0 when the duration is unset.
+- (double)clipFractionAtSeconds:(double)sec;
 @end
 
 /// Handles a kKKParamTimelineData parameterChanged: reads the blob inside

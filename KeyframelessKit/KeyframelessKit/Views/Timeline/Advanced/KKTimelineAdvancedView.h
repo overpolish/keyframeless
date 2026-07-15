@@ -42,6 +42,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) double frameDurationSeconds;
 @property(nonatomic) double playheadFraction;
 
+/// Empty-state text drawn centered in the track area when there are no visible
+/// lanes (nothing animated, or every lane hidden by the filter). Set it to keep
+/// the graph - and so its scrub ruler - visible instead of collapsing to a
+/// separate placeholder, so the playhead can still be dragged. nil when lanes
+/// are showing.
+@property(nonatomic, copy, nullable) NSString *emptyMessage;
+
 /// Owner (layer) keys in display order, so the lanes of a multi-layer timeline
 /// render grouped in the layer-list's stack order. Every lane is editable; the
 /// layer is just a display grouping (drawn via

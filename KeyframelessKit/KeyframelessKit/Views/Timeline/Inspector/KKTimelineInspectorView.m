@@ -622,6 +622,10 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     return;
   _playButton.playing = playing;
   [_detachedView setPlaying:playing];
+  // Flip the open keypose/constants popover's live preview in place, so the clip
+  // can be played back without closing the editor. The preview itself follows
+  // the feed frames; this only toggles the play/idle mode.
+  [_basicView setOpenPopoverLivePlaying:playing];
 }
 
 - (KKPlayButton *)_guidePlayButton {

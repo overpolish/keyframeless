@@ -515,6 +515,16 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 /// the popover so the canvas stays free of the lanes-view import cycle.
 @property(nonatomic) NSInteger renderMode;
 
+/// Live-playback preview: while the host reports FCP is playing back, the mini
+/// shows the effect at the moving playhead instead of the frozen keypose it's
+/// editing, and every on-screen control is suppressed so the preview reads as a
+/// clean frame. When YES, each source frame is rendered at ITS OWN feed tag (the
+/// clip fraction that frame represents), so the effect transform stays locked to
+/// the footage the feed delivered rather than trailing a separately-polled
+/// playhead; the poll also speeds up to keep pace with the feed. Default NO
+/// restores the edited-keypose frame with its controls on the next redraw.
+@property(nonatomic) BOOL livePlaybackActive;
+
 /// When YES, a click in the mini makes the mini the window's first responder
 /// (instead of resigning to nil), so an NSPopover-hosted mini becomes the key
 /// window and its local keyDown monitor fires - letting bare keys (e.g. Delete

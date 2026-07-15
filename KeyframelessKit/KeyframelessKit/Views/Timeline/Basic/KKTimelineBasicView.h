@@ -44,6 +44,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// (log) axis like everything else.
 @property(nonatomic) double playheadFraction;
 
+/// Empty-state text drawn centered in the track area when nothing is animated.
+/// Set it to keep the graph - and so its scrub ruler - visible instead of
+/// collapsing to a separate placeholder, so the playhead can still be dragged.
+/// nil when phases/lanes are showing.
+@property(nonatomic, copy, nullable) NSString *emptyMessage;
+
 /// Reset pinch-zoom/pan back to fit (zoom 1, no pan).
 - (void)resetZoom;
 

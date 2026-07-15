@@ -18,6 +18,8 @@ The canvas also has two additional render modes, toggled from the header pill:
 - Filmstrip lays every keypose out side by side so you can see the whole animation in one view. Click an inactive cell to select that keypose and edit it. Linked keyposes show up as a single cell.
 - Onion skin overlays the surrounding keypose frames on top of the current one with red and blue tinting (previous in red, next in blue) so you can see how the motion progresses.
 
+While an editor is open, the preview also follows playback. Play back or scrub the timeline and the preview tracks the playhead - the footage and the effect move together - while its on-screen controls hide so you get a clean moving frame. When you stop it snaps back to the frame you're editing, controls and all. So you can watch the animation run without closing the editor to get back to Final Cut's viewer. (The footage only keeps advancing while Final Cut is actually rendering the clip; once it has cached the playback it may hold the last frame, the same as any effect preview.)
+
 The OSC handles also work inside the main FCP viewer, not just the mini-viewer, so once you're comfortable you can drag the same controls on the full-size canvas.
 
 The preview renders in the clip's own image space - it shows the effect applied to the clip's media, but not the clip's own Video-inspector Transform/Crop/Distort or the project-canvas letterbox, since Final Cut applies those after the effect. See the clip-space-and-wrapping topic for why, and when to wrap in a compound or adjustment clip so the preview matches the viewer.

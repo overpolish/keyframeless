@@ -1039,4 +1039,50 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   [_openStaticView guideCommitFieldForLabel:label component:component];
 }
 
+- (void)setOpenPopoverLivePlaying:(BOOL)playing {
+  KKMiniViewerView *mini = _openContentMiniViewer;
+  if (!mini)
+    return;
+  // Only react to the play state flipping; per-frame redraws come from the feed
+  // poll picking up new source frames (each carries its own fraction tag), not
+  // from the playhead poller.
+  if (mini.livePlaybackActive == playing)
+    return;
+  mini.livePlaybackActive = playing;
+  // The feed's source is pinned to the editor's frame - a keypose boundary, or
+  // a stale request a prior keypose left behind (the constants editor writes
+  // none of its own). Without releasing it, only the transform would animate
+  // while the footage stayed frozen. Release the pin while playing so the feed
+  // serves the live playhead frame for BOTH keypose and constants; on stop,
+  // re-pin only a keypose so it snaps back to its frame (constants has nothing
+  // to pin - single-slot live just shows the current playhead, which it
+  // previews anyway).
+  if (playing)
+    [self _setOpenBoundaryRequestActive:NO];
+  else if (_openStaticIsBoundary)
+    [self _setOpenBoundaryRequestActive:YES];
+  [mini setNeedsDisplay:YES];
+}
+
+- (void)_setOpenBoundaryRequestActive:(BOOL)active {
+  NSString *path = self.miniViewerRequestPath;
+  if (!path)
+    return;
+  NSData *d = [NSData dataWithContentsOfFile:path];
+  NSDictionary *j =
+      d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
+  if (![j isKindOfClass:[NSDictionary class]])
+    return;
+  NSArray<NSNumber *> *fracs =
+      [j[@"fracs"] isKindOfClass:[NSArray class]] ? j[@"fracs"] : nil;
+  if (fracs.count == 0) {
+    NSNumber *f = j[@"frac"];
+    fracs = f ? @[ f ] : @[ @0 ];
+  }
+  // Preserve the keypose fracs, flip only the active flag: NO releases the pin
+  // (render side serves the live playhead frame), YES re-requests the keypose
+  // boundary frame.
+  KKWriteBoundaryRequestMulti(path, fracs, active);
+}
+
 @end

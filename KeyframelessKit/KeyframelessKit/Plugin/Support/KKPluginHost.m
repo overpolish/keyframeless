@@ -17,6 +17,11 @@
   }
   return self;
 }
+- (double)clipFractionAtSeconds:(double)sec {
+  if (_effectDurSec <= 0.0)
+    return 0.0;
+  return MAX(0.0, MIN(1.0, (sec - _effectStartSec) / _effectDurSec));
+}
 @end
 
 NSArray<NSNumber *> *KKReadBoundaryRequestFracs(NSString *path) {

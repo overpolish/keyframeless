@@ -359,6 +359,14 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
                    preferredEdge:(NSRectEdge)preferredEdge
                          onClose:(nullable void (^)(void))onClose;
 
+/// Push live-playback state to the currently-open keypose or constants popover's
+/// mini preview. While `playing`, the mini follows the playhead (each feed frame
+/// rendered at its own tag) with its on-screen controls hidden, so the clip can
+/// be played back without closing the popover; when it goes NO the mini snaps
+/// back to the edited keypose with its controls. A no-op when no mini popover is
+/// open. Gated on the same play-button state that the playhead poll drives.
+- (void)setOpenPopoverLivePlaying:(BOOL)playing;
+
 /// The value-editor row (slider/fields) for `label` in the currently open
 /// static-values popover, or nil if it isn't open / no such lane. Lets a
 /// guide spotlight a specific constant's control.

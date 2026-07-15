@@ -190,7 +190,10 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
                              boundaryReqFracs:self.renderCache.boundaryReqFracs
                               multiSlotActive:YES
                             changesOutputSize:NO
-                                   defaultTag:CMTimeGetSeconds(renderTime)];
+                                   defaultTag:[self.renderCache
+                                                  clipFractionAtSeconds:
+                                                      CMTimeGetSeconds(
+                                                          renderTime)]];
 
   // Passthrough: sample the source straight into the destination via the kit's
   // shared full-screen-quad infra + the kit-bundle passthrough shaders. Canvas

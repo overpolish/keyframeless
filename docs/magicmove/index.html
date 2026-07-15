@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png" />
     <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png" />
-    <meta name="kk-version" content="3.0.2" />
+    <meta name="kk-version" content="3.1.0" />
   </head>
   <body>
     <main class="wrap">
@@ -25,12 +25,20 @@
       </header>
       <section class="release">
         <div class="release-head">
-          <h2>3.0.2</h2>
+          <h2>3.1.0</h2>
           <span class="date">TBD</span>
+        </div>
+        <div class="group">
+          <span class="tag feature">New</span>
+          <ul class="bullets">
+            <li>Added a <strong>Blur</strong> control that softens the clip with a Gaussian blur. Animate it from or to 0 for a blur-in or blur-out reveal</li>
+          </ul>
         </div>
         <div class="group">
           <span class="tag improvement">Improved</span>
           <ul class="bullets">
+            <li>The keypose and Constants editors now preview playback live: play or scrub the timeline with one open and its preview follows the playhead - footage and effect together, with the on-screen controls hidden - then snaps back to the frame you're editing when you stop, so you never have to close the editor to watch the animation</li>
+            <li>The timeline ruler is always available now, even before anything is animated, so you can scrub the playhead straight from the inspector (and preview it in an open editor) without leaving it</li>
             <li>The keypose or interval you're editing now highlights in the timeline, and the Constants button lights up while its panel is open, so it's always clear what the editor is controlling</li>
             <li>The keypose, Constants, and interval editors now open in one consistent spot beside the inspector instead of jumping around as you move between them, and each has a close button</li>
           </ul>

@@ -259,16 +259,6 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   _centeredArea.translatesAutoresizingMaskIntoConstraints = NO;
   [self addSubview:_centeredArea];
 
-  _hintLabel = [NSTextField
-      labelWithString:KKLoc(@"No animated properties",
-                            @"Empty state: no animated properties.")];
-  _hintLabel.translatesAutoresizingMaskIntoConstraints = NO;
-  _hintLabel.font = [NSFont systemFontOfSize:KKFontSizeSM
-                                      weight:NSFontWeightRegular];
-  _hintLabel.textColor = [[NSColor inspectorLabel] colorWithAlphaComponent:0.4];
-  _hintLabel.alignment = NSTextAlignmentCenter;
-  [_centeredArea addSubview:_hintLabel];
-
   [NSLayoutConstraint activateConstraints:@[
     [_laneStack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
     [_laneStack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
@@ -298,11 +288,6 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     [_centeredArea.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
     [_centeredArea.topAnchor constraintEqualToAnchor:_laneStack.bottomAnchor],
     [_centeredArea.bottomAnchor constraintEqualToAnchor:footerRow.topAnchor],
-
-    [_hintLabel.centerXAnchor
-        constraintEqualToAnchor:_centeredArea.centerXAnchor],
-    [_hintLabel.centerYAnchor
-        constraintEqualToAnchor:_centeredArea.centerYAnchor],
   ]];
 
   _basicGraph =
@@ -310,9 +295,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
                                                  timeline:_timeline];
   _basicGraph.translatesAutoresizingMaskIntoConstraints = NO;
   _basicGraph.hidden = YES;
-  [_centeredArea addSubview:_basicGraph
-                 positioned:NSWindowBelow
-                 relativeTo:_hintLabel];
+  [_centeredArea addSubview:_basicGraph];
   [NSLayoutConstraint activateConstraints:@[
     [_basicGraph.leadingAnchor
         constraintEqualToAnchor:_centeredArea.leadingAnchor],
@@ -389,9 +372,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     if (s && s->_onKeyposeLayerActivated)
       s->_onKeyposeLayerActivated(layerKey);
   };
-  [_centeredArea addSubview:_advancedGraph
-                 positioned:NSWindowBelow
-                 relativeTo:_hintLabel];
+  [_centeredArea addSubview:_advancedGraph];
   [NSLayoutConstraint activateConstraints:@[
     [_advancedGraph.leadingAnchor
         constraintEqualToAnchor:_centeredArea.leadingAnchor],
@@ -490,18 +471,24 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     if (l.enabled && [condVisible containsObject:l.label])
       optedIn++;
   BOOL anyOptedIn = optedIn > 0;
-  BOOL showAdvanced = anyOptedIn && _activeTab == 1;
   BOOL allFiltered =
-      showAdvanced && optedIn >= 2 && (NSInteger)hidden.count >= optedIn;
-  _advancedGraph.hidden = !showAdvanced || allFiltered;
-  if (!anyOptedIn)
-    _hintLabel.stringValue = KKLoc(@"No animated properties",
-                                   @"Empty state: no animated properties.");
-  else if (allFiltered)
-    _hintLabel.stringValue =
-        KKLoc(@"All lanes hidden",
-              @"Empty state: every animated lane is hidden by the filter bar.");
-  _hintLabel.hidden = anyOptedIn && !allFiltered;
+      _activeTab == 1 && optedIn >= 2 && (NSInteger)hidden.count >= optedIn;
+  // The active tab's graph stays visible even when empty so its scrub ruler is
+  // always usable (drag the playhead with a popover open); the empty-state
+  // message is drawn inside the track area instead of a separate centered
+  // label. The inactive tab's graph hides.
+  _advancedGraph.hidden = _activeTab != 1;
+  _basicGraph.hidden = _activeTab != 0;
+  NSString *noAnim =
+      KKLoc(@"No animated properties", @"Empty state: no animated properties.");
+  _advancedGraph.emptyMessage =
+      !anyOptedIn
+          ? noAnim
+          : (allFiltered ? KKLoc(@"All lanes hidden",
+                                 @"Empty state: every animated lane is hidden "
+                                 @"by the filter bar.")
+                         : nil);
+  _basicGraph.emptyMessage = anyOptedIn ? nil : noAnim;
 }
 
 - (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes {
@@ -539,11 +526,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     if (l.enabled && [condVisibleGraph containsObject:l.label])
       [optedIn addObject:l];
   BOOL anyOptedIn = optedIn.count > 0;
-  BOOL showBasic = anyOptedIn && _activeTab == 0;
-  BOOL showAdvanced = anyOptedIn && _activeTab == 1;
-  _basicGraph.hidden = !showBasic;
   [_basicGraph applyTimeline:gt];
   [_advancedGraph applyTimeline:gt];
+  // Graph visibility (active tab always shown, even with no lanes, so its ruler
+  // stays scrubbable) and the empty-state messages are set in
+  // _applyLaneFilterHidden below.
 
   // Shown in Advanced when there are >=2 lanes worth filtering; the bar's
   // hidden set drives which rows the graph draws.
@@ -552,7 +539,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   // layer (multi-owner), matching the companion layer panel's height.
   _laneFilterBar.minimumPopoverHeight = self.minimumManagePopoverHeight;
   _laneFilterBar.activeLayerKey = _activeLayerKey;
-  BOOL showFilter = showAdvanced && optedIn.count >= 2;
+  BOOL showFilter = anyOptedIn && _activeTab == 1 && optedIn.count >= 2;
   _laneFilterBar.hidden = !showFilter;
   // Graph visibility + empty-state hint (also driven live by the bar's
   // onVisibilityChanged, which doesn't run a full _refresh).

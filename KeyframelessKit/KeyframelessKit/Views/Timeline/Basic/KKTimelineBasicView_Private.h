@@ -253,6 +253,8 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
                             dur:(double)dur
                          rulerY:(CGFloat)rulerY;
 - (void)_drawRulerInRect:(NSRect)g proj:(KKBasicProj)p xproj:(KKBasicProj)xp;
+- (void)_drawPlayheadInRect:(NSRect)g proj:(KKBasicProj)p;
+- (void)_drawEmptyStateInRect:(NSRect)g proj:(KKBasicProj)p;
 - (void)_placeSection:(NSTextField *)label
              checkbox:(nullable KKCheckboxView *)check
               centerX:(CGFloat)cx

@@ -294,7 +294,10 @@ id<MTLTexture> KKMagicMoveBlurredTexture(id<MTLTexture> src, float blurFrac,
                              boundaryReqFracs:self.renderCache.boundaryReqFracs
                               multiSlotActive:YES
                             changesOutputSize:NO
-                                   defaultTag:CMTimeGetSeconds(renderTime)];
+                                   defaultTag:[self.renderCache
+                                                  clipFractionAtSeconds:
+                                                      CMTimeGetSeconds(
+                                                          renderTime)]];
 
   simd_float2 tileOffsetPx = {
       (float)(destinationImage.tilePixelBounds.left -

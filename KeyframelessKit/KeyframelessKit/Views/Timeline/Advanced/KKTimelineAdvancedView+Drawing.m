@@ -8,6 +8,7 @@
 #import "KKKeyposeSymbol.h"
 #import "KKLocalized.h"
 #import "KKLog.h"
+#import "KKTimelineHintText.h"
 #import "KKTimelineScale.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
@@ -341,6 +342,11 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   // Fade shadows over the rows go under the ruler / playhead so those stay
   // crisp; the row content above/below fades into a shadow when it scrolls.
   [self _drawScrollFadesInRect:g];
+
+  // Empty state: no lanes to draw, but the ruler + playhead below still render
+  // so the timeline stays scrubbable. The message sits where the rows would.
+  if (self.emptyMessage.length && lanes.count == 0)
+    KKTimelineDrawCenteredHint(self.emptyMessage, g);
 
   [self _drawRulerInRect:g tracks:tracks];
   [self _drawDurationOverlayInRect:g tracks:tracks];

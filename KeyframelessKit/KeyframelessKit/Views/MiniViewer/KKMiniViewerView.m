@@ -17,6 +17,10 @@
 #import <simd/simd.h>
 
 static const NSTimeInterval kPollInterval = 1.0 / 15.0;
+// During live playback the feed streams new source frames up to 60fps; the idle
+// 15fps poll would stutter the footage, so poll near the feed's rate while it
+// plays and drop back to idle when it stops.
+static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
 
 @implementation KKMiniBox
 + (instancetype)boxWithRect:(CGRect)rect
@@ -221,27 +225,44 @@ static const NSTimeInterval kPollInterval = 1.0 / 15.0;
 
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
-  [_pollTimer invalidate];
-  _pollTimer = nil;
   [self _teardownKeyMonitors];
+  [self _startPollTimer];
   if (self.window) {
-    // Weak block (NOT target:self) - a target:self repeating timer retains the
-    // view, so it only deallocs when the timer is invalidated (window-leave /
-    // dealloc). The guide's popover juggling (content moving to the overlay /
-    // passthrough window, deferred closes) can leave the view in a window with
-    // a live timer, so it never deallocs and its MTKView CAMetalLayer drawables
-    // (multi-MB IOSurfaces) leak, accumulating per guide run. A weak block lets
-    // the view dealloc as soon as its popover releases it; dealloc invalidates
-    // the timer.
-    __weak typeof(self) weakSelf = self;
-    _pollTimer = [NSTimer scheduledTimerWithTimeInterval:kPollInterval
-                                                 repeats:YES
-                                                   block:^(NSTimer *t) {
-                                                     [weakSelf _poll];
-                                                   }];
     [self _poll];
     [self _installKeyMonitor];
   }
+}
+
+// (Re)arm the descriptor poll at the rate for the current playback state. Also
+// called when live playback flips so the footage keeps up (see
+// kPollIntervalLive).
+- (void)_startPollTimer {
+  [_pollTimer invalidate];
+  _pollTimer = nil;
+  if (!self.window)
+    return;
+  // Weak block (NOT target:self) - a target:self repeating timer retains the
+  // view, so it only deallocs when the timer is invalidated (window-leave /
+  // dealloc). The guide's popover juggling (content moving to the overlay /
+  // passthrough window, deferred closes) can leave the view in a window with
+  // a live timer, so it never deallocs and its MTKView CAMetalLayer drawables
+  // (multi-MB IOSurfaces) leak, accumulating per guide run. A weak block lets
+  // the view dealloc as soon as its popover releases it; dealloc invalidates
+  // the timer.
+  __weak typeof(self) weakSelf = self;
+  NSTimeInterval iv = _livePlaybackActive ? kPollIntervalLive : kPollInterval;
+  _pollTimer = [NSTimer scheduledTimerWithTimeInterval:iv
+                                               repeats:YES
+                                                 block:^(NSTimer *t) {
+                                                   [weakSelf _poll];
+                                                 }];
+}
+
+- (void)setLivePlaybackActive:(BOOL)active {
+  if (_livePlaybackActive == active)
+    return;
+  _livePlaybackActive = active;
+  [self _startPollTimer];
 }
 
 // Cmd-0 snaps zoom/pan back to fit, matching double-click and the inspector's

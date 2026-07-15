@@ -98,6 +98,12 @@
 // Core Graphics than via a Metal line pipeline.
 - (void)drawRect:(NSRect)dirtyRect {
   KKMiniViewerView *c = self.canvas;
+  // Live playback suppresses every on-screen control for a clean frame; this
+  // AppKit overlay draws the box size readouts (and drag snap guides) on top of
+  // the Metal pass, so it has to honour the same gate - the Metal overlay is
+  // already skipped in -drawInMTKView:.
+  if (c.livePlaybackActive)
+    return;
   id<KKMiniViewerDelegate> d = c.canvasDelegate;
   CGRect cr = [c contentRectInViewPoints];
   if (_dragging &&

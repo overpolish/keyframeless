@@ -12,6 +12,8 @@ To move from one look to another, drop a keypose where it starts and another whe
 
 When you open a keypose to edit its value, that keypose highlights on its lane so you can see which one the editor is controlling; opening an interval's easing or modulation highlights that interval the same way. The highlight is drawn in the pill's own colour - accent for a flat value, the warning colour for a real transition (ends that differ) - and clears when you close the editor or switch to Constants.
 
+The editor's preview plays along with the clip. While you scrub or play back, the preview follows the playhead - the footage and the effect move together - and hides its on-screen controls so you see a clean moving frame, then snaps back to the keypose you're editing (with its controls) the moment playback stops. You can judge the animation in motion without closing the editor. The timeline ruler is always available to scrub, even before you've animated anything.
+
 ## How it differs from keyframes
 
 A keypose is not an FCP keyframe - it is an anchor point of the animation, and the interval between adjacent keyposes owns the interpolation. When two endpoints differ, the curve tweens between them; when they are linked, they share one value and the interval becomes a hold you can still modulate with wiggle, oscillate, or handheld. Linked keyposes keep their values synced.

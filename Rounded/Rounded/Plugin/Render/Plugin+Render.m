@@ -239,7 +239,10 @@
                            boundaryReqFracs:self.renderCache.boundaryReqFracs
                             multiSlotActive:self.renderCache.boundaryFeedActive
                           changesOutputSize:NO
-                                 defaultTag:0.0];
+                                 defaultTag:[self.renderCache
+                                                clipFractionAtSeconds:
+                                                    CMTimeGetSeconds(
+                                                        renderTime)]];
 
   id<MTLRenderPipelineState> pipelineState =
       [self pipelineStateForPluginID:kPluginID

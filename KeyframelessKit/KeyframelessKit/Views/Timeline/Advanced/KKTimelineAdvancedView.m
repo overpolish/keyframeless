@@ -345,6 +345,13 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
   [self setNeedsDisplay:YES];
 }
 
+- (void)setEmptyMessage:(NSString *)emptyMessage {
+  if (_emptyMessage == emptyMessage || [_emptyMessage isEqual:emptyMessage])
+    return;
+  _emptyMessage = [emptyMessage copy];
+  [self setNeedsDisplay:YES];
+}
+
 - (NSString *)primaryLaneLabel {
   return [_topLaneLabel copy];
 }

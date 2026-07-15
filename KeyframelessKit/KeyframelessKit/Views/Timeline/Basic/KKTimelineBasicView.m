@@ -156,6 +156,13 @@
   [self setNeedsDisplay:YES];
 }
 
+- (void)setEmptyMessage:(NSString *)emptyMessage {
+  if (_emptyMessage == emptyMessage || [_emptyMessage isEqual:emptyMessage])
+    return;
+  _emptyMessage = [emptyMessage copy];
+  [self setNeedsDisplay:YES];
+}
+
 // The canonical Basic shape of a lane. The two Hold keyposes are ALWAYS
 // present (so drift / modulation are always possible); an In adds a keypose
 // at t≈0, an Out at t≈1. Keypose counts: neither 2, In 3, Out 3, both 4.

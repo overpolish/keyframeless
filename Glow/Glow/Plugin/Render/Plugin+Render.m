@@ -700,14 +700,17 @@ static NSArray<NSNumber *> *_GlowLaneValues(KKTimeline *timeline,
   [self
       kkPublishMiniViewerFeedForDestination:destinationImage
                                sourceImages:sourceImages
-                             descriptorPath:
-                                 GlowMiniViewerDescriptorPathForUUID(
-                                     KKInstanceUUIDForAPI(self.apiManager))
+                             descriptorPath:GlowMiniViewerDescriptorPathForUUID(
+                                                KKInstanceUUIDForAPI(
+                                                    self.apiManager))
                             boundaryReqSecs:self.renderCache.boundaryReqSecs
                            boundaryReqFracs:self.renderCache.boundaryReqFracs
                             multiSlotActive:self.renderCache.boundaryFeedActive
                           changesOutputSize:YES
-                                 defaultTag:0.0];
+                                 defaultTag:[self.renderCache
+                                                clipFractionAtSeconds:
+                                                    CMTimeGetSeconds(
+                                                        renderTime)]];
 
   @autoreleasepool {
 

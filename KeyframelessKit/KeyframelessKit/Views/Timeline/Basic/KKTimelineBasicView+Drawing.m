@@ -8,6 +8,7 @@
 #import "KKKeyposeSymbol.h"
 #import "KKMiniViewerView.h"
 #import "KKSegmentEditView.h"
+#import "KKTimelineHintText.h"
 #import "KKTimelineScale.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
@@ -18,11 +19,16 @@
 
 - (void)drawRect:(NSRect)dirtyRect {
   KKBasicProj p = [self _projection];
-  if (!p.anyAnimatable)
-    return;
   NSRect g = [self _graphRect];
   if (NSWidth(g) <= 0 || NSHeight(g) <= 0)
     return;
+  // No animatable lanes: keep the container + ruler + playhead so the timeline
+  // stays scrubbable, with the empty-state message where the phases would be.
+  if (!p.anyAnimatable) {
+    if (self.emptyMessage.length)
+      [self _drawEmptyStateInRect:g proj:p];
+    return;
+  }
 
   // The container background fills the full track width (independent of the
   // graph rect's half-pill content inset + 1px right padding) so the box keeps
@@ -222,37 +228,57 @@
 
   [self _drawRulerInRect:g proj:p xproj:xp];
 
-  // Playhead: a thin line spanning ruler→track plus a small top knob, mapped
-  // through the same warp as everything else. < 0 = hidden (not playing).
-  if (_playheadFraction >= 0.0) {
-    CGFloat px = KKBasicXForFrac(_playheadFraction, g, p);
-    px = round(px) + 0.5; // crisp 1px line
-    CGFloat top = NSMaxY(g) + kRulerGap + kRulerH;
-    NSColor *phc = [NSColor inspectorLabel];
-    // Contain the scrubber horizontally to the visible container; vertical is
-    // left free so the knob still sits up in the ruler.
-    NSRect cont = [self _containerRect];
-    [NSGraphicsContext saveGraphicsState];
-    NSRectClip(NSMakeRect(NSMinX(cont), NSMinY(g), NSWidth(cont),
-                          NSMaxY(self.bounds) - NSMinY(g)));
-    NSBezierPath *line = [NSBezierPath bezierPath];
-    [line moveToPoint:NSMakePoint(px, NSMinY(g))];
-    [line lineToPoint:NSMakePoint(px, top)];
-    line.lineWidth = 1.0;
-    [[phc colorWithAlphaComponent:0.85] setStroke];
-    [line stroke];
-    CGFloat kw = 7.0, kh = 6.0;
-    NSBezierPath *knob = [NSBezierPath bezierPath];
-    [knob moveToPoint:NSMakePoint(px - kw / 2.0, top)];
-    [knob lineToPoint:NSMakePoint(px + kw / 2.0, top)];
-    [knob lineToPoint:NSMakePoint(px + kw / 2.0, top - kh + 3.0)];
-    [knob lineToPoint:NSMakePoint(px, top - kh)];
-    [knob lineToPoint:NSMakePoint(px - kw / 2.0, top - kh + 3.0)];
-    [knob closePath];
-    [phc setFill];
-    [knob fill];
-    [NSGraphicsContext restoreGraphicsState];
-  }
+  [self _drawPlayheadInRect:g proj:p];
+}
+
+// Playhead: a thin line spanning ruler→track plus a small top knob, mapped
+// through the same warp as everything else. < 0 = hidden (not playing).
+- (void)_drawPlayheadInRect:(NSRect)g proj:(KKBasicProj)p {
+  if (_playheadFraction < 0.0)
+    return;
+  CGFloat px = KKBasicXForFrac(_playheadFraction, g, p);
+  px = round(px) + 0.5; // crisp 1px line
+  CGFloat top = NSMaxY(g) + kRulerGap + kRulerH;
+  NSColor *phc = [NSColor inspectorLabel];
+  // Contain the scrubber horizontally to the visible container; vertical is
+  // left free so the knob still sits up in the ruler.
+  NSRect cont = [self _containerRect];
+  [NSGraphicsContext saveGraphicsState];
+  NSRectClip(NSMakeRect(NSMinX(cont), NSMinY(g), NSWidth(cont),
+                        NSMaxY(self.bounds) - NSMinY(g)));
+  NSBezierPath *line = [NSBezierPath bezierPath];
+  [line moveToPoint:NSMakePoint(px, NSMinY(g))];
+  [line lineToPoint:NSMakePoint(px, top)];
+  line.lineWidth = 1.0;
+  [[phc colorWithAlphaComponent:0.85] setStroke];
+  [line stroke];
+  CGFloat kw = 7.0, kh = 6.0;
+  NSBezierPath *knob = [NSBezierPath bezierPath];
+  [knob moveToPoint:NSMakePoint(px - kw / 2.0, top)];
+  [knob lineToPoint:NSMakePoint(px + kw / 2.0, top)];
+  [knob lineToPoint:NSMakePoint(px + kw / 2.0, top - kh + 3.0)];
+  [knob lineToPoint:NSMakePoint(px, top - kh)];
+  [knob lineToPoint:NSMakePoint(px - kw / 2.0, top - kh + 3.0)];
+  [knob closePath];
+  [phc setFill];
+  [knob fill];
+  [NSGraphicsContext restoreGraphicsState];
+}
+
+- (void)_drawEmptyStateInRect:(NSRect)g proj:(KKBasicProj)p {
+  NSBezierPath *track =
+      [NSBezierPath bezierPathWithRoundedRect:[self _containerRect]
+                                      xRadius:KKRadiusMD
+                                      yRadius:KKRadiusMD];
+  [[[NSColor inspectorLabel] colorWithAlphaComponent:0.06] setFill];
+  [track fill];
+
+  KKTimelineDrawCenteredHint(self.emptyMessage, g);
+
+  // With no lanes p is the default linear projection, so it doubles as the
+  // ruler's unwarped x-projection.
+  [self _drawRulerInRect:g proj:p xproj:p];
+  [self _drawPlayheadInRect:g proj:p];
 }
 
 - (void)_strokeCurveFrom:(double)t0
