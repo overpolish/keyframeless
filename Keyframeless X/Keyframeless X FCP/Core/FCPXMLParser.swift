@@ -188,7 +188,7 @@ enum FCPXMLParser {
 		return 0
 	}
 
-	static func audioClips(in doc: XMLDocument) -> [AudioClip] {
+	static func audioClips(in doc: XMLDocument, dialogueOnly: Bool = true) -> [AudioClip] {
 		let assets = assetResources(in: doc)
 		let effects = parseAudioEffectResources(in: doc)
 		let resources = doc.rootElement()?.elements(forName: "resources").first
@@ -211,7 +211,7 @@ enum FCPXMLParser {
 		for el in topLevel {
 			collectAudioClips(
 				from: el, assets: assets, mediaMap: mediaMap, multicamMap: multicamMap,
-				effects: effects, into: &clips)
+				effects: effects, dialogueOnly: dialogueOnly, into: &clips)
 		}
 		return clips
 	}
@@ -219,7 +219,8 @@ enum FCPXMLParser {
 	private static func collectAudioClips(
 		from el: XMLElement, assets: [String: AssetResource],
 		mediaMap: [String: XMLElement], multicamMap: [String: XMLElement],
-		effects: [String: AudioEffectResource], into clips: inout [AudioClip]
+		effects: [String: AudioEffectResource], dialogueOnly: Bool,
+		into clips: inout [AudioClip]
 	) {
 		switch el.name {
 		case "project":
@@ -229,12 +230,14 @@ enum FCPXMLParser {
 			let tcStart = parseTime(seq.attribute(forName: "tcStart")?.stringValue ?? "0s")
 			walkElement(
 				spine, tcStart: tcStart, compound: nil, assets: assets, mediaMap: mediaMap,
-				multicamMap: multicamMap, effects: effects, into: &clips)
+				multicamMap: multicamMap, effects: effects, dialogueOnly: dialogueOnly, into: &clips
+			)
 		case "ref-clip":
 			guard isEnabled(el) else { return }
 			walkElement(
 				el, tcStart: 0, compound: nil, assets: assets, mediaMap: mediaMap,
-				multicamMap: multicamMap, effects: effects, into: &clips)
+				multicamMap: multicamMap, effects: effects, dialogueOnly: dialogueOnly, into: &clips
+			)
 			if let mediaId = el.attribute(forName: "ref")?.stringValue,
 				let mediaSeq = mediaMap[mediaId],
 				let mediaSpine = mediaSeq.elements(forName: "spine").first
@@ -244,7 +247,7 @@ enum FCPXMLParser {
 				walkElement(
 					mediaSpine, tcStart: mediaTcStart, compound: nil, assets: assets,
 					mediaMap: mediaMap, multicamMap: multicamMap, effects: effects,
-					into: &clips)
+					dialogueOnly: dialogueOnly, into: &clips)
 			}
 		case "mc-clip":
 			guard isEnabled(el),
@@ -273,10 +276,12 @@ enum FCPXMLParser {
 				walkElement(
 					angle, tcStart: mcTcStart, compound: ctx, assets: assets,
 					mediaMap: mediaMap, multicamMap: multicamMap, effects: effects,
-					into: &clips)
+					dialogueOnly: dialogueOnly, into: &clips)
 			}
 		case "asset-clip":
-			if isEnabled(el), isDialogue(el), !isMuted(el) {
+			if isEnabled(el), dialogueOnly ? isDialogue(el) : hasActiveAudio(el),
+				!isMuted(el)
+			{
 				clips.append(
 					makeClip(from: el, assets: assets, tcStart: nil, effects: effects))
 			}

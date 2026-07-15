@@ -40,6 +40,22 @@ extension FCPXMLParser {
 		return !effectiveRoles.contains(where: { $0.hasPrefix("effects") })
 	}
 
+	/// `isDialogue` minus the role filter: true when the clip has audio that
+	/// isn't explicitly disabled, regardless of role (dialogue / music /
+	/// effects). Used by the all-audio parse (`dialogueOnly: false`) that feeds
+	/// the spectrogram analyzer.
+	static func hasActiveAudio(_ el: XMLElement) -> Bool {
+		let channelSources = el.elements(forName: "audio-channel-source")
+		if !channelSources.isEmpty {
+			return channelSources.contains {
+				$0.attribute(forName: "active")?.stringValue != "0"
+			}
+		}
+		// No explicit channel sources: assume the asset carries audio. Video-only
+		// clips fall through harmlessly (extraction yields nothing, analyzer skips).
+		return true
+	}
+
 	/// Ref-clips can disable a contained subrole via `<audio-role-source role="..." active="0"/>`.
 	/// Returns true when dialogue is explicitly disabled at this wrapper level.
 	static func isDialogueRoleDisabled(_ el: XMLElement) -> Bool {

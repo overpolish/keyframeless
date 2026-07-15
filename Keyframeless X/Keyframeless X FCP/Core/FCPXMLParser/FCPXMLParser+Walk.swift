@@ -28,6 +28,21 @@ extension FCPXMLParser {
 		}?.attribute(forName: "ref")?.stringValue
 	}
 
+	/// `dialogueAudioRef` minus the role filter: the ref of any `<audio>`
+	/// belonging directly to `el`, regardless of role. For the all-audio parse.
+	static func anyAudioRef(_ el: XMLElement) -> String? {
+		let audios =
+			(try? el.nodes(forXPath: ".//audio"))?.compactMap { $0 as? XMLElement } ?? []
+		return audios.first { audio in
+			var node = audio.parent as? XMLElement
+			while let n = node, n !== el {
+				if laneClipNames.contains(n.name ?? "") { return false }
+				node = n.parent as? XMLElement
+			}
+			return true
+		}?.attribute(forName: "ref")?.stringValue
+	}
+
 	/// Returns the set of angle IDs providing audio in a multicam clip,
 	/// or nil when all angles should be used (no explicit mc-source selection).
 	static func audioAngleIDs(from mcClip: XMLElement) -> Set<String>? {
@@ -100,16 +115,19 @@ extension FCPXMLParser {
 		_ el: XMLElement, tcStart: Double, compound: CompoundContext?,
 		assets: [String: AssetResource], mediaMap: [String: XMLElement],
 		multicamMap: [String: XMLElement], effects: [String: AudioEffectResource] = [:],
+		dialogueOnly: Bool,
 		into clips: inout [AudioClip]
 	) {
 		for child in el.children?.compactMap({ $0 as? XMLElement }) ?? [] {
-			if child.name == "asset-clip", isEnabled(child), isDialogue(child) {
+			if child.name == "asset-clip", isEnabled(child),
+				dialogueOnly ? isDialogue(child) : hasActiveAudio(child)
+			{
 				if !isMuted(child) {
 					if let ctx = compound {
 						appendCompoundAssetClip(
 							child, ctx: ctx, assets: assets, effects: effects,
 							fallbackTcStart: tcStart, mediaMap: mediaMap, multicamMap: multicamMap,
-							into: &clips)
+							dialogueOnly: dialogueOnly, into: &clips)
 					} else {
 						clips.append(
 							makeClip(
@@ -119,16 +137,18 @@ extension FCPXMLParser {
 				// Recurse into asset-clip to find nested audio clips even if muted
 				walkElement(
 					child, tcStart: tcStart, compound: compound, assets: assets,
-					mediaMap: mediaMap, multicamMap: multicamMap, effects: effects, into: &clips)
+					mediaMap: mediaMap, multicamMap: multicamMap, effects: effects,
+					dialogueOnly: dialogueOnly, into: &clips)
 			} else if child.name == "ref-clip", isEnabled(child) {
 				// Connected clips (XML children of the ref-clip) are in the main XML tree;
 				// projectTime works for them as-is.
 				walkElement(
 					child, tcStart: tcStart, compound: nil, assets: assets, mediaMap: mediaMap,
-					multicamMap: multicamMap, effects: effects, into: &clips)
+					multicamMap: multicamMap, effects: effects, dialogueOnly: dialogueOnly,
+					into: &clips)
 				// `<audio-role-source role="dialogue" active="0"/>` on the ref-clip
 				// mutes the compound's contained dialogue audio; skip the inner spine walk.
-				if isDialogueRoleDisabled(child) { continue }
+				if dialogueOnly, isDialogueRoleDisabled(child) { continue }
 				// Recurse into compound clip's media spine with explicit position + trim context.
 				if let mediaId = child.attribute(forName: "ref")?.stringValue,
 					let mediaSeq = mediaMap[mediaId],
@@ -155,7 +175,7 @@ extension FCPXMLParser {
 					walkElement(
 						mediaSpine, tcStart: mediaTcStart, compound: ctx, assets: assets,
 						mediaMap: mediaMap, multicamMap: multicamMap, effects: effects,
-						into: &clips)
+						dialogueOnly: dialogueOnly, into: &clips)
 				}
 			} else if child.name == "mc-clip", isEnabled(child) {
 				if let mediaId = child.attribute(forName: "ref")?.stringValue,
@@ -190,26 +210,29 @@ extension FCPXMLParser {
 						walkElement(
 							angle, tcStart: mcTcStart, compound: ctx, assets: assets,
 							mediaMap: mediaMap, multicamMap: multicamMap, effects: effects,
-							into: &clips)
+							dialogueOnly: dialogueOnly, into: &clips)
 					}
 				}
 				// Walk mc-clip's own children for connected clips
 				walkElement(
 					child, tcStart: tcStart, compound: compound, assets: assets,
-					mediaMap: mediaMap, multicamMap: multicamMap, effects: effects, into: &clips)
+					mediaMap: mediaMap, multicamMap: multicamMap, effects: effects,
+					dialogueOnly: dialogueOnly, into: &clips)
 			} else if child.name == "clip", isEnabled(child), !isMuted(child),
-				let audioRef = dialogueAudioRef(child)
+				let audioRef = dialogueOnly ? dialogueAudioRef(child) : anyAudioRef(child)
 			{
 				appendConnectedClip(
 					child, audioRef: audioRef, compound: compound, assets: assets,
 					effects: effects, tcStart: tcStart, into: &clips)
 				walkElement(
 					child, tcStart: tcStart, compound: compound, assets: assets,
-					mediaMap: mediaMap, multicamMap: multicamMap, effects: effects, into: &clips)
+					mediaMap: mediaMap, multicamMap: multicamMap, effects: effects,
+					dialogueOnly: dialogueOnly, into: &clips)
 			} else {
 				walkElement(
 					child, tcStart: tcStart, compound: compound, assets: assets,
-					mediaMap: mediaMap, multicamMap: multicamMap, effects: effects, into: &clips)
+					mediaMap: mediaMap, multicamMap: multicamMap, effects: effects,
+					dialogueOnly: dialogueOnly, into: &clips)
 			}
 		}
 	}
@@ -219,13 +242,14 @@ extension FCPXMLParser {
 		assets: [String: AssetResource], effects: [String: AudioEffectResource],
 		fallbackTcStart: Double,
 		mediaMap: [String: XMLElement], multicamMap: [String: XMLElement],
-		into clips: inout [AudioClip]
+		dialogueOnly: Bool, into clips: inout [AudioClip]
 	) {
 		let clipDur = parseTime(child.attribute(forName: "duration")?.stringValue ?? "0s")
 		guard let window = visibleWindow(child: child, ctx: ctx, dur: clipDur) else {
 			walkElement(
 				child, tcStart: fallbackTcStart, compound: ctx, assets: assets,
-				mediaMap: mediaMap, multicamMap: multicamMap, effects: effects, into: &clips)
+				mediaMap: mediaMap, multicamMap: multicamMap, effects: effects,
+				dialogueOnly: dialogueOnly, into: &clips)
 			return
 		}
 		let ref = child.attribute(forName: "ref")?.stringValue

@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+import AppKit
 import Foundation
 import KeyframelessAI
 import KeyframelessKit
 import SwiftUI
+import os
 
 struct AppShell: View {
 	@ObservedObject var audioModel: AudioModel
@@ -226,6 +228,9 @@ struct AppShell: View {
 			PillTabBar(selected: $selectedTab)
 			WhatsNewButton(url: KKUpdateChecker.shared().notesURL)
 			FeedbackButton(url: KKUpdateChecker.shared().feedbackURL)
+			#if DEBUG
+				debugSpectrogramButton
+			#endif
 			Spacer()
 			toolNav
 		}
@@ -259,4 +264,39 @@ struct AppShell: View {
 			)
 		}
 	}
+
+	#if DEBUG
+		// Temporary Phase-1 verification: analyze the parsed clips into a
+		// timeline spectrogram and reveal the PNG dump in Finder. Remove once the
+		// real Analyzer tab exists.
+		private var debugSpectrogramButton: some View {
+			Button {
+				let clips = audioModel.allAudioClips
+				Task {
+					let log = Logger(
+						subsystem: "com.keyframeless.analyzer", category: "dump")
+					guard !clips.isEmpty else {
+						log.log("no audio clips parsed yet - drop a project first")
+						return
+					}
+					do {
+						let out = FileManager.default.temporaryDirectory
+							.appendingPathComponent("spectrogram.png")
+						let spec = try await SpectrogramAnalyzer.analyze(clips: clips)
+						try spec.writePNG(to: out)
+						log.log(
+							"wrote \(spec.numFrames, privacy: .public)x\(spec.numBands, privacy: .public) frames -> \(out.path, privacy: .public)"
+						)
+						NSWorkspace.shared.activateFileViewerSelecting([out])
+					} catch {
+						log.log("failed: \(error.localizedDescription, privacy: .public)")
+					}
+				}
+			} label: {
+				Image(systemName: "ladybug")
+			}
+			.buttonStyle(.plain)
+			.help("DEBUG: analyze parsed clips into a spectrogram PNG")
+		}
+	#endif
 }

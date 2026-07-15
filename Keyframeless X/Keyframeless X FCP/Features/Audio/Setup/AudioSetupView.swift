@@ -98,6 +98,7 @@ struct AudioSetupView: View {
 	private func handleDrop(_ doc: XMLDocument) {
 		let clips = FCPXMLParser.audioClips(in: doc)
 		model.audioClips = clips
+		model.allAudioClips = FCPXMLParser.audioClips(in: doc, dialogueOnly: false)
 		model.selectedClips = []
 		model.editSelectedClips = nil
 		model.dropItems = FCPXMLParser.topLevelItems(in: doc)

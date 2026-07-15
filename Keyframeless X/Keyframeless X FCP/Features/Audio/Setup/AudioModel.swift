@@ -20,6 +20,10 @@ class AudioModel: ObservableObject {
 	@Published var isDraggingToFCP: Bool = false
 	@Published var projectFormat: FCPXMLParser.ProjectFormat?
 	@Published var audioClips: [FCPXMLParser.AudioClip] = []
+	/// Every audio clip regardless of role (music / effects / dialogue), parsed
+	/// alongside `audioClips` at import so the spectrogram analyzer sees the full
+	/// mix with the same media access. Not used by transcription.
+	@Published var allAudioClips: [FCPXMLParser.AudioClip] = []
 	@Published var selectedClips: Set<Int> = []
 	@Published var editSelectedClips: Set<Int>?
 	@Published var dropItems: [FCPXMLParser.DropItem] = []
