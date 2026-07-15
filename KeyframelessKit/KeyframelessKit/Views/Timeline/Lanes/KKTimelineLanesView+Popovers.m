@@ -5,6 +5,7 @@
 
 #import "KKLaneFilterBar.h"
 #import "KKLocalized.h"
+#import "KKLog.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
 #import "KKPopoverHeaderView.h"
@@ -147,6 +148,10 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
 
   _openManageView = manageView;
 
+  // The Animated dropdown is an option picker (pick which lanes animate), so it
+  // dismisses on any outside click - a click elsewhere in the inspector closes
+  // it, unlike the companion editors that stay open to switch content.
+  _nextPopoverIsOptionType = YES;
   NSPopover *pop =
       [self _showPopoverWithContent:manageView
                            fromView:anchorView
@@ -233,11 +238,12 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                               fromView:(NSView *)anchor
                          preferredEdge:(NSRectEdge)preferredEdge
                                onClose:(void (^)(void))onClose {
-  // Dismiss any popover from a previous call first - the ApplicationDefined
-  // outside-click monitors don't fire click-to-click between two gaps in the
-  // same custom view, so a second gap would otherwise stack on the first.
-  // (Not reentrant: we're in a fresh mouseUp, not the old popover's callback.)
-  [_openContentPopover close];
+  // Consume the one-shot option-type marker: an option picker (OSC / filter /
+  // param-order / motion blur) dismisses on any outside click; a companion
+  // editor keeps open on in-inspector clicks (mode switches). Captured locally
+  // so the dismiss monitor below reads THIS popover's kind, not a later one's.
+  BOOL optionType = _nextPopoverIsOptionType;
+  _nextPopoverIsOptionType = NO;
 
   _KKLVPopoverContentView *wrapper = [[_KKLVPopoverContentView alloc] init];
   wrapper.frame = content.bounds;
@@ -253,28 +259,74 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   NSViewController *vc = [[NSViewController alloc] init];
   vc.view = wrapper;
 
-  // Reuse one popover instance (and its remote-hosted backing window) across
-  // opens - see _openContentPopover's declaration. Just swap its content; only
-  // alloc the first time.
+  // Swap content on the LIVE window ONLY when the new popover targets the SAME
+  // anchor+edge (same family / on-screen position, e.g.
+  // keypose<->gap<->constants beside the inspector). A DIFFERENT anchor (a cog
+  // popover at its button, or the reverse) needs a real close+reopen to
+  // re-position - the buttons inside fire on mouseDown so they survive that
+  // reopen.
+  BOOL isShown = _openContentPopover.isShown;
+  BOOL swapInPlace = isShown && anchor == _openPopoverAnchorView &&
+                     preferredEdge == _openPopoverPreferredEdge;
+  NSView *outgoingContent = _openContentView;
+  void (^outgoingOnClose)(void) = _openContentOnClose;
+
+  if (isShown && !swapInPlace) {
+    // Cross-anchor reopen: close the old popover first so its WillClose runs
+    // the OUTGOING cleanup (the closeObs reads the still-current
+    // _openContentOnClose / _openContentView) and tears down the old monitors,
+    // BEFORE we overwrite the live state and re-show at the new anchor.
+    [_openContentPopover close];
+  }
+
+  // New live state the ONE persistent monitor set reads.
+  _openContentView = content;
+  _openContentMiniViewer = KKFindMiniViewer(content);
+  _openPopoverIsOptionType = optionType;
+  _openPopoverShownAt = CACurrentMediaTime();
+  _openContentOnClose = [onClose copy];
+  _openPopoverPreferredEdge = preferredEdge;
+  _openPopoverAnchorView = anchor;
+  KKFindMiniViewer(content).grabsKeyFocusOnClick =
+      self.miniGrabsKeyFocusOnClick;
+
+  if (swapInPlace) {
+    // Never close+reopen for a same-anchor switch - the swap keeps the window
+    // (and its event forwarding) alive. Run the OUTGOING content's cleanup
+    // (onClose + mini-viewer release) here since its WillClose won't fire.
+    if (outgoingOnClose)
+      outgoingOnClose();
+    // Controller FIRST, then contentSize, then force layout - setting size
+    // first leaves the popover grown to the new size while the OLD content is
+    // still installed, so a taller editor (curve -> modulation, gap -> keypose)
+    // never repaints the exposed area.
+    _openContentPopover.contentViewController = vc;
+    if (!NSIsEmptyRect(content.bounds))
+      _openContentPopover.contentSize = content.bounds.size;
+    [wrapper layoutSubtreeIfNeeded];
+    __weak NSView *weakOutgoing = outgoingContent;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      __strong NSView *oc = weakOutgoing;
+      if ([oc respondsToSelector:@selector(releaseMiniViewer)])
+        [(id)oc releaseMiniViewer];
+    });
+    return _openContentPopover;
+  }
+
+  // First open (or after a real dismiss): create/show + install the persistent
+  // monitors. Reuse one popover instance (and its remote-hosted backing window)
+  // across opens - see _openContentPopover's declaration. ApplicationDefined,
+  // not Transient: Transient closes on ANY event to a different window, but
+  // ViewBridge-routed FCP clicks target the inspector window - we replicate
+  // outside-click close with the local + global mouseDown monitors below.
   NSPopover *popover = _openContentPopover;
   if (!popover) {
     popover = [[NSPopover alloc] init];
-    // ApplicationDefined instead of Transient: Transient closes the popover if
-    // ANY event targets a different window - ViewBridge-routed clicks from FCP
-    // target the inspector window, not the popover, triggering that
-    // immediately. We replicate outside-click close with local + global
-    // mouseDown monitors.
     popover.behavior = NSPopoverBehaviorApplicationDefined;
   }
   popover.contentViewController = vc;
-  // Size the popover to THIS content before it shows. A reused instance keeps
-  // the previous open's contentSize, so without this the new content (e.g. a
-  // keypose mini-viewer) draws at the stale/small size and then pops to the
-  // right size on first layout. content.bounds is the caller-sized content
-  // (same value used for wrapper.frame above).
   if (!NSIsEmptyRect(content.bounds))
     popover.contentSize = content.bounds.size;
-
   [popover showRelativeToRect:anchor.bounds
                        ofView:anchor
                 preferredEdge:preferredEdge];
@@ -300,17 +352,11 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   // view's multi-MB CAMetalLayer drawables every guide run. Weak so a stranded
   // monitor can't keep the window (and the whole mini-viewer) alive.
   __weak NSWindow *weakPopoverWindow = popoverWindow;
-  CFTimeInterval shownAt = CACurrentMediaTime();
   // Host app (FCP) is frontmost when the popover opens. Captured so an
   // outside-click in another app doesn't dismiss it.
   pid_t hostPID =
       NSWorkspace.sharedWorkspace.frontmostApplication.processIdentifier;
   __weak NSPopover *weakPopover = popover;
-  KKMiniViewerView *canvas = KKFindMiniViewer(content);
-  __weak NSView *weakContent = content;
-  // Let the mini grab key focus on click (so bare keys are handled in the
-  // popover) when the plugin opted in.
-  canvas.grabsKeyFocusOnClick = self.miniGrabsKeyFocusOnClick;
   __block id localMon = nil;
   __block id globalMon = nil;
   __block id magnifyLocalMon = nil;
@@ -357,21 +403,29 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                    queue:NSOperationQueue.mainQueue
               usingBlock:^(NSNotification *n) {
                 removeMonitors();
-                if (onClose)
-                  onClose();
+                // Fire the CURRENT content's onClose (a swap already fired the
+                // outgoing one), then clear the live state - a real close ends
+                // the session; the next show re-installs monitors.
+                __strong typeof(navWeakSelf) s = navWeakSelf;
+                void (^oc)(void) = s ? s->_openContentOnClose : nil;
+                NSView *closing = s ? s->_openContentView : nil;
+                if (s) {
+                  s->_openContentOnClose = nil;
+                  s->_openContentView = nil;
+                  s->_openContentMiniViewer = nil;
+                }
+                if (oc)
+                  oc();
                 // Free the closing content's mini-viewer GPU memory promptly.
                 // The backing window is NOT destroyed: _openContentPopover is
                 // reused across opens (its remote-hosted window can't be freed
                 // until inspector teardown anyway - see its declaration), so
                 // reusing one window bounds the CA layer-hosting IOSurface leak
                 // instead of creating a fresh stranded window per open. Defer
-                // one runloop so the popover's own close settles first. Target
-                // weakContent (the CLOSING content), never the reused popover's
-                // current content.
+                // one runloop so the popover's own close settles first.
                 dispatch_async(dispatch_get_main_queue(), ^{
-                  __strong NSView *c = weakContent;
-                  if ([c respondsToSelector:@selector(releaseMiniViewer)])
-                    [(id)c releaseMiniViewer];
+                  if ([closing respondsToSelector:@selector(releaseMiniViewer)])
+                    [(id)closing releaseMiniViewer];
                 });
                 [NSNotificationCenter.defaultCenter removeObserver:closeObs];
               }];
@@ -380,8 +434,10 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   // swatch's shared NSColorPanel is open - a separate window whose clicks would
   // otherwise count as "outside" and close the popover mid-edit).
   BOOL (^contentSuppressesDismiss)(void) = ^BOOL {
-    return [content respondsToSelector:@selector(suppressesPopoverDismiss)] &&
-           [(id)content suppressesPopoverDismiss];
+    __strong typeof(navWeakSelf) s = navWeakSelf;
+    NSView *c = s ? s->_openContentView : nil;
+    return [c respondsToSelector:@selector(suppressesPopoverDismiss)] &&
+           [(id)c suppressesPopoverDismiss];
   };
 
   // Scroll over the mini viewer = zoom/pan (events arrive global in
@@ -402,6 +458,10 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   localMon = [NSEvent
       addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                    handler:^NSEvent *(NSEvent *e) {
+                                     __strong typeof(navWeakSelf) s =
+                                         navWeakSelf;
+                                     KKMiniViewerView *canvas =
+                                         s ? s->_openContentMiniViewer : nil;
                                      if (canvas && [canvas pointerOverCanvas])
                                        return e; // let the responder handle it
                                      // Scroll inside a companion side panel
@@ -421,6 +481,10 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
   globalMon = [NSEvent
       addGlobalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
                                     handler:^(NSEvent *e) {
+                                      __strong typeof(navWeakSelf) s =
+                                          navWeakSelf;
+                                      KKMiniViewerView *canvas =
+                                          s ? s->_openContentMiniViewer : nil;
                                       if (canvas && [canvas pointerOverCanvas])
                                         return;
                                       if (KKPopoverPointInKeepAliveWindow(
@@ -474,19 +538,40 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
       if (owner != hostPID)
         return;
     }
-    // A click inside our own timeline (the graph that owns this popover) is a
-    // keypose re-target or timeline interaction, NOT a dismiss. Don't close:
-    // the graph re-presents IN PLACE on mouseUp, keeping the mini viewer + its
-    // overlay alive. Closing here tears the mini viewer down and rebuilds it
-    // into the reused ViewBridge window, where the fresh overlay loses drag
-    // tracking (OSC freezes after a keypose switch). This monitor fires on
-    // mousedown - before the graph's mouseUp re-present - so a flag set during
-    // the re-present loses the race; gate on the click LOCATION instead.
     __strong typeof(self) s = navWeakSelf;
-    if (s && s->_openStaticIsBoundary && s.window) {
-      NSRect lanesScreen = [s.window convertRectToScreen:[s convertRect:s.bounds
-                                                                 toView:nil]];
-      if (NSPointInRect(p, lanesScreen))
+    if (!s)
+      return;
+    // A click on the popover's OWN anchor (e.g. the cog toggle button) is that
+    // button's job to handle - it toggles the popover shut on mouseUp. Don't
+    // also close here on mouseDown, or the button's action re-opens it right
+    // after (the popover never closes from its own button). Applies to every
+    // popover; option pickers just have no other in-inspector keep-open case.
+    NSView *anchorV = s->_openPopoverAnchorView;
+    if (anchorV && anchorV.window) {
+      NSRect aScreen = [anchorV.window
+          convertRectToScreen:[anchorV convertRect:anchorV.bounds toView:nil]];
+      if (NSPointInRect(p, aScreen))
+        return;
+    }
+    // COMPANION editors (keypose / constants / curve / modulation) treat a
+    // click anywhere in the inspector's OWN UI as a mode switch, not a dismiss:
+    // clicking another keypose/gap/the constants button switches them IN PLACE
+    // (reconfigure / same-anchor swap), so closing here would fight that.
+    // OPTION pickers (OSC / filter / param-order / motion blur / presets /
+    // animated) instead dismiss on ANY click off them - including elsewhere in
+    // the inspector - because they are separate; opening a companion from that
+    // click re-shows at the correct anchor and its buttons fire on mouseDown so
+    // they survive the reopen. Read the kind live (the popover swaps content in
+    // place, so its current kind is on the ivar).
+    if (!s->_openPopoverIsOptionType) {
+      BOOL clickInInspector = NO;
+      NSView *cv = s.window.contentView;
+      if (s.window && cv) {
+        NSRect inspScreen = [s.window
+            convertRectToScreen:[cv convertRect:cv.bounds toView:nil]];
+        clickInInspector = NSPointInRect(p, inspScreen);
+      }
+      if (clickInInspector)
         return;
     }
     [weakPopover close];
@@ -498,8 +583,14 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                      // local event ~50-100ms after the joyride
                                      // global monitor fires; ignore events in
                                      // that window to avoid false-closing the
-                                     // popover.
-                                     if (CACurrentMediaTime() - shownAt < 0.2)
+                                     // popover. Read the live show-time
+                                     // (updated on every swap) so a swap gets
+                                     // its own warm-up window.
+                                     __strong typeof(navWeakSelf) sw =
+                                         navWeakSelf;
+                                     if (sw && CACurrentMediaTime() -
+                                                       sw->_openPopoverShownAt <
+                                                   0.2)
                                        return e;
                                      if (e.window != weakPopoverWindow)
                                        closeIfOutsidePopover();
@@ -551,6 +642,19 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
 
   _openContentPopover = popover;
   return popover;
+}
+
+- (NSRectEdge)_inspectorSidePreferredEdge {
+  NSRectEdge sideEdge = NSRectEdgeMinX;
+  if (self.window && self.window.screen) {
+    NSRect selfScreen = [self.window
+        convertRectToScreen:[self convertRect:self.bounds toView:nil]];
+    NSRect vis = self.window.screen.visibleFrame;
+    CGFloat spaceLeft = NSMinX(selfScreen) - NSMinX(vis);
+    CGFloat spaceRight = NSMaxX(vis) - NSMaxX(selfScreen);
+    sideEdge = (spaceLeft >= spaceRight) ? NSRectEdgeMinX : NSRectEdgeMaxX;
+  }
+  return sideEdge;
 }
 
 // Dedup tolerance for "same keypose, different lane" filmstrip cells. Two
@@ -742,6 +846,11 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   // registered companion windows), then post the open/close signals a companion
   // panel (Canvas's layer list) observes - scoped to this lanes view via
   // `object`. Lets the OSC settings popover host the layer-list panel too.
+  // These are option pickers (OSC / filter / param-order / motion blur), so
+  // they dismiss on any outside click - a click elsewhere in the inspector
+  // closes them (unlike the companion editors that stay open to switch
+  // content).
+  _nextPopoverIsOptionType = YES;
   __weak typeof(self) weak = self;
   NSPopover *popover =
       [self _showPopoverWithContent:content
@@ -759,6 +868,20 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
   // isBoundary NO => every layer selectable (like the constants kind).
   KKPostStaticValuesPopoverDidOpen(popover, self, kind ?: @"osc", NO, 0.0);
   return popover;
+}
+
+- (NSPopover *)showOptionPopover:(NSView *)content
+                        fromView:(NSView *)anchor
+                   preferredEdge:(NSRectEdge)preferredEdge
+                         onClose:(void (^)(void))onClose {
+  // Option picker: dismiss on any outside click. No companion-panel DidOpen
+  // signal (unlike -showCompanionPopover:) - these have no layer list beside
+  // them.
+  _nextPopoverIsOptionType = YES;
+  return [self _showPopoverWithContent:content
+                              fromView:anchor
+                         preferredEdge:preferredEdge
+                               onClose:onClose];
 }
 
 - (void)showStaticValuesPopoverFromView:(NSView *)anchor {

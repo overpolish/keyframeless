@@ -106,6 +106,18 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   NSInteger _topKPIdx;
 
   double _currentPopoverFrac;
+  // YES while a value (keypose) popover is open: rings the keypose(s) at
+  // _currentPopoverFrac in the active layer so the user sees which keypose the
+  // fixed-position popover controls. Cleared on the shared popover's close
+  // notification. Mirrors Basic's _boundaryPopoverShowing.
+  BOOL _valuePopoverShowing;
+  // YES while a gap (curve / modulation) popover is open: highlights ONLY the
+  // clicked lane's gap (_activeGapLabel, _activeGapAIdx) in the gap-selection
+  // style so the user sees which gap the fixed-position popover controls.
+  // Cleared on the shared popover's close notification.
+  BOOL _gapPopoverShowing;
+  NSString *_activeGapLabel;
+  NSInteger _activeGapAIdx;
 
   NSMutableSet<NSString *> *_selection;
   NSMutableSet<NSString *> *_selectedGaps;
@@ -269,6 +281,8 @@ FOUNDATION_EXPORT double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
 - (void)_drawMarqueeRect;
 - (void)_drawDragSnapGuideInRect:(NSRect)g tracks:(NSRect)tracks;
 - (void)_drawLane:(KKLane *)lane inRow:(NSRect)row tracks:(NSRect)tracks;
+- (void)_drawActiveKeyposeHighlightForLanes:(NSArray<KKLane *> *)lanes
+                                     tracks:(NSRect)tracks;
 - (void)_drawGapSelectionForLane:(KKLane *)lane
                            inRow:(NSRect)row
                           tracks:(NSRect)tracks;

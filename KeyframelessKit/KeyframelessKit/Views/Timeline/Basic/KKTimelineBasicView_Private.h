@@ -157,6 +157,16 @@ FOUNDATION_EXPORT void KKBasicValueExtent(KKBasicProj p, double *outLo,
   double _curBoundaryHoldFrac;
   KKBasicSection _curAnimateSec;
   NSInteger _curDiamond;
+  // YES while the boundary (keypose) popover is open for _curDiamond, so the
+  // drawing highlights that pill in the accent selection colour. Cleared when
+  // the popover closes (KKStaticValuesPopoverDidCloseNotification observer).
+  BOOL _boundaryPopoverShowing;
+  // YES while a gap (curve / modulation) popover is open, so the drawing tints
+  // _activeGapSection's span in the gap-selection style - the fixed-position
+  // popover no longer points at the gap it edits. Cleared on the same close
+  // notification.
+  BOOL _gapPopoverShowing;
+  KKBasicSection _activeGapSection;
   // Which pill (1-4 diamond model) the right-click context menu targets, so
   // the copy/paste actions know the boundary column to read/write.
   NSInteger _menuDiamond;

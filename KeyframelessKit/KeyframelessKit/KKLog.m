@@ -112,6 +112,10 @@ static NSString *const KKLogFolderName = @"co.overpolish.keyframeless";
   va_end(args);
 }
 
+- (void)flush {
+  [_ddLog flushLog];
+}
+
 - (void)verbose:(NSString *)format, ... {
   va_list args;
   va_start(args, format);

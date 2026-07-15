@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLog.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView_Private.h"
 #import "NSColor+KKColors.h"
@@ -270,6 +271,21 @@
       c.onOptHideHandle(@"");
     return;
   }
+  // A press while a drag is still active means the prior mouseUp was lost - a
+  // keypose popover open over the constants popover splits the down/up between
+  // two nonactivating windows, so this overlay sees repeated mouseDowns and no
+  // mouseUp. End the stale drag first so onHandleDragBegin/End stay balanced;
+  // an unbalanced begin leaks the plugin's drag undo group and aborts FCP.
+  if (_dragging)
+    [self _endActiveHandleDragReason:@"lost mouseUp - new mouseDown"];
+  // A reused popover window can come back NON-KEY after a close+reopen (the
+  // boundary popover reopens into the recycled ViewBridge window). A
+  // synthesized mousedown still lands here, but the natural drag session
+  // (mouseDragged / mouseUp) is only tracked for the key window - so without
+  // this the OSC drag freezes after a keypose switch. It's a nonactivating
+  // panel, so keying it doesn't steal FCP's foreground (same makeKeyWindow the
+  // popovers already use for keyboard).
+  [self.window makeKeyWindow];
   _dragging = YES;
   if (c.onHandleDragBegin)
     c.onHandleDragBegin();
@@ -334,14 +350,42 @@
     [self setNeedsDisplay:YES];
     return;
   }
+  [self _endActiveHandleDragReason:@"mouseUp"];
+}
+
+// End an in-progress handle drag exactly once, firing the same end path mouseUp
+// would. Called from mouseUp, from a new mouseDown that arrives while still
+// dragging (lost mouseUp), and from teardown - so onHandleDragBegin always has
+// a matching onHandleDragEnd and the plugin's drag undo group never leaks.
+- (void)_endActiveHandleDragReason:(NSString *)reason {
   if (!_dragging)
     return;
   _dragging = NO;
+  KKMiniViewerView *c = self.canvas;
+  id<KKMiniViewerDelegate> d = c.canvasDelegate;
+  (void)reason;
   if ([d respondsToSelector:@selector(miniViewerEndHandleDrag:)])
     [d miniViewerEndHandleDrag:c];
   if (c.onHandleDragEnd)
     c.onHandleDragEnd();
   [self setNeedsDisplay:YES];
+}
+
+// If this overlay is pulled from its window (popover dismissed or mini-viewer
+// rebuilt) while a handle drag is live, its mouseUp never arrives. End the drag
+// here so onHandleDragEnd fires and the plugin's undo group closes - a dropped
+// end leaks the group and aborts FCP's next undo ("Adjust <effect>" crash).
+- (void)viewWillMoveToWindow:(NSWindow *)newWindow {
+  [super viewWillMoveToWindow:newWindow];
+  if (_dragging && !newWindow)
+    [self _endActiveHandleDragReason:@"torn down (window->nil)"];
+}
+
+- (void)dealloc {
+  if (_dragging)
+    KKLogWarn(@"[dragundo] overlay=%p dealloc'd mid-drag - onHandleDragEnd "
+              @"was DROPPED",
+              self);
 }
 
 // Opt-hold over the mini-viewer reveals hidden handles/rings as ghosts. A

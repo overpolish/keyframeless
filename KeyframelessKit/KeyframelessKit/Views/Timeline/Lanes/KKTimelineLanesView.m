@@ -1128,6 +1128,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   if (_activeTab == tab)
     return;
   _activeTab = tab;
+  // Basic and Advanced are different timeline UIs - a value/gap popover opened
+  // against one doesn't map cleanly onto the other, so dismiss any open popover
+  // on the switch (which also clears its graph highlight) rather than trying to
+  // re-target it across the two representations.
+  [_openContentPopover close];
   [self _refresh];
   if (_onAccessoryButtonsChanged)
     _onAccessoryButtonsChanged();

@@ -180,6 +180,13 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 @property(nonatomic, readonly) NSArray<NSView *> *accessoryButtons;
 @property(nonatomic, copy, nullable) void (^onAccessoryButtonsChanged)(void);
 
+/// Fires when the shared popover starts / stops showing CONSTANTS (as opposed
+/// to a keypose, gap, or nothing), so the inspector can light up the Constants
+/// button. YES on constants open (fresh or a keypose->constants switch), NO
+/// when it closes or switches to a keypose/gap.
+@property(nonatomic, copy, nullable) void (^onConstantsPopoverActiveChanged)
+    (BOOL active);
+
 /// The lane-visibility filter cluster (filter glyph + clear), hosted CENTERED
 /// in the inspector's header row rather than in the right-aligned accessory
 /// stack. Self-hiding (Advanced + >=2 lanes), so the inspector can mount it
@@ -339,6 +346,18 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
                            fromView:(NSView *)anchor
                                kind:(NSString *)kind
                             onClose:(nullable void (^)(void))onClose;
+
+/// Present `content` as an OPTION-PICKER popover (parameter order, motion
+/// blur): same reliable outside-click dismiss as the companion popovers, but it
+/// closes on ANY click outside itself (including elsewhere in the inspector),
+/// and a click on its own `anchor` toggle button is left for that button to
+/// handle. Reuses the shared popover instance, so opening it dismisses any open
+/// value / gap popover. Returns the popover (resize its contentSize as content
+/// changes).
+- (NSPopover *)showOptionPopover:(NSView *)content
+                        fromView:(NSView *)anchor
+                   preferredEdge:(NSRectEdge)preferredEdge
+                         onClose:(nullable void (^)(void))onClose;
 
 /// The value-editor row (slider/fields) for `label` in the currently open
 /// static-values popover, or nil if it isn't open / no such lane. Lets a

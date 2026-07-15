@@ -331,6 +331,13 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   }
   [NSGraphicsContext restoreGraphicsState]; // outer rows clip
 
+  // Active-keypose highlight in its own pass, drawn AFTER both clips are lifted
+  // (mirrors Basic drawing the ring unclipped) so the ring isn't shaved at the
+  // track edges or the container's top/bottom. The scroll fades and ruler paint
+  // afterwards, covering any ring that strays toward a scrolled-off edge. Rings
+  // the keypose(s) the open value popover edits.
+  [self _drawActiveKeyposeHighlightForLanes:lanes tracks:tracks];
+
   // Fade shadows over the rows go under the ruler / playhead so those stay
   // crisp; the row content above/below fades into a shadow when it scrolls.
   [self _drawScrollFadesInRect:g];
@@ -877,8 +884,13 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   // the boundary pill's outer half - same edge the lane line uses, so the
   // highlight and the line agree on where the visible row "ends".
   CGFloat innerEdgePad = kPillW * 0.5;
+  BOOL laneHasActiveGap =
+      _gapPopoverShowing && [lane.label isEqualToString:_activeGapLabel];
   for (NSInteger i = 0; i + 1 < (NSInteger)kps.count; i++) {
-    if (![self _gapSelected:lane aIdx:i])
+    // Highlight a gap when the user has it selected OR it's the exact gap the
+    // open curve/modulation popover edits - same translucent column either way.
+    BOOL active = laneHasActiveGap && i == _activeGapAIdx;
+    if (![self _gapSelected:lane aIdx:i] && !active)
       continue;
     CGFloat xA = [self _xForFrac:kps[i].time inLane:lane inTracks:tracks];
     CGFloat xB = [self _xForFrac:kps[i + 1].time inLane:lane inTracks:tracks];
@@ -956,6 +968,57 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     halo.lineWidth = 1.5;
     [[NSColor inspectorLabel] setStroke];
     [halo stroke];
+  }
+}
+
+- (void)_drawActiveKeyposeHighlightForLanes:(NSArray<KKLane *> *)lanes
+                                     tracks:(NSRect)tracks {
+  if (!_valuePopoverShowing)
+    return;
+  NSColor *neutral = [NSColor accentMatchingHost];
+  NSColor *warn = [NSColor warning];
+  for (NSInteger li = 0; li < (NSInteger)lanes.count; li++) {
+    KKLane *lane = lanes[li];
+    if (lane.headerPlaceholder || lane.locked)
+      continue;
+    // Only the clicked lane's keypose, NOT every lane at this time - matches
+    // the single-pill selection halo (you selected one keypose, not the
+    // column).
+    if (![lane.label isEqualToString:_topLaneLabel])
+      continue;
+    NSArray<KKKeyPose *> *kps = lane.keyposes;
+    for (NSInteger i = 0; i < (NSInteger)kps.count; i++) {
+      KKKeyPose *kp = kps[i];
+      if (fabs(kp.time - _currentPopoverFrac) >= 1.0e-4)
+        continue;
+      // Colour tracks the pill's own value colour (warn when an adjacent
+      // endpoint differs, accent when flat) - same rule as
+      // _drawPillForKPInLane.
+      BOOL warnHere = NO;
+      if (i > 0 && !KKAdvValuesEqual(kps[i - 1].values, kp.values))
+        warnHere = YES;
+      if (!warnHere && i + 1 < (NSInteger)kps.count &&
+          !KKAdvValuesEqual(kp.values, kps[i + 1].values))
+        warnHere = YES;
+      NSRect row = [self _rowRectForIndex:li count:lanes.count];
+      CGFloat pillTop = NSMaxY(row) - kPillInsetY;
+      CGFloat pillBot = NSMinY(row) + kPillInsetY;
+      if (pillTop <= pillBot) {
+        pillTop = NSMaxY(row);
+        pillBot = NSMinY(row);
+      }
+      CGFloat x = [self _xForFrac:kp.time inLane:lane inTracks:tracks];
+      CGFloat pillX = round(x) - kPillW * 0.5 + 0.5;
+      NSRect pill = NSMakeRect(pillX, pillBot, kPillW, pillTop - pillBot);
+      NSBezierPath *hl =
+          [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(pill, -3.0, -3.0)
+                                          xRadius:kPillW
+                                          yRadius:kPillW];
+      hl.lineWidth = 2.0;
+      [(warnHere ? warn : neutral) setStroke];
+      [hl stroke];
+      break;
+    }
   }
 }
 

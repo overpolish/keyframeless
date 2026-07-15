@@ -311,6 +311,11 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// host uses this only to advance the mini-viewer guide's size step.
 @property(nonatomic, copy, nullable) void (^onSizeChanged)(NSInteger sizeIndex);
 
+/// Fired when the header's close (X) button is tapped. The host closes the
+/// popover. The button sits leftmost in the header band, before the keypose
+/// nav.
+@property(nonatomic, copy, nullable) void (^onCloseTapped)(void);
+
 /// Guide-only: screen rect of the size pill's segment `index` (0/1/2), or
 /// NSZeroRect if there's no mini-viewer (so no size pill).
 - (NSRect)guideSizePillScreenRectForIndex:(NSInteger)index;
@@ -351,6 +356,26 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// re-render rows without reopening (which blinks the MTKView).
 - (void)rebuildRowsWithLanes:(NSArray<KKLane *> *)lanes
               excludedLabels:(NSArray<NSString *> *)excluded;
+/// Switch an already-open static-values popover between constants and boundary
+/// (keypose) mode IN PLACE, WITHOUT recreating the mini-viewer. Recreating it
+/// (close+reopen) rebuilds the overlay into the reused ViewBridge remote
+/// window, where FCP stops forwarding the drag session (OSC freezes) and
+/// opening an undo group on its drag can abort FCP. Keeping the same
+/// mini-viewer instance and only swapping mode + edit handlers + rows + the
+/// header band preserves the working overlay. Handles BOTH directions
+/// (add/remove the keypose nav, swap the header). The bidirectional analogue of
+/// -rebuildRowsWithLanes:.
+- (void)reconfigureForEditsKeypose:(BOOL)editsKeypose
+                         withLanes:(NSArray<KKLane *> *)lanes
+                    excludedLabels:(NSArray<NSString *> *)excludedLabels
+                       headerTitle:(NSString *)headerTitle
+                      headerDetail:(NSString *)headerDetail
+                        headerIcon:(NSImage *)headerIcon
+                     onHandleValue:(void (^)(NSString *, NSArray<NSNumber *> *))
+                                       onHandleValue
+                       onDragBegin:(void (^)(void))onDragBegin
+                         onDragEnd:(void (^)(void))onDragEnd
+                        onNavigate:(void (^)(NSInteger))onNavigate;
 /// Set (Advanced only) to give editable rows a leading "−" remove button that
 /// fires `handler(label)`. Must be set before rows are (re)built; the present
 /// path rebuilds once after setting it. nil = no remove gutter.

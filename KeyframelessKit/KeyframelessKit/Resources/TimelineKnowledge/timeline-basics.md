@@ -10,6 +10,8 @@ summary: How animation works (lanes, keyposes, intervals, linked endpoints)
 
 To move from one look to another, drop a keypose where it starts and another where it ends. The interval fills in the motion between them. To pause the motion in the middle, add two keyposes with linked ends across the part you want to hold still.
 
+When you open a keypose to edit its value, that keypose highlights on its lane so you can see which one the editor is controlling; opening an interval's easing or modulation highlights that interval the same way. The highlight is drawn in the pill's own colour - accent for a flat value, the warning colour for a real transition (ends that differ) - and clears when you close the editor or switch to Constants.
+
 ## How it differs from keyframes
 
 A keypose is not an FCP keyframe - it is an anchor point of the animation, and the interval between adjacent keyposes owns the interpolation. When two endpoints differ, the curve tweens between them; when they are linked, they share one value and the interval becomes a hold you can still modulate with wiggle, oscillate, or handheld. Linked keyposes keep their values synced.

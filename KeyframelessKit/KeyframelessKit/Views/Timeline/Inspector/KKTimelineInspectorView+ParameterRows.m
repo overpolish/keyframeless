@@ -335,15 +335,21 @@ static const CGFloat kParamOrderMaxListH = 200.0;
     ]];
   }
 
-  NSViewController *vc = [[NSViewController alloc] init];
-  vc.view = content;
-  _paramOrderPopover = [[NSPopover alloc] init];
-  _paramOrderPopover.behavior = NSPopoverBehaviorTransient;
-  _paramOrderPopover.contentViewController = vc;
-  _paramOrderPopover.contentSize = content.fittingSize;
-  [_paramOrderPopover showRelativeToRect:_paramOrderButton.bounds
-                                  ofView:_paramOrderButton
-                           preferredEdge:NSRectEdgeMinY];
+  // Give the content a concrete size so the presenter sizes the popover to it
+  // (it reads content.bounds); the category rebuild resizes it thereafter.
+  content.frame =
+      NSMakeRect(0, 0, content.fittingSize.width, content.fittingSize.height);
+  // Present as an option picker on the lanes view: reliable outside-click
+  // dismiss, closing on any click outside itself; its toggle button closes it.
+  _paramOrderPopover =
+      [self.basicLanesView showOptionPopover:content
+                                    fromView:_paramOrderButton
+                               preferredEdge:NSRectEdgeMinY
+                                     onClose:^{
+                                       KKTimelineInspectorView *strong = weak;
+                                       if (strong)
+                                         strong->_paramOrderPopover = nil;
+                                     }];
 }
 
 // Rebuild the reorder list to show only the selected category's params (in
@@ -602,34 +608,31 @@ static const CGFloat kParamOrderMaxListH = 200.0;
   // the open popover to match.
   content.onLayoutChanged = ^{
     KKTimelineInspectorView *strong = weak;
+    // fittingSize, not frame.size: the view is pinned to the shared popover
+    // wrapper (its frame tracks the popover), so ask autolayout for the new
+    // intrinsic height after the Samples row is added/removed.
     if (strong && strong->_mbPopover.isShown)
-      strong->_mbPopover.contentSize = strong->_mbSettingsView.frame.size;
+      strong->_mbPopover.contentSize = strong->_mbSettingsView.fittingSize;
   };
   _mbSettingsView = content;
+  // Give the content a concrete size so the presenter sizes the popover to it
+  // (it reads content.bounds); autolayout resizes take over via
+  // onLayoutChanged.
+  content.frame =
+      NSMakeRect(0, 0, content.fittingSize.width, content.fittingSize.height);
 
-  // Reuse the lanes view's popover wrapper so the macOS 26 liquid-glass
-  // double-border fix (CoreHostingView/ContentHolderView clear) applies here
-  // too - same as the constants / curve popovers.
-  _KKLVPopoverContentView *wrapper = [[_KKLVPopoverContentView alloc] init];
-  wrapper.frame = content.bounds;
-  content.translatesAutoresizingMaskIntoConstraints = NO;
-  [wrapper addSubview:content];
-  [NSLayoutConstraint activateConstraints:@[
-    [content.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor],
-    [content.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor],
-    [content.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
-    [content.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor],
-  ]];
-
-  NSViewController *vc = [[NSViewController alloc] init];
-  vc.view = wrapper;
-  _mbPopover = [[NSPopover alloc] init];
-  _mbPopover.contentViewController = vc;
-  _mbPopover.behavior = NSPopoverBehaviorTransient;
-  _mbPopover.contentSize = content.frame.size;
-  [_mbPopover showRelativeToRect:_mbSettingsButton.bounds
-                          ofView:_mbSettingsButton
-                   preferredEdge:NSRectEdgeMaxY];
+  // Present as an option picker on the lanes view: same reliable outside-click
+  // dismiss (and liquid-glass wrapper) as the value popovers, closing on any
+  // click outside itself. Its own toggle button is left to close it.
+  _mbPopover =
+      [self.basicLanesView showOptionPopover:content
+                                    fromView:_mbSettingsButton
+                               preferredEdge:NSRectEdgeMaxY
+                                     onClose:^{
+                                       KKTimelineInspectorView *strong = weak;
+                                       if (strong)
+                                         strong->_mbPopover = nil;
+                                     }];
 }
 
 - (void)_installConstraints:(NSView *)box headerRow:(NSView *)headerRow {

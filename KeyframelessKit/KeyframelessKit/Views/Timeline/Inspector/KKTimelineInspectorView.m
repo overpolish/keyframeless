@@ -298,6 +298,10 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     if (basic && btn)
       [basic showStaticValuesPopoverFromView:btn];
   };
+  _basicView.onConstantsPopoverActiveChanged = ^(BOOL active) {
+    KKConstantsButton *btn = weakConstants;
+    btn.active = active;
+  };
   _basicView.onTimelineMutated = ^(KKTimeline *updated) {
     KKTimelineInspectorView *strong = weak;
     KKTimelineLanesView *basic = weakBasic;

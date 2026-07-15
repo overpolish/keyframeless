@@ -33,6 +33,11 @@
 - (void)warn:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
 - (void)error:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
 
+/// Synchronously drain the async log queue so pending lines hit disk. Call
+/// right before a suspected crash point so the last line isn't lost in the
+/// buffer when the process aborts.
+- (void)flush;
+
 /// Macro entry point - captures call site, routes through +shared.
 - (void)logFlagValue:(NSUInteger)flag
                 file:(const char *)file
@@ -41,6 +46,8 @@
               format:(NSString *)format, ... NS_FORMAT_FUNCTION(5, 6);
 
 @end
+
+#define KKLogFlush() [[KKLog shared] flush]
 
 #define KKLogVerbose(fmt, ...)                                                 \
   [[KKLog shared] logFlagValue:(1 << 4) /* DDLogFlagVerbose */                 \

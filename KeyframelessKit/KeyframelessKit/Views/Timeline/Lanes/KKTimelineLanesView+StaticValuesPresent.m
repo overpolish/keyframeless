@@ -20,32 +20,37 @@
 - (void)_presentStaticValuesPopoverFromAnchor:(NSView *)anchor
                                        config:
                                            (_KKStaticValuesPopoverConfig *)cfg {
-  // Boundary-only preamble: in-place rebind / defer-if-other-popover-open /
-  // mini-viewer state setup / boundary-request publish + render nudge.
+  // An already-open static popover switches between constants and keypose mode
+  // (and navigates) entirely IN PLACE - the popover window is never closed +
+  // reopened, because rebuilding the mini-viewer into the recycled ViewBridge
+  // window kills its OSC drag (FCP stops forwarding the drag session to a
+  // reopened popover). See -reconfigureForEditsKeypose: and the reconfigure
+  // branch at the view-create site below.
+  BOOL popoverOpen = (_openContentPopover.isShown && _openStaticView != nil);
+
+  // Constants edits lane constants, not a specific keypose/gap, so clear any
+  // active graph highlight. A keypose->constants reconfigure switches in place
+  // without firing the close notification the highlight otherwise clears on, so
+  // it would linger; do it explicitly.
+  if (!cfg.isBoundary) {
+    [_basicGraph clearPopoverHighlights];
+    [_advancedGraph clearPopoverHighlights];
+  }
+  // Light up (or dim) the Constants button: this present covers constants<->
+  // keypose in both directions (fresh + in-place reconfigure).
+  if (self.onConstantsPopoverActiveChanged)
+    self.onConstantsPopoverActiveChanged(!cfg.isBoundary);
+
   if (cfg.isBoundary) {
-    // Already-open boundary popover: rebuild rows in place (no blink, keeps the
-    // mini viewer + its overlay alive so OSC drag keeps working after a keypose
-    // switch). Reaching this requires the outside-click dismiss monitor to NOT
-    // have closed the popover on the marker mousedown - see the timeline-bounds
-    // skip in closeIfOutsidePopover (KKTimelineLanesView+Popovers.m).
-    if (_openContentPopover.isShown && _openStaticIsBoundary &&
-        _openStaticView) {
+    // Keypose->keypose navigation: optimized row-only in-place update.
+    if (popoverOpen && _openStaticIsBoundary) {
       [self _updateBoundaryPopoverInPlaceWithLanes:cfg.lanes
                                           fraction:cfg.fraction
                                     excludedLabels:cfg.excludedLabels];
       return;
     }
-    if (_openContentPopover.isShown) {
-      [_openContentPopover close];
-      __weak typeof(self) wself = self;
-      _KKStaticValuesPopoverConfig *capturedCfg = cfg;
-      dispatch_async(dispatch_get_main_queue(), ^{
-        [wself _presentStaticValuesPopoverFromAnchor:anchor config:capturedCfg];
-      });
-      return;
-    }
-    [_openContentPopover close];
-
+    // Keypose-mode delegate setup (constants->keypose reconfigure OR fresh
+    // open).
     KKSetBoundaryEditing(self.miniViewerDelegate, YES,
                          [self _snapEditFractionToKeypose:cfg.fraction]);
     KKSetSuppressedHandles(self.miniViewerDelegate, cfg.excludedLabels);
@@ -57,6 +62,13 @@
     // just written. Nudge one render so the boundary frame resolves now.
     if (self.onBoundaryPreviewNeedsRender)
       self.onBoundaryPreviewNeedsRender();
+  } else if (popoverOpen && _openStaticIsBoundary) {
+    // Keypose->constants: turn OFF boundary editing (the fresh-constants path
+    // never turns it on, so a reconfigure from keypose mode must clear it) -
+    // same reset the popover-close does. editFraction was already set to the
+    // playhead by the constants trigger before this call.
+    KKSetBoundaryEditing(self.miniViewerDelegate, NO, 0.0);
+    KKSetSuppressedHandles(self.miniViewerDelegate, nil);
   }
 
   __weak typeof(self) weak = self;
@@ -186,6 +198,25 @@
   if ([self.miniViewerDelegate isKindOfClass:[KKMiniViewerRenderer class]])
     ((KKMiniViewerRenderer *)self.miniViewerDelegate).timeline = _timeline;
 
+  if (popoverOpen) {
+    // In-place mode switch (constants<->keypose, either direction) - the
+    // mini-viewer/overlay is preserved, no close+reopen, no new popover shown.
+    [_openStaticView reconfigureForEditsKeypose:cfg.isBoundary
+                                      withLanes:cfg.lanes
+                                 excludedLabels:cfg.excludedLabels
+                                    headerTitle:cfg.headerTitle
+                                   headerDetail:cfg.headerDetail
+                                     headerIcon:cfg.headerIcon
+                                  onHandleValue:onHandleValue
+                                    onDragBegin:onDragBeginBlock
+                                      onDragEnd:onDragEndBlock
+                                     onNavigate:cfg.onNavigate];
+    _openStaticIsBoundary = cfg.isBoundary;
+    if (cfg.isBoundary)
+      [self _refreshBoundaryPopoverNavEnabled];
+    return;
+  }
+
   _KKStaticValuesPopoverView *staticView = [[_KKStaticValuesPopoverView alloc]
         initWithLanes:cfg.lanes
        descriptorPath:self.miniViewerDescriptorPath
@@ -230,6 +261,11 @@
   __weak typeof(self) weakSize = self;
   staticView.onSizeChanged = ^(NSInteger sizeIndex) {
     [weakSize _miniViewerSizeDidChange:sizeIndex];
+  };
+  __weak typeof(self) weakClose = self;
+  staticView.onCloseTapped = ^{
+    __strong typeof(weakClose) s = weakClose;
+    [s->_openContentPopover close];
   };
 
   _openStaticView = staticView;
@@ -367,10 +403,17 @@
   // screen this is a no-op (clamp == natural, no scroll).
   [staticView clampContentToScreenOfView:anchor];
 
+  // Anchor the popover beside the inspector's timeline area (whichever side has
+  // more screen space), NOT at the clicked marker/button. It's a companion that
+  // switches content in place, so it should sit in one consistent spot out of
+  // the work area instead of jumping around / covering the keyframes as you
+  // move between keyposes.
+  NSRectEdge sideEdge = [self _inspectorSidePreferredEdge];
+
   NSPopover *popover = [self
       _showPopoverWithContent:staticView
-                     fromView:anchor
-                preferredEdge:NSRectEdgeMinX
+                     fromView:self
+                preferredEdge:sideEdge
                       onClose:^{
                         __strong typeof(weak) s = weak;
                         if (!s)
@@ -396,6 +439,12 @@
                                                           @"setEditFraction:")])
                             [del setValue:@0 forKey:@"editFraction"];
                         }
+                        // Dim the Constants button - the popover is gone (or
+                        // swapped to a gap/option). A keypose/constants switch
+                        // doesn't hit this (it's in-place); the present above
+                        // drives the button for that.
+                        if (s.onConstantsPopoverActiveChanged)
+                          s.onConstantsPopoverActiveChanged(NO);
                         if (s.onStaticValuesPopoverClosed)
                           s.onStaticValuesPopoverClosed();
                       }];

@@ -247,6 +247,8 @@
   self.onValuePopover(_popoverAnchor, displayLanes, frac, excludedLabels,
                       lane.categoryKey, onValue, onAnimate, onRemove,
                       onDragBegin, onDragEnd);
+  _valuePopoverShowing = YES;
+  [self setNeedsDisplay:YES];
 }
 
 // A candidate lane for the keypose popover: a real lane in the active layer
@@ -323,6 +325,30 @@
       }
       if (foundLane >= 0)
         break;
+    }
+  }
+  if (foundLane < 0 && !fireActivation) {
+    // Programmatic re-drive (tab switch / timeline re-feed) from a boundary
+    // fraction that's pinned to the clip edge: Basic projects its out-end /
+    // in-start diamonds to 1.0 / 0.0 even when the real keypose sits short of
+    // the edge, so an exact match finds nothing and the popover (and its
+    // highlight) wouldn't follow the tab switch. Snap to the nearest eligible
+    // keypose - mirroring Basic mapping any fraction to its nearest diamond.
+    // Gated to the re-drive path (fireActivation == NO) so user graph clicks
+    // still require a real hit.
+    double bestDist = INFINITY;
+    for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+      KKLane *l = lanes[i];
+      if (![self _laneEligibleForValuePopover:l])
+        continue;
+      for (NSInteger k = 0; k < (NSInteger)l.keyposes.count; k++) {
+        double dist = fabs(l.keyposes[k].time - fraction);
+        if (dist < bestDist) {
+          bestDist = dist;
+          foundLane = i;
+          foundKP = k;
+        }
+      }
     }
   }
   if (foundLane < 0)
@@ -602,6 +628,12 @@
         showsModLinked, partCompoundLabels, partCompoundStates, partRebuilder,
         onModulation, onIntensity, onFrequency, onSeed, onLinked,
         onParticipation, onDragBegin, onDragEnd, label, iv, reader, mutator);
+    // Set AFTER present: presenting closes any previously-open popover, whose
+    // close notification clears these flags (mirrors _valuePopoverShowing).
+    _gapPopoverShowing = YES;
+    _activeGapLabel = [label copy];
+    _activeGapAIdx = aIdx;
+    [self setNeedsDisplay:YES];
     return;
   }
   // animateOut mirrors the pill glyphs when the interval descends so the
@@ -662,6 +694,12 @@
                     ^(NSInteger _, BOOL __){
                     },
                     onDragBegin, onDragEnd, label, iv, reader, mutator);
+  // See the modulation branch: set AFTER present so the outgoing popover's
+  // close notification doesn't clear the flag we just set.
+  _gapPopoverShowing = YES;
+  _activeGapLabel = [label copy];
+  _activeGapAIdx = aIdx;
+  [self setNeedsDisplay:YES];
 }
 
 // Ctrl+click on a gap → flip `endpointsLinked`. Linking ON collapses the

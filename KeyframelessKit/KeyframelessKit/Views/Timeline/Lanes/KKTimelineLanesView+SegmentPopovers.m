@@ -22,6 +22,7 @@
 - (nullable NSArray<KKLane *> *)_compoundLanesForCompounds:
     (NSArray<NSArray<NSString *> *> *)compounds;
 - (void)_resizeOpenSegmentPopoverToEditor:(KKSegmentEditView *)edit;
+- (NSButton *)_makePopoverCloseButton;
 - (void)_wireSegmentEditor:(KKSegmentEditView *)edit
            onParticipation:(void (^)(NSInteger, BOOL))onParticipation
                onDragBegin:(void (^)(void))onDragBegin
@@ -193,13 +194,24 @@
       KKPaddingMD + headerH + KKSpacingSM + editH + extrasH + bottomPad;
   NSView *container =
       [[NSView alloc] initWithFrame:NSMakeRect(0, 0, w, totalH)];
+  // Close button top-left, before the header - same affordance as the keypose /
+  // constants popover so a fixed-position companion is easy to dismiss (the
+  // default close-on-focus-loss still applies).
+  NSButton *closeButton = [self _makePopoverCloseButton];
+  [container addSubview:closeButton];
   [container addSubview:header];
   [container addSubview:edit];
   _openSegEditHeightConstraint =
       [edit.heightAnchor constraintEqualToConstant:editH];
   [NSLayoutConstraint activateConstraints:@[
-    [header.leadingAnchor constraintEqualToAnchor:container.leadingAnchor
-                                         constant:KKPaddingMD],
+    [closeButton.leadingAnchor constraintEqualToAnchor:container.leadingAnchor
+                                              constant:KKPaddingMD],
+    [closeButton.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
+    // Match the keypose / constants popover close button (22pt square).
+    [closeButton.widthAnchor constraintEqualToConstant:22.0],
+    [closeButton.heightAnchor constraintEqualToConstant:22.0],
+    [header.leadingAnchor constraintEqualToAnchor:closeButton.trailingAnchor
+                                         constant:KKSpacingMD],
     [header.topAnchor constraintEqualToAnchor:container.topAnchor
                                      constant:KKPaddingMD],
     [edit.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
@@ -234,18 +246,33 @@
 
   _openExtraRows = extras;
   __weak typeof(self) weak = self;
-  // Boundary/segment popovers anchor to a point IN the timeline lane, so they
-  // open BELOW the boundary handle (not to the side like the inspector-button
-  // popovers).
-  NSPopover *pop = [self _showPopoverWithContent:container
-                                        fromView:anchor
-                                   preferredEdge:NSRectEdgeMinY
-                                         onClose:^{
-                                           if (onClose)
-                                             onClose();
-                                           __strong typeof(weak) s = weak;
-                                           s->_openExtraRows = nil;
-                                         }];
+  // Anchor beside the inspector's timeline area (whichever side has more screen
+  // space), NOT at the clicked gap - a companion that switches content in
+  // place, sitting in one consistent spot out of the work area. Matches the
+  // static-values / keypose popover. The graph tints the active gap instead
+  // (see the Basic / Advanced views' _gapPopoverShowing highlight). The
+  // presenter swaps content on the live window when already shown (gap-to-gap,
+  // or coming from any other popover), so the buttons inside never go dead from
+  // a reopen.
+  NSPopover *pop =
+      [self _showPopoverWithContent:container
+                           fromView:self
+                      preferredEdge:[self _inspectorSidePreferredEdge]
+                            onClose:^{
+                              if (onClose)
+                                onClose();
+                              __strong typeof(weak) s = weak;
+                              if (!s)
+                                return;
+                              s->_openExtraRows = nil;
+                              // Signal close so the graphs clear their
+                              // active-gap highlight (same companion signal the
+                              // static-values / manage popovers post).
+                              [NSNotificationCenter.defaultCenter
+                                  postNotificationName:
+                                      KKStaticValuesPopoverDidCloseNotification
+                                                object:s];
+                            }];
   // Signal the open so a multi-layer host (Canvas) can attach its layer-list
   // companion beside the "Applies to" checklist (Basic only - Advanced's
   // popover is opened on one lane that already lives on a single layer).
@@ -552,6 +579,27 @@ static KKIntervalModulation KKPillToModulation(NSInteger pill) {
                         sc->_openHoldModRebuilder = nil;
                         sc->_openHoldModIntervalReader = nil;
                       }];
+}
+
+- (NSButton *)_makePopoverCloseButton {
+  NSImage *img = [NSImage imageWithSystemSymbolName:@"xmark"
+                           accessibilityDescription:nil];
+  NSButton *b =
+      [NSButton buttonWithImage:img ?: [[NSImage alloc] init]
+                         target:self
+                         action:@selector(_segmentCloseButtonClicked:)];
+  b.translatesAutoresizingMaskIntoConstraints = NO;
+  b.bordered = NO;
+  b.bezelStyle = NSBezelStyleShadowlessSquare;
+  b.imageScaling = NSImageScaleProportionallyDown;
+  // Fire on mouseDOWN so the close survives a popover reopen (FCP forwards the
+  // mouseDown but not the matching mouseUp to a reused-then-reopened window).
+  [b.cell sendActionOn:NSEventMaskLeftMouseDown];
+  return b;
+}
+
+- (void)_segmentCloseButtonClicked:(id)sender {
+  [_openContentPopover close];
 }
 
 // Unified static-values popover presenter. Constants AND keypose (boundary)

@@ -12,6 +12,7 @@
 @class KKTimelineBasicView;
 @class KKTimelineAdvancedView;
 @class KKLaneFilterBar;
+@class KKMiniViewerView;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -48,6 +49,36 @@ NS_ASSUME_NONNULL_BEGIN
   // (~13 MB each) every time. Reusing one instance reuses its backing window
   // (and surfaces), bounding it. Closed (not destroyed) before a new one opens.
   NSPopover *_openContentPopover;
+  // Transient one-shot: set just before -_showPopoverWithContent: to mark the
+  // next popover as an "option picker" (OSC / filter / param-order / motion
+  // blur) rather than a companion editor. Option popovers dismiss on ANY
+  // outside click, including elsewhere in the inspector chrome/timeline;
+  // companion editors (keypose / constants / curve / modulation) keep the
+  // in-inspector-click keep-open behaviour. Consumed (reset) inside the show.
+  BOOL _nextPopoverIsOptionType;
+  // Live state for the ONE persistent set of dismiss/scroll monitors installed
+  // on the first show. Every transition SWAPS content in place (never
+  // close+reopen - FCP stops forwarding mouseUp to a reused popover window once
+  // it's been closed and reopened, killing the buttons inside), so the monitors
+  // must read the CURRENT popover's state from here, not from a per-open
+  // capture. Updated on every show/swap; the monitors reach them via weak self.
+  BOOL _openPopoverIsOptionType;
+  CFTimeInterval _openPopoverShownAt;
+  __weak NSView *_openContentView;
+  __weak KKMiniViewerView *_openContentMiniViewer;
+  void (^_openContentOnClose)(void);
+  // The anchor view + edge the open popover was shown against. A new show
+  // reuses the live window (swap in place) ONLY when it targets the SAME
+  // anchor+edge (same family / position, e.g. keypose<->gap<->constants beside
+  // the inspector). A different anchor (a cog popover at its button, or the
+  // reverse) needs a real close+reopen to re-position - the close buttons fire
+  // on mouseDown so they survive that reopen.
+  NSRectEdge _openPopoverPreferredEdge;
+  // The view _openContentPopover was anchored to at show time. Kept so an
+  // in-place mode switch (constants -> boundary) can re-anchor the popover to
+  // the clicked keypose marker by updating positioningRect, moving it without a
+  // close+reopen (which would rebuild - and break - the mini-viewer overlay).
+  __weak NSView *_openPopoverAnchorView;
   __weak _KKStaticValuesPopoverView *_openStaticView;
   // YES when _openStaticView is a boundary-value popover (caller-supplied
   // display lanes) - its rows must NOT be clobbered by _refresh's
@@ -202,6 +233,11 @@ NS_ASSUME_NONNULL_BEGIN
                               fromView:(NSView *)anchor
                          preferredEdge:(NSRectEdge)preferredEdge
                                onClose:(void (^)(void))onClose;
+/// The screen edge (MinX / MaxX) of the inspector's timeline area that has more
+/// free screen space. Companion popovers (static values, gap/hold) anchor there
+/// via `fromView:self` so they sit in one consistent spot beside the work area
+/// instead of jumping around / covering the keyframes.
+- (NSRectEdge)_inspectorSidePreferredEdge;
 // Defined in +Popovers.m (PopoversInternal @implementation); called back from
 // the +BoundaryNav navigation methods.
 - (double)_kpDedupEps;

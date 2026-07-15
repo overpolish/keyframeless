@@ -116,6 +116,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   void (^_onDragEnd)(void);
   NSButton *_navPrevButton;
   NSButton *_navNextButton;
+  NSButton *_closeButton;
   void (^_onNavigate)(NSInteger);
   KKPopoverHeaderView *_header;
   BOOL _hasHeader;
@@ -174,6 +175,113 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   _miniViewer.enclosingScrollView.documentView = nil;
   [_miniViewer removeFromSuperview];
   _miniViewer = nil;
+}
+
+- (void)reconfigureForEditsKeypose:(BOOL)editsKeypose
+                         withLanes:(NSArray<KKLane *> *)lanes
+                    excludedLabels:(NSArray<NSString *> *)excludedLabels
+                       headerTitle:(NSString *)headerTitle
+                      headerDetail:(NSString *)headerDetail
+                        headerIcon:(NSImage *)headerIcon
+                     onHandleValue:(void (^)(NSString *, NSArray<NSNumber *> *))
+                                       onHandleValue
+                       onDragBegin:(void (^)(void))onDragBegin
+                         onDragEnd:(void (^)(void))onDragEnd
+                        onNavigate:(void (^)(NSInteger))onNavigate {
+  _editsKeypose = editsKeypose;
+  _onHandleValue = [onHandleValue copy];
+  _onDragBegin = [onDragBegin copy];
+  _onDragEnd = [onDragEnd copy];
+  _onNavigate = [onNavigate copy];
+
+  // Re-point the PRESERVED mini viewer's drag callbacks at the new mode's
+  // blocks (keypose-write vs constant-write). The instance - and its overlay's
+  // working mouse tracking - is untouched; recreating it via close+reopen is
+  // what froze/crashed, so every constants<->keypose switch happens in place.
+  if (_miniViewer) {
+    __weak typeof(self) weakSelf = self;
+    _miniViewer.onHandleValue =
+        ^(NSString *label, NSArray<NSNumber *> *values) {
+          [weakSelf liveUpdateValues:values forLabel:label];
+          if (onHandleValue)
+            onHandleValue(label, values);
+        };
+    _miniViewer.onHandleDragBegin = onDragBegin;
+    _miniViewer.onHandleDragEnd = onDragEnd;
+  }
+
+  // Add the keypose nav chevrons (keypose mode) or remove them (constants
+  // mode), then rebuild the header pinned after them. Same band geometry as
+  // -initWithLanes:; the mini-viewer sits below the band and is unaffected.
+  CGFloat bandH = [_KKStaticValuesPopoverView _renderModePillHeaderHeight];
+  CGFloat bandCenterOffset = KKPaddingMD + bandH / 2.0;
+  // The close button is always present (built in init, leftmost); nav + header
+  // follow it.
+  NSLayoutXAxisAnchor *bandLead =
+      _closeButton ? _closeButton.trailingAnchor : self.leadingAnchor;
+  CGFloat bandLeadInset = _closeButton ? KKSpacingMD : KKPaddingMD;
+  if (editsKeypose && onNavigate && !_navPrevButton) {
+    _navPrevButton = [self _makeNavButton:@"chevron.left"
+                                direction:-1
+                               onNavigate:onNavigate];
+    _navNextButton = [self _makeNavButton:@"chevron.right"
+                                direction:1
+                               onNavigate:onNavigate];
+    [self addSubview:_navPrevButton];
+    [self addSubview:_navNextButton];
+    [NSLayoutConstraint activateConstraints:@[
+      [_navPrevButton.leadingAnchor constraintEqualToAnchor:bandLead
+                                                   constant:bandLeadInset],
+      [_navPrevButton.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                                   constant:bandCenterOffset],
+      [_navPrevButton.widthAnchor constraintEqualToConstant:bandH],
+      [_navPrevButton.heightAnchor constraintEqualToConstant:bandH],
+      [_navNextButton.leadingAnchor
+          constraintEqualToAnchor:_navPrevButton.trailingAnchor
+                         constant:KKPaddingSM],
+      [_navNextButton.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                                   constant:bandCenterOffset],
+      [_navNextButton.widthAnchor constraintEqualToConstant:bandH],
+      [_navNextButton.heightAnchor constraintEqualToConstant:bandH],
+    ]];
+  } else if (!editsKeypose && _navPrevButton) {
+    [_navPrevButton removeFromSuperview];
+    [_navNextButton removeFromSuperview];
+    _navPrevButton = nil;
+    _navNextButton = nil;
+  }
+  if (_header) {
+    [_header removeFromSuperview];
+    _header = nil;
+  }
+  if (headerTitle.length > 0) {
+    _header = [[KKPopoverHeaderView alloc] initWithTitle:headerTitle
+                                                  detail:headerDetail
+                                                    icon:headerIcon];
+    [self addSubview:_header];
+    NSLayoutXAxisAnchor *titleLead =
+        _navNextButton ? _navNextButton.trailingAnchor : bandLead;
+    CGFloat titleLeadInset = _navNextButton ? KKSpacingMD : bandLeadInset;
+    [NSLayoutConstraint activateConstraints:@[
+      [_header.leadingAnchor constraintEqualToAnchor:titleLead
+                                            constant:titleLeadInset],
+      [_header.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                            constant:bandCenterOffset],
+    ]];
+  }
+
+  // Rebuild the rows in the new mode (mini-viewer + the band we just rebuilt
+  // are untouched by this call).
+  [self rebuildRowsWithLanes:lanes excludedLabels:excludedLabels];
+
+  // The mode flip changes which OSC set the mini-viewer draws (keypose handles
+  // vs the constant's). The delegate's boundary-editing state was already
+  // updated by the caller, but the paused MTKView doesn't repaint on its own -
+  // force a redraw + handle refresh so it isn't left showing the old mode's OSC
+  // until the next click (same repaint the keypose->keypose in-place update
+  // does).
+  [_miniViewer setNeedsDisplay:YES];
+  [_miniViewer setHandlesNeedDisplay];
 }
 
 - (NSRect)guideRenderModePillScreenRectForMode:(KKMiniViewerRenderMode)mode {
@@ -336,6 +444,29 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   return YES;
 }
 
+- (NSButton *)_makeCloseButton {
+  NSImage *img = [NSImage imageWithSystemSymbolName:@"xmark"
+                           accessibilityDescription:nil];
+  NSButton *b = [NSButton buttonWithImage:img ?: [[NSImage alloc] init]
+                                   target:self
+                                   action:@selector(_closeButtonClicked:)];
+  b.translatesAutoresizingMaskIntoConstraints = NO;
+  b.bordered = NO;
+  b.bezelStyle = NSBezelStyleShadowlessSquare;
+  b.imageScaling = NSImageScaleProportionallyDown;
+  // Fire on mouseDOWN, not mouseUp: after the popover's shared ViewBridge
+  // window is closed+reopened, FCP forwards the mouseDown but not the matching
+  // mouseUp, so a normal (mouseUp) button would highlight and never fire.
+  // mouseDown is always delivered, so the close still works across a reopen.
+  [b.cell sendActionOn:NSEventMaskLeftMouseDown];
+  return b;
+}
+
+- (void)_closeButtonClicked:(id)sender {
+  if (self.onCloseTapped)
+    self.onCloseTapped();
+}
+
 - (NSButton *)_makeNavButton:(NSString *)symbolName
                    direction:(NSInteger)direction
                   onNavigate:(void (^)(NSInteger))onNavigate {
@@ -490,8 +621,28 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   BOOL hasNav = (showPill && onNavigate != nil);
   BOOL hasBand = (showPill || headerTitle.length > 0);
 
-  NSLayoutXAxisAnchor *titleLead = self.leadingAnchor;
-  CGFloat titleLeadInset = KKPaddingMD;
+  // Close (X) button, leftmost in the band - always present (both modes) so the
+  // popover can be dismissed without relying on focus loss. Nav + header
+  // follow.
+  NSLayoutXAxisAnchor *bandLead = self.leadingAnchor;
+  CGFloat bandLeadInset = KKPaddingMD;
+  if (hasBand) {
+    _closeButton = [self _makeCloseButton];
+    [self addSubview:_closeButton];
+    [NSLayoutConstraint activateConstraints:@[
+      [_closeButton.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                                 constant:KKPaddingMD],
+      [_closeButton.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                                 constant:bandCenterOffset],
+      [_closeButton.widthAnchor constraintEqualToConstant:bandH],
+      [_closeButton.heightAnchor constraintEqualToConstant:bandH],
+    ]];
+    bandLead = _closeButton.trailingAnchor;
+    bandLeadInset = KKSpacingMD;
+  }
+
+  NSLayoutXAxisAnchor *titleLead = bandLead;
+  CGFloat titleLeadInset = bandLeadInset;
   if (hasNav) {
     _navPrevButton = [self _makeNavButton:@"chevron.left"
                                 direction:-1
@@ -502,8 +653,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     [self addSubview:_navPrevButton];
     [self addSubview:_navNextButton];
     [NSLayoutConstraint activateConstraints:@[
-      [_navPrevButton.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
-                                                   constant:KKPaddingMD],
+      [_navPrevButton.leadingAnchor constraintEqualToAnchor:bandLead
+                                                   constant:bandLeadInset],
       [_navPrevButton.centerYAnchor constraintEqualToAnchor:self.topAnchor
                                                    constant:bandCenterOffset],
       [_navPrevButton.widthAnchor constraintEqualToConstant:bandH],

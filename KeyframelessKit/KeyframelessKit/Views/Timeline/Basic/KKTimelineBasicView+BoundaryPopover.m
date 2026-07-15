@@ -250,6 +250,9 @@
   _curAnimateSec = (boundary == KKBasicBoundaryInStart) ? KKBasicSectionIn
                                                         : KKBasicSectionOut;
   _curDiamond = d;
+  // Highlight this pill as the active keypose while its popover is open.
+  _boundaryPopoverShowing = YES;
+  [self setNeedsDisplay:YES];
   __weak typeof(self) weak = self;
   // Remove only applies to In/Out boundaries (their "applies to" set). Hold
   // always participates, so the Hold popover has no − gutter (onRemove nil).

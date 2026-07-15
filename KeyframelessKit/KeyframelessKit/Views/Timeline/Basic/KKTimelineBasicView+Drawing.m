@@ -37,6 +37,40 @@
   double lo = 0.0, hi = 1.0;
   KKBasicValueExtent(p, &lo, &hi);
 
+  // Active-gap band: while a curve/modulation popover is open, tint its section
+  // (In / Hold / Out) span in the same translucent gap-selection style Advanced
+  // uses, so the user sees which gap the fixed-position popover edits. Colour
+  // tracks the section's value (warn when it's a real transition/drift, accent
+  // when flat), matching the section's curve/pill colour. Drawn behind the
+  // curve + pills as a background band.
+  if (_gapPopoverShowing) {
+    double bandA = 0.0, bandB = 0.0;
+    BOOL bandWarn = NO;
+    if (_activeGapSection == KKBasicSectionIn) {
+      bandA = 0.0;
+      bandB = p.inEndFrac;
+      bandWarn = [self _inIsTransition];
+    } else if (_activeGapSection == KKBasicSectionOut) {
+      bandA = p.outStartFrac;
+      bandB = 1.0;
+      bandWarn = [self _outIsTransition];
+    } else { // Hold
+      bandA = p.inEnabled ? p.inEndFrac : 0.0;
+      bandB = p.outEnabled ? p.outStartFrac : 1.0;
+      bandWarn = [self _holdDrift];
+    }
+    CGFloat bx0 = KKBasicXForFrac(bandA, g, p);
+    CGFloat bx1 = KKBasicXForFrac(bandB, g, p);
+    if (bx1 - bx0 >= 1.0) {
+      NSColor *bandTint =
+          (bandWarn ? [NSColor warning] : [NSColor accentMatchingHost]);
+      [[bandTint colorWithAlphaComponent:0.15] setFill];
+      NSRectFillUsingOperation(
+          NSMakeRect(bx0, NSMinY(g), bx1 - bx0, NSHeight(g)),
+          NSCompositingOperationSourceOver);
+    }
+  }
+
   // Render is always live (log warp). Stable cursor tracking comes from
   // solving the drag fixed point each frame in -mouseDragged:, not from
   // freezing the map (which caused a jarring re-warp on release).
@@ -150,7 +184,41 @@
     [[hold colorWithAlphaComponent:0.7] setStroke];
     [tie stroke];
   }
+
   [NSGraphicsContext restoreGraphicsState];
+
+  // Active-keypose highlight: while the boundary popover is open, ring the pill
+  // it's editing so the user sees which keypose the (fixed-position) popover
+  // controls. The ring colour tracks that pill's own value colour (warn when
+  // the endpoint is a real transition, accent when flat), matching the diamond
+  // it highlights. Drawn unclipped so the ring isn't shaved at the track edges.
+  if (_boundaryPopoverShowing && p.anyAnimatable) {
+    double af;
+    NSColor *hlColor;
+    if (_curDiamond == 1) {
+      af = p.inEnabled ? 0.0 : p.inEndFrac;
+      hlColor = p.inEnabled ? (inTrans ? warn : hold) : holdStartC;
+    } else if (_curDiamond == 3) {
+      af = p.outStartFrac;
+      hlColor = holdEndC;
+    } else if (_curDiamond == 4) {
+      af = p.outEnabled ? 1.0 : p.outStartFrac;
+      hlColor = p.outEnabled ? (outTrans ? warn : hold) : holdEndC;
+    } else {
+      af = p.inEndFrac; // d == 2 (hold-start) / default
+      hlColor = holdStartC;
+    }
+    CGFloat cx = round(KKBasicXForFrac(af, g, xp)) + 0.5;
+    NSRect pill = NSMakeRect(cx - kPillW * 0.5, NSMinY(g) + kPillInsetY, kPillW,
+                             NSHeight(g) - 2.0 * kPillInsetY);
+    NSBezierPath *hl =
+        [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(pill, -3.0, -3.0)
+                                        xRadius:kPillW
+                                        yRadius:kPillW];
+    hl.lineWidth = 2.0;
+    [hlColor setStroke];
+    [hl stroke];
+  }
 
   [self _drawRulerInRect:g proj:p xproj:xp];
 

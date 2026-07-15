@@ -51,8 +51,11 @@ FOUNDATION_EXPORT NSButton *KKResetToDefaultButton(id target, SEL action);
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 
-/// "Constants" button: icon + label, opens the static-values popover.
+/// "Constants" button: icon + label, opens the static-values popover. Draws an
+/// accent selection border + tint while `active` (its popover is showing
+/// constants), matching the keypose/gap graph highlight.
 @interface KKConstantsButton : NSView
+@property(nonatomic) BOOL active;
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 

@@ -41,7 +41,9 @@ static NSTextField *_KKMakeNumberField(void) {
 }
 
 NSTextField *_KKMakeCaption(NSString *s) {
-  NSTextField *l = [NSTextField labelWithString:s];
+  // labelWithString: throws on a nil string; an absent caption (e.g. an
+  // excluded row with no message) is valid, so coalesce to empty.
+  NSTextField *l = [NSTextField labelWithString:s ?: @""];
   l.translatesAutoresizingMaskIntoConstraints = NO;
   l.font = [NSFont systemFontOfSize:KKFontSizeSM weight:NSFontWeightRegular];
   l.textColor = [NSColor inspectorLabel];

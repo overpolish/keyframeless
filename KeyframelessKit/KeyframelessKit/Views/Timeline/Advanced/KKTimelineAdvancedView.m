@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKPopoverKeepAlive.h"
 #import "KKTimelineAdvancedView_Private.h"
 
 // Global user preference (not per-clip): the Dynamic display warp is a viewing
@@ -32,8 +33,30 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
     _zp = [[KKTimelineZoomPan alloc] init];
     _dynamicDisplay = [[NSUserDefaults standardUserDefaults]
         boolForKey:kKKAdvancedDynamicDisplayDefaultsKey];
+    // Clear the active-keypose highlight when the shared value popover closes.
+    [NSNotificationCenter.defaultCenter
+        addObserver:self
+           selector:@selector(_valuePopoverDidClose:)
+               name:KKStaticValuesPopoverDidCloseNotification
+             object:nil];
   }
   return self;
+}
+
+- (void)dealloc {
+  [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)_valuePopoverDidClose:(NSNotification *)note {
+  [self clearPopoverHighlights];
+}
+
+- (void)clearPopoverHighlights {
+  if (!_valuePopoverShowing && !_gapPopoverShowing)
+    return;
+  _valuePopoverShowing = NO;
+  _gapPopoverShowing = NO;
+  [self setNeedsDisplay:YES];
 }
 
 - (void)setActiveLayerKey:(NSString *)activeLayerKey {

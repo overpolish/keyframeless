@@ -142,6 +142,12 @@
       ^(void (^_Nonnull mutate)(KKInterval *_Nonnull)) {
         [weak _mutateIntervalInLaneLabel:repLabel section:capSec with:mutate];
       });
+  // Highlight the section the (now fixed-position) gap popover edits. Set AFTER
+  // present: presenting closes any previously-open popover, whose close
+  // notification clears these flags (see _boundaryPopoverDidClose:).
+  _gapPopoverShowing = YES;
+  _activeGapSection = sec;
+  [self setNeedsDisplay:YES];
 }
 
 - (NSString *)_representativeLaneLabelForSection:(KKBasicSection)section {
@@ -395,6 +401,9 @@
                                    section:KKBasicSectionHold
                                       with:mutate];
         });
+    _gapPopoverShowing = YES;
+    _activeGapSection = KKBasicSectionHold;
+    [self setNeedsDisplay:YES];
     return;
   }
 
@@ -564,6 +573,9 @@
                                  section:KKBasicSectionHold
                                     with:mutate];
       });
+  _gapPopoverShowing = YES;
+  _activeGapSection = KKBasicSectionHold;
+  [self setNeedsDisplay:YES];
 }
 
 // Apply `mut` to the In / Hold / Out interval of every animatable lane -

@@ -8,6 +8,7 @@
 #import "KKConstants.h"
 #import "KKDataBlob.h"
 #import "KKHostInfo.h"
+#import "KKLog.h"
 #import "KKMotionBlur.h"
 #import "KKPlugin.h"
 #import "KKPluginHost.h"
@@ -192,6 +193,13 @@
     if (!act)
       return;
     [act startAction:strong];
+    // The overlay now guarantees a balanced onHandleDragEnd (it ends any active
+    // drag before a new press and on teardown), so a group should never already
+    // be open here. Keep the check as a tripwire in case another drag source
+    // regresses the invariant.
+    if (strong.miniDragUndoStarted)
+      KKLogWarn(@"[dragundo] onDragBegin while a group is already open - "
+                @"begin/end got unbalanced upstream");
     strong.miniDragUndoStarted =
         KKBeginUndoGroup(strong.apiManager, dragUndoLabel);
     [act endAction:strong];

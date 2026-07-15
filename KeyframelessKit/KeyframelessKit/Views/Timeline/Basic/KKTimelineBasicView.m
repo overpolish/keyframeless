@@ -8,6 +8,7 @@
 
 #import "KKCheckboxView.h"
 #import "KKKeyposeSymbol.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKTimelineScale.h"
 #import "KKTimelineZoomPan.h"
 #import "KKTokens.h"
@@ -35,8 +36,30 @@
     _snappedScrubFrac = NAN;
     _zp = [[KKTimelineZoomPan alloc] init];
     [self _buildUI];
+    // Clear the active-keypose highlight when the boundary popover closes.
+    [NSNotificationCenter.defaultCenter
+        addObserver:self
+           selector:@selector(_boundaryPopoverDidClose:)
+               name:KKStaticValuesPopoverDidCloseNotification
+             object:nil];
   }
   return self;
+}
+
+- (void)dealloc {
+  [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)_boundaryPopoverDidClose:(NSNotification *)note {
+  [self clearPopoverHighlights];
+}
+
+- (void)clearPopoverHighlights {
+  if (!_boundaryPopoverShowing && !_gapPopoverShowing)
+    return;
+  _boundaryPopoverShowing = NO;
+  _gapPopoverShowing = NO;
+  [self setNeedsDisplay:YES];
 }
 
 - (void)_buildUI {
