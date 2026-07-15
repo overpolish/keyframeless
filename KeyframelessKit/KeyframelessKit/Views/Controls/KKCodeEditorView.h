@@ -33,6 +33,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// The current sections, with the active tab's live edits folded in.
 - (NSArray<NSDictionary<NSString *, NSString *> *> *)sections;
 
+/// Re-apply text / sections from an EXTERNAL source (a host timeline change -
+/// an undo/redo of a committed edit, a preset load, an AI merge). Unlike
+/// `setSections:` / `codeText=`, these are SKIPPED while the user has an
+/// uncommitted local typing burst (so a background param echo never clobbers
+/// what they're mid-typing) and clear the local undo once applied (the new text
+/// is a durable, host-undo-owned state). A no-op when the text already matches.
+- (void)applyExternalText:(NSString *)text;
+- (void)applyExternalSections:
+    (NSArray<NSDictionary<NSString *, NSString *> *> *)sections;
+
 /// Fired ~0.4s after an edit with the full current section set. Tabbed hosts
 /// use this to persist every section (the plain `onChange` fires too, with the
 /// active tab's text). Also fires immediately when a tab is added or removed.

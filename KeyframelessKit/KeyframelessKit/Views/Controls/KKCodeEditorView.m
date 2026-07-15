@@ -147,14 +147,24 @@ NSNotificationName const KKCodeEditorReloadNotification =
       return YES;
     }
     if ([key isEqualToString:@"z"]) {
-      [self.undoManager undo];
-      return YES;
+      // Only consume Cmd-Z while there's local (uncommitted) typing to undo;
+      // once the burst is committed its local history is cleared (see the
+      // debounce commit) so this falls through to the host's (FCP) undo of the
+      // last timeline change - the two stacks no longer fight for Cmd-Z.
+      if (self.undoManager.canUndo) {
+        [self.undoManager undo];
+        return YES;
+      }
+      return [super performKeyEquivalent:event];
     }
   } else if (mods == (NSEventModifierFlagCommand | NSEventModifierFlagShift) &&
              [event.charactersIgnoringModifiers.lowercaseString
                  isEqualToString:@"z"]) {
-    [self.undoManager redo];
-    return YES;
+    if (self.undoManager.canRedo) {
+      [self.undoManager redo];
+      return YES;
+    }
+    return [super performKeyEquivalent:event];
   }
   [self keyDown:event];
   return YES;
@@ -615,6 +625,32 @@ NSNotificationName const KKCodeEditorReloadNotification =
   return out;
 }
 
+// `canUndo` is our "uncommitted local burst in progress" signal: the debounce
+// commit clears the local undo, so a non-empty local stack means the user is
+// mid-typing and an external re-apply would clobber them.
+- (BOOL)_hasUncommittedTyping {
+  return self.undoManager.canUndo;
+}
+
+- (void)applyExternalText:(NSString *)text {
+  if ([self _hasUncommittedTyping])
+    return;
+  if ([_textView.string isEqualToString:text ?: @""])
+    return;
+  self.codeText = text ?: @"";
+  [_textView.undoManager removeAllActions];
+}
+
+- (void)applyExternalSections:
+    (NSArray<NSDictionary<NSString *, NSString *> *> *)sections {
+  if (!sections.count || [self _hasUncommittedTyping])
+    return;
+  if ([[self sections] isEqualToArray:sections])
+    return;
+  [self setSections:sections];
+  [_textView.undoManager removeAllActions];
+}
+
 // A borderless text button styled for the strip.
 - (NSButton *)_stripButton:(NSString *)title
                     action:(SEL)action
@@ -1065,21 +1101,28 @@ NSNotificationName const KKCodeEditorReloadNotification =
 - (void)textDidChange:(NSNotification *)notification {
   [_debounce invalidate];
   __weak typeof(self) weak = self;
-  _debounce =
-      [NSTimer scheduledTimerWithTimeInterval:0.4
-                                      repeats:NO
-                                        block:^(NSTimer *t) {
-                                          __strong typeof(weak) s = weak;
-                                          if (!s)
-                                            return;
-                                          s->_sectionCodes[s->_activeTab] =
-                                              [s->_textView.string copy];
-                                          [s _runValidator];
-                                          if (s.onChange)
-                                            s.onChange(s->_textView.string);
-                                          if (s.onSectionsChange)
-                                            s.onSectionsChange([s sections]);
-                                        }];
+  _debounce = [NSTimer
+      scheduledTimerWithTimeInterval:0.4
+                             repeats:NO
+                               block:^(NSTimer *t) {
+                                 __strong typeof(weak) s = weak;
+                                 if (!s)
+                                   return;
+                                 s->_sectionCodes[s->_activeTab] =
+                                     [s->_textView.string copy];
+                                 [s _runValidator];
+                                 if (s.onChange)
+                                   s.onChange(s->_textView.string);
+                                 if (s.onSectionsChange)
+                                   s.onSectionsChange([s sections]);
+                                 // This burst is now a durable timeline
+                                 // state captured by the host's (FCP)
+                                 // undo; drop the local text-view undo
+                                 // for it so Cmd-Z doesn't walk the whole
+                                 // typing history before reaching a
+                                 // lane/OSC edit made after the commit.
+                                 [s->_textView.undoManager removeAllActions];
+                               }];
 }
 
 @end

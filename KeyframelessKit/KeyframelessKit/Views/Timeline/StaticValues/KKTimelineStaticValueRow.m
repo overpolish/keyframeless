@@ -186,7 +186,8 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   KKSeedView *_seedView; // seed control (value + re-roll), seedField lanes only
   BOOL _seedField;
   NSTextField *_titleField; // the lane-name caption; refreshed by applyLane:
-  KKPillToggleRowView *_choicePill;   // grouped radio pill, choiceLabels only
+  KKCodeEditorView *_codeEditor;    // code lanes only; re-synced by applyLane:
+  KKPillToggleRowView *_choicePill; // grouped radio pill, choiceLabels only
   NSArray<NSString *> *_choiceLabels; // English identifiers (count >= 2)
   NSArray<NSImage *> *_choiceIcons;   // optional per-choice glyphs (display)
   BOOL _wrapsChoicePills;             // pill wraps to multiple lines
@@ -831,6 +832,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     _reset.hidden = YES; // no scalar value to reset
     KKCodeEditorView *editor =
         [[KKCodeEditorView alloc] initWithFrame:NSZeroRect];
+    _codeEditor = editor; // so applyLane: can re-sync it (undo/redo, presets)
     editor.translatesAutoresizingMaskIntoConstraints = NO;
     editor.codeValidator =
         lane.codeValidator; // set before text so it validates
@@ -1683,6 +1685,30 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
 }
 
 - (void)applyLane:(KKLane *)lane {
+  // Code lane: no fields/slider - re-sync the editor's text from the lane (an
+  // undo/redo of a committed code edit, or a preset/AI swap, reverts the
+  // codeString here), plus the shared name + lock. The editor guards against
+  // clobbering an in-progress typing burst.
+  if (_valueType == KKLaneValueTypeCode) {
+    if (_codeEditor) {
+      if (lane.codeTabs.count > 0 || lane.codeTabCatalog.count > 0) {
+        NSMutableArray<NSDictionary<NSString *, NSString *> *> *sections =
+            [NSMutableArray array];
+        [sections
+            addObject:@{@"name" : @"Image", @"code" : lane.codeString ?: @""}];
+        [sections addObjectsFromArray:lane.codeTabs ?: @[]];
+        [_codeEditor applyExternalSections:sections];
+      } else {
+        [_codeEditor applyExternalText:lane.codeString ?: @""];
+      }
+    }
+    _locked = lane.locked;
+    self.alphaValue = _locked ? 0.5 : 1.0;
+    NSString *codeShown = KKLocalizedParamName(lane.displayName);
+    _titleField.stringValue = codeShown ?: @"";
+    _titleField.toolTip = codeShown;
+    return;
+  }
   // Re-bound the field + slider to the lane's CURRENT range before applying the
   // value, so a row reused across an updateUnoptedLanes rebuild picks up a
   // source-derived range change (e.g. a shader `// #color max=` edit) instead
