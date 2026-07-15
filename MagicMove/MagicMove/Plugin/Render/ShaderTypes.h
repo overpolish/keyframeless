@@ -16,6 +16,10 @@ typedef struct {
     float scaleX;
     float scaleY;
     float opacity;
+    // Gaussian blur as a fraction (0..1) of the source clip's minimum
+    // dimension. Applied as an MPS pass on the source frame before the
+    // transform, not consumed by the fragment shader.
+    float blur;
 } MagicMoveParams;
 
 typedef enum {

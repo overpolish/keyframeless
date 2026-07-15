@@ -500,7 +500,14 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
           @"[0.5, 0.5] = clip centre, [0, 0] = bottom-left corner, "
           @"[1, 1] = top-right corner.\n"
           @"    Default value: [0.5, 0.5] (centre). Only change it when the "
-          @"user wants rotation/scale to pivot off-centre.\n"];
+          @"user wants rotation/scale to pivot off-centre.\n"
+          @"\n"
+          @"- \"Blur\": one numeric component, a whole percentage - a Gaussian "
+          @"blur of the clip.\n"
+          @"    0 = perfectly sharp (default), 100 = a heavy blur (the slider's "
+          @"top; larger values are allowed for extreme blur). Animate it from/to "
+          @"0 for a blur-in or blur-out reveal.\n"
+          @"    Default value: 0.\n"];
   return s;
 }
 
@@ -580,7 +587,23 @@ static NSString *_MagicMoveAILaneSchemaText(void) {
   anchor.componentLabels = @[ @"X", @"Y" ];
   [anchor insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
 
-  return @[ position, scale, rotation, opacity, anchor ];
+  // Gaussian blur, authored as a percentage of the clip's minimum dimension so
+  // it reads resolution-independent. Applied in clip space BEFORE the transform
+  // (the source frame is blurred, then positioned/scaled/rotated), so the blur
+  // grows and shrinks with the clip. Default 0 = no blur; animate it to get a
+  // blur in / blur out reveal.
+  KKLane *blur = [KKLane laneWithLabel:@"Blur"];
+  blur.valueType = KKLaneValueTypeFloat;
+  blur.integerValued = YES; // whole percentages
+  blur.componentMin = @[ @0.0 ];
+  // No value ceiling (empty max = unconstrained) - the slider tops out at 100%
+  // but a larger value can still be typed / animated past it for extreme blur.
+  blur.componentMax = @[];
+  blur.sliderMax = @100.0;
+  blur.componentUnits = @[ @"%" ];
+  [blur insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]]];
+
+  return @[ position, scale, rotation, opacity, anchor, blur ];
 }
 
 + (NSArray<NSArray<NSString *> *> *)oscCompounds {

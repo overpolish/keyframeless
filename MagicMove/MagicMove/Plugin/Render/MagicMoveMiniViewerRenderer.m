@@ -150,6 +150,10 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
                     ? fmax(0.0, fmin(100.0, opacityVals[0].doubleValue))
                     : 100.0;
   outParams->opacity = (float)(opac / 100.0);
+  NSArray<NSNumber *> *blurVals = [renderer valuesForLabel:@"Blur"];
+  double blurPct =
+      blurVals.count > 0 ? fmax(0.0, blurVals[0].doubleValue) : 0.0;
+  outParams->blur = (float)(blurPct / 100.0);
 }
 
 - (NSString *)pointLabel {
@@ -215,6 +219,10 @@ static void KKMagicMoveBuildParams(MagicMoveParams *outParams,
   MagicMoveParams params = {0};
   KKMagicMoveBuildParams(&params, self);
   simd_float2 zeroOffset = {0.0f, 0.0f};
+
+  // Blur the source in clip space before the transform, matching the render
+  // path so the mini-viewer preview shows the same blur in / blur out.
+  source = KKMagicMoveBlurredTexture(source, params.blur, cb.device, cb) ?: source;
 
   MTLRenderPassDescriptor *rpd = [MTLRenderPassDescriptor renderPassDescriptor];
   rpd.colorAttachments[0].texture = dest;

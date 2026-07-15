@@ -85,6 +85,48 @@
         }
       }
     },
+    "<accent>Blur</accent> - softens the clip with a Gaussian blur, from a slider in the inspector. Animate it from or to 0 for a blur-in or blur-out reveal.": {
+      "comment": "Magic Move help text.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Unschärfe</accent> - macht den Clip mit einer Gaußschen Unschärfe weich, über einen Regler im Inspektor. Animiere sie von oder auf 0 für ein Ein- oder Ausblenden per Unschärfe."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Desenfoque</accent> - suaviza el clip con un desenfoque gaussiano, con un regulador en el inspector. Anímalo desde o hacia 0 para una entrada o salida con desenfoque."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>Flou</accent> - adoucit le clip avec un flou gaussien, via un curseur dans l'inspecteur. Animez-le depuis ou vers 0 pour une apparition ou disparition en flou."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>ぼかし</accent> - インスペクタのスライダーで、ガウスぼかしでクリップを柔らかくします。0 から、または 0 へアニメートすると、ぼかしのフェードイン・フェードアウトになります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>흐림</accent> - 인스펙터의 슬라이더로 가우시안 블러를 사용해 클립을 부드럽게 합니다. 0에서 또는 0으로 애니메이션하면 흐림 페이드 인/아웃이 됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<accent>模糊</accent> - 用检查器中的滑块，以高斯模糊柔化片段。从 0 或向 0 制作动画，即可实现模糊的淡入或淡出。"
+          }
+        }
+      }
+    },
     "<accent>Opacity</accent> - fades the clip in or out, from a slider in the inspector.": {
       "comment": "Magic Move help text.",
       "extractionState": "manual",

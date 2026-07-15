@@ -33,4 +33,14 @@ FOUNDATION_EXPORT double
 KKMagicMoveRotateWithMotionAdjustmentDegrees(KKLane *_Nullable positionLane,
                                              double frac, double effectDurSec);
 
+/// MPS Gaussian blur of `src` into a fresh intermediate, sized in the source's
+/// own pixel space (resolution-independent) with `blurFrac` in 0..1 (the Blur
+/// lane's 0-100% as a fraction). Encodes on the caller-owned command buffer and
+/// returns the blurred texture, or `src` unchanged when the blur is negligible
+/// or the device/textures are missing. Shared by the FCP render path and the
+/// mini-viewer so both show the same blur.
+FOUNDATION_EXPORT id<MTLTexture> _Nullable KKMagicMoveBlurredTexture(
+    id<MTLTexture> _Nullable src, float blurFrac, id<MTLDevice> _Nullable device,
+    id<MTLCommandBuffer> _Nullable cb);
+
 NS_ASSUME_NONNULL_END

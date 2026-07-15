@@ -11,5 +11,6 @@ summary: What Magic Move does
     - The knobs and value fields turn it in **global** space.
   - **Anchor** - the point the clip turns and grows around. It starts at the clip's centre.
   - **Opacity** - fades the clip in or out, from a slider in the inspector.
+  - **Blur** - softens the clip with a Gaussian blur, from a slider in the inspector. Animate it from or to 0 for a blur-in or blur-out reveal.
 
 Drag each control right on the preview, or type exact numbers in the inspector. Put Crop or similar effects below Magic Move so they travel with the moved clip.

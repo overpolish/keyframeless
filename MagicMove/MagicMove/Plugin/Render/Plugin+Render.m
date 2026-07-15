@@ -10,6 +10,7 @@
 #import "Plugin_Private.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KeyframelessKit.h>
+#import <MetalPerformanceShaders/MetalPerformanceShaders.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -71,6 +72,7 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
   NSArray<NSNumber *> *scaleVals = nil;
   NSArray<NSNumber *> *opacityVals = nil;
   NSArray<NSNumber *> *anchorVals = nil;
+  NSArray<NSNumber *> *blurVals = nil;
   for (KKLane *lane in timeline.lanes) {
     if ([lane.label isEqualToString:@"Position"]) {
       positionLane = lane;
@@ -83,6 +85,8 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
       opacityVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
     } else if ([lane.label isEqualToString:@"Anchor"]) {
       anchorVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+    } else if ([lane.label isEqualToString:@"Blur"]) {
+      blurVals = KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
     }
   }
   double posX = positionVals.count > 0 ? positionVals[0].doubleValue : 0.5;
@@ -119,6 +123,48 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
                     ? fmax(0.0, fmin(100.0, opacityVals[0].doubleValue))
                     : 100.0;
   outParams->opacity = (float)(opac / 100.0);
+  // Blur authored as a percentage of the clip's min dimension; carry it as a
+  // fraction (1.0 = 100%, the slider top, but larger values are allowed). Floor
+  // at 0 - easing can undershoot, and a negative blur is meaningless.
+  double blurPct = blurVals.count > 0 ? fmax(0.0, blurVals[0].doubleValue) : 0.0;
+  outParams->blur = (float)(blurPct / 100.0);
+}
+
+// MPS Gaussian blur of `src` into a fresh intermediate, sized in the source's
+// own pixel space so the blur is resolution-independent (a downscaled thumbnail
+// source yields a proportionally smaller sigma). Returns `src` unchanged when
+// the blur is negligible so callers can bind the result unconditionally. The
+// blur runs on the caller-owned command buffer, before the transform pass reads
+// the result. sigma is capped to keep very high blur% on 4K sources from
+// stalling MPS.
+id<MTLTexture> KKMagicMoveBlurredTexture(id<MTLTexture> src, float blurFrac,
+                                         id<MTLDevice> device,
+                                         id<MTLCommandBuffer> cb) {
+  if (!src || !device || !cb || blurFrac <= 0.0f)
+    return src;
+  float minDim = (float)MIN(src.width, src.height);
+  // The slider tops out at 100%, which maps to a sigma of ~1/10 the clip's
+  // short side - a heavy but not fully-dissolved blur. Values can exceed 100%
+  // (typed / animated) for more; the 256px cap protects large sources.
+  float sigma = fminf(blurFrac * minDim * 0.1f, 256.0f);
+  if (sigma < 0.5f)
+    return src;
+  MTLTextureDescriptor *td = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:src.pixelFormat
+                                   width:src.width
+                                  height:src.height
+                               mipmapped:NO];
+  td.usage = MTLTextureUsageShaderRead | MTLTextureUsageShaderWrite |
+             MTLTextureUsageRenderTarget;
+  td.storageMode = MTLStorageModePrivate;
+  id<MTLTexture> inter = [device newTextureWithDescriptor:td];
+  if (!inter)
+    return src;
+  MPSImageGaussianBlur *g =
+      [[MPSImageGaussianBlur alloc] initWithDevice:device sigma:sigma];
+  g.edgeMode = MPSImageEdgeModeClamp;
+  [g encodeToCommandBuffer:cb sourceTexture:src destinationTexture:inter];
+  return inter;
 }
 
 - (BOOL)magicMoveParams:(MagicMoveParams *)outParams
@@ -291,11 +337,17 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
                                              KKBlendModePremultipliedAlpha];
                       if (!pipeline)
                         return NO;
+                      // Blur the source frame in clip space before this sample's
+                      // transform, on the same command buffer, so the blur moves
+                      // with the clip.
+                      id<MTLTexture> blurredSrc = KKMagicMoveBlurredTexture(
+                          inputTextures[0], sampleParams.blur, sampleDest.device,
+                          commandBuffer);
                       return [strongSelf
                           encodeFullScreenQuadIntoTexture:sampleDest
                                          destinationImage:destinationImage
                                             commandBuffer:commandBuffer
-                                           sourceTextures:inputTextures
+                                           sourceTextures:@[ blurredSrc ]
                                                  commands:^(
                                                      id<MTLRenderCommandEncoder>
                                                          enc,
@@ -347,6 +399,60 @@ void KKMagicMoveFillParamsFromTimeline(MagicMoveParams *outParams,
                            blendMode:KKBlendModePremultipliedAlpha];
   if (!pipeline)
     return NO;
+
+  // Blur path: MPS-blur the source frame, then run the transform against the
+  // blurred texture on a caller-owned command buffer (the shared
+  // encodeRenderCommandsForDestinationImage: helper owns its own buffer, so we
+  // can't slot an MPS pass ahead of it). Falls through to the plain path when
+  // the device/textures are unavailable.
+  if (params.blur > 0.0f) {
+    KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+    uint64_t regID = destinationImage.deviceRegistryID;
+    MTLPixelFormat pf =
+        [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+    id<MTLDevice> device = [cache deviceWithRegistryID:regID];
+    id<MTLCommandQueue> queue =
+        [cache commandQueueWithRegistryID:regID pixelFormat:pf];
+    if (device && queue) {
+      id<MTLTexture> srcTex = [sourceImages[0] metalTextureForDevice:device];
+      id<MTLTexture> dstTex = [destinationImage metalTextureForDevice:device];
+      if (srcTex && dstTex) {
+        id<MTLCommandBuffer> cb = [queue commandBuffer];
+        id<MTLTexture> blurredSrc =
+            KKMagicMoveBlurredTexture(srcTex, params.blur, device, cb);
+        BOOL ok = [self
+            encodeFullScreenQuadIntoTexture:dstTex
+                           destinationImage:destinationImage
+                              commandBuffer:cb
+                             sourceTextures:@[ blurredSrc ]
+                                   commands:^(id<MTLRenderCommandEncoder> enc,
+                                              NSArray<id<MTLTexture>> *texs) {
+                                     [enc setRenderPipelineState:pipeline];
+                                     [enc setFragmentTexture:texs[0]
+                                                     atIndex:
+                                                         KKTextureIndex_InputImage];
+                                     [enc setFragmentBytes:&params
+                                                    length:sizeof(params)
+                                                   atIndex:FragmentIndex_Params];
+                                     [enc setFragmentBytes:&tileOffsetPx
+                                                    length:sizeof(tileOffsetPx)
+                                                   atIndex:
+                                                       FragmentIndex_TileOffsetPx];
+                                     [enc drawPrimitives:
+                                              MTLPrimitiveTypeTriangleStrip
+                                             vertexStart:0
+                                             vertexCount:4];
+                                   }];
+        [cb commit];
+        [cb waitUntilCompleted];
+        [cache returnCommandQueueToCache:queue];
+        if (ok)
+          return YES;
+      } else {
+        [cache returnCommandQueueToCache:queue];
+      }
+    }
+  }
 
   return [self
       encodeRenderCommandsForDestinationImage:destinationImage
