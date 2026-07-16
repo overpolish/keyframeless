@@ -33,7 +33,7 @@ Each Publish creates a **source**, listed under the button with its clip count, 
 - **It names itself from the roles you picked** - choose the music clips and it's called "Music", two roles gives "Music + Effects". Rename it in the list if you'd rather call it something else.
 - **Publishing different clips makes a different source.** Publish three music cues, then three others, and you get both ("Music" and "Music 2"), so one shader can use one and a second shader the other. Publishing the _same_ clips again just updates that source instead of cluttering the list.
 - **Changed the audio? Publish again.** A volume change, a fade, a new effect - re-publish and the source updates to match.
-- Sources stick around across projects and restarts. Delete removes one for good.
+- Sources stick around across projects and restarts, on the Mac that published them. Delete removes one for good.
 
 ## What gets included
 
@@ -44,5 +44,6 @@ If a clip's media is offline it gets left out and Sonar tells you which. Video c
 ## Worth knowing
 
 - **Use a source in the project it came from.** Audio published from one project won't line up with a different project's timeline, which is why the menu shows the project next to each source name.
+- **Moved to another Mac? Publish again there.** Sources live on the Mac that made them, so a project opened on a different machine finds nothing published and its effects sit still until you republish. Drop the project into Sonar, select the same clips, hit Publish, and your effects start moving again on their own - there's nothing to re-point in the inspector. A source is known by the clips it was made from, not by where those files happen to sit, so the same clips give the same source on any Mac.
 - **Publishing is a snapshot.** Change the audio in Final Cut Pro and your effect keeps moving to the old version until you publish again.
 - Nothing published yet, or you haven't picked a source, means the effect simply sits still. It won't error.

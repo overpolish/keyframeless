@@ -22,17 +22,18 @@ actor WaveformLoader {
 			return cached
 		}
 		let buckets = max(200, Int(clip.sourceDuration * 200))
-		let renderedURL = try await ProcessedAudioRenderer.shared.renderedURL(for: clip)
-		let raw = try loadFromAudioFile(
-			url: renderedURL, durationSeconds: clip.sourceDuration, buckets: buckets,
-			onProgress: onProgress)
-		let samples = smoothed(raw)
+		let samples = try await ProcessedAudioRenderer.shared.withRenderedAudio(for: clip) { url in
+			let raw = try Self.loadFromAudioFile(
+				url: url, durationSeconds: clip.sourceDuration, buckets: buckets,
+				onProgress: onProgress)
+			return Self.smoothed(raw)
+		}
 		cache[key] = samples
 		onProgress?(samples)
 		return samples
 	}
 
-	private func loadFromAudioFile(
+	private static func loadFromAudioFile(
 		url: URL, durationSeconds: Double, buckets: Int,
 		onProgress: (@Sendable ([Float]) -> Void)? = nil
 	) throws -> [Float] {
@@ -110,7 +111,7 @@ actor WaveformLoader {
 		return result
 	}
 
-	private func smoothed(_ input: [Float]) -> [Float] {
+	private static func smoothed(_ input: [Float]) -> [Float] {
 		guard input.count > 2 else { return input }
 		let radius = 5
 		var output = [Float](repeating: 0, count: input.count)

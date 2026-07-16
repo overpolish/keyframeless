@@ -93,8 +93,8 @@ enum SpectrogramAnalyzer {
 			// whose result is already stale.
 			try Task.checkCancellation()
 			// Per-clip failures are contained here. A clip whose media has moved
-			// throws out of `renderedURL`; letting that escape the loop would sink
-			// the whole analysis for one dead path.
+			// throws out of `withRenderedAudio`; letting that escape the loop would
+			// sink the whole analysis for one dead path.
 			let clipFrames: [[Float]]?
 			do {
 				clipFrames = try await frames(for: clip, config: config, bandEdges: bandEdges)
@@ -163,14 +163,17 @@ enum SpectrogramAnalyzer {
 		].joined(separator: "|")
 		if let cached = await SpectrogramFrameCache.shared.frames(key) { return cached }
 
-		let url = try await ProcessedAudioRenderer.shared.renderedURL(for: clip)
-		guard
-			let mono = try readMono(url: url, targetSampleRate: config.analysisSampleRate),
-			!mono.isEmpty
-		else { return nil }
-		let computed = stft(
-			samples: mono, config: config, bandEdges: bandEdges,
-			sampleRate: config.analysisSampleRate)
+		let computed = try await ProcessedAudioRenderer.shared.withRenderedAudio(for: clip) {
+			url -> [[Float]]? in
+			guard
+				let mono = try readMono(url: url, targetSampleRate: config.analysisSampleRate),
+				!mono.isEmpty
+			else { return nil }
+			return stft(
+				samples: mono, config: config, bandEdges: bandEdges,
+				sampleRate: config.analysisSampleRate)
+		}
+		guard let computed else { return nil }
 		await SpectrogramFrameCache.shared.store(computed, for: key)
 		return computed
 	}

@@ -59,14 +59,28 @@ Analysis is fast enough to have no Analyse button: the spectrogram follows the s
 ```
 char[4]  "KKSG"      uint32 version   uint32 numFrames   uint32 numBands
 float64  hopSeconds  float64 timelineStart
+float64  floorDB     float64 ceilingDB              <- v2+ only
 float32  data[numFrames * numBands]    row-major [frame][band], 0...1
 ```
 
 Everything is **little-endian**. `CFConvertDoubleHostToSwapped` produces big-endian and is the wrong tool here.
 
+The dB window is in the file because it is the analysis window, and Sonar's config invites you to tune it. `data` is already normalised into `floor...ceiling`, so a consumer that wants real dB back (a noise gate, say) can only get there if the file says what the window was. Hard-code the old -85/-15 in a consumer and every gate silently re-scales the day that config changes. v1 files have no such fields and legacy constants stand in, which is why the data offset branches on version.
+
 `KKSpectrogramSampleAtTime` is render-path safe by design: no allocation, no locking, no Objective-C messaging, just interpolated reads straight off the mapping. Times outside the published range fill zeroes and return `NO`, so a consumer can tell silence from "nothing published here". Nothing bound, a deleted source, and an out-of-range moment all render silence rather than failing.
 
-Sampling reads the manifest per frame today. That wants mtime-caching before it ships.
+Sampling used to read the manifest per frame. It is now cached on the manifest's `inode + mtime + size`, in the kit rather than in any one consumer, so the filename stays where the format lives and the next consumer inherits the fix.
+
+## Temp files clean themselves up
+
+Reconstructing a clip's processed audio writes an uncompressed Float32 WAV at the source rate: **~1.4GB per hour** of 48kHz stereo, one per clip, and every edit to a clip mints a fresh fingerprint and a fresh file. Nothing runs at process exit to remove them, and the system does not sweep a sandboxed container's tmp while the container is in use. Left alone this reached **19GB**.
+
+Two mechanisms, because they solve different halves:
+
+- **`TempJanitor.sweepOnce()`**, called at launch before anything can write, removes what a _previous_ run stranded: renders, Steno's extraction and segment temps, and `CFNetworkDownload_*` partials from cancelled model downloads (CFNetwork's own staging, which lands in our container and which nobody else collects - one abandoned download left 5GB). It works by age against a cutoff captured at launch, so nothing live can be caught, whatever way the last run died. That matters precisely because the case being cleaned up after is the one where bookkeeping didn't run.
+- **`ProcessedAudioRenderer`'s byte-budgeted LRU** bounds growth _within_ a run.
+
+The renderer hands out audio through `withRenderedAudio(for:)`, not a bare URL, and that shape is deliberate: it leases the file for the duration of the call so eviction cannot delete it mid-read. Read what you need inside the closure and don't hold the URL.
 
 ## The clock (read this before touching timing)
 
@@ -96,6 +110,12 @@ Identity is the **clips, not the name**. `contentHash` fingerprints the exact se
 - A volume tweak or an added effect counts as new content, because the fingerprint covers the edit.
 
 The name is only a label, derived from roles (pick the music clips and it's "Music") and renameable inline. No naming dialog, because publishing should stay one click.
+
+**The fingerprint is portable, and that is load-bearing.** `AudioClipFingerprint` comes in two flavours: `of` keys local caches by absolute URL (two same-named files in different folders must not collide), while `identity` keys published sources by _filename_ (two copies of one project on two Macs must not differ). `contentHash` uses `identity`.
+
+It has to. A shader stores `ShaderAudioSourceKey(contentHash)` in its lane, and that lane travels with the project inside the FCP library. Nothing else does - not the `.kksg`, not the manifest. So a project carried to another Mac finds an empty container, and the _only_ way its shaders can reconnect is for a fresh publish of the same clips to reproduce the same hash. Key `contentHash` on absolute paths and it can't: the media resolves elsewhere, every hash shifts, and republishing mints a source the shader has never heard of. Republish on any Mac, and the binding comes back on its own.
+
+`SonarSource.identityVersion` records which scheme a hash was built with. Bumping it invalidates every stored binding by definition, so older entries are purged (grid and all) on the first read that sees one, rather than lingering in the list matching nothing and colliding with their own republish as "Music 2".
 
 The publish writes atomically, which swaps in a new inode. That is exactly what the plugin's `inode + mtime + size` cache key notices, so a re-publish is picked up while the old mapping stays valid for anything mid-render.
 

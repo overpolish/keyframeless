@@ -26,6 +26,10 @@ struct SonarSource: Codable, Identifiable, Equatable {
 	/// field would fail to decode every manifest written before it and silently
 	/// empty the list.
 	var contentHash: String?
+	/// Which scheme `contentHash` was built with; see
+	/// `SonarSourceStore.identityVersion`. Nil means the original
+	/// absolute-path scheme. Optional for the same reason as `contentHash`.
+	var identityVersion: Int?
 }
 
 /// Reads and writes Sonar's published analyses in the shared app-group
@@ -56,6 +60,17 @@ enum SonarSourceStore {
 		directory?.appendingPathComponent("manifest.json")
 	}
 
+	/// Scheme behind a source's `contentHash`. Version 2 hashes portable clip
+	/// identity; version 1 (nil) hashed absolute paths.
+	///
+	/// Bumping this invalidates every existing binding by definition - a shader
+	/// looks a source up by a hash of its `contentHash`, so one hashed the old
+	/// way can never be found again. Older entries are therefore dropped rather
+	/// than left sitting in the list looking publishable while matching nothing,
+	/// which would also make a republish collide with its own ghost and land as
+	/// "Music 2" beside it.
+	static let identityVersion = 2
+
 	static func url(for id: String) -> URL? {
 		directory?.appendingPathComponent("\(id).kksg")
 	}
@@ -66,7 +81,25 @@ enum SonarSourceStore {
 		guard let manifestURL, let data = try? Data(contentsOf: manifestURL),
 			let list = try? JSONDecoder().decode([SonarSource].self, from: data)
 		else { return [] }
-		return list.sorted { $0.publishedAt > $1.publishedAt }
+		let current = list.filter { $0.identityVersion == identityVersion }
+		if current.count != list.count {
+			purge(list, keeping: current, manifestURL: manifestURL)
+		}
+		return current.sorted { $0.publishedAt > $1.publishedAt }
+	}
+
+	/// Drops sources from a superseded identity scheme, grid and all. Runs off
+	/// the first read that sees one and then never again, since the rewritten
+	/// manifest has none left.
+	private static func purge(
+		_ all: [SonarSource], keeping current: [SonarSource], manifestURL: URL
+	) {
+		let keep = Set(current.map(\.id))
+		for source in all where !keep.contains(source.id) {
+			if let url = url(for: source.id) { try? FileManager.default.removeItem(at: url) }
+		}
+		guard let data = try? JSONEncoder().encode(current) else { return }
+		try? data.write(to: manifestURL, options: .atomic)
 	}
 
 	/// Writes the grid and records it in the manifest.
@@ -104,7 +137,8 @@ enum SonarSourceStore {
 			duration: spectrogram.duration,
 			projectName: projectName,
 			publishedAt: Date(),
-			contentHash: hash
+			contentHash: hash,
+			identityVersion: identityVersion
 		)
 		var list = sources().filter { $0.id != source.id }
 		list.append(source)
@@ -115,10 +149,16 @@ enum SonarSourceStore {
 	}
 
 	/// Identity of a selection: the same clips with the same edits, in any order,
-	/// hash the same. Uses the clip fingerprint, so re-publishing after a volume
-	/// tweak counts as new content and refreshes rather than duplicating.
+	/// hash the same. Re-publishing after a volume tweak counts as new content
+	/// and refreshes rather than duplicating.
+	///
+	/// Deliberately the PORTABLE fingerprint, not the local one. A shader binds
+	/// to a hash of this, so keying it on absolute paths would mean a project
+	/// carried to another Mac could never reconnect: the media resolves
+	/// elsewhere, every hash shifts, and republishing the same clips mints a
+	/// source the shader has never heard of. Filenames travel; paths don't.
 	static func contentHash(for clips: [FCPXMLParser.AudioClip]) -> String {
-		let joined = clips.map(AudioClipFingerprint.of).sorted().joined(separator: "\n")
+		let joined = clips.map(AudioClipFingerprint.identity).sorted().joined(separator: "\n")
 		var hash: UInt64 = 5381
 		for byte in joined.utf8 { hash = (hash &* 33) &+ UInt64(byte) }
 		return String(hash, radix: 36)
@@ -157,7 +197,8 @@ enum SonarSourceStore {
 		list[index] = SonarSource(
 			id: newID, name: unique, roles: old.roles, clipCount: old.clipCount,
 			duration: old.duration, projectName: old.projectName,
-			publishedAt: old.publishedAt, contentHash: old.contentHash)
+			publishedAt: old.publishedAt, contentHash: old.contentHash,
+			identityVersion: old.identityVersion)
 		guard let manifestURL, let data = try? JSONEncoder().encode(list) else { return }
 		try? data.write(to: manifestURL, options: .atomic)
 	}
