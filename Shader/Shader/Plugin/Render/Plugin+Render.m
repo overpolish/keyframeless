@@ -6,8 +6,10 @@
 #import "Constants.h"
 #import "KKGLSLTranspiler.h" // GLSL -> MSL (glslang + SPIRV-Cross)
 #import "Plugin_Private.h"
+#import "ShaderAudioPool.h"
 #import "ShaderColorSpace.h"
 #import "ShaderCustomShader.h" // KKCustomUniforms + ShaderCustomFullSource (shared)
+#import "ShaderInspectorView.h"
 #import "ShaderMiniViewerRenderer.h" // per-instance descriptor path
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKMetalDeviceCache.h>
@@ -55,7 +57,8 @@ ShaderLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
 // timing/cache work) so a caller can refresh the render cache once and evaluate
 // many sub-frame fractions cheaply (motion blur samples).
 static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
-                                  double durSec, ShaderPluginState *outState) {
+                                  double durSec, double timelineSec,
+                                  ShaderPluginState *outState) {
   memset(outState, 0, sizeof(*outState));
 
   NSArray<NSNumber *> *speedV =
@@ -99,6 +102,13 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
   };
   int poolN = ShaderFillColorPool(shaderSrc, outState->colorPool, values);
   poolN = ShaderFillScalarPool(shaderSrc, outState->colorPool, poolN, values);
+  // `// #audio` props: sampled from the bound Sonar spectrogram at the TIMELINE
+  // time, not the clip fraction - the grid is keyed by timeline seconds. That
+  // is NOT the render time: `timelineSec` comes from
+  // `timelineTime:fromInputTime:`, because an FxPlug render time in FCP is the
+  // input's native media clock.
+  poolN = ShaderFillAudioPool(shaderSrc, outState->colorPool, poolN,
+                              timelineSec, values);
   outState->colorPoolCount = poolN;
 }
 
@@ -452,7 +462,7 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
     }
     bufTR[k] = KKTranspileGLSLBuffer(bufferSources[k]);
     for (int c = k; c < 4; c++)
-      if (bufTR[k].usedChannelMask & (1u << c))
+      if (bufTR[k].declaredChannelMask & (1u << c))
         needsFeedback = YES;
   }
 
@@ -715,10 +725,30 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
   BOOL hasTiming = KKRefreshRenderCache(
       self.apiManager, (KKTimelineInspectorView *)self.inspectorView,
       self.renderCache);
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
   [self bakeMaintainTimingForCache:self.renderCache
                    timelineParamID:kKKParamTimelineData
                     uiStateParamID:kParamUIState];
   double durSec = self.renderCache.effectDurSec;
+  // Tell the inspector where this clip sits in PROJECT time, so its mini-viewer
+  // can sample `// #audio` at the playhead instead of previewing silence. The
+  // render tick is the only place the clip's position surfaces; the value is a
+  // view's, so it lands on main.
+  if (hasTiming) {
+    ShaderInspectorView *iv = (ShaderInspectorView *)self.inspectorView;
+    // Converted, not raw: effectStartSec is native-media time in FCP.
+    CMTime effStartTL = kCMTimeZero;
+    [timingAPI timelineTime:&effStartTL
+              fromInputTime:CMTimeMakeWithSeconds(
+                                self.renderCache.effectStartSec, 600)];
+    double projectStart = CMTimeGetSeconds(effStartTL);
+    if (iv) {
+      dispatch_async(dispatch_get_main_queue(), ^{
+        iv.clipTimelineStartSec = projectStart;
+      });
+    }
+  }
   // Live scrubber: render ticks stop ~1s before the clip end (FCP pre-render
   // buffer - renderTime leads currentTime). Arm the self-terminating poll so it
   // follows currentTime through the tail.
@@ -739,7 +769,19 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
                                               durSec))
                       : 0.0;
     frac = KKMaintainTimingRemappedFraction(frac, self.renderCache);
-    ShaderEvalStateAtFrac(timeline, frac, durSec, &outStates[i]);
+    // TIMELINE time, which is NOT the render time. In FCP a render time is
+    // relative to the object's native media start (Apple's docs are explicit:
+    // "in Final Cut Pro this is the time the effect starts relative to the
+    // input object's native start time"), so a clip 6s into a project
+    // reports 63.9 if that's where it sits in its source.
+    // `timelineTime:fromInputTime:` is the only thing that converts it - and it
+    // returns the project's real timecode too (7206.083 for 6.05s into a
+    // project starting at 02:00:00:00), which is exactly how Sonar keys the
+    // spectrogram.
+    CMTime tlTime = kCMTimeZero;
+    [timingAPI timelineTime:&tlTime fromInputTime:times[i]];
+    ShaderEvalStateAtFrac(timeline, frac, durSec, CMTimeGetSeconds(tlTime),
+                          &outStates[i]);
   }
   return YES;
 }
@@ -996,11 +1038,11 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
     id<MTLDevice> device = [[KKMetalDeviceCache sharedCache]
         deviceWithRegistryID:destinationImage.deviceRegistryID];
     id<MTLTexture> noiseTex =
-        tr.usedChannelMask ? KKCustomChannelNoiseTexture(device) : nil;
+        tr.declaredChannelMask ? KKCustomChannelNoiseTexture(device) : nil;
     id<MTLSamplerState> chSampler =
-        tr.usedChannelMask ? KKCustomChannelSampler(device) : nil;
+        tr.declaredChannelMask ? KKCustomChannelSampler(device) : nil;
     id<MTLSamplerState> srcSampler =
-        tr.usedChannelMask ? KKCustomSourceSampler(device) : nil;
+        tr.declaredChannelMask ? KKCustomSourceSampler(device) : nil;
     // Gamma-encode the linear source so a Shadertoy shader (gamma-space input,
     // output re-decoded for the float dest) round-trips it instead of
     // double-decoding + darkening. encodeSRGB==0 == float/linear dest; an 8-bit

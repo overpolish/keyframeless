@@ -35,6 +35,14 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// inspector. Used by `-templateLaneForLabel:` for not-yet-in-timeline constant
 /// lane defaults.
 @property(nonatomic, copy, nullable) NSArray<KKLane *> *laneTemplates;
+
+/// TIMELINE seconds to sample `// #audio` at, from the inspector's playhead.
+///
+/// The preview can't use `editFraction` for this: that's the keypose being
+/// edited, not where the playhead is, and it's 0 unless a boundary popover is
+/// open - so the bars would sit on the clip's first frame forever. Negative =
+/// unknown (no timing yet), which reads as silence rather than the first frame.
+@property(nonatomic) double audioTimelineTimeSec;
 @end
 
 NS_ASSUME_NONNULL_END

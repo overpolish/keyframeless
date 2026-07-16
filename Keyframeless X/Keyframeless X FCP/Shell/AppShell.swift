@@ -3,18 +3,15 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-import AppKit
 import Foundation
 import KeyframelessAI
 import KeyframelessKit
 import SwiftUI
-import os
 
 struct AppShell: View {
 	@ObservedObject var audioModel: AudioModel
 	@StateObject private var audioModelManager = AudioModelManager()
 	@StateObject private var processingCoordinator = AudioProcessingCoordinator()
-	@State private var selectedTab: AppTab = .audio
 	@State private var availableVersion: String?
 	@State private var currentVersion: String = ""
 	@State private var updateDismissed = Self.dismissed
@@ -40,6 +37,17 @@ struct AppShell: View {
 				subdirectory: "AIKnowledge"
 			)
 		)
+		// Sonar's doc lives in KeyframelessKit, not here: Sonar publishes the data
+		// and Shader consumes it, so neither owns the explanation. Registering the
+		// shared copy keeps one source rather than a duplicate that drifts.
+		AIKnowledgeRegistry.shared.register(
+			BundleMarkdownKnowledgeProvider(
+				name: "Sonar",
+				bundle: Bundle(for: KKUpdateChecker.self),
+				subdirectory: nil,
+				onlyTopicIDs: ["audio-sonar", "audio-shader-directive"]
+			)
+		)
 	}
 
 	static let aiProductContext =
@@ -61,7 +69,7 @@ struct AppShell: View {
 			}
 			topBar
 			Group {
-				switch selectedTab {
+				switch audioModel.selectedTab {
 				case .audio:
 					switch audioModel.stage {
 					case .setup:
@@ -85,6 +93,8 @@ struct AppShell: View {
 					case .edit:
 						AudioEditView(model: audioModel)
 					}
+				case .sonar:
+					SonarView(model: audioModel)
 				}
 			}
 		}
@@ -225,12 +235,9 @@ struct AppShell: View {
 				productContext: AppShell.aiProductContext,
 				onRun: { instruction in audioModel.runAITransform(instruction: instruction) }
 			)
-			PillTabBar(selected: $selectedTab)
+			PillTabBar(selected: $audioModel.selectedTab)
 			WhatsNewButton(url: KKUpdateChecker.shared().notesURL)
 			FeedbackButton(url: KKUpdateChecker.shared().feedbackURL)
-			#if DEBUG
-				debugSpectrogramButton
-			#endif
 			Spacer()
 			toolNav
 		}
@@ -245,58 +252,32 @@ struct AppShell: View {
 
 	@ViewBuilder
 	private var toolNav: some View {
-		switch selectedTab {
+		switch audioModel.selectedTab {
 		case .audio:
-			PillIconToggle<AudioModel.Stage>(
-				selection: $audioModel.stage,
-				options: [
-					(
-						label: String(localized: "Setup"),
-						systemImage: "sparkles.rectangle.stack.fill",
-						value: .setup
-					),
-					(
-						label: String(localized: "Edit"), systemImage: "bubble.and.pencil",
-						value: .edit
-					),
-				],
-				disabledValues: audioModel.audioClips.isEmpty ? [.edit] : []
-			)
+			stageToggle
+		case .sonar:
+			// Hidden (not EmptyView) so the top bar reserves the toggle's height
+			// and doesn't shift a pixel when switching tabs.
+			stageToggle.hidden()
 		}
 	}
 
-	#if DEBUG
-		// Temporary Phase-1 verification: analyze the parsed clips into a
-		// timeline spectrogram and reveal the PNG dump in Finder. Remove once the
-		// real Analyzer tab exists.
-		private var debugSpectrogramButton: some View {
-			Button {
-				let clips = audioModel.allAudioClips
-				Task {
-					let log = Logger(
-						subsystem: "com.keyframeless.analyzer", category: "dump")
-					guard !clips.isEmpty else {
-						log.log("no audio clips parsed yet - drop a project first")
-						return
-					}
-					do {
-						let out = FileManager.default.temporaryDirectory
-							.appendingPathComponent("spectrogram.png")
-						let spec = try await SpectrogramAnalyzer.analyze(clips: clips)
-						try spec.writePNG(to: out)
-						log.log(
-							"wrote \(spec.numFrames, privacy: .public)x\(spec.numBands, privacy: .public) frames -> \(out.path, privacy: .public)"
-						)
-						NSWorkspace.shared.activateFileViewerSelecting([out])
-					} catch {
-						log.log("failed: \(error.localizedDescription, privacy: .public)")
-					}
-				}
-			} label: {
-				Image(systemName: "ladybug")
-			}
-			.buttonStyle(.plain)
-			.help("DEBUG: analyze parsed clips into a spectrogram PNG")
-		}
-	#endif
+	private var stageToggle: some View {
+		PillIconToggle<AudioModel.Stage>(
+			selection: $audioModel.stage,
+			options: [
+				(
+					label: String(localized: "Setup"),
+					systemImage: "sparkles.rectangle.stack.fill",
+					value: .setup
+				),
+				(
+					label: String(localized: "Edit"), systemImage: "bubble.and.pencil",
+					value: .edit
+				),
+			],
+			disabledValues: audioModel.audioClips.isEmpty ? [.edit] : []
+		)
+	}
+
 }

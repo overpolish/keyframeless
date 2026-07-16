@@ -179,6 +179,18 @@ static NSString *KKShimRawGLSL(NSString *src) {
   return s;
 }
 
+/// Which iChannels the WRAPPED shader declares - what the render must bind.
+///
+/// Not the same as what the user's source references: a generator that never
+/// samples iChannel0 still gets it declared, so its alpha can composite over the
+/// footage (see `honorAlpha` below). Binding follows the declaration, so this is
+/// the set that matters; reporting the user's set instead left channel 0
+/// declared but its sampler never created, and the draw bound nil.
+static NSUInteger KKDeclaredChannelMask(NSUInteger channelMask, BOOL bufferMode) {
+  BOOL honorAlpha = !bufferMode && !(channelMask & 1u);
+  return channelMask | (honorAlpha ? 1u : 0u);
+}
+
 static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
                                      NSInteger *outUserLineOffset,
                                      BOOL bufferMode) {
@@ -278,6 +290,33 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
                   withTemplate:@""];
   }
 
+  // `// #audio` props: a vec4 array in the block (4 bands packed per vec4 - a
+  // std140 float array pads to a 16-byte stride and would cost 4x the pool).
+  // The shader never sees that packing: `<name>Band(i)` unpacks it and
+  // `<name>Bands` is the count. Appended AFTER the scalars so both earlier
+  // pools keep their offsets.
+  ShaderAudioProp audios[KK_SHADER_MAX_AUDIO_PROPS];
+  int audioUsed = 0;
+  int nAudio = ShaderParseAudioProps(userSource, audios,
+                                     KK_SHADER_MAX_AUDIO_PROPS,
+                                     poolCount + scalarUsed, &audioUsed);
+  for (int i = 0; i < nAudio; i++) {
+    NSString *nm = @(audios[i].name);
+    [colorMembers appendFormat:@"  vec4 %@[%d];\n", nm, audios[i].vecCount];
+    [colorDefines appendFormat:@"#define %@Bands %d\n", nm, audios[i].bands];
+    [colorDefines appendFormat:@"#define %@Band(i) (%@[(i) >> 2][(i) & 3])\n",
+                               nm, nm];
+    NSString *pat = [NSString
+        stringWithFormat:
+            @"(?m)^[ \\t]*uniform\\s+vec4\\s+%@\\s*\\[[^\\]]*\\]\\s*;[ \\t]*$",
+            nm];
+    [[NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil]
+        replaceMatchesInString:body
+                       options:0
+                         range:NSMakeRange(0, body.length)
+                  withTemplate:@""];
+  }
+
   NSMutableString *s = [NSMutableString string];
   [s appendString:@"layout(location = 0) out vec4 kk_outColor;\n"
                   @"layout(std140, binding = 0) uniform KKUniforms {\n"
@@ -299,7 +338,7 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
   // wins), so it keeps the opaque image convention (a=1) - which also protects
   // golfed Shadertoy pastes that leave garbage in fragColor.a.
   BOOL honorAlpha = !bufferMode && !(channelMask & 1u);
-  NSUInteger declMask = channelMask | (honorAlpha ? 1u : 0u);
+  NSUInteger declMask = KKDeclaredChannelMask(channelMask, bufferMode);
   for (NSUInteger ch = 0; ch < 4; ch++) {
     if (declMask & (1u << ch))
       [s appendFormat:@"layout(binding = %lu) uniform sampler2D iChannel%lu;\n",
@@ -886,7 +925,7 @@ static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL,
       !hadMainImage &&
       [userGLSL rangeOfString:@"mainImage"].location != NSNotFound;
   NSUInteger channelMask = KKChannelMask(userGLSL);
-  result.usedChannelMask = channelMask;
+  result.declaredChannelMask = KKDeclaredChannelMask(channelMask, bufferMode);
   NSInteger lineOffset = 0;
   NSString *glsl =
       KKWrapGLSL(userGLSL, channelMask, &lineOffset, bufferMode);

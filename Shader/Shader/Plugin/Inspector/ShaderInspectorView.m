@@ -33,6 +33,10 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
                           timeline:timeline];
   if (self) {
     _miniViewerRenderer = [[ShaderMiniViewerRenderer alloc] init];
+    // Negative until the render tick says otherwise: unknown must read as
+    // silence, not as the clip's first frame.
+    _clipTimelineStartSec = -1.0;
+    _miniViewerRenderer.audioTimelineTimeSec = -1.0;
     // On a fresh instance the persisted param timeline is nil, but the super
     // reconstructs a working timeline from availableLanes (carrying the
     // plasma-seeded Shader lane) - that's what the editor shows. Seed the mini
@@ -280,6 +284,38 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
 
 - (instancetype)beginDetachedCopy {
   return [super beginDetachedCopy];
+}
+
+- (void)setClipProjectStartSec:(double)seconds {
+  if (_clipTimelineStartSec == seconds)
+    return;
+  _clipTimelineStartSec = seconds;
+  [self _pushAudioTimeToMiniViewer];
+}
+
+- (double)clipTimelineStartSec {
+  return _clipTimelineStartSec;
+}
+
+/// The playhead moved: the mini viewer's `// #audio` preview follows it, so the
+/// bars show the same instant the viewer does.
+- (void)setPlayheadFraction:(double)frac {
+  [super setPlayheadFraction:frac];
+  _playheadFraction = frac;
+  [self _pushAudioTimeToMiniViewer];
+}
+
+- (void)_pushAudioTimeToMiniViewer {
+  // Unknown clip position stays negative: that reads as outside the spectrogram
+  // (silence), which is honest, where 0 would confidently show the project's
+  // first frame no matter where this clip sits.
+  if (_clipTimelineStartSec < 0) {
+    _miniViewerRenderer.audioTimelineTimeSec = -1.0;
+    return;
+  }
+  double dur = [self clipDurationSeconds];
+  _miniViewerRenderer.audioTimelineTimeSec =
+      _clipTimelineStartSec + _playheadFraction * (dur > 0 ? dur : 0);
 }
 
 @end

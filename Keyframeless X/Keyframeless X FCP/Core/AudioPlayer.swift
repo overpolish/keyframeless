@@ -123,7 +123,12 @@ final class AudioPlayer: ObservableObject {
 	private func tickCurrentTime() {
 		guard let session, let elapsed = session.elapsedSeconds() else { return }
 		let absoluteTime = startSourceTime + elapsed
-		currentTime = absoluteTime
+		// The playhead should show what you HEAR, so it trails the schedule
+		// position by the output latency. Clamped so it waits at the clip's start
+		// during that first 160ms rather than starting somewhere behind it.
+		currentTime = max(startSourceTime, absoluteTime - session.presentationDelay)
+		// Automation stays on the SCHEDULE position: it shapes audio being rendered
+		// now, not audio already on its way to the speakers.
 		session.updateAutomation(atSourceTime: absoluteTime)
 	}
 

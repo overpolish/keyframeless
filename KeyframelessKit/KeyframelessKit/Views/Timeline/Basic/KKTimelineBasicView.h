@@ -160,6 +160,11 @@ NS_ASSUME_NONNULL_BEGIN
      KKGapIntervalReader _Nonnull intervalReader,
      KKGapIntervalMutator _Nonnull intervalMutator);
 
+/// Clear the active keypose / gap highlight in the graph. Called when the
+/// popover switches to a non-keypose mode (constants) in place, which doesn't
+/// fire the close notification the highlight otherwise clears on.
+- (void)clearPopoverHighlights;
+
 @end
 
 /// Public popover entry points. Declared as a category so the primary
@@ -189,10 +194,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// popover's link toggle.
 - (void)writeAspectLinkedForLabel:(NSString *)label isOn:(BOOL)on;
 - (void)writeGradientTypeForLabel:(NSString *)label type:(NSInteger)type;
-/// Clear the active keypose / gap highlight in the graph. Called when the
-/// popover switches to a non-keypose mode (constants) in place, which doesn't
-/// fire the close notification the highlight otherwise clears on.
-- (void)clearPopoverHighlights;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -131,7 +131,10 @@ enum FCPXMLParser {
 				: ProjectFormat.default.frameDuration,
 			width: isUsable ? width : ProjectFormat.default.width,
 			height: isUsable ? height : ProjectFormat.default.height,
-			sequenceDuration: duration
+			sequenceDuration: duration,
+			tcStart: seq.flatMap {
+				$0.attribute(forName: "tcStart")?.stringValue
+			}.map(parseTime)
 		)
 	}
 
@@ -279,7 +282,7 @@ enum FCPXMLParser {
 					dialogueOnly: dialogueOnly, into: &clips)
 			}
 		case "asset-clip":
-			if isEnabled(el), dialogueOnly ? isDialogue(el) : hasActiveAudio(el),
+			if isEnabled(el), dialogueOnly ? isDialogue(el) : hasActiveAudio(el, assets: assets),
 				!isMuted(el)
 			{
 				clips.append(

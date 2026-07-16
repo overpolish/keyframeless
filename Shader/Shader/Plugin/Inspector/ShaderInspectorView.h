@@ -19,6 +19,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// `ShaderInspectorView` guide categories - import
 /// `ShaderInspectorView+Guides.h` to call them.
 @interface ShaderInspectorView : KKTimelineInspectorView
+
+/// Where this clip starts in TIMELINE seconds (FCP's clock, timecode included).
+/// Pushed from the plugin's render tick - the only place the clip's position on
+/// the timeline surfaces - and combined with the playhead fraction to tell the
+/// mini viewer WHEN it is, so its `// #audio` preview samples the same instant
+/// the viewer shows. Negative = not known yet, which previews as silence rather
+/// than the first frame.
+@property(nonatomic) double clipTimelineStartSec;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -8,6 +8,7 @@
 
 #import "Constants.h"        // ShaderCustomDefaultShaderSource
 #import "KKGLSLTranspiler.h" // GLSL -> MSL + channel binding
+#import "ShaderAudioPool.h"
 #import "ShaderColorSpace.h"
 #import "ShaderCustomShader.h" // ShaderCustomErrorShaderSource
 #import "ShaderTypes.h"
@@ -546,6 +547,13 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   };
   int colorPoolN = ShaderFillColorPool(image, colorPool, values);
   colorPoolN = ShaderFillScalarPool(image, colorPool, colorPoolN, values);
+  // Sampled at the playhead's PROJECT time, pushed by the inspector - the same
+  // instant the viewer is showing, so the preview and the render agree. Still
+  // called when that's unknown (a large negative reads as outside the
+  // spectrogram = silence): the audio members must be COUNTED either way, or
+  // the block's tail goes unwritten and samples whatever the buffer last held.
+  colorPoolN = ShaderFillAudioPool(image, colorPool, colorPoolN,
+                                   self.audioTimelineTimeSec, values);
 
   id<MTLTexture> srcLin = [self _linearSourceView:source];
   // srcLin is linear (FCP's float source, or the sRGB view that linearises the
@@ -580,7 +588,7 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
     present[k] = YES;
     bufTR[k] = KKTranspileGLSLBuffer(bsrc);
     for (int c = k; c < 4; c++)
-      if (bufTR[k].usedChannelMask & (1u << c))
+      if (bufTR[k].declaredChannelMask & (1u << c))
         needsFeedback = YES;
   }
 

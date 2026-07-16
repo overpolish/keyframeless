@@ -53,8 +53,13 @@ typedef struct KKGLSLUniforms {
 // no error (a successful transpile).
 - (BOOL)firstError:(NSString *_Nullable *_Nullable)outMessage
               line:(NSInteger *_Nullable)outLine;
-// Bit i set when iChannel<i> is referenced (and so needs a bound texture).
-@property(nonatomic) NSUInteger usedChannelMask;
+// Bit i set when the wrapped shader DECLARES iChannel<i>, and so must have a
+// texture AND sampler bound for it. Wider than what the user's source
+// references: a generator that never samples iChannel0 still gets it declared
+// so its alpha composites over the footage. Bind against this, not against what
+// the source mentions - Metal tolerates a nil sampler, Metal API Validation
+// aborts.
+@property(nonatomic) NSUInteger declaredChannelMask;
 // The MSL [[texture(n)]] / [[sampler(n)]] index SPIRV-Cross assigned to
 // iChannel<ch>, or NSNotFound when that channel is unused.
 - (NSInteger)textureIndexForChannel:(NSUInteger)ch;

@@ -28,9 +28,10 @@ extension FCPXMLParser {
 		}?.attribute(forName: "ref")?.stringValue
 	}
 
-	/// `dialogueAudioRef` minus the role filter: the ref of any `<audio>`
-	/// belonging directly to `el`, regardless of role. For the all-audio parse.
-	static func anyAudioRef(_ el: XMLElement) -> String? {
+	/// The `<audio>` element supplying this clip's audio, ignoring any nested in
+	/// their own lane clips. It carries both the ref AND the role, so callers
+	/// that need the role must ask this element rather than the wrapper.
+	static func firstAudioElement(_ el: XMLElement) -> XMLElement? {
 		let audios =
 			(try? el.nodes(forXPath: ".//audio"))?.compactMap { $0 as? XMLElement } ?? []
 		return audios.first { audio in
@@ -40,7 +41,13 @@ extension FCPXMLParser {
 				node = n.parent as? XMLElement
 			}
 			return true
-		}?.attribute(forName: "ref")?.stringValue
+		}
+	}
+
+	/// `dialogueAudioRef` minus the role filter: the ref of any `<audio>`
+	/// belonging directly to `el`, regardless of role. For the all-audio parse.
+	static func anyAudioRef(_ el: XMLElement) -> String? {
+		firstAudioElement(el)?.attribute(forName: "ref")?.stringValue
 	}
 
 	/// Returns the set of angle IDs providing audio in a multicam clip,
@@ -71,12 +78,16 @@ extension FCPXMLParser {
 			else { continue }
 			let bookmarkStr = mediaRep.elements(forName: "bookmark").first?.stringValue?
 				.trimmingCharacters(in: .whitespacesAndNewlines)
+			let audioSources =
+				Int(asset.attribute(forName: "audioSources")?.stringValue ?? "0") ?? 0
 			map[id] = AssetResource(
 				url: url,
 				bookmark: bookmarkStr.flatMap {
 					Data(base64Encoded: $0, options: .ignoreUnknownCharacters)
 				},
-				mediaStart: parseTime(asset.attribute(forName: "start")?.stringValue ?? "0s")
+				mediaStart: parseTime(asset.attribute(forName: "start")?.stringValue ?? "0s"),
+				hasAudio: asset.attribute(forName: "hasAudio")?.stringValue == "1"
+					|| audioSources > 0
 			)
 		}
 		return map
@@ -107,7 +118,8 @@ extension FCPXMLParser {
 			auFilters: parseAudioFilters(el, effects: effects),
 			sourceChannels: parseActiveSourceChannels(el),
 			unhandledAdjustments: detectUnhandledAdjustments(el),
-			outer: nil
+			outer: nil,
+			role: roleName(el)
 		)
 	}
 
@@ -120,7 +132,7 @@ extension FCPXMLParser {
 	) {
 		for child in el.children?.compactMap({ $0 as? XMLElement }) ?? [] {
 			if child.name == "asset-clip", isEnabled(child),
-				dialogueOnly ? isDialogue(child) : hasActiveAudio(child)
+				dialogueOnly ? isDialogue(child) : hasActiveAudio(child, assets: assets)
 			{
 				if !isMuted(child) {
 					if let ctx = compound {
@@ -297,7 +309,8 @@ extension FCPXMLParser {
 					auFilters: parseAudioFilters(child, effects: effects),
 					sourceChannels: parseActiveSourceChannels(child),
 					unhandledAdjustments: detectUnhandledAdjustments(child),
-					outer: nil
+					outer: nil,
+					role: connectedRoleName(child)
 				))
 		}
 	}
@@ -357,7 +370,8 @@ extension FCPXMLParser {
 				outer: ctx.outerAuFilters),
 			sourceChannels: parseActiveSourceChannels(child),
 			unhandledAdjustments: detectUnhandledAdjustments(child),
-			outer: ctx.outerCompound(mainStart: window.mainStart))
+			outer: ctx.outerCompound(mainStart: window.mainStart),
+			role: connectedRoleName(child))
 	}
 
 	/// Concatenates inner + outer filter chains. Outer effects (on the

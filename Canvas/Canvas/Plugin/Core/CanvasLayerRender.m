@@ -1553,10 +1553,14 @@ static void CanvasEncodeOneVectorLayer(const CanvasVectorEncodeCtx *ctx,
     dp.revealLeadLen = revealLeadLen;
     dp.revealTrailLen = revealTrailLen;
     [encoder setFragmentBytes:&dp length:sizeof(dp) atIndex:0];
-    if (useGradient)
-      [encoder setFragmentBytes:cv.gradientLUT
-                         length:sizeof(cv.gradientLUT)
-                        atIndex:1];
+    // ALWAYS bound, gradient or not: KKStrokeDashFragment declares `lut` at
+    // buffer(1) unconditionally and only reads it when dp.useGradient != 0, but
+    // Metal requires every declared binding to exist. Leaving it out is a
+    // violation the driver happens to tolerate - and one Metal API Validation
+    // aborts on, so it only showed up under the debugger.
+    [encoder setFragmentBytes:cv.gradientLUT
+                       length:sizeof(cv.gradientLUT)
+                      atIndex:1];
   } else if (useGradient) {
     [encoder setFragmentBytes:cv.gradientLUT
                        length:sizeof(cv.gradientLUT)

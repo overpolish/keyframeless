@@ -9,6 +9,7 @@
 // Type's Shader lanes + the colour swatches). Extracted from Plugin+CustomUI.m
 // (which just returns ShaderBuildAvailableLanes()). One function, cohesive.
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKSpectrogram.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
 #import "Constants.h"        // ShaderCustomDefaultShaderSource
@@ -333,6 +334,87 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
   }
 }
 
+// Append one lane per `// #audio` property: a dropdown of the analyses Sonar
+// has published, read live from the manifest.
+//
+// The options are the published source NAMES, not anything the shader names -
+// the directive only declares the slot. So a shader shared with someone whose
+// Sonar has different sources still opens; they just pick their own.
+//
+// Structural (non-animatable): it selects which data feeds the shader, it isn't
+// a value to keyframe. The audio itself is the animation.
+static inline void ShaderAppendAudioLanes(NSMutableArray<KKLane *> *lanes,
+                                          NSString *source) {
+  ShaderAudioProp props[KK_SHADER_MAX_AUDIO_PROPS];
+  int used = 0;
+  int nProps =
+      ShaderParseAudioProps(source, props, KK_SHADER_MAX_AUDIO_PROPS, 0, &used);
+  if (nProps == 0)
+    return;
+
+  NSArray<NSDictionary<NSString *, id> *> *published =
+      KKSpectrogramPublishedSources();
+  NSMutableArray<NSString *> *options = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *keys = [NSMutableArray array];
+  // "None" first, so an unbound lane has a meaningful value and a shader with
+  // no audio published still renders instead of silently picking something.
+  [options addObject:RLoc(@"None", @"Shader audio source: nothing bound.")];
+  [keys addObject:@0];
+  for (NSDictionary *entry in published) {
+    NSString *name = entry[@"name"];
+    if (![name isKindOfClass:NSString.class] || !name.length)
+      continue;
+    NSString *hash = entry[@"contentHash"];
+    if (![hash isKindOfClass:NSString.class] || !hash.length)
+      hash = entry[@"id"];
+    if (![hash isKindOfClass:NSString.class] || !hash.length)
+      continue;
+    // Always "<name> - <project>": Sonar only dedupes names within a project,
+    // so two projects each publishing a "Dialogue" arrive here identically
+    // named. Naming the project unconditionally also says what the analysis was
+    // generated against, which is the thing you need to know when binding.
+    NSString *project = entry[@"projectName"];
+    NSString *label =
+        ([project isKindOfClass:NSString.class] && project.length)
+            ? [NSString stringWithFormat:@"%@ - %@", name, project]
+            : name;
+    [options addObject:label];
+    [keys addObject:@(ShaderAudioSourceKey(hash))];
+  }
+
+  for (int pi = 0; pi < nProps; pi++) {
+    ShaderAudioProp *p = &props[pi];
+    // Identity = the uniform name (stable across rename/reorder), like every
+    // other directive lane; the label is display-only.
+    KKLane *lane = [KKLane laneWithLabel:@(p->name)];
+    lane.displayLabel = @(p->label);
+    lane.valueType = KKLaneValueTypeFloat;
+    lane.integerValued = YES;
+    lane.animatable = NO;
+    lane.enabled = NO;
+    lane.choiceLabels = options;
+    // Stores the source's stable key, NOT the pill index: the published set
+    // changes between sessions, and an index would mean something different the
+    // moment a source is deleted.
+    lane.choiceValues = keys;
+    // However many sources are published, plus "None" - the set size isn't
+    // knowable at build time, so the pills wrap onto more lines rather than
+    // overflow the row.
+    lane.wrapsChoicePills = YES;
+    // Wide enough for any key: the stored value is a hash now, so clamping to
+    // the choice count would destroy every binding.
+    lane.componentMin = @[ @0.0 ];
+    lane.componentMax = @[ @16777215.0 ];
+    lane.groupKey = @(p->name);
+    // Same "Shader" group as the other dynamic directive lanes - only colours
+    // get their own category.
+    lane.categoryKey = @"Shader";
+    lane.categorySymbol = @"slider.horizontal.3";
+    [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0 ]]];
+    [lanes addObject:lane];
+  }
+}
+
 static inline NSArray<KKLane *> *
 ShaderBuildAvailableLanesForSource(NSString *shaderSource) {
   // Lane order (top-to-bottom default): the Core lanes, then the dynamic colour
@@ -420,6 +502,10 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource) {
   // Dynamic scalar params (`// #float` sliders, `// #choice` pills) declared by
   // the shader, in their own "Shader" group (distinct from Core).
   ShaderAppendScalarLanes(lanes, shaderSource);
+
+  // Dynamic audio bindings (`// #audio`): a dropdown of Sonar's published
+  // analyses per declared spectrum uniform.
+  ShaderAppendAudioLanes(lanes, shaderSource);
 
   // Custom shader source: a full-width code editor row at the bottom of Core.
   // Non-animatable; the text lives in the lane's codeString (not a keypose) and

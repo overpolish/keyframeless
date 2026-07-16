@@ -195,6 +195,11 @@ NS_ASSUME_NONNULL_BEGIN
      KKGapIntervalReader _Nonnull intervalReader,
      KKGapIntervalMutator _Nonnull intervalMutator);
 
+/// Clear the active keypose / gap highlight in the graph. Called when the
+/// popover switches to a non-keypose mode (constants) in place, which doesn't
+/// fire the close notification the highlight otherwise clears on.
+- (void)clearPopoverHighlights;
+
 @end
 
 /// Popover entry points implemented in KKTimelineAdvancedView+Popovers.m.
@@ -228,10 +233,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// Set the radial/linear type on every keypose of the composite-gradient lane
 /// `label`. Routed from the value popover's type pill (keypose editor).
 - (void)writeGradientTypeForLabel:(NSString *)label type:(NSInteger)type;
-/// Clear the active keypose / gap highlight in the graph. Called when the
-/// popover switches to a non-keypose mode (constants) in place, which doesn't
-/// fire the close notification the highlight otherwise clears on.
-- (void)clearPopoverHighlights;
 
 @end
 

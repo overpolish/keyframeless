@@ -61,7 +61,8 @@
 
 // The OSC element set the current shader declares, for the visibility popover /
 // settings cog. Each `osc`-annotated lane is one compound (single element for a
-// point handle; a rotation gizmo is one compound of its master + per-axis rings).
+// point handle; a rotation gizmo is one compound of its master + per-axis
+// rings).
 + (NSArray<NSArray<NSString *> *> *)oscCompoundsForShaderSource:
     (NSString *)source {
   NSMutableArray<NSArray<NSString *> *> *out = [NSMutableArray array];
@@ -337,6 +338,19 @@
                                        bundleForClass:[KKOnScreenControl class]]
                       subdirectory:nil
                       onlyTopicIDs:@[ @"visibility" ]];
+    // Audio-reactive shaders. The docs live in the kit (Sonar publishes the
+    // data, Shader consumes it - neither owns it), so the workflow extension
+    // and every future consumer read the same source. Both topics, not just the
+    // directive: a user asking how to drive a shader from audio needs to know
+    // Sonar exists and that they have to publish first.
+    [KKAIKnowledge
+        registerBundleDocsWithName:@"Audio-Reactive"
+                            bundle:[NSBundle
+                                       bundleForClass:[KKOnScreenControl class]]
+                      subdirectory:nil
+                      onlyTopicIDs:@[
+                        @"audio-sonar", @"audio-shader-directive"
+                      ]];
   });
 
   NSString *productContext = RLoc(

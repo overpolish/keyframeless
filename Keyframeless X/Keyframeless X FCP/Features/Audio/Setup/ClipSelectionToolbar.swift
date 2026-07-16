@@ -11,11 +11,16 @@ struct ClipSelectionToolbar: View {
 	@Binding var selectedClips: Set<Int>
 	var allowedIndices: Set<Int>?
 	var showOverlapsLegend: Bool = false
+	/// Sonar: one filter button per audio role present, so users can analyze
+	/// just the music, just the voice, etc. Off for Steno, where every clip is
+	/// dialogue and a single "Dialogue" button would be noise.
+	var showRoleFilters: Bool = false
 
 	var body: some View {
 		let allowed = allowedIndices ?? Set(clips.indices)
 		let hasMain = allowed.contains { !clips[$0].isCompound }
 		let hasCompound = allowed.contains { clips[$0].isCompound }
+		let roles = showRoleFilters ? rolesPresent(in: allowed) : []
 
 		HStack(spacing: KKSpacingLG) {
 			if showOverlapsLegend {
@@ -36,6 +41,15 @@ struct ClipSelectionToolbar: View {
 					}
 					ToolbarDivider()
 				}
+				ForEach(roles, id: \.self) { role in
+					ClipTypeFilterButton(
+						label: RoleColors.label(for: role) ?? role,
+						color: Color(nsColor: RoleColors.color(for: role))
+					) {
+						selectedClips = allowed.filter { clips[$0].role == role }
+					}
+					ToolbarDivider()
+				}
 				ClipActionButton(
 					label: String(localized: "Select All"),
 					systemImage: "checkmark.rectangle.stack.fill"
@@ -51,6 +65,17 @@ struct ClipSelectionToolbar: View {
 			}
 			.disabled(clips.isEmpty)
 		}
+	}
+
+	/// Distinct roles among the allowed clips, ordered by first appearance on
+	/// the timeline so the buttons stay stable as the selection changes.
+	private func rolesPresent(in allowed: Set<Int>) -> [String] {
+		var seen: [String] = []
+		for i in allowed.sorted() {
+			guard let role = clips[i].role else { continue }
+			if !seen.contains(role) { seen.append(role) }
+		}
+		return seen
 	}
 }
 

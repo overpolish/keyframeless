@@ -19,7 +19,13 @@ NS_ASSUME_NONNULL_BEGIN
 @protected
   ShaderMiniViewerRenderer *_miniViewerRenderer;
   ShaderBrowserController *_browserController;
+  /// Where this clip starts in TIMELINE seconds (FCP's clock, timecode
+  /// included), pushed from the render tick (the only place trims surface).
+  /// Negative = not known yet.
+  double _clipTimelineStartSec;
+  double _playheadFraction;
 }
+
 @end
 
 NS_ASSUME_NONNULL_END

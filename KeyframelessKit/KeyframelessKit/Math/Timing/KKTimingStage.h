@@ -392,6 +392,21 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// metadata; re-asserted via `kkApplyPickerMetadataFrom:`.
 @property(nonatomic) BOOL wrapsChoicePills;
 
+/// Optional per-choice STORED VALUES, parallel to `choiceLabels`. When set, the
+/// lane stores `choiceValues[i]` instead of the selected index `i`.
+///
+/// For a set whose MEMBERSHIP CHANGES between sessions - Shader's `#audio` lane
+/// lists whatever Sonar has published - an index is not a reference: delete one
+/// source and every lane pointing past it silently means something else. A
+/// stable id per choice survives insertion and deletion, and a stored value
+/// with no matching choice reads as "the thing I pointed at is gone" rather
+/// than quietly becoming its neighbour.
+///
+/// Values must be whole numbers exactly representable in a float (|v| < 2^24),
+/// since lane values travel as floats. nil = the value IS the index (the normal
+/// case, where the choices are fixed by the code).
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *choiceValues;
+
 /// When YES the value row presents a single right-aligned CHECKBOX instead of a
 /// number field; the lane's single value is 0 (off) or 1 (on). Pair with
 /// `animatable = NO` + `integerValued = YES` for a structural on/off (e.g. a

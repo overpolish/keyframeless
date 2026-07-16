@@ -5,6 +5,7 @@
 
 #import "KKPluginHost.h"
 #import "KKDataBlob.h"
+#import "KKHostInfo.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKTimelineInspectorView.h"
 #import <FxPlug/FxPlugSDK.h>

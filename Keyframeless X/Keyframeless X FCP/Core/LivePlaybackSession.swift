@@ -6,8 +6,11 @@
 import AVFoundation
 import Foundation
 
-/// Owns the live `AVAudioEngine` + `AVAssetReader` producer for one clip
-/// start. Lives off the main actor. Stop is idempotent.
+/// Owns the `AVAssetReader` producer and player node for one clip start. Lives
+/// off the main actor. Stop is idempotent.
+///
+/// The engine itself belongs to `PlaybackEngine` and outlives every session -
+/// starting one costs ~1s on Bluetooth, so it can't be per-clip.
 ///
 /// Pipeline: reader → downmix to mono → gain/fade → `AudioUnitChain` (raw v2
 /// AUs with state loaded pre-Initialize) → `AVAudioPlayerNode` → mainMixer.
@@ -29,7 +32,6 @@ final class LivePlaybackSession: @unchecked Sendable {
 		let clipSourceDuration: Double
 	}
 
-	private let engine = AVAudioEngine()
 	private let playerNode = AVAudioPlayerNode()
 	private let auChain: AudioUnitChain?
 	private let reader: AVAssetReader
@@ -128,9 +130,7 @@ final class LivePlaybackSession: @unchecked Sendable {
 	}
 
 	private func startEngine() throws {
-		engine.attach(playerNode)
-		engine.connect(playerNode, to: engine.mainMixerNode, format: monoFormat)
-		try engine.start()
+		try PlaybackEngine.shared.add(playerNode, format: monoFormat)
 		playerNode.play()
 	}
 
@@ -143,10 +143,24 @@ final class LivePlaybackSession: @unchecked Sendable {
 		_stopped = true
 		stateLock.unlock()
 		playerNode.stop()
-		if engine.isRunning { engine.stop() }
-		engine.detach(playerNode)
+		PlaybackEngine.shared.remove(playerNode)
 		reader.cancelReading()
 		resolvedURL.stopAccess()
+	}
+
+	/// Seconds between audio being handed to the engine and it reaching the
+	/// speakers.
+	///
+	/// `elapsedSeconds` reports the player node's schedule position, so anything
+	/// showing it as "where playback is" runs ahead of what you hear by this much
+	/// - 160ms on Bluetooth output, which is very visible against a waveform.
+	///
+	/// `playerNode.outputPresentationLatency` alone: `engine.outputNode
+	/// .presentationLatency` reports the SAME device buffer from the other end, so
+	/// adding them double-counts it. An AU chain's own latency does add, since it
+	/// delays the audio before it's ever scheduled.
+	var presentationDelay: Double {
+		(auChain?.latencySeconds ?? 0) + playerNode.outputPresentationLatency
 	}
 
 	func elapsedSeconds() -> Double? {

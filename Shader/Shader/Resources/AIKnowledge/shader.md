@@ -6,6 +6,7 @@ summary: What Shader does
 - Shader runs a **Shadertoy-style GLSL shader** on a clip. Apply it to footage from the Effects browser and the shader can read that clip (as `iChannel0`) and process it - blur, displace, tint, feed it through a simulation - or ignore it and draw a procedural look over it. To use it as a pure generator (nothing underneath), apply it to an adjustment layer or a solid. Everything animates on the keyframeless timeline, so the Timing sections (Basic, Advanced, easing, motion blur) apply to every control.
 - The look is entirely defined by the **shader code** you paste or write - see the custom-shader doc for the shader language, built-in inputs (`iTime`, `iChannel0`, ...), and multi-pass buffers.
 - A shader exposes **its own controls** (sliders, colours, points, on-screen handles) by annotating its uniforms with `// #` directives - see the directives doc.
+- A shader can **react to the audio in your project** with the `#audio` directive: publish the music or dialogue from Sonar (the free tab in Keyframeless X), pick it from the shader's menu, and the look moves to it - on playback and in the export. See the audio-sonar and audio-shader-directive docs.
 
 ## Shared controls (always present)
 

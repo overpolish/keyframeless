@@ -24,6 +24,55 @@ class AudioModel: ObservableObject {
 	/// alongside `audioClips` at import so the spectrogram analyzer sees the full
 	/// mix with the same media access. Not used by transcription.
 	@Published var allAudioClips: [FCPXMLParser.AudioClip] = []
+	/// Sonar's own clip selection - indexes into `allAudioClips`, so it can't
+	/// share Steno's `selectedClips` (which indexes into dialogue-only
+	/// `audioClips`). Drives which audio gets analyzed, letting users visualize
+	/// just the music, just the voice, etc.
+	@Published var sonarSelectedClips: Set<Int> = []
+	/// Clips dropped from `allAudioClips` because their media isn't on disk.
+	/// Kept by name so Sonar can say what it left out.
+	@Published var excludedClipNames: [String] = []
+	/// Identity of `allAudioClips`, recomputed only here - the one place the
+	/// clips change. Fingerprinting is far too expensive to do inside a SwiftUI
+	/// body, which re-evaluates on every unrelated state change.
+	@Published var allClipsSignature: String = ""
+	/// The tab that was open, restored with everything else so reopening the
+	/// extension lands where you left it rather than always on Steno.
+	@Published var selectedTab: AppTab = .audio
+
+	/// Populates the model from a dropped FCPXML. Shared by the Steno setup drop
+	/// and the Sonar drop so both tabs load the same project (the model is shared
+	/// across tabs, so a drop in either updates both).
+	func load(from doc: XMLDocument) {
+		audioClips = FCPXMLParser.audioClips(in: doc)
+		let all = FCPXMLParser.audioClips(in: doc, dialogueOnly: false)
+		// Media that isn't there can't be analyzed, so it has no business on the
+		// timeline taking up a row and a selection slot. Caught here with a stat
+		// rather than at decode time, so these clips never reach the analyzer.
+		allAudioClips = all.filter(Self.mediaExists)
+		excludedClipNames = all.filter { !Self.mediaExists($0) }.map(\.name)
+		allClipsSignature = allAudioClips.map(AudioClipFingerprint.of).joined(separator: "\n")
+		// Sonar defaults to the whole project; users narrow it down by role.
+		sonarSelectedClips = Set(allAudioClips.indices)
+		selectedClips = []
+		editSelectedClips = nil
+		dropItems = FCPXMLParser.topLevelItems(in: doc)
+		let fmt = FCPXMLParser.projectFormat(in: doc) ?? .default
+		projectFormat = fmt
+		exportWidth = "\(fmt.width)"
+		exportHeight = "\(fmt.height)"
+		exportFramerate = Framerate.from(frameDuration: fmt.frameDuration)
+		exportSettingsInitialized = true
+		useTimecode = !fmt.fpsDisplay.isEmpty
+	}
+
+	/// A clip with no resolvable URL, or one whose file has moved since the edit,
+	/// can never be read - FCP resolves such media internally, but we only have
+	/// the FCPXML's path.
+	private static func mediaExists(_ clip: FCPXMLParser.AudioClip) -> Bool {
+		guard let url = clip.url else { return false }
+		return FileManager.default.fileExists(atPath: url.path)
+	}
 	@Published var selectedClips: Set<Int> = []
 	@Published var editSelectedClips: Set<Int>?
 	@Published var dropItems: [FCPXMLParser.DropItem] = []
@@ -340,6 +389,13 @@ class AudioModel: ObservableObject {
 		var projectFormat: FCPXMLParser.ProjectFormat?
 		var audioClips: [FCPXMLParser.AudioClip]
 		var selectedClips: [Int]
+		/// Sonar's half of the drop. Optional so a state file written before Sonar
+		/// existed still decodes - a non-optional field would throw and silently
+		/// wipe Steno's restored project too.
+		var allAudioClips: [FCPXMLParser.AudioClip]?
+		var sonarSelectedClips: [Int]?
+		var excludedClipNames: [String]?
+		var selectedTab: AppTab?
 		var editSelectedClips: [Int]?
 		var dropItems: [FCPXMLParser.DropItem]
 		var useTimecode: Bool
@@ -375,6 +431,13 @@ class AudioModel: ObservableObject {
 		projectFormat = state.projectFormat
 		audioClips = state.audioClips
 		selectedClips = Set(state.selectedClips)
+		allAudioClips = state.allAudioClips ?? []
+		sonarSelectedClips = Set(state.sonarSelectedClips ?? [])
+		excludedClipNames = state.excludedClipNames ?? []
+		selectedTab = state.selectedTab ?? .audio
+		// Recomputed rather than stored: it's derived from the clips, and a
+		// persisted copy could disagree with them after a decode.
+		allClipsSignature = allAudioClips.map(AudioClipFingerprint.of).joined(separator: "\n")
 		editSelectedClips = state.editSelectedClips.map(Set.init)
 		dropItems = state.dropItems
 		useTimecode = state.useTimecode
@@ -408,6 +471,10 @@ class AudioModel: ObservableObject {
 			projectFormat: projectFormat,
 			audioClips: audioClips,
 			selectedClips: Array(selectedClips),
+			allAudioClips: allAudioClips,
+			sonarSelectedClips: Array(sonarSelectedClips),
+			excludedClipNames: excludedClipNames,
+			selectedTab: selectedTab,
 			editSelectedClips: editSelectedClips.map(Array.init),
 			dropItems: dropItems,
 			useTimecode: useTimecode,

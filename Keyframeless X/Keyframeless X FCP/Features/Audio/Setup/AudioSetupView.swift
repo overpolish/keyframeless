@@ -96,19 +96,7 @@ struct AudioSetupView: View {
 	}
 
 	private func handleDrop(_ doc: XMLDocument) {
-		let clips = FCPXMLParser.audioClips(in: doc)
-		model.audioClips = clips
-		model.allAudioClips = FCPXMLParser.audioClips(in: doc, dialogueOnly: false)
-		model.selectedClips = []
-		model.editSelectedClips = nil
-		model.dropItems = FCPXMLParser.topLevelItems(in: doc)
-		let fmt = FCPXMLParser.projectFormat(in: doc) ?? .default
-		model.projectFormat = fmt
-		model.exportWidth = "\(fmt.width)"
-		model.exportHeight = "\(fmt.height)"
-		model.exportFramerate = Framerate.from(frameDuration: fmt.frameDuration)
-		model.exportSettingsInitialized = true
-		model.useTimecode = !fmt.fpsDisplay.isEmpty
+		model.load(from: doc)
 		dropState = .dropped
 		isTargeted = false
 		timelineLoadID = UUID()

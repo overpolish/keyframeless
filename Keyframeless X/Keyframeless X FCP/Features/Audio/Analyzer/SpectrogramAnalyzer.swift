@@ -5,7 +5,6 @@
 
 import AVFoundation
 import Accelerate
-import AppKit
 import Foundation
 
 /// Turns a set of timeline `AudioClip`s into a timeline-indexed spectrogram:
@@ -23,16 +22,55 @@ enum SpectrogramAnalyzer {
 	struct Config {
 		var fftSize: Int = 2048
 		var hopSeconds: Double = 1.0 / 60.0
-		var numBands: Int = 64
+		var numBands: Int = 128
 		var minHz: Double = 30
 		var maxHz: Double = 16_000
 		/// Everything is downmixed to mono and resampled to this rate first.
 		var analysisSampleRate: Double = 48_000
+		/// dB window mapped onto 0...1, with 0 dB being a full-scale sine.
+		/// At/below `floorDB` reads black, at/above `ceilingDB` reads full
+		/// brightness. Music rarely peaks near 0 dB in any single band once the
+		/// energy is spread across the spectrum, hence the negative ceiling -
+		/// widen the window if the picture looks flat, tighten it if it blooms.
+		var floorDB: Float = -85
+		var ceilingDB: Float = -15
 	}
 
+	/// A finished analysis, plus the clips that couldn't be read.
+	///
+	/// Unreadable clips are reported rather than thrown, because media going
+	/// missing is an ordinary state for an FCP project - a file moved after the
+	/// edit, a drive unplugged - and it shouldn't cost you the other 34 clips'
+	/// worth of spectrogram.
+	struct Analysis {
+		let spectrogram: Spectrogram
+		let skipped: [String]
+	}
+
+	enum AnalysisError: LocalizedError {
+		case allClipsUnreadable([String])
+
+		var errorDescription: String? {
+			switch self {
+			case .allClipsUnreadable(let names):
+				let list = names.prefix(3).joined(separator: ", ")
+				let more = names.count > 3 ? " +\(names.count - 3) more" : ""
+				return String(
+					localized:
+						"Couldn't read any selected audio - the media may have moved (\(list)\(more))"
+				)
+			}
+		}
+	}
+
+	/// PROJECT-relative, like `clip.start` and like Sonar's own timeline: frame 0
+	/// is the project's first frame. The project's start timecode is added at
+	/// PUBLISH time (`SonarSourceStore`), because that's where the data crosses
+	/// into FCP's clock - keying the in-app model to 7200 would draw the preview
+	/// two hours off the right of the canvas.
 	static func analyze(
 		clips: [FCPXMLParser.AudioClip], config: Config = Config()
-	) async throws -> Spectrogram {
+	) async throws -> Analysis {
 		let timelineStart = 0.0
 		let timelineEnd = clips.map(\.end).max() ?? 0
 		let hop = config.hopSeconds
@@ -45,22 +83,55 @@ enum SpectrogramAnalyzer {
 		let sr = config.analysisSampleRate
 		let bandEdges = logBandEdges(config: config, sampleRate: sr)
 
+		var skipped: [String] = []
+		// Decode first, assemble after. Holding an unsafe pointer into `grid`
+		// across an `await` isn't allowed, so the placement pass runs on its own
+		// once every clip's frames are in hand.
+		var decoded: [(startFrame: Int, frames: [[Float]])] = []
 		for clip in clips {
-			let url = try await ProcessedAudioRenderer.shared.renderedURL(for: clip)
-			guard let mono = try readMono(url: url, targetSampleRate: sr), !mono.isEmpty
-			else { continue }
-
-			let clipFrames = stft(
-				samples: mono, config: config, bandEdges: bandEdges, sampleRate: sr)
-
-			let startFrame = Int(((clip.start - timelineStart) / hop).rounded())
-			for (i, bands) in clipFrames.enumerated() {
-				let f = startFrame + i
-				guard f >= 0, f < numFrames else { continue }
-				let base = f * numBands
-				for b in 0..<numBands { grid[base + b] += bands[b] }
-				counts[f] += 1
+			// Lets a superseded run stop mid-analysis instead of finishing work
+			// whose result is already stale.
+			try Task.checkCancellation()
+			// Per-clip failures are contained here. A clip whose media has moved
+			// throws out of `renderedURL`; letting that escape the loop would sink
+			// the whole analysis for one dead path.
+			let clipFrames: [[Float]]?
+			do {
+				clipFrames = try await frames(for: clip, config: config, bandEdges: bandEdges)
+			} catch {
+				skipped.append(clip.name)
+				continue
 			}
+			guard let clipFrames else {
+				skipped.append(clip.name)
+				continue
+			}
+			decoded.append(
+				(Int(((clip.start - timelineStart) / hop).rounded()), clipFrames))
+		}
+
+		grid.withUnsafeMutableBufferPointer { g in
+			counts.withUnsafeMutableBufferPointer { c in
+				guard let gBase = g.baseAddress else { return }
+				let n = vDSP_Length(numBands)
+				for (startFrame, frames) in decoded {
+					for (i, bands) in frames.enumerated() {
+						let f = startFrame + i
+						guard f >= 0, f < numFrames else { continue }
+						let base = f * numBands
+						bands.withUnsafeBufferPointer { b in
+							guard let bBase = b.baseAddress else { return }
+							vDSP_vadd(gBase + base, 1, bBase, 1, gBase + base, 1, n)
+						}
+						c[f] += 1
+					}
+				}
+			}
+		}
+		// Every clip failing is a real failure, not a partial one - publishing an
+		// empty grid would look like silent audio rather than a broken project.
+		if skipped.count == clips.count, !clips.isEmpty {
+			throw AnalysisError.allClipsUnreadable(skipped)
 		}
 
 		// Average frames that several clips wrote into.
@@ -70,26 +141,38 @@ enum SpectrogramAnalyzer {
 			for b in 0..<numBands { grid[base + b] *= inv }
 		}
 
-		return Spectrogram(
-			numFrames: numFrames, numBands: numBands, hopSeconds: hop,
-			timelineStart: timelineStart, data: grid)
+		return Analysis(
+			spectrogram: Spectrogram(
+				numFrames: numFrames, numBands: numBands, hopSeconds: hop,
+				timelineStart: timelineStart, data: grid),
+			skipped: skipped)
 	}
 
-	/// Convenience for Phase-1 verification: parse an exported .fcpxml, analyze
-	/// every audio clip it contains, and write a PNG dump. Returns the
-	/// `Spectrogram` so a caller can inspect it too.
-	@discardableResult
-	static func analyzeAndDump(
-		fcpxmlURL: URL, outPNG: URL, config: Config = Config()
-	) async throws -> Spectrogram {
-		let doc = try XMLDocument(contentsOf: fcpxmlURL, options: [.nodePreserveWhitespace])
-		let clips = FCPXMLParser.audioClips(in: doc, dialogueOnly: false)
-		let spec = try await analyze(clips: clips, config: config)
-		try spec.writePNG(to: outPNG)
-		return spec
-	}
+	/// Per-clip STFT frames, cached. Reconstructing a clip's processed audio is
+	/// the expensive half (`ProcessedAudioRenderer` caches that too); caching the
+	/// FFT output as well means re-assembling the timeline for a *different
+	/// selection* is just array copying - cheap enough to regenerate the preview
+	/// live rather than making the user press a button again.
+	private static func frames(
+		for clip: FCPXMLParser.AudioClip, config: Config, bandEdges: [Int]
+	) async throws -> [[Float]]? {
+		let key = [
+			AudioClipFingerprint.of(clip), "\(config.fftSize)", "\(config.hopSeconds)",
+			"\(config.numBands)", "\(config.analysisSampleRate)",
+		].joined(separator: "|")
+		if let cached = await SpectrogramFrameCache.shared.frames(key) { return cached }
 
-	// MARK: - Audio read (mono, resampled)
+		let url = try await ProcessedAudioRenderer.shared.renderedURL(for: clip)
+		guard
+			let mono = try readMono(url: url, targetSampleRate: config.analysisSampleRate),
+			!mono.isEmpty
+		else { return nil }
+		let computed = stft(
+			samples: mono, config: config, bandEdges: bandEdges,
+			sampleRate: config.analysisSampleRate)
+		await SpectrogramFrameCache.shared.store(computed, for: key)
+		return computed
+	}
 
 	private static func readMono(url: URL, targetSampleRate: Double) throws -> [Float]? {
 		let file = try AVAudioFile(forReading: url)
@@ -129,8 +212,6 @@ enum SpectrogramAnalyzer {
 		return Array(UnsafeBufferPointer(start: ptr, count: n))
 	}
 
-	// MARK: - STFT
-
 	/// Bin-index edges (length numBands+1) for log-spaced frequency bands.
 	private static func logBandEdges(config: Config, sampleRate: Double) -> [Int] {
 		let half = config.fftSize / 2
@@ -157,6 +238,13 @@ enum SpectrogramAnalyzer {
 		vDSP_hann_window(&window, vDSP_Length(n), Int32(vDSP_HANN_NORM))
 		let hopSamples = max(1, Int(config.hopSeconds * sampleRate))
 
+		// `vDSP_fft_zrip` is unnormalised and returns twice the DFT, so a raw bin
+		// is ~N times too hot (that's what turned the picture into one bright
+		// blob). Undo that, and the Hann window's 0.5 coherent gain with it, so a
+		// full-scale sine lands at ~1.0 == 0 dB.
+		let magScale = Float(2) / Float(n)
+		let span = max(0.0001, config.ceilingDB - config.floorDB)
+
 		var frames: [[Float]] = []
 		var windowed = [Float](repeating: 0, count: n)
 		var pos = 0
@@ -170,11 +258,12 @@ enum SpectrogramAnalyzer {
 			for b in 0..<config.numBands {
 				let lo = min(max(bandEdges[b], 0), half - 1)
 				let hi = max(lo + 1, min(bandEdges[b + 1], half))
-				var sum: Float = 0
-				for k in lo..<hi { sum += mag[k] }
-				let avg = sum / Float(hi - lo)
-				let db = 20 * log10f(max(avg, 1e-9))
-				bands[b] = max(0, min(1, (db + 80) / 80))  // -80..0 dB -> 0..1
+				// Peak, not mean: log-spaced bands get wide up top, and averaging
+				// buries a pure tone among its quiet neighbours.
+				var peak: Float = 0
+				for k in lo..<hi { peak = max(peak, mag[k]) }
+				let db = 20 * log10f(max(peak * magScale, 1e-9))
+				bands[b] = max(0, min(1, (db - config.floorDB) / span))
 			}
 			frames.append(bands)
 			pos += hopSamples
@@ -204,42 +293,12 @@ enum SpectrogramAnalyzer {
 	}
 }
 
-/// Timeline-indexed spectrogram: `data` is row-major `[frame][band]` in 0...1,
-/// frame `f` corresponds to timeline second `timelineStart + f*hopSeconds`.
-struct Spectrogram {
-	let numFrames: Int
-	let numBands: Int
-	let hopSeconds: Double
-	let timelineStart: Double
-	var data: [Float]
+/// Caches per-clip STFT frames, keyed by the clip's fingerprint + analysis
+/// settings, so changing the selection re-assembles instead of re-decoding.
+actor SpectrogramFrameCache {
+	static let shared = SpectrogramFrameCache()
+	private var cache: [String: [[Float]]] = [:]
 
-	func value(frame: Int, band: Int) -> Float {
-		data[frame * numBands + band]
-	}
-
-	/// Writes a grayscale PNG (x = time, y = frequency band, low freq at the
-	/// bottom) so the result can be checked by eye.
-	func writePNG(to url: URL) throws {
-		let w = max(1, numFrames)
-		let h = max(1, numBands)
-		guard
-			let rep = NSBitmapImageRep(
-				bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h,
-				bitsPerSample: 8, samplesPerPixel: 1, hasAlpha: false, isPlanar: false,
-				colorSpaceName: .deviceWhite, bytesPerRow: w, bitsPerPixel: 8),
-			let pixels = rep.bitmapData
-		else { throw CocoaError(.fileWriteUnknown) }
-
-		for f in 0..<numFrames {
-			for b in 0..<numBands {
-				let y = numBands - 1 - b  // low frequencies at the bottom
-				pixels[y * w + f] = UInt8(max(0, min(255, value(frame: f, band: b) * 255)))
-			}
-		}
-
-		guard let png = rep.representation(using: .png, properties: [:]) else {
-			throw CocoaError(.fileWriteUnknown)
-		}
-		try png.write(to: url)
-	}
+	func frames(_ key: String) -> [[Float]]? { cache[key] }
+	func store(_ frames: [[Float]], for key: String) { cache[key] = frames }
 }

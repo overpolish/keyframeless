@@ -191,6 +191,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   KKCodeEditorView *_codeEditor;    // code lanes only; re-synced by applyLane:
   KKPillToggleRowView *_choicePill; // grouped radio pill, choiceLabels only
   NSArray<NSString *> *_choiceLabels; // English identifiers (count >= 2)
+  NSArray<NSNumber *> *_choiceValues; // stored value per choice (nil = index)
   NSArray<NSImage *> *_choiceIcons;   // optional per-choice glyphs (display)
   BOOL _wrapsChoicePills;             // pill wraps to multiple lines
   NSLayoutConstraint *_pillWidthConstraint; // wrapping pill width (= wrapW)
@@ -705,6 +706,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   _laneScrubStep = lane.scrubStep;
   _seedField = lane.seedField;
   _choiceLabels = [lane.choiceLabels copy];
+  _choiceValues = [lane.choiceValues copy];
   _choiceIcons = [lane.choiceIcons copy];
   _isToggle = lane.isToggle;
   _autoSizesComponentLabels = lane.autoSizesComponentLabels;
@@ -977,8 +979,17 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     _choicePill.translatesAutoresizingMaskIntoConstraints = NO;
     __weak typeof(self) weak = self;
     _choicePill.onToggled = ^(NSInteger index, BOOL isOn) {
-      if (isOn)
-        [weak _setValues:@[ @((double)index) ] emit:YES];
+      if (!isOn)
+        return;
+      // `choiceValues` maps the pill's index onto what the lane actually
+      // stores, so a lane whose choices come and go can hold a stable id
+      // instead of a position.
+      typeof(self) strong = weak;
+      NSArray<NSNumber *> *vals = strong->_choiceValues;
+      double stored = (index >= 0 && index < (NSInteger)vals.count)
+                          ? vals[index].doubleValue
+                          : (double)index;
+      [strong _setValues:@[ @(stored) ] emit:YES];
     };
     [self addSubview:_choicePill];
     [NSLayoutConstraint activateConstraints:@[
@@ -1520,6 +1531,17 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     _seedView.seed = (uint32_t)llround(_values[0].doubleValue);
   if (_choicePill && _values.count) {
     NSInteger sel = (NSInteger)llround(_values[0].doubleValue);
+    if (_choiceValues.count) {
+      // Stored value -> pill. No match means the choice it named is gone; every
+      // pill goes off rather than lighting up whatever now sits at that index.
+      sel = -1;
+      for (NSInteger i = 0; i < (NSInteger)_choiceValues.count; i++)
+        if (llround(_choiceValues[i].doubleValue) ==
+            llround(_values[0].doubleValue)) {
+          sel = i;
+          break;
+        }
+    }
     for (NSInteger i = 0; i < (NSInteger)_choiceLabels.count; i++)
       [_choicePill setState:(i == sel) atIndex:i];
   }

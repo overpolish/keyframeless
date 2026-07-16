@@ -23,19 +23,20 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 
 ## Control kinds
 
-| Directive  | Uniform type       | Inspector control         | What the shader receives                           |
-| ---------- | ------------------ | ------------------------- | -------------------------------------------------- |
-| `#color`   | `vec4 n;`          | colour swatch             | `vec4` RGBA (from the Colours-style swatch)        |
-| `#color`   | `vec4 n[N];`       | palette bar (up to N)     | `vec4 n[N]` + `nCount` (int) active count          |
-| `#float`   | `float n;`         | slider                    | the raw value                                      |
-| `#percent` | `float n;`         | slider shown as `%`       | **0..1** (the inspector shows 0-100%)              |
-| `#int`     | `float n;`         | integer slider            | `int`                                              |
-| `#seed`    | `float n;`         | dice/seed field (no anim) | the raw integer value                              |
-| `#angle`   | `float n;`         | rotation dial (degrees)   | **radians, negated** (`radians(-deg)`)             |
-| `#bool`    | `bool n;`          | checkbox                  | `bool`                                             |
-| `#choice`  | `int n;`           | segmented pills           | `int` selected index (0-based)                     |
-| `#point`   | `vec2 n;`          | 2D point                  | pixels (`value * iResolution.xy`, fragCoord space) |
-| `#multi`   | `vec2` / `vec3 n;` | N-component field         | the raw vector                                     |
+| Directive  | Uniform type       | Inspector control         | What the shader receives                            |
+| ---------- | ------------------ | ------------------------- | --------------------------------------------------- |
+| `#color`   | `vec4 n;`          | colour swatch             | `vec4` RGBA (from the Colours-style swatch)         |
+| `#color`   | `vec4 n[N];`       | palette bar (up to N)     | `vec4 n[N]` + `nCount` (int) active count           |
+| `#float`   | `float n;`         | slider                    | the raw value                                       |
+| `#percent` | `float n;`         | slider shown as `%`       | **0..1** (the inspector shows 0-100%)               |
+| `#int`     | `float n;`         | integer slider            | `int`                                               |
+| `#seed`    | `float n;`         | dice/seed field (no anim) | the raw integer value                               |
+| `#angle`   | `float n;`         | rotation dial (degrees)   | **radians, negated** (`radians(-deg)`)              |
+| `#bool`    | `bool n;`          | checkbox                  | `bool`                                              |
+| `#choice`  | `int n;`           | segmented pills           | `int` selected index (0-based)                      |
+| `#point`   | `vec2 n;`          | 2D point                  | pixels (`value * iResolution.xy`, fragCoord space)  |
+| `#multi`   | `vec2` / `vec3 n;` | N-component field         | the raw vector                                      |
+| `#audio`   | `vec4 n[N];`       | audio source picker       | live spectrum via `nBand(i)` + `nBands` (see below) |
 
 The uniform TYPE is folded away by the compiler - you use `uAmount` directly as a `float`, `uColor` as a `vec4`, etc. A mistyped uniform type is tolerated (the `#`-kind wins), so `#int` over a `uniform float` still delivers an int.
 
@@ -46,6 +47,19 @@ The uniform TYPE is folded away by the compiler - you use `uAmount` directly as 
 - `default=` - starting value. `#point` / `#multi` take `default="x,y"` / `default="a,b,c"`.
 - `#choice` adds `options="One,Two,Three"` (the pill labels; `default=` is the 0-based index).
 - `#multi` adds `fields={Width,Height}` (names + counts the components) and `lockaspect` (components aspect-linked, ratio preserved on an OSC drag).
+
+### `#audio` is the odd one out
+
+Every other directive builds a keyframeable lane whose value you set. `#audio` doesn't: its lane is a **picker** listing the audio a user has published from Sonar, and the value arrives from that audio, frame by frame.
+
+```glsl
+// #audio label="Music"
+uniform vec4 uMusic[16];
+```
+
+Read it with the generated `uMusicBand(i)` (band `i`, roughly `0...1`, low frequency first) and `uMusicBands` (how many there are, 4 per `vec4`), never by indexing the `vec4` packing by hand. It takes `label=` and `smooth=<seconds>` (default `0.08`). Two per shader, up to 24 `vec4`s each.
+
+Nothing picked reads as silence rather than an error, so a shader with an unbound `#audio` still renders. See `audio-shader-directive` for shaping the levels into something that looks good, and `audio-sonar` for how a user publishes the audio in the first place.
 
 ## On-screen controls (`osc`)
 

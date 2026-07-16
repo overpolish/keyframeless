@@ -40,20 +40,63 @@ extension FCPXMLParser {
 		return !effectiveRoles.contains(where: { $0.hasPrefix("effects") })
 	}
 
+	/// The clip's effective audio role, reduced to its base name ("dialogue",
+	/// "music", "effects", or a custom role); nil when the clip has no active
+	/// audio role. Resolution mirrors `isDialogue`: an active
+	/// `audio-channel-source` role overrides the clip's top-level `audioRole`
+	/// (which often lingers as a stale import default).
+	static func roleName(_ el: XMLElement) -> String? {
+		let channelSources = el.elements(forName: "audio-channel-source")
+		let activeSources = channelSources.filter {
+			$0.attribute(forName: "active")?.stringValue != "0"
+		}
+		if !channelSources.isEmpty && activeSources.isEmpty { return nil }
+		let topRole = el.attribute(forName: "audioRole")?.stringValue ?? ""
+		let channelRoles = activeSources.compactMap {
+			$0.attribute(forName: "role")?.stringValue
+		}.filter { !$0.isEmpty }
+		let effective = channelRoles.first ?? topRole
+		guard !effective.isEmpty else { return nil }
+		// "dialogue.dialogue-1" -> "dialogue"; custom roles carry no subrole.
+		return effective.split(separator: ".").first.map(String.init) ?? effective
+	}
+
+	/// Role for a connected `<clip>`, whose audio comes from a nested `<audio>`
+	/// element.
+	///
+	/// The wrapper has no `audioRole` of its own - the role lives on the `<audio>`
+	/// element (`role="dialogue.dialogue-1"`). Asking the wrapper returns nil,
+	/// which is why these clips drew in the "no roles" grey despite being
+	/// perfectly ordinary dialogue.
+	static func connectedRoleName(_ el: XMLElement) -> String? {
+		if let role = roleName(el) { return role }
+		guard let role = firstAudioElement(el)?.attribute(forName: "role")?.stringValue,
+			!role.isEmpty
+		else { return nil }
+		// "dialogue.dialogue-1" -> "dialogue"; custom roles carry no subrole.
+		return role.split(separator: ".").first.map(String.init) ?? role
+	}
+
 	/// `isDialogue` minus the role filter: true when the clip has audio that
 	/// isn't explicitly disabled, regardless of role (dialogue / music /
 	/// effects). Used by the all-audio parse (`dialogueOnly: false`) that feeds
 	/// the spectrogram analyzer.
-	static func hasActiveAudio(_ el: XMLElement) -> Bool {
+	/// Whether this clip contributes audio worth analysing.
+	///
+	/// The asset is the authority: a video-only clip declares no `hasAudio` /
+	/// `audioSources`, and asking the clip element alone can't tell - it looks
+	/// identical to one whose audio is simply left at defaults. An unknown ref
+	/// counts as no audio, since a clip we can't resolve to media can't be read
+	/// anyway.
+	static func hasActiveAudio(_ el: XMLElement, assets: [String: AssetResource]) -> Bool {
+		guard let ref = el.attribute(forName: "ref")?.stringValue,
+			assets[ref]?.hasAudio == true
+		else { return false }
 		let channelSources = el.elements(forName: "audio-channel-source")
-		if !channelSources.isEmpty {
-			return channelSources.contains {
-				$0.attribute(forName: "active")?.stringValue != "0"
-			}
+		guard !channelSources.isEmpty else { return true }
+		return channelSources.contains {
+			$0.attribute(forName: "active")?.stringValue != "0"
 		}
-		// No explicit channel sources: assume the asset carries audio. Video-only
-		// clips fall through harmlessly (extraction yields nothing, analyzer skips).
-		return true
 	}
 
 	/// Ref-clips can disable a contained subrole via `<audio-role-source role="..." active="0"/>`.

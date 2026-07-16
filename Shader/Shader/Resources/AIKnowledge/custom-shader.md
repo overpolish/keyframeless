@@ -36,7 +36,9 @@ Use them exactly as on Shadertoy:
 
 **Source footage on `iChannel0`:** Shader is a Final Cut effect, so the clip it's applied to is bound to `iChannel0`. A pasted shader that samples `iChannel0` (e.g. `texture(iChannel0, uv)`) processes your footage - blur, displace, tint, feed it into a reaction-diffusion, etc. Apply Shader to an **adjustment layer** to run the shader over everything beneath it. `iChannel1`..`iChannel3` still read procedural noise.
 
-**Not supported yet:** extra image/video inputs beyond the source (you can't wire `iChannel1-3` to your own separate media - they read noise or a buffer), cubemaps, audio, and keyboard input.
+**Audio works, but not the Shadertoy way.** Shadertoy binds audio to an `iChannel` as a texture (row 0 the spectrum, row 1 the waveform), and that isn't supported - a pasted Shadertoy music visualiser reads noise from its channel and needs an edit. Shader instead has the `#audio` directive, which binds the audio a user published from Sonar and reads it as `uMusicBand(i)`. The port is usually small: swap the `texture(iChannel0, vec2(x, 0.0)).r` spectrum lookup for `uMusicBand(int(x * float(uMusicBands)))`. Unlike Shadertoy's, it stays in sync on export. See `directives` and `audio-shader-directive`.
+
+**Not supported yet:** extra image/video inputs beyond the source (you can't wire `iChannel1-3` to your own separate media - they read noise or a buffer), cubemaps, an audio waveform (`#audio` gives the spectrum, not raw samples), and keyboard input.
 
 ## Multi-pass (tabs: Common + Buffer A-D)
 
