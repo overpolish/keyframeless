@@ -7,7 +7,7 @@
 #import "Constants.h"
 #import "OSC_Internal.h"
 #import "Plugin_Private.h"    // +availableLanesForShaderSource:
-#import "ShaderColorSpace.h"  // ShaderParseScalarProps (osc directives)
+#import "ShaderDirectives.h"  // ShaderParseScalarProps (osc directives)
 #import "ShaderOSCSnapshot.h" // KKProcessTimelineSnapshot via the kit
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KeyframelessKit.h>

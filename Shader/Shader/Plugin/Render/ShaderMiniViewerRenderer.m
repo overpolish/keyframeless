@@ -9,8 +9,8 @@
 #import "Constants.h"        // ShaderCustomDefaultShaderSource
 #import "KKGLSLTranspiler.h" // GLSL -> MSL + channel binding
 #import "ShaderAudioPool.h"
-#import "ShaderColorSpace.h"
 #import "ShaderCustomShader.h" // ShaderCustomErrorShaderSource
+#import "ShaderDirectives.h"
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KeyframelessKit.h>

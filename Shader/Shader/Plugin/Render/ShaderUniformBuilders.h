@@ -8,15 +8,15 @@
 // Per-Type uniform builders shared by the FCP render (Plugin+Render.m) and the
 // mini-viewer (ShaderMiniViewerRenderer.m). Both paths used to fill the same
 // struct twice from the same lanes; now each Type has ONE builder here. A
-// `ShaderLaneReader` block abstracts where the lane values come from: the render
-// wraps ShaderLaneValuesAtFraction(timeline, label, frac); the mini wraps
-// [self valuesForLabel:label]. The shared transforms + grain live in
+// `ShaderLaneReader` block abstracts where the lane values come from: the
+// render wraps ShaderLaneValuesAtFraction(timeline, label, frac); the mini
+// wraps [self valuesForLabel:label]. The shared transforms + grain live in
 // ShaderCommonUniforms (built separately), so these builders only fill each
 // Type's own fields.
 
 #import <Foundation/Foundation.h>
 
-#import "ShaderColorSpace.h"
+#import "ShaderDirectives.h"
 #import "ShaderTypes.h"
 
 /// Returns the interpolated component values for a lane label (nil / empty if
@@ -36,10 +36,11 @@ static inline int ShaderReadStoredColorCount(ShaderLaneReader read) {
 }
 
 /// Fill the dynamic "Color N" palette for `type`: the stored swatch count
-/// clamped to the Type's cap (ShaderMaxColorsForType), each swatch read from its
-/// lane (falling back to the default palette). Returns the active count (>= 1).
-static inline int ShaderReadPalette(ShaderLaneReader read, vector_float4 *colors,
-                                  int type) {
+/// clamped to the Type's cap (ShaderMaxColorsForType), each swatch read from
+/// its lane (falling back to the default palette). Returns the active count (>=
+/// 1).
+static inline int ShaderReadPalette(ShaderLaneReader read,
+                                    vector_float4 *colors, int type) {
   int n = ShaderEffectiveColorCount(ShaderReadStoredColorCount(read), type);
   int count = 0;
   for (int i = 0; i < n && i < KK_SHADER_COLOR_MAX; i++) {
@@ -57,7 +58,7 @@ static inline int ShaderReadPalette(ShaderLaneReader read, vector_float4 *colors
 
 /// Write `*out` from a colour lane if present; leave it untouched otherwise.
 static inline void ShaderReadColor(ShaderLaneReader read, NSString *label,
-                                 vector_float4 *out) {
+                                   vector_float4 *out) {
   NSArray<NSNumber *> *v = read(label);
   if (v.count >= 4)
     *out = (vector_float4){v[0].floatValue, v[1].floatValue, v[2].floatValue,
@@ -66,14 +67,14 @@ static inline void ShaderReadColor(ShaderLaneReader read, NSString *label,
 
 /// Raw scalar lane value, or `fallback` if absent.
 static inline float ShaderReadScalar(ShaderLaneReader read, NSString *label,
-                                   float fallback) {
+                                     float fallback) {
   NSArray<NSNumber *> *v = read(label);
   return v.count ? v[0].floatValue : fallback;
 }
 
 /// Percent lane value scaled to 0..1 (100% -> 1.0), or `fallback01` if absent.
 static inline float ShaderReadPercent(ShaderLaneReader read, NSString *label,
-                                    float fallback01) {
+                                      float fallback01) {
   NSArray<NSNumber *> *v = read(label);
   return v.count ? v[0].floatValue / 100.0f : fallback01;
 }
@@ -81,7 +82,7 @@ static inline float ShaderReadPercent(ShaderLaneReader read, NSString *label,
 /// A 0-based choice-pill index + `offset` (shaders often want 1-based), or
 /// `fallback` if the lane is absent.
 static inline int ShaderReadPill(ShaderLaneReader read, NSString *label,
-                               int fallback, int offset) {
+                                 int fallback, int offset) {
   NSArray<NSNumber *> *v = read(label);
   return v.count ? (int)lround(v[0].doubleValue) + offset : fallback;
 }
@@ -113,7 +114,8 @@ static inline GrainGradientUniforms ShaderBuildGrainy(ShaderLaneReader read) {
   g.colorBack = g.colors[0]; // Color 1 is the base/background
 
   g.softness = ShaderReadPercent(read, @"Softness", KK_GRAIN_DEFAULT_SOFTNESS);
-  g.intensity = ShaderReadPercent(read, @"Intensity", KK_GRAIN_DEFAULT_INTENSITY);
+  g.intensity =
+      ShaderReadPercent(read, @"Intensity", KK_GRAIN_DEFAULT_INTENSITY);
   g.noise = ShaderReadPercent(read, @"Noise", KK_GRAIN_DEFAULT_NOISE);
   g.shape = ShaderReadPill(read, @"Pattern", KK_GRAIN_DEFAULT_SHAPE, 1);
   return g;
@@ -149,7 +151,8 @@ static inline SimplexNoiseUniforms ShaderBuildSimplex(ShaderLaneReader read) {
   SimplexNoiseUniforms sn = SimplexNoiseDefault();
   sn.colorsCount = ShaderReadPalette(read, sn.colors, ShaderType_Simplex);
   sn.stepsPerColor = ShaderReadScalar(read, @"Steps", KK_SIMPLEX_DEFAULT_STEPS);
-  sn.softness = ShaderReadPercent(read, @"Softness", KK_SIMPLEX_DEFAULT_SOFTNESS);
+  sn.softness =
+      ShaderReadPercent(read, @"Softness", KK_SIMPLEX_DEFAULT_SOFTNESS);
   return sn;
 }
 
@@ -170,7 +173,8 @@ static inline GodRaysUniforms ShaderBuildGodRays(ShaderLaneReader read) {
   ShaderReadColor(read, @"Bloom Color", &gr.colorBloom);
   gr.density = ShaderReadPercent(read, @"Density", KK_GODRAYS_DEFAULT_DENSITY);
   gr.spotty = ShaderReadPercent(read, @"Spots", KK_GODRAYS_DEFAULT_SPOTTY);
-  gr.midSize = ShaderReadPercent(read, @"Glow Size", KK_GODRAYS_DEFAULT_MIDSIZE);
+  gr.midSize =
+      ShaderReadPercent(read, @"Glow Size", KK_GODRAYS_DEFAULT_MIDSIZE);
   gr.midIntensity =
       ShaderReadPercent(read, @"Glow", KK_GODRAYS_DEFAULT_MIDINTENSITY);
   gr.intensity = ShaderReadPercent(read, @"Rays", KK_GODRAYS_DEFAULT_INTENSITY);
@@ -229,27 +233,29 @@ typedef struct ShaderTypeInfo {
   int type;
   const char *fragment;     // metal fragment function name
   const char *pluginSuffix; // pipeline cache-key suffix ("" = base plugin ID)
-  size_t uniformOffset; // offset of this Type's uniform within ShaderPluginState
-  size_t uniformSize;   // sizeof that uniform
+  size_t
+      uniformOffset;  // offset of this Type's uniform within ShaderPluginState
+  size_t uniformSize; // sizeof that uniform
 } ShaderTypeInfo;
 
-#define SHADER_TYPE_INFO(T, FRAG, SUFFIX, FIELD)                                 \
-  {T, FRAG, SUFFIX, offsetof(ShaderPluginState, FIELD),                          \
+#define SHADER_TYPE_INFO(T, FRAG, SUFFIX, FIELD)                               \
+  {T, FRAG, SUFFIX, offsetof(ShaderPluginState, FIELD),                        \
    sizeof(((ShaderPluginState *)0)->FIELD)}
 
 static const ShaderTypeInfo kShaderTypeInfo[] = {
     SHADER_TYPE_INFO(ShaderType_Mesh, "fragmentShader", "", mesh),
     SHADER_TYPE_INFO(ShaderType_Dithering, "ditheringFragment", ".dithering",
-                   dithering),
-    SHADER_TYPE_INFO(ShaderType_GrainGradient, "grainGradientFragment", ".grain",
-                   grain),
+                     dithering),
+    SHADER_TYPE_INFO(ShaderType_GrainGradient, "grainGradientFragment",
+                     ".grain", grain),
     SHADER_TYPE_INFO(ShaderType_Warp, "warpFragment", ".warp", warp),
     SHADER_TYPE_INFO(ShaderType_Neuro, "neuroNoiseFragment", ".neuro", neuro),
     SHADER_TYPE_INFO(ShaderType_Simplex, "simplexNoiseFragment", ".simplex",
-                   simplex),
+                     simplex),
     SHADER_TYPE_INFO(ShaderType_Metaballs, "metaballsFragment", ".metaballs",
-                   metaballs),
-    SHADER_TYPE_INFO(ShaderType_GodRays, "godRaysFragment", ".godrays", godrays),
+                     metaballs),
+    SHADER_TYPE_INFO(ShaderType_GodRays, "godRaysFragment", ".godrays",
+                     godrays),
     SHADER_TYPE_INFO(ShaderType_Fluid, "fluidFragment", ".fluid", fluid),
     SHADER_TYPE_INFO(ShaderType_Neon, "neonFragment", ".neon", neon),
     SHADER_TYPE_INFO(ShaderType_Silk, "silkFragment", ".silk", silk),
@@ -269,7 +275,7 @@ static inline const ShaderTypeInfo *ShaderTypeInfoForType(int type) {
 /// block is the one actually rendered, but all are cheap and keep the fallback
 /// path simple.
 static inline void ShaderBuildAllTypes(ShaderLaneReader read,
-                                     ShaderPluginState *state) {
+                                       ShaderPluginState *state) {
   state->mesh = ShaderBuildMesh(read);
   state->dithering = ShaderBuildDithering(read);
   state->grain = ShaderBuildGrainy(read);

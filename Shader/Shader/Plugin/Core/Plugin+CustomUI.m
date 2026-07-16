@@ -6,7 +6,7 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import "ShaderAISchema.h"
-#import "ShaderColorSpace.h"
+#import "ShaderDirectives.h"
 #import "ShaderInspectorView+Guides.h"
 #import "ShaderInspectorView.h"
 #import "ShaderLaneCatalog.h"

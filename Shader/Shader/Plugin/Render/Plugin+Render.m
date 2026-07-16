@@ -7,8 +7,8 @@
 #import "KKGLSLTranspiler.h" // GLSL -> MSL (glslang + SPIRV-Cross)
 #import "Plugin_Private.h"
 #import "ShaderAudioPool.h"
-#import "ShaderColorSpace.h"
 #import "ShaderCustomShader.h" // KKCustomUniforms + ShaderCustomFullSource (shared)
+#import "ShaderDirectives.h"
 #import "ShaderInspectorView.h"
 #import "ShaderMiniViewerRenderer.h" // per-instance descriptor path
 #import "ShaderTypes.h"

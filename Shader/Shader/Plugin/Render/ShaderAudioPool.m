@@ -10,7 +10,7 @@
 #import <os/log.h>
 #import <sys/stat.h>
 
-#import "ShaderColorSpace.h"
+#import "ShaderDirectives.h"
 
 /// Open spectrograms, keyed by source id.
 ///

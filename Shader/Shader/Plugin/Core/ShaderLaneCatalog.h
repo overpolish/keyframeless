@@ -15,7 +15,7 @@
 #import "Constants.h"        // ShaderCustomDefaultShaderSource
 #import "KKGLSLFormatter.h"  // Format button (XPC-only includers)
 #import "KKGLSLTranspiler.h" // live shader validation (XPC-only includers)
-#import "ShaderColorSpace.h"
+#import "ShaderDirectives.h"
 #import "ShaderLocalized.h" // RLoc
 
 // --- Dynamic colour lanes ------------------------------------------------

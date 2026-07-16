@@ -4,7 +4,7 @@
  */
 
 #import "KKGLSLTranspiler.h"
-#import "ShaderColorSpace.h" // ShaderParseColorProps (`// #color` block injection)
+#import "ShaderDirectives.h" // ShaderParseColorProps (`// #color` block injection)
 
 #include <string>
 #include <vector>
