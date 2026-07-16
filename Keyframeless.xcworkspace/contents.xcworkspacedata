@@ -13,7 +13,4 @@
    <FileRef
       location = "group:Keyframeless X/Keyframeless X.xcodeproj">
    </FileRef>
-   <FileRef
-      location = "group:Shader/Shader.xcodeproj">
-   </FileRef>
 </Workspace>
