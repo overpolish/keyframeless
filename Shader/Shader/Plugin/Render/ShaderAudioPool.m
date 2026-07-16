@@ -103,6 +103,190 @@ static KKSpectrogramRef ShaderAudioSpectrogramFor(NSString *sourceID) {
   return opened;
 }
 
+/// The published source whose stable key is `key`, or nil.
+///
+/// Resolves by identity, not position: the lane stores the key (0 = None), and
+/// a key matching nothing means the source was deleted since the shader was
+/// bound - silence, rather than whatever now sits where it used to.
+static NSString *
+ShaderAudioSourceIDForKey(long key,
+                          NSArray<NSDictionary<NSString *, id> *> *published) {
+  if (key == 0) {
+    return nil;
+  }
+  for (NSDictionary *entry in published) {
+    NSString *hash = entry[@"contentHash"];
+    if (![hash isKindOfClass:NSString.class] || !hash.length) {
+      hash = entry[@"id"];
+    }
+    if (![hash isKindOfClass:NSString.class] || !hash.length) {
+      continue;
+    }
+    if (lround(ShaderAudioSourceKey(hash)) == key) {
+      NSString *sourceID = entry[@"id"];
+      return [sourceID isKindOfClass:NSString.class] && sourceID.length
+                 ? sourceID
+                 : nil;
+    }
+  }
+  return nil;
+}
+
+/// Samples `have` bands at `timelineSeconds`, averaged over a `smoothSeconds`
+/// window centred on it. NO if the time lies outside the analysis.
+///
+/// Raw 60Hz bands are violently transient, so a shader mapping them straight to
+/// geometry judders; the window calms it without the shader having to.
+///
+/// A window rather than a running filter because renders are random-access -
+/// scrubbing, motion-blur sub-frames, out-of-order pre-render. A stateful
+/// filter would answer differently depending on how you reached a frame, so the
+/// same frame would look different scrubbed than played.
+static BOOL ShaderAudioSampleSmoothed(KKSpectrogramRef spectrogram,
+                                      double timelineSeconds,
+                                      double smoothSeconds, float *bands,
+                                      uint32_t have) {
+  double hop = KKSpectrogramHopSeconds(spectrogram);
+  int taps = 1;
+  if (smoothSeconds > 0 && hop > 0) {
+    taps = (int)lround(smoothSeconds / hop);
+    taps = taps < 1 ? 1 : (taps > 15 ? 15 : taps);
+  }
+  if (taps <= 1) {
+    return KKSpectrogramSampleAtTime(spectrogram, timelineSeconds, bands, have);
+  }
+  float acc[256] = {0};
+  float tap[256];
+  int hits = 0;
+  for (int k = 0; k < taps; k++) {
+    // Centred on `timelineSeconds`, so the value tracks the audio rather than
+    // lagging it the way a trailing window would.
+    double offset = ((double)k / (double)(taps - 1) - 0.5) * smoothSeconds;
+    if (!KKSpectrogramSampleAtTime(spectrogram, timelineSeconds + offset, tap,
+                                   have)) {
+      continue; // past an edge - just don't count it
+    }
+    for (uint32_t b = 0; b < have; b++) {
+      acc[b] += tap[b];
+    }
+    hits++;
+  }
+  if (hits == 0) {
+    return NO; // wholly outside the published range - silence
+  }
+  for (uint32_t b = 0; b < have; b++) {
+    bands[b] = acc[b] / (float)hits;
+  }
+  return YES;
+}
+
+/// Applies the gate to `bands` in place: a band under `gateDB` falls to zero
+/// over `releaseSeconds`, and snaps back the moment signal returns.
+///
+/// Per band, so each bar dies and revives on its own. Without the release this
+/// is a switch, and a bar at full height one frame and gone the next reads as a
+/// glitch rather than as a sound stopping.
+///
+/// Computed by looking BACKWARD for when a band last cleared the gate, rather
+/// than by decaying a remembered value. FCP renders frames out of order (scrub,
+/// motion blur, pre-render), so a remembered envelope would make a frame depend
+/// on how you reached it and wouldn't survive an export. A lookback answers
+/// identically however the frame is reached.
+static void ShaderAudioApplyGate(KKSpectrogramRef spectrogram,
+                                 double timelineSeconds, double gateDB,
+                                 double releaseSeconds, float *bands,
+                                 uint32_t have) {
+  double hop = KKSpectrogramHopSeconds(spectrogram);
+  // At or below the analysis floor the gate normalises to 0, and no band is
+  // quieter than that - so the bottom of the lane's range IS "off", and says so
+  // by doing nothing rather than by being a special case.
+  float gate = isnan(gateDB)
+                   ? 0.0f
+                   : (float)KKSpectrogramNormalizedForDB(spectrogram, gateDB);
+  if (gate <= 0.0f || hop <= 0) {
+    return;
+  }
+  double rel = releaseSeconds < 0 ? 0 : releaseSeconds;
+  if (rel > kShaderAudioReleaseMaxSec) {
+    rel = kShaderAudioReleaseMaxSec;
+  }
+  // How many hops back the envelope can still be above zero. rel = 0 leaves
+  // only the current frame, which IS a hard gate - one code path.
+  int maxK = (int)ceil(rel / hop);
+  int cap = (int)ceil(kShaderAudioReleaseMaxSec / hop);
+  if (maxK > cap) {
+    maxK = cap;
+  }
+
+  // Hops since each band last cleared the gate; -1 = not within the window.
+  int16_t sinceK[256];
+  for (uint32_t b = 0; b < have; b++) {
+    sinceK[b] = -1;
+  }
+  uint32_t unresolved = have;
+  float row[256];
+  for (int k = 0; k <= maxK && unresolved > 0; k++) {
+    // Raw rows, not smoothed ones: re-smoothing every step back would cost the
+    // window again per hop, and the threshold crossing is a property of the
+    // audio rather than of the display smoothing.
+    if (!KKSpectrogramSampleAtTime(spectrogram, timelineSeconds - k * hop, row,
+                                   have)) {
+      break; // past the start of the analysis - nothing earlier to find
+    }
+    for (uint32_t b = 0; b < have; b++) {
+      if (sinceK[b] < 0 && row[b] >= gate) {
+        sinceK[b] = (int16_t)k;
+        unresolved--;
+      }
+    }
+  }
+
+  for (uint32_t b = 0; b < have; b++) {
+    if (sinceK[b] == 0) {
+      continue; // open right now: full level, instant attack
+    }
+    if (sinceK[b] < 0) {
+      bands[b] = 0.0f; // silent for longer than the release
+      continue;
+    }
+    float env = 1.0f - (float)(sinceK[b] * hop / rel);
+    bands[b] *= env < 0 ? 0 : env;
+  }
+}
+
+/// Folds `have` analysis bands down to the shader's `p->bands`, packed 4 per
+/// vec4. Takes the MAX of each group so a transient survives being squeezed
+/// into fewer bands - the same reason Sonar's own picture buckets by max.
+static void ShaderAudioFoldToPool(const float *bands, uint32_t have,
+                                  const ShaderAudioProp *p,
+                                  vector_float4 *pool) {
+  int want = p->bands;
+  for (int b = 0; b < want; b++) {
+    int lo = (int)((int64_t)have * b / want);
+    int hi = (int)((int64_t)have * (b + 1) / want);
+    if (hi <= lo) {
+      hi = lo + 1;
+    }
+    float peak = 0;
+    for (int k = lo; k < hi && k < (int)have; k++) {
+      if (bands[k] > peak) {
+        peak = bands[k];
+      }
+    }
+    pool[p->poolOffset + (b >> 2)][b & 3] = peak;
+  }
+}
+
+/// The lane value for `label`, or `fallback` when the lane is absent. The
+/// directive's attributes only seeded these lanes' defaults, so by render time
+/// the lane is the authority.
+static double
+ShaderAudioLaneValue(NSArray<NSNumber *> * (^valuesForLabel)(NSString *),
+                     NSString *label, double fallback) {
+  NSArray<NSNumber *> *v = valuesForLabel(label);
+  return v.count ? v[0].doubleValue : fallback;
+}
+
 int ShaderFillAudioPool(
     NSString *source, vector_float4 *pool, int startOffset,
     double timelineSeconds,
@@ -125,105 +309,39 @@ int ShaderFillAudioPool(
       pool[p->poolOffset + v] = (vector_float4){0, 0, 0, 0};
     }
 
-    // The lane stores the source's stable key (0 = None), not its position, so
-    // this resolves by identity. A key that matches nothing means the source
-    // was deleted since the shader was bound - silence, rather than whatever
-    // now sits where it used to.
-    NSArray<NSNumber *> *v = valuesForLabel(@(p->name));
-    long key = v.count ? lround(v[0].doubleValue) : 0;
-    if (key == 0) {
-      continue;
-    }
-    NSString *sourceID = nil;
-    for (NSDictionary *entry in published) {
-      NSString *hash = entry[@"contentHash"];
-      if (![hash isKindOfClass:NSString.class] || !hash.length) {
-        hash = entry[@"id"];
-      }
-      if (![hash isKindOfClass:NSString.class] || !hash.length) {
-        continue;
-      }
-      if (lround(ShaderAudioSourceKey(hash)) == key) {
-        sourceID = entry[@"id"];
-        break;
-      }
-    }
-    if (![sourceID isKindOfClass:NSString.class] || !sourceID.length) {
-      continue;
+    NSString *uniform = @(p->name);
+    long key = lround(ShaderAudioLaneValue(valuesForLabel, uniform, 0));
+    NSString *sourceID = ShaderAudioSourceIDForKey(key, published);
+    if (!sourceID) {
+      continue; // nothing bound, or the bound source is gone
     }
     KKSpectrogramRef spectrogram = ShaderAudioSpectrogramFor(sourceID);
     if (!spectrogram) {
       continue;
     }
-    float bands[256];
+
     uint32_t have = KKSpectrogramNumBands(spectrogram);
     if (have > 256) {
       have = 256;
     }
-
-    // Averaged over `smooth=` seconds centred on now. Raw 60Hz bands are
-    // violently transient, so a shader mapping them straight to geometry
-    // judders; a window calms it without the shader having to.
-    //
-    // A window rather than a running filter because renders are random-access -
-    // scrubbing, motion-blur sub-frames, out-of-order pre-render. A stateful
-    // filter would answer differently depending on how you reached a frame, so
-    // the same frame would look different scrubbed than played.
-    double hop = KKSpectrogramHopSeconds(spectrogram);
-    int taps = 1;
-    if (p->smoothSeconds > 0 && hop > 0) {
-      taps = (int)lround(p->smoothSeconds / hop);
-      taps = taps < 1 ? 1 : (taps > 15 ? 15 : taps);
+    float bands[256];
+    if (!ShaderAudioSampleSmoothed(
+            spectrogram, timelineSeconds,
+            ShaderAudioLaneValue(valuesForLabel,
+                                 ShaderAudioSmoothLaneLabel(uniform),
+                                 p->smoothSeconds),
+            bands, have)) {
+      continue; // outside the published range - silence
     }
-    if (taps <= 1) {
-      if (!KKSpectrogramSampleAtTime(spectrogram, timelineSeconds, bands,
-                                     have)) {
-        continue; // outside the published range - silence
-      }
-    } else {
-      float acc[256] = {0};
-      float tap[256];
-      int hits = 0;
-      for (int k = 0; k < taps; k++) {
-        // Centred on `timelineSeconds`, so the value tracks the audio rather
-        // than lagging it the way a trailing window would.
-        double offset =
-            ((double)k / (double)(taps - 1) - 0.5) * p->smoothSeconds;
-        if (!KKSpectrogramSampleAtTime(spectrogram, timelineSeconds + offset,
-                                       tap, have)) {
-          continue; // past an edge - just don't count it
-        }
-        for (uint32_t b = 0; b < have; b++) {
-          acc[b] += tap[b];
-        }
-        hits++;
-      }
-      if (hits == 0) {
-        continue; // wholly outside the published range - silence
-      }
-      for (uint32_t b = 0; b < have; b++) {
-        bands[b] = acc[b] / (float)hits;
-      }
-    }
-
-    // Fold the analysis bands down to the shader's, taking the MAX of each
-    // group so a transient survives being squeezed into fewer bands (the same
-    // reason Sonar's own picture buckets by max).
-    int want = p->bands;
-    for (int b = 0; b < want; b++) {
-      int lo = (int)((int64_t)have * b / want);
-      int hi = (int)((int64_t)have * (b + 1) / want);
-      if (hi <= lo) {
-        hi = lo + 1;
-      }
-      float peak = 0;
-      for (int k = lo; k < hi && k < (int)have; k++) {
-        if (bands[k] > peak) {
-          peak = bands[k];
-        }
-      }
-      pool[p->poolOffset + (b >> 2)][b & 3] = peak;
-    }
+    ShaderAudioApplyGate(
+        spectrogram, timelineSeconds,
+        ShaderAudioLaneValue(valuesForLabel, ShaderAudioGateLaneLabel(uniform),
+                             p->gateDB),
+        ShaderAudioLaneValue(valuesForLabel,
+                             ShaderAudioReleaseLaneLabel(uniform),
+                             p->releaseSeconds),
+        bands, have);
+    ShaderAudioFoldToPool(bands, have, p, pool);
   }
   return startOffset + used;
 }

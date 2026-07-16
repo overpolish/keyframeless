@@ -4,6 +4,7 @@
  */
 
 #import "KKCheckboxView.h"
+#import "KKChoiceChecklistView.h"
 #import "KKCodeEditorView.h"
 #import "KKColorWellView.h"
 #import "KKGradientBarView.h"
@@ -13,6 +14,7 @@
 #import "KKMiniViewerView.h"
 #import "KKPillToggleRowView.h"
 #import "KKPopoverHeaderView.h"
+#import "KKPopoverKeepAlive.h"
 #import "KKSeedView.h"
 #import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
@@ -24,6 +26,15 @@
 #import <QuartzCore/QuartzCore.h>
 
 const CGFloat kFloatRowH = 30.0;
+// The choice popover's opening height. It hugs its rows and grows/shrinks from
+// here as a search narrows the list, so this is a floor rather than a cap.
+static const CGFloat kChoiceListMinH = 120.0;
+// The dropdown trigger's width. FIXED, not content-sized: the trigger sits in
+// the value column with every other row's field, and a width that tracked the
+// current pick would shuffle that column every time the pick changed. Long
+// picks tail-truncate at the chevron instead - and an audio source reads
+// "<name> - <project>", so it wants the room.
+static const CGFloat kChoiceTriggerW = 200.0;
 static const CGFloat kCropRowH = 30.0;     // single-line W/H/X/Y hstack
 static const CGFloat kGradientRowH = 42.0; // 36pt gradient control + padding
 static const CGFloat kCodeRowH =
@@ -158,6 +169,9 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return b;
 }
 
+@interface _KKStaticValueRow () <NSPopoverDelegate>
+@end
+
 @implementation _KKStaticValueRow {
   KKLaneValueType _valueType;
   NSArray<NSNumber *> *_cmin;
@@ -195,11 +209,15 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   NSArray<NSImage *> *_choiceIcons;   // optional per-choice glyphs (display)
   BOOL _wrapsChoicePills;             // pill wraps to multiple lines
   NSLayoutConstraint *_pillWidthConstraint; // wrapping pill width (= wrapW)
-  CGFloat _rowHeight;              // resolved height (wrapping pill rows)
-  CGFloat _contentWidth;           // popover content width (for pill wrap)
-  KKCheckboxView *_toggleCheckbox; // single on/off checkbox, isToggle only
-  BOOL _isToggle;                  // value row is a single checkbox (0/1)
-  BOOL _autoSizesComponentLabels;  // prefix captions hug text (Start/End)
+  BOOL _choiceUsesDropdown;           // choice row is a dropdown, not pills
+  _KKDropdownTrigger *_choiceField;   // the Animated dropdown's trigger
+  KKChoiceChecklistView *_choiceList; // the popover's list; nil when shut
+  NSPopover *_choicePopover;          // nil when shut
+  CGFloat _rowHeight;                 // resolved height (wrapping pill rows)
+  CGFloat _contentWidth;              // popover content width (for pill wrap)
+  KKCheckboxView *_toggleCheckbox;    // single on/off checkbox, isToggle only
+  BOOL _isToggle;                     // value row is a single checkbox (0/1)
+  BOOL _autoSizesComponentLabels;     // prefix captions hug text (Start/End)
   BOOL _oscEditedOnly; // geometry-style lane: message instead of value fields
   KKColorWellView *_colorWell; // swatch: Color (offset 0) or ColorPoint
   NSInteger
@@ -637,6 +655,106 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   }
 }
 
+// Stored value -> choice index. -1 when the stored value names no current
+// choice (the source it pointed at was deleted), which the callers show as
+// "nothing selected" rather than lighting up whatever now sits at that index.
+- (NSInteger)_choiceIndexForStored:(double)stored {
+  if (!_choiceValues.count)
+    return (NSInteger)llround(stored);
+  for (NSInteger i = 0; i < (NSInteger)_choiceValues.count; i++)
+    if (llround(_choiceValues[i].doubleValue) == llround(stored))
+      return i;
+  return -1;
+}
+
+// Choice index -> the value the lane stores. `choiceValues` lets a lane whose
+// choices come and go hold a stable id instead of a position.
+- (double)_storedForChoiceIndex:(NSInteger)index {
+  if (index >= 0 && index < (NSInteger)_choiceValues.count)
+    return _choiceValues[index].doubleValue;
+  return (double)index;
+}
+
+- (NSInteger)_selectedChoiceIndex {
+  if (!_values.count)
+    return -1;
+  return [self _choiceIndexForStored:_values[0].doubleValue];
+}
+
+- (void)_syncChoiceFieldTitle {
+  NSInteger sel = [self _selectedChoiceIndex];
+  BOOL valid = sel >= 0 && sel < (NSInteger)_choiceLabels.count;
+  // "None" rather than blank when the stored value names no current choice, so
+  // a deleted-source lane reads as unset instead of broken. Already a param
+  // name, so it localizes with the choice labels and needs no new string.
+  _choiceField.summaryOverride =
+      KKLocalizedParamName(valid ? _choiceLabels[sel] : @"None");
+  // `selectedLabels` is what the trigger reads as "has a selection", which
+  // dims the text when it doesn't - so an unset picker greys its "None" exactly
+  // like the Animated dropdown greys its placeholder.
+  _choiceField.selectedLabels = valid ? @[ _choiceLabels[sel] ] : nil;
+  [_choiceField setNeedsDisplay:YES];
+}
+
+// A popover off the trigger, like the Animated dropdown.
+//
+// This one opens from INSIDE the Constants popover, which would normally
+// dismiss the moment a click lands in another window. Registering the child as
+// a keep-alive window is what makes the parent treat clicks in it as its own -
+// the same mechanism the companion side panels use.
+- (void)_toggleChoiceList {
+  if (_choicePopover) {
+    [_choicePopover performClose:nil];
+    return;
+  }
+  _choiceList =
+      [[KKChoiceChecklistView alloc] initWithOptions:_choiceLabels
+                                       selectedIndex:[self _selectedChoiceIndex]
+                                       minimumHeight:kChoiceListMinH];
+  __weak typeof(self) weak = self;
+  _choiceList.onSelect = ^(NSInteger index) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    [s _setValues:@[ @([s _storedForChoiceIndex:index]) ] emit:YES];
+    [s _syncChoiceFieldTitle];
+    [s->_choicePopover performClose:nil]; // a pick ends the interaction
+  };
+
+  // Wrapped, not set as the content view directly: the wrapper is what strips
+  // the system popover's own glass + border once it has a window. Without it
+  // the kit's chrome and AppKit's both draw, and the list wears two borders.
+  _KKLVPopoverContentView *wrapper = [[_KKLVPopoverContentView alloc] init];
+  wrapper.frame = _choiceList.bounds;
+  _choiceList.translatesAutoresizingMaskIntoConstraints = NO;
+  [wrapper addSubview:_choiceList];
+  [NSLayoutConstraint activateConstraints:@[
+    [_choiceList.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor],
+    [_choiceList.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor],
+    [_choiceList.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+    [_choiceList.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor],
+  ]];
+
+  NSViewController *vc = [[NSViewController alloc] init];
+  vc.view = wrapper;
+  _choicePopover = [[NSPopover alloc] init];
+  _choicePopover.contentViewController = vc;
+  _choicePopover.behavior = NSPopoverBehaviorTransient;
+  _choicePopover.delegate = self;
+  _choiceList.popover = _choicePopover; // lets it resize as a search narrows
+  [_choicePopover showRelativeToRect:_choiceField.bounds
+                              ofView:_choiceField
+                       preferredEdge:NSRectEdgeMinY];
+  // Only available once shown.
+  KKPopoverAddKeepAliveWindow(_choiceList.window);
+}
+
+- (void)popoverDidClose:(NSNotification *)notification {
+  KKPopoverRemoveKeepAliveWindow(_choiceList.window);
+  _choicePopover = nil;
+  _choiceList = nil;
+}
+
 - (double)_clamp:(double)v index:(NSInteger)i {
   if (i < (NSInteger)_cmin.count && v < _cmin[i].doubleValue)
     v = _cmin[i].doubleValue;
@@ -692,6 +810,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   _rowHeight = h;
   _contentWidth = cw;
   _wrapsChoicePills = KKLaneWrapsChoicePills(lane);
+  _choiceUsesDropdown = lane.choiceUsesDropdown && lane.choiceLabels.count >= 2;
   _laneLabel = [lane.label copy];
   _valueType = lane.valueType;
   _cmin = lane.componentMin ?: @[];
@@ -957,6 +1076,34 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
       [_toggleCheckbox.heightAnchor constraintEqualToConstant:12.0],
     ]];
     _reset.hidden = YES; // a toggle resets via the checkbox itself
+  } else if (_choiceUsesDropdown && _choiceLabels.count >= 2) {
+    // A long or open-ended enum (a shader's `#choice ... dropdown`): a head
+    // showing the pick, expanding a searchable list in place. Pinned to the top
+    // band rather than centred, so the row can grow downwards when it opens
+    // without the head drifting.
+    // The Animated dropdown's own trigger, not a lookalike: text + chevron, no
+    // border, no background, tail-truncating at the chevron, and it already
+    // dims itself when nothing is picked.
+    _choiceField = [[_KKDropdownTrigger alloc] init];
+    _choiceField.translatesAutoresizingMaskIntoConstraints = NO;
+    // The value column is right-aligned, so the pick sits against the chevron
+    // with every other row's field rather than adrift at the column's left.
+    _choiceField.rightAligned = YES;
+    __weak typeof(self) weak = self;
+    _choiceField.onTapped = ^{
+      [weak _toggleChoiceList];
+    };
+    [self addSubview:_choiceField];
+    [NSLayoutConstraint activateConstraints:@[
+      [title.leadingAnchor constraintEqualToAnchor:titleLead
+                                          constant:titleLeadInset],
+      [title.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_choiceField.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+      [_choiceField.heightAnchor constraintEqualToConstant:kFloatRowH],
+      [_choiceField.trailingAnchor constraintEqualToAnchor:_reset.leadingAnchor
+                                                  constant:-KKPaddingLG],
+      [_choiceField.widthAnchor constraintEqualToConstant:kChoiceTriggerW],
+    ]];
   } else if (_choiceLabels.count >= 2) {
     // A structural enum (e.g. a colour mode): a grouped radio pill, one segment
     // per choice, instead of a number field. The lane's single value is the
@@ -981,15 +1128,8 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     _choicePill.onToggled = ^(NSInteger index, BOOL isOn) {
       if (!isOn)
         return;
-      // `choiceValues` maps the pill's index onto what the lane actually
-      // stores, so a lane whose choices come and go can hold a stable id
-      // instead of a position.
       typeof(self) strong = weak;
-      NSArray<NSNumber *> *vals = strong->_choiceValues;
-      double stored = (index >= 0 && index < (NSInteger)vals.count)
-                          ? vals[index].doubleValue
-                          : (double)index;
-      [strong _setValues:@[ @(stored) ] emit:YES];
+      [strong _setValues:@[ @([strong _storedForChoiceIndex:index]) ] emit:YES];
     };
     [self addSubview:_choicePill];
     [NSLayoutConstraint activateConstraints:@[
@@ -1530,20 +1670,15 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   if (_seedView && _values.count)
     _seedView.seed = (uint32_t)llround(_values[0].doubleValue);
   if (_choicePill && _values.count) {
-    NSInteger sel = (NSInteger)llround(_values[0].doubleValue);
-    if (_choiceValues.count) {
-      // Stored value -> pill. No match means the choice it named is gone; every
-      // pill goes off rather than lighting up whatever now sits at that index.
-      sel = -1;
-      for (NSInteger i = 0; i < (NSInteger)_choiceValues.count; i++)
-        if (llround(_choiceValues[i].doubleValue) ==
-            llround(_values[0].doubleValue)) {
-          sel = i;
-          break;
-        }
-    }
+    NSInteger sel = [self _selectedChoiceIndex];
     for (NSInteger i = 0; i < (NSInteger)_choiceLabels.count; i++)
       [_choicePill setState:(i == sel) atIndex:i];
+  }
+  if (_choiceField && _values.count) {
+    [self _syncChoiceFieldTitle];
+    // An outside change (undo, a keypose swap) has to move the mark in an open
+    // list too, or it keeps showing the pick the user just undid.
+    [_choiceList setSelectedIndex:[self _selectedChoiceIndex]];
   }
   if (_toggleCheckbox && _values.count)
     _toggleCheckbox.isChecked = llround(_values[0].doubleValue) != 0;

@@ -80,6 +80,7 @@ static const CGFloat kChecklistPillH = 24.0;
   // built off this flag; setting it after leaves the rows un-scrolled (they
   // overflow the host with no clip / fade / hit-testing past the edge).
   _embedded = maxBodyHeight > 0.0;
+  _allowsMultipleSelection = YES; // every lane list here is a checklist
   _lanes = [lanes copy];
   _allRows = [NSMutableArray array];
   _rowCategoryByLabel = catByLabel;
@@ -232,6 +233,7 @@ static const CGFloat kChecklistPillH = 24.0;
   row.rowLabel = label;
   row.categoryKey = categoryKey;
   row.indentLevel = indentLevel;
+  row.radio = !_allowsMultipleSelection;
   [_rowStack addArrangedSubview:row];
   [row.widthAnchor constraintEqualToAnchor:_rowStack.widthAnchor].active = YES;
   [_allRows addObject:row];
@@ -290,6 +292,22 @@ static const CGFloat kChecklistPillH = 24.0;
     if (l.label)
       [out addObject:l.label];
   return out;
+}
+
+- (void)setAllowsMultipleSelection:(BOOL)allowsMultipleSelection {
+  if (_allowsMultipleSelection == allowsMultipleSelection)
+    return;
+  _allowsMultipleSelection = allowsMultipleSelection;
+  // Rows already on screen keep their glyph otherwise: the flag is normally set
+  // before the first rebuild, but a host that flips it later shouldn't have to
+  // know that.
+  for (_KKManageRow *row in _allRows)
+    row.radio = !allowsMultipleSelection;
+}
+
+- (void)checkOnlyRow:(_KKManageRow *)row {
+  for (_KKManageRow *other in _allRows)
+    other.checked = (other == row);
 }
 
 - (void)rebuildRows {

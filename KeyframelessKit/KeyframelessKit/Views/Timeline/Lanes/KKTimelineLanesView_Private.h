@@ -65,6 +65,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// Fired on an option-click instead of `onToggle` (the lane filter solos the
 /// row). When nil, an option-click falls through to `onToggle`.
 @property(nonatomic, copy, nullable) void (^onOptionToggle)(void);
+/// Draw the glyph round instead of square: the shape is the affordance, so a
+/// single-select list (one row wins, picking another moves the mark) reads as
+/// radio buttons rather than as checkboxes that mysteriously refuse to
+/// multi-select. Set by the checklist from `allowsMultipleSelection`, not by
+/// row builders. Default NO.
+@property(nonatomic) BOOL radio;
 @end
 
 // The Animated "manage" dropdown's checkable lane list. Shared chrome (search,
@@ -457,6 +463,14 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// list as the field's text. The host owns the empty/placeholder decision by
 /// leaving this nil (then `selectedLabels` drives the placeholder).
 @property(nonatomic, copy, nullable) NSString *summaryOverride;
+/// Draw the text hard against the chevron instead of from the left edge.
+/// Default NO.
+///
+/// For a trigger sitting in a value column (a lane row's `#choice dropdown`),
+/// where every other row's field is right-aligned and a left-aligned one would
+/// break the column. The Animated dropdown's own trigger fills a footer, so it
+/// stays left.
+@property(nonatomic) BOOL rightAligned;
 @property(nonatomic, copy, nullable) void (^onTapped)(void);
 @end
 

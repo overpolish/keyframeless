@@ -180,6 +180,7 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
           [opts addObject:t];
       }
       lane.choiceLabels = opts;
+      lane.choiceUsesDropdown = p->choiceDropdown != 0;
       lane.componentMin = @[ @0.0 ];
       lane.componentMax = @[ @(opts.count ? (NSInteger)opts.count - 1 : 0) ];
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
@@ -334,6 +335,28 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
   }
 }
 
+// One of an `// #audio` property's animatable knobs (gate / release /
+// smoothness). They differ only in name, unit, range and default - everything
+// else has to agree or they'd scatter out of the Audio group and out of the
+// uniform's keypose scope.
+static inline KKLane *ShaderMakeAudioControlLane(NSString *idLabel,
+                                                 NSString *displayLabel,
+                                                 NSString *units, double min,
+                                                 double max, double def,
+                                                 NSString *group) {
+  KKLane *lane = [KKLane laneWithLabel:idLabel];
+  lane.displayLabel = displayLabel;
+  lane.valueType = KKLaneValueTypeFloat;
+  lane.componentUnits = @[ units ];
+  lane.componentMin = @[ @(min) ];
+  lane.componentMax = @[ @(max) ];
+  lane.groupKey = group;
+  lane.categoryKey = kShaderAudioCategory;
+  lane.categorySymbol = kShaderAudioCategorySymbol;
+  [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @(def) ]]];
+  return lane;
+}
+
 // Append one lane per `// #audio` property: a dropdown of the analyses Sonar
 // has published, read live from the manifest.
 //
@@ -384,9 +407,16 @@ static inline void ShaderAppendAudioLanes(NSMutableArray<KKLane *> *lanes,
 
   for (int pi = 0; pi < nProps; pi++) {
     ShaderAudioProp *p = &props[pi];
+    NSString *uniform = @(p->name);
+    // Only one `#audio` in the shader: the group already says "Audio", so
+    // "Noise Gate" needs no qualifying. With two, every lane says which source
+    // it belongs to or the group is six anonymous rows.
+    NSString *prefix =
+        nProps > 1 ? [NSString stringWithFormat:@"%@ ", @(p->label)] : @"";
+
     // Identity = the uniform name (stable across rename/reorder), like every
     // other directive lane; the label is display-only.
-    KKLane *lane = [KKLane laneWithLabel:@(p->name)];
+    KKLane *lane = [KKLane laneWithLabel:uniform];
     lane.displayLabel = @(p->label);
     lane.valueType = KKLaneValueTypeFloat;
     lane.integerValued = YES;
@@ -397,21 +427,53 @@ static inline void ShaderAppendAudioLanes(NSMutableArray<KKLane *> *lanes,
     // changes between sessions, and an index would mean something different the
     // moment a source is deleted.
     lane.choiceValues = keys;
-    // However many sources are published, plus "None" - the set size isn't
-    // knowable at build time, so the pills wrap onto more lines rather than
-    // overflow the row.
-    lane.wrapsChoicePills = YES;
+    // However many sources are published, plus "None". The set size isn't
+    // knowable at build time and grows with every Publish, so this is the
+    // open-ended case the dropdown exists for: wrapping pills grew the row
+    // without limit, one line per few sources.
+    lane.choiceUsesDropdown = YES;
     // Wide enough for any key: the stored value is a hash now, so clamping to
     // the choice count would destroy every binding.
     lane.componentMin = @[ @0.0 ];
     lane.componentMax = @[ @16777215.0 ];
-    lane.groupKey = @(p->name);
-    // Same "Shader" group as the other dynamic directive lanes - only colours
-    // get their own category.
-    lane.categoryKey = @"Shader";
-    lane.categorySymbol = @"slider.horizontal.3";
+    lane.groupKey = uniform;
+    lane.categoryKey = kShaderAudioCategory;
+    lane.categorySymbol = kShaderAudioCategorySymbol;
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0 ]]];
     [lanes addObject:lane];
+
+    // Gate + smoothness are ANIMATABLE lanes rather than fixed directive
+    // attributes: `gate=` / `smooth=` only seed their defaults. The right gate
+    // depends on the mix, not on the shader, so it belongs to whoever is
+    // cutting - and animating it (gate shut through a quiet section, open for
+    // the drop) is worth more than any value baked into the source.
+    //
+    // Suffixed identities: a dot can't appear in a GLSL identifier, so these
+    // can never collide with a uniform the author declared.
+    // The gate's floor is well below any analysis window: at or under it
+    // nothing is quieter than the gate, so the bottom of the range IS "off"
+    // without needing a magic value or a separate switch.
+    [lanes addObject:ShaderMakeAudioControlLane(
+                         ShaderAudioGateLaneLabel(uniform),
+                         [prefix stringByAppendingString:@"Noise Gate"], @"dB",
+                         kShaderAudioGateOffDB, -10.0,
+                         isnan(p->gateDB) ? kShaderAudioGateOffDB : p->gateDB,
+                         uniform)];
+
+    // Release sits next to the gate because it only means anything with one:
+    // it's how long a bar takes to die after its band goes under, so the gate
+    // reads as a sound stopping rather than as a switch.
+    [lanes
+        addObject:ShaderMakeAudioControlLane(
+                      ShaderAudioReleaseLaneLabel(uniform),
+                      [prefix stringByAppendingString:@"Release"], @"s", 0.0,
+                      kShaderAudioReleaseMaxSec, p->releaseSeconds, uniform)];
+
+    [lanes
+        addObject:ShaderMakeAudioControlLane(
+                      ShaderAudioSmoothLaneLabel(uniform),
+                      [prefix stringByAppendingString:@"Smoothness"], @"s", 0.0,
+                      kShaderAudioSmoothMaxSec, p->smoothSeconds, uniform)];
   }
 }
 

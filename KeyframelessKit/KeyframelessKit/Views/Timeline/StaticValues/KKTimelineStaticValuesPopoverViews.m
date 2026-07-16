@@ -156,6 +156,9 @@
   // …) clips at the chevron instead of overflowing the field.
   NSMutableParagraphStyle *para = [[NSMutableParagraphStyle alloc] init];
   para.lineBreakMode = NSLineBreakByTruncatingTail;
+  // Right-aligned still truncates its TAIL, so a long summary keeps its start
+  // and loses its end either way - only the resting edge changes.
+  para.alignment = _rightAligned ? NSTextAlignmentRight : NSTextAlignmentLeft;
   NSDictionary *attrs = @{
     NSFontAttributeName : [NSFont systemFontOfSize:KKFontSizeSM
                                             weight:NSFontWeightRegular],

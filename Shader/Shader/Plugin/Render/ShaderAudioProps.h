@@ -30,6 +30,36 @@
 // source the recipient doesn't have.
 #define KK_SHADER_MAX_AUDIO_PROPS 2
 #define KK_SHADER_MAX_AUDIO_VECS 24
+
+/// Audio lanes get their own inspector group: they aren't a look the way the
+/// other directive lanes are, and a source + its gate + its smoothing only make
+/// sense read together.
+static NSString *const kShaderAudioCategory = @"Audio";
+static NSString *const kShaderAudioCategorySymbol = @"waveform";
+
+/// The gate lane's floor, in dB. Below any analysis window, so the bottom of
+/// the slider means "gate off" without a magic value.
+static const double kShaderAudioGateOffDB = -90.0;
+/// The smoothness lane's cap, in seconds. Past this the spectrum is averaged so
+/// far that nothing reads as reacting to the audio any more.
+static const double kShaderAudioSmoothMaxSec = 0.5;
+/// The release lane's cap, in seconds. Also bounds how far back a render looks
+/// to find when a band last cleared the gate.
+static const double kShaderAudioReleaseMaxSec = 2.0;
+
+/// The lanes each `#audio` uniform owns, suffixed off the uniform name. A dot
+/// can't occur in a GLSL identifier, so these can never collide with one the
+/// author declared. Built by the catalog, read back by the pool - hence here,
+/// where both can see them, rather than as a literal in each.
+static inline NSString *ShaderAudioGateLaneLabel(NSString *uniformName) {
+  return [uniformName stringByAppendingString:@".gate"];
+}
+static inline NSString *ShaderAudioSmoothLaneLabel(NSString *uniformName) {
+  return [uniformName stringByAppendingString:@".smooth"];
+}
+static inline NSString *ShaderAudioReleaseLaneLabel(NSString *uniformName) {
+  return [uniformName stringByAppendingString:@".release"];
+}
 typedef struct ShaderAudioProp {
   char name[64];  // GLSL uniform name
   char label[80]; // display label
@@ -45,6 +75,20 @@ typedef struct ShaderAudioProp {
   /// how you got to a frame, so the same frame would look different on scrub
   /// than on playback. 0 = raw.
   double smoothSeconds;
+  /// `gate=` dB: bands quieter than this read as silence. A room is never
+  /// actually silent - air, hiss, a preamp - so an ungated visual never quite
+  /// settles between beats, and the noise is what a shader mapping the low end
+  /// to a radius shows as a permanent tremble. NAN = no gate (the default).
+  ///
+  /// In dB rather than a 0...1 band value because that's the unit the level
+  /// exists in: -60 means the same thing whatever window the analysis used, and
+  /// the file carries that window so the conversion is exact.
+  double gateDB;
+  /// `release=` seconds: how long a band takes to fall to zero once it drops
+  /// below the gate. Without it the gate is a switch - a bar is at its height
+  /// one frame and gone the next - which reads as a glitch rather than as a
+  /// sound stopping. Attack stays instant: signal returning should snap back.
+  double releaseSeconds;
 } ShaderAudioProp;
 
 /// A stable numeric id for a published source, from its manifest `contentHash`
@@ -129,6 +173,11 @@ static inline int ShaderParseAudioProps(NSString *source,
     p.bands = N * 4;
     p.smoothSeconds =
         ShaderAttrDouble(attrs, @"\\bsmooth\\s*=\\s*([0-9.]+)", 0.08);
+    // NAN = absent, so a gate at 0 dB (everything below full scale is silent -
+    // daft, but the author's call) still reads as a gate.
+    p.gateDB = ShaderAttrDouble(attrs, @"\\bgate\\s*=\\s*(-?[0-9.]+)", NAN);
+    p.releaseSeconds =
+        ShaderAttrDouble(attrs, @"\\brelease\\s*=\\s*([0-9.]+)", 0.15);
     p.poolOffset = pool;
     pool += N;
     props[n++] = p;

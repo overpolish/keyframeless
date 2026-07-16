@@ -112,6 +112,11 @@ static const CGFloat kManageRowIndentStep = 14.0;
   [self setNeedsDisplay:YES];
 }
 
+- (void)setRadio:(BOOL)radio {
+  _radio = radio;
+  [self setNeedsDisplay:YES];
+}
+
 - (void)setWarning:(BOOL)warning {
   _warning = warning;
   [self setNeedsDisplay:YES];
@@ -147,17 +152,20 @@ static const CGFloat kManageRowIndentStep = 14.0;
 
   NSColor *fillColor =
       _warning ? [NSColor warning] : [NSColor accentMatchingHost];
+  // A full-height radius rounds the same square into a circle, so radio and
+  // checkbox share one path and stay pixel-identical in size and alignment.
+  CGFloat radius = _radio ? kCheckSize / 2.0 : kCheckRadius;
   if (_checked) {
     NSBezierPath *fill = [NSBezierPath bezierPathWithRoundedRect:boxRect
-                                                         xRadius:kCheckRadius
-                                                         yRadius:kCheckRadius];
+                                                         xRadius:radius
+                                                         yRadius:radius];
     [fillColor setFill];
     [fill fill];
     NSRect innerRect = NSInsetRect(boxRect, 0.25, 0.25);
     NSBezierPath *innerStroke =
         [NSBezierPath bezierPathWithRoundedRect:innerRect
-                                        xRadius:kCheckRadius - 0.25
-                                        yRadius:kCheckRadius - 0.25];
+                                        xRadius:radius - 0.25
+                                        yRadius:radius - 0.25];
     [[NSColor colorWithWhite:1.0 alpha:0.15] setStroke];
     innerStroke.lineWidth = 0.25;
     [innerStroke stroke];
@@ -178,8 +186,8 @@ static const CGFloat kManageRowIndentStep = 14.0;
   } else {
     NSBezierPath *border =
         [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(boxRect, 0.5, 0.5)
-                                        xRadius:kCheckRadius
-                                        yRadius:kCheckRadius];
+                                        xRadius:radius
+                                        yRadius:radius];
     [[[NSColor inspectorLabel] colorWithAlphaComponent:0.3] setStroke];
     border.lineWidth = 1.0;
     [border stroke];

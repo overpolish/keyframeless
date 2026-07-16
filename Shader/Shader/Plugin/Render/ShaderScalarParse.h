@@ -37,6 +37,19 @@ static inline void ShaderScalarParseDefaults(NSString *attrs,
       if ([opts characterAtIndex:i] == ',')
         cnt++;
     p->choiceCount = cnt;
+    // `dropdown`: a searchable list instead of pills. Opt-in rather than a
+    // count threshold, because only the author knows whether their options are
+    // worth showing all at once - and a set that silently changed shape at the
+    // 6th option would be worse than either.
+    p->choiceDropdown =
+        ([[NSRegularExpression regularExpressionWithPattern:@"\\bdropdown\\b"
+                                                    options:0
+                                                      error:nil]
+             firstMatchInString:attrs
+                        options:0
+                          range:NSMakeRange(0, attrs.length)] != nil)
+            ? 1
+            : 0;
     int def = ShaderAttrInt(attrs, @"\\bdefault\\s*=\\s*(\\d+)", 0);
     if (def < 0)
       def = 0;

@@ -16,6 +16,14 @@ struct Spectrogram: Sendable {
 	let hopSeconds: Double
 	let timelineStart: Double
 	var data: [Float]
+	/// The dB window `data` is normalized against (0 = floor, 1 = ceiling).
+	///
+	/// Carried with the grid, not looked up from `Config`, because it's the only
+	/// thing anchoring a band value to a real loudness - a plugin wanting a dB
+	/// threshold needs the window that produced these numbers, not whatever the
+	/// analyzer's defaults happen to be today.
+	var floorDB: Double = -85
+	var ceilingDB: Double = -15
 
 	/// Seconds of timeline this spectrogram covers.
 	var duration: Double { Double(numFrames) * hopSeconds }
@@ -45,7 +53,7 @@ struct Spectrogram: Sendable {
 			var error: NSError?
 			let ok = KKSpectrogramWrite(
 				url, base, UInt32(numFrames), UInt32(numBands), hopSeconds,
-				timelineStart + timecodeStart, &error)
+				timelineStart + timecodeStart, floorDB, ceilingDB, &error)
 			if !ok {
 				throw error ?? SonarSourceError.emptySpectrogram
 			}

@@ -342,6 +342,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   _choiceIcons = [tmpl.choiceIcons copy];
   _choiceValues = [tmpl.choiceValues copy];
   _wrapsChoicePills = tmpl.wrapsChoicePills;
+  _choiceUsesDropdown = tmpl.choiceUsesDropdown;
   _isToggle = tmpl.isToggle;
   _autoSizesComponentLabels = tmpl.autoSizesComponentLabels;
   _visibleWhenLabel = [tmpl.visibleWhenLabel copy];
@@ -435,6 +436,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.choiceIcons = [_choiceIcons copy];
   c.choiceValues = [_choiceValues copy];
   c.wrapsChoicePills = _wrapsChoicePills;
+  c.choiceUsesDropdown = _choiceUsesDropdown;
   c.isToggle = _isToggle;
   c.autoSizesComponentLabels = _autoSizesComponentLabels;
   c.visibleWhenLabel = [_visibleWhenLabel copy];

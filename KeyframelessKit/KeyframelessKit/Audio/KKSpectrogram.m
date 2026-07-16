@@ -11,11 +11,21 @@
 
 #import "KKLog.h"
 
-const uint32_t KKSpectrogramFormatVersion = 1;
+const uint32_t KKSpectrogramFormatVersion = 2;
 
 static NSString *const kKKSpectrogramAppGroupID =
     @"group.co.overpolish.keyframeless";
-static const size_t kKKSpectrogramHeaderSize = 4 + 4 + 4 + 4 + 8 + 8;
+// v1: magic, version, numFrames, numBands, hopSeconds, timelineStart.
+// v2 appends the dB window. The grid starts after whichever header the file
+// declares, so the two sizes are what locate it - not one constant.
+static const size_t kKKSpectrogramHeaderSizeV1 = 4 + 4 + 4 + 4 + 8 + 8;
+static const size_t kKKSpectrogramHeaderSizeV2 =
+    kKKSpectrogramHeaderSizeV1 + 8 + 8;
+
+// What v1 was always written with, so a file from before the window was stored
+// reads back as the loudness it actually encoded.
+static const double kKKSpectrogramLegacyFloorDB = -85.0;
+static const double kKKSpectrogramLegacyCeilingDB = -15.0;
 
 struct KKSpectrogram {
   void *map;
@@ -25,6 +35,8 @@ struct KKSpectrogram {
   uint32_t numBands;
   double hopSeconds;
   double timelineStart;
+  double floorDB;
+  double ceilingDB;
 };
 
 static uint32_t KKReadU32(const uint8_t *p) {
@@ -67,7 +79,7 @@ KKSpectrogramRef KKSpectrogramOpen(NSURL *url) {
     return NULL;
   }
   struct stat st;
-  if (fstat(fd, &st) != 0 || (size_t)st.st_size < kKKSpectrogramHeaderSize) {
+  if (fstat(fd, &st) != 0 || (size_t)st.st_size < kKKSpectrogramHeaderSizeV1) {
     close(fd);
     KKLogWarn(@"KKSpectrogram: %@ is too small to be a spectrogram",
               url.lastPathComponent);
@@ -101,10 +113,32 @@ KKSpectrogramRef KKSpectrogramOpen(NSURL *url) {
   double hopSeconds = KKReadF64(bytes + 16);
   double timelineStart = KKReadF64(bytes + 24);
 
+  size_t headerSize =
+      version >= 2 ? kKKSpectrogramHeaderSizeV2 : kKKSpectrogramHeaderSizeV1;
+  double floorDB = kKKSpectrogramLegacyFloorDB;
+  double ceilingDB = kKKSpectrogramLegacyCeilingDB;
+  if (version >= 2) {
+    if (size < kKKSpectrogramHeaderSizeV2) {
+      munmap(map, size);
+      KKLogWarn(@"KKSpectrogram: %@ claims v%u but has no dB window",
+                url.lastPathComponent, version);
+      return NULL;
+    }
+    floorDB = KKReadF64(bytes + 32);
+    ceilingDB = KKReadF64(bytes + 40);
+    // An inverted or collapsed window would make every dB map to the same band
+    // value, so treat it as corrupt rather than dividing by ~0 later.
+    if (!(ceilingDB > floorDB)) {
+      munmap(map, size);
+      KKLogWarn(@"KKSpectrogram: %@ has a bad dB window (%.1f..%.1f)",
+                url.lastPathComponent, floorDB, ceilingDB);
+      return NULL;
+    }
+  }
+
   // Trust nothing: a truncated or corrupt file must fail here, not by reading
   // off the end of the mapping on the render thread.
-  size_t expected =
-      kKKSpectrogramHeaderSize + (size_t)numFrames * numBands * sizeof(float);
+  size_t expected = headerSize + (size_t)numFrames * numBands * sizeof(float);
   if (numFrames == 0 || numBands == 0 || hopSeconds <= 0 || size < expected) {
     munmap(map, size);
     KKLogWarn(@"KKSpectrogram: %@ header doesn't match its size",
@@ -119,11 +153,13 @@ KKSpectrogramRef KKSpectrogramOpen(NSURL *url) {
   }
   spectrogram->map = map;
   spectrogram->mapSize = size;
-  spectrogram->data = (const float *)(bytes + kKKSpectrogramHeaderSize);
+  spectrogram->data = (const float *)(bytes + headerSize);
   spectrogram->numFrames = numFrames;
   spectrogram->numBands = numBands;
   spectrogram->hopSeconds = hopSeconds;
   spectrogram->timelineStart = timelineStart;
+  spectrogram->floorDB = floorDB;
+  spectrogram->ceilingDB = ceilingDB;
   return spectrogram;
 }
 
@@ -152,6 +188,23 @@ double KKSpectrogramTimelineStart(KKSpectrogramRef s) {
 
 double KKSpectrogramDuration(KKSpectrogramRef s) {
   return s ? (double)s->numFrames * s->hopSeconds : 0;
+}
+
+double KKSpectrogramFloorDB(KKSpectrogramRef s) {
+  return s ? s->floorDB : kKKSpectrogramLegacyFloorDB;
+}
+double KKSpectrogramCeilingDB(KKSpectrogramRef s) {
+  return s ? s->ceilingDB : kKKSpectrogramLegacyCeilingDB;
+}
+
+double KKSpectrogramNormalizedForDB(KKSpectrogramRef s, double db) {
+  double floorDB = KKSpectrogramFloorDB(s);
+  double ceilingDB = KKSpectrogramCeilingDB(s);
+  double span = ceilingDB - floorDB;
+  if (span <= 0)
+    return 0;
+  double n = (db - floorDB) / span;
+  return n < 0 ? 0 : (n > 1 ? 1 : n);
 }
 
 BOOL KKSpectrogramSampleAtTime(KKSpectrogramRef s, double timelineSeconds,
@@ -184,7 +237,8 @@ BOOL KKSpectrogramSampleAtTime(KKSpectrogramRef s, double timelineSeconds,
 
 BOOL KKSpectrogramWrite(NSURL *url, const float *data, uint32_t numFrames,
                         uint32_t numBands, double hopSeconds,
-                        double timelineStart, NSError **error) {
+                        double timelineStart, double floorDB, double ceilingDB,
+                        NSError **error) {
   if (!data || numFrames == 0 || numBands == 0) {
     if (error) {
       *error = [NSError
@@ -194,9 +248,18 @@ BOOL KKSpectrogramWrite(NSURL *url, const float *data, uint32_t numFrames,
     }
     return NO;
   }
+  if (!(ceilingDB > floorDB)) {
+    if (error) {
+      *error = [NSError
+          errorWithDomain:@"KKSpectrogram"
+                     code:2
+                 userInfo:@{NSLocalizedDescriptionKey : @"Bad dB window"}];
+    }
+    return NO;
+  }
   size_t gridBytes = (size_t)numFrames * numBands * sizeof(float);
   NSMutableData *out =
-      [NSMutableData dataWithCapacity:kKKSpectrogramHeaderSize + gridBytes];
+      [NSMutableData dataWithCapacity:kKKSpectrogramHeaderSizeV2 + gridBytes];
   [out appendBytes:"KKSG" length:4];
   uint32_t version = CFSwapInt32HostToLittle(KKSpectrogramFormatVersion);
   [out appendBytes:&version length:4];
@@ -206,6 +269,8 @@ BOOL KKSpectrogramWrite(NSURL *url, const float *data, uint32_t numFrames,
   [out appendBytes:&bands length:4];
   KKAppendF64LE(out, hopSeconds);
   KKAppendF64LE(out, timelineStart);
+  KKAppendF64LE(out, floorDB);
+  KKAppendF64LE(out, ceilingDB);
   [out appendBytes:data length:gridBytes];
   return [out writeToURL:url options:NSDataWritingAtomic error:error];
 }

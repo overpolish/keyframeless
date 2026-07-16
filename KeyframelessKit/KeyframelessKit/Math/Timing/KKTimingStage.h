@@ -392,6 +392,16 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// metadata; re-asserted via `kkApplyPickerMetadataFrom:`.
 @property(nonatomic) BOOL wrapsChoicePills;
 
+/// When YES a choice row is a searchable single-select DROPDOWN instead of a
+/// pill group: the row shows the current pick and expands a list in place.
+///
+/// Pills are better while they fit - every option visible, one click to switch
+/// - so this is the escape hatch for a set that is long (pills wrap into a
+/// wall) or open-ended (a shader author's `#choice ... dropdown`, whose options
+/// this code has never seen). Build-time metadata; re-asserted via
+/// `kkApplyPickerMetadataFrom:`.
+@property(nonatomic) BOOL choiceUsesDropdown;
+
 /// Optional per-choice STORED VALUES, parallel to `choiceLabels`. When set, the
 /// lane stores `choiceValues[i]` instead of the selected index `i`.
 ///

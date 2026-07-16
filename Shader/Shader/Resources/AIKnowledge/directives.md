@@ -45,8 +45,21 @@ The uniform TYPE is folded away by the compiler - you use `uAmount` directly as 
 - `label="Nice Name"` - inspector display name (defaults to a prettified uniform name: `uCornerRadius` -> "Corner Radius").
 - `min=` / `max=` - value range. Omit `max=` to leave the field unbounded (the slider still uses a nominal cap).
 - `default=` - starting value. `#point` / `#multi` take `default="x,y"` / `default="a,b,c"`.
-- `#choice` adds `options="One,Two,Three"` (the pill labels; `default=` is the 0-based index).
+- `#choice` adds `options="One,Two,Three"` (the pill labels; `default=` is the 0-based index) and `dropdown` (see below).
 - `#multi` adds `fields={Width,Height}` (names + counts the components) and `lockaspect` (components aspect-linked, ratio preserved on an OSC drag).
+
+### `#choice` as a dropdown
+
+A `#choice` is segmented pills by default: every option on screen, one click to switch. Add `dropdown` when that stops being a good deal.
+
+```glsl
+// #choice label="Style" options="Bars,Spikes,Dots,Ring,Comet" default=0 dropdown
+uniform int uStyle;
+```
+
+The row then shows the current pick and expands a searchable list in place. It's the right call when the options are **many** (past a handful the pills wrap into a wall that pushes the rest of the panel down) or **long-worded**. Keep the pills for a short set - a dropdown hides the options behind a click and makes comparing them slower.
+
+It's opt-in rather than automatic on a count, because a control that changed shape at the 6th option would surprise you more than either default.
 
 ### `#audio` is the odd one out
 
@@ -57,7 +70,9 @@ Every other directive builds a keyframeable lane whose value you set. `#audio` d
 uniform vec4 uMusic[16];
 ```
 
-Read it with the generated `uMusicBand(i)` (band `i`, roughly `0...1`, low frequency first) and `uMusicBands` (how many there are, 4 per `vec4`), never by indexing the `vec4` packing by hand. It takes `label=` and `smooth=<seconds>` (default `0.08`). Two per shader, up to 24 `vec4`s each.
+Read it with the generated `uMusicBand(i)` (band `i`, roughly `0...1`, low frequency first) and `uMusicBands` (how many there are, 4 per `vec4`), never by indexing the `vec4` packing by hand. Two per shader, up to 24 `vec4`s each.
+
+One `#audio` builds an **Audio** group of four lanes, not one control: the source picker, plus animatable **Noise Gate** (dB), **Release** (seconds, how long a band takes to fall to zero once gated) and **Smoothness** (seconds) lanes. The directive takes `label=`, and `gate=` / `release=` / `smooth=` to seed those three - they're starting values, not settings, since the right gate depends on the mix rather than on the shader.
 
 Nothing picked reads as silence rather than an error, so a shader with an unbound `#audio` still renders. See `audio-shader-directive` for shaping the levels into something that looks good, and `audio-sonar` for how a user publishes the audio in the first place.
 

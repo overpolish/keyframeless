@@ -25,7 +25,15 @@ NS_ASSUME_NONNULL_BEGIN
 ///   uint32   numBands
 ///   float64  hopSeconds
 ///   float64  timelineStart
+///   float64  floorDB     (v2+) the dB mapped to 0.0
+///   float64  ceilingDB   (v2+) the dB mapped to 1.0
 ///   float32  data[numFrames * numBands]   row-major [frame][band], 0...1
+///
+/// v1 files have no dB window and read back as the -85/-15 they were written
+/// with. The window is IN the file because band values are normalised against
+/// it: without it, 0.5 is un-anchored to any real loudness, so a consumer
+/// wanting a dB threshold would have to hard-code Sonar's constants and would
+/// silently re-scale the day they were tuned.
 ///
 /// Frame f is timeline second `timelineStart + f * hopSeconds`.
 ///
@@ -59,6 +67,16 @@ double KKSpectrogramTimelineStart(KKSpectrogramRef spectrogram);
 /// Seconds of timeline covered.
 double KKSpectrogramDuration(KKSpectrogramRef spectrogram);
 
+/// The dB window the band values are normalised against: `floorDB` reads 0.0,
+/// `ceilingDB` reads 1.0. Use them to turn a real loudness into a band value -
+/// `KKSpectrogramNormalizedForDB` does exactly that.
+double KKSpectrogramFloorDB(KKSpectrogramRef spectrogram);
+double KKSpectrogramCeilingDB(KKSpectrogramRef spectrogram);
+
+/// `db` as a 0...1 band value for this spectrogram's window, clamped. Below the
+/// floor gives 0, above the ceiling gives 1.
+double KKSpectrogramNormalizedForDB(KKSpectrogramRef spectrogram, double db);
+
 /// Samples the spectrum at a timeline time into `outBands`.
 ///
 /// Render-path safe: no allocation, no locking, no Objective-C messaging - it
@@ -73,10 +91,12 @@ BOOL KKSpectrogramSampleAtTime(KKSpectrogramRef spectrogram,
                                size_t maxBands);
 
 /// Writes the format. `data` is row-major [frame][band], values 0...1.
+/// `floorDB` / `ceilingDB` are the window `data` was normalised against.
 /// Returns NO and sets `error` on a bad write.
 BOOL KKSpectrogramWrite(NSURL *url, const float *data, uint32_t numFrames,
                         uint32_t numBands, double hopSeconds,
-                        double timelineStart, NSError **error);
+                        double timelineStart, double floorDB, double ceilingDB,
+                        NSError **error);
 
 /// The shared app-group directory Sonar publishes into, or nil without the
 /// `group.co.overpolish.keyframeless` entitlement. A workflow extension's own

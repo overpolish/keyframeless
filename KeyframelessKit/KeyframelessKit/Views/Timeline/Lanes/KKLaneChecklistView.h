@@ -58,6 +58,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// Set by the host so the list can resize the popover to the visible row count.
 @property(nonatomic, weak, nullable) NSPopover *popover;
 
+/// NO = single-select: rows draw as radios, and checking one unchecks the rest.
+/// Default YES, because every lane list here is a checklist - a picker (a
+/// shader's `#choice dropdown`) is the exception that opts out.
+///
+/// Only the LOOK and the sibling-unchecking live here. Which row is checked is
+/// still the subclass's state, so a subclass opting out sets this and keeps
+/// answering `-configureRow:` from its own selection.
+@property(nonatomic) BOOL allowsMultipleSelection;
+
+/// Check `row` and uncheck every other, without a rebuild. For a single-select
+/// subclass to call from a row's toggle so the mark moves on the same tick as
+/// the click, rather than after a round-trip through the host.
+- (void)checkOnlyRow:(_KKManageRow *)row;
+
 /// Subclass hook: configure a freshly-created row (`rowLabel` is already set)
 /// for `lane` - its checked/warning state and toggle handlers. Default: no-op.
 - (void)configureRow:(_KKManageRow *)row forLane:(KKLane *)lane;

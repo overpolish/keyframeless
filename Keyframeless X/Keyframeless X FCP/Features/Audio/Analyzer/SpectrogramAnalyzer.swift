@@ -144,7 +144,8 @@ enum SpectrogramAnalyzer {
 		return Analysis(
 			spectrogram: Spectrogram(
 				numFrames: numFrames, numBands: numBands, hopSeconds: hop,
-				timelineStart: timelineStart, data: grid),
+				timelineStart: timelineStart, data: grid,
+				floorDB: Double(config.floorDB), ceilingDB: Double(config.ceilingDB)),
 			skipped: skipped)
 	}
 
