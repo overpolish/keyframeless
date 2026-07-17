@@ -6,14 +6,23 @@ echo ""
 echo "This will remove Keyframeless from your system."
 echo ""
 
-MOTION_TEMPLATES="$HOME/Movies/Motion Templates.localized/Effects.localized/Keyframeless"
+MOTION_BASE="$HOME/Movies/Motion Templates.localized"
 APP_DIR="/Applications/Keyframeless"
+
+# The Keyframeless folder under each template type a plugin might install (matches
+# the set the postinstall copies). A plugin can ship more than one - Shader ships
+# both an effect and a transition - so remove them all.
+TEMPLATES=()
+for TYPE in Effects.localized Generators.localized Titles.localized Transitions.localized; do
+    d="$MOTION_BASE/$TYPE/Keyframeless"
+    [ -d "$d" ] && TEMPLATES+=("$d")
+done
 
 echo "The following will be deleted:"
 echo "  $APP_DIR"
-if [ -d "$MOTION_TEMPLATES" ]; then
-    echo "  $MOTION_TEMPLATES"
-fi
+for t in "${TEMPLATES[@]}"; do
+    echo "  $t"
+done
 echo ""
 
 read -p "Continue? (y/n) " -n 1 -r
@@ -24,10 +33,10 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-if [ -d "$MOTION_TEMPLATES" ]; then
-    rm -rf "$MOTION_TEMPLATES"
-    echo "Removed Motion Templates."
-fi
+for t in "${TEMPLATES[@]}"; do
+    rm -rf "$t"
+done
+[ ${#TEMPLATES[@]} -gt 0 ] && echo "Removed Motion Templates."
 
 sudo rm -rf "$APP_DIR"
 echo "Removed Keyframeless."

@@ -13,7 +13,7 @@
 #   rounded        Rounded plugin
 #   magicmove      MagicMove plugin
 #   keyframelessx  Keyframeless X app
-#   mesh         Mesh plugin
+#   shader         Shader plugin
 #   canvas         Canvas plugin
 #   glow           Glow plugin
 #   ai             Keyframeless AI (standalone local helper)
@@ -29,7 +29,7 @@ usage() {
   echo "  rounded        Rounded plugin"
   echo "  magicmove      MagicMove plugin"
   echo "  keyframelessx  Keyframeless X app"
-  echo "  mesh         Mesh plugin"
+  echo "  shader         Shader plugin"
   echo "  canvas         Canvas plugin"
   echo "  glow           Glow plugin"
   echo "  ai             Keyframeless AI (standalone local helper)"
@@ -53,7 +53,7 @@ COMPONENT="$1"
 BUMP="$2"
 
 case "$COMPONENT" in
-  rounded | magicmove | glow | canvas | mesh | keyframelessx | ai) ;;
+  rounded | magicmove | glow | canvas | shader | keyframelessx | ai) ;;
   *)
     echo "Unknown component: $COMPONENT"
     usage
@@ -68,7 +68,7 @@ plist_for_component() {
     magicmove)     echo "MagicMove/MagicMove/Plugin/Info.plist" ;;
     glow)          echo "Glow/Glow/Plugin/Info.plist" ;;
     canvas)        echo "Canvas/Canvas/Plugin/Info.plist" ;;
-    mesh) echo "Mesh/Mesh/Plugin/Info.plist" ;;
+    shader)        echo "Shader/Shader/Plugin/Info.plist" ;;
     ai) echo "Distribution/helper/kk-ai-helper.plist" ;;
     keyframelessx) echo "" ;;
   esac
@@ -217,11 +217,11 @@ case "$COMPONENT" in
     ;;
 
 
-  mesh)
-    bump_plist "Mesh/Mesh/Wrapper Application/Info.plist"
-    bump_plist "Mesh/Mesh/Plugin/Info.plist"
-    bump_fxplug "Mesh/Mesh/Plugin/Info.plist"
-    bump_pkgproj "co.overpolish.keyframeless.Mesh"
+  shader)
+    bump_plist "Shader/Shader/Wrapper Application/Info.plist"
+    bump_plist "Shader/Shader/Plugin/Info.plist"
+    bump_fxplug "Shader/Shader/Plugin/Info.plist"
+    bump_pkgproj "co.overpolish.keyframeless.Shader"
     ;;
 
   ai)

@@ -18,6 +18,11 @@
       "kind": "FxPlug effect",
       "payhip": "https://store.overpolish.co/b/MfWRG"
     },
+    "shader": {
+      "name": "Shader",
+      "kind": "FxPlug effect",
+      "payhip": "https://store.overpolish.co/b/wGE3c"
+    },
     "rounded": {
       "name": "Rounded",
       "kind": "FxPlug effect",

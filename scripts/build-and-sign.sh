@@ -9,7 +9,7 @@
 #   <target>:
 #     combined         the all-in-one Keyframeless.pkg (every plugin)
 #     all              every plugin as its own per-product .pkg
-#     <component>      one per-product .pkg (rounded|keyframelessx|magicmove|glow|canvas|keyframelessai)
+#     <component>      one per-product .pkg (rounded|keyframelessx|magicmove|glow|canvas|shader|keyframelessai)
 #
 # Per-product builds GENERATE the single-product .pkgproj and its uninstaller from
 # templates (split-pkgproj.py + uninstall.template), build, sign, then delete those

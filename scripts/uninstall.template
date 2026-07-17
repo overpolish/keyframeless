@@ -7,10 +7,20 @@
 PLUGIN="__PLUGIN_NAME__"
 APP_DIR="/Applications/Keyframeless"
 APP="$APP_DIR/__APP_NAME__"
-TEMPLATES_DIR="$HOME/Movies/Motion Templates.localized/Effects.localized/Keyframeless"
-TEMPLATE_NAME="__TEMPLATE_NAME__"
-TEMPLATE=""
-[ -n "$TEMPLATE_NAME" ] && TEMPLATE="$TEMPLATES_DIR/$TEMPLATE_NAME"
+MOTION_BASE="$HOME/Movies/Motion Templates.localized"
+
+# One entry per template this plugin installs, each relative to MOTION_BASE
+# (e.g. "Effects.localized/Keyframeless/Shader • KF"). A plugin can ship more than
+# one type (effect + transition), so this is a list, not a single path. Empty for
+# products with no templates (the workflow extension).
+TEMPLATE_RELPATHS=(
+__TEMPLATE_RELPATHS__
+)
+
+TEMPLATES=()
+for rel in "${TEMPLATE_RELPATHS[@]}"; do
+    [ -n "$rel" ] && TEMPLATES+=("$MOTION_BASE/$rel")
+done
 
 echo "$PLUGIN Uninstaller"
 echo "=============================="
@@ -18,10 +28,17 @@ echo ""
 echo "Removes $PLUGIN only. Your other Keyframeless plugins are untouched."
 echo ""
 
+ANY_TEMPLATE=0
+for t in "${TEMPLATES[@]}"; do
+    [ -e "$t" ] && ANY_TEMPLATE=1
+done
+
 echo "The following will be deleted:"
 [ -e "$APP" ] && echo "  $APP"
-[ -n "$TEMPLATE" ] && [ -e "$TEMPLATE" ] && echo "  $TEMPLATE"
-if [ ! -e "$APP" ] && { [ -z "$TEMPLATE" ] || [ ! -e "$TEMPLATE" ]; }; then
+for t in "${TEMPLATES[@]}"; do
+    [ -e "$t" ] && echo "  $t"
+done
+if [ ! -e "$APP" ] && [ "$ANY_TEMPLATE" -eq 0 ]; then
     echo "  (nothing - $PLUGIN is already uninstalled)"
     sleep 2
     osascript -e 'tell application "Terminal" to close front window' &
@@ -36,19 +53,24 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 0
 fi
 
-if [ -n "$TEMPLATE" ] && [ -e "$TEMPLATE" ]; then
-    rm -rf "$TEMPLATE"
-    echo "Removed $PLUGIN template."
-fi
+for t in "${TEMPLATES[@]}"; do
+    if [ -e "$t" ]; then
+        rm -rf "$t"
+        echo "Removed $PLUGIN template."
+    fi
+done
 if [ -e "$APP" ]; then
     sudo rm -rf "$APP"
     echo "Removed $PLUGIN app."
 fi
 
-# Drop this uninstaller, then clear the shared folders only if now empty
-# (other installed plugins keep them populated, so they survive).
+# Drop this uninstaller, then clear the shared folders only if now empty (other
+# installed plugins keep them populated, so they survive). Each template's parent
+# is a "<Type>.localized/Keyframeless" folder shared with the other plugins.
 sudo rm -f "$APP_DIR/Uninstall $PLUGIN"
-rmdir "$TEMPLATES_DIR" 2>/dev/null
+for t in "${TEMPLATES[@]}"; do
+    rmdir "$(dirname "$t")" 2>/dev/null
+done
 sudo rmdir "$APP_DIR" 2>/dev/null
 
 echo ""

@@ -47,6 +47,7 @@ COMPONENT_ID = {
     "magicmove": "co.overpolish.keyframeless.MagicMove",
     "glow": "co.overpolish.keyframeless.Glow",
     "canvas": "co.overpolish.keyframeless.Canvas",
+    "shader": "co.overpolish.keyframeless.Shader",
     # The shared local-AI engine (helper + LaunchAgent to /Library). Not a plugin
     # (no .app / Motion Template), so `--components` (which drives `all`) excludes it;
     # build it explicitly. build-and-sign.sh stages the helper before packaging.
@@ -77,29 +78,36 @@ def find_app_name(node):
     return None
 
 
-def template_folder_name(pkg):
-    """The '<Plugin> • KF' folder this plugin installs into the Motion Templates tree,
-    or '' if the product ships no templates (e.g. the Keyframeless X workflow ext)."""
+def template_rel_paths(pkg):
+    """Every template this plugin installs, each as a path relative to the Motion
+    Templates base (e.g. 'Effects.localized/Keyframeless/<Plugin> • KF'). A plugin
+    can ship more than one type - an effect AND a transition - so this is a list.
+    Empty for products with no templates (e.g. the Keyframeless X workflow ext)."""
+    paths = []
     for r in pkg.get("PACKAGE_SCRIPTS", {}).get("RESOURCES", []):
         rel = r.get("PATH", "")
         if "MotionTemplates" not in rel:
             continue
-        # rel is like ../MotionTemplates/<dir>/Effects.localized ; the installed
-        # subfolder lives at <dir>/Effects.localized/Keyframeless/<Plugin> • KF.
+        # rel is like ../MotionTemplates/<dir>/<Type>.localized ; the installed
+        # subfolder lives at <Type>.localized/Keyframeless/<Plugin> • KF.
+        type_dir = pathlib.Path(rel).name  # e.g. Effects.localized
         kf = (ROOT / "Distribution" / rel).resolve() / "Keyframeless"
         if kf.is_dir():
-            entries = [p.name for p in kf.iterdir() if p.name != ".DS_Store"]
-            if entries:
-                return entries[0]
-    return ""
+            for p in sorted(kf.iterdir()):
+                if p.name != ".DS_Store" and p.is_dir():
+                    paths.append(f"{type_dir}/Keyframeless/{p.name}")
+    return paths
 
 
-def write_uninstaller(component, plugin_name, app_name, template_name):
+def write_uninstaller(component, plugin_name, app_name, rel_paths):
+    # Bash-array body: one quoted, indented entry per template ("" when none, so
+    # the array is still valid and the uninstaller reports nothing to remove).
+    body = "\n".join(f'    "{p}"' for p in rel_paths) if rel_paths else '    ""'
     text = UNINSTALL_TEMPLATE.read_text(encoding="utf-8")
     text = (
         text.replace("__PLUGIN_NAME__", plugin_name)
         .replace("__APP_NAME__", app_name)
-        .replace("__TEMPLATE_NAME__", template_name)
+        .replace("__TEMPLATE_RELPATHS__", body)
     )
     out = ROOT / "Distribution" / "scripts" / f"uninstall-{component}"
     out.write_text(text, encoding="utf-8")
@@ -147,10 +155,10 @@ def build_one(combined, component):
     # for non-plugin components (e.g. the AI engine ships its own uninstaller in the
     # payload and has no .app / Motion Template).
     app_name = find_app_name(only["PACKAGE_FILES"]["HIERARCHY"])
-    tmpl_name = ""
+    tmpl_paths = []
     if app_name is not None:
-        tmpl_name = template_folder_name(only)
-        write_uninstaller(component, name, app_name, tmpl_name)
+        tmpl_paths = template_rel_paths(only)
+        write_uninstaller(component, name, app_name, tmpl_paths)
         for r in only.get("PACKAGE_SCRIPTS", {}).get("RESOURCES", []):
             if r.get("PATH", "").rstrip("/").endswith("scripts/uninstall"):
                 r["PATH"] = f"scripts/uninstall-{component}"
@@ -161,7 +169,7 @@ def build_one(combined, component):
     print(
         f"  wrote {out.relative_to(ROOT)}  (builds to build/{name}.pkg)\n"
         f"        uninstaller: scripts/uninstall-{component}  "
-        f"(app={app_name}, template={tmpl_name or 'none'})"
+        f"(app={app_name}, templates={', '.join(tmpl_paths) or 'none'})"
     )
 
 

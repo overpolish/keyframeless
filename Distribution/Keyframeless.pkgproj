@@ -3564,7 +3564,7 @@
 											<key>GID</key>
 											<integer>80</integer>
 											<key>PATH</key>
-											<string>release/Mesh.app</string>
+											<string>release/Shader.app</string>
 											<key>PATH_TYPE</key>
 											<integer>1</integer>
 											<key>PERMISSIONS</key>
@@ -4037,7 +4037,23 @@
 						<key>GID</key>
 						<integer>0</integer>
 						<key>PATH</key>
-						<string>../MotionTemplates/Mesh/Generators.localized</string>
+						<string>../MotionTemplates/Shader/Effects.localized</string>
+						<key>PATH_TYPE</key>
+						<integer>1</integer>
+						<key>PERMISSIONS</key>
+						<integer>493</integer>
+						<key>TYPE</key>
+						<integer>3</integer>
+						<key>UID</key>
+						<integer>0</integer>
+					</dict>
+					<dict>
+						<key>CHILDREN</key>
+						<array/>
+						<key>GID</key>
+						<integer>0</integer>
+						<key>PATH</key>
+						<string>../MotionTemplates/Shader/Transitions.localized</string>
 						<key>PATH_TYPE</key>
 						<integer>1</integer>
 						<key>PERMISSIONS</key>
@@ -4074,11 +4090,11 @@
 				<key>FOLLOW_SYMBOLIC_LINKS</key>
 				<false/>
 				<key>IDENTIFIER</key>
-				<string>co.overpolish.keyframeless.Mesh</string>
+				<string>co.overpolish.keyframeless.Shader</string>
 				<key>LOCATION</key>
 				<integer>0</integer>
 				<key>NAME</key>
-				<string>Mesh</string>
+				<string>Shader</string>
 				<key>OVERWRITE_PERMISSIONS</key>
 				<false/>
 				<key>PAYLOAD_SIZE</key>
@@ -4345,7 +4361,7 @@
 										<key>LANGUAGE</key>
 										<string>English</string>
 										<key>VALUE</key>
-										<string>Mesh plugin. Generator for use in Motion/Final Cut Pro.</string>
+										<string>Shader plugin. Effect for use in Motion/Final Cut Pro.</string>
 									</dict>
 								</array>
 								<key>OPTIONS</key>
