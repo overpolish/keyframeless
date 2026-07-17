@@ -9,7 +9,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="../assets/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="../assets/favicon-16.png" />
     <link rel="apple-touch-icon" href="../assets/apple-touch-icon.png" />
-    <meta name="kk-version" content="3.0.1" />
+    <meta name="kk-version" content="3.1.0" />
   </head>
   <body>
     <main class="wrap">
@@ -23,6 +23,35 @@
         </div>
         <a class="cta" href="https://store.overpolish.co/b/pDFf6">Get it on Payhip →</a>
       </header>
+      <section class="release">
+        <div class="release-head">
+          <h2>3.1.0</h2>
+          <span class="date">TBD</span>
+        </div>
+        <div class="group">
+          <span class="tag feature">New</span>
+          <ul class="bullets">
+            <li><strong>Sonar</strong> - a new free tab that makes effects react to your audio: drop in a project, pick the clips it should listen to, and hit Publish</li>
+            <li>What you select is what the effect hears</li>
+            <li>Effects stay in sync on export, where audio-reactive effects normally come out wrong or frozen, because Sonar listens to the audio up front rather than during the render</li>
+            <li>Uses the audio as Final Cut Pro plays it, so volume changes, fades, compressors and EQ are all included</li>
+          </ul>
+        </div>
+        <div class="group">
+          <span class="tag improvement">Improved</span>
+          <ul class="bullets">
+            <li>Standard Final Cut Pro role colours now signal the audio type on the timeline</li>
+            <li>Clicking a clip to hear it now plays straight away instead of pausing for about a second first</li>
+            <li>The playhead now follows what you hear rather than running slightly ahead</li>
+          </ul>
+        </div>
+        <div class="group">
+          <span class="tag fix">Fixed</span>
+          <ul class="bullets">
+            <li>Temporary audio is now cleared out automatically - working files were never removed and could quietly build to many gigabytes over months, along with part-finished transcription model downloads</li>
+          </ul>
+        </div>
+      </section>
       <section class="release">
         <div class="release-head">
           <h2>3.0.1</h2>
