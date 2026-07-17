@@ -99,6 +99,21 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     pointHandleCenter:(out CGPoint *)outCenter
           contentRect:(CGRect)contentRect;
+/// The active point handle's centre for a GUIDE spotlight/target, WITHOUT
+/// implying a drawable primary handle. A multi-point renderer (Shader) paints
+/// its handles via `extraPointHandleGlyphs` and has no single primary, so it
+/// leaves `pointHandleCenter` unanswered (else the draw loop would paint an
+/// opaque primary over its dim ghosts) and answers this instead. Same space +
+/// contract as `pointHandleCenter`. `pointHandleScreenRect` falls back here.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    activePointHandleCenter:(out CGPoint *)outCenter
+                contentRect:(CGRect)contentRect;
+/// As above, at explicit lane values (the guide's drag destination). Falls back
+/// from `pointHandleScreenRectForValues:`.
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    activePointHandleCenter:(out CGPoint *)outCenter
+                  forValues:(NSArray<NSNumber *> *)values
+                contentRect:(CGRect)contentRect;
 /// Extra point handles (e.g. crop corners/edges) beyond the single
 /// `pointHandleCenter`, in overlay points (y-up). Each is drawn with the same
 /// shared `KKPointOSC` glyph. Return nil/empty for none.

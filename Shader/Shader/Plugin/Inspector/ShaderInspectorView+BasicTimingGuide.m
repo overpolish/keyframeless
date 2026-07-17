@@ -18,11 +18,17 @@
 // glowing target.
 static const double kShaderOSCGuideTargetSnap = 0.04;
 
-// Build a single-keypose Origin timeline at object-space (objX, objY) - the
+// Plasma's point handle is keyed by its GLSL uniform name (the lane identity
+// the mini-viewer OSC binds to), not its display name. So the seed lane + every
+// lookup use @"uCenter"; "Center" is only what the user reads.
+static NSString *const kShaderGuideCenterLabel = @"uCenter";
+static NSString *const kShaderGuideScaleLabel = @"uScale";
+
+// Build a single-keypose Center timeline at object-space (objX, objY) - the
 // live value the interactive OSC drag applies.
 static KKTimeline *ShaderGuideOriginTimeline(double objX, double objY) {
   KKTimeline *tl = [KKTimeline timeline];
-  KKLane *lane = [KKLane laneWithLabel:@"Origin"];
+  KKLane *lane = [KKLane laneWithLabel:kShaderGuideCenterLabel];
   lane.enabled = YES;
   lane.valueType = KKLaneValueTypeGeneric;
   lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
@@ -33,7 +39,8 @@ static KKTimeline *ShaderGuideOriginTimeline(double objX, double objY) {
 
 static NSPoint ShaderGuideCurrentOrigin(KKTimelineLanesView *lanes) {
   for (KKLane *lane in lanes.currentTimeline.lanes) {
-    if ([lane.label isEqualToString:@"Origin"] && lane.keyposes.count > 0) {
+    if ([lane.label isEqualToString:kShaderGuideCenterLabel] &&
+        lane.keyposes.count > 0) {
       KKKeyPose *kp = lane.keyposes.firstObject;
       if (kp.values.count >= 2)
         return NSMakePoint(kp.values[0].doubleValue, kp.values[1].doubleValue);
@@ -49,16 +56,21 @@ static BOOL ShaderGuideOriginNearTarget(NSPoint p) {
 
 @implementation ShaderInspectorView (BasicTimingGuide)
 
-// Shader's timing-guide data: it teaches the Origin lane (with Scale as the
-// second Advanced-seed lane). The inspector-level bridges (play button, tabs,
-// scrub, play-accent, preview) come pre-wired from -makeTimingGuideConfig; only
-// the plugin data + the viewer rect (from Shader's OSC bridge) are filled here.
-// Installed as the inspector's timingGuideConfigProvider in -init.
+// Shader's timing-guide data: it teaches the Center lane (Plasma's `#point`
+// handle), with Scale (Plasma's ring) as the second Advanced-seed lane. The
+// inspector-level bridges (play button, tabs, scrub, play-accent, preview) come
+// pre-wired from -makeTimingGuideConfig; only the plugin data + the viewer rect
+// (from Shader's OSC bridge) are filled here. Installed as the inspector's
+// timingGuideConfigProvider in -init.
 - (KKTimingGuideConfig *)_timingGuideConfig {
   KKTimingGuideConfig *cfg = [self makeTimingGuideConfig];
-  cfg.primaryLabel = @"Origin";
-  // OSCs to keep visible while this guide runs (the rest are hidden).
-  cfg.oscKeepLabels = @[ @"Origin" ];
+  // Identity = the GLSL uniform (what the mini-viewer OSC binds to); the human
+  // name shows in the step copy.
+  cfg.primaryLabel = kShaderGuideCenterLabel;
+  cfg.primaryDisplayLabel = @"Center";
+  // OSCs to keep visible while this guide runs (the rest are hidden). Keyed by
+  // the uniform, matching the OSC element key.
+  cfg.oscKeepLabels = @[ kShaderGuideCenterLabel ];
   cfg.primaryComponentCount = 2;
   cfg.primaryValueType = KKLaneValueTypeGeneric;
   cfg.primarySeedValues = @[ @0.5, @0.5 ];
@@ -66,9 +78,11 @@ static BOOL ShaderGuideOriginNearTarget(NSPoint p) {
   // multi-select are taught across two rows. Scale is a non-featured lane (not
   // in the Origin-only keypose mini-viewer), so seeding it can't disturb the
   // featured Origin handle.
-  cfg.secondaryLabel = @"Scale";
+  cfg.secondaryLabel = kShaderGuideScaleLabel;
+  cfg.secondaryDisplayLabel = @"Scale";
   cfg.secondaryValueType = KKLaneValueTypeFloat;
-  cfg.secondarySeedValues = @[ @100.0, @100.0 ];
+  // Scale is a scalar in [1, 8]; seed it mid-range.
+  cfg.secondarySeedValues = @[ @4.0 ];
   // Destination the constants step drags Origin to (off-centre from the seeded
   // centre, normalized 0..1).
   cfg.primaryTargetValues = @[ @0.7, @0.35 ];
@@ -86,8 +100,8 @@ static BOOL ShaderGuideOriginNearTarget(NSPoint p) {
   };
   // The pill step disables Scale (not Origin), so the keypose mini-viewer
   // (which shows only the featured Origin lane) stays populated for the later
-  // steps.
-  cfg.oscDisableLabel = @"Scale";
+  // steps. Keyed by the uniform, matching the lane identity.
+  cfg.oscDisableLabel = kShaderGuideScaleLabel;
   // The OSC-shape strategy: how a viewer drag maps to the 2D Origin value and
   // back (pure math; the shared guide owns the copy). Origin is a point, so
   // values box as NSValue.
@@ -111,7 +125,15 @@ static BOOL ShaderGuideOriginNearTarget(NSPoint p) {
       NSPoint p = [v pointValue];
       ShaderSetGuidePosition(p.x, p.y);
       KKTimelineLanesView *lanes = weakLanes;
-      KKTimeline *tl = ShaderGuideOriginTimeline(p.x, p.y);
+      // Edit the Center keypose nearest the playhead, preserving the other
+      // seeded keyposes (the viewer drag teaches editing one pose, not wiping
+      // the animation). Falls back to a single-keypose lane only if the current
+      // timeline somehow has no Center lane.
+      KKTimeline *tl = KKTimelineSettingValuesNearestFraction(
+          lanes.currentTimeline, kShaderGuideCenterLabel,
+          lanes.playheadFraction, @[ @(p.x), @(p.y) ]);
+      if (!tl)
+        tl = ShaderGuideOriginTimeline(p.x, p.y);
       [lanes applyTimeline:tl];
       __strong typeof(weakSelf) strong = weakSelf;
       if (strong.onTimelineMutated)

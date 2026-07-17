@@ -12,11 +12,21 @@
 // path leans on when the user's own source is absent or broken.
 
 // The default shader: the classic cosine-palette plasma, so Custom renders
-// something alive out of the box (and seeds the editor).
+// something alive out of the box (and seeds the editor). It also ships the two
+// directive-driven on-screen controls the timing guide teaches on - a Center
+// the pattern radiates from (a point handle) and a Scale (a ring around that
+// centre) - so a fresh instance has real OSCs, not just code. Default values
+// reproduce the plain plasma: Center at the frame middle, Scale 3.
 NSString *ShaderCustomDefaultShaderSource(void) {
-  return @"void mainImage( out vec4 fragColor, in vec2 fragCoord ) {\n"
-         @"    vec2 uv = fragCoord / iResolution.xy;\n"
-         @"    vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx * 3.0 + "
+  return @"// #point label=\"Center\" osc default=\"0.5,0.5\"\n"
+         @"uniform vec2 uCenter;\n"
+         @"// #float label=\"Scale\" osc=ring link=uCenter min=1 max=8 "
+         @"default=3\n"
+         @"uniform float uScale;\n"
+         @"\n"
+         @"void mainImage( out vec4 fragColor, in vec2 fragCoord ) {\n"
+         @"    vec2 uv = (fragCoord - uCenter) / iResolution.xy;\n"
+         @"    vec3 col = 0.5 + 0.5 * cos(iTime + uv.xyx * uScale + "
          @"vec3(0.0, 2.0, 4.0));\n"
          @"    fragColor = vec4(col, 1.0);\n"
          @"}\n";

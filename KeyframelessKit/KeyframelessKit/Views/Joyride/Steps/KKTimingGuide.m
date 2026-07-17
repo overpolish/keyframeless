@@ -38,10 +38,10 @@ static const double kWatchBackSeconds = 1.0;
 // Drag the In-end diamond toward 1.0s; snap windows for magnet + release.
 static const double kDragTargetSeconds = 1.0;
 // Release-acceptance half-window (seconds) around the target. This step has NO
-// cursor magnet (the adaptive/log-warped Basic timeline fights snapping), so the
-// diamond never clicks into place - keep the window generous (+/-0.2s) so landing
-// near 1.0s advances, instead of stranding the user on a boundary that "looks
-// right" but is just outside a tight tolerance.
+// cursor magnet (the adaptive/log-warped Basic timeline fights snapping), so
+// the diamond never clicks into place - keep the window generous (+/-0.2s) so
+// landing near 1.0s advances, instead of stranding the user on a boundary that
+// "looks right" but is just outside a tight tolerance.
 static const double kDragSnapSeconds = 0.2;
 static const CGFloat kDragSnapPx = 14.0;
 
@@ -247,6 +247,10 @@ static const CGFloat kDragSnapPx = 14.0;
   __weak KKTimelineLanesView *weakLanes = lanes;
   __weak KKTimelineBasicView *weakGraph = lanes.basicGraph;
   NSString *primary = config.primaryLabel;
+  // Identity (`primary`) drives lookups + the seed lane; the display name is
+  // what the user reads (they differ when the lane is keyed by an internal id,
+  // e.g. Shader's GLSL uniform @"uCenter" shown as "Center").
+  NSString *primaryDisplay = config.primaryDisplayLabel ?: primary;
 
   const NSInteger ixIntro = 0, ixOpenConstants = 1, ixEditConstant = 2,
                   ixAdd = 3, ixAddPrimary = 4, ixPhases = 5, ixToggleIn = 6,
@@ -303,7 +307,7 @@ static const CGFloat kDragSnapPx = 14.0;
                                  @"away.",
                                  @"Timing guide: drag a constant to a target. "
                                  @"%@ = property name."),
-                           primary]
+                           primaryDisplay]
       dragMessage:KKLoc(@"Drag toward the <warn>glowing target</warn>.",
                         @"Timing guide: drag-to-target hint.")
       circular:YES
@@ -361,7 +365,7 @@ static const CGFloat kDragSnapPx = 14.0;
           [NSString stringWithFormat:KKLoc(@"Add <accent>%@</accent>.",
                                            @"Timing guide: add the named "
                                            @"property. %@ = property name."),
-                                     primary]
+                                     primaryDisplay]
            targetView:nil];
   sAddPrimary.targetScreenRect = ^NSRect {
     __strong KKTimelineLanesView *l = weakLanes;
@@ -575,12 +579,12 @@ static const CGFloat kDragSnapPx = 14.0;
   if (config.helpButtonScreenRect) {
     sDone.showsNext = YES;
     sHelp = [KKJoyrideStep
-        stepWithMessage:KKLoc(
-                            @"More interactive guides and docs live in <symbol "
-                            @"questionmark.circle color=accent /> Help - open it "
-                            @"anytime.",
-                            @"Timing guide: closing step pointing at the Help "
-                            @"button.")
+        stepWithMessage:
+            KKLoc(@"More interactive guides and docs live in <symbol "
+                  @"questionmark.circle color=accent /> Help - open it "
+                  @"anytime.",
+                  @"Timing guide: closing step pointing at the Help "
+                  @"button.")
              targetView:nil];
     sHelp.spotlightCircular = YES;
     sHelp.targetScreenRect = ^NSRect {

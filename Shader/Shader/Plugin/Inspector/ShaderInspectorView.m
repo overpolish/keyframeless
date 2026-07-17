@@ -5,6 +5,7 @@
 
 #import "ShaderInspectorView.h"
 
+#import "Constants.h" // ShaderCustomDefaultShaderSource
 #import "ShaderCategory.h"
 #import "ShaderInspectorView+Guides.h"
 #import "ShaderInspectorView_Private.h"
@@ -261,6 +262,9 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
   if (self.onBoundaryPreviewNeedsRender)
     self.onBoundaryPreviewNeedsRender();
 
+  // (The source-derived OSC set re-wires via -applyTimeline: above, which fires
+  // onCodeCommitted when the effective shader source changes.)
+
   // Refresh the open code editor so the loaded shader's code shows + is
   // editable.
   NSMutableArray<NSDictionary<NSString *, NSString *> *> *sections =
@@ -279,6 +283,31 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
 - (void)applyTimeline:(KKTimeline *)timeline {
   [super applyTimeline:timeline];
   _miniViewerRenderer.timeline = timeline;
+  // Re-wire the source-derived OSC set (the cog checklist) whenever the
+  // effective shader source changes - the SAME re-wire a code-editor commit /
+  // browser load does (via onCodeCommitted). Mirrors -shaderSourceFromTimeline:
+  // exactly: a present-with-code Shader lane uses its code, otherwise the baked
+  // default. A guide seed drops the code lane => the default => its OSC
+  // controls (Center/Scale) load, so the cog isn't stuck on the previous clip's
+  // set.
+  NSString *effective = ShaderCustomDefaultShaderSource();
+  for (KKLane *l in timeline.lanes)
+    if ([l.label isEqualToString:@"Shader"] && l.codeString.length) {
+      effective = l.codeString;
+      break;
+    }
+  if (![effective isEqualToString:(_lastEffectiveShaderSource ?: @"")]) {
+    _lastEffectiveShaderSource = [effective copy];
+    // Route through the lanes view's code-commit block (not just the plugin's
+    // onCodeCommitted): it re-derives the available-lane set from the source
+    // (so the cog checklist resolves display names - Center/Scale, not the raw
+    // uCenter/uScale keys) AND forwards to the plugin's OSC re-wire. The base
+    // -applyTimeline: skips its own lane re-derive here because the seed's code
+    // lane is empty; this uses the resolved effective source instead.
+    void (^commit)(NSString *) = self.basicLanesView.onCodeCommitted;
+    if (commit)
+      commit(effective);
+  }
 }
 
 - (void)viewDidMoveToWindow {

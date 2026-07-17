@@ -43,6 +43,12 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniViewerView *c) {
   __weak KKTimelineAdvancedView *weakAdv = config.lanesView.advancedGraph;
   NSString *featured = config.oscKeepLabels.firstObject ?: config.primaryLabel;
   NSString *primary = config.primaryLabel;
+  // Display name for the copy (the featured element is usually the primary
+  // lane; fall back to its identity when no display name is set).
+  NSString *featuredDisplay = [featured isEqualToString:config.primaryLabel] &&
+                                      config.primaryDisplayLabel
+                                  ? config.primaryDisplayLabel
+                                  : featured;
 
   KKOSCGuideBridge *bridge =
       config.oscGuideBridge ? config.oscGuideBridge() : nil;
@@ -90,7 +96,7 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniViewerView *c) {
                              @"the <warn>glowing target</warn>.",
                              @"OSC guide: drag the handle to the target. %@ = "
                              @"property name."),
-                         featured];
+                         featuredDisplay];
     strategy.dragMessage =
         KKLoc(@"Keep dragging toward the <warn>glowing target</warn>.",
               @"OSC guide: drag-to-target hint.");
@@ -119,7 +125,7 @@ static NSRect KKOSCGuideCanvasScreenRect(KKMiniViewerView *c) {
                                       @"to edit it directly.",
                                       @"OSC guide: edit via the viewer handle. "
                                       @"%@ = property name."),
-                                featured]
+                                featuredDisplay]
              targetView:nil];
     sIntro.targetScreenRect = viewerRect;
     sIntro.spotlightCircular = NO;

@@ -337,6 +337,48 @@
         }
       }
     },
+    "Controls (directives)": {
+      "comment": "Help section: directives.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerungen (Direktiven)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controles (directivas)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Commandes (directives)"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール（ディレクティブ）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤(디렉티브)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件（指令）"
+          }
+        }
+      }
+    },
     "Drag the centre handle": {
       "comment": "Help shortcut keys: origin handle.",
       "extractionState": "manual",
@@ -1383,6 +1425,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "基本计时和高级计时有什么区别？"
+          }
+        }
+      }
+    },
+    "Writing a shader": {
+      "comment": "Help section: the shader language.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Shader schreiben"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribir un shader"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Écrire un shader"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シェーダを書く"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "셰이더 작성"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编写着色器"
           }
         }
       }

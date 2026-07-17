@@ -131,6 +131,25 @@
   return out;
 }
 
+- (BOOL)activeHandleCenter:(out CGPoint *)outCenter forContentRect:(CGRect)cr {
+  for (KKPositionMiniController *c in _controllers)
+    if ([self _handleActive:c.laneLabel] && [c pointHandleCenter:outCenter
+                                                  forContentRect:cr])
+      return YES;
+  return NO;
+}
+
+- (BOOL)activeHandleCenter:(out CGPoint *)outCenter
+                 forValues:(NSArray<NSNumber *> *)values
+            forContentRect:(CGRect)cr {
+  for (KKPositionMiniController *c in _controllers)
+    if ([self _handleActive:c.laneLabel] && [c pointHandleCenter:outCenter
+                                                       forValues:values
+                                                  forContentRect:cr])
+      return YES;
+  return NO;
+}
+
 - (NSArray<NSDictionary<NSString *, id> *> *)motionPathBundlesForContentRect:
     (CGRect)cr {
   NSMutableArray<NSDictionary<NSString *, id> *> *out = [NSMutableArray array];

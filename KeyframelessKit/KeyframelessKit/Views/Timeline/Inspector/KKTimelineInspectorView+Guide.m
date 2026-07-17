@@ -192,9 +192,20 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
     __strong typeof(weak) s = weak;
     if (!s)
       return;
-    [s.basicLanesView applyTimeline:tl];
+    // Route through the inspector's -applyTimeline: (NOT basicLanesView's) so
+    // the seed gets the SAME processing an ordinary edit / shader-load does:
+    // re-derive the source-declared lanes AND (for a plugin that overrides it)
+    // re-wire the source-derived OSC set. A shader guide seed drops the code
+    // lane and falls back to the default shader, so its directive lanes + OSC
+    // controls load instead of showing the previous clip's. The teardown
+    // restore runs through this same applier, so the user's shader comes back.
+    [s applyTimeline:tl];
     if (s.onTimelineMutated)
       s.onTimelineMutated(tl);
+    // Nudge a re-render after the seed (and any guide re-apply). Plugin-owned,
+    // no-op if unset.
+    if (s.onBoundaryPreviewNeedsRender)
+      s.onBoundaryPreviewNeedsRender();
   };
   _timingGuideHost.onGuideCompleted = ^{
     __strong typeof(weak) s = weak;
@@ -324,11 +335,11 @@ static NSRect KKGuideScreenRectForView(NSView *v) {
   __weak typeof(self) weak = self;
   [host
       runWithSeed:^KKTimeline * {
-        // An enabled (animatable) keypose lane so the Advanced graph has a
-        // clickable keypose whose mini-viewer the opt-hide / peek steps use.
-        // The viewer-drag step overwrites it with its own single keypose (still
-        // enabled, still at index 0), and the host restores the user's timeline
-        // on end.
+        // An enabled (animatable) multi-keypose lane so the Advanced graph
+        // shows the seeded animation. The viewer-drag step edits the keypose
+        // nearest the playhead (via KKTimelineSettingValuesNearestFraction)
+        // rather than collapsing the lane, so the other keyposes survive.
+        // Restored to the user's timeline on end.
         return [KKMiniViewerGuide seedTimelineForConfig:cfg];
       }
       buildSteps:^NSArray<KKJoyrideStep *> *(KKJoyrideController *guide,
@@ -591,9 +602,10 @@ static const NSTimeInterval kKKIntroAutostartPollInterval = 0.5;
   _introSeenKey = [seenKey copy];
   if (_introAutostartTimer)
     return; // already polling
-  // Poll for the gate rather than firing here: this runs mid -viewDidMoveToWindow
-  // (the OSC hasn't drawn yet on a fresh apply anyway), so deferring to the timer
-  // keeps the guide from starting synchronously during view attachment.
+  // Poll for the gate rather than firing here: this runs mid
+  // -viewDidMoveToWindow (the OSC hasn't drawn yet on a fresh apply anyway), so
+  // deferring to the timer keeps the guide from starting synchronously during
+  // view attachment.
   _introAutostartTimer = [NSTimer
       scheduledTimerWithTimeInterval:kKKIntroAutostartPollInterval
                               target:self

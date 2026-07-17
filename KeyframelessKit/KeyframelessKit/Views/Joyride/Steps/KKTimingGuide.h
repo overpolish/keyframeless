@@ -99,12 +99,24 @@ extern NSString *const KKTimingIntroGuideIdentifier;
 /// need it.
 @property(nonatomic, weak) KKTimelineInspectorView *inspectorView;
 
-/// The property the guide teaches, e.g. @"Radius" / @"Position". Required.
+/// The property the guide teaches, e.g. @"Radius" / @"Position". This is the
+/// lane *identity* the seed lane and every OSC/timeline binding use - so for a
+/// plugin whose lane identity isn't its display name (Shader's directive lanes
+/// are keyed by GLSL uniform, e.g. @"uCenter", so the mini-viewer OSC binds to
+/// that), pass the identity here and the human name via `primaryDisplayLabel`.
+/// Required.
 @property(nonatomic, copy) NSString *primaryLabel;
 
 /// Optional second property to seed in Advanced (e.g. @"Crop"). The Basic
-/// flow teaches a single property; nil keeps it single-lane.
+/// flow teaches a single property; nil keeps it single-lane. Identity label,
+/// see `primaryLabel`.
 @property(nonatomic, copy, nullable) NSString *secondaryLabel;
+
+/// Human-facing names shown in the step copy ("Drag <Center>...") when the
+/// identity label isn't presentable (a GLSL uniform name). Fall back to
+/// `primaryLabel`/`secondaryLabel` when nil.
+@property(nonatomic, copy, nullable) NSString *primaryDisplayLabel;
+@property(nonatomic, copy, nullable) NSString *secondaryDisplayLabel;
 
 /// OSC element labels to keep visible for this guide's duration (the rest are
 /// hidden, then restored on end). nil/empty = keep all OSCs. The plugin's

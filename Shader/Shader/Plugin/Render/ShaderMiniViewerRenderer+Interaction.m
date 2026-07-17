@@ -43,6 +43,31 @@
   return [[self _syncedSet] handleGlyphsForContentRect:cr];
 }
 
+// The point-handle centre the guide uses to spotlight / target the featured
+// point. This is a SEPARATE selector from `miniViewer:pointHandleCenter:...`
+// (which the mini-viewer's draw loop uses to paint a single "primary" handle):
+// Shader has no primary - it paints every point through
+// `extraPointHandleGlyphs`
+// - so answering the primary selector would double-draw the handle opaque over
+// the correct dim ghost. Instead the guide's `pointHandleScreenRect` falls back
+// to this `activePointHandleCenter` selector; we forward to the set's active
+// controller (its `_handleActive` gate = the same constant / visible /
+// keyed-at-fraction test the glyphs use).
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    activePointHandleCenter:(out CGPoint *)outCenter
+                contentRect:(CGRect)cr {
+  return [[self _syncedSet] activeHandleCenter:outCenter forContentRect:cr];
+}
+
+- (BOOL)miniViewer:(KKMiniViewerView *)canvas
+    activePointHandleCenter:(out CGPoint *)outCenter
+                  forValues:(NSArray<NSNumber *> *)values
+                contentRect:(CGRect)cr {
+  return [[self _syncedSet] activeHandleCenter:outCenter
+                                     forValues:values
+                                forContentRect:cr];
+}
+
 - (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
                                                  (KKMiniViewerView *)canvas
                                extraRingsForContentRect:(CGRect)cr {

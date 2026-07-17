@@ -190,7 +190,8 @@
 - (NSRect)guideToolbarButtonScreenRectForTag:(NSInteger)tag {
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
   if (!self.window ||
-      ![d respondsToSelector:@selector(miniViewer:toolbarButtonViewRectForTag:)])
+      ![d respondsToSelector:@selector(
+                                 miniViewer:toolbarButtonViewRectForTag:)])
     return NSZeroRect;
   NSRect vr = [d miniViewer:self toolbarButtonViewRectForTag:tag];
   if (NSIsEmptyRect(vr))
@@ -218,7 +219,8 @@
 // cursor via -cursorAtScreenPoint:.
 - (void)guideToolMoveToScreenPoint:(NSPoint)screenPoint {
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
-  if (![d respondsToSelector:@selector(miniViewer:toolMovedToPoint:contentRect:)])
+  if (![d respondsToSelector:@selector(
+                                 miniViewer:toolMovedToPoint:contentRect:)])
     return;
   [d miniViewer:self
       toolMovedToPoint:[self _viewPointForScreenPoint:screenPoint]
@@ -232,8 +234,8 @@
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
   CGPoint vp = [self _viewPointForScreenPoint:screenPoint];
   CGRect cr = [self contentRectInViewPoints];
-  if ([d respondsToSelector:@selector(miniViewer:
-                                 toolDownAtPoint:contentRect:modifiers:)])
+  if ([d respondsToSelector:
+              @selector(miniViewer:toolDownAtPoint:contentRect:modifiers:)])
     [d miniViewer:self toolDownAtPoint:vp contentRect:cr modifiers:0];
   if ([d respondsToSelector:@selector(miniViewer:toolUpAtPoint:contentRect:)])
     [d miniViewer:self toolUpAtPoint:vp contentRect:cr];
@@ -288,8 +290,8 @@
   // The toolbar still owns its own buttons (the toolbar step spotlights those).
   if ([d respondsToSelector:@selector(miniViewerToolDrawingActive:)] &&
       [d miniViewerToolDrawingActive:self] &&
-      [d respondsToSelector:@selector(miniViewer:
-                                  toolCursorAtPoint:contentRect:)]) {
+      [d respondsToSelector:@selector(
+                                miniViewer:toolCursorAtPoint:contentRect:)]) {
     BOOL overToolbar =
         [d respondsToSelector:@selector(miniViewer:toolbarTagAtPoint:)] &&
         [d miniViewer:self toolbarTagAtPoint:vp] != 0;
@@ -386,17 +388,22 @@
 
 - (NSRect)pointHandleScreenRect {
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
-  if (!self.window ||
-      ![d respondsToSelector:@selector(
-                                 miniViewer:pointHandleCenter:contentRect:)])
+  if (!self.window)
     return NSZeroRect;
+  CGRect cr = [self contentRectInViewPoints];
   CGPoint ctr;
-  if (![d miniViewer:self
-          pointHandleCenter:&ctr
-                contentRect:[self contentRectInViewPoints]])
-    return NSZeroRect;
-  return [self _screenRectForHandleCenter:ctr
-                                   radius:[self _pointHandleRadiusPt]];
+  if ([d respondsToSelector:@selector(
+                                miniViewer:pointHandleCenter:contentRect:)] &&
+      [d miniViewer:self pointHandleCenter:&ctr contentRect:cr])
+    return [self _screenRectForHandleCenter:ctr
+                                     radius:[self _pointHandleRadiusPt]];
+  // Multi-point renderer (no single primary): resolve the active handle.
+  if ([d respondsToSelector:
+              @selector(miniViewer:activePointHandleCenter:contentRect:)] &&
+      [d miniViewer:self activePointHandleCenter:&ctr contentRect:cr])
+    return [self _screenRectForHandleCenter:ctr
+                                     radius:[self _pointHandleRadiusPt]];
+  return NSZeroRect;
 }
 
 - (NSRect)pointHandleScreenRectForValue:(double)value {
@@ -417,18 +424,28 @@
 
 - (NSRect)pointHandleScreenRectForValues:(NSArray<NSNumber *> *)values {
   id<KKMiniViewerDelegate> d = self.canvasDelegate;
-  if (!self.window ||
-      ![d respondsToSelector:
-              @selector(miniViewer:pointHandleCenter:forValues:contentRect:)])
+  if (!self.window)
     return NSZeroRect;
+  CGRect cr = [self contentRectInViewPoints];
   CGPoint ctr;
-  if (![d miniViewer:self
+  if ([d respondsToSelector:
+              @selector(miniViewer:pointHandleCenter:forValues:contentRect:)] &&
+      [d miniViewer:self
           pointHandleCenter:&ctr
                   forValues:values
-                contentRect:[self contentRectInViewPoints]])
-    return NSZeroRect;
-  return [self _screenRectForHandleCenter:ctr
-                                   radius:[self _pointHandleRadiusPt]];
+                contentRect:cr])
+    return [self _screenRectForHandleCenter:ctr
+                                     radius:[self _pointHandleRadiusPt]];
+  // Multi-point renderer (no single primary): resolve the active handle.
+  if ([d respondsToSelector:@selector(miniViewer:activePointHandleCenter:
+                                      forValues:contentRect:)] &&
+      [d miniViewer:self
+          activePointHandleCenter:&ctr
+                        forValues:values
+                      contentRect:cr])
+    return [self _screenRectForHandleCenter:ctr
+                                     radius:[self _pointHandleRadiusPt]];
+  return NSZeroRect;
 }
 
 - (NSRect)_screenRectForHandleCenters:(NSArray<NSValue *> *)centers

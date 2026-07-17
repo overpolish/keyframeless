@@ -66,6 +66,19 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSArray<NSDictionary<NSString *, id> *> *)motionPathBundlesForContentRect:
     (CGRect)cr;
 
+/// The active point handle's centre - the first controller whose arc handle is
+/// drawn in the current editing context (same gate as
+/// `handleGlyphsForContentRect`). For a host that needs to spotlight or target
+/// the handle from a guide; forward the base renderer's
+/// `pointHandleCenter:forContentRect:` hook here. NO when no handle is active.
+- (BOOL)activeHandleCenter:(out CGPoint *)outCenter forContentRect:(CGRect)cr;
+/// Where that same active controller's handle *would* sit at explicit lane
+/// values - the guide's drag destination. Forward `pointHandleCenter:forValues:
+/// forContentRect:` here.
+- (BOOL)activeHandleCenter:(out CGPoint *)outCenter
+                 forValues:(NSArray<NSNumber *> *)values
+            forContentRect:(CGRect)cr;
+
 #pragma mark Interaction (forward the matching delegate methods here)
 
 - (BOOL)handleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr;

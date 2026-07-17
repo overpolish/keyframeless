@@ -10,6 +10,7 @@
 #import "ShaderDirectives.h"  // ShaderParseScalarProps (osc directives)
 #import "ShaderOSCSnapshot.h" // KKProcessTimelineSnapshot via the kit
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
 // Base for the dynamic OSC activePart numbers. Each `#point osc` lane claims
@@ -196,13 +197,35 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   return self;
 }
 
+// KKPositionGuideProvider: the point controllers read the guide state through
+// these, so they stay plugin-agnostic while Shader keeps its singleton bridge +
+// the guide-pushed position.
+- (KKOSCGuideBridge *)positionGuideBridge {
+  return ShaderGuideBridge();
+}
+
+- (CGPoint)positionGuideObjectValue {
+  return sGuidePosition;
+}
+
 // The live shader source from the process timeline snapshot (blob reads are
 // flaky in the OSC tick; the snapshot is canonical).
 - (nullable NSString *)_currentShaderSource {
+  BOOL hasShaderLane = NO;
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-    if ([l.label isEqualToString:@"Shader"] && l.codeString.length)
-      return l.codeString;
-  return nil;
+    if ([l.label isEqualToString:@"Shader"]) {
+      hasShaderLane = YES;
+      if (l.codeString.length)
+        return l.codeString;
+    }
+  // An ABSENT Shader lane is a fresh instance whose timeline blob hasn't been
+  // persisted yet: the render seeds the default (Plasma) source, so the OSC has
+  // to as well, or a fresh Plasma draws NO handles (its `#point`/`osc=ring`
+  // controls never build) - which is exactly what starves the timing guide's
+  // OSC step. A PRESENT-but-empty lane means the user cleared the code
+  // (passthrough), so it correctly has no controls. Mirrors ShaderStateBlob's
+  // absent-vs-empty rule on the render side.
+  return hasShaderLane ? nil : ShaderCustomDefaultShaderSource();
 }
 
 // Rebuild the position controllers to match the shader's `#point osc` lanes.
@@ -273,6 +296,11 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                             pathLabel:[label stringByAppendingString:@" Path"]];
     ctl.positionActivePart = kShaderOSCPartBase + (NSInteger)i * 2;
     ctl.tangentActivePart = kShaderOSCPartBase + (NSInteger)i * 2 + 1;
+    // So a running timing guide draws this handle at the guide-pushed position
+    // (see -positionGuideObjectValue). Set on every point controller: the guide
+    // teaches one primary point, and the bridge's guideStep gates it, so the
+    // rest read their real lane value normally.
+    ctl.guideProvider = self;
     for (KKLane *l in avail)
       if ([l.label isEqualToString:label]) {
         ctl.templateLane = l;
@@ -996,27 +1024,69 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                    atTime:time];
   }
 
-  // Feed the guide bridge this tick's canvas
-  // geometry (zoom-invariant CANVAS->screen affine + viewer-rect recompute) so
-  // ShaderHasCanvasReference and the timing guide's screen<->object map keep
-  // working once it is re-pointed at future shader-exposed OSCs. The "handle"
-  // is just the frame centre now (there is no Origin control to track).
+  // Feed the guide bridge this tick's canvas geometry (zoom-invariant
+  // CANVAS->screen affine + viewer-rect recompute) so ShaderHasCanvasReference
+  // and the timing guide's screen<->object map keep working. During a guide,
+  // the "handle" is the guide-pushed Center (object->canvas) and the "target"
+  // its drag destination, so the spotlight tracks the taught handle and its
+  // glowing goal - not the frame centre. Outside a guide the handle is just the
+  // frame centre (the bridge only needs the viewer geometry then).
   CGPoint trC = {0, 0}, blC = {0, 0};
   if (![self getCanvasTopRight:&trC bottomLeft:&blC])
     return;
-  CGPoint centre = CGPointMake((trC.x + blC.x) * 0.5, (trC.y + blC.y) * 0.5);
   id<FxOnScreenControlAPI_v2> oscAPI2 =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
   double rawZoom = oscAPI2 ? ([oscAPI2 canvasZoom] / 100.0) : 0.0;
   double displayScale = [[NSScreen mainScreen] backingScaleFactor];
   double spC =
       (rawZoom > 0.0 && displayScale > 0.0) ? rawZoom / displayScale : 0.0;
+
+  BOOL inGuide = ShaderGuideBridge().guideStep > 0;
+  // The primary point handle's canvas position, fed ALWAYS (not only during the
+  // guide) so the spotlight sits on the handle from the moment the OSC step
+  // opens - not just once the drag starts. The controller is guide-aware: with
+  // our guideProvider set, it returns the guide-pushed value while guideStep>0
+  // and its real lane value otherwise, so the spotlight and the drawn handle
+  // always coincide. Frame centre only when the shader declares no point.
+  CGPoint handleCanvas =
+      CGPointMake((trC.x + blC.x) * 0.5, (trC.y + blC.y) * 0.5);
+  KKPositionOSC *primaryPoint =
+      _posOrder.count ? _posControllers[_posOrder.firstObject] : nil;
+  if (primaryPoint)
+    handleCanvas = [primaryPoint positionCanvasAtTime:time];
+  // The drag destination the guide nudges toward, shown as the glowing target.
+  CGPoint targetCanvas = CGPointZero;
+  if (inGuide) {
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    CGPoint tgt = kShaderGuideTargetObject;
+    [oscAPI convertPointFromSpace:kFxDrawingCoordinates_OBJECT
+                            fromX:tgt.x
+                            fromY:tgt.y
+                          toSpace:kFxDrawingCoordinates_CANVAS
+                              toX:&targetCanvas.x
+                              toY:&targetCanvas.y];
+  }
   [ShaderGuideBridge() ingestDrawTickWithCanvasTopRight:trC
                                              bottomLeft:blC
                                             canvasScale:spC
-                                        handleCanvasPos:centre
-                                        targetCanvasPos:CGPointZero
-                                              hasTarget:NO];
+                                        handleCanvasPos:handleCanvas
+                                        targetCanvasPos:targetCanvas
+                                              hasTarget:inGuide];
+
+  // Diagnostic for the OSC-guide spotlight: fires only while a guide runs.
+  // handleScreen empty / off means the bridge couldn't map the handle to the
+  // viewer (geometry), so the spotlight can't land on it. Remove once
+  // confirmed.
+  if (inGuide) {
+    NSRect hs = ShaderGuideBridge().estimatedHandleScreenRect;
+    KKLogDebug(
+        @"[GuideOSC] step=%ld pts=%lu handleCanvas=(%.1f,%.1f) "
+        @"tr=(%.1f,%.1f) bl=(%.1f,%.1f) handleScreen=(%.0f,%.0f %.0fx%.0f)",
+        (long)ShaderGuideBridge().guideStep, (unsigned long)_posOrder.count,
+        handleCanvas.x, handleCanvas.y, trC.x, trC.y, blC.x, blC.y, NSMinX(hs),
+        NSMinY(hs), NSWidth(hs), NSHeight(hs));
+  }
 }
 
 - (void)hitTestOSCAtMousePositionX:(double)positionX

@@ -11,13 +11,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// The built-in Shader "look" presets: each sets the Type + a curated sRGB
-/// palette (Color Count + Color 1..N) and leaves every other lane at its Shader
-/// default. Register once via `-[KKPresets
-/// registerBuiltinPresets:forPluginKey:]` so they appear in the shared Presets
-/// popover. The palettes are drawn from paper-design/shaders' own preset
-/// colours (MIT). Names double as KKLocalizable keys resolved for display
-/// (falling back to the English key).
+/// The built-in Shader "look" presets: each installs the plasma shader (the
+/// @"Shader" code lane) with a different Center / Scale treatment - a static
+/// look plus an animated zoom and drift, so the shared Presets popover (and its
+/// guide) always has something to apply. Register once via `-[KKPresets
+/// registerBuiltinPresets:forPluginKey:]`. Names double as KKLocalizable keys
+/// resolved for display (falling back to the English key).
 NSArray<KKPreset *> *ShaderBuiltinPresets(void);
 
 NS_ASSUME_NONNULL_END

@@ -7,6 +7,11 @@ summary: Declaring inspector controls and on-screen controls in a Custom shader 
 
 A Custom shader can expose its own **inspector controls** and **on-screen controls (OSCs)** by annotating its uniforms. Put a `// #<kind>` comment on the line **before** a `uniform` declaration, and Shader builds a matching, fully keyframeable timeline lane for it. The uniform's value then comes from that lane (and its keyposes / OSC) instead of being a fixed constant.
 
+- **Value controls:** `#float` / `#percent` / `#int` (sliders), `#bool` (switch), `#choice` (a menu or pill), `#angle` (a dial), `#color` (a colour well), `#multi` (2-4 numbers), `#seed`.
+- **Spatial controls:** `#point` (a draggable position handle). Add `osc` to a value control for an on-screen ring, box, or rotation ring that edits the same lane.
+- **Reactive:** `#audio` binds a Sonar-published spectrum; `#progress` exposes a transition's sweep.
+- Attributes tune each one: `label=`, `min=` / `max=`, `default=`, and `osc=` place the on-screen control. The rest of this doc details every kind.
+
 ```glsl
 // #float label="Amount" min=0 max=2 default=0.5
 uniform float uAmount;

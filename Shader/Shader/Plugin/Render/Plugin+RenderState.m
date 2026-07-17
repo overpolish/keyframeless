@@ -64,12 +64,23 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
   // block's std140 tail). Values come from the per-property lanes (fallback:
   // directive default count + the default palette). The directives are parsed
   // from the "Shader" code lane.
-  NSString *shaderSrc = nil;
+  // Source for the directive pool. MUST match ShaderAppendCodeSections (which
+  // supplies the Image the pool binds against): a MISSING "Shader" lane falls
+  // back to the baked default so the pool's directive uniforms (uCenter/uScale/
+  // …) are still filled; a present-but-empty lane is passthrough (no
+  // directives). Without the fallback, a timeline that drops the code lane
+  // (e.g. a guide seed) transpiles the default shader but binds a ZERO pool -
+  // every directive reads 0, flattening the preview.
+  KKLane *shaderLane = nil;
   for (KKLane *l in timeline.lanes)
-    if ([l.label isEqualToString:@"Shader"] && l.codeString.length) {
-      shaderSrc = l.codeString;
+    if ([l.label isEqualToString:@"Shader"]) {
+      shaderLane = l;
       break;
     }
+  NSString *shaderSrc =
+      shaderLane.codeString.length
+          ? shaderLane.codeString
+          : (shaderLane ? nil : ShaderCustomDefaultShaderSource());
   NSArray<NSNumber *> * (^values)(NSString *) =
       ^NSArray<NSNumber *> *(NSString *label) {
     return ShaderLaneValuesAtFraction(timeline, label, frac);

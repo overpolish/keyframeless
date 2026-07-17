@@ -574,21 +574,33 @@
 }
 
 - (NSArray<KKHelpSection *> *)helpSections {
-  // Quick reference: short overview + parameter list (single-sourced from
-  // mesh.md), then an on-screen-control shortcuts table.
+  // Single-sourced from the AIKnowledge markdown - the same docs the AI reads -
+  // so help and AI never drift. Three user-facing topics (the per-directive /
+  // audio deep docs stay AI-only), then an on-screen-control shortcut table.
+  // topicID is the .md filename stem in the bundle's AIKnowledge subdir.
+  NSString * (^loc)(NSString *) = ^NSString *(NSString *tip) {
+    return RLoc(tip, @"Shader help tip (from AIKnowledge markdown).");
+  };
   KKHelpSection *overview = [self
-      helpSectionFromKnowledgeTopic:@"mesh"
-                              title:RLoc(@"Shader",
-                                         @"Help section title (plugin name).")
+      helpSectionFromKnowledgeTopic:@"shader"
+                              title:RLoc(@"Shader", @"Help section: overview.")
                              symbol:@"square.dotted"
-                          localizer:^NSString *(NSString *tip) {
-                            return RLoc(tip, @"Shader help tip (from "
-                                             @"AIKnowledge markdown).");
-                          }];
+                          localizer:loc];
+  KKHelpSection *writing = [self
+      helpSectionFromKnowledgeTopic:@"custom-shader"
+                              title:RLoc(@"Writing a shader",
+                                         @"Help section: the shader language.")
+                             symbol:@"chevron.left.forwardslash.chevron.right"
+                          localizer:loc];
+  KKHelpSection *directives =
+      [self helpSectionFromKnowledgeTopic:@"directives"
+                                    title:RLoc(@"Controls (directives)",
+                                               @"Help section: directives.")
+                                   symbol:@"slider.horizontal.3"
+                                localizer:loc];
 
   NSMutableArray<KKHelpShortcut *> *rows =
       [[KKPlugin sharedOnScreenControlShortcuts] mutableCopy];
-
   KKHelpSection *shortcuts =
       [KKHelpSection sectionWithTitle:RLoc(@"On-screen control shortcuts",
                                            @"Help section title.")
@@ -597,7 +609,7 @@
   shortcuts.icon = [NSImage imageWithSystemSymbolName:@"hand.point.up.left"
                              accessibilityDescription:nil];
 
-  return @[ overview, shortcuts ];
+  return @[ overview, writing, directives, shortcuts ];
 }
 
 @end

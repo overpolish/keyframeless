@@ -24,6 +24,10 @@ NS_ASSUME_NONNULL_BEGIN
   /// Negative = not known yet.
   double _clipTimelineStartSec;
   double _playheadFraction;
+  /// The effective shader source last seen by -applyTimeline:, so a timeline
+  /// change that swaps the shader (incl. a guide seed dropping the code lane =>
+  /// the baked default) re-wires the source-derived OSC set exactly once.
+  NSString *_lastEffectiveShaderSource;
 }
 
 @end

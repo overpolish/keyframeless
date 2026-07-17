@@ -5,10 +5,11 @@ summary: Writing and editing custom Shadertoy-style shaders in Shader
 
 # The Custom shader
 
-Shader is a blank shader canvas: paste a Shadertoy "Image" shader (or write your own GLSL) into the **Shader** editor and it runs live on the clip. Under the hood the GLSL is compiled to Metal at runtime with the real glslang + SPIRV-Cross toolchain, so the **full GLSL language works** - not a hand-rolled subset. If a single-pass Image shader compiles on Shadertoy, it almost always runs here unchanged.
+Shader is a blank shader canvas: paste a Shadertoy "Image" shader (or write your own GLSL) into the **Shader** editor and it runs live on the clip. The **full GLSL language works** - so if a single-pass Image shader runs on Shadertoy, it almost always runs here unchanged. Paste it and go.
 
-- Entry point is Shadertoy's `void mainImage(out vec4 fragColor, in vec2 fragCoord)`.
-- The **Shader** lane sits at the bottom of the Core section. It opens a syntax-highlighted code editor.
+- The editor is the **Shader** lane at the bottom of the Core section: a syntax-highlighted code pane with live error reporting.
+- Your entry point is Shadertoy's `void mainImage(out vec4 fragColor, in vec2 fragCoord)`, and the built-in inputs (`iTime`, `iChannel0`, `iResolution`, ...) all work.
+- Add your own sliders, colours, and on-screen handles by annotating uniforms with `// #` directives (see the directives help).
 
 ## Built-in inputs (no declaration needed)
 
@@ -28,6 +29,8 @@ Use them exactly as on Shadertoy:
 | `iChannel2`, `iChannel3` | `sampler2D` | bound to a repeating value-noise texture                                                                                                                                                                                      |
 
 ## What works, what doesn't
+
+Under the hood the GLSL is compiled to Metal at runtime with the real glslang + SPIRV-Cross toolchain, not a hand-rolled subset - which is why the whole language is available.
 
 **Works out of the box:** the whole GLSL language - `mod`, `atan`, `inversesqrt`, matrix constructors, `out`/`inout` params, passing a vector component like `p.x` by reference, swizzle compound-assignment (`p.xy *= rot`), `#define`/`#if` macros, loops, etc. Two Shadertoy-compat behaviours are matched deliberately:
 
