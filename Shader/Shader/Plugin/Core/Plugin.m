@@ -93,6 +93,13 @@
           return [weakSelf timelineStampedWithClipDuration:t];
         },
         nil, (KKTimelineInspectorView *)self.inspectorView);
+    // A source pick lands here, as a lane value. Deferred rather than done
+    // inline: this is already inside the handler's action scope, and opening a
+    // second one mid-change is what FCP complains about. By the next tick the
+    // change has settled and the snapshot is the one the user just made.
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [weakSelf syncAudioTicketsForTimeline:KKProcessTimelineSnapshot()];
+    });
   }
 
   if (parameterID == kKKParamMotionBlurData) {

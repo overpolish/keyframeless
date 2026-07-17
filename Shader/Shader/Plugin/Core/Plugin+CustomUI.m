@@ -41,8 +41,14 @@
 // Source-aware lane set: the Core lanes plus whatever dynamic lanes the given
 // shader source declares (e.g. the `// #color` Colours group).
 + (NSArray<KKLane *> *)availableLanesForShaderSource:(NSString *)source {
+  return [self availableLanesForShaderSource:source audioTickets:nil];
+}
+
++ (NSArray<KKLane *> *)
+    availableLanesForShaderSource:(NSString *)source
+                     audioTickets:(NSDictionary<NSString *, id> *)tickets {
   return ShaderBuildAvailableLanesForSource(
-      source.length ? source : ShaderCustomDefaultShaderSource());
+      source.length ? source : ShaderCustomDefaultShaderSource(), tickets);
 }
 
 // The current shader source from a timeline's "Shader" code lane (the baked
@@ -161,12 +167,18 @@
 
     [actionAPI endAction:self];
 
+    // Catches bindings this instance made before tickets existed, and any made
+    // while its inspector was closed. Opens its own scope, so it goes after the
+    // one above rather than inside it.
+    [self syncAudioTicketsForTimeline:timeline];
+
     // Source-aware: derive the lane set (incl. the dynamic Colours group) from
     // the current shader source, so a shader's `// #color` directive surfaces
     // its swatches + palette generator.
     NSString *shaderSrc = [ShaderPlugin shaderSourceFromTimeline:timeline];
     NSArray<KKLane *> *available =
-        [ShaderPlugin availableLanesForShaderSource:shaderSrc];
+        [ShaderPlugin availableLanesForShaderSource:shaderSrc
+                                       audioTickets:self.audioTickets];
     ShaderInspectorView *view =
         [[ShaderInspectorView alloc] initWithAPIManager:self.apiManager
                                             loopEnabled:loopEnabled
@@ -184,8 +196,13 @@
     // Live source-derived lanes: when the shader code commits (debounced), the
     // inspector re-derives the lane set from the new source so a `// #color`
     // directive's Colours group appears/updates without a clip reselect.
+    __weak __typeof(self) weakLaneSelf = self;
     view.availableLanesProvider = ^NSArray<KKLane *> *(NSString *code) {
-      return [ShaderPlugin availableLanesForShaderSource:code];
+      // The cached tickets, not a fresh read: this fires from a code-commit
+      // callback, outside any action scope, where the param APIs return nil.
+      return [ShaderPlugin
+          availableLanesForShaderSource:code
+                           audioTickets:weakLaneSelf.audioTickets];
     };
     // Seed the basic-view scrubber clamp immediately. Plugin+Render's
     // dispatch_async push runs once on first render - if it raced ahead

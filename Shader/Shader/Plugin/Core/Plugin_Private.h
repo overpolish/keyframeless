@@ -21,6 +21,12 @@
 /// viewer, thumbnails, and library previews keep independent ping-pong sets.
 /// Holds `_ShaderFeedbackSet` values (private to Plugin+Render.m).
 @property(nonatomic, strong, nullable) NSMutableDictionary *feedbackSets;
+/// Last-read Sonar tickets (key -> ticket), refreshed by `syncAudioTickets…`.
+///
+/// Cached because the lane builder needs them where the param APIs don't
+/// resolve: `availableLanesProvider` fires from a code-commit callback, which
+/// is outside any action scope, and reading a parameter there returns nil.
+@property(nonatomic, copy, nullable) NSDictionary<NSString *, id> *audioTickets;
 /// Returns a copy of `timeline` with every lane's lastKnownClipDuration set
 /// to the current effect duration (seconds), so the Basic ruler/hover have a
 /// duration without extra plumbing. Must be called inside an action scope.
@@ -40,6 +46,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// Source-aware lane set: Core lanes + the dynamic lanes the given shader
 /// source declares (e.g. the `// #color` Colours group).
 + (NSArray<KKLane *> *)availableLanesForShaderSource:(NSString *)source;
+/// As above, plus what this instance remembers about its `#audio` bindings, so
+/// a lane bound to a source not published here can name it instead of reading
+/// "None". Pass nil where that doesn't matter (the OSC draws no such label).
++ (NSArray<KKLane *> *)
+    availableLanesForShaderSource:(NSString *)source
+                     audioTickets:
+                         (nullable NSDictionary<NSString *, id> *)tickets;
 /// The current shader source from a timeline's "Shader" code lane (baked
 /// default when absent).
 + (NSString *)shaderSourceFromTimeline:(KKTimeline *)timeline;
@@ -54,6 +67,20 @@ NS_ASSUME_NONNULL_BEGIN
 /// settings-cog popover + hide persistence for the current shader.
 + (NSArray<NSArray<NSString *> *> *)oscCompoundsForShaderSource:
     (NSString *)source;
+@end
+
+@interface ShaderPlugin (AudioTickets)
+/// Records what each `#audio` lane is bound to, so the binding can still be
+/// named on a Mac where the source was never published (nothing but plugin
+/// parameters travels inside an FCP library).
+///
+/// Idempotent and self-scoping: writes only when something actually changed,
+/// and opens its own action scope. Never call from the render path.
+///
+/// Takes the timeline rather than reading the process snapshot, which is empty
+/// until something seeds it - a caller that already holds the canonical one
+/// shouldn't be made to depend on having seeded it first.
+- (void)syncAudioTicketsForTimeline:(nullable KKTimeline *)timeline;
 @end
 
 @interface ShaderPlugin (Render)

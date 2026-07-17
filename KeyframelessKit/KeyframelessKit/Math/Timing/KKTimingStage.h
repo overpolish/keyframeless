@@ -402,6 +402,31 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// `kkApplyPickerMetadataFrom:`.
 @property(nonatomic) BOOL choiceUsesDropdown;
 
+/// What to SHOW for a stored value that names none of `choiceValues`, keyed by
+/// that stored value.
+///
+/// Without this, a lane bound to a since-vanished option reads "None" - the
+/// same thing it says when the user deliberately picked None. The two are not
+/// the same, and only the owner knows the difference: Shader's `#audio` lane
+/// binds to a Sonar source that may simply not be published on this Mac, and
+/// the plugin remembers what it was even when the option list can't.
+///
+/// A map rather than one string because the answer depends on WHICH value is
+/// stored, and a lane template is built before any of its rows know theirs.
+/// Build-time metadata; re-asserted via `kkApplyPickerMetadataFrom:`.
+@property(nonatomic, copy, nullable)
+    NSDictionary<NSNumber *, NSString *> *choiceUnknownLabels;
+
+/// Short warning shown beside a choice whose stored value is unknown, e.g.
+/// "Republish required". nil = no warning.
+///
+/// Deliberately terse: it sits in the gap between the lane's name and its
+/// value control, which is ~145pt at the default popover width. The full
+/// explanation belongs in `choiceUnknownLabels`, which has the whole value
+/// column to render in. Build-time metadata; re-asserted via
+/// `kkApplyPickerMetadataFrom:`.
+@property(nonatomic, copy, nullable) NSString *choiceUnknownBadge;
+
 /// Optional per-choice STORED VALUES, parallel to `choiceLabels`. When set, the
 /// lane stores `choiceValues[i]` instead of the selected index `i`.
 ///

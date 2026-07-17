@@ -47,6 +47,10 @@ static const UInt32 kParamUIState = 201;
 /// re-runs -scheduleInputs: for the (otherwise cached) static frame, letting
 /// the boundary preview resolve without manual scrubbing.
 static const UInt32 kParamRenderNudge = 202;
+/// Hidden store of Sonar tickets: what each `#audio` binding points at, so a
+/// project carried to a Mac that never published can still say what it wants.
+/// A plain string param on purpose - see Plugin+AudioTickets.m.
+static const UInt32 kParamAudioTickets = 203;
 
 /// The baked default Custom shader (animated cosine plasma). Rendered when the
 /// Shader lane's codeString is empty, and seeds the "Shader" lane in the

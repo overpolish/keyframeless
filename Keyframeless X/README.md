@@ -26,8 +26,9 @@ flowchart TB
     end
 
     subgraph group ["App Group: group.co.overpolish.keyframeless"]
-        MAN[("manifest.json<br/>id, name, roles, clipCount,<br/>project, publishedAt, contentHash")]
+        MAN[("manifest.json<br/>id, name, roles, clipCount, project,<br/>publishedAt, contentHash, clipKeys")]
         KKSG[("&lt;project&gt;_&lt;name&gt;.kksg<br/>KKSG header + float32 grid")]
+        REQ[("Requests/&lt;key&gt;.json<br/>a ticket: 'this project wants X'")]
     end
 
     subgraph plugin ["FxPlug plugin, e.g. Shader (XPC Service)"]
@@ -36,8 +37,10 @@ flowchart TB
         OPEN["KKSpectrogramOpen (mmap, once)<br/>cached on inode+mtime+size"]
         POOL["ShaderFillAudioPool<br/>sample at timelineTime, smooth= window<br/>→ colour pool vec4s"]
         FRAG["fragment shader<br/>uMusicBand(i), uMusicBands"]
+        TIX["kParamAudioTickets (string param)<br/>key → name, project, clipKeys<br/><b>travels inside the FCP library</b>"]
         DIR --> LANE --> POOL
         OPEN --> POOL --> FRAG
+        LANE --> TIX
     end
 
     FCP -->|FCPXML| PARSE
@@ -46,7 +49,13 @@ flowchart TB
     MAN -->|KKSpectrogramPublishedSources| LANE
     KKSG -->|KKSpectrogramURLForSourceID| OPEN
     FRAG -->|"playback AND export"| FCP
+    TIX -.->|"key resolves to nothing:<br/>KKSonarWriteRepublishRequest"| REQ
+    REQ -.->|"project dropped:<br/>match clipKeys → preselect"| SEL
 ```
+
+The dotted path is the republish handshake, and it only exists because **nothing but plugin parameters travels inside an FCP library**. Carry a project to another Mac and the app group is empty: every binding dangles and nothing on disk can say what was lost. So the plugin carries a **ticket** (what it is bound to, and the clips that made it), notices its key resolves to nothing, and leaves a request. Sonar reads that on the next drop and preselects those clips, so Publish reproduces the same hash, the same key, and the binding reconnects with nothing re-pointed.
+
+It is one-way and nothing waits: the plugin drops a note and carries on rendering silence, and the note may never be read.
 
 The app group is the whole point of the middle. A workflow extension's `temporaryDirectory` is private to its sandbox, so a plugin in a different sandbox can never see it. Both sides already carry `group.co.overpolish.keyframeless` (the AI helper socket uses it too), which makes that container the one place the writer and the reader can both reach.
 
@@ -123,9 +132,13 @@ The publish writes atomically, which swaps in a new inode. That is exactly what 
 
 Nothing in the format is Shader-specific. A plugin needs the app group entitlement on its **XPC Service** target, then:
 
-1. `KKSpectrogramPublishedSources()` to populate a picker (the manifest exists so you never open a float grid to build a menu). Name entries `<source> - <project>`: a source only lines up with the project it came from.
+1. `KKSonarSourceKeyForSource()` for the value your picker stores, and `KKSpectrogramPublishedSources()` to populate it (the manifest exists so you never open a float grid to build a menu). Name entries `<source> - <project>`: a source only lines up with the project it came from. **Never store the menu index** - the published set changes between sessions, so an index means something different the moment a source is deleted.
 2. `KKSpectrogramURLForSourceID` + `KKSpectrogramOpen` once, cached, never on the render path.
 3. `KKSpectrogramSampleAtTime` at `timelineTime:fromInputTime:`.
+4. `KKSonarSourceForKey()` returning nil to tell `None` (key 0) from **missing** (a key that resolves to nothing). Both render silence and only one is a problem, so a picker that can't distinguish them tells the user nothing.
+5. `KKSonarTicketForSource()` on bind, stored in one of your own params, and `KKSonarWriteRepublishRequest()` when a key stops resolving. That is what makes a binding survive the trip to another Mac.
+
+The kit owns every part of that except **where the ticket's bytes live**, which is the one question a consumer answers for itself. Shader keeps its map in `kParamAudioTickets`, a hidden _string_ param - deliberately not a blob, since a ticket describes what Sonar published rather than a decision the user made, and has no business on the undo stack (`KKDataBlob.h` explains that blobs exist precisely _because_ string writes aren't undoable; here that is the feature). Keyed by source key, not by uniform, so an entry an undo strands is inert rather than wrong. See `Plugin+AudioTickets.m`.
 
 Shader adds one layer on top: `ShaderParseAudioProps` reads `// #audio`, the transpiler emits `<name>Band(i)` and `<name>Bands` accessors (four bands pack per `vec4`, because std140 pads a float array to a 16-byte stride), and `ShaderFillAudioPool` fills the colour pool. Limits are `KK_SHADER_MAX_AUDIO_PROPS` (2) and `KK_SHADER_MAX_AUDIO_VECS` (24).
 

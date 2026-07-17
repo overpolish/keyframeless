@@ -97,6 +97,7 @@
 				"/Localized: Plugin/InfoPlist.strings",
 				Plugin/Core/main.m,
 				Plugin/Core/Plugin.m,
+				"Plugin/Core/Plugin+AudioTickets.m",
 				"Plugin/Core/Plugin+CustomUI.m",
 				"Plugin/Core/Plugin+Parameters.m",
 				Plugin/Core/ShaderLocalCatalog.m,

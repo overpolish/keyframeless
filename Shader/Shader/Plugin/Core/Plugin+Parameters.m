@@ -83,6 +83,17 @@
     return NO;
   }
 
+  // Sonar tickets. A string param rather than a blob because a ticket must NOT
+  // be undoable - see Plugin+AudioTickets.m for why that is the point rather
+  // than a compromise.
+  if (![paramAPI addStringParameterWithName:@""
+                                parameterID:kParamAudioTickets
+                               defaultValue:@""
+                             parameterFlags:kFxParameterFlag_HIDDEN |
+                                            kFxParameterFlag_NOT_ANIMATABLE]) {
+    return NO;
+  }
+
   return YES;
 }
 

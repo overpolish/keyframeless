@@ -169,6 +169,43 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   return b;
 }
 
+// A caption prefixed with a warning glyph, as ONE label: an attachment keeps
+// the glyph and its text on a single baseline without a second view, a second
+// set of constraints, and a spacing constant to keep in step with the font.
+static NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
+  NSImageSymbolConfiguration *cfg = [[NSImageSymbolConfiguration
+      configurationWithPointSize:KKFontSizeSM
+                          weight:NSFontWeightMedium]
+      configurationByApplyingConfiguration:
+          [NSImageSymbolConfiguration configurationWithHierarchicalColor:tint]];
+  // Plain, not `.fill`: the same glyph Sonar puts on its own warnings, in the
+  // same `warning` colour. A user meeting both in one workflow - a shader that
+  // can't find its source, then Sonar telling them what it couldn't read -
+  // should be looking at one idea, not two.
+  NSImage *glyph = [[NSImage
+      imageWithSystemSymbolName:@"exclamationmark.triangle"
+       accessibilityDescription:text] imageWithSymbolConfiguration:cfg];
+  NSMutableAttributedString *out = [[NSMutableAttributedString alloc] init];
+  if (glyph) {
+    NSTextAttachment *att = [[NSTextAttachment alloc] init];
+    att.image = glyph;
+    [out appendAttributedString:[NSAttributedString
+                                    attributedStringWithAttachment:att]];
+    [out appendAttributedString:[[NSAttributedString alloc]
+                                    initWithString:@" "]];
+  }
+  [out
+      appendAttributedString:[[NSAttributedString alloc]
+                                 initWithString:text
+                                     attributes:@{
+                                       NSForegroundColorAttributeName : tint,
+                                       NSFontAttributeName : [NSFont
+                                           systemFontOfSize:KKFontSizeSM
+                                                     weight:NSFontWeightRegular]
+                                     }]];
+  return out;
+}
+
 @interface _KKStaticValueRow () <NSPopoverDelegate>
 @end
 
@@ -204,12 +241,17 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
   NSTextField *_titleField; // the lane-name caption; refreshed by applyLane:
   KKCodeEditorView *_codeEditor;    // code lanes only; re-synced by applyLane:
   KKPillToggleRowView *_choicePill; // grouped radio pill, choiceLabels only
-  NSArray<NSString *> *_choiceLabels; // English identifiers (count >= 2)
+  NSArray<NSString *> *_choiceLabels; // English identifiers (pills need >= 2)
   NSArray<NSNumber *> *_choiceValues; // stored value per choice (nil = index)
   NSArray<NSImage *> *_choiceIcons;   // optional per-choice glyphs (display)
   BOOL _wrapsChoicePills;             // pill wraps to multiple lines
   NSLayoutConstraint *_pillWidthConstraint; // wrapping pill width (= wrapW)
-  BOOL _choiceUsesDropdown;           // choice row is a dropdown, not pills
+  BOOL _choiceUsesDropdown; // choice row is a dropdown, not pills
+  // What a stored value that names no current choice should read as, and the
+  // warning beside it. See KKLane.choiceUnknownLabels.
+  NSDictionary<NSNumber *, NSString *> *_choiceUnknownLabels;
+  NSString *_choiceUnknownBadge;
+  NSTextField *_choiceWarning;
   _KKDropdownTrigger *_choiceField;   // the Animated dropdown's trigger
   KKChoiceChecklistView *_choiceList; // the popover's list; nil when shut
   NSPopover *_choicePopover;          // nil when shut
@@ -684,16 +726,62 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
 - (void)_syncChoiceFieldTitle {
   NSInteger sel = [self _selectedChoiceIndex];
   BOOL valid = sel >= 0 && sel < (NSInteger)_choiceLabels.count;
-  // "None" rather than blank when the stored value names no current choice, so
-  // a deleted-source lane reads as unset instead of broken. Already a param
-  // name, so it localizes with the choice labels and needs no new string.
+  // A stored value naming no current choice is NOT the same as picking "None",
+  // even though both render nothing and both fall back to defaults. Ask the
+  // owner what it was: Shader remembers the Sonar source a lane is bound to,
+  // so "Dialogue + Music - DEMO 1" survives even where it isn't published.
+  NSString *unknown =
+      valid ? nil : _choiceUnknownLabels[@([self _storedChoiceValue])];
+  // "None" rather than blank when nothing at all is known, so an unset lane
+  // reads as unset instead of broken. Already a param name, so it localizes
+  // with the choice labels and needs no new string.
   _choiceField.summaryOverride =
-      KKLocalizedParamName(valid ? _choiceLabels[sel] : @"None");
+      unknown ?: KKLocalizedParamName(valid ? _choiceLabels[sel] : @"None");
   // `selectedLabels` is what the trigger reads as "has a selection", which
   // dims the text when it doesn't - so an unset picker greys its "None" exactly
-  // like the Animated dropdown greys its placeholder.
+  // like the Animated dropdown greys its placeholder. A remembered-but-missing
+  // pick stays dimmed too: it names something that isn't selectable here.
   _choiceField.selectedLabels = valid ? @[ _choiceLabels[sel] ] : nil;
   [_choiceField setNeedsDisplay:YES];
+  [self _syncChoiceWarning:(unknown != nil)];
+}
+
+- (double)_storedChoiceValue {
+  return _values.count ? _values[0].doubleValue : 0.0;
+}
+
+/// Shows the owner's warning in the gap between the lane's name and its value
+/// control - the one place on the row nothing else claims.
+- (void)_syncChoiceWarning:(BOOL)show {
+  if (!show || !_choiceUnknownBadge.length) {
+    _choiceWarning.hidden = YES;
+    return;
+  }
+  if (!_choiceWarning) {
+    _choiceWarning = _KKMakeCaption(_choiceUnknownBadge);
+    _choiceWarning.attributedStringValue =
+        _KKWarningCaption(_choiceUnknownBadge, [NSColor warning]);
+    [self addSubview:_choiceWarning];
+    [NSLayoutConstraint activateConstraints:@[
+      [_choiceWarning.trailingAnchor
+          constraintEqualToAnchor:_choiceField.leadingAnchor
+                         constant:-KKPaddingMD],
+      [_choiceWarning.centerYAnchor
+          constraintEqualToAnchor:_choiceField.centerYAnchor],
+    ]];
+    // Compressible so a long localization gives way to the value column rather
+    // than shoving it off the row.
+    [_choiceWarning
+        setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
+                                 forOrientation:
+                                     NSLayoutConstraintOrientationHorizontal];
+  }
+  // Re-set rather than set once at creation: the trigger's text is what names
+  // the source, and it changes as the row is reused for other values.
+  _choiceWarning.toolTip = [NSString
+      stringWithFormat:@"%@ - %@", _choiceField.summaryOverride ?: @"",
+                       _choiceUnknownBadge];
+  _choiceWarning.hidden = NO;
 }
 
 // A popover off the trigger, like the Animated dropdown.
@@ -810,7 +898,13 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   _rowHeight = h;
   _contentWidth = cw;
   _wrapsChoicePills = KKLaneWrapsChoicePills(lane);
-  _choiceUsesDropdown = lane.choiceUsesDropdown && lane.choiceLabels.count >= 2;
+  // One option is enough for a DROPDOWN, unlike the pills below. Its option set
+  // is data the plugin discovers at runtime - Shader's `#audio` lane lists
+  // whatever Sonar has published - so "None" alone is a real state, not a
+  // degenerate one. Demanding two dropped the row to a raw number field showing
+  // the stored key: on a Mac where nothing is published, a lane bound to a
+  // source rendered as a slider reading "16483925".
+  _choiceUsesDropdown = lane.choiceUsesDropdown && lane.choiceLabels.count >= 1;
   _laneLabel = [lane.label copy];
   _valueType = lane.valueType;
   _cmin = lane.componentMin ?: @[];
@@ -826,6 +920,8 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   _seedField = lane.seedField;
   _choiceLabels = [lane.choiceLabels copy];
   _choiceValues = [lane.choiceValues copy];
+  _choiceUnknownLabels = [lane.choiceUnknownLabels copy];
+  _choiceUnknownBadge = [lane.choiceUnknownBadge copy];
   _choiceIcons = [lane.choiceIcons copy];
   _isToggle = lane.isToggle;
   _autoSizesComponentLabels = lane.autoSizesComponentLabels;
@@ -1076,7 +1172,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
       [_toggleCheckbox.heightAnchor constraintEqualToConstant:12.0],
     ]];
     _reset.hidden = YES; // a toggle resets via the checkbox itself
-  } else if (_choiceUsesDropdown && _choiceLabels.count >= 2) {
+  } else if (_choiceUsesDropdown && _choiceLabels.count >= 1) {
     // A long or open-ended enum (a shader's `#choice ... dropdown`): a head
     // showing the pick, expanding a searchable list in place. Pinned to the top
     // band rather than centred, so the row can grow downwards when it opens

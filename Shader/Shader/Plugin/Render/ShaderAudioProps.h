@@ -91,24 +91,6 @@ typedef struct ShaderAudioProp {
   double releaseSeconds;
 } ShaderAudioProp;
 
-/// A stable numeric id for a published source, from its manifest `contentHash`
-/// (falling back to `id`). The `#audio` lane stores THIS, not the dropdown
-/// index, so deleting a source in Sonar doesn't silently repoint every shader
-/// that pointed past it.
-///
-/// 24 bits, and never 0: lane values travel as floats, whose mantissa holds
-/// integers exactly only to 2^24, and 0 is reserved for "None". Collisions are
-/// a non-issue across the handful of sources one project publishes.
-static inline double ShaderAudioSourceKey(NSString *contentHash) {
-  if (contentHash.length == 0)
-    return 0;
-  uint32_t hash = 5381;
-  for (NSUInteger i = 0; i < contentHash.length; i++)
-    hash = (hash * 33u) + (uint32_t)[contentHash characterAtIndex:i];
-  hash &= 0xFFFFFFu;
-  return (double)(hash == 0 ? 1u : hash);
-}
-
 /// Parse every `// #audio [label=]` directive + its `uniform vec4 <name>[N];`.
 /// `startOffset` is the first free pool vec4 (audio is appended after the
 /// colour and scalar props, so neither path shifts).

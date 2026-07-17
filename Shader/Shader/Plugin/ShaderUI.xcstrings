@@ -757,6 +757,48 @@
         }
       }
     },
+    "Republish required": {
+      "comment": "Shader audio: the bound source isn't published on this Mac.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu veröffentlichen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver a publicar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À republier"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再公開が必要"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다시 게시 필요"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要重新发布"
+          }
+        }
+      }
+    },
     "Resize the pattern": {
       "comment": "Help shortcut description: scale box.",
       "extractionState": "manual",

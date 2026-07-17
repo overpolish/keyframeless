@@ -186,6 +186,10 @@ struct SonarView: View {
 					timecodeStart: model.projectFormat?.tcStart ?? 0
 				)
 				sources = SonarSourceStore.sources()
+				// Whatever a plugin was asking for, it has now - so drop the
+				// note. Left behind, it would re-impose this selection on every
+				// later drop of the project and quietly override the user.
+				SonarRepublishRequests.clearSatisfied()
 				justPublished = true
 				// Drop `isPublishing` before the pause, or the button stays
 				// disabled and greys out its own confirmation.

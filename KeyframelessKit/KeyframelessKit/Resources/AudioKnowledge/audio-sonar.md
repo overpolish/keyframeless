@@ -41,9 +41,27 @@ Sonar uses the audio as Final Cut Pro plays it, not as the raw file sounds. Your
 
 If a clip's media is offline it gets left out and Sonar tells you which. Video clips with no audio are ignored.
 
+## "Republish required"
+
+If an effect shows a **Republish required** warning next to its audio menu, it's asking for audio that isn't published on this Mac. The effect still knows exactly what it wants - the menu shows the name, greyed out, like "Music - My Documentary" - it just can't find it here.
+
+Almost always this means the project came from somewhere else: a different Mac, a colleague, a machine you edit on at the weekend. Published audio doesn't travel inside the project, so it doesn't arrive with it.
+
+Fixing it takes one action:
+
+1. **Drag the project onto Sonar.**
+2. **The clips are already selected for you.** You don't have to remember what you picked last time - the effect remembers, and Sonar reads it.
+3. **Hit Publish.**
+
+Every effect in the project waiting on that audio starts moving again by itself. There's nothing to re-point in the inspector, and it doesn't matter that you're on a different Mac, that the media sits in a different folder, or that it's months later. Publish the same clips and you get the same source.
+
+If the clips _aren't_ already selected when you drop the project, the effect is asking for audio this project no longer has - clips deleted since, or a different project entirely. Pick the audio you want and publish; the effect will need pointing at it by hand.
+
+The warning only means "this isn't here". It isn't a broken effect or a broken project, and the effect renders normally in every other respect - it just sits still, because as far as it can tell nothing is playing.
+
 ## Worth knowing
 
 - **Use a source in the project it came from.** Audio published from one project won't line up with a different project's timeline, which is why the menu shows the project next to each source name.
-- **Moved to another Mac? Publish again there.** Sources live on the Mac that made them, so a project opened on a different machine finds nothing published and its effects sit still until you republish. Drop the project into Sonar, select the same clips, hit Publish, and your effects start moving again on their own - there's nothing to re-point in the inspector. A source is known by the clips it was made from, not by where those files happen to sit, so the same clips give the same source on any Mac.
+- **Sharing a project? Publish on each Mac.** Sources live on the machine that made them. Whoever opens it elsewhere republishes once, and everything reconnects - see "Republish required" above.
 - **Publishing is a snapshot.** Change the audio in Final Cut Pro and your effect keeps moving to the old version until you publish again.
 - Nothing published yet, or you haven't picked a source, means the effect simply sits still. It won't error.

@@ -74,7 +74,11 @@ Read it with the generated `uMusicBand(i)` (band `i`, roughly `0...1`, low frequ
 
 One `#audio` builds an **Audio** group of four lanes, not one control: the source picker, plus animatable **Noise Gate** (dB), **Release** (seconds, how long a band takes to fall to zero once gated) and **Smoothness** (seconds) lanes. The directive takes `label=`, and `gate=` / `release=` / `smooth=` to seed those three - they're starting values, not settings, since the right gate depends on the mix rather than on the shader.
 
-Nothing picked reads as silence rather than an error, so a shader with an unbound `#audio` still renders. See `audio-shader-directive` for shaping the levels into something that looks good, and `audio-sonar` for how a user publishes the audio in the first place.
+Nothing picked reads as silence rather than an error, so a shader with an unbound `#audio` still renders.
+
+A binding also survives leaving the Mac it was made on. Published audio doesn't travel inside a project, so one opened elsewhere can't find what it's bound to - the picker keeps naming it, greyed out, under a **Republish required** warning, and the user gets it back by dropping the project on Sonar (the clips are already selected) and pressing Publish. Nothing needs re-pointing. Shader authors don't have to do anything for this: it's the picker's job, not the shader's, and no directive attribute affects it.
+
+See `audio-shader-directive` for shaping the levels into something that looks good, and `audio-sonar` for how a user publishes the audio in the first place, including the walkthrough for that warning.
 
 ## On-screen controls (`osc`)
 

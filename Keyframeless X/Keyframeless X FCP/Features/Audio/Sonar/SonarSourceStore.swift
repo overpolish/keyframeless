@@ -30,6 +30,14 @@ struct SonarSource: Codable, Identifiable, Equatable {
 	/// `SonarSourceStore.identityVersion`. Nil means the original
 	/// absolute-path scheme. Optional for the same reason as `contentHash`.
 	var identityVersion: Int?
+	/// Portable key of every clip in the selection, sorted.
+	///
+	/// This is the only record of *what was published*. `contentHash` is
+	/// one-way, so without these a republish - here or on another Mac - can't
+	/// know which clips to select, and the user is left guessing at the picks
+	/// they made weeks ago. Optional because it postdates the format; nil just
+	/// means the selection can't be restored, not that the source is invalid.
+	var clipKeys: [String]?
 }
 
 /// Reads and writes Sonar's published analyses in the shared app-group
@@ -138,7 +146,8 @@ enum SonarSourceStore {
 			projectName: projectName,
 			publishedAt: Date(),
 			contentHash: hash,
-			identityVersion: identityVersion
+			identityVersion: identityVersion,
+			clipKeys: clipKeys(for: clips)
 		)
 		var list = sources().filter { $0.id != source.id }
 		list.append(source)
@@ -158,9 +167,36 @@ enum SonarSourceStore {
 	/// elsewhere, every hash shifts, and republishing the same clips mints a
 	/// source the shader has never heard of. Filenames travel; paths don't.
 	static func contentHash(for clips: [FCPXMLParser.AudioClip]) -> String {
-		let joined = clips.map(AudioClipFingerprint.identity).sorted().joined(separator: "\n")
+		hash36(clips.map(AudioClipFingerprint.identity).sorted().joined(separator: "\n"))
+	}
+
+	/// Portable key for each clip in the selection, sorted.
+	///
+	/// Hashed rather than stored whole: the identity string carries the file
+	/// name plus every edit, and a ticket holding fifty of them verbatim would
+	/// ride around inside the FCP library forever. Sorted so the same selection
+	/// always writes the same manifest.
+	static func clipKeys(for clips: [FCPXMLParser.AudioClip]) -> [String] {
+		clips.map(clipKey(for:)).sorted()
+	}
+
+	/// One clip's portable key. The same clip on another Mac hashes the same,
+	/// which is what lets a republish there rebuild the identical selection.
+	static func clipKey(for clip: FCPXMLParser.AudioClip) -> String {
+		hash36(AudioClipFingerprint.identity(clip))
+	}
+
+	/// djb2 over UTF-8, base 36.
+	///
+	/// Hand-rolled on purpose: `Hasher` is seeded per process, so it gives a
+	/// different answer on every launch. These hashes are written to disk and
+	/// compared across machines, which needs a function that is stable
+	/// everywhere and forever. Changing it silently invalidates every published
+	/// source and every shader bound to one, so it is versioned by
+	/// `identityVersion`.
+	private static func hash36(_ string: String) -> String {
 		var hash: UInt64 = 5381
-		for byte in joined.utf8 { hash = (hash &* 33) &+ UInt64(byte) }
+		for byte in string.utf8 { hash = (hash &* 33) &+ UInt64(byte) }
 		return String(hash, radix: 36)
 	}
 
@@ -198,7 +234,7 @@ enum SonarSourceStore {
 			id: newID, name: unique, roles: old.roles, clipCount: old.clipCount,
 			duration: old.duration, projectName: old.projectName,
 			publishedAt: old.publishedAt, contentHash: old.contentHash,
-			identityVersion: old.identityVersion)
+			identityVersion: old.identityVersion, clipKeys: old.clipKeys)
 		guard let manifestURL, let data = try? JSONEncoder().encode(list) else { return }
 		try? data.write(to: manifestURL, options: .atomic)
 	}
@@ -252,11 +288,7 @@ enum SonarSourceStore {
 			}
 		}
 		while out.hasSuffix("-") { out.removeLast() }
-		if out.isEmpty {
-			var hash: UInt64 = 5381
-			for byte in name.utf8 { hash = (hash &* 33) &+ UInt64(byte) }
-			return "source-\(String(hash, radix: 36))"
-		}
+		if out.isEmpty { return "source-\(hash36(name))" }
 		return out
 	}
 }

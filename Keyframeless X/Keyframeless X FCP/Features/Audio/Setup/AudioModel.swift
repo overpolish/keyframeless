@@ -57,6 +57,19 @@ class AudioModel: ObservableObject {
 		selectedClips = []
 		editSelectedClips = nil
 		dropItems = FCPXMLParser.topLevelItems(in: doc)
+		// A plugin in this project may be bound to a source that was never
+		// published on this Mac, in which case it has left a note saying which
+		// clips it needs. Restoring that selection is the whole point: the user
+		// can't be expected to remember picks they made on another machine, and
+		// only an exact match reproduces the hash the plugin is looking for.
+		//
+		// After `dropItems`, because the note is matched on the project's name
+		// and that's where it comes from.
+		if let requested = SonarRepublishRequests.pendingSelection(
+			project: dropItems.first?.name, clips: allAudioClips)
+		{
+			sonarSelectedClips = requested
+		}
 		let fmt = FCPXMLParser.projectFormat(in: doc) ?? .default
 		projectFormat = fmt
 		exportWidth = "\(fmt.width)"

@@ -5,6 +5,7 @@
 
 #import "ShaderAudioPool.h"
 
+#import <KeyframelessKit/KKSonarTicket.h>
 #import <KeyframelessKit/KKSpectrogram.h>
 #import <os/lock.h>
 #import <os/log.h>
@@ -106,30 +107,17 @@ static KKSpectrogramRef ShaderAudioSpectrogramFor(NSString *sourceID) {
 /// The published source whose stable key is `key`, or nil.
 ///
 /// Resolves by identity, not position: the lane stores the key (0 = None), and
-/// a key matching nothing means the source was deleted since the shader was
-/// bound - silence, rather than whatever now sits where it used to.
+/// a key matching nothing means the source is gone - deleted here, or never
+/// published on this Mac. Silence either way, rather than whatever now sits
+/// where it used to.
 static NSString *
 ShaderAudioSourceIDForKey(long key,
                           NSArray<NSDictionary<NSString *, id> *> *published) {
-  if (key == 0) {
-    return nil;
-  }
-  for (NSDictionary *entry in published) {
-    NSString *hash = entry[@"contentHash"];
-    if (![hash isKindOfClass:NSString.class] || !hash.length) {
-      hash = entry[@"id"];
-    }
-    if (![hash isKindOfClass:NSString.class] || !hash.length) {
-      continue;
-    }
-    if (lround(ShaderAudioSourceKey(hash)) == key) {
-      NSString *sourceID = entry[@"id"];
-      return [sourceID isKindOfClass:NSString.class] && sourceID.length
-                 ? sourceID
-                 : nil;
-    }
-  }
-  return nil;
+  NSDictionary<NSString *, id> *source =
+      KKSonarSourceForKey((double)key, published);
+  NSString *sourceID = source[@"id"];
+  return [sourceID isKindOfClass:NSString.class] && sourceID.length ? sourceID
+                                                                    : nil;
 }
 
 /// Samples `have` bands at `timelineSeconds`, averaged over a `smoothSeconds`

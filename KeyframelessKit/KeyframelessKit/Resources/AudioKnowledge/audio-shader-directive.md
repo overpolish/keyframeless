@@ -25,6 +25,10 @@ Note what each one fixes, because they're easy to confuse. **Smoothness** is how
 
 The directive never names a source. It declares a slot, and the picker binds it. That means a shader shared with someone else opens fine on their machine - they just pick their own audio. It also means a shader with nothing bound (the picker's "None") renders silence rather than failing.
 
+A _project_ is different from a shader. Its bindings are real and are meant to survive, so a project opened on a Mac where its audio was never published doesn't quietly forget them - the picker keeps showing what it wants, greyed out, with a **Republish required** warning beside it. Drop the project on Sonar, where the clips will already be selected, and publish: the binding comes back on its own. See the Sonar doc for the walkthrough.
+
+This is worth telling apart from "None". Both render silence, but "None" is a choice and Republish required is a missing ingredient.
+
 ## Reading the spectrum
 
 The uniform is a `vec4` array because four bands pack into each `vec4`, but a shader never indexes that packing by hand. Two things are generated for it:

@@ -9,6 +9,7 @@
 // Type's Shader lanes + the colour swatches). Extracted from Plugin+CustomUI.m
 // (which just returns ShaderBuildAvailableLanes()). One function, cohesive.
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKSonarTicket.h>
 #import <KeyframelessKit/KKSpectrogram.h>
 #import <KeyframelessKit/KKTimingStage.h>
 
@@ -366,8 +367,14 @@ static inline KKLane *ShaderMakeAudioControlLane(NSString *idLabel,
 //
 // Structural (non-animatable): it selects which data feeds the shader, it isn't
 // a value to keyframe. The audio itself is the animation.
-static inline void ShaderAppendAudioLanes(NSMutableArray<KKLane *> *lanes,
-                                          NSString *source) {
+// `tickets` is what this plugin instance remembers about the sources its
+// `#audio` lanes are bound to (key -> KKSonarTicket), so a lane bound to
+// something not published HERE can still name it. Passed in rather than read:
+// tickets live in a parameter, and the param APIs resolve only inside an action
+// scope - which a lane builder called from a code-commit callback isn't in.
+static inline void
+ShaderAppendAudioLanes(NSMutableArray<KKLane *> *lanes, NSString *source,
+                       NSDictionary<NSString *, id> *tickets) {
   ShaderAudioProp props[KK_SHADER_MAX_AUDIO_PROPS];
   int used = 0;
   int nProps =
@@ -387,10 +394,8 @@ static inline void ShaderAppendAudioLanes(NSMutableArray<KKLane *> *lanes,
     NSString *name = entry[@"name"];
     if (![name isKindOfClass:NSString.class] || !name.length)
       continue;
-    NSString *hash = entry[@"contentHash"];
-    if (![hash isKindOfClass:NSString.class] || !hash.length)
-      hash = entry[@"id"];
-    if (![hash isKindOfClass:NSString.class] || !hash.length)
+    double key = KKSonarSourceKeyForSource(entry);
+    if (lround(key) == 0)
       continue;
     // Always "<name> - <project>": Sonar only dedupes names within a project,
     // so two projects each publishing a "Dialogue" arrive here identically
@@ -402,7 +407,31 @@ static inline void ShaderAppendAudioLanes(NSMutableArray<KKLane *> *lanes,
             ? [NSString stringWithFormat:@"%@ - %@", name, project]
             : name;
     [options addObject:label];
-    [keys addObject:@(ShaderAudioSourceKey(hash))];
+    [keys addObject:@(key)];
+  }
+
+  // What each remembered binding reads as when it names nothing published here.
+  // Built in the SAME "<name> - <project>" shape as a live option above, so a
+  // source that has gone missing still reads like the thing it is rather than
+  // like some other kind of object.
+  //
+  // Every ticket goes in, not just the missing ones: the row consults this only
+  // once a stored value has matched no option, so an entry for a source that IS
+  // published is simply never read. Filtering here would mean deciding twice,
+  // in two places, what "missing" means.
+  NSMutableDictionary<NSNumber *, NSString *> *unknownLabels =
+      [NSMutableDictionary dictionary];
+  for (NSString *ticketKey in tickets) {
+    NSDictionary *ticket = tickets[ticketKey];
+    if (![ticket isKindOfClass:NSDictionary.class])
+      continue;
+    NSString *name = KKSonarTicketSourceName(ticket);
+    if (!name.length)
+      continue;
+    NSString *project = KKSonarTicketProjectName(ticket);
+    unknownLabels[@(KKSonarTicketKey(ticket))] =
+        project.length ? [NSString stringWithFormat:@"%@ - %@", name, project]
+                       : name;
   }
 
   for (int pi = 0; pi < nProps; pi++) {
@@ -432,6 +461,15 @@ static inline void ShaderAppendAudioLanes(NSMutableArray<KKLane *> *lanes,
     // open-ended case the dropdown exists for: wrapping pills grew the row
     // without limit, one line per few sources.
     lane.choiceUsesDropdown = YES;
+    // What a binding to an unpublished source reads as. Without these the row
+    // says "None" - indistinguishable from deliberately picking None, when in
+    // fact the project knows exactly what it wants and just can't see it here.
+    lane.choiceUnknownLabels = unknownLabels;
+    lane.choiceUnknownBadge =
+        unknownLabels.count
+            ? RLoc(@"Republish required", @"Shader audio: the bound source "
+                                          @"isn't published on this Mac.")
+            : nil;
     // Wide enough for any key: the stored value is a hash now, so clamping to
     // the choice count would destroy every binding.
     lane.componentMin = @[ @0.0 ];
@@ -478,7 +516,8 @@ static inline void ShaderAppendAudioLanes(NSMutableArray<KKLane *> *lanes,
 }
 
 static inline NSArray<KKLane *> *
-ShaderBuildAvailableLanesForSource(NSString *shaderSource) {
+ShaderBuildAvailableLanesForSource(NSString *shaderSource,
+                                   NSDictionary<NSString *, id> *tickets) {
   // Lane order (top-to-bottom default): the Core lanes, then the dynamic colour
   // swatches last (parsed from the shader). Users can reorder in the inspector.
   NSMutableArray<KKLane *> *lanes = [NSMutableArray array];
@@ -567,7 +606,7 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource) {
 
   // Dynamic audio bindings (`// #audio`): a dropdown of Sonar's published
   // analyses per declared spectrum uniform.
-  ShaderAppendAudioLanes(lanes, shaderSource);
+  ShaderAppendAudioLanes(lanes, shaderSource, tickets);
 
   // Custom shader source: a full-width code editor row at the bottom of Core.
   // Non-animatable; the text lives in the lane's codeString (not a keypose) and
@@ -691,5 +730,6 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource) {
 // Back-compat entry: the default-shader lane set. Source-specific dynamic lanes
 // only appear when the default shader itself declares a directive.
 static inline NSArray<KKLane *> *ShaderBuildAvailableLanes(void) {
-  return ShaderBuildAvailableLanesForSource(ShaderCustomDefaultShaderSource());
+  return ShaderBuildAvailableLanesForSource(ShaderCustomDefaultShaderSource(),
+                                            nil);
 }
