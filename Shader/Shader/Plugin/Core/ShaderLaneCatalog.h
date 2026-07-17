@@ -329,8 +329,23 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
         lane.integerValued = YES; // whole-number slider
         lane.scrubStep = 1.0;
       }
-      [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
-                                            values:@[ @(p->fdefault) ]]];
+      if (p->isProgress) {
+        // The identity ramp, not a constant: 0% at the effect's start, 100% at
+        // its end. Left alone this evaluates to the raw clip fraction, so a
+        // `#progress` lane matches the built-in iProgress and a ported GL
+        // transition runs linearly like its web reference. Shaping the curve is
+        // then purely additive.
+        //
+        // The curve MUST be stated: KKInterval defaults to EaseInOut, which
+        // would silently ease every transition that never asked to be eased.
+        KKKeyPose *start = [KKKeyPose keyposeAtTime:0.0 values:@[ @0.0 ]];
+        start.outgoing.curve = KKIntervalCurveLinear;
+        [lane insertKeypose:start];
+        [lane insertKeypose:[KKKeyPose keyposeAtTime:1.0 values:@[ @100.0 ]]];
+      } else {
+        [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
+                                              values:@[ @(p->fdefault) ]]];
+      }
     }
     [lanes addObject:lane];
   }

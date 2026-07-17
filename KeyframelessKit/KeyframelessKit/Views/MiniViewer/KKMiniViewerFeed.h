@@ -57,6 +57,23 @@ NS_ASSUME_NONNULL_BEGIN
                device:(id<MTLDevice>)device
          commandQueue:(id<MTLCommandQueue>)commandQueue;
 
+#pragma mark - Channel 1 (a second texture)
+
+/// Publish a SECOND source texture, independent of the slots.
+///
+/// Slots mean "the same source at different times" (onion-skin / filmstrip),
+/// and `slotCount` moves with the caller's preview mode - so a second *texture*
+/// can't live there without its index shifting underfoot. This gets its own
+/// persistent surface and its own `channel1` descriptor key, absent entirely
+/// when never called, so existing feeds are unaffected.
+///
+/// Used by Shader for the "To" image well (the incoming clip of a transition),
+/// which the mini-viewer needs to preview a two-texture shader. Same contract
+/// as `-updateWithSourceTexture:`: full-frame texture, self-throttling.
+- (void)updateChannel1WithSourceTexture:(id<MTLTexture>)sourceTexture
+                                 device:(id<MTLDevice>)device
+                           commandQueue:(id<MTLCommandQueue>)commandQueue;
+
 /// Output media pixel size, for a GENERATOR with no source frames to carry it.
 /// When set (and there are no published slots), `publishDescriptor` writes a
 /// dims-only descriptor (`srcWidth`/`srcHeight`, empty `slots`) so a consuming

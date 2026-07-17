@@ -160,6 +160,13 @@ static inline void ShaderScalarParseDefaults(NSString *attrs,
     p->hasMax = !isnan(mx);
     if (!p->hasMax)
       mx = defMax; // nominal slider cap; the field stays unbounded
+    if (p->isProgress) {
+      // 0..100% is what progress MEANS, so it's a bounded field rather than an
+      // open one with a nominal cap. min=/max= aren't honoured here on purpose.
+      mn = 0.0;
+      mx = 100.0;
+      p->hasMax = 1;
+    }
     double df = ShaderAttrDouble(attrs, @"\\bdefault\\s*=\\s*(-?[0-9.]+)", mn);
     if (mx < mn)
       mx = mn;
@@ -188,7 +195,8 @@ static inline int ShaderParseScalarProps(NSString *source,
   NSRegularExpression *dirRe = [NSRegularExpression
       regularExpressionWithPattern:
           @"(?m)^[ \\t]*//[ "
-          @"\\t]*#(float|percent|seed|point|int|angle|bool|choice|multi)\\b([^"
+          @"\\t]*#(float|percent|progress|seed|point|int|angle|bool|choice|"
+          @"multi)\\b([^"
           @"\\n]*)$"
                            options:0
                              error:nil];
@@ -220,7 +228,10 @@ static inline int ShaderParseScalarProps(NSString *source,
     ShaderScalarProp p;
     memset(&p, 0, sizeof(p));
     p.isChoice = [kind isEqualToString:@"choice"];
-    p.isPercent = [kind isEqualToString:@"percent"];
+    p.isProgress = [kind isEqualToString:@"progress"];
+    // Everything about progress except its ramp default is a percent field
+    // (0..100 lane shown as %, pool gets value / 100), so reuse that path.
+    p.isPercent = [kind isEqualToString:@"percent"] || p.isProgress;
     p.isSeed = [kind isEqualToString:@"seed"];
     p.isPoint = [kind isEqualToString:@"point"];
     p.isBool = [kind isEqualToString:@"bool"];

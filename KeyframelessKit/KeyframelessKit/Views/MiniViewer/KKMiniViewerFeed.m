@@ -47,6 +47,12 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
 @implementation KKMiniViewerFeed {
   NSString *_descriptorPath;
   NSMutableArray<_KKMiniFeedSlot *> *_slots;
+  // A SECOND texture, not a second time. Deliberately outside `_slots`: those
+  // mean "the same source at different times" (onion-skin / filmstrip) and
+  // their count moves with the boundary preview, so an index into them would
+  // shift under a consumer's feet. Published as its own descriptor key, absent
+  // when nil, so feeds that never set it are byte-identical to before.
+  _KKMiniFeedSlot *_channel1;
   MPSImageBilinearScale *_scaler;
 }
 
@@ -151,6 +157,18 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
   return YES;
 }
 
+// The channel-1 entry, or nil when nothing has published one.
+- (NSDictionary *)_channel1EntryLocked {
+  if (!_channel1 || !_channel1.surface)
+    return nil;
+  return @{
+    @"ioSurfaceID" : @((uint32_t)IOSurfaceGetID(_channel1.surface)),
+    @"width" : @(_channel1.dstW),
+    @"height" : @(_channel1.dstH),
+    @"generation" : @(_channel1.generation),
+  };
+}
+
 - (void)_publishLocked {
   NSMutableArray *slotEntries = [NSMutableArray array];
   for (_KKMiniFeedSlot *s in _slots) {
@@ -170,12 +188,15 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
     // consumer synthesizes one source-less slot from the empty array and draws
     // it via its own generate path.
     if (_mediaSize.width > 0 && _mediaSize.height > 0) {
-      NSDictionary *dimsOnly = @{
+      NSMutableDictionary *dimsOnly = [@{
         @"srcWidth" : @(_mediaSize.width),
         @"srcHeight" : @(_mediaSize.height),
         @"ts" : @([NSDate timeIntervalSinceReferenceDate]),
         @"slots" : @[],
-      };
+      } mutableCopy];
+      NSDictionary *ch1 = [self _channel1EntryLocked];
+      if (ch1)
+        dimsOnly[@"channel1"] = ch1;
       NSData *json = [NSJSONSerialization dataWithJSONObject:dimsOnly
                                                      options:0
                                                        error:nil];
@@ -189,7 +210,7 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
   // consumers that don't know about `slots` keep working). New consumers
   // walk the `slots` array.
   _KKMiniFeedSlot *first = _slots.firstObject;
-  NSDictionary *desc = @{
+  NSMutableDictionary *desc = [@{
     @"ioSurfaceID" : @((uint32_t)IOSurfaceGetID(first.surface)),
     @"width" : @(first.dstW),
     @"height" : @(first.dstH),
@@ -198,7 +219,10 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
     @"generation" : @(first.generation),
     @"ts" : @([NSDate timeIntervalSinceReferenceDate]),
     @"slots" : slotEntries,
-  };
+  } mutableCopy];
+  NSDictionary *ch1 = [self _channel1EntryLocked];
+  if (ch1)
+    desc[@"channel1"] = ch1;
   NSData *json = [NSJSONSerialization dataWithJSONObject:desc
                                                  options:0
                                                    error:nil];
@@ -279,6 +303,25 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
     [self _encodeUpdateForSlot:slot
                  sourceTexture:sourceTexture
                            tag:tag
+                        device:device
+                  commandQueue:commandQueue];
+  }
+}
+
+- (void)updateChannel1WithSourceTexture:(id<MTLTexture>)sourceTexture
+                                 device:(id<MTLDevice>)device
+                           commandQueue:(id<MTLCommandQueue>)commandQueue {
+  if (!sourceTexture || !device || !commandQueue)
+    return;
+  @synchronized(self) {
+    if (!_channel1)
+      _channel1 = [[_KKMiniFeedSlot alloc] init];
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    if (now - _channel1.lastUpdate < kMinUpdateInterval)
+      return;
+    [self _encodeUpdateForSlot:_channel1
+                 sourceTexture:sourceTexture
+                           tag:0.0
                         device:device
                   commandQueue:commandQueue];
   }

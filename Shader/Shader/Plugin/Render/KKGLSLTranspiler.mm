@@ -58,6 +58,88 @@ static NSString *KKRenameReservedIdentifiers(NSString *src) {
 // so a glslang error still maps to the editor line. A shader already using
 // `mainImage` passes through untouched; uncommon custom uniform names still need
 // a hand edit (the validator points at them).
+// gl-transitions.com shaders speak a neighbouring dialect: a
+// `vec4 transition(vec2 uv)` entry point, host-supplied `progress` / `ratio` /
+// `getFromColor` / `getToColor`, and custom uniforms whose default rides in a
+// trailing `// = value` comment. Adapt them rather than make an author hand-port
+// every shader in the catalogue. The signature is the tell - nothing else
+// declares `vec4 transition(vec2`.
+static BOOL KKLooksLikeGLTransition(NSString *src) {
+  if (!src.length)
+    return NO;
+  static NSRegularExpression *re;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    re = [NSRegularExpression
+        regularExpressionWithPattern:@"\\bvec4\\s+transition\\s*\\(\\s*vec2"
+                             options:0
+                               error:nil];
+  });
+  return [re firstMatchInString:src
+                        options:0
+                          range:NSMakeRange(0, src.length)] != nil;
+}
+
+// `// #alpha`: the shader's own alpha is authoritative - emit it premultiplied,
+// with no compositing over the source and no forced-opaque.
+//
+// The two default conventions can't express a shader that MASKS its own clip -
+// e.g. a stacked-clips picture-in-picture, where each instance draws its clip
+// into one region and must be genuinely TRANSPARENT elsewhere so the lane below
+// shows through. Sampling iChannel0 (which such a shader must, to draw itself)
+// takes the filter path and forces a=1; the generator path instead composites
+// over iChannel0, which here is the very clip being masked. Hence a third mode,
+// opt-in because forcing a=1 remains the right default for golfed pastes that
+// leave garbage in fragColor.a.
+static BOOL KKWantsAlphaOutput(NSString *src) {
+  if (!src.length)
+    return NO;
+  static NSRegularExpression *re;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    re = [NSRegularExpression
+        regularExpressionWithPattern:@"(?m)^[ \\t]*//[ \\t]*#alpha\\b"
+                             options:0
+                               error:nil];
+  });
+  return [re firstMatchInString:src
+                        options:0
+                          range:NSMakeRange(0, src.length)] != nil;
+}
+
+// Fold a GL-Transitions shader into the image-shader convention.
+//
+// Both rewrites are LINE-COUNT SAFE so a glslang error still maps to the
+// editor: the uniform fold stays on its own line, and `mainImage` is APPENDED
+// (appending shifts nothing above it). The preamble that supplies
+// getFromColor / getToColor / progress / ratio is emitted by KKWrapGLSL's
+// prepended block instead, which `lineOffset` already accounts for.
+static NSString *KKShimGLTransition(NSString *src) {
+  if (!KKLooksLikeGLTransition(src))
+    return src;
+  NSMutableString *s = [src mutableCopy];
+
+  // `uniform float strength; // = 1.0` -> `const float strength = 1.0;`.
+  // Left as a bare uniform it would get a binding nothing ever writes, so every
+  // knob would silently read 0 (and this shader's burst() would flatten to
+  // nothing). Constants make it RUN correctly on the author's defaults; turning
+  // these into real inspector controls is the next step.
+  NSRegularExpression *uni = [NSRegularExpression
+      regularExpressionWithPattern:@"(?m)\\buniform\\s+(float|int|bool|vec2|vec3"
+                                   @"|vec4)\\s+(\\w+)\\s*;[ \\t]*//[ \\t]*=[ "
+                                   @"\\t]*(.+)$"
+                           options:0
+                             error:nil];
+  [uni replaceMatchesInString:s
+                      options:0
+                        range:NSMakeRange(0, s.length)
+                 withTemplate:@"const $1 $2 = $3;"];
+
+  [s appendString:@"\nvoid mainImage(out vec4 O, in vec2 fc){ O = "
+                  @"transition(fc / iResolution.xy); }\n"];
+  return s;
+}
+
 static NSString *KKShimRawGLSL(NSString *src) {
   if (!src.length)
     return src ?: @"";
@@ -321,14 +403,19 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
   [s appendString:@"layout(location = 0) out vec4 kk_outColor;\n"
                   @"layout(std140, binding = 0) uniform KKUniforms {\n"
                   @"  vec4 kkResTime;\n  vec4 iMouse;\n  vec4 iDate;\n"
-                  @"  vec4 kkExtra;\n  vec4 kkGrain;\n  vec4 kkChanRes[4];\n"];
+                  @"  vec4 kkExtra;\n  vec4 kkGrain;\n  vec4 kkChanRes[4];\n"
+                  @"  vec4 kkTransition;\n"];
   [s appendString:colorMembers]; // the shader's own colour uniforms
   [s appendString:@"};\n"
                   @"#define iResolution (kkResTime.xyz)\n"
                   @"#define iTime (kkResTime.w)\n"
                   @"#define iTimeDelta (kkExtra.x)\n"
                   @"#define iFrame (int(kkExtra.y))\n"
-                  @"#define iChannelResolution kkChanRes\n"];
+                  @"#define iChannelResolution kkChanRes\n"
+                  // Not `progress`: that's a plausible local-variable name in an
+                  // ordinary shader, and a #define would rewrite it.
+                  @"#define iProgress (kkTransition.x)\n"];
+  // GL-Transitions dialect. Scoped to shaders that actually declare
   [s appendString:colorDefines];
   // Alpha is honoured by DEFAULT for a shader that does NOT sample the source
   // itself: its transparent areas composite over iChannel0 (the footage) so a
@@ -344,6 +431,21 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
       [s appendFormat:@"layout(binding = %lu) uniform sampler2D iChannel%lu;\n",
                       (unsigned long)(ch + 1), (unsigned long)ch];
   }
+  // GL-Transitions dialect. Scoped to shaders that actually declare
+  // `vec4 transition(vec2 ...)`, so `progress` stays a usable local name
+  // everywhere else. Emitted AFTER the sampler declarations above - these
+  // reference iChannel0/1, and GLSL wants them declared first.
+  //
+  // getFromColor/getToColor are real functions, not #defines: the catalogue
+  // passes computed expressions (`getFromColor(safeUv(uv + s))`), which a macro
+  // would mangle.
+  if (KKLooksLikeGLTransition(userSource))
+    [s appendString:@"#define progress iProgress\n"
+                    @"#define ratio (iResolution.x / iResolution.y)\n"
+                    @"vec4 getFromColor(vec2 uv){ return texture(iChannel0, "
+                    @"uv); }\n"
+                    @"vec4 getToColor(vec2 uv){ return texture(iChannel1, uv); "
+                    @"}\n"];
   [s appendString:@"vec3 kkSrgbToLinear(vec3 c) {\n"
                   @"  c = clamp(c, 0.0, 1.0);\n"
                   @"  bvec3 lo = lessThanEqual(c, vec3(0.04045));\n"
@@ -393,6 +495,16 @@ static NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
     // position packed into RGBA). No grain, no sRGB, no clamp, no forced-opaque
     // - pass mainImage's output straight through.
     [s appendString:@"  kk_outColor = kkColor;\n}\n"];
+  } else if (KKWantsAlphaOutput(userSource)) {
+    // `// #alpha`: premultiplied passthrough of the shader's own alpha. No
+    // composite over the source (the shader is masking that source), no forced
+    // opaque. Grain + sRGB exactly as the other display paths.
+    [s appendString:
+           @"  vec3 disp = kkApplyGrain(clamp(kkColor.rgb, 0.0, 1.0), "
+           @"gl_FragCoord.xy);\n"
+           @"  vec3 rgb = (kkExtra.w == 0.0) ? kkSrgbToLinear(disp) : disp;\n"
+           @"  float kka = clamp(kkColor.a, 0.0, 1.0);\n"
+           @"  kk_outColor = vec4(rgb * kka, kka);\n}\n"];
   } else if (honorAlpha) {
     // Composite the shader over the source using its own alpha, so transparent
     // areas show the footage (iChannel0) rather than black - the shader is a
@@ -920,11 +1032,20 @@ static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL,
 
   KKGLSLTranspileResult *result = [KKGLSLTranspileResult new];
   BOOL hadMainImage = [userGLSL rangeOfString:@"mainImage"].location != NSNotFound;
-  userGLSL = KKShimRawGLSL(userGLSL); // raw-GL -> image-shader convention
+  // Before the raw-GL shim: this one SUPPLIES mainImage, which is exactly the
+  // condition KKShimRawGLSL bails on, so it then correctly leaves us alone.
+  BOOL glTransition = KKLooksLikeGLTransition(userGLSL);
+  userGLSL = KKShimGLTransition(userGLSL); // gl-transitions -> image-shader
+  userGLSL = KKShimRawGLSL(userGLSL);      // raw-GL -> image-shader convention
   result.shimmedFromRawGL =
-      !hadMainImage &&
+      !hadMainImage && !glTransition &&
       [userGLSL rangeOfString:@"mainImage"].location != NSNotFound;
   NSUInteger channelMask = KKChannelMask(userGLSL);
+  // A GL transition names its sources getFromColor/getToColor and never writes
+  // `iChannel` anywhere, so the scan returns 0 and BOTH clips would go unbound.
+  // Force the two it always samples.
+  if (glTransition)
+    channelMask |= 0x3u;
   result.declaredChannelMask = KKDeclaredChannelMask(channelMask, bufferMode);
   NSInteger lineOffset = 0;
   NSString *glsl =

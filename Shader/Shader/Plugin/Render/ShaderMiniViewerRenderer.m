@@ -538,6 +538,12 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   base.grain = (simd_float4){grain, grainSize, 0.0f, 0.0f};
   for (int c = 0; c < 4; c++)
     base.chanRes[c] = (simd_float4){256.0f, 256.0f, 1.0f, 0.0f};
+  // iProgress: the PLAYHEAD's fraction, matching the source frame the feed
+  // publishes (which is also the playhead's), so the preview agrees with the
+  // viewer. Not editFraction - that's the keypose being edited and is 0 outside
+  // a boundary popover, which would pin every transition to its outgoing clip.
+  base.transition =
+      (simd_float4){(float)self.playheadFraction, 0.0f, 0.0f, 0.0f};
   // A shader's `// #color` properties -> the colour pool (bound after the fixed
   // uniforms, same as the FCP render).
   simd_float4 colorPool[KK_SHADER_COLOR_POOL];
@@ -690,12 +696,22 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   if (!imagePS)
     return NO;
   KKGLSLTranspileResult *imgTR = KKTranspileGLSL(imgSrc);
+  // iChannel1 = the feed's second texture (Shader's "To" image well, i.e. a
+  // transition's incoming clip) when one was published. Same colour handling as
+  // iChannel0 above, so a two-texture shader previews the way it renders.
+  id<MTLTexture> ch1Raw = self.canvas.channel1Texture;
+  id<MTLTexture> toLin = ch1Raw ? [self _linearSourceView:ch1Raw] : nil;
+  if (toLin)
+    toLin = KKGammaEncodeSourceTextureOnBuffer(commandBuffer, toLin);
+
   NSMutableArray *imgCh = [NSMutableArray arrayWithCapacity:4];
   KKGLSLUniforms imgU = base;
   for (int c = 0; c < 4; c++) {
     id<MTLTexture> ct = bufTex[c];
     if (!ct && c == 0)
       ct = srcLin;
+    if (!ct && c == 1)
+      ct = toLin; // nil when no well -> NSNull -> noise, as before
     [imgCh addObject:ct ?: (id)[NSNull null]];
     if (ct)
       imgU.chanRes[c] =

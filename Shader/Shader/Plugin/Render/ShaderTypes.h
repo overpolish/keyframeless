@@ -36,6 +36,10 @@ typedef struct ShaderCommonUniforms {
     float time;           // clip seconds
     float speed;          // time multiplier (motion rate)
     float seed;           // start-time offset (shared)
+    // 0..1 across the effect's own window, before Speed/Seed. In a Motion
+    // transition template that window IS the transition, so this is the
+    // GL-Transitions `progress`. Exposed to shaders as iProgress.
+    float progress;
     // Core film grain.
     float grain;              // 0..1 core film-grain amount (nonzero default = anti-band)
     float grainSize;          // grain cell size in reference pixels (higher = coarser)

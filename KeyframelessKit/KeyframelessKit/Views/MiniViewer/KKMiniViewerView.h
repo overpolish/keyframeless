@@ -467,6 +467,17 @@ NS_ASSUME_NONNULL_BEGIN
 /// or zero until the source resolves. Used to show crop in pixel units.
 @property(nonatomic, readonly) CGSize sourceMediaSize;
 
+/// A SECOND source texture, when the feed published one via
+/// `-[KKMiniViewerFeed updateChannel1WithSourceTexture:...]`; nil otherwise.
+///
+/// Separate from the filmstrip slots, which are the same source at different
+/// TIMES. This is a different source entirely - Shader uses it for the "To"
+/// image well (a transition's incoming clip) so a two-texture shader previews
+/// properly instead of falling through to the noise fallback. Renderers reach
+/// it via `self.canvas.channel1Texture`. Raw, like the slot textures: the
+/// caller applies its own colour handling.
+@property(nonatomic, readonly, nullable) id<MTLTexture> channel1Texture;
+
 /// Fired when `sourceMediaSize` first resolves (or changes) - lets a host
 /// re-render any pixel-scaled UI that depends on it.
 @property(nonatomic, copy, nullable) void (^onSourceResolved)(void);
@@ -518,11 +529,12 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 /// Live-playback preview: while the host reports FCP is playing back, the mini
 /// shows the effect at the moving playhead instead of the frozen keypose it's
 /// editing, and every on-screen control is suppressed so the preview reads as a
-/// clean frame. When YES, each source frame is rendered at ITS OWN feed tag (the
-/// clip fraction that frame represents), so the effect transform stays locked to
-/// the footage the feed delivered rather than trailing a separately-polled
-/// playhead; the poll also speeds up to keep pace with the feed. Default NO
-/// restores the edited-keypose frame with its controls on the next redraw.
+/// clean frame. When YES, each source frame is rendered at ITS OWN feed tag
+/// (the clip fraction that frame represents), so the effect transform stays
+/// locked to the footage the feed delivered rather than trailing a
+/// separately-polled playhead; the poll also speeds up to keep pace with the
+/// feed. Default NO restores the edited-keypose frame with its controls on the
+/// next redraw.
 @property(nonatomic) BOOL livePlaybackActive;
 
 /// When YES, a click in the mini makes the mini the window's first responder

@@ -139,4 +139,32 @@
   }
 }
 
+- (void)kkPublishMiniViewerChannel1ForDestination:
+            (FxImageTile *)destinationImage
+                                     sourceImages:
+                                         (NSArray<FxImageTile *> *)sourceImages
+                                  wellParameterID:(UInt32)wellParameterID {
+  if (!self.miniViewerFeed)
+    return; // the slot publish creates the feed; nothing to attach to yet
+  FxImageTile *wellTile =
+      KKImageTileForParameterID(sourceImages, wellParameterID);
+  if (!wellTile || !wellTile.ioSurface)
+    return; // well empty / unfilled - leave the last published one alone
+
+  KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
+  MTLPixelFormat pf =
+      [KKMetalDeviceCache pixelFormatForImageTile:destinationImage];
+  uint64_t rid = destinationImage.deviceRegistryID;
+  id<MTLCommandQueue> q = [cache commandQueueWithRegistryID:rid pixelFormat:pf];
+  id<MTLDevice> dev = [cache deviceWithRegistryID:rid];
+  if (!q || !dev)
+    return;
+  id<MTLTexture> tex = [wellTile metalTextureForDevice:dev];
+  if (tex)
+    [self.miniViewerFeed updateChannel1WithSourceTexture:tex
+                                                  device:dev
+                                            commandQueue:q];
+  [cache returnCommandQueueToCache:q];
+}
+
 @end

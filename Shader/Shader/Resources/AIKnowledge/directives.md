@@ -23,27 +23,79 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 
 ## Control kinds
 
-| Directive  | Uniform type       | Inspector control         | What the shader receives                            |
-| ---------- | ------------------ | ------------------------- | --------------------------------------------------- |
-| `#color`   | `vec4 n;`          | colour swatch             | `vec4` RGBA (from the Colours-style swatch)         |
-| `#color`   | `vec4 n[N];`       | palette bar (up to N)     | `vec4 n[N]` + `nCount` (int) active count           |
-| `#float`   | `float n;`         | slider                    | the raw value                                       |
-| `#percent` | `float n;`         | slider shown as `%`       | **0..1** (the inspector shows 0-100%)               |
-| `#int`     | `float n;`         | integer slider            | `int`                                               |
-| `#seed`    | `float n;`         | dice/seed field (no anim) | the raw integer value                               |
-| `#angle`   | `float n;`         | rotation dial (degrees)   | **radians, negated** (`radians(-deg)`)              |
-| `#bool`    | `bool n;`          | checkbox                  | `bool`                                              |
-| `#choice`  | `int n;`           | segmented pills           | `int` selected index (0-based)                      |
-| `#point`   | `vec2 n;`          | 2D point                  | pixels (`value * iResolution.xy`, fragCoord space)  |
-| `#multi`   | `vec2` / `vec3 n;` | N-component field         | the raw vector                                      |
-| `#audio`   | `vec4 n[N];`       | audio source picker       | live spectrum via `nBand(i)` + `nBands` (see below) |
+| Directive   | Uniform type       | Inspector control                                | What the shader receives                            |
+| ----------- | ------------------ | ------------------------------------------------ | --------------------------------------------------- |
+| `#color`    | `vec4 n;`          | colour swatch                                    | `vec4` RGBA (from the Colours-style swatch)         |
+| `#color`    | `vec4 n[N];`       | palette bar (up to N)                            | `vec4 n[N]` + `nCount` (int) active count           |
+| `#float`    | `float n;`         | slider                                           | the raw value                                       |
+| `#percent`  | `float n;`         | slider shown as `%`                              | **0..1** (the inspector shows 0-100%)               |
+| `#progress` | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** — transition progress; see below           |
+| `#int`      | `float n;`         | integer slider                                   | `int`                                               |
+| `#seed`     | `float n;`         | dice/seed field (no anim)                        | the raw integer value                               |
+| `#angle`    | `float n;`         | rotation dial (degrees)                          | **radians, negated** (`radians(-deg)`)              |
+| `#bool`     | `bool n;`          | checkbox                                         | `bool`                                              |
+| `#choice`   | `int n;`           | segmented pills                                  | `int` selected index (0-based)                      |
+| `#point`    | `vec2 n;`          | 2D point                                         | pixels (`value * iResolution.xy`, fragCoord space)  |
+| `#multi`    | `vec2` / `vec3 n;` | N-component field                                | the raw vector                                      |
+| `#audio`    | `vec4 n[N];`       | audio source picker                              | live spectrum via `nBand(i)` + `nBands` (see below) |
 
 The uniform TYPE is folded away by the compiler - you use `uAmount` directly as a `float`, `uColor` as a `vec4`, etc. A mistyped uniform type is tolerated (the `#`-kind wins), so `#int` over a `uniform float` still delivers an int.
+
+### `#alpha` (masking your own clip)
+
+By default a shader's alpha is decided for it, by whether it samples the source:
+
+- **Doesn't sample `iChannel0`** (a generator): its transparent areas composite over the footage, so it never renders on black.
+- **Does sample `iChannel0`** (a filter): output is forced **opaque** - the source IS the background, and golfed pastes leave garbage in `fragColor.a`.
+
+`// #alpha` (on its own line, no uniform) opts into a third mode: **your alpha is authoritative**, emitted premultiplied, with no compositing and no forced-opaque.
+
+Use it when the shader **masks its own clip** - drawing it into part of the frame and needing to be genuinely transparent elsewhere so a lower lane shows through. The classic case is a stacked-clips picture-in-picture: apply one shader to several clips, give each a different region, and let Final Cut's lane compositing stack them.
+
+```glsl
+// #alpha
+
+// #choice label="Layout" options="Main,Top Left,Top Right" default=0
+uniform int uLayout;
+
+void mainImage(out vec4 O, in vec2 fc) {
+  if (uLayout == 0) {                                  // backplate: opaque
+    O = vec4(texture(iChannel0, fc / iResolution.xy).rgb, 1.0);
+    return;
+  }
+  // ... draw this clip small, and set O.a = 0 outside the box so the clip
+  // on the lane below shows through.
+}
+```
+
+Without it, that shader can't work: the corner instance samples `iChannel0`, gets `a = 1`, and covers the clip below with clamped edge pixels smeared out from the box.
+
+### `#progress` and `iProgress` (transitions)
+
+Every shader gets a built-in **`iProgress`**: the clip fraction, `0` at the effect's first frame and `1` at its last, rising linearly. In a Motion transition template that window IS the transition, so `iProgress` is the GL Transitions `progress` with nothing to declare:
+
+```glsl
+void mainImage(out vec4 O, in vec2 fc) {
+    vec2 uv = fc / iResolution.xy;
+    O = mix(texture(iChannel0, uv), texture(iChannel1, uv), iProgress); // cross-dissolve
+}
+```
+
+`// #progress` gives the user **control over the curve**:
+
+```glsl
+// #progress label="Progress"
+uniform float uProgress;
+```
+
+Unlike every other directive, its lane defaults to a **ramp** rather than a constant: 0% at the start, 100% at the end, linear. So a `#progress` lane left untouched evaluates to exactly the same thing as `iProgress`, and declaring it never changes what the shader does. What it adds is the timing engine - the user can ease it, move the keyposes, or reshape it entirely, which is something the upstream GL Transitions spec (linear only) can't express.
+
+Use `iProgress` when the shader should always run linearly; use `#progress` when the transition's pacing is worth exposing. Note the uniform receives **0..1** even though the inspector shows 0-100%, matching `#percent`.
 
 ### Common attributes
 
 - `label="Nice Name"` - inspector display name (defaults to a prettified uniform name: `uCornerRadius` -> "Corner Radius").
-- `min=` / `max=` - value range. Omit `max=` to leave the field unbounded (the slider still uses a nominal cap).
+- `min=` / `max=` - value range. Omit `max=` to leave the field unbounded (the slider still uses a nominal cap). `#progress` ignores both: it is always 0-100%.
 - `default=` - starting value. `#point` / `#multi` take `default="x,y"` / `default="a,b,c"`.
 - `#choice` adds `options="One,Two,Three"` (the pill labels; `default=` is the 0-based index) and `dropdown` (see below).
 - `#multi` adds `fields={Width,Height}` (names + counts the components) and `lockaspect` (components aspect-linked, ratio preserved on an OSC drag).

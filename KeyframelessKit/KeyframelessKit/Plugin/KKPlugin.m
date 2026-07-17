@@ -597,3 +597,13 @@
 }
 
 @end
+
+FxImageTile *KKImageTileForParameterID(NSArray<FxImageTile *> *sourceImages,
+                                       UInt32 parameterID) {
+  for (FxImageTile *tile in sourceImages) {
+    if (tile.imageSource == kFxImageTileRequestSourceParameter &&
+        tile.parameterID == parameterID)
+      return tile;
+  }
+  return nil;
+}

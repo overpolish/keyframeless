@@ -61,6 +61,10 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   return _sourceMediaSize;
 }
 
+- (id<MTLTexture>)channel1Texture {
+  return _channel1Slot.sourceTexture;
+}
+
 - (void)setRenderMode:(NSInteger)mode {
   if (_renderMode == mode)
     return;
@@ -506,6 +510,21 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
   if (!CGSizeEqualToSize(prevMedia, _sourceMediaSize) &&
       _sourceMediaSize.width > 0 && self.onSourceResolved)
     self.onSourceResolved();
+
+  // A second texture (Shader's "To" image well), independent of the slots and
+  // of the generator/filter split - resolve it before either path returns.
+  // Absent from the descriptor for every feed that never publishes one.
+  NSDictionary *ch1 = desc[@"channel1"];
+  if ([ch1 isKindOfClass:NSDictionary.class]) {
+    if (!_channel1Slot)
+      _channel1Slot = [[_KKMiniFilmSlot alloc] init];
+    uint32_t sid = (uint32_t)[ch1[@"ioSurfaceID"] unsignedIntValue];
+    uint64_t gen = (uint64_t)[ch1[@"generation"] unsignedLongLongValue];
+    if (sid != _channel1Slot.sid || gen != _channel1Slot.generation)
+      [self _resolveSlot:_channel1Slot sid:sid gen:gen tag:0.0];
+  } else if (_channel1Slot) {
+    _channel1Slot = nil; // feed stopped publishing it
+  }
 
   // Generator: the descriptor carries only the media size (empty `slots`),
   // because there is no source feed. Build the filmstrip/onion slots from the

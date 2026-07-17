@@ -302,6 +302,9 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
 - (void)setPlayheadFraction:(double)frac {
   [super setPlayheadFraction:frac];
   _playheadFraction = frac;
+  // iProgress in the preview: a transition shader has to show the blend at the
+  // playhead, not sit on its outgoing clip.
+  _miniViewerRenderer.playheadFraction = frac;
   [self _pushAudioTimeToMiniViewer];
 }
 

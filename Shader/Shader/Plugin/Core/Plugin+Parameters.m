@@ -47,6 +47,12 @@
     return NO;
   }
 
+  if (![paramAPI addImageReferenceWithName:@"To"
+                               parameterID:kParamToImage
+                            parameterFlags:kFxParameterFlag_DEFAULT]) {
+    return NO;
+  }
+
   if (![paramAPI addCustomParameterWithName:@""
                                 parameterID:kKKParamTimelineData
                                defaultValue:[KKDataBlob blobWithData:nil]

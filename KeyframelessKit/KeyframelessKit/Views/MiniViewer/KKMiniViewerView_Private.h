@@ -69,6 +69,11 @@ NS_ASSUME_NONNULL_BEGIN
   // Multi-slot bookkeeping. Always has at least 1 entry (slot 0); onion-skin
   // grows it to N when the descriptor's `slots[]` is published with N>1.
   NSMutableArray<_KKMiniFilmSlot *> *_filmstripSlots;
+  // A SECOND texture (not a second time), from the descriptor's optional
+  // `channel1`. Outside _filmstripSlots on purpose: that array's count tracks
+  // the onion/filmstrip fan-out, so an index into it would move. nil unless the
+  // feed publishes one. Exposed to renderers as -channel1Texture.
+  _KKMiniFilmSlot *_channel1Slot;
   NSTimer *_pollTimer;
   id _keyMon;       // Cmd-0 reset-zoom local keyDown monitor
   id _keyGlobalMon; // Cmd-0 reset-zoom global keyDown monitor (XPC: events

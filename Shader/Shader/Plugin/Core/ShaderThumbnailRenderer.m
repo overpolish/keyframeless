@@ -72,7 +72,15 @@ static NSData *ShaderPNGFromTexture(id<MTLTexture> tex) {
                                           colorSpaceName:NSDeviceRGBColorSpace
                                              bytesPerRow:bpr
                                             bitsPerPixel:32];
-  memcpy(rep.bitmapData, bytes, h * bpr);
+  // Flip vertically. The shader renders y-up (the fragCoord convention; the
+  // flipY in kkExtra.z stays off because FCP's destination is itself
+  // reverse-Y), while NSBitmapImageRep wants row 0 at the TOP. The
+  // mini-viewer's on-screen path absorbs that in its draw transform - a raw
+  // readback like this one has to do it here, or every thumbnail comes out
+  // upside down.
+  uint8_t *dst = rep.bitmapData;
+  for (NSUInteger y = 0; y < h; y++)
+    memcpy(dst + y * bpr, bytes + (h - 1 - y) * bpr, bpr);
   free(bytes);
   return [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
 }

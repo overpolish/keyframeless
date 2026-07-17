@@ -80,6 +80,7 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
   common.speed = speed;
   common.seed = seed;
   common.time = timeSec;
+  common.progress = (float)frac;
   common.grain =
       grainV.count ? grainV[0].floatValue / 100.0f : KK_CORE_GRAIN_DEFAULT;
   common.grainSize =
@@ -661,7 +662,7 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
        withPluginState:(NSData *)pluginState
                 atTime:(CMTime)renderTime
                  error:(NSError **)error {
-  *inputImageRequests = KKBuildSourceRequests(
+  NSArray<FxImageTileRequest *> *sourceReqs = KKBuildSourceRequests(
       renderTime,
       ShaderMiniViewerRequestPathForUUID(KKInstanceUUIDForAPI(self.apiManager)),
       self.renderCache, ^id(CMTime t) {
@@ -671,6 +672,16 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
             includeFilters:YES
                parameterID:0];
       });
+  // Probe: also ask for the "To" image well. In a Motion transition template
+  // this is meant to be wired to "Drop Zone Transition B", which would land the
+  // incoming clip alongside the effect clip in -renderDestinationImage:.
+  NSMutableArray<FxImageTileRequest *> *reqs = [sourceReqs mutableCopy];
+  [reqs addObject:[[FxImageTileRequest alloc]
+                      initWithSource:kFxImageTileRequestSourceParameter
+                                time:renderTime
+                      includeFilters:NO
+                         parameterID:kParamToImage]];
+  *inputImageRequests = reqs;
   return YES;
 }
 
@@ -920,6 +931,14 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
                           changesOutputSize:NO
                                  defaultTag:0.0];
 
+  // The "To" image well as a second feed texture, so the mini-viewer can
+  // preview a two-texture (GL-transition) shader instead of falling through to
+  // iChannel1's noise. Raw, like the source slots - the mini-viewer renderer
+  // applies the same linearise + gamma-encode it gives iChannel0.
+  [self kkPublishMiniViewerChannel1ForDestination:destinationImage
+                                     sourceImages:sourceImages
+                                  wellParameterID:kParamToImage];
+
   // Output dimensions drive the shader's resolution uniform (iResolution etc.).
   CGFloat mediaW = destinationImage.imagePixelBounds.right -
                    destinationImage.imagePixelBounds.left;
@@ -967,6 +986,10 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
     u.chanRes[0] = (simd_float4){(float)mediaW, (float)mediaH, 1.0f, 0.0f};
     for (int c = 1; c < 4; c++)
       u.chanRes[c] = (simd_float4){256.0f, 256.0f, 1.0f, 0.0f};
+    // iProgress: raw clip fraction, deliberately NOT scaled by Speed/Seed the
+    // way iTime is - a transition's progress has to reach exactly 1.0 at the
+    // cut regardless of the motion-rate params.
+    u.transition = (simd_float4){base.common.progress, 0.0f, 0.0f, 0.0f};
 
     // Multi-pass sections from the blob tail (Image / Common / Buffer A).
     NSUInteger head = sizeof(mbState) + sizeof(ShaderPluginState);
@@ -1043,25 +1066,41 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
         tr.declaredChannelMask ? KKCustomChannelSampler(device) : nil;
     id<MTLSamplerState> srcSampler =
         tr.declaredChannelMask ? KKCustomSourceSampler(device) : nil;
-    // Gamma-encode the linear source so a Shadertoy shader (gamma-space input,
-    // output re-decoded for the float dest) round-trips it instead of
+    // The clip we're applied to -> iChannel0, the "To" image well -> iChannel1.
+    // In a Motion transition template the well is wired to "Drop Zone
+    // Transition B", so a GL transition samples the outgoing and incoming clips
+    // together.
+    id<MTLTexture> rawTo =
+        [KKImageTileForParameterID(sourceImages, kParamToImage)
+            metalTextureForDevice:device];
+    // Gamma-encode the linear sources so a Shadertoy shader (gamma-space input,
+    // output re-decoded for the float dest) round-trips them instead of
     // double-decoding + darkening. encodeSRGB==0 == float/linear dest; an 8-bit
-    // dest already carries gamma source, so leave it untouched.
-    id<MTLTexture> gammaSrc = nil;
-    if (encodeSRGB == 0.0f && sourceImages.count) {
-      id<MTLTexture> rawSrc = [sourceImages[0] metalTextureForDevice:device];
-      if (rawSrc) {
-        KKMetalDeviceCache *dc = [KKMetalDeviceCache sharedCache];
-        id<MTLCommandQueue> gq = [dc
-            commandQueueWithRegistryID:destinationImage.deviceRegistryID
-                           pixelFormat:
-                               [KKMetalDeviceCache
-                                   pixelFormatForImageTile:destinationImage]];
+    // dest already carries gamma source, so leave it untouched. BOTH channels
+    // get the same treatment: a transition blending a gamma A against a linear
+    // B would tear across the mix.
+    //
+    // gammaSrc stays nil when nothing was encoded - the encode block below then
+    // falls back to its own inputTextures[0].
+    id<MTLTexture> gammaSrc = nil, gammaTo = rawTo;
+    if (encodeSRGB == 0.0f && (sourceImages.count || rawTo)) {
+      id<MTLTexture> rawSrc =
+          sourceImages.count ? [sourceImages[0] metalTextureForDevice:device]
+                             : nil;
+      KKMetalDeviceCache *dc = [KKMetalDeviceCache sharedCache];
+      id<MTLCommandQueue> gq =
+          [dc commandQueueWithRegistryID:destinationImage.deviceRegistryID
+                             pixelFormat:
+                                 [KKMetalDeviceCache
+                                     pixelFormatForImageTile:destinationImage]];
+      if (rawSrc)
         gammaSrc = KKGammaEncodeSourceTexture(gq, rawSrc);
-        if (gq)
-          [dc returnCommandQueueToCache:gq];
-      }
+      if (rawTo)
+        gammaTo = KKGammaEncodeSourceTexture(gq, rawTo) ?: rawTo;
+      if (gq)
+        [dc returnCommandQueueToCache:gq];
     }
+    id<MTLTexture> toTex = gammaTo;
     return [self
         encodeRenderCommandsForDestinationImage:destinationImage
                                    sourceImages:sourceImages
@@ -1081,12 +1120,21 @@ static id<MTLTexture> ShaderNewBufferTexture(id<MTLDevice> device, NSUInteger w,
                                            uu.chanRes[0] = (simd_float4){
                                                (float)src.width,
                                                (float)src.height, 1.0f, 0.0f};
+                                         if (toTex)
+                                           uu.chanRes[1] = (simd_float4){
+                                               (float)toTex.width,
+                                               (float)toTex.height, 1.0f, 0.0f};
                                          KKBindGLSLUniforms(
                                              encoder, &uu, base.colorPool,
                                              base.colorPoolCount);
-                                         KKBindCustomChannels(
-                                             encoder, tr, src, srcSampler,
-                                             noiseTex, chSampler);
+                                         KKBindCustomChannelTextures(
+                                             encoder, tr,
+                                             @[
+                                               src ?: (id)[NSNull null],
+                                               toTex ?: (id)[NSNull null],
+                                               [NSNull null], [NSNull null]
+                                             ],
+                                             srcSampler, noiseTex, chSampler);
                                          [encoder
                                              drawPrimitives:
                                                  MTLPrimitiveTypeTriangleStrip

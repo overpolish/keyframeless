@@ -51,6 +51,10 @@ static const UInt32 kParamRenderNudge = 202;
 /// project carried to a Mac that never published can still say what it wants.
 /// A plain string param on purpose - see Plugin+AudioTickets.m.
 static const UInt32 kParamAudioTickets = 203;
+/// Image-well probe: a second texture source, bound to iChannel1 when filled.
+/// In a Motion transition template this is meant to take "Drop Zone Transition
+/// B", giving the shader both clips (effect clip = A, this = B).
+static const UInt32 kParamToImage = 204;
 
 /// The baked default Custom shader (animated cosine plasma). Rendered when the
 /// Shader lane's codeString is empty, and seeds the "Shader" lane in the

@@ -36,6 +36,23 @@ NS_ASSUME_NONNULL_BEGIN
                         changesOutputSize:(BOOL)changesOutputSize
                                defaultTag:(double)defaultTag;
 
+/// Publish an image-well parameter's frame as the feed's SECOND texture, so a
+/// mini-viewer can preview a shader that samples two sources.
+///
+/// Call after the slot publish (which is what creates the feed); a no-op until
+/// then, and a no-op when the well is empty - an unfilled well leaves the last
+/// published texture alone rather than tearing it down. Finds the tile by
+/// `wellParameterID`, since a caller's request count can vary.
+///
+/// The tile must have been requested in `-scheduleInputs:` with
+/// `kFxImageTileRequestSourceParameter` and this parameter ID, or it will never
+/// appear in `sourceImages`.
+- (void)kkPublishMiniViewerChannel1ForDestination:
+            (FxImageTile *)destinationImage
+                                     sourceImages:
+                                         (NSArray<FxImageTile *> *)sourceImages
+                                  wellParameterID:(UInt32)wellParameterID;
+
 @end
 
 NS_ASSUME_NONNULL_END

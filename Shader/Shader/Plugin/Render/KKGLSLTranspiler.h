@@ -26,6 +26,7 @@ typedef struct KKGLSLUniforms {
   simd_float4 extra;   // x=iTimeDelta, y=float(iFrame), z=flipY, w=encodeSRGB
   simd_float4 grain;   // x=grain 0..1, y=grainSize px (shared core film grain)
   simd_float4 chanRes[4]; // iChannelResolution[0..3]: xyz = px size, z = 1
+  simd_float4 transition; // x = iProgress (0..1 over the effect's window)
   // A shader's `// #color` properties append their vec4s to this block's std140
   // tail (see KKWrapGLSL); the render supplies those bytes right after this
   // struct at bind time.

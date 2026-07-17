@@ -777,4 +777,16 @@ extern void KKEndUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
 - (void)multiStageRefreshLaneVisibility;
 @end
 
+/// The `sourceImages` tile belonging to an image-well parameter, or nil when
+/// the well is empty or was never requested.
+///
+/// Found by parameter ID rather than by INDEX, which is the whole point: a
+/// plug-in's `-scheduleInputs:` can return a varying number of effect-clip
+/// tiles (motion-blur sub-frames, a boundary preview), so a well's position in
+/// the array moves under you. The tile is only present at all if
+/// `-scheduleInputs:` asked for it with `kFxImageTileRequestSourceParameter`
+/// and this ID.
+FOUNDATION_EXPORT FxImageTile *_Nullable KKImageTileForParameterID(
+    NSArray<FxImageTile *> *_Nullable sourceImages, UInt32 parameterID);
+
 NS_ASSUME_NONNULL_END

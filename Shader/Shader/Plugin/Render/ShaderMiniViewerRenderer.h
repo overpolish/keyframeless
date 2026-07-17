@@ -43,6 +43,16 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// open - so the bars would sit on the clip's first frame forever. Negative =
 /// unknown (no timing yet), which reads as silence rather than the first frame.
 @property(nonatomic) double audioTimelineTimeSec;
+
+/// The playhead's 0..1 position through the clip, pushed by the inspector.
+/// Drives `iProgress` in the preview, so a transition shader shows the same
+/// blend the viewer is showing.
+///
+/// NOT `editFraction`: that's the keypose whose popover is open, and it stays 0
+/// the rest of the time - which pinned `iProgress` to 0 and made every
+/// transition preview as its outgoing clip forever. Same reasoning as
+/// `audioTimelineTimeSec` above: the preview has to agree with the viewer.
+@property(nonatomic) double playheadFraction;
 @end
 
 NS_ASSUME_NONNULL_END

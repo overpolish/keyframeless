@@ -29,15 +29,20 @@ typedef struct ShaderScalarProp {
     int isChoice;       // 0 = float slider, 1 = choice (int pills)
     int choiceDropdown; // `dropdown` on a #choice: searchable list, not pills
     int isPercent;      // float shown as % (0..100 lane); pool gets value / 100
-    int isSeed;         // random-seed field (dice, integer, non-animatable)
-    int isPoint;        // 2D point (vec2 uniform; xy of the pool vec4)
-    int isBool;         // on/off checkbox (bool uniform; .x > 0.5)
-    int isInt;          // integer slider (int uniform)
-    int isAngle;        // rotation knob, degrees lane; uniform gets radians
-    int hasMax;         // `max=` was specified (else the field is unbounded)
-    char name[64];      // GLSL uniform name
-    char label[80];     // display label
-    int poolOffset;     // vec4 index in the pool (value in .x, or xy for a point)
+    // Transition progress: a percent field whose lane defaults to the identity
+    // RAMP (0% at the start, 100% at the end, linear) rather than a constant,
+    // so it ties into the timing engine and the user can shape the curve. Left
+    // alone it matches the built-in iProgress exactly.
+    int isProgress;
+    int isSeed;     // random-seed field (dice, integer, non-animatable)
+    int isPoint;    // 2D point (vec2 uniform; xy of the pool vec4)
+    int isBool;     // on/off checkbox (bool uniform; .x > 0.5)
+    int isInt;      // integer slider (int uniform)
+    int isAngle;    // rotation knob, degrees lane; uniform gets radians
+    int hasMax;     // `max=` was specified (else the field is unbounded)
+    char name[64];  // GLSL uniform name
+    char label[80]; // display label
+    int poolOffset; // vec4 index in the pool (value in .x, or xy for a point)
     double fmin, fmax,
         fdefault;        // float (percent: in 0..100); fmax = nominal when
                          // !hasMax (slider cap; the field is unbounded)
