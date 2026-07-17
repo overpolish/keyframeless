@@ -1,6 +1,90 @@
 {
   "sourceLanguage": "en",
   "strings": {
+    "Add a control": {
+      "comment": "AI example chip: add a directive control.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steuerung hinzufügen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir un control"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter une commande"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロールを追加"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 추가"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加控件"
+          }
+        }
+      }
+    },
+    "Add a slider to control the amount.": {
+      "comment": "AI example value: add a directive control.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge einen Schieberegler hinzu, um die Stärke zu steuern."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade un control deslizante para controlar la cantidad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoute un curseur pour régler l'intensité."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "量を調整するスライダーを追加して。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "양을 조절하는 슬라이더를 추가해 줘."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加一个滑块来控制强度。"
+          }
+        }
+      }
+    },
     "Advanced Timing": {
       "comment": "Help guide title: advanced timing walkthrough.",
       "extractionState": "manual",
@@ -43,44 +127,44 @@
         }
       }
     },
-    "Ask a question or describe an animation…": {
+    "Ask a question or describe a shader…": {
       "comment": "AI prompt field placeholder for Shader.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stelle eine Frage oder beschreibe eine Animation…"
+            "value": "Stelle eine Frage oder beschreibe einen Shader…"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Haz una pregunta o describe una animación…"
+            "value": "Haz una pregunta o describe un shader…"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Posez une question ou décrivez une animation…"
+            "value": "Posez une question ou décrivez un shader…"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "質問するか、アニメーションを入力…"
+            "value": "質問するか、シェーダーを入力…"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "질문하거나 애니메이션을 설명하세요…"
+            "value": "질문하거나 셰이더를 설명하세요…"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "提问或描述一个动画…"
+            "value": "提问或描述一个着色器…"
           }
         }
       }
@@ -123,48 +207,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "音频"
-          }
-        }
-      }
-    },
-    "Calm drifting wisps": {
-      "comment": "AI example chip: calm drifting wisps.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ruhig treibende Wisp"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wisp a la deriva y tranquilo"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wisp dérivant et calme"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "静かに漂うWisp"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "잔잔하게 흐르는 Wisp"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "缓慢漂移的 Wisp"
           }
         }
       }
@@ -631,44 +673,86 @@
         }
       }
     },
-    "How do I keep one colour and reroll the rest?": {
-      "comment": "AI example value: keep one colour.",
+    "How do I turn a uniform into an on-screen control?": {
+      "comment": "AI example value: directives question.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wie behalte ich eine Farbe und würfle den Rest neu?"
+            "value": "Wie mache ich aus einem Uniform eine Bildschirmsteuerung?"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Cómo mantengo un color y regenero el resto?"
+            "value": "¿Cómo convierto un uniform en un control en pantalla?"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Comment conserver une couleur et régénérer les autres ?"
+            "value": "Comment transformer un uniform en contrôle à l'écran ?"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "1色を保持して残りを再生成するには？"
+            "value": "uniform をオンスクリーンコントロールにするには？"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "한 색상을 유지하고 나머지를 다시 생성하려면?"
+            "value": "uniform을 화면 컨트롤로 만들려면?"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "如何保留一种颜色并重新生成其余颜色？"
+            "value": "如何将 uniform 变成屏幕控件？"
+          }
+        }
+      }
+    },
+    "How do controls work?": {
+      "comment": "AI example chip: directives question.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie funktionieren Steuerungen?"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Cómo funcionan los controles?"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comment fonctionnent les commandes ?"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロールの仕組みは？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤은 어떻게 작동하나요?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件如何工作？"
           }
         }
       }
@@ -711,48 +795,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "简介"
-          }
-        }
-      }
-    },
-    "Keep one colour": {
-      "comment": "AI example chip: keep one colour.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eine Farbe behalten"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mantener un color"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conserver une couleur"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "1色をキープ"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "한 색상 유지"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保留一种颜色"
           }
         }
       }
@@ -837,48 +879,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "第 %ld 行：%@"
-          }
-        }
-      }
-    },
-    "Make a warm sunset mesh gradient.": {
-      "comment": "AI example value: warm sunset gradient.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Erstelle einen warmen Sonnenuntergangs-Shader-Verlauf."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crea un degradado de malla de atardecer cálido."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crée un dégradé mesh coucher de soleil chaud."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暖かい夕焼けのメッシュグラデーションを作成して。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "따뜻한 노을 메시 그러데이션을 만들어 줘."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "制作一个温暖的日落网格渐变。"
           }
         }
       }
@@ -1005,6 +1005,48 @@
           "stringUnit": {
             "state": "translated",
             "value": "屏幕控件快捷键"
+          }
+        }
+      }
+    },
+    "Plasma background": {
+      "comment": "AI example chip: generator shader.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plasma-Hintergrund"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fondo de plasma"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrière-plan plasma"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プラズマ背景"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "플라즈마 배경"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等离子背景"
           }
         }
       }
@@ -1261,170 +1303,128 @@
         }
       }
     },
-    "Use the Wisp style, slow and calm, in cool blues.": {
-      "comment": "AI example value: calm drifting wisps.",
+    "Wavy distortion": {
+      "comment": "AI example chip: filter shader.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Verwende den Wisp-Stil, langsam und ruhig, in kühlen Blautönen."
+            "value": "Wellenverzerrung"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usa el estilo Wisp, lento y tranquilo, en azules fríos."
+            "value": "Distorsión ondulada"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Utilise le style Wisp, lent et calme, dans des bleus froids."
+            "value": "Distorsion ondulée"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wispスタイルを使って、ゆっくり穏やかに、クールなブルーで。"
+            "value": "波状ディストーション"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "Wisp 스타일로, 느리고 잔잔하게, 시원한 블루 톤으로."
+            "value": "물결 왜곡"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "使用 Wisp 样式，缓慢平静，采用冷蓝色调。"
+            "value": "波浪扭曲"
           }
         }
       }
     },
-    "Warm sunset gradient": {
-      "comment": "AI example chip: warm sunset gradient.",
+    "Write a shader for a colourful flowing plasma background.": {
+      "comment": "AI example value: generator shader.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Warmer Sonnenuntergangs-Verlauf"
+            "value": "Schreibe einen Shader für einen farbenfrohen, fließenden Plasma-Hintergrund."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Degradado de atardecer cálido"
+            "value": "Escribe un shader para un fondo de plasma fluido y colorido."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dégradé coucher de soleil chaud"
+            "value": "Écris un shader pour un arrière-plan plasma coloré et fluide."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "暖かい夕焼けグラデーション"
+            "value": "カラフルで流れるようなプラズマ背景のシェーダーを書いて。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "따뜻한 노을 그러데이션"
+            "value": "다채롭고 흐르는 듯한 플라즈마 배경 셰이더를 작성해 줘."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "温暖的日落渐变"
+            "value": "编写一个呈现绚丽流动等离子背景的着色器。"
           }
         }
       }
     },
-    "What's Basic vs Advanced?": {
-      "comment": "AI example chip: Basic vs Advanced timing question.",
+    "Write a shader that distorts the clip with a wavy ripple.": {
+      "comment": "AI example value: filter shader.",
       "extractionState": "manual",
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Was ist Einfach vs. Erweitert?"
+            "value": "Schreibe einen Shader, der den Clip mit einer welligen Kräuselung verzerrt."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "¿Qué es Básico frente a Avanzado?"
+            "value": "Escribe un shader que distorsione el clip con una ondulación."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Quelle différence entre Basique et Avancé ?"
+            "value": "Écris un shader qui déforme le plan avec une ondulation."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "「基本」と「詳細」の違いは？"
+            "value": "波状のリップルでクリップを歪ませるシェーダーを書いて。"
           }
         },
         "ko": {
           "stringUnit": {
             "state": "translated",
-            "value": "기본과 고급의 차이는?"
+            "value": "물결치는 리플로 클립을 왜곡하는 셰이더를 작성해 줘."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "基本与高级有什么区别？"
-          }
-        }
-      }
-    },
-    "What's the difference between Basic and Advanced timing?": {
-      "comment": "AI example value: Basic vs Advanced timing question.",
-      "extractionState": "manual",
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Was ist der Unterschied zwischen einfachem und erweitertem Timing?"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "¿Cuál es la diferencia entre el tiempo Básico y Avanzado?"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quelle est la différence entre le timing Basique et Avancé ?"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "「基本」タイミングと「詳細」タイミングの違いは何ですか？"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "기본 타이밍과 고급 타이밍의 차이는 무엇인가요?"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "基本计时和高级计时有什么区别？"
+            "value": "编写一个用波浪涟漪扭曲片段的着色器。"
           }
         }
       }

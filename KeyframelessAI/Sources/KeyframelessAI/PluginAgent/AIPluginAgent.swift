@@ -15,6 +15,11 @@ public enum AIPluginResultKind: Int {
 	/// layers exist. Only produced when the caller passed
 	/// `supportsLayerCreation: true` (Canvas); other plugins never see it.
 	case createLayers = 2
+	/// The user asked to WRITE or EDIT the shader's GLSL source. `shaderSource`
+	/// holds the complete shader the host writes into its code lane (which
+	/// re-transpiles and re-derives its controls). Only produced when the caller
+	/// used the code-authoring entry point (Shader); other plugins never see it.
+	case authorCode = 3
 }
 
 /// Returned by `AIPluginAgent.run(...)`. Either `.answer(String)` (Q&A reply),
@@ -30,6 +35,7 @@ public final class AIPluginResult: NSObject {
 	@objc public let mutationJSON: String?
 	@objc public let createSVG: String?
 	@objc public let createAnimatePrompt: String?
+	@objc public let shaderSource: String?
 
 	init(answer: String) {
 		self.kind = .answer
@@ -37,6 +43,7 @@ public final class AIPluginResult: NSObject {
 		self.mutationJSON = nil
 		self.createSVG = nil
 		self.createAnimatePrompt = nil
+		self.shaderSource = nil
 		super.init()
 	}
 
@@ -46,6 +53,7 @@ public final class AIPluginResult: NSObject {
 		self.mutationJSON = mutationJSON
 		self.createSVG = nil
 		self.createAnimatePrompt = nil
+		self.shaderSource = nil
 		super.init()
 	}
 
@@ -55,6 +63,17 @@ public final class AIPluginResult: NSObject {
 		self.mutationJSON = nil
 		self.createSVG = createSVG
 		self.createAnimatePrompt = animatePrompt
+		self.shaderSource = nil
+		super.init()
+	}
+
+	init(shaderSource: String) {
+		self.kind = .authorCode
+		self.answer = nil
+		self.mutationJSON = nil
+		self.createSVG = nil
+		self.createAnimatePrompt = nil
+		self.shaderSource = shaderSource
 		super.init()
 	}
 }
@@ -140,6 +159,41 @@ public final class AIPluginAgent: NSObject {
 		}
 	}
 
+	/// Code-authoring variant of `run` (Shader): the host also passes the shader's
+	/// current GLSL source, which enables the `code` route - "write a shader for a
+	/// wavy look", "add a glow to this". The agent returns a `.authorCode` result
+	/// whose `shaderSource` the host writes into its code lane. Q&A, animation
+	/// (mutation), and vague prompts route exactly as `run` does; only prompts that
+	/// ask to change the shader's actual look/effect become code.
+	@MainActor
+	@objc public static func runCodeAuthoring(
+		prompt: String,
+		productContext: String,
+		laneSchemaText: String,
+		currentTimelineJSON: String,
+		clipDurationSeconds: Double,
+		currentInspectorMode: String,
+		currentShaderSource: String,
+		completion: @escaping (AIPluginResult?, Error?) -> Void
+	) {
+		Task { @MainActor in
+			do {
+				let result = try await runAsync(
+					prompt: prompt,
+					productContext: productContext,
+					laneSchemaText: laneSchemaText,
+					currentTimelineJSON: currentTimelineJSON,
+					clipDurationSeconds: clipDurationSeconds,
+					currentInspectorMode: currentInspectorMode,
+					supportsCode: true,
+					currentShaderSource: currentShaderSource)
+				completion(result, nil)
+			} catch {
+				completion(nil, error)
+			}
+		}
+	}
+
 	/// Canvas targeted routing (see `runCanvasTargetedAsync`). Declared in the
 	/// main class body - not an extension - so the `@objc` entry point reliably
 	/// lands in the generated ObjC header the plugin imports.
@@ -177,6 +231,8 @@ public final class AIPluginAgent: NSObject {
 		clipDurationSeconds: Double,
 		currentInspectorMode: String,
 		supportsCreate: Bool = false,
+		supportsCode: Bool = false,
+		currentShaderSource: String = "",
 		generatorTypeCatalog: String? = nil,
 		generatorMaxColors: Int = 0
 	) async throws -> AIPluginResult {
@@ -192,7 +248,18 @@ public final class AIPluginAgent: NSObject {
 			fallbackSchemaText: laneSchemaText)
 		let classification = try await classify(
 			prompt: prompt, productContext: productContext, laneLabels: labels,
-			supportsCreate: supportsCreate)
+			supportsCreate: supportsCreate, supportsCode: supportsCode)
+		// The user wants to write or edit the shader's GLSL. Generate the source
+		// (editing the current shader when there is one and the ask implies it);
+		// the host writes it into its code lane, which re-transpiles and rebuilds
+		// the controls.
+		if classification.kind == "code" {
+			AIDraftState.shared.routingStatus = AILoc("Writing shader")
+			let source = try await generateShaderCode(
+				prompt: prompt, productContext: productContext,
+				currentShaderSource: currentShaderSource)
+			return AIPluginResult(shaderSource: source)
+		}
 		// The user wants a new shape drawn. Hand back an SVG (+ optional follow-up
 		// animation request); the host parses it into layers and, if asked, runs
 		// the animation once they exist.

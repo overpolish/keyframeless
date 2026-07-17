@@ -51,7 +51,7 @@ extension AIPluginAgent {
 	@MainActor
 	static func classify(
 		prompt: String, productContext: String, laneLabels: [String],
-		supportsCreate: Bool = false
+		supportsCreate: Bool = false, supportsCode: Bool = false
 	) async throws -> Classification {
 		// Obvious questions bypass the (locally expensive) LLM router.
 		if looksLikeQuestion(prompt) {
@@ -69,6 +69,12 @@ extension AIPluginAgent {
 			supportsCreate
 			? "  \"create\"   - user wants to ADD a NEW shape / drawing / layer that doesn't exist yet (\"draw a line\", \"add a circle\", \"put an arrow in the corner\", \"create a box\"). Even when they also describe animating or styling it, choose \"create\" - the new shape must be made first.\n"
 			: ""
+		// Code authoring (Shader): the LOOK is defined by GLSL source, so a request
+		// to change what the shader draws is a code edit, not a lane mutation.
+		let codeKindLine =
+			supportsCode
+			? "  \"code\"     - user wants to WRITE, GENERATE, or EDIT the shader's GLSL source - the visual EFFECT itself, what the shader draws (\"write a shader for a wavy look\", \"make it look like flowing water\", \"give me a plasma effect\", \"add a vignette to the shader\", \"make the ripples bigger\", \"paste a shadertoy that does X\"). Choose this whenever the change is to the appearance/effect produced by the code. Prefer \"code\" over \"mutation\" for look/effect changes; use \"mutation\" only for animating or timing the EXISTING controls (e.g. \"pan the center from left to right\", \"speed it up over 2 seconds\").\n"
+			: ""
 		let system = """
 			Route a user message for \(productContext)'s AI animation and styling \
 			assistant. \
@@ -80,6 +86,7 @@ extension AIPluginAgent {
 			kind:
 			  "answer"   - user is asking a QUESTION about the tool.
 			\(createKindLine)\
+			\(codeKindLine)\
 			  "mutation" - user wants to CHANGE the content: its animation, its \
 			               properties, OR its overall look. It is actionable when it \
 			               gives ANY of: a lane, a value, a direction, a time range, a \
@@ -163,9 +170,9 @@ extension AIPluginAgent {
 			"properties": [
 				"kind": [
 					"type": "string",
-					"enum": supportsCreate
-						? ["answer", "create", "mutation", "vague"]
-						: ["answer", "mutation", "vague"],
+					"enum": ["answer", "mutation", "vague"]
+						+ (supportsCreate ? ["create"] : [])
+						+ (supportsCode ? ["code"] : []),
 				],
 				"complexity": ["type": "string", "enum": ["simple", "complex"]],
 				"clarification": ["type": "string"],
