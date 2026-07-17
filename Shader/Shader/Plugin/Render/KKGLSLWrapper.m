@@ -1,0 +1,309 @@
+/*
+ * SPDX-FileCopyrightText: 2026 overpolish
+ * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+ */
+
+#import "KKGLSLTranspiler_Internal.h"
+#import "ShaderDirectives.h" // ShaderParseColorProps (`// #color` block injection)
+
+// GLSL body -> full core-450 GLSL. No #version (forced via the API): the
+// uniform block is all-vec4 so std140 maps 1:1 to KKGLSLUniforms; iResolution /
+// iTime / iTimeDelta / iFrame are aliased onto its lanes. flipY, sRGB-encode and
+// premultiply live in main() driven by kkExtra so they stay runtime choices.
+
+NSUInteger KKDeclaredChannelMask(NSUInteger channelMask, BOOL bufferMode) {
+  BOOL honorAlpha = !bufferMode && !(channelMask & 1u);
+  return channelMask | (honorAlpha ? 1u : 0u);
+}
+
+// A shader's `// #color`-annotated `uniform vec4 <name>[N]?;` declarations move
+// INTO our std140 block (Vulkan-GLSL forbids non-opaque uniforms outside a
+// block). Parse them, strip the standalone declarations from `body` (leaving
+// blank lines so error line numbers stay aligned), and emit each as a block
+// member - plus a count-meta vec4 and a `<name>Count` define for arrays.
+// Returns the pool vec4s consumed, which the scalar/audio pools index after.
+static int KKEmitColorProps(NSString *userSource, NSMutableString *body,
+                            NSMutableString *members,
+                            NSMutableString *defines) {
+  ShaderColorProp props[KK_SHADER_MAX_COLOR_PROPS];
+  int poolCount = 0;
+  int nProps = ShaderParseColorProps(userSource, props,
+                                     KK_SHADER_MAX_COLOR_PROPS, &poolCount);
+  for (int i = 0; i < nProps; i++) {
+    NSString *nm = @(props[i].name);
+    if (props[i].isArray) {
+      [members appendFormat:@"  vec4 %@[%d];\n  vec4 %@_kkmeta;\n", nm,
+                            props[i].count, nm];
+      [defines appendFormat:@"#define %@Count (int(%@_kkmeta.x))\n", nm, nm];
+    } else {
+      [members appendFormat:@"  vec4 %@;\n", nm];
+    }
+    NSString *pat = [NSString
+        stringWithFormat:
+            @"(?m)^[ \\t]*uniform\\s+vec4\\s+%@\\s*(\\[[^\\]]*\\])?\\s*;[ \\t]*$",
+            nm];
+    [[NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil]
+        replaceMatchesInString:body
+                       options:0
+                         range:NSMakeRange(0, body.length)
+                  withTemplate:@""];
+  }
+  return poolCount;
+}
+
+// The `#define <name> ...` that gives one scalar prop its shader-facing type and
+// units, unpacking the pool vec4 it folded into.
+static void KKEmitScalarDefine(const ShaderScalarProp *p, NSString *nm,
+                               NSMutableString *defines) {
+  if (p->isChoice || p->isInt) {
+    [defines appendFormat:@"#define %@ (int(%@_kk.x))\n", nm, nm];
+  } else if (p->isBool) {
+    [defines appendFormat:@"#define %@ (%@_kk.x > 0.5)\n", nm, nm];
+  } else if (ShaderScalarOSCIsRotate(p)) {
+    // A rotation OSC (`osc={..}`): each euler component is delivered as
+    // radians(-deg), matching #angle's sign (a CW ring reads as a CW turn).
+    // The lane stores components in canonical X<Y<Z order; the braced axis
+    // order maps onto the shader vec via a swizzle (uRot.x = first-listed
+    // axis). A single-axis rotate reduces to `radians(-uRot_kk.x)`.
+    [defines appendFormat:@"#define %@ (radians(-%@_kk.%@))\n", nm, nm,
+                          ShaderRotateCanonicalSwizzle(p)];
+  } else if (p->isAngle) {
+    // Lane is degrees; the shader gets radians. Negated so a clockwise knob
+    // turn reads as a clockwise on-screen rotation (the knob increases CW, but
+    // a standard rotation matrix turns CCW for a positive angle in the shader's
+    // y-up coordinate space).
+    [defines appendFormat:@"#define %@ (radians(-%@_kk.x))\n", nm, nm];
+  } else if (p->isMulti) {
+    // An N-component numeric field, delivered RAW (the shader owns the units):
+    // vec2 -> `.xy`, vec3 -> `.xyz`. One pool vec4 member as usual.
+    const char *uty = p->uniformType;
+    NSString *swizzle = (strcmp(uty, "vec3") == 0)   ? @"xyz"
+                        : (strcmp(uty, "vec4") == 0) ? @"xyzw"
+                                                     : @"xy";
+    [defines appendFormat:@"#define %@ (%@_kk.%@)\n", nm, nm, swizzle];
+  } else if (p->isPoint) {
+    // Delivered in PIXELS (fragCoord space), not normalized: scale by
+    // iResolution. No Y flip - the shader's fragCoord is bottom-origin
+    // (Shadertoy convention), the SAME origin as the object-space lane, so the
+    // point lines up directly. Per-pass iResolution keeps it correct in smaller
+    // buffer passes.
+    [defines appendFormat:@"#define %@ (%@_kk.xy * iResolution.xy)\n", nm, nm];
+  } else {
+    [defines appendFormat:@"#define %@ (%@_kk.x)\n", nm, nm];
+  }
+}
+
+// `// #float`/`// #choice` scalar props: each folds into ONE vec4 block member
+// (value in .x), appended after the colour members. Returns the pool vec4s used.
+static int KKEmitScalarProps(NSString *userSource, NSMutableString *body,
+                             NSMutableString *members, NSMutableString *defines,
+                             int poolBase) {
+  ShaderScalarProp scalars[KK_SHADER_MAX_SCALAR_PROPS];
+  int scalarUsed = 0;
+  int nScalars = ShaderParseScalarProps(userSource, scalars,
+                                        KK_SHADER_MAX_SCALAR_PROPS, poolBase,
+                                        &scalarUsed);
+  for (int i = 0; i < nScalars; i++) {
+    NSString *nm = @(scalars[i].name);
+    [members appendFormat:@"  vec4 %@_kk;\n", nm];
+    KKEmitScalarDefine(&scalars[i], nm, defines);
+    // Strip the standalone declaration regardless of its declared GLSL type: the
+    // `#define` above owns the real access, so an `#int` fed a `uniform float`
+    // (or any type/name match) is still removed instead of surviving to collide
+    // with the macro (a cryptic "unexpected LEFT_PAREN" from glslang).
+    NSString *pat = [NSString
+        stringWithFormat:@"(?m)^[ \\t]*uniform\\s+\\w+\\s+%@\\s*;[ \\t]*$", nm];
+    [[NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil]
+        replaceMatchesInString:body
+                       options:0
+                         range:NSMakeRange(0, body.length)
+                  withTemplate:@""];
+  }
+  return scalarUsed;
+}
+
+// `// #audio` props: a vec4 array in the block (4 bands packed per vec4 - a
+// std140 float array pads to a 16-byte stride and would cost 4x the pool).
+// The shader never sees that packing: `<name>Band(i)` unpacks it and
+// `<name>Bands` is the count. Appended AFTER the scalars so both earlier
+// pools keep their offsets.
+static void KKEmitAudioProps(NSString *userSource, NSMutableString *body,
+                             NSMutableString *members, NSMutableString *defines,
+                             int poolBase) {
+  ShaderAudioProp audios[KK_SHADER_MAX_AUDIO_PROPS];
+  int audioUsed = 0;
+  int nAudio = ShaderParseAudioProps(userSource, audios,
+                                     KK_SHADER_MAX_AUDIO_PROPS, poolBase,
+                                     &audioUsed);
+  for (int i = 0; i < nAudio; i++) {
+    NSString *nm = @(audios[i].name);
+    [members appendFormat:@"  vec4 %@[%d];\n", nm, audios[i].vecCount];
+    [defines appendFormat:@"#define %@Bands %d\n", nm, audios[i].bands];
+    [defines appendFormat:@"#define %@Band(i) (%@[(i) >> 2][(i) & 3])\n", nm,
+                          nm];
+    NSString *pat = [NSString
+        stringWithFormat:
+            @"(?m)^[ \\t]*uniform\\s+vec4\\s+%@\\s*\\[[^\\]]*\\]\\s*;[ \\t]*$",
+            nm];
+    [[NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil]
+        replaceMatchesInString:body
+                       options:0
+                         range:NSMakeRange(0, body.length)
+                  withTemplate:@""];
+  }
+}
+
+// The sRGB decode + core film-grain overlay every display path calls. Grain is
+// ported verbatim from ShaderCommon.h so Custom grain matches the built-in
+// Types; it is applied in gamma space before encoding.
+static void KKAppendColorHelpers(NSMutableString *s) {
+  [s appendString:@"vec3 kkSrgbToLinear(vec3 c) {\n"
+                  @"  c = clamp(c, 0.0, 1.0);\n"
+                  @"  bvec3 lo = lessThanEqual(c, vec3(0.04045));\n"
+                  @"  return mix(pow((c + 0.055) / 1.055, vec3(2.4)), c / 12.92, "
+                  @"vec3(lo));\n}\n"];
+  [s appendString:
+         @"float kkGrainHash(vec2 p){p=fract(p*vec2(123.34,456.21));"
+         @"p+=dot(p,p+45.164);return fract(p.x*p.y);}\n"
+         @"vec2 kkGrainRot(vec2 v,float a){float s=sin(a),c=cos(a);"
+         @"return vec2(c*v.x+s*v.y,-s*v.x+c*v.y);}\n"
+         @"float kkGrainNoise(vec2 st){vec2 i=floor(st),f=fract(st);"
+         @"float a=kkGrainHash(i),b=kkGrainHash(i+vec2(1.,0.)),"
+         @"c=kkGrainHash(i+vec2(0.,1.)),d=kkGrainHash(i+vec2(1.,1.));"
+         @"vec2 u=f*f*(3.-2.*f);return mix(mix(a,b,u.x),mix(c,d,u.x),u.y);}\n"
+         @"float kkGrainSample(vec2 g){float v=kkGrainNoise(kkGrainRot(g,1.)"
+         @"+vec2(3.));v=mix(v,kkGrainNoise(kkGrainRot(g,2.)+vec2(-1.)),0.5);"
+         @"v=pow(v,1.3);return v*2.-1.;}\n"
+         @"vec3 kkApplyGrain(vec3 color,vec2 fc){float amt=max(kkGrain.x,0.0);"
+         @"vec2 g=fc/max(kkGrain.y,0.25);float gv=kkGrainSample(g);"
+         @"vec3 gc=vec3(step(0.0,gv));float st=pow(amt*abs(gv),0.8);"
+         @"color=mix(color,gc,0.35*st);"
+         @"float d=(kkGrainHash(fc)-kkGrainHash(fc.yx+7.0))/255.0;"
+         @"return clamp(color+d,0.0,1.0);}\n"];
+}
+
+// The tail of main(): turn mainImage's output into what this pass must store.
+// The three display branches differ only in how alpha is treated; see
+// KKWantsAlphaOutput for why `// #alpha` is a third mode rather than a default.
+static void KKAppendOutputBranch(NSMutableString *s, NSString *userSource,
+                                 BOOL bufferMode, BOOL honorAlpha) {
+  if (bufferMode) {
+    // A Buffer pass stores raw DATA a later pass samples (e.g. a distance /
+    // position packed into RGBA). No grain, no sRGB, no clamp, no forced-opaque
+    // - pass mainImage's output straight through.
+    [s appendString:@"  kk_outColor = kkColor;\n}\n"];
+    return;
+  }
+  // Grain in gamma/display space (screen-fixed, raw gl_FragCoord) before the
+  // sRGB encode, on every display path.
+  [s appendString:@"  vec3 disp = kkApplyGrain(clamp(kkColor.rgb, 0.0, 1.0), "
+                  @"gl_FragCoord.xy);\n"];
+  if (KKWantsAlphaOutput(userSource)) {
+    // `// #alpha`: premultiplied passthrough of the shader's own alpha. No
+    // composite over the source (the shader is masking that source), no forced
+    // opaque.
+    [s appendString:
+           @"  vec3 rgb = (kkExtra.w == 0.0) ? kkSrgbToLinear(disp) : disp;\n"
+           @"  float kka = clamp(kkColor.a, 0.0, 1.0);\n"
+           @"  kk_outColor = vec4(rgb * kka, kka);\n}\n"];
+  } else if (honorAlpha) {
+    // Composite the shader over the source using its own alpha, so transparent
+    // areas show the footage (iChannel0) rather than black - the shader is a
+    // filter, and its source IS the background. Output is opaque (over the
+    // footage); where the source itself is transparent its alpha carries through
+    // so lower layers still show.
+    [s appendString:
+           @"  float kka = clamp(kkColor.a, 0.0, 1.0);\n"
+           @"  vec4 kkSrc = texture(iChannel0, fragCoord / iResolution.xy);\n"
+           @"  vec3 comp = mix(kkSrc.rgb, disp, kka);\n"
+           @"  vec3 rgb = (kkExtra.w == 0.0) ? kkSrgbToLinear(comp) : comp;\n"
+           @"  float outA = max(kka, kkSrc.a);\n"
+           @"  kk_outColor = vec4(rgb * outA, outA);\n}\n"];
+  } else {
+    // The image convention ignores fragColor.a (always opaque): golfed shaders
+    // accumulate garbage into alpha, so forcing a=1 is safest.
+    [s appendString:
+           @"  vec3 rgb = (kkExtra.w == 0.0) ? kkSrgbToLinear(disp) : disp;\n"
+           @"  kk_outColor = vec4(rgb, 1.0);\n}\n"];
+  }
+}
+
+NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
+                     NSInteger *outUserLineOffset, BOOL bufferMode) {
+  NSMutableString *colorMembers = [NSMutableString string];
+  NSMutableString *colorDefines = [NSMutableString string];
+  NSMutableString *body = [userSource mutableCopy];
+  int poolCount =
+      KKEmitColorProps(userSource, body, colorMembers, colorDefines);
+  int scalarUsed = KKEmitScalarProps(userSource, body, colorMembers,
+                                     colorDefines, poolCount);
+  KKEmitAudioProps(userSource, body, colorMembers, colorDefines,
+                   poolCount + scalarUsed);
+
+  NSMutableString *s = [NSMutableString string];
+  [s appendString:@"layout(location = 0) out vec4 kk_outColor;\n"
+                  @"layout(std140, binding = 0) uniform KKUniforms {\n"
+                  @"  vec4 kkResTime;\n  vec4 iMouse;\n  vec4 iDate;\n"
+                  @"  vec4 kkExtra;\n  vec4 kkGrain;\n  vec4 kkChanRes[4];\n"
+                  @"  vec4 kkTransition;\n"];
+  [s appendString:colorMembers]; // the shader's own colour uniforms
+  [s appendString:@"};\n"
+                  @"#define iResolution (kkResTime.xyz)\n"
+                  @"#define iTime (kkResTime.w)\n"
+                  @"#define iTimeDelta (kkExtra.x)\n"
+                  @"#define iFrame (int(kkExtra.y))\n"
+                  @"#define iChannelResolution kkChanRes\n"
+                  // Not `progress`: that's a plausible local-variable name in an
+                  // ordinary shader, and a #define would rewrite it.
+                  @"#define iProgress (kkTransition.x)\n"];
+  [s appendString:colorDefines];
+  // Alpha is honoured by DEFAULT for a shader that does NOT sample the source
+  // itself: its transparent areas composite over iChannel0 (the footage) so a
+  // generator-style shader never renders a black background. That needs
+  // iChannel0 bound even when the shader never references it, so force channel 0
+  // on. A shader that DOES sample iChannel0 manages the source itself (that use
+  // wins), so it keeps the opaque image convention (a=1) - which also protects
+  // golfed Shadertoy pastes that leave garbage in fragColor.a.
+  BOOL honorAlpha = !bufferMode && !(channelMask & 1u);
+  NSUInteger declMask = KKDeclaredChannelMask(channelMask, bufferMode);
+  for (NSUInteger ch = 0; ch < 4; ch++) {
+    if (declMask & (1u << ch))
+      [s appendFormat:@"layout(binding = %lu) uniform sampler2D iChannel%lu;\n",
+                      (unsigned long)(ch + 1), (unsigned long)ch];
+  }
+  // GL-Transitions dialect. Scoped to shaders that actually declare
+  // `vec4 transition(vec2 ...)`, so `progress` stays a usable local name
+  // everywhere else. Emitted AFTER the sampler declarations above - these
+  // reference iChannel0/1, and GLSL wants them declared first.
+  //
+  // getFromColor/getToColor are real functions, not #defines: the catalogue
+  // passes computed expressions (`getFromColor(safeUv(uv + s))`), which a macro
+  // would mangle.
+  if (KKLooksLikeGLTransition(userSource))
+    [s appendString:@"#define progress iProgress\n"
+                    @"#define ratio (iResolution.x / iResolution.y)\n"
+                    @"vec4 getFromColor(vec2 uv){ return texture(iChannel0, "
+                    @"uv); }\n"
+                    @"vec4 getToColor(vec2 uv){ return texture(iChannel1, uv); "
+                    @"}\n"];
+  KKAppendColorHelpers(s);
+  [s appendString:@"\n"];
+  // The user's source begins on the next line: a glslang error at wrapped line L
+  // is the editor's line (L - <newlines so far>).
+  if (outUserLineOffset) {
+    NSInteger n = 0;
+    for (NSUInteger i = 0; i < s.length; i++)
+      if ([s characterAtIndex:i] == '\n')
+        n++;
+    *outUserLineOffset = n;
+  }
+  [s appendString:KKRenameReservedIdentifiers(body)];
+  [s appendString:@"\nvoid main() {\n"
+                  @"  vec2 fragCoord = gl_FragCoord.xy;\n"
+                  @"  if (kkExtra.z != 0.0) fragCoord.y = kkResTime.y - "
+                  @"fragCoord.y;\n"
+                  @"  vec4 kkColor = vec4(0.0, 0.0, 0.0, 1.0);\n"
+                  @"  mainImage(kkColor, fragCoord);\n"];
+  KKAppendOutputBranch(s, userSource, bufferMode, honorAlpha);
+  return s;
+}

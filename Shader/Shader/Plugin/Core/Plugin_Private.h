@@ -19,7 +19,7 @@
 /// Persistent feedback-buffer state for Custom multi-pass shaders that read
 /// their own (or a later) buffer's previous frame. Keyed by "WxH" so the main
 /// viewer, thumbnails, and library previews keep independent ping-pong sets.
-/// Holds `_ShaderFeedbackSet` values (private to Plugin+Render.m).
+/// Holds `ShaderFeedbackSet` values (see ShaderFeedbackSet.h).
 @property(nonatomic, strong, nullable) NSMutableDictionary *feedbackSets;
 /// Last-read Sonar tickets (key -> ticket), refreshed by `syncAudioTickets…`.
 ///
@@ -84,15 +84,18 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 @interface ShaderPlugin (Render)
-- (BOOL)pluginState:(NSData *_Nullable *_Nonnull)pluginState
-             atTime:(CMTime)renderTime
-            quality:(FxQuality)qualityLevel
-              error:(NSError **)error;
 - (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
                   sourceImages:(NSArray<FxImageTile *> *)sourceImages
                    pluginState:(NSData *)pluginState
                         atTime:(CMTime)renderTime
                          error:(NSError *_Nullable *)outError;
+@end
+
+@interface ShaderPlugin (RenderState)
+- (BOOL)pluginState:(NSData *_Nullable *_Nonnull)pluginState
+             atTime:(CMTime)renderTime
+            quality:(FxQuality)qualityLevel
+              error:(NSError **)error;
 @end
 
 NS_ASSUME_NONNULL_END
