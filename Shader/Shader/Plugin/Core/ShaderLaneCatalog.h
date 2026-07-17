@@ -16,6 +16,7 @@
 #import "Constants.h"        // ShaderCustomDefaultShaderSource
 #import "KKGLSLFormatter.h"  // Format button (XPC-only includers)
 #import "KKGLSLTranspiler.h" // live shader validation (XPC-only includers)
+#import "ShaderCategory.h"   // the save bar's category picker options
 #import "ShaderDirectives.h"
 #import "ShaderLocalized.h" // RLoc
 
@@ -638,6 +639,10 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource,
   shader.codeTabCatalog =
       @[ @"Common", @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ];
   shader.codeSavable = YES; // show the save bar (name + Save) under the editor
+  // What the save bar's category picker offers. Display names, in
+  // ShaderCategoryIDs() order - the save handler maps the picked index back to
+  // the id it stores, so these two must stay in the same order.
+  shader.codeSaveCategories = ShaderCategoryDisplayNames();
   shader.animatable = NO;
   shader.enabled = NO;
   shader.categoryKey = @"Core";

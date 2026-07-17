@@ -4,11 +4,15 @@
  */
 
 #import "KKCodeEditorView.h"
+#import "KKChoiceChecklistView.h"
 #import "KKCodeGutterView.h"
 #import "KKFieldEditorSupport.h"
 #import "KKGLSLSyntax.h"
 #import "KKLocalized.h"
+#import "KKPopoverKeepAlive.h"
+#import "KKTimelineLanesView_Private.h" // _KKDropdownTrigger, _KKLVPopoverContentView
 #import "KKTimingStage.h" // KKCodeEditorSave* notification constant declarations
+#import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <QuartzCore/QuartzCore.h>
 
@@ -16,6 +20,13 @@ NSNotificationName const KKCodeEditorSaveRequestedNotification =
     @"KKCodeEditorSaveRequestedNotification";
 NSString *const KKCodeEditorSaveNameKey = @"name";
 NSString *const KKCodeEditorSaveSectionsKey = @"sections";
+NSString *const KKCodeEditorSaveCategoryIndexKey = @"categoryIndex";
+
+// Wide enough for the longest category a host is likely to offer without the
+// name field losing its own room.
+static const CGFloat kSaveCategoryW = 96.0;
+// ~6 rows before the list scrolls, matching the other capped checklists.
+static const CGFloat kSaveCategoryListMaxBody = 168.0;
 NSNotificationName const KKCodeEditorReloadNotification =
     @"KKCodeEditorReloadNotification";
 
@@ -229,7 +240,7 @@ NSNotificationName const KKCodeEditorReloadNotification =
 @end
 
 @interface KKCodeEditorView () <NSTextViewDelegate, NSTextStorageDelegate,
-                                NSTextFieldDelegate>
+                                NSTextFieldDelegate, NSPopoverDelegate>
 @end
 
 @implementation KKCodeEditorView {
@@ -252,6 +263,15 @@ NSNotificationName const KKCodeEditorReloadNotification =
   NSButton *_saveButton;
   NSLayoutConstraint *_saveBarHeight;
   id _nameOutsideClickMon; // blur the name field on an outside click
+  // Optional category picker between the name field and Save. Width collapses
+  // to 0 when a host offers no labels, so the name field takes the whole strip.
+  _KKDropdownTrigger *_saveCategoryField;
+  NSLayoutConstraint *_saveCategoryWidth;
+  NSLayoutConstraint *_saveCategoryGap; // name field -> picker
+  NSPopover *_saveCategoryPopover;
+  KKChoiceChecklistView *_saveCategoryList;
+  NSArray<NSString *> *_saveCategoryLabels;
+  NSInteger _saveCategoryIndex;
   // Tabbed sections: parallel names/codes, the active one shown in _textView.
   // A single (default) section behaves exactly like the plain editor - the tab
   // strip stays collapsed.
@@ -462,6 +482,20 @@ NSNotificationName const KKCodeEditorReloadNotification =
     _nameOutsideClickMon = KKMakeFieldOutsideClickMonitor(_saveNameField);
     [_saveBar addSubview:_saveNameField];
 
+    _saveCategoryField = [_KKDropdownTrigger new];
+    _saveCategoryField.translatesAutoresizingMaskIntoConstraints = NO;
+    _saveCategoryField.hidden = YES; // until a host supplies labels
+    __weak typeof(self) weakSelf = self;
+    _saveCategoryField.onTapped = ^{
+      [weakSelf _toggleSaveCategoryList];
+    };
+    [_saveBar addSubview:_saveCategoryField];
+    _saveCategoryWidth =
+        [_saveCategoryField.widthAnchor constraintEqualToConstant:0.0];
+    _saveCategoryGap = [_saveNameField.trailingAnchor
+        constraintEqualToAnchor:_saveCategoryField.leadingAnchor
+                       constant:0.0];
+
     _saveButton =
         [NSButton buttonWithTitle:KKLoc(@"Save", @"Save-shader button.")
                            target:self
@@ -521,9 +555,19 @@ NSNotificationName const KKCodeEditorReloadNotification =
                                                constant:6.0],
       [_saveNameField.bottomAnchor constraintEqualToAnchor:_saveBar.bottomAnchor
                                                   constant:-6.0],
-      [_saveNameField.trailingAnchor
+      // Name field -> category picker -> Save. Both the picker's width and the
+      // gap BEFORE it collapse to 0 when unused, leaving just the gap after it
+      // - so a save bar with no categories measures exactly as it did before
+      // the picker existed.
+      _saveCategoryGap,
+      _saveCategoryWidth,
+      [_saveCategoryField.trailingAnchor
           constraintEqualToAnchor:_saveButton.leadingAnchor
                          constant:-6.0],
+      [_saveCategoryField.centerYAnchor
+          constraintEqualToAnchor:_saveNameField.centerYAnchor],
+      [_saveCategoryField.heightAnchor
+          constraintEqualToAnchor:_saveNameField.heightAnchor],
       [_saveButton.trailingAnchor
           constraintEqualToAnchor:_saveBar.trailingAnchor
                          constant:-8.0],
@@ -918,6 +962,108 @@ NSNotificationName const KKCodeEditorReloadNotification =
   _saveBarHeight.constant = savable ? 34.0 : 0.0;
 }
 
+- (NSArray<NSString *> *)saveCategoryLabels {
+  return _saveCategoryLabels;
+}
+
+- (void)setSaveCategoryLabels:(NSArray<NSString *> *)labels {
+  _saveCategoryLabels = [labels copy];
+  BOOL on = _saveCategoryLabels.count > 0;
+  _saveCategoryField.hidden = !on;
+  _saveCategoryWidth.constant = on ? kSaveCategoryW : 0.0;
+  _saveCategoryGap.constant = on ? -6.0 : 0.0;
+  if (_saveCategoryIndex >= (NSInteger)_saveCategoryLabels.count)
+    _saveCategoryIndex = 0; // a shorter list can't leave the pick dangling
+  [self _syncSaveCategoryTitle];
+}
+
+- (NSInteger)saveCategoryIndex {
+  return (_saveCategoryIndex >= 0 &&
+          _saveCategoryIndex < (NSInteger)_saveCategoryLabels.count)
+             ? _saveCategoryIndex
+             : 0;
+}
+
+- (void)setSaveCategoryIndex:(NSInteger)index {
+  _saveCategoryIndex = index;
+  [self _syncSaveCategoryTitle];
+}
+
+- (void)_syncSaveCategoryTitle {
+  NSInteger i = self.saveCategoryIndex;
+  NSString *title =
+      i < (NSInteger)_saveCategoryLabels.count ? _saveCategoryLabels[i] : nil;
+  _saveCategoryField.summaryOverride = title;
+  // What the trigger reads as "has a selection" - without it the title draws
+  // dimmed, like an unset picker.
+  _saveCategoryField.selectedLabels = title ? @[ title ] : nil;
+  _saveCategoryField.rightAligned = NO;
+  [_saveCategoryField setNeedsDisplay:YES];
+}
+
+// The picker's popover, built exactly like a `#choice dropdown` lane's: the
+// wrapper strips AppKit's own glass so the kit's chrome isn't double-drawn, and
+// the keep-alive registration stops the nonactivating host window from
+// dismissing it the moment the click lands in the child window.
+- (void)_toggleSaveCategoryList {
+  if (_saveCategoryPopover) {
+    [_saveCategoryPopover performClose:nil];
+    return;
+  }
+  if (!_saveCategoryLabels.count)
+    return;
+  _saveCategoryList =
+      [[KKChoiceChecklistView alloc] initWithOptions:_saveCategoryLabels
+                                       selectedIndex:self.saveCategoryIndex
+                                       maxBodyHeight:kSaveCategoryListMaxBody];
+  __weak typeof(self) weak = self;
+  _saveCategoryList.onSelect = ^(NSInteger index) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    s.saveCategoryIndex = index;
+    [s->_saveCategoryPopover performClose:nil]; // a pick ends the interaction
+  };
+
+  _KKLVPopoverContentView *wrapper = [[_KKLVPopoverContentView alloc] init];
+  wrapper.frame = _saveCategoryList.bounds;
+  _saveCategoryList.translatesAutoresizingMaskIntoConstraints = NO;
+  [wrapper addSubview:_saveCategoryList];
+  [NSLayoutConstraint activateConstraints:@[
+    [_saveCategoryList.leadingAnchor
+        constraintEqualToAnchor:wrapper.leadingAnchor],
+    [_saveCategoryList.trailingAnchor
+        constraintEqualToAnchor:wrapper.trailingAnchor],
+    [_saveCategoryList.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
+    [_saveCategoryList.bottomAnchor
+        constraintEqualToAnchor:wrapper.bottomAnchor],
+  ]];
+
+  NSViewController *vc = [[NSViewController alloc] init];
+  vc.view = wrapper;
+  _saveCategoryPopover = [[NSPopover alloc] init];
+  _saveCategoryPopover.contentViewController = vc;
+  _saveCategoryPopover.behavior = NSPopoverBehaviorTransient;
+  _saveCategoryPopover.delegate = self;
+  // Wire the popover BEFORE sizing: the list only knows it is the popover's
+  // whole content (rather than a section of a bigger one) once this is set, and
+  // -refilterAndResize is what sizes the popover to the capped list. Skipping
+  // it leaves the popover at the wrapper's init frame, which clips every row
+  // past the first few until a search edit happens to re-run the resize.
+  _saveCategoryList.popover = _saveCategoryPopover;
+  [_saveCategoryList refilterAndResize];
+  [_saveCategoryPopover showRelativeToRect:_saveCategoryField.bounds
+                                    ofView:_saveCategoryField
+                             preferredEdge:NSRectEdgeMinY];
+  KKPopoverAddKeepAliveWindow(_saveCategoryList.window); // only once shown
+}
+
+- (void)popoverDidClose:(NSNotification *)notification {
+  KKPopoverRemoveKeepAliveWindow(_saveCategoryList.window);
+  _saveCategoryPopover = nil;
+  _saveCategoryList = nil;
+}
+
 - (void)controlTextDidChange:(NSNotification *)note {
   if (note.object == _saveNameField)
     _saveButton.enabled =
@@ -956,13 +1102,18 @@ NSNotificationName const KKCodeEditorReloadNotification =
                                           .whitespaceAndNewlineCharacterSet];
   if (!name.length)
     return;
+  NSMutableDictionary *info = [@{
+    KKCodeEditorSaveNameKey : name,
+    KKCodeEditorSaveSectionsKey : [self sections]
+  } mutableCopy];
+  // Absent, not 0, when the host offers no categories: 0 is a real pick, so a
+  // host that never showed a picker must be able to tell the difference.
+  if (_saveCategoryLabels.count)
+    info[KKCodeEditorSaveCategoryIndexKey] = @(self.saveCategoryIndex);
   [[NSNotificationCenter defaultCenter]
       postNotificationName:KKCodeEditorSaveRequestedNotification
                     object:self
-                  userInfo:@{
-                    KKCodeEditorSaveNameKey : name,
-                    KKCodeEditorSaveSectionsKey : [self sections]
-                  }];
+                  userInfo:info];
 }
 
 // Fade the overflow edges in/out with scroll position (0 when the message

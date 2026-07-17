@@ -31,6 +31,9 @@ typedef NS_ENUM(NSInteger, _ShaderItemKind) {
 @property(nonatomic, copy) NSString *entryID;
 @property(nonatomic, copy) NSString *name;
 @property(nonatomic, copy) NSString *author;
+/// A ShaderCategory.h id, already normalised. Drives the card's type badge and
+/// the header's category filter.
+@property(nonatomic, copy) NSString *category;
 @property(nonatomic, strong, nullable) NSImage *thumbnail;
 @property(nonatomic)
     BOOL updateAvailable; // installed + remote has newer version
@@ -67,12 +70,18 @@ typedef NS_ENUM(NSInteger, _ShaderItemKind) {
 
 // One card: thumbnail + name, with hover buttons (delete top-left, favourite
 // top-right, action bottom-right).
-@interface _ShaderCard : NSView <NSTextFieldDelegate>
+@interface _ShaderCard : NSView <NSTextFieldDelegate, NSViewToolTipOwner>
 @property(nonatomic, strong) _ShaderBrowserItem *item;
 @property(nonatomic, weak) id<_ShaderCardOwner> owner;
 @property(nonatomic) BOOL favorite;
 - (instancetype)initWithItem:(_ShaderBrowserItem *)item width:(CGFloat)width;
 - (void)setHovered:(BOOL)hovered;
+/// The pointer's position in this card's coordinates, on every move while it is
+/// the hovered card. Drives the author badge's expand, which needs per-move
+/// resolution rather than just card enter/exit. (Tracking areas would be the
+/// obvious tool, but the browser already tracks hover with a global monitor -
+/// this panel is a nonactivating ViewBridge child window.)
+- (void)setHoverPoint:(NSPoint)point;
 - (void)setThumbnail:(NSImage *)image;
 @end
 

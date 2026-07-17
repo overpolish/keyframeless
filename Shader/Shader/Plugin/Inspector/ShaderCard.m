@@ -5,6 +5,8 @@
 
 #import "ShaderBrowserInternal.h"
 
+#import "ShaderBadgeView.h"
+#import "ShaderCategory.h"
 #import "ShaderLocalCatalog.h"
 #import "ShaderLocalized.h"
 #import <KeyframelessKit/KeyframelessKit.h>
@@ -21,6 +23,9 @@ const CGFloat kShaderCardNameH = 16.0;
   CGFloat _w, _imgH;  // card width + thumbnail height (16:9), set per rebuild
   id _keyMonitor;     // forwards keyDown to the rename field editor
   id _renameClickMon; // blurs the rename field on a click outside it
+  NSString
+      *_typeTooltip; // the type badge's rect tooltip (see -addToolTipRect:)
+  _ShaderBadge *_authorBadge; // nil when the shader names no author
 }
 
 - (instancetype)initWithItem:(_ShaderBrowserItem *)item width:(CGFloat)width {
@@ -45,8 +50,32 @@ const CGFloat kShaderCardNameH = 16.0;
   _thumb.image = item.thumbnail;
   [self addSubview:_thumb];
 
+  // Author (right end of the name row), when the shader names one. Built before
+  // the name field so the name can give way to it - the name row is also the
+  // rename hit region, so overlapping them would make a click near the author
+  // start an edit. It is ADDED after the name, though: expanding it on hover
+  // has it grow left across the name, and it has to draw on top to do that.
+  //
+  // Clamped to a third of the card, because the shader's own name is what
+  // people scan for; the full author is a hover away.
+  if (item.author.length) {
+    _authorBadge =
+        [[_ShaderBadge alloc] initWithSymbol:@"person.fill"
+                                        text:item.author
+                                       color:[NSColor accentMatchingHost]
+                                        fill:[[NSColor accentMatchingHost]
+                                                 colorWithAlphaComponent:0.15]
+                                    maxWidth:floor(_w / 3.0)];
+    NSRect af = _authorBadge.frame;
+    af.origin = NSMakePoint(_w - 1 - NSWidth(af),
+                            round((kShaderCardNameH - NSHeight(af)) / 2.0));
+    _authorBadge.frame = af;
+  }
+
+  CGFloat nameW =
+      _w - 2 - (_authorBadge ? NSWidth(_authorBadge.frame) + KKSpacingSM : 0.0);
   _name = [[_ShaderRenameField alloc]
-      initWithFrame:NSMakeRect(1, 0, _w - 2, kShaderCardNameH)];
+      initWithFrame:NSMakeRect(1, 0, nameW, kShaderCardNameH)];
   _name.editable = NO;
   _name.selectable = NO;
   _name.bordered = NO;
@@ -59,6 +88,35 @@ const CGFloat kShaderCardNameH = 16.0;
   _name.textColor = [NSColor secondaryLabelColor];
   _name.focusRingType = NSFocusRingTypeNone;
   [self addSubview:_name];
+  if (_authorBadge)
+    [self addSubview:_authorBadge]; // above the name: see the comment above
+
+  // Type (top-centre, over the thumbnail): always shown, so the catalogue can
+  // be read at a glance now that it holds every kind of shader. Icon only -
+  // five localized words don't fit a card this size, and the header's filter
+  // pills use the same symbols, so the row doubles as the legend.
+  //
+  // A dark scrim rather than InfoBadge's 15% tint: this one sits on a shader
+  // render, which is routinely bright and saturated, and a tint that low
+  // disappears against it.
+  NSString *category = ShaderCategoryNormalize(item.category);
+  _ShaderBadge *type = [[_ShaderBadge alloc]
+      initWithSymbol:ShaderCategorySymbol(category)
+                text:nil
+               color:[NSColor colorWithWhite:1.0 alpha:0.9]
+                fill:[NSColor colorWithWhite:0.0 alpha:0.45]
+            maxWidth:0.0]; // icon only: nothing to clamp
+  NSRect tf = type.frame;
+  tf.origin =
+      NSMakePoint(round((_w - NSWidth(tf)) / 2.0),
+                  _imgH - NSHeight(tf) - KKPaddingMD + kShaderCardNameH + 3.0);
+  type.frame = tf;
+  [self addSubview:type];
+  // The badge is click-through and the card collapses every non-button hit to
+  // itself, so the badge can't carry its own tooltip - and an icon with no
+  // tooltip is a rebus. Register the rect on the card instead.
+  [self addToolTipRect:tf owner:self userData:NULL];
+  _typeTooltip = ShaderCategoryDisplayName(category);
 
   // Favourite (top-right): visible when favourited, else on hover. Right edge
   // aligned with the bottom-right action (same inset) so they line up.
@@ -149,6 +207,16 @@ const CGFloat kShaderCardNameH = 16.0;
   for (NSButton *b in _hoverButtons)
     b.hidden = !hovered;
   _favButton.hidden = !(_favorite || hovered);
+  if (!hovered)
+    [_authorBadge setExpanded:NO animated:YES];
+}
+
+- (void)setHoverPoint:(NSPoint)point {
+  // Tested against the badge's CURRENT frame, so once it has grown the pointer
+  // can follow it left across the revealed name without it snapping shut. It
+  // only collapses on leaving the expanded badge (or the card entirely).
+  [_authorBadge setExpanded:NSPointInRect(point, _authorBadge.frame)
+                   animated:YES];
 }
 
 - (void)setThumbnail:(NSImage *)image {
@@ -234,6 +302,13 @@ const CGFloat kShaderCardNameH = 16.0;
 // click (their mouseDown is a no-op), so the card never got it. Route clicks on
 // them to the card (apply / double-click rename); keep buttons + the live
 // rename field working.
+- (NSString *)view:(NSView *)view
+    stringForToolTip:(NSToolTipTag)tag
+               point:(NSPoint)point
+            userData:(void *)data {
+  return _typeTooltip ?: @"";
+}
+
 - (NSView *)hitTest:(NSPoint)point {
   NSView *hit = [super hitTest:point];
   if (!hit)

@@ -15,11 +15,18 @@
 
 - (instancetype)initWithOptions:(NSArray<NSString *> *)options
                   selectedIndex:(NSInteger)selectedIndex
-                  minimumHeight:(CGFloat)minimumHeight {
+                  maxBodyHeight:(CGFloat)maxBodyHeight {
+  // Embedded (capped + internally scrolling) rather than the base's
+  // popover-resizing mode. A choice list can be any length a shader author
+  // types, so it caps and scrolls behind the standard top/bottom fade instead
+  // of growing the popover without limit.
+  //
   // No lanes: the base only walks them in the default -rebuildRows, which this
   // replaces. Everything else it does - search, filtering, the row stack, the
   // height math - is lane-agnostic.
-  self = [super initWithLanes:@[] minimumHeight:minimumHeight];
+  self = [super initWithLanes:@[]
+                        width:[[self class] preferredWidth]
+                maxBodyHeight:maxBodyHeight];
   if (!self)
     return nil;
   _options = [options copy];

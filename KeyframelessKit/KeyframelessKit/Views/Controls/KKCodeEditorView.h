@@ -78,6 +78,21 @@ NS_ASSUME_NONNULL_BEGIN
 /// sections in userInfo. Default NO.
 @property(nonatomic) BOOL savable;
 
+/// Optional single-select picker in the save bar, between the name field and
+/// Save, wearing the same chrome as a `#choice dropdown` lane. Set the labels a
+/// host wants to offer (already localized); nil or empty hides it entirely, so
+/// a save bar without one looks exactly as it did before.
+///
+/// The editor treats these as opaque strings - what they MEAN is the host's
+/// business, which is why the save notification reports the picked index rather
+/// than trying to name it (see `KKCodeEditorSaveCategoryIndexKey`).
+@property(nonatomic, copy, nullable) NSArray<NSString *> *saveCategoryLabels;
+
+/// The picked row, an index into `saveCategoryLabels`. Default 0, so a host
+/// that puts its default first gets it for free when the user just hits Save.
+/// Out of range reads back as 0.
+@property(nonatomic) NSInteger saveCategoryIndex;
+
 @end
 
 NS_ASSUME_NONNULL_END

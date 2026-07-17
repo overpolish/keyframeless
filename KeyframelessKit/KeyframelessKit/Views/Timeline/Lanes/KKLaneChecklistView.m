@@ -377,10 +377,22 @@ static const CGFloat kChecklistPillH = 24.0;
   return visible;
 }
 
+// An embedded list is normally a SECTION of a bigger popover, so
+// `-_embeddedHeightForRows:` leaves the bottom pad to that host. When the list
+// IS the popover's whole content (`popover` set), nothing else supplies it - so
+// add it here. `_bodyScroll` is pinned at the top with an explicit height and
+// never to the bottom, so the extra simply becomes the gap below the fade,
+// matching the trailing pad the non-embedded path bakes into
+// `+heightForRowCount:`.
+- (CGFloat)_embeddedHeightForRows:(NSInteger)rows hostedInPopover:(BOOL)hosted {
+  return [self _embeddedHeightForRows:rows] + (hosted ? KKPaddingMD : 0.0);
+}
+
 - (CGFloat)fittingHeight {
   NSInteger visible = MAX([self _applyFilter], 1);
   if (_embedded)
-    return [self _embeddedHeightForRows:[self _cappedRowCount:visible]];
+    return [self _embeddedHeightForRows:[self _cappedRowCount:visible]
+                        hostedInPopover:self.popover != nil];
   return MAX([[self class] heightForRowCount:visible hasPill:_hasPill],
              _minimumHeight);
 }
@@ -390,7 +402,13 @@ static const CGFloat kChecklistPillH = 24.0;
   if (_embedded) {
     NSInteger capped = [self _cappedRowCount:visible];
     _bodyHeightConstraint.constant = capped * kRowHeight;
-    _heightConstraint.constant = [self _embeddedHeightForRows:capped];
+    CGFloat h = [self _embeddedHeightForRows:capped
+                             hostedInPopover:self.popover != nil];
+    _heightConstraint.constant = h;
+    // Hosted directly in a popover: keep it hugging the capped height as a
+    // search narrows the list, exactly as the non-embedded path does below.
+    if (self.popover)
+      self.popover.contentSize = NSMakeSize(_width, h);
     return;
   }
   if (self.popover)

@@ -85,7 +85,8 @@ static const CGFloat kPillLineSpacing = 3.0; // gap between wrapped pill lines
 }
 
 - (CGFloat)wrapWidth {
-  return (_wraps && _preferredMaxLayoutWidth > 0) ? _preferredMaxLayoutWidth : 0;
+  return (_wraps && _preferredMaxLayoutWidth > 0) ? _preferredMaxLayoutWidth
+                                                  : 0;
 }
 
 - (void)setPreferredMaxLayoutWidth:(CGFloat)w {
@@ -169,11 +170,10 @@ static const CGFloat kPillLineSpacing = 3.0; // gap between wrapped pill lines
 // fall back to the raw image at its own size.
 - (NSImage *)resolvedIconAtIndex:(NSInteger)i {
   NSImage *raw = _icons[i];
-  NSImage *sym = [raw
-      imageWithSymbolConfiguration:[NSImageSymbolConfiguration
-                                       configurationWithPointSize:kPillIconSize
-                                                           weight:
-                                                               NSFontWeightMedium]];
+  NSImage *sym = [raw imageWithSymbolConfiguration:
+                          [NSImageSymbolConfiguration
+                              configurationWithPointSize:kPillIconSize
+                                                  weight:NSFontWeightMedium]];
   return sym ?: raw;
 }
 
@@ -320,10 +320,16 @@ static const CGFloat kPillLineSpacing = 3.0; // gap between wrapped pill lines
       [tinted unlockFocus];
       CGFloat contentX = NSMinX(r) + [self currentPillPadX];
       CGFloat iconY = NSMidY(r) - tinted.size.height / 2.0;
-      [tinted drawAtPoint:NSMakePoint(contentX, iconY)
-                 fromRect:NSZeroRect
-                operation:NSCompositingOperationSourceOver
-                 fraction:1.0];
+      // respectFlipped: this view IS flipped, and the -drawAtPoint: family
+      // ignores that - it draws an image bottom-up into a top-down context, so
+      // any icon that isn't vertically symmetric comes out upside down.
+      [tinted drawInRect:NSMakeRect(contentX, iconY, tinted.size.width,
+                                    tinted.size.height)
+                fromRect:NSZeroRect
+               operation:NSCompositingOperationSourceOver
+                fraction:1.0
+          respectFlipped:YES
+                   hints:nil];
       NSDictionary *attrs = @{
         NSFontAttributeName : [self pillFont],
         NSForegroundColorAttributeName : tint,
@@ -343,10 +349,14 @@ static const CGFloat kPillLineSpacing = 3.0; // gap between wrapped pill lines
       [tinted unlockFocus];
       CGFloat iconX = NSMidX(r) - tinted.size.width / 2.0;
       CGFloat iconY = NSMidY(r) - tinted.size.height / 2.0;
-      [tinted drawAtPoint:NSMakePoint(iconX, iconY)
-                 fromRect:NSZeroRect
-                operation:NSCompositingOperationSourceOver
-                 fraction:1.0];
+      // respectFlipped: see the labelled variant above.
+      [tinted drawInRect:NSMakeRect(iconX, iconY, tinted.size.width,
+                                    tinted.size.height)
+                fromRect:NSZeroRect
+               operation:NSCompositingOperationSourceOver
+                fraction:1.0
+          respectFlipped:YES
+                   hints:nil];
     } else {
       NSDictionary *attrs = @{
         NSFontAttributeName : [self pillFont],

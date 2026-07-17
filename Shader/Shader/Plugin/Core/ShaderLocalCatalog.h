@@ -14,6 +14,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy) NSString *entryID; // UUID
 @property(nonatomic, copy) NSString *name;
 @property(nonatomic, copy) NSString *author;
+/// What the shader is (see ShaderCategory.h). Always a known id: reads
+/// normalise, so this is safe to switch on. Carried in metadata.json, so it
+/// survives a publish + download round trip.
+@property(nonatomic, copy) NSString *category;
 @property(nonatomic) NSInteger version;
 @property(nonatomic, copy)
     NSString *folderPath; // on-disk directory ("" builtin)
@@ -48,10 +52,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Save (or overwrite by name) the given sections as a named entry.
 /// `previewPNG` is optional (a placeholder is used until a real thumbnail is
-/// rendered). Returns the written entry.
+/// rendered). `category` is a ShaderCategory.h id (nil = the default). Returns
+/// the written entry.
 - (ShaderCatalogEntry *)
     saveShaderNamed:(NSString *)name
              author:(NSString *)author
+           category:(nullable NSString *)category
            sections:(NSDictionary<NSString *, NSString *> *)sections
          previewPNG:(nullable NSData *)previewPNG;
 
@@ -60,10 +66,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Install (or update) a downloaded community shader for offline use, keyed by
 /// its community id so a re-download replaces it. `version` is the remote
-/// version.
+/// version; `category` is a ShaderCategory.h id (nil = the default).
 - (void)installCommunityID:(NSString *)entryID
                       name:(NSString *)name
                     author:(NSString *)author
+                  category:(nullable NSString *)category
                    version:(NSInteger)version
                   sections:(NSDictionary<NSString *, NSString *> *)sections
                 previewPNG:(nullable NSData *)previewPNG;

@@ -19,16 +19,24 @@ NS_ASSUME_NONNULL_BEGIN
 /// builds rows from labels - `-appendRowWithLabel:` - and only its DEFAULT
 /// rebuild walks lanes, which this overrides.
 ///
-/// Shown in a popover off its trigger, like the Animated dropdown. Set the
-/// base's `popover` so the list resizes to the visible rows as a search narrows
-/// it.
+/// Shown in a popover off its trigger, like the Animated dropdown.
+///
+/// The list caps at `maxBodyHeight` and scrolls behind the standard top/bottom
+/// fade past it - the option count is whatever a shader author typed, so it
+/// can't be allowed to size the popover freely.
+///
+/// A host MUST set the base's `popover` and then call `-refilterAndResize`
+/// BEFORE showing it: that is what sizes the popover to the (capped) list. The
+/// popover is not known at init - it is built around this view - so the size
+/// can only be settled once the host wires the two together.
 @interface KKChoiceChecklistView : _KKLaneChecklistView
 
 /// `options` are the choice labels in directive order, `selectedIndex` the one
-/// currently checked (out of range = nothing checked).
+/// currently checked (out of range = nothing checked). `maxBodyHeight` caps the
+/// row area (it scrolls beyond that); a row is `kRowHeight` tall.
 - (instancetype)initWithOptions:(NSArray<NSString *> *)options
                   selectedIndex:(NSInteger)selectedIndex
-                  minimumHeight:(CGFloat)minimumHeight;
+                  maxBodyHeight:(CGFloat)maxBodyHeight;
 
 /// Fires with the option's index on pick. Re-picking the checked row still
 /// fires: a picker has no "off", so a click is always a pick.

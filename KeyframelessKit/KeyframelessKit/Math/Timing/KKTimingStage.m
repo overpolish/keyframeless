@@ -406,6 +406,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.codeValidator = _codeValidator; // block, copied by the property setter
   c.codeFormatter = _codeFormatter; // block, copied by the property setter
   c.codeSavable = _codeSavable;     // static config, not serialized
+  c.codeSaveCategories = [_codeSaveCategories copy]; // static config
   c.componentMin = [_componentMin copy];
   c.componentMax = [_componentMax copy];
   c.sliderMax = [_sliderMax copy];

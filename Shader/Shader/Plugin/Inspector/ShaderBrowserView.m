@@ -6,6 +6,7 @@
 #import "ShaderBrowserView.h"
 
 #import "ShaderBrowserInternal.h"
+#import "ShaderCategory.h"
 #import "ShaderLocalCatalog.h"
 #import "ShaderLocalized.h"
 #import <KeyframelessKit/KeyframelessKit.h>
@@ -25,6 +26,7 @@ static const CGFloat kEdgeFadeH = 14.0;
   id _searchOutsideClickMon; // blur the search field on an outside click
   NSButton *_favFilter;
   NSButton *_refreshButton;
+  KKPillToggleRowView *_categoryPills;
   NSView *_well;
   NSScrollView *_scroll;
   _ShaderFlippedView *_doc;
@@ -39,6 +41,11 @@ static const CGFloat kEdgeFadeH = 14.0;
   BOOL _fetching;
   NSString *_query;
   BOOL _favoritesOnly;
+  /// Category ids currently filtered to. EMPTY = no category filter (show all),
+  /// which is why this is a set of what's ON rather than a per-pill toggle: "no
+  /// pills lit" and "every pill lit" would otherwise be different states that
+  /// show the same thing.
+  NSMutableSet<NSString *> *_categoryFilter;
   BOOL _renaming;     // a card is inline-editing; don't destroy it in a rebuild
   BOOL _needsRebuild; // a rebuild was requested while renaming
   CGFloat _cardW, _cardH; // computed per rebuild (2-column 50/50 split)
@@ -82,6 +89,10 @@ static const CGFloat kEdgeFadeH = 14.0;
                                 action:@selector(_refresh:)
                                tooltip:RLoc(@"Refresh", @"Refresh shaders.")];
   [self addSubview:_refreshButton];
+
+  _categoryFilter = [NSMutableSet set];
+  _categoryPills = [self _buildCategoryPills];
+  [self addSubview:_categoryPills];
 
   _well = [NSView new];
   _well.translatesAutoresizingMaskIntoConstraints = NO;
@@ -144,8 +155,21 @@ static const CGFloat kEdgeFadeH = 14.0;
     [_refreshButton.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
                                                   constant:-10],
     [_refreshButton.widthAnchor constraintEqualToConstant:18],
-    [_well.topAnchor constraintEqualToAnchor:_search.bottomAnchor
+    // Its own row: five icon pills plus the title/search/star/refresh chain
+    // would crush the search field at a 300pt panel width.
+    [_categoryPills.topAnchor constraintEqualToAnchor:_search.bottomAnchor
+                                             constant:KKPaddingSM],
+    [_categoryPills.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
+    // Centred, but never past the edges if the panel is ever narrower than the
+    // row wants to be.
+    [_categoryPills.leadingAnchor
+        constraintGreaterThanOrEqualToAnchor:self.leadingAnchor
                                     constant:KKPaddingMD],
+    [_categoryPills.trailingAnchor
+        constraintLessThanOrEqualToAnchor:self.trailingAnchor
+                                 constant:-10],
+    [_well.topAnchor constraintEqualToAnchor:_categoryPills.bottomAnchor
+                                    constant:KKPaddingSM],
     [_well.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
                                         constant:KKPaddingSM],
     [_well.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
@@ -172,6 +196,50 @@ static const CGFloat kEdgeFadeH = 14.0;
   l.lineBreakMode = NSLineBreakByWordWrapping;
   l.translatesAutoresizingMaskIntoConstraints = NO;
   return l;
+}
+
+// One icon pill per category, in ShaderCategoryIDs() order. Multi-select (not
+// radioMode): "generators and transitions" is a reasonable thing to ask for,
+// and with nothing lit the filter is simply off.
+//
+// Icons rather than names: five localized words don't fit a 300pt inspector
+// panel on one row, and the same symbols badge the cards, so the row doubles as
+// the legend for them.
+- (KKPillToggleRowView *)_buildCategoryPills {
+  // Raw symbols, unconfigured: the pill row sizes its own glyphs. A nil from an
+  // unknown symbol name would take the array literal down with it, so fall back
+  // to a blank of the same footprint - a missing icon is a blemish, a crash on
+  // an OS that never shipped one is not.
+  NSMutableArray<NSImage *> *icons = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *states = [NSMutableArray array];
+  for (NSString *c in ShaderCategoryIDs()) {
+    NSImage *img =
+        [NSImage imageWithSystemSymbolName:ShaderCategorySymbol(c)
+                  accessibilityDescription:ShaderCategoryDisplayName(c)];
+    [icons addObject:img ?: [[NSImage alloc] initWithSize:NSMakeSize(11, 11)]];
+    [states addObject:@NO]; // nothing lit = filter off
+  }
+  KKPillToggleRowView *pills =
+      [[KKPillToggleRowView alloc] initWithIcons:icons];
+  pills.translatesAutoresizingMaskIntoConstraints = NO;
+  pills.grouped = YES; // one segmented track, not five loose buttons
+  pills.states = states;
+  pills.toolTip = RLoc(@"Filter by type", @"Category filter row tooltip.");
+  __weak typeof(self) weak = self;
+  pills.onToggled = ^(NSInteger index, BOOL isOn) {
+    __strong typeof(weak) s = weak;
+    if (!s)
+      return;
+    NSArray<NSString *> *ids = ShaderCategoryIDs();
+    if (index < 0 || index >= (NSInteger)ids.count)
+      return;
+    if (isOn)
+      [s->_categoryFilter addObject:ids[index]];
+    else
+      [s->_categoryFilter removeObject:ids[index]];
+    [s _rebuildAll];
+  };
+  return pills;
 }
 
 - (NSImage *)_headerIcon:(NSString *)symbol {
@@ -208,6 +276,11 @@ static const CGFloat kEdgeFadeH = 14.0;
 
 - (BOOL)_matches:(_ShaderBrowserItem *)it {
   if (_favoritesOnly && ![[ShaderLocalCatalog shared] isFavorite:it.entryID])
+    return NO;
+  // Normalised, so an entry whose category this build doesn't know filters as
+  // the default rather than as nothing at all (it badges as the default too).
+  if (_categoryFilter.count &&
+      ![_categoryFilter containsObject:ShaderCategoryNormalize(it.category)])
     return NO;
   if (_query.length &&
       [it.name rangeOfString:_query options:NSCaseInsensitiveSearch].location ==
@@ -248,6 +321,7 @@ static const CGFloat kEdgeFadeH = 14.0;
     it.entryID = e.entryID;
     it.name = e.name;
     it.author = e.author;
+    it.category = e.category;
     it.thumbnail = e.thumbnail;
     it.localEntry = e;
     if ([self _matches:it])
@@ -260,6 +334,9 @@ static const CGFloat kEdgeFadeH = 14.0;
     it.entryID = r.entryID;
     it.name = inst.name ?: r.name;
     it.author = inst.author ?: r.author;
+    // An installed copy is the authority (it may be a newer publish than the
+    // last fetch); otherwise the remote's.
+    it.category = inst ? inst.category : r.category;
     it.communityEntry = r.communityEntry;
     if (inst) {
       it.kind = _ShaderItemInstalled;
@@ -285,6 +362,7 @@ static const CGFloat kEdgeFadeH = 14.0;
     it.entryID = entryID;
     it.name = inst.name;
     it.author = inst.author;
+    it.category = inst.category;
     it.thumbnail = inst.thumbnail;
     it.localEntry = inst;
     if ([self _matches:it])
@@ -298,6 +376,7 @@ static const CGFloat kEdgeFadeH = 14.0;
     it.entryID = e.entryID;
     it.name = e.name;
     it.author = e.author;
+    it.category = e.category;
     it.thumbnail = e.thumbnail;
     it.localEntry = e;
     if ([self _matches:it])
@@ -356,7 +435,8 @@ static const CGFloat kEdgeFadeH = 14.0;
       NSMakeRect(0, 0, width, MAX(y, NSHeight(_scroll.contentView.bounds)));
   BOOL none = (keyframeless.count + custom.count) == 0 && !_fetching;
   _empty.hidden = !none;
-  _empty.stringValue = (_query.length || _favoritesOnly)
+  BOOL filtering = _query.length || _favoritesOnly || _categoryFilter.count;
+  _empty.stringValue = filtering
                            ? RLoc(@"No matching shaders", @"No filter results.")
                            : RLoc(@"No shaders yet.", @"Empty browser state.");
   [self _scrolled];
@@ -407,6 +487,10 @@ static const CGFloat kEdgeFadeH = 14.0;
       it.entryID = e.entryID;
       it.name = e.name;
       it.author = e.author;
+      // Straight out of the remote metadata.json: KKCommunityEntry carries the
+      // raw values for payload-specific keys like this, so a category needs no
+      // change on the KKCommunity (Swift) side.
+      it.category = ShaderCategoryNormalize(e.metadata[@"category"]);
       it.communityEntry = e;
       [items addObject:it];
       [s _loadCommunityThumbnail:e];
@@ -491,11 +575,14 @@ static const CGFloat kEdgeFadeH = 14.0;
       hit = c;
       break;
     }
-  if (hit == _hovered)
-    return;
-  [_hovered setHovered:NO];
-  [hit setHovered:YES];
-  _hovered = hit;
+  if (hit != _hovered) {
+    [_hovered setHovered:NO];
+    [hit setHovered:YES];
+    _hovered = hit;
+  }
+  // Every move, not just on entry: the author badge expands only while the
+  // pointer is actually on it, which the card can't know from a bare BOOL.
+  [hit setHoverPoint:[hit convertPoint:e.locationInWindow fromView:nil]];
 }
 
 - (void)controlTextDidChange:(NSNotification *)note {
@@ -603,12 +690,16 @@ static const CGFloat kEdgeFadeH = 14.0;
                  if (section && code)
                    sections[section] = code;
                }
-               [[ShaderLocalCatalog shared] installCommunityID:e.entryID
-                                                          name:e.name
-                                                        author:e.author
-                                                       version:e.version
-                                                      sections:sections
-                                                    previewPNG:preview];
+               // Raw, not normalised: a shader published by a newer build keeps
+               // the category it was published with (see -installCommunityID:).
+               [[ShaderLocalCatalog shared]
+                   installCommunityID:e.entryID
+                                 name:e.name
+                               author:e.author
+                             category:e.metadata[@"category"]
+                              version:e.version
+                             sections:sections
+                           previewPNG:preview];
                [weak _rebuildAll];
              }];
 }

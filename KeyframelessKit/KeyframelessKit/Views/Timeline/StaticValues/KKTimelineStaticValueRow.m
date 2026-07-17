@@ -28,7 +28,8 @@
 const CGFloat kFloatRowH = 30.0;
 // The choice popover's opening height. It hugs its rows and grows/shrinks from
 // here as a search narrows the list, so this is a floor rather than a cap.
-static const CGFloat kChoiceListMinH = 120.0;
+// ~6 rows before a long `#choice` option list scrolls behind the edge fades.
+static const CGFloat kChoiceListMaxBody = 168.0;
 // The dropdown trigger's width. FIXED, not content-sized: the trigger sits in
 // the value column with every other row's field, and a width that tracked the
 // current pick would shuffle that column every time the pick changed. Long
@@ -798,7 +799,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   _choiceList =
       [[KKChoiceChecklistView alloc] initWithOptions:_choiceLabels
                                        selectedIndex:[self _selectedChoiceIndex]
-                                       minimumHeight:kChoiceListMinH];
+                                       maxBodyHeight:kChoiceListMaxBody];
   __weak typeof(self) weak = self;
   _choiceList.onSelect = ^(NSInteger index) {
     __strong typeof(weak) s = weak;
@@ -829,7 +830,12 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   _choicePopover.contentViewController = vc;
   _choicePopover.behavior = NSPopoverBehaviorTransient;
   _choicePopover.delegate = self;
-  _choiceList.popover = _choicePopover; // lets it resize as a search narrows
+  // Before sizing: the list only knows it is the popover's whole content once
+  // this is set, and -refilterAndResize is what sizes the popover to the capped
+  // list (an options list longer than the old fixed minimum used to be clipped
+  // with no way to reach the tail).
+  _choiceList.popover = _choicePopover;
+  [_choiceList refilterAndResize];
   [_choicePopover showRelativeToRect:_choiceField.bounds
                               ofView:_choiceField
                        preferredEdge:NSRectEdgeMinY];
@@ -1057,6 +1063,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
         lane.codeValidator; // set before text so it validates
     editor.codeFormatter = lane.codeFormatter;
     editor.savable = lane.codeSavable;
+    editor.saveCategoryLabels = lane.codeSaveCategories;
     __weak typeof(self) weak = self;
     if (lane.codeTabs.count > 0 || lane.codeTabCatalog.count > 0) {
       // Tabbed: section 0 is Image (the lane's codeString), then any added

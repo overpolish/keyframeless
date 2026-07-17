@@ -5,6 +5,7 @@
 
 #import "ShaderInspectorView.h"
 
+#import "ShaderCategory.h"
 #import "ShaderInspectorView+Guides.h"
 #import "ShaderInspectorView_Private.h"
 #import "ShaderLocalCatalog.h"
@@ -136,10 +137,13 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
   NSData *preview = ShaderRenderThumbnailPNG(_miniViewerRenderer, 320, 180);
   // No author by default - never derive it from the account name (privacy). The
   // user can add an author when publishing.
-  [[ShaderLocalCatalog shared] saveShaderNamed:name
-                                        author:@""
-                                      sections:dict
-                                    previewPNG:preview];
+  [[ShaderLocalCatalog shared]
+      saveShaderNamed:name
+               author:@""
+             category:ShaderCategoryAtIndex(
+                          note.userInfo[KKCodeEditorSaveCategoryIndexKey])
+             sections:dict
+           previewPNG:preview];
   [_browserController
       refreshLocal]; // local save; show the new card, no re-fetch
 }
@@ -174,6 +178,7 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
     @"id" : entry.entryID,
     @"name" : entry.name,
     @"author" : author ?: @"",
+    @"category" : entry.category ?: kShaderCategoryDefault,
     @"version" : @(entry.version),
     @"preview" : @"preview.png",
   };

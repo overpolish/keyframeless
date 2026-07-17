@@ -221,6 +221,13 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// code. Static template config (not serialized), carried template->reconciled
 /// like `codeValidator`. Default NO.
 @property(nonatomic) BOOL codeSavable;
+/// For a `codeSavable` lane: labels for an optional single-select picker in the
+/// save bar, between the name field and Save. Already localized, and opaque to
+/// the timeline - the save notification reports the picked INDEX into this
+/// array (`KKCodeEditorSaveCategoryIndexKey`) and the host maps it back to
+/// whatever it means. Empty / nil = no picker. Static template config (not
+/// serialized), carried template->reconciled like `codeSavable`.
+@property(nonatomic, copy, nullable) NSArray<NSString *> *codeSaveCategories;
 @property(nonatomic, copy) NSArray<NSNumber *>
     *componentMin; // one per component, empty = unconstrained
 @property(nonatomic, copy) NSArray<NSNumber *>
@@ -554,6 +561,13 @@ FOUNDATION_EXPORT NSNotificationName const
     KKCodeEditorSaveRequestedNotification;
 FOUNDATION_EXPORT NSString *const KKCodeEditorSaveNameKey;
 FOUNDATION_EXPORT NSString *const KKCodeEditorSaveSectionsKey;
+/// Also in userInfo when the host set `saveCategoryLabels`: an NSNumber index
+/// into that array (absent when the host set no labels).
+///
+/// An INDEX, not a name: the labels are the host's own localized strings, so
+/// the editor has no idea what they mean and shouldn't pretend to - it hands
+/// back the row that was picked and lets the host map it to whatever it models.
+FOUNDATION_EXPORT NSString *const KKCodeEditorSaveCategoryIndexKey;
 
 /// Post this to make an open savable code editor reload its sections (e.g.
 /// after a host loads a different shader). userInfo:

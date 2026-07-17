@@ -108,6 +108,7 @@
 				Plugin/Inspector/ShaderBrowserController.m,
 				Plugin/Inspector/ShaderBrowserFields.m,
 				Plugin/Inspector/ShaderBrowserView.m,
+				Plugin/Inspector/ShaderBadgeView.m,
 				Plugin/Inspector/ShaderCard.m,
 				Plugin/Inspector/ShaderInspectorView.m,
 				"Plugin/Inspector/ShaderInspectorView+BasicTimingGuide.m",
