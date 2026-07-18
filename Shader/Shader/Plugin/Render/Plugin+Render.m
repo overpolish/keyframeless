@@ -190,9 +190,15 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
 // Publish the source (and the "To" well) to the inspector's mini-viewer feed.
 // The renderer applies the shader locally, so these are the RAW textures.
 - (void)_publishMiniViewerFeeds:(FxImageTile *)destinationImage
-                   sourceImages:(NSArray<FxImageTile *> *)sourceImages {
+                   sourceImages:(NSArray<FxImageTile *> *)sourceImages
+                     renderTime:(CMTime)renderTime {
   // Per slot: single-slot = playhead, multi-slot = boundary preview / filmstrip
-  // / onion. Shared glue in KKPlugin (MiniViewerFeed).
+  // / onion. Shared glue in KKPlugin (MiniViewerFeed). The single-slot tag is
+  // this frame's clip fraction (not a hard 0), so during playback/scrub the
+  // open popover's mini-viewer sets editFraction to it and advances iTime with
+  // the playhead - otherwise the preview stays frozen at t=0 while the timeline
+  // moves (the popover live-playback plumbing the rest of the kit already
+  // does).
   [self
       kkPublishMiniViewerFeedForDestination:destinationImage
                                sourceImages:sourceImages
@@ -203,7 +209,10 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
                            boundaryReqFracs:self.renderCache.boundaryReqFracs
                             multiSlotActive:self.renderCache.boundaryFeedActive
                           changesOutputSize:NO
-                                 defaultTag:0.0];
+                                 defaultTag:[self.renderCache
+                                                clipFractionAtSeconds:
+                                                    CMTimeGetSeconds(
+                                                        renderTime)]];
   // The "To" well as a second feed texture, so the mini-viewer can preview a
   // two-texture (GL-transition) shader instead of falling through to
   // iChannel1's noise.
@@ -230,7 +239,9 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
     return NO;
   }
 
-  [self _publishMiniViewerFeeds:destinationImage sourceImages:sourceImages];
+  [self _publishMiniViewerFeeds:destinationImage
+                   sourceImages:sourceImages
+                     renderTime:renderTime];
 
   // Output dimensions drive the shader's resolution uniform (iResolution etc.).
   CGFloat mediaW = destinationImage.imagePixelBounds.right -

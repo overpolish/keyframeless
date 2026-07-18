@@ -516,7 +516,12 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
                     dest.pixelFormat == MTLPixelFormatBGRA8Unorm)
                        ? 1
                        : 0;
-  float timeSec = (float)self.editFraction;
+  // Match the FCP render's iTime, which uses seconds (frac * durSec), not the
+  // bare 0..1 fraction - otherwise the preview animates durSec-times too slow.
+  // Fall back to the raw fraction when the duration hasn't been pushed yet.
+  float timeSec = (float)(self.editFraction * (self.clipDurationSeconds > 0.0
+                                                   ? self.clipDurationSeconds
+                                                   : 1.0));
   NSArray<NSNumber *> *seedV = [self valuesForLabel:@"Seed"];
   float seed = seedV.count ? seedV[0].floatValue : KK_SHADER_GRAD_DEFAULT_SEED;
   NSArray<NSNumber *> *speedV = [self valuesForLabel:@"Speed"];

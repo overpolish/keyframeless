@@ -53,6 +53,14 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// transition preview as its outgoing clip forever. Same reasoning as
 /// `audioTimelineTimeSec` above: the preview has to agree with the viewer.
 @property(nonatomic) double playheadFraction;
+
+/// The clip's duration in seconds, pushed by the inspector. The preview's
+/// `iTime` is `editFraction * clipDurationSeconds * Speed + Seed`, matching the
+/// FCP render's `frac * durSec` (see Plugin+RenderState `timeSec`). Without the
+/// duration the preview would advance in bare 0..1 fraction units - i.e.
+/// `durSec`x too slow to match the viewer. 0/unknown falls back to the raw
+/// fraction (slow but never frozen). Named to match Canvas/Glow's renderer.
+@property(nonatomic) double clipDurationSeconds;
 @end
 
 NS_ASSUME_NONNULL_END

@@ -339,6 +339,9 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
   // iProgress in the preview: a transition shader has to show the blend at the
   // playhead, not sit on its outgoing clip.
   _miniViewerRenderer.playheadFraction = frac;
+  // iTime in the preview scales the edit/playhead fraction by the clip duration
+  // to match the FCP render (frac * durSec); without it the preview crawls.
+  _miniViewerRenderer.clipDurationSeconds = [self clipDurationSeconds];
   [self _pushAudioTimeToMiniViewer];
 }
 
