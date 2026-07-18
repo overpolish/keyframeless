@@ -101,7 +101,7 @@ Use `iProgress` when the shader should always run linearly; use `#progress` when
 
 - `label="Nice Name"` - inspector display name (defaults to a prettified uniform name: `uCornerRadius` -> "Corner Radius").
 - `min=` / `max=` - value range. Omit `max=` to leave the field unbounded (the slider still uses a nominal cap). `#progress` ignores both: it is always 0-100%.
-- `default=` - starting value. `#point` / `#multi` take `default="x,y"` / `default="a,b,c"`.
+- `default=` - starting value. `#point` / `#multi` take `default="x,y"` / `default="a,b,c"`. `#color` takes a hex default: `default="#RRGGBB"` (or `#RRGGBBAA`) for a single swatch, or a comma list `default="#06080F,#1B4A6B,#57E0FF"` for a palette - the list seeds the swatches AND sets the default active count (still clamped by `min`/`max`). A bare `default=3` on a palette stays count-only (built-in palette colours). The default colours are also what **Reset to default** reverts each swatch to, so a shader's intended palette lives in its source.
 - `#choice` adds `options="One,Two,Three"` (the pill labels; `default=` is the 0-based index) and `dropdown` (see below).
 - `#multi` adds `fields={Width,Height}` (names + counts the components) and `lockaspect` (components aspect-linked, ratio preserved on an OSC drag).
 
@@ -194,8 +194,9 @@ uniform vec3 uOrient;
 // #float label="Radius" min=0 max=1 default=0.3 osc=ring link=uPivot
 uniform float uRadius;
 
-// A palette of up to 5 colours (built-in palette generator + swatches).
-// #color min=1 max=5 default=3
+// A palette of up to 5 colours; the hex list seeds three swatches (users can
+// add up to 5 and reroll them with the built-in palette generator).
+// #color max=5 default="#1B1035,#5B2A8C,#E86BFF"
 uniform vec4 uPalette[5];
 
 void mainImage(out vec4 O, in vec2 I) {

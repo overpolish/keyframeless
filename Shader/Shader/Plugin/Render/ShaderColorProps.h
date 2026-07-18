@@ -43,7 +43,95 @@ typedef struct ShaderColorProp {
   int defaultCount; // count lane default
   int poolOffset;   // first vec4 index in the colour pool (see
                     // KK_SHADER_COLOR_POOL)
+  // Author-supplied default swatches from `default="#hex,#hex,..."`
+  // (sRGB+alpha, like kShaderDefaultPalette). When hasDefColors is 0 the
+  // built-in palette is used, preserving the old behaviour. These seed the
+  // lanes AND are what Reset reverts to, so a shader's intended palette lives
+  // in its source.
+  int hasDefColors;
+  int defColorCount;
+  float defColors[KK_SHADER_MAX_COLORS][4];
 } ShaderColorProp;
+
+/// One nibble of a hex digit, or -1.
+static inline int ShaderHexNibble(char c) {
+  if (c >= '0' && c <= '9')
+    return c - '0';
+  if (c >= 'a' && c <= 'f')
+    return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F')
+    return c - 'A' + 10;
+  return -1;
+}
+
+/// Parse one `#RGB` / `#RRGGBB` / `#RRGGBBAA` token (leading `#` optional) into
+/// an sRGB+alpha float4. Returns NO on any non-hex or wrong-length token.
+static inline BOOL ShaderParseHexColor(NSString *tok, float out[4]) {
+  NSString *t = [tok
+      stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+  const char *s = t.UTF8String;
+  if (!s)
+    return NO;
+  if (*s == '#')
+    s++;
+  int d[8], nd = 0;
+  while (nd < 8 && s[nd]) {
+    int v = ShaderHexNibble(s[nd]);
+    if (v < 0)
+      break;
+    d[nd] = v;
+    nd++;
+  }
+  if (s[nd] != '\0')
+    return NO; // trailing garbage
+  out[3] = 1.0f;
+  if (nd == 3) {
+    out[0] = (d[0] * 16 + d[0]) / 255.0f;
+    out[1] = (d[1] * 16 + d[1]) / 255.0f;
+    out[2] = (d[2] * 16 + d[2]) / 255.0f;
+  } else if (nd == 6 || nd == 8) {
+    out[0] = (d[0] * 16 + d[1]) / 255.0f;
+    out[1] = (d[2] * 16 + d[3]) / 255.0f;
+    out[2] = (d[4] * 16 + d[5]) / 255.0f;
+    if (nd == 8)
+      out[3] = (d[6] * 16 + d[7]) / 255.0f;
+  } else {
+    return NO;
+  }
+  return YES;
+}
+
+/// Parse a `default="#hex,#hex,..."` attribute into up to `maxN` swatches.
+/// Returns the number parsed (0 when the attribute is absent or not a hex list,
+/// e.g. a bare `default=3` count). Stops at the first non-hex token.
+static inline int ShaderParseColorDefaults(NSString *attrs,
+                                           float defColors[][4], int maxN) {
+  NSTextCheckingResult *m = [[NSRegularExpression
+      regularExpressionWithPattern:@"\\bdefault\\s*=\\s*\"([^\"]*)\""
+                           options:0
+                             error:nil]
+      firstMatchInString:attrs
+                 options:0
+                   range:NSMakeRange(0, attrs.length)];
+  if (!m || [m rangeAtIndex:1].location == NSNotFound)
+    return 0;
+  NSString *list = [attrs substringWithRange:[m rangeAtIndex:1]];
+  NSArray<NSString *> *toks = [list componentsSeparatedByString:@","];
+  int n = 0;
+  for (NSString *tok in toks) {
+    if (n >= maxN)
+      break;
+    float c[4];
+    if (!ShaderParseHexColor(tok, c))
+      break;
+    defColors[n][0] = c[0];
+    defColors[n][1] = c[1];
+    defColors[n][2] = c[2];
+    defColors[n][3] = c[3];
+    n++;
+  }
+  return n;
+}
 
 /// Parse every `// #color [label=] [min=] [max=] [default=]` directive and the
 /// `uniform vec4 <name>[N]?;` declaration that follows it (before the next
@@ -119,12 +207,20 @@ static inline int ShaderParseColorProps(NSString *source,
       int minC = ShaderAttrInt(attrs, @"\\bmin\\s*=\\s*(\\d+)", 0);
       int maxC = ShaderAttrInt(attrs, @"\\bmax\\s*=\\s*(\\d+)", 0);
       int defC = ShaderAttrInt(attrs, @"\\bdefault\\s*=\\s*(\\d+)", 0);
+      // A quoted hex list, e.g. default="#06080F,#57E0FF", seeds the swatches
+      // (a bare default=3 stays count-only). The list also sets the default
+      // active count when no numeric count is given.
+      int ndc = ShaderParseColorDefaults(attrs, p.defColors, N);
+      if (ndc > 0) {
+        p.hasDefColors = 1;
+        p.defColorCount = ndc;
+      }
       minC = minC <= 0 ? 1 : minC;
       maxC = (maxC <= 0 || maxC > N) ? N : maxC; // `[N]` is the hard ceiling
       if (minC > maxC)
         minC = maxC;
       if (defC <= 0)
-        defC = maxC < 4 ? maxC : 4;
+        defC = ndc > 0 ? ndc : (maxC < 4 ? maxC : 4);
       if (defC > maxC)
         defC = maxC;
       if (defC < minC)
@@ -134,6 +230,15 @@ static inline int ShaderParseColorProps(NSString *source,
       p.defaultCount = defC;
     } else {
       p.minCount = p.maxCount = p.defaultCount = 1;
+      float dc[1][4];
+      if (ShaderParseColorDefaults(attrs, dc, 1) > 0) {
+        p.hasDefColors = 1;
+        p.defColorCount = 1;
+        p.defColors[0][0] = dc[0][0];
+        p.defColors[0][1] = dc[0][1];
+        p.defColors[0][2] = dc[0][2];
+        p.defColors[0][3] = dc[0][3];
+      }
     }
     props[n++] = p;
     pool += slots;
@@ -176,7 +281,10 @@ ShaderFillColorPool(NSString *source, vector_float4 *pool,
           pool[p->poolOffset + i] =
               (vector_float4){cv[0].floatValue, cv[1].floatValue,
                               cv[2].floatValue, cv[3].floatValue};
-        else {
+        else if (p->hasDefColors && i < p->defColorCount) {
+          const float *d = p->defColors[i];
+          pool[p->poolOffset + i] = (vector_float4){d[0], d[1], d[2], d[3]};
+        } else {
           const float *d = kShaderDefaultPalette[i % 10];
           pool[p->poolOffset + i] = (vector_float4){d[0], d[1], d[2], d[3]};
         }
@@ -188,7 +296,10 @@ ShaderFillColorPool(NSString *source, vector_float4 *pool,
         pool[p->poolOffset] =
             (vector_float4){cv[0].floatValue, cv[1].floatValue,
                             cv[2].floatValue, cv[3].floatValue};
-      else {
+      else if (p->hasDefColors) {
+        const float *d = p->defColors[0];
+        pool[p->poolOffset] = (vector_float4){d[0], d[1], d[2], d[3]};
+      } else {
         // Fall back to the SAME per-index palette colour the catalog seeds the
         // lane with (pal[pi % 10]); using pal[0] for every single colour made
         // an un-seeded first render collapse all colours to one (purple).

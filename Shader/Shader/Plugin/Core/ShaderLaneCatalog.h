@@ -94,8 +94,11 @@ static inline void ShaderAppendColorLanes(NSMutableArray<KKLane *> *lanes,
     NSString *name = @(p->name);
     NSString *label = @(p->label);
     if (!p->isArray) {
-      // A single named colour - its own one-colour journey, distinct hue.
-      [lanes addObject:ShaderMakeColorLane(name, label, name, pal[pi % 10])];
+      // A single named colour - its own one-colour journey, distinct hue. The
+      // author's `default="#hex"` wins over the built-in palette (and is what
+      // Reset reverts to).
+      const float *seed = p->hasDefColors ? p->defColors[0] : pal[pi % 10];
+      [lanes addObject:ShaderMakeColorLane(name, label, name, seed)];
       continue;
     }
     // An array: count lane + N swatches (the shared bar above rerolls them).
@@ -118,10 +121,14 @@ static inline void ShaderAppendColorLanes(NSMutableArray<KKLane *> *lanes,
 
     for (int i = 0; i < p->maxCount; i++) {
       NSInteger n = i + 1;
+      // Author's `default="#hex,..."` swatch wins over the built-in palette for
+      // the swatches it covers (and is what Reset reverts to).
+      const float *seed = (p->hasDefColors && i < p->defColorCount)
+                              ? p->defColors[i]
+                              : pal[i % 10];
       KKLane *color = ShaderMakeColorLane(
           [NSString stringWithFormat:@"%@ %ld", name, (long)n],
-          [NSString stringWithFormat:@"%@ %ld", label, (long)n], name,
-          pal[i % 10]);
+          [NSString stringWithFormat:@"%@ %ld", label, (long)n], name, seed);
       // "count >= n" via the absolute ceiling, so a swatch still reveals when
       // the stored count is transiently above a just-lowered max.
       color.visibleWhenLabel = countId;
