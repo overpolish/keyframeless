@@ -61,6 +61,13 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// `durSec`x too slow to match the viewer. 0/unknown falls back to the raw
 /// fraction (slow but never frozen). Named to match Canvas/Glow's renderer.
 @property(nonatomic) double clipDurationSeconds;
+
+/// Blit-scale `src` into `dest` (format-converting to dest's format, aspect
+/// from dest's dimensions). Used by the thumbnail bake to capture the rendered
+/// final frame into a readable target.
+- (void)blitFrom:(id<MTLTexture>)src
+             into:(id<MTLTexture>)dest
+    commandBuffer:(id<MTLCommandBuffer>)commandBuffer;
 @end
 
 NS_ASSUME_NONNULL_END

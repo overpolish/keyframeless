@@ -39,13 +39,17 @@ typedef struct ShaderScalarProp {
     int isBool;     // on/off checkbox (bool uniform; .x > 0.5)
     int isInt;      // integer slider (int uniform)
     int isAngle;    // rotation knob, degrees lane; uniform gets radians
-    int hasMax;     // `max=` was specified (else the field is unbounded)
+    int hasMax;     // `max=` was specified (else the field is unbounded above)
+    int hasMin;     // `min=` was specified (else the field is unbounded below)
     char name[64];  // GLSL uniform name
     char label[80]; // display label
     int poolOffset; // vec4 index in the pool (value in .x, or xy for a point)
     double fmin, fmax,
         fdefault;        // float (percent: in 0..100); fmax = nominal when
                          // !hasMax (slider cap; the field is unbounded)
+    double sliderLo,     // the slider's visible span (its ends). Defaults to the
+        sliderHi;        // field bound (or the nominal 0/cap when unbounded);
+                         // `slidermin=`/`slidermax=` override it independently.
     double pdefx, pdefy; // point default (normalized 0..1)
     char options[256];   // choice: comma-separated pill labels
     int choiceCount;     // number of options

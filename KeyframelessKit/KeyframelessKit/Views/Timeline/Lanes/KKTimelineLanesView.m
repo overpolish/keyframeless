@@ -732,6 +732,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       // STATE (aspectLinked), which is user data kept below.
       fixed.aspectLinkable = tmpl.aspectLinkable;
       fixed.autoSizesComponentLabels = tmpl.autoSizesComponentLabels;
+      // Whole-number display (e.g. #angle, #int) is canonical to the template,
+      // not user data - re-assert it so a lane from a blob that predates the
+      // flag (a #angle serialized while it was still a float) stops showing
+      // decimals.
+      fixed.integerValued = tmpl.integerValued;
       // codeString is user data (a code lane's text), so keep the saved value;
       // only fall back to the template default when it's missing (older blob).
       if (!fixed.codeString.length)

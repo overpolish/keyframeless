@@ -101,7 +101,8 @@ public struct CommunityPublisher: Sendable {
   }
 
   private func sanitize(_ s: String) -> String {
-    s.replacingOccurrences(of: ":", with: "-")
+    s.replacingOccurrences(of: "/", with: "-")
+      .replacingOccurrences(of: ":", with: "-")
       .replacingOccurrences(of: "\\", with: "-")
       .replacingOccurrences(of: "\0", with: "")
   }

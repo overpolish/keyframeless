@@ -57,7 +57,10 @@ static int KKEmitColorProps(NSString *userSource, NSMutableString *body,
 // and units, unpacking the pool vec4 it folded into.
 static void KKEmitScalarDefine(const ShaderScalarProp *p, NSString *nm,
                                NSMutableString *defines) {
-  if (p->isChoice || p->isInt) {
+  if (!p->isMulti && (p->isChoice || p->isInt)) {
+    // Scalar int/choice only. A `#multi int` is still a vector (its
+    // integer-ness is just field stepping), so it falls through to the multi
+    // branch below.
     [defines appendFormat:@"#define %@ (int(%@_kk.x))\n", nm, nm];
   } else if (p->isBool) {
     [defines appendFormat:@"#define %@ (%@_kk.x > 0.5)\n", nm, nm];

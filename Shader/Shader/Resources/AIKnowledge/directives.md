@@ -37,7 +37,7 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 | `#progress` | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** — transition progress; see below           |
 | `#int`      | `float n;`         | integer slider                                   | `int`                                               |
 | `#seed`     | `float n;`         | dice/seed field (no anim)                        | the raw integer value                               |
-| `#angle`    | `float n;`         | rotation dial (degrees)                          | **radians, negated** (`radians(-deg)`)              |
+| `#angle`    | `float n;`         | rotation dial (whole degrees)                    | **radians, negated** (`radians(-deg)`)              |
 | `#bool`     | `bool n;`          | checkbox                                         | `bool`                                              |
 | `#choice`   | `int n;`           | segmented pills                                  | `int` selected index (0-based)                      |
 | `#point`    | `vec2 n;`          | 2D point                                         | pixels (`value * iResolution.xy`, fragCoord space)  |
@@ -124,10 +124,11 @@ Reach for `native` only when the shader genuinely produces its own smear (trails
 ### Common attributes
 
 - `label="Nice Name"` - inspector display name (defaults to a prettified uniform name: `uCornerRadius` -> "Corner Radius").
-- `min=` / `max=` - value range. Omit `max=` to leave the field unbounded (the slider still uses a nominal cap). `#progress` ignores both: it is always 0-100%.
+- `min=` / `max=` - hard value range. Omit either to leave that side unbounded (the field accepts any value past the slider's ends) - so a bare `min=` lets a field go negative. `#progress` ignores both: it is always 0-100%.
+- `slidermin=` / `slidermax=` - the slider's visible span, overriding the default ends (`min`/`max` when set, else a nominal 0 / 1 / 10 / 100%). Use this to give an unbounded field a sensible slider range, or to make the slider a comfortable sub-range of a wider field. The field still accepts values outside the slider.
 - `default=` - starting value. `#point` / `#multi` take `default="x,y"` / `default="a,b,c"`. `#color` takes a hex default: `default="#RRGGBB"` (or `#RRGGBBAA`) for a single swatch, or a comma list `default="#06080F,#1B4A6B,#57E0FF"` for a palette - the list seeds the swatches AND sets the default active count (still clamped by `min`/`max`). A bare `default=3` on a palette stays count-only (built-in palette colours). The default colours are also what **Reset to default** reverts each swatch to, so a shader's intended palette lives in its source.
 - `#choice` adds `options="One,Two,Three"` (the pill labels; `default=` is the 0-based index) and `dropdown` (see below).
-- `#multi` adds `fields={Width,Height}` (names + counts the components) and `lockaspect` (components aspect-linked, ratio preserved on an OSC drag).
+- `#multi` adds `fields={Width,Height}` (names + counts the components) and `lockaspect` (components aspect-linked, ratio preserved on an OSC drag). By default its fields are floats; add `percent` for whole-number `%` fields (delivered to the shader as 0..1, like a single `#percent`) or `int` for whole-number fields (delivered raw). Example: `// #multi label="Crop Size" fields={W,H} percent min=1 max=100 default="100,100"`.
 
 ### `#choice` as a dropdown
 

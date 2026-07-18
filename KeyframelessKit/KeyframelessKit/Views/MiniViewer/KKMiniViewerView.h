@@ -493,6 +493,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// caller applies its own colour handling.
 @property(nonatomic, readonly, nullable) id<MTLTexture> channel1Texture;
 
+/// The active slot's rendered FINAL frame - the effect's output the mini-viewer
+/// is currently displaying (BGRA8). Exposed so the thumbnail bake can capture
+/// the real composited result directly (transitions, picture-in-picture,
+/// audio visualisers) instead of re-running the shader on a stand-in source.
+/// nil before the first draw / when no slot is loaded.
+@property(nonatomic, readonly, nullable) id<MTLTexture> processedTexture;
+
 /// Fired when `sourceMediaSize` first resolves (or changes) - lets a host
 /// re-render any pixel-scaled UI that depends on it.
 @property(nonatomic, copy, nullable) void (^onSourceResolved)(void);

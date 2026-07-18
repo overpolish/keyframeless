@@ -123,15 +123,24 @@ static inline void ShaderScalarParseDefaults(NSString *attrs,
                           range:NSMakeRange(0, attrs.length)] != nil)
             ? 1
             : 0;
-    double mn = ShaderAttrDouble(attrs, @"\\bmin\\s*=\\s*(-?[0-9.]+)", 0.0);
+    double mn = ShaderAttrDouble(attrs, @"\\bmin\\s*=\\s*(-?[0-9.]+)", NAN);
     double mx = ShaderAttrDouble(attrs, @"\\bmax\\s*=\\s*(-?[0-9.]+)", NAN);
+    p->hasMin = !isnan(mn);
     p->hasMax = !isnan(mx);
+    if (!p->hasMin)
+      mn = 0.0; // nominal slider floor; the field is unbounded below
     if (!p->hasMax)
-      mx = 1.0; // nominal range (the field stays unbounded)
+      mx = p->isPercent ? 100.0 : 1.0; // percent implies 0..100; else nominal
     if (mx < mn)
       mx = mn;
     p->fmin = mn;
     p->fmax = mx;
+    double smn =
+        ShaderAttrDouble(attrs, @"\\bslidermin\\s*=\\s*(-?[0-9.]+)", NAN);
+    double smx =
+        ShaderAttrDouble(attrs, @"\\bslidermax\\s*=\\s*(-?[0-9.]+)", NAN);
+    p->sliderLo = isnan(smn) ? mn : smn;
+    p->sliderHi = isnan(smx) ? mx : smx;
     for (int k = 0; k < 4; k++)
       p->mdef[k] = mn;
     NSTextCheckingResult *dm = [[NSRegularExpression
@@ -155,28 +164,42 @@ static inline void ShaderScalarParseDefaults(NSString *attrs,
     }
   } else {
     double defMax = p->isPercent ? 100.0 : (p->isInt ? 10.0 : 1.0);
-    double mn = ShaderAttrDouble(attrs, @"\\bmin\\s*=\\s*(-?[0-9.]+)", 0.0);
+    double mn = ShaderAttrDouble(attrs, @"\\bmin\\s*=\\s*(-?[0-9.]+)", NAN);
     double mx = ShaderAttrDouble(attrs, @"\\bmax\\s*=\\s*(-?[0-9.]+)", NAN);
+    p->hasMin = !isnan(mn);
     p->hasMax = !isnan(mx);
+    if (!p->hasMin)
+      mn = 0.0; // nominal slider floor; the field stays unbounded below
     if (!p->hasMax)
-      mx = defMax; // nominal slider cap; the field stays unbounded
+      mx = defMax; // nominal slider cap; the field stays unbounded above
     if (p->isProgress) {
       // 0..100% is what progress MEANS, so it's a bounded field rather than an
       // open one with a nominal cap. min=/max= aren't honoured here on purpose.
       mn = 0.0;
       mx = 100.0;
+      p->hasMin = 1;
       p->hasMax = 1;
     }
     double df = ShaderAttrDouble(attrs, @"\\bdefault\\s*=\\s*(-?[0-9.]+)", mn);
     if (mx < mn)
       mx = mn;
-    if (df < mn)
-      df = mn;
-    if (df > mx)
-      df = mx;
+    if (p->hasMin && df < mn)
+      df = mn; // only clamp to a bound that was actually set (else the
+    if (p->hasMax && df > mx)
+      df = mx; // nominal slider range would wrongly cap an unbounded default)
     p->fmin = mn;
     p->fmax = mx;
     p->fdefault = df;
+    // `slidermin=`/`slidermax=` override the slider span (its visible ends)
+    // without touching the hard field bounds. Default to the bound / nominal.
+    // Progress is a fixed 0..100 ramp, so it ignores these like it does
+    // min/max.
+    double smn =
+        ShaderAttrDouble(attrs, @"\\bslidermin\\s*=\\s*(-?[0-9.]+)", NAN);
+    double smx =
+        ShaderAttrDouble(attrs, @"\\bslidermax\\s*=\\s*(-?[0-9.]+)", NAN);
+    p->sliderLo = (p->isProgress || isnan(smn)) ? mn : smn;
+    p->sliderHi = (p->isProgress || isnan(smx)) ? mx : smx;
   }
 }
 
@@ -238,6 +261,33 @@ static inline int ShaderParseScalarProps(NSString *source,
     p.isInt = [kind isEqualToString:@"int"];
     p.isAngle = [kind isEqualToString:@"angle"];
     p.isMulti = [kind isEqualToString:@"multi"];
+    if (p.isMulti) {
+      // `#multi` can carry a numeric sub-type: `percent` (0..100 lane shown as
+      // %, pool gets value / 100 like a single #percent) or `int` (whole-number
+      // fields). Scan with quoted strings blanked so a word inside label="..."
+      // can't trip the keyword (`int` in particular is short).
+      NSString *bare =
+          [[NSRegularExpression regularExpressionWithPattern:@"\"[^\"]*\""
+                                                     options:0
+                                                       error:nil]
+              stringByReplacingMatchesInString:attrs
+                                       options:0
+                                         range:NSMakeRange(0, attrs.length)
+                                  withTemplate:@""];
+      p.isPercent =
+          ([[NSRegularExpression regularExpressionWithPattern:@"\\bpercent\\b"
+                                                      options:0
+                                                        error:nil]
+               firstMatchInString:bare
+                          options:0
+                            range:NSMakeRange(0, bare.length)] != nil);
+      p.isInt = ([[NSRegularExpression regularExpressionWithPattern:@"\\bint\\b"
+                                                            options:0
+                                                              error:nil]
+                     firstMatchInString:bare
+                                options:0
+                                  range:NSMakeRange(0, bare.length)] != nil);
+    }
     strncpy(p.name, nm.UTF8String ?: "", sizeof(p.name) - 1);
     NSString *uty = [source substringWithRange:[um rangeAtIndex:1]];
     strncpy(p.uniformType, uty.UTF8String ?: "", sizeof(p.uniformType) - 1);
@@ -291,11 +341,20 @@ ShaderFillScalarPool(NSString *source, vector_float4 *pool, int startOffset,
       float c[4] = {0, 0, 0, 0};
       for (int k = 0; k < p->fieldCount && k < 4; k++)
         c[k] = (float)(v.count > k ? v[k].doubleValue : p->mdef[k]);
+      if (ShaderScalarOSCIsRotate(p))
+        for (int k = 0; k < 4; k++)
+          c[k] =
+              roundf(c[k]); // rotation is whole degrees, even from an OSC drag
+      if (p->isPercent)
+        for (int k = 0; k < 4; k++)
+          c[k] /= 100.0f; // lane is 0..100 %, shader wants 0..1
       pool[p->poolOffset] = (vector_float4){c[0], c[1], c[2], c[3]};
       continue;
     }
     double val = v.count ? v[0].doubleValue
                          : (p->isChoice ? (double)p->cdefault : p->fdefault);
+    if (p->isAngle)
+      val = round(val); // angles are whole degrees, even from an OSC drag
     if (p->isPercent)
       val /= 100.0; // lane is 0..100 %, shader wants 0..1
     pool[p->poolOffset] = (vector_float4){(float)val, 0, 0, 0};

@@ -237,6 +237,7 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       // permuted back to canonical order.
       lane.valueType = KKLaneValueTypeAngle;
       lane.animatable = YES;
+      lane.integerValued = YES; // rotation dials snap to whole degrees
       lane.componentMin = @[];
       lane.componentMax = @[];
       NSMutableArray<NSString *> *labels = [NSMutableArray array];
@@ -268,8 +269,9 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       lane.autoSizesComponentLabels = YES;
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:defs]];
     } else if (p->isAngle) {
-      lane.valueType = KKLaneValueTypeAngle; // circular knob, degrees
+      lane.valueType = KKLaneValueTypeAngle; // circular knob, whole degrees
       lane.animatable = YES;
+      lane.integerValued = YES; // angles snap to whole degrees
       // Unconstrained (accumulates past 360), like MagicMove's Rotation.
       lane.componentMin = @[];
       lane.componentMax = @[];
@@ -301,32 +303,43 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       NSMutableArray<NSNumber *> *maxs = [NSMutableArray array];
       NSMutableArray<NSNumber *> *defs = [NSMutableArray array];
       for (int k = 0; k < n; k++) {
-        [mins addObject:@(p->fmin)];
+        [mins addObject:p->hasMin ? @(p->fmin) : @(-1000000.0)];
         [maxs addObject:p->hasMax ? @(p->fmax) : @1000000.0];
         [defs addObject:@(p->mdef[k])];
       }
       lane.componentMin = mins;
       lane.componentMax = maxs;
-      if (!p->hasMax)
-        lane.sliderMax =
-            @(p->fmax); // nominal slider cap; field stays unbounded
+      lane.sliderMin = @(p->sliderLo); // bound, nominal, or slidermin= override
+      lane.sliderMax = @(p->sliderHi); // bound, nominal, or slidermax= override
       // Multi-word component captions (e.g. "Width"/"Height") size to fit
       // instead of the fixed one-char slot that truncates them to "Wi"/"Hi".
       lane.autoSizesComponentLabels = YES;
       lane.aspectLinkable = p->aspectLinked ? YES : NO;
       lane.aspectLinked = p->aspectLinked ? YES : NO;
+      if (p->isPercent) {
+        // Whole-number % fields with a "%" unit, matching a single #percent
+        // lane (one unit entry per component).
+        NSMutableArray<NSString *> *units = [NSMutableArray array];
+        for (int k = 0; k < n; k++)
+          [units addObject:@"%"];
+        lane.componentUnits = units;
+        lane.integerValued = YES;
+      } else if (p->isInt) {
+        lane.integerValued = YES; // whole-number fields
+        lane.scrubStep = 1.0;
+      }
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:defs]];
     } else {
       lane.animatable = YES;
-      lane.componentMin = @[ @(p->fmin) ];
-      if (p->hasMax) {
-        lane.componentMax = @[ @(p->fmax) ]; // field + slider cap at max
-      } else {
-        // No max=: the field is unbounded (large cap so line-625 clamp is a
-        // no-op in practice) while the slider keeps the nominal range.
-        lane.componentMax = @[ @1000000.0 ];
-        lane.sliderMax = @(p->fmax);
-      }
+      // Hard field bounds: the actual `min=`/`max=`, or an
+      // effectively-unbounded cap when omitted (so the field accepts any
+      // value).
+      lane.componentMin = @[ p->hasMin ? @(p->fmin) : @(-1000000.0) ];
+      lane.componentMax = @[ p->hasMax ? @(p->fmax) : @(1000000.0) ];
+      // Slider span: the field bound, the nominal, or an explicit
+      // slidermin=/slidermax= override.
+      lane.sliderMin = @(p->sliderLo);
+      lane.sliderMax = @(p->sliderHi);
       if (p->isPercent) {
         // Match the canonical percentage lane (opacityLane): whole-number %
         // with a "%" unit, not a raw decimal float.

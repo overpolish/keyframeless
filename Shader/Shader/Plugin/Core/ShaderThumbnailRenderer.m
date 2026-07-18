@@ -4,6 +4,7 @@
  */
 
 #import "ShaderThumbnailRenderer.h"
+#import "ShaderMiniViewerRenderer.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <Metal/Metal.h>
@@ -152,6 +153,42 @@ NSData *ShaderRenderThumbnailJPEG(KKMiniViewerRenderer *renderer, NSUInteger w,
                                   NSUInteger h) {
   if (!renderer || w == 0 || h == 0)
     return nil;
+
+  // Primary path: capture the already-rendered FINAL frame the mini-viewer is
+  // displaying, rather than re-running the shader. That frame is the true
+  // composited result on real footage / audio / "To" well, so transitions,
+  // picture-in-picture layouts and audio visualisers thumbnail correctly.
+  // Blit-scale it (keeping its aspect) into a shared target we can read back.
+  id<MTLTexture> finalFrame = renderer.canvas.processedTexture;
+  if (finalFrame && [renderer isKindOfClass:[ShaderMiniViewerRenderer class]]) {
+    id<MTLDevice> cd = finalFrame.device;
+    NSUInteger fw = MAX((NSUInteger)1, finalFrame.width);
+    NSUInteger fh = MAX((NSUInteger)1, finalFrame.height);
+    NSUInteger tw = w;
+    NSUInteger th =
+        MAX((NSUInteger)1, (NSUInteger)llround((double)w * (double)fh / fw));
+    MTLTextureDescriptor *cdd = [MTLTextureDescriptor
+        texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                     width:tw
+                                    height:th
+                                 mipmapped:NO];
+    cdd.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+    cdd.storageMode = MTLStorageModeShared;
+    id<MTLTexture> cdest = [cd newTextureWithDescriptor:cdd];
+    if (cdest) {
+      id<MTLCommandQueue> cq = [cd newCommandQueue];
+      id<MTLCommandBuffer> ccb = [cq commandBuffer];
+      [(ShaderMiniViewerRenderer *)renderer blitFrom:finalFrame
+                                                into:cdest
+                                       commandBuffer:ccb];
+      [ccb commit];
+      [ccb waitUntilCompleted];
+      return ShaderJPEGFromTexture(cdest);
+    }
+  }
+
+  // Fallback (no rendered frame yet, e.g. authoring off a clip): re-render on a
+  // bundled reference frame, gradient as a last resort.
   id<MTLDevice> device = MTLCreateSystemDefaultDevice();
   if (!device)
     return nil;
@@ -164,7 +201,6 @@ NSData *ShaderRenderThumbnailJPEG(KKMiniViewerRenderer *renderer, NSUInteger w,
   dd.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
   dd.storageMode = MTLStorageModeShared;
   id<MTLTexture> dest = [device newTextureWithDescriptor:dd];
-  // Real reference frame first (filters need detail); gradient as a fallback.
   id<MTLTexture> source = ShaderPreviewSourceTexture(device);
   if (!source)
     source = ShaderTestPatternTexture(device, w, h);
