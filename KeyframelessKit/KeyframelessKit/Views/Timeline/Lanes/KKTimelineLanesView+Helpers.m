@@ -68,9 +68,33 @@ static void _clearPopoverBackground(NSView *view) {
 }
 @end
 
-@implementation _KKSearchField
+@implementation _KKSearchField {
+  id _outsideClickMon; // blurs the field on an outside click while editing
+}
 + (Class)cellClass {
   return [_KKSearchFieldCell class];
+}
+
+// Focus from a real click only, never the window's key-view loop when the
+// popover opens - so a freshly-shown checklist (lane filter, OSC, "Applies to")
+// doesn't auto-grab focus. That auto-focus would leave the field editor as
+// first responder, which swallows spacebar (playback) and Esc (close popover).
+// Same approach as KKCodeEditorView: gate on the CURRENT EVENT being a
+// mouse-down in OUR window landing on the field; the popover's opening click is
+// in the host window, so the key-loop auto-focus is rejected while a genuine
+// click focuses.
+- (BOOL)acceptsFirstResponder {
+  NSEvent *cur = NSApp.currentEvent;
+  BOOL fromClick = cur && (cur.type == NSEventTypeLeftMouseDown ||
+                           cur.type == NSEventTypeRightMouseDown);
+  if (!fromClick || cur.window != self.window)
+    return NO;
+  NSPoint p = [self convertPoint:cur.locationInWindow fromView:nil];
+  return NSPointInRect(p, self.bounds);
+}
+
+- (BOOL)acceptsFirstMouse:(NSEvent *)event {
+  return YES; // focus on the first click even when the popover isn't key yet
 }
 
 - (void)drawRect:(NSRect)dirty {
@@ -84,9 +108,20 @@ static void _clearPopoverBackground(NSView *view) {
 
 - (BOOL)becomeFirstResponder {
   BOOL r = [super becomeFirstResponder];
-  if (r)
+  if (r) {
     KKStyleFieldEditorAccent([self currentEditor]);
+    // Blur on a click anywhere off the field: a ViewBridge popover won't resign
+    // a field on a click that lands on a non-responder (a checklist row), so
+    // wire the shared field monitor - same as every other field.
+    if (!_outsideClickMon)
+      _outsideClickMon = KKMakeFieldOutsideClickMonitor(self);
+  }
   return r;
+}
+
+- (void)dealloc {
+  if (_outsideClickMon)
+    [NSEvent removeMonitor:_outsideClickMon];
 }
 @end
 

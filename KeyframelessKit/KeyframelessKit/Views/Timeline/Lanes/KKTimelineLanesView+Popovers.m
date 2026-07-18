@@ -602,9 +602,10 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                                closeIfOutsidePopover();
                                              }];
 
-  // Left/right arrows step to the prev/next keypose while the boundary popover
-  // is focused - but only when no value field is being edited (the field editor
-  // is first responder), so arrows still move the text cursor inside a field.
+  // Key handling while a content popover is open: Esc closes it, and (boundary
+  // popover only) left/right arrows step to the prev/next keypose. Both are
+  // suppressed while a value field or the code editor is being edited (its
+  // field editor is first responder), so those keys reach the text instead.
   keyMon = [NSEvent
       addLocalMonitorForEventsMatchingMask:NSEventMaskKeyDown
                                    handler:^NSEvent *(NSEvent *e) {
@@ -612,28 +613,42 @@ static pid_t KKWindowOwnerPIDAtScreenPoint(NSPoint screenPoint) {
                                          navWeakSelf;
                                      if (!s)
                                        return e;
-                                     if (!(s->_openContentPopover.isShown &&
-                                           s->_openStaticIsBoundary))
+                                     if (!s->_openContentPopover.isShown)
                                        return e;
                                      unsigned short kc = e.keyCode;
-                                     if (kc != 123 && kc != 124)
-                                       return e; // 123 = left, 124 = right
                                      // ViewBridge routes the popover's key
                                      // events through the host window, so
                                      // e.window never equals the popover window
                                      // - gate on the popover window's first
                                      // responder instead. An NSText (the field
-                                     // editor) means a value field is being
-                                     // edited: let the arrows move the text
-                                     // cursor rather than navigating. Also let
-                                     // them through when a field editor is
-                                     // active in the key window (e.g. renaming
-                                     // a layer in the companion panel, a
-                                     // separate window from the popover).
-                                     if ([weakPopoverWindow.firstResponder
+                                     // editor, incl. the code editor's text
+                                     // view) means a value field is being
+                                     // edited. Also check the key window for a
+                                     // field editor (e.g. renaming a layer in
+                                     // the companion panel, a separate window).
+                                     BOOL fieldEditing =
+                                         [weakPopoverWindow.firstResponder
                                              isKindOfClass:[NSText class]] ||
                                          [NSApp.keyWindow.firstResponder
-                                             isKindOfClass:[NSText class]])
+                                             isKindOfClass:[NSText class]];
+                                     // Esc closes the popover - unless a value
+                                     // field / code editor is focused, where it
+                                     // should cancel that edit instead.
+                                     if (kc == 53) { // Escape
+                                       if (fieldEditing)
+                                         return e;
+                                       [s->_openContentPopover close];
+                                       return nil; // consume
+                                     }
+                                     // Left/right step to the prev/next keypose
+                                     // (boundary popover only), when not
+                                     // editing a field, so arrows still move
+                                     // the text cursor inside a value field.
+                                     if (!s->_openStaticIsBoundary)
+                                       return e;
+                                     if (kc != 123 && kc != 124)
+                                       return e; // 123 = left, 124 = right
+                                     if (fieldEditing)
                                        return e;
                                      [s _navigateBoundaryPopoverDirection:
                                              (kc == 123 ? -1 : 1)];

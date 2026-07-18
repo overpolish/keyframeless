@@ -56,7 +56,7 @@ Snapping: a small guide line appears when a dragged keypose comes within a few p
 - Click and drag a number field to scrub its value (right/up increases, left/down decreases). Shift drags in larger steps, Option in finer ones; the pointer hides and holds its spot for the drag.
 - Return commits the number field you're typing in.
 - Tab moves to the next number field (Shift-Tab to the previous one), like a web form.
-- Esc cancels the in-progress edit and closes the popover.
+- Esc closes the popover (the keypose, constants, curve, or modulation editor). If you are editing a number field or the property search box, Esc first cancels that edit and leaves the popover open, so a second Esc closes it.
 - Left and Right arrows step to the previous/next keypose when a keypose popover is open, so you can walk the animation without reaching for the mouse. This only applies when you're not editing a number field - inside a field the arrows move the text cursor as usual.
 - Double-click the mini-viewer, or press Cmd-0 while the mini-viewer is open, to reset its zoom and pan back to aspect-fit (same as the Reset Zoom button in the inspector header). Scroll-wheel or pinch zooms in and out; two-finger drag pans.
 - Note on Cmd-0: because the inspector runs as a Final Cut Pro extension, the Cmd-0 key press also reaches Final Cut Pro itself. If you have assigned Cmd-0 to a command in Final Cut's keyboard customization (Final Cut Pro > Commands), that command will fire too. Final Cut has no default Cmd-0 shortcut, so by default there is nothing to clash with, but if you hit unexpected behaviour, check your custom command set or just use the Reset Zoom button or a double-click instead.

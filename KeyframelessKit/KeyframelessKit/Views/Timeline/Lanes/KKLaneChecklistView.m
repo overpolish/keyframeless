@@ -422,4 +422,17 @@ static const CGFloat kChecklistPillH = 24.0;
   [self _applyFilterAndResize];
 }
 
+// Enter / Esc drop focus (blur) so spacebar (playback) and Esc (close popover)
+// reach the popover again, matching every other field in a ViewBridge popover.
+- (BOOL)control:(NSControl *)control
+               textView:(NSTextView *)textView
+    doCommandBySelector:(SEL)selector {
+  if (selector == @selector(insertNewline:) ||
+      selector == @selector(cancelOperation:)) {
+    [control.window makeFirstResponder:nil];
+    return YES;
+  }
+  return NO;
+}
+
 @end
