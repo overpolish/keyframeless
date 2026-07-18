@@ -41,6 +41,20 @@ public struct CommunityRepo: Sendable {
     return URL(string: "\(Self.rawBase)/\(owner)/\(repo)/\(branch)/\(enc)")!
   }
 
+  /// Raw URL of a catalog's precomputed manifest (`<catalog>/index.json`). A
+  /// GitHub Action regenerates it on every push to the catalog, so listing an
+  /// entire catalog is one raw CDN fetch with no GitHub REST API calls at all.
+  func manifestURL() -> URL {
+    rawURL("\(catalogFolder)/index.json")
+  }
+
+  /// Git Trees API URL for the whole repo at `branch`, recursively. One call
+  /// returns every path in the repo, letting a catalog list all entries without
+  /// an O(N) fan-out of Contents API calls (which trip the 60/hour unauth limit).
+  func treeURL() -> URL {
+    URL(string: "\(Self.apiBase)/repos/\(owner)/\(repo)/git/trees/\(branch)?recursive=1")!
+  }
+
   /// A GitHub REST API URL under this repo (e.g. "git/refs", "pulls"). Used by
   /// the publisher; not percent-encoded since callers pass API path segments.
   func apiURL(_ path: String) -> URL {

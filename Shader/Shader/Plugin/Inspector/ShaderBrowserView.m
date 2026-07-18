@@ -246,9 +246,13 @@ static const CGFloat kHeaderH = 22.0;
 }
 
 - (void)reload {
+  [self _reloadForcingRefresh:NO];
+}
+
+- (void)_reloadForcingRefresh:(BOOL)forceRefresh {
   _fetching = YES; // show the inline loader until the fetch returns
   [self _rebuildAll];
-  [self _fetchCommunity];
+  [self _fetchCommunity:forceRefresh];
 }
 
 - (void)refreshLocal {
@@ -453,33 +457,39 @@ static const CGFloat kHeaderH = 22.0;
   return y + rows * (_cardH + kCardGap) + kCardGap;
 }
 
-- (void)_fetchCommunity {
+- (void)_fetchCommunity:(BOOL)forceRefresh {
   KKCommunityClient *client =
       [[KKCommunityClient alloc] initWithCatalogFolder:@"Shaders"];
   __weak typeof(self) weak = self;
-  [client fetchEntriesWithCompletion:^(NSArray<KKCommunityEntry *> *entries,
-                                       NSString *error) {
-    __strong typeof(weak) s = weak;
-    if (!s)
-      return;
-    s->_fetching = NO;
-    NSMutableArray<_ShaderBrowserItem *> *items = [NSMutableArray array];
-    for (KKCommunityEntry *e in entries) {
-      _ShaderBrowserItem *it = [_ShaderBrowserItem new];
-      it.entryID = e.entryID;
-      it.name = e.name;
-      it.author = e.author;
-      // Straight out of the remote metadata.json: KKCommunityEntry carries the
-      // raw values for payload-specific keys like this, so a category needs no
-      // change on the KKCommunity (Swift) side.
-      it.category = ShaderCategoryNormalize(e.metadata[@"category"]);
-      it.communityEntry = e;
-      [items addObject:it];
-      [s _loadCommunityThumbnail:e];
-    }
-    s->_community = items;
-    [s _rebuildAll];
-  }];
+  [client fetchEntriesWithForceRefresh:forceRefresh
+                            completion:^(NSArray<KKCommunityEntry *> *entries,
+                                         NSString *error) {
+                              __strong typeof(weak) s = weak;
+                              if (!s)
+                                return;
+                              s->_fetching = NO;
+                              NSMutableArray<_ShaderBrowserItem *> *items =
+                                  [NSMutableArray array];
+                              for (KKCommunityEntry *e in entries) {
+                                _ShaderBrowserItem *it =
+                                    [_ShaderBrowserItem new];
+                                it.entryID = e.entryID;
+                                it.name = e.name;
+                                it.author = e.author;
+                                // Straight out of the remote metadata.json:
+                                // KKCommunityEntry carries the raw values for
+                                // payload-specific keys like this, so a
+                                // category needs no change on the KKCommunity
+                                // (Swift) side.
+                                it.category = ShaderCategoryNormalize(
+                                    e.metadata[@"category"]);
+                                it.communityEntry = e;
+                                [items addObject:it];
+                                [s _loadCommunityThumbnail:e];
+                              }
+                              s->_community = items;
+                              [s _rebuildAll];
+                            }];
 }
 
 - (void)_loadCommunityThumbnail:(KKCommunityEntry *)e {
@@ -565,7 +575,7 @@ static const CGFloat kHeaderH = 22.0;
 
 - (void)_refresh:(id)sender {
   _communityThumbnails = [NSMutableDictionary dictionary];
-  [self reload]; // re-fetch the community list
+  [self _reloadForcingRefresh:YES]; // bypass the TTL cache, re-fetch now
 }
 
 - (void)_toggleFavFilter:(id)sender {

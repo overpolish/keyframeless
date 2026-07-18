@@ -9,8 +9,64 @@
 #import <Metal/Metal.h>
 #import <simd/simd.h>
 
+// A bundled reference frame for iChannel0 (a real photo: faces, saturated
+// colour, fine texture, brick/textile detail) so a filter that samples /
+// distorts its input previews on genuine detail instead of a flat gradient - a
+// smooth gradient hides displacement / chroma-shift / glitch entirely. Decoded
+// into sRGB-encoded 8-bit BGRA, the same gamma-encoded convention as the
+// gradient fallback (iChannel0 is sampled as gamma-encoded). Returns nil if the
+// asset is missing / undecodable, so the caller falls back to the gradient.
+static id<MTLTexture> ShaderPreviewSourceTexture(id<MTLDevice> device) {
+  NSBundle *bundle =
+      [NSBundle bundleForClass:NSClassFromString(@"ShaderPlugin")];
+  NSURL *url = [bundle URLForResource:@"PreviewSource" withExtension:@"jpg"];
+  if (!url)
+    return nil;
+  NSImage *img = [[NSImage alloc] initWithContentsOfURL:url];
+  CGImageRef cg = [img CGImageForProposedRect:NULL context:nil hints:nil];
+  if (!cg)
+    return nil;
+  NSUInteger w = CGImageGetWidth(cg), h = CGImageGetHeight(cg);
+  if (w == 0 || h == 0)
+    return nil;
+  uint8_t *bytes = (uint8_t *)calloc(w * h * 4, 1);
+  CGColorSpaceRef cs = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+  // Top-row-first (flip the default bottom-left CG origin) so the photo reads
+  // upright through the render + readback flip. If a thumbnail comes out
+  // upside down, drop the translate/scale pair below.
+  CGContextRef ctx = CGBitmapContextCreate(bytes, w, h, 8, w * 4, cs,
+                                           kCGImageAlphaPremultipliedFirst |
+                                               kCGBitmapByteOrder32Little);
+  CGColorSpaceRelease(cs);
+  if (!ctx) {
+    free(bytes);
+    return nil;
+  }
+  CGContextTranslateCTM(ctx, 0, h);
+  CGContextScaleCTM(ctx, 1, -1);
+  CGContextDrawImage(ctx, CGRectMake(0, 0, w, h), cg);
+  CGContextRelease(ctx);
+
+  MTLTextureDescriptor *d = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                   width:w
+                                  height:h
+                               mipmapped:NO];
+  d.usage = MTLTextureUsageShaderRead;
+  d.storageMode = MTLStorageModeShared;
+  id<MTLTexture> tex = [device newTextureWithDescriptor:d];
+  if (tex)
+    [tex replaceRegion:MTLRegionMake2D(0, 0, w, h)
+           mipmapLevel:0
+             withBytes:bytes
+           bytesPerRow:w * 4];
+  free(bytes);
+  return tex;
+}
+
 // A synthetic source for iChannel0: a smooth colour gradient with a soft radial
-// so a shader that samples / distorts its input has something to show.
+// so a shader that samples / distorts its input has something to show. Fallback
+// when the bundled reference frame is unavailable.
 static id<MTLTexture> ShaderTestPatternTexture(id<MTLDevice> device,
                                                NSUInteger w, NSUInteger h) {
   MTLTextureDescriptor *d = [MTLTextureDescriptor
@@ -108,7 +164,10 @@ NSData *ShaderRenderThumbnailJPEG(KKMiniViewerRenderer *renderer, NSUInteger w,
   dd.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
   dd.storageMode = MTLStorageModeShared;
   id<MTLTexture> dest = [device newTextureWithDescriptor:dd];
-  id<MTLTexture> source = ShaderTestPatternTexture(device, w, h);
+  // Real reference frame first (filters need detail); gradient as a fallback.
+  id<MTLTexture> source = ShaderPreviewSourceTexture(device);
+  if (!source)
+    source = ShaderTestPatternTexture(device, w, h);
   if (!dest || !source)
     return nil;
 

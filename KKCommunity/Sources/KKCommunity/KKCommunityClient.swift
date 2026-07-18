@@ -33,28 +33,61 @@ public final class KKCommunityEntry: NSObject {
   }
 }
 
+/// Process-wide TTL cache of fetched entries, keyed by catalog folder. Browsing
+/// the catalog reuses a recent result instead of re-fetching every time a
+/// popover opens; a manual refresh bypasses it. Lives in the (shared) inspector
+/// UI process, so it persists across plugin instances and popover reopens.
+private actor CommunityCache {
+  static let shared = CommunityCache()
+  static let ttl: TimeInterval = 15 * 60  // 15 minutes
+
+  private var store: [String: (fetched: Date, entries: [CommunityEntry])] = [:]
+
+  func cached(_ key: String) -> [CommunityEntry]? {
+    guard let hit = store[key], Date().timeIntervalSince(hit.fetched) < Self.ttl
+    else { return nil }
+    return hit.entries
+  }
+
+  func put(_ key: String, _ entries: [CommunityEntry]) {
+    store[key] = (Date(), entries)
+  }
+}
+
 /// ObjC entry point to the shared community catalog. `catalogFolder` picks the
 /// payload ("Shaders", "Captions"). Read-only for now (publish added next).
 @objc(KKCommunityClient)
 public final class KKCommunityClient: NSObject {
   private let catalog: CommunityCatalog
   private let publisher: CommunityPublisher
+  private let catalogFolder: String
 
   @objc public init(catalogFolder: String) {
     let repo = CommunityRepo(catalogFolder: catalogFolder)
+    self.catalogFolder = catalogFolder
     catalog = CommunityCatalog(repo: repo)
     publisher = CommunityPublisher(repo: repo)
     super.init()
   }
 
-  /// List the catalog's entries. `completion` is always called on the main queue.
+  /// List the catalog's entries. Serves a cached result when one is fresh
+  /// (within the TTL) unless `forceRefresh` is set. `completion` is always
+  /// called on the main queue.
   @objc public func fetchEntries(
+    forceRefresh: Bool,
     completion: @escaping (_ entries: [KKCommunityEntry]?, _ error: String?) -> Void
   ) {
     Task {
+      if !forceRefresh, let cached = await CommunityCache.shared.cached(catalogFolder) {
+        let mapped = cached.map(KKCommunityEntry.init)
+        await MainActor.run { completion(mapped, nil) }
+        return
+      }
       do {
-        let entries = try await catalog.fetchEntries().map(KKCommunityEntry.init)
-        await MainActor.run { completion(entries, nil) }
+        let entries = try await catalog.fetchEntries(bustCache: forceRefresh)
+        await CommunityCache.shared.put(catalogFolder, entries)
+        let mapped = entries.map(KKCommunityEntry.init)
+        await MainActor.run { completion(mapped, nil) }
       } catch {
         await MainActor.run { completion(nil, error.localizedDescription) }
       }
