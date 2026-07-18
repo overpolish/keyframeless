@@ -87,6 +87,32 @@ BOOL KKWantsAlphaOutput(NSString *src) {
                           range:NSMakeRange(0, src.length)] != nil;
 }
 
+ShaderMotionBlurMode ShaderMotionBlurModeForSource(NSString *src) {
+  if (!src.length)
+    return ShaderMotionBlurModeAccumulate;
+  static NSRegularExpression *re;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    re = [NSRegularExpression
+        regularExpressionWithPattern:
+            @"(?m)^[ \\t]*//[ \\t]*#motionblur[ \\t]+([a-zA-Z]+)"
+                             options:0
+                               error:nil];
+  });
+  NSTextCheckingResult *m = [re firstMatchInString:src
+                                           options:0
+                                             range:NSMakeRange(0, src.length)];
+  if (!m || [m rangeAtIndex:1].location == NSNotFound)
+    return ShaderMotionBlurModeAccumulate;
+  NSString *word =
+      [[src substringWithRange:[m rangeAtIndex:1]] lowercaseString];
+  if ([word isEqualToString:@"native"])
+    return ShaderMotionBlurModeNative;
+  if ([word isEqualToString:@"off"] || [word isEqualToString:@"none"])
+    return ShaderMotionBlurModeOff;
+  return ShaderMotionBlurModeAccumulate;
+}
+
 // Fold a GL-Transitions shader into the image-shader convention.
 //
 // Both rewrites are LINE-COUNT SAFE so a glslang error still maps to the

@@ -146,7 +146,7 @@ NSString *ShaderSectionNameForFile(NSString *fileName) {
              author:(NSString *)author
            category:(NSString *)category
            sections:(NSDictionary<NSString *, NSString *> *)sections
-         previewPNG:(NSData *)previewPNG {
+        previewJPEG:(NSData *)previewJPEG {
   NSFileManager *fm = [NSFileManager defaultManager];
   NSString *root = [self rootDirectory];
 
@@ -176,9 +176,9 @@ NSString *ShaderSectionNameForFile(NSString *fileName) {
                 error:nil];
   }
 
-  if (previewPNG)
-    [previewPNG writeToFile:[dir stringByAppendingPathComponent:@"preview.png"]
-                 atomically:YES];
+  if (previewJPEG)
+    [previewJPEG writeToFile:[dir stringByAppendingPathComponent:@"preview.jpg"]
+                  atomically:YES];
 
   NSDictionary *meta = @{
     @"id" : entryID,
@@ -190,7 +190,7 @@ NSString *ShaderSectionNameForFile(NSString *fileName) {
     // category instead of quietly rewriting it.
     @"category" : category.length ? category : kShaderCategoryDefault,
     @"version" : @(version),
-    @"preview" : @"preview.png",
+    @"preview" : @"preview.jpg",
   };
   NSData *metaData = [NSJSONSerialization
       dataWithJSONObject:meta
@@ -234,7 +234,7 @@ NSString *ShaderSectionNameForFile(NSString *fileName) {
                   category:(NSString *)category
                    version:(NSInteger)version
                   sections:(NSDictionary<NSString *, NSString *> *)sections
-                previewPNG:(NSData *)previewPNG {
+               previewJPEG:(NSData *)previewJPEG {
   NSFileManager *fm = [NSFileManager defaultManager];
   NSString *dir = [[self rootDirectory] stringByAppendingPathComponent:entryID];
   [fm removeItemAtPath:dir error:nil]; // replace on update
@@ -252,9 +252,9 @@ NSString *ShaderSectionNameForFile(NSString *fileName) {
              encoding:NSUTF8StringEncoding
                 error:nil];
   }
-  if (previewPNG)
-    [previewPNG writeToFile:[dir stringByAppendingPathComponent:@"preview.png"]
-                 atomically:YES];
+  if (previewJPEG)
+    [previewJPEG writeToFile:[dir stringByAppendingPathComponent:@"preview.jpg"]
+                  atomically:YES];
   NSDictionary *meta = @{
     @"id" : entryID,
     @"name" : name ?: @"",
@@ -265,7 +265,7 @@ NSString *ShaderSectionNameForFile(NSString *fileName) {
     // unknown shows as the default without losing what it really is.
     @"category" : category.length ? category : kShaderCategoryDefault,
     @"version" : @(version),
-    @"preview" : @"preview.png",
+    @"preview" : @"preview.jpg",
     @"community" : @YES,
   };
   [[NSJSONSerialization
@@ -340,7 +340,7 @@ static NSString *const kFavKey = @"ShaderFavorites";
     // Auto-format GLSL sections on publish so community shaders are clean and
     // consistent whether or not the author ran Format (and this catches
     // entries saved before the Format button existed). Non-code payloads
-    // (preview.png) and any undecodable source ship unchanged; KKFormatGLSL
+    // (preview.jpg) and any undecodable source ship unchanged; KKFormatGLSL
     // itself returns the input untouched on an astyle error, and is idempotent
     // so re-publishing a version is stable.
     if ([file.pathExtension isEqualToString:@"glsl"]) {

@@ -297,6 +297,10 @@ static NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
   return _paletteGeneratorBar;
 }
 
+- (CGFloat)labelColumnWidth {
+  return _labelColumnW;
+}
+
 - (BOOL)renderShapeMatchesLane:(KKLane *)lane {
   // The field editors, seed control, choice pill, checkbox, and unit/decimal
   // formatting are all built once from the lane. A directive edit that changes

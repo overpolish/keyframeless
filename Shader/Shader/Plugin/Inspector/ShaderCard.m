@@ -59,12 +59,19 @@ const CGFloat kShaderCardNameH = 16.0;
   // Clamped to a third of the card, because the shader's own name is what
   // people scan for; the full author is a hover away.
   if (item.author.length) {
+    // The tint has to be OPAQUE: expanding grows the capsule left across the
+    // name (see below), and a 15% translucent fill let the title bleed through,
+    // reading as if the badge sat under it. Bake the same 15% accent onto the
+    // card's own background so it still looks like a light accent chip, but now
+    // occludes what it slides over.
+    NSColor *authorFill = [[NSColor controlBackgroundColor]
+        blendedColorWithFraction:0.15
+                         ofColor:[NSColor accentMatchingHost]];
     _authorBadge =
         [[_ShaderBadge alloc] initWithSymbol:@"person.fill"
                                         text:item.author
                                        color:[NSColor accentMatchingHost]
-                                        fill:[[NSColor accentMatchingHost]
-                                                 colorWithAlphaComponent:0.15]
+                                        fill:authorFill
                                     maxWidth:floor(_w / 3.0)];
     NSRect af = _authorBadge.frame;
     af.origin = NSMakePoint(_w - 1 - NSWidth(af),

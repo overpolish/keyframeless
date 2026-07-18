@@ -7,6 +7,7 @@
 
 #import "Constants.h" // ShaderCustomDefaultShaderSource
 #import "ShaderCategory.h"
+#import "ShaderDirectives.h" // #color / #float ... default parsing
 #import "ShaderInspectorView+Guides.h"
 #import "ShaderInspectorView_Private.h"
 #import "ShaderLocalCatalog.h"
@@ -18,6 +19,91 @@
 @import KKCommunity;
 
 static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
+
+// Default keypose values a directive lane seeds for `label`, given a shader
+// `source` - the SAME seed the lane catalog uses (ShaderMakeColorLane /
+// ShaderAppendScalarLanes): a colour honours `default="#hex"` else the built-in
+// palette; a scalar honours its `default=`. Returns nil when `label` isn't a
+// directive lane this source declares (a Core lane, or an untracked label) or
+// when the lane's default isn't a single constant to compare (the #progress
+// ramp) - callers leave those untouched.
+static NSArray<NSNumber *> *
+ShaderDirectiveDefaultValuesForLabel(NSString *source, NSString *label) {
+  if (!source.length || !label.length)
+    return nil;
+
+  // Scalars: identity is the uniform name.
+  ShaderScalarProp sp[KK_SHADER_MAX_SCALAR_PROPS];
+  int used = 0;
+  int ns =
+      ShaderParseScalarProps(source, sp, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
+  for (int i = 0; i < ns; i++) {
+    if (![label isEqualToString:@(sp[i].name)])
+      continue;
+    if (sp[i].isProgress)
+      return nil; // a ramp, not a constant - leave it alone
+    if (sp[i].isPoint)
+      return @[ @(sp[i].pdefx), @(sp[i].pdefy) ];
+    if (sp[i].isMulti) {
+      NSMutableArray<NSNumber *> *d = [NSMutableArray array];
+      for (int k = 0; k < sp[i].fieldCount && k < 4; k++)
+        [d addObject:@(sp[i].mdef[k])];
+      return d;
+    }
+    return @[ @(sp[i].isChoice ? (double)sp[i].cdefault : sp[i].fdefault) ];
+  }
+
+  // Colours: single = uniform name; array = "<name> Count" + "<name> N". Match
+  // the catalog seed (defColors else palette; a single colour uses the prop
+  // index, a swatch its own index).
+  ShaderColorProp cp[KK_SHADER_MAX_COLOR_PROPS];
+  int pool = 0;
+  int nc = ShaderParseColorProps(source, cp, KK_SHADER_MAX_COLOR_PROPS, &pool);
+  for (int i = 0; i < nc; i++) {
+    NSString *name = @(cp[i].name);
+    if (!cp[i].isArray) {
+      if ([label isEqualToString:name]) {
+        const float *d = cp[i].hasDefColors ? cp[i].defColors[0]
+                                            : kShaderDefaultPalette[i % 10];
+        return @[ @(d[0]), @(d[1]), @(d[2]), @(d[3]) ];
+      }
+      continue;
+    }
+    if ([label isEqualToString:[NSString stringWithFormat:@"%@ Count", name]])
+      return @[ @(cp[i].defaultCount) ];
+    for (int n = 1; n <= cp[i].maxCount; n++)
+      if ([label
+              isEqualToString:[NSString stringWithFormat:@"%@ %d", name, n]]) {
+        const float *d = (cp[i].hasDefColors && (n - 1) < cp[i].defColorCount)
+                             ? cp[i].defColors[n - 1]
+                             : kShaderDefaultPalette[(n - 1) % 10];
+        return @[ @(d[0]), @(d[1]), @(d[2]), @(d[3]) ];
+      }
+  }
+  return nil;
+}
+
+static BOOL ShaderValueArraysApproxEqual(NSArray<NSNumber *> *a,
+                                         NSArray<NSNumber *> *b) {
+  if (a.count != b.count)
+    return NO;
+  for (NSUInteger i = 0; i < a.count; i++)
+    if (fabs(a[i].doubleValue - b[i].doubleValue) > 1e-4)
+      return NO;
+  return YES;
+}
+
+// A lane sits at its plain default when it holds exactly one keypose, at t=0,
+// whose values match `values`. An animated lane (>1 keypose) or one whose
+// constant was changed reads as user-touched and is left alone.
+static BOOL ShaderLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
+  if (lane.keyposes.count != 1)
+    return NO;
+  KKKeyPose *kp = lane.keyposes.firstObject;
+  if (fabs(kp.time) > 1e-6)
+    return NO;
+  return ShaderValueArraysApproxEqual(kp.values, values);
+}
 
 @implementation ShaderInspectorView
 
@@ -105,10 +191,10 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
       lane.codeString = e.sections[@"Image"];
       t.lanes = @[ lane ];
       r.timeline = t;
-      NSData *png = ShaderRenderThumbnailPNG(r, 320, 180);
-      if (png)
+      NSData *jpeg = ShaderRenderThumbnailJPEG(r, 320, 180);
+      if (jpeg)
         [ShaderLocalCatalog
-            setBuiltinThumbnail:[[NSImage alloc] initWithData:png]
+            setBuiltinThumbnail:[[NSImage alloc] initWithData:jpeg]
                         forName:e.name];
     }
   });
@@ -135,7 +221,7 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
     if (sName.length && code.length)
       dict[sName] = code;
   }
-  NSData *preview = ShaderRenderThumbnailPNG(_miniViewerRenderer, 320, 180);
+  NSData *preview = ShaderRenderThumbnailJPEG(_miniViewerRenderer, 320, 180);
   // No author by default - never derive it from the account name (privacy). The
   // user can add an author when publishing.
   [[ShaderLocalCatalog shared]
@@ -144,7 +230,7 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
              category:ShaderCategoryAtIndex(
                           note.userInfo[KKCodeEditorSaveCategoryIndexKey])
              sections:dict
-           previewPNG:preview];
+          previewJPEG:preview];
   [_browserController
       refreshLocal]; // local save; show the new card, no re-fetch
 }
@@ -175,13 +261,22 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
                                           .whitespaceAndNewlineCharacterSet];
   NSDictionary<NSString *, NSData *> *files =
       [[ShaderLocalCatalog shared] publishFilesForEntry:entry];
+  // Name the preview after whatever the entry actually shipped (the sole
+  // non-`.glsl` file), so a legacy `preview.png` save and a new `preview.jpg`
+  // one both publish metadata that resolves to the real file.
+  NSString *previewName = @"preview.jpg";
+  for (NSString *f in files)
+    if (![f.pathExtension isEqualToString:@"glsl"]) {
+      previewName = f;
+      break;
+    }
   NSDictionary *meta = @{
     @"id" : entry.entryID,
     @"name" : entry.name,
     @"author" : author ?: @"",
     @"category" : entry.category ?: kShaderCategoryDefault,
     @"version" : @(entry.version),
-    @"preview" : @"preview.png",
+    @"preview" : previewName,
   };
   NSData *metaJSON =
       [NSJSONSerialization dataWithJSONObject:meta
@@ -247,6 +342,30 @@ static NSString *const kShaderIntroSeenKey = @"ShaderIntroSeen";
   }
   if (!found)
     return;
+
+  // Reset every shader-declared control (colours, #float / #point / ... props)
+  // to the loaded template's defaults. Switching shaders is a compare-looks
+  // activity, so each one should come up AS AUTHORED rather than carrying the
+  // previous shader's palette/values (which rarely mean the same thing on a
+  // different shader). The shared Core lanes (Speed / Seed / Grain) are left
+  // alone - they're a global feel the user dials in, not part of any shader's
+  // look, so the helper returns nil for them and we skip them.
+  NSString *newSource =
+      image.length ? image : ShaderCustomDefaultShaderSource();
+  for (NSUInteger i = 0; i < lanes.count; i++) {
+    KKLane *lane = lanes[i];
+    if (lane.valueType == KKLaneValueTypeCode)
+      continue;
+    NSArray<NSNumber *> *def =
+        ShaderDirectiveDefaultValuesForLabel(newSource, lane.label);
+    if (!def)
+      continue; // Core lane, or not declared by the new source
+    if (ShaderLaneIsAtConstant(lane, def))
+      continue; // already at the new default - no-op
+    KKLane *reset = [lane copy];
+    reset.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:def] ];
+    lanes[i] = reset;
+  }
 
   KKTimeline *updated = [current copy];
   updated.lanes = lanes;

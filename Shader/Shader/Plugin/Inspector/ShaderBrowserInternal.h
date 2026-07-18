@@ -41,7 +41,11 @@ typedef NS_ENUM(NSInteger, _ShaderItemKind) {
 @property(nonatomic, strong, nullable) KKCommunityEntry *communityEntry;
 @end
 
+// The scroll's document view. Flipped so cards anchor at the top, and it
+// reports its laid-out card height as its intrinsic size so KKPaddedScrollView
+// (which pins width + top, not height) grows it and drives its edge fades.
 @interface _ShaderFlippedView : NSView
+@property(nonatomic) CGFloat contentHeight;
 @end
 
 // The card name field, editable inline. In a ViewBridge panel key events arrive

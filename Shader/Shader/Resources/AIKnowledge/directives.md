@@ -97,6 +97,30 @@ Unlike every other directive, its lane defaults to a **ramp** rather than a cons
 
 Use `iProgress` when the shader should always run linearly; use `#progress` when the transition's pacing is worth exposing. Note the uniform receives **0..1** even though the inspector shows 0-100%, matching `#percent`.
 
+### `#motionblur` (who owns the blur)
+
+The user's **Motion Blur** popover (on/off, shutter, samples) is separate from any directive. `// #motionblur <mode>` (on its own line, no uniform) only decides **who applies** those settings. Absent, the default is `accumulate`.
+
+- **`accumulate`** (default): the plugin re-renders the shader at N sub-frame times across the shutter and averages them. Correct for any ordinary animated single-pass shader with **nothing to declare** - it just works. (A multi-pass shader can't be accumulated, so it silently renders once; declare `native` instead.)
+- **`native`**: the shader **blurs itself** - a feedback trail, or its own internal sampling loop. The plugin renders once and hands you the popover settings as globals:
+  - **`iMotionBlur`** - shutter as `0..1` (`0` when Motion Blur is off). Map it onto your effect, e.g. a trail's decay.
+  - **`iMotionBlurSamples`** - the sample count, if you loop internally.
+- **`off`**: no motion blur for this shader.
+
+```glsl
+// #motionblur native
+
+void mainImage(out vec4 O, in vec2 fc) {
+  vec2 uv = fc / iResolution.xy;
+  // longer shutter -> longer trail (a feedback shader would read its own
+  // previous frame from a Buffer; shown here as a decay factor).
+  float trail = mix(0.85, 0.98, iMotionBlur);
+  // ...
+}
+```
+
+Reach for `native` only when the shader genuinely produces its own smear (trails / feedback) or wants an internal loop; otherwise leave it off and let `accumulate` handle it.
+
 ### Common attributes
 
 - `label="Nice Name"` - inspector display name (defaults to a prettified uniform name: `uCornerRadius` -> "Corner Radius").

@@ -15,7 +15,6 @@
 
 static const CGFloat kCardGap = 10.0;
 static const CGFloat kHeaderH = 22.0;
-static const CGFloat kEdgeFadeH = 14.0;
 
 @interface ShaderBrowserView () <_ShaderCardOwner, NSSearchFieldDelegate>
 @end
@@ -28,14 +27,12 @@ static const CGFloat kEdgeFadeH = 14.0;
   NSButton *_refreshButton;
   KKPillToggleRowView *_categoryPills;
   NSView *_well;
-  NSScrollView *_scroll;
+  KKPaddedScrollView *_scrollContainer; // shared scroll + edge-fade shadows
   _ShaderFlippedView *_doc;
   NSTextField *_empty;
   NSMutableArray<_ShaderCard *> *_cards;
   _ShaderCard *_hovered;
   id _mouseMonitor;
-  CAGradientLayer *_topFade;
-  CAGradientLayer *_bottomFade;
   NSArray<_ShaderBrowserItem *> *_community; // raw fetched (entryID + entry)
   NSMutableDictionary<NSString *, NSImage *> *_communityThumbnails;
   BOOL _fetching;
@@ -104,37 +101,19 @@ static const CGFloat kEdgeFadeH = 14.0;
   _well.layer.masksToBounds = YES;
   [self addSubview:_well];
 
-  _scroll = [[NSScrollView alloc] initWithFrame:NSZeroRect];
-  _scroll.translatesAutoresizingMaskIntoConstraints = NO;
-  _scroll.drawsBackground = NO;
-  _scroll.hasVerticalScroller = YES;
-  _scroll.hasHorizontalScroller = NO;
-  _scroll.scrollerStyle = NSScrollerStyleOverlay;
+  // The shared scroll container owns the scroll view, the flipped clip, and the
+  // top/bottom edge-fade shadows (alpha crossfades with scroll position). Same
+  // component the constants popover and the other plugins use - don't hand-roll
+  // the fades. The doc grows by its intrinsic height (set per rebuild).
   _doc = [[_ShaderFlippedView alloc] initWithFrame:NSZeroRect];
-  _scroll.documentView = _doc;
-  _scroll.contentView.postsBoundsChangedNotifications = YES;
-  [[NSNotificationCenter defaultCenter]
-      addObserver:self
-         selector:@selector(_scrolled)
-             name:NSViewBoundsDidChangeNotification
-           object:_scroll.contentView];
-  [_well addSubview:_scroll];
+  _scrollContainer = [[KKPaddedScrollView alloc] initWithDocumentView:_doc
+                                                              padding:0];
+  _scrollContainer.translatesAutoresizingMaskIntoConstraints = NO;
+  [_well addSubview:_scrollContainer];
 
   _empty = [self _centeredLabel:@""];
   _empty.hidden = YES;
   [_well addSubview:_empty];
-
-  id opaque =
-      (__bridge id)[[NSColor blackColor] colorWithAlphaComponent:0.35].CGColor;
-  id clear = (__bridge id)[NSColor clearColor].CGColor;
-  _topFade = [CAGradientLayer layer];
-  _topFade.colors = @[ opaque, clear ];
-  _topFade.opacity = 0.0;
-  _bottomFade = [CAGradientLayer layer];
-  _bottomFade.colors = @[ clear, opaque ];
-  _bottomFade.opacity = 0.0;
-  [_well.layer addSublayer:_topFade];
-  [_well.layer addSublayer:_bottomFade];
 
   [NSLayoutConstraint activateConstraints:@[
     [_title.topAnchor constraintEqualToAnchor:self.topAnchor
@@ -176,10 +155,12 @@ static const CGFloat kEdgeFadeH = 14.0;
                                          constant:-KKPaddingSM],
     [_well.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
                                        constant:-KKPaddingSM],
-    [_scroll.topAnchor constraintEqualToAnchor:_well.topAnchor],
-    [_scroll.leadingAnchor constraintEqualToAnchor:_well.leadingAnchor],
-    [_scroll.trailingAnchor constraintEqualToAnchor:_well.trailingAnchor],
-    [_scroll.bottomAnchor constraintEqualToAnchor:_well.bottomAnchor],
+    [_scrollContainer.topAnchor constraintEqualToAnchor:_well.topAnchor],
+    [_scrollContainer.leadingAnchor
+        constraintEqualToAnchor:_well.leadingAnchor],
+    [_scrollContainer.trailingAnchor
+        constraintEqualToAnchor:_well.trailingAnchor],
+    [_scrollContainer.bottomAnchor constraintEqualToAnchor:_well.bottomAnchor],
     [_empty.centerXAnchor constraintEqualToAnchor:_well.centerXAnchor],
     [_empty.centerYAnchor constraintEqualToAnchor:_well.centerYAnchor],
     [_empty.widthAnchor constraintLessThanOrEqualToAnchor:_well.widthAnchor
@@ -391,7 +372,7 @@ static const CGFloat kEdgeFadeH = 14.0;
   [_cards removeAllObjects];
   _hovered = nil;
 
-  CGFloat width = NSWidth(_scroll.contentView.bounds);
+  CGFloat width = NSWidth(_doc.bounds);
   if (width <= 0)
     width = NSWidth(_well.bounds);
   // Two columns that split the width 50/50 (cards fill, no big right margin).
@@ -431,15 +412,16 @@ static const CGFloat kEdgeFadeH = 14.0;
                 leftPad:leftPad
                   width:width];
 
-  _doc.frame =
-      NSMakeRect(0, 0, width, MAX(y, NSHeight(_scroll.contentView.bounds)));
+  // Grow the document to the laid-out card height. The scroll container reads
+  // this via the doc's intrinsic size (it pins width + top, not height) and
+  // updates its edge-fade shadows off the resulting scroll range.
+  _doc.contentHeight = y;
   BOOL none = (keyframeless.count + custom.count) == 0 && !_fetching;
   _empty.hidden = !none;
   BOOL filtering = _query.length || _favoritesOnly || _categoryFilter.count;
   _empty.stringValue = filtering
                            ? RLoc(@"No matching shaders", @"No filter results.")
                            : RLoc(@"No shaders yet.", @"Empty browser state.");
-  [self _scrolled];
 }
 
 - (CGFloat)_addSection:(NSString *)title
@@ -518,34 +500,6 @@ static const CGFloat kEdgeFadeH = 14.0;
           [c setThumbnail:img];
     });
   });
-}
-
-- (void)layout {
-  [super layout];
-  CGFloat w = NSWidth(_well.bounds), h = NSHeight(_well.bounds);
-  [CATransaction begin];
-  [CATransaction setDisableActions:YES];
-  _topFade.frame = CGRectMake(0, h - kEdgeFadeH, w, kEdgeFadeH);
-  _bottomFade.frame = CGRectMake(0, 0, w, kEdgeFadeH);
-  [CATransaction commit];
-}
-
-- (void)_scrolled {
-  CGFloat docH = NSHeight(_doc.frame);
-  CGFloat visH = NSHeight(_scroll.contentView.bounds);
-  CGFloat offY = _scroll.contentView.bounds.origin.y;
-  CGFloat scrollable = docH - visH;
-  [CATransaction begin];
-  [CATransaction setDisableActions:YES];
-  if (scrollable <= 0.5) {
-    _topFade.opacity = 0.0;
-    _bottomFade.opacity = 0.0;
-  } else {
-    _topFade.opacity = (float)MAX(0.0, MIN(1.0, offY / kEdgeFadeH));
-    _bottomFade.opacity =
-        (float)MAX(0.0, MIN(1.0, (scrollable - offY) / kEdgeFadeH));
-  }
-  [CATransaction commit];
 }
 
 - (void)viewDidMoveToWindow {
@@ -677,9 +631,13 @@ static const CGFloat kEdgeFadeH = 14.0;
                  return;
                NSMutableDictionary<NSString *, NSString *> *sections =
                    [NSMutableDictionary dictionary];
+               // The preview is whatever the entry's metadata names
+               // (preview.jpg now, preview.png for anything published before
+               // the switch), so a hard-coded filename can't miss it.
+               NSString *previewName = e.metadata[@"preview"] ?: @"preview.jpg";
                NSData *preview = nil;
                for (NSString *file in files) {
-                 if ([file isEqualToString:@"preview.png"]) {
+                 if ([file isEqualToString:previewName]) {
                    preview = files[file];
                    continue;
                  }
@@ -699,7 +657,7 @@ static const CGFloat kEdgeFadeH = 14.0;
                              category:e.metadata[@"category"]
                               version:e.version
                              sections:sections
-                           previewPNG:preview];
+                          previewJPEG:preview];
                [weak _rebuildAll];
              }];
 }

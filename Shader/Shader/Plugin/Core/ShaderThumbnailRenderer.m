@@ -48,7 +48,7 @@ static id<MTLTexture> ShaderTestPatternTexture(id<MTLDevice> device,
   return tex;
 }
 
-static NSData *ShaderPNGFromTexture(id<MTLTexture> tex) {
+static NSData *ShaderJPEGFromTexture(id<MTLTexture> tex) {
   NSUInteger w = tex.width, h = tex.height, bpr = w * 4;
   uint8_t *bytes = (uint8_t *)malloc(h * bpr);
   [tex getBytes:bytes
@@ -82,11 +82,18 @@ static NSData *ShaderPNGFromTexture(id<MTLTexture> tex) {
   for (NSUInteger y = 0; y < h; y++)
     memcpy(dst + y * bpr, bytes + (h - 1 - y) * bpr, bpr);
   free(bytes);
-  return [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+  // JPEG, not PNG. Shader previews are smooth gradients - the worst case for
+  // PNG's lossless run-length coding, which leaves them near 80KB. They're
+  // opaque composites over an opaque test source, so alpha is moot, and JPEG at
+  // 0.8 lands them near 10KB with no visible loss at thumbnail size.
+  return [rep representationUsingType:NSBitmapImageFileTypeJPEG
+                           properties:@{
+                             NSImageCompressionFactor : @0.8
+                           }];
 }
 
-NSData *ShaderRenderThumbnailPNG(KKMiniViewerRenderer *renderer, NSUInteger w,
-                                 NSUInteger h) {
+NSData *ShaderRenderThumbnailJPEG(KKMiniViewerRenderer *renderer, NSUInteger w,
+                                  NSUInteger h) {
   if (!renderer || w == 0 || h == 0)
     return nil;
   id<MTLDevice> device = MTLCreateSystemDefaultDevice();
@@ -111,5 +118,5 @@ NSData *ShaderRenderThumbnailPNG(KKMiniViewerRenderer *renderer, NSUInteger w,
     return nil;
   [cb commit];
   [cb waitUntilCompleted];
-  return ShaderPNGFromTexture(dest);
+  return ShaderJPEGFromTexture(dest);
 }

@@ -35,7 +35,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Local store of saved shaders under Application Support. Each entry is a
 /// folder `Shaders/<uuid>/` holding `metadata.json`, one `.glsl` per section
-/// (`image.glsl`/`common.glsl`/`buffer-a.glsl`..) and `preview.png`.
+/// (`image.glsl`/`common.glsl`/`buffer-a.glsl`..) and `preview.jpg`.
 @interface ShaderLocalCatalog : NSObject
 + (instancetype)shared;
 
@@ -51,15 +51,16 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setBuiltinThumbnail:(nullable NSImage *)image forName:(NSString *)name;
 
 /// Save the given sections as a new UUID-keyed entry. Never overwrites an
-/// existing entry by name, so duplicate names are fine. `previewPNG` is optional
-/// (a placeholder is used until a real thumbnail is rendered). `category` is a
-/// ShaderCategory.h id (nil = the default). Returns the written entry.
+/// existing entry by name, so duplicate names are fine. `previewJPEG` is
+/// optional (a placeholder is used until a real thumbnail is rendered).
+/// `category` is a ShaderCategory.h id (nil = the default). Returns the written
+/// entry.
 - (ShaderCatalogEntry *)
     saveShaderNamed:(NSString *)name
              author:(NSString *)author
            category:(nullable NSString *)category
            sections:(NSDictionary<NSString *, NSString *> *)sections
-         previewPNG:(nullable NSData *)previewPNG;
+        previewJPEG:(nullable NSData *)previewJPEG;
 
 /// Delete a saved entry by id (also uninstalls a downloaded community shader).
 - (void)deleteEntryID:(NSString *)entryID;
@@ -73,7 +74,7 @@ NS_ASSUME_NONNULL_BEGIN
                   category:(nullable NSString *)category
                    version:(NSInteger)version
                   sections:(NSDictionary<NSString *, NSString *> *)sections
-                previewPNG:(nullable NSData *)previewPNG;
+               previewJPEG:(nullable NSData *)previewJPEG;
 
 /// Installed version of a community shader (0 = not installed).
 - (NSInteger)installedVersionForID:(NSString *)entryID;
@@ -87,7 +88,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)toggleFavorite:(NSString *)entryID;
 
 /// The files a publish needs: filename -> bytes (`.glsl` per section +
-/// `preview.png`), NOT including metadata.json (the caller builds that).
+/// `preview.jpg`), NOT including metadata.json (the caller builds that).
 - (NSDictionary<NSString *, NSData *> *)publishFilesForEntry:
     (ShaderCatalogEntry *)entry;
 @end

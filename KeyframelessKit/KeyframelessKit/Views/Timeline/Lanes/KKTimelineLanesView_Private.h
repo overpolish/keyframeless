@@ -106,6 +106,12 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// directive edited from `// #float` to `// #percent` (adds a % unit + integer
 /// formatting) or `// #seed` to `// #float` (dice control <-> number field).
 - (BOOL)renderShapeMatchesLane:(KKLane *)lane;
+/// The uniform label-column width this row was built with. The host compares it
+/// against the current shared column on a rows update: when the widest lane
+/// name changes the column shifts, and a reused (applyLane'd) row can't adopt
+/// the new width in place, so a mismatch forces a remake (else its value
+/// control starts at a different x than the rows around it).
+@property(nonatomic, readonly) CGFloat labelColumnWidth;
 /// New constant values for the lane (Float: [v]; Crop: [w,h,x,y]).
 @property(nonatomic, copy, nullable) void (^onValue)
     (NSArray<NSNumber *> *values);

@@ -67,6 +67,28 @@ static const CGFloat kSlideDistance = 12.0;
   [_browser refreshLocal];
 }
 
+// Resizable rounded-rect mask. NSVisualEffectView uses this both to clip the
+// vibrancy AND to shape the window shadow, so the shadow follows the corners
+// instead of the window's square backing (a plain layer cornerRadius leaves the
+// hasShadow shadow rectangular - the "blocky shadow"). Mirrors the Canvas layer
+// list panel.
++ (NSImage *)_roundedMaskImageWithRadius:(CGFloat)radius {
+  CGFloat dim = radius * 2.0 + 1.0;
+  NSImage *image =
+      [NSImage imageWithSize:NSMakeSize(dim, dim)
+                     flipped:NO
+              drawingHandler:^BOOL(NSRect rect) {
+                [[NSColor blackColor] set];
+                [[NSBezierPath bezierPathWithRoundedRect:rect
+                                                 xRadius:radius
+                                                 yRadius:radius] fill];
+                return YES;
+              }];
+  image.capInsets = NSEdgeInsetsMake(radius, radius, radius, radius);
+  image.resizingMode = NSImageResizingModeStretch;
+  return image;
+}
+
 - (NSPanel *)_ensurePanel {
   if (_panel)
     return _panel;
@@ -122,10 +144,13 @@ static const CGFloat kSlideDistance = 12.0;
     fx.blendingMode = NSVisualEffectBlendingModeBehindWindow;
     fx.state = NSVisualEffectStateActive;
     fx.wantsLayer = YES;
-    fx.layer.cornerRadius = kPanelCornerRadius;
     fx.layer.borderColor = NSColor.separatorColor.CGColor;
     fx.layer.borderWidth = 1.0;
-    fx.layer.masksToBounds = YES;
+    // Round via a mask image (not layer cornerRadius): the mask shapes the
+    // window shadow too, so hasShadow follows the corners instead of drawing a
+    // square shadow past them. The hairline border is clipped to the same shape.
+    fx.maskImage =
+        [ShaderBrowserController _roundedMaskImageWithRadius:kPanelCornerRadius];
     content.frame = fx.bounds;
     [fx addSubview:content];
     p.contentView = fx;

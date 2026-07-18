@@ -12,6 +12,7 @@
 
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMiniViewerFeed.h>
+#import <KeyframelessKit/KKMotionBlur.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -86,13 +87,25 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
   return u;
 }
 
-// Single pass: source clip -> iChannel0, the "To" well -> iChannel1, noise ->
-// the rest.
-- (BOOL)_renderSinglePassWithUniforms:(KKGLSLUniforms)u
-                                 base:(const ShaderPluginState *)base
-                               source:(NSString *)effectiveSource
-                     destinationImage:(FxImageTile *)destinationImage
-                         sourceImages:(NSArray<FxImageTile *> *)sourceImages {
+// A prepared single-pass draw: binds the per-sample uniforms + colour pool and
+// issues the full-screen shader draw into whatever encoder it is handed. The
+// source-dependent setup (pipeline, transpile, gamma-encoded source textures,
+// noise/samplers) is captured ONCE, so motion blur can reuse it across N
+// sub-frame samples, varying only the uniforms and pool per sample.
+typedef void (^ShaderSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
+                                     NSArray<id<MTLTexture>> *inputTextures,
+                                     KKGLSLUniforms u,
+                                     const simd_float4 *colorPool,
+                                     int poolCount);
+
+// Builds a ShaderSinglePassDraw for `effectiveSource`. `linearDst` (float dest)
+// triggers the gamma-encode of the linear sources - done once here and shared
+// across all samples. Returns nil if even the error-pattern pipeline fails.
+- (nullable ShaderSinglePassDraw)
+    _singlePassDrawForSource:(NSString *)effectiveSource
+            destinationImage:(FxImageTile *)destinationImage
+                sourceImages:(NSArray<FxImageTile *> *)sourceImages
+                   linearDst:(BOOL)linearDst {
   id<MTLRenderPipelineState> customPS =
       [self customPipelineForSource:effectiveSource
                    destinationImage:destinationImage];
@@ -102,7 +115,7 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
                             destinationImage:destinationImage];
   }
   if (!customPS)
-    return NO;
+    return nil;
   KKGLSLTranspileResult *tr = KKTranspileGLSL(effectiveSource);
   KKMetalDeviceCache *dc = [KKMetalDeviceCache sharedCache];
   uint64_t registryID = destinationImage.deviceRegistryID;
@@ -120,15 +133,15 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
       metalTextureForDevice:device];
   // Gamma-encode the linear sources so a Shadertoy shader (gamma-space input,
   // output re-decoded for the float dest) round-trips them instead of
-  // double-decoding + darkening. extra.w==0 == float/linear dest; an 8-bit dest
+  // double-decoding + darkening. linearDst == float/linear dest; an 8-bit dest
   // already carries gamma source, so leave it untouched. BOTH channels get the
   // same treatment: a transition blending a gamma A against a linear B would
   // tear across the mix.
   //
-  // gammaSrc stays nil when nothing was encoded - the encode block below then
+  // gammaSrc stays nil when nothing was encoded - the draw block below then
   // falls back to its own inputTextures[0].
   id<MTLTexture> gammaSrc = nil, gammaTo = rawTo;
-  if (u.extra.w == 0.0f && (sourceImages.count || rawTo)) {
+  if (linearDst && (sourceImages.count || rawTo)) {
     id<MTLTexture> rawSrc = sourceImages.count
                                 ? [sourceImages[0] metalTextureForDevice:device]
                                 : nil;
@@ -144,6 +157,47 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
       [dc returnCommandQueueToCache:gq];
   }
   id<MTLTexture> toTex = gammaTo;
+  return ^(id<MTLRenderCommandEncoder> encoder,
+           NSArray<id<MTLTexture>> *inputTextures, KKGLSLUniforms u,
+           const simd_float4 *colorPool, int poolCount) {
+    [encoder setRenderPipelineState:customPS];
+    id<MTLTexture> src =
+        gammaSrc ?: (inputTextures.count ? inputTextures[0] : nil);
+    KKGLSLUniforms uu = u;
+    if (src)
+      uu.chanRes[0] =
+          (simd_float4){(float)src.width, (float)src.height, 1.0f, 0.0f};
+    if (toTex)
+      uu.chanRes[1] =
+          (simd_float4){(float)toTex.width, (float)toTex.height, 1.0f, 0.0f};
+    KKBindGLSLUniforms(encoder, &uu, colorPool, poolCount);
+    KKBindCustomChannelTextures(encoder, tr,
+                                @[
+                                  src ?: (id)[NSNull null],
+                                  toTex ?: (id)[NSNull null], [NSNull null],
+                                  [NSNull null]
+                                ],
+                                srcSampler, noiseTex, chSampler);
+    [encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip
+                vertexStart:0
+                vertexCount:4];
+  };
+}
+
+// Single pass: source clip -> iChannel0, the "To" well -> iChannel1, noise ->
+// the rest.
+- (BOOL)_renderSinglePassWithUniforms:(KKGLSLUniforms)u
+                                 base:(const ShaderPluginState *)base
+                               source:(NSString *)effectiveSource
+                     destinationImage:(FxImageTile *)destinationImage
+                         sourceImages:(NSArray<FxImageTile *> *)sourceImages {
+  ShaderSinglePassDraw draw =
+      [self _singlePassDrawForSource:effectiveSource
+                    destinationImage:destinationImage
+                        sourceImages:sourceImages
+                           linearDst:(u.extra.w == 0.0f)];
+  if (!draw)
+    return NO;
   ShaderPluginState baseCopy = *base;
   return [self
       encodeRenderCommandsForDestinationImage:destinationImage
@@ -152,39 +206,65 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
                                          id<MTLRenderCommandEncoder> encoder,
                                          NSArray<id<MTLTexture>>
                                              *inputTextures) {
-                                       [encoder
-                                           setRenderPipelineState:customPS];
-                                       id<MTLTexture> src =
-                                           gammaSrc
-                                               ?: (inputTextures.count
-                                                       ? inputTextures[0]
-                                                       : nil);
-                                       KKGLSLUniforms uu = u;
-                                       if (src)
-                                         uu.chanRes[0] = (simd_float4){
-                                             (float)src.width,
-                                             (float)src.height, 1.0f, 0.0f};
-                                       if (toTex)
-                                         uu.chanRes[1] = (simd_float4){
-                                             (float)toTex.width,
-                                             (float)toTex.height, 1.0f, 0.0f};
-                                       KKBindGLSLUniforms(
-                                           encoder, &uu, baseCopy.colorPool,
-                                           baseCopy.colorPoolCount);
-                                       KKBindCustomChannelTextures(
-                                           encoder, tr,
-                                           @[
-                                             src ?: (id)[NSNull null],
-                                             toTex ?: (id)[NSNull null],
-                                             [NSNull null], [NSNull null]
-                                           ],
-                                           srcSampler, noiseTex, chSampler);
-                                       [encoder
-                                           drawPrimitives:
-                                               MTLPrimitiveTypeTriangleStrip
-                                              vertexStart:0
-                                              vertexCount:4];
+                                       draw(encoder, inputTextures, u,
+                                            baseCopy.colorPool,
+                                            baseCopy.colorPoolCount);
                                      }];
+}
+
+// Motion blur (single pass only): re-render the shader at N sub-frame samples
+// and average via KKMotionBlur. states[i] carries that sample's animation clock
+// (iTime/iProgress) and colour pool; the source-dependent setup is shared. The
+// source frame is the same for every sample (scheduleInputs: requests no extra
+// sub-frame source), so only the shader's own animation smears.
+- (BOOL)_renderSinglePassMotionBlurWithStates:(const ShaderPluginState *)states
+                                        count:(NSInteger)count
+                                      mbState:(KKMotionBlurState)mbState
+                                   renderTime:(CMTime)renderTime
+                                       source:(NSString *)effectiveSource
+                                       mediaW:(CGFloat)mediaW
+                                       mediaH:(CGFloat)mediaH
+                                   encodeSRGB:(float)encodeSRGB
+                             destinationImage:(FxImageTile *)destinationImage
+                                 sourceImages:
+                                     (NSArray<FxImageTile *> *)sourceImages {
+  ShaderSinglePassDraw draw =
+      [self _singlePassDrawForSource:effectiveSource
+                    destinationImage:destinationImage
+                        sourceImages:sourceImages
+                           linearDst:(encodeSRGB == 0.0f)];
+  if (!draw)
+    return NO;
+  return [KKMotionBlur
+      applyToDestinationImage:destinationImage
+                 sourceImages:sourceImages
+                        state:mbState
+                   renderTime:renderTime
+                  renderBlock:^BOOL(int sampleIndex, id<MTLTexture> sampleDest,
+                                    id<MTLCommandBuffer> commandBuffer,
+                                    NSArray<id<MTLTexture>> *inputTextures) {
+                    NSInteger si =
+                        sampleIndex < 0
+                            ? 0
+                            : (sampleIndex >= count ? count - 1 : sampleIndex);
+                    const ShaderPluginState *s = &states[si];
+                    KKGLSLUniforms su =
+                        ShaderBuildUniforms(s, mediaW, mediaH, encodeSRGB);
+                    return [self
+                        encodeFullScreenQuadIntoTexture:sampleDest
+                                       destinationImage:destinationImage
+                                          commandBuffer:commandBuffer
+                                         sourceTextures:inputTextures
+                                               commands:^(
+                                                   id<MTLRenderCommandEncoder>
+                                                       encoder,
+                                                   NSArray<id<MTLTexture>>
+                                                       *inputs) {
+                                                 draw(encoder, inputs, su,
+                                                      s->colorPool,
+                                                      s->colorPoolCount);
+                                               }];
+                  }];
 }
 
 // Publish the source (and the "To" well) to the inspector's mini-viewer feed.
@@ -250,8 +330,9 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
                    destinationImage.imagePixelBounds.bottom;
 
   // State built in -pluginState: (the params API is invalid here). Layout is
-  // [KKMotionBlurState][state@sample0][sections...]; read the header + the base
-  // sample. Fall back to defaults if the blob is missing/short.
+  // [KKMotionBlurState][state@0]...[state@n-1][sections...] - N samples when
+  // motion blur is on (else 1). Read the header + the base sample (state@0).
+  // Fall back to defaults if the blob is missing/short.
   KKMotionBlurState mbState;
   ShaderPluginState base;
   if (pluginState.length >= sizeof(mbState) + sizeof(base)) {
@@ -264,6 +345,16 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
     base.common = ShaderCommonDefault();
   }
 
+  // Sample count must match -pluginState: (KKMotionBlur derives it the same way
+  // from the state + renderTime), so the sections tail sits at a known offset.
+  NSInteger n = mbState.enabled
+                    ? (NSInteger)[KKMotionBlur sampleTimesForState:mbState
+                                                        renderTime:renderTime]
+                          .count
+                    : 1;
+  if (n < 1)
+    n = 1;
+
   float encodeSRGB =
       (destinationImage.ioSurface.pixelFormat == kCVPixelFormatType_32BGRA)
           ? 1.0f
@@ -272,7 +363,7 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
 
   // Multi-pass sections from the blob tail (Image / Common / Buffer A-D).
   // Common is prepended to every pass.
-  NSUInteger head = sizeof(mbState) + sizeof(ShaderPluginState);
+  NSUInteger head = sizeof(mbState) + (NSUInteger)n * sizeof(ShaderPluginState);
   NSDictionary<NSString *, NSString *> *sections =
       (pluginState.length > head) ? ShaderParseSections(pluginState, head)
                                   : @{};
@@ -283,6 +374,24 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
   NSString * (^withCommon)(NSString *) = ^NSString *(NSString *s) {
     return common.length ? [NSString stringWithFormat:@"%@\n%@", common, s] : s;
   };
+
+  // Who owns the blur (the shader's `// #motionblur` directive, default
+  // accumulate). Native shaders blur themselves (feedback trails / an internal
+  // loop), so hand them the popover settings as uniforms and skip the plugin's
+  // accumulate. iMotionBlur stays 0 for accumulate/off so those never
+  // self-blur on top of the plugin's averaging.
+  ShaderMotionBlurMode mbMode = ShaderMotionBlurModeForSource(imageSrc);
+  if (mbMode == ShaderMotionBlurModeNative && mbState.enabled) {
+    double frameDur = self.renderCache.frameDurSec;
+    // Shutter as a fraction of a frame (1.0 == 360deg). A trail shader maps
+    // this onto its decay; frameDur unknown -> approximate against 60fps.
+    float shutterFrac =
+        frameDur > 0.0
+            ? (float)MIN(1.0, MAX(0.0, mbState.shutterSec / frameDur))
+            : (float)MIN(1.0, MAX(0.0, mbState.shutterSec * 60.0));
+    u.transition.y = shutterFrac;
+    u.transition.z = (float)mbState.sampleCount;
+  }
 
   // Any Buffer A-D present -> multi-pass (buffer textures feed the passes'
   // iChannels).
@@ -299,12 +408,38 @@ static KKGLSLUniforms ShaderBuildUniforms(const ShaderPluginState *base,
       [bufSources addObject:@""];
     }
   }
-  if (!anyBuffer)
+  if (!anyBuffer) {
+    // Accumulate blur is plugin-owned + single-pass only (feedback buffers
+    // can't be re-simulated per sub-frame sample cheaply). Only in accumulate
+    // mode: native shaders blur themselves, off opts out. On any bail, fall
+    // through to a single pass.
+    NSUInteger allStatesLen = sizeof(mbState) + (NSUInteger)n * sizeof(base);
+    if (mbMode == ShaderMotionBlurModeAccumulate && mbState.enabled && n > 1 &&
+        pluginState.length >= allStatesLen) {
+      ShaderPluginState *states = malloc(sizeof(ShaderPluginState) * (size_t)n);
+      [pluginState
+          getBytes:states
+             range:NSMakeRange(sizeof(mbState), (NSUInteger)n * sizeof(base))];
+      BOOL ok = [self _renderSinglePassMotionBlurWithStates:states
+                                                      count:n
+                                                    mbState:mbState
+                                                 renderTime:renderTime
+                                                     source:withCommon(imageSrc)
+                                                     mediaW:mediaW
+                                                     mediaH:mediaH
+                                                 encodeSRGB:encodeSRGB
+                                           destinationImage:destinationImage
+                                               sourceImages:sourceImages];
+      free(states);
+      if (ok)
+        return YES;
+    }
     return [self _renderSinglePassWithUniforms:u
                                           base:&base
                                         source:withCommon(imageSrc)
                               destinationImage:destinationImage
                                   sourceImages:sourceImages];
+  }
 
   // Frame index + per-frame iTime step, so feedback buffers advance
   // deterministically (carry-forward on a sequential frame, re-sim on a seek).

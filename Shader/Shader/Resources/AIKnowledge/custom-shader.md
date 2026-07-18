@@ -27,6 +27,8 @@ Use them exactly as on Shadertoy:
 | `iChannel0`              | `sampler2D` | **the source clip** Shader is applied to (the footage / adjustment-layer composite below)                                                                                                                                     |
 | `iChannel1`              | `sampler2D` | **the "To" image well** when the user fills it - a SECOND clip, which is what makes transitions and picture-in-picture possible (see below). Falls back to the noise texture when the well is empty                           |
 | `iChannel2`, `iChannel3` | `sampler2D` | bound to a repeating value-noise texture                                                                                                                                                                                      |
+| `iMotionBlur`            | `float`     | shutter `0..1` from the user's Motion Blur popover (`0` when off). Non-zero **only** in a `// #motionblur native` shader; otherwise the plugin owns the blur and this stays `0`. See the `// #motionblur` directive           |
+| `iMotionBlurSamples`     | `int`       | Motion Blur sample count, for a `native` shader that loops internally                                                                                                                                                         |
 
 ## What works, what doesn't
 

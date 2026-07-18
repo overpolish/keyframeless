@@ -26,11 +26,30 @@ typedef struct KKGLSLUniforms {
   simd_float4 extra;   // x=iTimeDelta, y=float(iFrame), z=flipY, w=encodeSRGB
   simd_float4 grain;   // x=grain 0..1, y=grainSize px (shared core film grain)
   simd_float4 chanRes[4]; // iChannelResolution[0..3]: xyz = px size, z = 1
-  simd_float4 transition; // x = iProgress (0..1 over the effect's window)
+  // x = iProgress (0..1 over the effect's window); y = iMotionBlur (0..1
+  // shutter, non-zero only for a `// #motionblur native` shader); z =
+  // iMotionBlurSamples (as float).
+  simd_float4 transition;
   // A shader's `// #color` properties append their vec4s to this block's std140
   // tail (see KKWrapGLSL); the render supplies those bytes right after this
   // struct at bind time.
 } KKGLSLUniforms;
+
+/// How a shader wants motion blur handled, declared by a `// #motionblur
+/// <mode>` directive in its source (default = accumulate). The end-user Motion
+/// Blur popover (enabled / shutter / samples) is unchanged; this only decides
+/// who consumes those settings.
+typedef enum ShaderMotionBlurMode {
+  /// Plugin re-renders N sub-frame samples and averages them (single-pass only;
+  /// a multi-pass shader silently renders once). The default.
+  ShaderMotionBlurModeAccumulate = 0,
+  /// The shader owns its own blur (feedback trails / an internal loop). The
+  /// plugin renders once and exposes the popover settings as iMotionBlur (0..1
+  /// shutter) + iMotionBlurSamples. Works for single AND multi-pass.
+  ShaderMotionBlurModeNative = 1,
+  /// No motion blur for this shader: render once, iMotionBlur = 0.
+  ShaderMotionBlurModeOff = 2,
+} ShaderMotionBlurMode;
 
 // Result of transpiling a GLSL image-shader body to a full MSL unit.
 @interface KKGLSLTranspileResult : NSObject
@@ -77,6 +96,10 @@ typedef struct KKGLSLUniforms {
 extern "C" {
 #endif
 KKGLSLTranspileResult *KKTranspileGLSL(NSString *userGLSL);
+
+// The `// #motionblur <accumulate|native|off>` mode a source declares (default
+// accumulate when the directive is absent or unrecognized).
+ShaderMotionBlurMode ShaderMotionBlurModeForSource(NSString *userGLSL);
 
 // Bind the fixed KKGLSLUniforms at buffer(0), followed by a shader's `//
 // #color` property pool (the std140 tail: `poolCount` vec4s) as one contiguous

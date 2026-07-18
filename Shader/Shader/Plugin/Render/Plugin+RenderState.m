@@ -241,20 +241,24 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
     return NO;
   }
 
-  // The Custom (GLSL) path is the only render path now: it owns its own
-  // animation (the shader's own time via Speed) and its source rides in the
-  // blob tail, so it never uses the sample-accumulate motion-blur path.
-  mbState.enabled = NO;
+  // A procedural shader owns every pixel and its own animation clock
+  // (iTime/iProgress), so motion blur is pure sample-accumulate: re-render the
+  // shader at N sub-frame times across the shutter and average (render loops
+  // states[0..n-1] through KKMotionBlur). There is no velocity buffer to
+  // reconstruct from, so the Fast technique can't apply here - force Accurate
+  // (which also derives mode = Always, blurring every animated frame).
+  if (mbState.enabled)
+    mbState.technique = KKMotionBlurTechniqueAccurate;
 
   NSMutableData *data = [NSMutableData
-      dataWithCapacity:sizeof(mbState) + sizeof(ShaderPluginState)];
+      dataWithCapacity:sizeof(mbState) + (size_t)n * sizeof(ShaderPluginState)];
   [data appendBytes:&mbState length:sizeof(mbState)];
-  [data appendBytes:&states[0] length:sizeof(ShaderPluginState)];
+  [data appendBytes:states length:(size_t)n * sizeof(ShaderPluginState)];
   free(states);
 
-  // Append the user shader source after the single state sample. MB is forced
-  // off above, so the layout is a fixed [mbState][state][sections...] and
-  // render reads the tail from a known offset.
+  // The user shader source follows the N state samples: the layout is
+  // [mbState][state@0]...[state@n-1][sections...] and render reads the tail
+  // from sizeof(mbState) + n*sizeof(ShaderPluginState).
   ShaderAppendCodeSections(data, [self _timelineFromParams:paramAPI]);
 
   *pluginState = data;

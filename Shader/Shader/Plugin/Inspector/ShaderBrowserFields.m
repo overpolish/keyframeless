@@ -14,6 +14,15 @@
 - (BOOL)isFlipped {
   return YES;
 }
+- (void)setContentHeight:(CGFloat)contentHeight {
+  if (fabs(contentHeight - _contentHeight) < 0.5)
+    return;
+  _contentHeight = contentHeight;
+  [self invalidateIntrinsicContentSize];
+}
+- (NSSize)intrinsicContentSize {
+  return NSMakeSize(NSViewNoIntrinsicMetric, _contentHeight);
+}
 @end
 
 @implementation _ShaderRenameField

@@ -166,12 +166,17 @@ static const CGFloat KKPaddedScrollShadowH = 16.0;
     _bottomShadow.alphaValue = 0.0;
     return;
   }
-  // documentVisibleRect is reported in the documentView's natural coords
-  // (origin bottom-left for non-flipped stacks), so the fraction we want -
-  // "how far the top edge of the visible window has been scrolled down
-  // from the top of the document" - is the inverse of vr.origin.y.
+  // We want "how far the top edge of the visible window has scrolled down from
+  // the top of the document". documentVisibleRect is in the documentView's own
+  // coords, so the measure flips with the document's geometry: a non-flipped
+  // doc (origin bottom-left, e.g. a plain stack) reads it off the top edges,
+  // while a flipped doc (origin top-left, y grows down) already reports it
+  // directly as vr.origin.y. Without this branch a flipped document inverts -
+  // the top shadow lights up at the very top instead of the bottom.
   CGFloat fromTop =
-      (cr.origin.y + cr.size.height) - (vr.origin.y + vr.size.height);
+      [(NSView *)_scroll.documentView isFlipped]
+          ? (vr.origin.y - cr.origin.y)
+          : (cr.origin.y + cr.size.height) - (vr.origin.y + vr.size.height);
   CGFloat percent = fromTop / scrollable;
   percent = MAX(0.0, MIN(1.0, percent));
   _topShadow.alphaValue = percent;

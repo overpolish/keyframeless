@@ -1695,7 +1695,16 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     // or field-count change) can't be updated in place - drop it so it is
     // remade below. Metadata-only changes (range, values) are handled by
     // applyLane.
-    if (existing && ![existing renderShapeMatchesLane:lane]) {
+    //
+    // Also remake when the shared label column moved: a lane added/removed/
+    // relabelled above can change the widest name, and `_labelColumnWidth` was
+    // just recomputed. applyLane can't restretch the row's title-width
+    // constraint, so a reused row would keep its old column and start its value
+    // control at a different x than the rows around it (misaligned sliders).
+    BOOL columnShifted =
+        existing && fabs(existing.labelColumnWidth - _labelColumnWidth) > 0.5;
+    if (existing &&
+        (![existing renderShapeMatchesLane:lane] || columnShifted)) {
       [_stack removeArrangedSubview:existing];
       [existing removeFromSuperview];
       [_rowsByLabel removeObjectForKey:lane.label];
