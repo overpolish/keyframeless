@@ -50,10 +50,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// Cache a baked thumbnail for a built-in shader by name.
 + (void)setBuiltinThumbnail:(nullable NSImage *)image forName:(NSString *)name;
 
-/// Save (or overwrite by name) the given sections as a named entry.
-/// `previewPNG` is optional (a placeholder is used until a real thumbnail is
-/// rendered). `category` is a ShaderCategory.h id (nil = the default). Returns
-/// the written entry.
+/// Save the given sections as a new UUID-keyed entry. Never overwrites an
+/// existing entry by name, so duplicate names are fine. `previewPNG` is optional
+/// (a placeholder is used until a real thumbnail is rendered). `category` is a
+/// ShaderCategory.h id (nil = the default). Returns the written entry.
 - (ShaderCatalogEntry *)
     saveShaderNamed:(NSString *)name
              author:(NSString *)author

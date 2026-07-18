@@ -58,7 +58,6 @@ fragment float4 meshBlitFragment(ShaderBlitData in [[stage_in]], texture2d<float
     return src.sample(samp, in.uv);
 }
 
-// The 12 built-in per-Type fragment shaders (Shaders_*.h) were retired with the
-// Type system; the plugin is Custom-only (runtime-compiled GLSL). The MSL files
-// remain on disk as reference for the planned GLSL community-shader ports, but
-// are no longer compiled into the plugin.
+// The 12 built-in per-Type fragment shaders were retired with the Type system;
+// the plugin is Custom-only (runtime-compiled GLSL). They were ported to GLSL as
+// community shader templates and their MSL sources removed.
