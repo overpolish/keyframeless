@@ -35,9 +35,9 @@ static id<MTLTexture> ShaderPreviewSourceTexture(id<MTLDevice> device) {
   // Top-row-first (flip the default bottom-left CG origin) so the photo reads
   // upright through the render + readback flip. If a thumbnail comes out
   // upside down, drop the translate/scale pair below.
-  CGContextRef ctx = CGBitmapContextCreate(bytes, w, h, 8, w * 4, cs,
-                                           kCGImageAlphaPremultipliedFirst |
-                                               kCGBitmapByteOrder32Little);
+  CGContextRef ctx = CGBitmapContextCreate(
+      bytes, w, h, 8, w * 4, cs,
+      (uint32_t)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little);
   CGColorSpaceRelease(cs);
   if (!ctx) {
     free(bytes);
