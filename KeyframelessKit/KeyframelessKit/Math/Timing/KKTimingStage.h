@@ -197,6 +197,18 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// -seededFrom: like a piece of static config, not clip data.
 @property(nonatomic, copy, nullable) NSString *_Nullable (^codeValidator)
     (NSString *code, NSInteger *outLine);
+/// For a `KKLaneValueTypeCode` lane: optional pre-pass composing the source
+/// that `codeValidator` sees from the section set (e.g. prepending a shared
+/// "Common" section, or appending a stub entry point when validating that
+/// section itself). Return the composed source + `*outPrependLines` for
+/// error-line mapping; nil validates the active section as-is. Keeps
+/// language-specific composition in the plugin. Not serialized (a block),
+/// carried template->reconciled like `codeValidator`.
+@property(nonatomic, copy, nullable)
+    NSString *_Nullable (^codeValidationComposer)
+        (NSString *activeSectionName, NSString *activeCode,
+         NSArray<NSDictionary<NSString *, NSString *> *> *sections,
+         NSInteger *outPrependLines);
 /// For a `KKLaneValueTypeCode` lane: optional formatter powering a "Format"
 /// button in the editor's tab strip. Given a section's text, return the
 /// reformatted text (nil / unchanged = no-op). Not serialized (a block), so it
@@ -228,6 +240,10 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// whatever it means. Empty / nil = no picker. Static template config (not
 /// serialized), carried template->reconciled like `codeSavable`.
 @property(nonatomic, copy, nullable) NSArray<NSString *> *codeSaveCategories;
+/// For a `codeSavable` lane: the save-bar name field placeholder (already
+/// localized). nil = the editor's generic "Name". Static template config (not
+/// serialized), carried template->reconciled like `codeSavable`.
+@property(nonatomic, copy, nullable) NSString *codeSaveNamePlaceholder;
 @property(nonatomic, copy) NSArray<NSNumber *>
     *componentMin; // one per component, empty = unconstrained
 @property(nonatomic, copy) NSArray<NSNumber *>
@@ -533,6 +549,17 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// each stays its own cohesive palette. Build-time metadata.
 @property(nonatomic, copy, nullable) NSString *paletteGroup;
 
+/// Parameter-link binding (cross-effect linking - see KKLinkBus). Model-level
+/// so EVERY plugin's lanes carry it; serialized with the timeline, read by the
+/// shared resolver. The kit never infers it.
+///
+/// `linkExpression`: the transform code for this lane (see KKLinkExpr). `value`
+/// = this lane's own value; `${name}` = another source, resolved recursively at
+/// the current timeline time. nil / empty / bare "value" = plain passthrough
+/// (own value). This is the source of truth: a lane is expression-driven or it
+/// isn't.
+@property(nonatomic, copy, nullable) NSString *linkExpression;
+
 + (instancetype)laneWithLabel:(NSString *)label;
 
 /// Standard FCP-style opacity lane (one whole-percentage component 0..100,
@@ -674,6 +701,12 @@ FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingSpatialSmooth(
 /// can skip the commit + undo entry.
 FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingAspectLinked(
     KKTimeline *timeline, NSString *label, BOOL on);
+
+/// Returns a copy of `timeline` with the lane named `label`'s link EXPRESSION
+/// set to `expr` (nil/empty clears it -> passthrough). Returns nil when
+/// unchanged.
+FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingLinkExpression(
+    KKTimeline *timeline, NSString *label, NSString *_Nullable expr);
 
 /// Returns a copy of `timeline` with the composite-gradient lane named `label`
 /// set to gradient `type` (value index 0) on EVERY keypose - the type is a

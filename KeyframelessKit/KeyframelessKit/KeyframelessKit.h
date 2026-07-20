@@ -51,6 +51,9 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKKbd.h>
 #import <KeyframelessKit/KKLabelView.h>
 #import <KeyframelessKit/KKLaneRowView.h>
+#import <KeyframelessKit/KKLinkBus.h>
+#import <KeyframelessKit/KKLinkExpr.h>
+#import <KeyframelessKit/KKLinkWatcher.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMarkup.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>

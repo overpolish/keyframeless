@@ -467,6 +467,10 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
                                topic:@"easing"
                               symbol:@"point.topleft.down.curvedto."
                                      @"point.bottomright.up"],
+    [self
+        _knowledgeSectionWithTitle:KKLoc(@"Expressions", @"Help section title.")
+                             topic:@"expressions"
+                            symbol:@"function"],
     [self _knowledgeSectionWithTitle:KKLoc(@"Presets", @"Help section title.")
                                topic:@"presets"
                               symbol:@"bookmark"],

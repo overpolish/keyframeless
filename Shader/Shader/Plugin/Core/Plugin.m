@@ -26,6 +26,7 @@
 
 - (void)dealloc {
   [_playheadPoller invalidate];
+  [_linkWatcher invalidate];
 }
 
 - (BOOL)properties:(NSDictionary *_Nonnull *)properties

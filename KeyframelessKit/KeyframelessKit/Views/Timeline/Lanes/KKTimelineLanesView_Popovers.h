@@ -195,6 +195,8 @@ NS_ASSUME_NONNULL_BEGIN
             (NSArray<NSDictionary<NSString *, NSString *> *> *)sections
                     forLabel:(NSString *)label;
 - (void)_setLaneAspectLinked:(BOOL)on forLabel:(NSString *)label;
+- (void)_setLaneLinkExpression:(nullable NSString *)expr
+                      forLabel:(NSString *)label;
 @end
 
 /// Internal popover plumbing - the manage-popover presenter and the generic

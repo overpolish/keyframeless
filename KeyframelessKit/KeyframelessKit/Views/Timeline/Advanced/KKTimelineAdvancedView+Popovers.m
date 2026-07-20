@@ -186,6 +186,10 @@
     // just copied from tmpl. Prefer the template; fall back to the source lane
     // only when no template resolved.
     display.displayLabel = tmpl.displayLabel ?: l.displayLabel;
+    // Parameter-link expression is a lane-level property (from the serialized
+    // timeline lane, not the template); carry it so the keypose popover shows
+    // the accent label + inline editor.
+    display.linkExpression = l.linkExpression;
     KKKeyPose *displayKp = [KKKeyPose keyposeAtTime:0.0
                                              values:vals ?: @[ @0.0 ]];
     // Carry the curve state so the row's toggle reflects this keypose.

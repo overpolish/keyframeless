@@ -7,6 +7,7 @@
 #import "ShaderBrowserView.h"
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/NSColor+KKColors.h>
 #import <QuartzCore/QuartzCore.h>
 
 static const CGFloat kPanelWidth = 300.0;
@@ -135,6 +136,12 @@ static const CGFloat kSlideDistance = 12.0;
     NSGlassEffectView *glass =
         [[NSGlassEffectView alloc] initWithFrame:NSZeroRect];
     glass.cornerRadius = kPanelCornerRadius;
+    // Opaque inspector-matched fill so the template browser reads like the
+    // popovers beside it, not see-through liquid glass. The glass clips it to
+    // the corner radius, so the panel keeps its rounded shape and shadow.
+    content.wantsLayer = YES;
+    content.layer.backgroundColor =
+        [NSColor.inspectorBackground colorWithAlphaComponent:0.5].CGColor;
     glass.contentView = content;
     p.contentView = glass;
   } else {
@@ -148,9 +155,10 @@ static const CGFloat kSlideDistance = 12.0;
     fx.layer.borderWidth = 1.0;
     // Round via a mask image (not layer cornerRadius): the mask shapes the
     // window shadow too, so hasShadow follows the corners instead of drawing a
-    // square shadow past them. The hairline border is clipped to the same shape.
-    fx.maskImage =
-        [ShaderBrowserController _roundedMaskImageWithRadius:kPanelCornerRadius];
+    // square shadow past them. The hairline border is clipped to the same
+    // shape.
+    fx.maskImage = [ShaderBrowserController
+        _roundedMaskImageWithRadius:kPanelCornerRadius];
     content.frame = fx.bounds;
     [fx addSubview:content];
     p.contentView = fx;

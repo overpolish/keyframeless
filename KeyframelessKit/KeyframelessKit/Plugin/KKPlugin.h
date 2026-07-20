@@ -70,6 +70,24 @@ NS_ASSUME_NONNULL_BEGIN
 /// namespace between plugins.
 - (NSString *)presetPluginKey;
 
+/// Parameter-link discovery: the EFFECTIVE referenceable lanes this clip
+/// exposes as a link source (directive-seeded constants for Shader, the static
+/// param set for others). Default nil = this plugin doesn't advertise
+/// (opt-out). Override to opt in, then call -writeLinkManifest from the render
+/// tick. The kit filters out non-referenceable lanes (code / palette bars), so
+/// return the full set.
+- (nullable NSArray<KKLane *> *)linkableLanesForManifest;
+/// Display name for this plugin in the reference picker ("<name> @
+/// <timecode>"). Defaults to the bundle name. Override to force a specific
+/// label.
+- (NSString *)linkManifestEffectName;
+/// Advertise this clip as a link source: compute its absolute span from the
+/// timing API and write its manifest (uuid + display name + params) via
+/// KKLinkWriteManifest. No-op unless -linkableLanesForManifest returns lanes.
+/// Call from the render tick, where the clip's timeline position resolves.
+/// Cheap (idempotent skip-if-unchanged).
+- (void)writeLinkManifest;
+
 /// Convenience wrapper around KKMetalDeviceCache buildAndRegisterPipelineState.
 /// Call from renderDestinationImage: to get or build the pipeline state for
 /// this plugin.

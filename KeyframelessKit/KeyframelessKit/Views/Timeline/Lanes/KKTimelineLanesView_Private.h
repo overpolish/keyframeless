@@ -152,6 +152,17 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// slot as the smooth toggle) that flips the global aspect lock. Fires with the
 /// new state; the host persists `aspectLinked` on the lane.
 @property(nonatomic, copy, nullable) void (^onLinkToggled)(BOOL on);
+/// Right-click "Add / Remove Expression" on the lane label (parameter linking).
+/// Fired with the new expression (nil clears it back to a plain lane); the host
+/// persists `linkExpression`. While an expression is set the label tints with
+/// the host accent to signal the lane is expression-driven.
+@property(nonatomic, copy, nullable) void (^onSetLinkExpression)
+    (NSString *_Nullable expr);
+/// Right-click "Format Expression" on an expression-driven lane's label. Fired
+/// with no argument; the host reformats that lane's inline editor in place (the
+/// editor owns the text, so the row can't do it). Absent unless an expression
+/// is set.
+@property(nonatomic, copy, nullable) void (^onFormatExpression)(void);
 /// A KKLaneValueTypeColor row carries a colour swatch that opens the shared
 /// colour panel. Fires YES while that panel is open and NO when it closes, so
 /// the hosting popover can suspend its transient auto-dismiss during the edit.
@@ -182,6 +193,24 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
               reservesGutter:(BOOL)reservesGutter
             labelColumnWidth:(CGFloat)labelColumnWidth
                 contentWidth:(CGFloat)contentWidth;
+
+/// Build a supplementary EDITOR row (e.g. the parameter-link expression editor)
+/// that reuses this row's gutter geometry so its spacing matches every value
+/// row: `contentView` fills the label+value columns; `leftView` sits in the
+/// leading gutter (the remove / add-to-animated glyph slot) and `rightView` in
+/// the trailing reset column - both optional overrides, both optically centred
+/// on the FIRST line so they stay put when the row grows. `height` is the
+/// initial row height (change it later with -setEditorRowHeight: for an
+/// expanded state); `firstLineH` is the collapsed one-line height the gutter
+/// views centre on. Callers size `leftView`/`rightView` themselves.
+- (instancetype)initEditorRowWithContentView:(NSView *)contentView
+                                    leftView:(nullable NSView *)leftView
+                                   rightView:(nullable NSView *)rightView
+                                  firstLineH:(CGFloat)firstLineH
+                                      height:(CGFloat)height;
+/// Change an editor row's height (drives the expand/collapse), re-laying the
+/// stack via intrinsic content size.
+- (void)setEditorRowHeight:(CGFloat)height;
 /// Width to pin every row's label column to, so the value controls line up
 /// regardless of label length (the widest localized param name). 0 = natural.
 + (CGFloat)labelColumnWidthForLanes:(NSArray<KKLane *> *)lanes;
@@ -298,6 +327,12 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// constants and keypose popovers). Fired with the lane label + new state; the
 /// host writes `aspectLinked` on the lane (global, not per-keypose).
 - (void)setOnLinkToggled:(void (^)(NSString *label, BOOL on))handler;
+
+/// Wire the label's right-click "Add / Remove Expression" (parameter linking).
+/// Fired with the lane label + new expression (nil clears it); the host writes
+/// `linkExpression` and persists.
+- (void)setOnSetLinkExpression:(void (^)(NSString *label,
+                                         NSString *_Nullable expr))handler;
 
 /// Wire the gradient radial/linear type pill (keypose editor only). Fired with
 /// the lane label + new type index; the host applies it to every keypose of the

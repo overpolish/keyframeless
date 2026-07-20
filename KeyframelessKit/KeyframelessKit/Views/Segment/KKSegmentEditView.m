@@ -14,6 +14,7 @@
 #import "KKEasing.h"
 #import "KKLaneModulationChecklistView.h"
 #import "KKLaneParticipationChecklistView.h"
+#import "KKPopoverBackground.h"
 #import "KKSeedView.h"
 #import "KKSliderView.h"
 #import "KKTimingStage.h" // KKLane
@@ -31,42 +32,6 @@ static const CGFloat kLinkedHeight = 22.0; // matches KKLaneRowView's row height
 static const CGFloat kRowGap = 8.0;
 static const NSInteger kIntensityTickCount = 3;
 static const NSInteger kFrequencyTickCount = 3;
-
-/// Removes macOS 26's liquid-glass content background from the popover
-/// frame so a content view's own styling isn't drawn on top of the default
-/// glass pane (which otherwise shows as a doubled border). Matches the
-/// approach in KKGradientFavoritesPopover.
-static void _clearPopoverBackground(NSView *view) {
-  dispatch_after(
-      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
-      dispatch_get_main_queue(), ^{
-        NSView *current = view;
-        NSView *popoverFrame = nil;
-        while (current) {
-          if ([NSStringFromClass([current class])
-                  hasPrefix:@"NSPopoverFrame"]) {
-            popoverFrame = current;
-            break;
-          }
-          current = current.superview;
-        }
-        if (!popoverFrame)
-          return;
-        for (NSView *sub in popoverFrame.subviews) {
-          if (![NSStringFromClass([sub class]) containsString:@"GlassView"])
-            continue;
-          for (NSView *glassSub in sub.subviews) {
-            glassSub.wantsLayer = YES;
-            NSString *name = NSStringFromClass([glassSub class]);
-            if ([name containsString:@"CoreHostingView"])
-              glassSub.layer.opacity = 0;
-            else if ([name containsString:@"ContentHolderView"])
-              glassSub.layer.backgroundColor = NSColor.clearColor.CGColor;
-          }
-          break;
-        }
-      });
-}
 
 static const CGFloat kBulkHeaderHeight = 18.0;
 
@@ -905,7 +870,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
     // Prevent the popover from auto-focusing the seed field on open so
     // spacebar still controls timeline playback.
     [self.window makeFirstResponder:nil];
-    _clearPopoverBackground(self);
+    KKApplyPopoverBackground(self);
   }
 }
 

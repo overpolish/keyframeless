@@ -210,6 +210,14 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// publishing it as the viewer-OSC snapshot, so keypose-proximity visibility
 /// uses a one-frame epsilon instead of a blind fallback.
 - (double)clipDurationSeconds;
+/// This clip's absolute project-start time (seconds, fraction 0), pushed from
+/// the render tick. Feeds parameter-link resolution in the mini-viewer at the
+/// feed rate (it is constant, so it isn't starved by the playhead poller).
+/// Negative = unknown. Every plugin gets link feed-locking for free by having
+/// its render cache push this (KKRefreshRenderCache does it automatically).
+- (void)setClipProjectStartSec:(double)seconds;
+/// The clip project-start last set (seconds), negative if never.
+- (double)clipProjectStartSec;
 /// Live frame duration (seconds) - bounds the scrubber to the last frame.
 - (void)setFrameDurationSeconds:(double)seconds;
 /// Live playhead position (clip fraction 0–1; < 0 hides) for the scrubber.

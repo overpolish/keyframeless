@@ -3,8 +3,13 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKCodeEditorView.h"
+#import "KKGLSLSyntax.h" // KKExprCatalog for the function reference menu
 #import "KKLaneCategoryNav.h"
+#import "KKLinkBus.h"
+#import "KKLinkExpr.h"
 #import "KKLocalized.h"
+#import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
 #import "KKPaddedScrollView.h"
 #import "KKPaletteGenerator.h"
@@ -21,6 +26,27 @@
 
 // Height of the category nav pill row (icon pills under the mini-viewer).
 static const CGFloat kKKCategoryPillH = 24.0;
+
+// A parameter-link expression editor sits as its own row directly under the
+// value row whose lane carries an expression: 1 line collapsed, taller when
+// expanded via the chevron button. The row reserves a bottom 16pt strip for the
+// live result readout, so the ROW height = the text height + the strip; the
+// gutter buttons centre on the TEXT height (kKKExprEditorTextH) = the first
+// line.
+static const CGFloat kKKExprEditorTextH = 30.0;
+static const CGFloat kKKExprEditorRowH = 46.0;       // text + result strip
+static const CGFloat kKKExprEditorExpandedH = 112.0; // ~3 lines + result strip
+
+// A lane shows an inline expression editor when it carries a linkExpression AND
+// is referenceable (not a code editor or a palette-generator bar - mirrors the
+// manifest / row-label filter).
+static BOOL KKLaneHasExpressionEditor(KKLane *lane) {
+  // Present = the lane HAS an expression binding, even an empty one. Clearing
+  // the editor text leaves an empty (passthrough) expression, and the editor
+  // stays open; only "Remove Expression" (which nils linkExpression) closes it.
+  return lane.linkExpression != nil && lane.valueType != KKLaneValueTypeCode &&
+         !lane.paletteGeneratorBar;
+}
 
 // Vertical breathing room kept around the popover when its natural height is
 // clamped to the screen (so the arrow + a small gap fit on a low-res display),
@@ -93,6 +119,32 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // Excluded ("Animate" placeholder) rows aren't in _rowsByLabel; track them so
   // the category filter can hide/show them too.
   NSMutableDictionary<NSString *, NSView *> *_excludedRowsByLabel;
+  // Inline parameter-link expression editor ROWS, keyed by lane label. Each is
+  // a full-width container (the arranged stack subview) holding an inset
+  // KKCodeEditorView, sitting directly under the lane's value row; the category
+  // filter hides it with its row.
+  NSMutableDictionary<NSString *, NSView *> *_exprRowsByLabel;
+  // Labels whose expression editor is EXPANDED (taller); survives row rebuilds
+  // so the user's expand choice sticks. The row owns its height
+  // (-setEditorRowHeight:), so the chevron just re-reads this set.
+  NSMutableSet<NSString *> *_exprExpandedLabels;
+  // The KKCodeEditorView inside each expression row, keyed by lane label, so
+  // the reference-insert menu can drop a token into the right editor. Torn down
+  // wherever `_exprRowsByLabel` is (they are created and removed together).
+  NSMutableDictionary<NSString *, KKCodeEditorView *> *_exprEditorByLabel;
+  // Repeating timer that refreshes the inline result strips (live value->result
+  // readout) so time-based expressions update as the playhead / playback moves.
+  NSTimer *_exprResultTimer;
+  // Playhead-motion tracking for the keypose sparkline marker: last tick's
+  // linkTimelineSec + whether it changed. Moving (scrub/playback) -> the dot
+  // follows the playhead; settled -> it pings back to the keypose
+  // (editFraction).
+  double _lastMarkerLinkSec;
+  BOOL _playheadMoving;
+  // Discovered link sources (other clips' manifests), cached so the display<->
+  // stored token transforms don't hit disk on every keystroke. Refreshed when
+  // an editor is installed and each time the insert menu opens.
+  NSArray<KKLinkManifest *> *_linkManifests;
   // Colour labels the user has pinned via the per-swatch lock toggle. Transient
   // (never persisted): a palette reroll skips these. Survives row rebuilds
   // because it lives on the long-lived popover, keyed by lane label.
@@ -110,6 +162,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   void (^_onHandleValue)(NSString *, NSArray<NSNumber *> *);
   void (^_onSmoothToggled)(NSString *, BOOL);
   void (^_onLinkToggled)(NSString *, BOOL);
+  void (^_onSetLinkExpression)(NSString *, NSString *);
   void (^_onGradientTypeChanged)(NSString *, NSInteger);
   BOOL _editsKeypose;
   void (^_onDragBegin)(void);
@@ -172,6 +225,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // documentView (its other strong hold) lets the mini-viewer dealloc and free
 // that memory even while the empty window shell lingers.
 - (void)releaseMiniViewer {
+  // The result strips lose their time source and the popover is closing; stop
+  // the refresh timer so it doesn't keep firing on a stranded content view.
+  [_exprResultTimer invalidate];
+  _exprResultTimer = nil;
   _miniViewer.enclosingScrollView.documentView = nil;
   [_miniViewer removeFromSuperview];
   _miniViewer = nil;
@@ -300,6 +357,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   _onLinkToggled = [handler copy];
 }
 
+- (void)setOnSetLinkExpression:(void (^)(NSString *, NSString *))handler {
+  _onSetLinkExpression = [handler copy];
+}
+
 - (void)setOnGradientTypeChanged:(void (^)(NSString *, NSInteger))handler {
   _onGradientTypeChanged = [handler copy];
 }
@@ -413,17 +474,23 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     for (KKLane *lane in lanes)
       if ([condVisible containsObject:lane.label] &&
           (lane.categoryKey.length == 0 ||
-           [lane.categoryKey isEqualToString:sel]))
+           [lane.categoryKey isEqualToString:sel])) {
         page += [_KKStaticValueRow heightForLane:lane
                                     contentWidth:cw
                                 labelColumnWidth:labelColumnWidth];
+        if (KKLaneHasExpressionEditor(lane))
+          page += kKKExprEditorRowH;
+      }
     rows = page + kKKCategoryPillH + KKPaddingMD;
   } else {
     for (KKLane *lane in lanes)
-      if ([condVisible containsObject:lane.label])
+      if ([condVisible containsObject:lane.label]) {
         rows += [_KKStaticValueRow heightForLane:lane
                                     contentWidth:cw
                                 labelColumnWidth:labelColumnWidth];
+        if (KKLaneHasExpressionEditor(lane))
+          rows += kKKExprEditorRowH;
+      }
   }
   // No trailing bottom pad: the rows scroller is pinned flush to the popover's
   // bottom edge (so its fade shadow sits at the absolute bottom). The leading
@@ -603,6 +670,9 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   _clipAspect = clipAspect;
   _rowsByLabel = [NSMutableDictionary dictionary];
   _excludedRowsByLabel = [NSMutableDictionary dictionary];
+  _exprRowsByLabel = [NSMutableDictionary dictionary];
+  _exprExpandedLabels = [NSMutableSet set];
+  _exprEditorByLabel = [NSMutableDictionary dictionary];
   _editsKeypose = editsKeypose;
   _onHandleValue = [onHandleValue copy];
   _onDragBegin = [onDragBegin copy];
@@ -849,6 +919,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     [_stack addArrangedSubview:row];
     [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
     _rowsByLabel[lane.label] = row;
+    [self _installExprEditorForLane:lane];
   }
   [self _applyCategoryFilter];
   return self;
@@ -942,6 +1013,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
         catHidden(label) || ![condVisible containsObject:label];
   for (NSString *label in _excludedRowsByLabel)
     _excludedRowsByLabel[label].hidden = catHidden(label);
+  // An inline expression editor follows its value row's visibility exactly.
+  for (NSString *label in _exprRowsByLabel)
+    _exprRowsByLabel[label].hidden =
+        catHidden(label) || ![condVisible containsObject:label];
   [self _refreshDynamicMaxRows];
 }
 
@@ -969,14 +1044,25 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // The popover content's natural (unclamped) size for the current lanes /
 // category / live values.
 - (CGSize)_naturalContentSize {
-  return NSMakeSize(
-      [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath],
+  CGFloat h =
       [_KKStaticValuesPopoverView _heightForLanes:_lanes
                                    descriptorPath:_descriptorPath
                                        clipAspect:_clipAspect
                                     reserveHeader:_hasHeader
                                  selectedCategory:_selectedCategory
-                                    valuesByLabel:_currentValuesByLabel]);
+                                    valuesByLabel:_currentValuesByLabel];
+  // The class-level height calc assumes every expression editor is COLLAPSED
+  // (it has no instance state); add the extra height for each visible EXPANDED
+  // one.
+  CGFloat extra = kKKExprEditorExpandedH - kKKExprEditorRowH;
+  for (NSString *label in _exprExpandedLabels) {
+    NSView *ed = _exprRowsByLabel[label];
+    if (ed && !ed.hidden)
+      h += extra;
+  }
+  return NSMakeSize(
+      [_KKStaticValuesPopoverView _popoverWidthForDescriptor:_descriptorPath],
+      h);
 }
 
 // Clamp a natural content height to what fits on `screen` (with a margin and a
@@ -1059,6 +1145,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 
 - (void)dealloc {
   [_colorPersistTimer invalidate];
+  [_exprResultTimer invalidate];
 }
 
 // Presenter hook (KKTimelineLanesView+Popovers `_showPopoverWithContent`): when
@@ -1095,6 +1182,530 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   KKLane *adjusted = [lane copy];
   adjusted.componentMax = @[ @(effMax) ];
   return adjusted;
+}
+
+// The parameter-link expression editor row: a `_KKStaticValueRow` editor row so
+// its gutters line up with every value row for free (leading glyph slot, label/
+// value columns, trailing reset column) instead of hand-rolled insets. Content
+// = the KKCodeEditorView; left override = the insert-reference button; right
+// override = the expand chevron. Edits persist through -_onSetLinkExpression
+// WITHOUT a popover rebuild (boundary re-drive is suppressed), so typing
+// survives.
+- (NSView *)_makeExprEditorRowForLabel:(NSString *)label text:(NSString *)text {
+  BOOL expanded = [_exprExpandedLabels containsObject:label];
+  KKCodeEditorView *ed = [[KKCodeEditorView alloc] initWithFrame:NSZeroRect];
+  ed.syntax = KKCodeSyntaxExpression; // set before codeText for the first paint
+  // The model stores UUID-keyed refs (`${uuid.param}`); the editor shows the
+  // friendly `${Clip.Param}` form. Translate on the way in, and back on
+  // persist.
+  [self _refreshLinkManifests];
+  ed.codeText = [self _displayFromStored:(text ?: @"")];
+  _exprEditorByLabel[label] = ed;
+  __weak typeof(self) weak = self;
+  ed.onChange = ^(NSString *code) {
+    __strong typeof(weak) s = weak;
+    NSString *stored = [s _storedFromDisplay:code];
+    // Refresh the popover's cached `_lanes` entry so the result-strip timer
+    // re-evaluates the NEW expression. The keypose popover suppresses the
+    // rebuild echo (the _boundaryRedriveSuppress window that fixes the cmd-Z
+    // crash), so unlike constants it never gets a fresh `_lanes` from
+    // updateUnoptedLanes - update it here, in place, without a row rebuild.
+    [s _updateCachedLaneExpression:stored forLabel:label];
+    if (s->_onSetLinkExpression)
+      s->_onSetLinkExpression(label, stored);
+  };
+  // Left override: the discovered-clip insert menu (drops a `${Clip.Param}`
+  // token). Right override: the expand/collapse chevron. Both carry the label
+  // on their identifier for the action, and are sized to the row's gutter
+  // glyphs.
+  NSButton *insertBtn = [NSButton
+      buttonWithImage:[NSImage imageWithSystemSymbolName:@"plus.circle"
+                                accessibilityDescription:nil]
+               target:self
+               action:@selector(_insertReferenceMenu:)];
+  insertBtn.bordered = NO;
+  insertBtn.identifier = label;
+  insertBtn.toolTip = KKLoc(
+      @"Insert a clip reference, function or variable",
+      @"Expression editor: insert-reference / function-reference button.");
+  insertBtn.contentTintColor =
+      [[NSColor accentMatchingHost] colorWithAlphaComponent:0.9];
+  insertBtn.imageScaling = NSImageScaleProportionallyDown;
+  insertBtn.translatesAutoresizingMaskIntoConstraints = NO;
+  [insertBtn.widthAnchor constraintEqualToConstant:15.0].active = YES;
+  [insertBtn.heightAnchor constraintEqualToConstant:15.0].active = YES;
+
+  NSButton *chevron = [NSButton
+      buttonWithImage:[NSImage
+                          imageWithSystemSymbolName:(expanded ? @"chevron.up"
+                                                              : @"chevron.down")
+                           accessibilityDescription:nil]
+               target:self
+               action:@selector(_toggleExprExpand:)];
+  chevron.bordered = NO;
+  chevron.identifier = label;
+  chevron.contentTintColor =
+      [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
+  chevron.imageScaling = NSImageScaleProportionallyDown;
+  chevron.translatesAutoresizingMaskIntoConstraints = NO;
+  [chevron.widthAnchor constraintEqualToConstant:15.0].active = YES;
+  [chevron.heightAnchor constraintEqualToConstant:15.0].active = YES;
+
+  _KKStaticValueRow *row = [[_KKStaticValueRow alloc]
+      initEditorRowWithContentView:ed
+                          leftView:insertBtn
+                         rightView:chevron
+                        firstLineH:kKKExprEditorTextH
+                            height:(expanded ? kKKExprEditorExpandedH
+                                             : kKKExprEditorRowH)];
+  return row;
+}
+
+// Reload the discovered link sources into the per-popover cache used by the
+// display<->stored token transforms and the insert menu. Cheap directory read;
+// called on editor install and each menu open, not on the render/keystroke
+// path.
+- (void)_refreshLinkManifests {
+  _linkManifests = [KKLinkBus allManifests];
+}
+
+// Model (`${uuid.rawLabel}`) <-> editor (`${Clip.Param}`) ref translation. The
+// logic (token walk + name/uuid resolution) lives in the kit so the plugin's AI
+// write-back and this editor share ONE source of truth; here we just bind it to
+// the cached manifests.
+- (NSString *)_displayFromStored:(NSString *)stored {
+  return KKLinkDisplayExpressionFromStored(stored, _linkManifests);
+}
+
+- (NSString *)_storedFromDisplay:(NSString *)display {
+  return KKLinkStoredExpressionFromDisplay(display, _linkManifests);
+}
+
+// Build and pop the reference-insert menu for the editor whose gutter button
+// was clicked: one submenu per discovered clip (its display name + timecode),
+// each listing that clip's referenceable params. Choosing one drops a friendly
+// `${Clip.Param}` token into that editor (persisted uuid-keyed via onChange).
+- (void)_insertReferenceMenu:(NSButton *)sender {
+  NSString *label = sender.identifier;
+  if (label.length == 0)
+    return;
+  [self _refreshLinkManifests];
+  NSMenu *menu = [[NSMenu alloc] init];
+  if (_linkManifests.count == 0) {
+    NSMenuItem *empty = [[NSMenuItem alloc]
+        initWithTitle:KKLoc(@"No other clips found",
+                            @"Expression insert menu: empty state.")
+               action:NULL
+        keyEquivalent:@""];
+    empty.enabled = NO;
+    [menu addItem:empty];
+  }
+  for (KKLinkManifest *man in _linkManifests) {
+    NSMenuItem *clipItem = [[NSMenuItem alloc] initWithTitle:man.displayName
+                                                      action:NULL
+                                               keyEquivalent:@""];
+    // Per-clip thumbnail (baked by the source's inspector, keyed by its uuid)
+    // so two same-named clips ("Shader @ 0:02" x2) are told apart visually.
+    // Absent thumbnail = text-only item, unchanged.
+    NSString *thumbPath = [KKLinkBus thumbnailPathForUUID:man.uuid];
+    if (thumbPath.length) {
+      NSImage *thumb = [[NSImage alloc] initWithContentsOfFile:thumbPath];
+      if (thumb) {
+        CGFloat h = 24.0; // ~menu row height; keep the source's aspect
+        CGFloat w = MAX(1.0, thumb.size.height > 0
+                                 ? h * thumb.size.width / thumb.size.height
+                                 : h);
+        thumb.size = NSMakeSize(round(w), h);
+        clipItem.image = thumb;
+      }
+    }
+    NSMenu *sub = [[NSMenu alloc] init];
+    for (NSUInteger i = 0; i < man.paramLabels.count; i++) {
+      NSString *paramDisplay = (i < man.paramDisplayNames.count)
+                                   ? man.paramDisplayNames[i]
+                                   : man.paramLabels[i];
+      NSMenuItem *pit =
+          [[NSMenuItem alloc] initWithTitle:paramDisplay
+                                     action:@selector(_insertReferenceChosen:)
+                              keyEquivalent:@""];
+      pit.target = self;
+      // Carry the editor label + the friendly token to insert (onChange maps it
+      // back to the stable `${uuid.rawLabel}` for the model).
+      pit.representedObject = @{
+        @"label" : label,
+        @"token" : [NSString
+            stringWithFormat:@"${%@.%@}", man.displayName, paramDisplay]
+      };
+      [sub addItem:pit];
+    }
+    if (man.paramLabels.count == 0) {
+      NSMenuItem *none = [[NSMenuItem alloc]
+          initWithTitle:KKLoc(@"No parameters",
+                              @"Expression insert menu: a source with no "
+                              @"referenceable params.")
+                 action:NULL
+          keyEquivalent:@""];
+      none.enabled = NO;
+      [sub addItem:none];
+    }
+    // Manual cleanup. Auto-reconcile drops a source only once its clip is gone
+    // AND the project is reopened (FCP gives the plugin no in-session delete
+    // signal). For the rare straggler still listed after an in-session delete,
+    // let the user remove it by hand. Harmless if it is actually live - it
+    // re-advertises on its next render.
+    [sub addItem:[NSMenuItem separatorItem]];
+    NSMenuItem *rm = [[NSMenuItem alloc]
+        initWithTitle:KKLoc(@"Remove from list",
+                            @"Expression insert menu: manually drop a stale "
+                            @"source clip from the reference list.")
+               action:@selector(_removeReferenceSource:)
+        keyEquivalent:@""];
+    rm.target = self;
+    rm.representedObject = man.uuid;
+    if (@available(macOS 11.0, *))
+      rm.image = [NSImage imageWithSystemSymbolName:@"xmark.circle"
+                           accessibilityDescription:nil];
+    [sub addItem:rm];
+    clipItem.submenu = sub;
+    [menu addItem:clipItem];
+  }
+
+  // Functions & variables reference: the WHOLE expression vocabulary, grouped
+  // by category, each showing its signature + a one-line description, click to
+  // insert. This is the discoverability surface - nothing is hidden behind
+  // "you had to know it existed" (e.g. pingpong).
+  if (menu.numberOfItems > 0)
+    [menu addItem:[NSMenuItem separatorItem]];
+  NSMenuItem *fnHeader = [[NSMenuItem alloc]
+      initWithTitle:KKLoc(@"Functions & variables",
+                          @"Expression insert menu: reference section header.")
+             action:NULL
+      keyEquivalent:@""];
+  fnHeader.enabled = NO;
+  [menu addItem:fnHeader];
+  for (NSString *categ in KKExprCatalogCategories()) {
+    // categ stays English as the grouping key (matched against each entry's
+    // "category"); localize only its shown title.
+    NSMenuItem *catItem = [[NSMenuItem alloc]
+        initWithTitle:KKLoc(categ, @"Expression insert menu: a category of "
+                                   @"functions/variables (Variables/Math/...).")
+               action:NULL
+        keyEquivalent:@""];
+    NSMenu *catSub = [[NSMenu alloc] init];
+    for (NSDictionary<NSString *, NSString *> *e in KKExprCatalog()) {
+      if (![e[@"category"] isEqualToString:categ])
+        continue;
+      NSMenuItem *it =
+          [[NSMenuItem alloc] initWithTitle:e[@"signature"]
+                                     action:@selector(_insertReferenceChosen:)
+                              keyEquivalent:@""];
+      it.target = self;
+      it.attributedTitle = [self _exprCatalogTitleForEntry:e];
+      it.toolTip = e[@"desc"];
+      it.representedObject = @{@"label" : label, @"token" : e[@"insert"]};
+      [catSub addItem:it];
+    }
+    catItem.submenu = catSub;
+    [menu addItem:catItem];
+  }
+
+  [menu popUpMenuPositioningItem:nil
+                      atLocation:NSMakePoint(0, NSHeight(sender.bounds))
+                          inView:sender];
+}
+
+// A reference-menu item title: the signature in normal menu text followed by
+// its description dimmed + smaller, so the whole vocabulary reads at a glance.
+- (NSAttributedString *)_exprCatalogTitleForEntry:
+    (NSDictionary<NSString *, NSString *> *)e {
+  NSMutableAttributedString *s = [[NSMutableAttributedString alloc]
+      initWithString:e[@"signature"]
+          attributes:@{
+            NSFontAttributeName : [NSFont menuFontOfSize:0],
+            NSForegroundColorAttributeName : [NSColor labelColor]
+          }];
+  [s appendAttributedString:
+          [[NSAttributedString alloc]
+              initWithString:[@"    " stringByAppendingString:e[@"desc"]]
+                  attributes:@{
+                    NSFontAttributeName :
+                        [NSFont menuFontOfSize:[NSFont smallSystemFontSize]],
+                    NSForegroundColorAttributeName :
+                        [NSColor secondaryLabelColor]
+                  }]];
+  return s;
+}
+
+- (void)_insertReferenceChosen:(NSMenuItem *)item {
+  NSDictionary *info = item.representedObject;
+  NSString *label = info[@"label"];
+  NSString *token = info[@"token"];
+  KKCodeEditorView *ed = _exprEditorByLabel[label];
+  [ed insertReferenceText:token];
+}
+
+// Manually drop a source clip from the reference list (the "Remove from list"
+// item in a source's submenu). Wipes its manifest / thumbnail / published
+// curves; the next menu open rebuilds from what's left. Non-destructive for a
+// live source - it re-advertises on its next render tick.
+- (void)_removeReferenceSource:(NSMenuItem *)item {
+  NSString *uuid = item.representedObject;
+  if (uuid.length == 0)
+    return;
+  [KKLinkBus removeSourceForUUID:uuid];
+  [self _refreshLinkManifests];
+}
+
+// Chevron on an expression-editor row: flip its label's expanded state, resize
+// the editor row, swap the glyph, and re-fit the popover.
+- (void)_toggleExprExpand:(NSButton *)sender {
+  NSString *label = sender.identifier;
+  if (label.length == 0)
+    return;
+  BOOL expanded = ![_exprExpandedLabels containsObject:label];
+  if (expanded)
+    [_exprExpandedLabels addObject:label];
+  else
+    [_exprExpandedLabels removeObject:label];
+  _KKStaticValueRow *row = (_KKStaticValueRow *)_exprRowsByLabel[label];
+  if ([row respondsToSelector:@selector(setEditorRowHeight:)])
+    [row setEditorRowHeight:(expanded ? kKKExprEditorExpandedH
+                                      : kKKExprEditorRowH)];
+  sender.image = [NSImage
+      imageWithSystemSymbolName:(expanded ? @"chevron.up" : @"chevron.down")
+       accessibilityDescription:nil];
+  [self _applyContentSize];
+}
+
+// Append an expression-editor row for `lane` to the end of the stack (used
+// while building rows in order). No-op unless the lane carries an expression.
+- (void)_installExprEditorForLane:(KKLane *)lane {
+  if (!KKLaneHasExpressionEditor(lane))
+    return;
+  NSView *row = [self _makeExprEditorRowForLabel:lane.label
+                                            text:lane.linkExpression];
+  [_stack addArrangedSubview:row];
+  [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
+  _exprRowsByLabel[lane.label] = row;
+  [self _updateExprResultForLane:lane]; // seed the strip immediately
+  [self _ensureExprResultTimer];
+}
+
+// Evaluate `lane`'s expression at the current preview time and push the result
+// to its inline editor's strip. Time comes from the popover's mini-viewer
+// renderer (clip fraction / project seconds / duration); with no mini-viewer it
+// falls to t=0. `value` + `${refs}` resolve exactly as the render does, so the
+// strip shows what actually renders. No-op for a lane without an editor /
+// expression.
+- (void)_updateExprResultForLane:(KKLane *)lane {
+  KKCodeEditorView *ed = _exprEditorByLabel[lane.label];
+  if (!ed)
+    return;
+  if (lane.linkExpression.length == 0) {
+    ed.resultText = nil;
+    return;
+  }
+  // Evaluate against the LIVE displayed value (seeded from the shown keypose,
+  // updated on every field / OSC edit) so the strip re-runs immediately - the
+  // keypose popover never rebuilds `_lanes` on a value edit, so the cached
+  // lane's keypose would otherwise stay stale until the popover is reopened.
+  KKLane *evalLane = lane;
+  NSArray<NSNumber *> *live = _currentValuesByLabel[lane.label];
+  if (live.count) {
+    evalLane = [lane copy];
+    evalLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:live] ];
+  }
+  double frac = 0.0, tlSec = 0.0, dur = 0.0, start = 0.0;
+  if ([_miniViewer.canvasDelegate isKindOfClass:[KKMiniViewerRenderer class]]) {
+    KKMiniViewerRenderer *r =
+        (KKMiniViewerRenderer *)_miniViewer.canvasDelegate;
+    frac = r.editFraction;
+    tlSec = r.linkTimelineSec;
+    dur = r.clipDurationSeconds;
+    start = r.clipTimelineStartSec;
+  }
+
+  // Where the dot sits (and where the readout is evaluated - they must agree):
+  //  - constants mode: always the live playhead (linkTimelineSec back-solved to
+  //  a
+  //    clip fraction = clipProjectStartSec + playheadFraction*dur) - no keypose
+  //    to anchor to, so it just tracks the scrub;
+  //  - keypose mode: the playhead WHILE scrubbing/playing (so the dot + readout
+  //    move with the live preview), pinging back to the keypose (editFraction)
+  //    once the playhead settles.
+  double playFrac = -1.0;
+  if (dur > 0.0 && start >= 0.0 && tlSec >= 0.0)
+    playFrac = MAX(0.0, MIN(1.0, (tlSec - start) / dur));
+  double markerFrac;
+  if (!_editsKeypose)
+    markerFrac = playFrac;
+  else if (_playheadMoving && playFrac >= 0.0)
+    markerFrac = playFrac;
+  else
+    markerFrac = (frac >= 0.0 && frac <= 1.0) ? frac : -1.0;
+
+  // Evaluate the readout AT the marker position so the number matches the dot:
+  // t = clipStart + evalFrac*dur (= linkTimelineSec while moving; = the
+  // keypose's own time once settled - not the stale scrub-release time).
+  double evalFrac = (markerFrac >= 0.0) ? markerFrac : frac;
+  double evalTl = (dur > 0.0 && start >= 0.0) ? start + evalFrac * dur : tlSec;
+  NSArray<NSNumber *> *res =
+      KKLinkResolvedLaneValue(evalLane, evalFrac, evalTl, dur);
+  ed.resultText = [self _formatResultText:res];
+
+  // Inline curve preview: sample the SAME expression across the whole clip
+  // (fraction 0..1, t = clipStart + frac*dur), first component only, so it
+  // reads identically in constants and keypose modes regardless of the current
+  // playhead. A time-independent expression comes out flat, which is the honest
+  // picture.
+  static const NSInteger kSamples = 48;
+  NSMutableArray<NSNumber *> *curve =
+      [NSMutableArray arrayWithCapacity:kSamples];
+  for (NSInteger i = 0; i < kSamples; i++) {
+    double f = (double)i / (double)(kSamples - 1);
+    double t = dur > 0.0 ? start + f * dur : tlSec;
+    NSArray<NSNumber *> *v = KKLinkResolvedLaneValue(evalLane, f, t, dur);
+    [curve addObject:v.firstObject ?: @0];
+  }
+  ed.sparklineSamples = curve;
+  ed.sparklineMarker = markerFrac;
+}
+
+// "→ 135" (scalar) / "→ 105.2, 52.6" (multi-component), rounded to 2 decimals.
+- (NSString *)_formatResultText:(NSArray<NSNumber *> *)values {
+  if (values.count == 0)
+    return nil;
+  NSMutableArray<NSString *> *parts =
+      [NSMutableArray arrayWithCapacity:values.count];
+  for (NSNumber *n in values)
+    [parts addObject:[NSString
+                         stringWithFormat:@"%g", round(n.doubleValue * 100.0) /
+                                                     100.0]];
+  return [@"→ " stringByAppendingString:[parts componentsJoinedByString:@", "]];
+}
+
+// Refresh every visible expression lane's result strip (timer tick).
+- (void)_updateAllExprResults {
+  // Detect playhead motion once per tick (scrub/playback advances
+  // linkTimelineSec; it holds at rest) so the keypose sparkline dot follows the
+  // playhead while moving and pings back to the keypose when settled - matching
+  // the mini-viewer's live preview. Computed here, not per-lane, so every lane
+  // sees the same verdict.
+  double tl = -1.0;
+  if ([_miniViewer.canvasDelegate isKindOfClass:[KKMiniViewerRenderer class]])
+    tl = ((KKMiniViewerRenderer *)_miniViewer.canvasDelegate).linkTimelineSec;
+  _playheadMoving = (tl >= 0.0 && fabs(tl - _lastMarkerLinkSec) > 1e-6);
+  _lastMarkerLinkSec = tl;
+  for (KKLane *lane in _lanes)
+    if (_exprEditorByLabel[lane.label])
+      [self _updateExprResultForLane:lane];
+}
+
+// Start the result-refresh timer (once) so time-based expressions stay live.
+// Weak self (no retain cycle); torn down in -releaseMiniViewer / -dealloc.
+- (void)_ensureExprResultTimer {
+  if (_exprResultTimer)
+    return;
+  __weak typeof(self) weak = self;
+  _exprResultTimer =
+      [NSTimer scheduledTimerWithTimeInterval:0.2
+                                      repeats:YES
+                                        block:^(NSTimer *t) {
+                                          __strong typeof(weak) s = weak;
+                                          if (!s) {
+                                            [t invalidate];
+                                            return;
+                                          }
+                                          [s _updateAllExprResults];
+                                        }];
+}
+
+// Bring the inline editor in/out of an ALREADY-BUILT stack to match the current
+// expression state for `label`, inserting it directly under `valueRow`. Drives
+// the grow-in-place on Add/Remove. Returns YES iff a row was added/removed
+// (structural change); a live text edit (still non-empty) leaves the existing
+// editor alone. `label` is always a referenceable lane here (the row only
+// exposes the menu for those), so presence is just `expr.length`.
+- (BOOL)_syncExprEditorForLabel:(NSString *)label
+                     expression:(NSString *)expr
+                       afterRow:(_KKStaticValueRow *)valueRow {
+  // nil = no expression (remove the editor); an empty string is a present-but-
+  // empty expression (keep the editor open), so key on nil, not length.
+  BOOL should = (expr != nil);
+  NSView *existing = _exprRowsByLabel[label];
+  if (should && !existing) {
+    NSView *row = [self _makeExprEditorRowForLabel:label text:expr];
+    NSInteger idx = [_stack.arrangedSubviews indexOfObject:valueRow];
+    if (idx == NSNotFound)
+      [_stack addArrangedSubview:row];
+    else
+      [_stack insertArrangedSubview:row atIndex:idx + 1];
+    [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
+    _exprRowsByLabel[label] = row;
+    [self _ensureExprResultTimer]; // populate the result strip on the next tick
+    return YES;
+  }
+  if (!should && existing) {
+    [_stack removeArrangedSubview:existing];
+    [existing removeFromSuperview];
+    [_exprRowsByLabel removeObjectForKey:label];
+    [_exprEditorByLabel removeObjectForKey:label];
+    return YES;
+  }
+  return NO; // no structural change (text edit / already correct)
+}
+
+- (BOOL)_syncExprEditorForLane:(KKLane *)lane
+                      afterRow:(_KKStaticValueRow *)valueRow {
+  return [self _syncExprEditorForLabel:lane.label
+                            expression:(KKLaneHasExpressionEditor(lane)
+                                            ? lane.linkExpression
+                                            : nil)afterRow:valueRow];
+}
+
+// Push the lane's current (stored) expression into its inline editor as an
+// EXTERNAL change, so an undo/redo of a committed edit reaches the editor. Uses
+// -applyExternalText: which is focus-safe (skips a live uncommitted typing
+// burst so it never clobbers what the user is mid-typing) and clears the
+// editor's local undo once applied. No-op when the lane has no editor.
+//
+// DEFERRED to the next runloop, and NO disk read here: this is called from
+// inside the synchronous undo -> _refresh -> updateUnoptedLanes chain, often
+// while the editor's text view is first responder mid-edit. Mutating it (and,
+// worse, doing app-group disk I/O) re-entrantly from that chain crashed FCP on
+// cmd-Z. The dispatch hops out of the chain; the stored->display mapping uses
+// the cached manifests (a stale friendly name is harmless and refreshes on the
+// next edit).
+- (void)_resyncExprEditorTextForLane:(KKLane *)lane {
+  NSString *label = lane.label;
+  if (!_exprEditorByLabel[label])
+    return;
+  NSString *stored = lane.linkExpression ?: @"";
+  __weak typeof(self) weak = self;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    __strong typeof(weak) s = weak;
+    KKCodeEditorView *ed = s ? s->_exprEditorByLabel[label] : nil;
+    if (!ed)
+      return;
+    [ed applyExternalText:[s _displayFromStored:stored]];
+  });
+}
+
+// Update the popover's cached `_lanes` entry for `label` so a subsequent resize
+// (_applyContentSize -> _heightForLanes:_lanes) computes the new height. A copy
+// is mutated (never the shared model lane). Needed for the keypose popover,
+// which has no lanes-view reconcile to refresh _lanes on an expression toggle.
+- (void)_updateCachedLaneExpression:(NSString *)expr
+                           forLabel:(NSString *)label {
+  NSMutableArray<KKLane *> *ml = [_lanes mutableCopy];
+  for (NSInteger i = 0; i < (NSInteger)ml.count; i++)
+    if ([ml[i].label isEqualToString:label]) {
+      KKLane *c = [ml[i] copy];
+      c.linkExpression = expr.length ? expr : nil;
+      ml[i] = c;
+      _lanes = ml;
+      return;
+    }
 }
 
 - (_KKStaticValueRow *)_makeRowForLane:(KKLane *)lane {
@@ -1215,6 +1826,33 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       if (s->_onLinkToggled)
         s->_onLinkToggled(label, on);
     };
+  // Parameter linking: right-click "Add / Remove Expression" on the label.
+  row.onSetLinkExpression = ^(NSString *_Nullable expr) {
+    __strong typeof(weak) s = weak;
+    // Persist through the host.
+    if (s->_onSetLinkExpression)
+      s->_onSetLinkExpression(label, expr);
+    // Grow/shrink IN PLACE (works for both the constants and keypose popovers -
+    // popover-level, so it doesn't depend on the lanes-view reconcile that only
+    // runs for constants). Update the cached lane so the resize computes the
+    // new height, sync the editor under the row, then re-fit. Idempotent, so
+    // the constants path's later reconcile is a no-op.
+    [s _updateCachedLaneExpression:expr forLabel:label];
+    _KKStaticValueRow *r = s->_rowsByLabel[label];
+    if (r && [s _syncExprEditorForLabel:label expression:expr afterRow:r])
+      [s _applyContentSize];
+  };
+  // Right-click "Format Expression": tidy the live editor text in place. Parses
+  // the friendly display text (refs round-trip verbatim) and rewrites it
+  // normalized; a parse error no-ops. onChange then re-stores the uuid form.
+  row.onFormatExpression = ^{
+    __strong typeof(weak) s = weak;
+    KKCodeEditorView *ed = s->_exprEditorByLabel[label];
+    [ed formatUsing:^NSString *(NSString *code) {
+      KKLinkExpr *e = [KKLinkExpr compile:code error:NULL];
+      return e ? [e formattedSource] : nil;
+    }];
+  };
   if (lane.valueType == KKLaneValueTypeColor ||
       lane.valueType == KKLaneValueTypeGradient ||
       lane.valueType == KKLaneValueTypeColorPoint)
@@ -1492,6 +2130,11 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   }
   [_rowsByLabel removeAllObjects];
   [_excludedRowsByLabel removeAllObjects];
+  [_exprRowsByLabel
+      removeAllObjects]; // editors were removed with the stack above
+  [_exprEditorByLabel removeAllObjects]; // re-tracked per editor rebuild
+  // NB: _exprExpandedLabels persists so the user's expand choice survives
+  // rebuilds.
   _lanes = [lanes copy];
   [self _seedCurrentValues];
   _labelColumnWidth = [_KKStaticValueRow labelColumnWidthForLanes:lanes];
@@ -1504,9 +2147,19 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     if (!reused) // a reused row already has its stack-width constraint
       [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
     _rowsByLabel[lane.label] = row;
+    [self _installExprEditorForLane:lane];
     if (lane.categoryKey.length)
       catByLabel[lane.label] = lane.categoryKey;
   }
+  // Tear down any PRESERVED code row the new lane set didn't reuse (e.g. the
+  // constants "Shader" code lane when reconfiguring into a keypose popover,
+  // whose lanes don't include it). It was held back from the
+  // removeFromSuperview sweep above so its live editor state could be reused;
+  // when it isn't, it would otherwise float over the new rows ("bleeding").
+  NSArray<_KKStaticValueRow *> *reusedRows = _rowsByLabel.allValues;
+  for (_KKStaticValueRow *codeRow in kept)
+    if (![reusedRows containsObject:codeRow])
+      [codeRow removeFromSuperview];
   _rowCategoryByLabel = catByLabel;
   if (_defaultsProvider)
     for (NSString *label in _rowsByLabel)
@@ -1553,6 +2206,10 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 - (void)liveUpdateValues:(NSArray<NSNumber *> *)values
                 forLabel:(NSString *)label {
   [[self _rowForLabelTolerant:label] applyValues:values];
+  // Keep the live-value cache current for OSC drags too (the row's own onValue
+  // does this for field edits), so an expression lane's result strip re-runs
+  // against the value being dragged instead of a stale cached keypose.
+  _currentValuesByLabel[label] = values;
 }
 
 - (nullable NSView *)rowViewForLabel:(NSString *)label {
@@ -1681,6 +2338,14 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     [_stack removeArrangedSubview:row];
     [row removeFromSuperview];
     [_rowsByLabel removeObjectForKey:label];
+    // Drop its inline expression editor too, if any (the label is gone).
+    NSView *ed = _exprRowsByLabel[label];
+    if (ed) {
+      [_stack removeArrangedSubview:ed];
+      [ed removeFromSuperview];
+      [_exprRowsByLabel removeObjectForKey:label];
+      [_exprEditorByLabel removeObjectForKey:label];
+    }
   }
 
   _lanes = [lanes copy];
@@ -1708,16 +2373,33 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       [_stack removeArrangedSubview:existing];
       [existing removeFromSuperview];
       [_rowsByLabel removeObjectForKey:lane.label];
+      // Drop its inline expression editor too (a remake reinstalls a fresh
+      // one).
+      NSView *oldEd = _exprRowsByLabel[lane.label];
+      if (oldEd) {
+        [_stack removeArrangedSubview:oldEd];
+        [oldEd removeFromSuperview];
+        [_exprRowsByLabel removeObjectForKey:lane.label];
+        [_exprEditorByLabel removeObjectForKey:lane.label];
+      }
       existing = nil;
     }
     if (existing) {
       [existing applyLane:lane]; // reflect external edits (values + range)
+      // Grow/shrink in place when an expression was added/removed on a reused
+      // row.
+      [self _syncExprEditorForLane:lane afterRow:existing];
+      // Re-sync a KEPT editor's text to the (possibly undone/redone)
+      // expression, so cmd-Z reaches the inline editor - the GLSL code row does
+      // this via applyLane, but the expression editor is popover-level.
+      [self _resyncExprEditorTextForLane:lane];
       continue;
     }
     _KKStaticValueRow *row = [self _makeRowForLane:lane];
     [_stack addArrangedSubview:row];
     [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
     _rowsByLabel[lane.label] = row;
+    [self _installExprEditorForLane:lane];
   }
   // Order the stack by the canonical `lanes` order (the parameter order), not
   // alphabetically: a row restored by cmd-Z (undo of "move to animated") must
@@ -1731,6 +2413,12 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       continue;
     [_stack removeArrangedSubview:row];
     [_stack insertArrangedSubview:row atIndex:pos++];
+    // Keep the inline expression editor directly under its row.
+    NSView *ed = _exprRowsByLabel[lane.label];
+    if (ed) {
+      [_stack removeArrangedSubview:ed];
+      [_stack insertArrangedSubview:ed atIndex:pos++];
+    }
   }
 
   // Refresh each row's template default (drives the reset button) so a changed

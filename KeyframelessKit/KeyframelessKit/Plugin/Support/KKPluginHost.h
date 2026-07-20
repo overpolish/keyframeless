@@ -49,6 +49,7 @@ double KKProcessFrameDurationSeconds(void);
 @property(nonatomic) double sourceInSec;
 @property(nonatomic) double frameDurSec;
 @property(nonatomic) double lastPushedClipDuration;
+@property(nonatomic) double lastPushedClipProjectStart;
 @property(nonatomic) BOOL loopEnabled;
 /// "Maintain Timing" (timelock): when YES and `anchorDurSec` > 0, the render
 /// remaps the clip fraction so keyposes hold their absolute media position
@@ -98,10 +99,10 @@ void KKHandleTimelineParamChanged(
 ///
 /// Motion blur does NOT request sub-frame source frames here: every built-in
 /// plugin blurs its OWN animation (per-sample params / transforms, or velocity
-/// reconstruction) over a single source frame, so requesting N sub-frame sources
-/// would only re-render the upstream effect N times for no benefit (footage
-/// smear needs Frame Blending / Optical Flow to differ at all). An effect that
-/// genuinely wants footage content-smear calls `+[KKMotionBlur
+/// reconstruction) over a single source frame, so requesting N sub-frame
+/// sources would only re-render the upstream effect N times for no benefit
+/// (footage smear needs Frame Blending / Optical Flow to differ at all). An
+/// effect that genuinely wants footage content-smear calls `+[KKMotionBlur
 /// appendSourceRequestsForState:...]` explicitly.
 ///
 /// `requestBuilder` returns an FxImageTileRequest for the given CMTime.

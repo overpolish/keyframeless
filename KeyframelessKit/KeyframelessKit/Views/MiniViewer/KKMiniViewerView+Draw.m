@@ -50,6 +50,29 @@
       (canProcess || canGenerate) && (n > 1 || liveOverride)
           ? [(NSObject *)del valueForKey:@"editFraction"] // nil if absent
           : nil;
+  // Feed-lock parameter-link time to the frame being rendered. Links resolve at
+  // an absolute project time (`linkTimelineSec`), which the inspector normally
+  // pushes from the playhead poller - but that poller only fires ~2/sec, so
+  // during live playback linked values jumped while everything else stayed
+  // 60fps. The feed frame's fraction (slot.tag) advances at the feed rate, and
+  // the clip start is constant, so `start + tag*duration` gives a 60fps-smooth
+  // project time. Saved/restored around the loop like editFraction. Renderers
+  // that don't expose these keys (base mini renderer) leave savedLink nil and
+  // are untouched.
+  NSNumber *savedLink = nil;
+  double linkClipStart = -1, linkClipDur = 0;
+  if (savedFrac) {
+    @try {
+      NSNumber *cs = [(NSObject *)del valueForKey:@"clipTimelineStartSec"];
+      NSNumber *cd = [(NSObject *)del valueForKey:@"clipDurationSeconds"];
+      if (cs && cd && cs.doubleValue >= 0 && cd.doubleValue > 0) {
+        linkClipStart = cs.doubleValue;
+        linkClipDur = cd.doubleValue;
+        savedLink = [(NSObject *)del valueForKey:@"linkTimelineSec"];
+      }
+    } @catch (...) {
+    }
+  }
   // Tell the renderer how many slots it's about to iterate so subclasses
   // can distinguish single-slot (source = plugin's published dest, blit it)
   // from multi-slot (source = raw frame at editFraction, re-render).
@@ -93,6 +116,9 @@
         // the same tag.
         @try {
           [(NSObject *)del setValue:@(slot.tag) forKey:@"editFraction"];
+          if (savedLink)
+            [(NSObject *)del setValue:@(linkClipStart + slot.tag * linkClipDur)
+                               forKey:@"linkTimelineSec"];
         } @catch (...) {
         }
       }
@@ -110,6 +136,8 @@
     if (savedFrac) {
       @try {
         [(NSObject *)del setValue:savedFrac forKey:@"editFraction"];
+        if (savedLink)
+          [(NSObject *)del setValue:savedLink forKey:@"linkTimelineSec"];
       } @catch (...) {
       }
     }

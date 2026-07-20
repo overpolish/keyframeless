@@ -404,9 +404,11 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.codeTabs = [_codeTabs copy];
   c.codeTabCatalog = [_codeTabCatalog copy]; // static config, not serialized
   c.codeValidator = _codeValidator; // block, copied by the property setter
+  c.codeValidationComposer = _codeValidationComposer; // block, copied by setter
   c.codeFormatter = _codeFormatter; // block, copied by the property setter
   c.codeSavable = _codeSavable;     // static config, not serialized
-  c.codeSaveCategories = [_codeSaveCategories copy]; // static config
+  c.codeSaveCategories = [_codeSaveCategories copy];           // static config
+  c.codeSaveNamePlaceholder = [_codeSaveNamePlaceholder copy]; // static config
   c.componentMin = [_componentMin copy];
   c.componentMax = [_componentMax copy];
   c.sliderMax = [_sliderMax copy];
@@ -456,6 +458,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.paletteLockable = _paletteLockable;
   c.paletteGeneratorBar = _paletteGeneratorBar;
   c.paletteGroup = [_paletteGroup copy];
+  c.linkExpression = [_linkExpression copy];
   return c;
 }
 
@@ -537,6 +540,11 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   }
   if (_gradientShowsTypeAngle)
     d[@"gradient_type_angle"] = @YES;
+  // Serialize even an EMPTY expression (present-but-empty passthrough), so a
+  // lane whose editor the user cleared keeps it open across the param
+  // round-trip; nil = truly no expression and is left out.
+  if (_linkExpression != nil)
+    d[@"link_expr"] = _linkExpression;
   return d;
 }
 
@@ -599,6 +607,8 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   if ([d[@"max_by_controller_value"] isKindOfClass:[NSArray class]])
     l.componentMaxByControllerValue = d[@"max_by_controller_value"];
   l.gradientShowsTypeAngle = [d[@"gradient_type_angle"] boolValue];
+  if ([d[@"link_expr"] isKindOfClass:[NSString class]])
+    l.linkExpression = d[@"link_expr"];
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {
     NSMutableArray *kps = [NSMutableArray arrayWithCapacity:rawKps.count];
@@ -682,6 +692,26 @@ KKTimeline *KKTimelineSettingAspectLinked(KKTimeline *timeline, NSString *label,
       return nil; // already in that state - no commit, no undo entry
     KKLane *nl = [lanes[i] copy];
     nl.aspectLinked = on;
+    lanes[i] = nl;
+    t.lanes = lanes;
+    return t;
+  }
+  return nil;
+}
+
+KKTimeline *KKTimelineSettingLinkExpression(KKTimeline *timeline,
+                                            NSString *label, NSString *expr) {
+  KKTimeline *t = [timeline copy];
+  NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
+  NSString *e = expr.length ? expr : nil;
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    if (![lanes[i].label isEqualToString:label])
+      continue;
+    NSString *cur = lanes[i].linkExpression;
+    if (cur == e || [cur isEqualToString:e])
+      return nil; // unchanged
+    KKLane *nl = [lanes[i] copy];
+    nl.linkExpression = e;
     lanes[i] = nl;
     t.lanes = lanes;
     return t;

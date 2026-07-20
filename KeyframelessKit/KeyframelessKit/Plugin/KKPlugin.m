@@ -6,7 +6,18 @@
 #import "KKConstants.h"
 #import "KKDataBlob.h"
 #import "KKHostInfo.h"
+#import "KKLinkBus.h"
+#import "KKLog.h"
 #import "KKPluginInstanceState.h"
+#import <os/lock.h>
+
+// Process-wide (all this plugin's instances share ONE XPC service process) live
+// set + reconcile debounce. -pluginInstanceAddedToDocument adds each existing
+// instance's uuid on document load; ~5s after the load burst settles we remove
+// any manifest whose uuid never showed up (an effect deleted before this load).
+static NSMutableSet<NSString *> *gKKLiveUUIDs;
+static os_unfair_lock gKKLiveLock = OS_UNFAIR_LOCK_INIT;
+static NSInteger gKKReconcileGen; // main-thread only
 #import "KKPlugin_Private.h"
 #import "KKUpdateChecker.h"
 #import <AppKit/AppKit.h>
@@ -56,6 +67,11 @@
   self = [super init];
   if (self) {
     _apiManager = apiManager;
+    // Warm the parameter-link app-group container off-thread at process start,
+    // so the first link resolve on the render thread doesn't stall on the ~1-2s
+    // cold container lookup mid-frame. One call covers every plugin (each
+    // FxPlug instance is its own XPC process); a no-op when nothing links.
+    [KKLinkBus warmUp];
   }
   return self;
 }
@@ -63,6 +79,80 @@
 - (NSString *)presetPluginKey {
   return [NSBundle bundleForClass:[self class]].bundleIdentifier
              ?: NSStringFromClass([self class]);
+}
+
+- (NSArray<KKLane *> *)linkableLanesForManifest {
+  return nil; // opt-out by default; a plugin opts in by overriding
+}
+
+- (NSString *)linkManifestEffectName {
+  NSString *n =
+      [NSBundle bundleForClass:[self class]].infoDictionary[@"CFBundleName"];
+  return n.length ? n : NSStringFromClass([self class]);
+}
+
+- (void)writeLinkManifest {
+  NSArray<KKLane *> *lanes = [self linkableLanesForManifest];
+  if (lanes == nil)
+    return; // not a link source
+  id<FxTimingAPI_v4> t =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  if (!t)
+    return;
+  CMTime effStart = kCMTimeZero, dur = kCMTimeZero, effStartTL = kCMTimeZero;
+  [t startTimeForEffect:&effStart];
+  [t durationTimeForEffect:&dur];
+  [t timelineTime:&effStartTL fromInputTime:effStart];
+  double durSec = CMTimeGetSeconds(dur);
+  if (durSec <= 0.0)
+    return;
+  double tlStart = CMTimeGetSeconds(effStartTL);
+  KKLinkWriteManifest(self.apiManager, lanes, tlStart, durSec,
+                      [self linkManifestEffectName]);
+  // Publish the same lanes' actual curves so a `${uuid.label}` reference on
+  // another clip resolves (the manifest only advertises the label set).
+  KKLinkPublishReferenceableLanes(self.apiManager, lanes, tlStart,
+                                  tlStart + durSec);
+}
+
+// FxPlug's ADD signal (FxTileableEffect, @optional): fires when this instance
+// becomes part of the document - on ADD and on every document LOAD, once per
+// existing instance as it deserializes. There is NO removal counterpart in the
+// SDK (verified: FCP never tells a plugin an effect was deleted, and pins the
+// instance for undo so no teardown fires either). We lean on the ADD signal two
+// ways: register the manifest here (not only on render) so idle effects still
+// advertise themselves, and treat the load-time burst of uuids as the set of
+// LIVE effects - anything on the bus that isn't in it was deleted before this
+// load, so reconcile drops it. In-session deletes can't be caught (no signal);
+// they clear on the next reopen, or via the manual "Remove from list".
+- (void)pluginInstanceAddedToDocument {
+  NSString *uuid = KKInstanceUUIDForAPI(self.apiManager);
+  [self writeLinkManifest]; // register on add/load, not just on render
+  if (uuid.length == 0)
+    return;
+  os_unfair_lock_lock(&gKKLiveLock);
+  if (!gKKLiveUUIDs)
+    gKKLiveUUIDs = [NSMutableSet set];
+  [gKKLiveUUIDs addObject:uuid];
+  os_unfair_lock_unlock(&gKKLiveLock);
+
+  // Debounce a reconcile ~5s after the LAST add of this load burst: any
+  // manifest for THIS effect whose uuid isn't in the live set by then belonged
+  // to a deleted effect (it never deserialized), so drop it. Scoped by effect
+  // name so one plugin never prunes another plugin's manifests. No staleness ->
+  // idle effects, which DO fire this callback on load, are never touched.
+  NSString *effectName = [self linkManifestEffectName];
+  NSInteger gen = ++gKKReconcileGen;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
+      dispatch_get_main_queue(), ^{
+        if (gen != gKKReconcileGen)
+          return; // superseded by a later add (burst still arriving)
+        os_unfair_lock_lock(&gKKLiveLock);
+        NSSet<NSString *> *live = [gKKLiveUUIDs copy];
+        os_unfair_lock_unlock(&gKKLiveLock);
+        [KKLinkBus reconcileEffectName:effectName keepingUUIDs:live];
+      });
 }
 
 - (void)setTimingGroupExtraParamIDs:(NSArray<NSNumber *> *)ids {

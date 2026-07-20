@@ -12222,6 +12222,2694 @@
           }
         }
       }
+    },
+    "Add Expression": {
+      "comment": "Label right-click menu: add an expression to a lane.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausdruck hinzufügen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir expresión"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter une expression"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "式を追加"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "표현식 추가"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加表达式"
+          }
+        }
+      }
+    },
+    "Remove Expression": {
+      "comment": "Label right-click menu: remove a lane's expression.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausdruck entfernen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar expresión"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer l’expression"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "式を削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "표현식 제거"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除表达式"
+          }
+        }
+      }
+    },
+    "Format Expression": {
+      "comment": "Label right-click menu: pretty-print the expression.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausdruck formatieren"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formatear expresión"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Formater l’expression"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "式を整形"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "표현식 정리"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "格式化表达式"
+          }
+        }
+      }
+    },
+    "Functions & variables": {
+      "comment": "Expression insert menu: reference section header.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Funktionen & Variablen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Funciones y variables"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fonctions et variables"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "関数と変数"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "함수 및 변수"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "函数与变量"
+          }
+        }
+      }
+    },
+    "Insert a clip reference, function or variable": {
+      "comment": "Tooltip: expression editor insert button.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clip-Referenz, Funktion oder Variable einfügen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insertar una referencia de clip, función o variable"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insérer une référence de plan, une fonction ou une variable"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリップ参照、関数、変数を挿入"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "클립 참조, 함수 또는 변수 삽입"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "插入片段引用、函数或变量"
+          }
+        }
+      }
+    },
+    "No other clips found": {
+      "comment": "Expression insert menu: empty state.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine anderen Clips gefunden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se encontraron otros clips"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun autre plan trouvé"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "他のクリップが見つかりません"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다른 클립을 찾을 수 없음"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未找到其他片段"
+          }
+        }
+      }
+    },
+    "No parameters": {
+      "comment": "Expression insert menu: a source with no referenceable params.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Parameter"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin parámetros"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun paramètre"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パラメータなし"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "매개변수 없음"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无参数"
+          }
+        }
+      }
+    },
+    "Remove from list": {
+      "comment": "Expression insert menu: manually drop a stale source clip from the reference list.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus Liste entfernen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar de la lista"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retirer de la liste"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リストから削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "목록에서 제거"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从列表中移除"
+          }
+        }
+      }
+    },
+    "Variables": {
+      "comment": "Expression insert menu: a category of functions/variables (Variables/Math/...).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Variablen"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Variables"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Variables"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変数"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "변수"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "变量"
+          }
+        }
+      }
+    },
+    "Math": {
+      "comment": "Expression insert menu: a category of functions/variables (Variables/Math/...).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mathematik"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Matemáticas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mathématiques"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数学"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "수학"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数学"
+          }
+        }
+      }
+    },
+    "Easing": {
+      "comment": "Expression insert menu: a category of functions/variables (Variables/Math/...).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Easing"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suavizado"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lissage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "イージング"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이징"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓动"
+          }
+        }
+      }
+    },
+    "Phase": {
+      "comment": "Expression insert menu: a category of functions/variables (Variables/Math/...).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phase"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fase"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phase"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位相"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "위상"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "相位"
+          }
+        }
+      }
+    },
+    "Vector": {
+      "comment": "Expression insert menu: a category of functions/variables (Variables/Math/...).",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vektor"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vector"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vecteur"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ベクトル"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "벡터"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向量"
+          }
+        }
+      }
+    },
+    "This lane's own value (its keyframes or constant at this time). Most expressions build on it.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der eigene Wert dieser Spur (ihre Keyframes oder Konstante zu diesem Zeitpunkt). Die meisten Ausdrücke bauen darauf auf."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El propio valor de esta pista (sus fotogramas clave o su constante en este momento). La mayoría de las expresiones parten de él."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La valeur propre de cette piste (ses images clés ou sa constante à cet instant). La plupart des expressions s’appuient dessus."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このレーン自身の値（この時点でのキーフレームまたは定数）。ほとんどの式はこれを基にします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 레인 자체의 값(현재 시점의 키프레임 또는 상수). 대부분의 표현식이 이를 기반으로 합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此轨道自身的值（当前时间的关键帧或常量）。大多数表达式以它为基础。"
+          }
+        }
+      }
+    },
+    "Absolute project time in seconds. Use for motion over time, e.g. sin(t).": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Absolute Projektzeit in Sekunden. Für Bewegung über die Zeit, z. B. sin(t)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempo absoluto del proyecto en segundos. Úsalo para movimiento a lo largo del tiempo, p. ej. sin(t)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temps absolu du projet en secondes. À utiliser pour un mouvement dans le temps, par ex. sin(t)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "プロジェクトの絶対時間（秒）。時間による動きに使用します。例：sin(t)"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프로젝트의 절대 시간(초). 시간에 따른 움직임에 사용합니다. 예: sin(t)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目绝对时间（秒）。用于随时间的运动，例如 sin(t)。"
+          }
+        }
+      }
+    },
+    "0 to 1 across the clip. Use for a whole-clip ramp.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 bis 1 über den Clip. Für einen Verlauf über den gesamten Clip."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De 0 a 1 a lo largo del clip. Úsalo para una rampa en todo el clip."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De 0 à 1 sur toute la durée du plan. Pour une progression sur l’ensemble du plan."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリップ全体で0から1。クリップ全体のランプに使用します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "클립 전체에서 0에서 1까지. 클립 전체 램프에 사용합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在整个片段中从 0 到 1。用于贯穿整个片段的渐变。"
+          }
+        }
+      }
+    },
+    "Seconds since this clip started (0 at its first frame). Use for one-shots at the start.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sekunden seit Beginn dieses Clips (0 im ersten Bild). Für einmalige Effekte am Anfang."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Segundos desde que empezó este clip (0 en su primer fotograma). Úsalo para efectos únicos al inicio."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Secondes depuis le début de ce plan (0 à sa première image). Pour des effets ponctuels au début."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このクリップの開始からの秒数（最初のフレームで0）。開始時のワンショットに使用します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 클립이 시작된 이후의 초(첫 프레임에서 0). 시작 부분의 일회성 효과에 사용합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自此片段开始以来的秒数（首帧为 0）。用于开头的一次性效果。"
+          }
+        }
+      }
+    },
+    "3.14159, half a turn in radians.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3,14159, eine halbe Umdrehung im Bogenmaß."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3,14159, media vuelta en radianes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3,14159, un demi-tour en radians."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3.14159、ラジアンで半回転。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3.14159, 라디안으로 반 바퀴."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3.14159，半圈的弧度值。"
+          }
+        }
+      }
+    },
+    "Two times pi, one full turn in radians. sin(t*tau) repeats once per second.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwei mal pi, eine volle Umdrehung im Bogenmaß. sin(t*tau) wiederholt sich einmal pro Sekunde."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dos veces pi, una vuelta completa en radianes. sin(t*tau) se repite una vez por segundo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deux fois pi, un tour complet en radians. sin(t*tau) se répète une fois par seconde."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "piの2倍、ラジアンで1回転。sin(t*tau)は1秒ごとに繰り返します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "pi의 두 배, 라디안으로 한 바퀴. sin(t*tau)는 1초마다 반복됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两倍 pi，一整圈的弧度值。sin(t*tau) 每秒重复一次。"
+          }
+        }
+      }
+    },
+    "Euler's number, about 2.718.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eulersche Zahl, etwa 2,718."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Número de Euler, aproximadamente 2,718."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombre d’Euler, environ 2,718."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オイラー数、約2.718。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오일러 수, 약 2.718."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "欧拉数，约 2.718。"
+          }
+        }
+      }
+    },
+    "Sine of x (x in radians).": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sinus von x (x im Bogenmaß)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seno de x (x en radianes)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sinus de x (x en radians)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xのサイン（xはラジアン）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x의 사인(x는 라디안)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x 的正弦（x 为弧度）。"
+          }
+        }
+      }
+    },
+    "Cosine of x (x in radians).": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kosinus von x (x im Bogenmaß)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coseno de x (x en radianes)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosinus de x (x en radians)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xのコサイン（xはラジアン）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x의 코사인(x는 라디안)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x 的余弦（x 为弧度）。"
+          }
+        }
+      }
+    },
+    "Tangent of x (x in radians).": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tangens von x (x im Bogenmaß)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tangente de x (x en radianes)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tangente de x (x en radians)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xのタンジェント（xはラジアン）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x의 탄젠트(x는 라디안)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x 的正切（x 为弧度）。"
+          }
+        }
+      }
+    },
+    "Absolute value (drops the sign).": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Absolutwert (entfernt das Vorzeichen)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valor absoluto (elimina el signo)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valeur absolue (supprime le signe)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "絶対値（符号を除きます）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "절댓값(부호 제거)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "绝对值（去掉符号）。"
+          }
+        }
+      }
+    },
+    "Gives -1, 0 or 1 depending on the sign of x.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ergibt -1, 0 oder 1 je nach Vorzeichen von x."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devuelve -1, 0 o 1 según el signo de x."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renvoie -1, 0 ou 1 selon le signe de x."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xの符号に応じて-1、0、1を返します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x의 부호에 따라 -1, 0 또는 1을 반환합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "根据 x 的符号返回 -1、0 或 1。"
+          }
+        }
+      }
+    },
+    "Round down to a whole number.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf eine ganze Zahl abrunden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redondear hacia abajo a un número entero."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrondir à l’entier inférieur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整数に切り捨てます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정수로 내림."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向下取整。"
+          }
+        }
+      }
+    },
+    "Round up to a whole number.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf eine ganze Zahl aufrunden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redondear hacia arriba a un número entero."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrondir à l’entier supérieur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整数に切り上げます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정수로 올림."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向上取整。"
+          }
+        }
+      }
+    },
+    "Round to the nearest whole number.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf die nächste ganze Zahl runden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redondear al número entero más cercano."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrondir à l’entier le plus proche."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最も近い整数に丸めます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가장 가까운 정수로 반올림."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "四舍五入到最接近的整数。"
+          }
+        }
+      }
+    },
+    "Square root.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quadratwurzel."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raíz cuadrada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Racine carrée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平方根。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "제곱근."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平方根。"
+          }
+        }
+      }
+    },
+    "e raised to the power x.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e hoch x."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e elevado a x."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e à la puissance x."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eのx乗。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e의 x제곱."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e 的 x 次幂。"
+          }
+        }
+      }
+    },
+    "Natural logarithm.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Natürlicher Logarithmus."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logaritmo natural."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logarithme naturel."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自然対数。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "자연로그."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自然对数。"
+          }
+        }
+      }
+    },
+    "Convert degrees to radians.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grad in Bogenmaß umwandeln."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convertir grados a radianes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convertir des degrés en radians."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "度をラジアンに変換します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "도를 라디안으로 변환."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将角度转换为弧度。"
+          }
+        }
+      }
+    },
+    "Convert radians to degrees.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bogenmaß in Grad umwandeln."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convertir radianes a grados."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convertir des radians en degrés."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ラジアンを度に変換します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "라디안을 도로 변환."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将弧度转换为角度。"
+          }
+        }
+      }
+    },
+    "The smaller of a and b.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der kleinere von a und b."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El menor de a y b."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le plus petit de a et b."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aとbのうち小さい方。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a와 b 중 작은 값."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a 和 b 中较小的值。"
+          }
+        }
+      }
+    },
+    "The larger of a and b.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der größere von a und b."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El mayor de a y b."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le plus grand de a et b."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aとbのうち大きい方。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a와 b 중 큰 값."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a 和 b 中较大的值。"
+          }
+        }
+      }
+    },
+    "Remainder of a divided by b (wraps a into 0 to b).": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rest von a geteilt durch b (schlägt a in den Bereich 0 bis b um)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resto de a dividido por b (envuelve a en el rango de 0 a b)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reste de a divisé par b (ramène a dans l’intervalle 0 à b)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aをbで割った余り（aを0からbの範囲に折り返します）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a를 b로 나눈 나머지(a를 0에서 b 범위로 순환)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a 除以 b 的余数（将 a 折回到 0 到 b 之间）。"
+          }
+        }
+      }
+    },
+    "a raised to the power b.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a hoch b."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a elevado a b."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a à la puissance b."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "aのb乗。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a의 b제곱."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a 的 b 次幂。"
+          }
+        }
+      }
+    },
+    "Angle of the point (x, y) in radians.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Winkel des Punktes (x, y) im Bogenmaß."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ángulo del punto (x, y) en radianes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Angle du point (x, y) en radians."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点(x, y)の角度（ラジアン）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "점 (x, y)의 각도(라디안)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点 (x, y) 的角度（弧度）。"
+          }
+        }
+      }
+    },
+    "Diagonal length, the square root of a*a plus b*b.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagonale Länge, die Quadratwurzel aus a*a plus b*b."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Longitud diagonal, la raíz cuadrada de a*a más b*b."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Longueur diagonale, la racine carrée de a*a plus b*b."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "対角線の長さ、a*a足すb*bの平方根。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "대각선 길이, a*a 더하기 b*b의 제곱근."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对角线长度，a*a 加 b*b 的平方根。"
+          }
+        }
+      }
+    },
+    "Gives 0 if x is below edge, otherwise 1.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ergibt 0, wenn x unter edge liegt, sonst 1."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devuelve 0 si x está por debajo de edge, de lo contrario 1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renvoie 0 si x est inférieur à edge, sinon 1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xがedge未満なら0、それ以外は1を返します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x가 edge보다 작으면 0, 그렇지 않으면 1."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果 x 小于 edge 则返回 0，否则返回 1。"
+          }
+        }
+      }
+    },
+    "Keep x within the range lo to hi.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hält x im Bereich lo bis hi."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantiene x dentro del rango de lo a hi."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintient x dans l’intervalle lo à hi."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xをloからhiの範囲に収めます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x를 lo에서 hi 범위로 유지합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将 x 限制在 lo 到 hi 的范围内。"
+          }
+        }
+      }
+    },
+    "Linear blend from a to b as t goes 0 to 1.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lineare Überblendung von a nach b, während t von 0 auf 1 geht."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mezcla lineal de a a b a medida que t va de 0 a 1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fondu linéaire de a à b lorsque t passe de 0 à 1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tが0から1になるにつれてaからbへ線形補間します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "t가 0에서 1로 갈 때 a에서 b로 선형 보간."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当 t 从 0 变到 1 时，在 a 到 b 之间线性混合。"
+          }
+        }
+      }
+    },
+    "Same as lerp(a, b, t).": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie lerp(a, b, t)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Igual que lerp(a, b, t)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Identique à lerp(a, b, t)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lerp(a, b, t)と同じです。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lerp(a, b, t)와 동일."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与 lerp(a, b, t) 相同。"
+          }
+        }
+      }
+    },
+    "Smooth 0 to 1 ramp as x crosses lo to hi (eased ends).": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sanfter Verlauf von 0 auf 1, während x von lo nach hi geht (weiche Enden)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rampa suave de 0 a 1 a medida que x cruza de lo a hi (extremos suavizados)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rampe douce de 0 à 1 lorsque x passe de lo à hi (extrémités adoucies)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "xがloからhiへ移るときの滑らかな0から1のランプ（両端がイーズ）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x가 lo에서 hi로 넘어갈 때 부드러운 0에서 1 램프(양 끝이 완만)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当 x 从 lo 过渡到 hi 时平滑的 0 到 1 渐变（两端缓和）。"
+          }
+        }
+      }
+    },
+    "Ease in (slow start). Feed a 0 to 1 phase, get an eased 0 to 1, the same as the keypose easing.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ease-In (langsamer Start). Gib eine Phase von 0 bis 1 ein und erhalte ein geglättetes 0 bis 1, wie das Keypose-Easing."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrada suave (inicio lento). Introduce una fase de 0 a 1 y obtén un 0 a 1 suavizado, igual que el suavizado de pose clave."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accélération (départ lent). Fournissez une phase de 0 à 1 et obtenez un 0 à 1 lissé, comme le lissage de pose clé."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "イーズイン（ゆっくり開始）。0から1の位相を渡すと、キーポーズのイージングと同じ、イーズされた0から1が得られます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이즈 인(느린 시작). 0에서 1 위상을 입력하면 키포즈 이징과 동일하게 완만해진 0에서 1을 반환합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓入（缓慢开始）。输入 0 到 1 的相位，得到缓动后的 0 到 1，与关键姿势缓动相同。"
+          }
+        }
+      }
+    },
+    "Ease out (slow end). Feed a 0 to 1 phase.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ease-Out (langsames Ende). Gib eine Phase von 0 bis 1 ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Salida suave (final lento). Introduce una fase de 0 a 1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Décélération (fin lente). Fournissez une phase de 0 à 1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "イーズアウト（ゆっくり終了）。0から1の位相を渡します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이즈 아웃(느린 끝). 0에서 1 위상을 입력합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓出（缓慢结束）。输入 0 到 1 的相位。"
+          }
+        }
+      }
+    },
+    "Ease in and out (slow at both ends). Feed a 0 to 1 phase.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ease-In und -Out (langsam an beiden Enden). Gib eine Phase von 0 bis 1 ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entrada y salida suaves (lento en ambos extremos). Introduce una fase de 0 a 1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accélération et décélération (lent aux deux extrémités). Fournissez une phase de 0 à 1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "イーズインアウト（両端がゆっくり）。0から1の位相を渡します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이즈 인아웃(양 끝이 느림). 0에서 1 위상을 입력합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缓入缓出（两端都缓慢）。输入 0 到 1 的相位。"
+          }
+        }
+      }
+    },
+    "Springy overshoot settling to 1. Feed a 0 to 1 phase.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Federndes Überschwingen, das sich bei 1 einpendelt. Gib eine Phase von 0 bis 1 ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rebote elástico que se asienta en 1. Introduce una fase de 0 a 1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dépassement élastique se stabilisant à 1. Fournissez une phase de 0 à 1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1に落ち着くバネのようなオーバーシュート。0から1の位相を渡します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1로 안정되는 탄성 오버슈트. 0에서 1 위상을 입력합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹性过冲并稳定到 1。输入 0 到 1 的相位。"
+          }
+        }
+      }
+    },
+    "Bouncing settle to 1. Feed a 0 to 1 phase.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Federndes Einpendeln bei 1. Gib eine Phase von 0 bis 1 ein."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rebote que se asienta en 1. Introduce una fase de 0 a 1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rebond se stabilisant à 1. Fournissez une phase de 0 à 1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1に落ち着くバウンド。0から1の位相を渡します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1로 안정되는 바운스. 0에서 1 위상을 입력합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "反弹并稳定到 1。输入 0 到 1 的相位。"
+          }
+        }
+      }
+    },
+    "Sawtooth from 0 to 1 every `period` seconds. Feed it to an easing function for a looping animation.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sägezahn von 0 bis 1 alle `period` Sekunden. Übergib es einer Easing-Funktion für eine sich wiederholende Animation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diente de sierra de 0 a 1 cada `period` segundos. Pásalo a una función de suavizado para una animación en bucle."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dent de scie de 0 à 1 toutes les `period` secondes. Transmettez-la à une fonction de lissage pour une animation en boucle."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`period`秒ごとに0から1へののこぎり波。イージング関数に渡すとループアニメーションになります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`period`초마다 0에서 1까지 톱니파. 이징 함수에 전달하면 반복 애니메이션이 됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每隔 `period` 秒从 0 到 1 的锯齿波。将其传给缓动函数可实现循环动画。"
+          }
+        }
+      }
+    },
+    "Triangle from 0 up to 1 and back every `period` seconds. Feed it to an easing function for a back and forth loop.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dreieck von 0 hoch auf 1 und zurück alle `period` Sekunden. Übergib es einer Easing-Funktion für eine Hin-und-her-Schleife."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Triángulo de 0 a 1 y de vuelta cada `period` segundos. Pásalo a una función de suavizado para un bucle de ida y vuelta."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Triangle de 0 à 1 et retour toutes les `period` secondes. Transmettez-le à une fonction de lissage pour une boucle aller-retour."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`period`秒ごとに0から1へ上がって戻る三角波。イージング関数に渡すと往復ループになります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "`period`초마다 0에서 1로 올라갔다 돌아오는 삼각파. 이징 함수에 전달하면 왕복 반복이 됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每隔 `period` 秒从 0 上升到 1 再返回的三角波。将其传给缓动函数可实现往复循环。"
+          }
+        }
+      }
+    },
+    "Build a 2 component value (e.g. a Size's W and H). Combine with value.x and value.y to drive axes independently.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erzeugt einen Wert mit 2 Komponenten (z. B. B und H einer Größe). Kombiniere mit value.x und value.y, um Achsen unabhängig zu steuern."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un valor de 2 componentes (p. ej. el an. y al. de un tamaño). Combínalo con value.x y value.y para controlar los ejes de forma independiente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crée une valeur à 2 composantes (par ex. la L et la H d’une taille). Combinez avec value.x et value.y pour piloter les axes indépendamment."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2成分の値を作成します（例：サイズの幅と高さ）。value.xとvalue.yと組み合わせて軸を個別に制御します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2개 성분 값을 만듭니다(예: 크기의 너비와 높이). value.x 및 value.y와 결합하여 축을 개별적으로 제어합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "构建一个 2 分量的值（例如尺寸的宽和高）。与 value.x 和 value.y 结合可独立驱动各轴。"
+          }
+        }
+      }
+    },
+    "Build a 3 component value.": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erzeugt einen Wert mit 3 Komponenten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un valor de 3 componentes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crée une valeur à 3 composantes."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3成分の値を作成します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3개 성분 값을 만듭니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "构建一个 3 分量的值。"
+          }
+        }
+      }
+    },
+    "Build a 4 component value (e.g. W, H, X, Y).": {
+      "comment": "Expression reference: a function or variable description shown in the insert menu.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erzeugt einen Wert mit 4 Komponenten (z. B. B, H, X, Y)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un valor de 4 componentes (p. ej. an., al., X, Y)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crée une valeur à 4 composantes (par ex. L, H, X, Y)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4成分の値を作成します（例：幅、高さ、X、Y）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4개 성분 값을 만듭니다(예: 너비, 높이, X, Y)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "构建一个 4 分量的值（例如 宽、高、X、Y）。"
+          }
+        }
+      }
+    },
+    "Expressions": {
+      "comment": "Help section title.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausdrücke"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expresiones"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expressions"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "式"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "표현식"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表达式"
+          }
+        }
+      }
+    },
+    "An expression drives a property from a small formula instead of a plain value or keyframes. It is evaluated every frame, so it can move a property over time, react to another clip, or reshape the property's own animation - the kind of motion that would take dozens of keyframes to build by hand.": {
+      "comment": "Help tip rendered from the Expressions knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Ausdruck steuert eine Eigenschaft über eine kleine Formel statt über einen festen Wert oder Keyframes. Er wird in jedem Bild ausgewertet und kann eine Eigenschaft über die Zeit bewegen, auf einen anderen Clip reagieren oder die eigene Animation der Eigenschaft umformen - Bewegungen, die von Hand Dutzende Keyframes bräuchten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una expresión controla una propiedad mediante una pequeña fórmula en lugar de un valor fijo o fotogramas clave. Se evalúa en cada fotograma, así que puede mover una propiedad a lo largo del tiempo, reaccionar a otro clip o reformar la animación de la propia propiedad - el tipo de movimiento que a mano requeriría docenas de fotogramas clave."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une expression pilote une propriété à partir d'une petite formule au lieu d'une valeur fixe ou d'images clés. Elle est évaluée à chaque image : elle peut donc animer une propriété dans le temps, réagir à un autre plan ou remodeler l'animation propre de la propriété - le genre de mouvement qui demanderait des dizaines d'images clés à la main."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "式は、固定値やキーフレームの代わりに小さな数式でプロパティを駆動します。毎フレーム評価されるので、プロパティを時間とともに動かしたり、別のクリップに反応させたり、プロパティ自身のアニメーションを作り変えたりできます。手作業では何十ものキーフレームが必要になる動きです。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "표현식은 고정 값이나 키프레임 대신 작은 수식으로 속성을 구동합니다. 매 프레임 평가되므로 속성을 시간에 따라 움직이거나, 다른 클립에 반응하거나, 속성 자체의 애니메이션을 재구성할 수 있습니다. 손으로는 키프레임 수십 개가 필요한 움직임입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表达式用一个小公式来驱动属性，而不是固定值或关键帧。它每帧都会求值，因此可以让属性随时间运动、对另一个片段作出反应，或重塑属性自身的动画——这类运动手动制作需要数十个关键帧。"
+          }
+        }
+      }
+    },
+    "Add one by right-clicking a property's label in the Constants or keypose editor and choosing Add Expression. A small code editor opens under that property; Remove Expression and Format Expression are in the same menu.": {
+      "comment": "Help tip rendered from the Expressions knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge einen hinzu, indem du mit der rechten Maustaste auf die Beschriftung einer Eigenschaft im Konstanten- oder Keypose-Editor klickst und Ausdruck hinzufügen wählst. Ein kleiner Code-Editor öffnet sich unter der Eigenschaft; Ausdruck entfernen und Ausdruck formatieren sind im selben Menü."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade una desde el menú contextual de la etiqueta de una propiedad en el editor de Constantes o de pose clave, eligiendo Añadir expresión. Debajo de la propiedad se abre un pequeño editor de código; Eliminar expresión y Formatear expresión están en el mismo menú."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoutez-en une en faisant un clic droit sur l'étiquette d'une propriété dans l'éditeur Constantes ou de pose clé et en choisissant Ajouter une expression. Un petit éditeur de code s'ouvre sous la propriété ; Supprimer l'expression et Formater l'expression sont dans le même menu."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "定数エディタまたはキーポーズエディタでプロパティのラベルを右クリックし、「式を追加」を選ぶと追加できます。プロパティの下に小さなコードエディタが開きます。「式を削除」と「式を整形」は同じメニューにあります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "상수 편집기나 키포즈 편집기에서 속성 레이블을 마우스 오른쪽 버튼으로 클릭하고 표현식 추가를 선택해 추가합니다. 속성 아래에 작은 코드 편집기가 열립니다. 표현식 제거와 표현식 정리는 같은 메뉴에 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在常量或关键姿势编辑器中右键点击某个属性的标签并选择“添加表达式”即可添加。属性下方会打开一个小代码编辑器；“移除表达式”和“格式化表达式”在同一菜单中。"
+          }
+        }
+      }
+    },
+    "<kbd>value</kbd> is the property's own value right now - its keyframes or its constant. Build on it: <kbd>value + 10</kbd> offsets it, <kbd>value * 2</kbd> doubles it. A bare <kbd>value</kbd> changes nothing, so keep it in the formula unless you mean to replace the value outright.": {
+      "comment": "Help tip rendered from the Expressions knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>value</kbd> ist der aktuelle eigene Wert der Eigenschaft - ihre Keyframes oder ihre Konstante. Bau darauf auf: <kbd>value + 10</kbd> verschiebt ihn, <kbd>value * 2</kbd> verdoppelt ihn. Ein bloßes <kbd>value</kbd> ändert nichts, also lass es in der Formel, sofern du den Wert nicht komplett ersetzen willst."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>value</kbd> es el valor propio actual de la propiedad - sus fotogramas clave o su constante. Construye sobre él: <kbd>value + 10</kbd> lo desplaza, <kbd>value * 2</kbd> lo duplica. Un <kbd>value</kbd> a secas no cambia nada, así que mantenlo en la fórmula salvo que quieras reemplazar el valor por completo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>value</kbd> est la valeur propre actuelle de la propriété - ses images clés ou sa constante. Construisez dessus : <kbd>value + 10</kbd> la décale, <kbd>value * 2</kbd> la double. Un simple <kbd>value</kbd> ne change rien, alors gardez-le dans la formule sauf si vous voulez remplacer la valeur entièrement."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>value</kbd> はプロパティ自身の現在の値（キーフレームまたは定数）です。これを基に組み立てます。<kbd>value + 10</kbd> はオフセット、<kbd>value * 2</kbd> は2倍。<kbd>value</kbd> 単体では何も変わらないので、値を丸ごと置き換えるのでなければ式に残してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>value</kbd>는 속성 자체의 현재 값(키프레임 또는 상수)입니다. 이를 기반으로 구성하세요. <kbd>value + 10</kbd>은 오프셋, <kbd>value * 2</kbd>는 두 배입니다. <kbd>value</kbd>만 있으면 아무것도 바뀌지 않으니, 값을 완전히 대체할 것이 아니라면 식에 남겨 두세요."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>value</kbd> 是属性此刻自身的值——它的关键帧或常量。在它的基础上构建：<kbd>value + 10</kbd> 进行偏移，<kbd>value * 2</kbd> 加倍。单独的 <kbd>value</kbd> 不会改变任何东西，所以除非你想完全替换该值，否则请把它保留在公式里。"
+          }
+        }
+      }
+    },
+    "Move something over time with <kbd>t</kbd>, the time in seconds. <kbd>value + sin(t * tau) * 20</kbd> wobbles it by 20 either way; <kbd>tau</kbd> is one full turn, so <kbd>sin(t * tau)</kbd> repeats once a second - divide <kbd>t</kbd> to go slower, multiply to go faster.": {
+      "comment": "Help tip rendered from the Expressions knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bewege etwas über die Zeit mit <kbd>t</kbd>, der Zeit in Sekunden. <kbd>value + sin(t * tau) * 20</kbd> lässt es um 20 in beide Richtungen schwingen; <kbd>tau</kbd> ist eine volle Umdrehung, also wiederholt sich <kbd>sin(t * tau)</kbd> einmal pro Sekunde - teile <kbd>t</kbd> für langsamer, multipliziere für schneller."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mueve algo a lo largo del tiempo con <kbd>t</kbd>, el tiempo en segundos. <kbd>value + sin(t * tau) * 20</kbd> lo hace oscilar 20 en cada sentido; <kbd>tau</kbd> es una vuelta completa, así que <kbd>sin(t * tau)</kbd> se repite una vez por segundo - divide <kbd>t</kbd> para ir más lento, multiplícalo para ir más rápido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animez quelque chose dans le temps avec <kbd>t</kbd>, le temps en secondes. <kbd>value + sin(t * tau) * 20</kbd> le fait osciller de 20 de part et d'autre ; <kbd>tau</kbd> est un tour complet, donc <kbd>sin(t * tau)</kbd> se répète une fois par seconde - divisez <kbd>t</kbd> pour ralentir, multipliez pour accélérer."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "秒単位の時間 <kbd>t</kbd> で時間とともに動かします。<kbd>value + sin(t * tau) * 20</kbd> は左右に20だけ揺らします。<kbd>tau</kbd> は1回転なので <kbd>sin(t * tau)</kbd> は1秒ごとに繰り返します。<kbd>t</kbd> を割ると遅く、掛けると速くなります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초 단위 시간 <kbd>t</kbd>로 시간에 따라 움직입니다. <kbd>value + sin(t * tau) * 20</kbd>은 양쪽으로 20만큼 흔듭니다. <kbd>tau</kbd>는 한 바퀴이므로 <kbd>sin(t * tau)</kbd>는 1초마다 반복됩니다. <kbd>t</kbd>를 나누면 느려지고 곱하면 빨라집니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用以秒为单位的时间 <kbd>t</kbd> 让物体随时间运动。<kbd>value + sin(t * tau) * 20</kbd> 会让它左右各摆动 20；<kbd>tau</kbd> 是一整圈，所以 <kbd>sin(t * tau)</kbd> 每秒重复一次——把 <kbd>t</kbd> 除小可放慢，乘大可加快。"
+          }
+        }
+      }
+    },
+    "Loop smoothly by feeding a 0-to-1 phase into an easing function: <kbd>value + easeInOut(pingpong(t, 2)) * 20</kbd> eases up and back every 2 seconds. <kbd>pingpong</kbd> and <kbd>repeat</kbd> turn time into that phase, and the easings match the ones on the timeline.": {
+      "comment": "Help tip rendered from the Expressions knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für eine sanfte Schleife gib einer Easing-Funktion eine Phase von 0 bis 1: <kbd>value + easeInOut(pingpong(t, 2)) * 20</kbd> schwingt alle 2 Sekunden weich hin und zurück. <kbd>pingpong</kbd> und <kbd>repeat</kbd> machen aus der Zeit diese Phase, und die Easings entsprechen denen auf der Timeline."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para un bucle suave, pasa una fase de 0 a 1 a una función de suavizado: <kbd>value + easeInOut(pingpong(t, 2)) * 20</kbd> va y vuelve suavemente cada 2 segundos. <kbd>pingpong</kbd> y <kbd>repeat</kbd> convierten el tiempo en esa fase, y los suavizados coinciden con los de la línea de tiempo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pour une boucle fluide, fournissez une phase de 0 à 1 à une fonction de lissage : <kbd>value + easeInOut(pingpong(t, 2)) * 20</kbd> fait un aller-retour en douceur toutes les 2 secondes. <kbd>pingpong</kbd> et <kbd>repeat</kbd> transforment le temps en cette phase, et les lissages correspondent à ceux de la timeline."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滑らかにループさせるには、0から1の位相をイージング関数に渡します。<kbd>value + easeInOut(pingpong(t, 2)) * 20</kbd> は2秒ごとに滑らかに往復します。<kbd>pingpong</kbd> と <kbd>repeat</kbd> が時間をその位相に変換し、イージングはタイムラインのものと同じです。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "부드럽게 반복하려면 0에서 1까지의 위상을 이징 함수에 전달하세요. <kbd>value + easeInOut(pingpong(t, 2)) * 20</kbd>은 2초마다 부드럽게 왕복합니다. <kbd>pingpong</kbd>과 <kbd>repeat</kbd>가 시간을 그 위상으로 바꾸며, 이징은 타임라인의 것과 동일합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "要平滑循环，就把 0 到 1 的相位传给缓动函数：<kbd>value + easeInOut(pingpong(t, 2)) * 20</kbd> 每 2 秒平滑地来回一次。<kbd>pingpong</kbd> 和 <kbd>repeat</kbd> 把时间变成这个相位，缓动与时间线上的一致。"
+          }
+        }
+      }
+    },
+    "<kbd>t</kbd> is the whole project's clock, not the clip's. For motion that starts when the clip does, use <kbd>progress</kbd> (0 to 1 across the clip) or <kbd>ct</kbd> (seconds since it started) - ease something in over the clip's first second with <kbd>easeOut(clamp(ct, 0, 1))</kbd>.": {
+      "comment": "Help tip rendered from the Expressions knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>t</kbd> ist die Uhr des ganzen Projekts, nicht die des Clips. Für Bewegung, die mit dem Clip beginnt, nimm <kbd>progress</kbd> (0 bis 1 über den Clip) oder <kbd>ct</kbd> (Sekunden seit Beginn) - blende etwas über die erste Sekunde des Clips ein mit <kbd>easeOut(clamp(ct, 0, 1))</kbd>."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>t</kbd> es el reloj de todo el proyecto, no el del clip. Para un movimiento que empiece con el clip, usa <kbd>progress</kbd> (de 0 a 1 a lo largo del clip) o <kbd>ct</kbd> (segundos desde que empezó) - haz que algo entre durante el primer segundo del clip con <kbd>easeOut(clamp(ct, 0, 1))</kbd>."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>t</kbd> est l'horloge de tout le projet, pas celle du plan. Pour un mouvement qui commence avec le plan, utilisez <kbd>progress</kbd> (de 0 à 1 sur le plan) ou <kbd>ct</kbd> (secondes depuis son début) - faites entrer quelque chose pendant la première seconde du plan avec <kbd>easeOut(clamp(ct, 0, 1))</kbd>."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>t</kbd> はクリップではなくプロジェクト全体の時計です。クリップの開始に合わせて動かすには <kbd>progress</kbd>（クリップ全体で0から1）または <kbd>ct</kbd>（開始からの秒数）を使います。<kbd>easeOut(clamp(ct, 0, 1))</kbd> でクリップの最初の1秒かけてフェードインできます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>t</kbd>는 클립이 아니라 프로젝트 전체의 시계입니다. 클립과 함께 시작하는 움직임에는 <kbd>progress</kbd>(클립 전체에서 0에서 1)나 <kbd>ct</kbd>(시작 이후 초)를 사용하세요. <kbd>easeOut(clamp(ct, 0, 1))</kbd>로 클립의 첫 1초 동안 서서히 나타나게 할 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "<kbd>t</kbd> 是整个项目的时钟，不是片段的。要让运动随片段开始，请用 <kbd>progress</kbd>（在片段中从 0 到 1）或 <kbd>ct</kbd>（自片段开始以来的秒数）——用 <kbd>easeOut(clamp(ct, 0, 1))</kbd> 让某物在片段的第一秒内淡入。"
+          }
+        }
+      }
+    },
+    "Link one clip to another with the insert button (the + in the editor's gutter): it lists the other clips and their parameters, and choosing one drops in a reference. <kbd>${Title.Opacity} * 0.5</kbd> makes this property follow the Title clip's opacity at half strength.": {
+      "comment": "Help tip rendered from the Expressions knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verknüpfe einen Clip mit einem anderen über die Einfügen-Schaltfläche (das + in der Editor-Leiste): sie listet die anderen Clips und ihre Parameter auf, und eine Auswahl fügt eine Referenz ein. <kbd>${Title.Opacity} * 0.5</kbd> lässt diese Eigenschaft der Deckkraft des Title-Clips mit halber Stärke folgen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enlaza un clip con otro mediante el botón de insertar (el + en el margen del editor): muestra los demás clips y sus parámetros, y al elegir uno se inserta una referencia. <kbd>${Title.Opacity} * 0.5</kbd> hace que esta propiedad siga la opacidad del clip Title a media intensidad."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reliez un plan à un autre avec le bouton d'insertion (le + dans la gouttière de l'éditeur) : il liste les autres plans et leurs paramètres, et en choisir un insère une référence. <kbd>${Title.Opacity} * 0.5</kbd> fait suivre à cette propriété l'opacité du plan Title à moitié."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "挿入ボタン（エディタの余白の＋）で1つのクリップを別のクリップに連携できます。他のクリップとそのパラメータが一覧表示され、選ぶと参照が挿入されます。<kbd>${Title.Opacity} * 0.5</kbd> はこのプロパティを Title クリップの不透明度に半分の強さで追従させます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "삽입 버튼(편집기 여백의 +)으로 한 클립을 다른 클립에 연결합니다. 다른 클립과 그 매개변수가 나열되며 선택하면 참조가 삽입됩니다. <kbd>${Title.Opacity} * 0.5</kbd>는 이 속성이 Title 클립의 불투명도를 절반 강도로 따르게 합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用插入按钮（编辑器边栏中的 +）把一个片段链接到另一个：它会列出其他片段及其参数，选择一个即插入一个引用。<kbd>${Title.Opacity} * 0.5</kbd> 让此属性以一半强度跟随 Title 片段的不透明度。"
+          }
+        }
+      }
+    },
+    "For a property with more than one part - a Size's width and height, a Position's X and Y - <kbd>value</kbd> is the whole thing. Read one part with <kbd>value.x</kbd> or <kbd>value.y</kbd> and rebuild it with <kbd>vec2(...)</kbd> to drive the parts independently.": {
+      "comment": "Help tip rendered from the Expressions knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bei einer Eigenschaft mit mehreren Teilen - Breite und Höhe einer Größe, X und Y einer Position - ist <kbd>value</kbd> das Ganze. Lies einen Teil mit <kbd>value.x</kbd> oder <kbd>value.y</kbd> und bau es mit <kbd>vec2(...)</kbd> neu zusammen, um die Teile unabhängig zu steuern."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Para una propiedad con más de una parte - ancho y alto de un tamaño, X e Y de una posición - <kbd>value</kbd> es el conjunto. Lee una parte con <kbd>value.x</kbd> o <kbd>value.y</kbd> y reconstrúyela con <kbd>vec2(...)</kbd> para controlar las partes de forma independiente."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pour une propriété à plusieurs composantes - largeur et hauteur d'une taille, X et Y d'une position - <kbd>value</kbd> est l'ensemble. Lisez une composante avec <kbd>value.x</kbd> ou <kbd>value.y</kbd> et reconstruisez-la avec <kbd>vec2(...)</kbd> pour piloter les composantes indépendamment."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複数の要素を持つプロパティ（サイズの幅と高さ、位置のXとY）では <kbd>value</kbd> は全体を指します。<kbd>value.x</kbd> や <kbd>value.y</kbd> で一部を読み取り、<kbd>vec2(...)</kbd> で組み立て直すと、要素を個別に制御できます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "부분이 여러 개인 속성(크기의 너비와 높이, 위치의 X와 Y)에서 <kbd>value</kbd>는 전체를 가리킵니다. <kbd>value.x</kbd>나 <kbd>value.y</kbd>로 한 부분을 읽고 <kbd>vec2(...)</kbd>로 다시 구성하면 부분을 개별적으로 제어할 수 있습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对于有多个部分的属性——尺寸的宽和高、位置的 X 和 Y——<kbd>value</kbd> 表示整体。用 <kbd>value.x</kbd> 或 <kbd>value.y</kbd> 读取某一部分，再用 <kbd>vec2(...)</kbd> 重新组合，即可独立驱动各部分。"
+          }
+        }
+      }
+    },
+    "The insert button also lists every function and variable with a short description, so you can discover what is available; and as you type, a live result with a small sparkline under the editor previews the value.": {
+      "comment": "Help tip rendered from the Expressions knowledge doc.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Einfügen-Schaltfläche listet außerdem jede Funktion und Variable mit einer kurzen Beschreibung, damit du siehst, was verfügbar ist; und während du tippst, zeigt ein Live-Ergebnis mit einer kleinen Sparkline unter dem Editor eine Vorschau des Werts."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El botón de insertar también lista cada función y variable con una breve descripción, para que veas lo que hay disponible; y mientras escribes, un resultado en vivo con una pequeña minigráfica bajo el editor muestra una vista previa del valor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bouton d'insertion liste aussi chaque fonction et variable avec une courte description, pour voir ce qui est disponible ; et pendant que vous tapez, un résultat en direct avec une petite sparkline sous l'éditeur prévisualise la valeur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "挿入ボタンには各関数と変数が短い説明付きで一覧表示され、何が使えるか分かります。入力中は、エディタの下のライブ結果と小さなスパークラインが値をプレビューします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "삽입 버튼에는 각 함수와 변수가 짧은 설명과 함께 나열되어 무엇이 있는지 알 수 있습니다. 입력하는 동안 편집기 아래의 실시간 결과와 작은 스파크라인이 값을 미리 보여 줍니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "插入按钮还会列出每个函数和变量并附带简短说明，方便你了解有哪些可用；输入时，编辑器下方的实时结果和小型迷你图会预览该值。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

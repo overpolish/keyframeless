@@ -46,6 +46,27 @@ NS_ASSUME_NONNULL_BEGIN
 /// `editFraction` (preserving structure) instead of a t=0 single keypose.
 @property(nonatomic) BOOL boundaryEditing;
 @property(nonatomic) double editFraction;
+/// Absolute project time (seconds) of the frame the preview shows, for
+/// resolving parameter links (`${refs}`) so the mini-viewer matches the render.
+/// The owning inspector sets it (typically the playhead's timeline time). A
+/// negative value means unknown - linked lanes then resolve their sources
+/// out-of-span. Only consulted for lanes that actually carry a link binding.
+@property(nonatomic) double linkTimelineSec;
+/// The clip's duration in seconds, pushed by the inspector. Used both for the
+/// preview's own time scaling and, with `clipTimelineStartSec`, to feed-lock
+/// parameter-link resolution to the frame being drawn. 0/unknown = fall back to
+/// the raw fraction. (Hoisted to the base so every plugin's mini gets link
+/// feed-locking for free.)
+@property(nonatomic) double clipDurationSeconds;
+/// Absolute project time (seconds) of this clip's first frame (fraction 0),
+/// pushed by the inspector. Constant while a clip plays (only the playhead
+/// moves), so unlike the poller-driven `linkTimelineSec` it is not starved
+/// during live playback. The mini draw path pairs it with the feed frame's
+/// fraction
+/// (`clipTimelineStartSec + editFraction * clipDurationSeconds`) to resolve
+/// links in lockstep with the 60fps feed - fixing linked-clip playback jitter.
+/// Negative = unknown.
+@property(nonatomic) double clipTimelineStartSec;
 /// Number of slots the canvas is currently iterating. KKMiniViewerView
 /// sets this before its per-slot processSourceTexture loop. Subclasses
 /// can use it to differentiate "single-slot, source is the pre-rendered
@@ -312,6 +333,15 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 /// end) so the drag's in-flight value shows immediately without round-tripping
 /// through FxPlug param writes.
 - (NSArray<NSNumber *> *)valuesForLabel:(NSString *)label;
+
+/// Like `valuesForLabel:` but WITHOUT resolving a lane's link expression - the
+/// lane's own (root) value. OSC handles read this so a drag on an
+/// expression-driven lane seeds + commits the underlying value (never the
+/// `value*expr` result, which would compound on every grab). The rendered
+/// object still uses `valuesForLabel:` (resolved), so the handle sits at the
+/// root value, matching the main viewer's OSC. Identical to `valuesForLabel:`
+/// for a lane with no expression.
+- (NSArray<NSNumber *> *)rootValuesForLabel:(NSString *)label;
 
 /// Push the in-flight drag value for `label` as a live override at
 /// `fraction`. The next `valuesForLabel:` returns these instead of the

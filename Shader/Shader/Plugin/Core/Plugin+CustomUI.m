@@ -28,6 +28,159 @@
 #import <KeyframelessKit/KKUpdateChecker.h>
 @import KeyframelessAI;
 
+// Apply-an-AI-result helpers, one per result kind. Each owns its FCP action
+// scope and, on success, lights the green "done" sparkle. Parsing/mutating a
+// timeline needs no scope - only the param write does - so the shared writer
+// takes the finished JSON and just opens the scope around the write.
+
+// Open an action scope on `plugin`, write `json` to the timeline-data param,
+// close it, and light the done sparkle. Sets the AI error and returns NO if the
+// scope can't be opened.
+static BOOL ShaderAIWriteTimelineJSON(ShaderPlugin *plugin, NSString *json,
+                                      NSString *scopeError) {
+  id<FxCustomParameterActionAPI_v4> act = [plugin.apiManager
+      apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!act) {
+    [KKAIDraft setError:scopeError];
+    return NO;
+  }
+  [act startAction:plugin];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [plugin.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (json.length)
+    KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
+  [act endAction:plugin];
+  [KKAIDraft setAnswer:nil];
+  [KKAIDraft setCompleted:YES]; // green done sparkle
+  [KKAIDraft clearPrompt];
+  return YES;
+}
+
+// Code authoring: set the AI-written GLSL on the "Shader" code lane (creating
+// it if the persisted timeline has none) and write back; applyTimeline
+// re-transpiles and rebuilds the controls (same path a manual code commit
+// takes).
+static void ShaderAIApplyShaderSource(ShaderPlugin *plugin, NSString *newSrc,
+                                      NSString *timelineBlob) {
+  if (!newSrc.length) {
+    KKLogError(@"AI[err] empty shader source");
+    [KKAIDraft setError:@"AI returned an empty shader."];
+    return;
+  }
+  KKTimeline *tl = timelineBlob.length
+                       ? [KKTimeline timelineFromJSON:timelineBlob]
+                       : [KKTimeline timeline];
+  if (!tl)
+    tl = [KKTimeline timeline];
+  KKLane *shaderLane = nil;
+  for (KKLane *l in tl.lanes)
+    if ([l.label isEqualToString:@"Shader"]) {
+      shaderLane = l;
+      break;
+    }
+  if (!shaderLane) {
+    shaderLane = [KKLane laneWithLabel:@"Shader"];
+    shaderLane.valueType = KKLaneValueTypeCode;
+    shaderLane.animatable = NO;
+    shaderLane.enabled = NO;
+    tl.lanes = [tl.lanes arrayByAddingObject:shaderLane];
+  }
+  shaderLane.codeString = newSrc;
+  ShaderAIWriteTimelineJSON(
+      plugin, [KKTimeline jsonFromTimeline:tl],
+      @"Couldn't open the FCP action scope to apply the shader.");
+}
+
+// Expression authoring: for each {lane, expression} op set that lane's
+// linkExpression (creating the lane if absent; friendly ${Clip.Param} refs
+// translated to the stored ${uuid.label} form via the current manifests), then
+// write back so applyTimeline re-derives the driven values.
+static void ShaderAIApplyExpressionOps(ShaderPlugin *plugin, NSString *opsJSON,
+                                       NSString *timelineBlob) {
+  NSData *opsData = [opsJSON dataUsingEncoding:NSUTF8StringEncoding];
+  NSDictionary *opsObj = opsData
+                             ? [NSJSONSerialization JSONObjectWithData:opsData
+                                                               options:0
+                                                                 error:nil]
+                             : nil;
+  NSArray *ops =
+      [opsObj isKindOfClass:[NSDictionary class]] ? opsObj[@"operations"] : nil;
+  if (![ops isKindOfClass:[NSArray class]] || ops.count == 0) {
+    [KKAIDraft setError:@"AI returned no expression."];
+    return;
+  }
+  KKTimeline *tl = timelineBlob.length
+                       ? [KKTimeline timelineFromJSON:timelineBlob]
+                       : [KKTimeline timeline];
+  if (!tl)
+    tl = [KKTimeline timeline];
+  NSArray<KKLinkManifest *> *manifests = [KKLinkBus allManifests];
+  NSMutableArray<KKLane *> *lanes = [tl.lanes mutableCopy];
+  for (NSDictionary *op in ops) {
+    if (![op isKindOfClass:[NSDictionary class]])
+      continue;
+    NSString *label = op[@"lane"];
+    NSString *expr = op[@"expression"];
+    if (![label isKindOfClass:[NSString class]] || label.length == 0 ||
+        ![expr isKindOfClass:[NSString class]] || expr.length == 0)
+      continue;
+    NSString *stored = KKLinkStoredExpressionFromDisplay(expr, manifests);
+    KKLane *target = nil;
+    for (KKLane *l in lanes)
+      if ([l.label isEqualToString:label]) {
+        target = l;
+        break;
+      }
+    if (!target) {
+      target = [KKLane laneWithLabel:label];
+      [lanes addObject:target];
+    }
+    target.linkExpression = stored;
+  }
+  tl.lanes = lanes;
+  ShaderAIWriteTimelineJSON(
+      plugin, [KKTimeline jsonFromTimeline:tl],
+      @"Couldn't open the FCP action scope to apply the expression.");
+}
+
+// Keypose mutation: merge into the current timeline (snapping final keyposes to
+// the last renderable frame), write back, and - when the result isn't Basic-
+// representable - switch the inspector to Advanced so the user sees the real
+// structure instead of the compatibility banner.
+static void ShaderAIApplyMutation(ShaderPlugin *plugin, NSString *currentJSON,
+                                  NSString *mutationJSON, double clipDurSec) {
+  NSString *merged = KKTimelineAIMergeMutationJSON(
+      currentJSON, mutationJSON, clipDurSec, KKProcessFrameDurationSeconds());
+  if (!merged) {
+    KKLogError(@"AI[err] merge returned nil");
+    [KKAIDraft setError:@"AI returned an invalid timeline mutation."];
+    return;
+  }
+  id<FxCustomParameterActionAPI_v4> writeAct = [plugin.apiManager
+      apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!writeAct) {
+    [KKAIDraft setError:@"Couldn't open the FCP action scope to apply the "
+                        @"mutation."];
+    return;
+  }
+  [writeAct startAction:plugin];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [plugin.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  KKWriteCustomParamString(setAPI, merged, kKKParamTimelineData);
+  KKTimeline *resultTimeline = [KKTimeline timelineFromJSON:merged];
+  double mergeFrameDur = KKProcessFrameDurationSeconds();
+  double aiEndFrac =
+      (clipDurSec > 0.0 && mergeFrameDur > 0.0 && mergeFrameDur < clipDurSec)
+          ? (clipDurSec - mergeFrameDur) / clipDurSec
+          : 1.0;
+  if (resultTimeline && !KKTimelineIsBasicCompatible(resultTimeline, aiEndFrac))
+    [plugin patchUIStateKey:@"activeTab" value:@(1) paramID:kParamUIState];
+  [writeAct endAction:plugin];
+  [KKAIDraft setAnswer:nil];
+  [KKAIDraft setCompleted:YES]; // green done sparkle
+  [KKAIDraft clearPrompt];
+}
+
 @implementation ShaderPlugin (CustomUI)
 
 - (BOOL)usesMotionBlur {
@@ -454,6 +607,10 @@
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   NSString *currentJSON =
       KKTimelineAICurrentJSON(getAPI, [ShaderPlugin availableLanes]);
+  // Other clips this one can reference in a cross-clip ${Clip.Param} expression
+  // (excluding itself), for the AI's expression route.
+  NSString *selfLinkUUID = KKInstanceUUIDForAPI(self.apiManager);
+  NSString *availableSources = KKLinkAvailableSourcesJSON(selfLinkUUID);
   // Raw timeline blob (carries the "Shader" code lane the AI may rewrite) and
   // the current shader source. Pass "" when it's the untouched default so a
   // from-scratch ask starts clean; a customised shader is passed so the AI
@@ -508,6 +665,7 @@
              clipDurationSeconds:clipDurSec
             currentInspectorMode:currentMode
              currentShaderSource:aiShaderSrc
+                availableSources:availableSources
                       completion:^(KKAIPluginResult *result, NSError *err) {
                         dispatch_async(dispatch_get_main_queue(), ^{
                           __strong typeof(weakSelf) strong = weakSelf;
@@ -524,128 +682,24 @@
                             [KKAIDraft setError:@"Empty AI response."];
                             return;
                           }
-                          if (result.kind == KKAIPluginResultKindAnswer) {
+                          switch (result.kind) {
+                          case KKAIPluginResultKindAnswer:
                             [KKAIDraft setAnswer:result.answer];
-                            return;
+                            break;
+                          case KKAIPluginResultKindAuthorCode:
+                            ShaderAIApplyShaderSource(
+                                strong, result.shaderSource, timelineBlob);
+                            break;
+                          case KKAIPluginResultKindAuthorExpression:
+                            ShaderAIApplyExpressionOps(
+                                strong, result.expressionOps, timelineBlob);
+                            break;
+                          default: // .mutation
+                            ShaderAIApplyMutation(strong, currentJSON,
+                                                  result.mutationJSON,
+                                                  clipDurSec);
+                            break;
                           }
-                          // Code authoring: the AI wrote/edited the GLSL. Set
-                          // it on the "Shader" code lane and write the timeline
-                          // back - the inspector's applyTimeline re-transpiles
-                          // and rebuilds the controls (same path a manual code
-                          // commit takes).
-                          if (result.kind == KKAIPluginResultKindAuthorCode) {
-                            NSString *newSrc = result.shaderSource;
-                            if (!newSrc.length) {
-                              KKLogError(@"AI[err] empty shader source");
-                              [KKAIDraft
-                                  setError:@"AI returned an empty shader."];
-                              return;
-                            }
-                            id<FxCustomParameterActionAPI_v4> codeAct =
-                                [strong.apiManager
-                                    apiForProtocol:
-                                        @protocol(
-                                            FxCustomParameterActionAPI_v4)];
-                            if (!codeAct) {
-                              [KKAIDraft
-                                  setError:
-                                      @"Couldn't open the FCP action scope "
-                                      @"to apply the shader."];
-                              return;
-                            }
-                            [codeAct startAction:strong];
-                            id<FxParameterSettingAPI_v5> codeSetAPI =
-                                [strong.apiManager
-                                    apiForProtocol:
-                                        @protocol(FxParameterSettingAPI_v5)];
-                            KKTimeline *tl =
-                                timelineBlob.length
-                                    ? [KKTimeline timelineFromJSON:timelineBlob]
-                                    : [KKTimeline timeline];
-                            if (!tl)
-                              tl = [KKTimeline timeline];
-                            KKLane *shaderLane = nil;
-                            for (KKLane *l in tl.lanes)
-                              if ([l.label isEqualToString:@"Shader"]) {
-                                shaderLane = l;
-                                break;
-                              }
-                            if (!shaderLane) {
-                              shaderLane = [KKLane laneWithLabel:@"Shader"];
-                              shaderLane.valueType = KKLaneValueTypeCode;
-                              shaderLane.animatable = NO;
-                              shaderLane.enabled = NO;
-                              tl.lanes =
-                                  [tl.lanes arrayByAddingObject:shaderLane];
-                            }
-                            shaderLane.codeString = newSrc;
-                            NSString *newJSON =
-                                [KKTimeline jsonFromTimeline:tl];
-                            if (newJSON.length)
-                              KKWriteCustomParamString(codeSetAPI, newJSON,
-                                                       kKKParamTimelineData);
-                            [codeAct endAction:strong];
-                            [KKAIDraft setAnswer:nil];
-                            [KKAIDraft clearPrompt];
-                            return;
-                          }
-                          // The merge also snaps final keyposes to the last
-                          // renderable frame (FCP's last frame is one frame
-                          // before the clip end, so a keypose at 1.0 is never
-                          // reached) - clipDur from the prompt, frameDur from
-                          // the process cache.
-                          NSString *merged = KKTimelineAIMergeMutationJSON(
-                              currentJSON, result.mutationJSON, clipDurSec,
-                              KKProcessFrameDurationSeconds());
-                          if (!merged) {
-                            KKLogError(@"AI[err] merge returned nil");
-                            [KKAIDraft setError:@"AI returned an invalid "
-                                                @"timeline mutation."];
-                            return;
-                          }
-                          id<FxCustomParameterActionAPI_v4> writeAct =
-                              [strong.apiManager
-                                  apiForProtocol:
-                                      @protocol(FxCustomParameterActionAPI_v4)];
-                          if (!writeAct) {
-                            [KKAIDraft
-                                setError:
-                                    @"Couldn't open the FCP action scope to "
-                                    @"apply the mutation."];
-                            return;
-                          }
-                          [writeAct startAction:strong];
-                          id<FxParameterSettingAPI_v5> setAPI =
-                              [strong.apiManager
-                                  apiForProtocol:@protocol(
-                                                     FxParameterSettingAPI_v5)];
-                          KKWriteCustomParamString(setAPI, merged,
-                                                   kKKParamTimelineData);
-
-                          // If the new timeline isn't representable in Basic,
-                          // force the inspector to Advanced so the user sees
-                          // the actual structure. Keeping the activeTab on
-                          // Basic when the data is Advanced-only shows the
-                          // compatibility banner instead of the new animation.
-                          KKTimeline *resultTimeline =
-                              [KKTimeline timelineFromJSON:merged];
-                          double mergeFrameDur =
-                              KKProcessFrameDurationSeconds();
-                          double aiEndFrac =
-                              (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
-                               mergeFrameDur < clipDurSec)
-                                  ? (clipDurSec - mergeFrameDur) / clipDurSec
-                                  : 1.0;
-                          if (resultTimeline &&
-                              !KKTimelineIsBasicCompatible(resultTimeline,
-                                                           aiEndFrac)) {
-                            [strong patchUIStateKey:@"activeTab"
-                                              value:@(1)
-                                            paramID:kParamUIState];
-                          }
-                          [writeAct endAction:strong];
-                          [KKAIDraft setAnswer:nil];
-                          [KKAIDraft clearPrompt];
                         });
                       }];
 }

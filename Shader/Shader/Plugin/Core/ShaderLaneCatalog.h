@@ -659,6 +659,8 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource,
   shader.codeTabCatalog =
       @[ @"Common", @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ];
   shader.codeSavable = YES; // show the save bar (name + Save) under the editor
+  shader.codeSaveNamePlaceholder =
+      RLoc(@"Shader name", @"Save-shader name field placeholder.");
   // What the save bar's category picker offers. Display names, in
   // ShaderCategoryIDs() order - the save handler maps the picked index back to
   // the id it stores, so these two must stay in the same order.
@@ -671,6 +673,39 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource,
   // first glslang error as a bar + flagged line. Only compiled into the XPC
   // service (the sole includer of this catalog), where the transpiler is
   // linked.
+  // Multi-pass composition (moved out of the generic editor): validate a tab
+  // WITH the shared "Common" section prepended (so shared decls resolve,
+  // mirroring the render), and validate the Common tab itself against a dummy
+  // entry point so its own syntax is still checked. `outPrependLines` maps a
+  // reported error back to the active tab (an error inside Common surfaces on
+  // the Common tab).
+  shader.codeValidationComposer =
+      ^NSString *(NSString *activeName, NSString *activeCode,
+                  NSArray<NSDictionary<NSString *, NSString *> *> *sections,
+                  NSInteger *outPrependLines) {
+        NSString *commonCode = nil;
+        for (NSDictionary<NSString *, NSString *> *s in sections)
+          if ([s[@"name"] isEqualToString:@"Common"]) {
+            commonCode = s[@"code"];
+            break;
+          }
+        if ([activeName isEqualToString:@"Common"]) {
+          if (outPrependLines)
+            *outPrependLines = 0;
+          return [activeCode
+              stringByAppendingString:@"\nvoid mainImage(out vec4 kkO, in vec2 "
+                                      @"kkC){ kkO = vec4(0.0); }\n"];
+        }
+        if (commonCode.length) {
+          if (outPrependLines)
+            *outPrependLines =
+                (NSInteger)[commonCode componentsSeparatedByString:@"\n"].count;
+          return [NSString stringWithFormat:@"%@\n%@", commonCode, activeCode];
+        }
+        if (outPrependLines)
+          *outPrependLines = 0;
+        return activeCode;
+      };
   shader.codeValidator = ^NSString *(NSString *code, NSInteger *outLine) {
     // Only full Image/Buffer shaders validate standalone; an empty tab or the
     // Common shared-code fragment has no entry point, so skip it (no false

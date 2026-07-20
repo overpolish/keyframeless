@@ -112,11 +112,16 @@ static NSData *ShaderJPEGFromTexture(id<MTLTexture> tex) {
       bytesPerRow:bpr
        fromRegion:MTLRegionMake2D(0, 0, w, h)
       mipmapLevel:0];
-  // BGRA -> RGBA for NSBitmapImageRep.
+  // BGRA -> RGBA for NSBitmapImageRep, and force alpha opaque. JPEG has no
+  // alpha, so a transparent region would otherwise flatten over WHITE. The
+  // output is premultiplied, so pinning alpha=255 reads the RGB as an
+  // over-BLACK composite - empty pixels come out black, matching the
+  // mini-viewer's background.
   for (NSUInteger i = 0; i < w * h; i++) {
     uint8_t b = bytes[i * 4], r = bytes[i * 4 + 2];
     bytes[i * 4] = r;
     bytes[i * 4 + 2] = b;
+    bytes[i * 4 + 3] = 255;
   }
   NSBitmapImageRep *rep =
       [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL
@@ -147,6 +152,42 @@ static NSData *ShaderJPEGFromTexture(id<MTLTexture> tex) {
                            properties:@{
                              NSImageCompressionFactor : @0.8
                            }];
+}
+
+// Re-render the effect fresh into a `w`x`h` JPEG at the renderer's CURRENT
+// uniform state. `providedSource` is the iChannel0 texture (this clip's real
+// footage from the mini feed); nil falls back to the bundled reference frame
+// (test pattern as a last resort - fine for generators, which ignore
+// iChannel0).
+static NSData *ShaderThumbReRender(KKMiniViewerRenderer *renderer, NSUInteger w,
+                                   NSUInteger h,
+                                   id<MTLTexture> providedSource) {
+  id<MTLDevice> device =
+      providedSource.device ?: MTLCreateSystemDefaultDevice();
+  if (!device)
+    return nil;
+  MTLTextureDescriptor *dd = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                   width:w
+                                  height:h
+                               mipmapped:NO];
+  dd.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
+  dd.storageMode = MTLStorageModeShared;
+  id<MTLTexture> dest = [device newTextureWithDescriptor:dd];
+  id<MTLTexture> source = providedSource;
+  if (!source)
+    source = ShaderPreviewSourceTexture(device);
+  if (!source)
+    source = ShaderTestPatternTexture(device, w, h);
+  if (!dest || !source)
+    return nil;
+  id<MTLCommandQueue> queue = [device newCommandQueue];
+  id<MTLCommandBuffer> cb = [queue commandBuffer];
+  if (![renderer encodeEffectFromSource:source into:dest commandBuffer:cb])
+    return nil;
+  [cb commit];
+  [cb waitUntilCompleted];
+  return ShaderJPEGFromTexture(dest);
 }
 
 NSData *ShaderRenderThumbnailJPEG(KKMiniViewerRenderer *renderer, NSUInteger w,
@@ -188,30 +229,40 @@ NSData *ShaderRenderThumbnailJPEG(KKMiniViewerRenderer *renderer, NSUInteger w,
   }
 
   // Fallback (no rendered frame yet, e.g. authoring off a clip): re-render on a
-  // bundled reference frame, gradient as a last resort.
-  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
-  if (!device)
-    return nil;
+  // bundled reference frame at the renderer's live state.
+  return ShaderThumbReRender(renderer, w, h, nil);
+}
 
-  MTLTextureDescriptor *dd = [MTLTextureDescriptor
-      texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
-                                   width:w
-                                  height:h
-                               mipmapped:NO];
-  dd.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
-  dd.storageMode = MTLStorageModeShared;
-  id<MTLTexture> dest = [device newTextureWithDescriptor:dd];
-  id<MTLTexture> source = ShaderPreviewSourceTexture(device);
-  if (!source)
-    source = ShaderTestPatternTexture(device, w, h);
-  if (!dest || !source)
+NSData *ShaderRenderThumbnailJPEGFromSource(KKMiniViewerRenderer *renderer,
+                                            NSUInteger w, NSUInteger h,
+                                            id<MTLTexture> source) {
+  if (!renderer || w == 0 || h == 0)
     return nil;
+  // Deterministic poster on the clip's REAL source: pin the renderer to
+  // fraction 0.5 (iTime <- editFraction, iProgress <- playheadFraction, link
+  // refs <- clipStart+0.5*dur), re-render on `source` (this clip's footage from
+  // the mini feed; nil = bundled reference for generators), then restore the
+  // live values. Runs synchronously on the main thread, so the live preview is
+  // untouched.
+  double savedEdit = renderer.editFraction;
+  double savedLink = renderer.linkTimelineSec;
+  double dur = renderer.clipDurationSeconds;
+  double start = renderer.clipTimelineStartSec;
+  BOOL isShader = [renderer isKindOfClass:[ShaderMiniViewerRenderer class]];
+  double savedPlay =
+      isShader ? ((ShaderMiniViewerRenderer *)renderer).playheadFraction : 0.0;
 
-  id<MTLCommandQueue> queue = [device newCommandQueue];
-  id<MTLCommandBuffer> cb = [queue commandBuffer];
-  if (![renderer encodeEffectFromSource:source into:dest commandBuffer:cb])
-    return nil;
-  [cb commit];
-  [cb waitUntilCompleted];
-  return ShaderJPEGFromTexture(dest);
+  renderer.editFraction = 0.5;
+  if (isShader)
+    ((ShaderMiniViewerRenderer *)renderer).playheadFraction = 0.5;
+  if (dur > 0.0 && start >= 0.0)
+    renderer.linkTimelineSec = start + 0.5 * dur;
+
+  NSData *jpeg = ShaderThumbReRender(renderer, w, h, source);
+
+  renderer.editFraction = savedEdit;
+  renderer.linkTimelineSec = savedLink;
+  if (isShader)
+    ((ShaderMiniViewerRenderer *)renderer).playheadFraction = savedPlay;
+  return jpeg;
 }

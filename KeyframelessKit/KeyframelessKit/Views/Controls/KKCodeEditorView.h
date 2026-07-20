@@ -9,6 +9,13 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Which grammar drives syntax colouring: GLSL (the shader code lane, default)
+/// or the parameter-link expression language (KKLinkExpr).
+typedef NS_ENUM(NSInteger, KKCodeSyntax) {
+  KKCodeSyntaxGLSL = 0,
+  KKCodeSyntaxExpression,
+};
+
 /// A dumb, self-contained multi-line code editor: a monospaced NSTextView in a
 /// scroll view, with the auto-substitutions (smart quotes / dashes / spelling)
 /// that would corrupt source turned off, lines that overflow horizontally
@@ -18,6 +25,41 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Set/replace the editor text without firing `onChange`.
 @property(nonatomic, copy) NSString *codeText;
+
+/// Insert `text` at the current caret (replacing any selection) as a single
+/// undoable edit, committing through the normal debounce so the host persists
+/// it like typed text. Used by the expression editor's reference-insert menu to
+/// drop a `${...}` token where the cursor is (appends when the editor isn't
+/// focused).
+- (void)insertReferenceText:(NSString *)text;
+
+/// Which grammar colours the text. Default `KKCodeSyntaxGLSL`. Set before the
+/// first `codeText` so the initial highlight uses the right mode.
+@property(nonatomic) KKCodeSyntax syntax;
+
+/// Optional read-only result strip under the editor (styled like the error
+/// bar): a host pushes the live computed result of an expression here for
+/// clarity. nil/empty hides the strip.
+@property(nonatomic, copy, nullable) NSString *resultText;
+
+/// Optional inline sparkline drawn at the trailing end of the result strip: the
+/// expression sampled across the whole clip (fraction 0->1), so it reads the
+/// same in constants and keypose modes regardless of the current playhead.
+/// First component only for multi-component lanes. Fewer than 2 samples draws a
+/// flat baseline; nil/empty hides the curve (the number keeps the full row).
+/// Only visible while `resultText` is showing the strip.
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *sparklineSamples;
+
+/// Where the current playhead sits along `sparklineSamples` (0..1): draws an
+/// accent dot on the curve. Negative (the default) hides the dot.
+@property(nonatomic) double sparklineMarker;
+
+/// Replace the whole content with `formatter(currentText)` as one undoable edit
+/// (committing through the normal debounce), or no-op when the block returns
+/// nil / unchanged text. Lets a host drive formatting from its own control
+/// instead of the built-in `codeFormatter` tab-strip button (which needs a
+/// taller editor).
+- (void)formatUsing:(NSString *_Nullable (^)(NSString *code))formatter;
 
 /// Fired ~0.4s after the last keystroke with the current text (single-section
 /// hosts). Tabbed hosts use `onSectionsChange` instead.
@@ -62,6 +104,20 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, copy, nullable) NSString *_Nullable (^codeValidator)
     (NSString *code, NSInteger *outLine);
 
+/// Optional pre-pass that builds the source actually handed to `codeValidator`
+/// from the current section set (e.g. a shader prepending a shared "Common"
+/// section, or appending a stub entry point when validating that shared section
+/// itself). Return the composed source, and set `*outPrependLines` to how many
+/// lines were added ABOVE the active section so a reported error line maps back
+/// (an error landing in the prepended region is suppressed here - it surfaces
+/// on that section's own tab). nil (the default) validates the active section
+/// as-is. Keeps language-specific composition in the host, not this editor.
+@property(nonatomic, copy, nullable)
+    NSString *_Nullable (^validationSourceComposer)
+        (NSString *activeSectionName, NSString *activeCode,
+         NSArray<NSDictionary<NSString *, NSString *> *> *sections,
+         NSInteger *outPrependLines);
+
 /// Optional formatter. When set, a "Format" button appears at the trailing end
 /// of the top tab strip; pressing it passes the active section's text through
 /// this block and replaces the editor content with the result (or no-ops when
@@ -70,6 +126,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// normal edit. Runs on the main thread; keep it reasonably quick.
 @property(nonatomic, copy, nullable) NSString *_Nullable (^codeFormatter)
     (NSString *code);
+
+/// Placeholder shown in the save bar's name field. Defaults to a generic
+/// "Name"; a host (e.g. a shader preset editor) can set something
+/// domain-specific.
+@property(nonatomic, copy, null_resettable) NSString *saveNamePlaceholder;
 
 /// When YES, shows a save bar under the editor: a name field + Save button
 /// (disabled until a name is entered). Pressing Save posts

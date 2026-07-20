@@ -328,3 +328,44 @@ static const NSTimeInterval kMinUpdateInterval = 1.0 / 60.0;
 }
 
 @end
+
+id<MTLTexture> KKMiniViewerFeedLoadPrimarySource(NSString *descriptorPath,
+                                                 id<MTLDevice> device) {
+  if (descriptorPath.length == 0 || !device)
+    return nil;
+  NSData *data = [NSData dataWithContentsOfFile:descriptorPath];
+  if (!data)
+    return nil;
+  NSDictionary *desc = [NSJSONSerialization JSONObjectWithData:data
+                                                       options:0
+                                                         error:nil];
+  if (![desc isKindOfClass:NSDictionary.class])
+    return nil;
+  // Slot 0 (multi-slot descriptors) else the legacy top-level key. A generator
+  // feed carries neither (it publishes only media dims), so this returns nil
+  // and the caller re-renders on its own reference source instead.
+  uint32_t sid = 0;
+  NSArray *slots = desc[@"slots"];
+  if ([slots isKindOfClass:NSArray.class] && slots.count > 0 &&
+      [slots[0] isKindOfClass:NSDictionary.class])
+    sid = (uint32_t)[slots[0][@"ioSurfaceID"] unsignedIntValue];
+  if (sid == 0)
+    sid = (uint32_t)[desc[@"ioSurfaceID"] unsignedIntValue];
+  if (sid == 0)
+    return nil;
+  IOSurfaceRef surf = IOSurfaceLookup((IOSurfaceID)sid);
+  if (!surf)
+    return nil;
+  MTLTextureDescriptor *td = [MTLTextureDescriptor
+      texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm
+                                   width:IOSurfaceGetWidth(surf)
+                                  height:IOSurfaceGetHeight(surf)
+                               mipmapped:NO];
+  td.usage = MTLTextureUsageShaderRead | MTLTextureUsagePixelFormatView;
+  td.storageMode = MTLStorageModeShared;
+  id<MTLTexture> tex = [device newTextureWithDescriptor:td
+                                              iosurface:surf
+                                                  plane:0];
+  CFRelease(surf); // the texture retains the surface
+  return tex;
+}

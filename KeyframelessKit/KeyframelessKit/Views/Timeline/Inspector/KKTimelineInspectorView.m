@@ -72,6 +72,7 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   if (!self)
     return nil;
   _apiManager = apiManager;
+  _clipProjectStartSec = -1.0; // unknown until the render tick pushes it
   _availableLanes = [availableLanes copy];
   _selectedTab = (KKTimelineTab)activeTab;
   _constantsButtonTitle =
@@ -598,10 +599,48 @@ const CGFloat kMBCheckboxTrailing = 23.0;
   _clipDurationSeconds = seconds;
   [_basicView setClipDurationSeconds:seconds];
   [_detachedView setClipDurationSeconds:seconds];
+  [self _pushLinkTimeToMiniViewer];
 }
 
 - (double)clipDurationSeconds {
   return _clipDurationSeconds;
+}
+
+// This clip's absolute project-start seconds (fraction 0). Pushed from the
+// shared render tick (KKRefreshRenderCache). Constant while a clip plays, so it
+// feeds parameter-link resolution at the 60fps feed rate instead of the ~2/sec
+// playhead poller - see -_pushLinkTimeToMiniViewer.
+- (void)setClipProjectStartSec:(double)seconds {
+  if (_clipProjectStartSec == seconds)
+    return;
+  _clipProjectStartSec = seconds;
+  [self _pushLinkTimeToMiniViewer];
+}
+
+- (double)clipProjectStartSec {
+  return _clipProjectStartSec;
+}
+
+// Feed the mini-viewer's parameter-link timing generically for EVERY plugin
+// (the renderer's clip props are on the KKMiniViewerRenderer base).
+// `linkTimelineSec` is the scrub/static fallback (poller-paced); during live
+// playback the mini draw path overrides it per-frame from the feed frame's own
+// fraction, using the constant `clipTimelineStartSec` pushed here. KVC so a
+// delegate that predates these keys is simply skipped (non-linked plugins are
+// unaffected either way).
+- (void)_pushLinkTimeToMiniViewer {
+  NSObject *del = (NSObject *)_miniViewerDelegate;
+  if (!del)
+    return;
+  double link = -1.0;
+  if (_clipProjectStartSec >= 0.0 && _playheadFraction >= 0.0)
+    link = _clipProjectStartSec + _playheadFraction * _clipDurationSeconds;
+  @try {
+    [del setValue:@(_clipDurationSeconds) forKey:@"clipDurationSeconds"];
+    [del setValue:@(_clipProjectStartSec) forKey:@"clipTimelineStartSec"];
+    [del setValue:@(link) forKey:@"linkTimelineSec"];
+  } @catch (...) {
+  }
 }
 
 - (void)setFrameDurationSeconds:(double)seconds {
@@ -611,8 +650,10 @@ const CGFloat kMBCheckboxTrailing = 23.0;
 }
 
 - (void)setPlayheadFraction:(double)frac {
+  _playheadFraction = frac;
   [_basicView setPlayheadFraction:frac];
   [_detachedView setPlayheadFraction:frac];
+  [self _pushLinkTimeToMiniViewer];
 }
 
 - (void)setPlaying:(BOOL)playing {
@@ -622,9 +663,9 @@ const CGFloat kMBCheckboxTrailing = 23.0;
     return;
   _playButton.playing = playing;
   [_detachedView setPlaying:playing];
-  // Flip the open keypose/constants popover's live preview in place, so the clip
-  // can be played back without closing the editor. The preview itself follows
-  // the feed frames; this only toggles the play/idle mode.
+  // Flip the open keypose/constants popover's live preview in place, so the
+  // clip can be played back without closing the editor. The preview itself
+  // follows the feed frames; this only toggles the play/idle mode.
   [_basicView setOpenPopoverLivePlaying:playing];
 }
 

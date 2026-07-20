@@ -111,11 +111,16 @@ static NSString *kkAxisLetter(int k) {
 }
 
 - (BOOL)_axisSuppressed:(int)k forLabel:(NSString *)label {
+  // Hidden either by boundary-phase suppression (suppressedHandleLabels) OR by
+  // the OSC-visibility checklist, which stores its hidden elements in
+  // hiddenHandleLabels - checking only the former let a checklist-hidden ring
+  // (master "Rotation" or per-axis "Rotation.Z") keep drawing in the mini
+  // viewer. Mirrors the single-lane -_ringIndividuallyHiddenAtAxis:.
   NSArray<NSString *> *sup = self.renderer.suppressedHandleLabels;
-  if ([sup containsObject:label])
-    return YES;
-  return [sup
-      containsObject:[label stringByAppendingFormat:@".%@", kkAxisLetter(k)]];
+  NSSet<NSString *> *hid = self.renderer.hiddenHandleLabels;
+  NSString *axisKey = [label stringByAppendingFormat:@".%@", kkAxisLetter(k)];
+  return [sup containsObject:label] || [hid containsObject:label] ||
+         [sup containsObject:axisKey] || [hid containsObject:axisKey];
 }
 
 // Per-axis draw alpha: 0 = not drawn (disabled or hidden with no reveal), 0.3 =

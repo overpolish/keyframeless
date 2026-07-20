@@ -199,6 +199,24 @@
     ((KKMiniViewerRenderer *)self.miniViewerDelegate).timeline = _timeline;
 
   if (popoverOpen) {
+    // Re-establish the mode-specific leading gutter handlers for the NEW mode:
+    // they are set once at fresh-create and don't carry across an in-place
+    // switch, so a keypose->constants switch would otherwise keep the keypose's
+    // (nil) add-to-animated handler and the constant rows would show no
+    // curve-glyph button. Constants supply onAddToAnimated; an Advanced keypose
+    // supplies onRemove. Clear whichever the new mode doesn't use. Set BEFORE
+    // reconfigure (it rebuilds the rows from these handlers).
+    [_openStaticView
+        setRowAddToAnimatedHandler:cfg.onAddToAnimated
+                                       ? ^(NSString *label) {
+                                           cfg.onAddToAnimated(label);
+                                         }
+                                       : nil];
+    [_openStaticView
+        setRowRemoveHandler:cfg.onRemove ? ^(NSString *label) {
+          suppressBoundaryRedrive();
+          cfg.onRemove(label);
+        } : nil];
     // In-place mode switch (constants<->keypose, either direction) - the
     // mini-viewer/overlay is preserved, no close+reopen, no new popover shown.
     [_openStaticView reconfigureForEditsKeypose:cfg.isBoundary
@@ -310,6 +328,28 @@
     else
       [s->_basicGraph writeAspectLinkedForLabel:label isOn:on];
   }];
+
+  // Parameter linking: the label's right-click Add/Remove Expression AND the
+  // inline editor's typed commits. Lane-level (non-fractional) like the aspect
+  // lock, so it persists against the lanes view's own _timeline for both the
+  // constants and keypose popovers.
+  __weak typeof(self) weakExpr = self;
+  [staticView
+      setOnSetLinkExpression:^(NSString *label, NSString *_Nullable expr) {
+        __strong typeof(weakExpr) s = weakExpr;
+        if (!s)
+          return;
+        // Suppress the boundary (keypose) popover re-drive, exactly like the
+        // smooth / aspect-link toggles: an expression edit persists and FCP
+        // echoes it back, and a full rebuild would tear down the FOCUSED inline
+        // editor mid-type and cascade (rebuild -> echo -> rebuild, accelerating
+        // -> crash). The inline editor already reflects the edit; structural
+        // add/remove is handled in place by the popover, so no rebuild is
+        // needed here.
+        s->_boundaryRedriveSuppressUntil =
+            [NSDate timeIntervalSinceReferenceDate] + 0.4;
+        [s _setLaneLinkExpression:expr forLabel:label];
+      }];
 
   // Gradient type (radial/linear): a single non-animated property, so editing
   // it in the keypose editor rewrites every keypose of the lane. Only wired for

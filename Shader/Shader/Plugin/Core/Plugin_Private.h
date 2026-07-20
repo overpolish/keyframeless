@@ -16,6 +16,11 @@
 // miniViewerFeed + miniDragUndoStarted now live on the KKPlugin base.
 @property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
 @property(nonatomic, strong, nullable) KKPlayheadPoller *playheadPoller;
+/// Subscriber-side link watcher: polls the published sources this clip's
+/// expressions reference and forces a re-render when one changes (FCP won't
+/// refresh a subscriber on a cross-clip source edit). Fed each render in
+/// buildStates; nil until this clip references something.
+@property(nonatomic, strong, nullable) KKLinkWatcher *linkWatcher;
 /// Persistent feedback-buffer state for Custom multi-pass shaders that read
 /// their own (or a later) buffer's previous frame. Keyed by "WxH" so the main
 /// viewer, thumbnails, and library previews keep independent ping-pong sets.

@@ -2,16 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<!-- Version manifest for the standalone "Keyframeless AI" installer (the
-	     kk-ai-helper). Source of truth for bump-version.sh (component: ai); the
-	     build stages it beside the helper so it installs to
-	     /Library/Application Support/Keyframeless/kk-ai-helper.plist, where
-	     KKUpdateChecker reads CFBundleShortVersionString to detect updates. -->
 	<key>CFBundleIdentifier</key>
 	<string>co.overpolish.keyframeless.aihelper</string>
 	<key>CFBundleName</key>
 	<string>Keyframeless AI</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.1</string>
+	<string>1.1.0</string>
 </dict>
 </plist>

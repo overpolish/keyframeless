@@ -147,6 +147,8 @@ NS_ASSUME_NONNULL_BEGIN
   KKTimelineInspectorView *_detachedView;
   double _clipDurationSeconds;
   double _frameDurationSeconds;
+  double _clipProjectStartSec;
+  double _playheadFraction;
 }
 
 /// Internal accessor so the +Guide category can read the play-button view

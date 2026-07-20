@@ -56,7 +56,11 @@
 }
 
 - (NSArray<NSNumber *> *)valuesForLabel:(NSString *)label {
-  NSArray<NSNumber *> *v = [_renderer valuesForLabel:label];
+  // ROOT value: this feeds the ring geometry + drag seed (the OSC edits the
+  // lane's own value, not the link-expression result - else a drag would
+  // compound). The rendered object still uses the renderer's resolved
+  // valuesForLabel:.
+  NSArray<NSNumber *> *v = [_renderer rootValuesForLabel:label];
   if (v.count)
     return v;
   NSDictionary *s = _specByLabel[label];
@@ -101,7 +105,9 @@
   NSString *link = s[@"linkLabel"];
   double cx, cy;
   if ([link isKindOfClass:NSString.class] && link.length) {
-    NSArray<NSNumber *> *pv = [_renderer valuesForLabel:link];
+    // Root value of the linked centre point: keep the ring anchored to that
+    // point's OSC handle (also root), consistent across handles.
+    NSArray<NSNumber *> *pv = [_renderer rootValuesForLabel:link];
     cx = pv.count >= 1 ? pv[0].doubleValue : 0.5;
     cy = pv.count >= 2 ? pv[1].doubleValue : 0.5;
   } else {

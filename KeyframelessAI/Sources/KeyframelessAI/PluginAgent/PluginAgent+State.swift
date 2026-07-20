@@ -63,7 +63,7 @@ extension AIPluginAgent {
 		return out
 	}
 
-	private static func decodeLanes(_ json: String) -> [[String: Any]]? {
+	static func decodeLanes(_ json: String) -> [[String: Any]]? {
 		guard let data = json.data(using: .utf8),
 			let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
 			let lanes = obj["lanes"] as? [[String: Any]]

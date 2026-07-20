@@ -6,6 +6,8 @@
 #import "KKPluginHost.h"
 #import "KKDataBlob.h"
 #import "KKHostInfo.h"
+#import "KKLinkBus.h"
+#import "KKLog.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKTimelineInspectorView.h"
 #import <FxPlug/FxPlugSDK.h>
@@ -14,6 +16,7 @@
 - (instancetype)init {
   if ((self = [super init])) {
     _lastPushedClipDuration = -1.0;
+    _lastPushedClipProjectStart = -999.0; // sentinel: force first push
     _frameDurSec = 1.0 / 60.0;
   }
   return self;
@@ -192,6 +195,26 @@ BOOL KKRefreshRenderCache(id<PROAPIAccessing> apiManager,
       [iv setClipDurationSeconds:durSec];
       if (frameDurSec > 0)
         [iv setFrameDurationSeconds:frameDurSec];
+    });
+  }
+
+  // Push this clip's absolute project-start time (fraction 0 in timeline
+  // seconds) so the inspector can feed-lock parameter-link resolution in the
+  // mini-viewer. Uses timelineTime(effectStart) - the effect's own start mapped
+  // to the timeline, NOT the source-in-based timelineStartSec above. Generic
+  // for every plugin (the inspector + mini renderer base handle the rest), so a
+  // new plugin gets linked-clip playback parity for free with no per-plugin
+  // wiring.
+  CMTime effStartTL = kCMTimeZero;
+  [timingAPI timelineTime:&effStartTL
+            fromInputTime:CMTimeMakeWithSeconds(cache.effectStartSec, 600)];
+  double clipProjectStart = CMTimeGetSeconds(effStartTL);
+  if (fabs(clipProjectStart - cache.lastPushedClipProjectStart) > 0.0005 &&
+      inspectorView) {
+    cache.lastPushedClipProjectStart = clipProjectStart;
+    KKTimelineInspectorView *iv = inspectorView;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [iv setClipProjectStartSec:clipProjectStart];
     });
   }
 

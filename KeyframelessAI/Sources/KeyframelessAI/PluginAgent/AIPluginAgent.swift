@@ -20,6 +20,13 @@ public enum AIPluginResultKind: Int {
 	/// re-transpiles and re-derives its controls). Only produced when the caller
 	/// used the code-authoring entry point (Shader); other plugins never see it.
 	case authorCode = 3
+	/// The user asked to drive one or more properties from a FORMULA. `expressionOps`
+	/// is JSON `{ "operations": [{ "lane": "...", "expression": "..." }] }`; the host
+	/// sets each named lane's `linkExpression` and writes the timeline back (which
+	/// re-derives the driven values). Cross-clip `${Clip.Param}` refs come back in the
+	/// friendly display form the host translates to stored ids. Only produced when the
+	/// caller enabled expression authoring.
+	case authorExpression = 4
 }
 
 /// Returned by `AIPluginAgent.run(...)`. Either `.answer(String)` (Q&A reply),
@@ -36,6 +43,7 @@ public final class AIPluginResult: NSObject {
 	@objc public let createSVG: String?
 	@objc public let createAnimatePrompt: String?
 	@objc public let shaderSource: String?
+	@objc public let expressionOps: String?
 
 	init(answer: String) {
 		self.kind = .answer
@@ -44,6 +52,7 @@ public final class AIPluginResult: NSObject {
 		self.createSVG = nil
 		self.createAnimatePrompt = nil
 		self.shaderSource = nil
+		self.expressionOps = nil
 		super.init()
 	}
 
@@ -54,6 +63,7 @@ public final class AIPluginResult: NSObject {
 		self.createSVG = nil
 		self.createAnimatePrompt = nil
 		self.shaderSource = nil
+		self.expressionOps = nil
 		super.init()
 	}
 
@@ -64,6 +74,7 @@ public final class AIPluginResult: NSObject {
 		self.createSVG = createSVG
 		self.createAnimatePrompt = animatePrompt
 		self.shaderSource = nil
+		self.expressionOps = nil
 		super.init()
 	}
 
@@ -74,6 +85,18 @@ public final class AIPluginResult: NSObject {
 		self.createSVG = nil
 		self.createAnimatePrompt = nil
 		self.shaderSource = shaderSource
+		self.expressionOps = nil
+		super.init()
+	}
+
+	init(expressionOps: String) {
+		self.kind = .authorExpression
+		self.answer = nil
+		self.mutationJSON = nil
+		self.createSVG = nil
+		self.createAnimatePrompt = nil
+		self.shaderSource = nil
+		self.expressionOps = expressionOps
 		super.init()
 	}
 }
@@ -174,6 +197,7 @@ public final class AIPluginAgent: NSObject {
 		clipDurationSeconds: Double,
 		currentInspectorMode: String,
 		currentShaderSource: String,
+		availableSources: String,
 		completion: @escaping (AIPluginResult?, Error?) -> Void
 	) {
 		Task { @MainActor in
@@ -186,7 +210,9 @@ public final class AIPluginAgent: NSObject {
 					clipDurationSeconds: clipDurationSeconds,
 					currentInspectorMode: currentInspectorMode,
 					supportsCode: true,
-					currentShaderSource: currentShaderSource)
+					currentShaderSource: currentShaderSource,
+					supportsExpressions: true,
+					availableSources: availableSources)
 				completion(result, nil)
 			} catch {
 				completion(nil, error)
@@ -233,6 +259,8 @@ public final class AIPluginAgent: NSObject {
 		supportsCreate: Bool = false,
 		supportsCode: Bool = false,
 		currentShaderSource: String = "",
+		supportsExpressions: Bool = false,
+		availableSources: String = "",
 		generatorTypeCatalog: String? = nil,
 		generatorMaxColors: Int = 0
 	) async throws -> AIPluginResult {
@@ -248,7 +276,8 @@ public final class AIPluginAgent: NSObject {
 			fallbackSchemaText: laneSchemaText)
 		let classification = try await classify(
 			prompt: prompt, productContext: productContext, laneLabels: labels,
-			supportsCreate: supportsCreate, supportsCode: supportsCode)
+			supportsCreate: supportsCreate, supportsCode: supportsCode,
+			supportsExpressions: supportsExpressions)
 		// The user wants to write or edit the shader's GLSL. Generate the source
 		// (editing the current shader when there is one and the ask implies it);
 		// the host writes it into its code lane, which re-transpiles and rebuilds
@@ -259,6 +288,17 @@ public final class AIPluginAgent: NSObject {
 				prompt: prompt, productContext: productContext,
 				currentShaderSource: currentShaderSource)
 			return AIPluginResult(shaderSource: source)
+		}
+		// The user wants a property driven by a formula (procedural motion, a
+		// math relationship, or a link to another clip). Generate one expression
+		// per target lane; the host sets each lane's linkExpression.
+		if classification.kind == "expression" {
+			AIDraftState.shared.routingStatus = AILoc("Writing expression")
+			let ops = try await generateExpressionOps(
+				prompt: prompt, productContext: productContext,
+				currentTimelineJSON: currentTimelineJSON,
+				availableSources: availableSources, laneLabels: labels)
+			return AIPluginResult(expressionOps: ops)
 		}
 		// The user wants a new shape drawn. Hand back an SVG (+ optional follow-up
 		// animation request); the host parses it into layers and, if asked, runs

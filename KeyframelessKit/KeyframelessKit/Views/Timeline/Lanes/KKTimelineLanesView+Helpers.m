@@ -6,6 +6,7 @@
 #import "KKFieldEditorSupport.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerView.h"
+#import "KKPopoverBackground.h"
 #import "KKPopoverHeaderView.h"
 #import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
@@ -16,46 +17,11 @@
 #import <KeyframelessKit/KKLog.h>
 #import <QuartzCore/QuartzCore.h>
 
-// macOS 26 wraps popover content in a GlassView that injects a CoreHostingView
-// (glass chrome) and ContentHolderView (opaque bg fill). Walk up to
-// NSPopoverFrame and zero out both so liquid glass shows through unobstructed.
-static void _clearPopoverBackground(NSView *view) {
-  dispatch_after(
-      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
-      dispatch_get_main_queue(), ^{
-        NSView *current = view;
-        NSView *popoverFrame = nil;
-        while (current) {
-          if ([NSStringFromClass([current class])
-                  hasPrefix:@"NSPopoverFrame"]) {
-            popoverFrame = current;
-            break;
-          }
-          current = current.superview;
-        }
-        if (!popoverFrame)
-          return;
-        for (NSView *sub in popoverFrame.subviews) {
-          if (![NSStringFromClass([sub class]) containsString:@"GlassView"])
-            continue;
-          for (NSView *glassSub in sub.subviews) {
-            glassSub.wantsLayer = YES;
-            NSString *name = NSStringFromClass([glassSub class]);
-            if ([name containsString:@"CoreHostingView"])
-              glassSub.layer.opacity = 0;
-            else if ([name containsString:@"ContentHolderView"])
-              glassSub.layer.backgroundColor = NSColor.clearColor.CGColor;
-          }
-          break;
-        }
-      });
-}
-
 @implementation _KKLVPopoverContentView
 - (void)viewDidMoveToWindow {
   [super viewDidMoveToWindow];
   if (self.window)
-    _clearPopoverBackground(self);
+    KKApplyPopoverBackground(self);
 }
 @end
 

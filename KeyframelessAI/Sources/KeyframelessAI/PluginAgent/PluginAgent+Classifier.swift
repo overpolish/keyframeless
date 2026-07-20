@@ -51,7 +51,8 @@ extension AIPluginAgent {
 	@MainActor
 	static func classify(
 		prompt: String, productContext: String, laneLabels: [String],
-		supportsCreate: Bool = false, supportsCode: Bool = false
+		supportsCreate: Bool = false, supportsCode: Bool = false,
+		supportsExpressions: Bool = false
 	) async throws -> Classification {
 		// Obvious questions bypass the (locally expensive) LLM router.
 		if looksLikeQuestion(prompt) {
@@ -75,6 +76,13 @@ extension AIPluginAgent {
 			supportsCode
 			? "  \"code\"     - user wants to WRITE, GENERATE, or EDIT the shader's GLSL source - the visual EFFECT itself, what the shader draws (\"write a shader for a wavy look\", \"make it look like flowing water\", \"give me a plasma effect\", \"add a vignette to the shader\", \"make the ripples bigger\", \"paste a shadertoy that does X\"). Choose this whenever the change is to the appearance/effect produced by the code. Prefer \"code\" over \"mutation\" for look/effect changes; use \"mutation\" only for animating or timing the EXISTING controls (e.g. \"pan the center from left to right\", \"speed it up over 2 seconds\").\n"
 			: ""
+		// Expression authoring: drive a property from a FORMULA rather than keyframes.
+		// This is for continuous/procedural motion, math relationships, or links to
+		// another clip - things fixed keyposes can't express.
+		let expressionKindLine =
+			supportsExpressions
+			? "  \"expression\" - drive a property from a FORMULA, for motion that fixed keyframes and the modulate template CANNOT do cleanly. Decide by CAPABILITY: choose \"expression\" when the request needs ANY of these (keyframes can't, or would need dozens of keyposes): (a) a PRECISE repeat rate, period, or count - \"every 2 seconds\", \"twice a second\", \"at 2 Hz\", \"pulse 5 times\", \"once per second\"; (b) ENDLESS / continuous motion - \"forever\", \"the whole time\", \"keeps going\", \"never stops\"; (c) a named MATH FUNCTION (sin, cos, sine, cosine, tan) or an explicit \"formula\"/\"expression\"; (d) a MATH RELATIONSHIP between properties - \"width is twice the height\", \"rotation follows position\"; (e) a LINK to ANOTHER clip's parameter - \"follow the title's opacity\", \"half of the hero clip's rotation\". These OVERRIDE the modulate/mutation routes even when the words wobble, breathe, pulse, oscillate, or shake appear - e.g. \"breathe in and out every 2 seconds\" and \"wobble the rotation using sin\" are BOTH \"expression\". Do NOT use \"expression\" for a GENERIC shake/breathe/pulse/wobble with NO exact rate (that is the modulate template - keyframes handle it), for a single ease A-to-B over the clip, or for specific poses at specific times (\"from 0 to 100 over 2 seconds\", \"fade in\") - those are \"mutation\".\n"
+			: ""
 		let system = """
 			Route a user message for \(productContext)'s AI animation and styling \
 			assistant. \
@@ -87,6 +95,7 @@ extension AIPluginAgent {
 			  "answer"   - user is asking a QUESTION about the tool.
 			\(createKindLine)\
 			\(codeKindLine)\
+			\(expressionKindLine)\
 			  "mutation" - user wants to CHANGE the content: its animation, its \
 			               properties, OR its overall look. It is actionable when it \
 			               gives ANY of: a lane, a value, a direction, a time range, a \
@@ -134,7 +143,14 @@ extension AIPluginAgent {
 			               handheld, camera-shake.
 			               Only use when ONE lane from the available list is clearly \
 			               named or strongly implied. If the lane is ambiguous, do \
-			               NOT pick this template - set kind = "vague" instead.
+			               NOT pick this template - set kind = "vague" instead. \
+			               Modulate is for a GENERIC shake/breathe/pulse with NO \
+			               exact timing. Do NOT pick modulate (nor kind "mutation") \
+			               when the request specifies a PRECISE rate/period/count \
+			               ("every 2 seconds", "twice a second", "pulse 3 times"), \
+			               asks for ENDLESS motion ("forever"), names a math \
+			               function (sin/cos), states a math relationship, or links \
+			               to another clip - those are kind "expression".
 			  "style"    - user wants to set an overall LOOK for a generator: a \
 			               colour palette, mood, or a named visual style, with NO \
 			               animation. E.g. "warm sunset gradient", "a neon look", \
@@ -172,7 +188,8 @@ extension AIPluginAgent {
 					"type": "string",
 					"enum": ["answer", "mutation", "vague"]
 						+ (supportsCreate ? ["create"] : [])
-						+ (supportsCode ? ["code"] : []),
+						+ (supportsCode ? ["code"] : [])
+						+ (supportsExpressions ? ["expression"] : []),
 				],
 				"complexity": ["type": "string", "enum": ["simple", "complex"]],
 				"clarification": ["type": "string"],

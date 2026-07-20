@@ -33,3 +33,30 @@ NSRegularExpression *KKGLSLTokenizer(void);
 /// colours it as a function call when it's followed by `(`, else leaves it
 /// default.
 NSColor *KKGLSLWordColor(NSString *w);
+
+/// One regex for the parameter-link EXPRESSION grammar (KKLinkExpr): capture
+/// group 1 a `${ref}`, 2 a number, 3 an identifier.
+NSRegularExpression *KKExprTokenizer(void);
+
+/// Colour for an expression identifier: a built-in function (sin, clamp, mix,
+/// …)
+/// -> purple, a variable/constant (value / t / pi / tau / e) -> coral, else nil
+/// (default text).
+NSColor *KKExprWordColor(NSString *w);
+
+/// The single source of truth for the parameter-link EXPRESSION vocabulary:
+/// every variable and function with its display signature, a one-line
+/// description, the category it groups under, and the text to insert at the
+/// caret. Drives the editor's browse-and-insert reference menu (and, exported
+/// the same way, the AI knowledge). Ordered by category then declaration order.
+/// Each entry is a dict:
+///   @"name"      short identifier (e.g. "pingpong")
+///   @"category"  one of: Variables, Math, Easing, Phase, Vector
+///   @"signature" how it reads in the menu (e.g. "pingpong(t, period)")
+///   @"desc"      one-line plain-language description
+///   @"insert"    text dropped at the caret ("pingpong(" for a call, "t" for a
+///   var)
+NSArray<NSDictionary<NSString *, NSString *> *> *KKExprCatalog(void);
+
+/// The distinct category names in KKExprCatalog(), in menu order.
+NSArray<NSString *> *KKExprCatalogCategories(void);

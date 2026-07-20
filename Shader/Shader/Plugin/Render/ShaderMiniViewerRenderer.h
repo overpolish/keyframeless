@@ -54,13 +54,10 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// `audioTimelineTimeSec` above: the preview has to agree with the viewer.
 @property(nonatomic) double playheadFraction;
 
-/// The clip's duration in seconds, pushed by the inspector. The preview's
-/// `iTime` is `editFraction * clipDurationSeconds * Speed + Seed`, matching the
-/// FCP render's `frac * durSec` (see Plugin+RenderState `timeSec`). Without the
-/// duration the preview would advance in bare 0..1 fraction units - i.e.
-/// `durSec`x too slow to match the viewer. 0/unknown falls back to the raw
-/// fraction (slow but never frozen). Named to match Canvas/Glow's renderer.
-@property(nonatomic) double clipDurationSeconds;
+// clipDurationSeconds + clipTimelineStartSec are inherited from
+// KKMiniViewerRenderer (hoisted there so every plugin's mini gets
+// parameter-link feed-locking). The preview's `iTime` still reads
+// clipDurationSeconds (see -generateIntoTexture: `timeSec`).
 
 /// Blit-scale `src` into `dest` (format-converting to dest's format, aspect
 /// from dest's dimensions). Used by the thumbnail bake to capture the rendered

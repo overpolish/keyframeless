@@ -13,6 +13,7 @@
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
 #import <KeyframelessKit/KKTimingStage.h>
 #import <KeyframelessKit/KKTokens.h>
+#import <KeyframelessKit/NSColor+KKColors.h>
 #import <QuartzCore/QuartzCore.h>
 
 // Panel sits to the left of the popover card with a small gap, ordered behind
@@ -59,12 +60,13 @@ static const CGFloat kSlideDistance = 12.0;
 
 - (void)invalidate {
   [NSNotificationCenter.defaultCenter removeObserver:self];
-  // Teardown path (called from -[CanvasInspectorView dealloc]). _hide fires host
-  // callbacks (onNonSelectableLayersChanged / ...Marquee...) that are blocks
-  // defined in the inspector's init and capture inspector state - invoking them
-  // while the inspector is mid-dealloc reads freed memory (SIGSEGV; also stalls
-  // the inspector reload after a popover edit -> ViewBridge placeholder). Drop
-  // them first so _hide only tears the panel down.
+  // Teardown path (called from -[CanvasInspectorView dealloc]). _hide fires
+  // host callbacks (onNonSelectableLayersChanged / ...Marquee...) that are
+  // blocks defined in the inspector's init and capture inspector state -
+  // invoking them while the inspector is mid-dealloc reads freed memory
+  // (SIGSEGV; also stalls the inspector reload after a popover edit ->
+  // ViewBridge placeholder). Drop them first so _hide only tears the panel
+  // down.
   self.onPrimaryLayerSelected = nil;
   self.onLayerHovered = nil;
   self.onAutoSelectToggled = nil;
@@ -252,6 +254,12 @@ static const CGFloat kSlideDistance = 12.0;
     NSGlassEffectView *glass =
         [[NSGlassEffectView alloc] initWithFrame:NSZeroRect];
     glass.cornerRadius = kPanelCornerRadius;
+    // Opaque inspector-matched fill so the layer list reads like the popovers
+    // beside it, not see-through liquid glass. The glass clips it to the corner
+    // radius, so the panel keeps its rounded shape and shadow.
+    content.wantsLayer = YES;
+    content.layer.backgroundColor =
+        [NSColor.inspectorBackground colorWithAlphaComponent:0.5].CGColor;
     glass.contentView = content;
     p.contentView = glass;
   } else {

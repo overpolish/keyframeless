@@ -10,43 +10,51 @@
 #import "ShaderInspectorView.h"
 #import "ShaderStateBlob.h"
 
+#import <KeyframelessKit/KKLinkBus.h>
 #import <KeyframelessKit/KKMotionBlur.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
 
-// The interpolated component values of the lane named `label` at clip fraction
-// `frac`, or nil if there's no such lane.
+// The resolved component values of the lane named `label` at clip fraction
+// `frac`, or nil if there's no such lane. Routes through the kit's
+// KKLinkResolvedLaneValue so an expression-driven lane reads its computed value
+// (evaluated at the absolute `timelineSec`), and a plain lane evaluates exactly
+// as before. This is the ONE place Shader plugs its lane evaluation into the
+// shared link engine.
 static NSArray<NSNumber *> *
-ShaderLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac) {
+ShaderLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac,
+                           double timelineSec, double durSec) {
   for (KKLane *lane in timeline.lanes) {
     if ([lane.label isEqualToString:label])
-      return KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      return KKLinkResolvedLaneValue(lane, frac, timelineSec, durSec);
   }
   return nil;
 }
 
 // Build the full plugin state from the timeline at one clip fraction. Pure (no
 // timing/cache work) so a caller can refresh the render cache once and evaluate
-// many sub-frame fractions cheaply (motion blur samples).
+// many sub-frame fractions cheaply (motion blur samples). Lane linking is
+// handled inside ShaderLaneValuesAtFraction via the kit resolver, keyed on the
+// absolute `timelineSec`.
 static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
                                   double durSec, double timelineSec,
                                   ShaderPluginState *outState) {
   memset(outState, 0, sizeof(*outState));
 
   NSArray<NSNumber *> *speedV =
-      ShaderLaneValuesAtFraction(timeline, @"Speed", frac);
+      ShaderLaneValuesAtFraction(timeline, @"Speed", frac, timelineSec, durSec);
   float speed =
       speedV.count ? speedV[0].floatValue : KK_SHADER_GRAD_DEFAULT_SPEED;
   NSArray<NSNumber *> *seedV =
-      ShaderLaneValuesAtFraction(timeline, @"Seed", frac);
+      ShaderLaneValuesAtFraction(timeline, @"Seed", frac, timelineSec, durSec);
   float seed = seedV.count ? seedV[0].floatValue : KK_SHADER_GRAD_DEFAULT_SEED;
   float timeSec = (float)(frac * durSec);
 
   NSArray<NSNumber *> *grainV =
-      ShaderLaneValuesAtFraction(timeline, @"Grain", frac);
-  NSArray<NSNumber *> *grainSizeV =
-      ShaderLaneValuesAtFraction(timeline, @"Grain Size", frac);
+      ShaderLaneValuesAtFraction(timeline, @"Grain", frac, timelineSec, durSec);
+  NSArray<NSNumber *> *grainSizeV = ShaderLaneValuesAtFraction(
+      timeline, @"Grain Size", frac, timelineSec, durSec);
   // Only the shared params survive (Speed / Seed / Grain / Grain Size + time).
   // The user shader source drives everything else and rides in the blob tail.
   ShaderCommonUniforms common = ShaderCommonDefault();
@@ -83,7 +91,8 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
           : (shaderLane ? nil : ShaderCustomDefaultShaderSource());
   NSArray<NSNumber *> * (^values)(NSString *) =
       ^NSArray<NSNumber *> *(NSString *label) {
-    return ShaderLaneValuesAtFraction(timeline, label, frac);
+    return ShaderLaneValuesAtFraction(timeline, label, frac, timelineSec,
+                                      durSec);
   };
   int poolN = ShaderFillColorPool(shaderSrc, outState->colorPool, values);
   poolN = ShaderFillScalarPool(shaderSrc, outState->colorPool, poolN, values);
@@ -103,6 +112,57 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
 - (KKTimeline *)_timelineFromParams:(id<FxParameterRetrievalAPI_v6>)paramAPI {
   NSString *json = KKReadCustomParamString(paramAPI, kKKParamTimelineData);
   return json.length ? [KKTimeline timelineFromJSON:json] : nil;
+}
+
+// Link-source opt-in (see KKPlugin -writeLinkManifest): the EFFECTIVE directive
+// lane set for the current shader, so a fresh clip advertises its full param
+// set (constants) before it's ever edited - NOT the persisted timeline (empty
+// on a fresh instance). Source = the "Shader" code lane, or the baked default.
+- (NSArray<KKLane *> *)linkableLanesForManifest {
+  id<FxParameterRetrievalAPI_v6> getAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  if (!getAPI)
+    return nil;
+  KKTimeline *timeline = [self _timelineFromParams:getAPI];
+  NSString *shaderSrc = nil;
+  for (KKLane *lane in timeline.lanes)
+    if ([lane.label isEqualToString:@"Shader"] && lane.codeString.length) {
+      shaderSrc = lane.codeString;
+      break;
+    }
+  if (shaderSrc.length == 0)
+    shaderSrc = ShaderCustomDefaultShaderSource();
+  NSArray<KKLane *> *templates =
+      [ShaderPlugin availableLanesForShaderSource:shaderSrc];
+  // Overlay the user's REAL keyposes / expression onto each template lane so
+  // the auto-published curves (KKPlugin -writeLinkManifest) carry the values
+  // the render actually uses, not just defaults - while keeping each template's
+  // displayLabel/metadata (the persisted lane's display name isn't serialized)
+  // so the manifest's friendly param names survive. Unedited params keep the
+  // template default; edited ones (constant or animated) get their real curve.
+  NSMutableDictionary<NSString *, KKLane *> *persisted =
+      [NSMutableDictionary dictionaryWithCapacity:timeline.lanes.count];
+  for (KKLane *l in timeline.lanes)
+    if (l.label)
+      persisted[l.label] = l;
+  NSMutableArray<KKLane *> *merged =
+      [NSMutableArray arrayWithCapacity:templates.count];
+  for (KKLane *t in templates) {
+    KKLane *p = persisted[t.label];
+    if (p.keyposes.count) {
+      KKLane *m = [t copy];
+      m.keyposes = p.keyposes;
+      m.linkExpression = p.linkExpression;
+      [merged addObject:m];
+    } else {
+      [merged addObject:t];
+    }
+  }
+  return merged;
+}
+
+- (NSString *)linkManifestEffectName {
+  return @"Shader";
 }
 
 // Tell the inspector where this clip sits in PROJECT time, so its mini-viewer
@@ -173,6 +233,30 @@ static void ShaderEvalStateAtFrac(KKTimeline *timeline, double frac,
     KKPlayheadPoller *poller = self.playheadPoller;
     dispatch_async(dispatch_get_main_queue(), ^{
       [poller ensureRunning];
+    });
+  }
+
+  // Advertise this clip as a link SOURCE via the shared base hook (see
+  // -linkableLanesForManifest below for Shader's effective directive lane set).
+  if (hasTiming)
+    [self writeLinkManifest];
+
+  // Subscriber side: watch the sources THIS clip's expressions reference so a
+  // cross-clip source edit forces us to re-render (FCP renders clips
+  // independently and won't refresh a subscriber otherwise). Created lazily -
+  // only clips that actually reference something pay for a timer. The nudge
+  // (debounced) writes the hidden render-nudge scratch param in an action
+  // scope.
+  NSSet<NSString *> *linkSources = KKLinkTimelineSourceNames(timeline);
+  if (linkSources.count > 0 || self.linkWatcher) {
+    if (!self.linkWatcher)
+      self.linkWatcher =
+          [[KKLinkWatcher alloc] initWithAPIManager:self.apiManager
+                                       actionTarget:self
+                                       nudgeParamID:kParamRenderNudge];
+    KKLinkWatcher *watcher = self.linkWatcher;
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [watcher setSourceNames:linkSources]; // empty stops it
     });
   }
 

@@ -266,4 +266,17 @@
     self.onTimelineMutated(t);
 }
 
+// Parameter linking: the lane's transform expression is a lane-level (non-
+// fractional) property, so it persists against the lanes view's own _timeline
+// the same way the aspect lock does.
+- (void)_setLaneLinkExpression:(NSString *)expr forLabel:(NSString *)label {
+  KKTimeline *t = KKTimelineSettingLinkExpression(_timeline, label, expr);
+  if (!t)
+    return;
+  _timeline = t;
+  [self _refresh];
+  if (self.onTimelineMutated)
+    self.onTimelineMutated(t);
+}
+
 @end

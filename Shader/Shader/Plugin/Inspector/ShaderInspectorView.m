@@ -120,11 +120,14 @@ static BOOL ShaderLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
                     availableLanes:availableLanes
                           timeline:timeline];
   if (self) {
+    _thumbAPIManager = apiManager;
     _miniViewerRenderer = [[ShaderMiniViewerRenderer alloc] init];
     // Negative until the render tick says otherwise: unknown must read as
     // silence, not as the clip's first frame.
     _clipTimelineStartSec = -1.0;
     _miniViewerRenderer.audioTimelineTimeSec = -1.0;
+    _miniViewerRenderer.linkTimelineSec = -1.0;
+    _miniViewerRenderer.clipTimelineStartSec = -1.0;
     // On a fresh instance the persisted param timeline is nil, but the super
     // reconstructs a working timeline from availableLanes (carrying the
     // plasma-seeded Shader lane) - that's what the editor shows. Seed the mini
@@ -402,6 +405,8 @@ static BOOL ShaderLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
 - (void)applyTimeline:(KKTimeline *)timeline {
   [super applyTimeline:timeline];
   _miniViewerRenderer.timeline = timeline;
+  // Refresh this clip's reference-menu thumbnail when its look changes.
+  [self _scheduleThumbnailBake];
   // Re-wire the source-derived OSC set (the cog checklist) whenever the
   // effective shader source changes - the SAME re-wire a code-editor commit /
   // browser load does (via onCodeCommitted). Mirrors -shaderSourceFromTimeline:
@@ -433,6 +438,50 @@ static BOOL ShaderLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   [super viewDidMoveToWindow];
   if (!self.isDetachedCopy)
     [self autostartIntroGuideOnceWithSeenKey:kShaderIntroSeenKey];
+  // Bake this clip's thumbnail when it appears on-screen (plain selection,
+  // which -applyTimeline: does NOT cover - that only fires on a param change).
+  // The detached copy is a mirror, not the source instance.
+  if (self.window && !self.isDetachedCopy)
+    [self _scheduleThumbnailBake];
+}
+
+// Coalesced one-shot bake: bump the generation, fire ~0.8s later only if still
+// the latest (so appear + a burst of edits collapse to one bake, and the mini
+// has had a moment to render). No repeating poll.
+- (void)_scheduleThumbnailBake {
+  if (self.isDetachedCopy)
+    return;
+  NSInteger gen = ++_thumbBakeGeneration;
+  __weak typeof(self) weak = self;
+  dispatch_after(
+      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
+      dispatch_get_main_queue(), ^{
+        __strong typeof(weak) s = weak;
+        if (s && s->_thumbBakeGeneration == gen)
+          [s _bakeLinkThumbnail];
+      });
+}
+
+// Capture the mini-viewer's current frame as this clip's reference-menu
+// thumbnail, keyed by the instance UUID (matching the manifest).
+// writeThumbnailJPEG skips a byte-identical rewrite.
+- (void)_bakeLinkThumbnail {
+  NSString *uuid = KKInstanceUUIDForAPI(_thumbAPIManager);
+  if (uuid.length == 0)
+    return; // instance UUID not created yet (lazy); a later bake will catch it
+  // The inspector has no live mini-viewer canvas, so instead of capturing a
+  // displayed frame we re-render on this clip's OWN source - loaded headless
+  // from the same per-UUID mini-viewer feed the preview reads (real footage).
+  // Pinned to fraction 0.5 for a deterministic poster. A generator publishes no
+  // source (src==nil) and re-renders on the bundled reference, which it ignores
+  // anyway.
+  id<MTLDevice> device = MTLCreateSystemDefaultDevice();
+  id<MTLTexture> src = KKMiniViewerFeedLoadPrimarySource(
+      ShaderMiniViewerDescriptorPathForUUID(uuid), device);
+  NSData *jpeg =
+      ShaderRenderThumbnailJPEGFromSource(_miniViewerRenderer, 320, 180, src);
+  if (jpeg.length)
+    [KKLinkBus writeThumbnailJPEG:jpeg forUUID:uuid];
 }
 
 - (instancetype)beginDetachedCopy {
@@ -440,6 +489,10 @@ static BOOL ShaderLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
 }
 
 - (void)setClipProjectStartSec:(double)seconds {
+  // Base stores it + feed-locks parameter-link timing into the mini
+  // generically; we still keep _clipTimelineStartSec for the audio
+  // (spectrogram) preview below.
+  [super setClipProjectStartSec:seconds];
   if (_clipTimelineStartSec == seconds)
     return;
   _clipTimelineStartSec = seconds;
@@ -470,11 +523,22 @@ static BOOL ShaderLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   // first frame no matter where this clip sits.
   if (_clipTimelineStartSec < 0) {
     _miniViewerRenderer.audioTimelineTimeSec = -1.0;
+    _miniViewerRenderer.linkTimelineSec = -1.0;
+    _miniViewerRenderer.clipTimelineStartSec = -1.0;
     return;
   }
   double dur = [self clipDurationSeconds];
-  _miniViewerRenderer.audioTimelineTimeSec =
+  double projectSec =
       _clipTimelineStartSec + _playheadFraction * (dur > 0 ? dur : 0);
+  _miniViewerRenderer.audioTimelineTimeSec = projectSec;
+  // Same project time drives parameter-link `${refs}` in the mini-viewer so its
+  // preview matches the render. This is the fallback for scrub/static; during
+  // live playback the draw path feed-locks the link time from the frame's own
+  // fraction (see clipTimelineStartSec) because this poller only fires ~2/sec.
+  _miniViewerRenderer.linkTimelineSec = projectSec;
+  // Constant clip position (not the moving playhead), so it isn't starved by
+  // the poller - the draw path pairs it with the 60fps feed fraction.
+  _miniViewerRenderer.clipTimelineStartSec = _clipTimelineStartSec;
 }
 
 @end

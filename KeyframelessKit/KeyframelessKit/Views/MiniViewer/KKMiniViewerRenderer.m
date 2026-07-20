@@ -7,6 +7,7 @@
 
 #import "KKMiniViewerCropEditor.h"
 #import "KKResizeCursor.h"
+#import <KeyframelessKit/KKLinkBus.h>
 #import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
@@ -75,6 +76,11 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
     _cropEditor = [[KKMiniViewerCropEditor alloc] init];
     _currentSlotCount = 1;
     _rotActiveAxis = -1;
+    _clipTimelineStartSec = -1.0; // unknown until the inspector pushes it
+    // Warm the app-group container off-thread so the first parameter-link
+    // resolve in this (inspector/ViewBridge) process doesn't stall on the ~1-2s
+    // cold container lookup. Harmless no-op when nothing links.
+    [KKLinkBus warmUp];
   }
   return self;
 }
@@ -203,7 +209,11 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   NSString *label = self.rotationLabel;
   if (!label)
     return @[ @0.0, @0.0, @0.0 ];
-  return [self _eulerDegFromLaneValues:[self valuesForLabel:label]];
+  // ROOT value: this drives the rotation GIZMO (ring draw, hit-test, drag
+  // seed), which edits the lane's own value - not the link-expression result
+  // (else a drag would compound). The rendered object uses the resolved
+  // valuesForLabel:.
+  return [self _eulerDegFromLaneValues:[self rootValuesForLabel:label]];
 }
 
 - (CGPoint)rotationCenterForContentRect:(CGRect)cr {
@@ -502,6 +512,43 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 - (NSArray<NSNumber *> *)valuesForLabel:(NSString *)label {
+  if (_hasLiveFraction) {
+    NSArray<NSNumber *> *live = _liveValues[label];
+    if (live.count > 0 && fabs(self.editFraction - _liveFraction) < 1e-4)
+      return live;
+  }
+  for (KKLane *lane in self.timeline.lanes) {
+    if (![lane.label isEqualToString:label])
+      continue;
+    // An expression-driven lane resolves through the same path the render uses
+    // (its own value plus any `${refs}` sampled at the playhead's project time)
+    // so the mini-viewer PREVIEW matches - this method feeds the shader-uniform
+    // reads that draw the object. Non-expression lanes keep the plain sampler.
+    // NB: the OSC handles must NOT use this (they'd seed a drag from value*expr
+    // and compound the write) - they read `rootValuesForLabel:` instead.
+    if (lane.linkExpression.length) {
+      NSArray<NSNumber *> *rv =
+          KKLinkResolvedLaneValue(lane, self.editFraction, self.linkTimelineSec,
+                                  self.clipDurationSeconds);
+      if (rv.count > 0)
+        return rv;
+    }
+    NSArray<NSNumber *> *v =
+        KKTimelineLaneValueAtFraction(lane, self.editFraction);
+    if (v.count > 0)
+      return v;
+  }
+  return [self defaultValuesForLabel:label];
+}
+
+- (NSArray<NSNumber *> *)rootValuesForLabel:(NSString *)label {
+  // The lane's OWN value (NO link-expression resolution) - what the OSC handles
+  // edit. Identical to valuesForLabel: minus the expression pass: same
+  // live-drag override, same sampler, same default. An OSC drag on an
+  // expression lane must seed + write THIS (else it seeds from value*expr and
+  // compounds the write); the rendered object still uses the resolved
+  // valuesForLabel:, so the handle sits at the root value just like the main
+  // FCP viewer's OSC.
   if (_hasLiveFraction) {
     NSArray<NSNumber *> *live = _liveValues[label];
     if (live.count > 0 && fabs(self.editFraction - _liveFraction) < 1e-4)

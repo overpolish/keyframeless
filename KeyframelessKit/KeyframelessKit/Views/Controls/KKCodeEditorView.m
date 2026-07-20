@@ -8,6 +8,7 @@
 #import "KKCodeGutterView.h"
 #import "KKFieldEditorSupport.h"
 #import "KKGLSLSyntax.h"
+#import "KKLinkExpr.h" // expression error range for the red squiggle
 #import "KKLocalized.h"
 #import "KKPopoverKeepAlive.h"
 #import "KKTimelineLanesView_Private.h" // _KKDropdownTrigger, _KKLVPopoverContentView
@@ -38,6 +39,13 @@ NSNotificationName const KKCodeEditorReloadNotification =
 // Cmd-A/C/V/X/Z cluster explicitly (a ViewBridge popover has no Edit menu, so
 // those equivalents never reach us otherwise).
 @interface _KKCodeTextView : NSTextView
+// Gives the owner (KKCodeEditorView) first crack at Escape: returns YES to
+// consume it (dismiss an open autocomplete) instead of blurring the editor.
+@property(nonatomic, copy) BOOL (^escapeHandler)(void);
+// Returns YES when an outside-the-editor click should NOT blur us (e.g. it
+// landed on the autocomplete overlay, which the owner owns). Lets a click pick
+// a row.
+@property(nonatomic, copy) BOOL (^benignOutsideClick)(NSEvent *event);
 @end
 
 @implementation _KKCodeTextView {
@@ -107,8 +115,14 @@ NSNotificationName const KKCodeEditorReloadNotification =
                                        NSRect r = [area convertRect:area.bounds
                                                              toView:nil];
                                        if (!NSPointInRect(e.locationInWindow,
-                                                          r))
+                                                          r)) {
+                                         // A click on the autocomplete overlay
+                                         // is benign - let it pick, don't blur.
+                                         if (s.benignOutsideClick &&
+                                             s.benignOutsideClick(e))
+                                           return e;
                                          [s.window makeFirstResponder:nil];
+                                       }
                                        return e;
                                      }];
   }
@@ -133,8 +147,10 @@ NSNotificationName const KKCodeEditorReloadNotification =
 - (BOOL)performKeyEquivalent:(NSEvent *)event {
   if (self.window.firstResponder != self)
     return [super performKeyEquivalent:event];
-  if (event.keyCode == 53) { // Escape: drop focus, like a value field
-    [self.window makeFirstResponder:nil];
+  if (event.keyCode == 53) { // Escape
+    if (_escapeHandler && _escapeHandler())
+      return YES; // consumed (e.g. dismissed autocomplete)
+    [self.window makeFirstResponder:nil]; // else drop focus, like a value field
     return YES;
   }
   NSEventModifierFlags mods =
@@ -239,6 +255,282 @@ NSNotificationName const KKCodeEditorReloadNotification =
 }
 @end
 
+// Inline autocomplete list for the expression editor: a display-only overlay
+// (hit-transparent, keyboard-driven) that lists matching catalog entries below
+// the caret. Each row is a signature + dimmed description; the selected row is
+// accent- filled. All state pushed in by the editor.
+static const CGFloat kKKComplRowH = 22.0;
+static const NSInteger kKKComplMaxRows = 8;
+static const CGFloat kKKComplWidth = 400.0;
+static const CGFloat kKKComplPad = 8.0; // horizontal text inset
+
+@interface _KKExprCompletionView : NSView
+@property(nonatomic, copy)
+    NSArray<NSDictionary<NSString *, NSString *> *> *items;
+@property(nonatomic) NSInteger selectedIndex;
+@property(nonatomic, copy) void (^onPick)(NSInteger index);
+@end
+
+@implementation _KKExprCompletionView {
+  NSTrackingArea *_track;
+}
+
+- (instancetype)initWithFrame:(NSRect)frame {
+  if ((self = [super initWithFrame:frame])) {
+    // Rounded, bordered panel matching the code editor's own chrome
+    // (GitHub-Dark: radius 8, KKCodeBorder, an elevated panel tint over the
+    // editor).
+    self.wantsLayer = YES;
+    self.layer.cornerRadius = 8.0;
+    self.layer.masksToBounds = YES;
+    self.layer.borderWidth = 1.0;
+    self.layer.borderColor = KKCodeBorder().CGColor;
+    self.layer.backgroundColor = KKHex(0x161b22).CGColor;
+  }
+  return self;
+}
+
+- (BOOL)isFlipped {
+  return YES; // rows drawn + hit-tested top-down
+}
+
+- (void)setItems:(NSArray<NSDictionary<NSString *, NSString *> *> *)items {
+  _items = [items copy];
+  self.needsDisplay = YES;
+}
+
+- (void)setSelectedIndex:(NSInteger)selectedIndex {
+  _selectedIndex = selectedIndex;
+  self.needsDisplay = YES;
+}
+
+- (CGFloat)_descHeight:(NSString *)desc {
+  if (desc.length == 0)
+    return 0.0;
+  NSRect r = [desc
+      boundingRectWithSize:NSMakeSize(kKKComplWidth - 2 * kKKComplPad, 1000)
+                   options:NSStringDrawingUsesLineFragmentOrigin
+                attributes:@{
+                  NSFontAttributeName : [NSFont systemFontOfSize:9.5]
+                }];
+  return ceil(r.size.height);
+}
+
+// Footer sized to the TALLEST description in the current list, so switching the
+// selection swaps the shown text without resizing the popup (no jump).
+- (CGFloat)_footerHeight {
+  NSInteger n = MIN((NSInteger)self.items.count, kKKComplMaxRows);
+  CGFloat maxH = 0.0;
+  for (NSInteger i = 0; i < n; i++)
+    maxH = MAX(maxH, [self _descHeight:self.items[i][@"desc"]]);
+  return maxH > 0.0 ? (1.0 + 6.0 + maxH + 6.0)
+                    : 0.0; // divider + pad + text + pad
+}
+
+- (CGFloat)fittingHeight {
+  NSInteger n = MIN((NSInteger)self.items.count, kKKComplMaxRows);
+  return 1.0 + n * kKKComplRowH + [self _footerHeight] + 1.0;
+}
+
+- (NSInteger)_rowAtPoint:(NSPoint)p {
+  NSInteger i = (NSInteger)floor((p.y - 1.0) / kKKComplRowH);
+  NSInteger n = MIN((NSInteger)self.items.count, kKKComplMaxRows);
+  return (i >= 0 && i < n) ? i : -1;
+}
+
+- (void)updateTrackingAreas {
+  [super updateTrackingAreas];
+  if (_track)
+    [self removeTrackingArea:_track];
+  _track = [[NSTrackingArea alloc]
+      initWithRect:self.bounds
+           options:NSTrackingMouseMoved | NSTrackingActiveAlways
+             owner:self
+          userInfo:nil];
+  [self addTrackingArea:_track];
+}
+
+- (void)mouseMoved:(NSEvent *)event {
+  NSInteger i = [self _rowAtPoint:[self convertPoint:event.locationInWindow
+                                            fromView:nil]];
+  if (i >= 0 && i != _selectedIndex) {
+    _selectedIndex = i;
+    self.needsDisplay = YES;
+  }
+}
+
+- (void)mouseDown:(NSEvent *)event {
+  NSInteger i = [self _rowAtPoint:[self convertPoint:event.locationInWindow
+                                            fromView:nil]];
+  if (i >= 0 && self.onPick)
+    self.onPick(i);
+}
+
+- (void)drawRect:(NSRect)dirty {
+  NSFont *sigFont = [NSFont monospacedSystemFontOfSize:10.0
+                                                weight:NSFontWeightMedium];
+  NSMutableParagraphStyle *rowPara = [NSMutableParagraphStyle new];
+  rowPara.lineBreakMode = NSLineBreakByTruncatingTail;
+  NSColor *argColor = KKCodeComment(); // grey, like a comment/secondary
+  NSInteger n = MIN((NSInteger)self.items.count, kKKComplMaxRows);
+
+  for (NSInteger i = 0; i < n; i++) {
+    NSRect row = NSMakeRect(1.0, 1.0 + i * kKKComplRowH,
+                            self.bounds.size.width - 2.0, kKKComplRowH);
+    NSDictionary<NSString *, NSString *> *e = self.items[i];
+    if (i == self.selectedIndex) {
+      [[NSColor colorWithWhite:1.0 alpha:0.12] setFill]; // soft grey highlight
+      NSRectFill(row);
+    }
+    // The identifier takes its SYNTAX-highlight colour (functions purple,
+    // variables coral - same as in the editor); the argument list stays grey.
+    NSString *sig = e[@"signature"] ?: @"";
+    NSRange paren = [sig rangeOfString:@"("];
+    NSString *namePart = paren.location != NSNotFound
+                             ? [sig substringToIndex:paren.location]
+                             : sig;
+    NSString *argPart = paren.location != NSNotFound
+                            ? [sig substringFromIndex:paren.location]
+                            : @"";
+    NSColor *nameColor = KKExprWordColor(e[@"name"]) ?: KKCodeText();
+    NSMutableAttributedString *a = [[NSMutableAttributedString alloc]
+        initWithString:namePart
+            attributes:@{
+              NSFontAttributeName : sigFont,
+              NSForegroundColorAttributeName : nameColor,
+              NSParagraphStyleAttributeName : rowPara
+            }];
+    if (argPart.length)
+      [a appendAttributedString:[[NSAttributedString alloc]
+                                    initWithString:argPart
+                                        attributes:@{
+                                          NSFontAttributeName : sigFont,
+                                          NSForegroundColorAttributeName :
+                                              argColor,
+                                          NSParagraphStyleAttributeName :
+                                              rowPara
+                                        }]];
+    CGFloat th = a.size.height;
+    NSRect textRect = NSMakeRect(row.origin.x + kKKComplPad,
+                                 row.origin.y + (kKKComplRowH - th) / 2.0,
+                                 row.size.width - 2 * kKKComplPad, th);
+    [a drawInRect:textRect];
+  }
+
+  // Description of the highlighted row, wrapped, in the fixed-height footer.
+  CGFloat footerH = [self _footerHeight];
+  if (footerH <= 0.0 || self.selectedIndex < 0 ||
+      self.selectedIndex >= (NSInteger)self.items.count)
+    return;
+  CGFloat rowsBottom = 1.0 + n * kKKComplRowH;
+  NSRect divider = NSMakeRect(kKKComplPad, rowsBottom,
+                              self.bounds.size.width - 2 * kKKComplPad, 1.0);
+  [[KKCodeBorder() colorWithAlphaComponent:0.6] setFill];
+  NSRectFill(divider);
+  NSMutableParagraphStyle *wrap = [NSMutableParagraphStyle new];
+  wrap.lineBreakMode = NSLineBreakByWordWrapping;
+  NSString *desc = self.items[self.selectedIndex][@"desc"] ?: @"";
+  NSRect descRect =
+      NSMakeRect(kKKComplPad, rowsBottom + 7.0,
+                 self.bounds.size.width - 2 * kKKComplPad, footerH - 8.0);
+  [desc drawWithRect:descRect
+             options:NSStringDrawingUsesLineFragmentOrigin
+          attributes:@{
+            NSFontAttributeName : [NSFont systemFontOfSize:9.5],
+            NSForegroundColorAttributeName : KKHex(0xadbac7),
+            NSParagraphStyleAttributeName : wrap
+          }];
+}
+
+@end
+
+// A tiny read-only curve preview: normalises `samples` (the expression
+// evaluated across the clip, fraction 0->1) to its own min/max and strokes a
+// polyline, with an accent dot at `marker` (the current playhead fraction).
+// Flat / empty samples draw a centred baseline. Lives in the result strip
+// beside the number; a dumb renderer, all data pushed in by the host.
+@interface _KKSparklineView : NSView
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *samples;
+@property(nonatomic) double marker; // 0..1, negative hides the dot
+@end
+
+@implementation _KKSparklineView
+
+- (void)setSamples:(NSArray<NSNumber *> *)samples {
+  _samples = [samples copy];
+  self.needsDisplay = YES;
+}
+
+- (void)setMarker:(double)marker {
+  _marker = marker;
+  self.needsDisplay = YES;
+}
+
+- (BOOL)isFlipped {
+  return NO;
+}
+
+- (void)drawRect:(NSRect)dirty {
+  NSArray<NSNumber *> *s = _samples;
+  NSRect b = NSInsetRect(self.bounds, 1.5, 2.5);
+  if (b.size.width <= 1.0 || b.size.height <= 1.0)
+    return;
+  if (s.count < 2) {
+    NSBezierPath *base = [NSBezierPath bezierPath];
+    [base moveToPoint:NSMakePoint(NSMinX(b), NSMidY(b))];
+    [base lineToPoint:NSMakePoint(NSMaxX(b), NSMidY(b))];
+    base.lineWidth = 1.0;
+    [[KKCodeText() colorWithAlphaComponent:0.28] setStroke];
+    [base stroke];
+    return;
+  }
+  double lo = s.firstObject.doubleValue, hi = lo;
+  for (NSNumber *n in s) {
+    double v = n.doubleValue;
+    if (v < lo)
+      lo = v;
+    if (v > hi)
+      hi = v;
+  }
+  double span = hi - lo;
+  BOOL flat = span < 1e-9;
+  CGFloat (^yFor)(double) = ^CGFloat(double v) {
+    if (flat)
+      return NSMidY(b);
+    return NSMinY(b) + (CGFloat)((v - lo) / span) * b.size.height;
+  };
+  CGFloat (^xFor)(NSInteger) = ^CGFloat(NSInteger i) {
+    return NSMinX(b) + (CGFloat)i / (CGFloat)(s.count - 1) * b.size.width;
+  };
+  NSBezierPath *line = [NSBezierPath bezierPath];
+  for (NSInteger i = 0; i < (NSInteger)s.count; i++) {
+    NSPoint p = NSMakePoint(xFor(i), yFor(s[i].doubleValue));
+    if (i == 0)
+      [line moveToPoint:p];
+    else
+      [line lineToPoint:p];
+  }
+  line.lineWidth = 1.0;
+  line.lineJoinStyle = NSLineJoinStyleRound;
+  [[[NSColor accentMatchingHost] colorWithAlphaComponent:0.75] setStroke];
+  [line stroke];
+
+  if (_marker >= 0.0 && _marker <= 1.0) {
+    double m = _marker * (double)(s.count - 1);
+    NSInteger i0 = (NSInteger)floor(m);
+    NSInteger i1 = MIN(i0 + 1, (NSInteger)s.count - 1);
+    double frac = m - (double)i0;
+    double v = s[i0].doubleValue * (1.0 - frac) + s[i1].doubleValue * frac;
+    NSPoint p =
+        NSMakePoint(NSMinX(b) + (CGFloat)_marker * b.size.width, yFor(v));
+    NSRect dot = NSMakeRect(p.x - 1.75, p.y - 1.75, 3.5, 3.5);
+    [[NSColor accentMatchingHost] setFill];
+    [[NSBezierPath bezierPathWithOvalInRect:dot] fill];
+  }
+}
+
+@end
+
 @interface KKCodeEditorView () <NSTextViewDelegate, NSTextStorageDelegate,
                                 NSTextFieldDelegate, NSPopoverDelegate>
 @end
@@ -246,6 +538,12 @@ NSNotificationName const KKCodeEditorReloadNotification =
 @implementation KKCodeEditorView {
   NSTextView *_textView;
   NSTimer *_debounce;
+  // Inline autocomplete (Expression syntax only): the overlay list, its current
+  // matches, the highlighted row, and the partial-word range being completed.
+  _KKExprCompletionView *_completion;
+  NSArray<NSDictionary<NSString *, NSString *> *> *_completionItems;
+  NSInteger _completionIndex;
+  NSRange _completionWord;
   BOOL _highlightScheduled;
   KKCodeGutterView *_lineGutter;
   NSView *_errorBar;             // red strip container (height toggled 0/on)
@@ -258,7 +556,17 @@ NSNotificationName const KKCodeEditorReloadNotification =
       *_errorScrollHeight; // = label line height, centered in strip
   NSLayoutConstraint *_errorBarHeight;
   NSInteger _errorLine; // 1-based line to flag, 0 = none
-  NSView *_saveBar;     // optional name + Save strip (height toggled 0/on)
+  // Optional read-only result strip (height toggled 0/on), under the error bar:
+  // a host pushes the live computed result of an expression here for clarity.
+  NSView *_resultBar;
+  NSTextField *_resultLabel;
+  _KKSparklineView *_sparkline; // trailing curve preview in the result strip
+  NSButton *_resultCopyButton;  // trailing copy button, shown only on error
+  NSLayoutConstraint *_resultBarHeight;
+  NSString *_resultValueText; // host's "-> value" readout (shown when valid)
+  NSString
+      *_exprErrorText; // parser error (shown red in the strip when invalid)
+  NSView *_saveBar;    // optional name + Save strip (height toggled 0/on)
   NSTextField *_saveNameField;
   NSButton *_saveButton;
   NSLayoutConstraint *_saveBarHeight;
@@ -287,9 +595,11 @@ NSNotificationName const KKCodeEditorReloadNotification =
 - (instancetype)initWithFrame:(NSRect)frame {
   self = [super initWithFrame:frame];
   if (self) {
-    // One implicit "Image" section until a host sets more (keeps the plain
-    // single-editor behaviour + tab strip collapsed).
-    _sectionNames = [@[ @"Image" ] mutableCopy];
+    // One implicit unnamed section until a host sets more (keeps the plain
+    // single-editor behaviour + tab strip collapsed). The name is invisible
+    // while there's a single section; a tabbed host (e.g. the shader lane)
+    // names its sections explicitly via setSections:.
+    _sectionNames = [@[ @"Main" ] mutableCopy];
     _sectionCodes = [@[ @"" ] mutableCopy];
     _activeTab = 0;
     // Solid GitHub-Dark box, forced dark so scrollers / caret render for a dark
@@ -311,6 +621,24 @@ NSNotificationName const KKCodeEditorReloadNotification =
 
     _textView = [[_KKCodeTextView alloc] initWithFrame:self.bounds];
     _textView.delegate = self;
+    _completionWord = NSMakeRange(NSNotFound, 0);
+    __weak typeof(self) weakEsc = self;
+    ((_KKCodeTextView *)_textView).escapeHandler = ^BOOL {
+      __strong typeof(weakEsc) s = weakEsc;
+      if (s && s->_completion.superview) {
+        [s _hideCompletion];
+        return YES;
+      }
+      return NO;
+    };
+    ((_KKCodeTextView *)_textView).benignOutsideClick = ^BOOL(NSEvent *e) {
+      __strong typeof(weakEsc) s = weakEsc;
+      NSView *content = s ? s->_completion.superview : nil;
+      if (!content)
+        return NO;
+      NSPoint p = [content convertPoint:e.locationInWindow fromView:nil];
+      return NSPointInRect(p, s->_completion.frame);
+    };
     _textView.textStorage.delegate = self; // drives syntax colouring
     _textView.font = [NSFont monospacedSystemFontOfSize:9.5
                                                  weight:NSFontWeightRegular];
@@ -472,8 +800,8 @@ NSNotificationName const KKCodeEditorReloadNotification =
     _saveNameField = [_KKNameField new];
     _saveNameField.translatesAutoresizingMaskIntoConstraints = NO;
     _saveNameField.font = [NSFont systemFontOfSize:11.0];
-    _saveNameField.placeholderString =
-        KKLoc(@"Shader name", @"Save-shader name field placeholder.");
+    _saveNameField.placeholderString = KKLoc(
+        @"Name", @"Code editor save-bar name field placeholder (generic).");
     _saveNameField.bezelStyle = NSTextFieldRoundedBezel;
     _saveNameField.focusRingType = NSFocusRingTypeNone;
     _saveNameField.delegate = self;
@@ -504,6 +832,58 @@ NSNotificationName const KKCodeEditorReloadNotification =
     _saveButton.bezelStyle = NSBezelStyleRegularSquare; // fills its height
     _saveButton.enabled = NO;
     [_saveBar addSubview:_saveButton];
+
+    // Read-only result strip under the error bar: collapsed until a host sets
+    // `resultText` (the live computed result of an expression). Dimmed, single
+    // line, truncates with a tooltip.
+    _resultBar = [NSView new];
+    _resultBar.translatesAutoresizingMaskIntoConstraints = NO;
+    _resultBar.wantsLayer = YES;
+    _resultBar.layer.backgroundColor = KKHex(0x161b22).CGColor;
+    [self addSubview:_resultBar];
+    _resultBarHeight = [_resultBar.heightAnchor constraintEqualToConstant:0.0];
+    _resultLabel = [NSTextField labelWithString:@""];
+    _resultLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _resultLabel.font = [NSFont monospacedSystemFontOfSize:8.5
+                                                    weight:NSFontWeightMedium];
+    _resultLabel.textColor = [KKCodeText() colorWithAlphaComponent:0.55];
+    _resultLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+    _resultLabel.maximumNumberOfLines = 1;
+    _resultLabel.drawsBackground = NO;
+    _resultLabel.selectable = NO;
+    [_resultBar addSubview:_resultLabel];
+
+    // Curve preview at the trailing end of the result strip: hidden until a
+    // host pushes samples. Fixed width so the number keeps the rest of the row.
+    _sparkline = [_KKSparklineView new];
+    _sparkline.translatesAutoresizingMaskIntoConstraints = NO;
+    _sparkline.marker = -1.0;
+    _sparkline.hidden = YES;
+    [_resultBar addSubview:_sparkline];
+
+    // Copy button for an error message (mirrors the GLSL error bar's), at the
+    // trailing edge where the sparkline sits; only one of the two shows at a
+    // time.
+    NSImage *rCopyImg = [NSImage imageWithSystemSymbolName:@"doc.on.doc"
+                                  accessibilityDescription:nil];
+    _resultCopyButton =
+        rCopyImg
+            ? [NSButton buttonWithImage:rCopyImg
+                                 target:self
+                                 action:@selector(_copyExprError:)]
+            : [NSButton buttonWithTitle:KKLoc(@"Copy",
+                                              @"Copy button (error fallback).")
+                                 target:self
+                                 action:@selector(_copyExprError:)];
+    _resultCopyButton.translatesAutoresizingMaskIntoConstraints = NO;
+    _resultCopyButton.bordered = NO;
+    _resultCopyButton.imagePosition = rCopyImg ? NSImageOnly : NSNoImage;
+    _resultCopyButton.imageScaling = NSImageScaleProportionallyDown;
+    _resultCopyButton.contentTintColor = KKCodeError();
+    _resultCopyButton.toolTip =
+        KKLoc(@"Copy error message", @"Result-strip copy button tooltip.");
+    _resultCopyButton.hidden = YES;
+    [_resultBar addSubview:_resultCopyButton];
 
     // A host can post this to reload the editor after loading a different
     // shader.
@@ -540,8 +920,35 @@ NSNotificationName const KKCodeEditorReloadNotification =
       [scroll.bottomAnchor constraintEqualToAnchor:_errorBar.topAnchor],
       [_errorBar.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
       [_errorBar.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-      [_errorBar.bottomAnchor constraintEqualToAnchor:_saveBar.topAnchor],
+      [_errorBar.bottomAnchor constraintEqualToAnchor:_resultBar.topAnchor],
       _errorBarHeight,
+      [_resultBar.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+      [_resultBar.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+      [_resultBar.bottomAnchor constraintEqualToAnchor:_saveBar.topAnchor],
+      _resultBarHeight,
+      [_resultLabel.leadingAnchor
+          constraintEqualToAnchor:_resultBar.leadingAnchor
+                         constant:6.0],
+      [_resultLabel.trailingAnchor
+          constraintLessThanOrEqualToAnchor:_sparkline.leadingAnchor
+                                   constant:-6.0],
+      [_resultLabel.centerYAnchor
+          constraintEqualToAnchor:_resultBar.centerYAnchor],
+      [_sparkline.trailingAnchor
+          constraintEqualToAnchor:_resultBar.trailingAnchor
+                         constant:-6.0],
+      [_sparkline.topAnchor constraintEqualToAnchor:_resultBar.topAnchor
+                                           constant:1.0],
+      [_sparkline.bottomAnchor constraintEqualToAnchor:_resultBar.bottomAnchor
+                                              constant:-1.0],
+      [_sparkline.widthAnchor constraintEqualToConstant:54.0],
+      [_resultCopyButton.trailingAnchor
+          constraintEqualToAnchor:_resultBar.trailingAnchor
+                         constant:-6.0],
+      [_resultCopyButton.centerYAnchor
+          constraintEqualToAnchor:_resultBar.centerYAnchor],
+      [_resultCopyButton.widthAnchor constraintEqualToConstant:13.0],
+      [_resultCopyButton.heightAnchor constraintEqualToConstant:13.0],
       [_saveBar.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
       [_saveBar.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
       [_saveBar.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
@@ -621,6 +1028,26 @@ NSNotificationName const KKCodeEditorReloadNotification =
     return;
   _textView.string = codeText ?: @"";
   _sectionCodes[_activeTab] = [_textView.string copy];
+  [self _runValidator]; // validates expressions too (KKLinkExpr) -> error strip
+}
+
+- (void)insertReferenceText:(NSString *)text {
+  if (text.length == 0)
+    return;
+  // Replace the current selection (a plain caret is a zero-length selection at
+  // the insertion point); when the editor was never focused the selection sits
+  // at 0, so a leading token lands at the start - acceptable for an append-like
+  // insert. Route through shouldChange/didChange so it's one undoable edit and
+  // fires the normal debounce -> onChange persist, exactly like _formatClicked.
+  NSRange sel = _textView.selectedRange;
+  if (sel.location == NSNotFound || NSMaxRange(sel) > _textView.string.length)
+    sel = NSMakeRange(_textView.string.length, 0);
+  if (![_textView shouldChangeTextInRange:sel replacementString:text])
+    return;
+  [_textView replaceCharactersInRange:sel withString:text];
+  [_textView didChangeText]; // fires textDidChange: -> debounce -> commit
+  NSUInteger caret = MIN(sel.location + text.length, _textView.string.length);
+  _textView.selectedRange = NSMakeRange(caret, 0);
   [self _runValidator];
 }
 
@@ -750,7 +1177,7 @@ NSNotificationName const KKCodeEditorReloadNotification =
                                size:9.5
                              weight:active ? NSFontWeightSemibold
                                            : NSFontWeightRegular]];
-    if (i > 0) // Image (0) is permanent; added tabs get a close button
+    if (i > 0) // the first section is permanent; added tabs get a close button
       [_tabBar
           addArrangedSubview:[self
                                  _stripButton:@"✕"
@@ -796,10 +1223,14 @@ NSNotificationName const KKCodeEditorReloadNotification =
 // persists the formatted text just like a typed edit. No-op when the formatter
 // returns nil or text that is already formatted.
 - (void)_formatClicked:(id)sender {
-  if (!_codeFormatter)
+  [self formatUsing:_codeFormatter];
+}
+
+- (void)formatUsing:(NSString * (^)(NSString *))formatter {
+  if (!formatter)
     return;
   NSString *current = [_textView.string copy];
-  NSString *formatted = _codeFormatter(current);
+  NSString *formatted = formatter(current);
   if (formatted.length == 0 || [formatted isEqualToString:current])
     return;
   NSRange full = NSMakeRange(0, current.length);
@@ -840,7 +1271,7 @@ NSNotificationName const KKCodeEditorReloadNotification =
   NSString *name = item.representedObject;
   if (!name.length || [_sectionNames containsObject:name])
     return;
-  // Insert keeping catalog order among the extra tabs (Image stays first).
+  // Insert keeping catalog order among the extra tabs (section 0 stays first).
   NSInteger catIdx = (NSInteger)[_addableTabNames indexOfObject:name];
   NSInteger insertAt = (NSInteger)_sectionNames.count;
   for (NSInteger i = 1; i < (NSInteger)_sectionNames.count; i++) {
@@ -864,7 +1295,7 @@ NSNotificationName const KKCodeEditorReloadNotification =
 - (void)_tabCloseClicked:(NSButton *)sender {
   NSInteger i = sender.tag;
   if (i <= 0 || i >= (NSInteger)_sectionNames.count)
-    return; // never remove the first (Image) tab
+    return; // never remove the first section's tab
   [_sectionNames removeObjectAtIndex:i];
   [_sectionCodes removeObjectAtIndex:i];
   if (_activeTab >= (NSInteger)_sectionNames.count)
@@ -893,26 +1324,24 @@ NSNotificationName const KKCodeEditorReloadNotification =
 // Run the owner's validator over the current text and reflect the result: a
 // one-line red bar and a flagged line, or clear both when it's valid / absent.
 - (void)_runValidator {
-  // Multi-pass: validate the tab WITH the Common section prepended (so shared
-  // decls resolve), mirroring the render. The Common tab itself is validated
-  // with a dummy entry point so its own syntax is still checked. `prependLines`
-  // maps a reported error back to this tab; an error inside Common is
-  // suppressed here (it surfaces on the Common tab).
+  // A host may pre-compose the active section with others (e.g. a shader
+  // prepending a shared section) before validation; `prependLines` maps a
+  // reported error line back to the active section, and an error landing in the
+  // prepended region is suppressed here (it surfaces on that section's own
+  // tab). With no composer the active section is validated as-is.
   NSString *code = _textView.string;
   NSInteger prependLines = 0;
   NSString *activeName = (_activeTab < (NSInteger)_sectionNames.count)
                              ? _sectionNames[_activeTab]
                              : @"";
-  NSUInteger ci = [_sectionNames indexOfObject:@"Common"];
-  NSString *commonCode = (ci != NSNotFound) ? _sectionCodes[ci] : nil;
-  if ([activeName isEqualToString:@"Common"]) {
-    code = [code stringByAppendingString:
-                     @"\nvoid mainImage(out vec4 kkO, in vec2 kkC){ kkO = "
-                     @"vec4(0.0); }\n"];
-  } else if (commonCode.length) {
-    prependLines =
-        (NSInteger)[commonCode componentsSeparatedByString:@"\n"].count;
-    code = [NSString stringWithFormat:@"%@\n%@", commonCode, code];
+  if (_validationSourceComposer) {
+    NSInteger pl = 0;
+    NSString *composed =
+        _validationSourceComposer(activeName, code, [self sections], &pl);
+    if (composed) {
+      code = composed;
+      prependLines = pl;
+    }
   }
   NSInteger line = 0;
   NSString *err = _codeValidator ? _codeValidator(code, &line) : nil;
@@ -923,8 +1352,31 @@ NSNotificationName const KKCodeEditorReloadNotification =
       line = 0;
     }
   }
+  // Expression editors have a BUILT-IN validator (KKLinkExpr) rather than a
+  // host block, so they get the same error treatment (red line + gutter +
+  // message + copy) for free.
+  if (!_codeValidator && _syntax == KKCodeSyntaxExpression) {
+    NSString *msg = nil;
+    NSString *exprSrc = _textView.string;
+    NSRange bad = [KKLinkExpr errorCharRangeForSource:exprSrc message:&msg];
+    if (bad.location != NSNotFound && msg.length) {
+      // Sentence-case the parser message.
+      err = [[[msg substringToIndex:1] uppercaseString]
+          stringByAppendingString:[msg substringFromIndex:1]];
+      line = 1; // the line the error sits on (expressions are single-line)
+      for (NSUInteger i = 0; i < bad.location && i < exprSrc.length; i++)
+        if ([exprSrc characterAtIndex:i] == '\n')
+          line++;
+    }
+  }
   _errorLine = err.length ? line : 0;
-  if (err.length) {
+
+  // GLSL uses the tall (20px) error bar; the compact expression editor has no
+  // room for it, so it surfaces the message in the result strip (with its own
+  // copy button) instead. Both share the red line + red gutter highlight.
+  BOOL exprMode = (_syntax == KKCodeSyntaxExpression);
+  BOOL useBar = err.length && !exprMode;
+  if (useBar) {
     _errorLabel.stringValue = err;
     [_errorLabel sizeToFit];
     // Document view = the text's own size so the scroll can pan a wide message
@@ -940,10 +1392,12 @@ NSNotificationName const KKCodeEditorReloadNotification =
     _errorLabel.stringValue = @"";
     _errorBarHeight.constant = 0.0;
   }
-  _errorCopyButton.hidden = (err.length == 0);
+  _errorCopyButton.hidden = !useBar;
+  _exprErrorText = (err.length && exprMode) ? err : nil;
   [self _errorScrolled]; // refresh overflow fades for the new message width
   _lineGutter.errorLine = _errorLine;
-  [self _applyHighlighting]; // repaint the flagged-line background
+  [self _applyHighlighting];  // repaint the flagged-line background
+  [self _refreshResultStrip]; // expression message / value + copy button
   [_lineGutter setNeedsDisplay:YES];
 }
 
@@ -956,10 +1410,78 @@ NSNotificationName const KKCodeEditorReloadNotification =
   [pb setString:msg forType:NSPasteboardTypeString];
 }
 
+- (NSString *)resultText {
+  return _resultValueText;
+}
+
+- (void)setResultText:(NSString *)resultText {
+  _resultValueText = [resultText copy];
+  [self _refreshResultStrip];
+}
+
+// The strip shows the parser error (red, Error-Lens style: always visible, no
+// hover) when the expression is invalid, otherwise the host's "-> value"
+// readout (dim) with its sparkline. Error wins because an invalid expression
+// has no value.
+- (void)_refreshResultStrip {
+  BOOL hasError = _exprErrorText.length > 0;
+  NSString *text = hasError ? _exprErrorText : (_resultValueText ?: @"");
+  _resultLabel.stringValue = text;
+  _resultLabel.textColor =
+      hasError ? KKCodeError() : [KKCodeText() colorWithAlphaComponent:0.55];
+  // Match the GLSL error bar: red text on a dark-red strip when invalid, the
+  // neutral panel tint otherwise.
+  _resultBar.layer.backgroundColor =
+      (hasError ? KKHex(0x2d1214) : KKHex(0x161b22)).CGColor;
+  _resultBarHeight.constant = text.length ? 16.0 : 0.0;
+  // Error and value are mutually exclusive in the strip: error shows the copy
+  // button, a valid value shows the sparkline.
+  _resultCopyButton.hidden = !hasError;
+  _sparkline.hidden =
+      hasError || text.length == 0 || _sparkline.samples.count < 2;
+}
+
+- (void)_copyExprError:(id)sender {
+  if (!_exprErrorText.length)
+    return;
+  NSPasteboard *pb = NSPasteboard.generalPasteboard;
+  [pb clearContents];
+  [pb setString:_exprErrorText forType:NSPasteboardTypeString];
+}
+
+- (NSArray<NSNumber *> *)sparklineSamples {
+  return _sparkline.samples;
+}
+
+- (void)setSparklineSamples:(NSArray<NSNumber *> *)sparklineSamples {
+  _sparkline.samples = sparklineSamples;
+  [self _refreshResultStrip];
+}
+
+- (double)sparklineMarker {
+  return _sparkline.marker;
+}
+
+- (void)setSparklineMarker:(double)sparklineMarker {
+  _sparkline.marker = sparklineMarker;
+}
+
 - (void)setSavable:(BOOL)savable {
   _savable = savable;
   _saveBar.hidden = !savable;
   _saveBarHeight.constant = savable ? 34.0 : 0.0;
+}
+
+- (NSString *)saveNamePlaceholder {
+  return _saveNameField.placeholderString;
+}
+
+- (void)setSaveNamePlaceholder:(NSString *)placeholder {
+  _saveNameField.placeholderString =
+      placeholder.length
+          ? placeholder
+          : KKLoc(@"Name",
+                  @"Code editor save-bar name field placeholder (generic).");
 }
 
 - (NSArray<NSString *> *)saveCategoryLabels {
@@ -1178,6 +1700,35 @@ NSNotificationName const KKCodeEditorReloadNotification =
                  value:[KKCodeError() colorWithAlphaComponent:0.16]
                  range:lr];
   }
+  if (_syntax == KKCodeSyntaxExpression) {
+    // Expression grammar: 1 `${ref}` (orange, like an external input), 2
+    // number, 3 identifier (built-in fn -> purple, var/const -> coral, else
+    // default).
+    [KKExprTokenizer()
+        enumerateMatchesInString:src
+                         options:0
+                           range:full
+                      usingBlock:^(NSTextCheckingResult *m,
+                                   NSMatchingFlags flags, BOOL *stop) {
+                        NSColor *color = nil;
+                        NSRange r = [m rangeAtIndex:1];
+                        if (r.location != NSNotFound) {
+                          color = KKCodeUniform(); // ${ref}
+                        } else if ((r = [m rangeAtIndex:2]).location !=
+                                   NSNotFound) {
+                          color = KKCodeNumber();
+                        } else if ((r = [m rangeAtIndex:3]).location !=
+                                   NSNotFound) {
+                          color = KKExprWordColor([src substringWithRange:r]);
+                        }
+                        if (color && r.location != NSNotFound)
+                          [ts addAttribute:NSForegroundColorAttributeName
+                                     value:color
+                                     range:r];
+                      }];
+    [ts endEditing];
+    return;
+  }
   [KKGLSLTokenizer()
       enumerateMatchesInString:src
                        options:0
@@ -1236,11 +1787,32 @@ NSNotificationName const KKCodeEditorReloadNotification =
   });
 }
 
-// Escape drops focus (like a value field). Return / arrows fall through to the
-// default multi-line editing. Covers the routing where Escape arrives as a
-// command rather than a key equivalent.
+// While the autocomplete list is open, arrows navigate it, Return/Tab accept,
+// and a caret move dismisses it. Otherwise Escape drops focus (like a value
+// field) and everything else falls through to the default multi-line editing.
+// (Covers the routing where these arrive as commands rather than key
+// equivalents.)
 - (BOOL)textView:(NSTextView *)textView
     doCommandBySelector:(SEL)commandSelector {
+  if (_completion.superview) {
+    if (commandSelector == @selector(moveDown:))
+      return [self _moveCompletionBy:1];
+    if (commandSelector == @selector(moveUp:))
+      return [self _moveCompletionBy:-1];
+    if (commandSelector == @selector(insertNewline:) ||
+        commandSelector == @selector(insertTab:))
+      return [self _acceptCompletion];
+    if (commandSelector == @selector(cancelOperation:)) {
+      [self _hideCompletion];
+      return YES;
+    }
+    if (commandSelector == @selector(moveLeft:) ||
+        commandSelector == @selector(moveRight:) ||
+        commandSelector == @selector(moveToBeginningOfLine:) ||
+        commandSelector == @selector(moveToEndOfLine:) ||
+        commandSelector == @selector(deleteBackward:))
+      [self _hideCompletion]; // then fall through to perform the edit
+  }
   if (commandSelector == @selector(cancelOperation:)) {
     [textView.window makeFirstResponder:nil];
     return YES;
@@ -1248,8 +1820,170 @@ NSNotificationName const KKCodeEditorReloadNotification =
   return NO;
 }
 
+// The identifier prefix under the caret (empty selection), or a not-found
+// range.
+- (NSRange)_completionWordRange {
+  NSRange sel = _textView.selectedRange;
+  if (sel.length > 0)
+    return NSMakeRange(NSNotFound, 0);
+  NSString *s = _textView.string;
+  NSUInteger caret = sel.location;
+  static NSCharacterSet *idSet;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    idSet = [NSCharacterSet
+        characterSetWithCharactersInString:
+            @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"];
+  });
+  NSUInteger start = caret;
+  while (start > 0 && [idSet characterIsMember:[s characterAtIndex:start - 1]])
+    start--;
+  if (start == caret)
+    return NSMakeRange(NSNotFound, 0);
+  unichar first = [s characterAtIndex:start];
+  if (first >= '0' && first <= '9') // a numeric literal, not an identifier
+    return NSMakeRange(NSNotFound, 0);
+  return NSMakeRange(start, caret - start);
+}
+
+// Recompute the autocomplete list from the word under the caret. Expression
+// syntax only, only while the editor is focused. Hides when nothing matches (or
+// the only match is already fully typed).
+- (void)_updateCompletions {
+  if (_syntax != KKCodeSyntaxExpression ||
+      self.window.firstResponder != _textView) {
+    [self _hideCompletion];
+    return;
+  }
+  NSRange word = [self _completionWordRange];
+  if (word.location == NSNotFound) {
+    [self _hideCompletion];
+    return;
+  }
+  NSString *prefix = [_textView.string substringWithRange:word];
+  NSMutableArray *matches = [NSMutableArray array];
+  for (NSDictionary<NSString *, NSString *> *e in KKExprCatalog())
+    if ([e[@"name"] rangeOfString:prefix
+                          options:NSCaseInsensitiveSearch | NSAnchoredSearch]
+            .location == 0)
+      [matches addObject:e];
+  if (matches.count == 0 ||
+      (matches.count == 1 &&
+       [matches[0][@"name"] caseInsensitiveCompare:prefix] == NSOrderedSame)) {
+    [self _hideCompletion];
+    return;
+  }
+  _completionWord = word;
+  _completionItems = matches;
+  if (_completionIndex >= (NSInteger)matches.count)
+    _completionIndex = 0;
+  [self _showCompletion];
+}
+
+// Position the overlay just under the caret in the window's content view (not a
+// child of the clipped editor), so it can extend past the one-line editor.
+// Flips above the caret when it would fall off the bottom.
+- (void)_showCompletion {
+  NSView *content = self.window.contentView;
+  if (!content) {
+    [self _hideCompletion];
+    return;
+  }
+  if (!_completion) {
+    _completion = [[_KKExprCompletionView alloc] initWithFrame:NSZeroRect];
+    __weak typeof(self) weak = self;
+    _completion.onPick = ^(NSInteger index) {
+      __strong typeof(weak) s = weak;
+      if (!s)
+        return;
+      s->_completionIndex = index;
+      [s _acceptCompletion];
+    };
+  }
+  _completion.items = _completionItems;
+  _completion.selectedIndex = _completionIndex;
+
+  // Caret rect -> content-view coords (handles the content view's flippedness),
+  // then place the list just UNDER the text line, flipping above only if it
+  // would fall off the bottom edge.
+  NSRect caretScreen = [_textView
+      firstRectForCharacterRange:NSMakeRange(_completionWord.location, 0)
+                     actualRange:NULL];
+  NSRect caret =
+      [content convertRect:[self.window convertRectFromScreen:caretScreen]
+                  fromView:nil];
+  CGFloat w = kKKComplWidth;
+  CGFloat h = [_completion fittingHeight];
+  CGFloat gap = 4.0;
+  CGFloat x = caret.origin.x - 6.0;
+  CGFloat
+      y; // one line below the caret, in whichever vertical direction is "down"
+  if (content.isFlipped) {
+    y = NSMaxY(caret) + gap;
+    if (y + h > NSMaxY(content.bounds) - 4.0)
+      y = caret.origin.y - gap - h;
+  } else {
+    y = caret.origin.y - gap - h;
+    if (y < 4.0)
+      y = NSMaxY(caret) + gap;
+  }
+  if (x + w > NSMaxX(content.bounds) - 4.0)
+    x = NSMaxX(content.bounds) - 4.0 - w;
+  if (x < 4.0)
+    x = 4.0;
+  _completion.frame = NSMakeRect(x, y, w, h);
+  if (_completion.superview != content)
+    [content addSubview:_completion positioned:NSWindowAbove relativeTo:nil];
+  [_completion setNeedsDisplay:YES];
+}
+
+- (void)_hideCompletion {
+  [_completion removeFromSuperview];
+  _completionItems = nil;
+  _completionIndex = 0;
+  _completionWord = NSMakeRange(NSNotFound, 0);
+}
+
+- (BOOL)_moveCompletionBy:(NSInteger)delta {
+  NSInteger n = (NSInteger)_completionItems.count;
+  if (n == 0)
+    return NO;
+  _completionIndex = (_completionIndex + delta + n) % n;
+  _completion.selectedIndex = _completionIndex;
+  return YES;
+}
+
+- (BOOL)_acceptCompletion {
+  if (_completionWord.location == NSNotFound ||
+      _completionIndex >= (NSInteger)_completionItems.count)
+    return NO;
+  NSString *insert = _completionItems[_completionIndex][@"insert"];
+  NSRange r = _completionWord;
+  [self _hideCompletion];
+  if (![_textView shouldChangeTextInRange:r replacementString:insert])
+    return YES;
+  [_textView replaceCharactersInRange:r withString:insert];
+  [_textView setSelectedRange:NSMakeRange(r.location + insert.length, 0)];
+  [_textView didChangeText]; // commits through the debounce like typed text
+  return YES;
+}
+
+// Blur (click-away / Esc) closes the autocomplete list.
+- (void)textDidEndEditing:(NSNotification *)notification {
+  [self _hideCompletion];
+}
+
+// The overlay lives in the window's content view, so drop it when the editor
+// leaves that window (popover close / row rebuild) or it would be orphaned.
+- (void)viewWillMoveToWindow:(NSWindow *)newWindow {
+  [super viewWillMoveToWindow:newWindow];
+  if (newWindow != self.window)
+    [self _hideCompletion];
+}
+
 // Debounce so consumers recompile on a pause, not on every keystroke.
 - (void)textDidChange:(NSNotification *)notification {
+  [self _updateCompletions]; // live, not debounced - it tracks the caret word
   [_debounce invalidate];
   __weak typeof(self) weak = self;
   _debounce = [NSTimer

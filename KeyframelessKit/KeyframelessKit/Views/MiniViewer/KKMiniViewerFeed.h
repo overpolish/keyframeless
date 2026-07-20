@@ -95,4 +95,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+/// Headless reader for a feed's PRIMARY source frame: reads the JSON descriptor
+/// at `descriptorPath`, looks up slot 0's published `IOSurface`, and wraps it
+/// as a shader-readable `MTLTexture` on `device`. Returns nil if the descriptor
+/// is missing / carries no source slot (a generator feed publishes none) / the
+/// surface is gone. Lets code WITHOUT a live `KKMiniViewerView` (e.g. a link
+/// thumbnail bake) get the same per-instance source frame the mini composites.
+FOUNDATION_EXPORT id<MTLTexture> _Nullable KKMiniViewerFeedLoadPrimarySource(
+    NSString *descriptorPath, id<MTLDevice> device);
+
 NS_ASSUME_NONNULL_END

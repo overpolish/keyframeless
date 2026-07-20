@@ -10,6 +10,7 @@
 #import "KKGradientBarView.h"
 #import "KKGradientControl.h"
 #import "KKGradientSampling.h"
+#import "KKLinkBus.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerView.h"
 #import "KKPillToggleRowView.h"
@@ -232,7 +233,9 @@ static NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
   BOOL _smoothOn;
   NSButton *_linkBtn; // aspect-link toggle, left of the value fields
   BOOL _linkOn;
-  BOOL _integerValued;            // fields display + round to whole numbers
+  NSString
+      *_linkExpression; // param-link transform expression (nil = plain lane)
+  BOOL _integerValued;  // fields display + round to whole numbers
   BOOL _clampsDisplayToMax;       // clamp field + thumb to _cmax (dynamic-max)
   BOOL _componentsScaleWithMedia; // display = norm x media px
                                   // (Position/Anchor/Crop)
@@ -380,6 +383,72 @@ static NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
   [self.window makeFirstResponder:nil];
   if (self.onAddToAnimated)
     self.onAddToAnimated();
+}
+
+// Parameter linking (expression-driven lanes). The lane's own value + keyposes
+// are untouched; an optional `linkExpression` layers a transform on top
+// (`value` = this lane's value, `${...}` = another source). Right-click the
+// label to add/ remove one; the label tints with the host accent while an
+// expression is set.
+- (void)_applyExpressionState {
+  // Only numeric value lanes can be expression-driven - not the code editor
+  // (source text) or a palette-generator bar (mirrors the manifest's
+  // referenceable filter).
+  BOOL referenceable =
+      _valueType != KKLaneValueTypeCode && !_paletteGeneratorBar;
+  BOOL driven = referenceable && _linkExpression != nil;
+  _titleField.textColor =
+      driven ? [NSColor accentMatchingHost] : [NSColor inspectorLabel];
+  if (!referenceable) {
+    _titleField.menu = nil;
+    return;
+  }
+  NSMenu *menu = [[NSMenu alloc] init];
+  NSString *title =
+      driven
+          ? KKLoc(
+                @"Remove Expression",
+                @"Lane label right-click: clear the parameter-link expression")
+          : KKLoc(@"Add Expression",
+                  @"Lane label right-click: make this lane expression-driven");
+  NSMenuItem *item =
+      [[NSMenuItem alloc] initWithTitle:title
+                                 action:@selector(_toggleExpressionMenu:)
+                          keyEquivalent:@""];
+  item.target = self;
+  [menu addItem:item];
+  // Formatting only makes sense once there's an expression to tidy.
+  if (driven) {
+    NSMenuItem *fmt = [[NSMenuItem alloc]
+        initWithTitle:KKLoc(
+                          @"Format Expression",
+                          @"Lane label right-click: normalize the expression's "
+                          @"spacing / parentheses")
+               action:@selector(_formatExpressionMenu:)
+        keyEquivalent:@""];
+    fmt.target = self;
+    [menu addItem:fmt];
+  }
+  _titleField.menu = menu;
+}
+
+- (void)_formatExpressionMenu:(id)sender {
+  // The inline editor owns the live text, so the popover does the actual
+  // reformat.
+  if (self.onFormatExpression)
+    self.onFormatExpression();
+}
+
+- (void)_toggleExpressionMenu:(id)sender {
+  // Add -> a passthrough starter ("value", edited in the inline editor next
+  // increment); Remove -> nil (back to a plain lane). Update in place so the
+  // accent + menu flip immediately, then persist up through the host.
+  BOOL driven = _linkExpression != nil;
+  NSString *newExpr = driven ? nil : @"value";
+  _linkExpression = [newExpr copy];
+  [self _applyExpressionState];
+  if (self.onSetLinkExpression)
+    self.onSetLinkExpression(newExpr);
 }
 
 // Curve glyph that flips this keypose corner↔smooth. Same SF Symbol the gap
@@ -891,6 +960,79 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   return w > 0 ? MIN(w + KKPaddingMD, kMaxLabelColW) : w;
 }
 
+- (instancetype)initEditorRowWithContentView:(NSView *)contentView
+                                    leftView:(NSView *)leftView
+                                   rightView:(NSView *)rightView
+                                  firstLineH:(CGFloat)firstLineH
+                                      height:(CGFloat)height {
+  self = [super initWithFrame:NSMakeRect(0, 0, kCanvasPopoverW, height)];
+  if (!self)
+    return nil;
+  _rowHeight = height; // drives intrinsicContentSize (see -setEditorRowHeight:)
+  // Mirror the value-row geometry EXACTLY so a supplementary editor row lines
+  // up with every other row: the leading gutter view sits in the remove/add-to-
+  // animated glyph slot (leading + KKPaddingMD, 15pt), the content starts
+  // KKPaddingSM after it (the label column), the trailing gutter view takes the
+  // reset column (trailing - KKPaddingLG, 15pt) and the content ends
+  // KKPaddingLG before it (where value controls end). Gutter views
+  // optical-centre on the FIRST line so they don't drift down when the row
+  // grows (expanded state). Callers size the gutter views 15pt to match the
+  // real glyphs.
+  CGFloat firstLineCenter = firstLineH / 2.0;
+  contentView.translatesAutoresizingMaskIntoConstraints = NO;
+  [self addSubview:contentView];
+  NSMutableArray<NSLayoutConstraint *> *cs = [NSMutableArray arrayWithArray:@[
+    [contentView.topAnchor constraintEqualToAnchor:self.topAnchor
+                                          constant:KKPaddingXS],
+    [contentView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor
+                                             constant:-KKPaddingXS],
+  ]];
+  if (leftView) {
+    leftView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:leftView];
+    [cs addObjectsFromArray:@[
+      [leftView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor
+                                             constant:KKPaddingMD],
+      [leftView.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                             constant:firstLineCenter],
+      [contentView.leadingAnchor constraintEqualToAnchor:leftView.trailingAnchor
+                                                constant:KKPaddingSM],
+    ]];
+  } else {
+    // No override: reserve the same label column as a gutter-button row.
+    [cs addObject:[contentView.leadingAnchor
+                      constraintEqualToAnchor:self.leadingAnchor
+                                     constant:KKPaddingMD + 15.0 +
+                                              KKPaddingSM]];
+  }
+  if (rightView) {
+    rightView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self addSubview:rightView];
+    [cs addObjectsFromArray:@[
+      [rightView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor
+                                               constant:-KKPaddingLG],
+      [rightView.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                              constant:firstLineCenter],
+      [contentView.trailingAnchor
+          constraintEqualToAnchor:rightView.leadingAnchor
+                         constant:-KKPaddingLG],
+    ]];
+  } else {
+    [cs addObject:[contentView.trailingAnchor
+                      constraintEqualToAnchor:self.trailingAnchor
+                                     constant:-KKPaddingLG]];
+  }
+  [NSLayoutConstraint activateConstraints:cs];
+  return self;
+}
+
+- (void)setEditorRowHeight:(CGFloat)height {
+  if (fabs(height - _rowHeight) < 0.5)
+    return;
+  _rowHeight = height;
+  [self invalidateIntrinsicContentSize];
+}
+
 - (instancetype)initWithLane:(KKLane *)lane
                  showsRemove:(BOOL)showsRemove
           showsAddToAnimated:(BOOL)showsAddToAnimated
@@ -916,6 +1058,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   // source rendered as a slider reading "16483925".
   _choiceUsesDropdown = lane.choiceUsesDropdown && lane.choiceLabels.count >= 1;
   _laneLabel = [lane.label copy];
+  _linkExpression = [lane.linkExpression copy];
   _valueType = lane.valueType;
   _cmin = lane.componentMin ?: @[];
   _cmax = lane.componentMax ?: @[];
@@ -948,6 +1091,10 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   title.usesSingleLineMode = YES;
   title.toolTip = KKLocalizedParamName(lane.displayName);
   [self addSubview:title];
+  // Parameter linking: right-click the label to add/remove an expression, and
+  // tint it with the host accent while one is set (the "expression-driven"
+  // signal).
+  [self _applyExpressionState];
   // Uniform label column so the value controls line up across rows regardless
   // of label length (widest localized name); 54 is the legacy fallback.
   [title.widthAnchor
@@ -1065,9 +1212,11 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     editor.translatesAutoresizingMaskIntoConstraints = NO;
     editor.codeValidator =
         lane.codeValidator; // set before text so it validates
+    editor.validationSourceComposer = lane.codeValidationComposer;
     editor.codeFormatter = lane.codeFormatter;
     editor.savable = lane.codeSavable;
     editor.saveCategoryLabels = lane.codeSaveCategories;
+    editor.saveNamePlaceholder = lane.codeSaveNamePlaceholder;
     __weak typeof(self) weak = self;
     if (lane.codeTabs.count > 0 || lane.codeTabCatalog.count > 0) {
       // Tabbed: section 0 is Image (the lane's codeString), then any added
@@ -1951,6 +2100,10 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
 }
 
 - (void)applyLane:(KKLane *)lane {
+  // Re-capture the link expression so a reused row reflects the current model
+  // (the accent tint + right-click menu flip to match).
+  _linkExpression = [lane.linkExpression copy];
+  [self _applyExpressionState];
   // Code lane: no fields/slider - re-sync the editor's text from the lane (an
   // undo/redo of a committed code edit, or a preset/AI swap, reverts the
   // codeString here), plus the shared name + lock. The editor guards against
