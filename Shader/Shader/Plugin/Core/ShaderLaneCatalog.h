@@ -303,8 +303,10 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       NSMutableArray<NSNumber *> *maxs = [NSMutableArray array];
       NSMutableArray<NSNumber *> *defs = [NSMutableArray array];
       for (int k = 0; k < n; k++) {
-        [mins addObject:p->hasMin ? @(p->fmin) : @(-1000000.0)];
-        [maxs addObject:p->hasMax ? @(p->fmax) : @1000000.0];
+        // Per-component bounds (min={}/max={}); an unbounded component uses the
+        // wide sentinel so the field accepts off-scene values.
+        [mins addObject:p->mhasMin[k] ? @(p->mmin[k]) : @(-1000000.0)];
+        [maxs addObject:p->mhasMax[k] ? @(p->mmax[k]) : @(1000000.0)];
         [defs addObject:@(p->mdef[k])];
       }
       lane.componentMin = mins;
@@ -316,7 +318,31 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       lane.autoSizesComponentLabels = YES;
       lane.aspectLinkable = p->aspectLinked ? YES : NO;
       lane.aspectLinked = p->aspectLinked ? YES : NO;
-      if (p->isPercent) {
+      // Per-field units `units={%,px,...}` override the blanket percent/int:
+      // each component can be a "%", a media "px", or raw. Any px component
+      // puts the lane in media-scaled display; the popover's per-component
+      // scale leaves "%" components literal (never media-scaled).
+      int anyFieldUnit = 0, anyFieldPx = 0;
+      for (int k = 0; k < n; k++) {
+        if (p->fieldUnit[k])
+          anyFieldUnit = 1;
+        if (p->fieldUnit[k] == 'p')
+          anyFieldPx = 1;
+      }
+      if (anyFieldUnit) {
+        NSMutableArray<NSString *> *units = [NSMutableArray array];
+        for (int k = 0; k < n; k++)
+          [units addObject:p->fieldUnit[k] == 'p'   ? @"px"
+                           : p->fieldUnit[k] == '%' ? @"%"
+                                                    : @""];
+        lane.componentUnits = units;
+        // A px field stores a normalised 0..1 fraction - integerValued would
+        // round that storage to 0/1 (the "maxes at 0" bug). Media-scaling
+        // already gives whole-PIXEL display; only round storage when there are
+        // no px fields (a pure %/raw units lane).
+        lane.componentsScaleWithMedia = anyFieldPx ? YES : NO;
+        lane.integerValued = anyFieldPx ? NO : YES;
+      } else if (p->isPercent) {
         // Whole-number % fields with a "%" unit, matching a single #percent
         // lane (one unit entry per component).
         NSMutableArray<NSString *> *units = [NSMutableArray array];

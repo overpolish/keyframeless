@@ -76,6 +76,19 @@ typedef struct ShaderScalarProp {
     int aspectLinked;          // `lockaspect` flag: components aspect-linkable (+
                                // locked by default) so an OSC drag keeps their ratio
     double mdef[4];            // per-component defaults (#multi)
+    // Per-component HARD bounds for a #multi, from `min={a,b,c,d}` /
+    // `max={a,b,c,d}` (partial: an empty slot falls back to the scalar
+    // `min=`/`max=`, else unbounded). Lets one control mix ranges - e.g. a crop
+    // with W,H clamped 0..100 and X,Y free to go off-frame. mhasMin/mhasMax say
+    // whether that component ended up bounded; mmin/mmax hold the value if so.
+    double mmin[4], mmax[4];
+    int mhasMin[4], mhasMax[4];
+    // Per-component display units for a #multi, from `units={%,px,...}`. Each is
+    // '%' (literal percent - the lane shows a "%" and the SHADER divides by 100),
+    // 'p' (media pixels - stored normalised 0..1, shown in px, scaled by media),
+    // or 0 (raw / unitless). A #multi is delivered RAW, so the shader owns the
+    // conversion; a px field is a 0..1 fraction, a % field is 0..100.
+    char fieldUnit[4];
 } ShaderScalarProp;
 
 #endif // __METAL_VERSION__

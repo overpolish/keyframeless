@@ -18,6 +18,43 @@
 #import "ShaderScalarProps.h"
 #import "ShaderTypes.h"
 
+// Parse a braced per-field list `key={a,b,c,d}` into out[4]/has[4]. Partial
+// lists and empty slots are allowed: `{,,3,4}` sets only slots 2 and 3. A slot
+// with no number leaves has[k]=0 (fall back to the scalar attr / unbounded).
+// The attr being absent leaves every has[k]=0.
+static inline void ShaderParseBracedFields(NSString *attrs, NSString *key,
+                                           double out[4], int has[4]) {
+  for (int k = 0; k < 4; k++) {
+    out[k] = 0.0;
+    has[k] = 0;
+  }
+  NSString *pat =
+      [NSString stringWithFormat:@"\\b%@\\s*=\\s*\\{([^}]*)\\}", key];
+  NSTextCheckingResult *m =
+      [[NSRegularExpression regularExpressionWithPattern:pat
+                                                 options:0
+                                                   error:nil]
+          firstMatchInString:attrs
+                     options:0
+                       range:NSMakeRange(0, attrs.length)];
+  if (!m || [m rangeAtIndex:1].location == NSNotFound)
+    return;
+  NSArray<NSString *> *parts = [[attrs substringWithRange:[m rangeAtIndex:1]]
+      componentsSeparatedByString:@","];
+  for (int k = 0; k < 4 && k < (int)parts.count; k++) {
+    NSString *t = [parts[k]
+        stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    if (t.length == 0)
+      continue;
+    NSScanner *sc = [NSScanner scannerWithString:t];
+    double v = 0.0;
+    if ([sc scanDouble:&v] && sc.atEnd) {
+      out[k] = v;
+      has[k] = 1;
+    }
+  }
+}
+
 static inline void ShaderScalarParseDefaults(NSString *attrs,
                                              ShaderScalarProp *p) {
   if (p->isChoice) {
@@ -135,6 +172,43 @@ static inline void ShaderScalarParseDefaults(NSString *attrs,
       mx = mn;
     p->fmin = mn;
     p->fmax = mx;
+    // Per-field `min={...}` / `max={...}` override the scalar min=/max= per
+    // component; an empty slot keeps the scalar value (or stays unbounded).
+    double pfMin[4], pfMax[4];
+    int pfHasMin[4], pfHasMax[4];
+    ShaderParseBracedFields(attrs, @"min", pfMin, pfHasMin);
+    ShaderParseBracedFields(attrs, @"max", pfMax, pfHasMax);
+    for (int k = 0; k < 4; k++) {
+      p->mhasMin[k] = pfHasMin[k] || p->hasMin;
+      p->mmin[k] = pfHasMin[k] ? pfMin[k] : mn;
+      p->mhasMax[k] = pfHasMax[k] || p->hasMax;
+      p->mmax[k] = pfHasMax[k] ? pfMax[k] : mx;
+    }
+    // Per-field units `units={%,px,...}`. Empty / absent slot = raw. "%" -> the
+    // lane shows a percent, the shader divides by 100; "px" -> media pixels.
+    for (int k = 0; k < 4; k++)
+      p->fieldUnit[k] = 0;
+    NSTextCheckingResult *um = [[NSRegularExpression
+        regularExpressionWithPattern:@"\\bunits\\s*=\\s*\\{([^}]*)\\}"
+                             options:0
+                               error:nil]
+        firstMatchInString:attrs
+                   options:0
+                     range:NSMakeRange(0, attrs.length)];
+    if (um && [um rangeAtIndex:1].location != NSNotFound) {
+      NSArray<NSString *> *us = [[attrs substringWithRange:[um rangeAtIndex:1]]
+          componentsSeparatedByString:@","];
+      for (int k = 0; k < 4 && k < (int)us.count; k++) {
+        NSString *t =
+            [[us[k] stringByTrimmingCharactersInSet:NSCharacterSet
+                                                        .whitespaceCharacterSet]
+                lowercaseString];
+        if ([t isEqualToString:@"%"] || [t isEqualToString:@"percent"])
+          p->fieldUnit[k] = '%';
+        else if ([t isEqualToString:@"px"])
+          p->fieldUnit[k] = 'p';
+      }
+    }
     double smn =
         ShaderAttrDouble(attrs, @"\\bslidermin\\s*=\\s*(-?[0-9.]+)", NAN);
     double smx =

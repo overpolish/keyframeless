@@ -129,6 +129,16 @@ Reach for `native` only when the shader genuinely produces its own smear (trails
 - `default=` - starting value. `#point` / `#multi` take `default="x,y"` / `default="a,b,c"`. `#color` takes a hex default: `default="#RRGGBB"` (or `#RRGGBBAA`) for a single swatch, or a comma list `default="#06080F,#1B4A6B,#57E0FF"` for a palette - the list seeds the swatches AND sets the default active count (still clamped by `min`/`max`). A bare `default=3` on a palette stays count-only (built-in palette colours). The default colours are also what **Reset to default** reverts each swatch to, so a shader's intended palette lives in its source.
 - `#choice` adds `options="One,Two,Three"` (the pill labels; `default=` is the 0-based index) and `dropdown` (see below).
 - `#multi` adds `fields={Width,Height}` (names + counts the components) and `lockaspect` (components aspect-linked, ratio preserved on an OSC drag). By default its fields are floats; add `percent` for whole-number `%` fields (delivered to the shader as 0..1, like a single `#percent`) or `int` for whole-number fields (delivered raw). Example: `// #multi label="Crop Size" fields={W,H} percent min=1 max=100 default="100,100"`.
+- **Per-field bounds on a `#multi`:** `min={a,b,c,d}` / `max={a,b,c,d}` set each component's hard range independently, overriding the scalar `min=`/`max=`. The list may be partial and slots may be empty - an empty slot falls back to the scalar attr, or stays unbounded if none.
+- **Per-field units on a `#multi`:** `units={u1,u2,...}` gives each component its own unit; an empty slot is raw/unitless. `%` shows a percent (0-100, and the **shader divides by 100** - a `#multi` is delivered RAW, so the shader owns the conversion). `px` shows media pixels: the field stores a normalised `0..1` fraction but displays and edits in pixels (scaled by the media, like a `#point`), and reaches the shader as that `0..1` fraction. Any `px` component switches the lane to media-scaled display; the `%` components stay literal. This lets one control mix units - a crop with a `%` size and a px position:
+
+  ```glsl
+  // #multi label="Crop" fields={W,H,X,Y} units={%,%,px,px} min={0,0,,} max={100,100,,} default="100,100,0,0"
+  uniform vec4 uCrop;
+  // in the shader: W,H arrive as 0..100 (divide by 100); X,Y arrive as 0..1
+  ```
+
+  W,H show as a clamped `%`, X,Y show as pixels and are free to run off-frame. `default=` and `min=`/`max=` for a `px` field are in its stored `0..1` space (like `#point`'s `default="0.5,0.5"`).
 
 ### `#choice` as a dropdown
 
