@@ -14,6 +14,7 @@
 #import "KKMiniViewerView.h"
 #import "KKParameterRowView.h"
 #import "KKPillToggleRowView.h"
+#import "KKPluginInstanceState.h" // KKInstanceUUIDForAPI
 #import "KKPopoverHeaderView.h"
 #import "KKPopupSelectView.h"
 #import "KKReorderListView.h"
@@ -281,6 +282,10 @@ const CGFloat kMBCheckboxTrailing = 23.0;
                                                  timeline:timeline];
   _basicView.translatesAutoresizingMaskIntoConstraints = NO;
   [_basicView setActiveTab:_selectedTab];
+  // This clip's identity, so its expression popover can read its own manifest
+  // off the bus and scope the reference picker to its project. Resolved on the
+  // view side (the render process can't push it here - different process).
+  [_basicView setLinkSelfUUID:KKInstanceUUIDForAPI(_apiManager)];
   [_contentView addSubview:_basicView];
 
   _constantsButton.hidden = !_basicView.hasUnoptedLanes;

@@ -15,10 +15,12 @@
 #import "KKPluginInstanceState.h" // KKInstanceUUIDForAPI
 #import "KKTimingEvaluation.h"
 #import "KKTimingStage.h"
+#import <FxPlug/FxPlugSDK.h> // PROAPIAccessing, FxProjectAPI
 
 // Same shared container the Sonar spectrograms use, so the bus works from the
 // plugin sandbox and is visible across every plugin that ships the entitlement.
-static NSString *const kKKLinkBusAppGroupID = @"group.co.overpolish.keyframeless";
+static NSString *const kKKLinkBusAppGroupID =
+    @"group.co.overpolish.keyframeless";
 
 @interface KKLinkedCurve ()
 @property(nonatomic) KKLane *lane;
@@ -97,9 +99,11 @@ static NSMutableDictionary<NSString *, NSData *> *KKLinkLastManifest(void) {
   });
   return dict;
 }
-// Monotonic seconds of the last ACTUAL write per uuid, so an unchanged manifest is
-// still re-touched periodically (keeps a live clip's file mtime fresh for GC).
-static NSMutableDictionary<NSString *, NSNumber *> *KKLinkManifestWriteTime(void) {
+// Monotonic seconds of the last ACTUAL write per uuid, so an unchanged manifest
+// is still re-touched periodically (keeps a live clip's file mtime fresh for
+// GC).
+static NSMutableDictionary<NSString *, NSNumber *> *
+KKLinkManifestWriteTime(void) {
   static NSMutableDictionary<NSString *, NSNumber *> *dict = nil;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -115,11 +119,11 @@ static double KKLinkMonoSeconds(void) {
   return (double)ts.tv_sec + (double)ts.tv_nsec / 1.0e9;
 }
 
-// A live clip re-touches its manifest at least this often (even when unchanged) so
-// its file mtime stays recent; a manifest older than the prune window is treated
-// as an orphan (its clip was deleted) and removed on the next read. Generous, so a
-// clip rendered anytime within the window stays discoverable.
-static const double kKKManifestTouchSeconds = 3600.0;    // 1 hour
+// A live clip re-touches its manifest at least this often (even when unchanged)
+// so its file mtime stays recent; a manifest older than the prune window is
+// treated as an orphan (its clip was deleted) and removed on the next read.
+// Generous, so a clip rendered anytime within the window stays discoverable.
+static const double kKKManifestTouchSeconds = 3600.0;      // 1 hour
 static const long kKKManifestPruneSeconds = 7 * 24 * 3600; // 7 days
 
 static NSData *KKLinkManifestData(KKLinkManifest *m) {
@@ -127,6 +131,7 @@ static NSData *KKLinkManifestData(KKLinkManifest *m) {
     @"uuid" : m.uuid ?: @"",
     @"name" : m.displayName ?: @"",
     @"effect" : m.effectName ?: @"",
+    @"doc" : m.documentID ?: @"",
     @"start" : @(m.clipStartSec),
     @"dur" : @(m.clipDurSec),
     @"params" : m.paramLabels ?: @[],
@@ -147,8 +152,11 @@ static KKLinkManifest *KKLinkManifestFromData(NSData *data) {
     return nil;
   KKLinkManifest *m = [[KKLinkManifest alloc] init];
   m.uuid = uuid;
-  m.displayName = [d[@"name"] isKindOfClass:[NSString class]] ? d[@"name"] : @"";
-  m.effectName = [d[@"effect"] isKindOfClass:[NSString class]] ? d[@"effect"] : @"";
+  m.displayName =
+      [d[@"name"] isKindOfClass:[NSString class]] ? d[@"name"] : @"";
+  m.effectName =
+      [d[@"effect"] isKindOfClass:[NSString class]] ? d[@"effect"] : @"";
+  m.documentID = [d[@"doc"] isKindOfClass:[NSString class]] ? d[@"doc"] : @"";
   m.clipStartSec = [d[@"start"] doubleValue];
   m.clipDurSec = [d[@"dur"] doubleValue];
   m.paramLabels =
@@ -185,18 +193,18 @@ static KKLinkManifest *KKLinkManifestFromData(NSData *data) {
 // Resolve the app-group container off the caller's thread. The first
 // containerURLForSecurityApplicationGroupIdentifier: in a sandboxed process can
 // block ~1-2s while the container is provisioned; without warming, that cost
-// lands on the first LINK RESOLVE - which happens on the render thread mid-frame
+// lands on the first LINK RESOLVE - which happens on the render thread
+// mid-frame
 // - and freezes playback (linked clips only; non-linked never touch the bus).
 // Each FxPlug plugin instance is its own XPC process, so every process that may
 // publish or subscribe should call this at init, well before the render loop.
-// Idempotent: dispatch_once inside linksDirectory means later real calls hit the
-// warmed cache (or, if the frame beats the warm, block once instead of per
+// Idempotent: dispatch_once inside linksDirectory means later real calls hit
+// the warmed cache (or, if the frame beats the warm, block once instead of per
 // process-with-cold-cache).
 + (void)warmUp {
-  dispatch_async(
-      dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-        (void)[self linksDirectory];
-      });
+  dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    (void)[self linksDirectory];
+  });
 }
 
 // Per-process record of the last bytes written per link, so a render loop that
@@ -241,7 +249,9 @@ static os_unfair_lock gLinkPublishLock = OS_UNFAIR_LOCK_INIT;
     @"tlEnd" : @(tlEnd),
     @"laneTimeline" : laneJSON,
   };
-  NSData *data = [NSJSONSerialization dataWithJSONObject:file options:0 error:nil];
+  NSData *data = [NSJSONSerialization dataWithJSONObject:file
+                                                 options:0
+                                                   error:nil];
   if (!data)
     return;
 
@@ -254,9 +264,9 @@ static os_unfair_lock gLinkPublishLock = OS_UNFAIR_LOCK_INIT;
   if (unchanged)
     return;
 
-  NSURL *url = [dir URLByAppendingPathComponent:
-                        [KKLinkSafeFilename(linkID)
-                            stringByAppendingPathExtension:@"json"]];
+  NSURL *url = [dir
+      URLByAppendingPathComponent:[KKLinkSafeFilename(linkID)
+                                      stringByAppendingPathExtension:@"json"]];
   NSError *err = nil;
   if (![data writeToURL:url options:NSDataWritingAtomic error:&err]) {
     KKLogWarn(@"KKLinkBus: publish '%@' failed: %@", linkID, err);
@@ -286,8 +296,7 @@ static os_unfair_lock gLinkPublishLock = OS_UNFAIR_LOCK_INIT;
                                                           options:0
                                                             error:nil]
                         : nil;
-    NSString *name =
-        [j isKindOfClass:[NSDictionary class]] ? j[@"name"] : nil;
+    NSString *name = [j isKindOfClass:[NSDictionary class]] ? j[@"name"] : nil;
     if ([name isKindOfClass:[NSString class]] && name.length &&
         ![names containsObject:name])
       [names addObject:name];
@@ -300,17 +309,18 @@ static os_unfair_lock gLinkPublishLock = OS_UNFAIR_LOCK_INIT;
   NSURL *dir = [self linksDirectory];
   if (!dir || name.length == 0)
     return 0;
-  NSURL *url = [dir URLByAppendingPathComponent:
-                        [KKLinkSafeFilename(name)
-                            stringByAppendingPathExtension:@"json"]];
+  NSURL *url = [dir
+      URLByAppendingPathComponent:[KKLinkSafeFilename(name)
+                                      stringByAppendingPathExtension:@"json"]];
   struct stat st;
-  return stat(url.fileSystemRepresentation, &st) == 0 ? KKLinkStatStamp(&st) : 0;
+  return stat(url.fileSystemRepresentation, &st) == 0 ? KKLinkStatStamp(&st)
+                                                      : 0;
 }
 
 static KKLinkedCurve *KKLinkParseCurveData(NSData *data) {
   NSDictionary *file = [NSJSONSerialization JSONObjectWithData:data
-                                                      options:0
-                                                        error:nil];
+                                                       options:0
+                                                         error:nil];
   if (![file isKindOfClass:[NSDictionary class]])
     return nil;
   NSString *laneJSON = file[@"laneTimeline"];
@@ -325,7 +335,8 @@ static KKLinkedCurve *KKLinkParseCurveData(NSData *data) {
   curve.timelineStart = [file[@"tlStart"] doubleValue];
   curve.timelineEnd = [file[@"tlEnd"] doubleValue];
   NSString *unit = file[@"unit"];
-  curve.unit = [unit isKindOfClass:[NSString class]] && unit.length ? unit : nil;
+  curve.unit =
+      [unit isKindOfClass:[NSString class]] && unit.length ? unit : nil;
   return curve;
 }
 
@@ -336,7 +347,8 @@ static KKLinkedCurve *KKLinkParseCurveData(NSData *data) {
 // name doesn't stat+miss every frame. Process-local (not shared across
 // instances) and locked (FCP renders multi-thread).
 static os_unfair_lock gLinkLoadLock = OS_UNFAIR_LOCK_INIT;
-static NSMutableDictionary<NSString *, _KKLinkLoadEntry *> *KKLinkLoadCache(void) {
+static NSMutableDictionary<NSString *, _KKLinkLoadEntry *> *
+KKLinkLoadCache(void) {
   static NSMutableDictionary<NSString *, _KKLinkLoadEntry *> *dict = nil;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -351,9 +363,9 @@ static NSMutableDictionary<NSString *, _KKLinkLoadEntry *> *KKLinkLoadCache(void
   NSURL *dir = [self linksDirectory];
   if (!dir)
     return nil;
-  NSURL *url = [dir URLByAppendingPathComponent:
-                        [KKLinkSafeFilename(linkID)
-                            stringByAppendingPathExtension:@"json"]];
+  NSURL *url = [dir
+      URLByAppendingPathComponent:[KKLinkSafeFilename(linkID)
+                                      stringByAppendingPathExtension:@"json"]];
 
   struct stat st;
   BOOL exists = stat(url.fileSystemRepresentation, &st) == 0;
@@ -413,17 +425,20 @@ static NSMutableDictionary<NSString *, _KKLinkLoadEntry *> *KKLinkLoadCache(void
   NSData *data = KKLinkManifestData(manifest);
   if (!data)
     return;
-  // Skip the write when the bytes match what we last wrote AND we wrote recently
-  // (render tick calls this every frame). An unchanged manifest is still re-touched
-  // every kKKManifestTouchSeconds so a live clip's file mtime stays fresh for GC.
-  // Skip check FIRST so manifestsDirectory's dir-ensure only runs on a real write.
+  // Skip the write when the bytes match what we last wrote AND we wrote
+  // recently (render tick calls this every frame). An unchanged manifest is
+  // still re-touched every kKKManifestTouchSeconds so a live clip's file mtime
+  // stays fresh for GC. Skip check FIRST so manifestsDirectory's dir-ensure
+  // only runs on a real write.
   double now = KKLinkMonoSeconds();
   os_unfair_lock_lock(&gLinkManifestLock);
   NSMutableDictionary<NSString *, NSData *> *last = KKLinkLastManifest();
-  NSMutableDictionary<NSString *, NSNumber *> *times = KKLinkManifestWriteTime();
+  NSMutableDictionary<NSString *, NSNumber *> *times =
+      KKLinkManifestWriteTime();
   BOOL unchanged = [last[manifest.uuid] isEqualToData:data];
   NSNumber *lastWrite = times[manifest.uuid];
-  BOOL stale = !lastWrite || (now - lastWrite.doubleValue) > kKKManifestTouchSeconds;
+  BOOL stale =
+      !lastWrite || (now - lastWrite.doubleValue) > kKKManifestTouchSeconds;
   BOOL doWrite = !unchanged || stale;
   if (doWrite) {
     last[manifest.uuid] = data;
@@ -435,10 +450,9 @@ static NSMutableDictionary<NSString *, _KKLinkLoadEntry *> *KKLinkLoadCache(void
   NSURL *dir = [self manifestsDirectory];
   if (!dir)
     return;
-  NSURL *url =
-      [dir URLByAppendingPathComponent:[KKLinkSafeFilename(manifest.uuid)
-                                           stringByAppendingPathExtension:
-                                               @"manifest.json"]];
+  NSURL *url = [dir URLByAppendingPathComponent:
+                        [KKLinkSafeFilename(manifest.uuid)
+                            stringByAppendingPathExtension:@"manifest.json"]];
   [data writeToURL:url atomically:YES];
 }
 
@@ -476,8 +490,9 @@ static NSMutableDictionary<NSString *, _KKLinkLoadEntry *> *KKLinkLoadCache(void
                                              : NSOrderedDescending;
     return [a.displayName ?: @"" compare:b.displayName ?: @""];
   }];
-  // Prune orphan thumbnails (a clip whose manifest was GC'd above) while we have
-  // the live uuid set - cheap, and this runs on menu-open, not the render path.
+  // Prune orphan thumbnails (a clip whose manifest was GC'd above) while we
+  // have the live uuid set - cheap, and this runs on menu-open, not the render
+  // path.
   NSMutableSet<NSString *> *liveUUIDs = [NSMutableSet set];
   for (KKLinkManifest *m in out)
     if (m.uuid.length)
@@ -486,9 +501,23 @@ static NSMutableDictionary<NSString *, _KKLinkLoadEntry *> *KKLinkLoadCache(void
   return out;
 }
 
++ (NSArray<KKLinkManifest *> *)manifestsForDocumentID:(NSString *)documentID {
+  NSArray<KKLinkManifest *> *all = [self allManifests];
+  if (documentID.length == 0)
+    return all; // caller has no document scope - library-wide (legacy
+                // behaviour)
+  NSMutableArray<KKLinkManifest *> *out = [NSMutableArray array];
+  for (KKLinkManifest *m in all)
+    // Empty documentID = legacy / host-unknown: matches any project so it never
+    // vanishes; otherwise it must be the SAME project as the asking clip.
+    if (m.documentID.length == 0 || [m.documentID isEqualToString:documentID])
+      [out addObject:m];
+  return out;
+}
+
 + (NSURL *)thumbnailsDirectory {
-  // Same shape as manifestsDirectory: cache the slow container lookup, re-ensure
-  // the subdir each call so an externally-deleted folder self-heals.
+  // Same shape as manifestsDirectory: cache the slow container lookup,
+  // re-ensure the subdir each call so an externally-deleted folder self-heals.
   static NSURL *container = nil;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
@@ -512,9 +541,9 @@ static NSMutableDictionary<NSString *, _KKLinkLoadEntry *> *KKLinkLoadCache(void
   NSURL *dir = [self thumbnailsDirectory];
   if (!dir)
     return nil;
-  return [dir URLByAppendingPathComponent:[KKLinkSafeFilename(uuid)
-                                              stringByAppendingPathExtension:
-                                                  @"thumb.jpg"]];
+  return [dir URLByAppendingPathComponent:
+                  [KKLinkSafeFilename(uuid)
+                      stringByAppendingPathExtension:@"thumb.jpg"]];
 }
 
 + (void)writeThumbnailJPEG:(NSData *)jpeg forUUID:(NSString *)uuid {
@@ -547,29 +576,30 @@ static NSMutableDictionary<NSString *, _KKLinkLoadEntry *> *KKLinkLoadCache(void
 
   NSURL *md = [self manifestsDirectory];
   if (md)
-    [fm removeItemAtURL:[md URLByAppendingPathComponent:
-                                [safe stringByAppendingPathExtension:
-                                          @"manifest.json"]]
+    [fm removeItemAtURL:
+            [md URLByAppendingPathComponent:
+                    [safe stringByAppendingPathExtension:@"manifest.json"]]
                   error:nil];
   NSURL *td = [self thumbnailsDirectory];
   if (td)
-    [fm removeItemAtURL:[td URLByAppendingPathComponent:
-                                [safe stringByAppendingPathExtension:@"thumb.jpg"]]
+    [fm removeItemAtURL:
+            [td URLByAppendingPathComponent:
+                    [safe stringByAppendingPathExtension:@"thumb.jpg"]]
                   error:nil];
   // Published curves live in Links/ as "<safe>.<label>.json".
   NSURL *ld = [self linksDirectory];
   if (ld) {
     NSString *prefix = [safe stringByAppendingString:@"."];
-    for (NSURL *f in [fm contentsOfDirectoryAtURL:ld
-                       includingPropertiesForKeys:nil
-                                          options:
-                                              NSDirectoryEnumerationSkipsHiddenFiles
-                                            error:nil])
+    for (NSURL *f in
+         [fm contentsOfDirectoryAtURL:ld
+             includingPropertiesForKeys:nil
+                                options:NSDirectoryEnumerationSkipsHiddenFiles
+                                  error:nil])
       if ([f.lastPathComponent hasPrefix:prefix])
         [fm removeItemAtURL:f error:nil];
   }
-  // Drop the manifest idempotency cache so a re-add (undo) in THIS process isn't
-  // skipped as "unchanged".
+  // Drop the manifest idempotency cache so a re-add (undo) in THIS process
+  // isn't skipped as "unchanged".
   os_unfair_lock_lock(&gLinkManifestLock);
   [KKLinkLastManifest() removeObjectForKey:uuid];
   [KKLinkManifestWriteTime() removeObjectForKey:uuid];
@@ -585,8 +615,8 @@ static NSMutableDictionary<NSString *, _KKLinkLoadEntry *> *KKLinkLoadCache(void
       continue;
     // Only ever touch THIS effect's manifests. Legacy manifests (no recorded
     // effect name) are treated as ours - they predate multi-plugin use.
-    BOOL mine = (m.effectName.length == 0) ||
-                [m.effectName isEqualToString:effectName];
+    BOOL mine =
+        (m.effectName.length == 0) || [m.effectName isEqualToString:effectName];
     if (mine && ![liveUUIDs containsObject:m.uuid]) {
       [removed addObject:m.uuid];
       [self removeSourceForUUID:m.uuid];
@@ -630,14 +660,16 @@ static KKExprVal KKLinkExprValFromArray(NSArray<NSNumber *> *arr) {
 }
 
 static NSArray<NSNumber *> *KKLinkArrayFromExprVal(KKExprVal v) {
-  NSMutableArray<NSNumber *> *a = [NSMutableArray arrayWithCapacity:(NSUInteger)v.n];
+  NSMutableArray<NSNumber *> *a =
+      [NSMutableArray arrayWithCapacity:(NSUInteger)v.n];
   for (int i = 0; i < v.n; i++)
     [a addObject:@(v.v[i])];
   return a;
 }
 
-// Compiled-expression cache: the render path resolves the same expression string
-// every frame, and parsing is pure, so cache by source. NSCache is thread-safe.
+// Compiled-expression cache: the render path resolves the same expression
+// string every frame, and parsing is pure, so cache by source. NSCache is
+// thread-safe.
 static KKLinkExpr *KKLinkCompile(NSString *src) {
   if (src.length == 0)
     return nil;
@@ -677,13 +709,13 @@ static KKExprVal KKLinkResolveSource(NSString *name, double T,
   double dur = curve.timelineEnd - curve.timelineStart;
   double local = T - curve.timelineStart;
   double srcProgress = dur > 0.0 ? MAX(0.0, MIN(1.0, local / dur)) : 0.0;
-  double srcClipTime =
-      dur > 0.0 ? MAX(0.0, MIN(dur, local)) : MAX(0.0, local);
+  double srcClipTime = dur > 0.0 ? MAX(0.0, MIN(dur, local)) : MAX(0.0, local);
   // HOLD outside the source's span for `t` too: clamp the ABSOLUTE time to the
   // authored span, so a source whose expression uses `t` (e.g. sin(t*tau))
   // freezes at its boundary value before/after the source clip exists, instead
-  // of running live everywhere. Matches the held keyposes + clamped progress/ct,
-  // so the WHOLE value holds - and the hold boundaries move with the clip.
+  // of running live everywhere. Matches the held keyposes + clamped
+  // progress/ct, so the WHOLE value holds - and the hold boundaries move with
+  // the clip.
   double srcT = MAX(curve.timelineStart, MIN(curve.timelineEnd, T));
   [visiting addObject:name];
   KKExprVal out = [expr evalWithValue:ownVal
@@ -703,8 +735,9 @@ NSArray<NSNumber *> *KKLinkResolvedLaneValue(KKLane *lane, double frac,
   NSString *exprStr = lane.linkExpression;
   BOOL trivial =
       exprStr.length == 0 ||
-      [[exprStr stringByTrimmingCharactersInSet:
-                    [NSCharacterSet whitespaceAndNewlineCharacterSet]]
+      [[exprStr
+          stringByTrimmingCharactersInSet:[NSCharacterSet
+                                              whitespaceAndNewlineCharacterSet]]
           isEqualToString:@"value"];
   if (trivial)
     // No expression (or bare passthrough) -> the lane's own value.
@@ -716,7 +749,8 @@ NSArray<NSNumber *> *KKLinkResolvedLaneValue(KKLane *lane, double frac,
     return own;
   KKExprVal ownVal = KKLinkExprValFromArray(own);
   NSMutableSet<NSString *> *visiting = [NSMutableSet set];
-  // `frac` is already the clip's 0..1 position; clip-local seconds = frac * dur.
+  // `frac` is already the clip's 0..1 position; clip-local seconds = frac *
+  // dur.
   KKExprVal out =
       [expr evalWithValue:ownVal
                         t:timelineSec
@@ -732,11 +766,10 @@ NSSet<NSString *> *KKLinkTimelineSourceNames(KKTimeline *timeline) {
   NSMutableSet<NSString *> *names = [NSMutableSet set];
   for (KKLane *lane in timeline.lanes) {
     NSString *expr = lane.linkExpression;
-    BOOL trivial =
-        expr.length == 0 ||
-        [[expr stringByTrimmingCharactersInSet:
-                   [NSCharacterSet whitespaceAndNewlineCharacterSet]]
-            isEqualToString:@"value"];
+    BOOL trivial = expr.length == 0 ||
+                   [[expr stringByTrimmingCharactersInSet:
+                              [NSCharacterSet whitespaceAndNewlineCharacterSet]]
+                       isEqualToString:@"value"];
     if (!trivial) {
       KKLinkExpr *compiled = KKLinkCompile(expr);
       if (compiled)
@@ -747,25 +780,27 @@ NSSet<NSString *> *KKLinkTimelineSourceNames(KKTimeline *timeline) {
 }
 
 // Walk every `${...}` token in `src`, replacing each token's inner text with
-// what `map(inner)` returns (nil = leave that token untouched). Back-to-front so
-// earlier ranges stay valid as we splice. The shared core of both translators.
+// what `map(inner)` returns (nil = leave that token untouched). Back-to-front
+// so earlier ranges stay valid as we splice. The shared core of both
+// translators.
 static NSString *KKLinkTransformExprTokens(NSString *src,
-                                           NSString *(^map)(NSString *inner)) {
+                                           NSString * (^map)(NSString *inner)) {
   if (src.length == 0)
     return src ?: @"";
   static NSRegularExpression *re;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     re = [NSRegularExpression regularExpressionWithPattern:@"\\$\\{([^}]*)\\}"
-                                                  options:0
-                                                    error:nil];
+                                                   options:0
+                                                     error:nil];
   });
   NSMutableString *out = [src mutableCopy];
   NSArray<NSTextCheckingResult *> *matches =
       [re matchesInString:src options:0 range:NSMakeRange(0, src.length)];
   for (NSTextCheckingResult *m in [matches reverseObjectEnumerator]) {
     NSString *inner = [[src substringWithRange:[m rangeAtIndex:1]]
-        stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        stringByTrimmingCharactersInSet:[NSCharacterSet
+                                            whitespaceCharacterSet]];
     NSString *repl = map(inner);
     if (repl)
       [out replaceCharactersInRange:m.range
@@ -774,8 +809,8 @@ static NSString *KKLinkTransformExprTokens(NSString *src,
   return out;
 }
 
-// Split a ref inner on its LAST dot into head + tail; NO returned (tail nil) for
-// a bare same-clip ref (no dot), which the caller leaves untouched.
+// Split a ref inner on its LAST dot into head + tail; NO returned (tail nil)
+// for a bare same-clip ref (no dot), which the caller leaves untouched.
 static BOOL KKLinkSplitRefInner(NSString *inner, NSString **outHead,
                                 NSString **outTail) {
   NSRange dot = [inner rangeOfString:@"." options:NSBackwardsSearch];
@@ -786,8 +821,9 @@ static BOOL KKLinkSplitRefInner(NSString *inner, NSString **outHead,
   return YES;
 }
 
-NSString *KKLinkStoredExpressionFromDisplay(NSString *display,
-                                            NSArray<KKLinkManifest *> *manifests) {
+NSString *
+KKLinkStoredExpressionFromDisplay(NSString *display,
+                                  NSArray<KKLinkManifest *> *manifests) {
   return KKLinkTransformExprTokens(display, ^NSString *(NSString *inner) {
     NSString *clip = nil, *param = nil;
     if (!KKLinkSplitRefInner(inner, &clip, &param))
@@ -804,8 +840,9 @@ NSString *KKLinkStoredExpressionFromDisplay(NSString *display,
   });
 }
 
-NSString *KKLinkDisplayExpressionFromStored(
-    NSString *stored, NSArray<KKLinkManifest *> *manifests) {
+NSString *
+KKLinkDisplayExpressionFromStored(NSString *stored,
+                                  NSArray<KKLinkManifest *> *manifests) {
   return KKLinkTransformExprTokens(stored, ^NSString *(NSString *inner) {
     NSString *uuid = nil, *param = nil;
     if (!KKLinkSplitRefInner(inner, &uuid, &param))
@@ -822,9 +859,10 @@ NSString *KKLinkDisplayExpressionFromStored(
   });
 }
 
-NSString *KKLinkAvailableSourcesJSON(NSString *excludeUUID) {
+NSString *KKLinkAvailableSourcesJSON(NSString *excludeUUID,
+                                     NSString *documentID) {
   NSMutableArray<NSDictionary *> *out = [NSMutableArray array];
-  for (KKLinkManifest *man in [KKLinkBus allManifests]) {
+  for (KKLinkManifest *man in [KKLinkBus manifestsForDocumentID:documentID]) {
     if (man.uuid.length == 0 ||
         (excludeUUID.length && [man.uuid isEqualToString:excludeUUID]))
       continue;
@@ -832,16 +870,22 @@ NSString *KKLinkAvailableSourcesJSON(NSString *excludeUUID) {
     // sources are still listed (a user may ask about them).
     NSArray<NSString *> *params =
         man.paramDisplayNames.count ? man.paramDisplayNames : man.paramLabels;
-    [out addObject:@{@"clip" : man.displayName ?: @"", @"params" : params ?: @[]}];
+    [out addObject:@{
+      @"clip" : man.displayName ?: @"",
+      @"params" : params ?: @[]
+    }];
   }
-  NSData *data = [NSJSONSerialization dataWithJSONObject:out options:0 error:nil];
-  return data ? [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]
+  NSData *data = [NSJSONSerialization dataWithJSONObject:out
+                                                 options:0
+                                                   error:nil];
+  return data ? [[NSString alloc] initWithData:data
+                                      encoding:NSUTF8StringEncoding]
               : @"[]";
 }
 
 // "M:SS" (or "H:MM:SS" past an hour) for a clip's project-start seconds, the
-// human anchor in the auto display name. Not frame-accurate - just enough to tell
-// clips apart at a glance in the reference menu.
+// human anchor in the auto display name. Not frame-accurate - just enough to
+// tell clips apart at a glance in the reference menu.
 static NSString *KKLinkTimecode(double sec) {
   if (sec < 0)
     sec = 0;
@@ -853,7 +897,8 @@ static NSString *KKLinkTimecode(double sec) {
 }
 
 // A lane an expression can actually consume: a numeric value lane, not a code
-// editor (source text, no value) or a palette-generator bar (UI-only, no value).
+// editor (source text, no value) or a palette-generator bar (UI-only, no
+// value).
 static BOOL KKLinkLaneIsReferenceable(KKLane *lane) {
   if (lane.label.length == 0)
     return NO;
@@ -862,6 +907,60 @@ static BOOL KKLinkLaneIsReferenceable(KKLane *lane) {
   if (lane.paletteGeneratorBar)
     return NO;
   return YES;
+}
+
+// Sticky per-UUID (process-wide), NOT per-api: FxProjectAPI -documentID:
+// returns a clip's HOME project index only at document-load / while its project
+// is active. The SAME clip is also rendered through OTHER api objects
+// (thumbnail, mini-viewer, background) that resolve "not inside a project" -
+// and those wrote the manifest (keyed by uuid) with an empty doc, clobbering
+// the good value. The first NON-empty resolve for a uuid is the reliable home
+// index (the load burst partitions clips cleanly by project); remember it here
+// so no later empty resolve from any api can overwrite it. Process-static
+// because all of one plugin's instances share one XPC process, and a uuid maps
+// to exactly one clip. Re-derived each launch (a fresh process), which is fine
+// - the index is assigned by open order and we only ever compare within one
+// session.
+static NSMutableDictionary<NSString *, NSString *> *gDocIDByUUID;
+static os_unfair_lock gDocIDLock = OS_UNFAIR_LOCK_INIT;
+
+NSString *KKLinkDocumentIDForAPI(id<PROAPIAccessing> api) {
+  if (!api)
+    return nil;
+  NSString *uuid = KKInstanceUUIDForAPI(api);
+  if (uuid.length) {
+    os_unfair_lock_lock(&gDocIDLock);
+    NSString *known = gDocIDByUUID[uuid];
+    os_unfair_lock_unlock(&gDocIDLock);
+    if (known.length)
+      return known; // first good resolve wins; never regress to empty
+  }
+
+  id<FxProjectAPI> projAPI = [api apiForProtocol:@protocol(FxProjectAPI)];
+  if (!projAPI)
+    return nil;
+  NSUInteger docID = 0;
+  NSError *err = nil;
+  if (![projAPI documentID:&docID error:&err])
+    return nil; // e.g. thumbnail / background render: "not inside a project"
+  NSString *result = [NSString stringWithFormat:@"%lu", (unsigned long)docID];
+  if (uuid.length) {
+    os_unfair_lock_lock(&gDocIDLock);
+    if (!gDocIDByUUID)
+      gDocIDByUUID = [NSMutableDictionary dictionary];
+    gDocIDByUUID[uuid] = result;
+    os_unfair_lock_unlock(&gDocIDLock);
+  }
+  return result;
+}
+
+NSString *KKLinkDocumentIDForSelfUUID(NSString *uuid) {
+  if (uuid.length == 0)
+    return nil;
+  for (KKLinkManifest *m in [KKLinkBus allManifests])
+    if ([m.uuid isEqualToString:uuid])
+      return m.documentID.length ? m.documentID : nil;
+  return nil;
 }
 
 void KKLinkWriteManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
@@ -873,8 +972,10 @@ void KKLinkWriteManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
   KKLinkManifest *m = [[KKLinkManifest alloc] init];
   m.uuid = uuid;
   m.effectName = effectName ?: @"";
-  m.displayName = [NSString stringWithFormat:@"%@ @ %@", effectName ?: @"Effect",
-                                             KKLinkTimecode(clipStartSec)];
+  m.documentID = KKLinkDocumentIDForAPI(api) ?: @"";
+  m.displayName =
+      [NSString stringWithFormat:@"%@ @ %@", effectName ?: @"Effect",
+                                 KKLinkTimecode(clipStartSec)];
   m.clipStartSec = clipStartSec;
   m.clipDurSec = clipDurSec;
   NSMutableArray<NSString *> *params = [NSMutableArray array];
@@ -883,8 +984,8 @@ void KKLinkWriteManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
     if (KKLinkLaneIsReferenceable(lane)) {
       [params addObject:lane.label];
       // The lane object still carries its (non-serialized) display name here at
-      // write time (built from the plugin's templates), so the picker can show a
-      // friendly "Center" for a raw "uCenter" uniform key.
+      // write time (built from the plugin's templates), so the picker can show
+      // a friendly "Center" for a raw "uCenter" uniform key.
       [displays addObject:lane.displayName ?: lane.label];
     }
   m.paramLabels = params;
@@ -903,8 +1004,7 @@ void KKLinkPublishReferenceableLanes(id<PROAPIAccessing> api,
       continue;
     // Key MUST match the token `${uuid.label}` a subscriber stores (see the
     // popover's stored form); loadCurve reads the same `<uuid>.<label>` file.
-    NSString *linkID =
-        [NSString stringWithFormat:@"%@.%@", uuid, lane.label];
+    NSString *linkID = [NSString stringWithFormat:@"%@.%@", uuid, lane.label];
     [KKLinkBus publishLane:lane
                     linkID:linkID
              timelineStart:tlStart

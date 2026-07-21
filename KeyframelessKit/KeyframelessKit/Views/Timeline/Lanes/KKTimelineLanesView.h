@@ -40,6 +40,13 @@ typedef NS_ENUM(NSInteger, KKMiniViewerRenderMode) {
 /// Does not fire onTimelineMutated.
 - (void)applyTimeline:(KKTimeline *)timeline;
 
+/// The editing clip's instance uuid, so its expression popover can read the
+/// clip's own manifest off the bus and scope the reference picker to the clip's
+/// project (the project id lives on the manifest, written by the render process).
+/// Resolved on the view side because the render process can't push across to the
+/// ViewBridge-hosted popover. Empty / nil = unknown (picker stays library-wide).
+- (void)setLinkSelfUUID:(nullable NSString *)uuid;
+
 /// Optional all-owners (all-layers) timeline. When set, BOTH graphs (Basic +
 /// Advanced) render and edit this instead of the single-owner `timeline`: every
 /// animated lane across every layer shows, all editable, independent of which

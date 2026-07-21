@@ -218,5 +218,11 @@ BOOL KKRefreshRenderCache(id<PROAPIAccessing> apiManager,
     });
   }
 
+  // NB: the FCP document (project) id is resolved during render
+  // (KKLinkWriteManifest stamps each manifest with it, sticky per uuid). We do
+  // NOT push it to the inspector from here: this runs in the RENDER process
+  // where `inspectorView` is nil, so the call wouldn't cross to the
+  // ViewBridge-hosted popover. The view side reads the id back off its own
+  // manifest instead (KKTimelineLanesView linkSelfUUID -> KKLinkBus).
   return YES;
 }

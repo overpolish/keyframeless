@@ -610,7 +610,8 @@ static void ShaderAIApplyMutation(ShaderPlugin *plugin, NSString *currentJSON,
   // Other clips this one can reference in a cross-clip ${Clip.Param} expression
   // (excluding itself), for the AI's expression route.
   NSString *selfLinkUUID = KKInstanceUUIDForAPI(self.apiManager);
-  NSString *availableSources = KKLinkAvailableSourcesJSON(selfLinkUUID);
+  NSString *availableSources = KKLinkAvailableSourcesJSON(
+      selfLinkUUID, KKLinkDocumentIDForAPI(self.apiManager));
   // Raw timeline blob (carries the "Shader" code lane the AI may rewrite) and
   // the current shader source. Pass "" when it's the untouched default so a
   // from-scratch ask starts clean; a customised shader is passed so the AI

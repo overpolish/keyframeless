@@ -83,6 +83,11 @@ NS_ASSUME_NONNULL_BEGIN
   // display lanes) - its rows must NOT be clobbered by _refresh's
   // updateUnoptedLanes:, which is only for the constants popover.
   BOOL _openStaticIsBoundary;
+  // This clip's instance uuid. At popover creation the lanes view reads the
+  // clip's own manifest off the bus to learn its project id, then scopes the
+  // expression reference picker to that project. Empty / nil = unknown (picker
+  // stays library-wide).
+  NSString *_linkSelfUUID;
 
   // Guide-only callbacks (set via KKTimelineLanesView+Guide). Fired
   // alongside the existing host plumbing so production behaviour is

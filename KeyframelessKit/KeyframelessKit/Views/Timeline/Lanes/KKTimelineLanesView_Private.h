@@ -265,6 +265,10 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 
 @interface _KKStaticValuesPopoverView : NSView
 @property(nonatomic, weak, nullable) NSPopover *popover;
+/// The FCP document (project) id of the clip being edited, so the expression
+/// reference picker only lists OTHER clips in the SAME project. Empty / nil =
+/// unknown, which leaves the picker library-wide (legacy behaviour).
+@property(nonatomic, copy, nullable) NSString *documentID;
 /// The inner mini-viewer. Exposed so callers (e.g. the boundary popover
 /// path that wires onion-skin filmstrip clicks) can attach extra closures
 /// without threading another init parameter.

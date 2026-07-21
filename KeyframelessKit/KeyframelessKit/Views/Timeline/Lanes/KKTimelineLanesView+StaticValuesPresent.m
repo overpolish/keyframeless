@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKLinkBus.h"
 #import "KKLocalized.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView.h"
@@ -251,6 +252,11 @@
             onDragEnd:onDragEndBlock
          editsKeypose:cfg.isBoundary
       initialCategory:cfg.initialCategory];
+  // Scope the expression reference picker to this clip's project: read the
+  // clip's OWN manifest off the bus (the render process stamped it with the
+  // project id; it can't push it across to this ViewBridge process). nil uuid /
+  // no manifest yet = library-wide, the safe fallback.
+  staticView.documentID = KKLinkDocumentIDForSelfUUID(_linkSelfUUID);
   staticView.onCategoryChanged = cfg.onCategoryChanged;
   // Code-lane edits (e.g. a shader source) are discrete text commits: write the
   // new string to the lane's codeString through the standard lane-replace path.

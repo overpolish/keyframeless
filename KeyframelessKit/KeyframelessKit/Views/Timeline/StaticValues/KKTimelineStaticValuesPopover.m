@@ -1266,7 +1266,9 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // called on editor install and each menu open, not on the render/keystroke
 // path.
 - (void)_refreshLinkManifests {
-  _linkManifests = [KKLinkBus allManifests];
+  // Scope the picker to the editing clip's project (empty documentID = unknown,
+  // which returns everything - the legacy library-wide behaviour).
+  _linkManifests = [KKLinkBus manifestsForDocumentID:_documentID];
 }
 
 // Model (`${uuid.rawLabel}`) <-> editor (`${Clip.Param}`) ref translation. The

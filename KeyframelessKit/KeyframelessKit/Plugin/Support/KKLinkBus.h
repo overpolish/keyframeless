@@ -63,6 +63,12 @@ typedef NS_ENUM(NSInteger, KKLinkOutOfRange) {
 /// one plugin's own manifests. Empty on legacy manifests written before this
 /// field existed (they get rewritten with it on the source's next render/load).
 @property(nonatomic, copy) NSString *effectName;
+/// The FCP document (project/timeline) id this source lives in, as a string
+/// (from FxProjectAPI -documentID:). Cross-clip refs only make sense WITHIN one
+/// project, so the picker filters manifests to the editing clip's document.
+/// Empty when the host can't provide one (older manifests, or FxProjectAPI
+/// unavailable) - treated as matching any document so it never hides a source.
+@property(nonatomic, copy) NSString *documentID;
 @property(nonatomic, copy)
     NSArray<NSString *> *paramLabels; // referenceable lanes
 /// Friendly names to SHOW for each `paramLabels` entry (same order/count). The
@@ -131,6 +137,14 @@ typedef NS_ENUM(NSInteger, KKLinkOutOfRange) {
 /// - the source list the reference picker enumerates. Reads the directory; call
 /// on demand (not the render path).
 + (NSArray<KKLinkManifest *> *)allManifests;
+
+/// `allManifests` filtered to the given FCP document, so a clip's reference
+/// picker only sees OTHER clips in the SAME project (not the whole library). A
+/// manifest with an empty `documentID` (legacy / host couldn't provide one)
+/// always matches, and a nil/empty `documentID` argument returns everything -
+/// both degrade to the old library-wide behaviour rather than hiding sources.
++ (NSArray<KKLinkManifest *> *)manifestsForDocumentID:
+    (nullable NSString *)documentID;
 
 /// The thumbnails directory inside the shared app-group container (parallel to
 /// manifestsDirectory), created on first call. Small per-clip JPEGs keyed by
@@ -239,11 +253,29 @@ FOUNDATION_EXPORT NSString *
 KKLinkDisplayExpressionFromStored(NSString *stored,
                                   NSArray<KKLinkManifest *> *manifests);
 
+/// The FCP document (project) id for `api`'s instance, as a string, via
+/// FxProjectAPI -documentID:. nil when the host can't provide one (older host,
+/// API unavailable, or an error) - callers treat nil as "unscoped". Cheap; safe
+/// to call on the render tick.
+FOUNDATION_EXPORT NSString *_Nullable KKLinkDocumentIDForAPI(
+    id<PROAPIAccessing> api);
+
+/// The document (project) id a clip is in, read off its OWN manifest on the bus
+/// (keyed by instance `uuid`). For the VIEW side (ViewBridge process), which
+/// has no render context to resolve FxProjectAPI but can read the manifest the
+/// render process wrote. nil when `uuid` is empty or no manifest is published
+/// yet.
+FOUNDATION_EXPORT NSString *_Nullable KKLinkDocumentIDForSelfUUID(
+    NSString *_Nullable uuid);
+
 /// A compact JSON catalog of every OTHER clip on the bus and its referenceable
 /// parameters, for grounding an AI that writes cross-clip `${Clip.Param}` refs:
 /// `[{"clip":"<displayName>","params":["<paramDisplay>", ...]}]`. Excludes the
-/// manifest whose uuid equals `excludeUUID` (the asking clip itself). Returns
+/// manifest whose uuid equals `excludeUUID` (the asking clip itself) and scopes
+/// to `documentID` (the asking clip's project; nil = library-wide). Returns
 /// `[]` when nothing else is published.
-FOUNDATION_EXPORT NSString *KKLinkAvailableSourcesJSON(NSString *excludeUUID);
+FOUNDATION_EXPORT NSString *
+KKLinkAvailableSourcesJSON(NSString *excludeUUID,
+                           NSString *_Nullable documentID);
 
 NS_ASSUME_NONNULL_END

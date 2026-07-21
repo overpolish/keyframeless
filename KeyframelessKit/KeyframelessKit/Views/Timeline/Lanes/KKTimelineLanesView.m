@@ -997,6 +997,10 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   [self _refresh];
 }
 
+- (void)setLinkSelfUUID:(NSString *)uuid {
+  _linkSelfUUID = [uuid copy];
+}
+
 // A graph (Basic or Advanced) committed an edit. In multi-owner mode the edit
 // is on the all-layers graphTimeline, so route it to onGraphTimelineMutated and
 // let the host split it back per owner (then reload re-feeds both timelines);
