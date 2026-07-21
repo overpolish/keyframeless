@@ -45,6 +45,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// When nil (default), the ring picks a resize cursor based on mouse angle.
 @property(nonatomic, strong, nullable) NSCursor *hoverCursor;
 
+/// When YES, the ring always draws its ACTIVE (solid white) fill + stroke +
+/// widths, ignoring idle/hover state - for a host with no hover feedback (e.g.
+/// a mini-viewer-parity handle) so it reads crisply white always instead of the
+/// dim idle grey. Ghost (Opt-reveal) dimming still applies. Default NO.
+@property(nonatomic) BOOL solidStyle;
+
 /// Opt-hover visibility affordance: 0 = none (normal resize/ghost cursor),
 /// 1 = "hide" (eye.slash, an Opt-click will hide a visible ring), 2 = "show"
 /// (eye, an Opt-click will re-enable a revealed ghost). Set by the owner when
@@ -52,10 +58,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// hit and tracks it so clearCursorIfSet resets it. Default 0.
 @property(nonatomic) NSInteger visibilityHint;
 
-/// Configure this ring as the standard small "radius widget" handle - the shared
-/// look used for Canvas's live-corner widget and Rounded's radius handle, so the
-/// two can't drift. Sets ringRadius / fillWidth / ringOutlineWidth + clearsOnDraw;
-/// the caller still sets `center` and `tintColor` per use.
+/// Configure this ring as the standard small "radius widget" handle - the
+/// shared look used for Canvas's live-corner widget and Rounded's radius
+/// handle, so the two can't drift. Sets ringRadius / fillWidth /
+/// ringOutlineWidth + clearsOnDraw; the caller still sets `center` and
+/// `tintColor` per use.
 - (void)applyRadiusWidgetStyle;
 
 /// Updates the resize cursor direction based on mouse position relative to

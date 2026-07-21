@@ -11,6 +11,7 @@
 #import "ShaderAudioPool.h"
 #import "ShaderCustomShader.h" // ShaderCustomErrorShaderSource
 #import "ShaderDirectives.h"
+#import "ShaderExprMiniSet.h" // // @osc custom-handling handles
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KeyframelessKit.h>
@@ -53,6 +54,7 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   KKBoxOSCSet *_boxSet;
   NSString *_rotSyncedSource;
   KKRotationOSCSet *_rotSet;
+  ShaderExprMiniSet *_exprSet;
 }
 
 // All point OSCs draw + drag uniformly through the KKPointOSCSet (via the
@@ -105,6 +107,20 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   if (!_rotSet)
     _rotSet = [[KKRotationOSCSet alloc] initWithRenderer:self];
   return _rotSet;
+}
+
+- (ShaderExprMiniSet *)exprSet {
+  if (!_exprSet)
+    _exprSet = [[ShaderExprMiniSet alloc] initWithRenderer:self];
+  return _exprSet;
+}
+
+// Feed the expr set the shader's current `// @osc` blocks. It parses + compiles
+// via the shared ShaderOSCBlockRuntime (its own cheap string-compare no-op),
+// seeded with the renderer's template lanes for a first write.
+- (void)_syncMiniExprController {
+  [self.exprSet syncWithSource:[self _customShaderSource]
+                         lanes:self.laneTemplates ?: @[]];
 }
 
 // Feed the rotation set the shader's current `osc={..}` lanes: one spec per

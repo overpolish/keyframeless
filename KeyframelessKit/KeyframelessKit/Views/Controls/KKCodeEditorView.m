@@ -392,7 +392,18 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
     NSString *argPart = paren.location != NSNotFound
                             ? [sig substringFromIndex:paren.location]
                             : @"";
-    NSColor *nameColor = KKExprWordColor(e[@"name"]) ?: KKCodeText();
+    // A provider-supplied `color` hex (GLSL / directive items) wins so the row
+    // reads the same colour it will once inserted; expression items have none
+    // and fall back to the expression grammar's own colouring.
+    NSColor *nameColor;
+    NSString *colorHex = e[@"color"];
+    if (colorHex.length == 6) {
+      unsigned int rgb = 0;
+      [[NSScanner scannerWithString:colorHex] scanHexInt:&rgb];
+      nameColor = KKHex(rgb);
+    } else {
+      nameColor = KKExprWordColor(e[@"name"]) ?: KKCodeText();
+    }
     NSMutableAttributedString *a = [[NSMutableAttributedString alloc]
         initWithString:namePart
             attributes:@{
@@ -1765,7 +1776,154 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
                                    value:color
                                    range:r];
                     }];
+  // Overlay directive colouring on the grey comments: `// #kind` / `// @block`
+  // headers + their `key = value` attributes/fields read as structured
+  // annotations, not flat comments.
+  [self _highlightDirectivesInStorage:ts source:src];
   [ts endEditing];
+}
+
+// A directive HEADER comment: `// #kind ...` / `// @block ...`. Group 1 is the
+// `#kind` / `@block` token. `^` anchors it to the line start (after indent).
+static NSRegularExpression *KKDirectiveHeaderRE(void) {
+  static NSRegularExpression *re;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    re = [NSRegularExpression
+        regularExpressionWithPattern:@"^\\s*//\\s*([#@][A-Za-z_]\\w*)"
+                             options:0
+                               error:nil];
+  });
+  return re;
+}
+
+// The colourable pieces after a directive header (and on each `key = value`
+// block-continuation line): group 1 an attribute/field KEY (a word right before
+// `=`), 2 a quoted string, 3 a number.
+static NSRegularExpression *KKDirectiveBodyRE(void) {
+  static NSRegularExpression *re;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    re = [NSRegularExpression
+        regularExpressionWithPattern:@"([A-Za-z_]\\w*)(?=\\s*=(?!=))" // 1 key
+                                     @"|(\"(?:[^\"\\\\]|\\\\.)*\")"   // 2 str
+                                     @"|(?<![\\w.])(-?\\d+\\.?\\d*)"  // 3 num
+                                     @"|([A-Za-z_]\\w*)"              // 4 ident
+                             options:0
+                               error:nil];
+  });
+  return re;
+}
+
+// Colour keys/strings/numbers in `range` (a directive line's body). `ts`/`src`
+// as in -_applyHighlighting; `range` is in `src` coordinates.
+- (void)_colorDirectiveBodyRange:(NSRange)range
+                       inStorage:(NSTextStorage *)ts
+                          source:(NSString *)src {
+  if (range.length == 0)
+    return;
+  NSCharacterSet *ws = NSCharacterSet.whitespaceCharacterSet;
+  [KKDirectiveBodyRE()
+      enumerateMatchesInString:src
+                       options:0
+                         range:range
+                    usingBlock:^(NSTextCheckingResult *m, NSMatchingFlags flags,
+                                 BOOL *stop) {
+                      NSColor *color = nil;
+                      NSRange r = [m rangeAtIndex:1];
+                      if (r.location != NSNotFound) {
+                        color = KKCodeUniform(); // key= (orange)
+                      } else if ((r = [m rangeAtIndex:2]).location !=
+                                 NSNotFound) {
+                        color = KKCodeString();
+                      } else if ((r = [m rangeAtIndex:3]).location !=
+                                 NSNotFound) {
+                        color = KKCodeNumber();
+                      } else if ((r = [m rangeAtIndex:4]).location !=
+                                 NSNotFound) {
+                        // A value identifier (tr, pad, vec2…): a function call
+                        // when the next non-space char is `(`, else a plain
+                        // value - either way NOT the flat comment grey.
+                        NSUInteger j = NSMaxRange(r);
+                        while (j < src.length &&
+                               [ws characterIsMember:[src characterAtIndex:j]])
+                          j++;
+                        color =
+                            (j < src.length && [src characterAtIndex:j] == '(')
+                                ? KKCodeFunction()
+                                : KKCodeText();
+                      }
+                      if (color && r.location != NSNotFound)
+                        [ts addAttribute:NSForegroundColorAttributeName
+                                   value:color
+                                   range:r];
+                    }];
+}
+
+- (void)_highlightDirectivesInStorage:(NSTextStorage *)ts
+                               source:(NSString *)src {
+  NSRegularExpression *header = KKDirectiveHeaderRE();
+  NSCharacterSet *ws = NSCharacterSet.whitespaceCharacterSet;
+  __block BOOL inBlock =
+      NO; // inside an open `@block` (its `key = value` lines)
+  [src enumerateSubstringsInRange:NSMakeRange(0, src.length)
+                          options:NSStringEnumerationByLines
+                       usingBlock:^(NSString *line, NSRange lineRange,
+                                    NSRange enclosing, BOOL *stop) {
+                         NSRange slashes = [line rangeOfString:@"//"];
+                         if (slashes.location == NSNotFound) {
+                           inBlock =
+                               NO; // a non-comment line closes any open block
+                           return;
+                         }
+                         NSTextCheckingResult *h = [header
+                             firstMatchInString:line
+                                        options:0
+                                          range:NSMakeRange(0, line.length)];
+                         if (h) {
+                           NSRange tok = [h rangeAtIndex:1];
+                           NSString *token = [line substringWithRange:tok];
+                           [ts addAttribute:NSForegroundColorAttributeName
+                                      value:KKCodeDirective() // green: a
+                                                              // directive, not
+                                                              // a code keyword
+                                      range:NSMakeRange(lineRange.location +
+                                                            tok.location,
+                                                        tok.length)];
+                           // `@block` opens a multi-line block (its indented
+                           // `key = value` fields); a `#kind` directive is
+                           // single-line.
+                           inBlock = [token hasPrefix:@"@"];
+                           NSUInteger bodyStart = NSMaxRange(tok);
+                           [self
+                               _colorDirectiveBodyRange:NSMakeRange(
+                                                            lineRange.location +
+                                                                bodyStart,
+                                                            line.length -
+                                                                bodyStart)
+                                              inStorage:ts
+                                                 source:src];
+                           return;
+                         }
+                         if (!inBlock)
+                           return;
+                         // A block continuation line: the comment body after
+                         // `//`. A blank comment (or `}`) ends the block;
+                         // otherwise colour its key = value.
+                         NSUInteger bs = NSMaxRange(slashes);
+                         NSString *body = [[line substringFromIndex:bs]
+                             stringByTrimmingCharactersInSet:ws];
+                         if (body.length == 0 || [body isEqualToString:@"}"]) {
+                           inBlock = NO;
+                           return;
+                         }
+                         [self _colorDirectiveBodyRange:NSMakeRange(
+                                                            lineRange.location +
+                                                                bs,
+                                                            line.length - bs)
+                                              inStorage:ts
+                                                 source:src];
+                       }];
 }
 
 - (void)textStorage:(NSTextStorage *)textStorage
@@ -1846,14 +2004,117 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
   return NSMakeRange(start, caret - start);
 }
 
+static BOOL KKIsExprIdentChar(unichar c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+         (c >= '0' && c <= '9') || c == '_';
+}
+
+// Vector-swizzle completions for an expression `value` / `${ref}` / call
+// result, filtered by the partial after the dot. Generic (no component count) -
+// the user picks the ones their vector actually has.
+static NSArray<NSDictionary<NSString *, NSString *> *> *
+KKSwizzleCompletionItems(NSString *prefix) {
+  static NSArray *all;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    NSDictionary * (^S)(NSString *, NSString *) = ^(NSString *n, NSString *d) {
+      return @{
+        @"name" : n,
+        @"signature" : n,
+        @"desc" : KKLoc(d, @"Code editor: help for a vector swizzle "
+                           @"component (.x / .rgba …)."),
+        @"insert" : n
+      };
+    };
+    all = @[
+      S(@"x", @"1st component (or red)."),
+      S(@"y", @"2nd component (or green)."),
+      S(@"z", @"3rd component (or blue)."),
+      S(@"w", @"4th component (or alpha)."), S(@"r", @"Red (1st component)."),
+      S(@"g", @"Green (2nd component)."), S(@"b", @"Blue (3rd component)."),
+      S(@"a", @"Alpha (4th component)."),
+      S(@"xy", @"The first two components."),
+      S(@"xyz", @"The first three components."),
+      S(@"xyzw", @"All four components."), S(@"rgb", @"Red, green, blue."),
+      S(@"rgba", @"Red, green, blue, alpha.")
+    ];
+  });
+  if (prefix.length == 0)
+    return all;
+  NSMutableArray *out = [NSMutableArray array];
+  for (NSDictionary<NSString *, NSString *> *e in all)
+    if ([e[@"name"] rangeOfString:prefix
+                          options:NSCaseInsensitiveSearch | NSAnchoredSearch]
+            .location == 0)
+      [out addObject:e];
+  if (out.count == 1 &&
+      [out[0][@"name"] caseInsensitiveCompare:prefix] == NSOrderedSame)
+    return @[];
+  return out;
+}
+
 // Recompute the autocomplete list from the word under the caret. Expression
 // syntax only, only while the editor is focused. Hides when nothing matches (or
 // the only match is already fully typed).
 - (void)_updateCompletions {
-  if (_syntax != KKCodeSyntaxExpression ||
-      self.window.firstResponder != _textView) {
+  if (self.window.firstResponder != _textView) {
     [self _hideCompletion];
     return;
+  }
+  // GLSL mode with a host provider: it owns the vocabulary + context (a
+  // shader's `//` directives, GLSL builtins, declared uniforms) and returns the
+  // filtered items + the range the pick replaces. Only fires when the caret has
+  // no selection (a live word/context, like the expression path).
+  if (_syntax == KKCodeSyntaxGLSL && self.completionProvider) {
+    if (_textView.selectedRange.length > 0) {
+      [self _hideCompletion];
+      return;
+    }
+    NSRange replace = NSMakeRange(NSNotFound, 0);
+    NSArray<NSDictionary<NSString *, NSString *> *> *items =
+        self.completionProvider(_textView.string,
+                                _textView.selectedRange.location, &replace);
+    if (items.count == 0 || replace.location == NSNotFound) {
+      [self _hideCompletion];
+      return;
+    }
+    _completionWord = replace;
+    _completionItems = items;
+    if (_completionIndex >= (NSInteger)items.count)
+      _completionIndex = 0;
+    [self _showCompletion];
+    return;
+  }
+  if (_syntax != KKCodeSyntaxExpression) {
+    [self _hideCompletion];
+    return;
+  }
+  // Vector swizzle: a `.` right after a value / `${ref}` / `)` offers the
+  // component accessors (`.x`, `.rgba`, …). Handled before the word lookup so
+  // an empty partial (`value.`) still shows the list.
+  if (_textView.selectedRange.length == 0) {
+    NSString *src = _textView.string;
+    NSUInteger caret = _textView.selectedRange.location;
+    NSUInteger sw = caret;
+    while (sw > 0 && KKIsExprIdentChar([src characterAtIndex:sw - 1]))
+      sw--;
+    if (sw > 0 && [src characterAtIndex:sw - 1] == '.') {
+      unichar b = sw >= 2 ? [src characterAtIndex:sw - 2] : 0;
+      if (KKIsExprIdentChar(b) || b == ')' || b == '}') {
+        NSArray *items = KKSwizzleCompletionItems(
+            [src substringWithRange:NSMakeRange(sw, caret - sw)]);
+        if (items.count) {
+          _completionWord = NSMakeRange(sw, caret - sw);
+          _completionItems = items;
+          if (_completionIndex >= (NSInteger)items.count)
+            _completionIndex = 0;
+          [self _showCompletion];
+        } else {
+          [self _hideCompletion];
+        }
+        return;
+      }
+    }
   }
   NSRange word = [self _completionWordRange];
   if (word.location == NSNotFound) {

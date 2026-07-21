@@ -12,6 +12,7 @@
 @class KKRingOSCSet;
 @class KKBoxOSCSet;
 @class KKRotationOSCSet;
+@class ShaderExprMiniSet;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -37,6 +38,11 @@ NS_ASSUME_NONNULL_BEGIN
 // forwards the rotation draw + generic handle methods here; Shader feeds it the
 // rotate specs (label + active-axis bitmask + clip-centre) from the source.
 @property(nonatomic, strong, readonly) KKRotationOSCSet *rotSet;
+// The mini sibling of the viewer's custom `// @osc` handle loop, one fixed
+// glyph per `// @osc` block. Interaction forwards the fixed-glyph draw +
+// generic handle methods here; Shader feeds it the source (which it parses +
+// compiles through the shared ShaderOSCBlockRuntime).
+@property(nonatomic, strong, readonly) ShaderExprMiniSet *exprSet;
 // Re-derive the set's lane labels from the current shader source. Cheap no-op
 // when the source is unchanged.
 - (void)_syncMiniPointController;
@@ -47,6 +53,9 @@ NS_ASSUME_NONNULL_BEGIN
 // Re-derive the rotation set's specs from the current shader source. Cheap
 // no-op when the source is unchanged.
 - (void)_syncMiniRotController;
+// Re-derive the custom `// @osc` handles from the current shader source. Cheap
+// no-op when the source is unchanged.
+- (void)_syncMiniExprController;
 @end
 
 @interface ShaderMiniViewerRenderer (Interaction)

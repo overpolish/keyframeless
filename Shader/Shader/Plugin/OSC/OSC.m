@@ -6,12 +6,40 @@
 #import "OSC.h"
 #import "Constants.h"
 #import "OSC_Internal.h"
-#import "Plugin_Private.h"    // +availableLanesForShaderSource:
-#import "ShaderDirectives.h"  // ShaderParseScalarProps (osc directives)
-#import "ShaderOSCSnapshot.h" // KKProcessTimelineSnapshot via the kit
+#import "Plugin_Private.h"        // +availableLanesForShaderSource:
+#import "ShaderDirectives.h"      // ShaderParseScalarProps (osc directives)
+#import "ShaderOSCBlock.h"        // // @osc custom-handling blocks
+#import "ShaderOSCBlockRuntime.h" // compiled block: eval / invert (shared w/ mini)
+#import "ShaderOSCSnapshot.h"     // KKProcessTimelineSnapshot via the kit
 #import <FxPlug/FxPlugSDK.h>
+#import <KeyframelessKit/KKLinkExpr.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KeyframelessKit.h>
+
+// The three glyph handles (KKArcOSC / KKPointOSC / KKSquarePointOSC) are
+// unrelated classes sharing this draw selector; a custom OSC picks one by
+// `style=` and draws it at the forward-expression's canvas position.
+@protocol _ShaderGlyphOSC <NSObject>
+@property(nonatomic) float ghostAlpha; // dim while an Opt-reveal peek shows it
+- (void)drawAtCanvasPosition:(CGPoint)canvasPosition
+                   isHovered:(BOOL)isHovered
+                    isActive:(BOOL)isActive
+            destinationImage:(FxImageTile *)destinationImage
+                      atTime:(CMTime)time;
+@end
+
+// The compiled-block spec (bound lane, forward/inverse, normalization) lives in
+// the shared ShaderOSCBlockRuntime so the viewer here and the mini evaluate the
+// handle identically. The viewer keeps only the glyph object per block (in
+// `_exprControllers`); grab radius + hover cursor derive from the runtime's
+// style / cursor name.
+static double ShaderExprGrabRadius(NSString *styleName) {
+  return [styleName isEqualToString:@"hollow"] ? 12.0 : 10.0;
+}
+
+// Base for `// @osc` custom-handling activePart numbers, clear of the rotate
+// range (rotate order stays well under 1000, so 5000+idx never overlaps).
+static const NSInteger kShaderExprPartBase = 5000;
 
 // Base for the dynamic OSC activePart numbers. Each `#point osc` lane claims
 // two consecutive parts: handle/anchor (even) and motion-path tangent (odd).
@@ -174,6 +202,14 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   NSMutableDictionary<NSString *, KKRotationOSC *> *_rotControllers;
   NSArray<NSString *> *_rotOrder;
   NSString *_rotDragLabel;
+  // Custom `// @osc` controls: a glyph handle drawn at the block's forward
+  // expression, keyed by block name; `_exprOrder` fixes the block ->
+  // activePart-index mapping. `_exprDragName` is the block being dragged.
+  NSMutableDictionary<NSString *, id<_ShaderGlyphOSC>> *_exprControllers;
+  NSMutableDictionary<NSString *, ShaderOSCBlockRuntime *> *_exprBlocks;
+  NSArray<NSString *> *_exprOrder;
+  NSString *_exprDragName;
+  NSString *_oscBlockSig;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -193,8 +229,67 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
     _boxDragHandle = -1;
     _rotControllers = [NSMutableDictionary dictionary];
     _rotOrder = @[];
+    _exprControllers = [NSMutableDictionary dictionary];
+    _exprBlocks = [NSMutableDictionary dictionary];
+    _exprOrder = @[];
   }
   return self;
+}
+
+// Rebuild the custom-OSC controllers to match the shader's `// @osc` blocks.
+// Cheap no-op when the block set is unchanged (raw-block-text signature).
+- (void)_syncOSCBlocks:(NSString *)src {
+  ShaderOSCBlock blocks[KK_SHADER_MAX_OSC_BLOCKS];
+  int n = src.length
+              ? ShaderParseOSCBlocks(src, blocks, KK_SHADER_MAX_OSC_BLOCKS)
+              : 0;
+  NSMutableString *sig = [NSMutableString string];
+  for (int i = 0; i < n; i++)
+    [sig appendFormat:@"%s|%s|%s|%s|%s|%s\x1f", blocks[i].name,
+                      blocks[i].primitive, blocks[i].binds, blocks[i].style,
+                      blocks[i].forward, blocks[i].inverse];
+  if ([sig isEqualToString:_oscBlockSig])
+    return;
+  _oscBlockSig = sig;
+
+  // Parse + compile + normalize via the shared runtime (the mini uses the
+  // same), then attach the viewer-only glyph object per block.
+  NSArray<KKLane *> *avail =
+      src.length ? [ShaderPlugin availableLanesForShaderSource:src] : @[];
+  NSArray<ShaderOSCBlockRuntime *> *runtimes =
+      [ShaderOSCBlockRuntime runtimesForSource:src lanes:avail];
+
+  NSMutableDictionary<NSString *, id<_ShaderGlyphOSC>> *nextCtl =
+      [NSMutableDictionary dictionary];
+  NSMutableDictionary<NSString *, ShaderOSCBlockRuntime *> *nextBlk =
+      [NSMutableDictionary dictionary];
+  NSMutableArray<NSString *> *order = [NSMutableArray array];
+
+  for (ShaderOSCBlockRuntime *b in runtimes) {
+    // Glyph by style: hollow -> the small radius-widget ring (matching
+    // Rounded/Canvas), square -> square, else dot.
+    id<_ShaderGlyphOSC> glyph;
+    if ([b.styleName isEqualToString:@"hollow"]) {
+      KKRingOSC *g = [[KKRingOSC alloc] initWithAPIManager:self.apiManager];
+      [g applyRadiusWidgetStyle];
+      // Solid white always: parity with the mini (which has no hover), and the
+      // dim idle grey reads unclear for a small radius handle.
+      g.solidStyle = YES;
+      glyph = (id<_ShaderGlyphOSC>)g;
+    } else if ([b.styleName isEqualToString:@"square"]) {
+      glyph = (id<_ShaderGlyphOSC>)[[KKSquarePointOSC alloc]
+          initWithAPIManager:self.apiManager];
+    } else {
+      glyph = (id<_ShaderGlyphOSC>)[[KKPointOSC alloc]
+          initWithAPIManager:self.apiManager];
+    }
+    nextCtl[b.name] = glyph;
+    nextBlk[b.name] = b;
+    [order addObject:b.name];
+  }
+  _exprControllers = nextCtl;
+  _exprBlocks = nextBlk;
+  _exprOrder = [order copy];
 }
 
 // KKPositionGuideProvider: the point controllers read the guide state through
@@ -232,6 +327,7 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
 // Cheap no-op when the lane set is unchanged (signature compare).
 - (void)_syncOSCControllers {
   NSString *src = [self _currentShaderSource];
+  [self _syncOSCBlocks:src]; // custom `// @osc` controls (own signature)
   NSMutableArray<NSString *> *pointLabels = [NSMutableArray array];
   NSMutableArray<NSString *> *ringLabels = [NSMutableArray array];
   NSMutableArray<NSString *> *boxLabels = [NSMutableArray array];
@@ -631,6 +727,131 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
     *forceUpdate = YES;
 }
 
+// --- Custom `// @osc` controls --------------------------------------------
+
+// The bound lane for a block: the snapshot lane, else its template (default
+// keypose) so the handle is drawable / grabbable before the lane materializes.
+- (nullable KKLane *)_exprLaneForBlock:(ShaderOSCBlockRuntime *)b {
+  for (KKLane *l in KKProcessTimelineSnapshot().lanes)
+    if ([l.label isEqualToString:b.binds])
+      return l;
+  return b.templateLane;
+}
+
+// The bound value in EXPR units (the shader's, post-directive-normalization: a
+// percent lane's 0..100 -> 0..1). One vector, `fieldCount` components.
+- (KKExprVal)_exprValueForBlock:(ShaderOSCBlockRuntime *)b
+                     atFraction:(double)frac {
+  return [b boundValueFromLaneValues:KKTimelineLaneValueAtFraction(
+                                         [self _exprLaneForBlock:b], frac)];
+}
+
+// The viewer's aspect (canvas width / height), fed to the runtime so its
+// object-space geometry is aspect-corrected the same way the mini's is.
+- (double)_exprAspect {
+  CGPoint tr = CGPointZero, bl = CGPointZero;
+  if ([self getCanvasTopRight:&tr bottomLeft:&bl]) {
+    double w = fabs(tr.x - bl.x), h = fabs(tr.y - bl.y);
+    if (h > 0.0)
+      return w / h;
+  }
+  return 1.0;
+}
+
+// Canvas position of the block's handle for a given bound value (forward expr
+// -> object -> canvas).
+- (CGPoint)_exprCanvasForBlock:(ShaderOSCBlockRuntime *)b value:(KKExprVal)v {
+  simd_float2 p = [b objectPointForBound:v
+                                  aspect:[self _exprAspect]
+                                   mouse:(simd_float2){0, 0}
+                               haveMouse:NO];
+  return [self canvasPointFromObjectPoint:p];
+}
+
+// The handle position at the current (lane) value.
+- (CGPoint)_exprHandleCanvasForBlock:(ShaderOSCBlockRuntime *)b
+                          atFraction:(double)frac {
+  return [self _exprCanvasForBlock:b
+                             value:[self _exprValueForBlock:b atFraction:frac]];
+}
+
+// Custom `// @osc` handle visibility (mirrors _ringVisible:): shown when the
+// bound lane is a constant or the playhead is on a keypose, always mid-drag; an
+// Opt-hidden handle surfaces as a dim ghost while Opt-reveal is active. The
+// block's `name` is its OSC-checklist element key (see oscElementKeys).
+- (BOOL)_exprVisible:(ShaderOSCBlockRuntime *)b
+          atFraction:(double)frac
+              reveal:(BOOL *)outReveal {
+  BOOL dragging = [_exprDragName isEqualToString:b.name];
+  BOOL shownHere =
+      dragging || KKLaneVisibleAtFraction([self _exprLaneForBlock:b], frac,
+                                          KKProcessFrameDurationSeconds());
+  BOOL enabled = [self kkOSCElementVisible:b.name];
+  BOOL visible = shownHere && enabled;
+  BOOL reveal = !visible && self.optRevealActive && shownHere &&
+                [self kkOSCRevealEligible:b.name];
+  if (outReveal)
+    *outReveal = reveal;
+  return visible;
+}
+
+// The new bound value for a drag to `mouseCanvas`: the explicit inverse if one
+// was authored, else a numeric inversion of the forward (searches the value
+// whose forward-position is nearest the cursor, like Rounded's binary search).
+// Both run in the runtime's object space, so the mouse converts to object
+// first.
+- (KKExprVal)_exprBoundForBlock:(ShaderOSCBlockRuntime *)b
+                    mouseCanvas:(CGPoint)m
+                     atFraction:(double)frac {
+  simd_float2 om = [self objectPointFromCanvasPoint:m];
+  double aspect = [self _exprAspect];
+  if (b.hasInverse) {
+    KKExprVal boundNow = [self _exprValueForBlock:b atFraction:frac];
+    return [b inverseBoundForObjectMouse:om boundNow:boundNow aspect:aspect];
+  }
+  return [b invertBoundForObjectPoint:om aspect:aspect];
+}
+
+// Write a block's new bound value (EXPR units) back to its lane: denormalize to
+// lane units, clamp, set the keypose nearest the playhead in an action scope
+// (seed from the template when the lane isn't materialized). Mirrors
+// _writeRingValues without the ring meta.
+- (void)_writeExprValue:(KKExprVal)val
+               forBlock:(ShaderOSCBlockRuntime *)b
+                 atTime:(CMTime)time
+            forceUpdate:(BOOL *)forceUpdate {
+  NSArray<NSNumber *> *values = [b laneValuesFromBound:val];
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!actionAPI)
+    return;
+  [actionAPI startAction:self];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  if (!setAPI) {
+    [actionAPI endAction:self];
+    return;
+  }
+  double frac = [self fractionAtTime:time];
+  KKTimeline *snap = KKProcessTimelineSnapshot();
+  KKTimeline *tl =
+      snap ? KKTimelineSettingValuesNearestFraction(snap, b.binds, frac, values)
+           : nil;
+  if (!tl) {
+    tl = snap ? [snap copy] : [KKTimeline timeline];
+    KKLane *seed = [b.templateLane copy] ?: [KKLane laneWithLabel:b.binds];
+    seed.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
+    NSMutableArray<KKLane *> *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+    [lanes addObject:seed];
+    tl.lanes = lanes;
+  }
+  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                           kKKParamTimelineData);
+  [actionAPI endAction:self];
+  if (forceUpdate)
+    *forceUpdate = YES;
+}
+
 // --- Mouse routing (called from the +MouseHandlers category) ---------------
 // A position drag starts here so `_dragHit`/`_dragController` persist for the
 // subsequent mouseDragged ticks. Returns YES when a controller claimed it.
@@ -693,6 +914,15 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
           forceUpdate:forceUpdate
                atTime:time];
     return YES;
+  }
+  if (part >= kShaderExprPartBase) {
+    NSInteger idx = part - kShaderExprPartBase;
+    if (idx >= 0 && idx < (NSInteger)_exprOrder.count) {
+      _exprDragName = _exprOrder[idx];
+      if (forceUpdate)
+        *forceUpdate = YES;
+      return YES;
+    }
   }
   BOOL isPath = NO;
   KKPositionOSC *c = [self controllerForActivePart:part isPath:&isPath];
@@ -794,6 +1024,21 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                   atTime:time];
     return YES;
   }
+  if (_exprDragName) {
+    ShaderOSCBlockRuntime *b = _exprBlocks[_exprDragName];
+    double frac = [self fractionAtTime:time];
+    KKExprVal nv = [self _exprBoundForBlock:b
+                                mouseCanvas:CGPointMake(x, y)
+                                 atFraction:frac];
+    NSCursor *cur = ShaderOSCCursorForName(b.cursorName);
+    if (cur) {
+      id<FxOnScreenControlAPI_v4> curAPI =
+          [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+      [curAPI setCursor:cur];
+    }
+    [self _writeExprValue:nv forBlock:b atTime:time forceUpdate:forceUpdate];
+    return YES;
+  }
   if (!_dragController)
     return NO;
   [_dragController mouseDraggedAtX:x
@@ -826,6 +1071,12 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   if (_rotDragLabel) {
     [_rotControllers[_rotDragLabel] mouseUp];
     _rotDragLabel = nil;
+  }
+  if (_exprDragName) {
+    id<FxOnScreenControlAPI_v4> oscAPI =
+        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+    [oscAPI setCursor:[NSCursor arrowCursor]];
+    _exprDragName = nil;
   }
 }
 
@@ -895,10 +1146,18 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
       [keys addObject:label];
     }
   }
+  // Custom `// @osc` handles are single hideable elements, keyed by block name.
+  for (NSString *name in _exprOrder)
+    [keys addObject:name];
   return keys;
 }
 
 - (nullable NSString *)oscElementKeyForActivePart:(NSInteger)activePart {
+  if (activePart >= kShaderExprPartBase) {
+    NSInteger idx = activePart - kShaderExprPartBase;
+    if (idx >= 0 && idx < (NSInteger)_exprOrder.count)
+      return _exprOrder[idx];
+  }
   NSString *ringLabel = [self ringLabelForActivePart:activePart];
   if (ringLabel)
     return ringLabel;
@@ -989,7 +1248,7 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
       continue;
     }
     [self _updateRing:ring forLabel:label atFraction:ringFrac];
-    ring.ghostAlpha = reveal ? 0.6f : 1.0f;
+    ring.ghostAlpha = reveal ? MAX(0.6f, [self kkRevealGhostAlpha]) : 1.0f;
     BOOL hovered = (activePart == kShaderRingPartBase + (NSInteger)i);
     [ring drawAtCanvasPosition:ring.center
                      isHovered:hovered
@@ -1013,7 +1272,7 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                     atFraction:ringFrac
                       topRight:&tr
                     bottomLeft:&bl];
-    box.ghostAlpha = reveal ? 0.6f : 1.0f;
+    box.ghostAlpha = reveal ? MAX(0.6f, [self kkRevealGhostAlpha]) : 1.0f;
     NSInteger activeHandle =
         [_boxDragLabel isEqualToString:label] ? _boxDragHandle : -1;
     [box drawWithTopRight:tr
@@ -1022,6 +1281,26 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
              activeHandle:activeHandle
          destinationImage:destinationImage
                    atTime:time];
+  }
+
+  // Draw each custom `// @osc` handle at its forward-expression position,
+  // under the same visibility gating (Opt-hidden -> dim ghost while Opt-reveal
+  // is held) as the rings/boxes.
+  for (NSUInteger i = 0; i < _exprOrder.count; i++) {
+    NSString *name = _exprOrder[i];
+    ShaderOSCBlockRuntime *b = _exprBlocks[name];
+    BOOL reveal = NO;
+    if (![self _exprVisible:b atFraction:ringFrac reveal:&reveal] && !reveal)
+      continue;
+    id<_ShaderGlyphOSC> glyph = _exprControllers[name];
+    glyph.ghostAlpha = reveal ? MAX(0.6f, [self kkRevealGhostAlpha]) : 1.0f;
+    CGPoint c = [self _exprHandleCanvasForBlock:b atFraction:ringFrac];
+    [glyph
+        drawAtCanvasPosition:c
+                   isHovered:(activePart == kShaderExprPartBase + (NSInteger)i)
+                    isActive:[_exprDragName isEqualToString:name]
+            destinationImage:destinationImage
+                      atTime:time];
   }
 
   // Feed the guide bridge this tick's canvas geometry (zoom-invariant
@@ -1198,6 +1477,35 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
       }
     }
   }
+  // Custom `// @osc` handles hit-test last: distance from the cursor to the
+  // handle's forward-expression position, within the glyph's grab radius.
+  if (*activePart == 0) {
+    double frac = [self fractionAtTime:time];
+    for (NSUInteger i = 0; i < _exprOrder.count; i++) {
+      NSString *name = _exprOrder[i];
+      ShaderOSCBlockRuntime *b = _exprBlocks[name];
+      BOOL reveal = NO;
+      if (![self _exprVisible:b atFraction:frac reveal:&reveal] && !reveal)
+        continue;
+      CGPoint c = [self _exprHandleCanvasForBlock:b atFraction:frac];
+      if (hypot(positionX - c.x, positionY - c.y) <=
+          ShaderExprGrabRadius(b.styleName)) {
+        *activePart = kShaderExprPartBase + (NSInteger)i;
+        // Opt-hover shows the eye (hide) / eye-slash cursor over a toggleable
+        // handle; otherwise the block's own drag cursor.
+        NSCursor *cur = [self kkVisibilityCursorForLabel:name]
+                            ?: ShaderOSCCursorForName(b.cursorName);
+        if (cur) {
+          id<FxOnScreenControlAPI_v4> curAPI = [self.apiManager
+              apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+          [curAPI setCursor:cur];
+        }
+        self.pointCursorSet = YES;
+        break;
+      }
+    }
+  }
+
   // Motion full-preview fallback: claim a background part over empty canvas so
   // OPTION keeps being reported on hover (no-op in FCP).
   *activePart = [self kkOSCBackgroundPartFallbackForActivePart:*activePart];

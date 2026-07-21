@@ -20,6 +20,8 @@ NSColor *KKCodeKeyword(void) { return KKHex(0xff7b72); }
 NSColor *KKCodeUniform(void) { return KKHex(0xffa657); }
 NSColor *KKCodeFunction(void) { return KKHex(0xd2a8ff); }
 NSColor *KKCodeNumber(void) { return KKHex(0x79c0ff); }
+NSColor *KKCodeString(void) { return KKHex(0xa5d6ff); }
+NSColor *KKCodeDirective(void) { return KKHex(0x7ee787); }
 NSColor *KKCodeCursor(void) { return KKHex(0x58a6ff); }
 NSColor *KKCodeError(void) { return KKHex(0xf85149); }
 

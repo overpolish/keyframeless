@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "ShaderExprMiniSet.h"
 #import "ShaderMiniViewerRenderer_Internal.h"
 #import <KeyframelessKit/KeyframelessKit.h>
 
@@ -35,6 +36,11 @@
 - (KKRotationOSCSet *)_syncedRotSet {
   [self _syncMiniRotController];
   return self.rotSet;
+}
+
+- (ShaderExprMiniSet *)_syncedExprSet {
+  [self _syncMiniExprController];
+  return self.exprSet;
 }
 
 - (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
@@ -72,6 +78,12 @@
                                                  (KKMiniViewerView *)canvas
                                extraRingsForContentRect:(CGRect)cr {
   return [[self _syncedRingSet] ringBundlesForContentRect:cr];
+}
+
+- (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
+                                                 (KKMiniViewerView *)canvas
+                         extraFixedGlyphsForContentRect:(CGRect)cr {
+  return [[self _syncedExprSet] glyphBundlesForContentRect:cr];
 }
 
 - (NSArray<KKMiniBox *> *)miniViewer:(KKMiniViewerView *)canvas
@@ -112,6 +124,8 @@
     return YES;
   if ([[self _syncedRotSet] handleHitAtPoint:p contentRect:cr])
     return YES;
+  if ([[self _syncedExprSet] handleHitAtPoint:p contentRect:cr])
+    return YES;
   return [super miniViewer:canvas handleHitAtPoint:p contentRect:cr];
 }
 
@@ -131,6 +145,9 @@
   if (c)
     return c;
   c = [[self _syncedRotSet] cursorAtPoint:p contentRect:cr];
+  if (c)
+    return c;
+  c = [[self _syncedExprSet] cursorAtPoint:p contentRect:cr];
   return c ?: [super miniViewer:canvas cursorAtPoint:p contentRect:cr];
 }
 
@@ -144,6 +161,8 @@
   if ([[self _syncedBoxSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
     return;
   if ([[self _syncedRotSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
+    return;
+  if ([[self _syncedExprSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
     return;
   [super miniViewer:canvas beginHandleDragAtPoint:p contentRect:cr];
 }
@@ -172,6 +191,8 @@
                                  canvas:canvas
                               modifiers:modifiers])
     return;
+  if ([[self _syncedExprSet] dragToPoint:p contentRect:cr canvas:canvas])
+    return;
   [super miniViewer:canvas
       dragHandleToPoint:p
             contentRect:cr
@@ -186,6 +207,8 @@
   if ([self.boxSet endDragOnCanvas:canvas])
     return;
   if ([self.rotSet endDragOnCanvas:canvas])
+    return;
+  if ([self.exprSet endDragOnCanvas:canvas])
     return;
   [super miniViewerEndHandleDrag:canvas];
 }
@@ -207,7 +230,9 @@
     return YES;
   if ([[self _syncedBoxSet] optClickAtPoint:p contentRect:cr canvas:canvas])
     return YES;
-  return [[self _syncedRotSet] optClickAtPoint:p contentRect:cr canvas:canvas];
+  if ([[self _syncedRotSet] optClickAtPoint:p contentRect:cr canvas:canvas])
+    return YES;
+  return [[self _syncedExprSet] optClickAtPoint:p contentRect:cr canvas:canvas];
 }
 
 - (void)miniViewer:(KKMiniViewerView *)canvas

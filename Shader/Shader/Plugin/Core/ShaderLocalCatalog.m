@@ -7,6 +7,7 @@
 #import "Constants.h"       // ShaderCustomDefaultShaderSource
 #import "KKGLSLFormatter.h" // auto-format sections on publish
 #import "ShaderCategory.h"
+#import "ShaderDirectiveCatalog.h" // tidy `//` directive blocks on publish
 #import <KeyframelessKit/KeyframelessKit.h>
 
 static NSMutableDictionary<NSString *, NSImage *> *sBuiltinThumbnails;
@@ -347,8 +348,8 @@ static NSString *const kFavKey = @"ShaderFavorites";
       NSString *code = [[NSString alloc] initWithData:data
                                              encoding:NSUTF8StringEncoding];
       if (code.length) {
-        NSData *formatted =
-            [KKFormatGLSL(code) dataUsingEncoding:NSUTF8StringEncoding];
+        NSData *formatted = [ShaderTidyDirectives(KKFormatGLSL(code))
+            dataUsingEncoding:NSUTF8StringEncoding];
         if (formatted)
           data = formatted;
       }

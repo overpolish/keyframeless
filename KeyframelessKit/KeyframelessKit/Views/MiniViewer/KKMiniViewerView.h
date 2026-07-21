@@ -130,6 +130,18 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
                                                  (KKMiniViewerView *)canvas
                    extraPointHandleGlyphsForContentRect:(CGRect)contentRect;
+/// Fixed-glyph handles whose GLYPH is chosen PER handle (unlike
+/// `extraPointHandleGlyphs`, which paints every one with the delegate's single
+/// `pointHandleStyle`). A dynamic plugin that maps a custom OSC to an arbitrary
+/// glyph (e.g. Shader's `// @osc` blocks: a `style=hollow` radius handle draws
+/// the shared radius-widget ring) returns one bundle each: `@"center"` =
+/// NSValue point (overlay points, y-up), `@"style"` = NSNumber
+/// KKMiniHandleStyle, and optional `@"alpha"` = NSNumber ghost alpha (< 1 dims
+/// an Opt-revealed hidden handle). The delegate owns their hit-test / drag.
+/// Return nil/empty for none.
+- (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
+                                                 (KKMiniViewerView *)canvas
+                         extraFixedGlyphsForContentRect:(CGRect)contentRect;
 /// Additional motion paths (one per extra point OSC), so every animated point
 /// lane draws its OWN trajectory - not just the first. Sibling of
 /// `extraPointHandleGlyphsForContentRect:`; without it, whichever lane is first

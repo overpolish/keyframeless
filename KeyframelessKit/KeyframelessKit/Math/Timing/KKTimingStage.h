@@ -215,6 +215,16 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// is carried template->reconciled in -seededFrom: like `codeValidator`.
 @property(nonatomic, copy, nullable) NSString *_Nullable (^codeFormatter)
     (NSString *code);
+/// For a `KKLaneValueTypeCode` lane: optional autocomplete provider (GLSL mode)
+/// wired to the editor's `completionProvider` - given the text + caret, returns
+/// the context-filtered candidate items + the range a pick replaces. Keeps the
+/// language vocabulary in the plugin (a shader's `//` directives, GLSL
+/// builtins, its declared uniforms). Not serialized (a block), carried
+/// template->reconciled like `codeValidator`.
+@property(nonatomic, copy, nullable)
+    NSArray<NSDictionary<NSString *, NSString *> *> *_Nullable (
+        ^codeCompletionProvider)
+        (NSString *text, NSUInteger caret, NSRange *outReplaceRange);
 /// For a `KKLaneValueTypeCode` lane: optional extra named code sections beyond
 /// `codeString` (the primary/Image section), presented as tabs in the editor.
 /// Each entry is @{ @"name": display, @"code": source }. nil/empty = a single
@@ -703,8 +713,9 @@ FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingAspectLinked(
     KKTimeline *timeline, NSString *label, BOOL on);
 
 /// Returns a copy of `timeline` with the lane named `label`'s link EXPRESSION
-/// set to `expr` (nil/empty clears it -> passthrough). Returns nil when
-/// unchanged.
+/// set to `expr`. A nil `expr` clears the binding; an empty string is kept as a
+/// present-but-empty passthrough (so a cleared editor stays open). Returns nil
+/// when unchanged.
 FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingLinkExpression(
     KKTimeline *timeline, NSString *label, NSString *_Nullable expr);
 

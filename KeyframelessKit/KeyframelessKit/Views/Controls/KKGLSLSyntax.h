@@ -21,6 +21,10 @@ NSColor *KKCodeKeyword(void);  // coral
 NSColor *KKCodeUniform(void);  // orange
 NSColor *KKCodeFunction(void); // purple
 NSColor *KKCodeNumber(void);   // blue
+NSColor *KKCodeString(void); // light blue (string literals / directive values)
+NSColor *
+KKCodeDirective(void); // green (a `// #kind` / `// @osc` annotation - a
+                       // flavour on top of the comment, NOT real code)
 NSColor *KKCodeCursor(void);
 NSColor *KKCodeError(void); // red (error bar / flagged line)
 

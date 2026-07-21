@@ -37,6 +37,20 @@ typedef NS_ENUM(NSInteger, KKCodeSyntax) {
 /// first `codeText` so the initial highlight uses the right mode.
 @property(nonatomic) KKCodeSyntax syntax;
 
+/// Optional autocomplete provider for GLSL mode (Expression mode uses the
+/// built-in KKExprCatalog). Called live on each edit with the full `text` and
+/// the caret offset; return the candidate items already FILTERED to the caret
+/// context (each a `name`/`signature`/`desc`/`insert` dict, same shape as
+/// KKExprCatalog), and set `*outReplaceRange` to the text range the accepted
+/// item's `insert` replaces. Return nil/empty for no completion here. This
+/// keeps the language vocabulary + context detection in the host (e.g. a
+/// shader's `//` directives, GLSL builtins, its own declared uniforms); the
+/// editor only shows and inserts what comes back.
+@property(nonatomic, copy, nullable)
+    NSArray<NSDictionary<NSString *, NSString *> *> *_Nullable (
+        ^completionProvider)
+        (NSString *text, NSUInteger caret, NSRange *outReplaceRange);
+
 /// Optional read-only result strip under the editor (styled like the error
 /// bar): a host pushes the live computed result of an expression here for
 /// clarity. nil/empty hides the strip.

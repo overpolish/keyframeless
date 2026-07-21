@@ -1470,6 +1470,6096 @@
           }
         }
       }
+    },
+    "A number slider. min= and max= set the range.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Zahlenregler. min= und max= legen den Bereich fest."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un control deslizante numérico. min= y max= definen el rango."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un curseur numérique. min= et max= définissent la plage."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数値スライダー。min= と max= で範囲を設定します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "숫자 슬라이더입니다. min= 와 max= 로 범위를 설정합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数字滑块。min= 和 max= 设置范围。"
+          }
+        }
+      }
+    },
+    "A 0-100% slider, delivered as 0..1.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein 0–100%-Regler, geliefert als 0..1."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un control deslizante de 0-100%, entregado como 0..1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un curseur de 0 à 100%, fourni sous forme 0..1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0〜100% のスライダー。0..1 として渡されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0-100% 슬라이더입니다. 0..1 로 전달됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0-100% 滑块，以 0..1 传入。"
+          }
+        }
+      }
+    },
+    "A whole-number slider.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Regler für ganze Zahlen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un control deslizante de números enteros."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un curseur de nombres entiers."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整数のスライダー。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정수 슬라이더입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整数滑块。"
+          }
+        }
+      }
+    },
+    "An on/off checkbox.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Ein/Aus-Kontrollkästchen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una casilla de activado/desactivado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une case à cocher activé/désactivé."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オン/オフのチェックボックス。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "켜기/끄기 확인란입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开/关复选框。"
+          }
+        }
+      }
+    },
+    "A pick-one menu, delivering the chosen index.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Auswahlmenü, das den gewählten Index liefert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un menú de selección única que entrega el índice elegido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un menu à choix unique qui fournit l'index choisi."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1つを選ぶメニュー。選択したインデックスを渡します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하나를 고르는 메뉴로, 선택한 인덱스를 전달합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单选菜单，传入所选的索引。"
+          }
+        }
+      }
+    },
+    "A rotation dial in degrees, delivered as radians.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Drehregler in Grad, geliefert als Bogenmaß."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un dial de rotación en grados, entregado en radianes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un cadran de rotation en degrés, fourni en radians."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "度単位の回転ダイヤル。ラジアンとして渡されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "도 단위 회전 다이얼로, 라디안으로 전달됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以度为单位的旋转拨盘，以弧度传入。"
+          }
+        }
+      }
+    },
+    "A colour picker or palette, delivered as rgba.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Farbauswahl oder Palette, geliefert als rgba."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un selector de color o paleta, entregado como rgba."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un sélecteur de couleur ou une palette, fourni en rgba."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "カラーピッカーまたはパレット。rgba として渡されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "색상 선택기 또는 팔레트로, rgba 로 전달됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "颜色选择器或调色板，以 rgba 传入。"
+          }
+        }
+      }
+    },
+    "2-4 numbers in one control, like a size or offset.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2–4 Zahlen in einem Steuerelement, z. B. Größe oder Versatz."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2-4 números en un control, como un tamaño o desplazamiento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 à 4 nombres dans une commande, comme une taille ou un décalage."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1つのコントロールに2〜4個の数値。サイズやオフセットなど。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하나의 컨트롤에 2-4개의 숫자로, 크기나 오프셋 등에 사용합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一个控件中的 2-4 个数字，如尺寸或偏移。"
+          }
+        }
+      }
+    },
+    "A random-seed field with a dice button.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Zufalls-Seed-Feld mit Würfel-Schaltfläche."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un campo de semilla aleatoria con un botón de dado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un champ de graine aléatoire avec un bouton dé."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サイコロボタン付きの乱数シードフィールド。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "주사위 버튼이 있는 랜덤 시드 필드입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "带骰子按钮的随机种子字段。"
+          }
+        }
+      }
+    },
+    "A draggable point in the frame, delivering its position.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein ziehbarer Punkt im Bild, der seine Position liefert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un punto arrastrable en el fotograma que entrega su posición."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un point déplaçable dans l'image qui fournit sa position."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フレーム内をドラッグできる点。その位置を渡します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프레임 안에서 드래그할 수 있는 점으로, 그 위치를 전달합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面中可拖动的点，传入其位置。"
+          }
+        }
+      }
+    },
+    "Reacts to sound, binding a clip's frequency spectrum.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reagiert auf Ton und bindet das Frequenzspektrum eines Clips."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reacciona al sonido, vinculando el espectro de frecuencias de un clip."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réagit au son en liant le spectre de fréquences d'un plan."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音に反応し、クリップの周波数スペクトルを結び付けます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "소리에 반응하여 클립의 주파수 스펙트럼을 연결합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对声音作出反应，绑定片段的频谱。"
+          }
+        }
+      }
+    },
+    "A 0-100% sweep that auto-runs across a transition.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein 0–100%-Verlauf, der automatisch über einen Übergang läuft."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un barrido de 0-100% que se ejecuta automáticamente en una transición."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un balayage de 0 à 100% qui se déroule automatiquement sur une transition."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "トランジション全体で自動的に進む 0〜100% のスイープ。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전환 전체에 걸쳐 자동으로 진행되는 0-100% 스윕입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在转场中自动运行的 0-100% 扫描。"
+          }
+        }
+      }
+    },
+    "Take control of transparency, to mask part of the frame so a lower clip shows through.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übernimm die Transparenz, um einen Teil des Bildes zu maskieren, damit ein darunterliegender Clip durchscheint."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toma el control de la transparencia para enmascarar parte del fotograma y dejar ver un clip inferior."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Prenez le contrôle de la transparence pour masquer une partie de l'image et laisser apparaître un plan inférieur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透明度を自分で制御し、フレームの一部をマスクして下のクリップを透かせます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "투명도를 직접 제어하여 프레임의 일부를 마스킹해 아래 클립이 비쳐 보이게 합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自行控制透明度，遮罩画面的一部分，让下方片段透出。"
+          }
+        }
+      }
+    },
+    "A draggable on-screen handle for a value.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein ziehbarer Bildschirmgriff für einen Wert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un controlador en pantalla arrastrable para un valor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une poignée à l'écran déplaçable pour une valeur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "値を操作する、ドラッグ可能な画面上のハンドル。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "값을 조절하는 드래그 가능한 화면 핸들입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用于某个值的可拖动屏幕控制柄。"
+          }
+        }
+      }
+    },
+    "The name shown in the inspector.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der im Inspektor angezeigte Name."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El nombre que se muestra en el inspector."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le nom affiché dans l'inspecteur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "インスペクタに表示される名前。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "인스펙터에 표시되는 이름입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在检查器中显示的名称。"
+          }
+        }
+      }
+    },
+    "Lowest allowed value.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niedrigster zulässiger Wert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valor mínimo permitido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valeur minimale autorisée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "許可される最小値。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "허용되는 최소값입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许的最小值。"
+          }
+        }
+      }
+    },
+    "Highest allowed value.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Höchster zulässiger Wert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valor máximo permitido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valeur maximale autorisée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "許可される最大値。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "허용되는 최대값입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许的最大值。"
+          }
+        }
+      }
+    },
+    "Starting value.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Startwert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valor inicial."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valeur de départ."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "初期値。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시작 값입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "起始值。"
+          }
+        }
+      }
+    },
+    "Add an on-screen control: point, ring, box or rotate.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fügt ein Bildschirm-Steuerelement hinzu: Punkt, Ring, Rechteck oder Rotation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade un control en pantalla: punto, anillo, caja o rotación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoute une commande à l'écran : point, anneau, cadre ou rotation."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面上のコントロールを追加します: 点、リング、ボックス、回転。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면 컨트롤을 추가합니다: 점, 링, 상자 또는 회전."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加屏幕控件：点、环、框或旋转。"
+          }
+        }
+      }
+    },
+    "Names for each number of a #multi control.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Namen für jede Zahl eines #multi-Steuerelements."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nombres para cada número de un control #multi."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noms pour chaque nombre d'une commande #multi."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#multi コントロールの各数値の名前。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#multi 컨트롤의 각 숫자에 대한 이름입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#multi 控件中每个数字的名称。"
+          }
+        }
+      }
+    },
+    "Per-field units for #multi: % or px.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einheiten pro Feld für #multi: % oder px."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unidades por campo para #multi: % o px."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unités par champ pour #multi : % ou px."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#multi のフィールドごとの単位: % または px。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#multi 의 필드별 단위: % 또는 px."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#multi 每个字段的单位：% 或 px。"
+          }
+        }
+      }
+    },
+    "Where a ring or box sits in the frame, 0 to 1.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wo ein Ring oder Rechteck im Bild sitzt, 0 bis 1."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dónde se sitúa un anillo o caja en el fotograma, de 0 a 1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Où se place un anneau ou un cadre dans l'image, de 0 à 1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リングやボックスがフレーム内のどこに置かれるか、0〜1。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "링이나 상자가 프레임에서 놓이는 위치, 0에서 1까지."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "环或框在画面中的位置，0 到 1。"
+          }
+        }
+      }
+    },
+    "Pin a ring centre to a #point control.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verankert die Ringmitte an einem #point-Steuerelement."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fija el centro de un anillo a un control #point."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fixe le centre d'un anneau à une commande #point."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リングの中心を #point コントロールに固定します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "링 중심을 #point 컨트롤에 고정합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将环心固定到某个 #point 控件。"
+          }
+        }
+      }
+    },
+    "Which axes a rotate control spins: x, y, z.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um welche Achsen sich ein Rotations-Steuerelement dreht: x, y, z."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Qué ejes gira un control de rotación: x, y, z."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autour de quels axes tourne une commande de rotation : x, y, z."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回転コントロールが回す軸: x, y, z。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "회전 컨트롤이 도는 축: x, y, z."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旋转控件绕哪些轴旋转：x、y、z。"
+          }
+        }
+      }
+    },
+    "The handle shape: point.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Griffform: Punkt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La forma del controlador: punto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La forme de la poignée : point."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハンドルの形状: 点。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "핸들 모양: 점."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控制柄形状：点。"
+          }
+        }
+      }
+    },
+    "The value this handle edits.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Wert, den dieser Griff bearbeitet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El valor que edita este controlador."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La valeur que modifie cette poignée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このハンドルが編集する値。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 핸들이 편집하는 값입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此控制柄编辑的值。"
+          }
+        }
+      }
+    },
+    "Handle look: hollow, square or dot.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Griffdarstellung: hohl, Quadrat oder Punkt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aspecto del controlador: hueco, cuadrado o punto."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aspect de la poignée : creux, carré ou point."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハンドルの見た目: 中空、四角、点。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "핸들 모양새: 빈 링, 사각형 또는 점."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控制柄外观：空心、方块或圆点。"
+          }
+        }
+      }
+    },
+    "The cursor shown over the handle.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der über dem Griff angezeigte Cursor."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cursor que se muestra sobre el controlador."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le curseur affiché au-dessus de la poignée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハンドル上に表示されるカーソル。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "핸들 위에 표시되는 커서입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "悬停在控制柄上时显示的光标。"
+          }
+        }
+      }
+    },
+    "Where the handle sits, worked out from the value.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wo der Griff sitzt, berechnet aus dem Wert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dónde se sitúa el controlador, calculado a partir del valor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Où se place la poignée, calculé à partir de la valeur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ハンドルの位置。値から計算されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "핸들의 위치로, 값에서 계산됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控制柄的位置，由值计算得出。"
+          }
+        }
+      }
+    },
+    "Turns a drag back into a value. Optional, guessed if omitted.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wandelt ein Ziehen zurück in einen Wert. Optional, wird bei Auslassung geschätzt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convierte un arrastre de nuevo en un valor. Opcional; se deduce si se omite."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconvertit un glissement en valeur. Facultatif, déduit si omis."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ドラッグを値に戻します。省略可能で、省略時は推定されます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "드래그를 값으로 되돌립니다. 선택 사항이며 생략하면 추정합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将拖动转换回值。可选，省略时会自动推断。"
+          }
+        }
+      }
+    },
+    "Where a box handle sits, from the value.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wo ein Rechteck-Griff sitzt, aus dem Wert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dónde se sitúa un controlador de caja, a partir del valor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Où se place une poignée de cadre, à partir de la valeur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ボックスハンドルの位置。値から求めます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "상자 핸들의 위치로, 값에서 구합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "框控制柄的位置，由值得出。"
+          }
+        }
+      }
+    },
+    "Turns a box drag back into a value.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wandelt ein Ziehen des Rechtecks zurück in einen Wert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convierte un arrastre de la caja de nuevo en un valor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reconvertit un glissement de cadre en valeur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ボックスのドラッグを値に戻します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "상자 드래그를 값으로 되돌립니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将框的拖动转换回值。"
+          }
+        }
+      }
+    },
+    "The drag position, 0 to 1 across the frame.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Ziehposition, 0 bis 1 über das Bild."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La posición de arrastre, de 0 a 1 en el fotograma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La position du glissement, de 0 à 1 sur l'image."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ドラッグ位置。フレーム全体で 0〜1。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "드래그 위치로, 프레임 전체에서 0에서 1까지."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动位置，在画面上从 0 到 1。"
+          }
+        }
+      }
+    },
+    "The drag position, same as mouse.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Ziehposition, wie mouse."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La posición de arrastre, igual que mouse."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La position du glissement, identique à mouse."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ドラッグ位置。mouse と同じ。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "드래그 위치로, mouse 와 동일합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动位置，与 mouse 相同。"
+          }
+        }
+      }
+    },
+    "The top-right corner.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die obere rechte Ecke."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La esquina superior derecha."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le coin supérieur droit."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右上の角。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오른쪽 위 모서리입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右上角。"
+          }
+        }
+      }
+    },
+    "The top-left corner.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die obere linke Ecke."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La esquina superior izquierda."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le coin supérieur gauche."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左上の角。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "왼쪽 위 모서리입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左上角。"
+          }
+        }
+      }
+    },
+    "The bottom-left corner.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die untere linke Ecke."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La esquina inferior izquierda."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le coin inférieur gauche."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左下の角。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "왼쪽 아래 모서리입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左下角。"
+          }
+        }
+      }
+    },
+    "The bottom-right corner.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die untere rechte Ecke."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La esquina inferior derecha."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le coin inférieur droit."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右下の角。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오른쪽 아래 모서리입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右下角。"
+          }
+        }
+      }
+    },
+    "The centre of the frame.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Bildmitte."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El centro del fotograma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le centre de l'image."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フレームの中心。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프레임의 중심입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面的中心。"
+          }
+        }
+      }
+    },
+    "Frame width over height. Multiply x by this to correct for shape.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bildbreite geteilt durch Höhe. Multipliziere x damit, um die Form zu korrigieren."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ancho del fotograma dividido por su alto. Multiplica x por esto para corregir la forma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Largeur de l'image divisée par la hauteur. Multipliez x par ceci pour corriger la forme."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フレームの幅÷高さ。x にこれを掛けて形状を補正します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프레임 너비 나누기 높이입니다. x 에 이 값을 곱해 형태를 보정합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面宽度除以高度。将 x 乘以它以校正形状。"
+          }
+        }
+      }
+    },
+    "The frame size.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Bildgröße."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tamaño del fotograma."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La taille de l'image."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フレームのサイズ。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프레임 크기입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面尺寸。"
+          }
+        }
+      }
+    },
+    "The sub-part being dragged.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der gerade gezogene Teilbereich."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La subparte que se está arrastrando."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La sous-partie en cours de glissement."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ドラッグ中のサブ部分。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "드래그 중인 하위 부분입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在拖动的子部件。"
+          }
+        }
+      }
+    },
+    "3.14159, half a turn in radians.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3,14159, eine halbe Umdrehung im Bogenmaß."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3,14159, media vuelta en radianes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3,14159, un demi-tour en radians."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3.14159、半回転をラジアンで表した値。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3.14159, 라디안으로 반 바퀴입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3.14159，即半圈的弧度值。"
+          }
+        }
+      }
+    },
+    "Make a point from an x and a y.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erzeugt einen Punkt aus einem x und einem y."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un punto a partir de una x y una y."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crée un point à partir d'un x et d'un y."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x と y から点を作ります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x 와 y 로 점을 만듭니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由 x 和 y 生成一个点。"
+          }
+        }
+      }
+    },
+    "The length of a vector.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Länge eines Vektors."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La longitud de un vector."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La longueur d'un vecteur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ベクトルの長さ。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "벡터의 길이입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向量的长度。"
+          }
+        }
+      }
+    },
+    "A vector scaled to length 1.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein auf Länge 1 skalierter Vektor."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un vector escalado a longitud 1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un vecteur ramené à une longueur de 1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "長さ1に正規化したベクトル。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "길이 1로 정규화한 벡터입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缩放为长度 1 的向量。"
+          }
+        }
+      }
+    },
+    "The distance between two points.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Abstand zwischen zwei Punkten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La distancia entre dos puntos."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La distance entre deux points."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2点間の距離。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "두 점 사이의 거리입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两点之间的距离。"
+          }
+        }
+      }
+    },
+    "The dot product of two vectors.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Skalarprodukt zweier Vektoren."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El producto escalar de dos vectores."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le produit scalaire de deux vecteurs."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2つのベクトルの内積。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "두 벡터의 내적입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两个向量的点积。"
+          }
+        }
+      }
+    },
+    "Blend from a to b as t runs 0 to 1.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blendet von a nach b, während t von 0 nach 1 läuft."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mezcla de a a b a medida que t va de 0 a 1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fond de a à b à mesure que t va de 0 à 1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "t が 0 から 1 に進むにつれて a から b へ補間します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "t 가 0에서 1로 갈 때 a 에서 b 로 섞습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "随着 t 从 0 到 1，从 a 混合到 b。"
+          }
+        }
+      }
+    },
+    "Keep a value within a low and high bound.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hält einen Wert innerhalb einer unteren und oberen Grenze."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantiene un valor dentro de un límite inferior y superior."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maintient une valeur entre une borne basse et haute."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "値を下限と上限の範囲内に収めます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "값을 하한과 상한 사이로 유지합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将值限制在下限和上限之间。"
+          }
+        }
+      }
+    },
+    "The smaller of two values.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der kleinere von zwei Werten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El menor de dos valores."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La plus petite de deux valeurs."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2つの値のうち小さい方。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "두 값 중 작은 쪽입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两个值中较小的一个。"
+          }
+        }
+      }
+    },
+    "The larger of two values.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der größere von zwei Werten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El mayor de dos valores."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La plus grande de deux valeurs."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2つの値のうち大きい方。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "두 값 중 큰 쪽입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两个值中较大的一个。"
+          }
+        }
+      }
+    },
+    "a to the power b.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a hoch b."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a elevado a b."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a à la puissance b."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a の b 乗。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a 의 b 제곱입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "a 的 b 次方。"
+          }
+        }
+      }
+    },
+    "Square root.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quadratwurzel."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raíz cuadrada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Racine carrée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平方根。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "제곱근입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平方根。"
+          }
+        }
+      }
+    },
+    "Sine, angle in radians.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sinus, Winkel im Bogenmaß."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seno, ángulo en radianes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sinus, angle en radians."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サイン。角度はラジアン。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사인, 각도는 라디안입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正弦，角度以弧度表示。"
+          }
+        }
+      }
+    },
+    "Cosine, angle in radians.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kosinus, Winkel im Bogenmaß."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coseno, ángulo en radianes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cosinus, angle en radians."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コサイン。角度はラジアン。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "코사인, 각도는 라디안입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "余弦，角度以弧度表示。"
+          }
+        }
+      }
+    },
+    "The entry point. Write the pixel colour to fragColor.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Einstiegspunkt. Schreibe die Pixelfarbe in fragColor."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El punto de entrada. Escribe el color del píxel en fragColor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le point d'entrée. Écrivez la couleur du pixel dans fragColor."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エントリーポイント。ピクセルの色を fragColor に書き込みます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "진입점입니다. 픽셀 색상을 fragColor 에 씁니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "入口点。将像素颜色写入 fragColor。"
+          }
+        }
+      }
+    },
+    "A smooth 0 to 1 ramp between two edges.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein weicher Übergang von 0 nach 1 zwischen zwei Kanten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una rampa suave de 0 a 1 entre dos bordes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une rampe douce de 0 à 1 entre deux bords."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2つのエッジの間を滑らかに 0 から 1 へ変化させます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "두 경계 사이에서 부드럽게 0에서 1로 변하는 램프입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在两个边界之间平滑地从 0 过渡到 1。"
+          }
+        }
+      }
+    },
+    "0 below the edge, 1 at or above it.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 unterhalb der Kante, 1 an oder oberhalb."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 por debajo del borde, 1 en el borde o por encima."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 sous le bord, 1 au bord ou au-dessus."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "エッジより下で 0、エッジ以上で 1。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "경계 아래에서는 0, 경계 이상에서는 1입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低于边界为 0，达到或高于边界为 1。"
+          }
+        }
+      }
+    },
+    "The cross product, 3D.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Kreuzprodukt, 3D."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El producto vectorial, 3D."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le produit vectoriel, 3D."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外積（3D）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "외적(3D)입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "叉积（3D）。"
+          }
+        }
+      }
+    },
+    "Read a pixel from an image at uv, 0 to 1.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liest ein Pixel aus einem Bild bei uv, 0 bis 1."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lee un píxel de una imagen en uv, de 0 a 1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lit un pixel d'une image à uv, de 0 à 1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画像から uv（0〜1）の位置のピクセルを読み取ります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이미지에서 uv(0에서 1) 위치의 픽셀을 읽습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从图像中读取 uv（0 到 1）处的像素。"
+          }
+        }
+      }
+    },
+    "Read a pixel at a chosen blur level.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liest ein Pixel auf einer gewählten Unschärfestufe."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lee un píxel en un nivel de desenfoque elegido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lit un pixel à un niveau de flou choisi."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指定したぼかしレベルでピクセルを読み取ります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 흐림 레벨에서 픽셀을 읽습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在选定的模糊级别读取像素。"
+          }
+        }
+      }
+    },
+    "Tangent, angle in radians.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tangens, Winkel im Bogenmaß."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tangente, ángulo en radianes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tangente, angle en radians."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タンジェント。角度はラジアン。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "탄젠트, 각도는 라디안입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正切，角度以弧度表示。"
+          }
+        }
+      }
+    },
+    "Inverse sine, gives an angle.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arkussinus, ergibt einen Winkel."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arcoseno, da un ángulo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arc sinus, donne un angle."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逆サイン。角度を返します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "역사인으로, 각도를 반환합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "反正弦，返回一个角度。"
+          }
+        }
+      }
+    },
+    "Inverse cosine, gives an angle.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arkuskosinus, ergibt einen Winkel."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arcocoseno, da un ángulo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arc cosinus, donne un angle."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逆コサイン。角度を返します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "역코사인으로, 각도를 반환합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "反余弦，返回一个角度。"
+          }
+        }
+      }
+    },
+    "The angle of a direction, y and x.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Winkel einer Richtung, y und x."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El ángulo de una dirección, y y x."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'angle d'une direction, y et x."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方向の角度（y と x）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "방향의 각도(y 와 x)입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "某个方向的角度（y 和 x）。"
+          }
+        }
+      }
+    },
+    "e to the power x.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e hoch x."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e elevado a x."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e à la puissance x."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e の x 乗。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e 의 x 제곱입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e 的 x 次方。"
+          }
+        }
+      }
+    },
+    "Natural logarithm.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Natürlicher Logarithmus."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logaritmo natural."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logarithme naturel."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自然対数。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "자연로그입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自然对数。"
+          }
+        }
+      }
+    },
+    "2 to the power x.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 hoch x."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 elevado a x."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 à la puissance x."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 の x 乗。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 의 x 제곱입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2 的 x 次方。"
+          }
+        }
+      }
+    },
+    "Logarithm base 2.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logarithmus zur Basis 2."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logaritmo en base 2."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logarithme en base 2."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "底が2の対数。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "밑이 2인 로그입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以 2 为底的对数。"
+          }
+        }
+      }
+    },
+    "1 over square root, fast.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 durch Quadratwurzel, schnell."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 dividido por la raíz cuadrada, rápido."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 sur racine carrée, rapide."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1÷平方根（高速）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 나누기 제곱근으로, 빠릅니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 除以平方根，快速。"
+          }
+        }
+      }
+    },
+    "Drop the sign, always positive.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entfernt das Vorzeichen, immer positiv."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quita el signo, siempre positivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprime le signe, toujours positif."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "符号を外し、常に正にします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "부호를 없애 항상 양수로 만듭니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "去掉符号，始终为正。"
+          }
+        }
+      }
+    },
+    "-1, 0 or 1 for the sign.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "-1, 0 oder 1 für das Vorzeichen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "-1, 0 o 1 según el signo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "-1, 0 ou 1 selon le signe."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "符号に応じて -1、0、1。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "부호에 따라 -1, 0 또는 1입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "符号为 -1、0 或 1。"
+          }
+        }
+      }
+    },
+    "Round down.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrunden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redondear hacia abajo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrondir à l'inférieur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切り捨て。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "내림합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向下取整。"
+          }
+        }
+      }
+    },
+    "Round up.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufrunden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redondear hacia arriba."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arrondir au supérieur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切り上げ。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "올림합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "向上取整。"
+          }
+        }
+      }
+    },
+    "The part after the decimal point, 0 to 1.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Teil nach dem Komma, 0 bis 1."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La parte tras la coma decimal, de 0 a 1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La partie après la virgule, de 0 à 1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小数点以下の部分、0〜1。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "소수점 이하 부분, 0에서 1까지."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小数点后的部分，0 到 1。"
+          }
+        }
+      }
+    },
+    "The remainder, wrapping into 0 to b.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Rest, umgebrochen auf 0 bis b."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El resto, ajustado al rango 0 a b."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le reste, ramené entre 0 et b."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剰余。0〜b の範囲に折り返します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "나머지로, 0에서 b 범위로 감쌉니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "余数，回绕到 0 到 b。"
+          }
+        }
+      }
+    },
+    "Degrees to radians.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grad in Bogenmaß."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grados a radianes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Degrés en radians."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "度からラジアンへ。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "도를 라디안으로 변환합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "度转弧度。"
+          }
+        }
+      }
+    },
+    "Radians to degrees.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bogenmaß in Grad."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Radianes a grados."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Radians en degrés."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ラジアンから度へ。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "라디안을 도로 변환합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弧度转度。"
+          }
+        }
+      }
+    },
+    "Bounce a direction off a surface.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reflektiert eine Richtung an einer Oberfläche."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refleja una dirección en una superficie."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réfléchit une direction sur une surface."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方向を面で反射させます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "방향을 표면에서 반사시킵니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让方向在表面上反射。"
+          }
+        }
+      }
+    },
+    "Bend a direction through a surface.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bricht eine Richtung durch eine Oberfläche."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refracta una dirección a través de una superficie."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Réfracte une direction à travers une surface."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方向を面で屈折させます。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "방향을 표면을 통해 굴절시킵니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让方向穿过表面时折射。"
+          }
+        }
+      }
+    },
+    "How fast a value changes between neighbouring pixels, for anti-aliasing.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie schnell sich ein Wert zwischen Nachbarpixeln ändert, für Kantenglättung."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Con qué rapidez cambia un valor entre píxeles vecinos, para el suavizado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À quelle vitesse une valeur change entre pixels voisins, pour l'anticrénelage."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隣接ピクセル間で値がどれだけ速く変化するか。アンチエイリアス用。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "인접 픽셀 사이에서 값이 얼마나 빨리 변하는지로, 안티앨리어싱에 사용합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "值在相邻像素之间变化的速度，用于抗锯齿。"
+          }
+        }
+      }
+    },
+    "How fast a value changes across the screen, left to right.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie schnell sich ein Wert über den Bildschirm ändert, links nach rechts."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Con qué rapidez cambia un valor por la pantalla, de izquierda a derecha."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À quelle vitesse une valeur change sur l'écran, de gauche à droite."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面上で値がどれだけ速く変化するか（左から右）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면에서 값이 얼마나 빨리 변하는지(왼쪽에서 오른쪽)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "值在屏幕上从左到右变化的速度。"
+          }
+        }
+      }
+    },
+    "How fast a value changes across the screen, top to bottom.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie schnell sich ein Wert über den Bildschirm ändert, oben nach unten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Con qué rapidez cambia un valor por la pantalla, de arriba a abajo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "À quelle vitesse une valeur change sur l'écran, de haut en bas."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面上で値がどれだけ速く変化するか（上から下）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "화면에서 값이 얼마나 빨리 변하는지(위에서 아래)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "值在屏幕上从上到下变化的速度。"
+          }
+        }
+      }
+    },
+    "The output colour for this pixel, rgba.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Ausgabefarbe für dieses Pixel, rgba."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El color de salida de este píxel, rgba."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La couleur de sortie de ce pixel, rgba."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このピクセルの出力色、rgba。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 픽셀의 출력 색상, rgba."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该像素的输出颜色，rgba。"
+          }
+        }
+      }
+    },
+    "This pixel's position, in pixels.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Position dieses Pixels, in Pixeln."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La posición de este píxel, en píxeles."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La position de ce pixel, en pixels."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このピクセルの位置（ピクセル単位）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 픽셀의 위치(픽셀 단위)입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该像素的位置，以像素为单位。"
+          }
+        }
+      }
+    },
+    "The frame size in pixels, xy.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Bildgröße in Pixeln, xy."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tamaño del fotograma en píxeles, xy."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La taille de l'image en pixels, xy."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フレームのサイズ（ピクセル単位、xy）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "프레임 크기(픽셀 단위, xy)입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面尺寸，以像素为单位，xy。"
+          }
+        }
+      }
+    },
+    "The source clip image. Sample it to read the footage.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Bild des Quellclips. Taste es ab, um das Material zu lesen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La imagen del clip de origen. Muestréala para leer el metraje."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'image du plan source. Échantillonnez-la pour lire les rushes."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "元クリップの画像。サンプリングして映像を読み取ります。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "소스 클립 이미지입니다. 샘플링하여 영상을 읽습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "源片段图像。对其采样以读取素材。"
+          }
+        }
+      }
+    },
+    "A second input image, e.g. a transition's incoming clip.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein zweites Eingabebild, z. B. der eingehende Clip eines Übergangs."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una segunda imagen de entrada, p. ej. el clip entrante de una transición."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une deuxième image d'entrée, p. ex. le plan entrant d'une transition."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2つ目の入力画像。例: トランジションの入ってくるクリップ。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "두 번째 입력 이미지입니다. 예: 전환의 들어오는 클립."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第二个输入图像，例如转场的传入片段。"
+          }
+        }
+      }
+    },
+    "An extra input image.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein zusätzliches Eingabebild."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una imagen de entrada adicional."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une image d'entrée supplémentaire."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "追加の入力画像。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "추가 입력 이미지입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "额外的输入图像。"
+          }
+        }
+      }
+    },
+    "Time in seconds since the clip started.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeit in Sekunden seit dem Start des Clips."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempo en segundos desde que comenzó el clip."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temps en secondes depuis le début du plan."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "クリップ開始からの経過秒数。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "클립이 시작된 이후의 시간(초)입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自片段开始以来的秒数。"
+          }
+        }
+      }
+    },
+    "Seconds since the previous frame.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sekunden seit dem vorherigen Bild."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Segundos desde el fotograma anterior."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Secondes depuis l'image précédente."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前のフレームからの秒数。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이전 프레임 이후의 시간(초)입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自上一帧以来的秒数。"
+          }
+        }
+      }
+    },
+    "The current frame number.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die aktuelle Bildnummer."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El número de fotograma actual."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le numéro de l'image actuelle."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在のフレーム番号。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현재 프레임 번호입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前帧编号。"
+          }
+        }
+      }
+    },
+    "Frames per second.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bilder pro Sekunde."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fotogramas por segundo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Images par seconde."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1秒あたりのフレーム数。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초당 프레임 수입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每秒帧数。"
+          }
+        }
+      }
+    },
+    "Pointer position and clicks, xy is the position.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigerposition und Klicks, xy ist die Position."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posición del puntero y clics; xy es la posición."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Position du pointeur et clics ; xy est la position."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ポインタの位置とクリック。xy が位置。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "포인터 위치와 클릭으로, xy 가 위치입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指针位置和点击，xy 为位置。"
+          }
+        }
+      }
+    },
+    "The current date and time.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das aktuelle Datum und die Uhrzeit."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La fecha y hora actuales."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La date et l'heure actuelles."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在の日付と時刻。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "현재 날짜와 시간입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前日期和时间。"
+          }
+        }
+      }
+    },
+    "The pixel size of each input image.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Pixelgröße jedes Eingabebilds."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tamaño en píxeles de cada imagen de entrada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La taille en pixels de chaque image d'entrée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各入力画像のピクセルサイズ。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 입력 이미지의 픽셀 크기입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个输入图像的像素尺寸。"
+          }
+        }
+      }
+    },
+    "Playback time of each input.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiedergabezeit jeder Eingabe."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiempo de reproducción de cada entrada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temps de lecture de chaque entrée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各入力の再生時間。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 입력의 재생 시간입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个输入的播放时间。"
+          }
+        }
+      }
+    },
+    "Audio sample rate.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Audio-Abtastrate."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Frecuencia de muestreo de audio."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fréquence d'échantillonnage audio."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オーディオのサンプルレート。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "오디오 샘플레이트입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音频采样率。"
+          }
+        }
+      }
+    },
+    "A single number.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine einzelne Zahl."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un único número."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un seul nombre."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1つの数値。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "하나의 숫자입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单个数字。"
+          }
+        }
+      }
+    },
+    "A whole number.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine ganze Zahl."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un número entero."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un nombre entier."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整数。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "정수입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整数。"
+          }
+        }
+      }
+    },
+    "True or false.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wahr oder falsch."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verdadero o falso."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vrai ou faux."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "真か偽。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "참 또는 거짓입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "真或假。"
+          }
+        }
+      }
+    },
+    "Nothing. A function that returns no value.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts. Eine Funktion, die keinen Wert zurückgibt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nada. Una función que no devuelve ningún valor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rien. Une fonction qui ne renvoie aucune valeur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "なし。値を返さない関数。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "없음. 값을 반환하지 않는 함수입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无。不返回任何值的函数。"
+          }
+        }
+      }
+    },
+    "A pair of numbers, x and y.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Zahlenpaar, x und y."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un par de números, x e y."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une paire de nombres, x et y."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数値のペア（x と y）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "숫자 한 쌍(x 와 y)입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一对数字，x 和 y。"
+          }
+        }
+      }
+    },
+    "Three numbers, xyz or rgb.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drei Zahlen, xyz oder rgb."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tres números, xyz o rgb."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trois nombres, xyz ou rgb."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3つの数値（xyz または rgb）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "세 숫자(xyz 또는 rgb)입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "三个数字，xyz 或 rgb。"
+          }
+        }
+      }
+    },
+    "Four numbers, xyzw or rgba.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vier Zahlen, xyzw oder rgba."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuatro números, xyzw o rgba."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quatre nombres, xyzw ou rgba."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4つの数値（xyzw または rgba）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "네 숫자(xyzw 또는 rgba)입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "四个数字，xyzw 或 rgba。"
+          }
+        }
+      }
+    },
+    "A 2x2 matrix.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine 2×2-Matrix."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una matriz 2x2."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une matrice 2×2."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2×2 の行列。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2x2 행렬입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一个 2x2 矩阵。"
+          }
+        }
+      }
+    },
+    "A 3x3 matrix.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine 3×3-Matrix."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una matriz 3x3."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une matrice 3×3."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3×3 の行列。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3x3 행렬입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一个 3x3 矩阵。"
+          }
+        }
+      }
+    },
+    "A 4x4 matrix.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine 4×4-Matrix."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una matriz 4x4."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une matrice 4×4."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4×4 の行列。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4x4 행렬입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一个 4x4 矩阵。"
+          }
+        }
+      }
+    },
+    "A handle to an image that can be sampled.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Verweis auf ein Bild, das abgetastet werden kann."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un identificador de una imagen que se puede muestrear."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une référence vers une image que l'on peut échantillonner."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サンプリング可能な画像へのハンドル。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "샘플링할 수 있는 이미지에 대한 핸들입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指向可采样图像的句柄。"
+          }
+        }
+      }
+    },
+    "Declares an input value, usually from a // # directive.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deklariert einen Eingabewert, meist aus einer // #-Direktive."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Declara un valor de entrada, normalmente de una directiva // #."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déclare une valeur d'entrée, généralement issue d'une directive // #."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "入力値を宣言します。通常は // # ディレクティブから。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "입력 값을 선언합니다. 보통 // # 지시문에서 옵니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "声明一个输入值，通常来自 // # 指令。"
+          }
+        }
+      }
+    },
+    "A value that never changes.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Wert, der sich nie ändert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un valor que nunca cambia."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une valeur qui ne change jamais."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変化しない値。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "절대 변하지 않는 값입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永不改变的值。"
+          }
+        }
+      }
+    },
+    "Hand a result back from a function.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gibt ein Ergebnis aus einer Funktion zurück."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devuelve un resultado desde una función."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Renvoie un résultat depuis une fonction."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "関数から結果を返します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "함수에서 결과를 돌려줍니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从函数返回一个结果。"
+          }
+        }
+      }
+    },
+    "Run a block only when a condition is true.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Führt einen Block nur aus, wenn eine Bedingung wahr ist."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ejecuta un bloque solo cuando una condición es verdadera."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exécute un bloc uniquement lorsqu'une condition est vraie."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "条件が真のときだけブロックを実行します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "조건이 참일 때만 블록을 실행합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅当条件为真时运行代码块。"
+          }
+        }
+      }
+    },
+    "The block to run when the if was false.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Block, der ausgeführt wird, wenn das if falsch war."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El bloque que se ejecuta cuando el if fue falso."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le bloc à exécuter lorsque le if était faux."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "if が偽だった場合に実行するブロック。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "if 가 거짓일 때 실행할 블록입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当 if 为假时运行的代码块。"
+          }
+        }
+      }
+    },
+    "Repeat a block a set number of times.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiederholt einen Block eine festgelegte Anzahl von Malen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repite un bloque un número determinado de veces."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Répète un bloc un nombre défini de fois."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブロックを決められた回数だけ繰り返します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "블록을 정해진 횟수만큼 반복합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将代码块重复固定的次数。"
+          }
+        }
+      }
+    },
+    "Repeat a block while a condition holds.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiederholt einen Block, solange eine Bedingung gilt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repite un bloque mientras se cumpla una condición."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Répète un bloc tant qu'une condition est vraie."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "条件が成り立つ間ブロックを繰り返します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "조건이 유지되는 동안 블록을 반복합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当条件成立时重复代码块。"
+          }
+        }
+      }
+    },
+    "Group values into a custom type.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fasst Werte zu einem eigenen Typ zusammen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agrupa valores en un tipo personalizado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regroupe des valeurs dans un type personnalisé."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "値をまとめてカスタム型にします。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "값들을 사용자 지정 형식으로 묶습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将多个值组合成自定义类型。"
+          }
+        }
+      }
+    },
+    "Drop this pixel entirely.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwirft dieses Pixel vollständig."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Descarta este píxel por completo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abandonne entièrement ce pixel."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このピクセルを完全に破棄します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 픽셀을 완전히 버립니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完全丢弃此像素。"
+          }
+        }
+      }
+    },
+    "A dot that gets dragged.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Punkt, der gezogen wird."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un punto que se arrastra."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un point que l'on déplace."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ドラッグする点。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "드래그하는 점입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可拖动的圆点。"
+          }
+        }
+      }
+    },
+    "A ring that gets resized.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Ring, dessen Größe geändert wird."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un anillo cuyo tamaño se cambia."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un anneau que l'on redimensionne."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サイズを変えるリング。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "크기를 조절하는 링입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可调整大小的环。"
+          }
+        }
+      }
+    },
+    "A rectangle that gets resized.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Rechteck, dessen Größe geändert wird."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un rectángulo cuyo tamaño se cambia."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un rectangle que l'on redimensionne."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サイズを変える四角形。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "크기를 조절하는 사각형입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可调整大小的矩形。"
+          }
+        }
+      }
+    },
+    "A dial that gets spun.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Rad, das gedreht wird."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un dial que se gira."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un cadran que l'on tourne."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回すダイヤル。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "돌리는 다이얼입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可旋转的拨盘。"
+          }
+        }
+      }
+    },
+    "A small hollow ring.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein kleiner hohler Ring."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un pequeño anillo hueco."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un petit anneau creux."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小さな中空のリング。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "작은 빈 링입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一个小的空心环。"
+          }
+        }
+      }
+    },
+    "A filled square.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein gefülltes Quadrat."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un cuadrado relleno."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un carré plein."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "塗りつぶした四角。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "채워진 사각형입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一个实心方块。"
+          }
+        }
+      }
+    },
+    "A filled dot.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein gefüllter Punkt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un punto relleno."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un point plein."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "塗りつぶした点。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "채워진 점입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一个实心圆点。"
+          }
+        }
+      }
+    },
+    "Open-hand move cursor.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschieben-Cursor (offene Hand)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cursor de mover (mano abierta)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curseur de déplacement (main ouverte)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移動カーソル（開いた手）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이동 커서(펼친 손)입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移动光标（张开的手）。"
+          }
+        }
+      }
+    },
+    "Crosshair cursor.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fadenkreuz-Cursor."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cursor de cruz."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curseur en croix."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "十字カーソル。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "십자 커서입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "十字光标。"
+          }
+        }
+      }
+    },
+    "Pointing-hand cursor.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigende-Hand-Cursor."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cursor de mano que señala."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Curseur main pointant."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指差しカーソル。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "가리키는 손 커서입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指向手光标。"
+          }
+        }
+      }
+    },
+    "Left-right resize.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Größe ändern links-rechts."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redimensionar izquierda-derecha."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redimensionnement gauche-droite."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左右のサイズ変更。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "좌우 크기 조절입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左右调整大小。"
+          }
+        }
+      }
+    },
+    "Up-down resize.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Größe ändern oben-unten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redimensionar arriba-abajo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redimensionnement haut-bas."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上下のサイズ変更。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "상하 크기 조절입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上下调整大小。"
+          }
+        }
+      }
+    },
+    "Diagonal resize.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagonale Größenänderung."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redimensionar en diagonal."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Redimensionnement diagonal."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "斜めのサイズ変更。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "대각선 크기 조절입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对角调整大小。"
+          }
+        }
+      }
+    },
+    "All 2 components.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle 2 Komponenten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los 2 componentes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les 2 composantes."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2つの成分すべて。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2개 성분 전체입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部 2 个分量。"
+          }
+        }
+      }
+    },
+    "All 3 components.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle 3 Komponenten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los 3 componentes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les 3 composantes."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3つの成分すべて。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3개 성분 전체입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部 3 个分量。"
+          }
+        }
+      }
+    },
+    "All 4 components.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle 4 Komponenten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los 4 componentes."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les 4 composantes."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4つの成分すべて。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4개 성분 전체입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部 4 个分量。"
+          }
+        }
+      }
+    },
+    "Red": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rot"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rojo"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rouge"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "赤"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "빨강"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "红"
+          }
+        }
+      }
+    },
+    "Green": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grün"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verde"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vert"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "緑"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "초록"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "绿"
+          }
+        }
+      }
+    },
+    "Blue": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blau"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Azul"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bleu"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "青"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "파랑"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "蓝"
+          }
+        }
+      }
+    },
+    "Alpha": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alpha"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alfa"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alpha"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アルファ"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알파"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "透明度"
+          }
+        }
+      }
+    },
+    "1st component": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1. Komponente"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1.er componente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1re composante"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1番目の成分"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "첫 번째 성분"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 1 个分量"
+          }
+        }
+      }
+    },
+    "2nd component": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2. Komponente"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2.º componente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2e composante"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2番目の成分"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "두 번째 성분"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 2 个分量"
+          }
+        }
+      }
+    },
+    "3rd component": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3. Komponente"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3.er componente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3e composante"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "3番目の成分"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "세 번째 성분"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 3 个分量"
+          }
+        }
+      }
+    },
+    "4th component": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4. Komponente"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4.º componente"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4e composante"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "4番目の成分"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "네 번째 성분"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 4 个分量"
+          }
+        }
+      }
+    },
+    "A declared input.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein deklarierter Eingabewert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una entrada declarada."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "une entrée déclarée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宣言された入力。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선언된 입력입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已声明的输入。"
+          }
+        }
+      }
+    },
+    "A local in this block.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine lokale Variable in diesem Block."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una variable local en este bloque."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une variable locale de ce bloc."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このブロック内のローカル変数。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 블록의 지역 변수입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此代码块中的局部变量。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

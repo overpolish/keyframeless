@@ -20,6 +20,7 @@ typedef NS_ENUM(int, KKExprKind) {
   KKNodeTernary,
   KKNodeCall,
   KKNodeSwizzle, // `.xyzw` / `.rgba` component select on the child
+  KKNodeVar,     // a caller-supplied named variable (OSC: mouse/pos/tr/…)
 };
 
 // Multi-char operator codes (single-char ops use their ASCII value).
@@ -55,6 +56,7 @@ typedef struct {
   long errPos; // byte offset where the FIRST error was raised
   NSString *errMsg;
   __unsafe_unretained NSMutableSet<NSString *> *refs; // collected during parse
+  __unsafe_unretained NSSet<NSString *> *allowedVars; // OSC bare-var allow-list
 } KKExprParser;
 
 static void KKExprFail(KKExprParser *p, NSString *msg) {
@@ -210,6 +212,9 @@ static KKExprNode *KKExprParseAtom(KKExprParser *p) {
     } else if ([ident isEqualToString:@"e"]) {
       n->kind = KKNodeNum;
       n->num = M_E;
+    } else if ([p->allowedVars containsObject:ident]) {
+      n->kind = KKNodeVar;
+      n->name = ident;
     } else {
       KKExprFail(p, [NSString stringWithFormat:@"unknown name '%@'", ident]);
       return nil;
@@ -454,9 +459,16 @@ static double KKClampD(double x, double lo, double hi) {
   KKExprVal _cValue;
   double _cT, _cProgress, _cClipTime;
   KKExprVal (^_cResolveRef)(NSString *);
+  KKExprVal (^_cVars)(NSString *); // OSC bare-variable resolver
 }
 
 + (instancetype)compile:(NSString *)source error:(NSString **)error {
+  return [self compile:source allowedVars:nil error:error];
+}
+
++ (instancetype)compile:(NSString *)source
+            allowedVars:(NSSet<NSString *> *)allowedVars
+                  error:(NSString **)error {
   NSString *src = source ?: @"";
   NSString *trimmed = [src
       stringByTrimmingCharactersInSet:[NSCharacterSet
@@ -471,6 +483,7 @@ static double KKClampD(double x, double lo, double hi) {
   p.pos = 0;
   NSMutableSet<NSString *> *refs = [NSMutableSet set];
   p.refs = refs;
+  p.allowedVars = allowedVars;
 
   KKExprNode *root = KKExprParseExpr(&p);
   if (!p.error) {
@@ -666,6 +679,8 @@ static NSString *KKExprEmit(KKExprNode *n) {
     return @"ct";
   case KKNodeRef:
     return [NSString stringWithFormat:@"${%@}", n->name];
+  case KKNodeVar:
+    return n->name;
   case KKNodeSwizzle:
     return [NSString stringWithFormat:@"%@.%@", KKExprWrap(n->a, 8), n->name];
   case KKNodeUnary:
@@ -711,6 +726,8 @@ static NSString *KKExprEmit(KKExprNode *n) {
     return KKExprScalar(_cClipTime);
   case KKNodeRef:
     return _cResolveRef ? _cResolveRef(node->name) : KKExprScalar(0.0);
+  case KKNodeVar:
+    return _cVars ? _cVars(node->name) : KKExprScalar(0.0);
   case KKNodeSwizzle: {
     KKExprVal cv = [self eval:node->a];
     const char *s = node->name.UTF8String;
@@ -823,6 +840,37 @@ static NSString *KKExprEmit(KKExprNode *n) {
     KKExprVal a0 = nc > 0 ? [self eval:an[0]] : KKExprScalar(0);
     KKExprVal a1 = nc > 1 ? [self eval:an[1]] : KKExprScalar(0);
     KKExprVal a2 = nc > 2 ? [self eval:an[2]] : KKExprScalar(0);
+    // Vector reducers (GLSL): length(v), distance(a,b), dot(a,b) -> scalar;
+    // normalize(v) -> unit vector. Handle before the per-component maps.
+    if ([fn isEqualToString:@"length"] || [fn isEqualToString:@"normalize"]) {
+      double s = 0;
+      for (int i = 0; i < a0.n; i++)
+        s += a0.v[i] * a0.v[i];
+      double len = sqrt(s);
+      if ([fn isEqualToString:@"length"])
+        return KKExprScalar(len);
+      KKExprVal r = a0;
+      if (len > 1e-12)
+        for (int i = 0; i < r.n; i++)
+          r.v[i] /= len;
+      return r;
+    }
+    if ([fn isEqualToString:@"distance"]) {
+      double s = 0;
+      int m = MAX(a0.n, a1.n);
+      for (int i = 0; i < m; i++) {
+        double d = (i < a0.n ? a0.v[i] : 0) - (i < a1.n ? a1.v[i] : 0);
+        s += d * d;
+      }
+      return KKExprScalar(sqrt(s));
+    }
+    if ([fn isEqualToString:@"dot"]) {
+      double s = 0;
+      int m = MIN(a0.n, a1.n);
+      for (int i = 0; i < m; i++)
+        s += a0.v[i] * a1.v[i];
+      return KKExprScalar(s);
+    }
     // 1-arg per-component
     if ([fn isEqualToString:@"sin"])
       return KKExprMap1(a0, ^(double x) {
@@ -992,6 +1040,18 @@ static NSString *KKExprEmit(KKExprNode *n) {
   _cProgress = progress;
   _cClipTime = clipTime;
   _cResolveRef = resolveRef;
+  _cVars = nil;
+  return [self eval:_root];
+}
+
+- (KKExprVal)evalWithValue:(KKExprVal)value
+                      vars:(KKExprVal (^)(NSString *))vars {
+  _cValue = value;
+  _cT = 0.0;
+  _cProgress = 0.0;
+  _cClipTime = 0.0;
+  _cResolveRef = nil;
+  _cVars = vars;
   return [self eval:_root];
 }
 

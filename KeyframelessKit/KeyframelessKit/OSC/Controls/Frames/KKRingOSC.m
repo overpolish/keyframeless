@@ -180,8 +180,12 @@ static NSColor *ringActiveStrokeColor(void) {
     isActive = NO;
   }
 
-  float fillWidth = (isHovered || isActive) ? 2.5f : 2.0f;
-  float outlineWidth = (isHovered || isActive) ? 1.5f : 1.0f;
+  // `solidStyle` (a host with no hover feedback) always uses the active/white
+  // look, but never overrides a ghost's dim idle appearance.
+  BOOL active = isActive || (_solidStyle && _ghostAlpha >= 0.999f);
+
+  float fillWidth = (isHovered || active) ? 2.5f : 2.0f;
+  float outlineWidth = (isHovered || active) ? 1.5f : 1.0f;
   float outerX = _ringRadius + fillWidth / 2.0f + outlineWidth;
   float outerY = _ringRadiusY + fillWidth / 2.0f + outlineWidth;
   float outerRadiusPixels = fmaxf(outerX, outerY);
@@ -193,7 +197,7 @@ static NSColor *ringActiveStrokeColor(void) {
     NSColor *rgb =
         [_tintColor colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
     [rgb getRed:&r green:&g blue:&b alpha:&a];
-    if (isActive) {
+    if (active) {
       fillColor = (simd_float4){(float)r, (float)g, (float)b, 1.0f};
       strokeColor = [ringActiveStrokeColor() simdFloat4];
     } else if (isHovered) {
@@ -203,7 +207,7 @@ static NSColor *ringActiveStrokeColor(void) {
       fillColor = (simd_float4){(float)r, (float)g, (float)b, 0.7f};
       strokeColor = [ringIdleStrokeColor() simdFloat4];
     }
-  } else if (isActive) {
+  } else if (active) {
     fillColor = [ringActiveFillColor() simdFloat4];
     strokeColor = [ringActiveStrokeColor() simdFloat4];
   } else if (isHovered) {

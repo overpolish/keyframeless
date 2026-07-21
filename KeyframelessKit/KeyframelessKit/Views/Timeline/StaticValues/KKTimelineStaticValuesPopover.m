@@ -1703,7 +1703,9 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   for (NSInteger i = 0; i < (NSInteger)ml.count; i++)
     if ([ml[i].label isEqualToString:label]) {
       KKLane *c = [ml[i] copy];
-      c.linkExpression = expr.length ? expr : nil;
+      // An empty expression stays present (passthrough) so the inline editor
+      // remains open after the user clears the text; only nil closes it.
+      c.linkExpression = expr;
       ml[i] = c;
       _lanes = ml;
       return;

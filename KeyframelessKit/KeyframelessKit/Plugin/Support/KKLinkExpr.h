@@ -52,6 +52,17 @@ static inline KKExprVal KKExprScalar(double x) {
 + (nullable instancetype)compile:(NSString *)source
                            error:(NSString *_Nullable *_Nullable)error;
 
+/// Compile with an extra set of allowed bare identifiers (beyond
+/// `value`/`t`/…), each resolved at eval time through the `vars` block of
+/// `-evalWithValue:vars:`. An identifier NOT in `allowedVars` (and not a
+/// builtin or function) is still a parse error, so typo-detection survives.
+/// Used by the OSC-handling layer to expose `mouse`, `pos`, `size`, `aspect`,
+/// `tl`/`tr`/…, `center`, `part`. `nil`/empty allowedVars is identical to
+/// `compile:error:`.
++ (nullable instancetype)compile:(NSString *)source
+                     allowedVars:(nullable NSSet<NSString *> *)allowedVars
+                           error:(NSString *_Nullable *_Nullable)error;
+
 /// The CHARACTER range in `source` of the first parse error (the offending
 /// token expanded to its whole identifier, else the single bad character), for
 /// an editor to underline, plus a short human-readable message in `*outMessage`
@@ -70,6 +81,13 @@ static inline KKExprVal KKExprScalar(double x) {
                   progress:(double)progress
                   clipTime:(double)clipTime
                 resolveRef:(nullable KKExprVal (^)(NSString *name))resolveRef;
+
+/// Evaluate an OSC-handling expression: `value` is the bound lane value, and
+/// every allowed bare identifier (see `compile:allowedVars:error:`) resolves
+/// through `vars`. `t`/`progress`/`clipTime` are 0 and `${refs}` resolve to 0 -
+/// OSC expressions are spatial, not timeline-relative.
+- (KKExprVal)evalWithValue:(KKExprVal)value
+                      vars:(nullable KKExprVal (^)(NSString *name))vars;
 
 /// The distinct `${name}` references in this expression, so the resolver knows
 /// which sources to load (and the UI which are in use).

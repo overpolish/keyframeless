@@ -17,6 +17,7 @@
 #import "KKGLSLFormatter.h"  // Format button (XPC-only includers)
 #import "KKGLSLTranspiler.h" // live shader validation (XPC-only includers)
 #import "ShaderCategory.h"   // the save bar's category picker options
+#import "ShaderDirectiveCatalog.h" // directive + GLSL autocomplete
 #import "ShaderDirectives.h"
 #import "ShaderLocalized.h" // RLoc
 
@@ -818,7 +819,15 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource,
   // SPIRV-Cross .clang-format translated). Pure and self-contained; leaves the
   // text unchanged if astyle errors.
   shader.codeFormatter = ^NSString *(NSString *code) {
-    return KKFormatGLSL(code);
+    // astyle the GLSL, then align the `//` directive blocks on top.
+    return ShaderTidyDirectives(KKFormatGLSL(code));
+  };
+  // Context-aware autocomplete: `//` directive kinds + attributes + `@osc`
+  // fields/values + GLSL builtins + this shader's declared uniforms.
+  shader.codeCompletionProvider =
+      ^NSArray<NSDictionary<NSString *, NSString *> *> *(
+          NSString *text, NSUInteger caret, NSRange *outReplace) {
+    return ShaderDirectiveCompletions(text, caret, outReplace);
   };
   [lanes addObject:shader];
 

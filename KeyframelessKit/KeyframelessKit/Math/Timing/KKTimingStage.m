@@ -406,7 +406,8 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.codeValidator = _codeValidator; // block, copied by the property setter
   c.codeValidationComposer = _codeValidationComposer; // block, copied by setter
   c.codeFormatter = _codeFormatter; // block, copied by the property setter
-  c.codeSavable = _codeSavable;     // static config, not serialized
+  c.codeCompletionProvider = _codeCompletionProvider; // block, copied by setter
+  c.codeSavable = _codeSavable; // static config, not serialized
   c.codeSaveCategories = [_codeSaveCategories copy];           // static config
   c.codeSaveNamePlaceholder = [_codeSaveNamePlaceholder copy]; // static config
   c.componentMin = [_componentMin copy];
@@ -703,7 +704,10 @@ KKTimeline *KKTimelineSettingLinkExpression(KKTimeline *timeline,
                                             NSString *label, NSString *expr) {
   KKTimeline *t = [timeline copy];
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
-  NSString *e = expr.length ? expr : nil;
+  // Keep an EMPTY expression present (passthrough) so clearing the editor text
+  // leaves the inline editor open; only a nil `expr` (the Remove Expression
+  // menu) truly clears the binding.
+  NSString *e = expr;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     if (![lanes[i].label isEqualToString:label])
       continue;

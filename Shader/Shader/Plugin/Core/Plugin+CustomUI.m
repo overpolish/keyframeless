@@ -12,6 +12,7 @@
 #import "ShaderLaneCatalog.h"
 #import "ShaderLocalized.h"
 #import "ShaderMiniViewerRenderer.h" // per-instance mini-viewer rendezvous paths
+#import "ShaderOSCBlockRuntime.h" // // @osc custom-handling blocks (checklist)
 #import "ShaderOSCSnapshot.h" // OSC timeline snapshot + frame-duration setters
 #import "ShaderPresets.h"     // ShaderBuiltinPresets (built-in look presets)
 #import <AppKit/AppKit.h>
@@ -260,6 +261,12 @@ static void ShaderAIApplyMutation(ShaderPlugin *plugin, NSString *currentJSON,
       if (props[i].isPoint && strcmp(props[i].oscKind, "point") == 0)
         [out addObject:@[ [name stringByAppendingString:@" Path"] ]];
     }
+  // Custom `// @osc` blocks are single hideable elements too, keyed by block
+  // name - the SAME key the viewer's oscElementKeys appends and the mini's expr
+  // set toggles, so the checklist + opt-click + persistence all line up.
+  for (ShaderOSCBlockRuntime *b in
+       [ShaderOSCBlockRuntime runtimesForSource:source lanes:@[]])
+    [out addObject:@[ b.name ]];
   return out;
 }
 

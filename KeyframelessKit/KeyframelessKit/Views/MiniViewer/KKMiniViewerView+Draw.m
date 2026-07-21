@@ -669,6 +669,48 @@
         }
       }
 
+      // Fixed-glyph handles whose GLYPH is chosen per handle (a custom OSC
+      // mapped to an arbitrary glyph, e.g. Shader's `// @osc style=hollow`
+      // radius handle -> the shared radius-widget ring). Same per-style encode
+      // as the primary handle above.
+      if ([del respondsToSelector:
+                   @selector(miniViewer:extraFixedGlyphsForContentRect:)]) {
+        for (NSDictionary<NSString *, id> *g in [del miniViewer:self
+                                 extraFixedGlyphsForContentRect:cr]) {
+          CGPoint c = [g[@"center"] pointValue];
+          CGFloat ga = g[@"alpha"] ? [g[@"alpha"] doubleValue] : 1.0;
+          KKMiniHandleStyle st = (KKMiniHandleStyle)[g[@"style"] integerValue];
+          if (st == KKMiniHandleStyleNone)
+            continue;
+          if (st == KKMiniHandleStyleArc) {
+            [self _encodeArcHandleGlyphAt:c
+                                 isActive:NO
+                               ghostAlpha:ga
+                                  encoder:enc];
+          } else if (st == KKMiniHandleStyleRing) {
+            CGFloat cs = [self _canvasScale];
+            simd_float4 f = whiteFill;
+            f.w *= (float)ga;
+            simd_float4 outline = {0.0f, 0.0f, 0.0f, 0.75f * (float)ga};
+            [self _encodeRingOSCAt:c
+                         radiusXPt:2.3 * cs
+                         radiusYPt:2.3 * cs
+                         fillColor:f
+                       strokeColor:outline
+                       fillWidthPt:1.0 * cs
+                    outlineWidthPt:0.5 * cs
+                           encoder:enc];
+          } else {
+            simd_float4 f = accentFill;
+            f.w *= (float)ga;
+            [self _encodeHandleGlyphAt:c
+                             fillColor:f
+                             sizeScale:pointSizeScale
+                               encoder:enc];
+          }
+        }
+      }
+
       // Anchor pivot square - topmost, mirroring the viewer's layering.
       CGPoint anchorCenterPts;
       if (_squarePipeline &&
