@@ -2183,7 +2183,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       catByLabel[lane.label] = lane.categoryKey;
   }
   // Tear down any PRESERVED code row the new lane set didn't reuse (e.g. the
-  // constants "Shader" code lane when reconfiguring into a keypose popover,
+  // constants "Mirage" code lane when reconfiguring into a keypose popover,
   // whose lanes don't include it). It was held back from the
   // removeFromSuperview sweep above so its live editor state could be reused;
   // when it isn't, it would otherwise float over the new rows ("bleeding").

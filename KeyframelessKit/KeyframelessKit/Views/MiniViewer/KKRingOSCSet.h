@@ -21,7 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// "primary" ring: every ring draws through
 /// `-miniViewer:extraRingsForContentRect:` and drags through one shared
 /// active-label, so N rings behave identically. The mini sibling of the
-/// viewer's ring loop in ShaderOSC, and the ring analogue of KKPointOSCSet.
+/// viewer's ring loop in MirageOSC, and the ring analogue of KKPointOSCSet.
 ///
 /// Each ring encodes its scalar value NORMALIZED 0..1 across [min,max] through
 /// the shared KKRingOSCExtentForNorm curve, so it draws and drags at the same

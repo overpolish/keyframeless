@@ -59,7 +59,7 @@ typedef NS_ENUM(NSInteger, KKLinkOutOfRange) {
 @property(nonatomic, copy) NSString *displayName;
 @property(nonatomic) double clipStartSec; // project seconds at clip fraction 0
 @property(nonatomic) double clipDurSec;
-/// The source effect's name (e.g. "Shader"), so the bus can scope operations to
+/// The source effect's name (e.g. "Mirage"), so the bus can scope operations to
 /// one plugin's own manifests. Empty on legacy manifests written before this
 /// field existed (they get rewritten with it on the source's next render/load).
 @property(nonatomic, copy) NSString *effectName;

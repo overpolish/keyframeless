@@ -18,8 +18,8 @@
       "kind": "FxPlug effect",
       "payhip": "https://store.overpolish.co/b/MfWRG"
     },
-    "shader": {
-      "name": "Shader",
+    "mirage": {
+      "name": "Mirage",
       "kind": "FxPlug effect",
       "payhip": "https://store.overpolish.co/b/wGE3c"
     },
