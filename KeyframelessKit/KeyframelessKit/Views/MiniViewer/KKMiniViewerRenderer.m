@@ -374,9 +374,6 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   KKRotMatrix3 m = [self _currentRotationMatrix];
   NSArray<NSColor *> *cols = [self rotationRingColors];
   KKRotationOSCParams p = {
-      .rotCol0 = m.col0,
-      .rotCol1 = m.col1,
-      .rotCol2 = m.col2,
       // ringHalfWidth / outlineWidth are fractions of radius; the canvas's
       // encode helper rescales them into the shader's normalized space. The
       // 3.5/90 ratio reads as a chunky grab target on the mini.
@@ -395,6 +392,9 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
            [self _ringShownAtAxis:1] ? [self _ringAlphaAtAxis:1] : 0.0f,
            [self _ringShownAtAxis:2] ? [self _ringAlphaAtAxis:2] : 0.0f},
   };
+  // Built-in path is the classic full 3-axis gizmo: every ring under the one
+  // pose (trackball semantics).
+  KKRotationOSCParamsSetRingBases(&p, m, m, m);
   *outParams = p;
   return YES;
 }

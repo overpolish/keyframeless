@@ -6,6 +6,7 @@
 #import "KKLinkExpr.h"
 
 #import "KKEasing.h" // easeIn/easeOut/... share the timeline's KKApplyEasing
+#import "KKScaleGizmo.h" // ringExtent/ringNorm share the radius-ring OSC curve
 #import <math.h>
 
 typedef NS_ENUM(int, KKExprKind) {
@@ -21,6 +22,7 @@ typedef NS_ENUM(int, KKExprKind) {
   KKNodeCall,
   KKNodeSwizzle, // `.xyzw` / `.rgba` component select on the child
   KKNodeVar,     // a caller-supplied named variable (OSC: mouse/pos/tr/…)
+  KKNodeMember,  // rect accessor on the child: `.min .max .width .height`
 };
 
 // Multi-char operator codes (single-char ops use their ASCII value).
@@ -244,20 +246,38 @@ static int KKExprSwizzleIndex(char c) {
   return -1;
 }
 
+// Is `name` a rect member accessor (`rect(min, max)` is a vec4 of
+// minX, minY, maxX, maxY; these read it as a rect)?
+static BOOL KKExprIsRectMember(NSString *name) {
+  return [name isEqualToString:@"min"] || [name isEqualToString:@"max"] ||
+         [name isEqualToString:@"width"] || [name isEqualToString:@"height"];
+}
+
 // An atom, plus any trailing `.xyzw`/`.rgba` component swizzles (GLSL style, so
 // `value.x` reads a single component and `vec2(value.x, value.y)` rebuilds
-// one).
+// one) or rect member accessors (`.min`/`.max` -> vec2 corner,
+// `.width`/`.height` -> scalar side).
 static KKExprNode *KKExprParsePostfix(KKExprParser *p) {
   KKExprNode *node = KKExprParseAtom(p);
   if (p->error)
     return nil;
   while (KKExprPeek(p) == '.') {
-    // `.` is a swizzle only when a component letter follows (not `.5` etc).
+    // `.` is a member/swizzle only when a letter follows (not `.5` etc).
     char after = (p->pos + 1 < p->len) ? p->s[p->pos + 1] : '\0';
-    if (KKExprSwizzleIndex(after) < 0)
+    BOOL alpha =
+        (after >= 'a' && after <= 'z') || (after >= 'A' && after <= 'Z');
+    if (!alpha && KKExprSwizzleIndex(after) < 0)
       break;
     p->pos++; // consume '.'
     NSString *sw = KKExprReadIdent(p);
+    if (KKExprIsRectMember(sw)) {
+      KKExprNode *m = [KKExprNode new];
+      m->kind = KKNodeMember;
+      m->name = sw;
+      m->a = node;
+      node = m;
+      continue;
+    }
     if (sw.length < 1 || sw.length > 4) {
       KKExprFail(p, @"swizzle must be 1-4 of x/y/z/w (or r/g/b/a)");
       return nil;
@@ -447,6 +467,26 @@ static KKExprVal KKExprMap1(KKExprVal a, double (^f)(double)) {
 
 static double KKClampD(double x, double lo, double hi) {
   return x < lo ? lo : (x > hi ? hi : x);
+}
+
+// Deterministic pseudo-random in [0, 1) from a seed - the classic hash, but
+// stable per input so an expression re-evaluates identically every frame (no
+// flicker; scrub/undo reproducible). `random(3)` is a fixed roll;
+// `random(floor(t))` a new roll each second.
+static double KKExprHash01(double x) {
+  // +1.0 so seed 0 isn't degenerate (sin(0)=0 -> a always-0 first roll).
+  double s = sin((x + 1.0) * 12.9898) * 43758.5453;
+  return s - floor(s); // fract
+}
+
+// Smooth value noise in [0, 1] over `x`: interpolate two neighbouring hashes
+// with a smoothstep, so it wanders organically instead of jumping. `noise(t)`
+// drifts once per unit of x; `noise(t * 0.5)` half as fast.
+static double KKExprValueNoise(double x) {
+  double i = floor(x), f = x - i;
+  double u = f * f * (3.0 - 2.0 * f); // smoothstep ease
+  double a = KKExprHash01(i), b = KKExprHash01(i + 1.0);
+  return a + (b - a) * u;
 }
 
 @implementation KKLinkExpr {
@@ -682,6 +722,7 @@ static NSString *KKExprEmit(KKExprNode *n) {
   case KKNodeVar:
     return n->name;
   case KKNodeSwizzle:
+  case KKNodeMember:
     return [NSString stringWithFormat:@"%@.%@", KKExprWrap(n->a, 8), n->name];
   case KKNodeUnary:
     return
@@ -739,6 +780,17 @@ static NSString *KKExprEmit(KKExprNode *n) {
       r.v[i] = KKExprComp(cv, idx < 0 ? 0 : idx);
     }
     return r;
+  }
+  case KKNodeMember: {
+    // Child is a rect vec4 (minX, minY, maxX, maxY).
+    KKExprVal cv = [self eval:node->a];
+    if ([node->name isEqualToString:@"min"])
+      return (KKExprVal){{KKExprComp(cv, 0), KKExprComp(cv, 1), 0, 0}, 2};
+    if ([node->name isEqualToString:@"max"])
+      return (KKExprVal){{KKExprComp(cv, 2), KKExprComp(cv, 3), 0, 0}, 2};
+    if ([node->name isEqualToString:@"width"])
+      return KKExprScalar(KKExprComp(cv, 2) - KKExprComp(cv, 0));
+    return KKExprScalar(KKExprComp(cv, 3) - KKExprComp(cv, 1)); // height
   }
   case KKNodeUnary: {
     KKExprVal x = [self eval:node->a];
@@ -819,9 +871,12 @@ static NSString *KKExprEmit(KKExprNode *n) {
     NSString *fn = node->name;
     // Vector constructors: flatten every arg's components in order and take N
     // (GLSL: vec2(x,y), vec4(v2, a, b), vec3(x) -> broadcast). Handled before
-    // the 3-arg shortcut below because vec4 takes four args.
-    if (fn.length == 4 && [fn hasPrefix:@"vec"]) {
-      int N = (int)[fn characterAtIndex:3] - '0';
+    // the 3-arg shortcut below because vec4 takes four args. `rect(min, max)`
+    // is the vec4 constructor spelt as a rectangle (two vec2 corners ->
+    // minX, minY, maxX, maxY), read back via `.min .max .width .height`.
+    if ((fn.length == 4 && [fn hasPrefix:@"vec"]) ||
+        [fn isEqualToString:@"rect"]) {
+      int N = [fn hasPrefix:@"vec"] ? (int)[fn characterAtIndex:3] - '0' : 4;
       if (N >= 2 && N <= 4) {
         double comps[4];
         int k = 0;
@@ -916,6 +971,18 @@ static NSString *KKExprEmit(KKExprNode *n) {
       return KKExprMap1(a0, ^(double x) {
         return x <= 0 ? 0 : log(x);
       });
+    // Radius-ring OSC curve, in MIN-DIMENSION FRACTIONS (multiply by the
+    // surface's min dimension for pixels): ringExtent maps a normalized 0..1
+    // value to the ring's radius, ringNorm inverts it. Shared with every
+    // radius-ring OSC so an expression-driven ring sits at the identical size.
+    if ([fn isEqualToString:@"ringExtent"])
+      return KKExprMap1(a0, ^(double x) {
+        return KKRingOSCExtentForNorm(x, 1.0);
+      });
+    if ([fn isEqualToString:@"ringNorm"])
+      return KKExprMap1(a0, ^(double x) {
+        return KKRingOSCNormForExtent(x, 1.0);
+      });
     if ([fn isEqualToString:@"rad"])
       return KKExprMap1(a0, ^(double x) {
         return x * M_PI / 180.0;
@@ -1001,6 +1068,17 @@ static NSString *KKExprEmit(KKExprNode *n) {
         return 1.0 - fabs(2.0 * p - 1.0);
       });
     }
+    // Deterministic randomness (Motion's linking can't do this). Seeded by the
+    // ARGUMENT, so it is stable per frame: `random` a hard 0..1 roll, `noise`
+    // its smooth cousin. Centre a swing with `noise(t)*2-1`, like `sin`.
+    if ([fn isEqualToString:@"random"])
+      return KKExprMap1(a0, ^(double x) {
+        return KKExprHash01(x);
+      });
+    if ([fn isEqualToString:@"noise"])
+      return KKExprMap1(a0, ^(double x) {
+        return KKExprValueNoise(x);
+      });
     // Keypose easing curves, identical to the timeline sampler (shared
     // KKApplyEasing): a 0..1 factor in -> eased 0..1 out, per component.
     // Optional 2nd arg = intensity (0..1, default 0.5); 3rd = frequency

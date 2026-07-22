@@ -142,10 +142,25 @@ static inline void ShaderScalarParseOSC(NSString *attrs, ShaderScalarProp *p) {
                 ? [attrs substringWithRange:[ov rangeAtIndex:1]]
                 : nil;
     }
+    // Two DISTINCT kinds for a #point lane: `position` = the FULL position
+    // control (editable motion path, anchors, tangents), `point` = a plain
+    // draggable point handle (a centre, an offset - just the dot). A bare
+    // `osc` on a #point defaults to the full position control.
     NSString *kindStr =
         val ? val.lowercaseString
-            : (p->isPoint ? @"point" : (p->isAngle ? @"rotate" : @""));
+            : (p->isPoint ? @"position" : (p->isAngle ? @"rotate" : @""));
     strncpy(p->oscKind, kindStr.UTF8String ?: "", sizeof(p->oscKind) - 1);
+    // `skipsnapping`: opt a point/position handle out of the default Cmd snap.
+    p->skipSnapping =
+        ([[NSRegularExpression
+             regularExpressionWithPattern:@"\\bskipsnapping\\b"
+                                  options:0
+                                    error:nil]
+             firstMatchInString:attrs
+                        options:0
+                          range:NSMakeRange(0, attrs.length)] != nil)
+            ? 1
+            : 0;
     NSTextCheckingResult *am = [[NSRegularExpression
         regularExpressionWithPattern:@"\\baxis\\s*=\\s*([xyzXYZ])"
                              options:0

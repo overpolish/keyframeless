@@ -35,12 +35,30 @@ typedef struct ShaderOSCBlock {
   char binds[64];     // the bound uniform (lane) name
   char style[16];     // point glyph: "dot" / "square" / "hollow" ("" = default)
   char cursor[16];    // hover cursor: "move" / "crosshair" / "resize-h/v/diag"…
-  char forward[256];  // value -> geometry (toPos / toRect)
+  char forward[256];  // value -> geometry (toPos / toRect / toR)
   // Optional. When empty, a scalar handle's drag NUMERICALLY inverts `forward`
   // (searches the value whose forward-position is nearest the cursor, like
   // Rounded's binary search), so a non-linear forward needs no explicit
-  // inverse.
-  char inverse[256]; // geometry -> value (fromPos / fromRect)
+  // inverse. A ring/box REQUIRES its explicit inverse (fromR / fromRect).
+  char inverse[256]; // geometry -> value (fromPos / fromRect / fromR)
+  // Optional placement expression for a centred primitive (ring / rotate):
+  // evaluates to an object-space point. Empty = the frame centre. May
+  // reference another uniform (`center = uOrigin`) to follow a point lane.
+  char center[256];
+  // Rotate only: the enabled axis set, e.g. "x y z" / "z". Empty = z.
+  char axes[16];
+  // Ring/box ellipse fields: aspect-link the two components by default
+  // (`linked = true`); Shift inverts during a drag.
+  int linked;
+  // Box only: `body = none` disables the interior body-move part (a CENTRED
+  // box has no position to write, so its interior passes through). Default =
+  // body-move enabled (the crop feel).
+  int bodyDisabled;
+  // Point only: `skipsnapping` opts a handle out of the Cmd-held snap (to the
+  // canvas centre / edges / quarters + the lane's other keyposes) that every
+  // point control gets by default, matching osc=position. Bare flag or
+  // `skipsnapping = true`.
+  int skipSnapping;
   // Local variables: any `key = expr` line whose key isn't a reserved field. In
   // declaration order; a local may reference earlier locals (+ the bound value
   // + OSC builtins), so a complex forward reads as a few named steps instead of
@@ -98,10 +116,13 @@ static inline int ShaderParseOSCBlocks(NSString *source, ShaderOSCBlock *out,
       inBlock = NO;
       continue;
     }
-    // key = value
+    // A bare flag line (no `=`): the only one is `skipsnapping`.
     NSRange eq = [body rangeOfString:@"="];
-    if (eq.location == NSNotFound)
+    if (eq.location == NSNotFound) {
+      if ([body isEqualToString:@"skipsnapping"])
+        out[count - 1].skipSnapping = 1;
       continue;
+    }
     NSString *key = [[body substringToIndex:eq.location]
         stringByTrimmingCharactersInSet:ws];
     NSString *val = [[body substringFromIndex:eq.location + 1]
@@ -115,11 +136,26 @@ static inline int ShaderParseOSCBlocks(NSString *source, ShaderOSCBlock *out,
       ShaderOSCSetField(b->style, sizeof(b->style), val);
     else if ([key isEqualToString:@"cursor"])
       ShaderOSCSetField(b->cursor, sizeof(b->cursor), val);
-    else if ([key isEqualToString:@"toPos"] || [key isEqualToString:@"toRect"])
+    else if ([key isEqualToString:@"toPos"] ||
+             [key isEqualToString:@"toRect"] || [key isEqualToString:@"toR"])
       ShaderOSCSetField(b->forward, sizeof(b->forward), val);
     else if ([key isEqualToString:@"fromPos"] ||
-             [key isEqualToString:@"fromRect"])
+             [key isEqualToString:@"fromRect"] ||
+             [key isEqualToString:@"fromR"])
       ShaderOSCSetField(b->inverse, sizeof(b->inverse), val);
+    else if ([key isEqualToString:@"center"])
+      ShaderOSCSetField(b->center, sizeof(b->center), val);
+    else if ([key isEqualToString:@"axes"])
+      ShaderOSCSetField(b->axes, sizeof(b->axes), val);
+    else if ([key isEqualToString:@"linked"])
+      b->linked = [val isEqualToString:@"true"] ||
+                  [val isEqualToString:@"yes"] || [val isEqualToString:@"1"];
+    else if ([key isEqualToString:@"body"])
+      b->bodyDisabled = [val isEqualToString:@"none"];
+    else if ([key isEqualToString:@"skipsnapping"])
+      b->skipSnapping = [val isEqualToString:@"true"] ||
+                        [val isEqualToString:@"yes"] ||
+                        [val isEqualToString:@"1"];
     else if (b->localCount < KK_SHADER_MAX_OSC_LOCALS) {
       // Any other key = a local variable (in order; may use earlier locals).
       int li = b->localCount++;

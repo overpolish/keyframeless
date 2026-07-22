@@ -700,8 +700,15 @@
                        fillWidthPt:1.0 * cs
                     outlineWidthPt:0.5 * cs
                            encoder:enc];
+          } else if (st == KKMiniHandleStyleSquare) {
+            [self _encodeSquareGlyphAt:c
+                            ghostAlpha:ga
+                             sizeScale:pointSizeScale
+                               encoder:enc];
           } else {
-            simd_float4 f = accentFill;
+            // `white` hint = match the viewer's white KKPointOSC dot instead
+            // of the accent position-handle fill.
+            simd_float4 f = [g[@"white"] boolValue] ? whiteFill : accentFill;
             f.w *= (float)ga;
             [self _encodeHandleGlyphAt:c
                              fillColor:f

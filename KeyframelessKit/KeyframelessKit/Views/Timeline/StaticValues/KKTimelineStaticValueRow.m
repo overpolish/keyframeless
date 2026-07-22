@@ -273,6 +273,7 @@ static NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
   BOOL _paletteLockable; // lane opted into the lock toggle
   BOOL _paletteLocked;   // current (transient) lock state
   BOOL _paletteGeneratorBar; // row is the 5 mode buttons, not a value editor
+  BOOL _positionPathDriven;  // position-OSC lane: no link-expression affordance
   KKGradientControl *_gradientControl; // KKLaneValueTypeGradient only
   BOOL
       _suppressGradientRefresh; // mid own-edit: don't reset the control's stops
@@ -392,10 +393,11 @@ static NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
 // expression is set.
 - (void)_applyExpressionState {
   // Only numeric value lanes can be expression-driven - not the code editor
-  // (source text) or a palette-generator bar (mirrors the manifest's
-  // referenceable filter).
-  BOOL referenceable =
-      _valueType != KKLaneValueTypeCode && !_paletteGeneratorBar;
+  // (source text), a palette-generator bar, or a position-OSC lane whose value
+  // is authored by its on-screen editable path (an expression would override
+  // the drawn path). Mirrors the manifest's referenceable filter.
+  BOOL referenceable = _valueType != KKLaneValueTypeCode &&
+                       !_paletteGeneratorBar && !_positionPathDriven;
   BOOL driven = referenceable && _linkExpression != nil;
   _titleField.textColor =
       driven ? [NSColor accentMatchingHost] : [NSColor inspectorLabel];
@@ -1079,6 +1081,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   _isToggle = lane.isToggle;
   _autoSizesComponentLabels = lane.autoSizesComponentLabels;
   _oscEditedOnly = lane.oscEditedOnly;
+  _positionPathDriven = lane.positionPathDriven;
   _paletteLockable = lane.paletteLockable;
   _paletteGeneratorBar = lane.paletteGeneratorBar;
   _labelColumnW = labelColumnWidth;
@@ -1215,6 +1218,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     editor.validationSourceComposer = lane.codeValidationComposer;
     editor.codeFormatter = lane.codeFormatter;
     editor.completionProvider = lane.codeCompletionProvider;
+    editor.directiveKeywords = lane.codeDirectiveKeywords;
     editor.savable = lane.codeSavable;
     editor.saveCategoryLabels = lane.codeSaveCategories;
     editor.saveNamePlaceholder = lane.codeSaveNamePlaceholder;
@@ -2101,9 +2105,11 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
 }
 
 - (void)applyLane:(KKLane *)lane {
-  // Re-capture the link expression so a reused row reflects the current model
-  // (the accent tint + right-click menu flip to match).
+  // Re-capture the link expression + position-path flag so a reused row
+  // reflects the current model (the accent tint + right-click menu flip to
+  // match).
   _linkExpression = [lane.linkExpression copy];
+  _positionPathDriven = lane.positionPathDriven;
   [self _applyExpressionState];
   // Code lane: no fields/slider - re-sync the editor's text from the lane (an
   // undo/redo of a committed code edit, or a preset/AI swap, reverts the

@@ -67,5 +67,8 @@ NSArray<NSDictionary<NSString *, NSString *> *> *ShaderGLSLIdents(void);
 /// Enum values for a directive attribute / OSC field VALUE by key, or nil.
 NSArray<NSDictionary<NSString *, NSString *> *>
     *_Nullable ShaderValueEnumForKey(NSString *key);
+/// Directive/`@osc` VALUE words the editor highlights as keywords (enum values,
+/// booleans, bare flags) - passed to the code editor's `directiveKeywords`.
+NSSet<NSString *> *ShaderDirectiveValueKeywords(void);
 
 NS_ASSUME_NONNULL_END

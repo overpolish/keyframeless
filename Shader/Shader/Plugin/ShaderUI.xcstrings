@@ -7560,6 +7560,1308 @@
           }
         }
       }
+    },
+    "The control kind: point, ring, box or rotate.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Steuerelement-Art: point, ring, box oder rotate."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tipo de control: point, ring, box o rotate."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le type de contrôle : point, ring, box ou rotate."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロールの種類。point、ring、box、rotate。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 종류입니다. point, ring, box, rotate."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件类型：point、ring、box 或 rotate。"
+          }
+        }
+      }
+    },
+    "The value this control edits.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Wert, den dieses Steuerelement bearbeitet."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El valor que edita este control."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La valeur que ce contrôle modifie."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このコントロールが編集する値。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 컨트롤이 편집하는 값입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此控件编辑的值。"
+          }
+        }
+      }
+    },
+    "Point look: hollow, square, dot or position.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Punkt-Aussehen: hollow, square, dot oder position."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aspecto del punto: hollow, square, dot o position."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apparence du point : hollow, square, dot ou position."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ポイントの見た目。hollow、square、dot、position。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "포인트 모양입니다. hollow, square, dot, position."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点的外观：hollow、square、dot 或 position。"
+          }
+        }
+      }
+    },
+    "The cursor shown over the control.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Cursor über dem Steuerelement."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El cursor mostrado sobre el control."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le curseur affiché sur le contrôle."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール上に表示されるカーソル。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 위에 표시되는 커서입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件上显示的光标。"
+          }
+        }
+      }
+    },
+    "A ring's radius from the value, in min-side fractions.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Ringradius aus dem Wert, in Anteilen der kurzen Seite."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El radio del anillo a partir del valor, en fracciones del lado menor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le rayon de l'anneau à partir de la valeur, en fractions du petit côté."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "値から求めるリングの半径。短辺に対する割合。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "값에서 구한 링의 반지름입니다. 짧은 변 대비 비율입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由值得出的圆环半径，以短边比例表示。"
+          }
+        }
+      }
+    },
+    "Turns a dragged radius r back into a value.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wandelt einen gezogenen Radius r zurück in einen Wert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convierte un radio arrastrado r de nuevo en un valor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retransforme un rayon r déplacé en valeur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ドラッグした半径 r を値に戻す。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "드래그한 반지름 r을 값으로 되돌립니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将拖动的半径 r 转换回值。"
+          }
+        }
+      }
+    },
+    "A box's rectangle from the value.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Rechteck der Box aus dem Wert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El rectángulo de la caja a partir del valor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le rectangle de la boîte à partir de la valeur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "値から求めるボックスの矩形。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "값에서 구한 상자의 사각형입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由值得出的方框矩形。"
+          }
+        }
+      }
+    },
+    "Turns the dragged rect back into a value.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wandelt das gezogene Rechteck zurück in einen Wert."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convierte el rectángulo arrastrado de nuevo en un valor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retransforme le rectangle déplacé en valeur."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ドラッグした矩形を値に戻す。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "드래그한 사각형을 값으로 되돌립니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将拖动的矩形转换回值。"
+          }
+        }
+      }
+    },
+    "Where a ring or rotate sits. A point value follows it live.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wo ein Ring oder Rotate sitzt. Ein Punktwert folgt live."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dónde se sitúa un anillo o rotate. Un valor de punto lo sigue en vivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Où se place un anneau ou un rotate. Une valeur de point le suit en direct."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リングやローテートの位置。ポイント値を指定するとライブで追従。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "링이나 회전 컨트롤의 위치입니다. 포인트 값을 지정하면 실시간으로 따라갑니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圆环或旋转控件的位置。指定点值时会实时跟随。"
+          }
+        }
+      }
+    },
+    "The axes a rotate control spins: x, y, z.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Achsen, um die ein Rotate dreht: x, y, z."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los ejes que gira un control rotate: x, y, z."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Les axes qu'un contrôle rotate fait tourner : x, y, z."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ローテートが回す軸。x、y、z。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "회전 컨트롤이 도는 축입니다. x, y, z."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旋转控件转动的轴：x、y、z。"
+          }
+        }
+      }
+    },
+    "true keeps a two-field ring or box in proportion. Shift inverts it.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "true hält einen Ring oder eine Box mit zwei Feldern im Verhältnis. Umschalttaste kehrt es um."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "true mantiene la proporción de un anillo o caja de dos campos. Mayús lo invierte."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "true garde un anneau ou une boîte à deux champs en proportion. Maj l'inverse."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "true で2フィールドのリングやボックスの比率を保つ。Shiftで反転。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "true는 두 필드 링이나 상자의 비율을 유지합니다. Shift 키로 반전됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "true 使双字段圆环或方框保持比例。Shift 键反转。"
+          }
+        }
+      }
+    },
+    "none makes a box's interior inert (no body-move).": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "none macht das Innere der Box inaktiv (kein Verschieben)."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "none hace inerte el interior de la caja (sin mover el cuerpo)."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "none rend l'intérieur de la boîte inerte (pas de déplacement)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "none でボックス内部を不活性に（本体移動なし）。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "none은 상자 내부를 비활성으로 만듭니다(본체 이동 없음)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "none 使方框内部不响应拖动（无整体移动）。"
+          }
+        }
+      }
+    },
+    "The dragged radius in fromR, in min-side fractions.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der gezogene Radius in fromR, in Anteilen der kurzen Seite."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El radio arrastrado en fromR, en fracciones del lado menor."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le rayon déplacé dans fromR, en fractions du petit côté."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fromR で使うドラッグ中の半径。短辺に対する割合。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fromR에서 쓰는 드래그 중인 반지름입니다. 짧은 변 대비 비율입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fromR 中拖动的半径，以短边比例表示。"
+          }
+        }
+      }
+    },
+    "The dragged rectangle in fromRect. Read .min, .max, .width, .height.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das gezogene Rechteck in fromRect. Lies .min, .max, .width, .height."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El rectángulo arrastrado en fromRect. Lee .min, .max, .width, .height."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le rectangle déplacé dans fromRect. Lire .min, .max, .width, .height."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fromRect で使うドラッグ中の矩形。.min、.max、.width、.height を参照。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fromRect에서 쓰는 드래그 중인 사각형입니다. .min, .max, .width, .height로 읽습니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fromRect 中拖动的矩形。可读取 .min、.max、.width、.height。"
+          }
+        }
+      }
+    },
+    "Make a rectangle from two corner points.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Rechteck aus zwei Eckpunkten bilden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea un rectángulo a partir de dos esquinas."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Construit un rectangle à partir de deux coins."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2つの角の点から矩形を作る。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "두 모서리 점으로 사각형을 만듭니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由两个角点构成矩形。"
+          }
+        }
+      }
+    },
+    "The ring size for a 0 to 1 value, on the shared curve.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Ringgröße für einen Wert von 0 bis 1, auf der gemeinsamen Kurve."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tamaño del anillo para un valor de 0 a 1, en la curva compartida."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La taille de l'anneau pour une valeur de 0 à 1, sur la courbe partagée."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0〜1の値に対するリングサイズ。共通カーブ上。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0에서 1 값에 대한 링 크기입니다. 공유 곡선 기준입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 到 1 值对应的圆环大小，基于共享曲线。"
+          }
+        }
+      }
+    },
+    "Turns a ring size back into a 0 to 1 value.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wandelt eine Ringgröße zurück in einen Wert von 0 bis 1."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Convierte un tamaño de anillo de nuevo en un valor de 0 a 1."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retransforme une taille d'anneau en valeur de 0 à 1."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リングサイズを0〜1の値に戻す。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "링 크기를 0에서 1 값으로 되돌립니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将圆环大小转换回 0 到 1 的值。"
+          }
+        }
+      }
+    },
+    "Keep the two fields in proportion.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die zwei Felder im Verhältnis halten."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantiene los dos campos en proporción."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Garde les deux champs en proportion."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2つのフィールドの比率を保つ。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "두 필드의 비율을 유지합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使两个字段保持比例。"
+          }
+        }
+      }
+    },
+    "Each field resizes on its own.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Feld skaliert für sich."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada campo cambia de tamaño por su cuenta."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque champ se redimensionne séparément."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各フィールドが独立してサイズ変更。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 필드가 독립적으로 크기 조절됩니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个字段独立调整大小。"
+          }
+        }
+      }
+    },
+    "The box interior ignores drags.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Innere der Box ignoriert Ziehen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El interior de la caja ignora los arrastres."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "L'intérieur de la boîte ignore les glissements."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ボックス内部はドラッグを無視。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "상자 내부는 드래그를 무시합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方框内部忽略拖动。"
+          }
+        }
+      }
+    },
+    "Spin around the x axis.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um die x-Achse drehen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gira alrededor del eje x."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tourne autour de l'axe x."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x軸の周りに回転。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "x축을 중심으로 회전합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "绕 x 轴旋转。"
+          }
+        }
+      }
+    },
+    "Spin around the y axis.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Um die y-Achse drehen."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gira alrededor del eje y."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tourne autour de l'axe y."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "y軸の周りに回転。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "y축을 중심으로 회전합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "绕 y 轴旋转。"
+          }
+        }
+      }
+    },
+    "Spin flat, like a dial.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flach drehen, wie ein Drehregler."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gira en plano, como un dial."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tourne à plat, comme une molette."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダイヤルのように平面で回転。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다이얼처럼 평면으로 회전합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "像转盘一样平面旋转。"
+          }
+        }
+      }
+    },
+    "A full position handle with a motion path.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein vollwertiger Positions-Griff mit Bewegungspfad."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un tirador de posición completo con trayectoria de movimiento."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une poignée de position complète avec trajectoire de mouvement."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モーションパス付きの完全な位置ハンドル。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모션 패스가 있는 완전한 위치 핸들입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "带运动路径的完整位置手柄。"
+          }
+        }
+      }
+    },
+    "Point look: hollow, square, dot or arc.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Punkt-Aussehen: hollow, square, dot oder arc."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aspecto del punto: hollow, square, dot o arc."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apparence du point : hollow, square, dot ou arc."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ポイントの見た目。hollow、square、dot、arc。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "포인트 모양입니다. hollow, square, dot, arc."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点的外观：hollow、square、dot 或 arc。"
+          }
+        }
+      }
+    },
+    "An arc handle, like a position control.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Bogen-Griff, wie eine Positionssteuerung."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un tirador de arco, como un control de posición."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une poignée en arc, comme un contrôle de position."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置コントロールのようなアークハンドル。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "위치 컨트롤과 같은 호 모양 핸들입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弧形手柄，类似位置控件。"
+          }
+        }
+      }
+    },
+    "The full position control with a motion path. Needs a point value. toPos and fromPos warp where it sits.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die vollständige Positionssteuerung mit Bewegungspfad. Braucht einen Punktwert. toPos und fromPos verschieben, wo sie sitzt."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El control de posición completo con trayectoria de movimiento. Necesita un valor de punto. toPos y fromPos transforman dónde se sitúa."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le contrôle de position complet avec trajectoire de mouvement. Nécessite une valeur de point. toPos et fromPos transforment sa position."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "モーションパス付きの完全な位置コントロール。ポイント値が必要。toPos と fromPos で表示位置を変換。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모션 패스가 있는 완전한 위치 컨트롤입니다. 포인트 값이 필요합니다. toPos와 fromPos로 표시 위치를 변환합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "带运动路径的完整位置控件。需要点值。toPos 和 fromPos 变换其位置。"
+          }
+        }
+      }
+    },
+    "The full position control with an editable motion path.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die vollständige Positionssteuerung mit bearbeitbarem Bewegungspfad."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El control de posición completo con trayectoria de movimiento editable."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le contrôle de position complet avec trajectoire de mouvement modifiable."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "編集可能なモーションパス付きの完全な位置コントロール。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "편집 가능한 모션 패스가 있는 완전한 위치 컨트롤입니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "带可编辑运动路径的完整位置控件。"
+          }
+        }
+      }
+    },
+    "The control kind: point, position, ring, box or rotate.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Steuerelement-Art: point, position, ring, box oder rotate."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El tipo de control: point, position, ring, box o rotate."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le type de contrôle : point, position, ring, box ou rotate."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロールの種類。point、position、ring、box、rotate。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "컨트롤 종류입니다. point, position, ring, box, rotate."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控件类型：point、position、ring、box 或 rotate。"
+          }
+        }
+      }
+    },
+    "Add an on-screen control: point, position, ring, box or rotate.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fügt ein On-Screen-Control hinzu: point, position, ring, box oder rotate."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade un control en pantalla: point, position, ring, box o rotate."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoute un contrôle à l'écran : point, position, ring, box ou rotate."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "画面上コントロールを追加。point、position、ring、box、rotate。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "온스크린 컨트롤을 추가합니다. point, position, ring, box, rotate."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加屏幕控件：point、position、ring、box 或 rotate。"
+          }
+        }
+      }
+    },
+    "Opt a point/position handle out of the default Cmd-held snap.": {
+      "comment": "Shader code-editor autocomplete: the help line shown for a directive, GLSL or OSC item.",
+      "extractionState": "manual",
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließt einen Punkt- oder Positionsgriff vom standardmäßigen Einrasten (Cmd) aus."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Excluye un controlador de punto o posición del ajuste con Cmd predeterminado."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exclut une poignée de point ou de position de l'aimantation par défaut (Cmd)."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ポイントまたは位置ハンドルを既定の Cmd スナップから除外します。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "점 또는 위치 핸들을 기본 Cmd 스냅에서 제외합니다."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将点或位置手柄从默认的 Cmd 吸附中排除。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

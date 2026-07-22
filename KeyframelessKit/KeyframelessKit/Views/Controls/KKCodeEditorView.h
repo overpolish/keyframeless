@@ -51,6 +51,12 @@ typedef NS_ENUM(NSInteger, KKCodeSyntax) {
         ^completionProvider)
         (NSString *text, NSUInteger caret, NSRange *outReplaceRange);
 
+/// VALUE words the directive/`@osc` highlighter paints as keywords (coral) -
+/// enum values, booleans, bare flags (`position`, `none`, `true`,
+/// `skipsnapping`, …). Host-supplied so the kit stays vocabulary-agnostic; a
+/// bare value identifier not in this set stays plain text. nil = none.
+@property(nonatomic, copy, nullable) NSSet<NSString *> *directiveKeywords;
+
 /// Optional read-only result strip under the editor (styled like the error
 /// bar): a host pushes the live computed result of an expression here for
 /// clarity. nil/empty hides the strip.

@@ -18,6 +18,7 @@
 #import "KKGLSLTranspiler.h" // live shader validation (XPC-only includers)
 #import "ShaderCategory.h"   // the save bar's category picker options
 #import "ShaderDirectiveCatalog.h" // directive + GLSL autocomplete
+#import "ShaderDirectiveVocab.h" // ShaderDirectiveValueKeywords (highlight set)
 #import "ShaderDirectives.h"
 #import "ShaderLocalized.h" // RLoc
 
@@ -206,6 +207,11 @@ static inline void ShaderAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
                                             values:@[ @(p->fdefault) ]]];
     } else if (p->isPoint) {
       lane.animatable = YES;
+      // A `osc=position` point is driven by its on-screen editable path, so it
+      // isn't expression-referenceable (a link expression would fight the
+      // drawn path). A bare `#point` (no osc) or `osc=point` stays
+      // expression-eligible.
+      lane.positionPathDriven = strcmp(p->oscKind, "position") == 0;
       // Allowed off-scene (negative / past full res), so no min/max - empty =
       // unconstrained, the same as Position in Canvas/MagicMove.
       lane.componentMin = @[];
@@ -829,6 +835,9 @@ ShaderBuildAvailableLanesForSource(NSString *shaderSource,
           NSString *text, NSUInteger caret, NSRange *outReplace) {
     return ShaderDirectiveCompletions(text, caret, outReplace);
   };
+  // The value words the editor paints as keywords in `//` directive / `@osc`
+  // comments (osc kinds, booleans, bare flags like skipsnapping).
+  shader.codeDirectiveKeywords = ShaderDirectiveValueKeywords();
   [lanes addObject:shader];
 
   // Dynamic colour group parsed from the shader's `// #color` directive.

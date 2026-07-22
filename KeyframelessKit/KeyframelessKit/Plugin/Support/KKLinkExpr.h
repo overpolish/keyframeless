@@ -42,6 +42,11 @@ static inline KKExprVal KKExprScalar(double x) {
 ///            a repeating 0..1 phase to feed the easing fns: repeat = 0->1
 ///            sawtooth, pingpong = 0->1->0 triangle; period seconds, default 1)
 ///            vec2/vec3/vec4(...)  (build a vector, GLSL-style).
+///            rect(min, max)  (a rectangle as a vec4 of minX,minY,maxX,maxY
+///            from two vec2 corners; read via `.min .max .width .height`).
+///            ringExtent(norm) ringNorm(extent)  (the radius-ring OSC curve in
+///            min-dimension fractions, and its inverse - so an OSC-handling
+///            expression sizes a ring exactly like the built-in ring OSCs).
 /// Multi-component lanes: `value` is the whole vector (Crop Size = vec2 W,H).
 /// Ops broadcast per component; `.xyzw`/`.rgba` swizzle reads components and
 /// `vec2(value.x, value.y + …)` rebuilds one for independent per-axis control.

@@ -176,6 +176,8 @@ See `audio-shader-directive` for shaping the levels into something that looks go
 
 Add `osc` (or `osc=<kind>`) to a directive to also draw a **draggable control on the viewer and mini-viewer**. The control edits the same lane, so dragging is just another way to keyframe the value.
 
+Each `osc=` value is **sugar** - a standard control with no math to write. For a **fully custom** control (a handle at a corner, a crop box, a ring whose value isn't its radius), author a `// @osc` block instead; see the osc-blocks reference for the primitives and their expressions.
+
 | `osc` value         | Valid on                                                   | On-screen control                                       |
 | ------------------- | ---------------------------------------------------------- | ------------------------------------------------------- |
 | `osc` / `osc=point` | `#point` (vec2)                                            | a position handle at the point                          |
@@ -209,6 +211,10 @@ Each axis angle reaches the shader as **radians, negated** (a clockwise ring rea
 - `link=uPivot` - centre tracks another `#point` uniform's **live value**, so the control follows a draggable point. Useful for centring a ring / rotation on a position handle.
 
 (`#point` handles sit at their own value, so they don't take `center=` / `link=`.)
+
+### Snapping
+
+Point and position handles snap while dragging: hold **Cmd** and the handle snaps to the canvas centre / edges / quarters and onto the other point/position handles (with guides - yellow for the canvas, the accent colour for another handle). It is on by default; add **`skipsnapping`** to opt a handle out (`osc=point skipsnapping`, or on a bare `osc` / `osc=position`).
 
 ### Hiding OSCs
 

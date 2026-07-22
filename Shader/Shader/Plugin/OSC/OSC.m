@@ -14,6 +14,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKLinkExpr.h>
 #import <KeyframelessKit/KKLog.h>
+#import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
 // The three glyph handles (KKArcOSC / KKPointOSC / KKSquarePointOSC) are
@@ -45,34 +46,32 @@ static const NSInteger kShaderExprPartBase = 5000;
 // two consecutive parts: handle/anchor (even) and motion-path tangent (odd).
 static const NSInteger kShaderOSCPartBase = 1000;
 
-// Base for the `#float/#percent/#int osc=ring` activePart numbers. Each ring
-// claims ONE part (no motion path). Kept clear of the point range above.
-static const NSInteger kShaderRingPartBase = 2000;
+// The axis mask for a rotate block's `axes = x y z` subset (default Z).
+static KKRotationAxes ShaderExprRotationAxes(NSString *axes) {
+  KKRotationAxes m = 0;
+  NSString *lower = axes.lowercaseString;
+  if ([lower containsString:@"x"])
+    m |= KKRotationAxisX;
+  if ([lower containsString:@"y"])
+    m |= KKRotationAxisY;
+  if ([lower containsString:@"z"])
+    m |= KKRotationAxisZ;
+  return m ?: KKRotationAxisZ;
+}
 
-// Base for the `osc=box` activePart numbers. A box is the ring's twin - it
-// sizes through the same normalized-extent curve, but is a real KKBoxOSC (8
-// handles + border + value readout) edited by dragging a handle. Each box
-// claims ONE part; the grabbed handle is tracked separately. Kept clear of the
-// ring range (box order stays well under 1000, so 3000+idx never overlaps).
-static const NSInteger kShaderBoxPartBase = 3000;
-
-// Cmd during a box drag = fine mode (cursor movement scaled down for precision
-// at high extent), matching KKScaleOSC.
-static const double kShaderBoxFineFactor = 0.2;
-
-// Base for the `osc={..}` rotation activePart numbers. Each rotate lane claims
-// ONE part (the grabbed axis is tracked inside KKRotationOSC.activeAxis); kept
-// clear of the box range (box order stays well under 1000, so 4000+idx never
-// overlaps). The gizmo is the shared kit KKRotationOSC (3-ring sphere), so the
-// drag math / compose / persist all live in the control.
-static const NSInteger kShaderRotPartBase = 4000;
-
-// The KKRotationAxes bitmask a rotate prop drives (union of its listed x/y/z
-// axes), defaulting an empty set to Z. The lane stores those components in
-// canonical X<Y<Z order, matching the gizmo's contract; the braced order is a
-// shader-side swizzle, not a lane order.
-static KKRotationAxes ShaderRotationAxesForProp(const ShaderScalarProp *p) {
-  return (KKRotationAxes)(ShaderScalarRotationAxisMask(p) ?: KKRotationAxisZ);
+// A rotate block's OSC element keys: the gizmo gates on its LANE label (master
+// + per-axis suffixes), so the keys come from binds, in canonical X<Y<Z order.
+static NSArray<NSString *> *ShaderExprRotateElementKeys(NSString *binds,
+                                                        NSString *axes) {
+  NSMutableArray<NSString *> *keys = [NSMutableArray arrayWithObject:binds];
+  KKRotationAxes m = ShaderExprRotationAxes(axes);
+  if (m & KKRotationAxisX)
+    [keys addObject:[binds stringByAppendingString:@".X"]];
+  if (m & KKRotationAxisY)
+    [keys addObject:[binds stringByAppendingString:@".Y"]];
+  if (m & KKRotationAxisZ)
+    [keys addObject:[binds stringByAppendingString:@".Z"]];
+  return keys;
 }
 
 // The ring's radius encodes the scalar's value NORMALIZED to 0..1 across its
@@ -158,58 +157,53 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   // grabbed anchor-dot vs playhead-handle hit stays consistent).
   KKPositionOSC *_dragController;
   KKPositionHit _dragHit;
-  // Radius rings built from `#float/#percent/#int osc=ring` lanes, keyed on
-  // lane label; `_ringOrder` fixes the label -> activePart mapping.
-  // `_ringMeta`[label] = @[min, max, isInt, centerX, centerY] (center in object
-  // 0..1); the ring is not lane-bound, so the drag write goes through the
-  // scalar lane directly (its
-  // `_ringTemplates` entry seeds the lane if the timeline lacks it yet).
-  NSMutableDictionary<NSString *, KKRingOSC *> *_ringControllers;
-  NSArray<NSString *> *_ringOrder;
-  // Ring label -> spec dict: min/max/isInt/cx/cy/bounded (NSNumber), fields
-  // (component count), linked (aspect-linkable bool).
-  NSDictionary<NSString *, NSDictionary<NSString *, id> *> *_ringMeta;
-  NSDictionary<NSString *, KKLane *> *_ringTemplates;
-  // Ring label -> linked #point uniform name (empty = fixed `center=`). When
-  // set, the ring centres on that point's live value.
-  NSDictionary<NSString *, NSString *> *_ringLink;
-  NSString *_ringDragLabel; // lane being dragged (nil = no ring drag)
-  // Ring drag press-anchor: cursor offset from centre + component values at
-  // press, so an unlinked ellipse drag holds a cardinal-grabbed axis (Glow
-  // feel).
-  double _ringDragStartDx, _ringDragStartDy, _ringDragStartDist;
-  NSArray<NSNumber *> *_ringDragStartVals;
-  // Boxes built from `osc=box` lanes, keyed on lane label; `_boxOrder` fixes
-  // the label -> activePart mapping. Boxes SHARE the radial meta/template/link
-  // dicts above (identical value model to a ring), differing only in control +
-  // interaction. A vec2 #multi box is a rectangle; a scalar box is a square.
-  NSMutableDictionary<NSString *, KKBoxOSC *> *_boxControllers;
-  NSArray<NSString *> *_boxOrder;
-  NSString *_boxDragLabel; // lane being dragged (nil = no box drag)
-  NSInteger _boxHitHandle; // handle under the cursor at last hit-test (-1 none)
-  NSInteger _boxDragHandle; // grabbed handle for the active drag
-  CGPoint _boxDragCenter;   // box centre (canvas) captured at press
-  CGPoint _boxDragEff;      // effective cursor (advances by raw delta * fine)
-  CGPoint _boxDragLast;     // last raw cursor, for the per-tick delta
-  NSArray<NSNumber *>
-      *_boxDragPressNorms; // per-axis normalized values at press
-  // Rotation gizmos built from `osc={..}` lanes, keyed on lane label;
-  // `_rotOrder` fixes the label -> activePart mapping. Each is a self-contained
-  // KKRotationOSC (reads the snapshot lane by label, owns its drag + persist
-  // via kKKParamTimelineData - the same param Shader writes); Shader only sets
-  // the enabled axes + canvas centre + forwards draw/hit/mouse. `_rotDragLabel`
-  // is the lane being dragged (nil = no rotate drag).
-  NSMutableDictionary<NSString *, KKRotationOSC *> *_rotControllers;
-  NSArray<NSString *> *_rotOrder;
-  NSString *_rotDragLabel;
-  // Custom `// @osc` controls: a glyph handle drawn at the block's forward
-  // expression, keyed by block name; `_exprOrder` fixes the block ->
-  // activePart-index mapping. `_exprDragName` is the block being dragged.
-  NSMutableDictionary<NSString *, id<_ShaderGlyphOSC>> *_exprControllers;
+  // Custom `// @osc` controls: one control per block (a glyph handle for
+  // `point`, a KKRingOSC for `ring`), keyed by block name; `_exprOrder` fixes
+  // the block -> activePart-index mapping. `_exprDragName` is the block being
+  // dragged; the press-state pair drives the ring primitive's default drag.
+  NSMutableDictionary<NSString *, id> *_exprControllers;
   NSMutableDictionary<NSString *, ShaderOSCBlockRuntime *> *_exprBlocks;
   NSArray<NSString *> *_exprOrder;
+  // EVERY runtime (including position-style blocks, which live outside the
+  // expr-part namespace), in checklist order, for the element keys.
+  NSArray<ShaderOSCBlockRuntime *> *_allRuntimes;
   NSString *_exprDragName;
   NSString *_oscBlockSig;
+  // Template lanes by label for the runtimes' laneValueProvider (a referenced
+  // uniform that hasn't materialized yet reads its directive default), and the
+  // fraction of the CURRENT tick (the provider has no fraction argument).
+  NSDictionary<NSString *, KKLane *> *_exprAvailLanes;
+  double _exprTickFrac;
+  KKExprVal _exprDragPressBound; // bound value at mouse-down
+  simd_float2 _exprDragPressOff; // cursor - centre at mouse-down (fractions)
+  NSInteger _exprBoxHitPart;     // KKCropPart under the cursor at last hit-test
+  NSInteger _exprBoxDragPart;    // grabbed KKCropPart for the active box drag
+  // Centred-box drag state (`body = none`): the effective cursor starts AT the
+  // grabbed handle (no press snap) and advances by the raw delta, scaled down
+  // while Cmd is held (fine mode, matching KKScaleOSC).
+  CGPoint _exprBoxDragEff, _exprBoxDragLast;
+  // Diagnostic for the FCP "FFUIAction beginWithUndoState" abort-on-quit: a
+  // nested startAction (a write re-entering while another action is open)
+  // would assert in the host. Remove once the crash source is confirmed.
+  int _exprActionDepth;
+  // Cmd-held snap for point handles (parity with KKPositionOSC): snaps the
+  // dragged handle onto the canvas centre / edges / quarters and the other
+  // point/position handles, drawing guides. Live only during an active point
+  // drag whose block didn't opt out via `skipsnapping`.
+  KKSnapEngine *_exprSnap;
+  BOOL
+      _exprSnapActive; // the current point drag snapped this tick (draw guides)
+}
+
+// Cmd during a centred-box drag = fine mode (cursor movement scaled down for
+// precision at high extent), matching KKScaleOSC.
+static const double kShaderExprBoxFineFactor = 0.2;
+
+// Handle classification for KKBoxOSC's canonical index order (0-3 corners
+// BL/BR/TR/TL, 4-7 edges bottom/right/top/left).
+static BOOL ShaderExprBoxHandleIsCorner(NSInteger idx) { return idx < 4; }
+static BOOL ShaderExprBoxHandleControlsX(NSInteger idx) {
+  return idx < 4 || idx == 5 || idx == 7;
 }
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager {
@@ -218,20 +212,12 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
     self.clearsOnDraw = NO;
     _posControllers = [NSMutableDictionary dictionary];
     _posOrder = @[];
-    _ringControllers = [NSMutableDictionary dictionary];
-    _ringOrder = @[];
-    _ringMeta = @{};
-    _ringTemplates = @{};
-    _ringLink = @{};
-    _boxControllers = [NSMutableDictionary dictionary];
-    _boxOrder = @[];
-    _boxHitHandle = -1;
-    _boxDragHandle = -1;
-    _rotControllers = [NSMutableDictionary dictionary];
-    _rotOrder = @[];
     _exprControllers = [NSMutableDictionary dictionary];
     _exprBlocks = [NSMutableDictionary dictionary];
     _exprOrder = @[];
+    _exprSnap = [[KKSnapEngine alloc] init];
+    _exprBoxHitPart = KKCropPartNone;
+    _exprBoxDragPart = KKCropPartNone;
   }
   return self;
 }
@@ -239,57 +225,187 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
 // Rebuild the custom-OSC controllers to match the shader's `// @osc` blocks.
 // Cheap no-op when the block set is unchanged (raw-block-text signature).
 - (void)_syncOSCBlocks:(NSString *)src {
-  ShaderOSCBlock blocks[KK_SHADER_MAX_OSC_BLOCKS];
-  int n = src.length
-              ? ShaderParseOSCBlocks(src, blocks, KK_SHADER_MAX_OSC_BLOCKS)
-              : 0;
-  NSMutableString *sig = [NSMutableString string];
-  for (int i = 0; i < n; i++)
-    [sig appendFormat:@"%s|%s|%s|%s|%s|%s\x1f", blocks[i].name,
-                      blocks[i].primitive, blocks[i].binds, blocks[i].style,
-                      blocks[i].forward, blocks[i].inverse];
+  // The runtimes now include the DIRECTIVE SUGAR (osc=ring/box/{..}/point
+  // synthesized as standard blocks), so any source edit can change them; the
+  // whole source is the signature (same cheap compare the mini uses).
+  NSString *sig = src ?: @"";
   if ([sig isEqualToString:_oscBlockSig])
     return;
-  _oscBlockSig = sig;
+  _oscBlockSig = [sig copy];
 
   // Parse + compile + normalize via the shared runtime (the mini uses the
-  // same), then attach the viewer-only glyph object per block.
+  // same), then attach the viewer-only control object per block.
   NSArray<KKLane *> *avail =
       src.length ? [ShaderPlugin availableLanesForShaderSource:src] : @[];
+  NSMutableDictionary<NSString *, KKLane *> *availByLabel =
+      [NSMutableDictionary dictionary];
+  for (KKLane *l in avail)
+    if (l.label.length)
+      availByLabel[l.label] = l;
+  _exprAvailLanes = [availByLabel copy];
   NSArray<ShaderOSCBlockRuntime *> *runtimes =
       [ShaderOSCBlockRuntime runtimesForSource:src lanes:avail];
 
-  NSMutableDictionary<NSString *, id<_ShaderGlyphOSC>> *nextCtl =
+  NSMutableDictionary<NSString *, id> *nextCtl =
       [NSMutableDictionary dictionary];
   NSMutableDictionary<NSString *, ShaderOSCBlockRuntime *> *nextBlk =
       [NSMutableDictionary dictionary];
   NSMutableArray<NSString *> *order = [NSMutableArray array];
 
+  _allRuntimes = runtimes;
+  __weak ShaderOSC *weakSelf = self;
+
+  // Position-style point blocks (the `#point osc` sugar) get the full
+  // KKPositionOSC backing - motion path + tangents + playhead handle - in
+  // their own two-part namespace, exactly as before the sugar conversion.
+  NSMutableDictionary<NSString *, KKPositionOSC *> *nextPos =
+      [NSMutableDictionary dictionary];
+  NSMutableArray<NSString *> *posOrder = [NSMutableArray array];
   for (ShaderOSCBlockRuntime *b in runtimes) {
-    // Glyph by style: hollow -> the small radius-widget ring (matching
-    // Rounded/Canvas), square -> square, else dot.
-    id<_ShaderGlyphOSC> glyph;
-    if ([b.styleName isEqualToString:@"hollow"]) {
+    if (![b.primitive isEqualToString:@"position"])
+      continue;
+    NSString *label = b.binds;
+    KKPositionOSC *ctl =
+        _posControllers[label]
+            ?: [[KKPositionOSC alloc]
+                   initWithAPIManager:self.apiManager
+                            laneLabel:label
+                            pathLabel:[label stringByAppendingString:@" Path"]];
+    ctl.positionActivePart = kShaderOSCPartBase + (NSInteger)posOrder.count * 2;
+    ctl.tangentActivePart =
+        kShaderOSCPartBase + (NSInteger)posOrder.count * 2 + 1;
+    // So a running timing guide draws this handle at the guide-pushed position
+    // (see -positionGuideObjectValue). Set on every point controller: the
+    // guide teaches one primary point, and the bridge's guideStep gates it, so
+    // the rest read their real lane value normally.
+    ctl.guideProvider = self;
+    ctl.templateLane = b.templateLane;
+    ctl.snapDisabled = !b.snaps; // `skipsnapping` on the position sugar/block
+    nextPos[label] = ctl;
+    [posOrder addObject:label];
+  }
+  _posControllers = nextPos;
+  _posOrder = [posOrder copy];
+
+  for (ShaderOSCBlockRuntime *b in runtimes) {
+    // A referenced uniform (center = uOrigin, …) reads the snapshot lane at
+    // the current tick's fraction, falling back to its directive default.
+    b.laneValueProvider = ^NSArray<NSNumber *> *(NSString *label) {
+      return [weakSelf _exprRawLaneValuesForLabel:label];
+    };
+    b.laneValuesAtFractionProvider =
+        ^NSArray<NSNumber *> *(NSString *label, double frac) {
+      return [weakSelf _exprRawLaneValuesForLabel:label atFraction:frac];
+    };
+    if ([b.primitive isEqualToString:@"position"])
+      continue; // backed by _posControllers above, not an expr part
+    id ctl;
+    if ([b.primitive isEqualToString:@"ring"]) {
+      // A value-sized radius ring, drawn at the block's centre with its `toR`
+      // radii - the same control the inline `osc=ring` path uses.
+      KKRingOSC *ring =
+          [_exprControllers[b.name] isKindOfClass:KKRingOSC.class] &&
+                  ![(KKRingOSC *)_exprControllers[b.name] solidStyle]
+              ? _exprControllers[b.name]
+              : [[KKRingOSC alloc] initWithAPIManager:self.apiManager];
+      ring.clearsOnDraw = NO; // draw over the points, don't wipe the tile
+      ctl = ring;
+    } else if ([b.primitive isEqualToString:@"rotate"]) {
+      // Placement-only: the self-contained 3-ring gizmo reads/persists its
+      // lane itself; the block supplies binds + axes + the centre expression.
+      KKRotationOSC *rot =
+          [_exprControllers[b.name] isKindOfClass:KKRotationOSC.class]
+              ? _exprControllers[b.name]
+              : [[KKRotationOSC alloc] initWithAPIManager:self.apiManager
+                                                laneLabel:b.binds];
+      rot.laneLabel = b.binds;
+      rot.clearsOnDraw = NO; // draw over the other controls
+      rot.enabledAxes = ShaderExprRotationAxes(b.axes);
+      rot.templateLane = b.templateLane;
+      ctl = rot;
+    } else if ([b.primitive isEqualToString:@"box"]) {
+      // The crop scaffold: border + 8 anchored-resize handles + body-move + a
+      // px readout (how Rounded drives its crop). The block's toRect/fromRect
+      // bijection bridges its bound value to the scaffold's [w,h,x,y] model.
+      KKCropOSC *crop =
+          [_exprControllers[b.name] isKindOfClass:KKCropOSC.class]
+              ? _exprControllers[b.name]
+              : [[KKCropOSC alloc] initWithAPIManager:self.apiManager];
+      crop.hitPadding = 6.0; // forgiving handle grab, like the scale box
+      ShaderOSCBlockRuntime *blk = b;
+      crop.valuesProvider = ^NSArray<NSNumber *> *(CMTime t) {
+        __strong ShaderOSC *s = weakSelf;
+        if (!s)
+          return nil;
+        double frac = [s fractionAtTime:t];
+        s->_exprTickFrac = frac;
+        KKExprVal bound = [s _exprValueForBlock:blk atFraction:frac];
+        return [ShaderOSCBlockRuntime
+            cropModelFromRect:[blk boxRectForBound:bound
+                                            aspect:[s _exprAspect]]];
+      };
+      crop.valuesWriter = ^(NSArray<NSNumber *> *values, CMTime t) {
+        __strong ShaderOSC *s = weakSelf;
+        if (!s)
+          return;
+        double frac = [s fractionAtTime:t];
+        s->_exprTickFrac = frac;
+        KKExprVal rect = [ShaderOSCBlockRuntime rectFromCropModel:values];
+        KKExprVal nv = [blk boxBoundForRect:rect
+                                   boundNow:[s _exprValueForBlock:blk
+                                                       atFraction:frac]
+                                     aspect:[s _exprAspect]];
+        [s _writeExprValue:nv forBlock:blk atTime:t forceUpdate:NULL];
+      };
+      ctl = crop;
+    } else if ([b.styleName isEqualToString:@"hollow"]) {
+      // Glyph by style: hollow -> the small radius-widget ring (matching
+      // Rounded/Canvas), arc -> the position-style arc, square -> square,
+      // else dot. EVERY glyph must clear clearsOnDraw (default YES) or its
+      // draw wipes the tile and erases every control drawn before it.
       KKRingOSC *g = [[KKRingOSC alloc] initWithAPIManager:self.apiManager];
-      [g applyRadiusWidgetStyle];
+      [g applyRadiusWidgetStyle]; // also sets clearsOnDraw = NO
       // Solid white always: parity with the mini (which has no hover), and the
       // dim idle grey reads unclear for a small radius handle.
       g.solidStyle = YES;
-      glyph = (id<_ShaderGlyphOSC>)g;
+      ctl = g;
+    } else if ([b.styleName isEqualToString:@"arc"]) {
+      KKArcOSC *g = [[KKArcOSC alloc] initWithAPIManager:self.apiManager];
+      g.clearsOnDraw = NO;
+      ctl = g;
     } else if ([b.styleName isEqualToString:@"square"]) {
-      glyph = (id<_ShaderGlyphOSC>)[[KKSquarePointOSC alloc]
-          initWithAPIManager:self.apiManager];
+      KKSquarePointOSC *g =
+          [[KKSquarePointOSC alloc] initWithAPIManager:self.apiManager];
+      g.clearsOnDraw = NO;
+      ctl = g;
     } else {
-      glyph = (id<_ShaderGlyphOSC>)[[KKPointOSC alloc]
-          initWithAPIManager:self.apiManager];
+      KKPointOSC *g = [[KKPointOSC alloc] initWithAPIManager:self.apiManager];
+      g.clearsOnDraw = NO;
+      ctl = g;
     }
-    nextCtl[b.name] = glyph;
+    nextCtl[b.name] = ctl;
     nextBlk[b.name] = b;
     [order addObject:b.name];
   }
   _exprControllers = nextCtl;
   _exprBlocks = nextBlk;
   _exprOrder = [order copy];
+}
+
+// Raw lane values (lane units) for any uniform label at the current tick's
+// fraction: the snapshot lane when materialized, else the directive-default
+// template lane. Backs the runtimes' laneValueProvider.
+- (nullable NSArray<NSNumber *> *)_exprRawLaneValuesForLabel:(NSString *)label
+                                                  atFraction:(double)frac {
+  for (KKLane *l in KKProcessTimelineSnapshot().lanes)
+    if ([l.label isEqualToString:label])
+      return KKTimelineLaneValueAtFraction(l, frac);
+  KKLane *tpl = _exprAvailLanes[label];
+  return tpl ? KKTimelineLaneValueAtFraction(tpl, frac) : nil;
+}
+
+- (nullable NSArray<NSNumber *> *)_exprRawLaneValuesForLabel:(NSString *)label {
+  return [self _exprRawLaneValuesForLabel:label atFraction:_exprTickFrac];
 }
 
 // KKPositionGuideProvider: the point controllers read the guide state through
@@ -323,220 +439,11 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   return hasShaderLane ? nil : ShaderCustomDefaultShaderSource();
 }
 
-// Rebuild the position controllers to match the shader's `#point osc` lanes.
-// Cheap no-op when the lane set is unchanged (signature compare).
+// Rebuild every OSC control to match the shader source. The runtimes are the
+// single source of truth (directive sugar + authored blocks); the block sync
+// owns all controller construction.
 - (void)_syncOSCControllers {
-  NSString *src = [self _currentShaderSource];
-  [self _syncOSCBlocks:src]; // custom `// @osc` controls (own signature)
-  NSMutableArray<NSString *> *pointLabels = [NSMutableArray array];
-  NSMutableArray<NSString *> *ringLabels = [NSMutableArray array];
-  NSMutableArray<NSString *> *boxLabels = [NSMutableArray array];
-  NSMutableArray<NSString *> *rotLabels = [NSMutableArray array];
-  // The rotate signature carries each lane's axis SET, so editing `osc={z}` ->
-  // `osc={y}` (same uniform, different axis) changes the signature and forces a
-  // rebuild - the label alone is unchanged and would look stale.
-  NSMutableArray<NSString *> *rotSig = [NSMutableArray array];
-  ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
-  int nProps = 0;
-  if (src.length) {
-    int used = 0;
-    nProps = ShaderParseScalarProps(src, props, KK_SHADER_MAX_SCALAR_PROPS, 0,
-                                    &used);
-    for (int i = 0; i < nProps; i++) {
-      if (props[i].isPoint && strcmp(props[i].oscKind, "point") == 0)
-        [pointLabels
-            addObject:@(props[i].name)]; // uniform name = lane identity
-      else if (ShaderScalarOSCIsRotate(&props[i])) {
-        [rotLabels addObject:@(props[i].name)];
-        // Axis set + centre + link all feed the gizmo, so an edit to any of
-        // them must change the signature and force a rebuild.
-        [rotSig addObject:[NSString stringWithFormat:@"%s=%s|%.4f,%.4f|%s",
-                                                     props[i].name,
-                                                     props[i].oscAxes,
-                                                     props[i].rcenterx,
-                                                     props[i].rcentery,
-                                                     props[i].linkName]];
-      } else if (!ShaderScalarRingEligible(&props[i]))
-        continue;
-      else if (strcmp(props[i].oscKind, "ring") == 0)
-        [ringLabels addObject:@(props[i].name)];
-      else if (ShaderScalarOSCIsBox(&props[i]))
-        [boxLabels addObject:@(props[i].name)];
-    }
-  }
-  NSString *sig = [@[
-    [pointLabels componentsJoinedByString:@"\n"],
-    [ringLabels componentsJoinedByString:@"\n"],
-    [boxLabels componentsJoinedByString:@"\n"],
-    [rotSig componentsJoinedByString:@"\n"]
-  ] componentsJoinedByString:@"\x1f"];
-  if ([sig isEqualToString:_oscSig])
-    return;
-  _oscSig = sig;
-  _posOrder = [pointLabels copy];
-  _ringOrder = [ringLabels copy];
-  _boxOrder = [boxLabels copy];
-  _rotOrder = [rotLabels copy];
-  NSArray<KKLane *> *avail =
-      src.length ? [ShaderPlugin availableLanesForShaderSource:src] : @[];
-
-  NSMutableDictionary<NSString *, KKPositionOSC *> *nextPos =
-      [NSMutableDictionary dictionary];
-  for (NSUInteger i = 0; i < pointLabels.count; i++) {
-    NSString *label = pointLabels[i];
-    KKPositionOSC *ctl =
-        _posControllers[label]
-            ?: [[KKPositionOSC alloc]
-                   initWithAPIManager:self.apiManager
-                            laneLabel:label
-                            pathLabel:[label stringByAppendingString:@" Path"]];
-    ctl.positionActivePart = kShaderOSCPartBase + (NSInteger)i * 2;
-    ctl.tangentActivePart = kShaderOSCPartBase + (NSInteger)i * 2 + 1;
-    // So a running timing guide draws this handle at the guide-pushed position
-    // (see -positionGuideObjectValue). Set on every point controller: the guide
-    // teaches one primary point, and the bridge's guideStep gates it, so the
-    // rest read their real lane value normally.
-    ctl.guideProvider = self;
-    for (KKLane *l in avail)
-      if ([l.label isEqualToString:label]) {
-        ctl.templateLane = l;
-        break;
-      }
-    nextPos[label] = ctl;
-  }
-  _posControllers = nextPos;
-
-  // Rings and boxes share the SAME radial meta (identical value model); only
-  // the control + interaction differ. Build both in one pass over the radial
-  // props, routing each to its controller dict.
-  NSMutableDictionary<NSString *, KKRingOSC *> *nextRing =
-      [NSMutableDictionary dictionary];
-  NSMutableDictionary<NSString *, KKBoxOSC *> *nextBox =
-      [NSMutableDictionary dictionary];
-  NSMutableDictionary<NSString *, NSDictionary<NSString *, id> *> *nextMeta =
-      [NSMutableDictionary dictionary];
-  NSMutableDictionary<NSString *, KKLane *> *nextTpl =
-      [NSMutableDictionary dictionary];
-  NSMutableDictionary<NSString *, NSString *> *nextLink =
-      [NSMutableDictionary dictionary];
-  for (int i = 0; i < nProps; i++) {
-    if (!ShaderScalarRingEligible(&props[i]))
-      continue;
-    BOOL isRing = strcmp(props[i].oscKind, "ring") == 0;
-    BOOL isBox = ShaderScalarOSCIsBox(&props[i]);
-    if (!isRing && !isBox)
-      continue;
-    NSString *label = @(props[i].name);
-    BOOL isInt = props[i].isInt || props[i].isPercent;
-    int fields = props[i].isMulti
-                     ? (props[i].fieldCount > 0 ? props[i].fieldCount : 2)
-                     : 1;
-    nextMeta[label] = @{
-      @"min" : @(props[i].fmin),
-      @"max" : @(props[i].fmax),
-      @"isInt" : @(isInt),
-      @"isPercent" : @(props[i].isPercent != 0),
-      @"cx" : @(props[i].rcenterx),
-      @"cy" : @(props[i].rcentery),
-      @"bounded" : @(props[i].hasMax != 0),
-      @"fields" : @(fields),
-      @"linked" : @(props[i].aspectLinked != 0),
-    };
-    nextLink[label] = @(props[i].linkName);
-    for (KKLane *l in avail)
-      if ([l.label isEqualToString:label]) {
-        nextTpl[label] = l;
-        break;
-      }
-    if (isRing) {
-      KKRingOSC *ring =
-          _ringControllers[label]
-              ?: [[KKRingOSC alloc] initWithAPIManager:self.apiManager];
-      ring.clearsOnDraw = NO; // draw over the points, don't wipe the tile
-      nextRing[label] = ring;
-    } else {
-      KKBoxOSC *box =
-          _boxControllers[label]
-              ?: [[KKBoxOSC alloc] initWithAPIManager:self.apiManager];
-      box.hitPadding = 6.0; // forgiving handle grab, like the scale box
-      nextBox[label] = box;
-    }
-  }
-  _ringControllers = nextRing;
-  _boxControllers = nextBox;
-  _ringTemplates = nextTpl;
-
-  // Rotation gizmos: one self-contained KKRotationOSC per `osc={..}` lane, with
-  // its enabled axes from the braced set and its template from availableLanes.
-  // It reads/writes the snapshot lane (canonical X/Y/Z components) itself, so
-  // Shader only sets enabledAxes/templateLane/activePart and forwards events.
-  // The rotate gizmo's centre reuses the radial `center=`/`link=` machinery, so
-  // its cx/cy + link go into the shared `_ringMeta`/`_ringLink` dicts (its
-  // label never overlaps a ring/box label).
-  NSMutableDictionary<NSString *, KKRotationOSC *> *nextRot =
-      [NSMutableDictionary dictionary];
-  for (int i = 0; i < nProps; i++) {
-    if (!ShaderScalarOSCIsRotate(&props[i]))
-      continue;
-    NSString *label = @(props[i].name);
-    KKRotationOSC *rot =
-        _rotControllers[label]
-            ?: [[KKRotationOSC alloc] initWithAPIManager:self.apiManager
-                                               laneLabel:label];
-    rot.clearsOnDraw = NO; // draw over the other controls, don't wipe the tile
-    rot.enabledAxes = ShaderRotationAxesForProp(&props[i]);
-    for (KKLane *l in avail)
-      if ([l.label isEqualToString:label]) {
-        rot.templateLane = l;
-        break;
-      }
-    nextMeta[label] =
-        @{@"cx" : @(props[i].rcenterx), @"cy" : @(props[i].rcentery)};
-    nextLink[label] = @(props[i].linkName);
-    nextRot[label] = rot;
-  }
-  _rotControllers = nextRot;
-  _ringMeta = nextMeta;
-  _ringLink = nextLink;
-}
-
-// activePart -> rotation lane label, or nil when the part isn't a rotate gizmo.
-- (nullable NSString *)rotLabelForActivePart:(NSInteger)part {
-  if (part < kShaderRotPartBase)
-    return nil;
-  NSInteger idx = part - kShaderRotPartBase;
-  if (idx < 0 || idx >= (NSInteger)_rotOrder.count)
-    return nil;
-  return _rotOrder[idx];
-}
-
-// The rotation gizmo's canvas centre for a label: its `center=` object point
-// (or the `link=`ed #point's live value), via the shared radial-centre helper,
-// so several rotation gizmos can sit at distinct points instead of stacking.
-- (CGPoint)_rotationCenterForLabel:(NSString *)label atFraction:(double)frac {
-  CGPoint oc = [self _ringObjectCenterForLabel:label atFraction:frac];
-  return
-      [self canvasPointFromObjectPoint:(simd_float2){(float)oc.x, (float)oc.y}];
-}
-
-// The ring centre in object space 0..1: the linked #point's live value when
-// `link=` is set (and that point lane exists in the snapshot), else the fixed
-// `center=` default.
-- (CGPoint)_ringObjectCenterForLabel:(NSString *)label atFraction:(double)frac {
-  NSString *link = _ringLink[label];
-  if (link.length) {
-    for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-      if ([l.label isEqualToString:link]) {
-        NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(l, frac);
-        if (v.count >= 2)
-          return CGPointMake(v[0].doubleValue, v[1].doubleValue);
-        break;
-      }
-  }
-  NSDictionary<NSString *, id> *meta = _ringMeta[label];
-  double cx = meta[@"cx"] ? [meta[@"cx"] doubleValue] : 0.5;
-  double cy = meta[@"cy"] ? [meta[@"cy"] doubleValue] : 0.5;
-  return CGPointMake(cx, cy);
+  [self _syncOSCBlocks:[self _currentShaderSource]];
 }
 
 // activePart -> its position controller (and whether it's the path/tangent
@@ -551,180 +458,6 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   if (outPath)
     *outPath = ((part - kShaderOSCPartBase) & 1) != 0;
   return _posControllers[_posOrder[idx]];
-}
-
-// activePart -> ring lane label, or nil when the part isn't a ring.
-- (nullable NSString *)ringLabelForActivePart:(NSInteger)part {
-  if (part < kShaderRingPartBase)
-    return nil;
-  NSInteger idx = part - kShaderRingPartBase;
-  if (idx < 0 || idx >= (NSInteger)_ringOrder.count)
-    return nil;
-  return _ringOrder[idx];
-}
-
-// The snapshot lane for a ring label, or its template (constant t=0 default)
-// when the timeline hasn't materialized it yet - so the ring is grabbable and
-// visible from the first frame.
-- (nullable KKLane *)_ringLaneForLabel:(NSString *)label {
-  for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-    if ([l.label isEqualToString:label])
-      return l;
-  return _ringTemplates[label];
-}
-
-// The ring lane's raw component values at `frac` (per-component defaults when
-// the lane isn't materialized yet).
-- (NSArray<NSNumber *> *)_ringValuesForLabel:(NSString *)label
-                                  atFraction:(double)frac {
-  NSArray<NSNumber *> *v =
-      KKTimelineLaneValueAtFraction([self _ringLaneForLabel:label], frac);
-  if (v.count)
-    return v;
-  NSDictionary<NSString *, id> *meta = _ringMeta[label];
-  double mn = meta[@"min"] ? [meta[@"min"] doubleValue] : 0.0;
-  int fields = meta[@"fields"] ? [meta[@"fields"] intValue] : 1;
-  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
-  for (int k = 0; k < MAX(1, fields); k++)
-    [out addObject:@(mn)];
-  return out;
-}
-
-// Per-component normalized values ((value-min)/(refMax-min), no upper clamp so
-// an unbounded field grows the ring past its nominal range).
-- (NSArray<NSNumber *> *)ringNormsForLabel:(NSString *)label
-                                atFraction:(double)frac {
-  NSDictionary<NSString *, id> *meta = _ringMeta[label];
-  double mn = [meta[@"min"] doubleValue], mx = [meta[@"max"] doubleValue];
-  double span = mx - mn;
-  NSArray<NSNumber *> *v = [self _ringValuesForLabel:label atFraction:frac];
-  NSMutableArray<NSNumber *> *out = [NSMutableArray array];
-  for (NSNumber *n in v)
-    [out addObject:@(span > 0.0 ? MAX(0.0, (n.doubleValue - mn) / span) : 0.0)];
-  return out;
-}
-
-// Set the ring's canvas center + per-axis radii for the current value. A vec2
-// #multi ring is an ellipse (rx=field0, ry=field1); a scalar ring is a circle.
-- (void)_updateRing:(KKRingOSC *)ring
-           forLabel:(NSString *)label
-         atFraction:(double)frac {
-  CGPoint oc = [self _ringObjectCenterForLabel:label atFraction:frac];
-  NSArray<NSNumber *> *norms = [self ringNormsForLabel:label atFraction:frac];
-  double minDim = [self canvasMinDimension];
-  double nx = norms.count >= 1 ? norms[0].doubleValue : 0.0;
-  double ny = norms.count >= 2 ? norms[1].doubleValue : nx;
-  ring.center =
-      [self canvasPointFromObjectPoint:(simd_float2){(float)oc.x, (float)oc.y}];
-  ring.ringRadius = (float)KKRingOSCExtentForNorm(nx, minDim);
-  ring.ringRadiusY = (float)KKRingOSCExtentForNorm(ny, minDim);
-}
-
-// activePart -> box lane label, or nil when the part isn't a box.
-- (nullable NSString *)boxLabelForActivePart:(NSInteger)part {
-  if (part < kShaderBoxPartBase)
-    return nil;
-  NSInteger idx = part - kShaderBoxPartBase;
-  if (idx < 0 || idx >= (NSInteger)_boxOrder.count)
-    return nil;
-  return _boxOrder[idx];
-}
-
-// The box's canvas centre + two opposite corners for the current value. A box
-// is centred (symmetric, no anchor) on the same object point a ring would use,
-// with half-extents from the SAME normalized-extent curve - so a box and a ring
-// for the same field are the same size. A vec2 #multi box is a rectangle
-// (halfW=field0, halfH=field1); a scalar box is a square.
-- (CGPoint)_boxGeometryForLabel:(NSString *)label
-                     atFraction:(double)frac
-                       topRight:(CGPoint *)outTR
-                     bottomLeft:(CGPoint *)outBL {
-  CGPoint oc = [self _ringObjectCenterForLabel:label atFraction:frac];
-  CGPoint c =
-      [self canvasPointFromObjectPoint:(simd_float2){(float)oc.x, (float)oc.y}];
-  NSArray<NSNumber *> *norms = [self ringNormsForLabel:label atFraction:frac];
-  double minDim = [self canvasMinDimension];
-  double nx = norms.count >= 1 ? norms[0].doubleValue : 0.0;
-  double ny = norms.count >= 2 ? norms[1].doubleValue : nx;
-  double hw = KKRingOSCExtentForNorm(nx, minDim);
-  double hh = KKRingOSCExtentForNorm(ny, minDim);
-  if (outTR)
-    *outTR = CGPointMake(c.x + hw, c.y + hh);
-  if (outBL)
-    *outBL = CGPointMake(c.x - hw, c.y - hh);
-  return c;
-}
-
-// "X" / "X x Y" readout of the box's raw value(s), formatted by field type: a
-// percent shows "%", an integer a whole number, a float a trimmed decimal.
-- (NSString *)_boxReadoutForLabel:(NSString *)label atFraction:(double)frac {
-  NSDictionary<NSString *, id> *meta = _ringMeta[label];
-  return KKBoxOSCReadoutString([self _ringValuesForLabel:label atFraction:frac],
-                               [meta[@"isPercent"] boolValue],
-                               [meta[@"isInt"] boolValue]);
-}
-
-// Ring visibility (matches the point controllers / Glow): shown when the lane
-// is a constant or the playhead is on a keypose, always mid-drag; an Opt-hidden
-// ring surfaces as a dim ghost while Opt-reveal is active. `outReveal` reports
-// the ghost case so the caller dims it.
-- (BOOL)_ringVisible:(NSString *)label
-          atFraction:(double)frac
-              reveal:(BOOL *)outReveal {
-  BOOL dragging = [_ringDragLabel isEqualToString:label];
-  BOOL shownHere =
-      dragging || KKLaneVisibleAtFraction([self _ringLaneForLabel:label], frac,
-                                          KKProcessFrameDurationSeconds());
-  BOOL enabled = [self kkOSCElementVisible:label];
-  BOOL visible = shownHere && enabled;
-  BOOL reveal = !visible && self.optRevealActive && shownHere &&
-                [self kkOSCRevealEligible:label];
-  if (outReveal)
-    *outReveal = reveal;
-  return visible;
-}
-
-// Write the ring lane's N component values into the keypose nearest the
-// playhead, preserving In/Hold/Out structure. Mirrors Glow's
-// _writeRadiusValues: the blob is unreadable inside the action scope, so the
-// snapshot is canonical and the template seeds a first keypose if needed.
-- (void)_writeRingValues:(NSArray<NSNumber *> *)values
-                forLabel:(NSString *)label
-                  atTime:(CMTime)time
-             forceUpdate:(BOOL *)forceUpdate {
-  if (!_ringMeta[label] || !values.count)
-    return;
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI) {
-    [actionAPI endAction:self];
-    return;
-  }
-  double frac = [self fractionAtTime:time];
-  KKTimeline *snap = KKProcessTimelineSnapshot();
-  KKTimeline *tl =
-      snap ? KKTimelineSettingValuesNearestFraction(snap, label, frac, values)
-           : nil;
-  if (!tl) {
-    // No snapshot, or the lane isn't materialized yet: seed from the template
-    // (identical schema to ShaderAppendScalarLanes) with one keypose.
-    tl = snap ? [snap copy] : [KKTimeline timeline];
-    KKLane *seed = [_ringTemplates[label] copy] ?: [KKLane laneWithLabel:label];
-    seed.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
-    NSMutableArray<KKLane *> *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-    [lanes addObject:seed];
-    tl.lanes = lanes;
-  }
-  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                           kKKParamTimelineData);
-  [actionAPI endAction:self];
-  if (forceUpdate)
-    *forceUpdate = YES;
 }
 
 // --- Custom `// @osc` controls --------------------------------------------
@@ -775,7 +508,106 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                              value:[self _exprValueForBlock:b atFraction:frac]];
 }
 
-// Custom `// @osc` handle visibility (mirrors _ringVisible:): shown when the
+// Every point/position handle's object position at `frac` EXCEPT the one bound
+// to `binds` - the shared snap-target set both the point drag path and the
+// position OSC (its externalSnapTargets) pull from, so the two snap onto each
+// other. The handle geometry lives in ShaderOSCBlockRuntime (shared with the
+// mini); this supplies the viewer's snapshot lane values.
+- (NSArray<NSValue *> *)_exprSnapTargetsExcludingBinds:(NSString *)binds
+                                            atFraction:(double)frac {
+  return [ShaderOSCBlockRuntime
+      snapTargetsForRuntimes:_allRuntimes
+              excludingBinds:binds
+                      aspect:[self _exprAspect]
+                  laneValues:^NSArray<NSNumber *> *(NSString *b) {
+                    return [self _exprRawLaneValuesForLabel:b atFraction:frac];
+                  }];
+}
+
+// Snap a point block's dragged CANVAS point to the canvas centre / edges /
+// quarters and the other point/position handles (the shared target set), Cmd-
+// engaged like KKPositionOSC. Returns the snapped OBJECT point and records
+// `_exprSnapActive` for the guide-draw pass. Per-axis thresholds convert the
+// pixel radius through each axis's own px-per-object-unit (the object space is
+// aspect-distorted).
+- (simd_float2)_snapObjectMouseForBlock:(ShaderOSCBlockRuntime *)b
+                                 canvas:(CGPoint)m
+                             atFraction:(double)frac {
+  simd_float2 om = [self objectPointFromCanvasPoint:m];
+  static const float anchors[] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
+  NSArray<NSValue *> *targets = [self _exprSnapTargetsExcludingBinds:b.binds
+                                                          atFraction:frac];
+  NSUInteger n = targets.count;
+  simd_float2 *objs = n ? malloc(n * sizeof(simd_float2)) : NULL;
+  for (NSUInteger i = 0; i < n; i++) {
+    NSPoint p = targets[i].pointValue;
+    objs[i] = (simd_float2){(float)p.x, (float)p.y};
+  }
+  CGPoint tr = CGPointZero, bl = CGPointZero;
+  float thrX = 0.01f, thrY = 0.01f;
+  if ([self getCanvasTopRight:&tr bottomLeft:&bl]) {
+    float ppuX = MAX(1.0f, (float)fabs(tr.x - bl.x));
+    float ppuY = MAX(1.0f, (float)fabs(tr.y - bl.y));
+    thrX = _exprSnap.threshold / ppuX;
+    thrY = _exprSnap.threshold / ppuY;
+  }
+  simd_float2 snapped = [_exprSnap snapPoint:om
+                              canvasAnchorsX:anchors
+                                      countX:5
+                              canvasAnchorsY:anchors
+                                      countY:5
+                               objectTargets:objs
+                                       count:n
+                                  thresholdX:thrX
+                                  thresholdY:thrY];
+  if (objs)
+    free(objs);
+  _exprSnapActive = _exprSnap.snappedX || _exprSnap.snappedY;
+  return snapped;
+}
+
+// A ring block's canvas centre + per-axis radii in canvas px (the runtime
+// returns min-dimension fractions).
+- (CGPoint)_exprRingGeometryForBlock:(ShaderOSCBlockRuntime *)b
+                          atFraction:(double)frac
+                             radiusX:(double *)outRX
+                             radiusY:(double *)outRY {
+  KKExprVal v = [self _exprValueForBlock:b atFraction:frac];
+  double aspect = [self _exprAspect];
+  simd_float2 oc = [b centerObjectForBound:v aspect:aspect];
+  KKExprVal radii = [b ringRadiiForBound:v aspect:aspect];
+  double minDim = [self canvasMinDimension];
+  if (outRX)
+    *outRX = radii.v[0] * minDim;
+  if (outRY)
+    *outRY = (radii.n >= 2 ? radii.v[1] : radii.v[0]) * minDim;
+  return [self canvasPointFromObjectPoint:oc];
+}
+
+// A rotate block's canvas centre (its `center =` expression, default frame
+// centre).
+- (CGPoint)_exprRotationCenterForBlock:(ShaderOSCBlockRuntime *)b
+                            atFraction:(double)frac {
+  KKExprVal v = [self _exprValueForBlock:b atFraction:frac];
+  simd_float2 oc = [b centerObjectForBound:v aspect:[self _exprAspect]];
+  return [self canvasPointFromObjectPoint:oc];
+}
+
+// Push a ring block's current geometry into its KKRingOSC control.
+- (void)_exprUpdateRing:(KKRingOSC *)ring
+               forBlock:(ShaderOSCBlockRuntime *)b
+             atFraction:(double)frac {
+  double rx = 0, ry = 0;
+  CGPoint c = [self _exprRingGeometryForBlock:b
+                                   atFraction:frac
+                                      radiusX:&rx
+                                      radiusY:&ry];
+  ring.center = c;
+  ring.ringRadius = (float)rx;
+  ring.ringRadiusY = (float)ry;
+}
+
+// Custom `// @osc` control visibility: shown when the
 // bound lane is a constant or the playhead is on a keypose, always mid-drag; an
 // Opt-hidden handle surfaces as a dim ghost while Opt-reveal is active. The
 // block's `name` is its OSC-checklist element key (see oscElementKeys).
@@ -814,8 +646,8 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
 
 // Write a block's new bound value (EXPR units) back to its lane: denormalize to
 // lane units, clamp, set the keypose nearest the playhead in an action scope
-// (seed from the template when the lane isn't materialized). Mirrors
-// _writeRingValues without the ring meta.
+// (seed from the template when the lane isn't materialized). Mirrors Glow's
+// _writeRadiusValues.
 - (void)_writeExprValue:(KKExprVal)val
                forBlock:(ShaderOSCBlockRuntime *)b
                  atTime:(CMTime)time
@@ -825,11 +657,17 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!actionAPI)
     return;
+  _exprActionDepth++;
+  if (_exprActionDepth > 1)
+    KKLogError(@"[ExprWrite] NESTED action (depth=%d) writing %@ via %@ - "
+               @"this would assert FFUIAction in the host",
+               _exprActionDepth, b.binds, b.name);
   [actionAPI startAction:self];
   id<FxParameterSettingAPI_v5> setAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   if (!setAPI) {
     [actionAPI endAction:self];
+    _exprActionDepth--;
     return;
   }
   double frac = [self fractionAtTime:time];
@@ -848,6 +686,7 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
                            kKKParamTimelineData);
   [actionAPI endAction:self];
+  _exprActionDepth--;
   if (forceUpdate)
     *forceUpdate = YES;
 }
@@ -861,64 +700,63 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
               modifiers:(NSUInteger)modifiers
             forceUpdate:(BOOL *)forceUpdate
                  atTime:(CMTime)time {
-  NSString *ringLabel = [self ringLabelForActivePart:part];
-  if (ringLabel) {
-    _ringDragLabel = ringLabel;
-    double frac = [self fractionAtTime:time];
-    CGPoint oc = [self _ringObjectCenterForLabel:ringLabel atFraction:frac];
-    CGPoint center = [self
-        canvasPointFromObjectPoint:(simd_float2){(float)oc.x, (float)oc.y}];
-    _ringDragStartDx = x - center.x;
-    _ringDragStartDy = y - center.y;
-    _ringDragStartDist = hypot(_ringDragStartDx, _ringDragStartDy);
-    _ringDragStartVals = [self _ringValuesForLabel:ringLabel atFraction:frac];
-    [_ringControllers[ringLabel] updateCursorForMouseX:x positionY:y];
-    if (forceUpdate)
-      *forceUpdate = YES;
-    return YES;
-  }
-  NSString *boxLabel = [self boxLabelForActivePart:part];
-  if (boxLabel) {
-    _boxDragLabel = boxLabel;
-    _boxDragHandle = _boxHitHandle;
-    double frac = [self fractionAtTime:time];
-    CGPoint tr = CGPointZero, bl = CGPointZero;
-    _boxDragCenter = [self _boxGeometryForLabel:boxLabel
-                                     atFraction:frac
-                                       topRight:&tr
-                                     bottomLeft:&bl];
-    _boxDragPressNorms = [self ringNormsForLabel:boxLabel atFraction:frac];
-    // Effective cursor starts at the grabbed handle so the value begins exactly
-    // where it is (no press snap); the drag advances it by the raw delta.
-    _boxDragEff = (_boxDragHandle >= 0 && _boxDragHandle < KKBoxHandleCount)
-                      ? [KKBoxOSC handlePositionForIndex:_boxDragHandle
-                                                topRight:tr
-                                              bottomLeft:bl]
-                      : CGPointMake(x, y);
-    _boxDragLast = CGPointMake(x, y);
-    if (forceUpdate)
-      *forceUpdate = YES;
-    return YES;
-  }
-  NSString *rotLabel = [self rotLabelForActivePart:part];
-  if (rotLabel) {
-    _rotDragLabel = rotLabel;
-    KKRotationOSC *rot = _rotControllers[rotLabel];
-    rot.center = [self _rotationCenterForLabel:rotLabel
-                                    atFraction:[self fractionAtTime:time]];
-    // mouseDown reads the axis captured by the preceding hitTest + the press
-    // pose; the control owns the compose + persist.
-    [rot mouseDownAtX:x
-                    y:y
-            modifiers:modifiers
-          forceUpdate:forceUpdate
-               atTime:time];
-    return YES;
-  }
   if (part >= kShaderExprPartBase) {
     NSInteger idx = part - kShaderExprPartBase;
     if (idx >= 0 && idx < (NSInteger)_exprOrder.count) {
       _exprDragName = _exprOrder[idx];
+      // The ring primitive's drag mechanic anchors on the press state: the
+      // bound value and the cursor's offset from the centre (fractions).
+      ShaderOSCBlockRuntime *b = _exprBlocks[_exprDragName];
+      double frac = [self fractionAtTime:time];
+      _exprTickFrac = frac;
+      _exprDragPressBound = [self _exprValueForBlock:b atFraction:frac];
+      if ([b.primitive isEqualToString:@"ring"]) {
+        CGPoint c = [self _exprRingGeometryForBlock:b
+                                         atFraction:frac
+                                            radiusX:NULL
+                                            radiusY:NULL];
+        double minDim = MAX(1.0, [self canvasMinDimension]);
+        _exprDragPressOff = (simd_float2){(float)((x - c.x) / minDim),
+                                          (float)((y - c.y) / minDim)};
+        [(KKRingOSC *)_exprControllers[_exprDragName] updateCursorForMouseX:x
+                                                                  positionY:y];
+      } else if ([b.primitive isEqualToString:@"box"]) {
+        _exprBoxDragPart = _exprBoxHitPart;
+        KKCropOSC *crop = _exprControllers[_exprDragName];
+        if (b.bodyMove) {
+          // The crop scaffold owns the anchored-resize / body-move mechanic;
+          // it reads the press pose itself and writes through valuesWriter.
+          [crop mouseDownForPart:_exprBoxDragPart
+                       positionX:x
+                       positionY:y
+                          atTime:time];
+        } else {
+          // Centred box: the runtime owns the drag. Anchor the effective
+          // cursor AT the grabbed handle so the value starts exactly where it
+          // is (no press snap).
+          NSInteger idx = _exprBoxDragPart - KKCropPartPointBase;
+          CGPoint tr = CGPointZero, bl = CGPointZero;
+          if (idx >= 0 && idx < KKCropPointCount &&
+              [crop getTopRight:&tr
+                       bottomLeft:&bl
+                  fullImageCanvas:NULL
+                           atTime:time])
+            _exprBoxDragEff = [KKBoxOSC handlePositionForIndex:idx
+                                                      topRight:tr
+                                                    bottomLeft:bl];
+          else
+            _exprBoxDragEff = CGPointMake(x, y);
+          _exprBoxDragLast = CGPointMake(x, y);
+        }
+      } else if ([b.primitive isEqualToString:@"rotate"]) {
+        KKRotationOSC *rot = _exprControllers[_exprDragName];
+        rot.center = [self _exprRotationCenterForBlock:b atFraction:frac];
+        [rot mouseDownAtX:x
+                        y:y
+                modifiers:modifiers
+              forceUpdate:forceUpdate
+                   atTime:time];
+      }
       if (forceUpdate)
         *forceUpdate = YES;
       return YES;
@@ -933,6 +771,11 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                                                       : KKPositionHitHandle);
   _dragController = c;
   _dragHit = hit;
+  // Let the position drag snap onto the point OSCs too (symmetric with the
+  // point drag snapping onto positions). Static for the drag, so seed once.
+  c.externalSnapTargets =
+      [self _exprSnapTargetsExcludingBinds:c.laneLabel
+                                atFraction:[self fractionAtTime:time]];
   [c mouseDownAtX:x
                 y:y
               hit:hit
@@ -947,89 +790,91 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                  modifiers:(NSUInteger)modifiers
                forceUpdate:(BOOL *)forceUpdate
                     atTime:(CMTime)time {
-  if (_ringDragLabel) {
-    KKRingOSC *ring = _ringControllers[_ringDragLabel];
-    NSDictionary<NSString *, id> *meta = _ringMeta[_ringDragLabel];
-    CGPoint oc = [self _ringObjectCenterForLabel:_ringDragLabel
-                                      atFraction:[self fractionAtTime:time]];
-    CGPoint center = [self
-        canvasPointFromObjectPoint:(simd_float2){(float)oc.x, (float)oc.y}];
-    double dx = x - center.x, dy = y - center.y;
-    double minDim = [self canvasMinDimension];
-    // Effective aspect lock: the snapshot lane's persisted lock when present (a
-    // user-materialized lane reflects a toggle), else the template default via
-    // _ringLaneForLabel (the OSC snapshot omits un-materialized lanes, so a
-    // fresh #multi falls back to the directive default). Shift inverts it for
-    // the drag.
-    BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;
-    BOOL laneLinked = [meta[@"linked"] boolValue] &&
-                      [self _ringLaneForLabel:_ringDragLabel].aspectLinked;
-    BOOL effLinked = [meta[@"linked"] boolValue] ? (laneLinked ^ shift) : NO;
-    NSArray<NSNumber *> *newValues = KKRingOSCDragValues(
-        [meta[@"fields"] intValue], effLinked,
-        _ringDragStartVals.count >= 1 ? _ringDragStartVals[0].doubleValue : 0,
-        _ringDragStartVals.count >= 2 ? _ringDragStartVals[1].doubleValue : 0,
-        _ringDragStartDx, _ringDragStartDy, _ringDragStartDist, dx, dy, minDim,
-        [meta[@"min"] doubleValue], [meta[@"max"] doubleValue],
-        [meta[@"bounded"] boolValue], [meta[@"isInt"] boolValue]);
-    [ring updateCursorForMouseX:x positionY:y];
-    [self _writeRingValues:newValues
-                  forLabel:_ringDragLabel
-                    atTime:time
-               forceUpdate:forceUpdate];
-    return YES;
-  }
-  if (_boxDragLabel) {
-    NSDictionary<NSString *, id> *meta = _ringMeta[_boxDragLabel];
-    // Advance the effective cursor by the raw movement (scaled down for
-    // Cmd-fine); the candidate per-axis norm is its distance to the box centre
-    // through the shared curve, so the grabbed handle tracks the cursor 1:1.
-    double rawDx = x - _boxDragLast.x, rawDy = y - _boxDragLast.y;
-    _boxDragLast = CGPointMake(x, y);
-    double fine =
-        (modifiers & kFxModifierKey_COMMAND) ? kShaderBoxFineFactor : 1.0;
-    _boxDragEff.x += rawDx * fine;
-    _boxDragEff.y += rawDy * fine;
-    double minDim = [self canvasMinDimension];
-    double candNX =
-        KKRingOSCNormForExtent(fabs(_boxDragEff.x - _boxDragCenter.x), minDim);
-    double candNY =
-        KKRingOSCNormForExtent(fabs(_boxDragEff.y - _boxDragCenter.y), minDim);
-    double pNX =
-        _boxDragPressNorms.count >= 1 ? _boxDragPressNorms[0].doubleValue : 0;
-    double pNY =
-        _boxDragPressNorms.count >= 2 ? _boxDragPressNorms[1].doubleValue : pNX;
-    BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;
-    BOOL laneLinked = [meta[@"linked"] boolValue] &&
-                      [self _ringLaneForLabel:_boxDragLabel].aspectLinked;
-    BOOL effLinked = [meta[@"linked"] boolValue] ? (laneLinked ^ shift) : NO;
-    NSArray<NSNumber *> *newValues = KKBoxOSCDragValues(
-        _boxDragHandle, [meta[@"fields"] intValue], effLinked, pNX, pNY, candNX,
-        candNY, [meta[@"min"] doubleValue], [meta[@"max"] doubleValue],
-        [meta[@"bounded"] boolValue], [meta[@"isInt"] boolValue]);
-    [self _writeRingValues:newValues
-                  forLabel:_boxDragLabel
-                    atTime:time
-               forceUpdate:forceUpdate];
-    return YES;
-  }
-  if (_rotDragLabel) {
-    KKRotationOSC *rot = _rotControllers[_rotDragLabel];
-    rot.center = [self _rotationCenterForLabel:_rotDragLabel
-                                    atFraction:[self fractionAtTime:time]];
-    [rot mouseDraggedAtX:x
-                       y:y
-               modifiers:modifiers
-             forceUpdate:forceUpdate
-                  atTime:time];
-    return YES;
-  }
   if (_exprDragName) {
     ShaderOSCBlockRuntime *b = _exprBlocks[_exprDragName];
     double frac = [self fractionAtTime:time];
-    KKExprVal nv = [self _exprBoundForBlock:b
-                                mouseCanvas:CGPointMake(x, y)
-                                 atFraction:frac];
+    _exprTickFrac = frac;
+    if ([b.primitive isEqualToString:@"ring"]) {
+      // The ring's default drag: offset from the (live) centre in fractions ->
+      // runtime mechanic (circle / linked-ellipse / cardinal-hold) -> write.
+      CGPoint c = [self _exprRingGeometryForBlock:b
+                                       atFraction:frac
+                                          radiusX:NULL
+                                          radiusY:NULL];
+      double minDim = MAX(1.0, [self canvasMinDimension]);
+      simd_float2 off = {(float)((x - c.x) / minDim),
+                         (float)((y - c.y) / minDim)};
+      BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;
+      BOOL laneLinked = b.linked && [self _exprLaneForBlock:b].aspectLinked;
+      BOOL effLinked = b.linked ? (laneLinked ^ shift) : NO;
+      KKExprVal nv = [b ringBoundForDragOffset:off
+                                   pressOffset:_exprDragPressOff
+                                    pressBound:_exprDragPressBound
+                               linkedEffective:effLinked
+                                        aspect:[self _exprAspect]];
+      [(KKRingOSC *)_exprControllers[_exprDragName] updateCursorForMouseX:x
+                                                                positionY:y];
+      [self _writeExprValue:nv forBlock:b atTime:time forceUpdate:forceUpdate];
+      return YES;
+    }
+    if ([b.primitive isEqualToString:@"box"]) {
+      if (b.bodyMove) {
+        [(KKCropOSC *)_exprControllers[_exprDragName]
+            mouseDraggedForPart:_exprBoxDragPart
+                      positionX:x
+                      positionY:y
+                    forceUpdate:forceUpdate
+                         atTime:time];
+        return YES;
+      }
+      // Centred box: advance the effective cursor by the raw delta (scaled
+      // down for Cmd-fine), then run the runtime's centred mechanic.
+      double fine =
+          (modifiers & kFxModifierKey_COMMAND) ? kShaderExprBoxFineFactor : 1.0;
+      _exprBoxDragEff.x += (x - _exprBoxDragLast.x) * fine;
+      _exprBoxDragEff.y += (y - _exprBoxDragLast.y) * fine;
+      _exprBoxDragLast = CGPointMake(x, y);
+      NSInteger idx = _exprBoxDragPart - KKCropPartPointBase;
+      simd_float2 mObj =
+          [self objectPointFromCanvasPoint:CGPointMake(_exprBoxDragEff.x,
+                                                       _exprBoxDragEff.y)];
+      BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;
+      BOOL laneLinked = b.linked && [self _exprLaneForBlock:b].aspectLinked;
+      BOOL effLinked = b.linked ? (laneLinked ^ shift) : NO;
+      KKExprVal nv =
+          [b boxCenteredBoundForObjectMouse:mObj
+                                     corner:ShaderExprBoxHandleIsCorner(idx)
+                                  controlsX:ShaderExprBoxHandleControlsX(idx)
+                                 pressBound:_exprDragPressBound
+                            linkedEffective:effLinked
+                                     aspect:[self _exprAspect]];
+      [self _writeExprValue:nv forBlock:b atTime:time forceUpdate:forceUpdate];
+      return YES;
+    }
+    if ([b.primitive isEqualToString:@"rotate"]) {
+      KKRotationOSC *rot = _exprControllers[_exprDragName];
+      rot.center = [self _exprRotationCenterForBlock:b atFraction:frac];
+      [rot mouseDraggedAtX:x
+                         y:y
+                 modifiers:modifiers
+               forceUpdate:forceUpdate
+                    atTime:time];
+      return YES;
+    }
+    // Cmd engages point snapping (parity with osc=position): snap the cursor
+    // onto the canvas centre / edges / quarters + the other handles, then
+    // invert from the snapped point. `skipsnapping` blocks opt out.
+    CGPoint mp = CGPointMake(x, y);
+    _exprSnapActive = NO;
+    if (b.snaps && (modifiers & kFxModifierKey_COMMAND)) {
+      simd_float2 sp = [self _snapObjectMouseForBlock:b
+                                               canvas:mp
+                                           atFraction:frac];
+      mp = [self canvasPointFromObjectPoint:sp];
+    } else {
+      [_exprSnap reset];
+    }
+    KKExprVal nv = [self _exprBoundForBlock:b mouseCanvas:mp atFraction:frac];
     NSCursor *cur = ShaderOSCCursorForName(b.cursorName);
     if (cur) {
       id<FxOnScreenControlAPI_v4> curAPI =
@@ -1051,32 +896,25 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
 }
 
 - (void)oscMouseUp {
-  for (NSString *label in _posOrder)
+  for (NSString *label in _posOrder) {
     [_posControllers[label] mouseUp];
+    _posControllers[label].externalSnapTargets = nil;
+  }
+  [_exprSnap reset];
+  _exprSnapActive = NO;
   _dragController = nil;
-  if (_ringDragLabel) {
-    id<FxOnScreenControlAPI_v4> oscAPI =
-        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-    [oscAPI setCursor:[NSCursor arrowCursor]];
-    _ringDragLabel = nil;
-  }
-  if (_boxDragLabel) {
-    id<FxOnScreenControlAPI_v4> oscAPI =
-        [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
-    [oscAPI setCursor:[NSCursor arrowCursor]];
-    _boxControllers[_boxDragLabel].hoveredIndex = -1;
-    _boxDragLabel = nil;
-    _boxDragHandle = -1;
-  }
-  if (_rotDragLabel) {
-    [_rotControllers[_rotDragLabel] mouseUp];
-    _rotDragLabel = nil;
-  }
   if (_exprDragName) {
+    id ctl = _exprControllers[_exprDragName];
+    if ([ctl isKindOfClass:KKCropOSC.class])
+      [(KKCropOSC *)ctl mouseUp];
+    if ([ctl isKindOfClass:KKRotationOSC.class])
+      [(KKRotationOSC *)ctl mouseUp];
     id<FxOnScreenControlAPI_v4> oscAPI =
         [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
     [oscAPI setCursor:[NSCursor arrowCursor]];
     _exprDragName = nil;
+    _exprBoxDragPart = KKCropPartNone;
+    _exprBoxHitPart = KKCropPartNone;
   }
 }
 
@@ -1106,75 +944,45 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   return YES;
 }
 
-// Each `#point osc` lane is TWO hideable OSC elements: its handle (keyed on the
-// lane/uniform label) and its motion path ("<label> Path"), toggleable apart -
-// matching MagicMove's separate Position + Path. Order must mirror
-// oscCompoundsForShaderSource: (handle then path, per lane) so the checklist
-// states line up.
+// The OSC element keys, in RUNTIME order (directive sugar then authored
+// blocks), mirroring oscCompoundsForShaderSource: so the checklist states line
+// up. A position block is TWO hideable elements (handle + "<label> Path"); a
+// rotate block gates on its LANE label (master + per-axis suffixes);
+// everything else is a single element keyed by block name.
 - (NSArray<NSString *> *)oscElementKeys {
   [self _syncOSCControllers];
-  NSString *src = [self _currentShaderSource];
   NSMutableArray<NSString *> *keys = [NSMutableArray array];
-  if (!src.length)
-    return keys;
-  // Walk the props in SOURCE order, mirroring oscCompoundsForShaderSource: so
-  // the checklist states line up: a point is a handle + its "<label> Path", a
-  // ring is a single hideable element.
-  ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
-  int used = 0;
-  int n =
-      ShaderParseScalarProps(src, props, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
-  for (int i = 0; i < n; i++) {
-    NSString *label = @(props[i].name);
-    if (props[i].isPoint && strcmp(props[i].oscKind, "point") == 0) {
-      [keys addObject:label];
-      [keys addObject:[label stringByAppendingString:@" Path"]];
-    } else if (ShaderScalarOSCIsRotate(&props[i])) {
-      // A rotation gizmo: a master element + one per-axis ring, each hideable
-      // apart (matching Canvas/MagicMove's Rotation + Rotation.X/Y/Z).
-      [keys addObject:label];
-      KKRotationAxes axes = ShaderRotationAxesForProp(&props[i]);
-      if (axes & KKRotationAxisX)
-        [keys addObject:[label stringByAppendingString:@".X"]];
-      if (axes & KKRotationAxisY)
-        [keys addObject:[label stringByAppendingString:@".Y"]];
-      if (axes & KKRotationAxisZ)
-        [keys addObject:[label stringByAppendingString:@".Z"]];
-    } else if (ShaderScalarRingEligible(&props[i]) &&
-               (strcmp(props[i].oscKind, "ring") == 0 ||
-                ShaderScalarOSCIsBox(&props[i]))) {
-      [keys addObject:label];
+  for (ShaderOSCBlockRuntime *b in _allRuntimes) {
+    if ([b.primitive isEqualToString:@"position"]) {
+      [keys addObject:b.binds];
+      [keys addObject:[b.binds stringByAppendingString:@" Path"]];
+    } else if ([b.primitive isEqualToString:@"rotate"]) {
+      [keys addObjectsFromArray:ShaderExprRotateElementKeys(b.binds, b.axes)];
+    } else {
+      [keys addObject:b.name];
     }
   }
-  // Custom `// @osc` handles are single hideable elements, keyed by block name.
-  for (NSString *name in _exprOrder)
-    [keys addObject:name];
   return keys;
 }
 
 - (nullable NSString *)oscElementKeyForActivePart:(NSInteger)activePart {
   if (activePart >= kShaderExprPartBase) {
     NSInteger idx = activePart - kShaderExprPartBase;
-    if (idx >= 0 && idx < (NSInteger)_exprOrder.count)
+    if (idx >= 0 && idx < (NSInteger)_exprOrder.count) {
+      ShaderOSCBlockRuntime *b = _exprBlocks[_exprOrder[idx]];
+      if ([b.primitive isEqualToString:@"rotate"]) {
+        // The last-hit axis picks the per-axis element (a single ring hides);
+        // the master only when no ring is active. Mirrors the inline rotates.
+        NSInteger axis =
+            [(KKRotationOSC *)_exprControllers[_exprOrder[idx]] activeAxis];
+        NSString *suffix = axis == 0   ? @".X"
+                           : axis == 1 ? @".Y"
+                           : axis == 2 ? @".Z"
+                                       : nil;
+        return suffix ? [b.binds stringByAppendingString:suffix] : b.binds;
+      }
       return _exprOrder[idx];
-  }
-  NSString *ringLabel = [self ringLabelForActivePart:activePart];
-  if (ringLabel)
-    return ringLabel;
-  NSString *boxLabel = [self boxLabelForActivePart:activePart];
-  if (boxLabel)
-    return boxLabel;
-  NSString *rotLabel = [self rotLabelForActivePart:activePart];
-  if (rotLabel) {
-    // Opt-click the ring under the cursor: the controller's last-hit-test axis
-    // (0=X/1=Y/2=Z) picks the per-axis element so a single ring hides; fall
-    // back to the master when no ring is active.
-    NSInteger axis = _rotControllers[rotLabel].activeAxis;
-    NSString *suffix = axis == 0   ? @".X"
-                       : axis == 1 ? @".Y"
-                       : axis == 2 ? @".Z"
-                                   : nil;
-    return suffix ? [rotLabel stringByAppendingString:suffix] : rotLabel;
+    }
   }
   BOOL isPath = NO;
   KKPositionOSC *c = [self controllerForActivePart:activePart isPath:&isPath];
@@ -1204,16 +1012,18 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
   [self _syncOSCControllers];
   double ringFrac = [self fractionAtTime:time];
 
-  // Draw each `osc={..}` rotation gizmo (KKRotationOSC 3-ring sphere) FIRST, so
-  // the small position handle + rings/boxes stay on top (and grabbable) -
-  // matching the mini-viewer's layering. It reads its own pose + ring colours
-  // from the snapshot lane and gates per-axis visibility (master + .X/.Y/.Z +
-  // opt-reveal) internally; Shader just sets the canvas centre + drag/reveal.
-  for (NSUInteger i = 0; i < _rotOrder.count; i++) {
-    NSString *label = _rotOrder[i];
-    KKRotationOSC *rot = _rotControllers[label];
-    rot.center = [self _rotationCenterForLabel:label atFraction:ringFrac];
-    rot.rotationActivePart = kShaderRotPartBase + (NSInteger)i;
+  // Rotate blocks draw FIRST, so the small position handles + rings/boxes stay
+  // on top (and grabbable) - matching the mini-viewer's layering. The gizmo
+  // reads its own pose + ring colours from the snapshot lane and gates
+  // per-axis visibility (master + .X/.Y/.Z + opt-reveal) internally.
+  _exprTickFrac = ringFrac;
+  for (NSUInteger i = 0; i < _exprOrder.count; i++) {
+    ShaderOSCBlockRuntime *b = _exprBlocks[_exprOrder[i]];
+    if (![b.primitive isEqualToString:@"rotate"])
+      continue;
+    KKRotationOSC *rot = _exprControllers[_exprOrder[i]];
+    rot.center = [self _exprRotationCenterForBlock:b atFraction:ringFrac];
+    rot.rotationActivePart = kShaderExprPartBase + (NSInteger)i;
     rot.dragging = self.isDragging;
     rot.optRevealActive = self.optRevealActive;
     [rot drawInDestination:destinationImage atTime:time activePart:activePart];
@@ -1234,73 +1044,108 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
                     activePart:activePart];
   }
 
-  // Draw each `osc=ring` radius over the points. The ring is not lane-bound, so
-  // set its center + radius from the scalar value each tick, then draw with the
-  // shared visibility gating (Opt-hidden -> dim ghost while Opt-reveal is
-  // held).
-  for (NSUInteger i = 0; i < _ringOrder.count; i++) {
-    NSString *label = _ringOrder[i];
-    KKRingOSC *ring = _ringControllers[label];
-    BOOL reveal = NO;
-    BOOL visible = [self _ringVisible:label atFraction:ringFrac reveal:&reveal];
-    if (!visible && !reveal) {
-      [ring clearCursorIfSet];
-      continue;
-    }
-    [self _updateRing:ring forLabel:label atFraction:ringFrac];
-    ring.ghostAlpha = reveal ? MAX(0.6f, [self kkRevealGhostAlpha]) : 1.0f;
-    BOOL hovered = (activePart == kShaderRingPartBase + (NSInteger)i);
-    [ring drawAtCanvasPosition:ring.center
-                     isHovered:hovered
-                      isActive:[_ringDragLabel isEqualToString:label]
-              destinationImage:destinationImage
-                        atTime:time];
-  }
-
-  // Draw each `osc=box` gizmo (real KKBoxOSC: border + 8 handles + a value
-  // readout), sized through the same normalized-extent curve as the rings, with
-  // the same visibility gating (Opt-hidden -> dim ghost while Opt-reveal held).
-  for (NSUInteger i = 0; i < _boxOrder.count; i++) {
-    NSString *label = _boxOrder[i];
-    KKBoxOSC *box = _boxControllers[label];
-    BOOL reveal = NO;
-    BOOL visible = [self _ringVisible:label atFraction:ringFrac reveal:&reveal];
-    if (!visible && !reveal)
-      continue;
-    CGPoint tr = CGPointZero, bl = CGPointZero;
-    [self _boxGeometryForLabel:label
-                    atFraction:ringFrac
-                      topRight:&tr
-                    bottomLeft:&bl];
-    box.ghostAlpha = reveal ? MAX(0.6f, [self kkRevealGhostAlpha]) : 1.0f;
-    NSInteger activeHandle =
-        [_boxDragLabel isEqualToString:label] ? _boxDragHandle : -1;
-    [box drawWithTopRight:tr
-               bottomLeft:bl
-                  readout:[self _boxReadoutForLabel:label atFraction:ringFrac]
-             activeHandle:activeHandle
-         destinationImage:destinationImage
-                   atTime:time];
-  }
-
-  // Draw each custom `// @osc` handle at its forward-expression position,
-  // under the same visibility gating (Opt-hidden -> dim ghost while Opt-reveal
-  // is held) as the rings/boxes.
+  // Draw each custom `// @osc` control - a `point` glyph at its
+  // forward-expression position, a `ring` at its centre/radii - under the same
+  // visibility gating (Opt-hidden -> dim ghost while Opt-reveal is held) as
+  // the rings/boxes.
+  _exprTickFrac = ringFrac;
   for (NSUInteger i = 0; i < _exprOrder.count; i++) {
     NSString *name = _exprOrder[i];
     ShaderOSCBlockRuntime *b = _exprBlocks[name];
+    if ([b.primitive isEqualToString:@"rotate"])
+      continue; // drew in the early layer above
     BOOL reveal = NO;
-    if (![self _exprVisible:b atFraction:ringFrac reveal:&reveal] && !reveal)
+    if (![self _exprVisible:b atFraction:ringFrac reveal:&reveal] && !reveal) {
+      if ([b.primitive isEqualToString:@"ring"])
+        [(KKRingOSC *)_exprControllers[name] clearCursorIfSet];
       continue;
-    id<_ShaderGlyphOSC> glyph = _exprControllers[name];
-    glyph.ghostAlpha = reveal ? MAX(0.6f, [self kkRevealGhostAlpha]) : 1.0f;
-    CGPoint c = [self _exprHandleCanvasForBlock:b atFraction:ringFrac];
-    [glyph
-        drawAtCanvasPosition:c
-                   isHovered:(activePart == kShaderExprPartBase + (NSInteger)i)
-                    isActive:[_exprDragName isEqualToString:name]
+    }
+    BOOL hovered = (activePart == kShaderExprPartBase + (NSInteger)i);
+    BOOL active = [_exprDragName isEqualToString:name];
+    if ([b.primitive isEqualToString:@"ring"]) {
+      KKRingOSC *ring = _exprControllers[name];
+      [self _exprUpdateRing:ring forBlock:b atFraction:ringFrac];
+      ring.ghostAlpha = reveal ? MAX(0.6f, [self kkRevealGhostAlpha]) : 1.0f;
+      [ring drawAtCanvasPosition:ring.center
+                       isHovered:hovered
+                        isActive:active
+                destinationImage:destinationImage
+                          atTime:time];
+      continue;
+    }
+    if ([b.primitive isEqualToString:@"box"]) {
+      KKCropOSC *crop = _exprControllers[name];
+      crop.ghostAlpha = reveal ? MAX(0.6f, [self kkRevealGhostAlpha]) : 1.0f;
+      CGPoint btr = CGPointZero, bbl = CGPointZero;
+      CGSize fullCanvas = CGSizeZero;
+      if (![crop getTopRight:&btr
+                   bottomLeft:&bbl
+              fullImageCanvas:&fullCanvas
+                       atTime:time])
+        continue;
+      // The readout matches the BOUND LANE's display units, not always source
+      // px: a crop-style box shows W x H (px per "px" component, else the raw
+      // fraction), a centred value box its lane value ("58% x 58%"). Media px
+      // = the full-image canvas size de-zoomed (how KKCropOSC derives it).
+      NSString *readout;
+      if (b.bodyMove) {
+        id<FxOnScreenControlAPI_v2> zoomAPI =
+            [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
+        double zoom = zoomAPI ? [zoomAPI canvasZoom] : 1.0;
+        if (zoom < 0.001)
+          zoom = 1.0;
+        CGSize media = CGSizeMake(fabs(fullCanvas.width) / zoom,
+                                  fabs(fullCanvas.height) / zoom);
+        readout = [ShaderOSCBlockRuntime
+            boxReadoutForValues:KKTimelineLaneValueAtFraction(
+                                    [self _exprLaneForBlock:b], ringFrac)
+                          units:b.boundComponentUnits
+                scalesWithMedia:b.boundScalesWithMedia
+                      mediaSize:media];
+      } else {
+        NSArray<NSNumber *> *raw =
+            KKTimelineLaneValueAtFraction([self _exprLaneForBlock:b], ringFrac);
+        readout = KKBoxOSCReadoutString(raw, b.divisor == 100.0, b.isInt);
+      }
+      NSInteger activeHandle = active && _exprBoxDragPart >= KKCropPartPointBase
+                                   ? _exprBoxDragPart - KKCropPartPointBase
+                                   : crop.hoveredIndex;
+      [crop drawWithTopRight:btr
+                  bottomLeft:bbl
+                     readout:readout
+                activeHandle:activeHandle
             destinationImage:destinationImage
                       atTime:time];
+      continue;
+    }
+    id<_ShaderGlyphOSC> glyph = _exprControllers[name];
+    // Guard both protocol members: an unhandled selector here is an uncaught
+    // exception that kills the whole XPC (and FCP aborts reporting it).
+    if ([glyph respondsToSelector:@selector(setGhostAlpha:)])
+      glyph.ghostAlpha = reveal ? MAX(0.6f, [self kkRevealGhostAlpha]) : 1.0f;
+    if (![glyph
+            respondsToSelector:@selector(drawAtCanvasPosition:isHovered:
+                                         isActive:destinationImage:atTime:)])
+      continue;
+    CGPoint c = [self _exprHandleCanvasForBlock:b atFraction:ringFrac];
+    [glyph drawAtCanvasPosition:c
+                      isHovered:hovered
+                       isActive:active
+               destinationImage:destinationImage
+                         atTime:time];
+    // Snap guides for the point being dragged, drawn through self (the OSC
+    // holding the canvas reference) in object space. Two-colour like
+    // KKPositionOSC: canvas anchors yellow, other-handle targets the host
+    // accent (blue).
+    if (active && _exprSnapActive) {
+      simd_float4 yellow, accent;
+      KKSnapGuideColors(&yellow, &accent);
+      [_exprSnap drawSnapGuidesWithOSC:self
+                         isObjectSpace:YES
+                           canvasColor:yellow
+                           objectColor:accent
+                      destinationImage:destinationImage];
+    }
   }
 
   // Feed the guide bridge this tick's canvas geometry (zoom-invariant
@@ -1397,95 +1242,73 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
       break;
     }
   }
-  // Rings hit-test after the points (points win where they overlap). A ring
-  // only claims when visible (or an Opt-reveal ghost); the ring sets its own
-  // resize cursor on a hit.
+  // Custom `// @osc` controls hit-test last: a `point` by distance to its
+  // forward-expression position within the glyph's grab radius, a `ring` by
+  // its own edge hit-test (which also sets its resize / eye cursor).
   if (*activePart == 0) {
     double frac = [self fractionAtTime:time];
-    for (NSUInteger i = 0; i < _ringOrder.count; i++) {
-      NSString *label = _ringOrder[i];
-      KKRingOSC *ring = _ringControllers[label];
-      BOOL reveal = NO;
-      BOOL visible = [self _ringVisible:label atFraction:frac reveal:&reveal];
-      if (!visible && !reveal) {
-        ring.visibilityHint = 0;
-        [ring clearCursorIfSet];
-        continue;
-      }
-      [self _updateRing:ring forLabel:label atFraction:frac];
-      // Opt-hover hide/show affordance, only when an Opt-click would actually
-      // toggle (master on, not the peek-and-use reveal): eye.slash over a
-      // visible ring, eye over a revealed ghost. Mirrors GlowOSC.
-      BOOL optToggle = self.optRevealActive && ![self kkOSCMasterOff];
-      ring.visibilityHint = optToggle ? (visible ? 1 : 2) : 0;
-      if ([ring hitTestAtMousePositionX:positionX
-                              positionY:positionY
-                                 atTime:time]) {
-        *activePart = kShaderRingPartBase + (NSInteger)i;
-        self.pointCursorSet = YES;
-        break;
-      }
-    }
-  }
-  // Boxes hit-test after the rings (same precedence). Only a handle hit claims
-  // (interior clicks pass through); KKBoxOSC sets its own resize / eye cursor.
-  if (*activePart == 0) {
-    double frac = [self fractionAtTime:time];
-    for (NSUInteger i = 0; i < _boxOrder.count; i++) {
-      NSString *label = _boxOrder[i];
-      KKBoxOSC *box = _boxControllers[label];
-      BOOL reveal = NO;
-      BOOL visible = [self _ringVisible:label atFraction:frac reveal:&reveal];
-      if (!visible && !reveal) {
-        box.visibilityHint = 0;
-        continue;
-      }
-      BOOL optToggle = self.optRevealActive && ![self kkOSCMasterOff];
-      box.visibilityHint = optToggle ? (visible ? 1 : 2) : 0;
-      CGPoint tr = CGPointZero, bl = CGPointZero;
-      [self _boxGeometryForLabel:label
-                      atFraction:frac
-                        topRight:&tr
-                      bottomLeft:&bl];
-      NSInteger part = [box hitTestAtX:positionX
-                                     y:positionY
-                              topRight:tr
-                            bottomLeft:bl];
-      if (part >= KKBoxPartHandleBase) {
-        _boxHitHandle = part - KKBoxPartHandleBase;
-        *activePart = kShaderBoxPartBase + (NSInteger)i;
-        self.pointCursorSet = YES;
-        break;
-      }
-    }
-  }
-  // Rotation rings hit-test last (points/rings/boxes win where they overlap).
-  // KKRotationOSC returns the active axis (0/1/2) or -1 and sets its own rotate
-  // / visibility cursor; the gizmo owns per-axis visibility gating.
-  if (*activePart == 0) {
-    double rotFrac = [self fractionAtTime:time];
-    for (NSUInteger i = 0; i < _rotOrder.count; i++) {
-      NSString *label = _rotOrder[i];
-      KKRotationOSC *rot = _rotControllers[label];
-      rot.center = [self _rotationCenterForLabel:label atFraction:rotFrac];
-      rot.rotationActivePart = kShaderRotPartBase + (NSInteger)i;
-      rot.optRevealActive = self.optRevealActive;
-      if ([rot hitTestRingAtX:positionX y:positionY atTime:time] >= 0) {
-        *activePart = kShaderRotPartBase + (NSInteger)i;
-        self.pointCursorSet = YES;
-        break;
-      }
-    }
-  }
-  // Custom `// @osc` handles hit-test last: distance from the cursor to the
-  // handle's forward-expression position, within the glyph's grab radius.
-  if (*activePart == 0) {
-    double frac = [self fractionAtTime:time];
+    _exprTickFrac = frac;
     for (NSUInteger i = 0; i < _exprOrder.count; i++) {
       NSString *name = _exprOrder[i];
       ShaderOSCBlockRuntime *b = _exprBlocks[name];
+      if ([b.primitive isEqualToString:@"rotate"]) {
+        // The gizmo gates its own visibility and sets its own rotate / eye
+        // cursor, like the inline rotation loop.
+        KKRotationOSC *rot = _exprControllers[name];
+        rot.center = [self _exprRotationCenterForBlock:b atFraction:frac];
+        rot.rotationActivePart = kShaderExprPartBase + (NSInteger)i;
+        rot.optRevealActive = self.optRevealActive;
+        if ([rot hitTestRingAtX:positionX y:positionY atTime:time] >= 0) {
+          *activePart = kShaderExprPartBase + (NSInteger)i;
+          self.pointCursorSet = YES;
+          break;
+        }
+        continue;
+      }
       BOOL reveal = NO;
-      if (![self _exprVisible:b atFraction:frac reveal:&reveal] && !reveal)
+      BOOL visible = [self _exprVisible:b atFraction:frac reveal:&reveal];
+      if ([b.primitive isEqualToString:@"ring"]) {
+        KKRingOSC *ring = _exprControllers[name];
+        if (!visible && !reveal) {
+          ring.visibilityHint = 0;
+          [ring clearCursorIfSet];
+          continue;
+        }
+        [self _exprUpdateRing:ring forBlock:b atFraction:frac];
+        BOOL optToggle = self.optRevealActive && ![self kkOSCMasterOff];
+        ring.visibilityHint = optToggle ? (visible ? 1 : 2) : 0;
+        if ([ring hitTestAtMousePositionX:positionX
+                                positionY:positionY
+                                   atTime:time]) {
+          *activePart = kShaderExprPartBase + (NSInteger)i;
+          self.pointCursorSet = YES;
+          break;
+        }
+        continue;
+      }
+      if ([b.primitive isEqualToString:@"box"]) {
+        // Pass 1 accepts only the box's HANDLES. The interior (body-move)
+        // hit-tests in a second pass below, so a large box never steals a
+        // click from a smaller control sitting inside it.
+        KKCropOSC *crop = _exprControllers[name];
+        if (!visible && !reveal) {
+          crop.visibilityHint = 0;
+          continue;
+        }
+        BOOL optToggle = self.optRevealActive && ![self kkOSCMasterOff];
+        crop.visibilityHint = optToggle ? (visible ? 1 : 2) : 0;
+        NSInteger part = [crop hitTestAtMousePositionX:positionX
+                                             positionY:positionY
+                                                atTime:time];
+        if (part >= KKCropPartPointBase) {
+          _exprBoxHitPart = part;
+          *activePart = kShaderExprPartBase + (NSInteger)i;
+          self.pointCursorSet = YES;
+          break;
+        }
+        continue;
+      }
+      if (!visible && !reveal)
         continue;
       CGPoint c = [self _exprHandleCanvasForBlock:b atFraction:frac];
       if (hypot(positionX - c.x, positionY - c.y) <=
@@ -1500,6 +1323,36 @@ BOOL ShaderGuidePositionForScreenPoint(NSPoint screenPt, double *outX,
               apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
           [curAPI setCursor:cur];
         }
+        self.pointCursorSet = YES;
+        break;
+      }
+    }
+  }
+
+  // Pass 2: box INTERIORS (body-move). Lowest-priority target, so a
+  // crop-style box's large body only claims when no precise part anywhere
+  // (handles, rings, glyphs, gizmo rings) is under the cursor.
+  if (*activePart == 0) {
+    double frac = [self fractionAtTime:time];
+    for (NSUInteger i = 0; i < _exprOrder.count; i++) {
+      NSString *name = _exprOrder[i];
+      ShaderOSCBlockRuntime *b = _exprBlocks[name];
+      if (![b.primitive isEqualToString:@"box"] || !b.bodyMove)
+        continue;
+      BOOL reveal = NO;
+      if (![self _exprVisible:b atFraction:frac reveal:&reveal] && !reveal)
+        continue;
+      KKCropOSC *crop = _exprControllers[name];
+      if ([crop hitTestAtMousePositionX:positionX
+                              positionY:positionY
+                                 atTime:time] == KKCropPartRect) {
+        _exprBoxHitPart = KKCropPartRect;
+        *activePart = kShaderExprPartBase + (NSInteger)i;
+        // The interior moves the whole box: show the open-hand move cursor
+        // (the handles set their own resize cursors in pass 1).
+        id<FxOnScreenControlAPI_v4> curAPI =
+            [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+        [curAPI setCursor:KKPointMoveCursor()];
         self.pointCursorSet = YES;
         break;
       }

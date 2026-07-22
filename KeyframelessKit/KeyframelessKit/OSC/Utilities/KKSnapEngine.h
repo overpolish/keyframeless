@@ -9,6 +9,13 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// The two snap-guide colours every surface draws with: canvas anchors yellow,
+/// object targets (other handles / keyposes) the host accent (blue). Either out
+/// pointer may be NULL. One source, so the viewer and mini guides never
+/// diverge.
+extern void KKSnapGuideColors(simd_float4 *_Nullable canvasOut,
+                              simd_float4 *_Nullable objectOut);
+
 @interface KKSnapEngine : NSObject
 
 /// Whether the last snap operation snapped on X and/or Y.

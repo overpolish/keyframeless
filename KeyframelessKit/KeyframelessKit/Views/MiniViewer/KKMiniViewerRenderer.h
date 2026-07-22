@@ -204,7 +204,9 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
                               ///< point-handle anchor for guides / programmatic
                               ///< drag.
   KKMiniHandleStyleRing = 3,  ///< Haloed ring (matches KKRingOSC): the shared
-                             ///< radius-widget glyph (Canvas corners, Rounded).
+                              ///< radius-widget glyph (Canvas corners,
+                              ///< Rounded).
+  KKMiniHandleStyleSquare = 4, ///< Filled square (matches KKSquarePointOSC).
 };
 
 #pragma mark - Subclass effect + point handle (override)

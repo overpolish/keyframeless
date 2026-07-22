@@ -273,6 +273,10 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
 
 @implementation _KKExprCompletionView {
   NSTrackingArea *_track;
+  // First visible row when the list overflows kKKComplMaxRows. Follows the
+  // keyboard selection and the scroll wheel; rows are drawn from this offset.
+  NSInteger _firstRow;
+  CGFloat _wheelAcc; // sub-row wheel deltas accumulated into row steps
 }
 
 - (instancetype)initWithFrame:(NSRect)frame {
@@ -296,11 +300,39 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
 
 - (void)setItems:(NSArray<NSDictionary<NSString *, NSString *> *> *)items {
   _items = [items copy];
+  _firstRow = 0;
+  _wheelAcc = 0.0;
   self.needsDisplay = YES;
+}
+
+- (NSInteger)_maxFirstRow {
+  return MAX(0, (NSInteger)self.items.count - kKKComplMaxRows);
 }
 
 - (void)setSelectedIndex:(NSInteger)selectedIndex {
   _selectedIndex = selectedIndex;
+  // Keep the selection inside the visible window (arrow keys walk the FULL
+  // list, the drawn rows are only a slice of it).
+  if (selectedIndex >= 0) {
+    if (selectedIndex < _firstRow)
+      _firstRow = selectedIndex;
+    else if (selectedIndex >= _firstRow + kKKComplMaxRows)
+      _firstRow = selectedIndex - kKKComplMaxRows + 1;
+    _firstRow = MAX(0, MIN(_firstRow, [self _maxFirstRow]));
+  }
+  self.needsDisplay = YES;
+}
+
+- (void)scrollWheel:(NSEvent *)event {
+  if ([self _maxFirstRow] == 0)
+    return;
+  _wheelAcc += event.scrollingDeltaY;
+  NSInteger steps = (NSInteger)(_wheelAcc / kKKComplRowH);
+  if (steps == 0)
+    return;
+  _wheelAcc -= steps * kKKComplRowH;
+  // Natural scrolling: positive deltaY pulls earlier rows into view.
+  _firstRow = MAX(0, MIN(_firstRow - steps, [self _maxFirstRow]));
   self.needsDisplay = YES;
 }
 
@@ -316,13 +348,13 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
   return ceil(r.size.height);
 }
 
-// Footer sized to the TALLEST description in the current list, so switching the
-// selection swaps the shown text without resizing the popup (no jump).
+// Footer sized to the TALLEST description in the current list (ALL items, the
+// selection can scroll to any of them), so switching the selection swaps the
+// shown text without resizing the popup (no jump).
 - (CGFloat)_footerHeight {
-  NSInteger n = MIN((NSInteger)self.items.count, kKKComplMaxRows);
   CGFloat maxH = 0.0;
-  for (NSInteger i = 0; i < n; i++)
-    maxH = MAX(maxH, [self _descHeight:self.items[i][@"desc"]]);
+  for (NSDictionary<NSString *, NSString *> *e in self.items)
+    maxH = MAX(maxH, [self _descHeight:e[@"desc"]]);
   return maxH > 0.0 ? (1.0 + 6.0 + maxH + 6.0)
                     : 0.0; // divider + pad + text + pad
 }
@@ -333,9 +365,12 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
 }
 
 - (NSInteger)_rowAtPoint:(NSPoint)p {
-  NSInteger i = (NSInteger)floor((p.y - 1.0) / kKKComplRowH);
+  NSInteger slot = (NSInteger)floor((p.y - 1.0) / kKKComplRowH);
   NSInteger n = MIN((NSInteger)self.items.count, kKKComplMaxRows);
-  return (i >= 0 && i < n) ? i : -1;
+  if (slot < 0 || slot >= n)
+    return -1;
+  NSInteger i = _firstRow + slot;
+  return i < (NSInteger)self.items.count ? i : -1;
 }
 
 - (void)updateTrackingAreas {
@@ -374,8 +409,11 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
   NSColor *argColor = KKCodeComment(); // grey, like a comment/secondary
   NSInteger n = MIN((NSInteger)self.items.count, kKKComplMaxRows);
 
-  for (NSInteger i = 0; i < n; i++) {
-    NSRect row = NSMakeRect(1.0, 1.0 + i * kKKComplRowH,
+  for (NSInteger slot = 0; slot < n; slot++) {
+    NSInteger i = _firstRow + slot;
+    if (i >= (NSInteger)self.items.count)
+      break;
+    NSRect row = NSMakeRect(1.0, 1.0 + slot * kKKComplRowH,
                             self.bounds.size.width - 2.0, kKKComplRowH);
     NSDictionary<NSString *, NSString *> *e = self.items[i];
     if (i == self.selectedIndex) {
@@ -426,6 +464,26 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
                                  row.origin.y + (kKKComplRowH - th) / 2.0,
                                  row.size.width - 2 * kKKComplPad, th);
     [a drawInRect:textRect];
+  }
+
+  // Scroll-edge shadows over the rows (the standard 16pt background fade) so
+  // an overflowing list reads as scrollable in each hidden direction.
+  CGFloat shadowH = 16.0;
+  NSColor *bg = KKHex(0x161b22);
+  if (_firstRow > 0) {
+    NSGradient *top = [[NSGradient alloc]
+        initWithStartingColor:[bg colorWithAlphaComponent:0.95]
+                  endingColor:[bg colorWithAlphaComponent:0.0]];
+    [top drawInRect:NSMakeRect(1.0, 1.0, self.bounds.size.width - 2.0, shadowH)
+              angle:90.0];
+  }
+  if (_firstRow + n < (NSInteger)self.items.count) {
+    NSGradient *bottom = [[NSGradient alloc]
+        initWithStartingColor:[bg colorWithAlphaComponent:0.0]
+                  endingColor:[bg colorWithAlphaComponent:0.95]];
+    [bottom drawInRect:NSMakeRect(1.0, 1.0 + n * kKKComplRowH - shadowH,
+                                  self.bounds.size.width - 2.0, shadowH)
+                 angle:90.0];
   }
 
   // Description of the highlighted row, wrapped, in the fixed-height footer.
@@ -555,6 +613,13 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
   NSArray<NSDictionary<NSString *, NSString *> *> *_completionItems;
   NSInteger _completionIndex;
   NSRange _completionWord;
+  BOOL _completionEditInFlight; // a selection change from a typed/programmatic
+                                // edit, so it should refresh, not dismiss, the
+                                // list
+  NSSet<NSString *>
+      *_glslDeclaredUniforms; // this shader's uniform names, so a
+                              // `@osc` body reference paints orange
+                              // too (recomputed each highlight)
   BOOL _highlightScheduled;
   KKCodeGutterView *_lineGutter;
   NSView *_errorBar;             // red strip container (height toggled 0/on)
@@ -1740,6 +1805,12 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
     [ts endEditing];
     return;
   }
+  // A shader's own `uniform` names, painted the same orange as the built-in
+  // ones (a plain local variable stays default text, as GitHub renders it).
+  // Kept on the instance so the directive-body highlighter reuses it for `@osc`
+  // uniform references.
+  _glslDeclaredUniforms = KKGLSLDeclaredUniforms(src);
+  NSSet<NSString *> *declaredUniforms = _glslDeclaredUniforms;
   [KKGLSLTokenizer()
       enumerateMatchesInString:src
                        options:0
@@ -1758,10 +1829,12 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
                         color = KKCodeNumber();
                       } else if ((r = [m rangeAtIndex:4]).location !=
                                  NSNotFound) {
-                        color = KKGLSLWordColor([src substringWithRange:r]);
+                        NSString *w = [src substringWithRange:r];
+                        color = KKGLSLWordColor(w);
                         if (!color) {
                           // Not a known word: a function call if the next
-                          // non-space char is `(`, else a plain variable.
+                          // non-space char is `(`, a declared uniform ->
+                          // orange, else a plain variable (default text).
                           NSUInteger j = NSMaxRange(r);
                           while (j < src.length &&
                                  [ws characterIsMember:[src
@@ -1769,6 +1842,8 @@ static const CGFloat kKKComplPad = 8.0; // horizontal text inset
                             j++;
                           if (j < src.length && [src characterAtIndex:j] == '(')
                             color = KKCodeFunction();
+                          else if ([declaredUniforms containsObject:w])
+                            color = KKCodeUniform();
                         }
                       }
                       if (color && r.location != NSNotFound)
@@ -1842,16 +1917,22 @@ static NSRegularExpression *KKDirectiveBodyRE(void) {
                       } else if ((r = [m rangeAtIndex:4]).location !=
                                  NSNotFound) {
                         // A value identifier (tr, pad, vec2…): a function call
-                        // when the next non-space char is `(`, else a plain
-                        // value - either way NOT the flat comment grey.
+                        // when the next non-space char is `(`; a known keyword
+                        // (enum value / boolean / bare flag) coral; else a
+                        // plain value - either way NOT the flat comment grey.
                         NSUInteger j = NSMaxRange(r);
                         while (j < src.length &&
                                [ws characterIsMember:[src characterAtIndex:j]])
                           j++;
-                        color =
-                            (j < src.length && [src characterAtIndex:j] == '(')
-                                ? KKCodeFunction()
-                                : KKCodeText();
+                        NSString *w = [src substringWithRange:r];
+                        if (j < src.length && [src characterAtIndex:j] == '(')
+                          color = KKCodeFunction();
+                        else if ([self->_directiveKeywords containsObject:w])
+                          color = KKCodeKeyword();
+                        else if ([self->_glslDeclaredUniforms containsObject:w])
+                          color = KKCodeUniform(); // `@osc` uniform reference
+                        else
+                          color = KKCodeText();
                       }
                       if (color && r.location != NSNotFound)
                         [ts addAttribute:NSForegroundColorAttributeName
@@ -2239,6 +2320,30 @@ KKSwizzleCompletionItems(NSString *prefix) {
 - (void)viewWillMoveToWindow:(NSWindow *)newWindow {
   [super viewWillMoveToWindow:newWindow];
   if (newWindow != self.window)
+    [self _hideCompletion];
+}
+
+// Every edit (typed or programmatic) routes through here before it commits, so
+// the selection change it causes is flagged as an edit rather than a caret
+// move.
+- (BOOL)textView:(NSTextView *)textView
+    shouldChangeTextInRange:(NSRange)affectedCharRange
+          replacementString:(NSString *)replacementString {
+  _completionEditInFlight = YES;
+  return YES;
+}
+
+// A caret move (mouse click, or any selection change not caused by an edit)
+// dismisses the completion list - matching the arrow-key/line-nav dismissal in
+// doCommandBySelector. Consume the edit flag once so a typing edit's own
+// selection change refreshes the list (via textDidChange) instead of closing
+// it.
+- (void)textViewDidChangeSelection:(NSNotification *)notification {
+  BOOL fromEdit = _completionEditInFlight;
+  _completionEditInFlight = NO;
+  if (fromEdit)
+    return;
+  if (_completion.superview)
     [self _hideCompletion];
 }
 

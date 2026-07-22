@@ -225,6 +225,11 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
     NSArray<NSDictionary<NSString *, NSString *> *> *_Nullable (
         ^codeCompletionProvider)
         (NSString *text, NSUInteger caret, NSRange *outReplaceRange);
+/// For a `KKLaneValueTypeCode` lane: VALUE words the directive highlighter
+/// paints as keywords (wired to the editor's `directiveKeywords`). Keeps the
+/// vocabulary in the plugin, like `codeCompletionProvider`. Not serialized (a
+/// set), carried template->reconciled like `codeValidator`.
+@property(nonatomic, copy, nullable) NSSet<NSString *> *codeDirectiveKeywords;
 /// For a `KKLaneValueTypeCode` lane: optional extra named code sections beyond
 /// `codeString` (the primary/Image section), presented as tabs in the editor.
 /// Each entry is @{ @"name": display, @"code": source }. nil/empty = a single
@@ -391,6 +396,14 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// editor is replaced. Use for geometry-style properties (e.g. a path's
 /// points). Default NO. Build-time metadata.
 @property(nonatomic) BOOL oscEditedOnly;
+
+/// When YES this lane is driven by an on-screen EDITABLE PATH (a position OSC:
+/// the handle + motion-path anchors + tangents author the keyposes). Such a
+/// lane is NOT expression-referenceable - a link expression would override the
+/// path the user draws on canvas, so the "Add Expression" affordance is hidden
+/// (same treatment as a `paletteGeneratorBar` colour). The lane keeps its
+/// numeric X/Y fields. Default NO. Build-time metadata.
+@property(nonatomic) BOOL positionPathDriven;
 
 /// When YES this property applies to SOME owners only (multi-owner plugins):
 /// the plugin includes the lane in the applied timeline just for the layers

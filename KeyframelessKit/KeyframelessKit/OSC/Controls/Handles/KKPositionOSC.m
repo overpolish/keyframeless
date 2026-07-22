@@ -24,6 +24,11 @@
 @property(nonatomic) BOOL dragHandleIsOut;
 @property(nonatomic) double lastClickTime;
 @property(nonatomic) double lastClickFrac;
+// The clip fraction the NEXT lane<->object warp evaluation belongs to: the
+// playhead for the handle / drags, each sample's own time along the motion
+// path, the keypose's time for anchors + tangents. Only read when the warp
+// closures are set.
+@property(nonatomic) double warpFraction;
 @end
 
 @implementation KKPositionOSC
@@ -99,10 +104,11 @@
     objX = g.x;
     objY = g.y;
   } else {
-    NSArray<NSNumber *> *vals =
-        [self _positionValuesAtFraction:[self fractionAtTime:time]];
+    double frac = [self fractionAtTime:time];
+    NSArray<NSNumber *> *vals = [self _positionValuesAtFraction:frac];
     objX = vals[0].doubleValue;
     objY = vals[1].doubleValue;
+    self.warpFraction = frac;
   }
   return [self _canvasFromObjX:objX y:objY];
 }
@@ -117,6 +123,14 @@
 - (CGPoint)_canvasFromObjX:(double)ox y:(double)oy {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
+  // The block-supplied warp (lane value -> object) runs INSIDE the parent
+  // transform, at whatever fraction the caller staged in warpFraction.
+  if (self.laneToObjectWarp) {
+    simd_float2 w = self.laneToObjectWarp((simd_float2){(float)ox, (float)oy},
+                                          self.warpFraction);
+    ox = w.x;
+    oy = w.y;
+  }
   simd_float3 p = simd_mul(self.parentObjectTransform,
                            simd_make_float3((float)ox, (float)oy, 1.0f));
   double px = (p.z != 0.0f) ? p.x / p.z : p.x;
@@ -132,8 +146,8 @@
 }
 
 // CANVAS -> parent space -> INVERSE parentObjectTransform -> the control's own
-// lane space, so a drag maps the cursor back through the parent (reacting to its
-// rotation/scale) into the value's space.
+// lane space, so a drag maps the cursor back through the parent (reacting to
+// its rotation/scale) into the value's space.
 - (CGPoint)_objFromCanvasX:(double)cx y:(double)cy {
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
@@ -148,6 +162,12 @@
                            simd_make_float3((float)qx, (float)qy, 1.0f));
   double lx = (l.z != 0.0f) ? l.x / l.z : l.x;
   double ly = (l.z != 0.0f) ? l.y / l.z : l.y;
+  if (self.objectToLaneWarp) {
+    simd_float2 w = self.objectToLaneWarp((simd_float2){(float)lx, (float)ly},
+                                          self.warpFraction);
+    lx = w.x;
+    ly = w.y;
+  }
   return CGPointMake(lx, ly);
 }
 
@@ -162,13 +182,19 @@
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   if (!oscAPI)
     return;
-  NSArray<NSValue *> *path = KKLanePositionPathPoints(lane, 24);
+  NSArray<NSNumber *> *fracs = nil;
+  NSArray<NSValue *> *path =
+      KKLanePositionPathPointsWithFractions(lane, 24, &fracs);
   NSUInteger n = path.count;
   if (n < 2)
     return;
   CGPoint *pts = malloc(sizeof(CGPoint) * n);
   for (NSUInteger i = 0; i < n; i++) {
     NSPoint o = path[i].pointValue;
+    // Per-sample fraction: a warp referencing animated values maps each path
+    // point at ITS OWN time, so the drawn path is the true trajectory.
+    if (i < fracs.count)
+      self.warpFraction = fracs[i].doubleValue;
     pts[i] = [self _canvasFromObjX:o.x y:o.y];
   }
   simd_float4 red = {1.0f, 0.25f, 0.25f, 0.9f * ghostAlpha};
@@ -195,6 +221,7 @@
     if (!kp.spatialSmooth || kp.values.count < 2)
       continue;
     double ax = kp.values[0].doubleValue, ay = kp.values[1].doubleValue;
+    self.warpFraction = kp.time; // tangents map at their keypose's time
     CGPoint anchorC = [self _canvasFromObjX:ax y:ay];
     CGPoint inH = CGPointZero, outH = CGPointZero;
     KKLaneSpatialHandlesForKeypose(lane, i, &inH, &outH);
@@ -244,8 +271,13 @@
       }
     }
   }
-  for (NSValue *pv in KKLaneCoalescedAnchors(lane, skipIdx)) {
-    NSPoint v = pv.pointValue;
+  NSArray<NSNumber *> *anchorFracs = nil;
+  NSArray<NSValue *> *anchors =
+      KKLaneCoalescedAnchorsWithFractions(lane, skipIdx, &anchorFracs);
+  for (NSUInteger i = 0; i < anchors.count; i++) {
+    NSPoint v = anchors[i].pointValue;
+    if (i < anchorFracs.count)
+      self.warpFraction = anchorFracs[i].doubleValue;
     CGPoint c = [self _canvasFromObjX:v.x y:v.y];
     [self.anchorDotOSC drawAtCanvasPosition:c
                                   isHovered:NO
@@ -330,12 +362,8 @@
   }
   if (self.dragging && activePart == self.positionActivePart &&
       self.cmdSnapActive) {
-    simd_float4 yellow = {1, 1, 0, 1};
-    NSColor *accentNS = [[NSColor accentMatchingHost]
-        colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
-    CGFloat ar = 1, ag = 1, ab = 1, aa = 1;
-    [accentNS getRed:&ar green:&ag blue:&ab alpha:&aa];
-    simd_float4 accent = {(float)ar, (float)ag, (float)ab, (float)aa};
+    simd_float4 yellow, accent;
+    KKSnapGuideColors(&yellow, &accent);
     [self.snapEngine drawSnapGuidesWithOSC:self
                              isObjectSpace:YES
                                canvasColor:yellow
@@ -357,6 +385,7 @@
   for (KKKeyPose *kp in lane.keyposes) {
     if (kp.values.count < 2)
       continue;
+    self.warpFraction = kp.time;
     CGPoint c = [self _canvasFromObjX:kp.values[0].doubleValue
                                     y:kp.values[1].doubleValue];
     double d = hypot(x - c.x, y - c.y);
@@ -384,6 +413,7 @@
     if (!kp.spatialSmooth || kp.values.count < 2)
       continue;
     double ax = kp.values[0].doubleValue, ay = kp.values[1].doubleValue;
+    self.warpFraction = kp.time;
     CGPoint inH = CGPointZero, outH = CGPointZero;
     KKLaneSpatialHandlesForKeypose(lane, i, &inH, &outH);
     CGPoint sides[2] = {outH, inH};
@@ -464,12 +494,21 @@
     }
     return;
   }
+  double pressFrac = [self fractionAtTime:time];
+  self.warpFraction = pressFrac;
   CGPoint pressObj = [self _objFromCanvasX:x y:y];
   self.posPressObject = (simd_float2){(float)pressObj.x, (float)pressObj.y};
-  double pressFrac = [self fractionAtTime:time];
   BOOL onHandle = [self _positionVisibleAtFraction:pressFrac] &&
                   [self hitTestAtMousePositionX:x positionY:y atTime:time];
   self.dragAnchorFrac = onHandle ? NAN : [self _anchorFracNearCanvasX:x y:y];
+  if (!isnan(self.dragAnchorFrac)) {
+    // An anchor drag writes at the ANCHOR's keypose, so re-invert the press
+    // point at that fraction - keeping press + drag conversions in the same
+    // frame when a warp references animated values.
+    self.warpFraction = self.dragAnchorFrac;
+    CGPoint ap = [self _objFromCanvasX:x y:y];
+    self.posPressObject = (simd_float2){(float)ap.x, (float)ap.y};
+  }
   double clickFrac =
       isnan(self.dragAnchorFrac) ? pressFrac : self.dragAnchorFrac;
   double now = [NSDate timeIntervalSinceReferenceDate];
@@ -512,6 +551,9 @@
                   atTime:time];
     return;
   }
+  double dragFrac = [self fractionAtTime:time];
+  self.warpFraction =
+      isnan(self.dragAnchorFrac) ? dragFrac : self.dragAnchorFrac;
   CGPoint cur = [self _objFromCanvasX:x y:y];
   double curX = cur.x, curY = cur.y;
   // Delta-based drag: move by the cursor's offset from the grab point.
@@ -528,8 +570,9 @@
       newX = self.posGrabValX;
   }
 
-  // Snap OFF by default; Cmd engages it.
-  self.cmdSnapActive = (modifiers & kFxModifierKey_COMMAND) != 0;
+  // Snap OFF by default; Cmd engages it (unless this control opted out).
+  self.cmdSnapActive =
+      !self.snapDisabled && (modifiers & kFxModifierKey_COMMAND) != 0;
   double frac = [self fractionAtTime:time];
   double targetFrac = isnan(self.dragAnchorFrac) ? frac : self.dragAnchorFrac;
   if (self.cmdSnapActive) {
@@ -538,12 +581,12 @@
                  atFraction:targetFrac];
     newX = snapped.x;
     newY = snapped.y;
-  } else if (self.canvasSnapProvider) {
-    // Use the parent-aware conversion pair (_canvasFromObjX / _objFromCanvasX) so
-    // the round-trip stays consistent when the control is nested in a transformed
-    // parent (a Canvas member in a rotated group). canvasPointFromObjectPoint is
-    // the raw object->canvas and would mismatch the inverse below, offsetting the
-    // snapped handle.
+  } else if (!self.snapDisabled && self.canvasSnapProvider) {
+    // Use the parent-aware conversion pair (_canvasFromObjX / _objFromCanvasX)
+    // so the round-trip stays consistent when the control is nested in a
+    // transformed parent (a Canvas member in a rotated group).
+    // canvasPointFromObjectPoint is the raw object->canvas and would mismatch
+    // the inverse below, offsetting the snapped handle.
     CGPoint cp = [self _canvasFromObjX:newX y:newY];
     CGPoint sp = self.canvasSnapProvider(cp);
     CGPoint so = [self _objFromCanvasX:sp.x y:sp.y];
@@ -629,9 +672,9 @@
     for (NSInteger i = best; i > 0 && kps[i - 1].outgoing.endpointsLinked; i--)
       [skip addIndex:(NSUInteger)(i - 1)];
   }
+  NSUInteger cap = kps.count + self.externalSnapTargets.count;
   NSUInteger nObj = 0;
-  simd_float2 *objs =
-      kps.count ? malloc(kps.count * sizeof(simd_float2)) : NULL;
+  simd_float2 *objs = cap ? malloc(cap * sizeof(simd_float2)) : NULL;
   for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
     if ([skip containsIndex:(NSUInteger)k])
       continue;
@@ -640,6 +683,11 @@
       continue;
     objs[nObj++] =
         (simd_float2){(float)v[0].doubleValue, (float)v[1].doubleValue};
+  }
+  // Host-supplied targets (e.g. other point OSCs) share this object space.
+  for (NSValue *t in self.externalSnapTargets) {
+    CGPoint p = t.pointValue;
+    objs[nObj++] = (simd_float2){(float)p.x, (float)p.y};
   }
   CGPoint o0 = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
   CGPoint o1 = [self canvasPointFromObjectPoint:(simd_float2){1, 0}];
@@ -701,6 +749,7 @@
                 atTime:(CMTime)time {
   if (isnan(self.dragHandleFrac))
     return;
+  self.warpFraction = self.dragHandleFrac; // tangent maps at its keypose
   CGPoint cur = [self _objFromCanvasX:x y:y];
   double curX = cur.x, curY = cur.y;
   id<FxCustomParameterActionAPI_v4> actionAPI =
@@ -735,7 +784,15 @@
   }
   NSInteger best = KKLaneNearestKeyposeIndex(posLane, self.dragHandleFrac);
   NSMutableArray<KKKeyPose *> *out = [NSMutableArray arrayWithArray:kps];
-  KKKeyPose *nk = [out[best] copy];
+  KKKeyPose *nk =
+      (best >= 0 && best < (NSInteger)out.count) ? [out[best] copy] : nil;
+  // A malformed / mid-transition keypose (short values) must NOT throw here:
+  // the exception would escape the open action scope and wedge FCP's undo
+  // machinery (its next beginWithUndoState aborts). Bail cleanly instead.
+  if (!nk || nk.values.count < 2) {
+    [actionAPI endAction:self];
+    return;
+  }
   double ax = nk.values[0].doubleValue, ay = nk.values[1].doubleValue;
   double dx = curX - ax, dy = curY - ay;
   // Shift: axis-lock to the dominant axis (horizontal or vertical tangent).

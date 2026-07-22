@@ -116,9 +116,6 @@ fragment float4 KKRotationOSCFragment(KKRasterizerData in [[stage_in]],
     // local point), so all three agree without needing a flip here.
     float2 pos = in.textureCoordinate;
 
-    float3 col0 = float3(params->rotCol0);
-    float3 col1 = float3(params->rotCol1);
-    float3 col2 = float3(params->rotCol2);
     float radius = params->radius;
     float ringHW = params->ringHalfWidth;
     float outlineW = params->outlineWidth;
@@ -131,16 +128,16 @@ fragment float4 KKRotationOSCFragment(KKRasterizerData in [[stage_in]],
     ringColors[1] = float4(params->ringColorY);
     ringColors[2] = float4(params->ringColorZ);
 
-    // X ring spans the world Y/Z basis; Y ring spans X/Z; Z ring spans X/Y.
-    // (The axis's own column is its normal, which is dropped here.)
+    // Per-ring plane bases, filled CPU-side (one pose for a 3-axis gizmo,
+    // nested frames for a partial axis set - see KKRingDisplayMatrix).
     float3 ringU[3];
     float3 ringV[3];
-    ringU[0] = col1;
-    ringV[0] = col2;
-    ringU[1] = col0;
-    ringV[1] = col2;
-    ringU[2] = col0;
-    ringV[2] = col1;
+    ringU[0] = float3(params->ringUX);
+    ringV[0] = float3(params->ringVX);
+    ringU[1] = float3(params->ringUY);
+    ringV[1] = float3(params->ringVY);
+    ringU[2] = float3(params->ringUZ);
+    ringV[2] = float3(params->ringVZ);
 
     const int N = 64;
     const float twoPi = 6.28318530718;
@@ -250,8 +247,7 @@ fragment float4 KKLineFragment(KKRasterizerData in [[stage_in]],
 /// CPU-side and this shader just samples). buffer 0 = the gradient LUT
 /// (KK_GRADIENT_LUT_SIZE sRGB float3 samples, from KKColorLanesResolve); buffer
 /// 1 = opacity. Output is premultiplied to match the line pipeline's blend.
-fragment float4 KKGradientLineFragment(KKRasterizerData in [[stage_in]],
-                                       constant float3 *lut [[buffer(0)]],
+fragment float4 KKGradientLineFragment(KKRasterizerData in [[stage_in]], constant float3 *lut [[buffer(0)]],
                                        constant float *opacity [[buffer(1)]]) {
     float dist = abs(in.textureCoordinate.y);
     float alpha = 1.0 - smoothstep(1.0 - fwidth(dist) * 2.0, 1.0, dist);

@@ -23,6 +23,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// Multiplier for the fill color alpha. Default 1.0.
 @property(nonatomic) float fillAlpha;
 
+/// Multiplier on the WHOLE glyph's alpha (fill + stroke), default 1.0. Draw at
+/// < 1.0 to render as a dimmed "ghost" during Opt-reveal - the same contract
+/// as the other glyph handles (KKPointOSC / KKSquarePointOSC / KKRingOSC).
+@property(nonatomic) float ghostAlpha;
+
 @end
 
 NS_ASSUME_NONNULL_END

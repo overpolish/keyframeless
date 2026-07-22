@@ -14,14 +14,16 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Manages the mini-viewer siblings of the viewer's custom `// @osc` handles
-/// (ShaderOSC's expr blocks). One fixed glyph per block, drawn at the block's
-/// forward-expression object point and dragged by numerically inverting the
-/// forward (or evaluating its explicit inverse) - the SAME
-/// ShaderOSCBlockRuntime the viewer uses, so both sit and drag identically.
-/// Reads/writes the host through KKMiniViewerRenderer's public hooks. The mini
-/// analogue of the viewer's expr-handle loop in ShaderOSC, and the `// @osc`
-/// cousin of KKRingOSCSet.
+/// Manages the mini-viewer siblings of the viewer's custom `// @osc` controls
+/// (ShaderOSC's expr blocks). A `point` block is a fixed glyph at the block's
+/// forward-expression object point, dragged by numerically inverting the
+/// forward (or evaluating its explicit inverse); a `ring` block is a
+/// value-sized radius ring at its `center` with its `toR` radii, dragged
+/// through the runtime's shared ring mechanic - the SAME ShaderOSCBlockRuntime
+/// the viewer uses, so both sit and drag identically. Reads/writes the host
+/// through KKMiniViewerRenderer's public hooks. The mini analogue of the
+/// viewer's expr-control loop in ShaderOSC, and the `// @osc` cousin of
+/// KKRingOSCSet.
 @interface ShaderExprMiniSet : NSObject
 
 - (instancetype)initWithRenderer:(KKMiniViewerRenderer *)renderer;
@@ -31,10 +33,23 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)syncWithSource:(nullable NSString *)src
                  lanes:(NSArray<KKLane *> *)lanes;
 
-/// `@{@"center", @"style", @"alpha"}` bundles for the active handles. Forward
-/// -miniViewer:extraFixedGlyphsForContentRect: here.
+/// `@{@"center", @"style", @"alpha"}` bundles for the active POINT handles.
+/// Forward -miniViewer:extraFixedGlyphsForContentRect: here.
 - (NSArray<NSDictionary<NSString *, id> *> *)glyphBundlesForContentRect:
     (CGRect)cr;
+
+/// `@{@"center", @"radiusX", @"radiusY", @"emphasis", @"alpha"}` bundles for
+/// the active RING blocks (same shape as KKRingOSCSet's). Merge into
+/// -miniViewer:extraRingsForContentRect:.
+- (NSArray<NSDictionary<NSString *, id> *> *)ringBundlesForContentRect:
+    (CGRect)cr;
+
+/// One KKMiniBox (rect + 8 handles + readout) per active BOX block. Merge
+/// into -miniViewer:boxesForContentRect:. `mediaSize` = the canvas's
+/// sourceMediaSize; a crop-style (vec4) box shows its rect in source px with
+/// it, matching the viewer (zero size = no px readout).
+- (NSArray<KKMiniBox *> *)boxesForContentRect:(CGRect)cr
+                                    mediaSize:(CGSize)mediaSize;
 
 - (BOOL)handleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr;
 - (nullable NSCursor *)cursorAtPoint:(CGPoint)p contentRect:(CGRect)cr;
@@ -43,16 +58,38 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)beginDragAtPoint:(CGPoint)p
              contentRect:(CGRect)cr
                   canvas:(KKMiniViewerView *)canvas;
-/// Live-update the active drag. YES if a drag is active.
+/// Live-update the active drag (`modifiers` feeds the ring mechanic's Shift
+/// aspect-lock invert). YES if a drag is active.
 - (BOOL)dragToPoint:(CGPoint)p
         contentRect:(CGRect)cr
-             canvas:(KKMiniViewerView *)canvas;
+             canvas:(KKMiniViewerView *)canvas
+          modifiers:(NSEventModifierFlags)modifiers;
 /// End the active drag. YES if a drag was active.
 - (BOOL)endDragOnCanvas:(KKMiniViewerView *)canvas;
 /// Opt-click to hide the handle under `p`. YES if one toggled.
 - (BOOL)optClickAtPoint:(CGPoint)p
             contentRect:(CGRect)cr
                  canvas:(KKMiniViewerView *)canvas;
+
+/// YES while a POINT handle that snaps (not `skipsnapping`) is being dragged -
+/// the interaction routes the snap-guide query here rather than to the position
+/// set.
+@property(nonatomic, readonly) BOOL draggingSnapPoint;
+
+/// The active point drag's snap-guide state, in normalized value space
+/// (matching KKPositionMiniController's reporter). `fromKeypose*` = the axis
+/// snapped to another handle (accent/blue) rather than a canvas anchor
+/// (yellow).
+- (void)snapGuideHasX:(out BOOL *)hasX
+                    X:(out CGFloat *)outX
+         fromKeyposeX:(out BOOL *)fromKeyposeX
+                 hasY:(out BOOL *)hasY
+                    Y:(out CGFloat *)outY
+         fromKeyposeY:(out BOOL *)fromKeyposeY;
+
+/// Every POINT handle's normalized value position (0..1), so the position set
+/// can snap onto them (its `externalSnapTargets`). CGPoint-wrapped.
+- (NSArray<NSValue *> *)pointHandleValuePositionsForContentRect:(CGRect)cr;
 
 @end
 

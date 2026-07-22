@@ -66,7 +66,8 @@ NSColor *KKExprWordColor(NSString *w) {
       @"mod",      @"pow",       @"atan2",   @"hypot",      @"step",
       @"clamp",    @"lerp",      @"mix",     @"smoothstep", @"easeIn",
       @"easeOut",  @"easeInOut", @"elastic", @"bounce",     @"repeat",
-      @"pingpong", @"vec2",      @"vec3",    @"vec4"
+      @"pingpong", @"vec2",      @"vec3",    @"vec4",       @"random",
+      @"noise"
     ]];
     vars = [NSSet setWithArray:@[
       @"value", @"t", @"progress", @"ct", @"pi", @"tau", @"e"
@@ -77,6 +78,33 @@ NSColor *KKExprWordColor(NSString *w) {
   if ([vars containsObject:w])
     return KKCodeKeyword();
   return nil;
+}
+
+NSSet<NSString *> *KKGLSLDeclaredUniforms(NSString *source) {
+  if (source.length == 0)
+    return [NSSet set];
+  static NSRegularExpression *re;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    // `uniform` ... last identifier before an optional `[array]` and the `;`.
+    // The lazy `[^;{}]*?` swallows the type + any qualifiers (highp, etc).
+    re = [NSRegularExpression
+        regularExpressionWithPattern:
+            @"\\buniform\\b[^;{}]*?([A-Za-z_]\\w*)\\s*(?:\\[[^\\]]*\\])?\\s*;"
+                             options:0
+                               error:nil];
+  });
+  NSMutableSet<NSString *> *out = [NSMutableSet set];
+  [re enumerateMatchesInString:source
+                       options:0
+                         range:NSMakeRange(0, source.length)
+                    usingBlock:^(NSTextCheckingResult *m, NSMatchingFlags flags,
+                                 BOOL *stop) {
+                      NSRange r = [m rangeAtIndex:1];
+                      if (r.location != NSNotFound)
+                        [out addObject:[source substringWithRange:r]];
+                    }];
+  return out;
 }
 
 NSRegularExpression *KKExprTokenizer(void) {
@@ -131,6 +159,27 @@ KKExprEntry(NSString *name, NSString *cat, NSString *sig, NSString *desc,
 
 NSArray<NSString *> *KKExprCatalogCategories(void) {
   return @[ @"Variables", @"Math", @"Easing", @"Phase", @"Vector" ];
+}
+
+NSString *KKExprCatalogMarkdown(void) {
+  NSMutableString *md = [NSMutableString string];
+  [md appendString:
+          @"# Expression reference: every function and variable\n\n"
+          @"The complete vocabulary the expression editor accepts - the same "
+          @"list its insert menu shows. These are the ONLY names valid in an "
+          @"expression; anything else is an error. See the `expressions` topic "
+          @"for how expressions work and worked examples.\n\n"];
+  NSArray<NSDictionary<NSString *, NSString *> *> *catalog = KKExprCatalog();
+  for (NSString *category in KKExprCatalogCategories()) {
+    [md appendFormat:@"## %@\n\n", category];
+    for (NSDictionary<NSString *, NSString *> *e in catalog) {
+      if (![e[@"category"] isEqualToString:category])
+        continue;
+      [md appendFormat:@"- `%@` - %@\n", e[@"signature"], e[@"desc"]];
+    }
+    [md appendString:@"\n"];
+  }
+  return md;
 }
 
 NSArray<NSDictionary<NSString *, NSString *> *> *KKExprCatalog(void) {
@@ -215,6 +264,16 @@ NSArray<NSDictionary<NSString *, NSString *> *> *KKExprCatalog(void) {
       KKExprEntry(@"smoothstep", @"Math", @"smoothstep(lo, hi, x)",
                   @"Smooth 0 to 1 ramp as x crosses lo to hi (eased ends).",
                   @"smoothstep("),
+      KKExprEntry(@"random", @"Math", @"random(seed)",
+                  @"A steady 0 to 1 value from a seed - the same seed always "
+                  @"gives the same number. random(floor(t)) rolls once a "
+                  @"second; multiply/offset to fit a range.",
+                  @"random("),
+      KKExprEntry(@"noise", @"Math", @"noise(x)",
+                  @"Smooth 0 to 1 wander as x changes - random's flowing "
+                  @"cousin. value + (noise(t)*2 - 1) * 20 drifts either way "
+                  @"by 20.",
+                  @"noise("),
 
       KKExprEntry(
           @"easeIn", @"Easing", @"easeIn(f, intensity?)",

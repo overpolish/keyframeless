@@ -104,6 +104,19 @@ static NSString *kkAxisLetter(int k) {
                                (float)(e[2] * kDegToRad));
 }
 
+// Ring `k`'s display frame: the full pose for a 3-axis gizmo, the NESTED
+// frame for a partial axis set (drag = Euler increment there), matching the
+// viewer gizmo's _ringDisplayMatrix.
+- (KKRotMatrix3)_ringMatrixForLabel:(NSString *)label
+                               axes:(KKRotationAxes)axes
+                               ring:(int)k {
+  double e[3];
+  [self _eulerDegForLabel:label axes:axes out:e];
+  return KKRingDisplayMatrix((float)(e[0] * kDegToRad),
+                             (float)(e[1] * kDegToRad),
+                             (float)(e[2] * kDegToRad), (int)axes, k);
+}
+
 - (CGFloat)_radiusForCanvas:(KKMiniViewerView *)canvas {
   CGFloat h = canvas.oscSizingHeight;
   CGFloat scale = (h > 0) ? (h / kRotBaselineCanvasH) : 1.0;
@@ -152,12 +165,8 @@ static NSString *kkAxisLetter(int k) {
       continue;
     KKRotationAxes axes = [self _axesForSpec:s];
     CGPoint center = [self centerForSpec:s contentRect:cr];
-    KKRotMatrix3 m = [self _matrixForLabel:label axes:axes];
     BOOL grabbed = [label isEqualToString:_grabLabel];
     KKRotationOSCParams p = {
-        .rotCol0 = m.col0,
-        .rotCol1 = m.col1,
-        .rotCol2 = m.col2,
         .radius = 1.0f,
         .ringHalfWidth = 3.5f / 90.0f,
         .outlineWidth = 1.0f / 90.0f,
@@ -172,6 +181,10 @@ static NSString *kkAxisLetter(int k) {
                         [self _ringAlphaForLabel:label axes:axes axis:1],
                         [self _ringAlphaForLabel:label axes:axes axis:2]},
     };
+    KKRotMatrix3 mX = [self _ringMatrixForLabel:label axes:axes ring:0];
+    KKRotMatrix3 mY = [self _ringMatrixForLabel:label axes:axes ring:1];
+    KKRotMatrix3 mZ = [self _ringMatrixForLabel:label axes:axes ring:2];
+    KKRotationOSCParamsSetRingBases(&p, mX, mY, mZ);
     [out addObject:[KKMiniRotation rotationWithCenter:center
                                              radiusPx:radius
                                                params:p]];
@@ -200,13 +213,17 @@ static NSString *kkAxisLetter(int k) {
       continue;
     KKRotationAxes axes = [self _axesForSpec:s];
     CGPoint center = [self centerForSpec:s contentRect:cr];
-    // Overlay is Y-UP; the rotation math works in Y-DOWN screen space.
+    // Overlay is Y-UP; the rotation math works in Y-DOWN screen space. Each
+    // ring hit-tests in ITS display frame (nested for partial axis sets),
+    // matching the draw.
     CGPoint local = CGPointMake(p.x - center.x, center.y - p.y);
-    KKRotMatrix3 m = [self _matrixForLabel:label axes:axes];
     for (int k = 0; k < 3; k++) {
       if ([self _ringAlphaForLabel:label axes:axes axis:k] <= 0.0f)
         continue; // hidden/disabled ring not grabbable
-      KKRingHit h = KKClosestAngleOnRing(m, k, radius, local, kRotRingSamples);
+      KKRingHit h = KKClosestAngleOnRing([self _ringMatrixForLabel:label
+                                                              axes:axes
+                                                              ring:k],
+                                         k, radius, local, kRotRingSamples);
       if (h.frontDist < bestFront) {
         bestFront = h.frontDist;
         bestLabel = label;
@@ -247,7 +264,17 @@ static NSString *kkAxisLetter(int k) {
   if (vis)
     return vis;
   CGPoint c = [self centerForSpec:[self specForLabel:hit] contentRect:cr];
-  return KKRotationAxisCursor(axis, atan2(p.y - c.y, p.x - c.x));
+  if (axis == 2)
+    return KKRotationAxisCursor(axis, atan2(p.y - c.y, p.x - c.x));
+  // X/Y: the resize cursor follows the ring's on-screen TANGENT at the hovered
+  // angle (same pose-aware fix as the viewer gizmo) - the drag already uses
+  // this exact tangent. KKRingBasis is Y-down; flip for the Y-up overlay.
+  KKRotationAxes axes = [self _axesForSpec:[self specForLabel:hit]];
+  simd_float3 U, V;
+  KKRingBasis([self _ringMatrixForLabel:hit axes:axes ring:axis], axis, &U, &V);
+  double tx = -sin(t) * U.x + cos(t) * V.x;
+  double ty = -(-sin(t) * U.y + cos(t) * V.y);
+  return KKResizeCursorForAngle(atan2(ty, tx));
 }
 
 - (BOOL)beginDragAtPoint:(CGPoint)p
@@ -276,10 +303,10 @@ static NSString *kkAxisLetter(int k) {
   _lastWrittenRx = _pressRx;
   _lastWrittenRy = _pressRy;
   _lastWrittenRz = _pressRz;
-  // Y-DOWN screen tangent at the press ring point.
-  KKRotMatrix3 m = [self _matrixForLabel:hit axes:axes];
+  // Y-DOWN screen tangent at the press ring point, in the ring's own display
+  // frame (nested for partial axis sets, matching draw + hit).
   simd_float3 U, V;
-  KKRingBasis(m, axis, &U, &V);
+  KKRingBasis([self _ringMatrixForLabel:hit axes:axes ring:axis], axis, &U, &V);
   double tx = -sin(t) * U.x + cos(t) * V.x;
   double ty = -sin(t) * U.y + cos(t) * V.y;
   double len = sqrt(tx * tx + ty * ty);
@@ -314,9 +341,22 @@ static NSString *kkAxisLetter(int k) {
   if (modifiers & NSEventModifierFlagCommand)
     dAngle = round(dAngle / kRotSnapStep) * kRotSnapStep;
   double rx = 0, ry = 0, rz = 0;
-  KKRotationComposeAxisDelta(_activeAxis, dAngle, _pressRx, _pressRy, _pressRz,
-                             &_lastWrittenRx, &_lastWrittenRy, &_lastWrittenRz,
-                             &rx, &ry, &rz);
+  KKRotationAxes all = KKRotationAxisX | KKRotationAxisY | KKRotationAxisZ;
+  if ((axes & all) == all) {
+    KKRotationComposeAxisDelta(_activeAxis, dAngle, _pressRx, _pressRy,
+                               _pressRz, &_lastWrittenRx, &_lastWrittenRy,
+                               &_lastWrittenRz, &rx, &ry, &rz);
+  } else {
+    // PARTIAL axis set: the trackball compose needs the disabled axes to
+    // represent its result (dropping them corrupts the pose), so drag = a
+    // plain Euler increment on the grabbed axis - matching the viewer gizmo.
+    rx = _pressRx + (_activeAxis == 0 ? dAngle : 0.0);
+    ry = _pressRy + (_activeAxis == 1 ? dAngle : 0.0);
+    rz = _pressRz + (_activeAxis == 2 ? dAngle : 0.0);
+    _lastWrittenRx = rx;
+    _lastWrittenRy = ry;
+    _lastWrittenRz = rz;
+  }
   double euler[3] = {rx * kRadToDeg, ry * kRadToDeg, rz * kRadToDeg};
   [self.renderer commitValues:[self _laneValuesFromEulerDeg:euler axes:axes]
                      forLabel:_grabLabel

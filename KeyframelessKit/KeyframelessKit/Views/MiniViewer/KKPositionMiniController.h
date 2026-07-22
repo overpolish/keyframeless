@@ -59,12 +59,35 @@ NS_ASSUME_NONNULL_BEGIN
     (simd_float2 normalizedValue, CGRect contentRect);
 
 /// Optional map from a content-rect view point to the member-local normalized
-/// value (the inverse of how the handle is drawn). Set by a host whose handle is
-/// drawn through a parent transform (a Canvas member in a transformed group) so a
-/// drag follows the cursor instead of drifting. nil = the plain content-rect
-/// normalization. Mirrors the viewer Position OSC's `_objFromCanvasX` inverse.
+/// value (the inverse of how the handle is drawn). Set by a host whose handle
+/// is drawn through a parent transform (a Canvas member in a transformed group)
+/// so a drag follows the cursor instead of drifting. nil = the plain
+/// content-rect normalization. Mirrors the viewer Position OSC's
+/// `_objFromCanvasX` inverse.
 @property(nonatomic, copy, nullable) simd_float2 (^viewToValue)
     (CGPoint viewPoint, CGRect contentRect);
+
+/// Optional ARBITRARY warp between the lane's value space and the drawn
+/// object space (mirrors the viewer KKPositionOSC's warp pair): applied to
+/// every drawn point (handle, path samples, anchors, tangent endpoints) and
+/// inverted on drags. `fraction` = the mapped point's clip fraction (the edit
+/// fraction for the handle/drags, each sample's own time along the path). Set
+/// BOTH or NEITHER. nil = identity.
+@property(nonatomic, copy, nullable) simd_float2 (^laneToObjectWarp)
+    (simd_float2 laneValue, double fraction);
+@property(nonatomic, copy, nullable) simd_float2 (^objectToLaneWarp)
+    (simd_float2 objectPoint, double fraction);
+
+/// Extra normalized-value snap targets (0..1) folded into the Cmd snap
+/// alongside the lane's keyposes and the canvas anchors - so the host can let
+/// this position handle snap onto other handles (Shader's point OSCs). Each
+/// NSValue wraps a CGPoint. Set fresh per drag. Mirrors the viewer
+/// KKPositionOSC's `externalSnapTargets`.
+@property(nonatomic, copy, nullable) NSArray<NSValue *> *externalSnapTargets;
+
+/// Opt this handle out of snapping entirely (Cmd snap + grid), for a control
+/// the user asked not to snap (Shader's `skipsnapping`). Default NO.
+@property(nonatomic) BOOL snapDisabled;
 
 /// YES while a Position handle or a Path anchor/tangent is being dragged.
 @property(nonatomic, readonly) BOOL isDragging;

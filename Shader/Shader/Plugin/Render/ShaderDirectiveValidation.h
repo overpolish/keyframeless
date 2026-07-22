@@ -104,7 +104,8 @@ static inline NSString *ShaderFirstInvalidOSC(NSString *source, int *outKind) {
   int ns =
       ShaderParseScalarProps(source, sp, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
   for (int i = 0; i < ns; i++) {
-    if (strcmp(sp[i].oscKind, "point") == 0 &&
+    if ((strcmp(sp[i].oscKind, "point") == 0 ||
+         strcmp(sp[i].oscKind, "position") == 0) &&
         strcmp(sp[i].uniformType, "vec2") != 0) {
       if (outKind)
         *outKind = ShaderOSCErrorPoint;

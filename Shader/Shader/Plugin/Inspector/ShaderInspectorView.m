@@ -5,7 +5,8 @@
 
 #import "ShaderInspectorView.h"
 
-#import "Constants.h" // ShaderCustomDefaultShaderSource
+#import "Constants.h"      // ShaderCustomDefaultShaderSource
+#import "Plugin_Private.h" // +availableLanesForShaderSource:
 #import "ShaderCategory.h"
 #import "ShaderDirectives.h" // #color / #float ... default parsing
 #import "ShaderInspectorView+Guides.h"
@@ -431,6 +432,36 @@ static BOOL ShaderLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     void (^commit)(NSString *) = self.basicLanesView.onCodeCommitted;
     if (commit)
       commit(effective);
+    // A uniform that just became a POSITION OSC (osc=position) can't be
+    // expression-driven - its value is authored by the on-screen editable
+    // path. Strip any stale link expression a prior `osc=point` (or none) left
+    // on such a lane, so the render stops honouring it and the inline
+    // expression editor closes. Once-off at the transition (guarded so it
+    // doesn't re-persist on every apply).
+    NSMutableSet<NSString *> *pathDriven = [NSMutableSet set];
+    for (KKLane *t in [ShaderPlugin availableLanesForShaderSource:effective])
+      if (t.positionPathDriven && t.label)
+        [pathDriven addObject:t.label];
+    if (pathDriven.count) {
+      NSMutableArray<KKLane *> *lanes = [timeline.lanes mutableCopy];
+      BOOL changed = NO;
+      for (NSUInteger i = 0; i < lanes.count; i++) {
+        KKLane *l = lanes[i];
+        if (l.linkExpression != nil && [pathDriven containsObject:l.label]) {
+          KKLane *c = [l copy];
+          c.linkExpression = nil;
+          c.positionPathDriven = YES;
+          lanes[i] = c;
+          changed = YES;
+        }
+      }
+      if (changed && self.onTimelineMutated) {
+        KKTimeline *stripped = [timeline copy];
+        stripped.lanes = lanes;
+        _miniViewerRenderer.timeline = stripped;
+        self.onTimelineMutated(stripped);
+      }
+    }
   }
 }
 

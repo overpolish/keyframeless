@@ -216,7 +216,8 @@ LocalsInOSCBlockAbove(NSString *text, NSUInteger lineStart) {
   dispatch_once(&once, ^{
     reserved = [NSSet setWithArray:@[
       @"primitive", @"binds", @"style", @"cursor", @"topos", @"frompos",
-      @"torect", @"fromrect"
+      @"torect", @"fromrect", @"tor", @"fromr", @"center", @"axes", @"linked",
+      @"body"
     ]];
   });
   NSCharacterSet *ws = NSCharacterSet.whitespaceCharacterSet;

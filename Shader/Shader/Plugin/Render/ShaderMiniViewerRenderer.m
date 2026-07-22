@@ -8,10 +8,12 @@
 
 #import "Constants.h"        // ShaderCustomDefaultShaderSource
 #import "KKGLSLTranspiler.h" // GLSL -> MSL + channel binding
+#import "Plugin_Private.h"   // +availableLanesForShaderSource:
 #import "ShaderAudioPool.h"
 #import "ShaderCustomShader.h" // ShaderCustomErrorShaderSource
 #import "ShaderDirectives.h"
-#import "ShaderExprMiniSet.h" // // @osc custom-handling handles
+#import "ShaderExprMiniSet.h"     // // @osc custom-handling handles
+#import "ShaderOSCBlockRuntime.h" // rotate blocks feed the rotation set
 #import "ShaderTypes.h"
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KeyframelessKit.h>
@@ -49,9 +51,6 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   // cheap string compare instead of re-running the directive parse each frame.
   NSString *_pointSyncedSource;
   KKPointOSCSet *_pointSet;
-  NSString *_radialSyncedSource;
-  KKRingOSCSet *_ringSet;
-  KKBoxOSCSet *_boxSet;
   NSString *_rotSyncedSource;
   KKRotationOSCSet *_rotSet;
   ShaderExprMiniSet *_exprSet;
@@ -70,37 +69,29 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   return _pointSet;
 }
 
-// Feed the set the shader's current `#point osc` uniform names (its lane
-// identities). Cheap string compare skips the directive parse when the source
-// is unchanged; the set itself no-ops when the label list is unchanged.
+// Feed the set the current position lanes (the `#point osc` sugar arrives as
+// `style = position` blocks from the shared runtimes). Cheap string compare
+// skips the parse when the source is unchanged; the set itself no-ops when the
+// label list is unchanged.
 - (void)_syncMiniPointController {
   NSString *src = [self _customShaderSource] ?: @"";
   if ([src isEqualToString:_pointSyncedSource])
     return;
   _pointSyncedSource = [src copy];
   NSMutableArray<NSString *> *labels = [NSMutableArray array];
-  if (src.length) {
-    ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
-    int used = 0;
-    int n = ShaderParseScalarProps(src, props, KK_SHADER_MAX_SCALAR_PROPS, 0,
-                                   &used);
-    for (int i = 0; i < n; i++)
-      if (props[i].isPoint && strcmp(props[i].oscKind, "point") == 0)
-        [labels addObject:@(props[i].name)]; // uniform name = lane identity
-  }
+  NSMutableSet<NSString *> *noSnap =
+      [NSMutableSet set]; // `skipsnapping` labels
+  for (ShaderOSCBlockRuntime *b in
+       [ShaderOSCBlockRuntime runtimesForSource:src
+                                          lanes:self.laneTemplates ?: @[]])
+    if ([b.primitive isEqualToString:@"position"]) {
+      [labels addObject:b.binds]; // uniform name = lane identity
+      if (!b.snaps)
+        [noSnap addObject:b.binds];
+    }
   [self.pointSet setLaneLabels:labels];
-}
-
-- (KKRingOSCSet *)ringSet {
-  if (!_ringSet)
-    _ringSet = [[KKRingOSCSet alloc] initWithRenderer:self];
-  return _ringSet;
-}
-
-- (KKBoxOSCSet *)boxSet {
-  if (!_boxSet)
-    _boxSet = [[KKBoxOSCSet alloc] initWithRenderer:self];
-  return _boxSet;
+  for (KKPositionMiniController *c in self.pointSet.controllers)
+    c.snapDisabled = [noSnap containsObject:c.laneLabel];
 }
 
 - (KKRotationOSCSet *)rotSet {
@@ -116,12 +107,21 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
 }
 
 // Feed the expr set the shader's current `// @osc` blocks. It parses + compiles
-// via the shared ShaderOSCBlockRuntime (its own cheap string-compare no-op),
-// seeded with the renderer's template lanes for a first write.
+// via the shared ShaderOSCBlockRuntime (its own cheap string-compare no-op).
+// Seeds from lanes derived FRESH from the current source (not the createView
+// laneTemplates snapshot, which goes stale on a code edit) so a box readout's
+// per-component units track live `units={}` changes, matching the viewer.
 - (void)_syncMiniExprController {
-  [self.exprSet syncWithSource:[self _customShaderSource]
-                         lanes:self.laneTemplates ?: @[]];
+  NSString *src = [self _customShaderSource];
+  NSArray<KKLane *> *lanes =
+      src.length ? [ShaderPlugin availableLanesForShaderSource:src]
+                 : (self.laneTemplates ?: @[]);
+  [self.exprSet syncWithSource:src lanes:lanes];
 }
+
+// The KKRotationAxes bitmask for a rotate block's `axes = x y z` subset
+// (default Z), matching the viewer's mapping.
+static NSInteger ShaderMiniRotationAxesForNames(NSString *axes);
 
 // Feed the rotation set the shader's current `osc={..}` lanes: one spec per
 // rotate directive (label + active-axis bitmask + clip-centre). Cheap string
@@ -133,77 +133,55 @@ NSString *ShaderMiniViewerRequestPathForUUID(NSString *uuid) {
   _rotSyncedSource = [src copy];
   NSMutableArray<NSDictionary<NSString *, id> *> *rots = [NSMutableArray array];
   if (src.length) {
-    ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
-    int used = 0;
-    int n = ShaderParseScalarProps(src, props, KK_SHADER_MAX_SCALAR_PROPS, 0,
-                                   &used);
-    for (int i = 0; i < n; i++) {
-      if (!ShaderScalarOSCIsRotate(&props[i]))
+    // Rotate blocks (the `osc={..}` sugar included) feed the spec-driven set,
+    // keyed on their LANE label like the viewer gizmo. The two standard
+    // `center =` shapes map onto the spec: a bare uniform name is a live link,
+    // anything else evaluates once to a constant centre.
+    for (ShaderOSCBlockRuntime *b in
+         [ShaderOSCBlockRuntime runtimesForSource:src
+                                            lanes:self.laneTemplates ?: @[]]) {
+      if (![b.primitive isEqualToString:@"rotate"])
         continue;
-      // Axis bitmask (KKRotationAxisX/Y/Z = 1/2/4) from the braced set; the
-      // lane stores its components in canonical X<Y<Z order, which the set
-      // expands.
-      int axes = ShaderScalarRotationAxisMask(&props[i]);
-      [rots addObject:@{
-        @"label" : @(props[i].name),
-        @"axes" : @(axes),
-        @"centerX" : @(props[i].rcenterx),
-        @"centerY" : @(props[i].rcentery),
-        @"linkLabel" : @(props[i].linkName),
-      }];
+      NSString *centerSrc = [b.centerSource
+          stringByTrimmingCharactersInSet:NSCharacterSet
+                                              .whitespaceCharacterSet];
+      BOOL isLink =
+          centerSrc.length &&
+          [centerSrc
+              rangeOfCharacterFromSet:
+                  [[NSCharacterSet
+                      characterSetWithCharactersInString:
+                          @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX"
+                          @"YZ0123456789_"] invertedSet]]
+                  .location == NSNotFound;
+      simd_float2 c = {0.5f, 0.5f};
+      if (centerSrc.length && !isLink)
+        c = [b centerObjectForBound:KKExprScalar(0) aspect:1.0];
+      NSMutableDictionary<NSString *, id> *spec = [@{
+        @"label" : b.binds,
+        @"axes" : @((int)ShaderMiniRotationAxesForNames(b.axes)),
+        @"centerX" : @(c.x),
+        @"centerY" : @(c.y),
+        @"linkLabel" : isLink ? centerSrc : @"",
+      } mutableCopy];
+      [rots addObject:spec];
     }
   }
   [self.rotSet setRotations:rots];
 }
 
-// Feed the ring + box sets the shader's current `osc=ring` / `osc=box` scalar
-// lanes in ONE parse. A ring and a box share the exact same radial spec (label
-// + value range + object-space centre + aspect-lock); only the osc kind picks
-// the target set. Cheap string compare skips the parse when the source is
-// unchanged.
-- (void)_syncMiniRadialControllers {
-  NSString *src = [self _customShaderSource] ?: @"";
-  if ([src isEqualToString:_radialSyncedSource])
-    return;
-  _radialSyncedSource = [src copy];
-  NSMutableArray<NSDictionary<NSString *, id> *> *rings =
-      [NSMutableArray array];
-  NSMutableArray<NSDictionary<NSString *, id> *> *boxes =
-      [NSMutableArray array];
-  if (src.length) {
-    ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
-    int used = 0;
-    int n = ShaderParseScalarProps(src, props, KK_SHADER_MAX_SCALAR_PROPS, 0,
-                                   &used);
-    for (int i = 0; i < n; i++) {
-      if (!ShaderScalarRingEligible(&props[i]))
-        continue;
-      BOOL isRing = strcmp(props[i].oscKind, "ring") == 0;
-      BOOL isBox = ShaderScalarOSCIsBox(&props[i]);
-      if (!isRing && !isBox)
-        continue;
-      BOOL isInt = props[i].isInt || props[i].isPercent;
-      int fields = props[i].isMulti
-                       ? (props[i].fieldCount > 0 ? props[i].fieldCount : 2)
-                       : 1;
-      NSDictionary<NSString *, id> *spec = @{
-        @"label" : @(props[i].name),
-        @"min" : @(props[i].fmin),
-        @"max" : @(props[i].fmax),
-        @"isInt" : @(isInt),
-        @"isPercent" : @(props[i].isPercent != 0),
-        @"bounded" : @(props[i].hasMax != 0),
-        @"fields" : @(fields),
-        @"linked" : @(props[i].aspectLinked != 0),
-        @"centerX" : @(props[i].rcenterx),
-        @"centerY" : @(props[i].rcentery),
-        @"linkLabel" : @(props[i].linkName),
-      };
-      [(isRing ? rings : boxes) addObject:spec];
-    }
-  }
-  [self.ringSet setRings:rings];
-  [self.boxSet setBoxes:boxes];
+// The KKRotationAxes bitmask for a rotate block's `axes = x y z` subset
+// (default Z), matching the viewer's mapping.
+static NSInteger ShaderMiniRotationAxesForNames(NSString *axes) {
+  NSString *lower = axes.lowercaseString;
+  NSInteger m = 0;
+  if ([lower containsString:@"x"])
+    m |= KKRotationAxisX;
+  if ([lower containsString:@"y"])
+    m |= KKRotationAxisY;
+  if ([lower containsString:@"z"])
+    m |= KKRotationAxisZ;
+  return m ?: KKRotationAxisZ;
 }
 
 - (KKLane *)templateLaneForLabel:(NSString *)label {

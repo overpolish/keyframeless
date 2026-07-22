@@ -38,6 +38,12 @@ NSRegularExpression *KKGLSLTokenizer(void);
 /// default.
 NSColor *KKGLSLWordColor(NSString *w);
 
+/// The names declared by `uniform <type> <name>[array];` in `source`, so the
+/// editor can paint a shader's OWN uniforms the same orange as the built-in
+/// ones (GitHub colours a variable, not just the language's globals). Handles
+/// qualifiers (`highp`) and array uniforms.
+NSSet<NSString *> *KKGLSLDeclaredUniforms(NSString *source);
+
 /// One regex for the parameter-link EXPRESSION grammar (KKLinkExpr): capture
 /// group 1 a `${ref}`, 2 a number, 3 an identifier.
 NSRegularExpression *KKExprTokenizer(void);
@@ -64,3 +70,11 @@ NSArray<NSDictionary<NSString *, NSString *> *> *KKExprCatalog(void);
 
 /// The distinct category names in KKExprCatalog(), in menu order.
 NSArray<NSString *> *KKExprCatalogCategories(void);
+
+/// A markdown body listing every expression variable and function (from
+/// KKExprCatalog, grouped by category) with its signature and description - the
+/// AI-knowledge reference, so the model's expression vocabulary is generated
+/// from the SAME source as the editor's autocomplete and can never drift. No
+/// frontmatter (the caller supplies the topic id/summary). English signatures;
+/// descriptions in the current locale, exactly as the insert menu shows them.
+NSString *KKExprCatalogMarkdown(void);

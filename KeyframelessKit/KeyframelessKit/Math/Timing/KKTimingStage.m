@@ -337,6 +337,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   _animatable = tmpl.animatable;
   _seedField = tmpl.seedField;
   _oscEditedOnly = tmpl.oscEditedOnly;
+  _positionPathDriven = tmpl.positionPathDriven;
   _ownerScoped = tmpl.ownerScoped;
   _choiceLabels = [tmpl.choiceLabels copy];
   _choiceIcons = [tmpl.choiceIcons copy];
@@ -367,8 +368,10 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   _sliderMin = [tmpl.sliderMin copy];
   // Pixel-display flag is template metadata too: keypose/boundary popovers
   // rebuild a display lane and must carry it, or a normalised 0..1 spatial lane
-  // (Position / Crop / Anchor) shows raw fractions instead of pixels.
+  // (Position / Crop / Anchor) shows raw fractions instead of pixels. The
+  // per-component unit strings ride along for the same reason.
   _componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
+  _componentUnits = [tmpl.componentUnits copy];
   _scrubStep = tmpl.scrubStep;
 }
 
@@ -407,6 +410,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.codeValidationComposer = _codeValidationComposer; // block, copied by setter
   c.codeFormatter = _codeFormatter; // block, copied by the property setter
   c.codeCompletionProvider = _codeCompletionProvider; // block, copied by setter
+  c.codeDirectiveKeywords = _codeDirectiveKeywords;   // static config
   c.codeSavable = _codeSavable; // static config, not serialized
   c.codeSaveCategories = [_codeSaveCategories copy];           // static config
   c.codeSaveNamePlaceholder = [_codeSaveNamePlaceholder copy]; // static config
@@ -437,6 +441,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   c.animatable = _animatable;
   c.seedField = _seedField;
   c.oscEditedOnly = _oscEditedOnly;
+  c.positionPathDriven = _positionPathDriven;
   c.ownerScoped = _ownerScoped;
   c.choiceLabels = [_choiceLabels copy];
   c.choiceIcons = [_choiceIcons copy];

@@ -67,6 +67,27 @@ static const CGFloat kHandleHitTolPt = 12.0;
   return nil;
 }
 
+// Forward warp for a 2-component lane value at `fraction` (identity when no
+// warp is set); the shared choke point every drawn point goes through.
+- (NSArray<NSNumber *> *)_warp:(NSArray<NSNumber *> *)values
+                      fraction:(double)fraction {
+  if (!self.laneToObjectWarp || values.count < 2)
+    return values;
+  simd_float2 w = self.laneToObjectWarp(
+      (simd_float2){values[0].floatValue, values[1].floatValue}, fraction);
+  return @[ @(w.x), @(w.y) ];
+}
+
+// Inverse warp for a normalized object point (drags), identity when unset.
+- (void)_unwarpX:(double *)nx y:(double *)ny fraction:(double)fraction {
+  if (!self.objectToLaneWarp)
+    return;
+  simd_float2 w =
+      self.objectToLaneWarp((simd_float2){(float)*nx, (float)*ny}, fraction);
+  *nx = w.x;
+  *ny = w.y;
+}
+
 - (BOOL)_pathActive {
   return [self.renderer labelVisibleOrRevealing:self.pathLabel] &&
          self.renderer.boundaryEditing;
@@ -78,8 +99,9 @@ static const CGFloat kHandleHitTolPt = 12.0;
   if (outCenter)
     *outCenter = [self.renderer
         handlePointForContentRect:cr
-                         position:[self.renderer
-                                      valuesForLabel:self.laneLabel]];
+                         position:[self _warp:[self.renderer
+                                                  valuesForLabel:self.laneLabel]
+                                      fraction:self.renderer.editFraction]];
   return YES;
 }
 
@@ -91,7 +113,10 @@ static const CGFloat kHandleHitTolPt = 12.0;
   if (values.count < 2 || cr.size.width <= 0 || cr.size.height <= 0)
     return NO;
   if (outCenter)
-    *outCenter = [self.renderer handlePointForContentRect:cr position:values];
+    *outCenter = [self.renderer
+        handlePointForContentRect:cr
+                         position:[self _warp:values
+                                      fraction:self.renderer.editFraction]];
   return YES;
 }
 
@@ -103,7 +128,9 @@ static const CGFloat kHandleHitTolPt = 12.0;
     return NO;
   CGPoint hp = [self.renderer
       handlePointForContentRect:cr
-                       position:[self.renderer valuesForLabel:self.laneLabel]];
+                       position:[self _warp:[self.renderer
+                                                valuesForLabel:self.laneLabel]
+                                    fraction:self.renderer.editFraction]];
   return hypot(p.x - hp.x, p.y - hp.y) <= kHandleHitTolPt;
 }
 
@@ -119,6 +146,9 @@ static const CGFloat kHandleHitTolPt = 12.0;
       _posPressNX = (p.x - CGRectGetMinX(cr)) / cr.size.width;
       _posPressNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
     }
+    [self _unwarpX:&_posPressNX
+                 y:&_posPressNY
+          fraction:self.renderer.editFraction];
   }
   NSArray<NSNumber *> *pv = [self.renderer valuesForLabel:self.laneLabel];
   _posGrabValX = pv.count > 0 ? pv[0].doubleValue : 0.5;
@@ -144,6 +174,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
     nx = (p.x - CGRectGetMinX(cr)) / cr.size.width;
     ny = (p.y - CGRectGetMinY(cr)) / cr.size.height;
   }
+  [self _unwarpX:&nx y:&ny fraction:self.renderer.editFraction];
   // Delta drag: move the grabbed value by the cursor's offset from the press
   // point, so grabbing off-centre doesn't snap the handle to the cursor.
   double newX = _posGrabValX + (nx - _posPressNX);
@@ -154,8 +185,10 @@ static const CGFloat kHandleHitTolPt = 12.0;
     else
       newX = _posGrabValX;
   }
-  if (modifiers & NSEventModifierFlagCommand) {
+  if ((modifiers & NSEventModifierFlagCommand) && !self.snapDisabled) {
     [self _snapPositionX:&newX Y:&newY contentRect:cr];
+  } else if (self.snapDisabled) {
+    [_snapEngine reset];
   } else {
     if (self.gridSnapValue) {
       simd_float2 sv =
@@ -176,15 +209,24 @@ static const CGFloat kHandleHitTolPt = 12.0;
   KKLane *lane = [self _lane];
   if (!lane || lane.keyposes.count < 2 || ![self _pathActive])
     return @[];
-  NSArray<NSValue *> *pts = KKLanePositionPathPoints(lane, 24);
+  NSArray<NSNumber *> *fracs = nil;
+  NSArray<NSValue *> *pts =
+      KKLanePositionPathPointsWithFractions(lane, 24, &fracs);
   NSMutableArray<NSValue *> *out = [NSMutableArray arrayWithCapacity:pts.count];
-  for (NSValue *v in pts) {
-    NSPoint o = v.pointValue;
-    [out addObject:[NSValue valueWithPoint:[self.renderer
-                                               handlePointForContentRect:cr
-                                                                position:@[
-                                                                  @(o.x), @(o.y)
-                                                                ]]]];
+  for (NSUInteger i = 0; i < pts.count; i++) {
+    NSPoint o = pts[i].pointValue;
+    // Per-sample fraction: a warp referencing animated values maps each path
+    // point at its own time, so the drawn path is the true trajectory.
+    double f =
+        i < fracs.count ? fracs[i].doubleValue : self.renderer.editFraction;
+    [out
+        addObject:[NSValue valueWithPoint:
+                               [self.renderer
+                                   handlePointForContentRect:cr
+                                                    position:[self _warp:@[
+                                                      @(o.x), @(o.y)
+                                                    ]
+                                                                 fraction:f]]]];
   }
   return out;
 }
@@ -197,13 +239,20 @@ static const CGFloat kHandleHitTolPt = 12.0;
   // coalesce its linked partners; KKLaneCoalescedAnchors dedups the rest.
   NSInteger active = [self _activeAnchorSkipIndexForLane:lane];
   NSMutableArray<NSValue *> *out = [NSMutableArray array];
-  for (NSValue *pv in KKLaneCoalescedAnchors(lane, active)) {
-    NSPoint v = pv.pointValue;
-    [out addObject:[NSValue valueWithPoint:[self.renderer
-                                               handlePointForContentRect:cr
-                                                                position:@[
-                                                                  @(v.x), @(v.y)
-                                                                ]]]];
+  NSArray<NSNumber *> *afr = nil;
+  NSArray<NSValue *> *anchors =
+      KKLaneCoalescedAnchorsWithFractions(lane, active, &afr);
+  for (NSUInteger i = 0; i < anchors.count; i++) {
+    NSPoint v = anchors[i].pointValue;
+    double f = i < afr.count ? afr[i].doubleValue : self.renderer.editFraction;
+    [out
+        addObject:[NSValue valueWithPoint:
+                               [self.renderer
+                                   handlePointForContentRect:cr
+                                                    position:[self _warp:@[
+                                                      @(v.x), @(v.y)
+                                                    ]
+                                                                 fraction:f]]]];
   }
   return out;
 }
@@ -219,8 +268,9 @@ static const CGFloat kHandleHitTolPt = 12.0;
     if (!kp.spatialSmooth || kp.values.count < 2)
       continue;
     double ax = kp.values[0].doubleValue, ay = kp.values[1].doubleValue;
-    CGPoint anchorPt = [self.renderer handlePointForContentRect:cr
-                                                       position:kp.values];
+    CGPoint anchorPt = [self.renderer
+        handlePointForContentRect:cr
+                         position:[self _warp:kp.values fraction:kp.time]];
     CGPoint inH = CGPointZero, outH = CGPointZero;
     KKLaneSpatialHandlesForKeypose(lane, i, &inH, &outH);
     CGPoint sides[2] = {outH, inH};
@@ -229,9 +279,10 @@ static const CGFloat kHandleHitTolPt = 12.0;
         continue;
       CGPoint hp = [self.renderer
           handlePointForContentRect:cr
-                           position:@[
+                           position:[self _warp:@[
                              @(ax + sides[s].x), @(ay + sides[s].y)
-                           ]];
+                           ]
+                                        fraction:kp.time]];
       [out addObject:[NSValue valueWithPoint:anchorPt]];
       [out addObject:[NSValue valueWithPoint:hp]];
     }
@@ -273,8 +324,10 @@ static const CGFloat kHandleHitTolPt = 12.0;
   for (NSInteger i = 0; i < (NSInteger)kps.count; i++) {
     if (i == active || kps[i].values.count < 2)
       continue;
-    CGPoint hp = [self.renderer handlePointForContentRect:cr
-                                                 position:kps[i].values];
+    CGPoint hp =
+        [self.renderer handlePointForContentRect:cr
+                                        position:[self _warp:kps[i].values
+                                                     fraction:kps[i].time]];
     double d = hypot(p.x - hp.x, p.y - hp.y);
     if (d <= bestD) {
       bestD = d;
@@ -311,9 +364,10 @@ static const CGFloat kHandleHitTolPt = 12.0;
         continue;
       CGPoint hp = [self.renderer
           handlePointForContentRect:cr
-                           position:@[
+                           position:[self _warp:@[
                              @(ax + sides[s].x), @(ay + sides[s].y)
-                           ]];
+                           ]
+                                        fraction:kp.time]];
       double d = hypot(p.x - hp.x, p.y - hp.y);
       if (d <= bestD) {
         bestD = d;
@@ -357,6 +411,9 @@ static const CGFloat kHandleHitTolPt = 12.0;
     if (cr.size.width > 0 && cr.size.height > 0) {
       _pathPressNX = (p.x - CGRectGetMinX(cr)) / cr.size.width;
       _pathPressNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+      [self _unwarpX:&_pathPressNX
+                   y:&_pathPressNY
+            fraction:[self _lane].keyposes[ai].time];
     }
     [self applyPathDragToPoint:p contentRect:cr modifiers:0];
     return YES;
@@ -376,6 +433,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
     return;
   double curNX = (p.x - CGRectGetMinX(cr)) / cr.size.width;
   double curNY = (p.y - CGRectGetMinY(cr)) / cr.size.height;
+  [self _unwarpX:&curNX y:&curNY fraction:lane.keyposes[_pathIndex].time];
   NSMutableArray<KKLane *> *lanes = [self.renderer.timeline.lanes mutableCopy];
   NSInteger li = [lanes indexOfObject:lane];
   if (li == NSNotFound)
@@ -392,7 +450,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
       else
         nx = _pathGrabValX;
     }
-    if (modifiers & NSEventModifierFlagCommand)
+    if ((modifiers & NSEventModifierFlagCommand) && !self.snapDisabled)
       [self _snapPositionX:&nx Y:&ny contentRect:cr excludeIndex:_pathIndex];
     else
       [_snapEngine reset];
@@ -547,8 +605,9 @@ static const CGFloat kHandleHitTolPt = 12.0;
            i > 0 && kps[i - 1].outgoing.endpointsLinked; i--)
         [skip addIndex:(NSUInteger)(i - 1)];
     }
-    if (kps.count > 0)
-      objs = malloc(kps.count * sizeof(simd_float2));
+    NSUInteger cap = kps.count + self.externalSnapTargets.count;
+    if (cap > 0)
+      objs = malloc(cap * sizeof(simd_float2));
     for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
       if ([skip containsIndex:(NSUInteger)k])
         continue;
@@ -557,6 +616,11 @@ static const CGFloat kHandleHitTolPt = 12.0;
         continue;
       objs[nObj++] =
           (simd_float2){(float)v[0].doubleValue, (float)v[1].doubleValue};
+    }
+    // Host-supplied targets (other handles) share this normalized space.
+    for (NSValue *t in self.externalSnapTargets) {
+      CGPoint ep = t.pointValue;
+      objs[nObj++] = (simd_float2){(float)ep.x, (float)ep.y};
     }
   }
   simd_float2 snapped =

@@ -45,7 +45,7 @@ static BOOL KKLaneHasExpressionEditor(KKLane *lane) {
   // the editor text leaves an empty (passthrough) expression, and the editor
   // stays open; only "Remove Expression" (which nils linkExpression) closes it.
   return lane.linkExpression != nil && lane.valueType != KKLaneValueTypeCode &&
-         !lane.paletteGeneratorBar;
+         !lane.paletteGeneratorBar && !lane.positionPathDriven;
 }
 
 // Vertical breathing room kept around the popover when its natural height is
@@ -1553,7 +1553,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   double evalTl = (dur > 0.0 && start >= 0.0) ? start + evalFrac * dur : tlSec;
   NSArray<NSNumber *> *res =
       KKLinkResolvedLaneValue(evalLane, evalFrac, evalTl, dur);
-  ed.resultText = [self _formatResultText:res];
+  ed.resultText = [self _formatResultText:res forLane:evalLane];
 
   // Inline curve preview: sample the SAME expression across the whole clip
   // (fraction 0..1, t = clipStart + frac*dur), first component only, so it
@@ -1573,16 +1573,37 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   ed.sparklineMarker = markerFrac;
 }
 
-// "→ 135" (scalar) / "→ 105.2, 52.6" (multi-component), rounded to 2 decimals.
-- (NSString *)_formatResultText:(NSArray<NSNumber *> *)values {
+// "→ 135" (scalar) / "→ 105.2, 52.6" (multi-component). A media-scaled lane
+// (Position / Crop / Anchor) shows its result in DISPLAY units - normalized
+// 0..1 x media px, whole numbers - so the readout matches the lane's value
+// fields (otherwise the result reads 0.5 while the field reads 960). The same
+// per-component scale the value fields use (even index = width, odd = height;
+// a "%" component stays literal); raw two-decimal otherwise.
+- (NSString *)_formatResultText:(NSArray<NSNumber *> *)values
+                        forLane:(KKLane *)lane {
   if (values.count == 0)
     return nil;
+  CGSize media = _miniViewer.sourceMediaSize;
+  BOOL scaled =
+      lane.componentsScaleWithMedia && media.width > 0 && media.height > 0;
+  NSArray<NSString *> *units = lane.componentUnits;
   NSMutableArray<NSString *> *parts =
       [NSMutableArray arrayWithCapacity:values.count];
-  for (NSNumber *n in values)
-    [parts addObject:[NSString
-                         stringWithFormat:@"%g", round(n.doubleValue * 100.0) /
-                                                     100.0]];
+  for (NSUInteger i = 0; i < values.count; i++) {
+    double v = values[i].doubleValue;
+    // Media-scale only a "px" (or units-absent legacy) component; "%" and an
+    // explicit empty-string component stay literal - matches the value fields'
+    // componentScale block so the readout agrees with the fields.
+    NSString *u = i < units.count ? units[i] : nil;
+    BOOL literal = [u isEqualToString:@"%"] || (u != nil && u.length == 0);
+    if (scaled && !literal) {
+      double px = v * ((i % 2 == 0) ? media.width : media.height);
+      [parts addObject:[NSString stringWithFormat:@"%.0f", px]];
+    } else {
+      [parts addObject:[NSString
+                           stringWithFormat:@"%g", round(v * 100.0) / 100.0]];
+    }
+  }
   return [@"→ " stringByAppendingString:[parts componentsJoinedByString:@", "]];
 }
 
@@ -1758,10 +1779,16 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   if (lane.componentsScaleWithMedia) {
     NSArray<NSString *> *units = lane.componentUnits;
     row.componentScale = ^double(NSInteger i) {
-      // A "%" component is a literal percentage - never media-scaled. Lets one
-      // lane mix px positions (X/Y) with a % size (a mesh point's Spread).
-      if (i < (NSInteger)units.count && [units[i] isEqualToString:@"%"])
-        return 1.0;
+      // Per-component units decide scaling: a "%" component is a literal
+      // percentage, and an EXPLICIT empty-string component (units={px,px,,})
+      // is a raw 0..1 value - neither is media-scaled. Only a "px" component
+      // (or an absent units array, the legacy scale-all default) scales with
+      // the media. Lets one lane mix px W/H with raw or % X/Y.
+      if (i < (NSInteger)units.count) {
+        NSString *u = units[i];
+        if ([u isEqualToString:@"%"] || u.length == 0)
+          return 1.0;
+      }
       __strong typeof(weak) s = weak;
       CGSize m = s ? s->_miniViewer.sourceMediaSize : CGSizeZero;
       double scale = (i % 2 == 0) ? m.width : m.height;

@@ -23,16 +23,6 @@
   return self.pointSet;
 }
 
-- (KKRingOSCSet *)_syncedRingSet {
-  [self _syncMiniRadialControllers];
-  return self.ringSet;
-}
-
-- (KKBoxOSCSet *)_syncedBoxSet {
-  [self _syncMiniRadialControllers];
-  return self.boxSet;
-}
-
 - (KKRotationOSCSet *)_syncedRotSet {
   [self _syncMiniRotController];
   return self.rotSet;
@@ -77,7 +67,7 @@
 - (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
                                                  (KKMiniViewerView *)canvas
                                extraRingsForContentRect:(CGRect)cr {
-  return [[self _syncedRingSet] ringBundlesForContentRect:cr];
+  return [[self _syncedExprSet] ringBundlesForContentRect:cr];
 }
 
 - (NSArray<NSDictionary<NSString *, id> *> *)miniViewer:
@@ -89,7 +79,9 @@
 - (NSArray<KKMiniBox *> *)miniViewer:(KKMiniViewerView *)canvas
                  boxesForContentRect:(CGRect)cr {
   NSArray<KKMiniBox *> *base = [super miniViewer:canvas boxesForContentRect:cr];
-  NSArray<KKMiniBox *> *mine = [[self _syncedBoxSet] boxesForContentRect:cr];
+  NSArray<KKMiniBox *> *mine =
+      [[self _syncedExprSet] boxesForContentRect:cr
+                                       mediaSize:canvas.sourceMediaSize];
   if (!base.count)
     return mine;
   if (!mine.count)
@@ -118,10 +110,6 @@
   // the viewer precedence).
   if ([[self _syncedSet] handleHitAtPoint:p contentRect:cr])
     return YES;
-  if ([[self _syncedRingSet] handleHitAtPoint:p contentRect:cr])
-    return YES;
-  if ([[self _syncedBoxSet] handleHitAtPoint:p contentRect:cr])
-    return YES;
   if ([[self _syncedRotSet] handleHitAtPoint:p contentRect:cr])
     return YES;
   if ([[self _syncedExprSet] handleHitAtPoint:p contentRect:cr])
@@ -138,12 +126,6 @@
   NSCursor *c = [[self _syncedSet] cursorAtPoint:p contentRect:cr];
   if (c)
     return c;
-  c = [[self _syncedRingSet] cursorAtPoint:p contentRect:cr];
-  if (c)
-    return c;
-  c = [[self _syncedBoxSet] cursorAtPoint:p contentRect:cr];
-  if (c)
-    return c;
   c = [[self _syncedRotSet] cursorAtPoint:p contentRect:cr];
   if (c)
     return c;
@@ -154,12 +136,15 @@
 - (void)miniViewer:(KKMiniViewerView *)canvas
     beginHandleDragAtPoint:(CGPoint)p
                contentRect:(CGRect)cr {
-  if ([[self _syncedSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
+  if ([[self _syncedSet] beginDragAtPoint:p contentRect:cr canvas:canvas]) {
+    // Let the position drag snap onto the point OSCs (symmetric with the point
+    // drag snapping onto positions). Seed the shared target set for this drag.
+    NSArray<NSValue *> *pts =
+        [[self _syncedExprSet] pointHandleValuePositionsForContentRect:cr];
+    for (KKPositionMiniController *c in self.pointSet.controllers)
+      c.externalSnapTargets = pts;
     return;
-  if ([[self _syncedRingSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
-    return;
-  if ([[self _syncedBoxSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
-    return;
+  }
   if ([[self _syncedRotSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
     return;
   if ([[self _syncedExprSet] beginDragAtPoint:p contentRect:cr canvas:canvas])
@@ -176,22 +161,15 @@
                               canvas:canvas
                            modifiers:modifiers])
     return;
-  if ([[self _syncedRingSet] dragToPoint:p
-                             contentRect:cr
-                                  canvas:canvas
-                               modifiers:modifiers])
-    return;
-  if ([[self _syncedBoxSet] dragToPoint:p
-                            contentRect:cr
-                                 canvas:canvas
-                              modifiers:modifiers])
-    return;
   if ([[self _syncedRotSet] dragToPoint:p
                             contentRect:cr
                                  canvas:canvas
                               modifiers:modifiers])
     return;
-  if ([[self _syncedExprSet] dragToPoint:p contentRect:cr canvas:canvas])
+  if ([[self _syncedExprSet] dragToPoint:p
+                             contentRect:cr
+                                  canvas:canvas
+                               modifiers:modifiers])
     return;
   [super miniViewer:canvas
       dragHandleToPoint:p
@@ -201,10 +179,6 @@
 
 - (void)miniViewerEndHandleDrag:(KKMiniViewerView *)canvas {
   if ([self.pointSet endDragOnCanvas:canvas])
-    return;
-  if ([self.ringSet endDragOnCanvas:canvas])
-    return;
-  if ([self.boxSet endDragOnCanvas:canvas])
     return;
   if ([self.rotSet endDragOnCanvas:canvas])
     return;
@@ -226,10 +200,6 @@
     return YES;
   if ([[self _syncedSet] optClickAtPoint:p contentRect:cr canvas:canvas])
     return YES;
-  if ([[self _syncedRingSet] optClickAtPoint:p contentRect:cr canvas:canvas])
-    return YES;
-  if ([[self _syncedBoxSet] optClickAtPoint:p contentRect:cr canvas:canvas])
-    return YES;
   if ([[self _syncedRotSet] optClickAtPoint:p contentRect:cr canvas:canvas])
     return YES;
   return [[self _syncedExprSet] optClickAtPoint:p contentRect:cr canvas:canvas];
@@ -242,12 +212,16 @@
               hasY:(out BOOL *)hasY
                  Y:(out CGFloat *)outY
       fromKeyposeY:(out BOOL *)fromKeyposeY {
-  [self.pointSet snapGuideHasX:hasX
-                             X:outX
-                  fromKeyposeX:fromKeyposeX
-                          hasY:hasY
-                             Y:outY
-                  fromKeyposeY:fromKeyposeY];
+  // A point OSC drag reports its own guides (canvas anchors + other handles);
+  // otherwise the position set owns them.
+  id guideSource =
+      self.exprSet.draggingSnapPoint ? (id)self.exprSet : (id)self.pointSet;
+  [guideSource snapGuideHasX:hasX
+                           X:outX
+                fromKeyposeX:fromKeyposeX
+                        hasY:hasY
+                           Y:outY
+                fromKeyposeY:fromKeyposeY];
 }
 
 @end

@@ -63,6 +63,8 @@ typedef struct ShaderScalarProp {
     // multi-axis rotate (`osc={z}`/`osc={y,x}`/`osc={z,x,y}`) - the Nth listed
     // axis drives value component N, so order is meaningful.
     char oscKind[16];
+    int skipSnapping; // `skipsnapping` on the osc directive: opt this handle out
+                      // of the default Cmd-held snap (point + position sugar)
     char oscAxis;
     char oscAxes[4]; // ordered axis chars ("z"/"yx"/"zxy"), NUL-terminated
     int oscAxisCount;

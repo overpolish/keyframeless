@@ -103,6 +103,7 @@
 				Views/Controls/Fields/KKFieldEditorSupport.h,
 				Views/Controls/Fields/KKPopupSelectView.h,
 				Views/Controls/Fields/KKSeedView.h,
+				Views/Controls/KKGLSLSyntax.h,
 				Views/Controls/Popover/KKGapPopoverTypes.h,
 				Views/Controls/Popover/KKPopoverExtraRow.h,
 				Views/Controls/Text/KKKbd.h,

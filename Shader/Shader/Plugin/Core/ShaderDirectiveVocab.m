@@ -78,7 +78,8 @@ ShaderDirectiveAttributeKeys(void) {
           E(@"max", @"max=", @"Highest allowed value.", @"max="),
           E(@"default", @"default=", @"Starting value.", @"default="),
           E(@"osc", @"osc=",
-            @"Add an on-screen control: point, ring, box or rotate.", @"osc="),
+            @"Add an on-screen control: point, position, ring, box or rotate.",
+            @"osc="),
           E(@"fields", @"fields={}",
             @"Names for each number of a #multi control.", @"fields={"),
           E(@"units", @"units={}", @"Per-field units for #multi: % or px.",
@@ -91,6 +92,34 @@ ShaderDirectiveAttributeKeys(void) {
             @"axis="),
         ],
         kKEY);
+    // A bare flag - coral (keyword value) so its popup swatch matches the code.
+    v = [v arrayByAddingObjectsFromArray:
+               Colored(@[ E(@"skipsnapping", @"skipsnapping",
+                            @"Opt a point/position handle out of the default "
+                            @"Cmd-held snap.",
+                            @"skipsnapping") ],
+                       kKW)];
+  });
+  return v;
+}
+
+// The directive/`@osc` VALUE words the editor highlights as keywords (coral),
+// so `osc=position`, `body = none`, `linked = true`, `skipsnapping` etc. read
+// as vocabulary rather than flat text. Kinds/keys are coloured elsewhere; this
+// is the enum values, booleans, and bare flags.
+NSSet<NSString *> *ShaderDirectiveValueKeywords(void) {
+  static NSSet *v;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    v = [NSSet setWithArray:@[
+      @"true",         @"false",      @"yes",      @"no",
+      @"none", // booleans / off
+      @"point",        @"position",   @"ring",     @"box",
+      @"rotate",                                           // primitives / kinds
+      @"dot",          @"square",     @"hollow",   @"arc", // point styles
+      @"skipsnapping", @"lockaspect", @"dropdown",         // bare flags
+      @"percent",      @"int",        @"px" // #multi units/modifiers
+    ]];
   });
   return v;
 }
@@ -101,12 +130,14 @@ NSArray<NSDictionary<NSString *, NSString *> *> *ShaderOSCFieldKeys(void) {
   dispatch_once(&once, ^{
     v = Colored(
         @[
-          E(@"primitive", @"primitive =", @"The handle shape: point.",
+          E(@"primitive", @"primitive =",
+            @"The control kind: point, position, ring, box or rotate.",
             @"primitive = "),
-          E(@"binds", @"binds =", @"The value this handle edits.", @"binds = "),
-          E(@"style", @"style =", @"Handle look: hollow, square or dot.",
+          E(@"binds", @"binds =", @"The value this control edits.",
+            @"binds = "),
+          E(@"style", @"style =", @"Point look: hollow, square, dot or arc.",
             @"style = "),
-          E(@"cursor", @"cursor =", @"The cursor shown over the handle.",
+          E(@"cursor", @"cursor =", @"The cursor shown over the control.",
             @"cursor = "),
           E(@"toPos", @"toPos =",
             @"Where the handle sits, worked out from the value.", @"toPos = "),
@@ -114,12 +145,38 @@ NSArray<NSDictionary<NSString *, NSString *> *> *ShaderOSCFieldKeys(void) {
             @"Turns a drag back into a value. Optional, "
             @"guessed if omitted.",
             @"fromPos = "),
-          E(@"toRect", @"toRect =", @"Where a box handle sits, from the value.",
+          E(@"toR",
+            @"toR =", @"A ring's radius from the value, in min-side fractions.",
+            @"toR = "),
+          E(@"fromR", @"fromR =",
+            @"Turns a dragged radius r back into a value.", @"fromR = "),
+          E(@"toRect", @"toRect =", @"A box's rectangle from the value.",
             @"toRect = "),
-          E(@"fromRect", @"fromRect =", @"Turns a box drag back into a value.",
-            @"fromRect = "),
+          E(@"fromRect", @"fromRect =",
+            @"Turns the dragged rect back into a value.", @"fromRect = "),
+          E(@"center", @"center =",
+            @"Where a ring or rotate sits. A point value follows it live.",
+            @"center = "),
+          E(@"axes", @"axes =", @"The axes a rotate control spins: x, y, z.",
+            @"axes = "),
+          E(@"linked", @"linked =",
+            @"true keeps a two-field ring or box in proportion. Shift "
+            @"inverts it.",
+            @"linked = "),
+          E(@"body", @"body =",
+            @"none makes a box's interior inert (no body-move).", @"body = "),
         ],
         kKEY);
+    // A bare flag - highlighted coral (a keyword value), so its popup swatch
+    // matches how it renders in the code.
+    v = [v
+        arrayByAddingObjectsFromArray:Colored(
+                                          @[ E(@"skipsnapping", @"skipsnapping",
+                                               @"Opt a point/position handle "
+                                               @"out of the default "
+                                               @"Cmd-held snap.",
+                                               @"skipsnapping") ],
+                                          kKW)];
   });
   return v;
 }
@@ -144,6 +201,12 @@ NSArray<NSDictionary<NSString *, NSString *> *> *ShaderOSCExprBuiltins(void) {
             @"aspect"),
           E(@"size", @"size", @"The frame size.", @"size"),
           E(@"part", @"part", @"The sub-part being dragged.", @"part"),
+          E(@"r", @"r", @"The dragged radius in fromR, in min-side fractions.",
+            @"r"),
+          E(@"rect", @"rect",
+            @"The dragged rectangle in fromRect. Read .min, .max, .width, "
+            @".height.",
+            @"rect"),
           E(@"pi", @"pi", @"3.14159, half a turn in radians.", @"pi"),
         ],
         kVAR);
@@ -151,6 +214,13 @@ NSArray<NSDictionary<NSString *, NSString *> *> *ShaderOSCExprBuiltins(void) {
         @[
           E(@"vec2", @"vec2(x, y)", @"Make a point from an x and a y.",
             @"vec2("),
+          E(@"rect", @"rect(min, max)",
+            @"Make a rectangle from two corner points.", @"rect("),
+          E(@"ringExtent", @"ringExtent(norm)",
+            @"The ring size for a 0 to 1 value, on the shared curve.",
+            @"ringExtent("),
+          E(@"ringNorm", @"ringNorm(r)",
+            @"Turns a ring size back into a 0 to 1 value.", @"ringNorm("),
           E(@"length", @"length(v)", @"The length of a vector.", @"length("),
           E(@"normalize", @"normalize(v)", @"A vector scaled to length 1.",
             @"normalize("),
@@ -332,6 +402,9 @@ ShaderValueEnumForKey(NSString *key) {
     return Colored(
         @[
           E(@"point", @"point", @"A dot that gets dragged.", @"point"),
+          E(@"position", @"position",
+            @"The full position control with an editable motion path.",
+            @"position"),
           E(@"ring", @"ring", @"A ring that gets resized.", @"ring"),
           E(@"box", @"box", @"A rectangle that gets resized.", @"box"),
           E(@"rotate", @"rotate", @"A dial that gets spun.", @"rotate"),
@@ -343,6 +416,28 @@ ShaderValueEnumForKey(NSString *key) {
           E(@"hollow", @"hollow", @"A small hollow ring.", @"hollow"),
           E(@"square", @"square", @"A filled square.", @"square"),
           E(@"dot", @"dot", @"A filled dot.", @"dot"),
+          E(@"arc", @"arc", @"An arc handle, like a position control.", @"arc"),
+        ],
+        kVAR);
+  if ([k isEqualToString:@"linked"])
+    return Colored(
+        @[
+          E(@"true", @"true", @"Keep the two fields in proportion.", @"true"),
+          E(@"false", @"false", @"Each field resizes on its own.", @"false"),
+        ],
+        kVAR);
+  if ([k isEqualToString:@"body"])
+    return Colored(
+        @[
+          E(@"none", @"none", @"The box interior ignores drags.", @"none"),
+        ],
+        kVAR);
+  if ([k isEqualToString:@"axes"])
+    return Colored(
+        @[
+          E(@"x", @"x", @"Spin around the x axis.", @"x"),
+          E(@"y", @"y", @"Spin around the y axis.", @"y"),
+          E(@"z", @"z", @"Spin flat, like a dial.", @"z"),
         ],
         kVAR);
   if ([k isEqualToString:@"cursor"])

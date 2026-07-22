@@ -48,6 +48,38 @@ static inline KKRotMatrix3 KKBuildRotationMatrix(float rx, float ry, float rz) {
   return m;
 }
 
+/// The display matrix for ring `k` (0=X, 1=Y, 2=Z). A FULL 3-axis gizmo draws
+/// every ring under the whole pose (its trackball drag spins about the
+/// visible axis, so pose and motion agree). A PARTIAL axis set drags as a
+/// plain Euler increment (the trackball compose needs the disabled axes to
+/// store its result), so each ring draws in the NESTED frame where its Euler
+/// rotation actually applies - order R = Ry * Rx * Rz, so the Y ring sits
+/// under Ry, the X ring under Ry * Rx, the Z ring under the full pose. A
+/// ring's circle is invariant to its own rotation, so including it is safe.
+static inline KKRotMatrix3 KKRingDisplayMatrix(float rx, float ry, float rz,
+                                               int axesMask, int k) {
+  if ((axesMask & KKRotationAxesAll) == KKRotationAxesAll || k == 2)
+    return KKBuildRotationMatrix(rx, ry, rz);
+  if (k == 1)
+    return KKBuildRotationMatrix(0.0f, ry, 0.0f);
+  return KKBuildRotationMatrix(rx, ry, 0.0f); // X ring: Ry * Rx
+}
+
+/// Fill a KKRotationOSCParams' per-ring U/V bases from three per-ring display
+/// matrices (X ring spans col1/col2, Y spans col0/col2, Z spans col0/col1 -
+/// the ring's own axis column is its normal and is dropped). Declared here
+/// (not the shared shader-types header) so Metal never sees KKRotMatrix3; the
+/// params struct type is opaque via the macro-free field writes below.
+#define KKRotationOSCParamsSetRingBases(p, mx, my, mz)                         \
+  do {                                                                         \
+    (p)->ringUX = (mx).col1;                                                   \
+    (p)->ringVX = (mx).col2;                                                   \
+    (p)->ringUY = (my).col0;                                                   \
+    (p)->ringVY = (my).col2;                                                   \
+    (p)->ringUZ = (mz).col0;                                                   \
+    (p)->ringVZ = (mz).col1;                                                   \
+  } while (0)
+
 /// Identity rotation.
 static inline KKRotMatrix3 KKRotMatrixIdentity(void) {
   KKRotMatrix3 m;

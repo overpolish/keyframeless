@@ -18,6 +18,7 @@
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKColorLanes.h>
 #import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKGLSLSyntax.h> // KKExprCatalogMarkdown (AI reference)
 #import <KeyframelessKit/KKHelpSection.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin+InspectorCallbacks.h>
@@ -225,48 +226,42 @@ static void ShaderAIApplyMutation(ShaderPlugin *plugin, NSString *currentJSON,
 // rings).
 + (NSArray<NSArray<NSString *> *> *)oscCompoundsForShaderSource:
     (NSString *)source {
+  // The runtimes are the single source of truth: every inline `osc=` directive
+  // arrives as SUGAR (a synthesized block) alongside the authored `// @osc`
+  // blocks, in checklist order matching the viewer's oscElementKeys.
   NSMutableArray<NSArray<NSString *> *> *out = [NSMutableArray array];
   if (!source.length)
     return out;
-  ShaderScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
-  int used = 0;
-  int n = ShaderParseScalarProps(source, props, KK_SHADER_MAX_SCALAR_PROPS, 0,
-                                 &used);
-  for (int i = 0; i < n; i++)
-    if (props[i].oscKind[0] != '\0') {
-      NSString *name = @(props[i].name); // uniform name = lane identity
-      // A rotation gizmo is ONE compound of its master + per-axis rings, so the
-      // checklist shows a "Rotation" group with X/Y/Z children (matching
-      // Canvas/MagicMove). The axis suffixes mirror the viewer's
-      // oscElementKeys.
-      if (strcmp(props[i].oscKind, "rotate") == 0) {
-        NSMutableArray<NSString *> *group =
-            [NSMutableArray arrayWithObject:name];
-        // Canonical X<Y<Z child order, matching the viewer's oscElementKeys so
-        // the checklist states line up (a per-axis suffix per active axis).
-        const char *canon = "XYZ";
-        for (int a = 0; a < 3; a++)
-          for (int k = 0; k < props[i].oscAxisCount; k++)
-            if ((char)toupper(props[i].oscAxes[k]) == canon[a]) {
-              [group addObject:[name stringByAppendingFormat:@".%c", canon[a]]];
-              break;
-            }
-        [out addObject:group];
-        continue;
-      }
-      [out addObject:@[ name ]];
-      // A #point osc also owns a motion-PATH element, toggleable independently
-      // of its handle (matching MagicMove's separate Position + Path). The key
-      // is "<name> Path", the same pathLabel the viewer/mini controllers use.
-      if (props[i].isPoint && strcmp(props[i].oscKind, "point") == 0)
-        [out addObject:@[ [name stringByAppendingString:@" Path"] ]];
-    }
-  // Custom `// @osc` blocks are single hideable elements too, keyed by block
-  // name - the SAME key the viewer's oscElementKeys appends and the mini's expr
-  // set toggles, so the checklist + opt-click + persistence all line up.
   for (ShaderOSCBlockRuntime *b in
-       [ShaderOSCBlockRuntime runtimesForSource:source lanes:@[]])
+       [ShaderOSCBlockRuntime runtimesForSource:source lanes:@[]]) {
+    if ([b.primitive isEqualToString:@"position"]) {
+      // A position also owns a motion-PATH element, toggleable independently
+      // of its handle (matching MagicMove's separate Position + Path).
+      [out addObject:@[ b.binds ]];
+      [out addObject:@[ [b.binds stringByAppendingString:@" Path"] ]];
+      continue;
+    }
+    if ([b.primitive isEqualToString:@"rotate"]) {
+      // ONE compound of the gizmo's master + per-axis rings (keyed on its LANE
+      // label), so the checklist shows a "Rotation" group with X/Y/Z children.
+      NSMutableArray<NSString *> *group =
+          [NSMutableArray arrayWithObject:b.binds];
+      NSString *lower = b.axes.lowercaseString;
+      BOOL any = NO;
+      const char *canon = "XYZ";
+      for (int a = 0; a < 3; a++)
+        if ([lower containsString:[[NSString stringWithFormat:@"%c", canon[a]]
+                                      lowercaseString]]) {
+          [group addObject:[b.binds stringByAppendingFormat:@".%c", canon[a]]];
+          any = YES;
+        }
+      if (!any)
+        [group addObject:[b.binds stringByAppendingString:@".Z"]];
+      [out addObject:group];
+      continue;
+    }
     [out addObject:@[ b.name ]];
+  }
   return out;
 }
 
@@ -528,6 +523,16 @@ static void ShaderAIApplyMutation(ShaderPlugin *plugin, NSString *currentJSON,
                       onlyTopicIDs:@[
                         @"audio-sonar", @"audio-shader-directive"
                       ]];
+    // The expression function/variable reference, GENERATED from the editor's
+    // own KKExprCatalog so the AI's vocabulary can never drift from the
+    // autocomplete (the expressions.md prose teaches concepts; this is the
+    // exhaustive list). The expression + shader-code agents pull ALL knowledge
+    // entries, so it always travels with them.
+    [KKAIKnowledge registerInlineDocWithName:@"Expression Reference"
+                                     topicID:@"expression-functions"
+                                     summary:@"Every expression variable and "
+                                             @"function with its signature."
+                                     content:KKExprCatalogMarkdown()];
   });
 
   NSString *productContext = RLoc(
