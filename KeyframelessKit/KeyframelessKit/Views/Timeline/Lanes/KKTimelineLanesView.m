@@ -627,48 +627,9 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       [_openManageView setLanes:scoped];
     [_openManageView updateCheckedLabels:[self _optedInLabelsSet]];
   }
-  // Only the constants popover tracks the un-opted set. A boundary-value
-  // popover has caller-supplied display lanes; clobbering them here is what
-  // made Radius (the un-opted lane) replace Crop after a crop edit.
-  if (_openStaticView && !_openStaticIsBoundary) {
-    [_openStaticView updateUnoptedLanes:[self _unoptedLanes]];
-    // Re-apply per-lane state (values + smooth + LINK) to the existing
-    // constants rows from the current selected-layer timeline. A same-structure
-    // selection change (e.g. drawing another constant-stroke path) reuses the
-    // rows and previously never re-read aspectLinked, so the link toggle + its
-    // coupling stayed stale from the prior layer. applyValues is focus-safe
-    // (skips an in-progress field edit), so this won't clobber active editing.
-    [_openStaticView rebindLanes:_timeline.lanes];
-    // The popover's OWN mini viewer must read the SAME corrected timeline the
-    // rows do (template-seeded aspectLinked / aspectLinkable), not the stale
-    // applyTimeline copy - otherwise its OSC overlay (e.g. a ring's aspect
-    // lock) disagrees with the row's link glyph. The delegate is always a
-    // KKMiniViewerRenderer (plugins subclass it).
-    if ([self.miniViewerDelegate isKindOfClass:[KKMiniViewerRenderer class]])
-      ((KKMiniViewerRenderer *)self.miniViewerDelegate).timeline = _timeline;
-  }
-
-  // A boundary/value popover is built from a snapshot at open; an external
-  // timeline change (cmd-Z / redo) reaches the graphs but not the popover, so
-  // re-drive it from the active graph at its open fraction - the active/Animate
-  // row split and values rebuild from the new state (e.g. cmd-Z re-adding a
-  // keypose flips its row from "+ No keypose here" back to editable).
-  // Suppressed briefly after a popover edit so the host's echo write doesn't
-  // rebuild rows mid-interaction (add/remove already refresh synchronously).
-  if (_openStaticView && _openStaticIsBoundary && _openContentPopover.isShown &&
-      anyOptedIn &&
-      [NSDate timeIntervalSinceReferenceDate] >=
-          _boundaryRedriveSuppressUntil) {
-    double f = _openStaticBoundaryFraction;
-    // A timeline re-feed re-scopes the open popover to the SAME layer it's
-    // already on - it must not fire the activation callback (which would drive
-    // the host selection back to that layer, ping-ponging against a selection
-    // the user just changed). Only a user graph-click/nav moves selection.
-    if (_activeTab == 1)
-      [_advancedGraph requestValuePopoverAtFraction:f fireActivation:NO];
-    else
-      [_basicGraph requestValuePopoverAtFraction:f fireActivation:NO];
-  }
+  // Refresh whichever static-values popover is open (constants OR keypose)
+  // through the single mode-dispatched entry point.
+  [self _refreshOpenStaticPopoverAnyOptedIn:anyOptedIn];
 }
 
 - (nullable KKLane *)_laneForLabel:(NSString *)label {

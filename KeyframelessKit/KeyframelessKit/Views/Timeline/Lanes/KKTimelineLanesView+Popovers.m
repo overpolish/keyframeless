@@ -956,24 +956,9 @@ BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a, NSArray<NSNumber *> *b) {
     if (s.onLaneOptedIn)
       s.onLaneOptedIn(label);
   };
-  // Preview at the live playhead, not t=0. A property animated to start
-  // off-canvas (e.g. flying in) would otherwise render its first-frame pose,
-  // pushing the object + its handles out of the mini-viewer. Evaluate
-  // animatable lanes at the current playhead fraction so the preview matches
-  // the viewer. Constant lanes are single-keypose so editFraction doesn't move
-  // them, and the constants WRITE path ignores editFraction too (it always
-  // replaces the t=0 keypose - see -_timelineBySettingValues:forLabel:).
-  // boundaryEditing stays NO, so handle gating / writes are unchanged. Reset
-  // to 0 on close (see -_presentStaticValuesPopoverFromAnchor: onClose).
-  id constantsDel = self.miniViewerDelegate;
-  if ([constantsDel
-          respondsToSelector:NSSelectorFromString(@"setEditFraction:")]) {
-    double playFrac = [[(_activeTab == 1 ? (id)_advancedGraph : (id)_basicGraph)
-        valueForKey:@"playheadFraction"] doubleValue];
-    if (playFrac < 0.0)
-      playFrac = 0.0; // render tick hasn't pushed a playhead yet
-    [constantsDel setValue:@(playFrac) forKey:@"editFraction"];
-  }
+  // Playhead-fraction preview seeding (editFraction) happens in the presenter
+  // itself so the in-place keypose->constants switch gets it too - see the
+  // constants branch of -_presentStaticValuesPopoverFromAnchor:config:.
   [self _presentStaticValuesPopoverFromAnchor:anchor config:cfg];
 }
 

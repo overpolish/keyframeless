@@ -6,6 +6,7 @@
 #import "KKMiniViewerRenderer.h"
 
 #import "KKMiniViewerCropEditor.h"
+#import "KKOSCVisibilityModel.h"
 #import "KKResizeCursor.h"
 #import <KeyframelessKit/KKLinkBus.h>
 #import <KeyframelessKit/KKLocalized.h>
@@ -282,85 +283,76 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
          self.onHandleVisibilityToggled != nil;
 }
 
-// "Peek and use" mode: the master is off (handlesHidden) and Opt is held. Every
-// control reveals and is interactive, so its ghost draws at FULL alpha (it
-// reads as usable, not as a dimmed re-show target). Distinct from a single
-// element you individually hid while the master is on - that ghost stays dimmed
-// at 0.3.
+// The mini's inputs to the shared visibility rules (KKOSCVisibilityModel) -
+// every shown/ghost/peek decision below routes through the model so the mini
+// cannot drift from the viewer's KKOnScreenControl rules.
+- (KKOSCVisibilityState)_visibilityState {
+  return (KKOSCVisibilityState){.locked = _handlesLocked,
+                                .masterOff = _handlesHidden,
+                                .revealActive = [self _revealActive]};
+}
+
+// "Peek and use" mode: the master is off (handlesHidden) and Opt is held.
+// Every control reveals and is interactive, so its ghost draws at FULL alpha.
 - (BOOL)_peekActive {
-  return _handlesHidden && [self _revealActive];
+  return KKOSCVisibilityPeek([self _visibilityState]);
 }
 
 // A handle/element is "user-hidden" (master tick off or its own pill off) -
 // eligible to be revealed as a ghost. Boundary-phase suppression is separate.
 - (BOOL)_userHiddenLabel:(NSString *)label {
-  return _handlesHidden ||
-         (label && [_hiddenHandleLabels containsObject:label]);
+  return _handlesHidden || [self _individuallyHiddenLabel:label];
 }
 
-// Hidden by its own pill, independent of the master tick.
+// Hidden by its own pill (or a hidden dot-hierarchy ancestor), independent of
+// the master tick.
 - (BOOL)_individuallyHiddenLabel:(NSString *)label {
-  return label && [_hiddenHandleLabels containsObject:label];
+  return KKOSCLabelHiddenInSet(_hiddenHandleLabels, label);
 }
 
 // Whether `label`'s handle should be drawn + hit-tested this frame.
-//   master on  : visible unless individually hidden; Opt-hold reveals a hidden
-//                one as a dim ghost (so an Opt-click can re-show it).
-//   master off : Opt-hold "peek" shows ONLY the controls left enabled - the
-//   ones
-//                you turned off stay off (peek mirrors a flip back to
-//                master-on, so it respects your per-element config rather than
-//                flashing everything).
 - (BOOL)_shownLabel:(NSString *)label {
-  if (_handlesLocked)
-    return NO;
-  BOOL hidden = [self _individuallyHiddenLabel:label];
-  if (_handlesHidden)
-    return [self _revealActive] && !hidden;
-  return !hidden || [self _revealActive];
+  return KKOSCVisibilityShown([self _visibilityState],
+                              [self _individuallyHiddenLabel:label]);
 }
 
 // A specific rotation ring is user-hidden if the master tick is off, the whole
 // Rotation compound is hidden, or that ring's own key is hidden. The popover
-// stores ring keys as "<rotationLabel>.X/.Y/.Z" (e.g. @"Rotation.X").
+// stores ring keys as "<rotationLabel>.X/.Y/.Z" (e.g. @"Rotation.X") - the
+// parent-compound rule is the model's dot-hierarchy walk.
 - (BOOL)_ringUserHiddenAtAxis:(int)k {
   if (_handlesHidden)
     return YES;
   return [self _ringIndividuallyHiddenAtAxis:k];
 }
 
+- (NSString *)_ringKeyAtAxis:(int)k {
+  NSString *axis = (k == 0) ? @"X" : (k == 1) ? @"Y" : @"Z";
+  return [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
+}
+
 // As above but independent of the master tick: the ring's own pill, or its
 // parent Rotation compound, turned off.
 - (BOOL)_ringIndividuallyHiddenAtAxis:(int)k {
-  if (self.rotationLabel &&
-      [_hiddenHandleLabels containsObject:self.rotationLabel])
-    return YES;
-  NSString *axis = (k == 0) ? @"X" : (k == 1) ? @"Y" : @"Z";
-  NSString *key =
-      [NSString stringWithFormat:@"%@.%@", self.rotationLabel, axis];
-  return [_hiddenHandleLabels containsObject:key];
+  if (!self.rotationLabel)
+    return NO;
+  return KKOSCLabelHiddenInSet(_hiddenHandleLabels, [self _ringKeyAtAxis:k]);
 }
 
-// Ring is drawn / hit-tested this frame. Mirrors -_shownLabel: : master-off
-// peek shows only the rings left enabled.
+// Ring is drawn / hit-tested this frame. Same model rule as -_shownLabel:.
 - (BOOL)_ringShownAtAxis:(int)k {
-  if (_handlesLocked)
-    return NO;
   // A disabled axis (e.g. X/Y on a 2D plugin's Z-only rotation) never shows or
   // hit-tests.
   if (!([self rotationEnabledAxes] & (1 << k)))
     return NO;
-  BOOL hidden = [self _ringIndividuallyHiddenAtAxis:k];
-  if (_handlesHidden)
-    return [self _revealActive] && !hidden;
-  return !hidden || [self _revealActive];
+  return KKOSCVisibilityShown([self _visibilityState],
+                              [self _ringIndividuallyHiddenAtAxis:k]);
 }
 
 // Per-ring draw alpha: dim when it's a revealed ghost, full in peek mode.
 - (float)_ringAlphaAtAxis:(int)k {
-  if ([self _peekActive])
-    return 1.0f;
-  return [self _ringUserHiddenAtAxis:k] ? 0.3f : 1.0f;
+  return KKOSCVisibilityGhostAlpha([self _visibilityState],
+                                   [self _ringUserHiddenAtAxis:k]);
 }
 
 - (BOOL)rotationOSCCenter:(out CGPoint *)outCenter
@@ -777,9 +769,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 // Crop draw alpha: dim when it's a revealed ghost (border + corner handles),
 // full in peek mode.
 - (CGFloat)cropGhostAlpha {
-  if ([self _peekActive])
-    return 1.0;
-  return [self _userHiddenLabel:self.cropLabel] ? 0.3 : 1.0;
+  return [self ghostAlphaForLabel:self.cropLabel];
 }
 
 - (CGFloat)scaleGhostAlpha {
@@ -853,9 +843,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 - (CGFloat)pointHandleGhostAlpha {
-  if ([self _peekActive])
-    return 1.0;
-  return [self _userHiddenLabel:self.pointLabel] ? 0.3 : 1.0;
+  return [self ghostAlphaForLabel:self.pointLabel];
 }
 
 - (BOOL)labelVisibleOrRevealing:(NSString *)label {
@@ -863,9 +851,8 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 - (CGFloat)ghostAlphaForLabel:(NSString *)label {
-  if ([self _peekActive])
-    return 1.0;
-  return [self _userHiddenLabel:label] ? 0.3 : 1.0;
+  return KKOSCVisibilityGhostAlpha([self _visibilityState],
+                                   [self _userHiddenLabel:label]);
 }
 
 - (NSCursor *)kkVisibilityCursorForLabel:(NSString *)label {

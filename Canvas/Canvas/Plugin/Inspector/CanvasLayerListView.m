@@ -680,7 +680,7 @@
   if (_selection.count == 0)
     return;
   [self
-      _runInUndoGroup:@"Delete Layer"
+      _runInUndoGroup:KKUndoLabelDeleteLayer()
                 block:^{
                   [self _modifyPaths:^(NSMutableArray<KKBezierPath *> *paths) {
                     NSMutableIndexSet *expanded =
@@ -755,7 +755,7 @@
   if (dropIdx < 0)
     return; // already at the end of its level
   [self
-      _runInUndoGroup:delta < 0 ? @"Move Layer Up" : @"Move Layer Down"
+      _runInUndoGroup:KKUndoLabelMoveLayer(delta < 0)
                 block:^{
                   [self
                       performRowReorderFromIndices:[self dragIndicesForRow:idx]

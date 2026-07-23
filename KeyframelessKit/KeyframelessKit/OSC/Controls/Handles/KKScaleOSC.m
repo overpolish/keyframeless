@@ -12,7 +12,6 @@
 // Holding Cmd engages a fine mode that scales cursor movement down for precise
 // adjustment (essential at high scale, where the compressed box is otherwise
 // hyper-sensitive).
-static const double kScaleFineFactor = 0.2;
 
 @interface KKScaleOSC ()
 @property(nonatomic, readwrite) KKBoxOSC *box;
@@ -26,8 +25,7 @@ static const double kScaleFineFactor = 0.2;
 @property(nonatomic) CGPoint scalePressCenter;
 @property(nonatomic) double scalePressSclX;
 @property(nonatomic) double scalePressSclY;
-@property(nonatomic) CGPoint scaleEffCursor;
-@property(nonatomic) CGPoint scaleLastCursor;
+@property(nonatomic) KKScaleDragCursor scaleDragCursor;
 // Anchor frac captured at press (constant during a scale drag: only the Scale
 // lane changes), so the box keeps the anchor as the fixed point.
 @property(nonatomic) CGPoint scalePressFrac;
@@ -218,10 +216,12 @@ static const double kScaleFineFactor = 0.2;
   KKScaleHandlePositions(self.scalePressCenter, self.scalePressSclX,
                          self.scalePressSclY, e0, span, self.scalePressFrac,
                          hp);
-  self.scaleEffCursor = (self.scaleGrabHandle >= 0 && self.scaleGrabHandle < 8)
-                            ? hp[self.scaleGrabHandle]
-                            : CGPointMake(x, y);
-  self.scaleLastCursor = CGPointMake(x, y);
+  KKScaleDragCursor cur;
+  cur.effCursor = (self.scaleGrabHandle >= 0 && self.scaleGrabHandle < 8)
+                      ? hp[self.scaleGrabHandle]
+                      : CGPointMake(x, y);
+  cur.lastCursor = CGPointMake(x, y);
+  self.scaleDragCursor = cur;
 }
 
 - (void)mouseDraggedAtX:(double)x
@@ -232,41 +232,21 @@ static const double kScaleFineFactor = 0.2;
   NSInteger h = self.scaleGrabHandle;
   if (h < 0)
     return;
-  // Advance the effective cursor by the raw movement (scaled down for
-  // Cmd-fine). The value comes from its distance to centre through the gizmo
-  // curve, so the grabbed handle tracks the cursor 1:1 in normal mode.
-  double rawDx = x - self.scaleLastCursor.x;
-  double rawDy = y - self.scaleLastCursor.y;
-  self.scaleLastCursor = CGPointMake(x, y);
-  double fine = (modifiers & kFxModifierKey_COMMAND) ? kScaleFineFactor : 1.0;
-  CGPoint eff = self.scaleEffCursor;
-  eff.x += rawDx * fine;
-  eff.y += rawDy * fine;
-  self.scaleEffCursor = eff;
-
-  CGPoint c = self.scalePressCenter;
-  double pX = self.scalePressSclX, pY = self.scalePressSclY;
   double e0 = 0, span = 0;
   [self _e0:&e0 span:&span];
-  // Candidate per-axis percents from the effective cursor's distance to the
-  // ANCHOR (c), divided by the handle's |sign - frac| so the anchor is the
-  // fixed point (frac 0 = symmetric). A degenerate axis (handle on the anchor)
-  // holds.
-  CGPoint f = self.scalePressFrac;
-  double tX = KKScaleGizmoPercentForHandle(eff.x, c.x, KKScaleHandleSignX(h),
-                                           f.x, e0, span);
-  double tY = KKScaleGizmoPercentForHandle(eff.y, c.y, KKScaleHandleSignY(h),
-                                           f.y, e0, span);
-  if (tX < 0)
-    tX = pX;
-  if (tY < 0)
-    tY = pY;
   // Link is global per-lane; Shift temporarily inverts it for this drag. The
-  // corner/edge coupling itself is the shared kit rule.
-  BOOL shift = (modifiers & kFxModifierKey_SHIFT) != 0;
-  BOOL effLinked = [self _aspectLinked] ^ shift;
+  // whole tick (Cmd-fine cursor, anchor-fixed percents, link coupling) is the
+  // shared gizmo rule.
+  BOOL effLinked =
+      [self _aspectLinked] ^ ((modifiers & kFxModifierKey_SHIFT) != 0);
+  KKScaleDragCursor cur = self.scaleDragCursor;
   double newX = 0, newY = 0;
-  KKScaleValuesForHandleDrag(h, pX, pY, tX, tY, effLinked, &newX, &newY);
+  KKScaleDragTick(&cur, CGPointMake(x, y),
+                  (modifiers & kFxModifierKey_COMMAND) != 0, h,
+                  self.scalePressCenter, self.scalePressFrac,
+                  self.scalePressSclX, self.scalePressSclY, effLinked, e0,
+                  span, &newX, &newY);
+  self.scaleDragCursor = cur;
   [self _writeScaleValues:@[ @(newX), @(newY) ]
                    atTime:time
               forceUpdate:forceUpdate];

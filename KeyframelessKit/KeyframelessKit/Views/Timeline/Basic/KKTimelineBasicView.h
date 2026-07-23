@@ -6,6 +6,7 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKBoundaryEditingGraph.h>
 #import <KeyframelessKit/KKGapPopoverTypes.h>
 #import <KeyframelessKit/KKTimeline.h>
 
@@ -171,7 +172,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// @implementation isn't expected to provide them (silences
 /// -Wincomplete-implementation while keeping them public); implemented in
 /// KKTimelineBasicView+BoundaryPopover.m.
-@interface KKTimelineBasicView (BoundaryPopover)
+@interface KKTimelineBasicView (BoundaryPopover) <KKBoundaryEditingGraph>
 /// Programmatic re-open of the boundary value popover at the diamond
 /// closest to `fraction`. Used by the onion-skin filmstrip - clicking an
 /// inactive cell swaps the popover to the corresponding boundary diamond

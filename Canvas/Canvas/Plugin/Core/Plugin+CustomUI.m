@@ -445,7 +445,7 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
     CanvasInspectorView *view = (CanvasInspectorView *)[self
         kkCreateInspectorViewWithUIStateParamID:kParamUIState
         renderNudgeParamID:kParamRenderNudge
-        dragUndoLabel:@"Adjust Canvas"
+        dragUndoLabel:KKUndoLabelAdjust(@"Canvas")
         detachedWindowSize:CGSizeMake(720.0, 460.0)
         builtinPresets:CanvasBuiltinPresets()
         inScope:^(KKInspectorCreateContext *ctx,

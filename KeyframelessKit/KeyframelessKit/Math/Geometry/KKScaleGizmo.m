@@ -255,3 +255,30 @@ void KKScaleValuesForHandleDrag(NSInteger h, double pX, double pY, double tX,
   if (outY)
     *outY = fmax(0.0, round(newY));
 }
+
+void KKScaleDragTick(KKScaleDragCursor *cursor, CGPoint rawCursor, BOOL fine,
+                     NSInteger handle, CGPoint anchor, CGPoint anchorFrac,
+                     double pressX, double pressY, BOOL linked, double e0,
+                     double span, double *outX, double *outY) {
+  double rawDx = rawCursor.x - cursor->lastCursor.x;
+  double rawDy = rawCursor.y - cursor->lastCursor.y;
+  cursor->lastCursor = rawCursor;
+  double f = fine ? KKScaleDragFineFactor : 1.0;
+  cursor->effCursor.x += rawDx * f;
+  cursor->effCursor.y += rawDy * f;
+  // Candidate per-axis percents from the effective cursor's distance to the
+  // ANCHOR, divided by the handle's |sign - frac| so the anchor is the fixed
+  // point (frac 0 = symmetric). A degenerate axis holds the press value.
+  double tX = KKScaleGizmoPercentForHandle(cursor->effCursor.x, anchor.x,
+                                           KKScaleHandleSignX(handle),
+                                           anchorFrac.x, e0, span);
+  double tY = KKScaleGizmoPercentForHandle(cursor->effCursor.y, anchor.y,
+                                           KKScaleHandleSignY(handle),
+                                           anchorFrac.y, e0, span);
+  if (tX < 0)
+    tX = pressX;
+  if (tY < 0)
+    tY = pressY;
+  KKScaleValuesForHandleDrag(handle, pressX, pressY, tX, tY, linked, outX,
+                             outY);
+}

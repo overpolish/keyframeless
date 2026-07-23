@@ -4,6 +4,7 @@
  */
 
 #import "KKPositionOSC.h"
+#import "KKPositionElementModel.h"
 #import <AppKit/AppKit.h>
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KeyframelessKit.h>
@@ -372,29 +373,27 @@
   }
 }
 
+// Screen projection for the shared KKPositionElementModel hit helpers: warp
+// to the keypose's fraction (side effect the canvas mapping reads), then map
+// object space into canvas px through the parent transform.
+- (KKPositionProjection)_canvasProjection {
+  return ^CGPoint(double ox, double oy, double fraction) {
+    self.warpFraction = fraction;
+    return [self _canvasFromObjX:ox y:oy];
+  };
+}
+
 - (double)_anchorFracNearCanvasX:(double)x y:(double)y {
-  KKLane *lane = [self _positionLane];
-  if (!lane || lane.keyposes.count < 2)
-    return NAN;
   id<FxOnScreenControlAPI_v4> oscAPI =
       [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v4)];
   if (!oscAPI)
     return NAN;
-  double hitR = self.anchorDotOSC.oscRadius + 6.0;
-  double bestFrac = NAN, bestD = 1e9;
-  for (KKKeyPose *kp in lane.keyposes) {
-    if (kp.values.count < 2)
-      continue;
-    self.warpFraction = kp.time;
-    CGPoint c = [self _canvasFromObjX:kp.values[0].doubleValue
-                                    y:kp.values[1].doubleValue];
-    double d = hypot(x - c.x, y - c.y);
-    if (d < hitR && d < bestD) {
-      bestD = d;
-      bestFrac = kp.time;
-    }
-  }
-  return bestFrac;
+  KKLane *lane = [self _positionLane];
+  NSInteger idx = KKPositionAnchorHitIndex(
+      lane, CGPointMake(x, y),
+      KKPositionHitTolPt(self.anchorDotOSC.oscRadius), -1,
+      [self _canvasProjection]);
+  return idx >= 0 ? lane.keyposes[idx].time : NAN;
 }
 
 - (BOOL)_handleHitAtCanvasX:(double)x
@@ -402,42 +401,18 @@
                     outFrac:(double *)outFrac
                    outIsOut:(BOOL *)outIsOut {
   KKLane *lane = [self _positionLane];
-  if (!lane || lane.keyposes.count < 2)
+  BOOL isOut = NO;
+  NSInteger idx = KKPositionTangentHitIndex(
+      lane, CGPointMake(x, y),
+      KKPositionHitTolPt(self.tangentDotOSC.oscRadius), &isOut,
+      [self _canvasProjection]);
+  if (idx < 0)
     return NO;
-  double hitR = self.tangentDotOSC.oscRadius + 6.0;
-  double bestD = 1e9, bestFrac = NAN;
-  BOOL bestOut = NO, found = NO;
-  NSArray<KKKeyPose *> *kps = lane.keyposes;
-  for (NSUInteger i = 0; i < kps.count; i++) {
-    KKKeyPose *kp = kps[i];
-    if (!kp.spatialSmooth || kp.values.count < 2)
-      continue;
-    double ax = kp.values[0].doubleValue, ay = kp.values[1].doubleValue;
-    self.warpFraction = kp.time;
-    CGPoint inH = CGPointZero, outH = CGPointZero;
-    KKLaneSpatialHandlesForKeypose(lane, i, &inH, &outH);
-    CGPoint sides[2] = {outH, inH};
-    BOOL sideOut[2] = {YES, NO};
-    for (int s = 0; s < 2; s++) {
-      if (hypot(sides[s].x, sides[s].y) < 1e-6)
-        continue;
-      CGPoint hC = [self _canvasFromObjX:(ax + sides[s].x) y:(ay + sides[s].y)];
-      double d = hypot(x - hC.x, y - hC.y);
-      if (d < hitR && d < bestD) {
-        bestD = d;
-        bestFrac = kp.time;
-        bestOut = sideOut[s];
-        found = YES;
-      }
-    }
-  }
-  if (found) {
-    if (outFrac)
-      *outFrac = bestFrac;
-    if (outIsOut)
-      *outIsOut = bestOut;
-  }
-  return found;
+  if (outFrac)
+    *outFrac = lane.keyposes[idx].time;
+  if (outIsOut)
+    *outIsOut = isOut;
+  return YES;
 }
 
 - (void)_setCursorForLabel:(NSString *)label {
@@ -556,19 +531,14 @@
       isnan(self.dragAnchorFrac) ? dragFrac : self.dragAnchorFrac;
   CGPoint cur = [self _objFromCanvasX:x y:y];
   double curX = cur.x, curY = cur.y;
-  // Delta-based drag: move by the cursor's offset from the grab point.
-  double newX = self.posGrabValX + (curX - (double)self.posPressObject.x);
-  double newY = self.posGrabValY + (curY - (double)self.posPressObject.y);
-
-  // Shift axis-lock: pin whichever axis has less travel from the press point.
-  if (modifiers & kFxModifierKey_SHIFT) {
-    double dx = curX - (double)self.posPressObject.x;
-    double dy = curY - (double)self.posPressObject.y;
-    if (fabs(dx) >= fabs(dy))
-      newY = self.posGrabValY;
-    else
-      newX = self.posGrabValX;
-  }
+  // Delta-based drag from the grab point; Shift pins the axis with less
+  // travel (shared shaping).
+  double newX = 0, newY = 0;
+  KKPositionShapeAnchorDrag(self.posGrabValX, self.posGrabValY,
+                            curX - (double)self.posPressObject.x,
+                            curY - (double)self.posPressObject.y,
+                            (modifiers & kFxModifierKey_SHIFT) != 0, &newX,
+                            &newY);
 
   // Snap OFF by default; Cmd engages it (unless this control opted out).
   self.cmdSnapActive =
@@ -644,64 +614,17 @@
 // and every other keypose's stored position. Object space.
 - (simd_float2)_snapPosition:(simd_float2)p atFraction:(double)frac {
   KKLane *lane = [self _positionLane];
-  static const float anchors[] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
-  NSArray<KKKeyPose *> *kps = lane.keyposes;
-  NSInteger best = -1;
-  if (kps.count > 0) {
-    double bd = 1e9;
-    for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
-      double d = fabs(kps[k].time - frac);
-      if (d < bd) {
-        bd = d;
-        best = k;
-      }
-    }
-  }
-  // Skip the edited keypose AND its hold-linked twins: a coincident keypose
-  // joined by a linked interval moves WITH the drag, so it's the same point -
-  // leaving it in would snap the anchor to itself.
-  NSMutableIndexSet *skip = [NSMutableIndexSet indexSet];
-  if (best >= 0) {
-    [skip addIndex:(NSUInteger)best];
-    for (NSInteger i = best;
-         i + 1 < (NSInteger)kps.count && kps[i].outgoing.endpointsLinked; i++)
-      [skip addIndex:(NSUInteger)(i + 1)];
-    for (NSInteger i = best; i > 0 && kps[i - 1].outgoing.endpointsLinked; i--)
-      [skip addIndex:(NSUInteger)(i - 1)];
-  }
-  NSUInteger cap = kps.count + self.externalSnapTargets.count;
-  NSUInteger nObj = 0;
-  simd_float2 *objs = cap ? malloc(cap * sizeof(simd_float2)) : NULL;
-  for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
-    if ([skip containsIndex:(NSUInteger)k])
-      continue;
-    NSArray<NSNumber *> *v = kps[k].values;
-    if (v.count < 2)
-      continue;
-    objs[nObj++] =
-        (simd_float2){(float)v[0].doubleValue, (float)v[1].doubleValue};
-  }
-  // Host-supplied targets (e.g. other point OSCs) share this object space.
-  for (NSValue *t in self.externalSnapTargets) {
-    CGPoint p = t.pointValue;
-    objs[nObj++] = (simd_float2){(float)p.x, (float)p.y};
-  }
+  // The drag edits the keypose nearest `frac` - excluded (with its hold-linked
+  // twins) by the shared model so the anchor can't snap to itself. Threshold:
+  // engine px converted to object units through the canvas scale.
+  NSInteger edited =
+      lane.keyposes.count ? KKLaneNearestKeyposeIndex(lane, frac) : -1;
   CGPoint o0 = [self canvasPointFromObjectPoint:(simd_float2){0, 0}];
   CGPoint o1 = [self canvasPointFromObjectPoint:(simd_float2){1, 0}];
   float pxPerUnit = (float)fabs(o1.x - o0.x);
   float thr = (pxPerUnit > 0) ? self.snapEngine.threshold / pxPerUnit : 0.005f;
-  simd_float2 snapped = [self.snapEngine snapPoint:p
-                                    canvasAnchorsX:anchors
-                                            countX:5
-                                    canvasAnchorsY:anchors
-                                            countY:5
-                                     objectTargets:objs
-                                             count:nObj
-                                        thresholdX:thr
-                                        thresholdY:thr];
-  if (objs)
-    free(objs);
-  return snapped;
+  return KKPositionSnapPoint(self.snapEngine, p, lane, edited,
+                             self.externalSnapTargets, thr, thr);
 }
 
 // Double-click toggle: flip the keypose nearest `frac` between smooth and
@@ -777,40 +700,13 @@
         if (!nk || nk.values.count < 2)
           return;
         double ax = nk.values[0].doubleValue, ay = nk.values[1].doubleValue;
-        double dx = curX - ax, dy = curY - ay;
-        // Shift: axis-lock to the dominant axis (horizontal or vertical tangent).
-        if (modifiers & kFxModifierKey_SHIFT) {
-          if (fabs(dx) >= fabs(dy))
-            dy = 0.0;
-          else
-            dx = 0.0;
-        }
-        // Cmd: snap the handle's angle to 45-degree increments (length preserved).
-        if (modifiers & kFxModifierKey_COMMAND) {
-          double len = hypot(dx, dy);
-          if (len > 1e-9) {
-            double step = M_PI / 4.0;
-            double ang = round(atan2(dy, dx) / step) * step;
-            dx = cos(ang) * len;
-            dy = sin(ang) * len;
-          }
-        }
-        NSArray<NSNumber *> *off = @[ @(dx), @(dy) ];
-        NSArray<NSNumber *> *mirror = @[ @(-dx), @(-dy) ];
-        // Ctrl breaks the tangent into a cusp (in/out independent); otherwise the
-        // opposite side mirrors for a smooth curve. Ctrl is safe mid-drag - it only
-        // opens a context menu on a fresh Ctrl-click, not once a drag is under way.
-        BOOL cusp = (modifiers & kFxModifierKey_CONTROL) != 0;
-        nk.spatialSmooth = YES;
-        if (self.dragHandleIsOut) {
-          nk.outHandle = off;
-          if (!cusp)
-            nk.inHandle = mirror;
-        } else {
-          nk.inHandle = off;
-          if (!cusp)
-            nk.outHandle = mirror;
-        }
+        // Ctrl is safe mid-drag - it only opens a context menu on a fresh
+        // Ctrl-click, not once a drag is under way.
+        KKPositionApplyTangentDrag(
+            nk, self.dragHandleIsOut, curX - ax, curY - ay,
+            (modifiers & kFxModifierKey_SHIFT) != 0,
+            (modifiers & kFxModifierKey_COMMAND) != 0,
+            (modifiers & kFxModifierKey_CONTROL) != 0);
         out[best] = nk;
         posLane.keyposes = out;
         lanes[laneIdx] = posLane;

@@ -263,7 +263,9 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
     if (!inDrag)
       [actAPI startAction:strongSelf];
     BOOL ug =
-        inDrag ? NO : KKBeginUndoGroup(strongSelf.apiManager, @"Edit Gradient");
+        inDrag ? NO
+               : KKBeginUndoGroup(strongSelf.apiManager,
+                                  KKUndoLabelEditGradient());
     id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
     KKWriteCustomParamString(setAPI, json, kKKParamGradientData);
@@ -280,7 +282,7 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
     strongSelf.gradientDragSession =
         [KKDragUndoSession beginWithAPIManager:strongSelf.apiManager
                                      principal:strongSelf
-                                          name:@"Edit Gradient"
+                                          name:KKUndoLabelEditGradient()
                                           mode:KKDragUndoSessionModeHoldScope];
   };
   control.onDragEnd = ^{

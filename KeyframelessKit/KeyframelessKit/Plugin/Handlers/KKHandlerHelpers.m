@@ -6,6 +6,7 @@
 #import "KKDataBlob.h"
 #import "KKPluginInstanceState.h"
 #import "KKPlugin_Private.h"
+#import "KKLocalized.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKConstants.h>
 #import <KeyframelessKit/KKTimeline.h>
@@ -93,4 +94,34 @@ BOOL KKPerformUndoable(id<PROAPIAccessing> apiManager, id principal,
     [act endAction:principal];
   }
   return YES;
+}
+
+NSString *KKUndoLabelAdjust(NSString *productName) {
+  return [NSString
+      stringWithFormat:KKLoc(@"Adjust %@", @"Host undo label; %@ is the plugin "
+                                           @"product name (Canvas, Mirage)"),
+                       productName];
+}
+
+NSString *KKUndoLabelEditGradient(void) {
+  return KKLoc(@"Edit Gradient", @"Host undo label: gradient stop/color edit");
+}
+
+NSString *KKUndoLabelDuplicateLayer(void) {
+  return KKLoc(@"Duplicate Layer", @"Host undo label: duplicate a layer");
+}
+
+NSString *KKUndoLabelDeleteLayer(void) {
+  return KKLoc(@"Delete Layer", @"Host undo label: delete a layer");
+}
+
+NSString *KKUndoLabelGroupLayers(void) {
+  return KKLoc(@"Group Layers", @"Host undo label: group selected layers");
+}
+
+NSString *KKUndoLabelMoveLayer(BOOL up) {
+  return up ? KKLoc(@"Move Layer Up",
+                    @"Host undo label: reorder a layer upward in the stack")
+            : KKLoc(@"Move Layer Down",
+                    @"Host undo label: reorder a layer downward in the stack");
 }

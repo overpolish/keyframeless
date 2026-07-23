@@ -6,6 +6,7 @@
 #pragma once
 
 #import <AppKit/AppKit.h>
+#import <KeyframelessKit/KKBoundaryEditingGraph.h>
 #import <KeyframelessKit/KKGapPopoverTypes.h>
 #import <KeyframelessKit/KKTimeline.h>
 
@@ -206,7 +207,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Declared in a category (not the primary interface) so the primary
 /// @implementation isn't expected to provide them - silences
 /// -Wincomplete-implementation while the methods stay part of the public API.
-@interface KKTimelineAdvancedView (Popovers)
+@interface KKTimelineAdvancedView (Popovers) <KKBoundaryEditingGraph>
 
 /// Programmatic re-open of the value popover at a different keypose time.
 /// Used by the onion-skin filmstrip when the user clicks an inactive cell -

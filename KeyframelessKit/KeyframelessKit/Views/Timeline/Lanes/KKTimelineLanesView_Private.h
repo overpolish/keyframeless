@@ -422,6 +422,9 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
                        headerTitle:(NSString *)headerTitle
                       headerDetail:(NSString *)headerDetail
                         headerIcon:(NSImage *)headerIcon
+                        renderMode:(KKMiniViewerRenderMode)renderMode
+                     onModeChanged:
+                         (void (^)(KKMiniViewerRenderMode))onModeChanged
                      onHandleValue:(void (^)(NSString *, NSArray<NSNumber *> *))
                                        onHandleValue
                        onDragBegin:(void (^)(void))onDragBegin

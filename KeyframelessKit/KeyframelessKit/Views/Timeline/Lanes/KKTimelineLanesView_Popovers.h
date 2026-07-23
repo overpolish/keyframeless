@@ -5,6 +5,7 @@
 
 #pragma once
 
+#import "KKBoundaryEditingGraph.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineLanesView_Private.h"
 #import <KeyframelessKit/KKTimelineLanesView.h>
@@ -340,6 +341,33 @@ FOUNDATION_EXPORT BOOL _kkBoundaryValuesEqual(NSArray<NSNumber *> *a,
                                               NSArray<NSNumber *> *b);
 
 @interface KKTimelineLanesView (BoundaryNav)
+/// The graph behind the active tab (Advanced or Basic), typed as the shared
+/// popover write surface. Every popover-originated graph write and nav goes
+/// through this so the two tabs can't drift apart.
+- (id<KKBoundaryEditingGraph>)_activeGraph;
+/// Suppress the boundary-popover rebuild echo for ~0.4s after a write the
+/// open popover already reflects (smooth / aspect-link / expression / value
+/// commits) - the FCP echo would otherwise tear down focused rows mid-edit.
+- (void)_suppressBoundaryRedrive;
+/// THE single enter path for keypose (boundary) edit state: mini delegate
+/// boundary editing + suppressed handles + the open-popover stash ivars.
+/// Publishing the boundary request stays with the caller (fresh open always
+/// publishes, in-place update only on a fraction change).
+- (void)_applyKeyposeEditStateWithLanes:(NSArray<KKLane *> *)lanes
+                               fraction:(double)fraction
+                         excludedLabels:(NSArray<NSString *> *)excludedLabels;
+/// THE single exit path for keypose edit state: boundary editing off,
+/// suppressed handles cleared, AND the render-side request file written
+/// inactive. Every keypose-mode teardown (popover close, keypose->constants
+/// in-place switch) must call this - a partial reset leaves the render
+/// publishing stale boundary slots (visible as a corrupted/noisy preview).
+- (void)_exitKeyposeEditState;
+/// The ONE in-place refresh entry for an open static-values popover after a
+/// timeline change (selection re-feed, external undo/redo echo, lane opt-in
+/// flip). Dispatches per mode: constants re-scopes the un-opted rows and
+/// rebinds per-lane state; keypose re-drives the popover from the active
+/// graph at its open fraction (briefly suppressed after a popover edit).
+- (void)_refreshOpenStaticPopoverAnyOptedIn:(BOOL)anyOptedIn;
 - (void)_publishBoundaryRequestForFraction:(double)fraction;
 - (NSArray<NSNumber *> *)_animatableKPFractions;
 - (double)_snapEditFractionToKeypose:(double)fraction;

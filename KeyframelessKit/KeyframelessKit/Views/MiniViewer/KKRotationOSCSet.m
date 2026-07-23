@@ -4,6 +4,8 @@
  */
 
 #import "KKRotationOSCSet.h"
+
+#import "KKOSCVisibilityModel.h"
 #import "KKRadialOSCSet_Protected.h"
 
 #import <KeyframelessKit/KKResizeCursor.h> // KKRotationAxisCursor, eye cursors
@@ -17,7 +19,6 @@ static const CGFloat kRotBaselineRadiusPt = 28.0;
 static const CGFloat kRotBaselineCanvasH = 230.0;
 static const double kRotHitThresholdRatio = 10.0 / 90.0;
 static const int kRotRingSamples = 192;
-static const double kRotSnapStep = 15.0 * M_PI / 180.0;
 static const double kDegToRad = M_PI / 180.0;
 static const double kRadToDeg = 180.0 / M_PI;
 
@@ -149,7 +150,7 @@ static NSString *kkAxisLetter(int k) {
                 self.renderer.onHandleVisibilityToggled != nil;
   if (!suppressed)
     return 1.0f;
-  return reveal ? 0.3f : 0.0f;
+  return reveal ? kKKOSCGhostAlpha : 0.0f;
 }
 
 - (NSArray<KKMiniRotation *> *)rotationsForContentRect:(CGRect)cr
@@ -305,17 +306,8 @@ static NSString *kkAxisLetter(int k) {
   _lastWrittenRz = _pressRz;
   // Y-DOWN screen tangent at the press ring point, in the ring's own display
   // frame (nested for partial axis sets, matching draw + hit).
-  simd_float3 U, V;
-  KKRingBasis([self _ringMatrixForLabel:hit axes:axes ring:axis], axis, &U, &V);
-  double tx = -sin(t) * U.x + cos(t) * V.x;
-  double ty = -sin(t) * U.y + cos(t) * V.y;
-  double len = sqrt(tx * tx + ty * ty);
-  if (len > 1e-6) {
-    tx /= len;
-    ty /= len;
-  }
-  _pressTangentX = tx;
-  _pressTangentY = ty;
+  KKRingScreenTangentAtT([self _ringMatrixForLabel:hit axes:axes ring:axis],
+                         axis, t, &_pressTangentX, &_pressTangentY);
   [canvas setNeedsDisplay:YES];
   return YES;
 }
@@ -330,33 +322,18 @@ static NSString *kkAxisLetter(int k) {
   CGFloat radius = [self _radiusForCanvas:canvas];
   if (radius <= 0)
     return YES;
-  // Project overlay-space mouse displacement onto the press-time tangent (dy
-  // negated to bring overlay Y-UP into the tangent's Y-DOWN convention).
-  double dx = p.x - _pressMouse.x;
-  double dy = _pressMouse.y - p.y;
-  double projected = dx * _pressTangentX + dy * _pressTangentY;
-  // Axis signs {+1,-1,+1}, matching the single-lane path.
-  double sign = (_activeAxis == 1) ? -1.0 : 1.0;
-  double dAngle = sign * projected / (double)radius;
-  if (modifiers & NSEventModifierFlagCommand)
-    dAngle = round(dAngle / kRotSnapStep) * kRotSnapStep;
+  // Delta (dy flipped: overlay Y-UP into the tangent's Y-DOWN convention),
+  // Cmd-snap and full/partial apply are the shared ring-drag model's - one
+  // rule set with the viewer gizmo.
+  double dAngle = KKRingDragAngleDelta(
+      _activeAxis, p.x - _pressMouse.x, _pressMouse.y - p.y, _pressTangentX,
+      _pressTangentY, (double)radius,
+      (modifiers & NSEventModifierFlagCommand) != 0);
   double rx = 0, ry = 0, rz = 0;
   KKRotationAxes all = KKRotationAxisX | KKRotationAxisY | KKRotationAxisZ;
-  if ((axes & all) == all) {
-    KKRotationComposeAxisDelta(_activeAxis, dAngle, _pressRx, _pressRy,
-                               _pressRz, &_lastWrittenRx, &_lastWrittenRy,
-                               &_lastWrittenRz, &rx, &ry, &rz);
-  } else {
-    // PARTIAL axis set: the trackball compose needs the disabled axes to
-    // represent its result (dropping them corrupts the pose), so drag = a
-    // plain Euler increment on the grabbed axis - matching the viewer gizmo.
-    rx = _pressRx + (_activeAxis == 0 ? dAngle : 0.0);
-    ry = _pressRy + (_activeAxis == 1 ? dAngle : 0.0);
-    rz = _pressRz + (_activeAxis == 2 ? dAngle : 0.0);
-    _lastWrittenRx = rx;
-    _lastWrittenRy = ry;
-    _lastWrittenRz = rz;
-  }
+  KKRingApplyDragDelta(_activeAxis, (axes & all) == all, dAngle, _pressRx,
+                       _pressRy, _pressRz, &_lastWrittenRx, &_lastWrittenRy,
+                       &_lastWrittenRz, &rx, &ry, &rz);
   double euler[3] = {rx * kRadToDeg, ry * kRadToDeg, rz * kRadToDeg};
   [self.renderer commitValues:[self _laneValuesFromEulerDeg:euler axes:axes]
                      forLabel:_grabLabel

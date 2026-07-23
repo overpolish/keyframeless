@@ -5,6 +5,7 @@
 
 #import "KKOnScreenControl.h"
 #import "KKOSCShaderTypes.h"
+#import "KKOSCVisibilityModel.h"
 #import "KKResizeCursor.h"
 #import "NSColor+KKColors.h"
 #import <AppKit/AppKit.h>
@@ -212,22 +213,27 @@
   return 201; // the established kParamUIState id, shared across plugins
 }
 
-- (BOOL)kkOSCElementVisible:(NSString *)label {
+// The viewer's inputs to the shared visibility rules. No lock concept
+// viewer-side; no per-instance state yet reads as everything-visible (the
+// pre-toggle default).
+- (KKOSCVisibilityState)kkVisibilityState {
   KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
-  if (!st)
-    return YES; // no per-instance state yet => visible (pre-toggle default)
-  if (!st.oscMasterVisible)
-    return NO;
-  return !(st.hiddenOSCElements && [st.hiddenOSCElements containsObject:label]);
+  return (KKOSCVisibilityState){.locked = NO,
+                                .masterOff = st && !st.oscMasterVisible,
+                                .revealActive = self.optRevealActive};
+}
+
+- (BOOL)kkOSCElementVisible:(NSString *)label {
+  return KKOSCVisibilityEnabled(
+      [self kkVisibilityState], [self kkOSCElementIndividuallyHidden:label]);
 }
 
 - (BOOL)kkOSCMasterOff {
-  KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
-  return st && !st.oscMasterVisible;
+  return [self kkVisibilityState].masterOff;
 }
 
 - (float)kkRevealGhostAlpha {
-  return [self kkOSCMasterOff] ? 1.0f : 0.3f;
+  return KKOSCVisibilityGhostAlpha([self kkVisibilityState], YES);
 }
 
 - (NSCursor *)kkVisibilityCursorForLabel:(NSString *)label {
@@ -246,25 +252,12 @@
 
 - (BOOL)kkOSCElementIndividuallyHidden:(NSString *)label {
   KKPluginInstanceState *st = KKInstanceStateForAPI(self.apiManager);
-  NSSet<NSString *> *hidden = st.hiddenOSCElements;
-  if (!hidden || !label)
-    return NO;
-  if ([hidden containsObject:label])
-    return YES;
-  // An ancestor being hidden hides its children too, via the dot hierarchy
-  // ("Rotation" hides "Rotation.X"). Mirrors the inspector compound pills.
-  NSRange dot = [label rangeOfString:@"." options:NSBackwardsSearch];
-  return dot.location != NSNotFound &&
-         [hidden containsObject:[label substringToIndex:dot.location]];
+  return KKOSCLabelHiddenInSet(st.hiddenOSCElements, label);
 }
 
 - (BOOL)kkOSCRevealEligible:(NSString *)label {
-  BOOL hidden = [self kkOSCElementIndividuallyHidden:label];
-  // master on  -> Opt-hold reveals the elements you HID (dim re-show ghosts).
-  // master off -> Opt-hold "peek" reveals the elements left ENABLED; the ones
-  //               you turned off stay off (peek = a transient flip to
-  //               master-on).
-  return [self kkOSCMasterOff] ? !hidden : hidden;
+  return KKOSCVisibilityRevealEligible(
+      [self kkVisibilityState], [self kkOSCElementIndividuallyHidden:label]);
 }
 
 - (void)kkUpdateOptRevealWithModifiers:(NSUInteger)modifiers

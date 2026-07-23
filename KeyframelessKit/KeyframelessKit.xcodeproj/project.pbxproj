@@ -150,6 +150,7 @@
 				Views/Timeline/Inspector/KKTimelineInspectorButtons.h,
 				Views/Timeline/Inspector/KKTimelineInspectorView.h,
 				"Views/Timeline/Inspector/KKTimelineInspectorView+Guide.h",
+				Views/Timeline/KKBoundaryEditingGraph.h,
 				Views/Timeline/Lanes/KKPopoverKeepAlive.h,
 				Views/Timeline/Lanes/KKTimelineLanesView.h,
 				"Views/Timeline/Lanes/KKTimelineLanesView+Guide.h",

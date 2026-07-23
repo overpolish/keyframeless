@@ -6,12 +6,15 @@
 #import "KKPositionMiniController.h"
 
 #import <KeyframelessKit/KKPluginHost.h> // KKProcessFrameDurationSeconds
+#import "KKPositionElementModel.h"
 #import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKSpatialCurve.h>
 #import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneVisibleAtFraction
 #import <KeyframelessKit/KKTimeline.h>
 #import <simd/simd.h>
 
+// The shared KKPositionHitTolPt rule (dot radius + 6pt slop) for the mini's
+// 6pt dots.
 static const CGFloat kHandleHitTolPt = 12.0;
 
 @implementation KKPositionMiniController {
@@ -310,31 +313,26 @@ static const CGFloat kHandleHitTolPt = 12.0;
   return KKLaneNearestKeyposeIndex(lane, self.renderer.editFraction);
 }
 
+// Screen projection for the shared KKPositionElementModel hit helpers:
+// warp the normalized value by fraction, then map into contentRect points.
+- (KKPositionProjection)_projectionForContentRect:(CGRect)cr {
+  return ^CGPoint(double ox, double oy, double fraction) {
+    return [self.renderer
+        handlePointForContentRect:cr
+                         position:[self _warp:@[ @(ox), @(oy) ]
+                                      fraction:fraction]];
+  };
+}
+
 // The keypose anchor under `p` (excluding the active one, whose dot is hidden
 // under the position handle), or -1.
 - (NSInteger)_pathAnchorHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
   KKLane *lane = [self _lane];
-  if (!lane || lane.keyposes.count < 2 || CGRectIsEmpty(cr) ||
-      ![self _pathActive])
+  if (CGRectIsEmpty(cr) || ![self _pathActive])
     return -1;
-  NSArray<KKKeyPose *> *kps = lane.keyposes;
-  NSInteger active = [self _activeAnchorSkipIndexForLane:lane];
-  double bestD = kHandleHitTolPt;
-  NSInteger best = -1;
-  for (NSInteger i = 0; i < (NSInteger)kps.count; i++) {
-    if (i == active || kps[i].values.count < 2)
-      continue;
-    CGPoint hp =
-        [self.renderer handlePointForContentRect:cr
-                                        position:[self _warp:kps[i].values
-                                                     fraction:kps[i].time]];
-    double d = hypot(p.x - hp.x, p.y - hp.y);
-    if (d <= bestD) {
-      bestD = d;
-      best = i;
-    }
-  }
-  return best;
+  return KKPositionAnchorHitIndex(lane, p, kHandleHitTolPt,
+                                  [self _activeAnchorSkipIndexForLane:lane],
+                                  [self _projectionForContentRect:cr]);
 }
 
 // A smooth keypose's tangent-handle dot under `p`: outputs the keypose index +
@@ -343,42 +341,12 @@ static const CGFloat kHandleHitTolPt = 12.0;
                        contentRect:(CGRect)cr
                           outIsOut:(BOOL *)outIsOut {
   KKLane *lane = [self _lane];
-  if (!lane || lane.keyposes.count < 2 || CGRectIsEmpty(cr) ||
-      ![self _pathActive])
+  if (CGRectIsEmpty(cr) || ![self _pathActive])
     return -1;
-  NSArray<KKKeyPose *> *kps = lane.keyposes;
-  double bestD = kHandleHitTolPt;
-  NSInteger bestI = -1;
-  BOOL bestOut = NO;
-  for (NSInteger i = 0; i < (NSInteger)kps.count; i++) {
-    KKKeyPose *kp = kps[i];
-    if (!kp.spatialSmooth || kp.values.count < 2)
-      continue;
-    double ax = kp.values[0].doubleValue, ay = kp.values[1].doubleValue;
-    CGPoint inH = CGPointZero, outH = CGPointZero;
-    KKLaneSpatialHandlesForKeypose(lane, i, &inH, &outH);
-    CGPoint sides[2] = {outH, inH};
-    BOOL sideOut[2] = {YES, NO};
-    for (int s = 0; s < 2; s++) {
-      if (hypot(sides[s].x, sides[s].y) < 1e-6)
-        continue;
-      CGPoint hp = [self.renderer
-          handlePointForContentRect:cr
-                           position:[self _warp:@[
-                             @(ax + sides[s].x), @(ay + sides[s].y)
-                           ]
-                                        fraction:kp.time]];
-      double d = hypot(p.x - hp.x, p.y - hp.y);
-      if (d <= bestD) {
-        bestD = d;
-        bestI = i;
-        bestOut = sideOut[s];
-      }
-    }
-  }
   if (outIsOut)
-    *outIsOut = bestOut;
-  return bestI;
+    *outIsOut = NO;
+  return KKPositionTangentHitIndex(lane, p, kHandleHitTolPt, outIsOut,
+                                   [self _projectionForContentRect:cr]);
 }
 
 - (BOOL)pathHandleHitAtPoint:(CGPoint)p contentRect:(CGRect)cr {
@@ -440,16 +408,13 @@ static const CGFloat kHandleHitTolPt = 12.0;
     return;
   KKLane *nl;
   if (_pathPart == 0) {
-    // Anchor: delta-based move (no jump) + Shift axis-lock + Cmd-snap.
-    double nx = _pathGrabValX + (curNX - _pathPressNX);
-    double ny = _pathGrabValY + (curNY - _pathPressNY);
-    if (modifiers & NSEventModifierFlagShift) {
-      double dx = curNX - _pathPressNX, dy = curNY - _pathPressNY;
-      if (fabs(dx) >= fabs(dy))
-        ny = _pathGrabValY;
-      else
-        nx = _pathGrabValX;
-    }
+    // Anchor: delta-based move (no jump) + Shift axis-lock (shared shaping) +
+    // Cmd-snap.
+    double nx = 0, ny = 0;
+    KKPositionShapeAnchorDrag(_pathGrabValX, _pathGrabValY,
+                              curNX - _pathPressNX, curNY - _pathPressNY,
+                              (modifiers & NSEventModifierFlagShift) != 0, &nx,
+                              &ny);
     if ((modifiers & NSEventModifierFlagCommand) && !self.snapDisabled)
       [self _snapPositionX:&nx Y:&ny contentRect:cr excludeIndex:_pathIndex];
     else
@@ -460,44 +425,17 @@ static const CGFloat kHandleHitTolPt = 12.0;
     // state.
     nl = KKLaneBySettingValuesAtIndex(lane, _pathIndex, @[ @(nx), @(ny) ]);
   } else {
-    // Tangent handle: offset from the anchor. Shift axis-locks the handle to
-    // H/V; Cmd snaps its angle to 45-degree steps; Ctrl breaks it into a cusp
-    // (in/out independent) - otherwise the opposite side mirrors. Per-keypose
-    // curve shape is NOT shared by a hold-link, so write it alone.
+    // Tangent handle: offset from the anchor, shaped + mirrored by the shared
+    // model (Shift H/V lock, Cmd 45-degree snap, Ctrl cusp).
     nl = [lane copy];
     NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
     KKKeyPose *nk = [kps[_pathIndex] copy];
     double ax = nk.values.count > 0 ? nk.values[0].doubleValue : 0.5;
     double ay = nk.values.count > 1 ? nk.values[1].doubleValue : 0.5;
-    double offX = curNX - ax, offY = curNY - ay;
-    if (modifiers & NSEventModifierFlagShift) {
-      if (fabs(offX) >= fabs(offY))
-        offY = 0.0;
-      else
-        offX = 0.0;
-    }
-    if (modifiers & NSEventModifierFlagCommand) {
-      double len = hypot(offX, offY);
-      if (len > 1e-9) {
-        double step = M_PI / 4.0;
-        double ang = round(atan2(offY, offX) / step) * step;
-        offX = cos(ang) * len;
-        offY = sin(ang) * len;
-      }
-    }
-    NSArray<NSNumber *> *off = @[ @(offX), @(offY) ];
-    NSArray<NSNumber *> *mir = @[ @(-offX), @(-offY) ];
-    BOOL cusp = (modifiers & NSEventModifierFlagControl) != 0;
-    nk.spatialSmooth = YES;
-    if (_pathPart == 1) {
-      nk.outHandle = off;
-      if (!cusp)
-        nk.inHandle = mir;
-    } else {
-      nk.inHandle = off;
-      if (!cusp)
-        nk.outHandle = mir;
-    }
+    KKPositionApplyTangentDrag(nk, _pathPart == 1, curNX - ax, curNY - ay,
+                               (modifiers & NSEventModifierFlagShift) != 0,
+                               (modifiers & NSEventModifierFlagCommand) != 0,
+                               (modifiers & NSEventModifierFlagControl) != 0);
     kps[_pathIndex] = nk;
     nl.keyposes = kps;
   }
@@ -522,33 +460,14 @@ static const CGFloat kHandleHitTolPt = 12.0;
     idx = KKLaneNearestKeyposeIndex(lane, self.renderer.editFraction);
   if (idx < 0)
     return NO;
-  NSMutableArray<KKLane *> *lanes = [self.renderer.timeline.lanes mutableCopy];
-  NSInteger li = [lanes indexOfObject:lane];
-  if (li == NSNotFound)
+  // Same shared mutation the viewer's double-click uses - the nearest-keypose
+  // resolve (exact time here) and the hold-linked run toggle live in
+  // KKTimelineSettingSpatialSmooth, so the two surfaces flip identically.
+  BOOL newSmooth = !lane.keyposes[idx].spatialSmooth;
+  KKTimeline *t = KKTimelineSettingSpatialSmooth(
+      self.renderer.timeline, lane.label, lane.keyposes[idx].time, newSmooth);
+  if (!t)
     return NO;
-  KKLane *nl = [lane copy];
-  NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
-  BOOL newSmooth = !kps[idx].spatialSmooth;
-  // A hold-linked pair is two coincident keyposes the user sees as one; toggle
-  // the smooth flag on the whole linked run (idx + its twins) so clicking
-  // either half updates the curve - otherwise the un-toggled outgoing twin
-  // keeps the boundary a corner and the click looks like it did nothing.
-  NSMutableIndexSet *run =
-      [NSMutableIndexSet indexSetWithIndex:(NSUInteger)idx];
-  for (NSInteger i = idx;
-       i + 1 < (NSInteger)kps.count && kps[i].outgoing.endpointsLinked; i++)
-    [run addIndex:(NSUInteger)(i + 1)];
-  for (NSInteger i = idx; i > 0 && kps[i - 1].outgoing.endpointsLinked; i--)
-    [run addIndex:(NSUInteger)(i - 1)];
-  [run enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *stop) {
-    KKKeyPose *nk = [kps[i] copy];
-    nk.spatialSmooth = newSmooth;
-    kps[i] = nk;
-  }];
-  nl.keyposes = kps;
-  lanes[li] = nl;
-  KKTimeline *t = [self.renderer.timeline copy];
-  t.lanes = lanes;
   self.renderer.timeline = t;
   if (self.renderer.onTimelinePersist)
     self.renderer.onTimelinePersist(self.renderer.timeline);
@@ -580,61 +499,15 @@ static const CGFloat kHandleHitTolPt = 12.0;
                      Y:(double *)ny
            contentRect:(CGRect)cr
           excludeIndex:(NSInteger)excludeIndex {
-  static const float anchors[] = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f};
   // Snap threshold in mini-viewer view points; convert to normalized units
-  // (per-axis since the mini may not be square).
+  // (per-axis since the mini may not be square). Target assembly + the
+  // linked-twin exclusion are the shared model's.
   static const float kThreshPt = 6.0f;
   float thrX = cr.size.width > 0 ? kThreshPt / (float)cr.size.width : 0.01f;
   float thrY = cr.size.height > 0 ? kThreshPt / (float)cr.size.height : 0.01f;
-
-  KKLane *lane = [self _lane];
-  simd_float2 *objs = NULL;
-  NSUInteger nObj = 0;
-  if (lane) {
-    NSArray<KKKeyPose *> *kps = lane.keyposes;
-    // Skip the edited keypose AND its hold-linked twins: a coincident keypose
-    // joined by a linked interval moves WITH the drag, so it's the same point -
-    // leaving it in would snap the anchor to itself (a phantom accent guide).
-    NSMutableIndexSet *skip = [NSMutableIndexSet indexSet];
-    if (excludeIndex >= 0 && excludeIndex < (NSInteger)kps.count) {
-      [skip addIndex:(NSUInteger)excludeIndex];
-      for (NSInteger i = excludeIndex;
-           i + 1 < (NSInteger)kps.count && kps[i].outgoing.endpointsLinked; i++)
-        [skip addIndex:(NSUInteger)(i + 1)];
-      for (NSInteger i = excludeIndex;
-           i > 0 && kps[i - 1].outgoing.endpointsLinked; i--)
-        [skip addIndex:(NSUInteger)(i - 1)];
-    }
-    NSUInteger cap = kps.count + self.externalSnapTargets.count;
-    if (cap > 0)
-      objs = malloc(cap * sizeof(simd_float2));
-    for (NSInteger k = 0; k < (NSInteger)kps.count; k++) {
-      if ([skip containsIndex:(NSUInteger)k])
-        continue;
-      NSArray<NSNumber *> *v = kps[k].values;
-      if (v.count < 2)
-        continue;
-      objs[nObj++] =
-          (simd_float2){(float)v[0].doubleValue, (float)v[1].doubleValue};
-    }
-    // Host-supplied targets (other handles) share this normalized space.
-    for (NSValue *t in self.externalSnapTargets) {
-      CGPoint ep = t.pointValue;
-      objs[nObj++] = (simd_float2){(float)ep.x, (float)ep.y};
-    }
-  }
-  simd_float2 snapped =
-      [_snapEngine snapPoint:(simd_float2){(float)*nx, (float)*ny}
-              canvasAnchorsX:anchors
-                      countX:5
-              canvasAnchorsY:anchors
-                      countY:5
-               objectTargets:objs
-                       count:nObj
-                  thresholdX:thrX
-                  thresholdY:thrY];
-  if (objs)
-    free(objs);
+  simd_float2 snapped = KKPositionSnapPoint(
+      _snapEngine, (simd_float2){(float)*nx, (float)*ny}, [self _lane],
+      excludeIndex, self.externalSnapTargets, thrX, thrY);
   *nx = snapped.x;
   *ny = snapped.y;
 }

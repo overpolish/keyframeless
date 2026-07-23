@@ -129,16 +129,9 @@ FOUNDATION_EXPORT KKLane *KKRotationLaneWithLabel(NSString *label,
 @property(nonatomic) float ringAlphaZ;
 
 /// 0 = X, 1 = Y, 2 = Z, -1 = none. Set by `hitTestAtMousePositionX:...`
-/// and consumed by the draw call to highlight the grabbed ring + by
-/// `angleDeltaFromPressPoint:currentPoint:` to choose the axis to rotate.
+/// and consumed by the draw call to highlight the grabbed ring + by the
+/// drag to choose the axis to rotate (KKRingDragAngleDelta).
 @property(nonatomic, readonly) NSInteger activeAxis;
-
-/// Convert a screen-space drag (press → current, in canvas pixels) into the
-/// rotation delta (radians) to apply to `activeAxis`. Projects the screen
-/// displacement onto the ring's screen-space tangent at the press point,
-/// then divides by radius. Returns 0 if no ring is active.
-- (double)angleDeltaFromPressPoint:(CGPoint)pressPoint
-                      currentPoint:(CGPoint)currentPoint;
 
 /// High-level, self-contained API (requires `laneLabel`). The host forwards
 /// these from its drawOSC / hitTest / mouse callbacks after setting `center`

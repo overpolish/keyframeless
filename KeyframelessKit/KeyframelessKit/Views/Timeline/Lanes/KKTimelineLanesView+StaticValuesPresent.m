@@ -52,29 +52,39 @@
     }
     // Keypose-mode delegate setup (constants->keypose reconfigure OR fresh
     // open).
-    KKSetBoundaryEditing(self.miniViewerDelegate, YES,
-                         [self _snapEditFractionToKeypose:cfg.fraction]);
-    KKSetSuppressedHandles(self.miniViewerDelegate, cfg.excludedLabels);
-    _openStaticBoundaryFraction = cfg.fraction;
-    _openStaticBoundaryLanes = [cfg.lanes copy];
-    _openStaticBoundaryExcluded = [cfg.excludedLabels copy];
+    [self _applyKeyposeEditStateWithLanes:cfg.lanes
+                                 fraction:cfg.fraction
+                           excludedLabels:cfg.excludedLabels];
     [self _publishBoundaryRequestForFraction:cfg.fraction];
     // Static playhead → no render → -scheduleInputs: never sees the request
     // just written. Nudge one render so the boundary frame resolves now.
     if (self.onBoundaryPreviewNeedsRender)
       self.onBoundaryPreviewNeedsRender();
-  } else if (popoverOpen && _openStaticIsBoundary) {
-    // Keypose->constants: turn OFF boundary editing (the fresh-constants path
-    // never turns it on, so a reconfigure from keypose mode must clear it) -
-    // the SAME FULL reset the popover-close does, including the render-side
-    // request file. Without that write the render keeps boundaryFeedActive
-    // and publishes stale boundary-preview slots against constants-mode state
-    // (visible as a corrupted/noisy render), and nothing later clears it: the
-    // close handler only writes the file inactive when the CLOSING popover is
-    // keypose-mode, which after this switch it no longer is.
-    KKSetBoundaryEditing(self.miniViewerDelegate, NO, 0.0);
-    KKSetSuppressedHandles(self.miniViewerDelegate, nil);
-    KKWriteBoundaryRequest(self.miniViewerRequestPath, 0.0, NO);
+  } else {
+    // Keypose->constants: the fresh-constants path never turns boundary
+    // editing on, so a reconfigure FROM keypose mode must run the full exit
+    // (the close handler only exits when the CLOSING popover is keypose-mode,
+    // which after this switch it no longer is).
+    if (popoverOpen && _openStaticIsBoundary)
+      [self _exitKeyposeEditState];
+    // Constants previews at the LIVE playhead, not t=0: a property animated to
+    // start off-canvas (e.g. flying in) would otherwise render its first-frame
+    // pose, pushing the object + its handles out of the mini-viewer. Seeded
+    // HERE - after the keypose exit above, which resets editFraction to 0 - so
+    // the in-place keypose->constants switch shows the same frame a fresh
+    // constants open does. Constant lanes are single-keypose so editFraction
+    // doesn't move them, and the constants WRITE path ignores editFraction too
+    // (it always replaces the t=0 keypose - see
+    // -_timelineBySettingValues:forLabel:). boundaryEditing stays NO, so
+    // handle gating / writes are unchanged. Reset to 0 on close.
+    id constantsDel = self.miniViewerDelegate;
+    if ([constantsDel
+            respondsToSelector:NSSelectorFromString(@"setEditFraction:")]) {
+      double playFrac = [self _activeGraph].playheadFraction;
+      if (playFrac < 0.0)
+        playFrac = 0.0; // render tick hasn't pushed a playhead yet
+      [constantsDel setValue:@(playFrac) forKey:@"editFraction"];
+    }
   }
 
   __weak typeof(self) weak = self;
@@ -86,11 +96,12 @@
   __block NSArray<NSNumber *> *pendingValues = nil;
   __block BOOL dragging = NO;
   BOOL isBoundary = cfg.isBoundary;
+  // Live-gated on the CURRENT mode (not the mode at wiring time): handlers
+  // created by one present keep firing after an in-place mode switch.
   void (^suppressBoundaryRedrive)(void) = ^{
     __strong typeof(weak) s = weak;
-    if (s && isBoundary)
-      s->_boundaryRedriveSuppressUntil =
-          [NSDate timeIntervalSinceReferenceDate] + 0.4;
+    if (s && s->_openStaticIsBoundary)
+      [s _suppressBoundaryRedrive];
   };
   void (^commit)(NSString *, NSArray<NSNumber *> *) =
       ^(NSString *label, NSArray<NSNumber *> *values) {
@@ -204,6 +215,7 @@
   if ([self.miniViewerDelegate isKindOfClass:[KKMiniViewerRenderer class]])
     ((KKMiniViewerRenderer *)self.miniViewerDelegate).timeline = _timeline;
 
+  _KKStaticValuesPopoverView *staticView;
   if (popoverOpen) {
     // Re-establish the mode-specific leading gutter handlers for the NEW mode:
     // they are set once at fresh-create and don't carry across an in-place
@@ -231,32 +243,40 @@
                                     headerTitle:cfg.headerTitle
                                    headerDetail:cfg.headerDetail
                                      headerIcon:cfg.headerIcon
+                                     renderMode:cfg.renderMode
+                                  onModeChanged:cfg.onModeChanged
                                   onHandleValue:onHandleValue
                                     onDragBegin:onDragBeginBlock
                                       onDragEnd:onDragEndBlock
                                      onNavigate:cfg.onNavigate];
-    _openStaticIsBoundary = cfg.isBoundary;
-    if (cfg.isBoundary)
-      [self _refreshBoundaryPopoverNavEnabled];
-    return;
+    staticView = _openStaticView;
+    // Falls through to the shared mode wiring below: reconfigure only
+    // re-points value/drag/nav handlers, so every OTHER mode-routed handler
+    // (aspect link, gradient type, filmstrip, palette batch) must be re-wired
+    // here too or it keeps the OLD mode's routing - the popover-drift bug
+    // class this presenter exists to prevent.
+  } else {
+    staticView = [[_KKStaticValuesPopoverView alloc]
+          initWithLanes:cfg.lanes
+         descriptorPath:self.miniViewerDescriptorPath
+             clipAspect:self.miniViewerClipAspect
+            headerTitle:cfg.headerTitle
+           headerDetail:cfg.headerDetail
+             headerIcon:cfg.headerIcon
+         canvasDelegate:self.miniViewerDelegate
+             renderMode:cfg.renderMode
+          onModeChanged:cfg.onModeChanged
+             onNavigate:cfg.onNavigate
+          onHandleValue:onHandleValue
+            onDragBegin:onDragBeginBlock
+              onDragEnd:onDragEndBlock
+           editsKeypose:cfg.isBoundary
+        initialCategory:cfg.initialCategory];
   }
+  _openStaticView = staticView;
+  _openStaticIsBoundary = cfg.isBoundary;
+  weakStaticContent = staticView;
 
-  _KKStaticValuesPopoverView *staticView = [[_KKStaticValuesPopoverView alloc]
-        initWithLanes:cfg.lanes
-       descriptorPath:self.miniViewerDescriptorPath
-           clipAspect:self.miniViewerClipAspect
-          headerTitle:cfg.headerTitle
-         headerDetail:cfg.headerDetail
-           headerIcon:cfg.headerIcon
-       canvasDelegate:self.miniViewerDelegate
-           renderMode:cfg.renderMode
-        onModeChanged:cfg.onModeChanged
-           onNavigate:cfg.onNavigate
-        onHandleValue:onHandleValue
-          onDragBegin:onDragBeginBlock
-            onDragEnd:onDragEndBlock
-         editsKeypose:cfg.isBoundary
-      initialCategory:cfg.initialCategory];
   // Scope the expression reference picker to this clip's project: read the
   // clip's OWN manifest off the bus (the render process stamped it with the
   // project id; it can't push it across to this ViewBridge process). nil uuid /
@@ -297,10 +317,6 @@
     [s->_openContentPopover close];
   };
 
-  _openStaticView = staticView;
-  _openStaticIsBoundary = cfg.isBoundary;
-  weakStaticContent = staticView;
-
   // Per-keypose smooth toggle (spatialCurvable lanes): discrete write routed
   // to whichever graph owns the open keypose. Advanced keys by fraction, Basic
   // by its diamond mapping - each resolves the keypose internally.
@@ -309,13 +325,10 @@
     __strong typeof(weakSmooth) s = weakSmooth;
     if (!s)
       return;
-    s->_boundaryRedriveSuppressUntil =
-        [NSDate timeIntervalSinceReferenceDate] + 0.4;
-    double frac = s->_openStaticBoundaryFraction;
-    if (s->_activeTab == 1)
-      [s->_advancedGraph writeSpatialSmoothForLabel:label atFrac:frac isOn:on];
-    else
-      [s->_basicGraph writeSpatialSmoothForLabel:label atFrac:frac isOn:on];
+    [s _suppressBoundaryRedrive];
+    [[s _activeGraph] writeSpatialSmoothForLabel:label
+                                          atFrac:s->_openStaticBoundaryFraction
+                                            isOn:on];
   }];
 
   // Aspect link is a global per-lane toggle (no fraction). The keypose popover
@@ -328,16 +341,12 @@
     __strong typeof(weakLink) s = weakLink;
     if (!s)
       return;
-    if (!isBoundary) {
+    if (!s->_openStaticIsBoundary) {
       [s _setLaneAspectLinked:on forLabel:label];
       return;
     }
-    s->_boundaryRedriveSuppressUntil =
-        [NSDate timeIntervalSinceReferenceDate] + 0.4;
-    if (s->_activeTab == 1)
-      [s->_advancedGraph writeAspectLinkedForLabel:label isOn:on];
-    else
-      [s->_basicGraph writeAspectLinkedForLabel:label isOn:on];
+    [s _suppressBoundaryRedrive];
+    [[s _activeGraph] writeAspectLinkedForLabel:label isOn:on];
   }];
 
   // Parameter linking: the label's right-click Add/Remove Expression AND the
@@ -357,50 +366,40 @@
         // -> crash). The inline editor already reflects the edit; structural
         // add/remove is handled in place by the popover, so no rebuild is
         // needed here.
-        s->_boundaryRedriveSuppressUntil =
-            [NSDate timeIntervalSinceReferenceDate] + 0.4;
+        [s _suppressBoundaryRedrive];
         [s _setLaneLinkExpression:expr forLabel:label];
       }];
 
   // Gradient type (radial/linear): a single non-animated property, so editing
-  // it in the keypose editor rewrites every keypose of the lane. Only wired for
-  // the keypose (boundary) popover; the constants editor commits it per-row.
-  if (cfg.isBoundary) {
-    __weak typeof(self) weakType = self;
-    [staticView setOnGradientTypeChanged:^(NSString *label, NSInteger type) {
-      __strong typeof(weakType) s = weakType;
-      if (!s)
-        return;
-      s->_boundaryRedriveSuppressUntil =
-          [NSDate timeIntervalSinceReferenceDate] + 0.4;
-      if (s->_activeTab == 1)
-        [s->_advancedGraph writeGradientTypeForLabel:label type:type];
-      else
-        [s->_basicGraph writeGradientTypeForLabel:label type:type];
-    }];
-  }
+  // it in the keypose editor rewrites every keypose of the lane. Live-gated to
+  // keypose mode (the constants editor commits it per-row).
+  __weak typeof(self) weakType = self;
+  [staticView setOnGradientTypeChanged:^(NSString *label, NSInteger type) {
+    __strong typeof(weakType) s = weakType;
+    if (!s || !s->_openStaticIsBoundary)
+      return;
+    [s _suppressBoundaryRedrive];
+    [[s _activeGraph] writeGradientTypeForLabel:label type:type];
+  }];
+
+  // Onion-skin filmstrip: clicking an inactive cell asks the active tab's
+  // graph to swap the popover to that KP. Advanced rebinds in place; Basic
+  // re-opens. Wired in both modes (live-gated) so a constants-born popover
+  // switched to keypose in place gets a working filmstrip.
+  __weak typeof(self) weakSelf = self;
+  staticView.miniViewer.onFilmstripCellActivated = ^(double newFrac) {
+    __strong typeof(weakSelf) s = weakSelf;
+    if (!s || !s->_openStaticIsBoundary)
+      return;
+    [[s _activeGraph] requestValuePopoverAtFraction:newFrac];
+    if (s.onGuideFilmstripCellActivated)
+      s.onGuideFilmstripCellActivated(newFrac);
+  };
 
   if (cfg.isBoundary) {
     [staticView
         setHeaderLinked:[self _anyLinkedKeyposeAtFraction:cfg.fraction]];
     [self _refreshBoundaryPopoverNavEnabled];
-    // Onion-skin filmstrip: clicking an inactive cell asks the active tab's
-    // graph to swap the popover to that KP. Advanced rebinds in place;
-    // Basic re-opens.
-    __weak KKTimelineAdvancedView *weakAdv = _advancedGraph;
-    __weak KKTimelineBasicView *weakBasic = _basicGraph;
-    __weak typeof(self) weakSelf = self;
-    staticView.miniViewer.onFilmstripCellActivated = ^(double newFrac) {
-      __strong typeof(weakSelf) s = weakSelf;
-      if (!s)
-        return;
-      if (s->_activeTab == 1)
-        [weakAdv requestValuePopoverAtFraction:newFrac];
-      else
-        [weakBasic requestValuePopoverAtFraction:newFrac];
-      if (s.onGuideFilmstripCellActivated)
-        s.onGuideFilmstripCellActivated(newFrac);
-    };
   }
 
   [staticView applyDefaultsProvider:^NSArray<NSNumber *> *(NSString *l) {
@@ -425,8 +424,9 @@
                               cfg.onAnimate(label);
                           }];
     // Advanced supplies onRemove → editable rows get a leading "−" gutter.
-    // Set the handler then rebuild once so the gutter shows on init rows.
-    if (cfg.onRemove) {
+    // Set the handler then rebuild once so the gutter shows on init rows
+    // (the in-place path already set it BEFORE reconfigure's rebuild).
+    if (cfg.onRemove && !popoverOpen) {
       [staticView setRowRemoveHandler:^(NSString *label) {
         suppressBoundaryRedrive();
         cfg.onRemove(label);
@@ -437,15 +437,21 @@
   }
   // Constants popover (non-boundary) supplies onAddToAnimated → leading
   // curve-glyph gutter. Set the handler then rebuild so the gutter shows
-  // on init rows. Lives OUTSIDE the isBoundary block because the constants
-  // popover by definition has isBoundary == NO.
-  if (cfg.onAddToAnimated) {
+  // on init rows (in-place: already set before reconfigure). Lives OUTSIDE
+  // the isBoundary block because the constants popover by definition has
+  // isBoundary == NO.
+  if (cfg.onAddToAnimated && !popoverOpen) {
     [staticView setRowAddToAnimatedHandler:^(NSString *label) {
       cfg.onAddToAnimated(label);
     }];
     [staticView rebuildRowsWithLanes:cfg.lanes
                       excludedLabels:cfg.excludedLabels];
   }
+
+  // An in-place mode switch ends here - the popover is already shown and its
+  // close handler (which reads the LIVE mode) is already installed.
+  if (popoverOpen)
+    return;
 
   // Clamp the initial popover height to the anchor's screen so a small /
   // low-resolution display doesn't push the bottom rows off-screen. The view's
@@ -474,12 +480,17 @@
                                 KKStaticValuesPopoverDidCloseNotification
                                           object:s];
                         s->_openStaticView = nil;
-                        if (isBoundary) {
-                          s->_openStaticIsBoundary = NO;
-                          KKSetBoundaryEditing(s.miniViewerDelegate, NO, 0.0);
-                          KKSetSuppressedHandles(s.miniViewerDelegate, nil);
-                          KKWriteBoundaryRequest(s.miniViewerRequestPath, 0.0,
-                                                 NO);
+                        // Read the LIVE mode, not the fresh-create capture:
+                        // an in-place constants<->keypose switch changes it,
+                        // and closing after a switch must tear down the mode
+                        // the popover ENDED in (a constants-born popover
+                        // closed in keypose mode still needs the full keypose
+                        // exit, or the render keeps publishing stale boundary
+                        // slots).
+                        BOOL wasBoundary = s->_openStaticIsBoundary;
+                        s->_openStaticIsBoundary = NO;
+                        if (wasBoundary) {
+                          [s _exitKeyposeEditState];
                         } else {
                           // Constants popover previewed at the live playhead
                           // (set in -showStaticValuesPopoverFromView:); restore

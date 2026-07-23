@@ -119,6 +119,9 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
                        headerTitle:(NSString *)headerTitle
                       headerDetail:(NSString *)headerDetail
                         headerIcon:(NSImage *)headerIcon
+                        renderMode:(KKMiniViewerRenderMode)renderMode
+                     onModeChanged:
+                         (void (^)(KKMiniViewerRenderMode))onModeChanged
                      onHandleValue:(void (^)(NSString *, NSArray<NSNumber *> *))
                                        onHandleValue
                        onDragBegin:(void (^)(void))onDragBegin
@@ -145,6 +148,22 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     _miniViewer.onHandleDragBegin = onDragBegin;
     _miniViewer.onHandleDragEnd = onDragEnd;
   }
+
+  // Render-mode gating follows the mode: the off/film/onion pill and the
+  // filmstrip/onion layouts belong to keypose editing only. A keypose-born
+  // popover switched to constants drops the pill and falls back to the single
+  // frame; a constants-born popover switched to keypose gains the pill it
+  // never built at init.
+  BOOL wantPill =
+      editsKeypose && onModeChanged != nil && _descriptorPath.length > 0;
+  if (wantPill) {
+    [self _installRenderModePill:renderMode onModeChanged:onModeChanged];
+  } else if (_renderModePill) {
+    [_renderModePill removeFromSuperview];
+    _renderModePill = nil;
+  }
+  if (_miniViewer)
+    _miniViewer.renderMode = (NSInteger)renderMode;
 
   // Add the keypose nav chevrons (keypose mode) or remove them (constants
   // mode), then rebuild the header pinned after them. Same band geometry as
@@ -512,6 +531,41 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     _onSizeChanged(idx);
 }
 
+// Build + constrain the render-mode pill (off/film/onion), sitting to the left
+// of the size pill (which is trailing-most when a mini-viewer is present).
+// Shared by init and -reconfigureForEditsKeypose:...: a constants-born popover
+// has no pill until an in-place switch to keypose mode installs one. No-op if
+// already installed.
+- (void)_installRenderModePill:(KKMiniViewerRenderMode)renderMode
+                 onModeChanged:(void (^)(KKMiniViewerRenderMode))onModeChanged {
+  if (_renderModePill)
+    return;
+  CGFloat bandH = [_KKStaticValuesPopoverView _renderModePillHeaderHeight];
+  CGFloat bandCenterOffset = KKPaddingMD + bandH / 2.0;
+  __weak typeof(self) weakSelfPill = self;
+  void (^wrappedModeChanged)(KKMiniViewerRenderMode) =
+      ^(KKMiniViewerRenderMode m) {
+        __strong typeof(weakSelfPill) ss = weakSelfPill;
+        ss->_miniViewer.renderMode = (NSInteger)m;
+        if (onModeChanged)
+          onModeChanged(m);
+      };
+  KKPillToggleRowView *pill = [self _makeRenderModePill:renderMode
+                                          onModeChanged:wrappedModeChanged];
+  _renderModePill = pill;
+  [self addSubview:pill];
+  NSLayoutXAxisAnchor *pillTrail =
+      _sizePill ? _sizePill.leadingAnchor : self.trailingAnchor;
+  CGFloat pillTrailInset = _sizePill ? -KKSpacingMD : -KKPaddingMD;
+  [NSLayoutConstraint activateConstraints:@[
+    [pill.trailingAnchor constraintEqualToAnchor:pillTrail
+                                        constant:pillTrailInset],
+    [pill.centerYAnchor constraintEqualToAnchor:self.topAnchor
+                                       constant:bandCenterOffset],
+    [pill.heightAnchor constraintEqualToConstant:bandH],
+  ]];
+}
+
 - (instancetype)initWithLanes:(NSArray<KKLane *> *)lanes
                descriptorPath:(NSString *)descriptorPath
                    clipAspect:(CGFloat)clipAspect
@@ -652,32 +706,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     ]];
   }
 
-  if (showPill) {
-    __weak typeof(self) weakSelfPill = self;
-    void (^wrappedModeChanged)(KKMiniViewerRenderMode) =
-        ^(KKMiniViewerRenderMode m) {
-          __strong typeof(weakSelfPill) ss = weakSelfPill;
-          ss->_miniViewer.renderMode = (NSInteger)m;
-          if (onModeChanged)
-            onModeChanged(m);
-        };
-    KKPillToggleRowView *pill = [self _makeRenderModePill:renderMode
-                                            onModeChanged:wrappedModeChanged];
-    _renderModePill = pill;
-    [self addSubview:pill];
-    // Sit to the left of the size pill (which is trailing-most when a
-    // mini-viewer is present); fall back to the band's trailing edge otherwise.
-    NSLayoutXAxisAnchor *pillTrail =
-        _sizePill ? _sizePill.leadingAnchor : self.trailingAnchor;
-    CGFloat pillTrailInset = _sizePill ? -KKSpacingMD : -KKPaddingMD;
-    [NSLayoutConstraint activateConstraints:@[
-      [pill.trailingAnchor constraintEqualToAnchor:pillTrail
-                                          constant:pillTrailInset],
-      [pill.centerYAnchor constraintEqualToAnchor:self.topAnchor
-                                         constant:bandCenterOffset],
-      [pill.heightAnchor constraintEqualToConstant:bandH],
-    ]];
-  }
+  if (showPill)
+    [self _installRenderModePill:renderMode onModeChanged:onModeChanged];
 
   if (hasBand) {
     canvasTopAnchor = self.topAnchor;

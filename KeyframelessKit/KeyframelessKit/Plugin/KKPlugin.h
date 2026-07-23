@@ -504,6 +504,17 @@ extern BOOL KKPerformUndoable(
                            id<FxParameterSettingAPI_v5> _Nullable setAPI,
                            CMTime actionTime));
 
+/// Localized labels for host undo groups (FCP shows "Undo <label>" in the
+/// Edit menu). The one table for undo wording: every label lives here and in
+/// KKLocalizable.xcstrings - never pass an inline string literal as a group
+/// name at a call site.
+FOUNDATION_EXPORT NSString *KKUndoLabelAdjust(NSString *productName);
+FOUNDATION_EXPORT NSString *KKUndoLabelEditGradient(void);
+FOUNDATION_EXPORT NSString *KKUndoLabelDuplicateLayer(void);
+FOUNDATION_EXPORT NSString *KKUndoLabelDeleteLayer(void);
+FOUNDATION_EXPORT NSString *KKUndoLabelGroupLayers(void);
+FOUNDATION_EXPORT NSString *KKUndoLabelMoveLayer(BOOL up);
+
 /// The `sourceImages` tile belonging to an image-well parameter, or nil when
 /// the well is empty or was never requested.
 ///

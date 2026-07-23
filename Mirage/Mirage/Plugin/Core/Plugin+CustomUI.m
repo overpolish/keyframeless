@@ -275,7 +275,7 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
     MirageInspectorView *view = (MirageInspectorView *)[self
         kkCreateInspectorViewWithUIStateParamID:kParamUIState
         renderNudgeParamID:kParamRenderNudge
-        dragUndoLabel:@"Adjust Mirage"
+        dragUndoLabel:KKUndoLabelAdjust(@"Mirage")
         detachedWindowSize:CGSizeMake(720.0, 460.0)
         builtinPresets:MirageBuiltinPresets()
         inScope:^(KKInspectorCreateContext *ctx,

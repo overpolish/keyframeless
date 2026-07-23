@@ -330,6 +330,72 @@ KKRotationComposeAxisDelta(int axis, double dAngle, double pressRx,
   *outRz = rz;
 }
 
+/// Cmd-snap step for ring drags, shared by the viewer + mini surfaces.
+static const double KKRingDragSnapRad = 15.0 * M_PI / 180.0;
+
+/// Unit Y-DOWN screen tangent of ring `k` at t-angle `t` in display frame `m`
+/// (ring point = r(cos t·U + sin t·V) => tangent = -sin t·U + cos t·V).
+/// Captured at press so the drag stays consistent even if the pose is nudged
+/// mid-drag.
+static inline void KKRingScreenTangentAtT(KKRotMatrix3 m, int k, double t,
+                                          double *outTx, double *outTy) {
+  simd_float3 U, V;
+  KKRingBasis(m, k, &U, &V);
+  double tx = -sin(t) * U.x + cos(t) * V.x;
+  double ty = -sin(t) * U.y + cos(t) * V.y;
+  double len = sqrt(tx * tx + ty * ty);
+  if (len > 1e-6) {
+    tx /= len;
+    ty /= len;
+  }
+  *outTx = tx;
+  *outTy = ty;
+}
+
+/// Tangent-projected ring-drag delta in radians: the screen displacement
+/// (dx, dyYDown - callers flip their Y-up mouse dy) projected on the press
+/// tangent, per-axis user-natural sign {+1,-1,+1}, scaled by the ring radius.
+/// `snap` quantizes the OBJECT-axis delta to KKRingDragSnapRad BEFORE
+/// composing - snapping decomposed Euler values instead jiggles the other two
+/// axes (their decomposition shifts tick-to-tick as the object rotates).
+static inline double KKRingDragAngleDelta(int axis, double dx, double dyYDown,
+                                          double tanX, double tanY,
+                                          double radius, BOOL snap) {
+  double projected = dx * tanX + dyYDown * tanY;
+  double sign = (axis == 1) ? -1.0 : 1.0;
+  double dAngle = sign * projected / radius;
+  if (snap)
+    dAngle = round(dAngle / KKRingDragSnapRad) * KKRingDragSnapRad;
+  return dAngle;
+}
+
+/// Apply a ring drag delta to the press-time Euler pose. A FULL 3-axis set
+/// composes around the object's current ring axis (trackball feel, decomposed
+/// nearest lastWritten for continuity past ±90°). A PARTIAL set uses a plain
+/// Euler increment on the grabbed axis - the composed pose generally needs
+/// the disabled axes to represent it (dropping them corrupts the pose into a
+/// global-axis-like drift), so the slider semantic is exact and stable inside
+/// the storable subspace.
+static inline void KKRingApplyDragDelta(int axis, BOOL fullAxes, double dAngle,
+                                        double pressRx, double pressRy,
+                                        double pressRz, double *inOutLastRx,
+                                        double *inOutLastRy,
+                                        double *inOutLastRz, double *outRx,
+                                        double *outRy, double *outRz) {
+  if (fullAxes) {
+    KKRotationComposeAxisDelta(axis, dAngle, pressRx, pressRy, pressRz,
+                               inOutLastRx, inOutLastRy, inOutLastRz, outRx,
+                               outRy, outRz);
+    return;
+  }
+  *outRx = pressRx + (axis == 0 ? dAngle : 0.0);
+  *outRy = pressRy + (axis == 1 ? dAngle : 0.0);
+  *outRz = pressRz + (axis == 2 ? dAngle : 0.0);
+  *inOutLastRx = *outRx;
+  *inOutLastRy = *outRy;
+  *inOutLastRz = *outRz;
+}
+
 #ifdef __cplusplus
 }
 #endif

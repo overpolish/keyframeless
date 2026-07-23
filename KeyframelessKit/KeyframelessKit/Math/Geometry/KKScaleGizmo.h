@@ -191,4 +191,29 @@ KKScaleValuesForHandleDrag(NSInteger handle, double pressX, double pressY,
                            double candX, double candY, BOOL linked,
                            double *_Nullable outX, double *_Nullable outY);
 
+/// Cmd-fine cursor factor for scale-box drags (both surfaces).
+static const double KKScaleDragFineFactor = 0.2;
+
+/// Per-drag cursor state for KKScaleDragTick: the raw last cursor plus the
+/// accumulated EFFECTIVE cursor (fine mode advances it at a fraction of the
+/// raw movement, so the value tracks the cursor 1:1 in normal mode and
+/// precisely in fine mode). Seed both to the grabbed handle / press cursor at
+/// drag begin.
+typedef struct {
+  CGPoint effCursor;
+  CGPoint lastCursor;
+} KKScaleDragCursor;
+
+/// One scale-box drag tick, shared by the viewer (KKScaleOSC) and the mini
+/// (KKScaleMiniController): advance the effective cursor by the raw movement
+/// (scaled by KKScaleDragFineFactor when `fine`), resolve candidate per-axis
+/// percents through the gizmo about `anchor` (a degenerate axis - handle on
+/// the anchor - holds the press value), then apply the link coupling
+/// (`linked` already reflects the per-lane link XOR the Shift invert).
+FOUNDATION_EXPORT void
+KKScaleDragTick(KKScaleDragCursor *_Nonnull cursor, CGPoint rawCursor,
+                BOOL fine, NSInteger handle, CGPoint anchor, CGPoint anchorFrac,
+                double pressX, double pressY, BOOL linked, double e0,
+                double span, double *_Nullable outX, double *_Nullable outY);
+
 NS_ASSUME_NONNULL_END

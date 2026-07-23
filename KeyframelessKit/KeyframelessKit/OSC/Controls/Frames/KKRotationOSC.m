@@ -60,9 +60,6 @@ KKLane *KKRotationLaneWithLabel(NSString *label, KKRotationAxes axes) {
 
 static const int kRingSamples = 192;
 static const float kHitThresholdPixels = 10.0f;
-// Cmd snaps the per-axis drag delta to 15° steps (applied to the OBJECT-axis
-// delta before composing - see -mouseDraggedAtX:).
-static const double kRotSnapRad = 15.0 * M_PI / 180.0;
 
 @implementation KKRotationOSC {
   NSInteger _activeAxis; // -1 / 0 / 1 / 2
@@ -225,36 +222,9 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
   _pressRotZ = _rotZ;
   if (_activeAxis < 0)
     return;
-  simd_float3 U, V;
-  KKRingBasis([self _ringDisplayMatrix:(int)_activeAxis], (int)_activeAxis, &U,
-              &V);
-  double t = _pressAngle;
-  // Screen-space tangent at the ring point = derivative w.r.t. t, projected.
-  double tx = -sin(t) * U.x + cos(t) * V.x;
-  double ty = -sin(t) * U.y + cos(t) * V.y;
-  double len = sqrt(tx * tx + ty * ty);
-  if (len > 1e-6) {
-    tx /= len;
-    ty /= len;
-  }
-  _pressTangentX = tx;
-  _pressTangentY = ty;
-}
-
-- (double)angleDeltaFromPressPoint:(CGPoint)pressPoint
-                      currentPoint:(CGPoint)currentPoint {
-  if (_activeAxis < 0 || _radius <= 0)
-    return 0.0;
-  double dx = currentPoint.x - pressPoint.x;
-  // Mouse y comes in canvas Y-UP; the press tangent was captured in
-  // Y-DOWN screen space (same convention as the shader / hit-test), so
-  // negate dy before projecting.
-  double dy = pressPoint.y - currentPoint.y;
-  double projected = dx * _pressTangentX + dy * _pressTangentY;
-  // Per-axis sign tuned to user-natural drag direction.
-  static const double kAxisSign[3] = {+1.0, -1.0, +1.0};
-  double sign = kAxisSign[_activeAxis];
-  return sign * projected / (double)_radius;
+  KKRingScreenTangentAtT([self _ringDisplayMatrix:(int)_activeAxis],
+                         (int)_activeAxis, _pressAngle, &_pressTangentX,
+                         &_pressTangentY);
 }
 
 - (void)drawAtCanvasPosition:(CGPoint)canvasPosition
@@ -497,39 +467,22 @@ static const double kRotSnapRad = 15.0 * M_PI / 180.0;
             forceUpdate:(BOOL *)forceUpdate
                  atTime:(CMTime)time {
   NSInteger axis = self.activeAxis;
-  if (axis < 0)
+  if (axis < 0 || _radius <= 0)
     return;
-  double dAngle = [self angleDeltaFromPressPoint:_rotPressCanvas
-                                    currentPoint:CGPointMake(x, y)];
-  // Cmd snaps the OBJECT-axis delta to 15° BEFORE composing. Snapping the
-  // decomposed Euler values directly jiggles the other two axes (their
-  // decomposition shifts tick-to-tick as the object rotates).
-  if (modifiers & kFxModifierKey_COMMAND)
-    dAngle = round(dAngle / kRotSnapRad) * kRotSnapRad;
+  // Mouse y comes in canvas Y-UP; the press tangent is Y-DOWN screen space
+  // (same convention as the shader / hit-test), so flip dy. Delta + Cmd-snap
+  // + full/partial apply are the shared ring-drag model's.
+  double dAngle = KKRingDragAngleDelta(
+      (int)axis, x - _rotPressCanvas.x, _rotPressCanvas.y - y, _pressTangentX,
+      _pressTangentY, (double)_radius,
+      (modifiers & kFxModifierKey_COMMAND) != 0);
   double lastRx = _rotLastWrittenX, lastRy = _rotLastWrittenY,
          lastRz = _rotLastWrittenZ;
   double rx = 0, ry = 0, rz = 0;
   KKRotationAxes all = KKRotationAxisX | KKRotationAxisY | KKRotationAxisZ;
-  if ((self.enabledAxes & all) == all) {
-    // Compose around the OBJECT's current ring axis (R_press * R_axis(dAngle))
-    // so dragging the X ring after a Y rotation spins around the visible X,
-    // then decompose to Euler nearest the last-written pose (continuous past
-    // ±90°).
-    KKRotationComposeAxisDelta((int)axis, dAngle, _rotPressKpX, _rotPressKpY,
-                               _rotPressKpZ, &lastRx, &lastRy, &lastRz, &rx,
-                               &ry, &rz);
-  } else {
-    // PARTIAL axis set: the composed pose generally needs the disabled axes
-    // to represent (dropping them corrupts the pose into a global-axis-like
-    // drift), so drag = a plain Euler increment on the grabbed axis - the
-    // slider semantic, exact and stable inside the storable subspace.
-    rx = _rotPressKpX + (axis == 0 ? dAngle : 0.0);
-    ry = _rotPressKpY + (axis == 1 ? dAngle : 0.0);
-    rz = _rotPressKpZ + (axis == 2 ? dAngle : 0.0);
-    lastRx = rx;
-    lastRy = ry;
-    lastRz = rz;
-  }
+  KKRingApplyDragDelta((int)axis, (self.enabledAxes & all) == all, dAngle,
+                       _rotPressKpX, _rotPressKpY, _rotPressKpZ, &lastRx,
+                       &lastRy, &lastRz, &rx, &ry, &rz);
   _rotLastWrittenX = lastRx;
   _rotLastWrittenY = lastRy;
   _rotLastWrittenZ = lastRz;

@@ -16,6 +16,75 @@
 
 @implementation KKTimelineLanesView (BoundaryNav)
 
+- (id<KKBoundaryEditingGraph>)_activeGraph {
+  return _activeTab == 1 ? (id<KKBoundaryEditingGraph>)_advancedGraph
+                         : (id<KKBoundaryEditingGraph>)_basicGraph;
+}
+
+- (void)_suppressBoundaryRedrive {
+  _boundaryRedriveSuppressUntil = [NSDate timeIntervalSinceReferenceDate] + 0.4;
+}
+
+- (void)_applyKeyposeEditStateWithLanes:(NSArray<KKLane *> *)lanes
+                               fraction:(double)fraction
+                         excludedLabels:(NSArray<NSString *> *)excludedLabels {
+  KKSetBoundaryEditing(self.miniViewerDelegate, YES,
+                       [self _snapEditFractionToKeypose:fraction]);
+  KKSetSuppressedHandles(self.miniViewerDelegate, excludedLabels);
+  _openStaticBoundaryFraction = fraction;
+  _openStaticBoundaryLanes = [lanes copy];
+  _openStaticBoundaryExcluded = [excludedLabels copy];
+}
+
+- (void)_exitKeyposeEditState {
+  KKSetBoundaryEditing(self.miniViewerDelegate, NO, 0.0);
+  KKSetSuppressedHandles(self.miniViewerDelegate, nil);
+  KKWriteBoundaryRequest(self.miniViewerRequestPath, 0.0, NO);
+}
+
+- (void)_refreshOpenStaticPopoverAnyOptedIn:(BOOL)anyOptedIn {
+  if (!_openStaticView)
+    return;
+  if (!_openStaticIsBoundary) {
+    // Constants: re-scope the un-opted row set (a lane flipped to Animated
+    // disappears without close/reopen), then re-apply per-lane state (values +
+    // smooth + LINK) from the current selected-layer timeline. A
+    // same-structure selection change (e.g. drawing another constant-stroke
+    // path) reuses the rows and previously never re-read aspectLinked, so the
+    // link toggle + its coupling stayed stale from the prior layer.
+    // applyValues is focus-safe (skips an in-progress field edit), so this
+    // won't clobber active editing.
+    [_openStaticView updateUnoptedLanes:[self _unoptedLanes]];
+    [_openStaticView rebindLanes:_timeline.lanes];
+    // The popover's OWN mini viewer must read the SAME corrected timeline the
+    // rows do (template-seeded aspectLinked / aspectLinkable), not the stale
+    // applyTimeline copy - otherwise its OSC overlay (e.g. a ring's aspect
+    // lock) disagrees with the row's link glyph. The delegate is always a
+    // KKMiniViewerRenderer (plugins subclass it).
+    if ([self.miniViewerDelegate isKindOfClass:[KKMiniViewerRenderer class]])
+      ((KKMiniViewerRenderer *)self.miniViewerDelegate).timeline = _timeline;
+    return;
+  }
+  // Keypose: the popover is built from a snapshot at open; an external
+  // timeline change (cmd-Z / redo) reaches the graphs but not the popover, so
+  // re-drive it from the active graph at its open fraction - the
+  // active/Animate row split and values rebuild from the new state (e.g.
+  // cmd-Z re-adding a keypose flips its row from "+ No keypose here" back to
+  // editable). Suppressed briefly after a popover edit so the host's echo
+  // write doesn't rebuild rows mid-interaction (add/remove already refresh
+  // synchronously). No activation fire: re-scoping the open popover to the
+  // same layer must not drive the host selection back (ping-pong against a
+  // selection the user just changed) - only a user graph-click/nav moves
+  // selection.
+  if (!(_openContentPopover.isShown && anyOptedIn &&
+        [NSDate timeIntervalSinceReferenceDate] >=
+            _boundaryRedriveSuppressUntil))
+    return;
+  [[self _activeGraph]
+      requestValuePopoverAtFraction:_openStaticBoundaryFraction
+                     fireActivation:NO];
+}
+
 - (nullable NSSet<NSString *> *)_scopedLaneLabelsForOpenPopover {
   if (_advancedGraph && !_advancedGraph.hidden) {
     NSString *primary = _advancedGraph.primaryLaneLabel;
@@ -222,11 +291,7 @@
   double newFrac = fracs[target].doubleValue;
   // Same path the filmstrip cell click uses - graph rebuilds the display
   // lanes for the new KP, then calls back into the in-place updater.
-  if (_activeTab == 1) {
-    [_advancedGraph requestValuePopoverAtFraction:newFrac];
-  } else {
-    [_basicGraph requestValuePopoverAtFraction:newFrac];
-  }
+  [[self _activeGraph] requestValuePopoverAtFraction:newFrac];
 }
 
 - (void)_renderModeDidChange:(KKMiniViewerRenderMode)mode {
@@ -272,9 +337,9 @@
         _openStaticView))
     return;
   BOOL fracChanged = fabs(fraction - _openStaticBoundaryFraction) > 1e-6;
-  KKSetBoundaryEditing(self.miniViewerDelegate, YES,
-                       [self _snapEditFractionToKeypose:fraction]);
-  KKSetSuppressedHandles(self.miniViewerDelegate, excludedLabels);
+  [self _applyKeyposeEditStateWithLanes:lanes
+                               fraction:fraction
+                         excludedLabels:excludedLabels];
   // Full row rebuild (not just value rebind): the editable↔Animate split can
   // change between fractions (navigate) or after add/remove, and the one-way
   // applyExcludedLabels: swap can't restore an editable row on its own.
@@ -283,9 +348,6 @@
   [_openStaticView rebuildRowsWithLanes:lanes excludedLabels:excludedLabels];
   [_openStaticView setHeaderDetail:[self _timeStringForFraction:fraction]];
   [_openStaticView setHeaderLinked:[self _anyLinkedKeyposeAtFraction:fraction]];
-  _openStaticBoundaryFraction = fraction;
-  _openStaticBoundaryLanes = [lanes copy];
-  _openStaticBoundaryExcluded = [excludedLabels copy];
   // The render nudge writes an undoable param to force FCP to resolve the
   // preview frame at a NEW boundary time. A same-fraction in-place rebuild
   // (add / remove / undo-refresh) keeps the time, and the blob write already
