@@ -597,43 +597,40 @@
     [self.snapEngine reset];
   }
 
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI) {
-    [actionAPI endAction:self];
-    return;
-  }
-
-  // Snapshot is canonical - the param read returns empty inside the OSC action
-  // scope. Copy-preserves spatial-curve fields + propagates hold-links.
-  NSArray<NSNumber *> *newValues = @[ @(newX), @(newY) ];
-  KKTimeline *snap = KKProcessTimelineSnapshot();
-  KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
-                              snap, self.laneLabel, targetFrac, newValues)
-                        : nil;
-  if (!tl) {
-    tl = snap ? [snap copy] : [KKTimeline timeline];
-    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-    KKLane *posLane =
-        [self.templateLane copy] ?: [KKLane laneWithLabel:self.laneLabel];
-    posLane.enabled = NO;
-    posLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
-    [lanes addObject:posLane];
-    tl.lanes = lanes;
-  }
-
-  if (self.onTimelinePersist)
-    self.onTimelinePersist(tl);
-  else
-    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                             kKKParamTimelineData);
-  [actionAPI endAction:self];
-  if (forceUpdate)
+  __block BOOL wrote = NO;
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        if (!setAPI)
+          return;
+        // Snapshot is canonical - the param read returns empty inside the OSC
+        // action scope. Copy-preserves spatial-curve fields + propagates
+        // hold-links.
+        NSArray<NSNumber *> *newValues = @[ @(newX), @(newY) ];
+        KKTimeline *snap = KKProcessTimelineSnapshot();
+        KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
+                                    snap, self.laneLabel, targetFrac, newValues)
+                              : nil;
+        if (!tl) {
+          tl = snap ? [snap copy] : [KKTimeline timeline];
+          NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+          KKLane *posLane =
+              [self.templateLane copy] ?: [KKLane laneWithLabel:self.laneLabel];
+          posLane.enabled = NO;
+          posLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
+                                                  values:newValues] ];
+          [lanes addObject:posLane];
+          tl.lanes = lanes;
+        }
+        if (self.onTimelinePersist)
+          self.onTimelinePersist(tl);
+        else
+          KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                                   kKKParamTimelineData);
+        wrote = YES;
+      });
+  if (wrote && forceUpdate)
     *forceUpdate = YES;
 }
 
@@ -710,32 +707,28 @@
 // Double-click toggle: flip the keypose nearest `frac` between smooth and
 // corner.
 - (void)_toggleSmoothForFrac:(double)frac {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  KKTimeline *snap = KKProcessTimelineSnapshot();
-  if (!setAPI || !snap) {
-    [actionAPI endAction:self];
-    return;
-  }
-  KKLane *lane = [self _positionLane];
-  BOOL cur = NO;
-  if (lane.keyposes.count)
-    cur = lane.keyposes[KKLaneNearestKeyposeIndex(lane, frac)].spatialSmooth;
-  KKTimeline *tl =
-      KKTimelineSettingSpatialSmooth(snap, self.laneLabel, frac, !cur);
-  if (tl) {
-    if (self.onTimelinePersist)
-      self.onTimelinePersist(tl);
-    else
-      KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                               kKKParamTimelineData);
-  }
-  [actionAPI endAction:self];
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        KKTimeline *snap = KKProcessTimelineSnapshot();
+        if (!setAPI || !snap)
+          return;
+        KKLane *lane = [self _positionLane];
+        BOOL cur = NO;
+        if (lane.keyposes.count)
+          cur = lane.keyposes[KKLaneNearestKeyposeIndex(lane, frac)]
+                    .spatialSmooth;
+        KKTimeline *tl =
+            KKTimelineSettingSpatialSmooth(snap, self.laneLabel, frac, !cur);
+        if (tl) {
+          if (self.onTimelinePersist)
+            self.onTimelinePersist(tl);
+          else
+            KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                                     kKKParamTimelineData);
+        }
+      });
 }
 
 // Drag a tangent handle: set the dragged keypose's in/out handle to the cursor
@@ -752,93 +745,84 @@
   self.warpFraction = self.dragHandleFrac; // tangent maps at its keypose
   CGPoint cur = [self _objFromCanvasX:x y:y];
   double curX = cur.x, curY = cur.y;
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  KKTimeline *snap = KKProcessTimelineSnapshot();
-  if (!setAPI || !snap) {
-    [actionAPI endAction:self];
-    return;
-  }
-  KKTimeline *tl = [snap copy];
-  NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-  NSInteger laneIdx = NSNotFound;
-  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-    if ([((KKLane *)lanes[i]).label isEqualToString:self.laneLabel]) {
-      laneIdx = i;
-      break;
-    }
-  if (laneIdx == NSNotFound) {
-    [actionAPI endAction:self];
-    return;
-  }
-  KKLane *posLane = [lanes[laneIdx] copy];
-  NSArray<KKKeyPose *> *kps = posLane.keyposes;
-  if (kps.count == 0) {
-    [actionAPI endAction:self];
-    return;
-  }
-  NSInteger best = KKLaneNearestKeyposeIndex(posLane, self.dragHandleFrac);
-  NSMutableArray<KKKeyPose *> *out = [NSMutableArray arrayWithArray:kps];
-  KKKeyPose *nk =
-      (best >= 0 && best < (NSInteger)out.count) ? [out[best] copy] : nil;
-  // A malformed / mid-transition keypose (short values) must NOT throw here:
-  // the exception would escape the open action scope and wedge FCP's undo
-  // machinery (its next beginWithUndoState aborts). Bail cleanly instead.
-  if (!nk || nk.values.count < 2) {
-    [actionAPI endAction:self];
-    return;
-  }
-  double ax = nk.values[0].doubleValue, ay = nk.values[1].doubleValue;
-  double dx = curX - ax, dy = curY - ay;
-  // Shift: axis-lock to the dominant axis (horizontal or vertical tangent).
-  if (modifiers & kFxModifierKey_SHIFT) {
-    if (fabs(dx) >= fabs(dy))
-      dy = 0.0;
-    else
-      dx = 0.0;
-  }
-  // Cmd: snap the handle's angle to 45-degree increments (length preserved).
-  if (modifiers & kFxModifierKey_COMMAND) {
-    double len = hypot(dx, dy);
-    if (len > 1e-9) {
-      double step = M_PI / 4.0;
-      double ang = round(atan2(dy, dx) / step) * step;
-      dx = cos(ang) * len;
-      dy = sin(ang) * len;
-    }
-  }
-  NSArray<NSNumber *> *off = @[ @(dx), @(dy) ];
-  NSArray<NSNumber *> *mirror = @[ @(-dx), @(-dy) ];
-  // Ctrl breaks the tangent into a cusp (in/out independent); otherwise the
-  // opposite side mirrors for a smooth curve. Ctrl is safe mid-drag - it only
-  // opens a context menu on a fresh Ctrl-click, not once a drag is under way.
-  BOOL cusp = (modifiers & kFxModifierKey_CONTROL) != 0;
-  nk.spatialSmooth = YES;
-  if (self.dragHandleIsOut) {
-    nk.outHandle = off;
-    if (!cusp)
-      nk.inHandle = mirror;
-  } else {
-    nk.inHandle = off;
-    if (!cusp)
-      nk.outHandle = mirror;
-  }
-  out[best] = nk;
-  posLane.keyposes = out;
-  lanes[laneIdx] = posLane;
-  tl.lanes = lanes;
-  if (self.onTimelinePersist)
-    self.onTimelinePersist(tl);
-  else
-    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                             kKKParamTimelineData);
-  [actionAPI endAction:self];
-  if (forceUpdate)
+  __block BOOL wrote = NO;
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        KKTimeline *snap = KKProcessTimelineSnapshot();
+        if (!setAPI || !snap)
+          return;
+        KKTimeline *tl = [snap copy];
+        NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+        NSInteger laneIdx = NSNotFound;
+        for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
+          if ([((KKLane *)lanes[i]).label isEqualToString:self.laneLabel]) {
+            laneIdx = i;
+            break;
+          }
+        if (laneIdx == NSNotFound)
+          return;
+        KKLane *posLane = [lanes[laneIdx] copy];
+        NSArray<KKKeyPose *> *kps = posLane.keyposes;
+        if (kps.count == 0)
+          return;
+        NSInteger best = KKLaneNearestKeyposeIndex(posLane, self.dragHandleFrac);
+        NSMutableArray<KKKeyPose *> *out = [NSMutableArray arrayWithArray:kps];
+        KKKeyPose *nk =
+            (best >= 0 && best < (NSInteger)out.count) ? [out[best] copy] : nil;
+        // A malformed / mid-transition keypose (short values) must not reach the
+        // mutation below - bail cleanly (the wrapper's @finally would close the
+        // scope even on a throw, but a clean bail keeps the write out entirely).
+        if (!nk || nk.values.count < 2)
+          return;
+        double ax = nk.values[0].doubleValue, ay = nk.values[1].doubleValue;
+        double dx = curX - ax, dy = curY - ay;
+        // Shift: axis-lock to the dominant axis (horizontal or vertical tangent).
+        if (modifiers & kFxModifierKey_SHIFT) {
+          if (fabs(dx) >= fabs(dy))
+            dy = 0.0;
+          else
+            dx = 0.0;
+        }
+        // Cmd: snap the handle's angle to 45-degree increments (length preserved).
+        if (modifiers & kFxModifierKey_COMMAND) {
+          double len = hypot(dx, dy);
+          if (len > 1e-9) {
+            double step = M_PI / 4.0;
+            double ang = round(atan2(dy, dx) / step) * step;
+            dx = cos(ang) * len;
+            dy = sin(ang) * len;
+          }
+        }
+        NSArray<NSNumber *> *off = @[ @(dx), @(dy) ];
+        NSArray<NSNumber *> *mirror = @[ @(-dx), @(-dy) ];
+        // Ctrl breaks the tangent into a cusp (in/out independent); otherwise the
+        // opposite side mirrors for a smooth curve. Ctrl is safe mid-drag - it only
+        // opens a context menu on a fresh Ctrl-click, not once a drag is under way.
+        BOOL cusp = (modifiers & kFxModifierKey_CONTROL) != 0;
+        nk.spatialSmooth = YES;
+        if (self.dragHandleIsOut) {
+          nk.outHandle = off;
+          if (!cusp)
+            nk.inHandle = mirror;
+        } else {
+          nk.inHandle = off;
+          if (!cusp)
+            nk.outHandle = mirror;
+        }
+        out[best] = nk;
+        posLane.keyposes = out;
+        lanes[laneIdx] = posLane;
+        tl.lanes = lanes;
+        if (self.onTimelinePersist)
+          self.onTimelinePersist(tl);
+        else
+          KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                                   kKKParamTimelineData);
+        wrote = YES;
+      });
+  if (wrote && forceUpdate)
     *forceUpdate = YES;
 }
 

@@ -25,6 +25,7 @@
 #ifndef __METAL_VERSION__
 
 #import <Foundation/Foundation.h>
+#import <ctype.h>
 
 #define KK_SHADER_MAX_OSC_BLOCKS 8
 #define KK_SHADER_MAX_OSC_LOCALS 12
@@ -67,6 +68,60 @@ typedef struct MirageOSCBlock {
   char localExprs[KK_SHADER_MAX_OSC_LOCALS][256];
   int localCount;
 } MirageOSCBlock;
+
+/// YES when `b` (nullable) declares the given primitive ("rotate", "position",
+/// "ring", "box", "point"). The block model is the RUNTIME authority for a
+/// uniform's OSC - consumers query the shader model's block for a uniform
+/// instead of re-reading the directive's raw `osc=` parse fields.
+static inline BOOL MirageOSCBlockPrimitiveIs(const MirageOSCBlock *b,
+                                             const char *primitive) {
+  return b != NULL && strcmp(b->primitive, primitive) == 0;
+}
+
+static inline BOOL MirageOSCBlockIsRotate(const MirageOSCBlock *b) {
+  return MirageOSCBlockPrimitiveIs(b, "rotate");
+}
+
+/// Ordered axis chars ('x'/'y'/'z') a rotate block drives, from its
+/// space-separated `axes` field, lowercased, in braced order. Empty = the Z
+/// default. Returns the count (1-3); `out` receives the chars.
+static inline int MirageOSCBlockAxes(const MirageOSCBlock *b, char out[3]) {
+  int n = 0;
+  for (const char *c = b->axes; *c && n < 3; c++) {
+    char lc = (char)tolower(*c);
+    if (lc == 'x' || lc == 'y' || lc == 'z')
+      out[n++] = lc;
+  }
+  if (n == 0)
+    out[n++] = 'z';
+  return n;
+}
+
+/// The GLSL swizzle mapping a rotate OSC's CANONICAL-order lane components
+/// (packed X<Y<Z into the pool vec4's .xyz) onto the shader vec's braced order
+/// (shader component N = the axis listed Nth). E.g. axes "y x" -> "yx",
+/// "z x y" -> "zxy", a single axis -> "x".
+static inline NSString *MirageOSCBlockRotateSwizzle(const MirageOSCBlock *b) {
+  char axes[3];
+  int n = MirageOSCBlockAxes(b, axes);
+  const char *canon = "xyz";
+  NSMutableString *sw = [NSMutableString string];
+  for (int i = 0; i < n; i++) {
+    char axis = axes[i];
+    int pos = 0; // count of present axes that sort before `axis` in X<Y<Z
+    for (int a = 0; a < 3; a++) {
+      if (canon[a] == axis)
+        break;
+      for (int k = 0; k < n; k++)
+        if (axes[k] == canon[a]) {
+          pos++;
+          break;
+        }
+    }
+    [sw appendFormat:@"%c", canon[pos]];
+  }
+  return sw.length ? sw : @"x";
+}
 
 static inline void MirageOSCSetField(char *dst, size_t cap, NSString *src) {
   strncpy(dst, src.UTF8String ?: "", cap - 1);

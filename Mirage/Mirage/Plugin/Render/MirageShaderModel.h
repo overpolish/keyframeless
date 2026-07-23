@@ -52,6 +52,12 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly) int oscBlockCount;
 - (const MirageOSCBlock *)oscBlocks;
 
+/// The unified OSC declaration bound to `uniformName` (sugar or authored), or
+/// NULL when the uniform declares none. THE runtime authority for a uniform's
+/// on-screen control - never re-read the directive's raw `osc=` parse fields
+/// outside the model/validation.
+- (const MirageOSCBlock *)oscBlockForUniform:(const char *)uniformName;
+
 /// Fill the colour pool (the transpiled block's std140 tail) from the model's
 /// `// #color` properties, reading lane values via `valuesForLabel` (label ->
 /// [r,g,b,a] or nil). Single props write one vec4; array props write N

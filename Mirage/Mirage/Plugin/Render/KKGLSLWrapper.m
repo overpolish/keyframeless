@@ -59,18 +59,19 @@ static int KKEmitColorProps(NSString *userSource, NSMutableString *body,
 // lane stores components in canonical X<Y<Z order; the braced axis order maps
 // onto the shader vec via a swizzle (uRot.x = first-listed axis). A
 // single-axis rotate reduces to `radians(-uRot_kk.x)`.
-static void KKEmitRotateDefine(const MirageScalarProp *p, NSString *nm,
+static void KKEmitRotateDefine(const MirageOSCBlock *blk, NSString *nm,
                                NSMutableString *defines) {
   [defines appendFormat:@"#define %@ (radians(-%@_kk.%@))\n", nm, nm,
-                        MirageRotateCanonicalSwizzle(p)];
+                        MirageOSCBlockRotateSwizzle(blk)];
 }
 
-static void KKEmitScalarDefine(const MirageScalarProp *p, NSString *nm,
+static void KKEmitScalarDefine(const MirageScalarProp *p,
+                               const MirageOSCBlock *blk, NSString *nm,
                                NSMutableString *defines) {
   // The rotate-OSC form is per-kind below (never for int/choice/bool, which
   // historically outrank it) rather than one early check, so the kind switch
   // stays exhaustive for -Wswitch.
-  BOOL rotate = MirageScalarOSCIsRotate(p);
+  BOOL rotate = MirageOSCBlockIsRotate(blk);
   switch (p->kind) {
   case MirageScalarKindInt:
   case MirageScalarKindChoice:
@@ -83,7 +84,7 @@ static void KKEmitScalarDefine(const MirageScalarProp *p, NSString *nm,
     break;
   case MirageScalarKindAngle:
     if (rotate) {
-      KKEmitRotateDefine(p, nm, defines);
+      KKEmitRotateDefine(blk, nm, defines);
       break;
     }
     // Lane is degrees; the shader gets radians. Negated so a clockwise knob
@@ -94,7 +95,7 @@ static void KKEmitScalarDefine(const MirageScalarProp *p, NSString *nm,
     break;
   case MirageScalarKindMulti: {
     if (rotate) {
-      KKEmitRotateDefine(p, nm, defines);
+      KKEmitRotateDefine(blk, nm, defines);
       break;
     }
     // An N-component numeric field, delivered RAW (the shader owns the units):
@@ -108,7 +109,7 @@ static void KKEmitScalarDefine(const MirageScalarProp *p, NSString *nm,
   }
   case MirageScalarKindPoint:
     if (rotate) {
-      KKEmitRotateDefine(p, nm, defines);
+      KKEmitRotateDefine(blk, nm, defines);
       break;
     }
     // Delivered in PIXELS (fragCoord space), not normalized: scale by
@@ -123,7 +124,7 @@ static void KKEmitScalarDefine(const MirageScalarProp *p, NSString *nm,
   case MirageScalarKindProgress:
   case MirageScalarKindSeed:
     if (rotate) {
-      KKEmitRotateDefine(p, nm, defines);
+      KKEmitRotateDefine(blk, nm, defines);
       break;
     }
     [defines appendFormat:@"#define %@ (%@_kk.x)\n", nm, nm];
@@ -143,7 +144,9 @@ static int KKEmitScalarProps(NSString *userSource, NSMutableString *body,
   for (int i = 0; i < model.scalarCount; i++) {
     NSString *nm = @(scalars[i].name);
     [members appendFormat:@"  vec4 %@_kk;\n", nm];
-    KKEmitScalarDefine(&scalars[i], nm, defines);
+    KKEmitScalarDefine(&scalars[i],
+                       [model oscBlockForUniform:scalars[i].name], nm,
+                       defines);
     // Strip the standalone declaration regardless of its declared GLSL type:
     // the
     // `#define` above owns the real access, so an `#int` fed a `uniform float`

@@ -13,6 +13,7 @@
 #import <KeyframelessKit/KKHostInfo.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
 #import <KeyframelessKit/KKPluginInstanceState.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
@@ -342,40 +343,36 @@ const NSInteger KKOSCBackgroundPart = NSIntegerMax - 1;
     [hidden addObject:key];
   st.hiddenOSCElements = hidden;
 
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  UInt32 paramID = [self oscVisibilityParamID];
-  NSMutableDictionary *state = [st.lastUIState mutableCopy];
-  if (!state) {
-    NSString *existing = KKReadCustomParamString(getAPI, paramID);
-    state = [(existing.length
-                  ? [NSJSONSerialization
-                        JSONObjectWithData:
-                            [existing dataUsingEncoding:NSUTF8StringEncoding]
-                                   options:0
-                                     error:nil]
-                  : nil) ?: @{} mutableCopy];
-  }
-  NSMutableDictionary<NSString *, NSNumber *> *els =
-      [NSMutableDictionary dictionary];
-  for (NSString *k in [self oscElementKeys])
-    els[k] = @(![hidden containsObject:k]);
-  state[@"oscElements"] = els;
-  st.lastUIState = state;
-  NSString *json = [[NSString alloc]
-      initWithData:[NSJSONSerialization dataWithJSONObject:state
-                                                   options:0
-                                                     error:nil]
-          encoding:NSUTF8StringEncoding];
-  KKWriteCustomParamString(setAPI, json, paramID);
-  [actionAPI endAction:self];
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        UInt32 paramID = [self oscVisibilityParamID];
+        NSMutableDictionary *state = [st.lastUIState mutableCopy];
+        if (!state) {
+          NSString *existing = KKReadCustomParamString(getAPI, paramID);
+          state = [(existing.length
+                        ? [NSJSONSerialization
+                              JSONObjectWithData:
+                                  [existing
+                                      dataUsingEncoding:NSUTF8StringEncoding]
+                                         options:0
+                                           error:nil]
+                        : nil) ?: @{} mutableCopy];
+        }
+        NSMutableDictionary<NSString *, NSNumber *> *els =
+            [NSMutableDictionary dictionary];
+        for (NSString *k in [self oscElementKeys])
+          els[k] = @(![hidden containsObject:k]);
+        state[@"oscElements"] = els;
+        st.lastUIState = state;
+        NSString *json = [[NSString alloc]
+            initWithData:[NSJSONSerialization dataWithJSONObject:state
+                                                         options:0
+                                                           error:nil]
+                encoding:NSUTF8StringEncoding];
+        KKWriteCustomParamString(setAPI, json, paramID);
+      });
 }
 
 @end

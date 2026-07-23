@@ -17,6 +17,7 @@
 @class KKHelpSection;
 @class KKHelpShortcut;
 @class KKHelpGuide;
+@class KKDragUndoSession;
 @class KKRenderCache;
 @class KKTimelineInspectorView;
 @class NSBezierPath;
@@ -59,10 +60,11 @@ NS_ASSUME_NONNULL_BEGIN
                                   id<FxParameterSettingAPI_v5> setAPI,
                                   CMTime actionTime))block;
 
-/// Set while a continuous mini-viewer / inspector handle drag is coalescing its
-/// per-tick timeline writes into one undo group. Toggled by the standard
-/// inspector onDragBegin/onDragEnd callbacks (see KKPlugin+InspectorCallbacks).
-@property(nonatomic) BOOL miniDragUndoStarted;
+/// The mini-viewer drag's undo session (group-only mode: begin/end each in
+/// their own brief scope, per-tick writes self-scope). Owned here so the
+/// standard inspector callbacks and any teardown path share one lifecycle;
+/// the session's dealloc safety net closes an interrupted drag's group.
+@property(nonatomic, strong, nullable) KKDragUndoSession *miniDragSession;
 
 /// The mini-viewer source feed published from renderDestinationImage: and the
 /// descriptor path it was created with. Managed by the shared feed-publish
@@ -477,6 +479,30 @@ extern BOOL KKBeginUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
                              NSString *_Nonnull name);
 extern void KKEndUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
                            BOOL started);
+
+/// One undoable mutation: opens an FxCustomParameterActionAPI scope for
+/// `principal` (the plugin instance, or an OSC principal with its own
+/// apiManager), begins a host undo group named `name` (nil = scope-only, for
+/// the per-tick OSC drag model that relies on FCP's implicit same-target
+/// coalescing), resolves the get/set APIs, and runs `block`. Scope and group
+/// close in @finally, so nothing `block` does can leak an open scope (which
+/// wedges FCP's undo - its next beginWithUndoState aborts). Returns NO when
+/// the action API is unavailable (block not run). Free function so
+/// non-plugin classes (inspector views, layer lists) can use it too.
+/// Bracket a MULTI-WRITE mutation in one host undo group where each write in
+/// `block` manages its OWN action scope. The group begin/end each get a brief
+/// scope; holding one scope across the block would nest the writes' scopes
+/// (FFUIAction assert). Complement to KKPerformUndoable below.
+extern void KKWithHostUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
+                                id _Nonnull principal, NSString *_Nonnull name,
+                                void (^_Nonnull block)(void));
+
+extern BOOL KKPerformUndoable(
+    id<PROAPIAccessing> _Nullable apiManager, id _Nonnull principal,
+    NSString *_Nullable name,
+    void (^_Nonnull block)(id<FxParameterRetrievalAPI_v6> _Nullable getAPI,
+                           id<FxParameterSettingAPI_v5> _Nullable setAPI,
+                           CMTime actionTime));
 
 /// The `sourceImages` tile belonging to an image-well parameter, or nil when
 /// the well is empty or was never requested.

@@ -5,6 +5,7 @@
 
 #pragma once
 
+#import "KKDragUndoSession.h"
 #import "KKPlugin.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <objc/runtime.h>
@@ -49,7 +50,7 @@ extern double KKCurrentEffectDurationSeconds(id<PROAPIAccessing> apiManager);
 /// gradient stop / midpoint drags in the color popover. Set YES while
 /// the drag is in flight; the per-tick `onStopsChanged` callback skips
 /// its own action scope + undo group when this is YES.
-@property(nonatomic) BOOL gradientDragUndoActive;
+@property(nonatomic, strong, nullable) KKDragUndoSession *gradientDragSession;
 
 @end
 
@@ -65,14 +66,6 @@ extern double KKCurrentEffectDurationSeconds(id<PROAPIAccessing> apiManager);
 /// dispatch_async otherwise. Use for view-state pushes triggered from
 /// background callbacks (parameterChanged: from non-main, etc).
 extern void KKRunOnMain(dispatch_block_t block);
-
-/// Wraps `block` in an FxUndoAPI start/endUndoGroup pair so every host
-/// param write inside collapses into a single host undo entry. No-op
-/// fallback if the host (or this plugin's apiManager) doesn't implement
-/// FxUndoAPI - block runs unwrapped. `name` should be a short, localized
-/// human-readable label ("Add Segment", "Move Segment").
-extern void KKWithUndoGroup(id<PROAPIAccessing> _Nullable apiManager,
-                            NSString *name, dispatch_block_t block);
 
 /// Stack-style undo grouping. Pair every `KKBeginUndoGroup` with exactly
 /// one `KKEndUndoGroup` along every code path (including early returns).

@@ -260,15 +260,12 @@
 // triggers none. This nonce write is the same mechanism the boundary-preview
 // path uses; it doesn't touch any persisted UI state.
 - (void)kkNudgeRenderWithParamID:(UInt32)nudgeParamID {
-  id<FxCustomParameterActionAPI_v4> act =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!act)
-    return;
-  [act startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  KKWriteCustomParamString(setAPI, [[NSUUID UUID] UUIDString], nudgeParamID);
-  [act endAction:self];
+  KKPerformUndoable(self.apiManager, self, nil,
+                    ^(id<FxParameterRetrievalAPI_v6> getAPI,
+                      id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+                      KKWriteCustomParamString(
+                          setAPI, [[NSUUID UUID] UUIDString], nudgeParamID);
+                    });
 }
 
 @end

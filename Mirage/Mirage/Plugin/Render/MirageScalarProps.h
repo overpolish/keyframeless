@@ -59,7 +59,11 @@ typedef struct MirageScalarProp {
     char options[256];   // choice: comma-separated pill labels
     int choiceCount;     // number of options
     int cdefault;        // choice default index
-    // On-screen control opt-in (`osc` attribute). oscKind: "" = none, "point"
+    // On-screen control opt-in (`osc` attribute) - PARSE-SIDE ONLY. These raw
+    // fields feed the model's block synthesis (every opt-in becomes a standard
+    // `@osc` block) and directive validation; runtime consumers query
+    // -[MirageShaderModel oscBlockForUniform:] instead of reading them.
+    // oscKind: "" = none, "point"
     // (position handle, #point), "ring"/"box" (radial-extent OSC editing the
     // normalized value as an ellipse ring or a rectangle box,
     // #float/#percent/#int/#multi), "scale", "rotate" (#angle / vec2|vec3 #multi

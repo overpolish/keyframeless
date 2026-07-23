@@ -86,76 +86,68 @@ static NSArray<NSNumber *> *MirageBoundAudioKeys(NSString *source,
   if (!timeline) {
     return;
   }
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI) {
-    return;
-  }
-  [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
 
-  NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
-  NSArray<NSNumber *> *bound = MirageBoundAudioKeys(source, timeline);
-  NSDictionary<NSString *, id> *existing = MirageReadTicketMap(getAPI);
-  // Cached even when there's nothing to sync: the lane builder reads this from
-  // callbacks where the param APIs don't resolve, and it needs the tickets a
-  // saved project arrived with, not just ones minted this session.
-  self.audioTickets = existing;
-  if (bound.count == 0) {
-    [actionAPI endAction:self];
-    return;
-  }
+        NSString *source = [MiragePlugin shaderSourceFromTimeline:timeline];
+        NSArray<NSNumber *> *bound = MirageBoundAudioKeys(source, timeline);
+        NSDictionary<NSString *, id> *existing = MirageReadTicketMap(getAPI);
+        // Cached even when there's nothing to sync: the lane builder reads this from
+        // callbacks where the param APIs don't resolve, and it needs the tickets a
+        // saved project arrived with, not just ones minted this session.
+        self.audioTickets = existing;
+        if (bound.count == 0)
+          return;
 
-  NSArray<NSDictionary<NSString *, id> *> *published =
-      KKSpectrogramPublishedSources();
-  NSMutableDictionary<NSString *, id> *merged = [existing mutableCopy];
+        NSArray<NSDictionary<NSString *, id> *> *published =
+            KKSpectrogramPublishedSources();
+        NSMutableDictionary<NSString *, id> *merged = [existing mutableCopy];
 
-  for (NSNumber *key in bound) {
-    NSDictionary<NSString *, id> *entry =
-        KKSonarSourceForKey(key.doubleValue, published);
-    if (!entry) {
-      // Bound to something not published here. This is the case the whole
-      // feature exists for, and the ticket we already hold is the only record
-      // of what it was - so leave it exactly where it is, and ask Sonar for it.
-      // Nothing is awaited: the note simply waits in the container until the
-      // project is next dropped on Sonar, which may be never.
-      NSDictionary<NSString *, id> *ticket =
-          merged[MirageTicketMapKey(key.doubleValue)];
-      if (ticket) {
-        KKSonarWriteRepublishRequest(ticket);
-      }
-      continue;
-    }
-    NSDictionary<NSString *, id> *ticket = KKSonarTicketForSource(entry);
-    if (ticket) {
-      // Refreshed rather than only added: a rename in Sonar keeps the content
-      // hash, so the key survives while the name it should show changes.
-      merged[MirageTicketMapKey(key.doubleValue)] = ticket;
-      // It's here now, so nothing is owed. Clears a request this instance (or
-      // another clip bound to the same source) raised before the republish.
-      KKSonarClearRepublishRequest(key.doubleValue);
-    }
-  }
+        for (NSNumber *key in bound) {
+          NSDictionary<NSString *, id> *entry =
+              KKSonarSourceForKey(key.doubleValue, published);
+          if (!entry) {
+            // Bound to something not published here. This is the case the whole
+            // feature exists for, and the ticket we already hold is the only record
+            // of what it was - so leave it exactly where it is, and ask Sonar for it.
+            // Nothing is awaited: the note simply waits in the container until the
+            // project is next dropped on Sonar, which may be never.
+            NSDictionary<NSString *, id> *ticket =
+                merged[MirageTicketMapKey(key.doubleValue)];
+            if (ticket) {
+              KKSonarWriteRepublishRequest(ticket);
+            }
+            continue;
+          }
+          NSDictionary<NSString *, id> *ticket = KKSonarTicketForSource(entry);
+          if (ticket) {
+            // Refreshed rather than only added: a rename in Sonar keeps the content
+            // hash, so the key survives while the name it should show changes.
+            merged[MirageTicketMapKey(key.doubleValue)] = ticket;
+            // It's here now, so nothing is owed. Clears a request this instance (or
+            // another clip bound to the same source) raised before the republish.
+            KKSonarClearRepublishRequest(key.doubleValue);
+          }
+        }
 
-  // Never pruned. An entry costs a few dozen bytes and is only ever read by
-  // exact key, whereas dropping one loses the only description of a source
-  // that may not exist on this Mac to look up again.
-  if (![merged isEqualToDictionary:existing]) {
-    id<FxParameterSettingAPI_v5> setAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    NSData *data = [NSJSONSerialization dataWithJSONObject:merged
-                                                   options:0
-                                                     error:nil];
-    NSString *json = data ? [[NSString alloc] initWithData:data
-                                                  encoding:NSUTF8StringEncoding]
-                          : nil;
-    if (json.length) {
-      [setAPI setStringParameterValue:json toParameter:kParamAudioTickets];
-      self.audioTickets = merged;
-    }
-  }
-  [actionAPI endAction:self];
+        // Never pruned. An entry costs a few dozen bytes and is only ever read by
+        // exact key, whereas dropping one loses the only description of a source
+        // that may not exist on this Mac to look up again.
+        if (![merged isEqualToDictionary:existing]) {
+          NSData *data = [NSJSONSerialization dataWithJSONObject:merged
+                                                         options:0
+                                                           error:nil];
+          NSString *json = data ? [[NSString alloc] initWithData:data
+                                                        encoding:NSUTF8StringEncoding]
+                                : nil;
+          if (json.length) {
+            [setAPI setStringParameterValue:json toParameter:kParamAudioTickets];
+            self.audioTickets = merged;
+          }
+        }
+  });
 }
 
 @end

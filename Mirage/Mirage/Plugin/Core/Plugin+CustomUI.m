@@ -40,18 +40,17 @@
 // scope can't be opened.
 static BOOL MirageAIWriteTimelineJSON(MiragePlugin *plugin, NSString *json,
                                       NSString *scopeError) {
-  id<FxCustomParameterActionAPI_v4> act = [plugin.apiManager
-      apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!act) {
+  BOOL scoped = KKPerformUndoable(
+      plugin.apiManager, plugin, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        if (json.length)
+          KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
+      });
+  if (!scoped) {
     [KKAIDraft setError:scopeError];
     return NO;
   }
-  [act startAction:plugin];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [plugin.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (json.length)
-    KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
-  [act endAction:plugin];
   [KKAIDraft setAnswer:nil];
   [KKAIDraft setCompleted:YES]; // green done sparkle
   [KKAIDraft clearPrompt];
@@ -158,26 +157,26 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
     [KKAIDraft setError:@"AI returned an invalid timeline mutation."];
     return;
   }
-  id<FxCustomParameterActionAPI_v4> writeAct = [plugin.apiManager
-      apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!writeAct) {
+  BOOL scoped = KKPerformUndoable(
+      plugin.apiManager, plugin, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        KKWriteCustomParamString(setAPI, merged, kKKParamTimelineData);
+        KKTimeline *resultTimeline = [KKTimeline timelineFromJSON:merged];
+        double mergeFrameDur = KKProcessFrameDurationSeconds();
+        double aiEndFrac = (clipDurSec > 0.0 && mergeFrameDur > 0.0 &&
+                            mergeFrameDur < clipDurSec)
+                               ? (clipDurSec - mergeFrameDur) / clipDurSec
+                               : 1.0;
+        if (resultTimeline &&
+            !KKTimelineIsBasicCompatible(resultTimeline, aiEndFrac))
+          [plugin patchUIStateKey:@"activeTab" value:@(1) paramID:kParamUIState];
+      });
+  if (!scoped) {
     [KKAIDraft setError:@"Couldn't open the FCP action scope to apply the "
                         @"mutation."];
     return;
   }
-  [writeAct startAction:plugin];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [plugin.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  KKWriteCustomParamString(setAPI, merged, kKKParamTimelineData);
-  KKTimeline *resultTimeline = [KKTimeline timelineFromJSON:merged];
-  double mergeFrameDur = KKProcessFrameDurationSeconds();
-  double aiEndFrac =
-      (clipDurSec > 0.0 && mergeFrameDur > 0.0 && mergeFrameDur < clipDurSec)
-          ? (clipDurSec - mergeFrameDur) / clipDurSec
-          : 1.0;
-  if (resultTimeline && !KKTimelineIsBasicCompatible(resultTimeline, aiEndFrac))
-    [plugin patchUIStateKey:@"activeTab" value:@(1) paramID:kParamUIState];
-  [writeAct endAction:plugin];
   [KKAIDraft setAnswer:nil];
   [KKAIDraft setCompleted:YES]; // green done sparkle
   [KKAIDraft clearPrompt];
@@ -563,62 +562,65 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
   [KKAIDraft setError:nil];
 
   // Read current timeline + clip duration inside an action scope.
-  id<FxCustomParameterActionAPI_v4> readAct =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!readAct) {
+  __block NSString *currentJSON = nil;
+  __block NSString *availableSources = nil;
+  __block NSString *timelineBlob = nil;
+  __block NSString *aiShaderSrc = @"";
+  __block NSString *currentMode = @"Basic";
+  __block double clipDurSec = 5.0;
+  BOOL scoped = KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        currentJSON = KKTimelineAICurrentJSON(getAPI, [MiragePlugin availableLanes]);
+        // Other clips this one can reference in a cross-clip ${Clip.Param} expression
+        // (excluding itself), for the AI's expression route.
+        NSString *selfLinkUUID = KKInstanceUUIDForAPI(self.apiManager);
+        availableSources = KKLinkAvailableSourcesJSON(
+            selfLinkUUID, KKLinkDocumentIDForAPI(self.apiManager));
+        // Raw timeline blob (carries the "Mirage" code lane the AI may rewrite) and
+        // the current shader source. Pass "" when it's the untouched default so a
+        // from-scratch ask starts clean; a customised shader is passed so the AI
+        // edits it in place ("add a slider", "make the ripples bigger").
+        timelineBlob = KKReadCustomParamString(getAPI, kKKParamTimelineData);
+        NSString *rawShaderSrc = @"";
+        KKTimeline *readTimeline =
+            timelineBlob.length ? [KKTimeline timelineFromJSON:timelineBlob] : nil;
+        for (KKLane *l in readTimeline.lanes)
+          if ([l.label isEqualToString:kMirageCodeLaneLabel] && l.codeString.length) {
+            rawShaderSrc = l.codeString;
+            break;
+          }
+        aiShaderSrc =
+            [rawShaderSrc isEqualToString:MirageCustomDefaultShaderSource()]
+                ? @""
+                : rawShaderSrc;
+        NSString *uiJson = KKReadCustomParamString(getAPI, kParamUIState);
+        NSDictionary *uiState =
+            (uiJson.length
+                 ? [NSJSONSerialization
+                       JSONObjectWithData:[uiJson
+                                              dataUsingEncoding:NSUTF8StringEncoding]
+                                  options:0
+                                    error:nil]
+                 : nil)
+                ?: @{};
+        NSInteger activeTab = [uiState[@"activeTab"] integerValue];
+        currentMode = (activeTab == 1) ? @"Advanced" : @"Basic";
+        id<FxTimingAPI_v4> timingAPI =
+            [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+        CMTime clipDur = kCMTimeZero;
+        if (timingAPI)
+          [timingAPI durationTimeForEffect:&clipDur];
+        clipDurSec = CMTimeGetSeconds(clipDur);
+        if (clipDurSec <= 0 || isnan(clipDurSec))
+          clipDurSec = 5.0;
+  });
+  if (!scoped) {
     [KKAIDraft setRouting:NO];
     [KKAIDraft setError:@"Couldn't open the FCP action scope."];
     return;
   }
-  [readAct startAction:self];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  NSString *currentJSON =
-      KKTimelineAICurrentJSON(getAPI, [MiragePlugin availableLanes]);
-  // Other clips this one can reference in a cross-clip ${Clip.Param} expression
-  // (excluding itself), for the AI's expression route.
-  NSString *selfLinkUUID = KKInstanceUUIDForAPI(self.apiManager);
-  NSString *availableSources = KKLinkAvailableSourcesJSON(
-      selfLinkUUID, KKLinkDocumentIDForAPI(self.apiManager));
-  // Raw timeline blob (carries the "Mirage" code lane the AI may rewrite) and
-  // the current shader source. Pass "" when it's the untouched default so a
-  // from-scratch ask starts clean; a customised shader is passed so the AI
-  // edits it in place ("add a slider", "make the ripples bigger").
-  NSString *timelineBlob =
-      KKReadCustomParamString(getAPI, kKKParamTimelineData);
-  NSString *rawShaderSrc = @"";
-  KKTimeline *readTimeline =
-      timelineBlob.length ? [KKTimeline timelineFromJSON:timelineBlob] : nil;
-  for (KKLane *l in readTimeline.lanes)
-    if ([l.label isEqualToString:kMirageCodeLaneLabel] && l.codeString.length) {
-      rawShaderSrc = l.codeString;
-      break;
-    }
-  NSString *aiShaderSrc =
-      [rawShaderSrc isEqualToString:MirageCustomDefaultShaderSource()]
-          ? @""
-          : rawShaderSrc;
-  NSString *uiJson = KKReadCustomParamString(getAPI, kParamUIState);
-  NSDictionary *uiState =
-      (uiJson.length
-           ? [NSJSONSerialization
-                 JSONObjectWithData:[uiJson
-                                        dataUsingEncoding:NSUTF8StringEncoding]
-                            options:0
-                              error:nil]
-           : nil)
-          ?: @{};
-  NSInteger activeTab = [uiState[@"activeTab"] integerValue];
-  NSString *currentMode = (activeTab == 1) ? @"Advanced" : @"Basic";
-  id<FxTimingAPI_v4> timingAPI =
-      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  CMTime clipDur = kCMTimeZero;
-  if (timingAPI)
-    [timingAPI durationTimeForEffect:&clipDur];
-  double clipDurSec = CMTimeGetSeconds(clipDur);
-  if (clipDurSec <= 0 || isnan(clipDurSec))
-    clipDurSec = 5.0;
-  [readAct endAction:self];
 
   NSString *schema = MirageAILaneSchemaText();
 

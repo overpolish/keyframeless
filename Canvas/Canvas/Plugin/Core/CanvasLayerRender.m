@@ -19,6 +19,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
 
 // Cached tessellated stroke geometry for one layer: the vertex strip (+ the
 // dash arc-length buffer + endpoint markers), all on the GPU. Keyed by the
@@ -58,16 +59,16 @@ NSMutableArray<KKBezierPath *> *CanvasReadLayerPaths(id<PROAPIAccessing> api,
                                                      id target) {
   if (!api)
     return [NSMutableArray array];
+  __block NSString *b64 = nil;
   id<FxCustomParameterActionAPI_v4> action =
       [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!action)
     return [NSMutableArray array];
-  id token = target ?: (id)action;
-  [action startAction:token];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  NSString *b64 = KKReadCustomParamString(getAPI, kParamLayerData);
-  [action endAction:token];
+  KKPerformUndoable(api, target ?: (id)action, nil,
+                    ^(id<FxParameterRetrievalAPI_v6> getAPI,
+                      id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+                      b64 = KKReadCustomParamString(getAPI, kParamLayerData);
+                    });
   if (b64.length == 0)
     return [NSMutableArray array];
   NSData *blob = [[NSData alloc] initWithBase64EncodedString:b64 options:0];

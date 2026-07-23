@@ -47,13 +47,13 @@
                   atTime:(CMTime)time
                    error:(NSError **)error {
   if (parameterID == kParamUIState) {
-    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actionAPI startAction:self];
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    NSString *json = KKReadCustomParamString(getAPI, kParamUIState);
-    [actionAPI endAction:self];
+    __block NSString *json = nil;
+    KKPerformUndoable(self.apiManager, self, nil,
+                      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+                        id<FxParameterSettingAPI_v5> setAPI,
+                        CMTime actionTime) {
+                        json = KKReadCustomParamString(getAPI, kParamUIState);
+                      });
     // Keep the viewer OSC's UIState snapshot fresh after every write (toggle,
     // selection, OSC visibility, undo/redo).
     CanvasSetUIStateSnapshot(json);

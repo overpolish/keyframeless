@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
 #import "CanvasLayerListController_Private.h"
 #import "CanvasLayerListView.h"
 #import "CanvasLayerRender.h"
@@ -132,46 +133,40 @@ static const CGFloat kSlideDistance = 12.0;
   id<PROAPIAccessing> api = _apiManager;
   if (!api)
     return;
-  id<FxCustomParameterActionAPI_v4> action =
-      [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!action)
-    return;
-  id target = self.paramActionTarget ?: self;
-  [action startAction:target];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  NSData *blob = [KKBezierPath blobFromPaths:paths];
-  KKWriteCustomParamString(setAPI, [blob base64EncodedStringWithOptions:0],
-                           kParamLayerData);
-  // Set the selection in the SAME action so a blob+selection change undoes as
-  // one step. Read -> patch -> write kParamUIState (mirrors KKPlugin
-  // -patchUIStateKeys, but inside this action scope rather than its own). nil
-  // ids = leave selection untouched (blob-only write).
-  if (ids) {
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    NSString *existing = KKReadCustomParamString(getAPI, kParamUIState);
-    NSMutableDictionary *state =
-        (existing.length
-             ? [[NSJSONSerialization
-                   JSONObjectWithData:
-                       [existing dataUsingEncoding:NSUTF8StringEncoding]
-                              options:0
-                                error:nil] mutableCopy]
-             : nil)
-            ?: [NSMutableDictionary dictionary];
-    state[@"selectedLayerID"] = ids.firstObject ?: @"";
-    state[@"selectedLayerIDs"] = ids;
-    NSString *json = [[NSString alloc]
-        initWithData:[NSJSONSerialization dataWithJSONObject:state
-                                                     options:0
-                                                       error:nil]
-            encoding:NSUTF8StringEncoding];
-    KKWriteCustomParamString(setAPI, json, kParamUIState);
-  }
-  [action endAction:target];
+  KKPerformUndoable(
+      api, self.paramActionTarget ?: self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        NSData *blob = [KKBezierPath blobFromPaths:paths];
+        KKWriteCustomParamString(setAPI, [blob base64EncodedStringWithOptions:0],
+                                 kParamLayerData);
+        // Set the selection in the SAME action so a blob+selection change undoes as
+        // one step. Read -> patch -> write kParamUIState (mirrors KKPlugin
+        // -patchUIStateKeys, but inside this action scope rather than its own). nil
+        // ids = leave selection untouched (blob-only write).
+        if (ids) {
+          NSString *existing = KKReadCustomParamString(getAPI, kParamUIState);
+          NSMutableDictionary *state =
+              (existing.length
+                   ? [[NSJSONSerialization
+                         JSONObjectWithData:
+                             [existing dataUsingEncoding:NSUTF8StringEncoding]
+                                    options:0
+                                      error:nil] mutableCopy]
+                   : nil)
+                  ?: [NSMutableDictionary dictionary];
+          state[@"selectedLayerID"] = ids.firstObject ?: @"";
+          state[@"selectedLayerIDs"] = ids;
+          NSString *json = [[NSString alloc]
+              initWithData:[NSJSONSerialization dataWithJSONObject:state
+                                                           options:0
+                                                             error:nil]
+                  encoding:NSUTF8StringEncoding];
+          KKWriteCustomParamString(setAPI, json, kParamUIState);
+        }
+  });
   // Rebuild the open panel from the just-written param (no-op when closed).
-  [_listView reloadFromParam];
+  [self->_listView reloadFromParam];
 }
 
 - (void)dealloc {

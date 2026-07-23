@@ -257,7 +257,7 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
       return;
     KKPluginInstanceState *s = KKInstanceStateForAPI(strongSelf.apiManager);
     s.gradientJSONSnapshot = json;
-    BOOL inDrag = strongSelf.gradientDragUndoActive;
+    BOOL inDrag = strongSelf.gradientDragSession.active;
     id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
         apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
     if (!inDrag)
@@ -275,25 +275,20 @@ static NSArray<NSNumber *> *_colorModes(KKPlugin *self) {
 
   control.onDragBegin = ^{
     __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf || strongSelf.gradientDragUndoActive)
+    if (!strongSelf || strongSelf.gradientDragSession.active)
       return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (!actAPI)
-      return;
-    [actAPI startAction:strongSelf];
-    KKBeginUndoGroup(strongSelf.apiManager, @"Edit Gradient");
-    strongSelf.gradientDragUndoActive = YES;
+    strongSelf.gradientDragSession =
+        [KKDragUndoSession beginWithAPIManager:strongSelf.apiManager
+                                     principal:strongSelf
+                                          name:@"Edit Gradient"
+                                          mode:KKDragUndoSessionModeHoldScope];
   };
   control.onDragEnd = ^{
     __strong typeof(weakSelf) strongSelf = weakSelf;
-    if (!strongSelf || !strongSelf.gradientDragUndoActive)
+    if (!strongSelf)
       return;
-    KKEndUndoGroup(strongSelf.apiManager, YES);
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI endAction:strongSelf];
-    strongSelf.gradientDragUndoActive = NO;
+    [strongSelf.gradientDragSession finish];
+    strongSelf.gradientDragSession = nil;
   };
 
   return control;

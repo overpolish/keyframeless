@@ -658,15 +658,13 @@
 // scope opened with the plugin (paramActionTarget), like the kit does.
 - (void)_performHostCommand:(FxCommand)command {
   id<PROAPIAccessing> api = self.apiManager;
-  id<FxCustomParameterActionAPI_v4> act =
-      [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!act)
-    return;
-  id target = self.paramActionTarget ?: self;
-  [act startAction:target];
-  id<FxCommandAPI_v2> cmd = [api apiForProtocol:@protocol(FxCommandAPI_v2)];
-  [cmd performCommand:command error:nil];
-  [act endAction:target];
+  KKPerformUndoable(api, self.paramActionTarget ?: self, nil,
+                    ^(id<FxParameterRetrievalAPI_v6> getAPI,
+                      id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+                      id<FxCommandAPI_v2> cmd =
+                          [api apiForProtocol:@protocol(FxCommandAPI_v2)];
+                      [cmd performCommand:command error:nil];
+                    });
 }
 // Wrap a multi-write mutation (a _modifyPaths blob write plus the follow-up
 // _notifyPrimaryLayerSelected selection write) in ONE host undo group, so a
@@ -674,22 +672,8 @@
 // separate undo steps (cmd-Z first moves the selection, then a second cmd-Z
 // undoes the structural change). Matches the kit's detached-window undo path.
 - (void)_runInUndoGroup:(NSString *)name block:(void (^)(void))block {
-  id<PROAPIAccessing> api = self.apiManager;
-  id<FxCustomParameterActionAPI_v4> act =
-      api ? [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)] : nil;
-  id undoTarget = self.paramActionTarget ?: self;
-  BOOL undoGroup = NO;
-  if (act) {
-    [act startAction:undoTarget];
-    undoGroup = KKBeginUndoGroup(api, name);
-    [act endAction:undoTarget];
-  }
-  block();
-  if (act) {
-    [act startAction:undoTarget];
-    KKEndUndoGroup(api, undoGroup);
-    [act endAction:undoTarget];
-  }
+  KKWithHostUndoGroup(self.apiManager, self.paramActionTarget ?: self, name,
+                      block);
 }
 
 - (void)_deleteSelectedRows {

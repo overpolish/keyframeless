@@ -159,7 +159,8 @@ static inline NSColor *MirageRotationAxisColor(char axis) {
 }
 
 static inline void MirageConfigureRotateLane(KKLane *lane,
-                                             const MirageScalarProp *p) {
+                                             const MirageScalarProp *p,
+                                             const MirageOSCBlock *blk) {
   // A rotation OSC lane: one euler-angle (degrees) component per active
   // axis, in CANONICAL X<Y<Z order (KKRotationOSC's contract - the gizmo
   // maps enabledAxes bits to components in that order). The braced order
@@ -183,9 +184,11 @@ static inline void MirageConfigureRotateLane(KKLane *lane,
     char axis = canon[a];
     // The braced-order slot this canonical axis occupies (its shader
     // component), or -1 if the axis isn't part of this control.
+    char axes[3];
+    int nAxes = MirageOSCBlockAxes(blk, axes);
     int slot = -1;
-    for (int k = 0; k < p->oscAxisCount; k++)
-      if (p->oscAxes[k] == axis) {
+    for (int k = 0; k < nAxes; k++)
+      if (axes[k] == axis) {
         slot = k;
         break;
       }
@@ -260,7 +263,8 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       // isn't expression-referenceable (a link expression would fight the
       // drawn path). A bare `#point` (no osc) or `osc=point` stays
       // expression-eligible.
-      lane.positionPathDriven = strcmp(p->oscKind, "position") == 0;
+      lane.positionPathDriven = MirageOSCBlockPrimitiveIs(
+          [model oscBlockForUniform:p->name], "position");
       // Allowed off-scene (negative / past full res), so no min/max - empty =
       // unconstrained.
       lane.componentMin = @[];
@@ -286,8 +290,9 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       break;
     }
     case MirageScalarKindAngle: {
-      if (MirageScalarOSCIsRotate(p)) {
-        MirageConfigureRotateLane(lane, p);
+      if (MirageOSCBlockIsRotate([model oscBlockForUniform:p->name])) {
+        MirageConfigureRotateLane(lane, p,
+                                  [model oscBlockForUniform:p->name]);
         break;
       }
 
@@ -302,8 +307,9 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       break;
     }
     case MirageScalarKindMulti: {
-      if (MirageScalarOSCIsRotate(p)) {
-        MirageConfigureRotateLane(lane, p);
+      if (MirageOSCBlockIsRotate([model oscBlockForUniform:p->name])) {
+        MirageConfigureRotateLane(lane, p,
+                                  [model oscBlockForUniform:p->name]);
         break;
       }
       // An N-component numeric field (vec2/vec3): one lane, `fields={}` names
@@ -389,8 +395,9 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
     case MirageScalarKindPercent:
     case MirageScalarKindProgress:
     case MirageScalarKindInt: {
-      if (MirageScalarOSCIsRotate(p)) {
-        MirageConfigureRotateLane(lane, p);
+      if (MirageOSCBlockIsRotate([model oscBlockForUniform:p->name])) {
+        MirageConfigureRotateLane(lane, p,
+                                  [model oscBlockForUniform:p->name]);
         break;
       }
       lane.animatable = YES;

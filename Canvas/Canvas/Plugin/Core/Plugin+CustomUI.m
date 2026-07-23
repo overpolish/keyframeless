@@ -515,37 +515,32 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
         s.guideSuppressMutate = NO;
         return;
       }
-      id<FxCustomParameterActionAPI_v4> act = [s.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      if (!act)
-        return;
-      [act startAction:s];
-      id<FxParameterRetrievalAPI_v6> get =
-          [s.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      id<FxParameterSettingAPI_v5> set =
-          [s.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      NSString *b64 = KKReadCustomParamString(get, kParamLayerData);
-      NSMutableArray<KKBezierPath *> *cur =
-          b64.length
-              ? [KKBezierPath pathsFromBlob:[[NSData alloc]
-                                                initWithBase64EncodedString:b64
-                                                                    options:0]]
-              : [NSMutableArray array];
-      CanvasApplyTimelineToPath(
-          updated,
-          CanvasSelectedLayerForPaths(
-              cur, ((CanvasInspectorView *)s.inspectorView).selectedLayerID));
-      NSData *blob = [KKBezierPath blobFromPaths:cur];
-      KKWriteCustomParamString(set, [blob base64EncodedStringWithOptions:0],
-                               kParamLayerData);
-      // Republish the process snapshot so the viewer OSC recomputes visibility
-      // on the drawOSC the param write forces - moving a lane into/out of
-      // Animated flips its OSC's keypose-gated visibility, but the OSC reads
-      // the snapshot (not the param), so without this it keeps the pre-toggle
-      // visibility until the next selection/edit republishes it.
-      KKTimeline *stamped = [s timelineStampedWithClipDuration:updated];
-      KKSetProcessTimelineSnapshot(stamped ?: updated);
-      [act endAction:s];
+      KKPerformUndoable(
+          s.apiManager, s, nil,
+          ^(id<FxParameterRetrievalAPI_v6> get,
+            id<FxParameterSettingAPI_v5> set, CMTime actionTime) {
+          NSString *b64 = KKReadCustomParamString(get, kParamLayerData);
+          NSMutableArray<KKBezierPath *> *cur =
+              b64.length
+                  ? [KKBezierPath pathsFromBlob:[[NSData alloc]
+                                                    initWithBase64EncodedString:b64
+                                                                        options:0]]
+                  : [NSMutableArray array];
+          CanvasApplyTimelineToPath(
+              updated,
+              CanvasSelectedLayerForPaths(
+                  cur, ((CanvasInspectorView *)s.inspectorView).selectedLayerID));
+          NSData *blob = [KKBezierPath blobFromPaths:cur];
+          KKWriteCustomParamString(set, [blob base64EncodedStringWithOptions:0],
+                                   kParamLayerData);
+          // Republish the process snapshot so the viewer OSC recomputes visibility
+          // on the drawOSC the param write forces - moving a lane into/out of
+          // Animated flips its OSC's keypose-gated visibility, but the OSC reads
+          // the snapshot (not the param), so without this it keeps the pre-toggle
+          // visibility until the next selection/edit republishes it.
+          KKTimeline *stamped = [s timelineStampedWithClipDuration:updated];
+          KKSetProcessTimelineSnapshot(stamped ?: updated);
+      });
       // After a guide's seed lands on the demo layer, refresh the Advanced
       // graph from the new blob: the seed flows through here into the SELECTED
       // layer's currentTimeline (which the Basic graph reads), but the Advanced
@@ -567,28 +562,23 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
       __strong CanvasPlugin *s = weakSelf;
       if (!s)
         return;
-      id<FxCustomParameterActionAPI_v4> act = [s.apiManager
-          apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-      if (!act)
-        return;
-      [act startAction:s];
-      id<FxParameterRetrievalAPI_v6> get =
-          [s.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-      id<FxParameterSettingAPI_v5> set =
-          [s.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-      NSString *b64 = KKReadCustomParamString(get, kParamLayerData);
-      NSMutableArray<KKBezierPath *> *cur =
-          b64.length
-              ? [KKBezierPath pathsFromBlob:[[NSData alloc]
-                                                initWithBase64EncodedString:b64
-                                                                    options:0]]
-              : [NSMutableArray array];
-      CanvasApplyMergedTimelineToPaths(merged, cur,
-                                       [CanvasPlugin availableLanes]);
-      NSData *blob = [KKBezierPath blobFromPaths:cur];
-      KKWriteCustomParamString(set, [blob base64EncodedStringWithOptions:0],
-                               kParamLayerData);
-      [act endAction:s];
+      KKPerformUndoable(
+          s.apiManager, s, nil,
+          ^(id<FxParameterRetrievalAPI_v6> get,
+            id<FxParameterSettingAPI_v5> set, CMTime actionTime) {
+          NSString *b64 = KKReadCustomParamString(get, kParamLayerData);
+          NSMutableArray<KKBezierPath *> *cur =
+              b64.length
+                  ? [KKBezierPath pathsFromBlob:[[NSData alloc]
+                                                    initWithBase64EncodedString:b64
+                                                                        options:0]]
+                  : [NSMutableArray array];
+          CanvasApplyMergedTimelineToPaths(merged, cur,
+                                           [CanvasPlugin availableLanes]);
+          NSData *blob = [KKBezierPath blobFromPaths:cur];
+          KKWriteCustomParamString(set, [blob base64EncodedStringWithOptions:0],
+                                   kParamLayerData);
+      });
     };
 
     // Let the intro guide's closing step spotlight this effect's Help button
@@ -859,20 +849,23 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
     KKLogWarn(@"Canvas guide: can't stage demo scene (view/action API nil)");
     return;
   }
-  [act startAction:self];
-  id<FxParameterRetrievalAPI_v6> get =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> set =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  // Save the whole layer blob + the persisted selection so we can restore them.
-  [self _guideSaveSceneAndSelectionWithGet:get];
-  // Replace the scene with just the demo shape (a clean stage, like other
-  // plugins seeding the clip).
+  // The demo shape is needed after the scope too (its layerID keys the
+  // per-layer OSC seed + selection below).
   KKBezierPath *demo = _CanvasGuideDemoShape();
-  NSData *blob = [KKBezierPath blobFromPaths:@[ demo ]];
-  NSString *demoB64 = [blob base64EncodedStringWithOptions:0];
-  KKWriteCustomParamString(set, demoB64, kParamLayerData);
-  [act endAction:self];
+  __block NSString *demoB64 = nil;
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> get, id<FxParameterSettingAPI_v5> set,
+        CMTime actionTime) {
+        // Save the whole layer blob + the persisted selection so we can
+        // restore them.
+        [self _guideSaveSceneAndSelectionWithGet:get];
+        // Replace the scene with just the demo shape (a clean stage, like
+        // other plugins seeding the clip).
+        NSData *blob = [KKBezierPath blobFromPaths:@[ demo ]];
+        demoB64 = [blob base64EncodedStringWithOptions:0];
+        KKWriteCustomParamString(set, demoB64, kParamLayerData);
+      });
   self.guideSceneActive = YES;
   self.guideNeedsGraphRefresh = YES;
   // Seed the demo layer's PER-LAYER OSC visibility to Position-only. Canvas
@@ -941,14 +934,13 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
     KKLogWarn(@"Canvas guide: can't stage empty scene (view/action API nil)");
     return;
   }
-  [act startAction:self];
-  id<FxParameterRetrievalAPI_v6> get =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> set =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  [self _guideSaveSceneAndSelectionWithGet:get];
-  KKWriteCustomParamString(set, @"", kParamLayerData);
-  [act endAction:self];
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> get, id<FxParameterSettingAPI_v5> set,
+        CMTime actionTime) {
+        [self _guideSaveSceneAndSelectionWithGet:get];
+        KKWriteCustomParamString(set, @"", kParamLayerData);
+      });
   self.guideSceneActive = YES;
   self.guideNeedsGraphRefresh = YES;
   CanvasSetLayerBlobSnapshot(nil);
@@ -970,20 +962,21 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
       [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   if (!act)
     return;
-  [act startAction:self];
-  id<FxParameterRetrievalAPI_v6> get =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  NSString *uiStr = KKReadCustomParamString(get, kParamUIState);
-  NSInteger tool = CanvasToolbarToolCursor;
-  if (uiStr.length) {
-    NSDictionary *ui = [NSJSONSerialization
-        JSONObjectWithData:[uiStr dataUsingEncoding:NSUTF8StringEncoding]
-                   options:0
-                     error:nil];
-    if ([ui isKindOfClass:[NSDictionary class]] && ui[@"tool"])
-      tool = [ui[@"tool"] integerValue];
-  }
-  [act endAction:self];
+  __block NSInteger tool = CanvasToolbarToolCursor;
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> get, id<FxParameterSettingAPI_v5> set,
+        CMTime actionTime) {
+        NSString *uiStr = KKReadCustomParamString(get, kParamUIState);
+        if (uiStr.length) {
+          NSDictionary *ui = [NSJSONSerialization
+              JSONObjectWithData:[uiStr dataUsingEncoding:NSUTF8StringEncoding]
+                         options:0
+                           error:nil];
+          if ([ui isKindOfClass:[NSDictionary class]] && ui[@"tool"])
+            tool = [ui[@"tool"] integerValue];
+        }
+      });
   self.guideSavedTool = tool;
   // Force Cursor (patchUIStateKey opens its own action scope + merges the key).
   [self patchUIStateKey:@"tool"
@@ -1008,11 +1001,12 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
   // the stale pre-guide timeline to the restored selection).
   self.guideSuppressMutate = YES;
   NSString *savedB64 = self.guideSavedLayerB64 ?: @"";
-  [act startAction:self];
-  id<FxParameterSettingAPI_v5> set =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  KKWriteCustomParamString(set, savedB64, kParamLayerData);
-  [act endAction:self];
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> get, id<FxParameterSettingAPI_v5> set,
+        CMTime actionTime) {
+        KKWriteCustomParamString(set, savedB64, kParamLayerData);
+      });
   CanvasSetLayerBlobSnapshot(savedB64.length ? savedB64 : nil);
   [view reloadLayerList];
   [view restoreSelectedLayerIDs:(self.guideSavedSelIDs ?: @[])
@@ -1308,41 +1302,45 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
   [KKAIDraft setRouting:YES];
   [KKAIDraft setError:nil];
 
-  id<FxCustomParameterActionAPI_v4> readAct =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!readAct) {
+  NSArray<KKLane *> *templates = [CanvasPlugin availableLanes];
+  __block NSArray<KKBezierPath *> *paths = @[];
+  __block NSString *currentJSON = nil;
+  __block double clipDurSec = 5.0;
+  __block NSString *selectedLayerID = nil;
+  BOOL scoped = KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        NSString *b64 = KKReadCustomParamString(getAPI, kParamLayerData);
+        paths = b64.length
+                    ? [KKBezierPath
+                          pathsFromBlob:[[NSData alloc]
+                                            initWithBase64EncodedString:b64
+                                                                options:0]]
+                    : @[];
+        // The all-layers AI timeline: every layer's transform lanes (seeded)
+        // plus any lane it already animates, each label tagged
+        // "<property>\x1f<layerID>" so a mutation can target a specific layer
+        // and the result feeds straight back through
+        // CanvasApplyMergedTimelineToPaths.
+        currentJSON =
+            [KKTimeline jsonFromTimeline:CanvasAITimeline(paths, templates)];
+        id<FxTimingAPI_v4> timingAPI =
+            [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+        CMTime clipDur = kCMTimeZero;
+        if (timingAPI)
+          [timingAPI durationTimeForEffect:&clipDur];
+        clipDurSec = CMTimeGetSeconds(clipDur);
+        if (clipDurSec <= 0 || isnan(clipDurSec))
+          clipDurSec = 5.0;
+        selectedLayerID =
+            ((CanvasInspectorView *)self.inspectorView).resolvedSelectedLayerID;
+      });
+  if (!scoped) {
     [KKAIDraft setRouting:NO];
     [KKAIDraft setError:@"Couldn't open the FCP action scope."];
     return;
   }
-  [readAct startAction:self];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  NSArray<KKLane *> *templates = [CanvasPlugin availableLanes];
-  NSString *b64 = KKReadCustomParamString(getAPI, kParamLayerData);
-  NSArray<KKBezierPath *> *paths =
-      b64.length
-          ? [KKBezierPath
-                pathsFromBlob:[[NSData alloc] initWithBase64EncodedString:b64
-                                                                  options:0]]
-          : @[];
-  // The all-layers AI timeline: every layer's transform lanes (seeded) plus any
-  // lane it already animates, each label tagged "<property>\x1f<layerID>" so a
-  // mutation can target a specific layer and the result feeds straight back
-  // through CanvasApplyMergedTimelineToPaths.
-  NSString *currentJSON =
-      [KKTimeline jsonFromTimeline:CanvasAITimeline(paths, templates)];
-  id<FxTimingAPI_v4> timingAPI =
-      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  CMTime clipDur = kCMTimeZero;
-  if (timingAPI)
-    [timingAPI durationTimeForEffect:&clipDur];
-  double clipDurSec = CMTimeGetSeconds(clipDur);
-  if (clipDurSec <= 0 || isnan(clipDurSec))
-    clipDurSec = 5.0;
-  NSString *selectedLayerID =
-      ((CanvasInspectorView *)self.inspectorView).resolvedSelectedLayerID;
-  [readAct endAction:self];
 
   // Targeted routing: the model gets a compact PROPERTY CATALOG + the layer
   // NAMES (never the whole timeline, never layer ids), then resolves the edit
@@ -1492,53 +1490,44 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
                            }
                            mergedTL.lanes = changed;
 
-                           id<FxCustomParameterActionAPI_v4> writeAct =
-                               [strong.apiManager
-                                   apiForProtocol:
-                                       @protocol(
-                                           FxCustomParameterActionAPI_v4)];
-                           if (!writeAct) {
+                           BOOL scoped = KKPerformUndoable(
+                               strong.apiManager, strong, nil,
+                               ^(id<FxParameterRetrievalAPI_v6> get,
+                                 id<FxParameterSettingAPI_v5> setAPI,
+                                 CMTime actionTime) {
+                               NSString *freshB64 =
+                                   KKReadCustomParamString(get, kParamLayerData);
+                               NSMutableArray<KKBezierPath *> *cur =
+                                   freshB64.length
+                                       ? [KKBezierPath
+                                             pathsFromBlob:
+                                                 [[NSData alloc]
+                                                     initWithBase64EncodedString:
+                                                         freshB64
+                                                                         options:0]]
+                                       : [NSMutableArray array];
+                               CanvasApplyMergedTimelineToPaths(mergedTL, cur,
+                                                                templates);
+                               NSData *blob = [KKBezierPath blobFromPaths:cur];
+                               KKWriteCustomParamString(
+                                   setAPI, [blob base64EncodedStringWithOptions:0],
+                                   kParamLayerData);
+                               // A cross-layer AI ANIMATION isn't
+                               // Basic-representable (Basic shares timings across
+                               // layers), so show Advanced so the user sees the
+                               // real per-layer structure. A pure constant change
+                               // leaves the tab alone.
+                               if (anyAnimated)
+                                 [strong patchUIStateKey:@"activeTab"
+                                                   value:@(1)
+                                                 paramID:kParamUIState];
+                           });
+                           if (!scoped) {
                              [KKAIDraft
                                  setError:@"Couldn't open the FCP action scope "
                                           @"to apply the mutation."];
                              return;
                            }
-                           [writeAct startAction:strong];
-                           id<FxParameterRetrievalAPI_v6> get = [strong
-                                                                     .apiManager
-                               apiForProtocol:@protocol(
-                                                  FxParameterRetrievalAPI_v6)];
-                           id<FxParameterSettingAPI_v5> setAPI =
-                               [strong.apiManager
-                                   apiForProtocol:
-                                       @protocol(FxParameterSettingAPI_v5)];
-                           NSString *freshB64 =
-                               KKReadCustomParamString(get, kParamLayerData);
-                           NSMutableArray<KKBezierPath *> *cur =
-                               freshB64.length
-                                   ? [KKBezierPath
-                                         pathsFromBlob:
-                                             [[NSData alloc]
-                                                 initWithBase64EncodedString:
-                                                     freshB64
-                                                                     options:0]]
-                                   : [NSMutableArray array];
-                           CanvasApplyMergedTimelineToPaths(mergedTL, cur,
-                                                            templates);
-                           NSData *blob = [KKBezierPath blobFromPaths:cur];
-                           KKWriteCustomParamString(
-                               setAPI, [blob base64EncodedStringWithOptions:0],
-                               kParamLayerData);
-                           // A cross-layer AI ANIMATION isn't
-                           // Basic-representable (Basic shares timings across
-                           // layers), so show Advanced so the user sees the
-                           // real per-layer structure. A pure constant change
-                           // leaves the tab alone.
-                           if (anyAnimated)
-                             [strong patchUIStateKey:@"activeTab"
-                                               value:@(1)
-                                             paramID:kParamUIState];
-                           [writeAct endAction:strong];
                            [KKAIDraft setAnswer:nil];
                            [KKAIDraft clearPrompt];
                            [KKAIDraft setCompleted:YES];
@@ -1558,32 +1547,29 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
     return;
   }
 
-  id<FxCustomParameterActionAPI_v4> act =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!act) {
+  BOOL scoped = KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> get, id<FxParameterSettingAPI_v5> set,
+        CMTime actionTime) {
+        NSString *b64 = KKReadCustomParamString(get, kParamLayerData);
+        NSMutableArray<KKBezierPath *> *cur =
+            b64.length ? [KKBezierPath
+                             pathsFromBlob:[[NSData alloc]
+                                               initWithBase64EncodedString:b64
+                                                                   options:0]]
+                       : [NSMutableArray array];
+        // New layers go on top (front), matching preset insertion.
+        NSMutableArray<KKBezierPath *> *merged = [newLayers mutableCopy];
+        [merged addObjectsFromArray:cur];
+        NSData *blob = [KKBezierPath blobFromPaths:merged];
+        KKWriteCustomParamString(set, [blob base64EncodedStringWithOptions:0],
+                                 kParamLayerData);
+      });
+  if (!scoped) {
     [KKAIDraft
         setError:@"Couldn't open the FCP action scope to add the layer."];
     return;
   }
-  [act startAction:self];
-  id<FxParameterRetrievalAPI_v6> get =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> set =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  NSString *b64 = KKReadCustomParamString(get, kParamLayerData);
-  NSMutableArray<KKBezierPath *> *cur =
-      b64.length
-          ? [KKBezierPath
-                pathsFromBlob:[[NSData alloc] initWithBase64EncodedString:b64
-                                                                  options:0]]
-          : [NSMutableArray array];
-  // New layers go on top (front), matching preset insertion.
-  NSMutableArray<KKBezierPath *> *merged = [newLayers mutableCopy];
-  [merged addObjectsFromArray:cur];
-  NSData *blob = [KKBezierPath blobFromPaths:merged];
-  KKWriteCustomParamString(set, [blob base64EncodedStringWithOptions:0],
-                           kParamLayerData);
-  [act endAction:self];
 
   // If the user also asked to animate / reveal the shape, run that now that the
   // layer exists - the second pass classifies as a mutation and targets the new

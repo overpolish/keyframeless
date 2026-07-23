@@ -66,10 +66,15 @@
   } else if (popoverOpen && _openStaticIsBoundary) {
     // Keypose->constants: turn OFF boundary editing (the fresh-constants path
     // never turns it on, so a reconfigure from keypose mode must clear it) -
-    // same reset the popover-close does. editFraction was already set to the
-    // playhead by the constants trigger before this call.
+    // the SAME FULL reset the popover-close does, including the render-side
+    // request file. Without that write the render keeps boundaryFeedActive
+    // and publishes stale boundary-preview slots against constants-mode state
+    // (visible as a corrupted/noisy render), and nothing later clears it: the
+    // close handler only writes the file inactive when the CLOSING popover is
+    // keypose-mode, which after this switch it no longer is.
     KKSetBoundaryEditing(self.miniViewerDelegate, NO, 0.0);
     KKSetSuppressedHandles(self.miniViewerDelegate, nil);
+    KKWriteBoundaryRequest(self.miniViewerRequestPath, 0.0, NO);
   }
 
   __weak typeof(self) weak = self;

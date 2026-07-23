@@ -62,9 +62,14 @@ static NSInteger gKKReconcileGen; // main-thread only
   if (!act)
     return;
   [act startAction:self];
-  if (block)
-    block();
-  [act endAction:self];
+  @try {
+    if (block)
+      block();
+  } @finally {
+    // An exception escaping an open scope wedges FCP's undo machinery (its
+    // next beginWithUndoState aborts) - always close.
+    [act endAction:self];
+  }
 }
 
 - (void)kkInParamAction:(void (^)(id<FxParameterRetrievalAPI_v6> getAPI,

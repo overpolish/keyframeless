@@ -56,15 +56,9 @@
 }
 
 - (void)patchMaintainTimingEnabled:(BOOL)enabled paramID:(UInt32)paramID {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+  KKPerformUndoable(self.apiManager, self, nil, ^(
+                        id<FxParameterRetrievalAPI_v6> getAPI,
+                        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
   NSString *existing = KKReadCustomParamString(getAPI, paramID);
   NSMutableDictionary *state =
       (existing.length
@@ -94,7 +88,7 @@
                                                      error:nil]
           encoding:NSUTF8StringEncoding];
   KKWriteCustomParamString(setAPI, json, paramID);
-  [actionAPI endAction:self];
+  });
 }
 
 // Seconds the source range must hold steady after a trim before the bake
@@ -145,16 +139,10 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
 
 - (void)_commitMaintainTimingBakeWithTimelineParamID:(UInt32)timelineParamID
                                       uiStateParamID:(UInt32)uiStateParamID {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-
+  __block KKTimeline *retimedOut = nil;
+  BOOL scoped = KKPerformUndoable(self.apiManager, self, nil, ^(
+                    id<FxParameterRetrievalAPI_v6> getAPI,
+                    id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
   // Re-read the CURRENT source range fresh from FxTimingAPI here, not a value
   // captured off a render tick: trims surface on render ticks that FCP can
   // coalesce, so a captured value may lag the real clip (the cause of the
@@ -208,7 +196,11 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
             encoding:NSUTF8StringEncoding];
     KKWriteCustomParamString(setAPI, stJSON, uiStateParamID);
   }
-  [actionAPI endAction:self];
+  retimedOut = retimed;
+  });
+  if (!scoped)
+    return;
+  KKTimeline *retimed = retimedOut;
 
   // Push straight to the graph so it refreshes even if the parameterChanged
   // round-trip from this self-write is dropped (the inconsistency symptom). A

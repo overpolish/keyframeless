@@ -7,6 +7,7 @@
 
 #import "KKConstants.h"
 #import "KKDataBlob.h"
+#import "KKDragUndoSession.h"
 #import "KKHostInfo.h"
 #import "KKLog.h"
 #import "KKMotionBlur.h"
@@ -32,14 +33,16 @@
                               dragUndoLabel:(NSString *)dragUndoLabel
                          detachedWindowSize:(CGSize)detachedWindowSize
                              builtinPresets:(NSArray<KKPreset *> *)presets
-                                    inScope:(void (^)(KKInspectorCreateContext *,
-                                                      id<FxParameterRetrievalAPI_v6>))
+                                    inScope:(void (^)(
+                                                KKInspectorCreateContext *,
+                                                id<FxParameterRetrievalAPI_v6>))
                                                 inScope
                                   buildView:(KKTimelineInspectorView * (^)(
-                                                KKInspectorCreateContext *))buildView {
+                                                KKInspectorCreateContext *))
+                                                buildView {
   KKInspectorCreateContext *ctx = [KKInspectorCreateContext new];
-  id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-      apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actionAPI startAction:self];
   id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -86,8 +89,8 @@
 }
 
 - (void)kkHandleMotionBlurDataChangedPushingTechnique:(BOOL)pushTechnique {
-  id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-      apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  id<FxCustomParameterActionAPI_v4> actionAPI =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
   [actionAPI startAction:self];
   id<FxParameterRetrievalAPI_v6> getAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
@@ -96,7 +99,8 @@
   NSDictionary *mb =
       (json.length
            ? [NSJSONSerialization
-                 JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
+                 JSONObjectWithData:[json
+                                        dataUsingEncoding:NSUTF8StringEncoding]
                             options:0
                               error:nil]
            : nil)
@@ -121,7 +125,6 @@
           setMotionBlurTechnique:(KKMotionBlurTechnique)mbTechnique];
   });
 }
-
 
 - (KKInspectorPersistedState *)
     kkReadInspectorPersistedStateWithGetAPI:
@@ -282,30 +285,25 @@
     __strong typeof(weak) strong = weak;
     if (!strong)
       return;
-    [strong kkInActionScope:^{
-      // The overlay now guarantees a balanced onHandleDragEnd (it ends any
-      // active drag before a new press and on teardown), so a group should
-      // never already be open here. Keep the check as a tripwire in case
-      // another drag source regresses the invariant.
-      if (strong.miniDragUndoStarted)
-        KKLogWarn(@"[dragundo] onDragBegin while a group is already open - "
-                  @"begin/end got unbalanced upstream");
-      strong.miniDragUndoStarted =
-          KKBeginUndoGroup(strong.apiManager, dragUndoLabel);
-    }];
+    // The overlay guarantees a balanced onHandleDragEnd (it ends any active
+    // drag before a new press and on teardown), so a session should never
+    // already be open here. Keep the check as a tripwire in case another
+    // drag source regresses the invariant.
+    if (strong.miniDragSession.active)
+      KKLogWarn(@"[dragundo] onDragBegin while a session is already open - "
+                @"begin/end got unbalanced upstream");
+    strong.miniDragSession =
+        [KKDragUndoSession beginWithAPIManager:strong.apiManager
+                                     principal:strong
+                                          name:dragUndoLabel
+                                          mode:KKDragUndoSessionModeGroupOnly];
   };
   view.onDragEnd = ^{
     __strong typeof(weak) strong = weak;
     if (!strong)
       return;
-    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (act)
-      [act startAction:strong];
-    KKEndUndoGroup(strong.apiManager, strong.miniDragUndoStarted);
-    if (act)
-      [act endAction:strong];
-    strong.miniDragUndoStarted = NO;
+    [strong.miniDragSession finish];
+    strong.miniDragSession = nil;
   };
 
   // Boundary popover just wrote its request file. FCP only re-runs

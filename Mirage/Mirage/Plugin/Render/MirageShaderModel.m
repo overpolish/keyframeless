@@ -210,6 +210,15 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
   return _oscBlocks;
 }
 
+- (const MirageOSCBlock *)oscBlockForUniform:(const char *)uniformName {
+  if (!uniformName || !uniformName[0])
+    return NULL;
+  for (int i = 0; i < _oscBlockCount; i++)
+    if (strcmp(_oscBlocks[i].binds, uniformName) == 0)
+      return &_oscBlocks[i];
+  return NULL;
+}
+
 - (const MirageColorProp *)colorProps {
   return _colors;
 }
@@ -285,7 +294,7 @@ static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
       float c[4] = {0, 0, 0, 0};
       for (int k = 0; k < p->fieldCount && k < 4; k++)
         c[k] = (float)(v.count > k ? v[k].doubleValue : p->mdef[k]);
-      if (MirageScalarOSCIsRotate(p))
+      if (MirageOSCBlockIsRotate([self oscBlockForUniform:p->name]))
         for (int k = 0; k < 4; k++)
           c[k] =
               roundf(c[k]); // rotation is whole degrees, even from an OSC drag

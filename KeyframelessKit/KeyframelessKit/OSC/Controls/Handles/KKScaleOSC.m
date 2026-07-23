@@ -275,41 +275,38 @@ static const double kScaleFineFactor = 0.2;
 - (void)_writeScaleValues:(NSArray<NSNumber *> *)newValues
                    atTime:(CMTime)time
               forceUpdate:(BOOL *)forceUpdate {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI) {
-    [actionAPI endAction:self];
-    return;
-  }
+  __block BOOL wrote = NO;
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        if (!setAPI)
+          return;
 
-  double frac = [self fractionAtTime:time];
-  KKTimeline *snap = KKProcessTimelineSnapshot();
-  KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
-                              snap, self.laneLabel, frac, newValues)
-                        : nil;
-  if (!tl) {
-    tl = snap ? [snap copy] : [KKTimeline timeline];
-    NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-    KKLane *scaleLane =
-        [self.templateLane copy] ?: [KKLane laneWithLabel:self.laneLabel];
-    scaleLane.enabled = NO;
-    scaleLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
-    [lanes addObject:scaleLane];
-    tl.lanes = lanes;
-  }
+        double frac = [self fractionAtTime:time];
+        KKTimeline *snap = KKProcessTimelineSnapshot();
+        KKTimeline *tl = snap ? KKTimelineSettingValuesNearestFraction(
+                                    snap, self.laneLabel, frac, newValues)
+                              : nil;
+        if (!tl) {
+          tl = snap ? [snap copy] : [KKTimeline timeline];
+          NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+          KKLane *scaleLane =
+              [self.templateLane copy] ?: [KKLane laneWithLabel:self.laneLabel];
+          scaleLane.enabled = NO;
+          scaleLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
+          [lanes addObject:scaleLane];
+          tl.lanes = lanes;
+        }
 
-  if (self.onTimelinePersist)
-    self.onTimelinePersist(tl);
-  else
-    KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                             kKKParamTimelineData);
-  [actionAPI endAction:self];
-  if (forceUpdate)
+        if (self.onTimelinePersist)
+          self.onTimelinePersist(tl);
+        else
+          KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                                   kKKParamTimelineData);
+        wrote = YES;
+      });
+  if (wrote && forceUpdate)
     *forceUpdate = YES;
 }
 

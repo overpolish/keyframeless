@@ -652,41 +652,37 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
                  atTime:(CMTime)time
             forceUpdate:(BOOL *)forceUpdate {
   NSArray<NSNumber *> *values = [b laneValuesFromBound:val];
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
   _exprActionDepth++;
   if (_exprActionDepth > 1)
     KKLogError(@"[ExprWrite] NESTED action (depth=%d) writing %@ via %@ - "
                @"this would assert FFUIAction in the host",
                _exprActionDepth, b.binds, b.name);
-  [actionAPI startAction:self];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI) {
-    [actionAPI endAction:self];
-    _exprActionDepth--;
-    return;
-  }
-  double frac = [self fractionAtTime:time];
-  KKTimeline *snap = KKProcessTimelineSnapshot();
-  KKTimeline *tl =
-      snap ? KKTimelineSettingValuesNearestFraction(snap, b.binds, frac, values)
-           : nil;
-  if (!tl) {
-    tl = snap ? [snap copy] : [KKTimeline timeline];
-    KKLane *seed = [b.templateLane copy] ?: [KKLane laneWithLabel:b.binds];
-    seed.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
-    NSMutableArray<KKLane *> *lanes = [NSMutableArray arrayWithArray:tl.lanes];
-    [lanes addObject:seed];
-    tl.lanes = lanes;
-  }
-  KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
-                           kKKParamTimelineData);
-  [actionAPI endAction:self];
+  __block BOOL wrote = NO;
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        if (!setAPI)
+          return;
+        double frac = [self fractionAtTime:time];
+        KKTimeline *snap = KKProcessTimelineSnapshot();
+        KKTimeline *tl =
+            snap ? KKTimelineSettingValuesNearestFraction(snap, b.binds, frac, values)
+                 : nil;
+        if (!tl) {
+          tl = snap ? [snap copy] : [KKTimeline timeline];
+          KKLane *seed = [b.templateLane copy] ?: [KKLane laneWithLabel:b.binds];
+          seed.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
+          NSMutableArray<KKLane *> *lanes = [NSMutableArray arrayWithArray:tl.lanes];
+          [lanes addObject:seed];
+          tl.lanes = lanes;
+        }
+        KKWriteCustomParamString(setAPI, [KKTimeline jsonFromTimeline:tl],
+                                 kKKParamTimelineData);
+        wrote = YES;
+      });
   _exprActionDepth--;
-  if (forceUpdate)
+  if (wrote && forceUpdate)
     *forceUpdate = YES;
 }
 

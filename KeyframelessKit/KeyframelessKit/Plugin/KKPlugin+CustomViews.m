@@ -314,16 +314,15 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
                        __strong typeof(weakSelf) s = weakSelf;
                        if (!s)
                          return;
-                       id<FxCustomParameterActionAPI_v4> act = [s.apiManager
-                           apiForProtocol:@protocol(
-                                              FxCustomParameterActionAPI_v4)];
-                       if (!act)
-                         return;
-                       [act startAction:s];
-                       id<FxCommandAPI_v2> cmd = [s.apiManager
-                           apiForProtocol:@protocol(FxCommandAPI_v2)];
-                       [cmd performCommand:command error:nil];
-                       [act endAction:s];
+                       KKPerformUndoable(
+                           s.apiManager, s, nil,
+                           ^(id<FxParameterRetrievalAPI_v6> getAPI,
+                             id<FxParameterSettingAPI_v5> setAPI,
+                             CMTime actionTime) {
+                             id<FxCommandAPI_v2> cmd = [s.apiManager
+                                 apiForProtocol:@protocol(FxCommandAPI_v2)];
+                             [cmd performCommand:command error:nil];
+                           });
                      };
                      keyHandler.onTogglePlayback = ^{
                        perform(kFxCommand_TogglePlayback);
@@ -362,16 +361,15 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
 }
 
 - (void)closeRemoteWindowIfSupported {
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (!actionAPI)
-    return;
-  [actionAPI startAction:self];
-  id<FxRemoteWindowAPI> windowAPI =
-      [self.apiManager apiForProtocol:@protocol(FxRemoteWindowAPI)];
-  if ([(id)windowAPI respondsToSelector:@selector(closeRemoteWindow)])
-    [(id<FxRemoteWindowAPI_v3>)windowAPI closeRemoteWindow];
-  [actionAPI endAction:self];
+  KKPerformUndoable(
+      self.apiManager, self, nil,
+      ^(id<FxParameterRetrievalAPI_v6> getAPI,
+        id<FxParameterSettingAPI_v5> setAPI, CMTime actionTime) {
+        id<FxRemoteWindowAPI> windowAPI =
+            [self.apiManager apiForProtocol:@protocol(FxRemoteWindowAPI)];
+        if ([(id)windowAPI respondsToSelector:@selector(closeRemoteWindow)])
+          [(id<FxRemoteWindowAPI_v3>)windowAPI closeRemoteWindow];
+      });
 }
 
 @end
