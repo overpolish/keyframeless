@@ -129,56 +129,48 @@
                       value:@((NSInteger)mode)
                     paramID:uiStateParamID];
   };
-  view.onMotionBlurChanged = ^(BOOL enabled, double shutterAngle,
-                               NSInteger samples,
-                               KKMotionBlurTechnique technique) {
-    __strong typeof(weak) strong = weak;
-    if (!strong)
-      return;
-    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (!act)
-      return;
-    [act startAction:strong];
-    id<FxParameterSettingAPI_v5> setAPI =
-        [strong.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    NSDictionary *mb = @{
-      @"enabled" : @(enabled),
-      @"shutterAngle" : @(shutterAngle),
-      @"samples" : @(samples),
-      @"technique" : @((NSInteger)technique)
-    };
-    NSData *data = [NSJSONSerialization dataWithJSONObject:mb
-                                                   options:0
-                                                     error:nil];
-    NSString *json = [[NSString alloc] initWithData:data
-                                           encoding:NSUTF8StringEncoding];
-    if (json)
-      KKWriteCustomParamString(setAPI, json, kKKParamMotionBlurData);
-    [act endAction:strong];
-  };
+  view.onMotionBlurChanged =
+      ^(BOOL enabled, double shutterAngle, NSInteger samples,
+        KKMotionBlurTechnique technique) {
+        __strong typeof(weak) strong = weak;
+        if (!strong)
+          return;
+        [strong kkInParamAction:^(id<FxParameterRetrievalAPI_v6> getAPI,
+                                  id<FxParameterSettingAPI_v5> setAPI,
+                                  CMTime actionTime) {
+          NSDictionary *mb = @{
+            @"enabled" : @(enabled),
+            @"shutterAngle" : @(shutterAngle),
+            @"samples" : @(samples),
+            @"technique" : @((NSInteger)technique)
+          };
+          NSData *data = [NSJSONSerialization dataWithJSONObject:mb
+                                                         options:0
+                                                           error:nil];
+          NSString *json = [[NSString alloc] initWithData:data
+                                                 encoding:NSUTF8StringEncoding];
+          if (json)
+            KKWriteCustomParamString(setAPI, json, kKKParamMotionBlurData);
+        }];
+      };
   view.onTimelineMutated = ^(KKTimeline *updated) {
     __strong typeof(weak) strong = weak;
     if (!strong)
       return;
-    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (!act)
-      return;
-    [act startAction:strong];
-    id<FxParameterSettingAPI_v5> setAPI =
-        [strong.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    NSString *json = [KKTimeline jsonFromTimeline:updated];
-    if (json)
-      KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
-    // Writing the timeline blob alone doesn't re-render: FCP serves a cached
-    // frame for a static playhead until a scratch param changes. Nudge so a
-    // persisted change (e.g. a pasted shader source, which never touches a
-    // value field) reaches the render immediately instead of waiting for the
-    // next unrelated param write.
-    KKWriteCustomParamString(setAPI, [[NSUUID UUID] UUIDString],
-                             renderNudgeParamID);
-    [act endAction:strong];
+    [strong kkInParamAction:^(id<FxParameterRetrievalAPI_v6> getAPI,
+                              id<FxParameterSettingAPI_v5> setAPI,
+                              CMTime actionTime) {
+      NSString *json = [KKTimeline jsonFromTimeline:updated];
+      if (json)
+        KKWriteCustomParamString(setAPI, json, kKKParamTimelineData);
+      // Writing the timeline blob alone doesn't re-render: FCP serves a cached
+      // frame for a static playhead until a scratch param changes. Nudge so a
+      // persisted change (e.g. a pasted shader source, which never touches a
+      // value field) reaches the render immediately instead of waiting for the
+      // next unrelated param write.
+      KKWriteCustomParamString(setAPI, [[NSUUID UUID] UUIDString],
+                               renderNudgeParamID);
+    }];
   };
 
   // Coalesce a continuous mini-viewer handle drag into one undo entry: the
@@ -188,21 +180,17 @@
     __strong typeof(weak) strong = weak;
     if (!strong)
       return;
-    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (!act)
-      return;
-    [act startAction:strong];
-    // The overlay now guarantees a balanced onHandleDragEnd (it ends any active
-    // drag before a new press and on teardown), so a group should never already
-    // be open here. Keep the check as a tripwire in case another drag source
-    // regresses the invariant.
-    if (strong.miniDragUndoStarted)
-      KKLogWarn(@"[dragundo] onDragBegin while a group is already open - "
-                @"begin/end got unbalanced upstream");
-    strong.miniDragUndoStarted =
-        KKBeginUndoGroup(strong.apiManager, dragUndoLabel);
-    [act endAction:strong];
+    [strong kkInActionScope:^{
+      // The overlay now guarantees a balanced onHandleDragEnd (it ends any
+      // active drag before a new press and on teardown), so a group should
+      // never already be open here. Keep the check as a tripwire in case
+      // another drag source regresses the invariant.
+      if (strong.miniDragUndoStarted)
+        KKLogWarn(@"[dragundo] onDragBegin while a group is already open - "
+                  @"begin/end got unbalanced upstream");
+      strong.miniDragUndoStarted =
+          KKBeginUndoGroup(strong.apiManager, dragUndoLabel);
+    }];
   };
   view.onDragEnd = ^{
     __strong typeof(weak) strong = weak;
@@ -226,16 +214,12 @@
     __strong typeof(weak) strong = weak;
     if (!strong)
       return;
-    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (!act)
-      return;
-    [act startAction:strong];
-    id<FxParameterSettingAPI_v5> setAPI =
-        [strong.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    NSString *nonce = [[NSUUID UUID] UUIDString];
-    KKWriteCustomParamString(setAPI, nonce, renderNudgeParamID);
-    [act endAction:strong];
+    [strong kkInParamAction:^(id<FxParameterRetrievalAPI_v6> getAPI,
+                              id<FxParameterSettingAPI_v5> setAPI,
+                              CMTime actionTime) {
+      NSString *nonce = [[NSUUID UUID] UUIDString];
+      KKWriteCustomParamString(setAPI, nonce, renderNudgeParamID);
+    }];
   };
 
   // Scrub: drag the Basic playhead -> move the host playhead. FxTimingAPI
@@ -244,39 +228,35 @@
     __strong typeof(weak) strong = weak;
     if (!strong)
       return;
-    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (!act)
-      return;
-    [act startAction:strong];
-    id<FxTimingAPI_v4> timing =
-        [strong.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-    id<FxCommandAPI_v2> cmd =
-        [strong.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
-    CMTime es = kCMTimeZero, ed = kCMTimeZero;
-    [timing startTimeForEffect:&es];
-    [timing durationTimeForEffect:&ed];
-    double dsec = CMTimeGetSeconds(ed);
-    double base;
-    if ([KKHostInfo isRunningInFinalCut]) {
-      CMTime src = kCMTimeZero, tl = kCMTimeZero;
-      [timing startTimeOfInputToFilter:&src];
-      [timing timelineTime:&tl fromInputTime:src];
-      base = CMTimeGetSeconds(tl);
-    } else {
-      base = CMTimeGetSeconds(es);
-    }
-    if (dsec > 0.0) {
-      // FCP's movePlayheadToTime: floors a time sitting on a frame seam to the
-      // previous frame, so snapping to a keypose lands one frame short and the
-      // OSC's half-frame visibility window rejects it (handle vanishes). Nudge
-      // half a frame in so it rounds onto the intended frame - same trick the
-      // loop-back path uses.
-      double frameDur = KKProcessFrameDurationSeconds();
-      double target = base + frac * dsec + frameDur * 0.5;
-      [cmd movePlayheadToTime:CMTimeMakeWithSeconds(target, 600) error:nil];
-    }
-    [act endAction:strong];
+    [strong kkInActionScope:^{
+      id<FxTimingAPI_v4> timing =
+          [strong.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+      id<FxCommandAPI_v2> cmd =
+          [strong.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
+      CMTime es = kCMTimeZero, ed = kCMTimeZero;
+      [timing startTimeForEffect:&es];
+      [timing durationTimeForEffect:&ed];
+      double dsec = CMTimeGetSeconds(ed);
+      double base;
+      if ([KKHostInfo isRunningInFinalCut]) {
+        CMTime src = kCMTimeZero, tl = kCMTimeZero;
+        [timing startTimeOfInputToFilter:&src];
+        [timing timelineTime:&tl fromInputTime:src];
+        base = CMTimeGetSeconds(tl);
+      } else {
+        base = CMTimeGetSeconds(es);
+      }
+      if (dsec > 0.0) {
+        // FCP's movePlayheadToTime: floors a time sitting on a frame seam to
+        // the previous frame, so snapping to a keypose lands one frame short
+        // and the OSC's half-frame visibility window rejects it (handle
+        // vanishes). Nudge half a frame in so it rounds onto the intended frame
+        // - same trick the loop-back path uses.
+        double frameDur = KKProcessFrameDurationSeconds();
+        double target = base + frac * dsec + frameDur * 0.5;
+        [cmd movePlayheadToTime:CMTimeMakeWithSeconds(target, 600) error:nil];
+      }
+    }];
   };
 
   // Spacebar in the inspector -> play/pause (FCP eats it otherwise).
@@ -284,15 +264,11 @@
     __strong typeof(weak) strong = weak;
     if (!strong)
       return;
-    id<FxCustomParameterActionAPI_v4> act = [strong.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    if (!act)
-      return;
-    [act startAction:strong];
-    id<FxCommandAPI_v2> cmd =
-        [strong.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
-    [cmd performCommand:kFxCommand_TogglePlayback error:nil];
-    [act endAction:strong];
+    [strong kkInActionScope:^{
+      id<FxCommandAPI_v2> cmd =
+          [strong.apiManager apiForProtocol:@protocol(FxCommandAPI_v2)];
+      [cmd performCommand:kFxCommand_TogglePlayback error:nil];
+    }];
   };
 
   view.onToggleDetached = ^{

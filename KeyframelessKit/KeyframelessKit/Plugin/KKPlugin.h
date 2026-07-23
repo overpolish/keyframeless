@@ -46,6 +46,22 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property(nonatomic, weak) id<PROAPIAccessing> apiManager;
 
+/// Runs `block` inside a bare parameter action scope (`startAction:self` ...
+/// `endAction:self`) - the one correct place to resolve any API that returns
+/// nil OUTSIDE a scope (get/set/timing/command/undo; the #1 FxPlug mistake). A
+/// no-op (block not run) when the action API is unavailable; early-returning
+/// from the block still ends the action. Use -kkInParamAction: when you only
+/// need get/set.
+- (void)kkInActionScope:(void (^)(void))block;
+
+/// -kkInActionScope: with the parameter get/set APIs and the action's current
+/// time resolved inside the scope and handed to `block` (the time is what most
+/// `getXValue:...atTime:` / `setXValue:...atTime:` reads and writes want). Any
+/// param may be used or ignored.
+- (void)kkInParamAction:(void (^)(id<FxParameterRetrievalAPI_v6> getAPI,
+                                  id<FxParameterSettingAPI_v5> setAPI,
+                                  CMTime actionTime))block;
+
 /// Set while a continuous mini-viewer / inspector handle drag is coalescing its
 /// per-tick timeline writes into one undo group. Toggled by the standard
 /// inspector onDragBegin/onDragEnd callbacks (see KKPlugin+InspectorCallbacks).

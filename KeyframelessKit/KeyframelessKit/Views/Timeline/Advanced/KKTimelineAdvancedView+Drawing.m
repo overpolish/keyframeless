@@ -666,7 +666,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     KKKeyPose *ka = kps[i];
     KKKeyPose *kb = kps[i + 1];
     BOOL flat =
-        KKAdvValuesEqual(ka.values, kb.values) &&
+        KKLaneKeyposeValuesEqual(lane, ka, kb) &&
         (!ka.outgoing || ka.outgoing.modulation == KKIntervalModulationNone);
     NSInteger samples = flat ? 1 : 16;
     for (NSInteger k = 0; k <= samples; k++) {
@@ -774,7 +774,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     if (i + 1 == (NSInteger)kps.count - 1)
       xB += innerEdgePad;
     KKInterval *iv = a.outgoing;
-    BOOL anyDiffer = !KKAdvValuesEqual(a.values, b.values);
+    BOOL anyDiffer = !KKLaneKeyposeValuesEqual(lane, a, b);
     BOOL hasModulation = iv && iv.modulation != KKIntervalModulationNone;
     NSColor *base = anyDiffer ? warn : neutral;
     NSColor *color = [base colorWithAlphaComponent:compAlpha];
@@ -906,7 +906,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       xA -= innerEdgePad;
     if (i + 1 == (NSInteger)kps.count - 1)
       xB += innerEdgePad;
-    BOOL transition = !KKAdvValuesEqual(kps[i].values, kps[i + 1].values);
+    BOOL transition = !KKLaneKeyposeValuesEqual(lane, kps[i], kps[i + 1]);
     NSColor *tint =
         [(transition ? warn : neutral) colorWithAlphaComponent:0.15];
     NSRect col = NSMakeRect(xA, NSMinY(row), xB - xA, NSHeight(row));
@@ -926,7 +926,7 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
     KKInterval *iv = kps[i].outgoing;
     if (!iv || !iv.endpointsLinked)
       continue;
-    if (!KKAdvValuesEqual(kps[i].values, kps[i + 1].values))
+    if (!KKLaneKeyposeValuesEqual(lane, kps[i], kps[i + 1]))
       continue;
     CGFloat xA = [self _xForFrac:kps[i].time inLane:lane inTracks:tracks];
     CGFloat xB = [self _xForFrac:kps[i + 1].time inLane:lane inTracks:tracks];
@@ -956,10 +956,10 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
   KKKeyPose *kp = kps[i];
   CGFloat x = [self _xForFrac:kp.time inLane:lane inTracks:tracks];
   BOOL warnHere = NO;
-  if (i > 0 && !KKAdvValuesEqual(kps[i - 1].values, kp.values))
+  if (i > 0 && !KKLaneKeyposeValuesEqual(lane, kps[i - 1], kp))
     warnHere = YES;
   if (!warnHere && i + 1 < (NSInteger)kps.count &&
-      !KKAdvValuesEqual(kp.values, kps[i + 1].values))
+      !KKLaneKeyposeValuesEqual(lane, kp, kps[i + 1]))
     warnHere = YES;
   CGFloat pillX = round(x) - kPillW * 0.5 + 0.5;
   NSRect pill = NSMakeRect(pillX, pillBot, kPillW, pillTop - pillBot);
@@ -1001,10 +1001,10 @@ double KKAdvNormComponent(double v, NSArray<NSNumber *> *cMin,
       // endpoint differs, accent when flat) - same rule as
       // _drawPillForKPInLane.
       BOOL warnHere = NO;
-      if (i > 0 && !KKAdvValuesEqual(kps[i - 1].values, kp.values))
+      if (i > 0 && !KKLaneKeyposeValuesEqual(lane, kps[i - 1], kp))
         warnHere = YES;
       if (!warnHere && i + 1 < (NSInteger)kps.count &&
-          !KKAdvValuesEqual(kp.values, kps[i + 1].values))
+          !KKLaneKeyposeValuesEqual(lane, kp, kps[i + 1]))
         warnHere = YES;
       NSRect row = [self _rowRectForIndex:li count:lanes.count];
       CGFloat pillTop = NSMaxY(row) - kPillInsetY;

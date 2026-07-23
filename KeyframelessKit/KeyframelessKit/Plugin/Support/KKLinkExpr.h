@@ -52,6 +52,32 @@ static inline KKExprVal KKExprScalar(double x) {
 /// `vec2(value.x, value.y + …)` rebuilds one for independent per-axis control.
 @interface KKLinkExpr : NSObject
 
+/// Evaluate. `value` is the lane's own value; `t` absolute project seconds;
+/// `progress` the clip's 0..1 position; `clipTime` seconds since the clip
+/// started; each `${name}` is resolved through `resolveRef` (nil resolves refs
+/// to 0).
+- (KKExprVal)evalWithValue:(KKExprVal)value
+                         t:(double)t
+                  progress:(double)progress
+                  clipTime:(double)clipTime
+                resolveRef:(nullable KKExprVal (^)(NSString *name))resolveRef;
+
+/// Evaluate an OSC-handling expression: `value` is the bound lane value, and
+/// every allowed bare identifier (see `compile:allowedVars:error:`) resolves
+/// through `vars`. `t`/`progress`/`clipTime` are 0 and `${refs}` resolve to 0 -
+/// OSC expressions are spatial, not timeline-relative.
+- (KKExprVal)evalWithValue:(KKExprVal)value
+                      vars:(nullable KKExprVal (^)(NSString *name))vars;
+
+/// The distinct `${name}` references in this expression, so the resolver knows
+/// which sources to load (and the UI which are in use).
+@property(nonatomic, readonly) NSArray<NSString *> *references;
+
+@end
+
+/// Source text -> compiled expression (implemented in KKLinkExpr+Parse.m).
+@interface KKLinkExpr (Parse)
+
 /// Compile `source`, or nil with `*error` set on a parse error. An empty / all-
 /// whitespace source compiles to a bare `value` passthrough (never nil).
 + (nullable instancetype)compile:(NSString *)source
@@ -77,26 +103,11 @@ static inline KKExprVal KKExprScalar(double x) {
 + (NSRange)errorCharRangeForSource:(NSString *)source
                            message:(NSString *_Nullable *_Nullable)outMessage;
 
-/// Evaluate. `value` is the lane's own value; `t` absolute project seconds;
-/// `progress` the clip's 0..1 position; `clipTime` seconds since the clip
-/// started; each `${name}` is resolved through `resolveRef` (nil resolves refs
-/// to 0).
-- (KKExprVal)evalWithValue:(KKExprVal)value
-                         t:(double)t
-                  progress:(double)progress
-                  clipTime:(double)clipTime
-                resolveRef:(nullable KKExprVal (^)(NSString *name))resolveRef;
+@end
 
-/// Evaluate an OSC-handling expression: `value` is the bound lane value, and
-/// every allowed bare identifier (see `compile:allowedVars:error:`) resolves
-/// through `vars`. `t`/`progress`/`clipTime` are 0 and `${refs}` resolve to 0 -
-/// OSC expressions are spatial, not timeline-relative.
-- (KKExprVal)evalWithValue:(KKExprVal)value
-                      vars:(nullable KKExprVal (^)(NSString *name))vars;
-
-/// The distinct `${name}` references in this expression, so the resolver knows
-/// which sources to load (and the UI which are in use).
-@property(nonatomic, readonly) NSArray<NSString *> *references;
+/// Compiled expression -> canonical source text (implemented in
+/// KKLinkExpr+Format.m).
+@interface KKLinkExpr (Format)
 
 /// A normalized re-rendering of the compiled expression: single spaces around
 /// binary operators, `f(a, b)` calls, minimal parentheses (only where

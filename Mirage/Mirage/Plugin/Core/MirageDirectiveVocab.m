@@ -107,6 +107,19 @@ MirageDirectiveAttributeKeys(void) {
 // so `osc=position`, `body = none`, `linked = true`, `skipsnapping` etc. read
 // as vocabulary rather than flat text. Kinds/keys are coloured elsewhere; this
 // is the enum values, booleans, and bare flags.
+NSSet<NSString *> *MirageDirectiveKindTokens(void) {
+  static NSSet *v;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    NSMutableSet<NSString *> *s = [NSMutableSet set];
+    for (NSDictionary<NSString *, NSString *> *e in MirageDirectiveKinds())
+      if (e[@"name"].length)
+        [s addObject:e[@"name"]];
+    v = [s copy];
+  });
+  return v;
+}
+
 NSSet<NSString *> *MirageDirectiveValueKeywords(void) {
   static NSSet *v;
   static dispatch_once_t once;

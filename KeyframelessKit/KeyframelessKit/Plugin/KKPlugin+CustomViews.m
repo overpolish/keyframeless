@@ -110,16 +110,12 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
                                                 icon:icon
                                        showsCheckbox:NO];
 
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  header.isExpanded = KKReadCustomParamBool(paramGetAPI, expandedParamID);
-  header.isEnabled = YES;
-
-  [actionAPI endAction:self];
+  [self kkInParamAction:^(id<FxParameterRetrievalAPI_v6> getAPI,
+                          id<FxParameterSettingAPI_v5> setAPI,
+                          CMTime actionTime) {
+    header.isExpanded = KKReadCustomParamBool(getAPI, expandedParamID);
+    header.isEnabled = YES;
+  }];
 
   if (!self.genericGroupHeaders)
     self.genericGroupHeaders = [NSMapTable strongToWeakObjectsMapTable];
@@ -130,13 +126,11 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)
       return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    KKWriteCustomParamBool(setAPI, isExpanded, expandedParamID);
-    [actAPI endAction:strongSelf];
+    [strongSelf kkInParamAction:^(id<FxParameterRetrievalAPI_v6> getAPI,
+                                  id<FxParameterSettingAPI_v5> setAPI,
+                                  CMTime actionTime) {
+      KKWriteCustomParamBool(setAPI, isExpanded, expandedParamID);
+    }];
   };
 
   return header;
@@ -163,19 +157,16 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
                                                 icon:icon
                                        showsCheckbox:YES];
 
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  [actionAPI startAction:self];
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  CMTime currentTime = [actionAPI currentTime];
-  BOOL enabled = NO;
-  [paramGetAPI getBoolValue:&enabled
-              fromParameter:enabledParamID
-                     atTime:currentTime];
-  header.isEnabled = enabled;
-  header.isExpanded = KKReadCustomParamBool(paramGetAPI, expandedParamID);
-  [actionAPI endAction:self];
+  [self kkInParamAction:^(id<FxParameterRetrievalAPI_v6> getAPI,
+                          id<FxParameterSettingAPI_v5> setAPI,
+                          CMTime actionTime) {
+    BOOL enabled = NO;
+    [getAPI getBoolValue:&enabled
+           fromParameter:enabledParamID
+                  atTime:actionTime];
+    header.isEnabled = enabled;
+    header.isExpanded = KKReadCustomParamBool(getAPI, expandedParamID);
+  }];
 
   __weak typeof(self) weakSelf = self;
   void (^onEnabledExtraCopy)(BOOL, id<FxParameterSettingAPI_v5>) =
@@ -187,32 +178,28 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)
       return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    [setAPI setBoolValue:isEnabled
-             toParameter:enabledParamID
-                  atTime:[actAPI currentTime]];
-    if (onEnabledExtraCopy)
-      onEnabledExtraCopy(isEnabled, setAPI);
-    [actAPI endAction:strongSelf];
+    [strongSelf kkInParamAction:^(id<FxParameterRetrievalAPI_v6> getAPI,
+                                  id<FxParameterSettingAPI_v5> setAPI,
+                                  CMTime actionTime) {
+      [setAPI setBoolValue:isEnabled
+               toParameter:enabledParamID
+                    atTime:actionTime];
+      if (onEnabledExtraCopy)
+        onEnabledExtraCopy(isEnabled, setAPI);
+    }];
   };
 
   header.onExpandedChanged = ^(BOOL isExpanded) {
     __strong typeof(weakSelf) strongSelf = weakSelf;
     if (!strongSelf)
       return;
-    id<FxCustomParameterActionAPI_v4> actAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actAPI startAction:strongSelf];
-    id<FxParameterSettingAPI_v5> setAPI = [strongSelf.apiManager
-        apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-    KKWriteCustomParamBool(setAPI, isExpanded, expandedParamID);
-    if (onExpandedExtraCopy)
-      onExpandedExtraCopy(isExpanded, setAPI);
-    [actAPI endAction:strongSelf];
+    [strongSelf kkInParamAction:^(id<FxParameterRetrievalAPI_v6> getAPI,
+                                  id<FxParameterSettingAPI_v5> setAPI,
+                                  CMTime actionTime) {
+      KKWriteCustomParamBool(setAPI, isExpanded, expandedParamID);
+      if (onExpandedExtraCopy)
+        onExpandedExtraCopy(isExpanded, setAPI);
+    }];
   };
 
   [self registerGroupHeader:header

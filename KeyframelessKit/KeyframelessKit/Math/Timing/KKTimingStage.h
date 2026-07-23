@@ -230,6 +230,13 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// vocabulary in the plugin, like `codeCompletionProvider`. Not serialized (a
 /// set), carried template->reconciled like `codeValidator`.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *codeDirectiveKeywords;
+/// For a `KKLaneValueTypeCode` lane: the valid directive-header tokens
+/// (`#float`, `@osc`, ...) so the highlighter greens only REAL directives, not
+/// any `// #word` (a half-typed `#alp` stays a plain comment). Wired to the
+/// editor's `directiveKinds`. Keeps the vocabulary in the plugin, like
+/// `codeCompletionProvider`. Not serialized (a set), carried
+/// template->reconciled like `codeValidator`.
+@property(nonatomic, copy, nullable) NSSet<NSString *> *codeDirectiveKinds;
 /// For a `KKLaneValueTypeCode` lane: optional extra named code sections beyond
 /// `codeString` (the primary/Image section), presented as tabs in the editor.
 /// Each entry is @{ @"name": display, @"code": source }. nil/empty = a single

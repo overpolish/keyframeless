@@ -682,6 +682,11 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   // flows through the timeline. Seeded with the baked default so the editor
   // opens on something runnable.
   KKLane *shader = [KKLane laneWithLabel:@"Mirage"];
+  // The label "Mirage" is the internal identity (matched all over as the code
+  // lane); the code block is a GENERIC GLSL shader, so it SHOWS as "Shader" -
+  // the brand name shouldn't leak onto the editor caption / save placeholder.
+  shader.displayLabel = RLoc(@"Shader", @"Generic GLSL code lane display name "
+                                        @"(the code editor's caption).");
   shader.valueType = KKLaneValueTypeCode;
   shader.codeString = MirageCustomDefaultShaderSource();
   // Multi-pass: the editor starts on the single Image tab (codeString above)
@@ -693,7 +698,7 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
       @[ @"Common", @"Buffer A", @"Buffer B", @"Buffer C", @"Buffer D" ];
   shader.codeSavable = YES; // show the save bar (name + Save) under the editor
   shader.codeSaveNamePlaceholder =
-      RLoc(@"Mirage name", @"Save-shader name field placeholder.");
+      RLoc(@"Shader name", @"Save-shader name field placeholder.");
   // What the save bar's category picker offers. Display names, in
   // MirageCategoryIDs() order - the save handler maps the picked index back to
   // the id it stores, so these two must stay in the same order.
@@ -813,7 +818,7 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
     if (outLine)
       *outLine = line;
     if (!msg.length)
-      return RLoc(@"Mirage failed to compile",
+      return RLoc(@"Shader failed to compile",
                   @"Custom shader fallback error.");
     return line > 0
                ? [NSString stringWithFormat:RLoc(@"Line %ld: %@",
@@ -838,6 +843,9 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   // The value words the editor paints as keywords in `//` directive / `@osc`
   // comments (osc kinds, booleans, bare flags like skipsnapping).
   shader.codeDirectiveKeywords = MirageDirectiveValueKeywords();
+  // The valid directive-header tokens so the highlighter greens only real
+  // directives (`// #alpha`), not a half-typed `// #alp`.
+  shader.codeDirectiveKinds = MirageDirectiveKindTokens();
   [lanes addObject:shader];
 
   // Dynamic colour group parsed from the shader's `// #color` directive.

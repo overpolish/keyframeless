@@ -755,6 +755,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
           tmpl.codeFormatter; // static config, never persisted
       fixed.codeCompletionProvider = tmpl.codeCompletionProvider;
       fixed.codeDirectiveKeywords = tmpl.codeDirectiveKeywords;
+      fixed.codeDirectiveKinds = tmpl.codeDirectiveKinds;
       fixed.codeSavable = tmpl.codeSavable; // static config, never persisted
       fixed.codeSaveCategories = tmpl.codeSaveCategories;
       fixed.codeSaveNamePlaceholder = tmpl.codeSaveNamePlaceholder;
@@ -795,6 +796,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.codeFormatter = tmpl.codeFormatter;
     lane.codeCompletionProvider = tmpl.codeCompletionProvider;
     lane.codeDirectiveKeywords = tmpl.codeDirectiveKeywords;
+    lane.codeDirectiveKinds = tmpl.codeDirectiveKinds;
     lane.codeSavable = tmpl.codeSavable;
     lane.codeSaveCategories = tmpl.codeSaveCategories;
     lane.codeSaveNamePlaceholder = tmpl.codeSaveNamePlaceholder;

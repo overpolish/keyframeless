@@ -4,11 +4,12 @@
  */
 
 #import "Constants.h"
-#import "Plugin+Render_Internal.h"
 #import "MirageCustomShader.h"
 #import "MirageDirectives.h"         // MirageCommonDefault
 #import "MirageMiniViewerRenderer.h" // per-instance descriptor path
+#import "MirageRenderUniforms.h"     // MirageMakeUniforms (shared with mini)
 #import "MirageStateBlob.h"
+#import "Plugin+Render_Internal.h"
 
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMiniViewerFeed.h>
@@ -65,26 +66,15 @@ static KKGLSLUniforms MirageBuildUniforms(const MiragePluginState *base,
                                           float encodeSRGB) {
   float iTime = base->common.time * base->common.speed +
                 fmodf(base->common.seed, 10000.0f);
-  KKGLSLUniforms u;
-  u.resTime = (simd_float4){(float)mediaW, (float)mediaH, 1.0f, iTime};
-  u.mouse = (simd_float4){0.0f, 0.0f, 0.0f, 0.0f};
-  u.date = (simd_float4){0.0f, 0.0f, 0.0f, 0.0f};
-  // x=iTimeDelta (approx), y=float(iFrame) (approx), z=flipY (FCP dest is
-  // reverse-Y, no flip), w=encodeSRGB.
-  u.extra = (simd_float4){1.0f / 60.0f, iTime * 60.0f, 0.0f, encodeSRGB};
-  // Core film grain (Grain / Grain Size lanes), same as the built-in Types.
-  u.grain =
-      (simd_float4){base->common.grain, base->common.grainSize, 0.0f, 0.0f};
-  // iChannelResolution: 0 = source clip (filled from the bound texture at draw
-  // time), 1-3 = the 256x256 noise texture.
-  u.chanRes[0] = (simd_float4){(float)mediaW, (float)mediaH, 1.0f, 0.0f};
-  for (int c = 1; c < 4; c++)
-    u.chanRes[c] = (simd_float4){256.0f, 256.0f, 1.0f, 0.0f};
-  // iProgress: raw clip fraction, deliberately NOT scaled by Speed/Seed the way
-  // iTime is - a transition's progress has to reach exactly 1.0 at the cut
-  // regardless of the motion-rate params.
-  u.transition = (simd_float4){base->common.progress, 0.0f, 0.0f, 0.0f};
-  return u;
+  // iProgress is the raw clip fraction, deliberately NOT scaled by Speed/Seed
+  // the way iTime is - a transition's progress has to reach exactly 1.0 at the
+  // cut regardless of the motion-rate params. chanRes[0] = the source clip
+  // resolution (iChannelResolution[0], filled from the bound texture at draw
+  // time). Shared layout with the mini via MirageMakeUniforms.
+  return MirageMakeUniforms(
+      (float)mediaW, (float)mediaH, iTime, base->common.grain,
+      base->common.grainSize, base->common.progress, encodeSRGB,
+      (simd_float4){(float)mediaW, (float)mediaH, 1.0f, 0.0f});
 }
 
 // A prepared single-pass draw: binds the per-sample uniforms + colour pool and

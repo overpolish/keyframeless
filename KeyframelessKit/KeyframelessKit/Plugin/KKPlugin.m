@@ -56,6 +56,33 @@ static NSInteger gKKReconcileGen; // main-thread only
 @implementation KKPlugin
 #pragma clang diagnostic pop
 
+- (void)kkInActionScope:(void (^)(void))block {
+  id<FxCustomParameterActionAPI_v4> act =
+      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!act)
+    return;
+  [act startAction:self];
+  if (block)
+    block();
+  [act endAction:self];
+}
+
+- (void)kkInParamAction:(void (^)(id<FxParameterRetrievalAPI_v6> getAPI,
+                                  id<FxParameterSettingAPI_v5> setAPI,
+                                  CMTime actionTime))block {
+  id<PROAPIAccessing> api = self.apiManager;
+  [self kkInActionScope:^{
+    id<FxParameterRetrievalAPI_v6> getAPI =
+        [api apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    id<FxParameterSettingAPI_v5> setAPI =
+        [api apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
+    id<FxCustomParameterActionAPI_v4> act =
+        [api apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+    if (block)
+      block(getAPI, setAPI, act ? [act currentTime] : kCMTimeInvalid);
+  }];
+}
+
 @synthesize timingHeader = _timingHeader;
 @synthesize motionBlurHeader = _motionBlurHeader;
 

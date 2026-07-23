@@ -527,9 +527,32 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     // NB: the OSC handles must NOT use this (they'd seed a drag from value*expr
     // and compound the write) - they read `rootValuesForLabel:` instead.
     if (lane.linkExpression.length) {
-      NSArray<NSNumber *> *rv =
-          KKLinkResolvedLaneValue(lane, self.editFraction, self.linkTimelineSec,
-                                  self.clipDurationSeconds);
+      // Resolve `${refs}` that point at a lane in THIS SAME clip to the LIVE
+      // timeline value, not the published bus curve. The bus only updates on
+      // commit, so a derived lane (e.g. rotation = min(${...Split}, 90)) would
+      // otherwise lag its source until mouse-up. When static the timeline and
+      // bus agree, so this is byte-identical then; during an edit the timeline
+      // is live, so the derived lane tracks in real time. A cross-clip ref (no
+      // matching lane here) or an expression-driven source falls through to the
+      // bus unchanged.
+      KKTimeline *tl = self.timeline;
+      double editFrac = self.editFraction;
+      KKLinkRefOverride refOverride =
+          ^NSArray<NSNumber *> *(NSString *refName) {
+        NSString *tail =
+            [refName componentsSeparatedByString:@"."].lastObject ?: refName;
+        for (KKLane *l in tl.lanes) {
+          if (![l.label isEqualToString:tail])
+            continue;
+          return l.linkExpression.length
+                     ? nil
+                     : KKTimelineLaneValueAtFraction(l, editFrac);
+        }
+        return nil;
+      };
+      NSArray<NSNumber *> *rv = KKLinkResolvedLaneValueWithOverride(
+          lane, self.editFraction, self.linkTimelineSec,
+          self.clipDurationSeconds, refOverride);
       if (rv.count > 0)
         return rv;
     }

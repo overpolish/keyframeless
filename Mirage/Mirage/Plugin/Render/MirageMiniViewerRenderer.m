@@ -8,13 +8,14 @@
 
 #import "Constants.h"        // MirageCustomDefaultShaderSource
 #import "KKGLSLTranspiler.h" // GLSL -> MSL + channel binding
-#import "Plugin_Private.h"   // +availableLanesForShaderSource:
 #import "MirageAudioPool.h"
 #import "MirageCustomShader.h" // MirageCustomErrorShaderSource
 #import "MirageDirectives.h"
 #import "MirageExprMiniSet.h"     // // @osc custom-handling handles
 #import "MirageOSCBlockRuntime.h" // rotate blocks feed the rotation set
+#import "MirageRenderUniforms.h"  // MirageMakeUniforms (shared with FCP render)
 #import "MirageTypes.h"
+#import "Plugin_Private.h" // +availableLanesForShaderSource:
 #import <KeyframelessKit/KKShaderTypes.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 #import <Metal/Metal.h>
@@ -528,21 +529,18 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   float grainSize =
       grSzV.count ? grSzV[0].floatValue : KK_CORE_GRAINSIZE_DEFAULT;
 
-  KKGLSLUniforms base;
-  base.resTime = (simd_float4){W, H, 1.0f, iTime};
-  base.mouse = (simd_float4){0, 0, 0, 0};
-  base.date = (simd_float4){0, 0, 0, 0};
-  base.extra =
-      (simd_float4){1.0f / 60.0f, iTime * 60.0f, 0.0f, (float)encodeSRGB};
-  base.grain = (simd_float4){grain, grainSize, 0.0f, 0.0f};
-  for (int c = 0; c < 4; c++)
-    base.chanRes[c] = (simd_float4){256.0f, 256.0f, 1.0f, 0.0f};
-  // iProgress: the PLAYHEAD's fraction, matching the source frame the feed
-  // publishes (which is also the playhead's), so the preview agrees with the
-  // viewer. Not editFraction - that's the keypose being edited and is 0 outside
-  // a boundary popover, which would pin every transition to its outgoing clip.
-  base.transition =
-      (simd_float4){(float)self.playheadFraction, 0.0f, 0.0f, 0.0f};
+  // Shares the uniform-struct layout with the FCP render (MirageMakeUniforms)
+  // so the CPU<->shader contract can't drift. The mini differs on one field,
+  // passed here: iProgress is the PLAYHEAD's fraction, matching the source
+  // frame the feed publishes (which is also the playhead's) so the preview
+  // agrees with the viewer - not editFraction, the keypose being edited and 0
+  // outside a boundary popover, which would pin every transition to its
+  // outgoing clip. chanRes[0] = the render resolution {W,H}, matching the main
+  // render (its iChannelResolution[0] equals iResolution) so aspect-reading
+  // shaders preview the same as they output.
+  KKGLSLUniforms base = MirageMakeUniforms(
+      W, H, iTime, grain, grainSize, (float)self.playheadFraction,
+      (float)encodeSRGB, (simd_float4){W, H, 1.0f, 0.0f});
   // A shader's `// #color` properties -> the colour pool (bound after the fixed
   // uniforms, same as the FCP render).
   simd_float4 colorPool[KK_SHADER_COLOR_POOL];

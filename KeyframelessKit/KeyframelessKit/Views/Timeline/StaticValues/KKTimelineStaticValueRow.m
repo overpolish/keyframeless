@@ -20,6 +20,7 @@
 #import "KKSliderView.h"
 #import "KKTimelineInspectorButtons.h"
 #import "KKTimelineLanesView_Private.h"
+#import "KKTimelineStaticValueRow_Private.h" // @package ivars for categories
 #import "KKTokens.h"
 #import "KKValueTextField.h"
 #import "NSColor+KKColors.h"
@@ -30,7 +31,7 @@ const CGFloat kFloatRowH = 30.0;
 // The choice popover's opening height. It hugs its rows and grows/shrinks from
 // here as a search narrows the list, so this is a floor rather than a cap.
 // ~6 rows before a long `#choice` option list scrolls behind the edge fades.
-static const CGFloat kChoiceListMaxBody = 168.0;
+const CGFloat kChoiceListMaxBody = 168.0;
 // The dropdown trigger's width. FIXED, not content-sized: the trigger sits in
 // the value column with every other row's field, and a width that tracked the
 // current pick would shuffle that column every time the pick changed. Long
@@ -174,7 +175,7 @@ NSButton *_KKGutterGlyphButton(NSString *symbol, id target, SEL action,
 // A caption prefixed with a warning glyph, as ONE label: an attachment keeps
 // the glyph and its text on a single baseline without a second view, a second
 // set of constraints, and a spacing constant to keep in step with the font.
-static NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
+NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
   NSImageSymbolConfiguration *cfg = [[NSImageSymbolConfiguration
       configurationWithPointSize:KKFontSizeSM
                           weight:NSFontWeightMedium]
@@ -208,84 +209,7 @@ static NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
   return out;
 }
 
-@interface _KKStaticValueRow () <NSPopoverDelegate>
-@end
-
-@implementation _KKStaticValueRow {
-  KKLaneValueType _valueType;
-  NSArray<NSNumber *> *_cmin;
-  NSArray<NSNumber *> *_cmax;
-  NSArray<NSString *> *_cunits;
-  NSArray<NSString *>
-      *_clabels;         // per-component captions (built once, line ~874)
-  KKSliderView *_slider; // Float only
-  NSArray<NSSlider *> *_angleKnobs; // Angle only - one per component
-  NSMutableArray<NSNumber *>
-      *_prevKnobValues; // last seen knob position per knob
-  BOOL _angleKnobDragging;
-  NSArray<NSTextField *> *_fields;     // Float: 1; Angle: N; Crop: 4 (w,h,x,y)
-  NSMutableArray<NSNumber *> *_values; // normalized, authoritative
-  NSButton *_reset;                    // reset-to-default, right of the label
-  NSButton *_removeBtn;                // leading "−" gutter (Advanced only)
-  NSButton *_addBtn;                   // leading curve-glyph gutter (constants)
-  NSArray<NSNumber *> *_defaultValues;
-  NSButton *_smoothBtn; // curve toggle, left of the value fields
-  BOOL _smoothOn;
-  NSButton *_linkBtn; // aspect-link toggle, left of the value fields
-  BOOL _linkOn;
-  NSString
-      *_linkExpression; // param-link transform expression (nil = plain lane)
-  BOOL _integerValued;  // fields display + round to whole numbers
-  BOOL _clampsDisplayToMax;       // clamp field + thumb to _cmax (dynamic-max)
-  BOOL _componentsScaleWithMedia; // display = norm x media px
-                                  // (Position/Anchor/Crop)
-  double _laneScrubStep;          // lane's explicit scrub increment (0 = auto)
-  KKSeedView *_seedView; // seed control (value + re-roll), seedField lanes only
-  BOOL _seedField;
-  NSTextField *_titleField; // the lane-name caption; refreshed by applyLane:
-  KKCodeEditorView *_codeEditor;    // code lanes only; re-synced by applyLane:
-  KKPillToggleRowView *_choicePill; // grouped radio pill, choiceLabels only
-  NSArray<NSString *> *_choiceLabels; // English identifiers (pills need >= 2)
-  NSArray<NSNumber *> *_choiceValues; // stored value per choice (nil = index)
-  NSArray<NSImage *> *_choiceIcons;   // optional per-choice glyphs (display)
-  BOOL _wrapsChoicePills;             // pill wraps to multiple lines
-  NSLayoutConstraint *_pillWidthConstraint; // wrapping pill width (= wrapW)
-  BOOL _choiceUsesDropdown; // choice row is a dropdown, not pills
-  // What a stored value that names no current choice should read as, and the
-  // warning beside it. See KKLane.choiceUnknownLabels.
-  NSDictionary<NSNumber *, NSString *> *_choiceUnknownLabels;
-  NSString *_choiceUnknownBadge;
-  NSTextField *_choiceWarning;
-  _KKDropdownTrigger *_choiceField;   // the Animated dropdown's trigger
-  KKChoiceChecklistView *_choiceList; // the popover's list; nil when shut
-  NSPopover *_choicePopover;          // nil when shut
-  CGFloat _rowHeight;                 // resolved height (wrapping pill rows)
-  CGFloat _contentWidth;              // popover content width (for pill wrap)
-  KKCheckboxView *_toggleCheckbox;    // single on/off checkbox, isToggle only
-  BOOL _isToggle;                     // value row is a single checkbox (0/1)
-  BOOL _autoSizesComponentLabels;     // prefix captions hug text (Start/End)
-  BOOL _oscEditedOnly; // geometry-style lane: message instead of value fields
-  KKColorWellView *_colorWell; // swatch: Color (offset 0) or ColorPoint
-  NSInteger
-      _swatchOffset;     // first RGBA component index for _colorWell (0 for a
-                         // plain Color lane; = #leading fields for ColorPoint)
-  NSButton *_lockBtn;    // palette lock toggle, left of a lockable swatch
-  BOOL _paletteLockable; // lane opted into the lock toggle
-  BOOL _paletteLocked;   // current (transient) lock state
-  BOOL _paletteGeneratorBar; // row is the 5 mode buttons, not a value editor
-  BOOL _positionPathDriven;  // position-OSC lane: no link-expression affordance
-  KKGradientControl *_gradientControl; // KKLaneValueTypeGradient only
-  BOOL
-      _suppressGradientRefresh; // mid own-edit: don't reset the control's stops
-  BOOL _gradientWithTypeAngle;  // value = [type, angle, <flat stops>]
-  KKPillToggleRowView *_gradientTypePill; // radial/linear, composite only
-  NSView *_gradientAngleContainer;        // knob + field, hidden unless linear
-  NSSlider *_gradientAngleKnob;
-  NSTextField *_gradientAngleField;
-  BOOL _gradientAngleKnobDragging;
-  CGFloat _labelColumnW; // uniform label-column width (0 = natural)
-  BOOL _locked;          // locked layer: row is read-only (dimmed, no input)
-}
+@implementation _KKStaticValueRow
 
 // A locked lane's row shows its values but takes no input: swallow every mouse
 // event (so no field/slider/well/pill responds) and dim to read as disabled.
@@ -453,185 +377,6 @@ static NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
     self.onSetLinkExpression(newExpr);
 }
 
-// Curve glyph that flips this keypose corner↔smooth. Same SF Symbol the gap
-// popover uses for its "Curve" header, so the spatial-curve and timing-curve
-// affordances read consistently. Lit/accent = smooth, dim = corner.
-- (NSButton *)_makeSmoothToggle {
-  NSImage *img = [NSImage
-      imageWithSystemSymbolName:@"point.topleft.down.to.point.bottomright."
-                                @"curvepath"
-       accessibilityDescription:nil];
-  if (!img)
-    img = [NSImage imageWithSystemSymbolName:@"scribble"
-                    accessibilityDescription:nil];
-  NSButton *b = [NSButton buttonWithImage:img ?: [[NSImage alloc] init]
-                                   target:self
-                                   action:@selector(_smoothTapped:)];
-  b.translatesAutoresizingMaskIntoConstraints = NO;
-  b.bordered = NO;
-  b.bezelStyle = NSBezelStyleShadowlessSquare;
-  b.imageScaling = NSImageScaleProportionallyDown;
-  b.toolTip = KKLoc(@"Smooth path through this keypose",
-                    @"Tooltip: per-keypose curve toggle on the Position row.");
-  [NSLayoutConstraint activateConstraints:@[
-    [b.widthAnchor constraintEqualToConstant:15.0],
-    [b.heightAnchor constraintEqualToConstant:15.0],
-  ]];
-  return b;
-}
-
-- (void)_updateSmoothTint {
-  _smoothBtn.contentTintColor =
-      _smoothOn ? [NSColor accentMatchingHost]
-                : [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
-}
-
-- (void)_smoothTapped:(id)sender {
-  [self.window makeFirstResponder:nil];
-  _smoothOn = !_smoothOn;
-  [self _updateSmoothTint];
-  if (self.onSmoothToggled)
-    self.onSmoothToggled(_smoothOn);
-}
-
-- (void)applySmooth:(BOOL)on {
-  _smoothOn = on;
-  [self _updateSmoothTint];
-}
-
-// Link glyph that aspect-locks the two components: editing one scales the other
-// by the same factor, preserving their current ratio. Global per-lane toggle.
-// Lit/accent = linked, dim = unlinked.
-- (NSButton *)_makeLinkToggle {
-  NSImage *img = [NSImage imageWithSystemSymbolName:@"link"
-                           accessibilityDescription:nil];
-  NSButton *b = [NSButton buttonWithImage:img ?: [[NSImage alloc] init]
-                                   target:self
-                                   action:@selector(_linkTapped:)];
-  b.translatesAutoresizingMaskIntoConstraints = NO;
-  b.bordered = NO;
-  b.bezelStyle = NSBezelStyleShadowlessSquare;
-  b.imageScaling = NSImageScaleProportionallyDown;
-  b.toolTip = KKLoc(@"Link X and Y (lock aspect ratio)",
-                    @"Tooltip: aspect-link toggle on the Scale row.");
-  [NSLayoutConstraint activateConstraints:@[
-    [b.widthAnchor constraintEqualToConstant:15.0],
-    [b.heightAnchor constraintEqualToConstant:15.0],
-  ]];
-  return b;
-}
-
-- (void)_updateLinkTint {
-  _linkBtn.contentTintColor =
-      _linkOn ? [NSColor accentMatchingHost]
-              : [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
-}
-
-- (void)_linkTapped:(id)sender {
-  [self.window makeFirstResponder:nil];
-  _linkOn = !_linkOn;
-  [self _updateLinkTint];
-  if (self.onLinkToggled)
-    self.onLinkToggled(_linkOn);
-}
-
-- (void)applyLink:(BOOL)on {
-  _linkOn = on;
-  [self _updateLinkTint];
-}
-
-// Padlock toggle beside a lockable colour swatch. Closed/accent = locked (a
-// palette reroll skips this colour), open/dim = unlocked. Borderless glyph
-// styled like the row's other gutter toggles.
-- (NSButton *)_makePaletteLockToggle {
-  NSButton *b = [NSButton buttonWithImage:[[NSImage alloc] init]
-                                   target:self
-                                   action:@selector(_paletteLockTapped:)];
-  b.translatesAutoresizingMaskIntoConstraints = NO;
-  b.bordered = NO;
-  b.bezelStyle = NSBezelStyleShadowlessSquare;
-  b.imageScaling = NSImageScaleProportionallyDown;
-  b.toolTip =
-      KKLoc(@"Lock this colour (kept when the palette regenerates)",
-            @"Tooltip: per-colour lock toggle for the palette generator.");
-  [NSLayoutConstraint activateConstraints:@[
-    [b.widthAnchor constraintEqualToConstant:15.0],
-    [b.heightAnchor constraintEqualToConstant:15.0],
-  ]];
-  return b;
-}
-
-- (void)_updatePaletteLockAppearance {
-  NSImage *img = [NSImage
-      imageWithSystemSymbolName:(_paletteLocked ? @"lock.fill" : @"lock.open")
-       accessibilityDescription:nil];
-  if (img)
-    _lockBtn.image = img;
-  _lockBtn.contentTintColor =
-      _paletteLocked ? [NSColor accentMatchingHost]
-                     : [[NSColor inspectorLabel] colorWithAlphaComponent:0.55];
-}
-
-- (void)_paletteLockTapped:(id)sender {
-  [self.window makeFirstResponder:nil];
-  _paletteLocked = !_paletteLocked;
-  [self _updatePaletteLockAppearance];
-  if (self.onPaletteLockToggled)
-    self.onPaletteLockToggled(_paletteLocked);
-}
-
-- (void)applyPaletteLock:(BOOL)locked {
-  _paletteLocked = locked;
-  [self _updatePaletteLockAppearance];
-}
-
-// One momentary palette-bar button (glyph, with a text fallback if the SF
-// symbol is unavailable).
-- (NSButton *)_makePaletteButtonSymbol:(NSString *)symbol
-                                  name:(NSString *)englishName
-                                   tag:(NSInteger)tag
-                                action:(SEL)action {
-  NSString *loc = KKLocalizedParamName(englishName);
-  NSImage *img = [NSImage imageWithSystemSymbolName:symbol
-                           accessibilityDescription:loc];
-  NSButton *b = img ? [NSButton buttonWithImage:img target:self action:action]
-                    : [NSButton buttonWithTitle:loc target:self action:action];
-  b.translatesAutoresizingMaskIntoConstraints = NO;
-  b.bezelStyle = NSBezelStyleRoundRect;
-  b.controlSize = NSControlSizeSmall;
-  b.imageScaling = NSImageScaleProportionallyDown;
-  b.tag = tag;
-  b.toolTip = loc;
-  [b.heightAnchor constraintEqualToConstant:18.0].active = YES;
-  return b;
-}
-
-// Tag = mode index; tapping rerolls in that mode.
-- (NSButton *)_makePaletteModeButton:(NSInteger)mode
-                              symbol:(NSString *)symbol
-                                name:(NSString *)englishName {
-  return [self _makePaletteButtonSymbol:symbol
-                                   name:englishName
-                                    tag:mode
-                                 action:@selector(_paletteModeTapped:)];
-}
-
-- (void)_paletteModeTapped:(id)sender {
-  [self.window makeFirstResponder:nil];
-  if (self.onPaletteGenerate)
-    self.onPaletteGenerate([(NSButton *)sender tag]);
-}
-
-- (void)_paletteRefineTapped:(id)sender {
-  [self.window makeFirstResponder:nil];
-  if (self.onPaletteRefine)
-    self.onPaletteRefine();
-}
-
-// A toggle row is one big click target (like KKCheckboxRowView): the inner
-// KKCheckboxView's NSClickGestureRecognizer doesn't fire reliably inside FCP's
-// ApplicationDefined popovers, so handle the click at the row level. Non-toggle
-// rows fall through to AppKit so their fields/pills keep working.
 - (BOOL)acceptsFirstMouse:(NSEvent *)event {
   return _isToggle ? YES : [super acceptsFirstMouse:event];
 }
@@ -773,157 +518,6 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   }
 }
 
-// Stored value -> choice index. -1 when the stored value names no current
-// choice (the source it pointed at was deleted), which the callers show as
-// "nothing selected" rather than lighting up whatever now sits at that index.
-- (NSInteger)_choiceIndexForStored:(double)stored {
-  if (!_choiceValues.count)
-    return (NSInteger)llround(stored);
-  for (NSInteger i = 0; i < (NSInteger)_choiceValues.count; i++)
-    if (llround(_choiceValues[i].doubleValue) == llround(stored))
-      return i;
-  return -1;
-}
-
-// Choice index -> the value the lane stores. `choiceValues` lets a lane whose
-// choices come and go hold a stable id instead of a position.
-- (double)_storedForChoiceIndex:(NSInteger)index {
-  if (index >= 0 && index < (NSInteger)_choiceValues.count)
-    return _choiceValues[index].doubleValue;
-  return (double)index;
-}
-
-- (NSInteger)_selectedChoiceIndex {
-  if (!_values.count)
-    return -1;
-  return [self _choiceIndexForStored:_values[0].doubleValue];
-}
-
-- (void)_syncChoiceFieldTitle {
-  NSInteger sel = [self _selectedChoiceIndex];
-  BOOL valid = sel >= 0 && sel < (NSInteger)_choiceLabels.count;
-  // A stored value naming no current choice is NOT the same as picking "None",
-  // even though both render nothing and both fall back to defaults. Ask the
-  // owner what it was: Shader remembers the Sonar source a lane is bound to,
-  // so "Dialogue + Music - DEMO 1" survives even where it isn't published.
-  NSString *unknown =
-      valid ? nil : _choiceUnknownLabels[@([self _storedChoiceValue])];
-  // "None" rather than blank when nothing at all is known, so an unset lane
-  // reads as unset instead of broken. Already a param name, so it localizes
-  // with the choice labels and needs no new string.
-  _choiceField.summaryOverride =
-      unknown ?: KKLocalizedParamName(valid ? _choiceLabels[sel] : @"None");
-  // `selectedLabels` is what the trigger reads as "has a selection", which
-  // dims the text when it doesn't - so an unset picker greys its "None" exactly
-  // like the Animated dropdown greys its placeholder. A remembered-but-missing
-  // pick stays dimmed too: it names something that isn't selectable here.
-  _choiceField.selectedLabels = valid ? @[ _choiceLabels[sel] ] : nil;
-  [_choiceField setNeedsDisplay:YES];
-  [self _syncChoiceWarning:(unknown != nil)];
-}
-
-- (double)_storedChoiceValue {
-  return _values.count ? _values[0].doubleValue : 0.0;
-}
-
-/// Shows the owner's warning in the gap between the lane's name and its value
-/// control - the one place on the row nothing else claims.
-- (void)_syncChoiceWarning:(BOOL)show {
-  if (!show || !_choiceUnknownBadge.length) {
-    _choiceWarning.hidden = YES;
-    return;
-  }
-  if (!_choiceWarning) {
-    _choiceWarning = _KKMakeCaption(_choiceUnknownBadge);
-    _choiceWarning.attributedStringValue =
-        _KKWarningCaption(_choiceUnknownBadge, [NSColor warning]);
-    [self addSubview:_choiceWarning];
-    [NSLayoutConstraint activateConstraints:@[
-      [_choiceWarning.trailingAnchor
-          constraintEqualToAnchor:_choiceField.leadingAnchor
-                         constant:-KKPaddingMD],
-      [_choiceWarning.centerYAnchor
-          constraintEqualToAnchor:_choiceField.centerYAnchor],
-    ]];
-    // Compressible so a long localization gives way to the value column rather
-    // than shoving it off the row.
-    [_choiceWarning
-        setContentCompressionResistancePriority:NSLayoutPriorityDefaultLow
-                                 forOrientation:
-                                     NSLayoutConstraintOrientationHorizontal];
-  }
-  // Re-set rather than set once at creation: the trigger's text is what names
-  // the source, and it changes as the row is reused for other values.
-  _choiceWarning.toolTip = [NSString
-      stringWithFormat:@"%@ - %@", _choiceField.summaryOverride ?: @"",
-                       _choiceUnknownBadge];
-  _choiceWarning.hidden = NO;
-}
-
-// A popover off the trigger, like the Animated dropdown.
-//
-// This one opens from INSIDE the Constants popover, which would normally
-// dismiss the moment a click lands in another window. Registering the child as
-// a keep-alive window is what makes the parent treat clicks in it as its own -
-// the same mechanism the companion side panels use.
-- (void)_toggleChoiceList {
-  if (_choicePopover) {
-    [_choicePopover performClose:nil];
-    return;
-  }
-  _choiceList =
-      [[KKChoiceChecklistView alloc] initWithOptions:_choiceLabels
-                                       selectedIndex:[self _selectedChoiceIndex]
-                                       maxBodyHeight:kChoiceListMaxBody];
-  __weak typeof(self) weak = self;
-  _choiceList.onSelect = ^(NSInteger index) {
-    __strong typeof(weak) s = weak;
-    if (!s)
-      return;
-    [s _setValues:@[ @([s _storedForChoiceIndex:index]) ] emit:YES];
-    [s _syncChoiceFieldTitle];
-    [s->_choicePopover performClose:nil]; // a pick ends the interaction
-  };
-
-  // Wrapped, not set as the content view directly: the wrapper is what strips
-  // the system popover's own glass + border once it has a window. Without it
-  // the kit's chrome and AppKit's both draw, and the list wears two borders.
-  _KKLVPopoverContentView *wrapper = [[_KKLVPopoverContentView alloc] init];
-  wrapper.frame = _choiceList.bounds;
-  _choiceList.translatesAutoresizingMaskIntoConstraints = NO;
-  [wrapper addSubview:_choiceList];
-  [NSLayoutConstraint activateConstraints:@[
-    [_choiceList.leadingAnchor constraintEqualToAnchor:wrapper.leadingAnchor],
-    [_choiceList.trailingAnchor constraintEqualToAnchor:wrapper.trailingAnchor],
-    [_choiceList.topAnchor constraintEqualToAnchor:wrapper.topAnchor],
-    [_choiceList.bottomAnchor constraintEqualToAnchor:wrapper.bottomAnchor],
-  ]];
-
-  NSViewController *vc = [[NSViewController alloc] init];
-  vc.view = wrapper;
-  _choicePopover = [[NSPopover alloc] init];
-  _choicePopover.contentViewController = vc;
-  _choicePopover.behavior = NSPopoverBehaviorTransient;
-  _choicePopover.delegate = self;
-  // Before sizing: the list only knows it is the popover's whole content once
-  // this is set, and -refilterAndResize is what sizes the popover to the capped
-  // list (an options list longer than the old fixed minimum used to be clipped
-  // with no way to reach the tail).
-  _choiceList.popover = _choicePopover;
-  [_choiceList refilterAndResize];
-  [_choicePopover showRelativeToRect:_choiceField.bounds
-                              ofView:_choiceField
-                       preferredEdge:NSRectEdgeMinY];
-  // Only available once shown.
-  KKPopoverAddKeepAliveWindow(_choiceList.window);
-}
-
-- (void)popoverDidClose:(NSNotification *)notification {
-  KKPopoverRemoveKeepAliveWindow(_choiceList.window);
-  _choicePopover = nil;
-  _choiceList = nil;
-}
-
 - (double)_clamp:(double)v index:(NSInteger)i {
   if (i < (NSInteger)_cmin.count && v < _cmin[i].doubleValue)
     v = _cmin[i].doubleValue;
@@ -942,6 +536,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   // Round to the displayed precision first, then squash -0 → 0 so a tiny
   // negative never shows as "-0".
   dv = intFmt ? round(dv) : round(dv * 100.0) / 100.0;
+
   if (dv == 0.0)
     dv = 0.0;
   return [NSString stringWithFormat:(intFmt ? @"%.0f" : @"%.2f"), dv];
@@ -1219,6 +814,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
     editor.codeFormatter = lane.codeFormatter;
     editor.completionProvider = lane.codeCompletionProvider;
     editor.directiveKeywords = lane.codeDirectiveKeywords;
+    editor.directiveKinds = lane.codeDirectiveKinds;
     editor.savable = lane.codeSavable;
     editor.saveCategoryLabels = lane.codeSaveCategories;
     editor.saveNamePlaceholder = lane.codeSaveNamePlaceholder;
@@ -1841,61 +1437,8 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   return self;
 }
 
-// Gradient value layout: pure flat stops, or - for a composite type/angle lane
-// - [type, angleDegrees, <flat stops>]. These split/join the parts.
-- (NSArray<KKGradientStop *> *)_currentGradientStops {
-  NSArray<NSNumber *> *flat = _values;
-  if (_gradientWithTypeAngle)
-    flat = _values.count > 2
-               ? [_values subarrayWithRange:NSMakeRange(2, _values.count - 2)]
-               : @[];
-  return KKGradientStopsFromFlat(flat);
-}
-
-- (NSArray<NSNumber *> *)_composeGradientWithStops:
-    (NSArray<KKGradientStop *> *)stops {
-  NSArray<NSNumber *> *flat = KKGradientFlatFromStops(stops);
-  if (!_gradientWithTypeAngle)
-    return flat;
-  double type = _values.count >= 1 ? _values[0].doubleValue : 0.0;
-  double angle = _values.count >= 2 ? _values[1].doubleValue : 0.0;
-  NSMutableArray<NSNumber *> *out = [@[ @(type), @(angle) ] mutableCopy];
-  [out addObjectsFromArray:flat];
-  return out;
-}
-
-- (void)_updateGradientAngleVisibility {
-  NSInteger type = _values.count >= 1 ? llround(_values[0].doubleValue) : 0;
-  _gradientAngleContainer.hidden = (type != 1); // angle only for Linear
-}
-
-- (void)_gradientAngleKnobMoved:(NSSlider *)sender {
-  if (!_gradientAngleKnobDragging) {
-    [sender.window makeFirstResponder:nil];
-    _gradientAngleKnobDragging = YES;
-    if (self.onDragBegin)
-      self.onDragBegin();
-  }
-  NSMutableArray<NSNumber *> *v = [_values mutableCopy];
-  if (v.count >= 2)
-    v[1] = @(sender.doubleValue);
-  [self _setValues:v emit:YES];
-  if (NSApp.currentEvent.type == NSEventTypeLeftMouseUp) {
-    _gradientAngleKnobDragging = NO;
-    if (self.onDragEnd)
-      self.onDragEnd();
-  }
-}
-
-- (void)_gradientAngleFieldCommitted:(NSTextField *)sender {
-  NSMutableArray<NSNumber *> *v = [_values mutableCopy];
-  if (v.count >= 2)
-    v[1] = @(sender.doubleValue);
-  [self _setValues:v emit:YES];
-}
-
 // Per-component clamp; for Crop additionally keep the box inside the image
-// (|x| ≤ (1-w)/2, |y| ≤ (1-h)/2) so typed values match the OSC, which
+// (|x| <= (1-w)/2, |y| <= (1-h)/2) so typed values match the OSC, which
 // never lets the crop rect exceed the image.
 - (void)_constrain:(NSMutableArray<NSNumber *> *)v {
   for (NSInteger i = 0; i < (NSInteger)v.count; i++)

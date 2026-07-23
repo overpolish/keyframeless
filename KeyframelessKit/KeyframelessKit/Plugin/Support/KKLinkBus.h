@@ -228,6 +228,22 @@ FOUNDATION_EXPORT void KKLinkPublishReferenceableLanes(id<PROAPIAccessing> api,
 FOUNDATION_EXPORT NSArray<NSNumber *> *_Nullable KKLinkResolvedLaneValue(
     KKLane *lane, double frac, double timelineSec, double clipDurSec);
 
+/// A live-drag override for referenced sources: given a `${ref}` source name
+/// (in its stored `uuid.label` form), return an in-flight value to use INSTEAD
+/// of that source's published bus curve, or nil to fall through to the bus.
+/// Lets a mini-viewer make an expression that references a lane being dragged
+/// (e.g. `rotation` derived from `${split}`) update in REAL TIME during the
+/// drag, before it commits and republishes.
+typedef NSArray<NSNumber *> *_Nullable (^KKLinkRefOverride)(NSString *refName);
+
+/// `KKLinkResolvedLaneValue` with a live-drag override for the sources its
+/// expression references (see KKLinkRefOverride). `refOverride == nil` is
+/// identical to the plain form.
+FOUNDATION_EXPORT
+    NSArray<NSNumber *> *_Nullable KKLinkResolvedLaneValueWithOverride(
+        KKLane *lane, double frac, double timelineSec, double clipDurSec,
+        KKLinkRefOverride _Nullable refOverride);
+
 /// The source names a timeline's lanes reference - the `${refs}` across all
 /// lanes' linkExpressions - so a subscriber knows which sources to watch for
 /// live re-render. Empty when nothing references anything.

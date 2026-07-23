@@ -4,11 +4,11 @@
  */
 
 #import "Constants.h"
-#import "Plugin+Render_Internal.h"
 #import "MirageAudioPool.h" // MirageFillAudioPool (the Sonar spectrogram)
 #import "MirageDirectives.h"
 #import "MirageInspectorView.h"
 #import "MirageStateBlob.h"
+#import "Plugin+Render_Internal.h"
 
 #import <KeyframelessKit/KKLinkBus.h>
 #import <KeyframelessKit/KKMotionBlur.h>
@@ -248,6 +248,22 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   // (debounced) writes the hidden render-nudge scratch param in an action
   // scope.
   NSSet<NSString *> *linkSources = KKLinkTimelineSourceNames(timeline);
+  // Drop SAME-clip references (`${selfUUID.label}`). This clip republishes its
+  // own lanes on every render (writeLinkManifest above), which bumps their
+  // change stamp - so watching them would nudge-loop forever (render ->
+  // republish -> stamp bump -> nudge -> render), firing continuous ungrouped
+  // render-nudge writes even while idle. A same-clip source is already live in
+  // this clip's own timeline and re-renders with it, so it needs no cross-clip
+  // nudge. Only TRUE cross-clip sources (another effect's uuid) get watched.
+  NSString *selfLinkUUID = KKInstanceUUIDForAPI(self.apiManager);
+  if (selfLinkUUID.length && linkSources.count) {
+    NSString *selfPrefix = [selfLinkUUID stringByAppendingString:@"."];
+    NSMutableSet<NSString *> *crossClip = [NSMutableSet set];
+    for (NSString *name in linkSources)
+      if (![name hasPrefix:selfPrefix])
+        [crossClip addObject:name];
+    linkSources = crossClip;
+  }
   if (linkSources.count > 0 || self.linkWatcher) {
     if (!self.linkWatcher)
       self.linkWatcher =

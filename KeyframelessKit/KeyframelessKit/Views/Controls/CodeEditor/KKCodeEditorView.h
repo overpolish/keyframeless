@@ -57,6 +57,13 @@ typedef NS_ENUM(NSInteger, KKCodeSyntax) {
 /// bare value identifier not in this set stays plain text. nil = none.
 @property(nonatomic, copy, nullable) NSSet<NSString *> *directiveKeywords;
 
+/// The valid directive-header tokens (`#float`, `@osc`, ...). When set, the
+/// highlighter greens a `// #kind` / `// @block` header ONLY if its token is in
+/// this set, so a half-typed or unknown directive (`// #alp`) stays a plain
+/// grey comment. Host-supplied so the kit stays vocabulary-agnostic. nil = the
+/// old lexical behaviour (green any `// #word` / `// @word`).
+@property(nonatomic, copy, nullable) NSSet<NSString *> *directiveKinds;
+
 /// Optional read-only result strip under the editor (styled like the error
 /// bar): a host pushes the live computed result of an expression here for
 /// clarity. nil/empty hides the strip.

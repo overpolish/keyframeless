@@ -55,6 +55,11 @@ Colored(NSArray<NSDictionary<NSString *, NSString *> *> *items, NSString *hex) {
 
 /// `// #…` / `// @…` directive kinds (the token includes its `#`/`@`).
 NSArray<NSDictionary<NSString *, NSString *> *> *MirageDirectiveKinds(void);
+
+/// The valid directive-header TOKENS (`#float`, `@osc`, ...), derived from
+/// MirageDirectiveKinds. Passed to the code editor's `directiveKinds` so it
+/// greens only real directives, not any `// #word`.
+NSSet<NSString *> *MirageDirectiveKindTokens(void);
 /// Attribute keys on a `#…` directive line (`label=`, `min=`, `osc=`, …).
 NSArray<NSDictionary<NSString *, NSString *> *> *
 MirageDirectiveAttributeKeys(void);
