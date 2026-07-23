@@ -356,7 +356,7 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   KKMiniViewerView *canvas = self.penDrawCanvas;
   if (!canvas)
     return;
-  // The shared KKRingOSC shader (same as the viewer ring + Glow's radius ring),
+  // The shared KKRingOSC shader (same as the viewer ring),
   // tinted accent / error. Scales with the popover via the OSC sizing ratio;
   // the shader is crisp so no manual snap is needed.
   CGFloat scale = canvas.oscSizingHeight / 230.0;

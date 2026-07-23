@@ -5,7 +5,7 @@ summary: Color property - Dynamic, Solid, and Gradient modes shared across plugi
 
 # Color: Dynamic, Solid, and Gradient
 
-Color is a shared property that any plugin can adopt, so it looks and behaves the same everywhere (a plugin can have more than one - for example a fill colour and a stroke colour). What the colour _applies to_ depends on the plugin: in Glow it tints the glow. The control, its modes, and the way it animates are identical because they are the same shared code.
+Color is a shared property that any plugin can adopt, so it looks and behaves the same everywhere (a plugin can have more than one - for example a fill colour and a stroke colour). What the colour _applies to_ depends on the plugin (for example tinting an effect). The control, its modes, and the way it animates are identical because they are the same shared code.
 
 A Color group has a **Mode** selector and, depending on the mode, either a colour swatch or a gradient editor. Mode itself is structural: it is chosen in the constants / keypose editor and is **not** animated (you do not keyframe from Solid to Gradient). The colour _within_ a mode is what animates.
 

@@ -29,7 +29,7 @@ extern void MirageSetOSCGuideStep(NSInteger step);
 extern BOOL MirageHasCanvasReference(void);
 /// Pushes the live Origin position (object [0,1] space) the guide drag is
 /// writing so the OSC handle can track it from the drawOSC tick (the blob is
-/// unreadable there). Mirrors MagicMove's Position guide plumbing.
+/// unreadable there).
 extern void MirageSetGuidePosition(double objX, double objY);
 /// The object-space Origin position the OSC guide's interactive drag targets.
 extern CGPoint MirageGuideTargetObjectPosition(void);

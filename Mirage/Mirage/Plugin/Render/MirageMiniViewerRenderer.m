@@ -203,9 +203,8 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   return KKMiniHandleStyleArc;
 }
 
-// Match the other plugins' mini-viewer dot handles (Rounded / Canvas /
-// MagicMove all use 0.6): the `osc=box` handle glyphs read lighter. The #point
-// handles are arc-style, so this doesn't touch them.
+// Match the mini-viewer dot handles (0.6): the `osc=box` handle glyphs read
+// lighter. The #point handles are arc-style, so this doesn't touch them.
 - (CGFloat)pointHandleSizeScale {
   return 0.6;
 }

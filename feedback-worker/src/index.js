@@ -8,10 +8,7 @@
 // token, then open a GitHub issue using GITHUB_TOKEN - which never leaves here.
 
 const PLUGIN_NAMES = {
-  rounded: "Rounded",
-  magicmove: "Magic Move",
   canvas: "Canvas",
-  glow: "Glow",
   keyframelessx: "Keyframeless X",
 };
 

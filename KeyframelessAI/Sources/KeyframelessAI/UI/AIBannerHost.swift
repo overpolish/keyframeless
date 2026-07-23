@@ -7,7 +7,7 @@ import AppKit
 import SwiftUI
 
 /// ObjC-callable factory that builds an `NSHostingView` wrapping the SwiftUI
-/// `AIButton`. FxPlug plugin banners (Rounded, Canvas, etc.) use this to
+/// `AIButton`. FxPlug plugin banners use this to
 /// reuse the workflow-ext button design without pulling SwiftUI into
 /// KeyframelessKit.
 @objc(KKAIBannerHost)

@@ -88,8 +88,7 @@
     _penHandleOSC.oscRadius = 5.0f;
     _penHandleOSC.outlineWidth = 1.5f;
     _penHandleOSC.clearsOnDraw = NO;
-    // Live-corner radius widget: the shared ring control, small + tinted accent
-    // (same standard style as Rounded's radius handle).
+    // Live-corner radius widget: the shared ring control, small + tinted accent.
     _penCornerRingOSC = [[KKRingOSC alloc] initWithAPIManager:apiManager];
     [_penCornerRingOSC applyRadiusWidgetStyle];
     _penController = [[CanvasPenController alloc] initWithSurface:self];
@@ -181,9 +180,9 @@
     // gating internally (it reads kkOSCElementVisible / kkOSCRevealEligible +
     // ITS OWN optRevealActive). So just forward our reveal + drag state to it
     // and draw unconditionally - it draws nothing when hidden, the dim ghost
-    // when Opt-revealed, full when shown. (Forwarding optRevealActive is the bit
-    // Canvas needs that MagicMove/Glow don't: their primary handle is always
-    // shown, so they never relied on the controller ghosting a hidden Position.)
+    // when Opt-revealed, full when shown. (Forwarding optRevealActive matters
+    // here because Canvas's primary Position handle can itself be hidden, so the
+    // controller must ghost it rather than always show it.)
     self.position.optRevealActive = self.optRevealActive;
     self.position.dragging = self.isDragging;
     [self.position drawPathInDestination:destinationImage

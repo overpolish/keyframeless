@@ -359,7 +359,7 @@
 // `ctr` is overlay points, y-up, in the canvas's own coordinate space (the
 // overlay fills the canvas bounds 1:1) → glyph rect in screen space.
 // The point handle's visual radius in view points. Arc-style handles (e.g.
-// Magic Move's Position) draw a ring ~2x the point dot that scales with the
+// a Position handle) draw a ring ~2x the point dot that scales with the
 // popover, so a guide spotlight must match it (mirrors +Rendering's arc glyph:
 // outer 9pt at the 230pt baseline canvas height).
 - (CGFloat)_pointHandleRadiusPt {

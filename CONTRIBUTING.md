@@ -24,7 +24,7 @@ Details in `ThirdParty/README.md`.
 
 ## Plugin structure
 
-Every FxPlug plugin (Rounded, MagicMove, and the canonical `Template/`) follows the same `Plugin/` layout. Starting a new plugin is "copy `Template/`, rename, fill the hooks", so keep new plugins on this shape:
+Every FxPlug plugin (Canvas, Mirage, and the canonical `Template/`) follows the same `Plugin/` layout. Starting a new plugin is "copy `Template/`, rename, fill the hooks", so keep new plugins on this shape:
 
 ```
 Plugin/
@@ -33,7 +33,7 @@ Plugin/
   OSC/        OSC.{h,m}, OSC_Internal.h, <Name>OSC+<Category>.m, <Name>OSCMath.{h,m}
   Render/     Plugin+Render.m, <Name>MiniViewerRenderer.{h,m}, ShaderTypes.h, <Name>.metal
   Inspector/  (optional) <Name>InspectorView*.{h,m} - only if the plugin has a custom
-              inspector subclass (Rounded does; MagicMove does not)
+              inspector subclass (Canvas does; the Template does not)
   Assets/     (optional) cursors / images
   Info.plist, en.lproj/   (stay at the Plugin/ root, not inside Core/)
 ```
@@ -85,7 +85,7 @@ Quick sanity check that points at this cause: add `+ (void)load` and an `initWit
 Debug XPC service builds are non-sandboxed, so `NSUserDefaults` writes to `~/Library/Preferences/<BundleID>.plist` instead of the sandbox container. The `defaults` CLI looks in the container and won't find or delete the key. To reset the intro-seen state:
 
 ```sh
-plutil -remove introSeen ~/Library/Preferences/co.overpolish.keyframeless.Rounded.PlugIn.plist
+plutil -remove introSeen ~/Library/Preferences/co.overpolish.keyframeless.Canvas.PlugIn.plist
 killall cfprefsd
 ```
 
@@ -95,10 +95,10 @@ killall cfprefsd
 
 ## Switching languages during development
 
-Plugin UI (Rounded, the timeline sequencer) and the workflow extension are localized via String Catalogs (`.xcstrings`). To see another language while developing:
+Plugin UI (Canvas, the timeline sequencer) and the workflow extension are localized via String Catalogs (`.xcstrings`). To see another language while developing:
 
 > [!IMPORTANT]
-> Use the **global** `AppleLanguages` for everything, and make sure FCP has **no per-app override**. Why: the FxPlug plugin (Rounded render XPC + ViewBridge inspector/joyride are separate system-spawned processes) reads the global language directly. The workflow extension instead follows **FCP's own** language - which falls back to the global only when FCP has no per-app override. A stale `com.apple.FinalCut` override therefore pins the extension to that language while the plugin tracks the global, so they disagree.
+> Use the **global** `AppleLanguages` for everything, and make sure FCP has **no per-app override**. Why: the FxPlug plugin (Canvas render XPC + ViewBridge inspector/joyride are separate system-spawned processes) reads the global language directly. The workflow extension instead follows **FCP's own** language - which falls back to the global only when FCP has no per-app override. A stale `com.apple.FinalCut` override therefore pins the extension to that language while the plugin tracks the global, so they disagree.
 >
 > One-time: clear any FCP per-app override so FCP (and the extension) follow the global:
 >
@@ -190,7 +190,7 @@ one:
 
 ```sh
 # bump the served version above what's installed, then rebuild + reload the plugin
-cp docs/changelog/rounded/3.0.0.md docs/changelog/rounded/9.9.9.md
+cp docs/changelog/canvas/2.0.0.md docs/changelog/canvas/9.9.9.md
 python3 scripts/build-changelog.py
 ```
 
@@ -201,7 +201,7 @@ would publish a bogus version and trip the checker for real users.
 > FCP-hosted plugins don't inherit Xcode scheme env vars, so the banner can't be forced
 > with an environment variable. For pure UI work without a server, flip the compile-time
 > switch instead: `forceUpdateBanner` in `AppShell.swift` (Keyframeless X) or
-> `kKKForceUpdateBanner` in `KKLogoBannerView.m` (Rounded). Keep both `false`/`NO` for
+> `kKKForceUpdateBanner` in `KKLogoBannerView.m` (Canvas). Keep both `false`/`NO` for
 > shipping.
 
 ## Running the feedback form locally

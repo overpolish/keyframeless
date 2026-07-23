@@ -258,7 +258,7 @@ fragment float4 KKGradientLineFragment(KKRasterizerData in [[stage_in]], constan
     int i0 = int(floor(lutPos));
     int i1 = min(i0 + 1, n - 1);
     // LUT is sRGB; the render works in linear space, so linearise before output
-    // (same pow(2.2) Glow applies to its gradient + solid colour).
+    // (same pow(2.2) applied to the gradient + solid colour).
     float3 rgb = pow(mix(lut[i0], lut[i1], lutPos - float(i0)), 2.2);
     float a = alpha * (*opacity);
     return float4(rgb * a, a);

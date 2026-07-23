@@ -24,7 +24,7 @@ Usage:
   scripts/split-pkgproj.py --version <component>           print the product version
   scripts/split-pkgproj.py --components                    list component keys
 
-Components: rounded keyframelessx magicmove glow canvas
+Components: keyframelessx canvas shader
 Output:    Distribution/<Name>.pkgproj   (builds to build/<Name>.pkg)
 
 Build one unsigned:  packagesbuild "Distribution/<Name>.pkgproj"
@@ -42,10 +42,7 @@ UNINSTALL_TEMPLATE = ROOT / "scripts" / "uninstall.template"
 
 # component key -> package IDENTIFIER as it appears in the combined project
 COMPONENT_ID = {
-    "rounded": "co.overpolish.keyframeless.Rounded",
     "keyframelessx": "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP",
-    "magicmove": "co.overpolish.keyframeless.MagicMove",
-    "glow": "co.overpolish.keyframeless.Glow",
     "canvas": "co.overpolish.keyframeless.Canvas",
     "shader": "co.overpolish.keyframeless.Shader",
     # The shared local-AI engine (helper + LaunchAgent to /Library). Not a plugin
@@ -66,8 +63,8 @@ def installer_list(project):
 
 
 def find_app_name(node):
-    """The installed .app filename (e.g. 'MagicMove.app'), which can differ from the
-    product display name ('Magic Move'). Read it from the payload hierarchy."""
+    """The installed .app filename (which can differ from the product display name
+    when the name has spaces or separators). Read it from the payload hierarchy."""
     path = node.get("PATH", "")
     if path.endswith(".app"):
         return pathlib.Path(path).name

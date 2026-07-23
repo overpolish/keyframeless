@@ -102,7 +102,7 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic) BOOL holdsFlat;
 
 @property(nonatomic, copy, nullable)
-    NSData *pathData; // plugin blob (MagicMove bezier)
+    NSData *pathData; // plugin blob (bezier path)
 
 /// Plugin-specific per-interval flags / values, serialized into the
 /// interval JSON. Use the `userBool…` / `userNumber…` helpers below rather
@@ -331,8 +331,8 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// value fields (Shift/Option then scale it x10 / x0.1). Build-time metadata.
 /// Default 0, which means "auto": the row picks 1.0 for whole-number fields
 /// (integer / media-pixel) and 0.01 for raw 2-decimal fields. Set this when the
-/// auto guess is wrong - e.g. Glow's Radius is a raw 0..500 px value shown with
-/// decimals, so it wants 1.0 rather than the 0.01 the auto rule would choose.
+/// auto guess is wrong - e.g. a raw 0..500 px value shown with
+/// decimals wants 1.0 rather than the 0.01 the auto rule would choose.
 @property(nonatomic) double scrubStep;
 
 /// When YES the value-popover scales this lane's components by the media size
@@ -343,7 +343,7 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// on lanes whose stored value is a normalised 0..1 fraction the user should
 /// see as pixels (Crop, Position, Anchor). The `componentUnits` string (e.g.
 /// @"px") is purely cosmetic and does NOT drive this - a lane can show a "px"
-/// suffix while storing/rendering absolute pixels (e.g. Glow's Radius).
+/// suffix while storing/rendering absolute pixels (e.g. a raw pixel radius).
 @property(nonatomic) BOOL componentsScaleWithMedia;
 
 /// Navigational category for the static-values popover (Constants + Keypose):

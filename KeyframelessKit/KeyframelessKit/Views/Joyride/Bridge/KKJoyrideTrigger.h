@@ -66,7 +66,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)miniViewerZoomed;
 + (instancetype)miniViewerViewReset;
 /// Fires when a mini-viewer double-click is consumed by the delegate (e.g.
-/// Magic Move toggling a keypose corner/smooth) rather than resetting the view.
+/// a plugin toggling a keypose corner/smooth) rather than resetting the view.
 + (instancetype)miniViewerDoubleClickHandled;
 /// Fires when the boundary popover's render-mode pill changes the mode. `mode`
 /// is a KKMiniViewerRenderMode (0 = Off, 1 = Filmstrip, 2 = Onion); < 0 = any.

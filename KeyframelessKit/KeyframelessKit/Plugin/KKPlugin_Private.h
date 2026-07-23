@@ -38,7 +38,7 @@ extern NSSet<NSString *> *_Nullable KKEffectiveHiddenLaneLabels(
 /// main queue. Pass the full unfiltered JSON lane list and the **plugin
 /// (system) hidden-label set** - i.e. `-hiddenAnimatablePropertyLabels`,
 /// NOT the effective set. The bar omits lanes whose label is in
-/// `pluginHidden` (so e.g. Glow's color/gradient lanes are absent in the
+/// `pluginHidden` (so e.g. a plugin's color/gradient lanes are absent in the
 /// wrong colour mode), but still shows user-hidden pills so the user can
 /// click to unhide them.
 extern void

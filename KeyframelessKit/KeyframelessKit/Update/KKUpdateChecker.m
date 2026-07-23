@@ -35,24 +35,12 @@ static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
     // FxPlug plugins: current reverse-DNS ids (host + .PlugIn extension). The
     // bare and -XPC-Service ids are the pre-standardization installs, kept so
     // they still resolve to a changelog and get prompted to update.
-    @"co.overpolish.keyframeless.Rounded" : @"rounded",
-    @"co.overpolish.keyframeless.Rounded.PlugIn" : @"rounded",
-    @"Rounded" : @"rounded",
-    @"Rounded-XPC-Service" : @"rounded",
-    @"co.overpolish.keyframeless.MagicMove" : @"magicmove",
-    @"co.overpolish.keyframeless.MagicMove.PlugIn" : @"magicmove",
     @"co.overpolish.keyframeless.Mirage" : @"mirage",
     @"co.overpolish.keyframeless.Mirage.PlugIn" : @"mirage",
-    @"MagicMove" : @"magicmove",
-    @"MagicMove-XPC-Service" : @"magicmove",
     @"co.overpolish.keyframeless.Canvas" : @"canvas",
     @"co.overpolish.keyframeless.Canvas.PlugIn" : @"canvas",
     @"Canvas" : @"canvas",
-    @"Canvas-XPC-Service" : @"canvas",
-    @"co.overpolish.keyframeless.Glow" : @"glow",
-    @"co.overpolish.keyframeless.Glow.PlugIn" : @"glow",
-    @"Glow" : @"glow",
-    @"Glow-XPC-Service" : @"glow"
+    @"Canvas-XPC-Service" : @"canvas"
   };
 }
 

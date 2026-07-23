@@ -128,7 +128,7 @@ extern NSString *const KKTimingIntroGuideIdentifier;
 
 /// Whether the primary lane's components are aspect-linked (move together).
 /// The seed timeline mirrors this so OSC drags during the guide behave like
-/// the real lane - e.g. Glow's radius ring, whose mini-viewer drag takes a
+/// the real lane - e.g. a radius ring, whose mini-viewer drag takes a
 /// uniform path when linked and a per-axis path when not. Default NO.
 @property(nonatomic) BOOL primaryAspectLinked;
 
@@ -154,7 +154,7 @@ extern NSString *const KKTimingIntroGuideIdentifier;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *secondarySeedValues;
 @property(nonatomic) NSInteger secondaryValueType;
 
-/// Optional category keys for the seed lanes (e.g. Glow's @"Core" / @"Noise").
+/// Optional category keys for the seed lanes (e.g. @"Core" / @"Noise").
 /// When set, the Advanced seed carries them so the lane-filter bar groups the
 /// pills into the real `[Category | lane]` capsules the plugin shows, and the
 /// guide's filter step teaches the grouping. nil = ungrouped single pills.

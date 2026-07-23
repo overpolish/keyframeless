@@ -194,18 +194,18 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Glyph style for the renderer's point handle (the one returned by
 /// `pointHandleCenter:forContentRect:`). Mini-viewer draws the same glyph
-/// the viewer-side OSC uses, so plugins backed by `KKArcOSC` (e.g. Magic
-/// Move's Position) can match it here.
+/// the viewer-side OSC uses, so plugins backed by `KKArcOSC` (e.g. a
+/// Position handle) can match it here.
 typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
   KKMiniHandleStylePoint = 0, ///< Default: solid dot (matches KKPointOSC).
   KKMiniHandleStyleArc = 1,   ///< Ring (matches KKArcOSC).
   KKMiniHandleStyleNone = 2,  ///< No glyph: the renderer draws its own control
-                              ///< (e.g. Glow's radius ring) but still exposes a
+                              ///< (e.g. a radius ring) but still exposes a
                               ///< point-handle anchor for guides / programmatic
                               ///< drag.
   KKMiniHandleStyleRing = 3,  ///< Haloed ring (matches KKRingOSC): the shared
-                              ///< radius-widget glyph (Canvas corners,
-                              ///< Rounded).
+                              ///< radius-widget glyph for corner + radius
+                              ///< controls.
   KKMiniHandleStyleSquare = 4, ///< Filled square (matches KKSquarePointOSC).
 };
 
@@ -217,9 +217,8 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 
 /// Size multiplier for the point-style handle glyph (the main point handle and
 /// any crop-corner handles), relative to the standard mini-viewer dot. Default
-/// 1.0. Lets a plugin match a specific reference dot - e.g. Rounded sets this
-/// so its radius + crop handles are the same size as Magic Move's path-anchor
-/// dots.
+/// 1.0. Lets a plugin match a specific reference dot - e.g. so its radius +
+/// crop handles are the same size as another plugin's path-anchor dots.
 - (CGFloat)pointHandleSizeScale;
 
 /// YES while the main point handle is currently being dragged. Lets the
@@ -277,12 +276,12 @@ typedef NS_ENUM(NSInteger, KKMiniHandleStyle) {
 /// `-valuesForLabel:[self rotationLabel]`.
 - (NSArray<NSNumber *> *)rotationEulerDegrees;
 /// Where the sphere sits in overlay points (y-up). Default = centre of
-/// `contentRect`. Override to lock it to another handle (e.g. MagicMove
+/// `contentRect`. Override to lock it to another handle (e.g. a plugin
 /// uses the Position handle so the rings move with the translated image).
 - (CGPoint)rotationCenterForContentRect:(CGRect)contentRect;
 /// A parent/world rotation pre-applied to the DISPLAYED rings + drag tangent
 /// (not the written value), so a control on an object nested in a rotated
-/// parent (e.g. a Canvas member inside a rotated group) shows rings in the
+/// parent (e.g. a member inside a rotated group) shows rings in the
 /// parent's frame. Default identity.
 - (KKRotMatrix3)rotationBaseMatrix;
 /// The anchor's normalised position within the content box, per axis ([-1,1]; 0

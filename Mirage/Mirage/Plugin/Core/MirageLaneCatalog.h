@@ -213,13 +213,13 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       // expression-eligible.
       lane.positionPathDriven = strcmp(p->oscKind, "position") == 0;
       // Allowed off-scene (negative / past full res), so no min/max - empty =
-      // unconstrained, the same as Position in Canvas/MagicMove.
+      // unconstrained.
       lane.componentMin = @[];
       lane.componentMax = @[];
       lane.componentUnits = @[ @"px", @"px" ];
       lane.componentLabels = @[ @"X", @"Y" ];
       // Stored normalized 0..1, displayed as pixels (X * media width, Y * media
-      // height) - the same as Position/Anchor in Canvas/MagicMove.
+      // height).
       lane.componentsScaleWithMedia = YES;
       [lane insertKeypose:[KKKeyPose
                               keyposeAtTime:0.0
@@ -279,7 +279,7 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       lane.valueType = KKLaneValueTypeAngle; // circular knob, whole degrees
       lane.animatable = YES;
       lane.integerValued = YES; // angles snap to whole degrees
-      // Unconstrained (accumulates past 360), like MagicMove's Rotation.
+      // Unconstrained (accumulates past 360).
       lane.componentMin = @[];
       lane.componentMax = @[];
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0

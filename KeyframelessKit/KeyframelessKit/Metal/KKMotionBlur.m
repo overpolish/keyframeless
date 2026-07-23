@@ -28,7 +28,7 @@ static NSMutableArray<NSString *> *sKKMotionBlurPoolLRU; // tail = most recent
 static dispatch_semaphore_t sKKMotionBlurPoolLock;
 
 /// Pool of plugin-private "scratch" textures used inside renderBlocks
-/// (e.g. Glow's blur intermediates). Same key/lock conventions as the
+/// (e.g. blur intermediates). Same key/lock conventions as the
 /// sample-dest pool, including LRU cap.
 static NSMutableDictionary<NSString *, NSMutableArray<id<MTLTexture>> *>
     *sKKMotionBlurScratchPool;

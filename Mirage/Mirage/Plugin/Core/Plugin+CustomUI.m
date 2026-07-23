@@ -236,7 +236,7 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
        [MirageOSCBlockRuntime runtimesForSource:source lanes:@[]]) {
     if ([b.primitive isEqualToString:@"position"]) {
       // A position also owns a motion-PATH element, toggleable independently
-      // of its handle (matching MagicMove's separate Position + Path).
+      // of its handle (a separate Position + Path).
       [out addObject:@[ b.binds ]];
       [out addObject:@[ [b.binds stringByAppendingString:@" Path"] ]];
       continue;

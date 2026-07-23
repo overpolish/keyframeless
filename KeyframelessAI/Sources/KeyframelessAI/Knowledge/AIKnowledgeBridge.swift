@@ -7,7 +7,7 @@ import AppKit
 import Foundation
 
 /// ObjC-callable surface for registering plugin docs at process start.
-/// FxPlug plugins (Rounded, Canvas, …) call these from their ObjC plugin
+/// FxPlug plugins call these from their ObjC plugin
 /// init to wire the shared timeline docs + their own per-plugin bundle.
 @objc(KKAIKnowledge)
 public final class AIKnowledgeBridge: NSObject {

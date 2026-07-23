@@ -19,8 +19,8 @@ KKOrderedLaneCategories(NSArray<KKLane *> *lanes) {
     [syms addObject:l.categorySymbol.length ? l.categorySymbol : @"circle"];
   }
   // Show the category nav whenever ANY category is declared (a single-category
-  // plugin like Canvas's "Transform" still gets its pill). Plugins that set no
-  // categoryKey at all (Rounded, MagicMove) get none, as before.
+  // plugin's sole category still gets its pill). Plugins that set no
+  // categoryKey at all get none, as before.
   if (keys.count < 1)
     return @[];
   NSMutableArray<NSArray<NSString *> *> *out = [NSMutableArray array];

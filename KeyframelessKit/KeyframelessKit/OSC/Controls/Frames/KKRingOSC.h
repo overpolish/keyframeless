@@ -59,8 +59,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic) NSInteger visibilityHint;
 
 /// Configure this ring as the standard small "radius widget" handle - the
-/// shared look used for Canvas's live-corner widget and Rounded's radius
-/// handle, so the two can't drift. Sets ringRadius / fillWidth /
+/// shared look used for live-corner widgets and radius
+/// handles, so they can't drift. Sets ringRadius / fillWidth /
 /// ringOutlineWidth + clearsOnDraw; the caller still sets `center` and
 /// `tintColor` per use.
 - (void)applyRadiusWidgetStyle;

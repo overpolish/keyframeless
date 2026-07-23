@@ -11,11 +11,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		F20815D82F73D0A6004260DF /* MagicMove.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = MagicMove.xcodeproj; path = ../MagicMove/MagicMove.xcodeproj; sourceTree = SOURCE_ROOT; };
 		F21E97D52F4EE9CC00DF8CF3 /* FxPlug.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = FxPlug.framework; path = ../../../../../Library/Developer/Frameworks/FxPlug.framework; sourceTree = "<group>"; };
-		F2330A742F8577290020CB71 /* Glow.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Glow.xcodeproj; path = ../Glow/Glow.xcodeproj; sourceTree = SOURCE_ROOT; };
 		F26E01B62F4DE280009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		F26E02092F4DE539009D949A /* Rounded.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Rounded.xcodeproj; path = ../Rounded/Rounded.xcodeproj; sourceTree = SOURCE_ROOT; };
 		F297A4D53010C710002058F9 /* Mirage.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Mirage.xcodeproj; path = ../Mirage/Mirage.xcodeproj; sourceTree = SOURCE_ROOT; };
 		F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = "Keyframeless X.xcodeproj"; path = "../Keyframeless X/Keyframeless X.xcodeproj"; sourceTree = SOURCE_ROOT; };
 		F2D394A62F8AABA6003F4558 /* Canvas.xcodeproj */ = {isa = PBXFileReference; lastKnownFileType = "wrapper.pb-project"; name = Canvas.xcodeproj; path = ../Canvas/Canvas.xcodeproj; sourceTree = SOURCE_ROOT; };
@@ -185,13 +182,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		F20816252F73D0A6004260DF /* Products */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		F21E97D42F4EE9CC00DF8CF3 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
@@ -200,25 +190,15 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
-		F2330AB82F8577290020CB71 /* Products */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
 		F26E01AC2F4DE280009D949A = {
 			isa = PBXGroup;
 			children = (
 				F297A4D53010C710002058F9 /* Mirage.xcodeproj */,
 				F2D394A62F8AABA6003F4558 /* Canvas.xcodeproj */,
-				F2330A742F8577290020CB71 /* Glow.xcodeproj */,
 				F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */,
-				F26E02092F4DE539009D949A /* Rounded.xcodeproj */,
 				F26E01B82F4DE280009D949A /* KeyframelessKit */,
 				F21E97D42F4EE9CC00DF8CF3 /* Frameworks */,
 				F26E01B72F4DE280009D949A /* Products */,
-				F20815D82F73D0A6004260DF /* MagicMove.xcodeproj */,
 			);
 			sourceTree = "<group>";
 		};
@@ -226,13 +206,6 @@
 			isa = PBXGroup;
 			children = (
 				F26E01B62F4DE280009D949A /* KeyframelessKit.framework */,
-			);
-			name = Products;
-			sourceTree = "<group>";
-		};
-		F26E02462F4DE539009D949A /* Products */ = {
-			isa = PBXGroup;
-			children = (
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -336,24 +309,12 @@
 					ProjectRef = F2D394A62F8AABA6003F4558 /* Canvas.xcodeproj */;
 				},
 				{
-					ProductGroup = F2330AB82F8577290020CB71 /* Products */;
-					ProjectRef = F2330A742F8577290020CB71 /* Glow.xcodeproj */;
-				},
-				{
 					ProductGroup = F29C84D72F68205F0073B1A9 /* Products */;
 					ProjectRef = F29C84D42F68205F0073B1A9 /* Keyframeless X.xcodeproj */;
 				},
 				{
-					ProductGroup = F20816252F73D0A6004260DF /* Products */;
-					ProjectRef = F20815D82F73D0A6004260DF /* MagicMove.xcodeproj */;
-				},
-				{
 					ProductGroup = F297A5BA3010C711002058F9 /* Products */;
 					ProjectRef = F297A4D53010C710002058F9 /* Mirage.xcodeproj */;
-				},
-				{
-					ProductGroup = F26E02462F4DE539009D949A /* Products */;
-					ProjectRef = F26E02092F4DE539009D949A /* Rounded.xcodeproj */;
 				},
 			);
 			projectRoot = "";

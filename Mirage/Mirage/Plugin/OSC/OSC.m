@@ -113,7 +113,7 @@ BOOL MirageHasCanvasReference(void) {
 // Guide-scoped Origin position (object [0,1] space). The OSC can't read the
 // timeline blob from the drawOSC tick (FxParameterRetrievalAPI is nil there),
 // so during the OSC guide the inspector drag pushes the live position here and
-// the handle tracks it - mirrors MagicMove's sGuidePosition.
+// the handle tracks it.
 static CGPoint sGuidePosition = {0.5, 0.5};
 
 // Object-space target the interactive drag nudges the Origin handle toward
@@ -325,7 +325,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
       ctl = rot;
     } else if ([b.primitive isEqualToString:@"box"]) {
       // The crop scaffold: border + 8 anchored-resize handles + body-move + a
-      // px readout (how Rounded drives its crop). The block's toRect/fromRect
+      // px readout. The block's toRect/fromRect
       // bijection bridges its bound value to the scaffold's [w,h,x,y] model.
       KKCropOSC *crop =
           [_exprControllers[b.name] isKindOfClass:KKCropOSC.class]
@@ -359,8 +359,8 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
       };
       ctl = crop;
     } else if ([b.styleName isEqualToString:@"hollow"]) {
-      // Glyph by style: hollow -> the small radius-widget ring (matching
-      // Rounded/Canvas), arc -> the position-style arc, square -> square,
+      // Glyph by style: hollow -> the small radius-widget ring, arc -> the
+      // position-style arc, square -> square,
       // else dot. EVERY glyph must clear clearsOnDraw (default YES) or its
       // draw wipes the tile and erases every control drawn before it.
       KKRingOSC *g = [[KKRingOSC alloc] initWithAPIManager:self.apiManager];
@@ -629,7 +629,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
 
 // The new bound value for a drag to `mouseCanvas`: the explicit inverse if one
 // was authored, else a numeric inversion of the forward (searches the value
-// whose forward-position is nearest the cursor, like Rounded's binary search).
+// whose forward-position is nearest the cursor, via a binary search).
 // Both run in the runtime's object space, so the mouse converts to object
 // first.
 - (KKExprVal)_exprBoundForBlock:(MirageOSCBlockRuntime *)b
@@ -646,8 +646,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
 
 // Write a block's new bound value (EXPR units) back to its lane: denormalize to
 // lane units, clamp, set the keypose nearest the playhead in an action scope
-// (seed from the template when the lane isn't materialized). Mirrors Glow's
-// _writeRadiusValues.
+// (seed from the template when the lane isn't materialized).
 - (void)_writeExprValue:(KKExprVal)val
                forBlock:(MirageOSCBlockRuntime *)b
                  atTime:(CMTime)time
@@ -990,8 +989,8 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
     return nil;
   // The hit-test only tags a TANGENT handle with tangentActivePart; a keypose
   // ANCHOR (the common path click) comes back as positionActivePart, so also
-  // treat a hover on an anchor as the PATH element - matching MagicMove's
-  // `hoverTargetIsAnchor ? Path : Position`. Otherwise opt-clicking the path
+  // treat a hover on an anchor as the PATH element
+  // (`hoverTargetIsAnchor ? Path : Position`). Otherwise opt-clicking the path
   // toggled the handle instead.
   BOOL onPath = isPath || c.hoverTargetIsAnchor;
   return onPath ? c.pathLabel : c.laneLabel;

@@ -523,9 +523,9 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
     [KKPlugin _prependClipWrappingTip:wrapTip toSection:sections.firstObject];
 
   // Show the shared Timing docs when this plugin drives the timeline. Two
-  // mechanisms exist: Canvas/Glow declare their lanes via -defaultLanesAtTime
+  // mechanisms exist: some plugins declare their lanes via -defaultLanesAtTime
   // (which needs currentTime + a resolved getAPI, hence a short action scope),
-  // while MagicMove/Rounded declare theirs through the shared inspector config
+  // while others declare theirs through the shared inspector config
   // and never override -defaultLanesAtTime - so a non-empty -helpGuides (their
   // timing walkthroughs) counts as a timeline signal too.
   BOOL hasTimeline = NO;

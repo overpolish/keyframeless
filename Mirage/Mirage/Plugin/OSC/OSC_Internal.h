@@ -13,7 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 // KKPositionGuideProvider: during the timing guide the point handle draws at
 // the guide-pushed position (the drawOSC tick can't read the timeline blob), so
 // the taught handle - and the spotlight tracking it - follow the walkthrough
-// instead of sitting at the lane's stored value. Mirrors MagicMove.
+// instead of sitting at the lane's stored value.
 @interface MirageOSC () <KKPositionGuideProvider>
 // YES when a control forced a non-arrow cursor last hover; reset at the top of
 // the next hit-test so moving off a handle restores the arrow.

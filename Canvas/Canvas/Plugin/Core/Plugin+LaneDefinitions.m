@@ -23,9 +23,8 @@
   // layer's), so a fresh layer starts at identity. The render ignores them
   // until the transform plumbing lands; stroke / fill groups come later.
   //
-  // Scale: 2-component aspect-linked percent, modelled on MagicMove's box-OSC
-  // Scale lane so the box OSC drops straight in. Identity = 100%. Unbounded
-  // above (like MagicMove); 0 floor.
+  // Scale: 2-component aspect-linked percent, shaped so the box OSC drops
+  // straight in. Identity = 100%. Unbounded above; 0 floor.
   KKLane *scale = [KKLane laneWithLabel:@"Scale"];
   scale.valueType = KKLaneValueTypeFloat;
   scale.componentMin = @[ @0.0, @0.0 ];
@@ -41,8 +40,8 @@
                                          values:@[ @100.0, @100.0 ]]];
 
   // Position: 2D spatial, stored normalised 0..1 (0.5,0.5 = centred =
-  // identity), displayed as pixels. Same reusable curved-path Position as
-  // Glow/MagicMove (spatialCurvable). Off-canvas allowed, so no min/max.
+  // identity), displayed as pixels. The reusable curved-path Position
+  // (spatialCurvable). Off-canvas allowed, so no min/max.
   KKLane *position = [KKLane laneWithLabel:@"Position"];
   position.valueType = KKLaneValueTypeGeneric;
   position.componentMin = @[];
@@ -56,11 +55,11 @@
   position.categorySymbol = @"arrow.up.and.down.and.arrow.left.and.right";
   [position insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @0.5, @0.5 ]]];
 
-  // Rotation: 3-axis (X/Y/Z) Euler degrees, modelled on MagicMove's Rotation
-  // lane so the kit's KKRotationOSC + mini rotation rings drop straight in.
+  // Rotation: 3-axis (X/Y/Z) Euler degrees, shaped so the kit's KKRotationOSC
+  // + mini rotation rings drop straight in.
   // Identity = 0. Unbounded (angles accumulate past 360). Z is the in-plane
   // spin (rendered today); X/Y tilt renders once the perspective transform
-  // lands. Axis ring colours match MagicMove (X red, Y green, Z blue).
+  // lands. Axis ring colours: X red, Y green, Z blue.
   KKLane *rotation = [KKLane laneWithLabel:@"Rotation"];
   rotation.valueType = KKLaneValueTypeAngle;
   rotation.componentMin = @[];
@@ -80,8 +79,8 @@
 
   // Anchor: the pivot Rotation and Scale swing around. 2-component, stored
   // normalised 0..1 (0.5,0.5 = the layer centre = identity), displayed as
-  // pixels, same space as Position. Off-layer allowed, so no min/max. Modelled
-  // on MagicMove's Anchor lane so the kit's KKAnchorOSC + mini drop straight
+  // pixels, same space as Position. Off-layer allowed, so no min/max. Shaped
+  // so the kit's KKAnchorOSC + mini drop straight
   // in. On its own it does nothing - it only moves where rotation/scale pivot.
   KKLane *anchor = [KKLane laneWithLabel:@"Anchor"];
   anchor.valueType = KKLaneValueTypeGeneric;
@@ -177,7 +176,7 @@
                                                values:@[ @20.0, @20.0 ]]];
 
   // Stroke colour: the shared reusable colour group (Mode pill + solid swatch +
-  // composite gradient), the SAME helper Glow uses. No Dynamic mode - a vector
+  // composite gradient). No Dynamic mode - a vector
   // stroke has no source pixels to sample - so the modes are Solid (default) +
   // Gradient. Labels are prefixed ("Stroke Mode" / "Stroke Solid" / "Stroke
   // Gradient") so a future Fill colour group can't collide. Seeded per-path
@@ -576,7 +575,7 @@
   sketchStrokes.visibleWhenValues = @[ @1 ];
   [sketchStrokes insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:@[ @1.0 ]]];
   // Seed: a value-only random integer with a re-roll dice (KKSeedView), never a
-  // lane - the same control Glow's noise seed uses. integerValued + animatable
+  // lane. integerValued + animatable
   // NO + seedField YES.
   KKLane *sketchSeed =
       sketchScalar(@"Sketch Seed", 1.0, 0.0, 999999.0, NO, @"");

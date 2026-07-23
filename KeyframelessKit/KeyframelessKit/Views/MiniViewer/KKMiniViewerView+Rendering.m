@@ -105,7 +105,7 @@ static const BOOL kPointShadingLighterTop = YES;
   if (!_toolbarPipeline)
     KKLogError(@"KKMiniViewerView: toolbar pipeline failed: %@", err);
 
-  // Shared KKSquarePointOSC glyph (Magic Move anchor pivot). Same blend mode
+  // Shared KKSquarePointOSC glyph (anchor pivot). Same blend mode
   // as the point pipeline, different fragment.
   MTLRenderPipelineDescriptor *sq = [[MTLRenderPipelineDescriptor alloc] init];
   sq.vertexFunction = [lib newFunctionWithName:@"KKVertexShader"];
@@ -143,7 +143,7 @@ static const BOOL kPointShadingLighterTop = YES;
   if (!_arcPipeline)
     KKLogError(@"KKMiniViewerView: arc pipeline failed: %@", err);
 
-  // Elliptical ring (Glow radius): the in-viewer `KKRingOSCFragment` shader, so
+  // Elliptical ring (a radius widget): the in-viewer `KKRingOSCFragment` shader, so
   // the mini ring is pixel-identical to the viewer (single-pass ellipse SDF -
   // no tessellation seams or fill/outline bleed). Same premultiplied-over
   // blend.
@@ -584,7 +584,7 @@ static const BOOL kPointShadingLighterTop = YES;
   // the square only fills halfSize = 1 - outline/outer ~= 0.857 of its quad, so
   // scale the quad up by 1/0.857 to land on the same visible extent.
   // `sizeScale` is the same handle multiplier applied to the dots (e.g.
-  // MagicMove's 0.6), so the square tracks them at every popover size
+  // 0.6), so the square tracks them at every popover size
   // (canvasScale = H/230).
   static const float kSquareFillFrac = 0.857f;
   float sizePx = (float)(kKKMiniHandleOuterPt * sizeScale / kSquareFillFrac *

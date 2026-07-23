@@ -15,7 +15,7 @@ NS_ASSUME_NONNULL_BEGIN
 // Shared helpers for the property-category navigation that appears across the
 // timeline UI (the value-editor popover, the Animated dropdown, the Parameter
 // Order list, and the lane-filter bar). A "category" groups a plugin's lanes
-// (e.g. Glow's Core and Noise) so the UI can split them into pages/capsules.
+// (e.g. `Core` and `Noise`) so the UI can split them into pages/capsules.
 
 /// Ordered, first-seen distinct categories as `@[categoryKey, categorySymbol]`
 /// pairs (lanes with no categoryKey are skipped). Empty when there are fewer
@@ -54,9 +54,9 @@ FOUNDATION_EXPORT KKPillToggleRowView *_Nullable KKMakeLaneCategoryPill(
     void (^onSelect)(NSString *categoryKey));
 
 /// A compact hierarchical summary of `lanes` for a dropdown field:
-///  - no groups (Rounded/MagicMove): `Position, Scale`
-///  - categories (Glow): `Core > Glow, Radius | Noise > Amount`
-///  - layers (Canvas): `Layer 1 > Core > … | Layer 2 > …`
+///  - no groups: `Position, Scale`
+///  - categories: `Core > Glow, Radius | Noise > Amount`
+///  - layers: `Layer 1 > Core > … | Layer 2 > …`
 /// Layers are joined by " | ", category groups within a layer by ", ", and leaf
 /// params by ", ". Returns an empty string when `lanes` is empty (the caller
 /// supplies its own placeholder). Localizes param/category names; layer names

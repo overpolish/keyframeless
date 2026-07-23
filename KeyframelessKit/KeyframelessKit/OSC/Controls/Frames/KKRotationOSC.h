@@ -29,7 +29,7 @@ FOUNDATION_EXPORT KKLane *KKRotationLaneWithLabel(NSString *label,
 
 /// 3-ring sphere rotation gizmo. Each ring is the great-circle perpendicular
 /// to its axis, drawn with the current world rotation `R = Ry * Rx * Rz`
-/// applied (matching MagicMove's shader order) so the rings visually tilt
+/// applied (matching the shader order) so the rings visually tilt
 /// as the pose changes. Per-ring axis drag: grab a ring, drag tangentially,
 /// rotate that axis only.
 ///

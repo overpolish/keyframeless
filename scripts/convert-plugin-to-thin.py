@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 overpolish
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Converts an FxPlug plugin (Rounded/MagicMove/Canvas/Glow) to the thin-client model:
+# Converts an FxPlug plugin (Canvas/Shader) to the thin-client model:
 # removes the embedded `kk-ai-helper` target so the ~40 MB MLX engine no longer ships
 # in the plugin, and gives the sandboxed XPC Service the app-group entitlement so it
 # reaches the shared, separately-installed helper. Idempotent-ish: re-running after a
@@ -11,7 +11,7 @@
 # It edits the .pbxproj as TEXT (targeted line removals + one inserted build setting)
 # to keep the diff clean, then you must open the project in Xcode and build to verify.
 #
-# Usage: convert-plugin-to-thin.py <PluginName>   (e.g. Rounded)
+# Usage: convert-plugin-to-thin.py <PluginName>   (e.g. Canvas)
 
 import os
 import re

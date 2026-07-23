@@ -177,7 +177,7 @@ static const CGFloat kDragSnapPx = 14.0;
   primary.enabled = NO; // constant until the user opts it in to animation
   primary.valueType = (KKLaneValueType)config.primaryValueType;
   // Mirror the real lane's aspect-link so OSC drags during the guide follow the
-  // same path the plugin uses (e.g. Glow's radius ring: uniform when linked).
+  // same path the plugin uses (e.g. a radius ring: uniform when linked).
   primary.aspectLinkable = config.primaryAspectLinked;
   primary.aspectLinked = config.primaryAspectLinked;
   primary.keyposes = @[ [KKKeyPose keyposeAtTime:0.0

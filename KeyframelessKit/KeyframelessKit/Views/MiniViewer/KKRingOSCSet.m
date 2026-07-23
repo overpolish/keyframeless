@@ -12,7 +12,7 @@
 
 @implementation KKRingOSCSet {
   // Drag press-anchor (cursor offset from centre + component values at press),
-  // for an unlinked ellipse's cardinal-axis hold (Glow feel). The active label
+  // for an unlinked ellipse's cardinal-axis hold. The active label
   // itself lives in the base.
   double _dragStartDx, _dragStartDy, _dragStartDist;
   NSArray<NSNumber *> *_dragStartVals;

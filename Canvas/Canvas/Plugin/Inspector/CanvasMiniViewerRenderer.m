@@ -344,7 +344,7 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *uuid) {
 }
 
 // Position is the only point handle; draw it as a ring (matches the viewer's
-// KKArcOSC + MagicMove's mini), with the motion-path arc through its keyposes.
+// KKArcOSC), with the motion-path arc through its keyposes.
 - (NSString *)pointLabel {
   return @"Position";
 }
@@ -354,8 +354,7 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *uuid) {
 }
 
 // The Position handle is an arc (drawn on its own path), so this only sizes the
-// scale-box corner/edge point handles - shrink them so they aren't oversized
-// (matches MagicMove / Rounded).
+// scale-box corner/edge point handles - shrink them so they aren't oversized.
 - (CGFloat)pointHandleSizeScale {
   return 0.6;
 }

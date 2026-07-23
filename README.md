@@ -32,10 +32,7 @@
 - [Install](#-install)
 - [Supercharge Your Workflow](#️-supercharge-your-workflow)
   - [Canvas](#canvas)
-  - [Magic Move](#magic-move)
   - [Steno](#steno)
-  - [Glow](#glow)
-  - [Rounded](#rounded)
   - [Keyframeless AI](#keyframeless-ai)
 - [Source & License](#-source--license)
 
@@ -71,16 +68,6 @@ Each clip holds a stack of layers: shapes, images, and groups. Every one animate
 	<img width="400" alt="Canvas - Draw directly in Final Cut Pro." src="./Assets/Marketing/keyframeless-canvas-hero.png" />
 </div>
 
-## Magic Move
-
-Animation built around a simple mental model: think in seconds, not keyframes. Position, Scale, Rotation, Anchor, and Opacity each get their own lane, filled with as many `hold` and `move` segments as you need. Drag to resize, double-click to split, `cmd-click` to delete.
-
-Real easing curves per transition (Linear, EaseIn/Out/InOut, Elastic, Bounce), rather than the three options FCP gives you. Move along a curved path at an even speed, and flip on Rotate with Motion so the clip leans into its turns with real momentum. It tips as it speeds up and rocks back as it slows. Hold segments can wiggle or drift, so static doesn't have to mean lifeless.
-
-<div align="center">
-	<img width="400" alt="Magic Move - Hold. Move. Hold. No keyframes." src="./Assets/Marketing/keyframeless-magicmove-hero.png" />
-</div>
-
 ## Steno
 
 Ever felt like AI caption tools are too basic? Steno transcribes your timeline on-device and lets you edit every caption _before_ it hits Final Cut Pro. See your actual FCP audio, pick which clips to transcribe, and mix models across a batch.
@@ -110,22 +97,6 @@ Supported Models:
 
 > [!WARNING]
 > Intel performance is limited by CPU. For best performance, and better models, Silicon is recommended.
-
-## Glow
-
-Wrap any clip in a soft, glowing halo you can animate. The color is dynamic by default, borrowing from the clip underneath, or set a solid color or gradient. It also doubles as a drop shadow. Add outward noise for organic, evolving edges, and animate the whole thing in and out with full timing control.
-
-<div align="center">
-	<img width="400" alt="Glow - The glow Final Cut never shipped." src="./Assets/Marketing/keyframeless-glow-hero.png" />
-</div>
-
-## Rounded
-
-Round off any clip and crop it with a box you can animate. Combine the two for a rounded crop, like a circular reveal that opens from a point. It's free, and the easiest way to learn how every Keyframeless plugin animates.
-
-<div align="center">
-	<img width="400" alt="Rounded - No more shape masks." src="./Assets/Marketing/keyframeless-rounded-hero.png" />
-</div>
 
 ## Keyframeless AI
 

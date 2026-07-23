@@ -21,7 +21,7 @@ NS_ASSUME_NONNULL_BEGIN
 extern NSSet<NSString *> *MirageOSCBaseVars(void);
 
 /// Map a `cursor =` name ("move"/"crosshair"/"pointing"/"resize-h/v/diag") to
-/// an NSCursor. Defaults to the point-move cursor (matches Rounded).
+/// an NSCursor. Defaults to the point-move cursor.
 extern NSCursor *MirageOSCCursorForName(NSString *_Nullable name);
 
 /// A single compiled `// @osc` block: the bound lane, the value normalization

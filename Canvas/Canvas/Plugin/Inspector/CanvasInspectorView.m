@@ -537,7 +537,7 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
 
 // Show the inspector's OSC-visibility row (the global "show controls" toggle +
 // the Position/Path pills). The base defaults NO; Canvas has a viewer Transform
-// OSC, so opt in (matches MagicMove/Rounded).
+// OSC, so opt in.
 - (BOOL)showsOSCVisibilityRow {
   return YES;
 }
@@ -822,8 +822,8 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
   ((void (*)(id, SEL))base)(self, _cmd);
 }
 
-// Canvas teaches the Position lane (a 2D clip-space point, stored 0..1) the
-// same way MagicMove does - it has the clearest mini-viewer point handle - with
+// Canvas teaches the Position lane (a 2D clip-space point, stored 0..1) -
+// it has the clearest mini-viewer point handle - with
 // Scale as the second Advanced lane so the per-property timeline + marquee
 // multi-select steps have two rows. Both live in Canvas's "Transform" category,
 // so the Advanced lane-filter step groups them under the real capsule.

@@ -246,7 +246,7 @@ typedef NS_ENUM(NSInteger, KKTimelineTab) {
 /// Whether the host plugin can render the Fast (velocity-reconstruction)
 /// technique. Default NO (only the universal Accurate accumulate path).
 /// Override to YES in a plugin that emits a velocity buffer (per-object
-/// analytic motion, e.g. Canvas / MagicMove); the settings popover then shows
+/// analytic motion); the settings popover then shows
 /// the Fast/Accurate Quality pill. A NO host always runs Accurate and hides the
 /// pill.
 - (BOOL)motionBlurSupportsFastTechnique;

@@ -37,8 +37,8 @@ typedef struct MirageOSCBlock {
   char cursor[16];    // hover cursor: "move" / "crosshair" / "resize-h/v/diag"…
   char forward[256];  // value -> geometry (toPos / toRect / toR)
   // Optional. When empty, a scalar handle's drag NUMERICALLY inverts `forward`
-  // (searches the value whose forward-position is nearest the cursor, like
-  // Rounded's binary search), so a non-linear forward needs no explicit
+  // (searches the value whose forward-position is nearest the cursor, via a
+  // binary search), so a non-linear forward needs no explicit
   // inverse. A ring/box REQUIRES its explicit inverse (fromR / fromRect).
   char inverse[256]; // geometry -> value (fromPos / fromRect / fromR)
   // Optional placement expression for a centred primitive (ring / rotate):

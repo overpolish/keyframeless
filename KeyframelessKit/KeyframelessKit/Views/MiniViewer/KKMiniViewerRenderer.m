@@ -56,7 +56,7 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   BOOL _pointGrabbed;
   BOOL _rotationGrabbed;
   // Rotation drag state (set by the default rotation hooks; mirrored on the
-  // viewer side by `KKRotationOSC` / MagicMove OSC.m).
+  // viewer side by `KKRotationOSC`).
   NSInteger _rotActiveAxis; // -1, 0, 1, 2
   double _rotPressAngle;    // ring t at the press point
   double _rotPressTangentX; // Y-DOWN screen-space tangent, unit
@@ -163,8 +163,8 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
 }
 
 // Default precedence is rotation > point (the ring is the larger target). A
-// plugin whose point handle draws ON TOP of the rings (e.g. MagicMove's
-// Position arc, matching the viewer's layering) overrides this to YES so the
+// plugin whose point handle draws ON TOP of the rings (e.g. a Position
+// arc, matching the viewer's layering) overrides this to YES so the
 // hit-test / drag / opt-click all prefer the point where they overlap.
 - (BOOL)pointHandleBeatsRotation {
   return NO;
@@ -783,19 +783,19 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 }
 
 - (CGFloat)scaleGhostAlpha {
-  return 1.0; // no scale box by default; MagicMove overrides
+  return 1.0; // no scale box by default; subclasses override
 }
 
 - (CGFloat)anchorSquareGhostAlpha {
-  return 1.0; // no anchor square by default; MagicMove overrides
+  return 1.0; // no anchor square by default; subclasses override
 }
 
 - (CGFloat)positionHandleGhostAlpha {
-  return 1.0; // no secondary Position handle by default; Glow overrides
+  return 1.0; // no secondary Position handle by default; subclasses override
 }
 
 - (BOOL)positionHandleIsActive {
-  return NO; // no secondary Position handle by default; Glow overrides
+  return NO; // no secondary Position handle by default; subclasses override
 }
 
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas

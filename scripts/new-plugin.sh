@@ -197,12 +197,8 @@ ok "Added '$PLUGIN_KEY' to bump-version.sh"
 
 log "Registering in KKUpdateChecker.m..."
 
-# Add to KKKnownComponents
-sed -i '' "s|@\"magicmove\" : @\"MagicMove\"|@\"magicmove\" : @\"MagicMove\",\\
-    @\"$PLUGIN_KEY\" : @\"$PLUGIN_NAME\"|" "$UPDATE_CHECKER"
-
 # Add to KKBundleIDToComponent (host + .PlugIn extension, the standard scheme)
-sed -i '' "s|@\"co.overpolish.keyframeless.MagicMove.PlugIn\" : @\"magicmove\"|@\"co.overpolish.keyframeless.MagicMove.PlugIn\" : @\"magicmove\",\\
+sed -i '' "s|@\"co.overpolish.keyframeless.Canvas.PlugIn\" : @\"canvas\"|@\"co.overpolish.keyframeless.Canvas.PlugIn\" : @\"canvas\",\\
     @\"co.overpolish.keyframeless.$PLUGIN_NAME\" : @\"$PLUGIN_KEY\",\\
     @\"co.overpolish.keyframeless.$PLUGIN_NAME.PlugIn\" : @\"$PLUGIN_KEY\"|" "$UPDATE_CHECKER"
 

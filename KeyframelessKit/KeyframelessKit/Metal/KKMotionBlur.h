@@ -101,7 +101,7 @@ typedef struct {
 
 /// Acquires a pooled intermediate ("scratch") texture inside a render
 /// block. Use for any plugin-private textures the render block needs as
-/// passes feed each other (Glow's blur pyramid, etc.) so they survive the
+/// passes feed each other (e.g. a blur pyramid) so they survive the
 /// life of the shared command buffer without per-frame allocation churn.
 ///
 /// Pool entries are keyed by (`key`, `sampleIndex`, `registryID`,

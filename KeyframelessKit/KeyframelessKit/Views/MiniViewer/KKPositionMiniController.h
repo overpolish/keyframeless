@@ -60,7 +60,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// Optional map from a content-rect view point to the member-local normalized
 /// value (the inverse of how the handle is drawn). Set by a host whose handle
-/// is drawn through a parent transform (a Canvas member in a transformed group)
+/// is drawn through a parent transform (a member in a transformed group)
 /// so a drag follows the cursor instead of drifting. nil = the plain
 /// content-rect normalization. Mirrors the viewer Position OSC's
 /// `_objFromCanvasX` inverse.

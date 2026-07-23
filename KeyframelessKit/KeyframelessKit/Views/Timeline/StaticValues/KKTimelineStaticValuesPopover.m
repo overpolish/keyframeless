@@ -1104,7 +1104,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // width; odd-index (H/Y-like) use height, with the inverse on typed input.
   // Covers Crop (W,H,X,Y), Position X/Y, Anchor X/Y. The componentUnits string
   // is cosmetic and does NOT drive this - a lane can show "px" while storing
-  // raw pixels (Glow Radius). Returns 0 until the feed resolves, which the row
+  // raw pixels (a raw px radius). Returns 0 until the feed resolves, which the row
   // treats as "fall back to raw norm".
   if (lane.componentsScaleWithMedia) {
     NSArray<NSString *> *units = lane.componentUnits;

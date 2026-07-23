@@ -147,7 +147,7 @@ FOUNDATION_EXPORT BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac,
 FOUNDATION_EXPORT BOOL KKLaneKeyedAtFraction(KKLane *lane, double frac,
                                              double frameDurSec);
 
-/// Look-back window (seconds) used by both Canvas and MagicMove for the
+/// Look-back window (seconds) used for the
 /// rotate-with-motion velocity sample.
 FOUNDATION_EXPORT const double KKRotateWithMotionWindowSeconds;
 

@@ -11,7 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 static NSString *const kPluginID = @"co.overpolish.keyframeless.Canvas";
 
-// v3 custom-UI / persistence params (mirrors Glow / Rounded). The shared
+// v3 custom-UI / persistence params. The shared
 // timeline blob uses the kit-owned ID (kKKParamTimelineData); motion blur,
 // instance id and OSC params get added back as those features land.
 static const UInt32 kParamInspectorUI = 200;

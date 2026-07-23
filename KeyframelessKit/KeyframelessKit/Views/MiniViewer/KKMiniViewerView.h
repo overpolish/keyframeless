@@ -59,7 +59,7 @@ NS_ASSUME_NONNULL_BEGIN
 @optional
 /// YES if the effect should be rendered into a processed texture sized to the
 /// DISPLAY resolution (downscaled to the content rect, capped at source) rather
-/// than the full source size. Only soft / bounds-expanding effects (e.g. Glow)
+/// than the full source size. Only soft / bounds-expanding effects
 /// benefit - rendering at display res preserves their soft falloff. A transform
 /// shader that normalizes the fragment position by the dest texture's own pixel
 /// dims must return NO (the default), or a smaller dest would zoom it in.
@@ -158,7 +158,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// spotlight a scale handle; the drag itself reuses the generic handle path.
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     scaleHandleCentersForContentRect:(CGRect)contentRect;
-/// Motion-path overlay (Magic Move). Polyline points (overlay points, y-up) for
+/// Motion-path overlay. Polyline points (overlay points, y-up) for
 /// the red trajectory line through the Position keyposes. Empty for none.
 - (NSArray<NSValue *> *)miniViewer:(KKMiniViewerView *)canvas
     motionPathPolylineForContentRect:(CGRect)contentRect;
@@ -183,7 +183,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)miniViewer:(KKMiniViewerView *)canvas
     backgroundClickAtPoint:(CGPoint)point
                contentRect:(CGRect)contentRect;
-/// Anchor-point pivot square (Magic Move). Centre in overlay points (y-up),
+/// Anchor-point pivot square. Centre in overlay points (y-up),
 /// drawn with the shared `KKSquarePointOSC` glyph so it matches the viewer.
 /// Return NO for none. Dimming for a revealed ghost comes from the renderer's
 /// `anchorSquareGhostAlpha`.
@@ -191,7 +191,7 @@ NS_ASSUME_NONNULL_BEGIN
     anchorSquareCenter:(out CGPoint *)outCenter
            contentRect:(CGRect)contentRect;
 /// A secondary Position handle (the arc glyph) for a plugin whose main point
-/// handle is something else (e.g. Glow's radius ring). Centre in overlay points
+/// handle is something else (e.g. a radius ring). Centre in overlay points
 /// (y-up), drawn with the shared arc glyph so it matches the viewer's Position
 /// handle. Return NO for none. Dimming for a revealed ghost comes from the
 /// renderer's `positionHandleGhostAlpha`; the active (pressed) emphasis from
@@ -304,7 +304,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// encoder armed for the duration.
 - (void)miniViewerDrawToolOverlay:(KKMiniViewerView *)canvas
                       contentRect:(CGRect)contentRect;
-/// An elliptical ring OSC to draw (e.g. Glow's radius), centred at `outCenter`
+/// An elliptical ring OSC to draw (e.g. a radius ring), centred at `outCenter`
 /// with per-axis pixel radii `outRadiusX`/`outRadiusY`, all in overlay points
 /// (y-up). Return NO for none. The canvas strokes it in the Metal pass like the
 /// box borders; the delegate owns hit-testing + the drag-to-value mapping
@@ -444,8 +444,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// the render side to a small JSON descriptor file - and displays it. The
 /// render and view sides live in separate XPC processes, so the only shared
 /// primitive is the `IOSurface` (looked up here by global ID). Shader
-/// compositing, handles and value editing arrive in later phases. See
-/// Rounded/PLAN.md "Cross-process transport".
+/// compositing, handles and value editing arrive in later phases.
 @interface KKMiniViewerView : MTKView
 
 /// Path to the JSON descriptor: `{ ioSurfaceID, width, height, generation }`.
@@ -536,7 +535,7 @@ typedef NS_ENUM(NSInteger, KKMiniViewerTransformKind) {
 @property(nonatomic, copy, nullable) void (^onViewReset)(void);
 
 /// Fired when a double-click was consumed by the delegate (i.e. it returned YES
-/// from -miniViewer:doubleClickAtPoint:contentRect: - e.g. Magic Move toggling
+/// from -miniViewer:doubleClickAtPoint:contentRect: - e.g. a plugin toggling
 /// a keypose's corner/smooth handling) instead of falling through to a view
 /// reset. A guide uses this to advance a "double-click to curve a keypose"
 /// step.

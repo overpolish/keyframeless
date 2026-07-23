@@ -424,7 +424,7 @@ static const NSTimeInterval kPollIntervalLive = 1.0 / 60.0;
                                     height:h
                                  mipmapped:NO];
     // PixelFormatView so a renderer can take an sRGB view for a linear-light
-    // working pass (e.g. Glow blurs in linear, not gamma-encoded, space).
+    // working pass (e.g. a blur runs in linear, not gamma-encoded, space).
     td.usage = MTLTextureUsageShaderRead | MTLTextureUsagePixelFormatView;
     td.storageMode = MTLStorageModeShared;
     id<MTLTexture> tex = [self.device newTextureWithDescriptor:td
@@ -689,13 +689,13 @@ static const NSUInteger kFilmstripGridCols = 5;
   // the drawable), aspect-preserved and capped at the source size so we never
   // upscale. The processed texture is only ever blitted 1:1 into its cell, so
   // rendering it at full source res and then minifying into the small popover
-  // throws away the soft falloff of effects like Glow - making the preview read
+  // throws away the soft falloff of soft/bounds effects - making the preview read
   // as a tighter/dimmer glow than the viewer. Rendering at the size it's shown
   // keeps it faithful. (Handles/OSC use the content rect, not these pixels, so
   // this is display-only.)
   //
   // OPT-IN: only soft/bounds effects benefit. A renderer that normalizes by the
-  // dest texture's own pixel size (e.g. MagicMove's transform shader divides
+  // dest texture's own pixel size (e.g. a transform shader divides
   // the framebuffer position by the texture dims) would zoom in by source/dest
   // if the dest shrank, so it keeps the full source size (the pre-display-res
   // default). Renderers opt in via -prefersDisplayResolutionProcessing.

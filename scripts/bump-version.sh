@@ -10,12 +10,9 @@
 # Usage: bump-version.sh <component> <breaking|major|minor|alpha|release>
 #
 # Components:
-#   rounded        Rounded plugin
-#   magicmove      MagicMove plugin
 #   keyframelessx  Keyframeless X app
 #   shader         Shader plugin
 #   canvas         Canvas plugin
-#   glow           Glow plugin
 #   ai             Keyframeless AI (standalone local helper)
 
 set -euo pipefail
@@ -26,12 +23,9 @@ usage() {
   echo "Usage: bump-version.sh <component> <breaking|major|minor|alpha|release>"
   echo ""
   echo "Components:"
-  echo "  rounded        Rounded plugin"
-  echo "  magicmove      MagicMove plugin"
   echo "  keyframelessx  Keyframeless X app"
   echo "  shader         Shader plugin"
   echo "  canvas         Canvas plugin"
-  echo "  glow           Glow plugin"
   echo "  ai             Keyframeless AI (standalone local helper)"
   echo ""
   echo "Version format: BREAKING.MAJOR.MINOR[-vN]"
@@ -53,7 +47,7 @@ COMPONENT="$1"
 BUMP="$2"
 
 case "$COMPONENT" in
-  rounded | magicmove | glow | canvas | shader | keyframelessx | ai) ;;
+  canvas | shader | keyframelessx | ai) ;;
   *)
     echo "Unknown component: $COMPONENT"
     usage
@@ -64,9 +58,6 @@ esac
 # stores its version in the .pbxproj instead).
 plist_for_component() {
   case "$1" in
-    rounded)       echo "Rounded/Rounded/Plugin/Info.plist" ;;
-    magicmove)     echo "MagicMove/MagicMove/Plugin/Info.plist" ;;
-    glow)          echo "Glow/Glow/Plugin/Info.plist" ;;
     canvas)        echo "Canvas/Canvas/Plugin/Info.plist" ;;
     shader)        echo "Shader/Shader/Plugin/Info.plist" ;;
     ai) echo "Distribution/helper/kk-ai-helper.plist" ;;
@@ -188,27 +179,6 @@ EOF
 echo "Bumping $COMPONENT: $CURRENT -> $VERSION"
 
 case "$COMPONENT" in
-  rounded)
-    bump_plist "Rounded/Rounded/Wrapper Application/Info.plist"
-    bump_plist "Rounded/Rounded/Plugin/Info.plist"
-    bump_fxplug "Rounded/Rounded/Plugin/Info.plist"
-    bump_pkgproj "co.overpolish.keyframeless.Rounded"
-    ;;
-
-  magicmove)
-    bump_plist "MagicMove/MagicMove/Wrapper Application/Info.plist"
-    bump_plist "MagicMove/MagicMove/Plugin/Info.plist"
-    bump_fxplug "MagicMove/MagicMove/Plugin/Info.plist"
-    bump_pkgproj "co.overpolish.keyframeless.MagicMove"
-    ;;
-
-  glow)
-    bump_plist "Glow/Glow/Wrapper Application/Info.plist"
-    bump_plist "Glow/Glow/Plugin/Info.plist"
-    bump_fxplug "Glow/Glow/Plugin/Info.plist"
-    bump_pkgproj "co.overpolish.keyframeless.Glow"
-    ;;
-
   canvas)
     bump_plist "Canvas/Canvas/Wrapper Application/Info.plist"
     bump_plist "Canvas/Canvas/Plugin/Info.plist"

@@ -471,7 +471,7 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
     // Frame + clip duration for the keypose-snap epsilon and the basic-view
     // scrubber clamp. FxTimingAPI resolves inside this action scope; we push
     // them into the view right after construction to avoid the render-push
-    // race documented in Rounded.
+    // race.
     id<FxTimingAPI_v4> timingAPI =
         [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
     double seedFrameDurSec = 0.0;
@@ -650,8 +650,8 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
     // the mini's opt-reveal ghost gates on (revealHidden &&
     // onHandleVisibilityToggled
     // != nil); the kit overlay already drives revealHidden on Option-hold, so
-    // this is the missing half (it also gives opt-click-in-mini hide/show, like
-    // MagicMove/Glow). handlesHidden + hiddenHandleLabels stay owned by
+    // this is the missing half (it also gives opt-click-in-mini hide/show).
+    // handlesHidden + hiddenHandleLabels stay owned by
     // -syncMiniHandleVisibility (so lock ORs in without fighting the kit's
     // async master set); kkRefresh below keeps nil for the same reason.
     [self kkWireOSCVisibilityForView:view

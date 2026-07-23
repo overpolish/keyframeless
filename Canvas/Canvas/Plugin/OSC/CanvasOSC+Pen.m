@@ -207,7 +207,7 @@ CanvasPenModifiers CanvasPenModsFromFxModifiers(NSUInteger m) {
 - (void)penDrawRingAtObj:(CGPoint)objYUp maxed:(BOOL)maxed {
   if (!self.penDrawDest)
     return;
-  // The shared KKRingOSC glyph (same control as the Glow radius ring), white
+  // The shared KKRingOSC glyph, white
   // for legibility on any background - or error at the clamp. The ring shader is
   // crisp by construction (no line-strip anti-alias washout), so no manual
   // pixel-snap is needed.

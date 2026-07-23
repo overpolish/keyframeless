@@ -34,7 +34,7 @@ typedef enum {
   KKRotationAxesAll = KKRotationAxisX | KKRotationAxisY | KKRotationAxisZ,
 } KKRotationAxes;
 
-/// World matrix R = Ry * Rx * Rz (matches MagicMove.metal's order).
+/// World matrix R = Ry * Rx * Rz.
 static inline KKRotMatrix3 KKBuildRotationMatrix(float rx, float ry, float rz) {
   float cx = cosf(rx), sx = sinf(rx);
   float cy = cosf(ry), sy = sinf(ry);

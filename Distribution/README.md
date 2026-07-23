@@ -47,7 +47,7 @@ On app launch, `KKUpdateChecker` GETs the component's release-notes page (`<base
 
 ### Adding a new component
 
-The component key is the project name lowercased with no spaces or separators (e.g. `MagicMove` → `magicmove`, `Keyframeless X` → `keyframelessx`).
+The component key is the project name lowercased with no spaces or separators (e.g. `Keyframeless X` → `keyframelessx`, `Canvas` → `canvas`).
 
 1. Add the key to `KKBundleIDToComponent()` in `KKUpdateChecker.m` - map both the wrapper app and XPC service bundle IDs.
 2. Add a case to `scripts/bump-version.sh` that updates the relevant `Info.plist` / `.pbxproj` files.
@@ -126,7 +126,7 @@ Build an installer and sign it in one step. The first argument is the target:
 
 ```sh
 scripts/build-and-sign.sh combined       "<apple-id>" "<team-id>"   # all-in-one Keyframeless.pkg
-scripts/build-and-sign.sh rounded         "<apple-id>" "<team-id>"   # just Rounded.pkg
+scripts/build-and-sign.sh canvas          "<apple-id>" "<team-id>"   # just Canvas.pkg
 scripts/build-and-sign.sh all             "<apple-id>" "<team-id>"   # every plugin, one .pkg each
 scripts/build-and-sign.sh keyframelessai  "<apple-id>" "<team-id>"   # the local-AI helper .pkg
 ```
@@ -137,7 +137,7 @@ from `Distribution/Keyframeless.pkgproj` + `scripts/uninstall.template` (via
 per-plugin is committed. `combined` builds the committed `Keyframeless.pkgproj`. Each
 runs `packagesbuild`, then signs, notarizes, staples, and verifies the resulting `.pkg`.
 
-Per-product installers are named with their version, e.g. `Rounded-v4.0.0.pkg` (the
+Per-product installers are named with their version, e.g. `Canvas-v2.0.0.pkg` (the
 version comes from the package's `.pkgproj` entry, the same one `bump-version.sh`
 maintains). `combined` still emits `Keyframeless.pkg`.
 
@@ -172,12 +172,12 @@ target).
 To sign an already-built `.pkg` without rebuilding (base name, no `.pkg`):
 
 ```sh
-scripts/sign-pkg.sh "Rounded" "<apple-id>" "<team-id>"
+scripts/sign-pkg.sh "Canvas" "<apple-id>" "<team-id>"
 ```
 
 To just generate a per-product `.pkgproj` for an unsigned local build:
 
 ```sh
 python3 scripts/split-pkgproj.py rounded
-packagesbuild "Distribution/Rounded.pkgproj"
+packagesbuild "Distribution/Canvas.pkgproj"
 ```

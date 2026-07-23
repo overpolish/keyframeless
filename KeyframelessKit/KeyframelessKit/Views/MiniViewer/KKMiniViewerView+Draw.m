@@ -277,7 +277,7 @@
       }
     }
 
-    // Ring OSC (e.g. Glow's radius): the in-viewer KKRingOSC, rendered through
+    // Ring OSC (e.g. a radius ring): the in-viewer KKRingOSC, rendered through
     // the SAME shader (_ringPipeline / KKRingOSCFragment) - a single-pass
     // elliptical fill+outline. No tessellation seams, no fill/outline bleed.
     if (_ringPipeline && del &&
@@ -416,7 +416,7 @@
       }
     }
 
-    // Motion path (Magic Move): red trajectory line + tangent connectors under
+    // Motion path: red trajectory line + tangent connectors under
     // the dots, then anchor + handle dots. Drawn beneath the position handle.
     if (del &&
         [del respondsToSelector:
@@ -515,7 +515,7 @@
 
     if (_pointPipeline && del) {
       CGRect cr = [self contentRectInViewPoints];
-      // Radius handle uses the host accent (same as Canvas's Rotate OSC) so
+      // Radius handle uses the host accent (same as a Rotate OSC) so
       // it's distinguishable from the white crop handles.
       NSColor *a =
           [[NSColor accent] colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
@@ -607,11 +607,10 @@
                                 encoder:enc];
         } else if (style == KKMiniHandleStyleRing) {
           // Haloed KKRingOSC ring (the shared radius-widget glyph). White fill
-          // + dark outline for legibility on any background (matches Canvas's
+          // + dark outline for legibility on any background (matches the
           // corner ring), scaled with the OSC sizing ratio like the dot. Sizes
-          // match Canvas's corner-radius ring (CanvasMiniViewerRenderer+Pen.m
-          // penDrawRingAtObj:) so the two read identically in the mini-viewer,
-          // as they already do in the main viewer.
+          // match the corner-radius ring so the two read identically in the
+          // mini-viewer, as they already do in the main viewer.
           CGFloat cs = [self _canvasScale];
           simd_float4 f = whiteFill;
           f.w *= (float)ghostAlpha;
@@ -737,7 +736,7 @@
       }
 
       // Secondary Position arc handle (a plugin whose main point handle is
-      // something else - e.g. Glow's radius ring - draws its Position here with
+      // something else - e.g. a radius ring - draws its Position here with
       // the same arc glyph the viewer uses).
       CGPoint posCenterPts;
       if ([del respondsToSelector:

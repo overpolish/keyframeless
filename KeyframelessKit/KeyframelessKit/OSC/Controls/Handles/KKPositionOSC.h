@@ -26,8 +26,8 @@ typedef NS_ENUM(NSInteger, KKPositionHit) {
   KKPositionHitTangentHandle = 3 // an in/out tangent handle
 };
 
-/// Supplied by a plugin that runs an OSC guide over its Position handle (e.g.
-/// MagicMove). nil = no guide; the handle reads the live timeline normally.
+/// Supplied by a plugin that runs an OSC guide over its Position handle.
+/// nil = no guide; the handle reads the live timeline normally.
 @protocol KKPositionGuideProvider <NSObject>
 /// The per-process guide bridge (for `guideStep` + `handleHovered`).
 - (KKOSCGuideBridge *)positionGuideBridge;
@@ -105,7 +105,7 @@ typedef NS_ENUM(NSInteger, KKPositionHit) {
 /// owning layer. The block is invoked inside the control's open action scope,
 /// so the host's get/set API (same apiManager) resolves there. The lane carries
 /// its owner via `layerKey`. nil = default single-param write
-/// (Glow/MagicMove/Rounded unchanged).
+/// (single-param plugins unchanged).
 @property(nonatomic, copy, nullable) void (^onTimelinePersist)
     (KKTimeline *timeline);
 

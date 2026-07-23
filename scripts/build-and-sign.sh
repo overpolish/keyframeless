@@ -9,7 +9,7 @@
 #   <target>:
 #     combined         the all-in-one Keyframeless.pkg (every plugin)
 #     all              every plugin as its own per-product .pkg
-#     <component>      one per-product .pkg (rounded|keyframelessx|magicmove|glow|canvas|shader|keyframelessai)
+#     <component>      one per-product .pkg (keyframelessx|canvas|shader|keyframelessai)
 #
 # Per-product builds GENERATE the single-product .pkgproj and its uninstaller from
 # templates (split-pkgproj.py + uninstall.template), build, sign, then delete those
@@ -23,7 +23,7 @@ SPLIT="$ROOT/scripts/split-pkgproj.py"
 
 usage() {
   echo "Usage: build-and-sign.sh <target> <apple-id> <team-id>"
-  echo "  <target>: combined | all | rounded | keyframelessx | magicmove | glow | canvas | keyframelessai"
+  echo "  <target>: combined | all | keyframelessx | canvas | shader | keyframelessai"
   exit 1
 }
 
@@ -123,7 +123,7 @@ build_product() {
   echo ""
   "$ROOT/scripts/sign-pkg.sh" "$name" "$APPLE_ID" "$TEAM_ID"
 
-  # Stamp the product version onto the final installer (e.g. Rounded-v4.0.0.pkg).
+  # Stamp the product version onto the final installer (e.g. Canvas-v2.0.0.pkg).
   mv "$BUILD_DIR/$name.pkg" "$BUILD_DIR/$name-v$version.pkg"
   echo "  -> $name-v$version.pkg"
 

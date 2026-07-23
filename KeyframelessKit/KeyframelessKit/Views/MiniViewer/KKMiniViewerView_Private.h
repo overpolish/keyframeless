@@ -13,7 +13,7 @@
 
 // Outer radius (points) of the shared KKPointOSC handle glyph. Smaller than
 // the viewer OSC's oscSize - the mini viewer is a compact preview. Must stay
-// in sync with RoundedMiniViewerRenderer's MiniOscSize() (placement/hit).
+// in sync with a plugin renderer's mini-OSC size (placement/hit).
 // Shared by the main file's interaction code and the +Rendering encoders.
 static const CGFloat kKKMiniHandleOuterPt = 4.5;
 

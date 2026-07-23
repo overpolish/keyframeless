@@ -76,7 +76,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		F21396012F649EF900E1EC03 /* keyframeless.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = keyframeless.icon; path = ../Assets/keyframeless.icon; sourceTree = SOURCE_ROOT; };
+		F21396012F649EF900E1EC03 /* keyframeless.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = keyframeless.icon; path = ../../Assets/keyframeless.icon; sourceTree = SOURCE_ROOT; };
 		F26E024E2F4DE56D009D949A /* KeyframelessKit.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; path = KeyframelessKit.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		F28AC7E32FD96282005447BD /* kk-ai-helper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = "kk-ai-helper"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F28AC7F02FD962DE005447BD /* Wrapper ApplicationDebug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "Wrapper ApplicationDebug.entitlements"; sourceTree = "<group>"; };

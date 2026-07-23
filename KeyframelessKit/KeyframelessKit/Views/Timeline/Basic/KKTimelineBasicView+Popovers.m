@@ -130,7 +130,7 @@
       },
       self.onDragBegin, self.onDragEnd,
       // Representative interval + its lane label so plugins can gate extras
-      // by lane (e.g. MagicMove's rotate-with-motion only on Position). The
+      // by lane (e.g. a rotate-with-motion extra only on Position). The
       // mutator targets ONLY that lane's interval - the property is lane-
       // specific and shouldn't pollute other lanes' userProperties dicts.
       repLabel,
@@ -584,8 +584,8 @@
 // (setNeedsDisplay re-reads from the projection); the host coalesces the
 // per-tick blob writes into the slider drag's undo group.
 // Per-lane variant: write only to the named lane's phase interval. Used by
-// gap-popover extras whose semantics are lane-specific (e.g. MagicMove's
-// rotate-with-motion is a property of the Position curve, not of every
+// gap-popover extras whose semantics are lane-specific (e.g. a
+// rotate-with-motion extra is a property of the Position curve, not of every
 // participating lane). nil/empty label is a no-op.
 - (void)_mutateIntervalInLaneLabel:(NSString *)laneLabel
                            section:(KKBasicSection)section

@@ -179,8 +179,8 @@ KKTimeline *CanvasLayerTimelineForPath(KKBezierPath *path,
     // stored (round-tripped) lane - the animationJSON drops non-codable props,
     // notably componentLabelColors (the R/G/B/A graph-line tints), so an
     // animated colour lane drew every channel in the default accent instead of
-    // red/green/blue. Mirrors the kit seeder (_timelineSeededFrom) that Glow
-    // goes through; user state (keyposes, enabled, aspectLinked) is untouched.
+    // red/green/blue. Mirrors the kit seeder (_timelineSeededFrom); user state
+    // (keyposes, enabled, aspectLinked) is untouched.
     src.valueType = t.valueType;
     src.componentMin = t.componentMin;
     src.componentMax = t.componentMax;

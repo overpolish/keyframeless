@@ -14,7 +14,7 @@
 @property(nonatomic, readwrite) KKPointOSC *tangentDotOSC;
 @property(nonatomic, readwrite) KKSnapEngine *snapEngine;
 @property(nonatomic, readwrite) BOOL hoverTargetIsAnchor;
-// Drag state (was MagicMove's host state).
+// Drag state (was the host's state).
 @property(nonatomic) BOOL cmdSnapActive;
 @property(nonatomic) simd_float2 posPressObject;
 @property(nonatomic) double dragAnchorFrac;
@@ -48,7 +48,7 @@
     // it wipes everything drawn before it (same reason the dots below don't).
     self.clearsOnDraw = NO;
     _snapEngine = [[KKSnapEngine alloc] init];
-    // Match Rounded's crop/radius points so the anchors are easy to hit. Must
+    // Match the crop/radius points so the anchors are easy to hit. Must
     // not clear the destination, or each dot wipes the path + earlier anchors.
     _anchorDotOSC = [[KKPointOSC alloc] initWithAPIManager:apiManager];
     _anchorDotOSC.oscRadius = 7.0f;

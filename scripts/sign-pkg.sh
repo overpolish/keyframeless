@@ -7,7 +7,7 @@
 #
 # Usage: sign-pkg.sh <pkg-name> <apple-id> <team-id>
 #   <pkg-name>  base name (no .pkg) of the installer in Distribution/build/,
-#               e.g. "Keyframeless", "Rounded", "Keyframeless X"
+#               e.g. "Keyframeless", "Canvas", "Keyframeless X"
 
 set -euo pipefail
 

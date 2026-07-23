@@ -5,7 +5,7 @@ summary: Showing and hiding on-screen controls - master tick, per-control pills,
 
 # Showing and hiding on-screen controls
 
-Every plugin that draws on-screen controls lets you hide the ones you aren't using, to declutter the canvas. The state stays in sync across three places: the FCP viewer, the inspector mini-viewer preview, and the inspector itself. Which controls a given plugin exposes varies (for example Magic Move has Position and Rotation X / Y / Z rings; Rounded has Radius and a Crop box), but the behaviour below is identical everywhere.
+Every plugin that draws on-screen controls lets you hide the ones you aren't using, to declutter the canvas. The state stays in sync across three places: the FCP viewer, the inspector mini-viewer preview, and the inspector itself. Which controls a given plugin exposes varies (one plugin might have Position and Rotation X / Y / Z rings; another a Radius and a Crop box), but the behaviour below is identical everywhere.
 
 ## Three ways to hide a control
 
