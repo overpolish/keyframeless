@@ -12,7 +12,7 @@
 #import "KKMiniViewerView.h" // canvasDelegate + KKMiniViewerDelegate
 #import "KKPaletteGenerator.h"
 #import "KKTimelineStaticValuesPopover_Private.h"
-#import "KKTimingStage.h" // KKConditionalVisibleLaneLabels
+#import "KKTimeline.h" // KKConditionalVisibleLaneLabels
 #import "NSColor+KKColors.h"
 
 @interface _KKStaticValuesPopoverView (PalettePrivate)

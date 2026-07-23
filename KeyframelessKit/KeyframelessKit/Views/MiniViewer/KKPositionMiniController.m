@@ -9,7 +9,7 @@
 #import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKSpatialCurve.h>
 #import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneVisibleAtFraction
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <simd/simd.h>
 
 static const CGFloat kHandleHitTolPt = 12.0;

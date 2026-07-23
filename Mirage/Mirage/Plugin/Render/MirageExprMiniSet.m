@@ -308,18 +308,18 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
     // inline boxes; a crop-style vec4 shows its rect in SOURCE PIXELS,
     // matching the viewer's crop readout.
     NSString *readout = nil;
-    if (b.fieldCount <= 2) {
-      readout = KKBoxOSCReadoutString([r rootValuesForLabel:b.binds],
-                                      b.divisor == 100.0, b.isInt);
+    NSArray<NSNumber *> *raw = [r rootValuesForLabel:b.binds];
+    // Crop-style vec4 boxes AND centred boxes with declared per-component
+    // units (`units={px,%}`) show the BOUND LANE's display units, matching
+    // the lane fields; a unit-less (or single-component) value box keeps the
+    // raw/percent form.
+    if (b.fieldCount > 2 || (b.boundComponentUnits.count && raw.count >= 2)) {
+      readout = [MirageOSCBlockRuntime boxReadoutForValues:raw
+                                                     units:b.boundComponentUnits
+                                           scalesWithMedia:b.boundScalesWithMedia
+                                                 mediaSize:mediaSize];
     } else {
-      // A crop-style vec4 box shows its W x H in the BOUND LANE's display
-      // units (px only for a "px" component, else the raw fraction), matching
-      // the lane fields instead of always forcing source pixels.
-      readout = [MirageOSCBlockRuntime
-          boxReadoutForValues:[r rootValuesForLabel:b.binds]
-                        units:b.boundComponentUnits
-              scalesWithMedia:b.boundScalesWithMedia
-                    mediaSize:mediaSize];
+      readout = KKBoxOSCReadoutString(raw, b.divisor == 100.0, b.isInt);
     }
     [out addObject:[KKMiniBox boxWithRect:[editor cropRectForValues:values
                                                         contentRect:cr]

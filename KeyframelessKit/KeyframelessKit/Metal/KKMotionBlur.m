@@ -11,7 +11,7 @@
 #import "KKShaderTypes.h"
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 static NSString *const KKMotionBlurPipelineID =
     @"co.overpolish.keyframeless.kit.motionblur";

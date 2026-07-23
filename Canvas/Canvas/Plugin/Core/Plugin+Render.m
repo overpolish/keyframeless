@@ -15,7 +15,7 @@
 #import "Plugin_Private.h"
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKTimingEvaluation.h> // LaneValueAtVisualFractionSmoothed
-#import <KeyframelessKit/KKTimingStage.h>       // KKTimelineRetimedForMediaAnchor
+#import <KeyframelessKit/KKTimeline.h>       // KKTimelineRetimedForMediaAnchor
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKMotionBlur.h>

@@ -26,7 +26,7 @@
 #import <KeyframelessKit/KKTimelineAIMerge.h>
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h> // guide help-button provider
 #import <KeyframelessKit/KKTimingCompat.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKUpdateChecker.h>
 @import KeyframelessAI;
 
@@ -76,12 +76,12 @@ static void MirageAIApplyShaderSource(MiragePlugin *plugin, NSString *newSrc,
     tl = [KKTimeline timeline];
   KKLane *shaderLane = nil;
   for (KKLane *l in tl.lanes)
-    if ([l.label isEqualToString:@"Mirage"]) {
+    if ([l.label isEqualToString:kMirageCodeLaneLabel]) {
       shaderLane = l;
       break;
     }
   if (!shaderLane) {
-    shaderLane = [KKLane laneWithLabel:@"Mirage"];
+    shaderLane = [KKLane laneWithLabel:kMirageCodeLaneLabel];
     shaderLane.valueType = KKLaneValueTypeCode;
     shaderLane.animatable = NO;
     shaderLane.enabled = NO;
@@ -210,7 +210,7 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
 // default when absent/empty), for deriving the source-aware lane set.
 + (NSString *)shaderSourceFromTimeline:(KKTimeline *)timeline {
   for (KKLane *l in timeline.lanes)
-    if ([l.label isEqualToString:@"Mirage"] && l.codeString.length)
+    if ([l.label isEqualToString:kMirageCodeLaneLabel] && l.codeString.length)
       return l.codeString;
   return MirageCustomDefaultShaderSource();
 }
@@ -267,112 +267,80 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kParamInspectorUI) {
-    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actionAPI startAction:self];
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
+    __block KKTimeline *timeline = nil;
+    __block NSString *shaderSrc = nil;
+    __block NSArray<KKLane *> *available = nil;
+    __block BOOL oscMasterVisible = YES;
+    __block NSDictionary *uiState = nil;
+    __block KKMiniViewerRenderMode renderMode = 0;
+    MirageInspectorView *view = (MirageInspectorView *)[self
+        kkCreateInspectorViewWithUIStateParamID:kParamUIState
+        renderNudgeParamID:kParamRenderNudge
+        dragUndoLabel:@"Adjust Mirage"
+        detachedWindowSize:CGSizeMake(720.0, 460.0)
+        builtinPresets:MirageBuiltinPresets()
+        inScope:^(KKInspectorCreateContext *ctx,
+                  id<FxParameterRetrievalAPI_v6> getAPI) {
+          KKInspectorPersistedState *st = ctx.persistedState;
+          oscMasterVisible = st.oscMasterVisible;
+          uiState = st.uiState;
+          renderMode = (KKMiniViewerRenderMode)st.renderMode;
+          timeline = [self timelineStampedWithClipDuration:st.timeline];
+          // Cold-boot seed for the OSC. Without this, the first drawOSC tick
+          // after FCP relaunch sees an empty snapshot -> falls through to "no
+          // lane = constant", Origin reads default 0.5,0.5 -> the handle sits
+          // at frame centre regardless of saved state. parameterChanged
+          // eventually catches up, but only after a redraw nudge.
+          MirageSetTimelineSnapshot(timeline);
+          if (ctx.seedFrameDurSec > 0)
+            MirageSetFrameDurationSeconds(ctx.seedFrameDurSec);
+          // Seed the per-instance OSC master tick while the state is scoped.
+          ctx.instanceState.oscMasterVisible = st.oscMasterVisible;
+        }
+        buildView:^KKTimelineInspectorView *(KKInspectorCreateContext *ctx) {
+          // Catches bindings this instance made before tickets existed, and
+          // any made while its inspector was closed. Opens its own scope, so
+          // it runs after the template's scope rather than inside it.
+          [self syncAudioTicketsForTimeline:timeline];
+          // Source-aware: derive the lane set (incl. the dynamic Colours
+          // group) from the current shader source, so a shader's `// #color`
+          // directive surfaces its swatches + palette generator.
+          shaderSrc = [MiragePlugin shaderSourceFromTimeline:timeline];
+          available =
+              [MiragePlugin availableLanesForShaderSource:shaderSrc
+                                             audioTickets:self.audioTickets];
+          KKInspectorPersistedState *st = ctx.persistedState;
+          MirageInspectorView *v = [[MirageInspectorView alloc]
+              initWithAPIManager:self.apiManager
+                     loopEnabled:st.loopEnabled
+           maintainTimingEnabled:st.maintainTimingEnabled
+                       activeTab:st.activeTab
+                  availableLanes:available
+                        timeline:timeline];
+          // Per-instance rendezvous paths (keyed by the instance UUID) so two
+          // stacked Mirage clips read/write distinct /tmp files instead of
+          // the clip below showing the top clip's source in its mini-viewer.
+          v.miniViewerDescriptorPath =
+              MirageMiniViewerDescriptorPathForUUID(ctx.instanceUUID);
+          v.miniViewerRequestPath =
+              MirageMiniViewerRequestPathForUUID(ctx.instanceUUID);
+          // Live source-derived lanes: when the shader code commits
+          // (debounced), the inspector re-derives the lane set from the new
+          // source. Cached tickets, not a fresh read: this fires from a
+          // code-commit callback, outside any action scope, where the param
+          // APIs return nil.
+          __weak __typeof(self) weakLaneSelf = self;
+          v.availableLanesProvider = ^NSArray<KKLane *> *(NSString *code) {
+            return [MiragePlugin
+                availableLanesForShaderSource:code
+                                 audioTickets:weakLaneSelf.audioTickets];
+          };
+          return v;
+        }];
+    if (!view)
+      return nil;
 
-    KKInspectorPersistedState *st =
-        [self kkReadInspectorPersistedStateWithGetAPI:getAPI
-                                       uiStateParamID:kParamUIState];
-    BOOL loopEnabled = st.loopEnabled;
-    NSInteger activeTab = st.activeTab;
-    BOOL oscMasterVisible = st.oscMasterVisible;
-    KKMiniViewerRenderMode renderMode = (KKMiniViewerRenderMode)st.renderMode;
-    BOOL motionBlurEnabled = st.motionBlurEnabled;
-    double motionBlurShutterAngle = st.motionBlurShutterAngle;
-    NSInteger motionBlurSamples = st.motionBlurSamples;
-    NSInteger motionBlurTechnique = st.motionBlurTechnique;
-    NSDictionary *uiState = st.uiState;
-    KKTimeline *timeline = [self timelineStampedWithClipDuration:st.timeline];
-
-    // Cold-boot seed for the OSC. Without this, the first drawOSC tick after
-    // FCP relaunch sees an empty snapshot → falls through to "no lane =
-    // constant", Origin reads default 0.5,0.5 → the handle sits at frame
-    // centre regardless of saved state. parameterChanged eventually catches
-    // up, but only after a redraw nudge.
-    MirageSetTimelineSnapshot(timeline);
-
-    // Frame + clip duration for the keypose-snap epsilon AND the basic-view
-    // scrubber clamp. FxTimingAPI resolves inside this action scope. We
-    // also push these into the view itself right after construction (below)
-    // because the Plugin+Render push is gated on lastPushedClipDuration and
-    // can race with view creation: if the first render fires before the
-    // inspector view exists, the push targets a nil weak ref and the basic
-    // view never learns the frame duration for the lifetime of this session.
-    id<FxTimingAPI_v4> timingAPI =
-        [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-    double seedFrameDurSec = 0.0;
-    double seedClipDurSec = 0.0;
-    if (timingAPI) {
-      CMTime frameDur = kCMTimeZero, clipDur = kCMTimeZero;
-      [timingAPI frameDuration:&frameDur];
-      [timingAPI durationTimeForEffect:&clipDur];
-      seedFrameDurSec = CMTimeGetSeconds(frameDur);
-      seedClipDurSec = CMTimeGetSeconds(clipDur);
-      if (seedFrameDurSec > 0)
-        MirageSetFrameDurationSeconds(seedFrameDurSec);
-    }
-
-    // Per-instance OSC-visibility state: mint the UUID here (inside the action
-    // scope where the setting API resolves) and seed the master tick.
-    KKInstanceStateEnsureForAPI(self.apiManager).oscMasterVisible =
-        oscMasterVisible;
-
-    [actionAPI endAction:self];
-
-    // Catches bindings this instance made before tickets existed, and any made
-    // while its inspector was closed. Opens its own scope, so it goes after the
-    // one above rather than inside it.
-    [self syncAudioTicketsForTimeline:timeline];
-
-    // Source-aware: derive the lane set (incl. the dynamic Colours group) from
-    // the current shader source, so a shader's `// #color` directive surfaces
-    // its swatches + palette generator.
-    NSString *shaderSrc = [MiragePlugin shaderSourceFromTimeline:timeline];
-    NSArray<KKLane *> *available =
-        [MiragePlugin availableLanesForShaderSource:shaderSrc
-                                       audioTickets:self.audioTickets];
-    MirageInspectorView *view =
-        [[MirageInspectorView alloc] initWithAPIManager:self.apiManager
-                                            loopEnabled:loopEnabled
-                                  maintainTimingEnabled:st.maintainTimingEnabled
-                                              activeTab:activeTab
-                                         availableLanes:available
-                                               timeline:timeline];
-    // Per-instance rendezvous paths (keyed by the instance UUID minted above)
-    // so two stacked Mirage clips read/write distinct /tmp files instead of the
-    // clip below showing the top clip's source in its mini-viewer.
-    NSString *instUUID = KKInstanceUUIDForAPI(self.apiManager);
-    view.miniViewerDescriptorPath =
-        MirageMiniViewerDescriptorPathForUUID(instUUID);
-    view.miniViewerRequestPath = MirageMiniViewerRequestPathForUUID(instUUID);
-    // Live source-derived lanes: when the shader code commits (debounced), the
-    // inspector re-derives the lane set from the new source so a `// #color`
-    // directive's Colours group appears/updates without a clip reselect.
-    __weak __typeof(self) weakLaneSelf = self;
-    view.availableLanesProvider = ^NSArray<KKLane *> *(NSString *code) {
-      // The cached tickets, not a fresh read: this fires from a code-commit
-      // callback, outside any action scope, where the param APIs return nil.
-      return [MiragePlugin
-          availableLanesForShaderSource:code
-                           audioTickets:weakLaneSelf.audioTickets];
-    };
-    // Seed the basic-view scrubber clamp immediately. Plugin+Render's
-    // dispatch_async push runs once on first render - if it raced ahead
-    // and weakSelf.inspectorView was still nil, the basic view would
-    // never see the frame duration. Pushing here too is idempotent.
-    if (seedClipDurSec > 0)
-      [view setClipDurationSeconds:seedClipDurSec];
-    if (seedFrameDurSec > 0)
-      [view setFrameDurationSeconds:seedFrameDurSec];
-    [view setMotionBlurEnabled:motionBlurEnabled];
-    [view setMotionBlurShutterAngle:motionBlurShutterAngle
-                            samples:motionBlurSamples];
-    [view setMotionBlurTechnique:(KKMotionBlurTechnique)motionBlurTechnique];
-
-    // On-screen-control visibility: master tick + per-element pills (Origin,
+        // On-screen-control visibility: master tick + per-element pills (Origin,
     // Path) + opt-click-hide + opt-reveal. The element key is the lane label
     // (KKPositionOSC / the mini controller key their visibility on it). Shared
     // glue in KKPlugin (OSCVisibility); the renderer is the mini-viewer
@@ -427,20 +395,6 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
                              elementKeys:[KKPlugin kkOSCElementKeysForCompounds:
                                                        oscCompounds]
                             nudgeParamID:kParamRenderNudge];
-
-    [self kkWireStandardInspectorCallbacksForView:view
-                                   uiStateParamID:kParamUIState
-                               renderNudgeParamID:kParamRenderNudge
-                                    dragUndoLabel:@"Adjust Mirage"
-                               detachedWindowSize:CGSizeMake(720.0, 460.0)];
-
-    // Built-in "look" presets (Type + curated palette) for the shared Presets
-    // popover, under this plugin's preset key (set by kkWire above, the key the
-    // popover queries). Idempotent - re-registering replaces the same set.
-    [[KKPresets shared] registerBuiltinPresets:MirageBuiltinPresets()
-                                  forPluginKey:[self presetPluginKey]];
-
-    self.inspectorView = view;
 
     // Let the intro guide's closing step spotlight this effect's Help button
     // (owned by the plugin's logo banner, resolved live).
@@ -578,20 +532,22 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
   // when it opens, we run the standalone-helper update check (its own installer
   // + version, read by KKUpdateChecker) and push the result into the popover.
   // This is the one spot that links both KeyframelessKit and KeyframelessAI.
-  [KKAIUpdate setCheckHandler:^{
-    [[KKUpdateChecker shared] checkAIUpdateWithCompletion:^(BOOL avail) {
-      KKUpdateChecker *checker = [KKUpdateChecker shared];
-      [KKAIUpdate setAvailableVersion:checker.aiAvailableVersion
-                             notesURL:checker.aiNotesURL.absoluteString];
-    }];
-  }];
-
   __weak typeof(self) weakSelf = self;
   return [KKAIBannerHost
-      makePluginButtonWithProductContext:productContext
-                            examplePairs:examples
-                             placeholder:placeholder
-                                   onRun:^(NSString *prompt) {
+      makeStandardPluginButtonWithProductContext:productContext
+                                    examplePairs:examples
+                                     placeholder:placeholder
+                                checkForAIUpdate:^(void (^report)(
+                                    NSString *version, NSString *notesURL)) {
+                                  [[KKUpdateChecker shared]
+                                      checkAIUpdateWithCompletion:^(BOOL avail) {
+                                        KKUpdateChecker *c =
+                                            [KKUpdateChecker shared];
+                                        report(c.aiAvailableVersion,
+                                               c.aiNotesURL.absoluteString);
+                                      }];
+                                }
+                                           onRun:^(NSString *prompt) {
                                      __strong typeof(weakSelf) strong =
                                          weakSelf;
                                      if (!strong)
@@ -634,7 +590,7 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
   KKTimeline *readTimeline =
       timelineBlob.length ? [KKTimeline timelineFromJSON:timelineBlob] : nil;
   for (KKLane *l in readTimeline.lanes)
-    if ([l.label isEqualToString:@"Mirage"] && l.codeString.length) {
+    if ([l.label isEqualToString:kMirageCodeLaneLabel] && l.codeString.length) {
       rawShaderSrc = l.codeString;
       break;
     }

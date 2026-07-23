@@ -20,7 +20,7 @@
 #import "KKMiniViewerView.h"
 #import "KKTimelineStaticValuesPopover_Private.h"
 #import "KKTimingEvaluation.h" // KKTimelineLaneValueAtFraction
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <QuartzCore/QuartzCore.h>

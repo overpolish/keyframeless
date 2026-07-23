@@ -13,79 +13,19 @@
 
 - (BOOL)addParametersWithError:(NSError **)error {
   id<FxParameterCreationAPI_v5> paramAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterCreationAPI_v5)];
-  if (paramAPI == nil) {
-    if (error != NULL) {
-      *error = [NSError errorWithDomain:FxPlugErrorDomain
-                                   code:kFxError_APIUnavailable
-                               userInfo:@{
-                                 NSLocalizedDescriptionKey :
-                                     @"Unable to obtain an FxPlug API Object"
-                               }];
-    }
+      [self kkAddStandardParametersWithInspectorUI:kParamInspectorUI
+                                           uiState:kParamUIState
+                                       renderNudge:kParamRenderNudge
+                             motionBlurDefaultJSON:nil
+                                             error:error];
+  if (!paramAPI)
     return NO;
-  }
 
-  if (![self addLogoBannerParameterWithAPI:paramAPI error:error]) {
-    return NO;
-  }
-
-  FxParameterFlags inspectorFlags =
-      kFxParameterFlag_NOT_ANIMATABLE | kFxParameterFlag_CUSTOM_UI |
-      kFxParameterFlag_USE_FULL_VIEW_WIDTH | kFxParameterFlag_DISABLED;
-  if (![paramAPI addCustomParameterWithName:@""
-                                parameterID:kParamInspectorUI
-                               defaultValue:@(kParamInspectorUI)
-                             parameterFlags:inspectorFlags]) {
-    return NO;
-  }
-
-  if (![paramAPI addCustomParameterWithName:@""
-                                parameterID:kParamUIState
-                               defaultValue:[KKDataBlob blobWithData:nil]
-                             parameterFlags:kFxParameterFlag_HIDDEN]) {
-    return NO;
-  }
-
+  // Second texture source, bound to iChannel1 when filled (a Motion
+  // transition template feeds it "Drop Zone Transition B").
   if (![paramAPI addImageReferenceWithName:@"To"
                                parameterID:kParamToImage
                             parameterFlags:kFxParameterFlag_DEFAULT]) {
-    return NO;
-  }
-
-  if (![paramAPI addCustomParameterWithName:@""
-                                parameterID:kKKParamTimelineData
-                               defaultValue:[KKDataBlob blobWithData:nil]
-                             parameterFlags:kFxParameterFlag_HIDDEN]) {
-    return NO;
-  }
-
-  if (![paramAPI addCustomParameterWithName:@""
-                                parameterID:kParamRenderNudge
-                               defaultValue:[KKDataBlob blobWithData:nil]
-                             parameterFlags:kFxParameterFlag_HIDDEN |
-                                            kFxParameterFlag_NOT_ANIMATABLE]) {
-    return NO;
-  }
-
-  // Motion blur state lives in this custom-UI blob (edited from the inspector
-  // MB row, not native controls). Read at render time via
-  // +[KKMotionBlur snapshotStateFromJSON:...].
-  if (![paramAPI addCustomParameterWithName:@""
-                                parameterID:kKKParamMotionBlurData
-                               defaultValue:[KKDataBlob blobWithData:nil]
-                             parameterFlags:kFxParameterFlag_HIDDEN |
-                                            kFxParameterFlag_NOT_ANIMATABLE]) {
-    return NO;
-  }
-
-  // Per-instance identity UUID: lets the OSC resolve this instance's
-  // KKPluginInstanceState (OSC-visibility cache) from its own apiManager scope.
-  if (![paramAPI addStringParameterWithName:@""
-                                parameterID:kKKParamInstanceID
-                               defaultValue:@""
-                             parameterFlags:kFxParameterFlag_HIDDEN |
-                                            kFxParameterFlag_NOT_ANIMATABLE]) {
     return NO;
   }
 

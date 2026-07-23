@@ -11,8 +11,8 @@
 #import "CanvasSketchProperties.h"
 #import "CanvasLayerTransform.h" // CanvasLayerEffectiveTimeline (shared)
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
-#import <KeyframelessKit/KKTimingStage.h>
 
 BOOL CanvasSketchEnabledAtFraction(KKBezierPath *path, double frac,
                                    NSString *overrideLayerID,

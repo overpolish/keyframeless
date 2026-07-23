@@ -9,8 +9,7 @@
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKMotionBlur.h>
-#import <KeyframelessKit/KKTimingLane.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 @class KKTimelineInspectorView;
 @class KKMiniViewerRenderer;

@@ -5,7 +5,7 @@
 
 #import "KKScaleMiniController.h"
 #import <KeyframelessKit/KKScaleGizmo.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 static const CGFloat kHandleHitTolPt = 12.0;
 // Cmd-fine drag multiplier (matches the viewer KKScaleOSC).

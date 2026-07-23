@@ -6,7 +6,7 @@
 #import "MirageBrowserController.h"
 #import "MirageBrowserView.h"
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
 #import <QuartzCore/QuartzCore.h>
 

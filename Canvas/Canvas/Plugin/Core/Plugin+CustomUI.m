@@ -26,7 +26,7 @@
 #import <KeyframelessKit/KKTimelineAIMerge.h>
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
 #import <KeyframelessKit/KKTimingGuide.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKUpdateChecker.h>
 @import KeyframelessAI;
 
@@ -440,99 +440,61 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
 
 - (NSView *)createViewForParameterID:(UInt32)parameterID NS_RETURNS_RETAINED {
   if (parameterID == kParamInspectorUI) {
-    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actionAPI startAction:self];
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-
-    KKInspectorPersistedState *st =
-        [self kkReadInspectorPersistedStateWithGetAPI:getAPI
-                                       uiStateParamID:kParamUIState];
-    // Per-layer timelines: the kit inspector EDITS the SELECTED layer's own
-    // animationJSON with PLAIN labels (so the Animated dropdown / Constants /
-    // Keypose work unchanged). The all-layers overview is drawn separately as
-    // read-only context. (NOT the global kKKParamTimelineData; st.timeline is
-    // unused here.) Selection is the topmost layer until panel-driven selection
-    // lands.
-    NSString *layerB64 = KKReadCustomParamString(getAPI, kParamLayerData);
-    NSMutableArray<KKBezierPath *> *layerPaths =
-        layerB64.length
-            ? [KKBezierPath
-                  pathsFromBlob:[[NSData alloc]
-                                    initWithBase64EncodedString:layerB64
-                                                        options:0]]
-            : [NSMutableArray array];
-    KKTimeline *layerTL =
-        CanvasLayerTimelineForPath(CanvasSelectedLayerForPaths(layerPaths, nil),
-                                   [CanvasPlugin availableLanes]);
-    KKTimeline *timeline = [self timelineStampedWithClipDuration:layerTL];
-
-    // Frame + clip duration for the keypose-snap epsilon and the basic-view
-    // scrubber clamp. FxTimingAPI resolves inside this action scope; we push
-    // them into the view right after construction to avoid the render-push
-    // race.
-    id<FxTimingAPI_v4> timingAPI =
-        [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-    double seedFrameDurSec = 0.0;
-    double seedClipDurSec = 0.0;
-    if (timingAPI) {
-      CMTime frameDur = kCMTimeZero, clipDur = kCMTimeZero;
-      [timingAPI frameDuration:&frameDur];
-      [timingAPI durationTimeForEffect:&clipDur];
-      seedFrameDurSec = CMTimeGetSeconds(frameDur);
-      seedClipDurSec = CMTimeGetSeconds(clipDur);
-    }
-
-    // Mint the per-instance state UUID here (inside the action scope, where the
-    // setting API resolves) so the viewer Transform OSC can read its visibility
-    // - without it the OSC reads no state and defaults to visible.
-    KKInstanceStateEnsureForAPI(self.apiManager);
-
-    // Publish the full UIState JSON for the viewer OSC (it can't read the
-    // custom param) - it reads view-prefs like "autoSelect" and uses it as the
-    // base to merge a new selection into on a hit-test click.
-    CanvasSetUIStateSnapshot(KKReadCustomParamString(getAPI, kParamUIState));
-
-    [actionAPI endAction:self];
-
-    NSArray<KKLane *> *available = [CanvasPlugin availableLanes];
-    CanvasInspectorView *view =
-        [[CanvasInspectorView alloc] initWithAPIManager:self.apiManager
-                                            loopEnabled:st.loopEnabled
-                                  maintainTimingEnabled:st.maintainTimingEnabled
-                                              activeTab:st.activeTab
-                                         availableLanes:available
-                                               timeline:timeline];
-    // Per-instance rendezvous paths (keyed by the instance UUID minted above)
-    // so two stacked Canvas clips read/write distinct /tmp files instead of the
-    // clip below showing the top clip's source in its mini-viewer.
-    NSString *instUUID = KKInstanceUUIDForAPI(self.apiManager);
-    view.miniViewerDescriptorPath =
-        CanvasMiniViewerDescriptorPathForUUID(instUUID);
-    view.miniViewerRequestPath = CanvasMiniViewerRequestPathForUUID(instUUID);
-    if (seedClipDurSec > 0)
-      [view setClipDurationSeconds:seedClipDurSec];
-    if (seedFrameDurSec > 0)
-      [view setFrameDurationSeconds:seedFrameDurSec];
-    // Seed the motion-blur toolbar row from the persisted blob (the standard
-    // callbacks below own the write-back; this restores the toggle on reopen).
-    [view setMotionBlurEnabled:st.motionBlurEnabled];
-    [view setMotionBlurShutterAngle:st.motionBlurShutterAngle
-                            samples:st.motionBlurSamples];
-    [view setMotionBlurTechnique:(KKMotionBlurTechnique)st.motionBlurTechnique];
-
-    [self kkWireStandardInspectorCallbacksForView:view
-                                   uiStateParamID:kParamUIState
-                               renderNudgeParamID:kParamRenderNudge
-                                    dragUndoLabel:@"Adjust Canvas"
-                               detachedWindowSize:CGSizeMake(720.0, 460.0)];
-
-    // Canvas's annotation presets (Arrow, etc.) live in the shared Presets
-    // popover as content presets - register them under this plugin's preset key
-    // (set by kkWire above, the key the popover queries). Idempotent.
-    [[KKPresets shared] registerBuiltinPresets:CanvasBuiltinPresets()
-                                  forPluginKey:[self presetPluginKey]];
+    __block KKTimeline *timeline = nil;
+    __block NSDictionary *uiState = nil;
+    CanvasInspectorView *view = (CanvasInspectorView *)[self
+        kkCreateInspectorViewWithUIStateParamID:kParamUIState
+        renderNudgeParamID:kParamRenderNudge
+        dragUndoLabel:@"Adjust Canvas"
+        detachedWindowSize:CGSizeMake(720.0, 460.0)
+        builtinPresets:CanvasBuiltinPresets()
+        inScope:^(KKInspectorCreateContext *ctx,
+                  id<FxParameterRetrievalAPI_v6> getAPI) {
+          // Per-layer timelines: the kit inspector EDITS the SELECTED layer's
+          // own animationJSON with PLAIN labels (so the Animated dropdown /
+          // Constants / Keypose work unchanged). The all-layers overview is
+          // drawn separately as read-only context. (NOT the global
+          // kKKParamTimelineData; the persisted timeline is unused here.)
+          // Selection is the topmost layer until panel-driven selection lands.
+          NSString *layerB64 = KKReadCustomParamString(getAPI, kParamLayerData);
+          NSMutableArray<KKBezierPath *> *layerPaths =
+              layerB64.length
+                  ? [KKBezierPath
+                        pathsFromBlob:[[NSData alloc]
+                                          initWithBase64EncodedString:layerB64
+                                                              options:0]]
+                  : [NSMutableArray array];
+          KKTimeline *layerTL = CanvasLayerTimelineForPath(
+              CanvasSelectedLayerForPaths(layerPaths, nil),
+              [CanvasPlugin availableLanes]);
+          timeline = [self timelineStampedWithClipDuration:layerTL];
+          uiState = ctx.persistedState.uiState;
+          // Publish the full UIState JSON for the viewer OSC (it can't read
+          // the custom param) - it reads view-prefs like "autoSelect" and uses
+          // it as the base to merge a new selection into on a hit-test click.
+          CanvasSetUIStateSnapshot(
+              KKReadCustomParamString(getAPI, kParamUIState));
+        }
+        buildView:^KKTimelineInspectorView *(KKInspectorCreateContext *ctx) {
+          KKInspectorPersistedState *st = ctx.persistedState;
+          CanvasInspectorView *v = [[CanvasInspectorView alloc]
+              initWithAPIManager:self.apiManager
+                     loopEnabled:st.loopEnabled
+           maintainTimingEnabled:st.maintainTimingEnabled
+                       activeTab:st.activeTab
+                  availableLanes:[CanvasPlugin availableLanes]
+                        timeline:timeline];
+          // Per-instance rendezvous paths (keyed by the instance UUID) so two
+          // stacked Canvas clips read/write distinct /tmp files instead of
+          // the clip below showing the top clip's source in its mini-viewer.
+          v.miniViewerDescriptorPath =
+              CanvasMiniViewerDescriptorPathForUUID(ctx.instanceUUID);
+          v.miniViewerRequestPath =
+              CanvasMiniViewerRequestPathForUUID(ctx.instanceUUID);
+          return v;
+        }];
+    if (!view)
+      return nil;
 
     // Persist timeline edits PER LAYER instead of to the global timeline param:
     // decompose the edited merged timeline by layerKey and write each layer's
@@ -629,8 +591,6 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
       [act endAction:s];
     };
 
-    self.inspectorView = view;
-
     // Let the intro guide's closing step spotlight this effect's Help button
     // (owned by the plugin's logo banner, resolved live).
     __weak typeof(self) weakHelp = self;
@@ -726,7 +686,7 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
       });
     };
     NSMutableDictionary *visState =
-        [st.uiState mutableCopy] ?: [NSMutableDictionary dictionary];
+        [uiState mutableCopy] ?: [NSMutableDictionary dictionary];
     // Master "show controls" toggle stays GLOBAL (kkWire persists it under
     // oscMasterVisible). Default ON so opt-hold can reveal the per-layer
     // ghosts.
@@ -1316,20 +1276,22 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
   // when it opens, we run the standalone-helper update check (its own installer
   // + version, read by KKUpdateChecker) and push the result into the popover.
   // This is the one spot that links both KeyframelessKit and KeyframelessAI.
-  [KKAIUpdate setCheckHandler:^{
-    [[KKUpdateChecker shared] checkAIUpdateWithCompletion:^(BOOL avail) {
-      KKUpdateChecker *checker = [KKUpdateChecker shared];
-      [KKAIUpdate setAvailableVersion:checker.aiAvailableVersion
-                             notesURL:checker.aiNotesURL.absoluteString];
-    }];
-  }];
-
   __weak typeof(self) weakSelf = self;
   return [KKAIBannerHost
-      makePluginButtonWithProductContext:productContext
-                            examplePairs:examples
-                             placeholder:placeholder
-                                   onRun:^(NSString *prompt) {
+      makeStandardPluginButtonWithProductContext:productContext
+                                    examplePairs:examples
+                                     placeholder:placeholder
+                                checkForAIUpdate:^(void (^report)(
+                                    NSString *version, NSString *notesURL)) {
+                                  [[KKUpdateChecker shared]
+                                      checkAIUpdateWithCompletion:^(BOOL avail) {
+                                        KKUpdateChecker *c =
+                                            [KKUpdateChecker shared];
+                                        report(c.aiAvailableVersion,
+                                               c.aiNotesURL.absoluteString);
+                                      }];
+                                }
+                                           onRun:^(NSString *prompt) {
                                      __strong typeof(weakSelf) strong =
                                          weakSelf;
                                      if (!strong)

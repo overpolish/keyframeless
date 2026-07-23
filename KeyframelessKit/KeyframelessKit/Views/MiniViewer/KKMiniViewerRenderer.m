@@ -11,7 +11,7 @@
 #import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 // Map a KKMiniViewerCropEditor handle index (0-7: TL, TC, TR, RC, BR, BC, BL,
 // LC) to a resize-cursor kind. Mirrors the crop box's corner/edge layout.

@@ -5,7 +5,7 @@
 
 #import "MirageOSCBlockRuntime.h"
 
-#import "MirageDirectives.h" // MirageParseScalarProps + MirageScalarProp
+#import "MirageDirectives.h" // MirageShaderModel + MirageScalarProp
 #import "MirageOSCBlock.h"   // // @osc custom-handling blocks
 #import <KeyframelessKit/KKResizeCursor.h>
 #import <KeyframelessKit/KeyframelessKit.h> // KKLane
@@ -48,155 +48,19 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
   NSDictionary<NSString *, NSNumber *> *_uniformDivisors;
 }
 
-// Every inline `osc=` directive expands to a standard `@osc` block over the
-// same primitives - the sugar the easy path rides, so ONE runtime handles both
-// authored blocks and directive opt-ins. `explicitBinds` = uniforms an
-// authored block already binds (the author's block wins). Returns the count
-// written to `out`.
-static int MirageSynthesizeOSCBlocks(const MirageScalarProp *props, int np,
-                                     NSSet<NSString *> *explicitBinds,
-                                     MirageOSCBlock *out, int max) {
-  int n = 0;
-  for (int i = 0; i < np && n < max; i++) {
-    const MirageScalarProp *p = &props[i];
-    if (p->oscKind[0] == '\0')
-      continue;
-    NSString *nm = @(p->name);
-    if (!nm.length || [explicitBinds containsObject:nm])
-      continue;
-    MirageOSCBlock *b = &out[n];
-    memset(b, 0, sizeof(*b));
-    MirageOSCSetField(b->name, sizeof(b->name), nm);
-    MirageOSCSetField(b->binds, sizeof(b->binds), nm);
-    b->skipSnapping = p->skipSnapping; // `skipsnapping` on the sugar directive
-    NSString *center =
-        strlen(p->linkName)
-            ? @(p->linkName)
-            : [NSString
-                  stringWithFormat:@"vec2(%g, %g)", p->rcenterx, p->rcentery];
-    if (p->isPoint && strcmp(p->oscKind, "position") == 0) {
-      // The position primitive (KKPositionOSC / KKPointOSCSet backing: full
-      // editable motion path + tangents) is self-contained - the block only
-      // declares.
-      MirageOSCSetField(b->primitive, sizeof(b->primitive), @"position");
-      n++;
-      continue;
-    }
-    if (p->isPoint && strcmp(p->oscKind, "point") == 0) {
-      // A PLAIN point handle (a centre, an offset): the glyph sits AT the
-      // lane value and a drag writes the cursor back - the identity bijection
-      // over the point primitive. No motion path.
-      MirageOSCSetField(b->primitive, sizeof(b->primitive), @"point");
-      MirageOSCSetField(b->forward, sizeof(b->forward), nm);
-      MirageOSCSetField(b->inverse, sizeof(b->inverse), @"pos");
-      n++;
-      continue;
-    }
-    if (MirageScalarOSCIsRotate(p)) {
-      MirageOSCSetField(b->primitive, sizeof(b->primitive), @"rotate");
-      NSMutableString *ax = [NSMutableString string];
-      for (int k = 0; k < p->oscAxisCount; k++)
-        [ax appendFormat:@"%s%c", ax.length ? " " : "",
-                         (char)tolower(p->oscAxes[k])];
-      MirageOSCSetField(b->axes, sizeof(b->axes), ax);
-      MirageOSCSetField(b->center, sizeof(b->center), center);
-      n++;
-      continue;
-    }
-    if (!MirageScalarRingEligible(p))
-      continue;
-    BOOL isRing = strcmp(p->oscKind, "ring") == 0;
-    BOOL isBox = MirageScalarOSCIsBox(p);
-    if (!isRing && !isBox)
-      continue;
-    // The value <-> geometry bijection in EXPR units (a percent lane's 0..100
-    // arrives /100), through the shared radius-ring curve.
-    double div = p->isPercent ? 100.0 : 1.0;
-    double mn = p->fmin / div;
-    double span = (p->fmax - p->fmin) / div;
-    if (span <= 0)
-      span = 1.0;
-    b->linked = p->aspectLinked != 0;
-    MirageOSCSetField(b->center, sizeof(b->center), center);
-    if (isRing) {
-      MirageOSCSetField(b->primitive, sizeof(b->primitive), @"ring");
-      MirageOSCSetField(
-          b->forward, sizeof(b->forward),
-          [NSString
-              stringWithFormat:@"ringExtent((%@ - %g) / %g)", nm, mn, span]);
-      MirageOSCSetField(
-          b->inverse, sizeof(b->inverse),
-          [NSString stringWithFormat:@"%g + ringNorm(r) * %g", mn, span]);
-      n++;
-      continue;
-    }
-    // Centred box: half-extents through the same curve, per-axis. The extent
-    // is a MIN-DIMENSION fraction; the rect lives in per-axis object units, so
-    // `e`/`d` convert through the aspect (a scalar box stays square on
-    // screen). The interior is inert (a centred box has no position to write);
-    // the centred drag mechanic (shrink, aspect lock, fine mode) is
-    // boxCenteredBoundForObjectMouse:, with fromRect as the bijection.
-    MirageOSCSetField(b->primitive, sizeof(b->primitive), @"box");
-    b->bodyDisabled = 1;
-    int li = 0;
-    MirageOSCSetField(b->localNames[li], sizeof(b->localNames[li]), @"c");
-    MirageOSCSetField(b->localExprs[li], sizeof(b->localExprs[li]), center);
-    li++;
-    MirageOSCSetField(b->localNames[li], sizeof(b->localNames[li]), @"h");
-    MirageOSCSetField(b->localExprs[li], sizeof(b->localExprs[li]),
-                      [NSString stringWithFormat:@"ringExtent((%@ - %g) / %g)",
-                                                 nm, mn, span]);
-    li++;
-    // NOTE: local names must dodge the expression constants (`e` is Euler).
-    MirageOSCSetField(b->localNames[li], sizeof(b->localNames[li]), @"ext");
-    MirageOSCSetField(b->localExprs[li], sizeof(b->localExprs[li]),
-                      @"h * vec2(min(1.0, 1.0 / aspect), min(1.0, aspect))");
-    li++;
-    MirageOSCSetField(b->localNames[li], sizeof(b->localNames[li]), @"d");
-    MirageOSCSetField(b->localExprs[li], sizeof(b->localExprs[li]),
-                      @"max(c - rect.min, rect.max - c) * "
-                      @"vec2(max(1.0, aspect), max(1.0, 1.0 / aspect))");
-    li++;
-    b->localCount = li;
-    MirageOSCSetField(b->forward, sizeof(b->forward),
-                      @"rect(c - ext, c + ext)");
-    BOOL vec = p->isMulti && p->fieldCount != 1;
-    MirageOSCSetField(
-        b->inverse, sizeof(b->inverse),
-        [NSString stringWithFormat:vec ? @"%g + ringNorm(d) * %g"
-                                       : @"%g + ringNorm(max(d.x, d.y)) * %g",
-                                   mn, span]);
-    n++;
-  }
-  return n;
-}
-
 + (NSArray<MirageOSCBlockRuntime *> *)runtimesForSource:(NSString *)src
                                                   lanes:(NSArray<KKLane *> *)
                                                             lanes {
   if (src.length == 0)
     return @[];
-  MirageOSCBlock explicitBlocks[KK_SHADER_MAX_OSC_BLOCKS];
-  int ne = MirageParseOSCBlocks(src, explicitBlocks, KK_SHADER_MAX_OSC_BLOCKS);
-  MirageScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
-  int used = 0;
-  int np =
-      MirageParseScalarProps(src, props, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
-
-  // Directive sugar first (mirroring the checklist's source order: directives,
-  // then authored blocks), skipping uniforms an authored block already binds.
-  NSMutableSet<NSString *> *explicitBinds = [NSMutableSet set];
-  for (int i = 0; i < ne; i++)
-    if (strlen(explicitBlocks[i].binds))
-      [explicitBinds addObject:@(explicitBlocks[i].binds)];
-  MirageOSCBlock sugar[KK_SHADER_MAX_SCALAR_PROPS];
-  int ns = MirageSynthesizeOSCBlocks(props, np, explicitBinds, sugar,
-                                     KK_SHADER_MAX_SCALAR_PROPS);
+  MirageShaderModel *model = [MirageShaderModel modelForSource:src];
+  const MirageScalarProp *props = model.scalarProps;
+  int np = model.scalarCount;
+  const MirageOSCBlock *blocks = model.oscBlocks;
 
   NSMutableArray<MirageOSCBlockRuntime *> *out = [NSMutableArray array];
-  for (int i = 0; i < ns + ne; i++) {
-    const MirageOSCBlock *blk = i < ns ? &sugar[i] : &explicitBlocks[i - ns];
-    MirageOSCBlockRuntime *r = [self _runtimeForBlock:blk
+  for (int i = 0; i < model.oscBlockCount; i++) {
+    MirageOSCBlockRuntime *r = [self _runtimeForBlock:&blocks[i]
                                                 props:props
                                                 count:np
                                                 lanes:lanes];

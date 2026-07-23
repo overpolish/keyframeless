@@ -16,7 +16,7 @@
 #import "KKPlugin_Private.h"
 #import "KKTimelineInspectorView.h"
 #import "KKTimingEvaluation.h"
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 #import <FxPlug/FxPlugSDK.h>
 
 #pragma clang diagnostic ignored "-Wobjc-protocol-method-implementation"
@@ -140,7 +140,7 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
 }
 
 - (KKTimelineInspectorView *)maintainTimingInspectorView {
-  return nil;
+  return self.inspectorView;
 }
 
 - (void)_commitMaintainTimingBakeWithTimelineParamID:(UInt32)timelineParamID
@@ -522,26 +522,9 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
   if (wrapTip.length > 0 && sections.count > 0)
     [KKPlugin _prependClipWrappingTip:wrapTip toSection:sections.firstObject];
 
-  // Show the shared Timing docs when this plugin drives the timeline. Two
-  // mechanisms exist: some plugins declare their lanes via -defaultLanesAtTime
-  // (which needs currentTime + a resolved getAPI, hence a short action scope),
-  // while others declare theirs through the shared inspector config
-  // and never override -defaultLanesAtTime - so a non-empty -helpGuides (their
-  // timing walkthroughs) counts as a timeline signal too.
-  BOOL hasTimeline = NO;
-  id<FxCustomParameterActionAPI_v4> actionAPI =
-      [self.apiManager apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-  if (actionAPI) {
-    [actionAPI startAction:self];
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    hasTimeline = [self defaultLanesAtTime:[actionAPI currentTime]
-                               paramGetAPI:getAPI]
-                      .count > 0;
-    [actionAPI endAction:self];
-  }
-  if (!hasTimeline && [self helpGuides].count > 0)
-    hasTimeline = YES;
+  // Show the shared Timing docs when this plugin drives the timeline. A
+  // non-empty -helpGuides (its timing walkthroughs) is the signal.
+  BOOL hasTimeline = [self helpGuides].count > 0;
   if (hasTimeline)
     [sections addObjectsFromArray:[KKPlugin _builtInTimingHelpSections]];
   if ([self usesMotionBlur])

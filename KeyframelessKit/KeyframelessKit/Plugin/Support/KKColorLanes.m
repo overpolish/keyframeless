@@ -6,7 +6,7 @@
 #import "KKColorLanes.h"
 #import "KKGradientBarView.h"
 #import "KKGradientSampling.h"
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 #import <AppKit/AppKit.h>
 
 static NSString *_KKColorLabel(NSString *_Nullable baseName, NSString *suffix) {

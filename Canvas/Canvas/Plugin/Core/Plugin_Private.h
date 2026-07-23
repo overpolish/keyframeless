@@ -12,6 +12,8 @@
 @class KKPlayheadPoller;
 
 @interface CanvasPlugin ()
+/// Covariant re-type of the KKPlugin base property (one storage, @dynamic in
+/// the implementation).
 @property(nonatomic, weak, nullable) CanvasInspectorView *inspectorView;
 @property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
 @property(nonatomic, strong, nullable) KKPlayheadPoller *playheadPoller;
@@ -64,11 +66,6 @@
 @property(nonatomic, strong, nullable) id<MTLTexture> mbColorTex;
 @property(nonatomic, strong, nullable) id<MTLTexture> mbVelocityTex;
 @property(nonatomic, strong, nullable) id<MTLTexture> mbBlurredTex;
-/// Returns a copy of `timeline` with every lane's lastKnownClipDuration set to
-/// the current effect duration (seconds). Must be called inside an action
-/// scope (FxTimingAPI resolves there).
-- (nullable KKTimeline *)timelineStampedWithClipDuration:
-    (nullable KKTimeline *)timeline;
 @end
 
 NS_ASSUME_NONNULL_BEGIN

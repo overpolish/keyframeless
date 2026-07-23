@@ -12,7 +12,7 @@
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingGuide.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 // Object-space tolerance within which the drag snaps to / counts as on the
 // glowing target.

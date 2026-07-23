@@ -9,7 +9,7 @@
 #import <KeyframelessKit/KKPositionMiniController.h>
 #import <KeyframelessKit/KKResizeCursor.h>     // KKPointMoveCursor
 #import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneKeyedAtFraction
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 @implementation KKPointOSCSet {
   __weak KKMiniViewerRenderer *_renderer;

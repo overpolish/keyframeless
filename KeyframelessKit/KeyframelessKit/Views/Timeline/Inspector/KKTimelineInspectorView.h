@@ -9,7 +9,7 @@
 #import <KeyframelessKit/KKMotionBlur.h>
 #import <KeyframelessKit/KKTimelineInspectorButtons.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 @protocol PROAPIAccessing;
 @protocol KKMiniViewerDelegate;

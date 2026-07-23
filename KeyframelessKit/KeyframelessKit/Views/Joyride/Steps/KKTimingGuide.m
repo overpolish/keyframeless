@@ -21,7 +21,7 @@
 #import <KeyframelessKit/KKTimelineInspectorView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 NSString *const KKTimingIntroGuideIdentifier = @"timing.intro";
 

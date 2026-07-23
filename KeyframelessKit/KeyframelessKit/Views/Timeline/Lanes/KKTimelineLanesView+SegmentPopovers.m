@@ -14,7 +14,7 @@
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKSegmentEditView.h>
-#import <KeyframelessKit/KKTimingStage.h> // KKLane / KKTimeline
+#import <KeyframelessKit/KKTimeline.h> // KKLane / KKTimeline
 
 @interface KKTimelineLanesView (SegmentPopoversPrivate)
 - (nullable NSArray<KKLane *> *)_partLanesForLabels:

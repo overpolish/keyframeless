@@ -56,6 +56,10 @@ typedef enum MirageMotionBlurMode {
 // Complete MSL (the SPIRV-Cross fragment plus an appended full-screen vertex),
 // or nil when transpilation failed - then errorLog explains why.
 @property(nonatomic, copy, nullable) NSString *msl;
+// First 128 bits of SHA-256(msl) as hex, nil when msl is. Use this as the
+// content key for pipeline-state caches - NSString.hash is collision-prone and
+// a collision there silently renders the wrong shader.
+@property(nonatomic, copy, nullable) NSString *mslDigest;
 @property(nonatomic, copy) NSString *fragmentName; // MSL fragment function name
 @property(nonatomic, copy) NSString *vertexName;   // MSL vertex function name
 @property(nonatomic, copy, nullable) NSString *errorLog;

@@ -7,7 +7,7 @@
 
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKGapPopoverTypes.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 @protocol KKMiniViewerDelegate;
 @class KKMiniViewerView;

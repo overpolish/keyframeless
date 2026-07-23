@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 
 #import "KKBezierPath.h"
 #import "KKEasing.h"
+#import "KKLog.h"
 #import "KKPathMorph.h"
 
 BOOL KKLaneKeyposeValuesEqual(KKLane *lane, KKKeyPose *a, KKKeyPose *b) {
@@ -696,6 +697,20 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
 // Serialization
 // ---------------------------------------------------------------------------
 
+const NSInteger kKKTimelineJSONVersion = 1;
+
+/// One step of the load-time upgrade chain: rewrites a version-`from` root
+/// dictionary into version-`from + 1` form. Every kKKTimelineJSONVersion bump
+/// adds exactly one case; timelineFromJSON: applies the steps in sequence so
+/// a blob of any shipped version reaches current shape before parsing.
+static NSDictionary *KKTimelineUpgradeRootFromVersion(NSDictionary *root,
+                                                      NSInteger from) {
+  switch (from) {
+  default:
+    return root;
+  }
+}
+
 @implementation KKTimeline (Serialization)
 
 + (nullable NSString *)jsonFromTimeline:(KKTimeline *)timeline {
@@ -710,7 +725,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
     [groupsArr addObject:[group toDictionary]];
   }
   NSMutableDictionary *root = [@{
-    @"version" : @1,
+    @"version" : @(kKKTimelineJSONVersion),
     @"lanes" : lanesArr,
     @"groups" : groupsArr,
   } mutableCopy];
@@ -735,6 +750,18 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
                                                          error:&err];
   if (![root isKindOfClass:[NSDictionary class]])
     return nil;
+
+  // Blobs written before the stamp existed carry no version key; treat as v1.
+  NSInteger version = [root[@"version"] isKindOfClass:[NSNumber class]]
+                          ? [root[@"version"] integerValue]
+                          : 1;
+  if (version > kKKTimelineJSONVersion) {
+    KKLogWarn(@"Timeline blob version %ld is newer than this build's %ld; "
+              @"parsing best-effort",
+              (long)version, (long)kKKTimelineJSONVersion);
+  }
+  for (NSInteger v = version; v < kKKTimelineJSONVersion; v++)
+    root = KKTimelineUpgradeRootFromVersion(root, v);
 
   KKTimeline *timeline = [KKTimeline timeline];
 

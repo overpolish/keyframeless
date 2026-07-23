@@ -9,7 +9,7 @@
 // .m builds. The primary @interface lives in KKTimelineLanesView_Private.h.
 
 #import "KKTimelineLanesView_Private.h"
-#import "KKTimingStage.h" // KKLaneValueType
+#import "KKTimeline.h" // KKLaneValueType
 
 @class KKCheckboxView;
 @class KKChoiceChecklistView;

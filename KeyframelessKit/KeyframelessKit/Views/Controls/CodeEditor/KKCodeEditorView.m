@@ -15,7 +15,7 @@
 #import "KKLocalized.h"
 #import "KKPopoverKeepAlive.h"
 #import "KKTimelineLanesView_Private.h" // _KKDropdownTrigger, _KKLVPopoverContentView
-#import "KKTimingStage.h" // KKCodeEditorSave* notification constant declarations
+#import "KKTimeline.h" // KKCodeEditorSave* notification constant declarations
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <QuartzCore/QuartzCore.h>
@@ -449,6 +449,20 @@ NSNotificationName const KKCodeEditorReloadNotification =
 
 - (void)_scrollBoundsChanged:(NSNotification *)note {
   [_lineGutter setNeedsDisplay:YES];
+}
+
+- (void)viewWillMoveToWindow:(NSWindow *)newWindow {
+  [super viewWillMoveToWindow:newWindow];
+  // Leaving the window (an inspector rebuild after a directive change tears
+  // the editor down): the WINDOW's undo manager still holds text-change
+  // entries targeting our text storage, and NSUndoManager does not retain
+  // targets - a later Cmd-Z would objc_msgSend a dangling pointer (the
+  // fresh-paste -> rebuild -> Cmd-Z ViewBridge crash). Clear now, while the
+  // responder chain still reaches that undo manager; after detach
+  // `_textView.undoManager` resolves to nil and the clears in the commit path
+  // silently no-op.
+  if (!newWindow && self.window)
+    [_textView.undoManager removeAllActions];
 }
 
 - (void)dealloc {

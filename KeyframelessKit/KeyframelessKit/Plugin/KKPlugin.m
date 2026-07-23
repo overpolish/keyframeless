@@ -83,7 +83,6 @@ static NSInteger gKKReconcileGen; // main-thread only
   }];
 }
 
-@synthesize timingHeader = _timingHeader;
 @synthesize motionBlurHeader = _motionBlurHeader;
 
 + (id)servicePrincipalDelegate {
@@ -180,132 +179,6 @@ static NSInteger gKKReconcileGen; // main-thread only
         os_unfair_lock_unlock(&gKKLiveLock);
         [KKLinkBus reconcileEffectName:effectName keepingUUIDs:live];
       });
-}
-
-- (void)setTimingGroupExtraParamIDs:(NSArray<NSNumber *> *)ids {
-  objc_setAssociatedObject([self class], kKKTimingExtraIDs, [ids copy],
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
-- (NSArray<NSNumber *> *)timingGroupExtraParamIDs {
-  return objc_getAssociatedObject([self class], kKKTimingExtraIDs);
-}
-
-- (void)setLinkedParameterPairs:(NSArray<NSArray<NSNumber *> *> *)pairs {
-  objc_setAssociatedObject([self class], kKKLinkedPairs, [pairs copy],
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
-- (NSArray<NSArray<NSNumber *> *> *)linkedParameterPairs {
-  return objc_getAssociatedObject([self class], kKKLinkedPairs);
-}
-
-- (BOOL)handleLinkedParameterChanged:(UInt32)parameterID atTime:(CMTime)time {
-  NSNumber *locking = objc_getAssociatedObject(self, kKKLinkedLocking);
-  if (locking.boolValue)
-    return YES;
-
-  CGEventFlags flags =
-      CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
-  BOOL cmdHeld = (flags & kCGEventFlagMaskCommand) != 0;
-  BOOL optHeld = (flags & kCGEventFlagMaskAlternate) != 0;
-
-  if (!cmdHeld && !optHeld) {
-    objc_setAssociatedObject(self, kKKLinkedSource, nil,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return NO;
-  }
-
-  NSArray<NSArray<NSNumber *> *> *pairs = self.linkedParameterPairs;
-  UInt32 otherID = 0;
-  BOOL found = NO;
-  for (NSArray<NSNumber *> *pair in pairs) {
-    if (pair.count < 2)
-      continue;
-    if (pair[0].unsignedIntValue == parameterID) {
-      otherID = pair[1].unsignedIntValue;
-      found = YES;
-      break;
-    }
-    if (pair[1].unsignedIntValue == parameterID) {
-      otherID = pair[0].unsignedIntValue;
-      found = YES;
-      break;
-    }
-  }
-  if (!found)
-    return NO;
-
-  id<FxParameterRetrievalAPI_v6> getAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  id<FxParameterSettingAPI_v5> setAPI =
-      [self.apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!getAPI || !setAPI)
-    return NO;
-
-  double valA = 0;
-  [getAPI getFloatValue:&valA fromParameter:parameterID atTime:time];
-
-  if (optHeld) {
-    objc_setAssociatedObject(self, kKKLinkedLocking, @YES,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [setAPI setFloatValue:valA toParameter:otherID atTime:time];
-    objc_setAssociatedObject(self, kKKLinkedLocking, @NO,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return YES;
-  }
-
-  double valB = 0;
-  [getAPI getFloatValue:&valB fromParameter:otherID atTime:time];
-
-  // First-tick guard: when prevSource is nil or different (i.e. this is
-  // the first parameterChanged for `parameterID` in this gesture), only
-  // record the ratio baseline - don't write the linked partner yet.
-  // A cmd-Z / cmd-Shift-Z echo for a linked param is a single one-shot
-  // event so it never reaches a "second tick", meaning the linked write
-  // never fires from a host-revert echo and the redo stack is preserved.
-  // A real cmd-drag emits parameterChanged at ~60 Hz so the second tick
-  // arrives within ~16 ms and the partner catches up imperceptibly.
-  NSNumber *prevSource = objc_getAssociatedObject(self, kKKLinkedSource);
-  BOOL firstTickForSource =
-      (prevSource == nil || prevSource.unsignedIntValue != parameterID);
-  // Default: clear the "last partner written" marker so plugins polling
-  // it via `linkedPartnerWrittenForLastChange` don't see a stale value
-  // from a previous call.
-  objc_setAssociatedObject(self, kKKLinkedLastPartner, nil,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  if (firstTickForSource) {
-    objc_setAssociatedObject(self, kKKLinkedSource, @(parameterID),
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    double ratio = (valA > 0) ? valB / valA : 1.0;
-    objc_setAssociatedObject(self, kKKLinkedRatio, @(ratio),
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    return YES;
-  }
-
-  NSNumber *ratioNum = objc_getAssociatedObject(self, kKKLinkedRatio);
-  double ratio = ratioNum != nil ? ratioNum.doubleValue : 1.0;
-
-  objc_setAssociatedObject(self, kKKLinkedLocking, @YES,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  [setAPI setFloatValue:valA * ratio toParameter:otherID atTime:time];
-  objc_setAssociatedObject(self, kKKLinkedLocking, @NO,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  // Record the partner so the plugin can run any per-edit side effects
-  // (e.g. mirroring the value into a backing path blob) on the partner
-  // too. FCP does NOT echo `parameterChanged` for `setFloatValue:` calls
-  // made from inside another `parameterChanged`, so without this the
-  // partner write reaches the inspector but never triggers the plugin's
-  // normal parameterChanged-driven persistence path.
-  objc_setAssociatedObject(self, kKKLinkedLastPartner, @(otherID),
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-  return YES;
-}
-
-- (UInt32)linkedPartnerWrittenForLastChange {
-  NSNumber *partner = objc_getAssociatedObject(self, kKKLinkedLastPartner);
-  return partner != nil ? partner.unsignedIntValue : 0;
 }
 
 - (nullable id<MTLRenderPipelineState>)
@@ -573,140 +446,40 @@ static NSInteger gKKReconcileGen; // main-thread only
                                      }];
 }
 
-- (BOOL)forceShowAllParametersIfEnabled:(UInt32)forceShowParamID
-                               paramIDs:(NSArray<NSNumber *> *)paramIDs
-                                 atTime:(CMTime)time {
-  id<FxParameterRetrievalAPI_v6> paramGetAPI =
-      [_apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-  BOOL forceShow = NO;
-  [paramGetAPI getBoolValue:&forceShow
-              fromParameter:forceShowParamID
-                     atTime:time];
-  if (!forceShow)
-    return NO;
-
-  id<FxParameterSettingAPI_v5> paramSetAPI =
-      [_apiManager apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  for (NSNumber *paramID in paramIDs) {
-    UInt32 pid = paramID.unsignedIntValue;
-    FxParameterFlags cur = 0;
-    [paramGetAPI getParameterFlags:&cur fromParameter:pid];
-    FxParameterFlags want = cur & ~kFxParameterFlag_HIDDEN;
-    if (want != cur)
-      [paramSetAPI setParameterFlags:want toParameter:pid];
+- (nullable KKTimeline *)timelineStampedWithClipDuration:
+    (nullable KKTimeline *)timeline {
+  if (!timeline)
+    return timeline;
+  id<FxTimingAPI_v4> timingAPI =
+      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
+  CMTime dur = kCMTimeZero;
+  [timingAPI durationTimeForEffect:&dur];
+  double durSec = CMTimeGetSeconds(dur);
+  if (durSec <= 0)
+    return timeline;
+  KKTimeline *out = [timeline copy];
+  NSMutableArray<KKLane *> *lanes = [out.lanes mutableCopy];
+  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
+    KKLane *l = [lanes[i] copy];
+    l.lastKnownClipDuration = durSec;
+    lanes[i] = l;
   }
-  return YES;
+  out.lanes = lanes;
+  return out;
 }
 
 - (BOOL)forceShowAllParameters {
   return NO;
 }
 
-- (NSArray<NSNumber *> *)currentValuesForLaneLabel:(NSString *)label
-                                          groupKey:(NSString *)groupKey
-                                            atTime:(CMTime)time {
-  return nil;
-}
-
-- (BOOL)applyLaneValues:(NSArray<NSNumber *> *)values
-               forLabel:(NSString *)label
-               groupKey:(NSString *)groupKey
-                 atTime:(CMTime)time {
-  return NO;
-}
-
-- (void)setEditingDisabled:(BOOL)disabled
-              forLaneLabel:(NSString *)label
-                  groupKey:(NSString *)groupKey {
-}
-
-- (NSArray<KKTimingLane *> *)defaultLanesAtTime:(CMTime)time
-                                    paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
-                                                    paramGetAPI {
-  return nil;
-}
-
-- (NSArray<KKTimingLane *> *)reconcileLanes:(NSArray<KKTimingLane *> *)existing
-                                     atTime:(CMTime)time
-                                paramGetAPI:(id<FxParameterRetrievalAPI_v6>)
-                                                paramGetAPI {
-  return existing;
-}
-
-- (NSString *)kkReconcileFingerprintForAPI:(id<PROAPIAccessing>)apiManager {
-  return nil;
-}
-
-- (BOOL)usesMotionBlur {
-  return NO;
-}
-
-- (NSSet<NSString *> *)hiddenAnimatablePropertyLabels {
-  return [NSSet set];
-}
-
-- (NSSet<NSString *> *)animatablePropertyLabelsWithOSC {
-  return [NSSet set];
-}
-
-- (NSSet<NSString *> *)animatablePropertyLabelsWithOSCDefaultOff {
-  return [NSSet set];
-}
-
-- (NSString *)kkSelectedGroupKey {
-  return nil;
-}
-
-- (void)kkHandleGroupSegmentClickedForKey:(NSString *)groupKey {
-}
-
-- (void)kkRefreshSequencerSelectedGroup {
-}
-
-- (void)kkHandleLaneSegmentMutation:(KKLaneSegmentMutation)mutation
-                               lane:(KKTimingLane *)lane
-                            atIndex:(NSInteger)index
-                             getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
-                             setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
-  // Default: no-op. Plugins override to keep out-of-band per-segment data
-  // in sync with the sequencer's segment count.
-}
-
-- (void)kkLoadLaneSegmentForLabel:(NSString *)label
-                         groupKey:(NSString *)groupKey
-                          segment:(NSInteger)segmentIndex
-                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
-                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
-  // Default: no-op. Scalar lanes use the values-based applyLaneValues:
-  // path; this hook is for plugins with out-of-band per-segment payloads.
-}
-
-- (void)kkCopyLaneSegmentForLabel:(NSString *)label
-                         groupKey:(NSString *)groupKey
-                      fromSegment:(NSInteger)srcSegmentIndex
-                        toSegment:(NSInteger)dstSegmentIndex
-                           getAPI:(id<FxParameterRetrievalAPI_v6>)getAPI
-                           setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
-  // Default: no-op. The scalar values copy handled by
-  // _handleSegmentValuesCopiedAtLane: covers value-based lanes.
-}
-
-- (NSString *)emptyLanesMessageWhenNoLanes {
-  return nil;
-}
-
-- (NSString *)emptyLanesIconNameWhenNoLanes {
-  return @"rectangle.on.rectangle.slash";
-}
-
 // FxPlug requires this when the plugin uses custom parameters - FCP needs
 // the value classes ahead of unarchiving project files. Subclasses can
 // override and call super to add their own custom-param IDs.
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
-  if (parameterID == kKKParamMultiStageData ||
+  if (parameterID == kKKParamTimelineData ||
+      parameterID == kKKParamMotionBlurData ||
       parameterID == kKKParamGradientData ||
       parameterID == kKKParamColorExpanded ||
-      parameterID == kKKParamTimingExpanded ||
       parameterID == kKKParamMotionBlurExpanded ||
       parameterID == kKKParamMotionBlurEnabled)
     return [NSSet setWithObject:[KKDataBlob class]];

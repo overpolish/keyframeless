@@ -11,9 +11,7 @@
 
 @implementation MiragePlugin
 
-- (KKTimelineInspectorView *)maintainTimingInspectorView {
-  return (KKTimelineInspectorView *)self.inspectorView;
-}
+@dynamic inspectorView;
 
 - (nullable instancetype)initWithAPIManager:(id<PROAPIAccessing>)newApiManager;
 {
@@ -103,61 +101,14 @@
     });
   }
 
-  if (parameterID == kKKParamMotionBlurData) {
-    id<FxCustomParameterActionAPI_v4> actionAPI = [self.apiManager
-        apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
-    [actionAPI startAction:self];
-    id<FxParameterRetrievalAPI_v6> getAPI =
-        [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
-    NSString *json = KKReadCustomParamString(getAPI, kKKParamMotionBlurData);
-    [actionAPI endAction:self];
-    NSDictionary *mb =
-        (json.length ? [NSJSONSerialization
-                           JSONObjectWithData:
-                               [json dataUsingEncoding:NSUTF8StringEncoding]
-                                      options:0
-                                        error:nil]
-                     : nil)
-            ?: @{};
-    BOOL mbEnabled = [mb[@"enabled"] boolValue];
-    double mbShutterAngle =
-        mb[@"shutterAngle"] ? [mb[@"shutterAngle"] doubleValue] : 180.0;
-    NSInteger mbSamples = mb[@"samples"] ? [mb[@"samples"] integerValue] : 16;
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [self.inspectorView setMotionBlurEnabled:mbEnabled];
-      [self.inspectorView setMotionBlurShutterAngle:mbShutterAngle
-                                            samples:mbSamples];
-    });
-  }
+  if (parameterID == kKKParamMotionBlurData)
+    [self kkHandleMotionBlurDataChangedPushingTechnique:NO];
 
   return YES;
 }
 
-- (nullable KKTimeline *)timelineStampedWithClipDuration:
-    (nullable KKTimeline *)timeline {
-  if (!timeline)
-    return timeline;
-  id<FxTimingAPI_v4> timingAPI =
-      [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  CMTime dur = kCMTimeZero;
-  [timingAPI durationTimeForEffect:&dur];
-  double durSec = CMTimeGetSeconds(dur);
-  if (durSec <= 0)
-    return timeline;
-  KKTimeline *out = [timeline copy];
-  NSMutableArray<KKLane *> *lanes = [out.lanes mutableCopy];
-  for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    KKLane *l = [lanes[i] copy];
-    l.lastKnownClipDuration = durSec;
-    lanes[i] = l;
-  }
-  out.lanes = lanes;
-  return out;
-}
-
 - (NSSet<Class> *)classesForCustomParameterID:(UInt32)parameterID {
-  if (parameterID == kKKParamTimelineData || parameterID == kParamUIState ||
-      parameterID == kParamRenderNudge || parameterID == kKKParamMotionBlurData)
+  if (parameterID == kParamUIState || parameterID == kParamRenderNudge)
     return [NSSet setWithObject:[KKDataBlob class]];
   return [super classesForCustomParameterID:parameterID];
 }

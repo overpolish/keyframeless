@@ -7,7 +7,7 @@
 // change, and the media-anchored retime that keeps keyposes pinned to their
 // absolute media time. Pure transforms over the public KKTimeline API.
 
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 
 #import "KKBezierPath.h"
 #import "KKEasing.h"

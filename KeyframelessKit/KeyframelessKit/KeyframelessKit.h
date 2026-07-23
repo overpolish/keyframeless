@@ -135,8 +135,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKTimingCompat.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimingGuide.h>
-#import <KeyframelessKit/KKTimingLane.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/KKToolbar.h>
 #import <KeyframelessKit/KKUpdateChecker.h>

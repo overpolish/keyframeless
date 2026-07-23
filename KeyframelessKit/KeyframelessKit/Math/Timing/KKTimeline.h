@@ -783,9 +783,21 @@ FOUNDATION_EXPORT KKTimeline *_Nullable KKTimelineSettingValuesNearestFraction(
     KKTimeline *timeline, NSString *label, double frac,
     NSArray<NSNumber *> *values);
 
+/// Version stamped into `jsonFromTimeline:` output. Purely additive changes
+/// (new optional keys with tolerant readers) do NOT bump this. Bump it only
+/// for a structural change - renamed/removed keys, changed value shapes - and
+/// add the matching upgrade step in KKTimelineUpgradeRootFromVersion so every
+/// older blob still loads.
+FOUNDATION_EXPORT const NSInteger kKKTimelineJSONVersion;
+
 @interface KKTimeline (Serialization)
 
 + (nullable NSString *)jsonFromTimeline:(KKTimeline *)timeline;
+
+/// Parses any timeline blob at or below kKKTimelineJSONVersion, upgrading old
+/// versions in place. A blob NEWER than this build parses best-effort with a
+/// warning rather than failing - returning nil would make callers fall back to
+/// a fresh timeline and destroy the user's data on the next write.
 + (nullable KKTimeline *)timelineFromJSON:(NSString *)json;
 
 @end

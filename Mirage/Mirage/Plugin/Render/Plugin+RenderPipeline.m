@@ -33,8 +33,8 @@
     return nil;
   }
   KKMetalDeviceCache *cache = [KKMetalDeviceCache sharedCache];
-  NSString *pluginID = [NSString
-      stringWithFormat:@"%@.custom.%lu", kPluginID, (unsigned long)tr.msl.hash];
+  NSString *pluginID =
+      [NSString stringWithFormat:@"%@.custom.%@", kPluginID, tr.mslDigest];
   id<MTLRenderPipelineState> existing =
       [cache pipelineStateForPluginID:pluginID
                            registryID:registryID

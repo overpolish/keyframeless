@@ -59,10 +59,9 @@ MirageReadTicketMap(id<FxParameterRetrievalAPI_v6> getAPI) {
 /// same value everywhere on the timeline, so there is no "when" to ask about.
 static NSArray<NSNumber *> *MirageBoundAudioKeys(NSString *source,
                                                  KKTimeline *timeline) {
-  MirageAudioProp props[KK_SHADER_MAX_AUDIO_PROPS];
-  int used = 0;
-  int nProps =
-      MirageParseAudioProps(source, props, KK_SHADER_MAX_AUDIO_PROPS, 0, &used);
+  MirageShaderModel *model = [MirageShaderModel modelForSource:source];
+  const MirageAudioProp *props = model.audioProps;
+  int nProps = model.audioCount;
   NSMutableArray<NSNumber *> *keys = [NSMutableArray array];
   for (int i = 0; i < nProps; i++) {
     NSString *uniform = @(props[i].name);

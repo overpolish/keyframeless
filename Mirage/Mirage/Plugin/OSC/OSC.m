@@ -5,12 +5,12 @@
 
 #import "OSC.h"
 #import "Constants.h"
-#import "OSC_Internal.h"
-#import "Plugin_Private.h"        // +availableLanesForShaderSource:
-#import "MirageDirectives.h"      // MirageParseScalarProps (osc directives)
+#import "MirageDirectives.h"      // MirageShaderModel (osc directives)
 #import "MirageOSCBlock.h"        // // @osc custom-handling blocks
 #import "MirageOSCBlockRuntime.h" // compiled block: eval / invert (shared w/ mini)
 #import "MirageOSCSnapshot.h"     // KKProcessTimelineSnapshot via the kit
+#import "OSC_Internal.h"
+#import "Plugin_Private.h" // +availableLanesForShaderSource:
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKLinkExpr.h>
 #import <KeyframelessKit/KKLog.h>
@@ -424,7 +424,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
 - (nullable NSString *)_currentShaderSource {
   BOOL hasShaderLane = NO;
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-    if ([l.label isEqualToString:@"Mirage"]) {
+    if ([l.label isEqualToString:kMirageCodeLaneLabel]) {
       hasShaderLane = YES;
       if (l.codeString.length)
         return l.codeString;
@@ -1087,7 +1087,12 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
       // fraction), a centred value box its lane value ("58% x 58%"). Media px
       // = the full-image canvas size de-zoomed (how KKCropOSC derives it).
       NSString *readout;
-      if (b.bodyMove) {
+      NSArray<NSNumber *> *raw =
+          KKTimelineLaneValueAtFraction([self _exprLaneForBlock:b], ringFrac);
+      // A centred value box with declared per-component units (`units={px,%}`)
+      // takes the unit-aware path too, so its readout matches the lane fields;
+      // a unit-less (or single-component) one keeps the raw/percent form.
+      if (b.bodyMove || (b.boundComponentUnits.count && raw.count >= 2)) {
         id<FxOnScreenControlAPI_v2> zoomAPI =
             [self.apiManager apiForProtocol:@protocol(FxOnScreenControlAPI_v2)];
         double zoom = zoomAPI ? [zoomAPI canvasZoom] : 1.0;
@@ -1095,15 +1100,12 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
           zoom = 1.0;
         CGSize media = CGSizeMake(fabs(fullCanvas.width) / zoom,
                                   fabs(fullCanvas.height) / zoom);
-        readout = [MirageOSCBlockRuntime
-            boxReadoutForValues:KKTimelineLaneValueAtFraction(
-                                    [self _exprLaneForBlock:b], ringFrac)
-                          units:b.boundComponentUnits
-                scalesWithMedia:b.boundScalesWithMedia
-                      mediaSize:media];
+        readout =
+            [MirageOSCBlockRuntime boxReadoutForValues:raw
+                                                 units:b.boundComponentUnits
+                                       scalesWithMedia:b.boundScalesWithMedia
+                                             mediaSize:media];
       } else {
-        NSArray<NSNumber *> *raw =
-            KKTimelineLaneValueAtFraction([self _exprLaneForBlock:b], ringFrac);
         readout = KKBoxOSCReadoutString(raw, b.divisor == 100.0, b.isInt);
       }
       NSInteger activeHandle = active && _exprBoxDragPart >= KKCropPartPointBase

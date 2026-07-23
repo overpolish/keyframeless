@@ -34,11 +34,9 @@ MirageDirectiveDefaultValuesForLabel(NSString *source, NSString *label) {
     return nil;
 
   // Scalars: identity is the uniform name.
-  MirageScalarProp sp[KK_SHADER_MAX_SCALAR_PROPS];
-  int used = 0;
-  int ns =
-      MirageParseScalarProps(source, sp, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
-  for (int i = 0; i < ns; i++) {
+  MirageShaderModel *model = [MirageShaderModel modelForSource:source];
+  const MirageScalarProp *sp = model.scalarProps;
+  for (int i = 0; i < model.scalarCount; i++) {
     if (![label isEqualToString:@(sp[i].name)])
       continue;
     if (sp[i].isProgress)
@@ -57,10 +55,8 @@ MirageDirectiveDefaultValuesForLabel(NSString *source, NSString *label) {
   // Colours: single = uniform name; array = "<name> Count" + "<name> N". Match
   // the catalog seed (defColors else palette; a single colour uses the prop
   // index, a swatch its own index).
-  MirageColorProp cp[KK_SHADER_MAX_COLOR_PROPS];
-  int pool = 0;
-  int nc = MirageParseColorProps(source, cp, KK_SHADER_MAX_COLOR_PROPS, &pool);
-  for (int i = 0; i < nc; i++) {
+  const MirageColorProp *cp = model.colorProps;
+  for (int i = 0; i < model.colorCount; i++) {
     NSString *name = @(cp[i].name);
     if (!cp[i].isArray) {
       if ([label isEqualToString:name]) {
@@ -190,7 +186,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
         continue;
       MirageMiniViewerRenderer *r = [[MirageMiniViewerRenderer alloc] init];
       KKTimeline *t = [KKTimeline timeline];
-      KKLane *lane = [KKLane laneWithLabel:@"Mirage"];
+      KKLane *lane = [KKLane laneWithLabel:kMirageCodeLaneLabel];
       lane.valueType = KKLaneValueTypeCode;
       lane.codeString = e.sections[@"Image"];
       t.lanes = @[ lane ];
@@ -336,7 +332,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   NSMutableArray<KKLane *> *lanes = [current.lanes mutableCopy];
   BOOL found = NO;
   for (NSUInteger i = 0; i < lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:@"Mirage"])
+    if (![lanes[i].label isEqualToString:kMirageCodeLaneLabel])
       continue;
     KKLane *lane = [lanes[i] copy];
     lane.codeString = image;
@@ -417,7 +413,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   // set.
   NSString *effective = MirageCustomDefaultShaderSource();
   for (KKLane *l in timeline.lanes)
-    if ([l.label isEqualToString:@"Mirage"] && l.codeString.length) {
+    if ([l.label isEqualToString:kMirageCodeLaneLabel] && l.codeString.length) {
       effective = l.codeString;
       break;
     }

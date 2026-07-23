@@ -5,6 +5,8 @@
 
 #import "KKGLSLTranspiler_Internal.h"
 
+#import <CommonCrypto/CommonDigest.h>
+
 #include <string>
 #include <vector>
 
@@ -92,27 +94,46 @@ static NSUInteger KKChannelMask(NSString *src) {
 static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL,
                                                   BOOL bufferMode);
 
-// Memoise by source hash: the MSL, entry names and channel bindings are
+// An editing session churns many one-off shader variants; past this many
+// distinct sources the least-recently-used transpile is dropped.
+#define KK_TRANSPILE_CACHE_CAP 64
+
+// Memoise by full source: the MSL, entry names and channel bindings are
 // device-independent, so both the main render and the mini-viewer share one
-// cache and a given shader is transpiled once.
+// cache and a given shader is transpiled once. The key is the source string
+// itself (not its hash - lookups compare contents, so a collision can't
+// return another shader's MSL), bounded LRU.
 static KKGLSLTranspileResult *KKTranspileMemoized(NSString *userGLSL,
                                                   BOOL bufferMode) {
-  static NSMutableDictionary<NSNumber *, KKGLSLTranspileResult *> *cache;
+  static NSMutableDictionary<NSString *, KKGLSLTranspileResult *> *cache;
+  static NSMutableOrderedSet<NSString *> *recency;
   static NSLock *cacheLock;
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     cache = [NSMutableDictionary dictionary];
+    recency = [NSMutableOrderedSet orderedSet];
     cacheLock = [NSLock new];
   });
-  NSNumber *key = @(userGLSL.hash * 2u + (bufferMode ? 1u : 0u));
+  NSString *key =
+      [(bufferMode ? @"b|" : @"i|") stringByAppendingString:userGLSL];
   [cacheLock lock];
   KKGLSLTranspileResult *hit = cache[key];
+  if (hit) {
+    [recency removeObject:key];
+    [recency addObject:key];
+  }
   [cacheLock unlock];
   if (hit)
     return hit;
   KKGLSLTranspileResult *r = KKTranspileUncached(userGLSL, bufferMode);
   [cacheLock lock];
   cache[key] = r;
+  [recency removeObject:key];
+  [recency addObject:key];
+  while (recency.count > KK_TRANSPILE_CACHE_CAP) {
+    [cache removeObjectForKey:recency.firstObject];
+    [recency removeObjectAtIndex:0];
+  }
   [cacheLock unlock];
   return r;
 }
@@ -289,5 +310,14 @@ static KKGLSLTranspileResult *KKTranspileUncached(NSString *userGLSL,
   if (KKCompileToSPIRV(glslStr, spirv, result))
     KKCompileToMSL(spirv, result);
   [lock unlock];
+  if (result.msl) {
+    NSData *mslData = [result.msl dataUsingEncoding:NSUTF8StringEncoding];
+    unsigned char sha[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256(mslData.bytes, (CC_LONG)mslData.length, sha);
+    NSMutableString *hex = [NSMutableString stringWithCapacity:32];
+    for (int i = 0; i < 16; i++)
+      [hex appendFormat:@"%02x", sha[i]];
+    result.mslDigest = hex;
+  }
   return result;
 }

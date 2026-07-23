@@ -8,31 +8,43 @@
 #import <Foundation/Foundation.h>
 #import <KeyframelessKit/KeyframelessKit.h>
 
+#import "MirageTypes.h"
+
 NS_ASSUME_NONNULL_BEGIN
 
-// The multi-pass code sections ride in the plugin-state blob after the state
-// sample(s), each as [uint32 nameLen][name UTF8][uint32 codeLen][code UTF8].
-// Names identify the pass ("Image", "Common", "Buffer A"). This is the only
-// channel from -pluginState: (where the parameter APIs resolve) to
-// -renderDestinationImage: (where they do not), so both ends live here.
+// The -pluginState: blob is the ONLY channel from -pluginState: (where the
+// parameter APIs resolve) to -renderDestinationImage: (where they do not).
+// Layout: [uint32 sampleCount][KKMotionBlurState][MiragePluginState x count]
+// [code sections], each section as [uint32 nameLen][name UTF8][uint32
+// codeLen][code UTF8], names identifying the pass ("Image", "Common",
+// "Buffer A"...). Encode and decode both live in this file so the byte layout
+// has exactly one owner - nothing outside it may assume offsets.
 
-/// Append the shader's code sections for `timeline` to `data`: the "Mirage"
-/// lane's codeString as "Image", plus each non-empty extra tab (Common /
-/// Buffer A-D).
-///
-/// A present-but-empty codeString means the user explicitly cleared it =>
-/// passthrough, so nothing is written. An ABSENT Mirage lane is different: the
-/// timeline blob simply hasn't been persisted yet (a fresh instance writes it
-/// only on the first param change / UI edit), and the editor already shows the
-/// catalog default, so seed that same default here - otherwise the first render
-/// falls to passthrough and the plasma only appears after the user nudges a
-/// param.
-void MirageAppendCodeSections(NSMutableData *data,
+/// Pack the full render state. `states` holds `sampleCount` motion-blur
+/// sub-frame samples (sample 0 = the render time); the shader source sections
+/// come from `timeline`'s code lane (absent lane => the baked default seeds
+/// "Image", present-but-empty => passthrough, nothing written).
+NSData *MirageStateBlobEncode(const KKMotionBlurState *mbState,
+                              const MiragePluginState *states,
+                              NSInteger sampleCount,
                               KKTimeline *_Nullable timeline);
 
-/// Parse the sections back out, starting at `off`. Tolerates a truncated blob
-/// (stops at the first section that would overrun).
-NSDictionary<NSString *, NSString *> *MirageParseSections(NSData *data,
-                                                          NSUInteger off);
+/// Header + base sample (state@0). A nil/short blob decodes as motion blur
+/// disabled with one default sample, so render falls back gracefully.
+typedef struct MirageStateBlobHeader {
+  KKMotionBlurState mbState;
+  MiragePluginState base;
+  NSInteger sampleCount;
+} MirageStateBlobHeader;
+
+MirageStateBlobHeader MirageStateBlobReadHeader(NSData *_Nullable data);
+
+/// Copy all `count` samples (the header's sampleCount) into caller-allocated
+/// `outStates`. NO when the blob is shorter than it claims.
+BOOL MirageStateBlobReadStates(NSData *data, MiragePluginState *outStates,
+                               NSInteger count);
+
+/// The code-sections tail; empty when absent or truncated.
+NSDictionary<NSString *, NSString *> *MirageStateBlobReadSections(NSData *data);
 
 NS_ASSUME_NONNULL_END

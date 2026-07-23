@@ -27,21 +27,37 @@ static NSString *KKFeedbackBaseURL(void) {
 static NSString *const kCachedVersionKey =
     @"co.overpolish.keyframeless.cachedAvailableVersion";
 
-static NSDictionary<NSString *, NSString *> *KKBundleIDToComponent(void) {
-  return @{
-    @"co.overpolish.keyframeless.Keyframeless-X" : @"keyframelessx",
-    @"co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP" :
-        @"keyframelessx",
-    // FxPlug plugins: current reverse-DNS ids (host + .PlugIn extension). The
-    // bare and -XPC-Service ids are the pre-standardization installs, kept so
-    // they still resolve to a changelog and get prompted to update.
-    @"co.overpolish.keyframeless.Mirage" : @"mirage",
-    @"co.overpolish.keyframeless.Mirage.PlugIn" : @"mirage",
-    @"co.overpolish.keyframeless.Canvas" : @"canvas",
-    @"co.overpolish.keyframeless.Canvas.PlugIn" : @"canvas",
-    @"Canvas" : @"canvas",
-    @"Canvas-XPC-Service" : @"canvas"
-  };
+// Derives the changelog/update component slug from the running bundle's
+// identity instead of a hand-maintained roster, so a NEW plugin gets update
+// checks without editing kit source:
+//  - "co.overpolish.keyframeless.<Name>[.PlugIn|.<sub>]" -> <Name> lowercased
+//    with non-alphanumerics stripped ("Keyframeless-X" -> "keyframelessx").
+//  - Pre-standardization installs whose id is a bare product name ("Canvas",
+//    "Canvas-XPC-Service") -> the same slug, minus the XPC suffix - kept so
+//    they still resolve to a changelog and get prompted to update.
+//  - Any other reverse-DNS id -> nil (not ours; no update checks).
+static NSString *KKComponentForBundleID(NSString *bundleID) {
+  if (!bundleID.length)
+    return nil;
+  NSString *name = bundleID;
+  NSString *prefix = @"co.overpolish.keyframeless.";
+  if ([name hasPrefix:prefix]) {
+    name = [name substringFromIndex:prefix.length];
+    NSRange dot = [name rangeOfString:@"."];
+    if (dot.location != NSNotFound)
+      name = [name substringToIndex:dot.location];
+  } else if ([name containsString:@"."]) {
+    return nil;
+  }
+  if ([name hasSuffix:@"-XPC-Service"])
+    name = [name substringToIndex:name.length - @"-XPC-Service".length];
+  NSMutableString *slug = [NSMutableString stringWithCapacity:name.length];
+  for (NSUInteger i = 0; i < name.length; i++) {
+    unichar c = [name characterAtIndex:i];
+    if (isalnum(c))
+      [slug appendFormat:@"%c", (char)tolower(c)];
+  }
+  return slug.length ? [slug copy] : nil;
 }
 
 // The standalone "Keyframeless AI" helper installs its version manifest beside
@@ -69,7 +85,7 @@ static NSString *const kAIHelperVersionPlist =
   self = [super init];
   if (self) {
     NSString *bundleID = [[NSBundle mainBundle] bundleIdentifier] ?: @"";
-    _componentKey = KKBundleIDToComponent()[bundleID];
+    _componentKey = KKComponentForBundleID(bundleID);
     if (!_componentKey) {
       KKLogWarn(@"Unknown bundle identifier: %@", bundleID);
     }

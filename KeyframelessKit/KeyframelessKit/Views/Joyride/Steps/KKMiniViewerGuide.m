@@ -15,7 +15,7 @@
 #import <KeyframelessKit/KKTimelineLanesView+Guide.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimingGuide.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 // Spotlight the keypose at this index (a middle one, so the boundary popover
 // opens with frames on both sides in the filmstrip).

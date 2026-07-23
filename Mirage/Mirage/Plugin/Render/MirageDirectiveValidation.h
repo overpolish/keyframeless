@@ -17,11 +17,10 @@
 
 #import "MirageTypes.h"
 
-// Validation reads every directive kind back, so it sits on top of the parsers
-// rather than beside them.
-#import "MirageColorProps.h"
+// Validation reads every directive kind back, so it sits on the parsed model
+// rather than beside the parsers.
 #import "MirageScalarOSC.h"
-#import "MirageScalarParse.h"
+#import "MirageShaderModel.h"
 
 /// The first control label used by more than one directive (colour or scalar),
 /// or nil when all are unique. The label is the lane identity (values, OSC,
@@ -31,20 +30,16 @@ static inline NSString *MirageFirstDuplicateLabel(NSString *source) {
   if (!source.length)
     return nil;
   NSMutableSet<NSString *> *seen = [NSMutableSet set];
-  MirageColorProp cp[KK_SHADER_MAX_COLOR_PROPS];
-  int cpool = 0;
-  int nc = MirageParseColorProps(source, cp, KK_SHADER_MAX_COLOR_PROPS, &cpool);
-  for (int i = 0; i < nc; i++) {
+  MirageShaderModel *m = [MirageShaderModel modelForSource:source];
+  const MirageColorProp *cp = m.colorProps;
+  for (int i = 0; i < m.colorCount; i++) {
     NSString *l = @(cp[i].label);
     if ([seen containsObject:l])
       return l;
     [seen addObject:l];
   }
-  MirageScalarProp sp[KK_SHADER_MAX_SCALAR_PROPS];
-  int used = 0;
-  int ns =
-      MirageParseScalarProps(source, sp, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
-  for (int i = 0; i < ns; i++) {
+  const MirageScalarProp *sp = m.scalarProps;
+  for (int i = 0; i < m.scalarCount; i++) {
     NSString *l = @(sp[i].label);
     if ([seen containsObject:l])
       return l;
@@ -61,20 +56,16 @@ static inline NSString *MirageFirstDuplicateUniform(NSString *source) {
   if (!source.length)
     return nil;
   NSMutableSet<NSString *> *seen = [NSMutableSet set];
-  MirageColorProp cp[KK_SHADER_MAX_COLOR_PROPS];
-  int cpool = 0;
-  int nc = MirageParseColorProps(source, cp, KK_SHADER_MAX_COLOR_PROPS, &cpool);
-  for (int i = 0; i < nc; i++) {
+  MirageShaderModel *m = [MirageShaderModel modelForSource:source];
+  const MirageColorProp *cp = m.colorProps;
+  for (int i = 0; i < m.colorCount; i++) {
     NSString *nm = @(cp[i].name);
     if ([seen containsObject:nm])
       return nm;
     [seen addObject:nm];
   }
-  MirageScalarProp sp[KK_SHADER_MAX_SCALAR_PROPS];
-  int used = 0;
-  int ns =
-      MirageParseScalarProps(source, sp, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
-  for (int i = 0; i < ns; i++) {
+  const MirageScalarProp *sp = m.scalarProps;
+  for (int i = 0; i < m.scalarCount; i++) {
     NSString *nm = @(sp[i].name);
     if ([seen containsObject:nm])
       return nm;
@@ -99,10 +90,9 @@ typedef enum MirageOSCErrorKind {
 static inline NSString *MirageFirstInvalidOSC(NSString *source, int *outKind) {
   if (!source.length)
     return nil;
-  MirageScalarProp sp[KK_SHADER_MAX_SCALAR_PROPS];
-  int used = 0;
-  int ns =
-      MirageParseScalarProps(source, sp, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
+  MirageShaderModel *m = [MirageShaderModel modelForSource:source];
+  const MirageScalarProp *sp = m.scalarProps;
+  int ns = m.scalarCount;
   for (int i = 0; i < ns; i++) {
     if ((strcmp(sp[i].oscKind, "point") == 0 ||
          strcmp(sp[i].oscKind, "position") == 0) &&

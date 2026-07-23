@@ -8,7 +8,7 @@
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKLaneRowView.h>
 #import <KeyframelessKit/KKTimelineLanesView.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 #import "KKLaneChecklistView.h" // _KKLaneChecklistView base
 

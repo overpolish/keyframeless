@@ -8,8 +8,8 @@
 #import "CanvasLayerTree.h"
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKShape.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
-#import <KeyframelessKit/KKTimingStage.h>
 
 KKTimeline *CanvasLayerEffectiveTimeline(KKBezierPath *path,
                                          NSString *overrideLayerID,
@@ -23,9 +23,9 @@ KKTimeline *CanvasLayerEffectiveTimeline(KKBezierPath *path,
   // Memoize the parse: every lane evaluation (stroke width/colour/draw-on, fill
   // style/colour, the per-layer fill gate, ...) calls this, so one render would
   // otherwise deserialize a layer's animationJSON dozens of times - and motion
-  // blur multiplies that by the sample count (~1000 parses/frame). The result is
-  // read-only, so a content-addressed cache (keyed by the JSON text) is safe and
-  // reused across calls AND frames. Per-process (separate XPC process per
+  // blur multiplies that by the sample count (~1000 parses/frame). The result
+  // is read-only, so a content-addressed cache (keyed by the JSON text) is safe
+  // and reused across calls AND frames. Per-process (separate XPC process per
   // instance); content-addressed so sharing across instances in one process is
   // harmless. NSCache is thread-safe for FCP's render threads.
   static NSCache<NSString *, KKTimeline *> *sCache;
@@ -450,9 +450,10 @@ matrix_float4x4 CanvasComposedModelMatrix(CanvasLayerTransform memberT,
     // The perspective centres on the OUTERMOST element that actually TILTS: a
     // group's 3D tilt foreshortens its members about the group's pivot. A group
     // with NO tilt (including an identity group) must stay a no-op for the
-    // member's own perspective, so track the member's centre THROUGH the group's
-    // 2D transform instead of snapping the pivot onto the group - otherwise an
-    // untilted group re-shears a self-tilted member about the clip centre.
+    // member's own perspective, so track the member's centre THROUGH the
+    // group's 2D transform instead of snapping the pivot onto the group -
+    // otherwise an untilted group re-shears a self-tilted member about the clip
+    // centre.
     if (groups[k].t.rotX != 0.0f || groups[k].t.rotY != 0.0f) {
       pcPx = gcPx + (gPosPx - gRestPx) + gAncPx;
     } else {

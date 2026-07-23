@@ -9,6 +9,12 @@
 
 static NSString *const kPluginID = @"co.overpolish.keyframeless.Mirage";
 
+/// Label of the code lane carrying the shader source (KKLaneValueTypeCode).
+/// The label is the lane's PERSISTED identity - shipped timelines contain it,
+/// so it never tracks product renames. Match against this constant, never the
+/// literal.
+static NSString *const kMirageCodeLaneLabel = @"Mirage";
+
 /// Posted on the main queue when the OSC handle's screen position updates;
 /// the plugin returns this as its help-guide refresh notification.
 extern NSNotificationName const kMirageOSCPositionNotification;

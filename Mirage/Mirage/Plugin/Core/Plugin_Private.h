@@ -12,6 +12,8 @@
 @class KKPlayheadPoller;
 
 @interface MiragePlugin ()
+/// Covariant re-type of the KKPlugin base property (one storage, @dynamic in the
+/// implementation).
 @property(nonatomic, weak, nullable) MirageInspectorView *inspectorView;
 // miniViewerFeed + miniDragUndoStarted now live on the KKPlugin base.
 @property(nonatomic, strong, nonnull) KKRenderCache *renderCache;
@@ -32,11 +34,6 @@
 /// resolve: `availableLanesProvider` fires from a code-commit callback, which
 /// is outside any action scope, and reading a parameter there returns nil.
 @property(nonatomic, copy, nullable) NSDictionary<NSString *, id> *audioTickets;
-/// Returns a copy of `timeline` with every lane's lastKnownClipDuration set
-/// to the current effect duration (seconds), so the Basic ruler/hover have a
-/// duration without extra plumbing. Must be called inside an action scope.
-- (nullable KKTimeline *)timelineStampedWithClipDuration:
-    (nullable KKTimeline *)timeline;
 @end
 
 NS_ASSUME_NONNULL_BEGIN

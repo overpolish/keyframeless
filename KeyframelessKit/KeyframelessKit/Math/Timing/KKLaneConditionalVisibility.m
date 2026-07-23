@@ -7,7 +7,7 @@
 // values (a lane can gate on another lane via visibleWhen*). The recursive
 // clause evaluator + KKLaneComponentLabels / KKConditionalVisibleLaneLabels.
 
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 
 #import "KKBezierPath.h"
 #import "KKEasing.h"

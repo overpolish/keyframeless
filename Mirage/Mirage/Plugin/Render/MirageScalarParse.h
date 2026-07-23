@@ -57,7 +57,8 @@ static inline void MirageParseBracedFields(NSString *attrs, NSString *key,
 
 static inline void MirageScalarParseDefaults(NSString *attrs,
                                              MirageScalarProp *p) {
-  if (p->isChoice) {
+  switch (p->kind) {
+  case MirageScalarKindChoice: {
     NSTextCheckingResult *om = [[NSRegularExpression
         regularExpressionWithPattern:@"\\boptions\\s*=\\s*\"([^\"]*)\""
                              options:0
@@ -93,18 +94,26 @@ static inline void MirageScalarParseDefaults(NSString *attrs,
     if (cnt > 0 && def >= cnt)
       def = cnt - 1;
     p->cdefault = def;
-  } else if (p->isSeed) {
+    break;
+  }
+  case MirageScalarKindSeed: {
     // A random seed: any integer, non-animatable, dice-rerolled. Passes
     // straight to the float uniform (no normalization).
     p->fmin = 0.0;
     p->fmax = 1000000.0;
     p->fdefault = MirageAttrInt(attrs, @"\\bdefault\\s*=\\s*(\\d+)", 0);
-  } else if (p->isBool) {
+    break;
+  }
+  case MirageScalarKindBool: {
     p->fdefault = MirageAttrInt(attrs, @"\\bdefault\\s*=\\s*(\\d+)", 0) ? 1 : 0;
-  } else if (p->isAngle) {
+    break;
+  }
+  case MirageScalarKindAngle: {
     // Rotation knob, degrees; unconstrained (accumulates past 360).
     p->fdefault = MirageAttrDouble(attrs, @"\\bdefault\\s*=\\s*(-?[0-9.]+)", 0);
-  } else if (p->isPoint) {
+    break;
+  }
+  case MirageScalarKindPoint: {
     // A 2D point (vec2), normalized 0..1. Default center, or default="x,y".
     p->pdefx = 0.5;
     p->pdefy = 0.5;
@@ -123,7 +132,9 @@ static inline void MirageScalarParseDefaults(NSString *attrs,
         p->pdefy = xy[1].doubleValue;
       }
     }
-  } else if (p->isMulti) {
+    break;
+  }
+  case MirageScalarKindMulti: {
     // An N-component numeric field (vec2/vec3). Component count from
     // `fields={A,B}` (which also names the components), else the uniform
     // arity.
@@ -236,7 +247,12 @@ static inline void MirageScalarParseDefaults(NSString *attrs,
           p->mdef[k] = parts[0].doubleValue; // single default -> all components
       }
     }
-  } else {
+    break;
+  }
+  case MirageScalarKindFloat:
+  case MirageScalarKindPercent:
+  case MirageScalarKindProgress:
+  case MirageScalarKindInt: {
     double defMax = p->isPercent ? 100.0 : (p->isInt ? 10.0 : 1.0);
     double mn = MirageAttrDouble(attrs, @"\\bmin\\s*=\\s*(-?[0-9.]+)", NAN);
     double mx = MirageAttrDouble(attrs, @"\\bmax\\s*=\\s*(-?[0-9.]+)", NAN);
@@ -274,6 +290,8 @@ static inline void MirageScalarParseDefaults(NSString *attrs,
         MirageAttrDouble(attrs, @"\\bslidermax\\s*=\\s*(-?[0-9.]+)", NAN);
     p->sliderLo = (p->isProgress || isnan(smn)) ? mn : smn;
     p->sliderHi = (p->isProgress || isnan(smx)) ? mx : smx;
+    break;
+  }
   }
 }
 
@@ -291,10 +309,8 @@ static inline int MirageParseScalarProps(NSString *source,
     return 0;
   NSRegularExpression *dirRe = [NSRegularExpression
       regularExpressionWithPattern:
-          @"(?m)^[ \\t]*//[ "
-          @"\\t]*#(float|percent|progress|seed|point|int|angle|bool|choice|"
-          @"multi)\\b([^"
-          @"\\n]*)$"
+          [NSString stringWithFormat:@"(?m)^[ \\t]*//[ \\t]*#(%@)\\b([^\\n]*)$",
+                                     MirageScalarKindAlternation()]
                            options:0
                              error:nil];
   NSRegularExpression *uniRe = [NSRegularExpression
@@ -322,19 +338,21 @@ static inline int MirageParseScalarProps(NSString *source,
     if (!um || [um rangeAtIndex:2].location == NSNotFound)
       continue;
     NSString *nm = [source substringWithRange:[um rangeAtIndex:2]];
+    const MirageScalarKindSpec *spec = MirageScalarKindForKeyword(kind);
+    if (!spec)
+      continue;
     MirageScalarProp p;
     memset(&p, 0, sizeof(p));
-    p.isChoice = [kind isEqualToString:@"choice"];
-    p.isProgress = [kind isEqualToString:@"progress"];
-    // Everything about progress except its ramp default is a percent field
-    // (0..100 lane shown as %, pool gets value / 100), so reuse that path.
-    p.isPercent = [kind isEqualToString:@"percent"] || p.isProgress;
-    p.isSeed = [kind isEqualToString:@"seed"];
-    p.isPoint = [kind isEqualToString:@"point"];
-    p.isBool = [kind isEqualToString:@"bool"];
-    p.isInt = [kind isEqualToString:@"int"];
-    p.isAngle = [kind isEqualToString:@"angle"];
-    p.isMulti = [kind isEqualToString:@"multi"];
+    p.kind = spec->kind;
+    p.isChoice = spec->isChoice;
+    p.isProgress = spec->isProgress;
+    p.isPercent = spec->isPercent;
+    p.isSeed = spec->isSeed;
+    p.isPoint = spec->isPoint;
+    p.isBool = spec->isBool;
+    p.isInt = spec->isInt;
+    p.isAngle = spec->isAngle;
+    p.isMulti = spec->isMulti;
     if (p.isMulti) {
       // `#multi` can carry a numeric sub-type: `percent` (0..100 lane shown as
       // %, pool gets value / 100 like a single #percent) or `int` (whole-number
@@ -388,52 +406,6 @@ static inline int MirageParseScalarProps(NSString *source,
   if (outUsed)
     *outUsed = pool - startOffset;
   return n;
-}
-
-/// Fill the scalar props into the pool (each = one vec4, value in .x), starting
-/// at `startOffset` (the colour pool count). Returns the new total vec4 count.
-static inline int
-MirageFillScalarPool(NSString *source, vector_float4 *pool, int startOffset,
-                     NSArray<NSNumber *> * (^valuesForLabel)(NSString *)) {
-  MirageScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
-  int used = 0;
-  int nProps = MirageParseScalarProps(source, props, KK_SHADER_MAX_SCALAR_PROPS,
-                                      startOffset, &used);
-  for (int pi = 0; pi < nProps; pi++) {
-    MirageScalarProp *p = &props[pi];
-    // Look up by the uniform NAME (the lane identity), not the display label.
-    NSArray<NSNumber *> *v = valuesForLabel(@(p->name));
-    if (p->isPoint) {
-      double x = v.count >= 1 ? v[0].doubleValue : p->pdefx;
-      double y = v.count >= 2 ? v[1].doubleValue : p->pdefy;
-      pool[p->poolOffset] = (vector_float4){(float)x, (float)y, 0, 0};
-      continue;
-    }
-    if (p->isMulti) {
-      // N components packed into .xyz (one pool vec4). Missing components fall
-      // back to the per-component default.
-      float c[4] = {0, 0, 0, 0};
-      for (int k = 0; k < p->fieldCount && k < 4; k++)
-        c[k] = (float)(v.count > k ? v[k].doubleValue : p->mdef[k]);
-      if (MirageScalarOSCIsRotate(p))
-        for (int k = 0; k < 4; k++)
-          c[k] =
-              roundf(c[k]); // rotation is whole degrees, even from an OSC drag
-      if (p->isPercent)
-        for (int k = 0; k < 4; k++)
-          c[k] /= 100.0f; // lane is 0..100 %, shader wants 0..1
-      pool[p->poolOffset] = (vector_float4){c[0], c[1], c[2], c[3]};
-      continue;
-    }
-    double val = v.count ? v[0].doubleValue
-                         : (p->isChoice ? (double)p->cdefault : p->fdefault);
-    if (p->isAngle)
-      val = round(val); // angles are whole degrees, even from an OSC drag
-    if (p->isPercent)
-      val /= 100.0; // lane is 0..100 %, shader wants 0..1
-    pool[p->poolOffset] = (vector_float4){(float)val, 0, 0, 0};
-  }
-  return startOffset + used;
 }
 
 #endif // __METAL_VERSION__

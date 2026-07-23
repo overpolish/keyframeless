@@ -224,11 +224,9 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   // shader-DECLARED default (not super's @[@0], which would drive a `// #float`
   // uniform to 0 and flatten the preview) so the mini matches the first render.
   NSString *src = [self _customShaderSource];
-  MirageScalarProp sp[KK_SHADER_MAX_SCALAR_PROPS];
-  int used = 0;
-  int ns =
-      MirageParseScalarProps(src, sp, KK_SHADER_MAX_SCALAR_PROPS, 0, &used);
-  for (int i = 0; i < ns; i++)
+  MirageShaderModel *model = [MirageShaderModel modelForSource:src];
+  const MirageScalarProp *sp = model.scalarProps;
+  for (int i = 0; i < model.scalarCount; i++)
     if ([label isEqualToString:@(sp[i].name)]) { // uniform name = identity
       if (sp[i].isPoint)
         return @[ @(sp[i].pdefx), @(sp[i].pdefy) ];
@@ -241,10 +239,8 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
       return @[ @(sp[i].isChoice ? (double)sp[i].cdefault : sp[i].fdefault) ];
     }
 
-  MirageColorProp cp[KK_SHADER_MAX_COLOR_PROPS];
-  int pool = 0;
-  int nc = MirageParseColorProps(src, cp, KK_SHADER_MAX_COLOR_PROPS, &pool);
-  for (int i = 0; i < nc; i++) {
+  const MirageColorProp *cp = model.colorProps;
+  for (int i = 0; i < model.colorCount; i++) {
     NSString *lbl = @(cp[i].name); // uniform name = identity
     if (!cp[i].isArray) {
       if ([label isEqualToString:lbl]) {
@@ -272,7 +268,7 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
 - (NSString *)_customShaderSource {
   KKLane *shaderLane = nil;
   for (KKLane *lane in self.timeline.lanes)
-    if ([lane.label isEqualToString:@"Mirage"]) {
+    if ([lane.label isEqualToString:kMirageCodeLaneLabel]) {
       shaderLane = lane;
       break;
     }
@@ -296,7 +292,7 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
       [NSMutableDictionary dictionary];
   KKLane *shaderLane = nil;
   for (KKLane *lane in self.timeline.lanes)
-    if ([lane.label isEqualToString:@"Mirage"]) {
+    if ([lane.label isEqualToString:kMirageCodeLaneLabel]) {
       shaderLane = lane;
       break;
     }
@@ -337,8 +333,7 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   }
   if (!_pipelines)
     _pipelines = [NSMutableDictionary dictionary];
-  NSString *key =
-      [NSString stringWithFormat:@"custom:%lu", (unsigned long)tr.msl.hash];
+  NSString *key = [NSString stringWithFormat:@"custom:%@", tr.mslDigest];
   id<MTLRenderPipelineState> existing = _pipelines[key];
   if (existing)
     return existing;
@@ -547,14 +542,15 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
       ^NSArray<NSNumber *> *(NSString *label) {
     return [self valuesForLabel:label];
   };
-  int colorPoolN = MirageFillColorPool(image, colorPool, values);
-  colorPoolN = MirageFillScalarPool(image, colorPool, colorPoolN, values);
+  MirageShaderModel *poolModel = [MirageShaderModel modelForSource:image];
+  int colorPoolN = [poolModel fillColorPool:colorPool valuesForLabel:values];
+  colorPoolN = [poolModel fillScalarPool:colorPool valuesForLabel:values];
   // Sampled at the playhead's PROJECT time, pushed by the inspector - the same
   // instant the viewer is showing, so the preview and the render agree. Still
   // called when that's unknown (a large negative reads as outside the
   // spectrogram = silence): the audio members must be COUNTED either way, or
   // the block's tail goes unwritten and samples whatever the buffer last held.
-  colorPoolN = MirageFillAudioPool(image, colorPool, colorPoolN,
+  colorPoolN = MirageFillAudioPool(poolModel, colorPool,
                                    self.audioTimelineTimeSec, values);
 
   id<MTLTexture> srcLin = [self _linearSourceView:source];

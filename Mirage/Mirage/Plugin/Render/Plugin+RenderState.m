@@ -72,7 +72,8 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   // block's std140 tail). Values come from the per-property lanes (fallback:
   // directive default count + the default palette). The directives are parsed
   // from the "Mirage" code lane.
-  // Source for the directive pool. MUST match MirageAppendCodeSections (which
+  // Source for the directive pool. MUST match the blob codec's Image section
+  // (MirageStateBlobEncode, which
   // supplies the Image the pool binds against): a MISSING "Mirage" lane falls
   // back to the baked default so the pool's directive uniforms (uCenter/uScale/
   // …) are still filled; a present-but-empty lane is passthrough (no
@@ -81,7 +82,7 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   // every directive reads 0, flattening the preview.
   KKLane *shaderLane = nil;
   for (KKLane *l in timeline.lanes)
-    if ([l.label isEqualToString:@"Mirage"]) {
+    if ([l.label isEqualToString:kMirageCodeLaneLabel]) {
       shaderLane = l;
       break;
     }
@@ -94,15 +95,15 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
     return MirageLaneValuesAtFraction(timeline, label, frac, timelineSec,
                                       durSec);
   };
-  int poolN = MirageFillColorPool(shaderSrc, outState->colorPool, values);
-  poolN = MirageFillScalarPool(shaderSrc, outState->colorPool, poolN, values);
+  MirageShaderModel *model = [MirageShaderModel modelForSource:shaderSrc];
+  int poolN = [model fillColorPool:outState->colorPool valuesForLabel:values];
+  poolN = [model fillScalarPool:outState->colorPool valuesForLabel:values];
   // `// #audio` props: sampled from the bound Sonar spectrogram at the TIMELINE
   // time, not the clip fraction - the grid is keyed by timeline seconds. That
   // is NOT the render time: `timelineSec` comes from
   // `timelineTime:fromInputTime:`, because an FxPlug render time in FCP is the
   // input's native media clock.
-  poolN = MirageFillAudioPool(shaderSrc, outState->colorPool, poolN,
-                              timelineSec, values);
+  poolN = MirageFillAudioPool(model, outState->colorPool, timelineSec, values);
   outState->colorPoolCount = poolN;
 }
 
@@ -126,7 +127,7 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   KKTimeline *timeline = [self _timelineFromParams:getAPI];
   NSString *shaderSrc = nil;
   for (KKLane *lane in timeline.lanes)
-    if ([lane.label isEqualToString:@"Mirage"] && lane.codeString.length) {
+    if ([lane.label isEqualToString:kMirageCodeLaneLabel] && lane.codeString.length) {
       shaderSrc = lane.codeString;
       break;
     }
@@ -309,10 +310,8 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
               error:(NSError **)error {
   // Motion blur (Accurate / sample-accumulate): a generator owns every pixel,
   // so instead of requesting extra source frames we re-render the shader at N
-  // sub-frame times across the shutter and average them (KKMotionBlur). Layout:
-  // [KKMotionBlurState][state@sample0 == renderTime][state@sample1]... Render
-  // reads sample `sampleIndex` at sizeof(mbState) +
-  // i*sizeof(MiragePluginState).
+  // sub-frame times across the shutter and average them (KKMotionBlur).
+  // Sample 0 is the render time; MirageStateBlobEncode owns the byte layout.
   id<FxParameterRetrievalAPI_v6> paramAPI =
       [self.apiManager apiForProtocol:@protocol(FxParameterRetrievalAPI_v6)];
   id<FxTimingAPI_v4> timingAPI =
@@ -350,16 +349,9 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   if (mbState.enabled)
     mbState.technique = KKMotionBlurTechniqueAccurate;
 
-  NSMutableData *data = [NSMutableData
-      dataWithCapacity:sizeof(mbState) + (size_t)n * sizeof(MiragePluginState)];
-  [data appendBytes:&mbState length:sizeof(mbState)];
-  [data appendBytes:states length:(size_t)n * sizeof(MiragePluginState)];
+  NSData *data = MirageStateBlobEncode(&mbState, states, n,
+                                       [self _timelineFromParams:paramAPI]);
   free(states);
-
-  // The user shader source follows the N state samples: the layout is
-  // [mbState][state@0]...[state@n-1][sections...] and render reads the tail
-  // from sizeof(mbState) + n*sizeof(MiragePluginState).
-  MirageAppendCodeSections(data, [self _timelineFromParams:paramAPI]);
 
   *pluginState = data;
   return (*pluginState != nil);

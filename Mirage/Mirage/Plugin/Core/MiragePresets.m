@@ -7,7 +7,7 @@
 
 #import "Constants.h" // MirageCustomDefaultShaderSource
 #import <KeyframelessKit/KKPresets.h>
-#import <KeyframelessKit/KKTimingStage.h> // KKTimeline / KKLane / KKKeyPose
+#import <KeyframelessKit/KKTimeline.h> // KKTimeline / KKLane / KKKeyPose
 
 // Plasma's directive lanes are keyed by their GLSL uniform name (uCenter is the
 // point, uScale the scalar), not their display name - the same identity the
@@ -19,7 +19,7 @@ static NSString *const kMiragePresetScale = @"uScale";
 // shader look lives here, so every preset includes it (applying a preset
 // installs the plasma shader as well as its Center/Scale values).
 static KKLane *MiragePresetCodeLane(void) {
-  KKLane *lane = [KKLane laneWithLabel:@"Mirage"];
+  KKLane *lane = [KKLane laneWithLabel:kMirageCodeLaneLabel];
   lane.valueType = KKLaneValueTypeCode;
   lane.codeString = MirageCustomDefaultShaderSource();
   lane.animatable = NO;

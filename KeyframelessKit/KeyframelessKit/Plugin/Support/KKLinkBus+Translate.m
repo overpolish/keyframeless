@@ -15,7 +15,7 @@
 
 #import "KKLinkExpr.h"
 #import "KKPluginInstanceState.h" // KKInstanceUUIDForAPI
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 #import <FxPlug/FxPlugSDK.h> // PROAPIAccessing, FxProjectAPI
 
 // Walk every `${...}` token in `src`, replacing each token's inner text with

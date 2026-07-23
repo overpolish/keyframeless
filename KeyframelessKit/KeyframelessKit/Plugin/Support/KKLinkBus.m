@@ -13,7 +13,7 @@
 #import "KKLog.h"
 #import "KKPluginInstanceState.h" // KKInstanceUUIDForAPI
 #import "KKTimingEvaluation.h"
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 #import <FxPlug/FxPlugSDK.h> // PROAPIAccessing, FxProjectAPI
 
 // Same shared container the Sonar spectrograms use, so the bus works from the

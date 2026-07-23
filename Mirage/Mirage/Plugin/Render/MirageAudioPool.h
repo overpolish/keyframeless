@@ -8,6 +8,8 @@
 #import <Foundation/Foundation.h>
 #import <simd/simd.h>
 
+#import "MirageShaderModel.h"
+
 NS_ASSUME_NONNULL_BEGIN
 
 /// Fills every `// #audio` property's pool slots from the Sonar source its lane
@@ -23,10 +25,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// range fills zeroes: a shader bound to nothing should render silence, not
 /// garbage.
 ///
-/// Returns the new pool count (startOffset + the vec4s used).
+/// Returns the new pool count (colours + scalars + audio vec4s).
 int MirageFillAudioPool(
-    NSString *_Nullable source, vector_float4 *pool, int startOffset,
-    double timelineSeconds,
+    MirageShaderModel *model, vector_float4 *pool, double timelineSeconds,
     NSArray<NSNumber *> *_Nullable (^valuesForLabel)(NSString *label));
 
 NS_ASSUME_NONNULL_END

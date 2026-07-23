@@ -276,21 +276,19 @@ MirageAudioLaneValue(NSArray<NSNumber *> * (^valuesForLabel)(NSString *),
 }
 
 int MirageFillAudioPool(
-    NSString *source, vector_float4 *pool, int startOffset,
-    double timelineSeconds,
+    MirageShaderModel *model, vector_float4 *pool, double timelineSeconds,
     NSArray<NSNumber *> * (^valuesForLabel)(NSString *label)) {
-  MirageAudioProp props[KK_SHADER_MAX_AUDIO_PROPS];
-  int used = 0;
-  int nProps = MirageParseAudioProps(source, props, KK_SHADER_MAX_AUDIO_PROPS,
-                                     startOffset, &used);
+  const MirageAudioProp *props = model.audioProps;
+  int nProps = model.audioCount;
+  int total = model.colorPoolUsed + model.scalarPoolUsed + model.audioPoolUsed;
   if (nProps == 0) {
-    return startOffset;
+    return total;
   }
   NSArray<NSDictionary<NSString *, id> *> *published =
       KKSpectrogramPublishedSources();
 
   for (int pi = 0; pi < nProps; pi++) {
-    MirageAudioProp *p = &props[pi];
+    const MirageAudioProp *p = &props[pi];
     // Zero first: every path below that can't produce audio leaves silence
     // rather than whatever the last frame left in the pool.
     for (int v = 0; v < p->vecCount; v++) {
@@ -331,5 +329,5 @@ int MirageFillAudioPool(
         bands, have);
     MirageAudioFoldToPool(bands, have, p, pool);
   }
-  return startOffset + used;
+  return total;
 }

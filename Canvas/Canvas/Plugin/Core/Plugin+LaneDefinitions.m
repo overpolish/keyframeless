@@ -13,7 +13,7 @@
 #import "Plugin_Private.h"
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKColorLanes.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 @implementation CanvasPlugin (LaneDefinitions)
 

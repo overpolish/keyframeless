@@ -5,7 +5,7 @@
 
 #import "KKPresetTimelineOps.h"
 
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 
 static BOOL _kkAnyLockedSeconds(KKTimeline *t) {
   for (KKLane *l in t.lanes)

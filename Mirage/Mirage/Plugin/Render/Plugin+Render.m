@@ -319,31 +319,13 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
   CGFloat mediaH = destinationImage.imagePixelBounds.top -
                    destinationImage.imagePixelBounds.bottom;
 
-  // State built in -pluginState: (the params API is invalid here). Layout is
-  // [KKMotionBlurState][state@0]...[state@n-1][sections...] - N samples when
-  // motion blur is on (else 1). Read the header + the base sample (state@0).
-  // Fall back to defaults if the blob is missing/short.
-  KKMotionBlurState mbState;
-  MiragePluginState base;
-  if (pluginState.length >= sizeof(mbState) + sizeof(base)) {
-    [pluginState getBytes:&mbState length:sizeof(mbState)];
-    [pluginState getBytes:&base
-                    range:NSMakeRange(sizeof(mbState), sizeof(base))];
-  } else {
-    memset(&mbState, 0, sizeof(mbState)); // disabled
-    memset(&base, 0, sizeof(base));
-    base.common = MirageCommonDefault();
-  }
-
-  // Sample count must match -pluginState: (KKMotionBlur derives it the same way
-  // from the state + renderTime), so the sections tail sits at a known offset.
-  NSInteger n = mbState.enabled
-                    ? (NSInteger)[KKMotionBlur sampleTimesForState:mbState
-                                                        renderTime:renderTime]
-                          .count
-                    : 1;
-  if (n < 1)
-    n = 1;
+  // State built in -pluginState: (the params API is invalid here). The blob
+  // codec owns the layout and carries the sample count; a missing/short blob
+  // decodes as motion blur disabled with one default sample.
+  MirageStateBlobHeader blob = MirageStateBlobReadHeader(pluginState);
+  KKMotionBlurState mbState = blob.mbState;
+  MiragePluginState base = blob.base;
+  NSInteger n = blob.sampleCount;
 
   float encodeSRGB =
       (destinationImage.ioSurface.pixelFormat == kCVPixelFormatType_32BGRA)
@@ -353,10 +335,8 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
 
   // Multi-pass sections from the blob tail (Image / Common / Buffer A-D).
   // Common is prepended to every pass.
-  NSUInteger head = sizeof(mbState) + (NSUInteger)n * sizeof(MiragePluginState);
   NSDictionary<NSString *, NSString *> *sections =
-      (pluginState.length > head) ? MirageParseSections(pluginState, head)
-                                  : @{};
+      MirageStateBlobReadSections(pluginState);
   NSString *common = sections[@"Common"] ?: @"";
   NSString *imageSrc = sections[@"Image"];
   if (imageSrc.length == 0)
@@ -403,14 +383,10 @@ typedef void (^MirageSinglePassDraw)(id<MTLRenderCommandEncoder> encoder,
     // can't be re-simulated per sub-frame sample cheaply). Only in accumulate
     // mode: native shaders blur themselves, off opts out. On any bail, fall
     // through to a single pass.
-    NSUInteger allStatesLen = sizeof(mbState) + (NSUInteger)n * sizeof(base);
-    if (mbMode == MirageMotionBlurModeAccumulate && mbState.enabled && n > 1 &&
-        pluginState.length >= allStatesLen) {
+    if (mbMode == MirageMotionBlurModeAccumulate && mbState.enabled && n > 1) {
       MiragePluginState *states = malloc(sizeof(MiragePluginState) * (size_t)n);
-      [pluginState
-          getBytes:states
-             range:NSMakeRange(sizeof(mbState), (NSUInteger)n * sizeof(base))];
-      BOOL ok = [self _renderSinglePassMotionBlurWithStates:states
+      BOOL ok = MirageStateBlobReadStates(pluginState, states, n) &&
+                [self _renderSinglePassMotionBlurWithStates:states
                                                       count:n
                                                     mbState:mbState
                                                  renderTime:renderTime

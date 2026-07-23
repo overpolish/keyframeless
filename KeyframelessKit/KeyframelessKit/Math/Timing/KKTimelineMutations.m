@@ -6,9 +6,9 @@
 // Timeline mutation free functions: return a NEW timeline/lane with one lane
 // changed (spatial-smooth, aspect-link, link-expression, gradient-type, and
 // the value-at-index / nearest-fraction setters). Operate on the public
-// KKLane / KKTimeline API; the model classes live in KKTimingStage.m.
+// KKLane / KKTimeline API; the model classes live in KKTimeline.m.
 
-#import "KKTimingStage.h"
+#import "KKTimeline.h"
 
 #import "KKBezierPath.h"
 #import "KKEasing.h"

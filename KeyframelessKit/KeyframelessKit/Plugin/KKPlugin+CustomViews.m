@@ -61,14 +61,8 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
   if (parameterID == kKKParamColorCustomUI)
     return [self _createColorCustomUI:parameterID];
 
-  if (parameterID == kKKParamAnimationSeparator)
-    return [self _createTimingHeader:parameterID];
-
   if (parameterID == kKKParamMotionBlurSeparator)
     return [self _createMotionBlurHeader:parameterID];
-
-  if (parameterID == kKKParamTimingCurvePreview)
-    return [self _createTimingGraphViewUncapped:NO];
 
   NSString *separatorText =
       kkClassRegistry([self class], kKKSepTexts)[@(parameterID)];
@@ -243,11 +237,6 @@ NSUserInterfaceItemIdentifier const KKRemoteWindowContentID =
     if (weakHeader.isEnabled != enabled)
       weakHeader.isEnabled = enabled;
   });
-}
-
-- (void)kkWriteLanesJSON:(NSArray<KKTimingLane *> *)lanes
-                  setAPI:(id<FxParameterSettingAPI_v5>)setAPI {
-  KKWriteLanesJSON(lanes, setAPI, self.apiManager);
 }
 
 - (void)registerGroupHeader:(KKCustomGroupHeaderView *)header

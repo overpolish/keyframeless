@@ -9,19 +9,11 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <objc/runtime.h>
 
-@implementation KKTimingViewRefs
-- (BOOL)isAlive {
-  return _seqView != nil;
-}
-@end
-
 @implementation KKPluginInstanceState
 
 - (instancetype)init {
   self = [super init];
   if (self) {
-    _pendingPlayheadFraction = -1;
-    _pendingPlayheadDuration = -1;
     _oscMasterVisible = YES;
   }
   return self;

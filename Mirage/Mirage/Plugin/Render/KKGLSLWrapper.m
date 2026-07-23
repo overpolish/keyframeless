@@ -26,11 +26,10 @@ NSUInteger KKDeclaredChannelMask(NSUInteger channelMask, BOOL bufferMode) {
 static int KKEmitColorProps(NSString *userSource, NSMutableString *body,
                             NSMutableString *members,
                             NSMutableString *defines) {
-  MirageColorProp props[KK_SHADER_MAX_COLOR_PROPS];
-  int poolCount = 0;
-  int nProps = MirageParseColorProps(userSource, props,
-                                     KK_SHADER_MAX_COLOR_PROPS, &poolCount);
-  for (int i = 0; i < nProps; i++) {
+  MirageShaderModel *model = [MirageShaderModel modelForSource:userSource];
+  const MirageColorProp *props = model.colorProps;
+  int poolCount = model.colorPoolUsed;
+  for (int i = 0; i < model.colorCount; i++) {
     NSString *nm = @(props[i].name);
     if (props[i].isArray) {
       [members appendFormat:@"  vec4 %@[%d];\n  vec4 %@_kkmeta;\n", nm,
@@ -55,30 +54,49 @@ static int KKEmitColorProps(NSString *userSource, NSMutableString *body,
 
 // The `#define <name> ...` that gives one scalar prop its shader-facing type
 // and units, unpacking the pool vec4 it folded into.
+// Emits the rotate-OSC define: each euler component is delivered as
+// radians(-deg), matching #angle's sign (a CW ring reads as a CW turn). The
+// lane stores components in canonical X<Y<Z order; the braced axis order maps
+// onto the shader vec via a swizzle (uRot.x = first-listed axis). A
+// single-axis rotate reduces to `radians(-uRot_kk.x)`.
+static void KKEmitRotateDefine(const MirageScalarProp *p, NSString *nm,
+                               NSMutableString *defines) {
+  [defines appendFormat:@"#define %@ (radians(-%@_kk.%@))\n", nm, nm,
+                        MirageRotateCanonicalSwizzle(p)];
+}
+
 static void KKEmitScalarDefine(const MirageScalarProp *p, NSString *nm,
                                NSMutableString *defines) {
-  if (!p->isMulti && (p->isChoice || p->isInt)) {
-    // Scalar int/choice only. A `#multi int` is still a vector (its
-    // integer-ness is just field stepping), so it falls through to the multi
-    // branch below.
+  // The rotate-OSC form is per-kind below (never for int/choice/bool, which
+  // historically outrank it) rather than one early check, so the kind switch
+  // stays exhaustive for -Wswitch.
+  BOOL rotate = MirageScalarOSCIsRotate(p);
+  switch (p->kind) {
+  case MirageScalarKindInt:
+  case MirageScalarKindChoice:
+    // Scalar int/choice only; a `#multi int` is still a vector (its
+    // integer-ness is just field stepping) and lands in the Multi case.
     [defines appendFormat:@"#define %@ (int(%@_kk.x))\n", nm, nm];
-  } else if (p->isBool) {
+    break;
+  case MirageScalarKindBool:
     [defines appendFormat:@"#define %@ (%@_kk.x > 0.5)\n", nm, nm];
-  } else if (MirageScalarOSCIsRotate(p)) {
-    // A rotation OSC (`osc={..}`): each euler component is delivered as
-    // radians(-deg), matching #angle's sign (a CW ring reads as a CW turn).
-    // The lane stores components in canonical X<Y<Z order; the braced axis
-    // order maps onto the shader vec via a swizzle (uRot.x = first-listed
-    // axis). A single-axis rotate reduces to `radians(-uRot_kk.x)`.
-    [defines appendFormat:@"#define %@ (radians(-%@_kk.%@))\n", nm, nm,
-                          MirageRotateCanonicalSwizzle(p)];
-  } else if (p->isAngle) {
+    break;
+  case MirageScalarKindAngle:
+    if (rotate) {
+      KKEmitRotateDefine(p, nm, defines);
+      break;
+    }
     // Lane is degrees; the shader gets radians. Negated so a clockwise knob
     // turn reads as a clockwise on-screen rotation (the knob increases CW, but
-    // a standard rotation matrix turns CCW for a positive angle in the shader's
-    // y-up coordinate space).
+    // a standard rotation matrix turns CCW for a positive angle in the
+    // shader's y-up coordinate space).
     [defines appendFormat:@"#define %@ (radians(-%@_kk.x))\n", nm, nm];
-  } else if (p->isMulti) {
+    break;
+  case MirageScalarKindMulti: {
+    if (rotate) {
+      KKEmitRotateDefine(p, nm, defines);
+      break;
+    }
     // An N-component numeric field, delivered RAW (the shader owns the units):
     // vec2 -> `.xy`, vec3 -> `.xyz`. One pool vec4 member as usual.
     const char *uty = p->uniformType;
@@ -86,15 +104,30 @@ static void KKEmitScalarDefine(const MirageScalarProp *p, NSString *nm,
                         : (strcmp(uty, "vec4") == 0) ? @"xyzw"
                                                      : @"xy";
     [defines appendFormat:@"#define %@ (%@_kk.%@)\n", nm, nm, swizzle];
-  } else if (p->isPoint) {
+    break;
+  }
+  case MirageScalarKindPoint:
+    if (rotate) {
+      KKEmitRotateDefine(p, nm, defines);
+      break;
+    }
     // Delivered in PIXELS (fragCoord space), not normalized: scale by
     // iResolution. No Y flip - the shader's fragCoord is bottom-origin
     // (Shadertoy convention), the SAME origin as the object-space lane, so the
-    // point lines up directly. Per-pass iResolution keeps it correct in smaller
-    // buffer passes.
+    // point lines up directly. Per-pass iResolution keeps it correct in
+    // smaller buffer passes.
     [defines appendFormat:@"#define %@ (%@_kk.xy * iResolution.xy)\n", nm, nm];
-  } else {
+    break;
+  case MirageScalarKindFloat:
+  case MirageScalarKindPercent:
+  case MirageScalarKindProgress:
+  case MirageScalarKindSeed:
+    if (rotate) {
+      KKEmitRotateDefine(p, nm, defines);
+      break;
+    }
     [defines appendFormat:@"#define %@ (%@_kk.x)\n", nm, nm];
+    break;
   }
 }
 
@@ -102,13 +135,12 @@ static void KKEmitScalarDefine(const MirageScalarProp *p, NSString *nm,
 // (value in .x), appended after the colour members. Returns the pool vec4s
 // used.
 static int KKEmitScalarProps(NSString *userSource, NSMutableString *body,
-                             NSMutableString *members, NSMutableString *defines,
-                             int poolBase) {
-  MirageScalarProp scalars[KK_SHADER_MAX_SCALAR_PROPS];
-  int scalarUsed = 0;
-  int nScalars = MirageParseScalarProps(
-      userSource, scalars, KK_SHADER_MAX_SCALAR_PROPS, poolBase, &scalarUsed);
-  for (int i = 0; i < nScalars; i++) {
+                             NSMutableString *members,
+                             NSMutableString *defines) {
+  MirageShaderModel *model = [MirageShaderModel modelForSource:userSource];
+  const MirageScalarProp *scalars = model.scalarProps;
+  int scalarUsed = model.scalarPoolUsed;
+  for (int i = 0; i < model.scalarCount; i++) {
     NSString *nm = @(scalars[i].name);
     [members appendFormat:@"  vec4 %@_kk;\n", nm];
     KKEmitScalarDefine(&scalars[i], nm, defines);
@@ -134,13 +166,11 @@ static int KKEmitScalarProps(NSString *userSource, NSMutableString *body,
 // `<name>Bands` is the count. Appended AFTER the scalars so both earlier
 // pools keep their offsets.
 static void KKEmitAudioProps(NSString *userSource, NSMutableString *body,
-                             NSMutableString *members, NSMutableString *defines,
-                             int poolBase) {
-  MirageAudioProp audios[KK_SHADER_MAX_AUDIO_PROPS];
-  int audioUsed = 0;
-  int nAudio = MirageParseAudioProps(
-      userSource, audios, KK_SHADER_MAX_AUDIO_PROPS, poolBase, &audioUsed);
-  for (int i = 0; i < nAudio; i++) {
+                             NSMutableString *members,
+                             NSMutableString *defines) {
+  MirageShaderModel *model = [MirageShaderModel modelForSource:userSource];
+  const MirageAudioProp *audios = model.audioProps;
+  for (int i = 0; i < model.audioCount; i++) {
     NSString *nm = @(audios[i].name);
     [members appendFormat:@"  vec4 %@[%d];\n", nm, audios[i].vecCount];
     [defines appendFormat:@"#define %@Bands %d\n", nm, audios[i].bands];
@@ -239,12 +269,11 @@ NSString *KKWrapGLSL(NSString *userSource, NSUInteger channelMask,
   NSMutableString *colorMembers = [NSMutableString string];
   NSMutableString *colorDefines = [NSMutableString string];
   NSMutableString *body = [userSource mutableCopy];
-  int poolCount =
-      KKEmitColorProps(userSource, body, colorMembers, colorDefines);
-  int scalarUsed = KKEmitScalarProps(userSource, body, colorMembers,
-                                     colorDefines, poolCount);
-  KKEmitAudioProps(userSource, body, colorMembers, colorDefines,
-                   poolCount + scalarUsed);
+  // Emission order (colours, scalars, audio) must stay canonical: the std140
+  // member order IS the pool layout the model's offsets describe.
+  KKEmitColorProps(userSource, body, colorMembers, colorDefines);
+  KKEmitScalarProps(userSource, body, colorMembers, colorDefines);
+  KKEmitAudioProps(userSource, body, colorMembers, colorDefines);
 
   NSMutableString *s = [NSMutableString string];
   [s appendString:@"layout(location = 0) out vec4 kk_outColor;\n"

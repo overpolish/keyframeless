@@ -17,7 +17,7 @@
 #import "KKPopoverBackground.h"
 #import "KKSeedView.h"
 #import "KKSliderView.h"
-#import "KKTimingStage.h" // KKLane
+#import "KKTimeline.h" // KKLane
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 

@@ -49,6 +49,34 @@ public final class AIBannerHost: NSObject {
 		)
 	}
 
+	/// The standard `aiAccessoryView` spine: the plugin variant above PLUS the
+	/// "Keyframeless AI update available" banner wiring. `checkForAIUpdate`
+	/// runs the host's update check (the plugin owns `KKUpdateChecker`; this
+	/// package can't import KeyframelessKit) and reports the available version
+	/// + notes URL through its completion, which lands in the popover via
+	/// `KKAIUpdate`. Plugins supply only their product context, examples,
+	/// placeholder and run handler.
+	@MainActor
+	@objc public static func makeStandardPluginButton(
+		productContext: String,
+		examplePairs: [[String]],
+		placeholder: String,
+		checkForAIUpdate: @escaping (@escaping (String?, String?) -> Void) -> Void,
+		onRun: @escaping (String) -> Void
+	) -> NSView {
+		AIUpdateBridge.setCheckHandler {
+			checkForAIUpdate { version, notesURL in
+				AIUpdateBridge.setAvailableVersion(version, notesURL: notesURL)
+			}
+		}
+		return makePluginButton(
+			productContext: productContext,
+			examplePairs: examplePairs,
+			placeholder: placeholder,
+			onRun: onRun
+		)
+	}
+
 	@MainActor
 	private static func makeButtonInternal(
 		productContext: String,

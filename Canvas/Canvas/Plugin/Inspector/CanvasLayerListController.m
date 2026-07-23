@@ -11,7 +11,7 @@
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h> // KKWriteCustomParamString
 #import <KeyframelessKit/KKPopoverKeepAlive.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/NSColor+KKColors.h>
 #import <QuartzCore/QuartzCore.h>

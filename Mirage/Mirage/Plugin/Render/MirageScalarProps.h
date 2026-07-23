@@ -16,6 +16,7 @@
 #import <string.h>
 
 #import "MirageDirectiveCommon.h"
+#import "MirageScalarKinds.h"
 #import "MirageTypes.h"
 
 // --- Scalar properties (`// #float`, `// #choice`) -----------------------
@@ -26,6 +27,10 @@
 // (<name>_kk.x)` (float) / `(int(<name>_kk.x))` (choice).
 #define KK_SHADER_MAX_SCALAR_PROPS 12
 typedef struct MirageScalarProp {
+    // Which directive keyword declared this prop (registry row). Behaviour
+    // chains switch on this; the is* flags below are the stamped template
+    // (kept because they COMPOSE: a `#multi percent` sets isMulti + isPercent).
+    MirageScalarKind kind;
     int isChoice;       // 0 = float slider, 1 = choice (int pills)
     int choiceDropdown; // `dropdown` on a #choice: searchable list, not pills
     int isPercent;      // float shown as % (0..100 lane); pool gets value / 100

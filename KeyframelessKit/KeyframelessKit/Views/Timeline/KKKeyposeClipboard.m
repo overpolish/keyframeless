@@ -6,7 +6,7 @@
 #import "KKKeyposeClipboard.h"
 
 #import <AppKit/AppKit.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 static NSString *const kKKKeyposePBType =
     @"co.overpolish.keyframeless.keyposeValues";

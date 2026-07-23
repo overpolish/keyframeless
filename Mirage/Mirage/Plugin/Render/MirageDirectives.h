@@ -31,3 +31,4 @@
 #import "MirageScalarOSC.h"
 #import "MirageScalarParse.h"
 #import "MirageScalarProps.h"
+#import "MirageShaderModel.h"

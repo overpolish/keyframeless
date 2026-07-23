@@ -11,7 +11,7 @@
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKSonarTicket.h>
 #import <KeyframelessKit/KKSpectrogram.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 #import "Constants.h"        // MirageCustomDefaultShaderSource
 #import "KKGLSLFormatter.h"  // Format button (XPC-only includers)
@@ -74,10 +74,9 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
   const float (*pal)[4] = kMirageDefaultPalette;
   const NSInteger kSliderCap =
       10; // slider tops out here; the field goes higher
-  MirageColorProp props[KK_SHADER_MAX_COLOR_PROPS];
-  int poolCount = 0;
-  int nProps = MirageParseColorProps(source, props, KK_SHADER_MAX_COLOR_PROPS,
-                                     &poolCount);
+  MirageShaderModel *model = [MirageShaderModel modelForSource:source];
+  const MirageColorProp *props = model.colorProps;
+  int nProps = model.colorCount;
   if (nProps == 0)
     return;
   // One palette-generator bar for the whole Colours group.
@@ -90,7 +89,7 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
   [lanes addObject:bar];
 
   for (int pi = 0; pi < nProps; pi++) {
-    MirageColorProp *p = &props[pi];
+    const MirageColorProp *p = &props[pi];
     // Identity = the uniform name (+ " N"/" Count" for arrays); display = the
     // label. The palette group is the uniform name so it stays stable too.
     NSString *name = @(p->name);
@@ -144,7 +143,7 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
 // lanes in their own "Mirage" params group (distinct from Core and Colours). A
 // float lane is an animatable slider bounded by min/max; a choice lane is a
 // structural (non-animatable, integer) radio pill from options=. Value flows to
-// the shader via the pool tail (MirageFillScalarPool), same as colours.
+// the shader via the pool tail (the model scalar fill), same as colours.
 /// The standard 3D-axis inspector tint (matching KKRotationLaneWithLabel /
 /// Motion / Blender): X=red, Y=green, Z=blue. Used so a rotate OSC lane's dials
 /// and its KKRotationOSC rings agree.
@@ -159,14 +158,59 @@ static inline NSColor *MirageRotationAxisColor(char axis) {
   }
 }
 
+static inline void MirageConfigureRotateLane(KKLane *lane,
+                                             const MirageScalarProp *p) {
+  // A rotation OSC lane: one euler-angle (degrees) component per active
+  // axis, in CANONICAL X<Y<Z order (KKRotationOSC's contract - the gizmo
+  // maps enabledAxes bits to components in that order). The braced order
+  // (which axis drives which shader vec component) is applied later by the
+  // transpiler swizzle, not here. Circular + unconstrained (accumulates
+  // past 360), tinted red/green/blue by axis so the inspector dials and the
+  // KKRotationOSC rings agree. A single-axis `#angle` gets one dial; a
+  // vec2/vec3 `#multi` gets N. `default=` (parsed in braced order) is
+  // permuted back to canonical order.
+  lane.valueType = KKLaneValueTypeAngle;
+  lane.animatable = YES;
+  lane.integerValued = YES; // rotation dials snap to whole degrees
+  lane.componentMin = @[];
+  lane.componentMax = @[];
+  NSMutableArray<NSString *> *labels = [NSMutableArray array];
+  NSMutableArray<NSString *> *units = [NSMutableArray array];
+  NSMutableArray<NSColor *> *colors = [NSMutableArray array];
+  NSMutableArray<NSNumber *> *defs = [NSMutableArray array];
+  const char *canon = "xyz";
+  for (int a = 0; a < 3; a++) {
+    char axis = canon[a];
+    // The braced-order slot this canonical axis occupies (its shader
+    // component), or -1 if the axis isn't part of this control.
+    int slot = -1;
+    for (int k = 0; k < p->oscAxisCount; k++)
+      if (p->oscAxes[k] == axis) {
+        slot = k;
+        break;
+      }
+    if (slot < 0)
+      continue;
+    [labels
+        addObject:[NSString stringWithFormat:@"%c", (char)toupper(axis)]];
+    [units addObject:@"°"];
+    [colors addObject:MirageRotationAxisColor(axis)];
+    [defs addObject:@(p->isMulti ? p->mdef[slot] : p->fdefault)];
+  }
+  lane.componentLabels = labels;
+  lane.componentUnits = units;
+  lane.componentLabelColors = colors;
+  lane.autoSizesComponentLabels = YES;
+  [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:defs]];
+}
+
 static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
                                            NSString *source) {
-  MirageScalarProp props[KK_SHADER_MAX_SCALAR_PROPS];
-  int used = 0;
-  int nProps = MirageParseScalarProps(source, props, KK_SHADER_MAX_SCALAR_PROPS,
-                                      0, &used);
+  MirageShaderModel *model = [MirageShaderModel modelForSource:source];
+  const MirageScalarProp *props = model.scalarProps;
+  int nProps = model.scalarCount;
   for (int pi = 0; pi < nProps; pi++) {
-    MirageScalarProp *p = &props[pi];
+    const MirageScalarProp *p = &props[pi];
     // Identity = the GLSL uniform name (stable across rename/reorder); the
     // label is display-only. So the value/keyframes follow the uniform, not the
     // label.
@@ -179,7 +223,8 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
     lane.groupKey = @(p->name);
     lane.categoryKey = @"Mirage";
     lane.categorySymbol = @"slider.horizontal.3";
-    if (p->isChoice) {
+    switch (p->kind) {
+    case MirageScalarKindChoice: {
       lane.integerValued = YES;
       lane.animatable = NO; // structural enum
       NSMutableArray<NSString *> *opts = [NSMutableArray array];
@@ -196,7 +241,9 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       lane.componentMax = @[ @(opts.count ? (NSInteger)opts.count - 1 : 0) ];
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                             values:@[ @(p->cdefault) ]]];
-    } else if (p->isSeed) {
+      break;
+    }
+    case MirageScalarKindSeed: {
       lane.seedField = YES; // dice reroll
       lane.integerValued = YES;
       lane.animatable = NO; // structural like the core Seed
@@ -205,7 +252,9 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       lane.componentMax = @[ @(p->fmax) ];
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                             values:@[ @(p->fdefault) ]]];
-    } else if (p->isPoint) {
+      break;
+    }
+    case MirageScalarKindPoint: {
       lane.animatable = YES;
       // A `osc=position` point is driven by its on-screen editable path, so it
       // isn't expression-referenceable (a link expression would fight the
@@ -224,7 +273,9 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       [lane insertKeypose:[KKKeyPose
                               keyposeAtTime:0.0
                                      values:@[ @(p->pdefx), @(p->pdefy) ]]];
-    } else if (p->isBool) {
+      break;
+    }
+    case MirageScalarKindBool: {
       lane.isToggle = YES;
       lane.integerValued = YES;
       lane.animatable = NO; // structural on/off
@@ -232,50 +283,14 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       lane.componentMax = @[ @1.0 ];
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                             values:@[ @(p->fdefault) ]]];
-    } else if (MirageScalarOSCIsRotate(p)) {
-      // A rotation OSC lane: one euler-angle (degrees) component per active
-      // axis, in CANONICAL X<Y<Z order (KKRotationOSC's contract - the gizmo
-      // maps enabledAxes bits to components in that order). The braced order
-      // (which axis drives which shader vec component) is applied later by the
-      // transpiler swizzle, not here. Circular + unconstrained (accumulates
-      // past 360), tinted red/green/blue by axis so the inspector dials and the
-      // KKRotationOSC rings agree. A single-axis `#angle` gets one dial; a
-      // vec2/vec3 `#multi` gets N. `default=` (parsed in braced order) is
-      // permuted back to canonical order.
-      lane.valueType = KKLaneValueTypeAngle;
-      lane.animatable = YES;
-      lane.integerValued = YES; // rotation dials snap to whole degrees
-      lane.componentMin = @[];
-      lane.componentMax = @[];
-      NSMutableArray<NSString *> *labels = [NSMutableArray array];
-      NSMutableArray<NSString *> *units = [NSMutableArray array];
-      NSMutableArray<NSColor *> *colors = [NSMutableArray array];
-      NSMutableArray<NSNumber *> *defs = [NSMutableArray array];
-      const char *canon = "xyz";
-      for (int a = 0; a < 3; a++) {
-        char axis = canon[a];
-        // The braced-order slot this canonical axis occupies (its shader
-        // component), or -1 if the axis isn't part of this control.
-        int slot = -1;
-        for (int k = 0; k < p->oscAxisCount; k++)
-          if (p->oscAxes[k] == axis) {
-            slot = k;
-            break;
-          }
-        if (slot < 0)
-          continue;
-        [labels
-            addObject:[NSString stringWithFormat:@"%c", (char)toupper(axis)]];
-        [units addObject:@"°"];
-        [colors addObject:MirageRotationAxisColor(axis)];
-        [defs addObject:@(p->isMulti ? p->mdef[slot] : p->fdefault)];
+      break;
+    }
+    case MirageScalarKindAngle: {
+      if (MirageScalarOSCIsRotate(p)) {
+        MirageConfigureRotateLane(lane, p);
+        break;
       }
-      lane.componentLabels = labels;
-      lane.componentUnits = units;
-      lane.componentLabelColors = colors;
-      lane.autoSizesComponentLabels = YES;
-      [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:defs]];
-    } else if (p->isAngle) {
+
       lane.valueType = KKLaneValueTypeAngle; // circular knob, whole degrees
       lane.animatable = YES;
       lane.integerValued = YES; // angles snap to whole degrees
@@ -284,7 +299,13 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
       lane.componentMax = @[];
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                             values:@[ @(p->fdefault) ]]];
-    } else if (p->isMulti) {
+      break;
+    }
+    case MirageScalarKindMulti: {
+      if (MirageScalarOSCIsRotate(p)) {
+        MirageConfigureRotateLane(lane, p);
+        break;
+      }
       // An N-component numeric field (vec2/vec3): one lane, `fields={}` names
       // the components, `linked` makes them aspect-linkable. Unbounded unless
       // max=.
@@ -362,7 +383,16 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
         lane.scrubStep = 1.0;
       }
       [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0 values:defs]];
-    } else {
+      break;
+    }
+    case MirageScalarKindFloat:
+    case MirageScalarKindPercent:
+    case MirageScalarKindProgress:
+    case MirageScalarKindInt: {
+      if (MirageScalarOSCIsRotate(p)) {
+        MirageConfigureRotateLane(lane, p);
+        break;
+      }
       lane.animatable = YES;
       // Hard field bounds: the actual `min=`/`max=`, or an
       // effectively-unbounded cap when omitted (so the field accepts any
@@ -400,6 +430,8 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
         [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                               values:@[ @(p->fdefault) ]]];
       }
+      break;
+    }
     }
     [lanes addObject:lane];
   }
@@ -444,10 +476,9 @@ static inline KKLane *MirageMakeAudioControlLane(NSString *idLabel,
 static inline void
 MirageAppendAudioLanes(NSMutableArray<KKLane *> *lanes, NSString *source,
                        NSDictionary<NSString *, id> *tickets) {
-  MirageAudioProp props[KK_SHADER_MAX_AUDIO_PROPS];
-  int used = 0;
-  int nProps =
-      MirageParseAudioProps(source, props, KK_SHADER_MAX_AUDIO_PROPS, 0, &used);
+  MirageShaderModel *model = [MirageShaderModel modelForSource:source];
+  const MirageAudioProp *props = model.audioProps;
+  int nProps = model.audioCount;
   if (nProps == 0)
     return;
 
@@ -504,7 +535,7 @@ MirageAppendAudioLanes(NSMutableArray<KKLane *> *lanes, NSString *source,
   }
 
   for (int pi = 0; pi < nProps; pi++) {
-    MirageAudioProp *p = &props[pi];
+    const MirageAudioProp *p = &props[pi];
     NSString *uniform = @(p->name);
     // Only one `#audio` in the shader: the group already says "Audio", so
     // "Noise Gate" needs no qualifying. With two, every lane says which source
@@ -681,7 +712,7 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   // Non-animatable; the text lives in the lane's codeString (not a keypose) and
   // flows through the timeline. Seeded with the baked default so the editor
   // opens on something runnable.
-  KKLane *shader = [KKLane laneWithLabel:@"Mirage"];
+  KKLane *shader = [KKLane laneWithLabel:kMirageCodeLaneLabel];
   // The label "Mirage" is the internal identity (matched all over as the code
   // lane); the code block is a GENERIC GLSL shader, so it SHOWS as "Shader" -
   // the brand name shouldn't leak onto the editor caption / save placeholder.

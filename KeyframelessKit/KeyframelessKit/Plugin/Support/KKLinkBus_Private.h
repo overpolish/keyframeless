@@ -12,7 +12,7 @@
 #pragma once
 
 #import "KKLinkBus.h"
-#import "KKTimingStage.h" // KKLane
+#import "KKTimeline.h" // KKLane
 
 NS_ASSUME_NONNULL_BEGIN
 

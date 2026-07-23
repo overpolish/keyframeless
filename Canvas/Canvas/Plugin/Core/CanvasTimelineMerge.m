@@ -11,7 +11,7 @@
 
 #import "CanvasLayerTimeline.h"
 #import <KeyframelessKit/KKBezierPath.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 // U+001F separator joining a context lane's short label to its layerID (unique
 // across layers; KKLocalizedParamName strips it for display).

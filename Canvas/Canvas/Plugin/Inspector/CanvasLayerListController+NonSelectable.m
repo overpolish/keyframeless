@@ -14,7 +14,7 @@
 #import "CanvasLayerListView.h"
 #import "CanvasLocalized.h"
 #import <KeyframelessKit/KKBezierPath.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 @implementation CanvasLayerListController (NonSelectable)
 

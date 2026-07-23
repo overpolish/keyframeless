@@ -5,7 +5,7 @@
 
 #import "KKRadialOSCSet_Protected.h"
 
-#import <KeyframelessKit/KKTimingStage.h> // KKLane / KKTimeline (aspectLinked)
+#import <KeyframelessKit/KKTimeline.h> // KKLane / KKTimeline (aspectLinked)
 #import <math.h>
 
 @implementation KKRadialOSCSet {

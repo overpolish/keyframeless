@@ -7,7 +7,7 @@
 #import "CanvasLayerRender.h"
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKColorLanes.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 
 // Process-wide layer-blob snapshot for the viewer OSC (see header).
 static NSString *sCanvasLayerBlobSnapshot = nil;

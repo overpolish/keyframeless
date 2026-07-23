@@ -8,7 +8,7 @@
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKPresets.h>
 #import <KeyframelessKit/KKShape.h>
-#import <KeyframelessKit/KKTimingStage.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <simd/simd.h>
 
 NSString *const kCanvasPresetPayloadKind = @"canvasLayers";

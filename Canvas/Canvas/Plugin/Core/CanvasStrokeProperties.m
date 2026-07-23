@@ -15,8 +15,8 @@
 #import "CanvasLayerTransform.h" // CanvasLayerEffectiveTimeline (shared)
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKColorLanes.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
-#import <KeyframelessKit/KKTimingStage.h>
 
 void CanvasStrokeWidthAtFraction(KKBezierPath *path, double frac,
                                  NSString *overrideLayerID,
