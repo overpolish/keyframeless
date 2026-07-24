@@ -90,6 +90,30 @@ BOOL KKSpectrogramSampleAtTime(KKSpectrogramRef spectrogram,
                                double timelineSeconds, float *outBands,
                                size_t maxBands);
 
+/// Cumulative "flow": the running total of gated band energy from the start of
+/// the analysis up to `timelineSeconds`. It only ever increases, so an effect
+/// can advance geometry by it and a beat pushes that geometry FORWARD without
+/// ever pulling it back - the accumulator a stateless render can't keep itself.
+/// Read straight from the file, so it answers identically however a frame is
+/// reached (scrub, motion-blur sub-frame, out-of-order pre-render), where a
+/// remembered running sum would not survive an export.
+///
+/// `loBand`/`hiBand` select the analysis-band range (`hiBand` EXCLUSIVE; pass
+/// `0` / `numBands` for the full mix). Each frame contributes
+/// `max(0, peak(bands[lo..hi]) - gate01) * hopSeconds`, so the value is in
+/// band-seconds and frame-rate independent, and a quiet noise floor under
+/// `gate01` adds nothing (which is what keeps the flow still between beats).
+/// `gate01` is a 0...1 level - convert a dB threshold with
+/// `KKSpectrogramNormalizedForDB`; pass `0` for no gate.
+///
+/// Render-path safe: no allocation, no locking, reads the mapping directly. It
+/// scans every frame up to `timelineSeconds`, so it is O(frames-so-far) - fine
+/// for the clip lengths audio shaders run on; revisit with a prefix sum if that
+/// ever bites. Returns `0` before the analysis starts.
+double KKSpectrogramFlowAtTime(KKSpectrogramRef spectrogram,
+                               double timelineSeconds, uint32_t loBand,
+                               uint32_t hiBand, double gate01);
+
 /// Writes the format. `data` is row-major [frame][band], values 0...1.
 /// `floorDB` / `ceilingDB` are the window `data` was normalised against.
 /// Returns NO and sets `error` on a bad write.

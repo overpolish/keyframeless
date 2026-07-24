@@ -294,6 +294,9 @@ int MirageFillAudioPool(
     for (int v = 0; v < p->vecCount; v++) {
       pool[p->poolOffset + v] = (vector_float4){0, 0, 0, 0};
     }
+    if (p->wantsFlow) {
+      pool[p->flowPoolOffset] = (vector_float4){0, 0, 0, 0};
+    }
 
     NSString *uniform = @(p->name);
     long key = lround(MirageAudioLaneValue(valuesForLabel, uniform, 0));
@@ -328,6 +331,26 @@ int MirageFillAudioPool(
                              p->releaseSeconds),
         bands, have);
     MirageAudioFoldToPool(bands, have, p, pool);
+
+    if (p->wantsFlow) {
+      // Map the shader-band range to analysis bands with the same proportional
+      // fold the bars use, then accumulate gated energy up to now. Fixed gate
+      // and range (not the animatable bar lanes), so the clock's history is
+      // stable across scrubs and doesn't shift under a keyframed gate.
+      int want = p->bands;
+      uint32_t aLo = (uint32_t)((int64_t)have * p->flowLoBand / want);
+      uint32_t aHi = (uint32_t)((int64_t)have * (p->flowHiBand + 1) / want);
+      if (aHi > have) {
+        aHi = have;
+      }
+      if (aHi <= aLo) {
+        aHi = aLo + 1;
+      }
+      double gate01 = KKSpectrogramNormalizedForDB(spectrogram, p->flowGateDB);
+      double flow = KKSpectrogramFlowAtTime(spectrogram, timelineSeconds, aLo,
+                                            aHi, gate01);
+      pool[p->flowPoolOffset] = (vector_float4){(float)flow, 0, 0, 0};
+    }
   }
   return total;
 }

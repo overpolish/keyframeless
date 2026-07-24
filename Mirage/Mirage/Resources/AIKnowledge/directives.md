@@ -28,21 +28,21 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 
 ## Control kinds
 
-| Directive   | Uniform type       | Inspector control                                | What the shader receives                            |
-| ----------- | ------------------ | ------------------------------------------------ | --------------------------------------------------- |
-| `#color`    | `vec4 n;`          | colour swatch                                    | `vec4` RGBA (from the Colours-style swatch)         |
-| `#color`    | `vec4 n[N];`       | palette bar (up to N)                            | `vec4 n[N]` + `nCount` (int) active count           |
-| `#float`    | `float n;`         | slider                                           | the raw value                                       |
-| `#percent`  | `float n;`         | slider shown as `%`                              | **0..1** (the inspector shows 0-100%)               |
-| `#progress` | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** — transition progress; see below           |
-| `#int`      | `float n;`         | integer slider                                   | `int`                                               |
-| `#seed`     | `float n;`         | dice/seed field (no anim)                        | the raw integer value                               |
-| `#angle`    | `float n;`         | rotation dial (whole degrees)                    | **radians, negated** (`radians(-deg)`)              |
-| `#bool`     | `bool n;`          | checkbox                                         | `bool`                                              |
-| `#choice`   | `int n;`           | segmented pills                                  | `int` selected index (0-based)                      |
-| `#point`    | `vec2 n;`          | 2D point                                         | pixels (`value * iResolution.xy`, fragCoord space)  |
-| `#multi`    | `vec2` / `vec3 n;` | N-component field                                | the raw vector                                      |
-| `#audio`    | `vec4 n[N];`       | audio source picker                              | live spectrum via `nBand(i)` + `nBands` (see below) |
+| Directive   | Uniform type       | Inspector control                                | What the shader receives                                                      |
+| ----------- | ------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `#color`    | `vec4 n;`          | colour swatch                                    | `vec4` RGBA (from the Colours-style swatch)                                   |
+| `#color`    | `vec4 n[N];`       | palette bar (up to N)                            | `vec4 n[N]` + `nCount` (int) active count                                     |
+| `#float`    | `float n;`         | slider                                           | the raw value                                                                 |
+| `#percent`  | `float n;`         | slider shown as `%`                              | **0..1** (the inspector shows 0-100%)                                         |
+| `#progress` | `float n;`         | slider shown as `%`, keyframed 0→100% by default | **0..1** — transition progress; see below                                     |
+| `#int`      | `float n;`         | integer slider                                   | `int`                                                                         |
+| `#seed`     | `float n;`         | dice/seed field (no anim)                        | the raw integer value                                                         |
+| `#angle`    | `float n;`         | rotation dial (whole degrees)                    | **radians, negated** (`radians(-deg)`)                                        |
+| `#bool`     | `bool n;`          | checkbox                                         | `bool`                                                                        |
+| `#choice`   | `int n;`           | segmented pills                                  | `int` selected index (0-based)                                                |
+| `#point`    | `vec2 n;`          | 2D point                                         | pixels (`value * iResolution.xy`, fragCoord space)                            |
+| `#multi`    | `vec2` / `vec3 n;` | N-component field                                | the raw vector                                                                |
+| `#audio`    | `vec4 n[N];`       | audio source picker                              | live spectrum `nBand(i)`+`nBands`; `flow` adds cumulative `nFlow` (see below) |
 
 The uniform TYPE is folded away by the compiler - you use `uAmount` directly as a `float`, `uColor` as a `vec4`, etc. A mistyped uniform type is tolerated (the `#`-kind wins), so `#int` over a `uniform float` still delivers an int.
 
@@ -165,6 +165,15 @@ uniform vec4 uMusic[16];
 Read it with the generated `uMusicBand(i)` (band `i`, roughly `0...1`, low frequency first) and `uMusicBands` (how many there are, 4 per `vec4`), never by indexing the `vec4` packing by hand. Two per shader, up to 24 `vec4`s each.
 
 One `#audio` builds an **Audio** group of four lanes, not one control: the source picker, plus animatable **Noise Gate** (dB), **Release** (seconds, how long a band takes to fall to zero once gated) and **Smoothness** (seconds) lanes. The directive takes `label=`, and `gate=` / `release=` / `smooth=` to seed those three - they're starting values, not settings, since the right gate depends on the mix rather than on the shader.
+
+Add `flow` to also expose `uMusicFlow`, a **cumulative energy clock**: it counts up as beats go by and never counts down, so a beat pushes geometry FORWARD and it stays there. Use it when a live band value would pull back the moment the sound fades - e.g. particles that should be shoved outward on each hit and hold, not zoom in and out. Because it's stateless-safe (read from the analysis, not a remembered running sum), it survives scrubbing and export. It accumulates the lowest 4 bands by default; `flowlo=` / `flowhi=` set the shader-band range (e.g. `flowhi=1` for a tight kick, mids for bass) and `flowgate=` its dB floor (default -45, so a quiet noise floor never advances it). The value is in band-seconds and grows over the clip, so scale it down and wrap: `fract(birth + uMusicFlow * pushAmount)`.
+
+```glsl
+// #audio label="Beat" flow flowlo=0 flowhi=3 flowgate=-45
+uniform vec4 uBeat[16];
+// ... particle radius advances on every beat, never retreats:
+float life = fract(birthPhase + iTime * baseSpeed + uBeatFlow * uPush);
+```
 
 Nothing picked reads as silence rather than an error, so a shader with an unbound `#audio` still renders.
 

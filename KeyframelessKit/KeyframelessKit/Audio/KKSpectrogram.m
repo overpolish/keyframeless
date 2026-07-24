@@ -235,6 +235,56 @@ BOOL KKSpectrogramSampleAtTime(KKSpectrogramRef s, double timelineSeconds,
   return YES;
 }
 
+double KKSpectrogramFlowAtTime(KKSpectrogramRef s, double timelineSeconds,
+                               uint32_t loBand, uint32_t hiBand,
+                               double gate01) {
+  if (!s) {
+    return 0;
+  }
+  uint32_t nb = s->numBands;
+  if (hiBand > nb) {
+    hiBand = nb;
+  }
+  // A degenerate range reacts to the full mix rather than reporting nothing, so
+  // a mis-specified lo/hi still drives the effect instead of freezing it.
+  if (loBand >= hiBand) {
+    loBand = 0;
+    hiBand = nb;
+  }
+
+  double frame = (timelineSeconds - s->timelineStart) / s->hopSeconds;
+  if (frame <= 0) {
+    return 0; // before the analysis begins - nothing has accumulated yet
+  }
+  uint32_t last;
+  double frac; // fraction of the frame straddling `timelineSeconds` to count
+  if (frame >= (double)(s->numFrames - 1)) {
+    last = s->numFrames - 1;
+    frac = 1.0; // at or past the end - the whole analysis is behind us
+  } else {
+    last = (uint32_t)frame;
+    frac = frame - (double)last; // continuous, rather than stepping per hop
+  }
+
+  float gate = (float)(gate01 < 0 ? 0 : gate01);
+  double sum = 0;
+  for (uint32_t f = 0; f <= last; f++) {
+    const float *row = s->data + (size_t)f * nb;
+    float peak = 0;
+    for (uint32_t b = loBand; b < hiBand; b++) {
+      if (row[b] > peak) {
+        peak = row[b];
+      }
+    }
+    float v = peak - gate;
+    if (v <= 0) {
+      continue; // under the gate this frame - the noise floor adds nothing
+    }
+    sum += (f == last) ? (double)v * frac : (double)v;
+  }
+  return sum * s->hopSeconds;
+}
+
 BOOL KKSpectrogramWrite(NSURL *url, const float *data, uint32_t numFrames,
                         uint32_t numBands, double hopSeconds,
                         double timelineStart, double floorDB, double ceilingDB,

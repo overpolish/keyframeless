@@ -17,7 +17,25 @@
 // any manifest whose uuid never showed up (an effect deleted before this load).
 static NSMutableSet<NSString *> *gKKLiveUUIDs;
 static os_unfair_lock gKKLiveLock = OS_UNFAIR_LOCK_INIT;
-static NSInteger gKKReconcileGen; // main-thread only
+static NSInteger gKKReconcileGen; // guarded by gKKLiveLock
+
+/// Serialises the deferred link-manifest writes -pluginInstanceAddedToDocument
+/// hands off (see there for why they can't run inline).
+///
+/// Serial, not concurrent: a document load fires that callback once per
+/// instance, so a project with dozens of effects would otherwise hit the host
+/// with dozens of simultaneous round-trips at exactly its busiest moment. Off
+/// the main queue because the work blocks on the host, and blocking the
+/// plugin's main thread would just move the stall somewhere equally bad.
+static dispatch_queue_t KKLinkManifestQueue(void) {
+  static dispatch_queue_t queue;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    queue = dispatch_queue_create("co.overpolish.keyframeless.linkmanifest",
+                                  DISPATCH_QUEUE_SERIAL);
+  });
+  return queue;
+}
 #import "KKPlugin_Private.h"
 #import "KKUpdateChecker.h"
 #import <AppKit/AppKit.h>
@@ -129,12 +147,25 @@ static NSInteger gKKReconcileGen; // main-thread only
 - (void)writeLinkManifest {
   NSArray<KKLane *> *lanes = [self linkableLanesForManifest];
   NSArray<KKLinkLayerSource *> *layers = [self linkableLayersForManifest];
-  if (lanes == nil && layers == nil)
-    return; // not a link source
+  if (lanes == nil && layers == nil) {
+    // Expected for a plugin that never opted in. But it is ALSO what an
+    // unresolved FxParameterRetrievalAPI_v6 looks like from the deferred
+    // add-path, which is the one thing this fix could plausibly regress - hence
+    // the log rather than a silent return. DIAGNOSTIC: remove once confirmed.
+    KKLogDebug(@"KKPlugin: link manifest skipped, no lanes/layers (%@)",
+               [self linkManifestEffectName]);
+    return;
+  }
   id<FxTimingAPI_v4> t =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
-  if (!t)
+  if (!t) {
+    // DIAGNOSTIC (remove once the deferred add-path is confirmed): the
+    // load-time call now runs off the FxPlug callback, so this is where we'd
+    // find out the host APIs only resolve inside one.
+    KKLogWarn(@"KKPlugin: link manifest skipped, no FxTimingAPI (deferred=%d)",
+              !NSThread.isMainThread);
     return;
+  }
   CMTime effStart = kCMTimeZero, dur = kCMTimeZero, effStartTL = kCMTimeZero;
   [t startTimeForEffect:&effStart];
   [t durationTimeForEffect:&dur];
@@ -177,30 +208,54 @@ static NSInteger gKKReconcileGen; // main-thread only
 // they clear on the next reopen, or via the manual "Remove from list".
 - (void)pluginInstanceAddedToDocument {
   NSString *uuid = KKInstanceUUIDForAPI(self.apiManager);
-  [self writeLinkManifest]; // register on add/load, not just on render
+  // Deferred, NEVER inline: -writeLinkManifest re-enters the host synchronously
+  // (KKLinkDocumentIDForAPI -> FxProjectAPI documentID:), and this callback
+  // fires DURING a document load, while FCP holds its own locks. Called inline
+  // that deadlocks outright - FCP's main thread sits in FFSharedLock's
+  // _writeLock while this thread waits on the host, and neither ever moves.
+  // What matters is that this callback RETURNS, so the load can finish and the
+  // locks drop; the manifest landing a beat later costs nothing, since its
+  // whole job is to advertise an idle effect that isn't rendering anyway.
+  __weak typeof(self) weakSelf = self;
+  dispatch_async(KKLinkManifestQueue(), ^{
+    [weakSelf writeLinkManifest];
+  });
   if (uuid.length == 0)
     return;
-  os_unfair_lock_lock(&gKKLiveLock);
-  if (!gKKLiveUUIDs)
-    gKKLiveUUIDs = [NSMutableSet set];
-  [gKKLiveUUIDs addObject:uuid];
-  os_unfair_lock_unlock(&gKKLiveLock);
 
   // Debounce a reconcile ~5s after the LAST add of this load burst: any
   // manifest for THIS effect whose uuid isn't in the live set by then belonged
   // to a deleted effect (it never deserialized), so drop it. Scoped by effect
   // name so one plugin never prunes another plugin's manifests. No staleness ->
   // idle effects, which DO fire this callback on load, are never touched.
+  //
+  // The generation bump takes the live set's lock rather than standing alone:
+  // FxPlug delivers this callback on a CONCURRENT queue (one per instance
+  // during a load burst), so an unsynchronised ++ raced both its peers and the
+  // read below. Bumping it in the same critical section as the insert also
+  // makes "uuid is live" and "generation N" one atomic step, which is the real
+  // invariant - a generation only means anything paired with the set it was
+  // taken against.
   NSString *effectName = [self linkManifestEffectName];
+  os_unfair_lock_lock(&gKKLiveLock);
+  if (!gKKLiveUUIDs)
+    gKKLiveUUIDs = [NSMutableSet set];
+  [gKKLiveUUIDs addObject:uuid];
   NSInteger gen = ++gKKReconcileGen;
+  os_unfair_lock_unlock(&gKKLiveLock);
+
   dispatch_after(
       dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
       dispatch_get_main_queue(), ^{
-        if (gen != gKKReconcileGen)
-          return; // superseded by a later add (burst still arriving)
+        // Generation check and set snapshot under ONE acquisition: read apart,
+        // a later add landing between them would pass the check and then hand
+        // reconcile a set from a different generation.
         os_unfair_lock_lock(&gKKLiveLock);
-        NSSet<NSString *> *live = [gKKLiveUUIDs copy];
+        BOOL superseded = (gen != gKKReconcileGen);
+        NSSet<NSString *> *live = superseded ? nil : [gKKLiveUUIDs copy];
         os_unfair_lock_unlock(&gKKLiveLock);
+        if (superseded)
+          return; // a later add is still arriving; its timer does the work
         [KKLinkBus reconcileEffectName:effectName keepingUUIDs:live];
       });
 }

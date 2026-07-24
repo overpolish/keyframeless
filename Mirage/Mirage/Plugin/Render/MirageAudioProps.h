@@ -89,7 +89,37 @@ typedef struct MirageAudioProp {
   /// one frame and gone the next - which reads as a glitch rather than as a
   /// sound stopping. Attack stays instant: signal returning should snap back.
   double releaseSeconds;
+  /// `flow` present: also expose `<name>Flow`, a monotonic cumulative energy
+  /// clock (`KKSpectrogramFlowAtTime`). A beat advances it and it never
+  /// retreats, so a shader can push geometry outward per beat without the
+  /// pull-back a live band value forces. Costs one extra pool vec4 (scalar in
+  /// `.x`).
+  int wantsFlow;
+  /// The extra pool vec4 holding the flow scalar (valid only when `wantsFlow`),
+  /// appended right after this prop's band vecs so later props keep their
+  /// offsets.
+  int flowPoolOffset;
+  /// The SHADER-band range the flow accumulates over (inclusive), folded to
+  /// analysis bands at fill time. Defaults to the lowest 4 (0..3) - the kick.
+  int flowLoBand;
+  int flowHiBand;
+  /// `flowgate=` dB: the flow's own fixed threshold (NOT the animatable bar
+  /// gate). Kept fixed and separate so the accumulation is stable - an animated
+  /// accumulation floor would make the clock's history depend on the curve. A
+  /// quiet noise floor under it never advances the clock.
+  double flowGateDB;
 } MirageAudioProp;
+
+/// Whether a bare flag word (e.g. `flow`) is present in a directive's attrs.
+/// `\b...\b` so `flow` doesn't match `flowlo`/`flowhi`/`flowgate`.
+static inline BOOL MirageAttrFlag(NSString *attrs, NSString *pattern) {
+  return [[NSRegularExpression regularExpressionWithPattern:pattern
+                                                    options:0
+                                                      error:nil]
+             firstMatchInString:attrs
+                        options:0
+                          range:NSMakeRange(0, attrs.length)] != nil;
+}
 
 /// Parse every `// #audio [label=]` directive + its `uniform vec4 <name>[N];`.
 /// `startOffset` is the first free pool vec4 (audio is appended after the
@@ -133,7 +163,8 @@ static inline int MirageParseAudioProps(NSString *source,
       N = 1;
     if (N > KK_SHADER_MAX_AUDIO_VECS)
       N = KK_SHADER_MAX_AUDIO_VECS;
-    if (pool + N > KK_SHADER_COLOR_POOL)
+    BOOL wantsFlow = MirageAttrFlag(attrs, @"\\bflow\\b");
+    if (pool + N + (wantsFlow ? 1 : 0) > KK_SHADER_COLOR_POOL)
       break; // pool full - drop the rest
 
     MirageAudioProp p;
@@ -162,6 +193,23 @@ static inline int MirageParseAudioProps(NSString *source,
         MirageAttrDouble(attrs, @"\\brelease\\s*=\\s*([0-9.]+)", 0.15);
     p.poolOffset = pool;
     pool += N;
+    p.wantsFlow = wantsFlow ? 1 : 0;
+    if (wantsFlow) {
+      int lo = (int)MirageAttrDouble(attrs, @"\\bflowlo\\s*=\\s*(\\d+)", 0);
+      int hi = (int)MirageAttrDouble(attrs, @"\\bflowhi\\s*=\\s*(\\d+)", 3);
+      if (lo < 0)
+        lo = 0;
+      if (hi > p.bands - 1)
+        hi = p.bands - 1;
+      if (hi < lo)
+        hi = lo;
+      p.flowLoBand = lo;
+      p.flowHiBand = hi;
+      p.flowGateDB =
+          MirageAttrDouble(attrs, @"\\bflowgate\\s*=\\s*(-?[0-9.]+)", -45.0);
+      p.flowPoolOffset = pool;
+      pool += 1;
+    }
     props[n++] = p;
   }
   if (outUsed)

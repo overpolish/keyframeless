@@ -17,6 +17,16 @@ NSUInteger KKDeclaredChannelMask(NSUInteger channelMask, BOOL bufferMode) {
   return channelMask | (honorAlpha ? 1u : 0u);
 }
 
+// The tail every directive-uniform strip ends with. A declaration routinely
+// carries a trailing comment - authors annotate them constantly ("// 64 bands,
+// low frequency first") - and anchoring the strip right after the semicolon
+// left those declarations in the body, where glslang rejects them with
+// "non-opaque uniforms outside a block: not allowed when using GLSL for
+// Vulkan". Allows trailing space, a single-line block comment, and a line
+// comment, in that order.
+static NSString *const kKKUniformStripTail =
+    @"[ \\t]*(?:/\\*[^\\n]*?\\*/[ \\t]*)?(?://[^\\n]*)?$";
+
 // A shader's `// #color`-annotated `uniform vec4 <name>[N]?;` declarations move
 // INTO our std140 block (Vulkan-GLSL forbids non-opaque uniforms outside a
 // block). Parse them, strip the standalone declarations from `body` (leaving
@@ -40,9 +50,8 @@ static int KKEmitColorProps(NSString *userSource, NSMutableString *body,
     }
     NSString *pat = [NSString
         stringWithFormat:
-            @"(?m)^[ \\t]*uniform\\s+vec4\\s+%@\\s*(\\[[^\\]]*\\])?\\s*;[ "
-            @"\\t]*$",
-            nm];
+            @"(?m)^[ \\t]*uniform\\s+vec4\\s+%@\\s*(\\[[^\\]]*\\])?\\s*;%@", nm,
+            kKKUniformStripTail];
     [[NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil]
         replaceMatchesInString:body
                        options:0
@@ -144,16 +153,16 @@ static int KKEmitScalarProps(NSString *userSource, NSMutableString *body,
   for (int i = 0; i < model.scalarCount; i++) {
     NSString *nm = @(scalars[i].name);
     [members appendFormat:@"  vec4 %@_kk;\n", nm];
-    KKEmitScalarDefine(&scalars[i],
-                       [model oscBlockForUniform:scalars[i].name], nm,
-                       defines);
+    KKEmitScalarDefine(&scalars[i], [model oscBlockForUniform:scalars[i].name],
+                       nm, defines);
     // Strip the standalone declaration regardless of its declared GLSL type:
     // the
     // `#define` above owns the real access, so an `#int` fed a `uniform float`
     // (or any type/name match) is still removed instead of surviving to collide
     // with the macro (a cryptic "unexpected LEFT_PAREN" from glslang).
-    NSString *pat = [NSString
-        stringWithFormat:@"(?m)^[ \\t]*uniform\\s+\\w+\\s+%@\\s*;[ \\t]*$", nm];
+    NSString *pat =
+        [NSString stringWithFormat:@"(?m)^[ \\t]*uniform\\s+\\w+\\s+%@\\s*;%@",
+                                   nm, kKKUniformStripTail];
     [[NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil]
         replaceMatchesInString:body
                        options:0
@@ -179,10 +188,18 @@ static void KKEmitAudioProps(NSString *userSource, NSMutableString *body,
     [defines appendFormat:@"#define %@Bands %d\n", nm, audios[i].bands];
     [defines
         appendFormat:@"#define %@Band(i) (%@[(i) >> 2][(i) & 3])\n", nm, nm];
+    // `flow`: a cumulative energy clock alongside the bars. Its member comes
+    // right after the band array so the std140 layout still matches the pool's
+    // per-prop offsets (bands, then this scalar). `.x` holds the value.
+    if (audios[i].wantsFlow) {
+      NSString *fm = [nm stringByAppendingString:@"_flow"];
+      [members appendFormat:@"  vec4 %@;\n", fm];
+      [defines appendFormat:@"#define %@Flow (%@.x)\n", nm, fm];
+    }
     NSString *pat = [NSString
         stringWithFormat:
-            @"(?m)^[ \\t]*uniform\\s+vec4\\s+%@\\s*\\[[^\\]]*\\]\\s*;[ \\t]*$",
-            nm];
+            @"(?m)^[ \\t]*uniform\\s+vec4\\s+%@\\s*\\[[^\\]]*\\]\\s*;%@", nm,
+            kKKUniformStripTail];
     [[NSRegularExpression regularExpressionWithPattern:pat options:0 error:nil]
         replaceMatchesInString:body
                        options:0
