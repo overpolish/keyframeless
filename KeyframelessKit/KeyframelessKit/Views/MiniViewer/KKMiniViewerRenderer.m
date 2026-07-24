@@ -495,7 +495,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
 // through a drag - no mid-drag exemption needed.
 - (BOOL)isConstantLabel:(NSString *)label {
   for (KKLane *lane in self.timeline.lanes)
-    if ([lane.label isEqualToString:label])
+    if ([lane.key isEqualToString:label])
       // Constants popover: a constant (disabled) lane shows its handle.
       // Boundary popover: only the *animatable* lanes being edited there
       // show theirs (so a disabled property's handle doesn't intrude).
@@ -510,7 +510,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
       return live;
   }
   for (KKLane *lane in self.timeline.lanes) {
-    if (![lane.label isEqualToString:label])
+    if (![lane.key isEqualToString:label])
       continue;
     // An expression-driven lane resolves through the same path the render uses
     // (its own value plus any `${refs}` sampled at the playhead's project time)
@@ -543,7 +543,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
             ![comps.firstObject isEqualToString:selfUUID])
           return nil; // another clip -> bus
         for (KKLane *l in tl.lanes) {
-          if (![l.label isEqualToString:tail])
+          if (![l.key isEqualToString:tail])
             continue;
           if (layerID && ![l.layerKey isEqualToString:layerID])
             continue; // another layer (or untagged lane) -> bus
@@ -588,7 +588,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
       return live;
   }
   for (KKLane *lane in self.timeline.lanes) {
-    if (![lane.label isEqualToString:label])
+    if (![lane.key isEqualToString:label])
       continue;
     NSArray<NSNumber *> *v =
         KKTimelineLaneValueAtFraction(lane, self.editFraction);
@@ -684,7 +684,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     KKTimeline *updated = [self.timeline copy] ?: [KKTimeline timeline];
     NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-      if (![KKPlainLaneLabel(lanes[i].label) isEqualToString:plain])
+      if (![KKPlainLaneLabel(lanes[i].key) isEqualToString:plain])
         continue;
       if (lanes[i].keyposes.count)
         lanes[i] = KKLaneBySettingValuesNearestFraction(
@@ -698,7 +698,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
   NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
   BOOL replaced = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if ([KKPlainLaneLabel(lanes[i].label) isEqualToString:plain]) {
+    if ([KKPlainLaneLabel(lanes[i].key) isEqualToString:plain]) {
       // Copy the existing lane so EVERY property survives a constant value edit
       // - aspectLinked especially. A fresh lane that only carried
       // valueType/enabled/min/max dropped aspectLinked, so the first scale-box
@@ -717,7 +717,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
     // metadata (aspect-link, units, bounds) - a bare lane drops those, which on
     // a fresh instance clears e.g. Radius/Scale aspect-lock on the first drag.
     KKLane *tmpl = [self templateLaneForLabel:label];
-    KKLane *lane = tmpl ? [tmpl copy] : [KKLane laneWithLabel:label];
+    KKLane *lane = tmpl ? [tmpl copy] : [KKLane laneWithKey:label label:label];
     lane.valueType = (KKLaneValueType)[self valueTypeForLabel:label];
     lane.enabled = NO; // a value edit must not opt the property in
     lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];

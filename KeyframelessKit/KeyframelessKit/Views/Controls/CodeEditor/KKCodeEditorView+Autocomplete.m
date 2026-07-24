@@ -161,6 +161,53 @@ KKSwizzleCompletionItems(NSString *prefix) {
     [self _hideCompletion];
     return;
   }
+  // Link-reference completion: the caret inside a `${...` token (no `}` or
+  // newline between the opener and the caret) offers the discovered sources,
+  // host-supplied and filtered by the typed partial. Checked before swizzle /
+  // word completion so a partial like `${Cl` never falls through to the
+  // function catalog.
+  if (self.linkCompletionProvider && _textView.selectedRange.length == 0) {
+    NSString *src = _textView.string;
+    NSUInteger caret = _textView.selectedRange.location;
+    NSUInteger open = NSNotFound;
+    for (NSUInteger i = caret; i >= 2; i--) {
+      unichar c = [src characterAtIndex:i - 1];
+      if (c == '}' || c == '\n')
+        break;
+      if (c == '{' && [src characterAtIndex:i - 2] == '$') {
+        open = i;
+        break;
+      }
+    }
+    if (open != NSNotFound) {
+      NSArray<NSDictionary<NSString *, NSString *> *> *items =
+          self.linkCompletionProvider(
+              [src substringWithRange:NSMakeRange(open, caret - open)]);
+      if (items.count == 0) {
+        [self _hideCompletion];
+        return;
+      }
+      // When the caret sits inside an already-closed ref, accepting replaces
+      // the WHOLE token tail (through its `}`), so a pick swaps the ref
+      // instead of splicing into it.
+      NSUInteger end = caret;
+      while (end < src.length) {
+        unichar c = [src characterAtIndex:end];
+        if (c == '\n' || c == '$')
+          break;
+        end++;
+        if (c == '}')
+          break;
+      }
+      BOOL closed = end > caret && [src characterAtIndex:end - 1] == '}';
+      _completionWord = NSMakeRange(open, (closed ? end : caret) - open);
+      _completionItems = items;
+      if (_completionIndex >= (NSInteger)items.count)
+        _completionIndex = 0;
+      [self _showCompletion];
+      return;
+    }
+  }
   // Vector swizzle: a `.` right after a value / `${ref}` / `)` offers the
   // component accessors (`.x`, `.rgba`, …). Handled before the word lookup so
   // an empty partial (`value.`) still shows the list.
@@ -306,21 +353,45 @@ KKSwizzleCompletionItems(NSString *prefix) {
   [self _hideCompletion];
 }
 
-// The overlay lives in the window's content view, so drop it when the editor
-// leaves that window (popover close / row rebuild) or it would be orphaned.
-- (void)viewWillMoveToWindow:(NSWindow *)newWindow {
-  [super viewWillMoveToWindow:newWindow];
-  if (newWindow != self.window)
-    [self _hideCompletion];
-}
+// NOTE: no -viewWillMoveToWindow: here. A category implementation REPLACES
+// the main class's (which carries the window-undo-manager clear that guards
+// the rebuild -> Cmd-Z dangling-target crash); the completion-overlay drop
+// lives in the main class's override instead.
 
 // Every edit (typed or programmatic) routes through here before it commits, so
 // the selection change it causes is flagged as an edit rather than a caret
-// move.
+// move. Also hosts the `${` auto-close: an unclosed token reads as a syntax
+// error the whole time the ref is being typed, so typing the `{` of `${`
+// inserts the closing `}` too (caret between), and typing `}` over the
+// auto-inserted one steps past it instead of doubling (Expression mode only -
+// GLSL nests braces for real).
 - (BOOL)textView:(NSTextView *)textView
     shouldChangeTextInRange:(NSRange)affectedCharRange
           replacementString:(NSString *)replacementString {
   _completionEditInFlight = YES;
+  if (affectedCharRange.length == 0 && replacementString.length == 1) {
+    unichar ch = [replacementString characterAtIndex:0];
+    NSString *s = textView.string;
+    if (ch == '{' && affectedCharRange.location > 0 &&
+        [s characterAtIndex:affectedCharRange.location - 1] == '$') {
+      if ([textView shouldChangeTextInRange:affectedCharRange
+                          replacementString:@"{}"]) {
+        [textView replaceCharactersInRange:affectedCharRange withString:@"{}"];
+        [textView
+            setSelectedRange:NSMakeRange(affectedCharRange.location + 1, 0)];
+        [textView didChangeText];
+      }
+      return NO;
+    }
+    if (self.syntax == KKCodeSyntaxExpression && ch == '}' &&
+        affectedCharRange.location < s.length &&
+        [s characterAtIndex:affectedCharRange.location] == '}') {
+      _completionEditInFlight = NO; // a real caret move - let it close the list
+      [textView
+          setSelectedRange:NSMakeRange(affectedCharRange.location + 1, 0)];
+      return NO;
+    }
+  }
   return YES;
 }
 

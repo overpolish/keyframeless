@@ -25,6 +25,11 @@
 
 @implementation KKTimelineBasicView
 
+- (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes {
+  _availableLanes = [availableLanes copy];
+  [self setNeedsDisplay:YES];
+}
+
 - (instancetype)initWithAvailableLanes:(NSArray<KKLane *> *)availableLanes
                               timeline:(KKTimeline *)timeline {
   self = [super initWithFrame:NSZeroRect];

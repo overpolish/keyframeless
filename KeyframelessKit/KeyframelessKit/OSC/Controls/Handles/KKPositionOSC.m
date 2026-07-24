@@ -70,7 +70,7 @@
 
 - (nullable KKLane *)_positionLane {
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
-    if ([lane.label isEqualToString:self.laneLabel])
+    if ([lane.key isEqualToString:self.laneLabel])
       return lane;
   return nil;
 }
@@ -586,7 +586,7 @@
           tl = snap ? [snap copy] : [KKTimeline timeline];
           NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
           KKLane *posLane =
-              [self.templateLane copy] ?: [KKLane laneWithLabel:self.laneLabel];
+              [self.templateLane copy] ?: [KKLane laneWithKey:self.laneLabel label:self.laneLabel];
           posLane.enabled = NO;
           posLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
                                                   values:newValues] ];
@@ -680,7 +680,7 @@
         NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
         NSInteger laneIdx = NSNotFound;
         for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-          if ([((KKLane *)lanes[i]).label isEqualToString:self.laneLabel]) {
+          if ([((KKLane *)lanes[i]).key isEqualToString:self.laneLabel]) {
             laneIdx = i;
             break;
           }

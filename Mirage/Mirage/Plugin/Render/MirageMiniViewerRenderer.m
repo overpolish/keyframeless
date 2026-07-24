@@ -187,7 +187,7 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
 
 - (KKLane *)templateLaneForLabel:(NSString *)label {
   for (KKLane *l in self.laneTemplates)
-    if ([l.label isEqualToString:label])
+    if ([l.key isEqualToString:label])
       return l;
   return [super templateLaneForLabel:label];
 }
@@ -268,7 +268,7 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
 - (NSString *)_customShaderSource {
   KKLane *shaderLane = nil;
   for (KKLane *lane in self.timeline.lanes)
-    if ([lane.label isEqualToString:kMirageCodeLaneLabel]) {
+    if ([lane.key isEqualToString:kMirageCodeLaneLabel]) {
       shaderLane = lane;
       break;
     }
@@ -292,7 +292,7 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
       [NSMutableDictionary dictionary];
   KKLane *shaderLane = nil;
   for (KKLane *lane in self.timeline.lanes)
-    if ([lane.label isEqualToString:kMirageCodeLaneLabel]) {
+    if ([lane.key isEqualToString:kMirageCodeLaneLabel]) {
       shaderLane = lane;
       break;
     }

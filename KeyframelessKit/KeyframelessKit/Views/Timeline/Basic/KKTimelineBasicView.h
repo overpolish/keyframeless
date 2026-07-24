@@ -26,6 +26,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithFrame:(NSRect)frameRect NS_UNAVAILABLE;
 - (instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
 
+/// Refresh the plugin's lane templates (display names, metadata) after they
+/// change at runtime (directive rename / source-derived lanes) - the boundary
+/// popover resolves template metadata from this set.
+- (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes;
+
 /// Push an updated timeline from outside (e.g. parameterChanged:). Does not
 /// fire onTimelineMutated.
 - (void)applyTimeline:(KKTimeline *)timeline;

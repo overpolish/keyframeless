@@ -156,11 +156,18 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 + (instancetype)keyposeAtTime:(double)time values:(NSArray<NSNumber *> *)values;
 
 /// Returns a copy of the receiver with a new time, preserving everything else
-/// (values, outgoing interval, and the spatial-curve fields spatialSmooth /
-/// inHandle / outHandle). Use this when *moving* a keypose - rebuilding with
-/// keyposeAtTime:values: silently drops the spatial-curve state, which is the
-/// "all keyposes go back to linear after editing" class of bug.
+/// (values, outgoing interval, the spatial-curve fields spatialSmooth /
+/// inHandle / outHandle, and geometrySnapshot). Use this when *moving* a
+/// keypose - rebuilding with keyposeAtTime:values: silently drops the
+/// spatial-curve state, which is the "all keyposes go back to linear after
+/// editing" class of bug.
 - (instancetype)keyposeBySettingTime:(double)time;
+
+/// The values sibling: a copy with new values, preserving everything else
+/// (time, interval, spatial-curve fields, geometrySnapshot). Use this when
+/// *revaluing* a keypose in place - the +keyposeAtTime:values: rebuild is how
+/// a Points keypose loses its geometrySnapshot (the morph shape) silently.
+- (instancetype)keyposeBySettingValues:(NSArray<NSNumber *> *)values;
 
 @end
 
@@ -171,17 +178,12 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @interface KKLane : NSObject <NSCopying>
 
 @property(nonatomic, readonly) NSUUID *laneID;
+/// The lane's DISPLAY name - free to rename, free to duplicate (identity
+/// lives on `key`). Template-canonical: a stale persisted label is re-asserted
+/// from the template on every rebuild, so a rename propagates everywhere.
 @property(nonatomic, copy) NSString *label;
-/// Optional user-facing name shown INSTEAD of `label` (which stays the stable
-/// identity used for value lookup / OSC / persistence). Lets a dynamic plugin
-/// key a lane on something stable (e.g. a shader's GLSL uniform name) while the
-/// UI shows a free-to-rename label - so renaming or reordering never rebinds
-/// values. nil = show `label` (localized). Mirrors `layerLabel` for the layer
-/// level. Build-time metadata; re-asserted via `kkApplyPickerMetadataFrom:`.
-@property(nonatomic, copy, nullable) NSString *displayLabel;
-/// The name to SHOW for this lane: `displayLabel` when set, else the localized
-/// `label`. Every lane-name render site uses this so identity vs display stay
-/// separate.
+/// Alias every lane-name render site reads (== `label`; run through
+/// KKLocalizedParamName at display sites).
 - (NSString *)displayName;
 @property(nonatomic, copy, nullable) NSString *groupKey;
 @property(nonatomic) BOOL enabled;
@@ -367,18 +369,6 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic, copy, nullable) NSString *layerLabel;
 @property(nonatomic, copy, nullable) NSString *layerSymbol;
 
-/// Transient (never serialized) marker: this lane is a synthetic HEADER row in
-/// the Advanced graph (drawn as a name + collapse glyph, no keyposes). Set by
-/// the view when it injects per-layer / per-category header rows; not part of
-/// any plugin's timeline. `categoryHeader` (below) discriminates the two kinds.
-@property(nonatomic) BOOL headerPlaceholder;
-
-/// Transient (never serialized) marker: when paired with `headerPlaceholder`,
-/// this header row is a CATEGORY header (drawn from `categoryKey` /
-/// `categorySymbol`, collapses the lanes of that category) rather than a layer
-/// header. Set by the view when it injects per-category header rows.
-@property(nonatomic) BOOL categoryHeader;
-
 /// Transient (never serialized) marker: this lane is READ-ONLY in the timeline
 /// (e.g. it belongs to a locked layer). The graphs draw it dimmed and reject
 /// interaction; set by a multi-owner host when building its merged timeline.
@@ -510,21 +500,21 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 @property(nonatomic) BOOL autoSizesComponentLabels;
 
 /// Conditional visibility (static-values / constants popover only): this lane's
-/// row shows only when the lane named `visibleWhenLabel` has a component-0
+/// row shows only when the lane named `visibleWhenKey` has a component-0
 /// value (rounded) listed in `visibleWhenValues`. Cascades: a lane is also
 /// hidden when its controller is itself hidden (so chaining Angle -> Type ->
-/// Mode works). A nil `visibleWhenLabel` = always visible. Build-time metadata;
+/// Mode works). A nil `visibleWhenKey` = always visible. Build-time metadata;
 /// serialized so a rebuilt display lane keeps the rule.
-@property(nonatomic, copy, nullable) NSString *visibleWhenLabel;
+@property(nonatomic, copy, nullable) NSString *visibleWhenKey;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *visibleWhenValues;
 
-/// Optional OR alternative to `visibleWhenLabel`: when set, the lane is visible
-/// if EITHER the primary rule (visibleWhenLabel/Values) OR this one holds (the
+/// Optional OR alternative to `visibleWhenKey`: when set, the lane is visible
+/// if EITHER the primary rule (visibleWhenKey/Values) OR this one holds (the
 /// named lane's component-0 value is in `visibleWhenOrValues`). With this set,
 /// an ABSENT controller counts as that side being false (not "always visible"),
 /// so a lane gated on "A OR B" hides when only one of A/B is present and off.
 /// Used for Sketch (visible when Stroke OR Fill is enabled). Serialized.
-@property(nonatomic, copy, nullable) NSString *visibleWhenOrLabel;
+@property(nonatomic, copy, nullable) NSString *visibleWhenOrKey;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *visibleWhenOrValues;
 
 /// Optional second AND condition, combined with the primary rule: when set, the
@@ -534,17 +524,17 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// (the lane hides). Used for Mesh's dynamic colour swatches, which show only
 /// when both the Type supports swatch N AND the colour-count lane is >= N.
 /// Serialized.
-@property(nonatomic, copy, nullable) NSString *visibleWhenAndLabel;
+@property(nonatomic, copy, nullable) NSString *visibleWhenAndKey;
 @property(nonatomic, copy, nullable) NSArray<NSNumber *> *visibleWhenAndValues;
 
 /// Optional dynamic upper bound for the value slider: when set, the row's max
 /// (componentMax[0]) is looked up from `componentMaxByControllerValue` using
-/// the rounded component-0 value of the lane named `maxControllerLabel` as the
+/// the rounded component-0 value of the lane named `maxControllerKey` as the
 /// index
 /// - so the slider's range reacts to another lane (e.g. Mesh's Type caps the
 /// colour count, keeping one easy slider whose max tracks the Type). Falls back
 /// to the static `componentMax` when unset / out of range. Serialized.
-@property(nonatomic, copy, nullable) NSString *maxControllerLabel;
+@property(nonatomic, copy, nullable) NSString *maxControllerKey;
 @property(nonatomic, copy, nullable)
     NSArray<NSNumber *> *componentMaxByControllerValue;
 
@@ -590,7 +580,39 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// isn't.
 @property(nonatomic, copy, nullable) NSString *linkExpression;
 
-+ (instancetype)laneWithLabel:(NSString *)label;
+/// Opaque plugin-defined applicability bits for a TEMPLATE lane: which owner
+/// kinds the property applies to (e.g. Canvas's vector-only / image-only
+/// scopes - see CanvasLaneScope). The kit never interprets the bits; the
+/// plugin's own seeder reads them back through its enum. 0 = applies
+/// everywhere. Build-time metadata; re-asserted via
+/// `kkApplyTemplateCanonicalFrom:`.
+@property(nonatomic) NSUInteger templateScopeMask;
+
+/// Declarative constant seed for a TEMPLATE lane: given the plugin's opaque
+/// owner context (e.g. Canvas's KKBezierPath), returns the values for the
+/// lane's single constant keypose when the owner has no stored lane yet (nil
+/// = keep the template's default keypose). Lets a plugin declare where a
+/// property's flat value lives NEXT TO the lane definition, instead of a
+/// per-label seeding cascade at every timeline build site. Build-time
+/// config; never serialized.
+@property(nonatomic, copy, nullable) NSArray<NSNumber *> *_Nullable (^templateSeedProvider)
+    (id ownerContext);
+
+/// THE lane identity: an opaque, plugin-minted key, unique within a timeline
+/// and stable across sessions. The engine keys everything on this - lookups,
+/// selection, seeding, references - and NEVER on a display name. Plugins mint
+/// it deterministically from their domain (Mirage: the GLSL uniform name -
+/// the only durable handle in user-authored source; Canvas: layerID +
+/// template key), so a rebuilt template matches its stored lane. `label` is
+/// display data with NO uniqueness requirement: any two lanes may share a
+/// name, in any group. Serialized as "key"; legacy blobs without it fall
+/// back to key = label.
+@property(nonatomic, copy) NSString *key;
+
+/// THE factory: `key` is the stable primary key, `label` the (non-unique)
+/// display name. Template lanes whose key IS the display string pass the
+/// same value twice.
++ (instancetype)laneWithKey:(NSString *)key label:(NSString *)label;
 
 /// Standard FCP-style opacity lane (one whole-percentage component 0..100,
 /// identity 100). Shared so every plugin with an opacity property uses one
@@ -603,6 +625,17 @@ typedef NS_ENUM(NSInteger, KKIntervalModulation) {
 /// when display lanes are seeded/rebuilt from a persisted blob that predates
 /// these fields. Leaves value/keyposes/enabled and other state untouched.
 - (void)kkApplyPickerMetadataFrom:(KKLane *)tmpl;
+
+/// The full "re-canonicalize from template" repair: copies every build-time /
+/// static-config field (value type, component bounds/labels/colors, aspect
+/// linkability, integer display, spatial curvability, the code-lane config
+/// block) PLUS the picker metadata above from a plugin template lane onto
+/// this one. Use after loading a lane from a persisted blob - those fields
+/// are template-defined and either not serialized or overridable by a stale
+/// blob. Leaves user state (label, keyposes, enabled, aspectLinked,
+/// codeString/codeTabs, linkExpression, hold shape) untouched. No-op when
+/// `tmpl` is nil.
+- (void)kkApplyTemplateCanonicalFrom:(nullable KKLane *)tmpl;
 
 - (void)insertKeypose:(KKKeyPose *)keypose; // inserts maintaining time order
 - (void)removeKeyposeAtIndex:(NSUInteger)index;
@@ -648,7 +681,7 @@ NSArray<NSString *> *_Nullable KKLaneComponentLabels(KKLane *lane);
 /// first keypose. Pass nil to use first-keypose values throughout. Used to hide
 /// mode-gated lanes uniformly across the timeline UI (graph, filter bar, param
 /// order) and the constants/keypose popover.
-FOUNDATION_EXPORT NSSet<NSString *> *KKConditionalVisibleLaneLabels(
+FOUNDATION_EXPORT NSSet<NSString *> *KKConditionalVisibleLaneKeys(
     NSArray<KKLane *> *lanes,
     NSDictionary<NSString *, NSArray<NSNumber *> *> *_Nullable valuesByLabel);
 

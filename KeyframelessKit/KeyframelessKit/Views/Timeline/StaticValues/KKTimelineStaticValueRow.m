@@ -523,6 +523,17 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   }
 }
 
+- (void)updateLabelColumnWidth:(CGFloat)labelColumnWidth {
+  if (fabs(labelColumnWidth - _labelColumnW) <= 0.5)
+    return;
+  _labelColumnW = labelColumnWidth;
+  _titleWidthConstraint.constant = labelColumnWidth > 0 ? labelColumnWidth
+                                                        : 54.0;
+  // A wrapping pill row's block width (and so its height) derives from the
+  // column - re-derive through the same path a popover resize uses.
+  [self updateContentWidth:_contentWidth];
+}
+
 - (double)_clamp:(double)v index:(NSInteger)i {
   if (i < (NSInteger)_cmin.count && v < _cmin[i].doubleValue)
     v = _cmin[i].doubleValue;
@@ -659,7 +670,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   // the stored key: on a Mac where nothing is published, a lane bound to a
   // source rendered as a slider reading "16483925".
   _choiceUsesDropdown = lane.choiceUsesDropdown && lane.choiceLabels.count >= 1;
-  _laneLabel = [lane.label copy];
+  _laneLabel = [lane.key copy];
   _linkExpression = [lane.linkExpression copy];
   _valueType = lane.valueType;
   _cmin = lane.componentMin ?: @[];
@@ -669,7 +680,7 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   // A dynamic-max lane (its slider top tracks another lane) also clamps its
   // displayed value to that max - unlike normal lanes, whose field may exceed
   // the slider's end. Keeps the readout consistent with the reactive track.
-  _clampsDisplayToMax = lane.maxControllerLabel.length > 0;
+  _clampsDisplayToMax = lane.maxControllerKey.length > 0;
   _componentsScaleWithMedia = lane.componentsScaleWithMedia;
   _laneScrubStep = lane.scrubStep;
   _seedField = lane.seedField;
@@ -699,10 +710,12 @@ static BOOL KKLaneWrapsChoicePills(KKLane *lane) {
   // signal).
   [self _applyExpressionState];
   // Uniform label column so the value controls line up across rows regardless
-  // of label length (widest localized name); 54 is the legacy fallback.
-  [title.widthAnchor
-      constraintEqualToConstant:(_labelColumnW > 0 ? _labelColumnW : 54.0)]
-      .active = YES;
+  // of label length (widest localized name); 54 is the legacy fallback. Kept
+  // restretchable (updateLabelColumnWidth:) so a relabel that moves the
+  // column updates rows in place instead of remaking them.
+  _titleWidthConstraint = [title.widthAnchor
+      constraintEqualToConstant:(_labelColumnW > 0 ? _labelColumnW : 54.0)];
+  _titleWidthConstraint.active = YES;
 
   // Leading gutter, shared slot. Keypose popover (Advanced) uses "−" to
   // remove this lane's KP at the open fraction; constants popover uses the

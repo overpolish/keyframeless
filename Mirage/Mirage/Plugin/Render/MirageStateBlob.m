@@ -36,7 +36,7 @@ static void MirageAppendCodeSections(NSMutableData *data,
                                      KKTimeline *timeline) {
   KKLane *shaderLane = nil;
   for (KKLane *lane in timeline.lanes)
-    if ([lane.label isEqualToString:kMirageCodeLaneLabel]) {
+    if ([lane.key isEqualToString:kMirageCodeLaneLabel]) {
       shaderLane = lane;
       break;
     }

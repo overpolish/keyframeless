@@ -5,12 +5,12 @@
 
 #import "KKPositionMiniController.h"
 
-#import <KeyframelessKit/KKPluginHost.h> // KKProcessFrameDurationSeconds
 #import "KKPositionElementModel.h"
+#import <KeyframelessKit/KKPluginHost.h> // KKProcessFrameDurationSeconds
 #import <KeyframelessKit/KKSnapEngine.h>
 #import <KeyframelessKit/KKSpatialCurve.h>
-#import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneVisibleAtFraction
 #import <KeyframelessKit/KKTimeline.h>
+#import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneVisibleAtFraction
 #import <simd/simd.h>
 
 // The shared KKPositionHitTolPt rule (dot radius + 6pt slop) for the mini's
@@ -65,7 +65,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
 
 - (KKLane *)_lane {
   for (KKLane *lane in self.renderer.timeline.lanes)
-    if ([lane.label isEqualToString:self.laneLabel])
+    if ([lane.key isEqualToString:self.laneLabel])
       return lane;
   return nil;
 }
@@ -317,10 +317,10 @@ static const CGFloat kHandleHitTolPt = 12.0;
 // warp the normalized value by fraction, then map into contentRect points.
 - (KKPositionProjection)_projectionForContentRect:(CGRect)cr {
   return ^CGPoint(double ox, double oy, double fraction) {
-    return [self.renderer
-        handlePointForContentRect:cr
-                         position:[self _warp:@[ @(ox), @(oy) ]
-                                      fraction:fraction]];
+    return
+        [self.renderer handlePointForContentRect:cr
+                                        position:[self _warp:@[ @(ox), @(oy) ]
+                                                     fraction:fraction]];
   };
 }
 
@@ -465,7 +465,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
   // KKTimelineSettingSpatialSmooth, so the two surfaces flip identically.
   BOOL newSmooth = !lane.keyposes[idx].spatialSmooth;
   KKTimeline *t = KKTimelineSettingSpatialSmooth(
-      self.renderer.timeline, lane.label, lane.keyposes[idx].time, newSmooth);
+      self.renderer.timeline, lane.key, lane.keyposes[idx].time, newSmooth);
   if (!t)
     return NO;
   self.renderer.timeline = t;

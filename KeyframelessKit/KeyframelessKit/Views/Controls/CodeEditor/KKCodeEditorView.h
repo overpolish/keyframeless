@@ -51,6 +51,19 @@ typedef NS_ENUM(NSInteger, KKCodeSyntax) {
         ^completionProvider)
         (NSString *text, NSUInteger caret, NSRange *outReplaceRange);
 
+/// Optional link-reference completion for Expression mode: fires while the
+/// caret sits inside an unclosed-to-the-left `${...` token, with the partial
+/// the user has typed after `${`. Return the candidate items (same
+/// `name`/`signature`/`desc`/`insert` shape) already filtered against the
+/// partial; the accepted item's `insert` (which must include the closing `}`)
+/// replaces from after `${` through the token's closing `}` when the caret is
+/// inside an already-complete ref, else up to the caret. nil/empty shows no
+/// list. Host-supplied so the kit stays vocabulary-agnostic - the expression
+/// popover owns the discovered link sources.
+@property(nonatomic, copy, nullable)
+    NSArray<NSDictionary<NSString *, NSString *> *> *_Nullable (
+        ^linkCompletionProvider)(NSString *partial);
+
 /// VALUE words the directive/`@osc` highlighter paints as keywords (coral) -
 /// enum values, booleans, bare flags (`position`, `none`, `true`,
 /// `skipsnapping`, …). Host-supplied so the kit stays vocabulary-agnostic; a

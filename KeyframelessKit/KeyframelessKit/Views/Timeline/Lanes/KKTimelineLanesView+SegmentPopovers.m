@@ -53,21 +53,21 @@
   NSMutableDictionary<NSString *, KKLane *> *byLabel =
       [NSMutableDictionary dictionaryWithCapacity:all.count];
   for (KKLane *lane in all)
-    byLabel[lane.label] = lane;
+    byLabel[lane.key] = lane;
   NSMutableArray<KKLane *> *out =
       [NSMutableArray arrayWithCapacity:labels.count];
   for (NSString *label in labels) {
     // A label that can't be resolved (shouldn't happen - they come from the
     // same timeline) gets a category-less placeholder so the checklist still
     // renders rather than silently falling back to a pill bar.
-    KKLane *lane = byLabel[label] ?: [KKLane laneWithLabel:label];
-    // displayLabel isn't serialized on the timeline lane, so re-apply it from
-    // the template - else the applies-to checklist shows the stable identity
-    // (e.g. a shader uniform name) instead of the user's label.
+    KKLane *lane = byLabel[label] ?: [KKLane laneWithKey:label label:label];
+    // The display name is template-canonical: re-apply it from the template so
+    // the applies-to checklist shows the user's current label, not a stale
+    // persisted one (or the raw key on the placeholder above).
     for (KKLane *t in _availableLanes)
-      if ([t.label isEqualToString:lane.label] && t.displayLabel) {
+      if ([t.key isEqualToString:lane.key] && t.label.length) {
         lane = [lane copy];
-        lane.displayLabel = t.displayLabel;
+        lane.label = t.label;
         break;
       }
     [out addObject:lane];
@@ -109,12 +109,12 @@
   NSMutableDictionary<NSString *, KKLane *> *byLabel =
       [NSMutableDictionary dictionaryWithCapacity:all.count];
   for (KKLane *lane in all)
-    byLabel[lane.label] = lane;
+    byLabel[lane.key] = lane;
   NSMutableArray<KKLane *> *out =
       [NSMutableArray arrayWithCapacity:compounds.count];
   for (NSArray<NSString *> *compound in compounds) {
     NSString *master = compound.firstObject ?: @"";
-    KKLane *lane = byLabel[master] ?: [KKLane laneWithLabel:master];
+    KKLane *lane = byLabel[master] ?: [KKLane laneWithKey:master label:master];
     [out addObject:lane];
   }
   return out;

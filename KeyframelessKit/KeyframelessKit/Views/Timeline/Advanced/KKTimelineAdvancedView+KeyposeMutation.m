@@ -24,15 +24,15 @@
 
 // Opt+click pill: drop that keypose from its lane and write the new timeline.
 - (void)_removeKPInLaneIdx:(NSInteger)laneIdx kpIdx:(NSInteger)kpIdx {
-  NSArray<KKLane *> *anim = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *anim = [self _rows];
   if (laneIdx < 0 || laneIdx >= (NSInteger)anim.count)
     return;
-  NSString *label = anim[laneIdx].label;
+  NSString *label = anim[laneIdx].lane.key;
   KKTimeline *t = [_timeline copy];
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   BOOL changed = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    if (![lanes[i].key isEqualToString:label])
       continue;
     if (kpIdx < 0 || kpIdx >= (NSInteger)lanes[i].keyposes.count)
       return;
@@ -56,24 +56,25 @@
 // Double-click gap: insert a KP at `frac` (evaluated value so the curve
 // stays continuous), then open its value popover.
 - (void)_addAndOpenKPForLaneIdx:(NSInteger)laneIdx atFrac:(double)frac {
-  NSArray<KKLane *> *anim = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *anim = [self _rows];
   if (laneIdx < 0 || laneIdx >= (NSInteger)anim.count)
     return;
-  NSString *label = anim[laneIdx].label;
+  NSString *label = anim[laneIdx].lane.key;
   [self _addKeyposeAtFrac:frac forLabel:label];
   // _addKeyposeAtFrac: snaps the time to the nearest frame, so look up the
   // keypose by the SNAPPED time - searching the raw frac misses it for any
   // click between frames, and the value popover then silently never opens.
   double snapped =
       KKSnapFracToFrame(frac, [self _clipDuration], _frameDurationSeconds);
-  NSArray<KKLane *> *after = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *after = [self _rows];
   NSInteger newLaneIdx = -1, newKPIdx = -1;
   for (NSInteger i = 0; i < (NSInteger)after.count; i++) {
-    if (![after[i].label isEqualToString:label])
+    KKLane *al = after[i].lane;
+    if (![al.key isEqualToString:label])
       continue;
     newLaneIdx = i;
-    for (NSInteger j = 0; j < (NSInteger)after[i].keyposes.count; j++)
-      if (fabs(after[i].keyposes[j].time - snapped) < 1.0e-4) {
+    for (NSInteger j = 0; j < (NSInteger)al.keyposes.count; j++)
+      if (fabs(al.keyposes[j].time - snapped) < 1.0e-4) {
         newKPIdx = j;
         break;
       }
@@ -94,7 +95,7 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   BOOL changed = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    if (![lanes[i].key isEqualToString:label])
       continue;
     KKLane *src = lanes[i];
     NSInteger kpIdx = -1;
@@ -132,7 +133,10 @@
 // Does any animatable lane in `group` still hold a keypose at `frac`? Drives
 // the value popover's refresh-vs-close decision after a remove.
 - (BOOL)_anySameGroupKeyposeAtFrac:(double)frac group:(NSString *)group {
-  for (KKLane *l in [self _animatableLanes]) {
+  for (KKAdvancedRow *r in [self _rows]) {
+    KKLane *l = r.lane;
+    if (!l)
+      continue;
     BOOL sameGroup =
         (l.groupKey == group) || [l.groupKey isEqualToString:group];
     if (!sameGroup)
@@ -150,14 +154,14 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   BOOL changed = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    if (![lanes[i].key isEqualToString:label])
       continue;
     KKLane *src = lanes[i];
     NSArray<NSNumber *> *vals = KKTimelineLaneValueAtFraction(src, frac);
     if (!vals)
       vals = src.keyposes.firstObject.values;
     if (!vals)
-      vals = [self _templateDefaultValuesForLabel:src.label];
+      vals = [self _templateDefaultValuesForLabel:src.key];
     KKLane *nl = [src copy];
     KKKeyPose *inserted = [KKKeyPose keyposeAtTime:frac values:vals];
     // Geometry lane: capture the shape shown at this fraction so splitting a
@@ -218,7 +222,7 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   NSInteger newIdx = -1;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    if (![lanes[i].key isEqualToString:label])
       continue;
     KKLane *src = lanes[i];
     if (srcIdx < 0 || srcIdx >= (NSInteger)src.keyposes.count)
@@ -256,7 +260,7 @@
   NSArray<KKLane *> *lanes = _timeline.lanes;
   NSInteger laneArrIdx = -1;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-    if ([lanes[i].label isEqualToString:label]) {
+    if ([lanes[i].key isEqualToString:label]) {
       laneArrIdx = i;
       break;
     }
@@ -319,10 +323,10 @@
     // edits pass the tagged label; path-anchor drags persist the whole blob).
     // layerKey==_activeLayerKey keeps it scoped to one owner. Single-owner
     // timelines have no tag / active key, so only the exact branch fires.
-    BOOL match = [lanes[i].label isEqualToString:label];
+    BOOL match = [lanes[i].key isEqualToString:label];
     if (!match && _activeLayerKey.length && lanes[i].layerKey.length &&
         [lanes[i].layerKey isEqualToString:_activeLayerKey] &&
-        [KKPlainLaneLabel(lanes[i].label)
+        [KKPlainLaneLabel(lanes[i].key)
             isEqualToString:KKPlainLaneLabel(label)])
       match = YES;
     if (!match)
@@ -424,7 +428,7 @@
       NSInteger kIdx;
       if (![self _decodeSelectionKey:key label:&kLabel kpIdx:&kIdx])
         continue;
-      if (![kLabel isEqualToString:src.label])
+      if (![kLabel isEqualToString:src.key])
         continue;
       [selIdx addObject:@(kIdx)];
     }
@@ -437,7 +441,7 @@
       NSInteger idx = n.integerValue;
       if (idx < 0 || idx >= (NSInteger)kps.count)
         continue;
-      NSString *key = [self _selectionKeyForLabel:src.label kpIdx:idx];
+      NSString *key = [self _selectionKeyForLabel:src.key kpIdx:idx];
       NSNumber *origN = _dragOriginTimes[key];
       if (!origN)
         continue;

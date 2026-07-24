@@ -173,7 +173,7 @@ static const CGFloat kDragSnapPx = 14.0;
 
 + (KKTimeline *)basicSeedTimelineForConfig:(KKTimingGuideConfig *)config {
   KKTimeline *tl = [KKTimeline timeline];
-  KKLane *primary = [KKLane laneWithLabel:config.primaryLabel];
+  KKLane *primary = [KKLane laneWithKey:config.primaryLabel label:config.primaryLabel];
   primary.enabled = NO; // constant until the user opts it in to animation
   primary.valueType = (KKLaneValueType)config.primaryValueType;
   // Mirror the real lane's aspect-link so OSC drags during the guide follow the
@@ -191,7 +191,7 @@ static const CGFloat kDragSnapPx = 14.0;
                   aspectLinked:(BOOL)aspectLinked
                    startValues:(NSArray<NSNumber *> *)startValues
                      endValues:(NSArray<NSNumber *> *)endValues {
-  KKLane *lane = [KKLane laneWithLabel:label];
+  KKLane *lane = [KKLane laneWithKey:label label:label];
   lane.enabled = YES; // animatable
   lane.valueType = (KKLaneValueType)valueType;
   lane.aspectLinkable = aspectLinked;

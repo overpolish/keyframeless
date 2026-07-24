@@ -146,22 +146,22 @@
       else
         participates = YES;
       if (!participates)
-        [excludedLabels addObject:lane.label];
+        [excludedLabels addObject:lane.key];
     }
     NSArray<NSNumber *> *vals = KKTimelineLaneValueAtFraction(lane, frac)
                                     ?: lane.keyposes.firstObject.values;
-    // Multi-owner lanes are layer-tagged ("Stroke Width\x1f<id>"); match the
-    // template on the PLAIN label or it's nil for every tagged lane, losing its
-    // metadata (integerValued / autoSizesComponentLabels / scaleWithMedia) so
-    // the Basic keypose popover diverged from Constants.
-    NSString *plain = KKPlainLaneLabel(lane.label);
+    // Multi-owner lanes carry layer-scoped KEYS ("Stroke Width\x1f<id>");
+    // match the template on the PLAIN key or it's nil for every merged lane,
+    // losing its metadata (integerValued / autoSizesComponentLabels /
+    // scaleWithMedia) so the Basic keypose popover diverged from Constants.
+    NSString *plain = KKPlainLaneLabel(lane.key);
     KKLane *tmpl = nil;
     for (KKLane *t in _availableLanes)
-      if ([t.label isEqualToString:plain]) {
+      if ([t.key isEqualToString:plain]) {
         tmpl = t;
         break;
       }
-    KKLane *dl = [KKLane laneWithLabel:lane.label];
+    KKLane *dl = [KKLane laneWithKey:lane.key label:lane.label];
     dl.valueType = tmpl ? tmpl.valueType : lane.valueType;
     dl.componentMin = tmpl ? tmpl.componentMin : lane.componentMin;
     dl.componentMax = tmpl ? tmpl.componentMax : lane.componentMax;
@@ -187,11 +187,11 @@
     // across all layers, so freezing one layer here has no meaning. Lock is an
     // Advanced-only (per-lane) concept - so don't mark the Basic row read-only.
     [dl kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
-    // Display label lives on the TEMPLATE, not the serialized timeline lane, so
-    // `lane.displayLabel` is nil and would clobber the value just copied from
-    // tmpl. Prefer the template; fall back to the source lane only when no
-    // template resolved (matches Advanced).
-    dl.displayLabel = tmpl.displayLabel ?: lane.displayLabel;
+    // The display name is template-canonical: a persisted lane may carry a
+    // stale label (saved before a rename), so the template's current label
+    // wins when one resolved (matches Advanced).
+    if (tmpl.label.length)
+      dl.label = tmpl.label;
     // Parameter-link expression is a lane-level property (from the serialized
     // timeline lane, not the template), so carry it onto the display lane -
     // else the keypose popover shows neither the accent label nor the inline
@@ -387,10 +387,10 @@
     // Single-owner timelines have no tag / active key, so only the exact branch
     // fires (this is a no-op for them). layerKey==_activeLayerKey keeps it
     // scoped to one owner, so no cross-layer double-write.
-    BOOL match = [lanes[i].label isEqualToString:label];
+    BOOL match = [lanes[i].key isEqualToString:label];
     if (!match && _activeLayerKey.length && lanes[i].layerKey.length &&
         [lanes[i].layerKey isEqualToString:_activeLayerKey] &&
-        [KKPlainLaneLabel(lanes[i].label)
+        [KKPlainLaneLabel(lanes[i].key)
             isEqualToString:KKPlainLaneLabel(label)])
       match = YES;
     if (!match)

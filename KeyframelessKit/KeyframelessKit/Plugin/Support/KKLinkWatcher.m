@@ -6,6 +6,7 @@
 #import "KKLinkWatcher.h"
 
 #import "KKLinkBus.h" // changeStampForLink
+#import "KKLocalized.h"
 #import "KKLog.h"
 #import <FxPlug/FxPlugSDK.h>
 
@@ -18,6 +19,11 @@
   BOOL _pendingChange;
   NSTimeInterval _lastChangeWall;
   NSTimeInterval _lastFireWall;
+  // A nudge burst (throttled fires during a live source drag + the settle
+  // fire) is wrapped in ONE FxUndoAPI undo group so the per-write undo
+  // entries the host insists on (no param flag exempts a write - tested:
+  // plain, DONT_SAVE, DISABLED) coalesce into a single entry.
+  id<FxUndoAPI> _burstUndoAPI; // non-nil while a burst group is open
 }
 @end
 
@@ -37,6 +43,8 @@
 
 - (void)dealloc {
   [_timer invalidate];
+  if (_burstUndoAPI)
+    [_burstUndoAPI endUndoGroup];
 }
 
 - (void)invalidate {
@@ -44,6 +52,30 @@
   _timer = nil;
   [_stamps removeAllObjects];
   _pendingChange = NO;
+  [self _closeBurstUndoGroup];
+}
+
+// Called INSIDE the nudge's action scope: FxUndoAPI resolves nil outside one
+// (same as the setting API - observed in the XPC).
+- (void)_openBurstUndoGroupScoped:(id<PROAPIAccessing>)mgr {
+  if (_burstUndoAPI)
+    return;
+  id<FxUndoAPI> undo = [mgr apiForProtocol:@protocol(FxUndoAPI)];
+  if (!undo) {
+    KKLogWarn(@"KKLinkWatcher[%@]: FxUndoAPI nil even in-scope - not grouped",
+              [NSProcessInfo processInfo].processName);
+    return;
+  }
+  if ([undo startUndoGroup:KKLoc(@"Update Link", @"Undo menu name for a "
+                                 @"linked-parameter refresh")])
+    _burstUndoAPI = undo;
+}
+
+- (void)_closeBurstUndoGroup {
+  if (!_burstUndoAPI)
+    return;
+  [_burstUndoAPI endUndoGroup];
+  _burstUndoAPI = nil;
 }
 
 - (void)setSourceNames:(NSSet<NSString *> *)names {
@@ -84,12 +116,12 @@
     _lastChangeWall = now; // keep resetting while a drag is live
     // Sustained change (a live drag on the source): fire a THROTTLED nudge
     // (at most ~4/s) so the subscriber TRACKS the drag instead of freezing
-    // until it settles. FCP coalesces the repeated same-target nudge writes
-    // into one implicit undo entry (same-target writes with no group
-    // boundary between them), so this doesn't spam the undo stack.
+    // until it settles. Every honored write charges an undo entry, so the
+    // whole burst rides one FxUndoAPI group (opened here on the first fire,
+    // closed by the settle fire) and coalesces into a single entry.
     if (now - _lastFireWall >= 0.25) {
       _lastFireWall = now;
-      [self _nudge];
+      [self _nudgeClosingGroup:NO];
     }
     return;
   }
@@ -98,46 +130,40 @@
   if (_pendingChange && (now - _lastChangeWall) >= 0.15) {
     _pendingChange = NO;
     _lastFireWall = now;
-    [self _nudge];
+    [self _nudgeClosingGroup:YES];
   }
 }
 
 // Force FCP to re-render this clip: a fresh nonce to the hidden render-nudge
-// scratch param inside an action scope. A STRING write, because string writes
-// are the one param write FCP keeps off the undo stack - the watcher fires
-// autonomously, so an undoable (blob) nudge stacked stray entries around
-// every source edit and re-armed itself when the user hit undo (the revert
-// republishes the curves, the stamp changes, and a fresh nudge lands on the
-// stack being unwound). `_nudgeParamID` must therefore be a string param
-// (kKKParamRenderNudgeString).
-- (void)_nudge {
+// scratch param inside an action scope. The write MUST ride an action scope -
+// the host silently ignores setting-API writes outside one (observed in both
+// plugins' XPC) - and EVERY honored write charges one undo entry regardless
+// of param type or flags (tested: string vs blob, DONT_SAVE, DISABLED).
+// That's why the burst-level FxUndoAPI group exists: it coalesces the fires
+// of one source edit into a single entry. The group is opened inside the
+// burst's FIRST action scope and closed inside its LAST (the settle fire) -
+// FxUndoAPI, like the setting API, resolves nil outside a scope.
+- (void)_nudgeClosingGroup:(BOOL)closeGroup {
   id<PROAPIAccessing> mgr = _apiManager;
   NSObject *target = _actionTarget;
   if (!mgr || !target)
     return;
-  // NO action scope around this write. startAction/endAction is FCP's
-  // FFUIAction beginWithUndoState - the ACTION registers an undo entry even
-  // when nothing undoable is written inside it (the audio-tickets string
-  // write skips undo, but it rides inside an action a lane edit opened
-  // anyway). A scoped nudge therefore stacked one stray undo entry per fire,
-  // and worse: undoing the source edit republished the curves, re-fired the
-  // watcher, and pushed a fresh entry onto the stack being unwound. The
-  // string write alone re-renders without touching undo - IF the setting API
-  // resolves outside a scope in this (XPC main-thread timer) context; the log
-  // says which case we're in.
-  id<FxParameterSettingAPI_v5> setAPI =
-      [mgr apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
-  if (!setAPI) {
-    // Canary: if a host update stops resolving the setting API outside action
-    // scopes, cross-clip updates go stale and this says why. Only logs in the
-    // broken state.
-    KKLogWarn(@"KKLinkWatcher[%@]: setting API nil outside action scope - "
-              @"nudge dropped",
+  id<FxCustomParameterActionAPI_v4> act =
+      [mgr apiForProtocol:@protocol(FxCustomParameterActionAPI_v4)];
+  if (!act) {
+    KKLogWarn(@"KKLinkWatcher[%@]: action API unavailable - nudge dropped",
               [NSProcessInfo processInfo].processName);
     return;
   }
+  [act startAction:target];
+  [self _openBurstUndoGroupScoped:mgr];
+  id<FxParameterSettingAPI_v5> setAPI =
+      [mgr apiForProtocol:@protocol(FxParameterSettingAPI_v5)];
   [setAPI setStringParameterValue:[[NSUUID UUID] UUIDString]
                       toParameter:_nudgeParamID];
+  if (closeGroup)
+    [self _closeBurstUndoGroup];
+  [act endAction:target];
 }
 
 @end

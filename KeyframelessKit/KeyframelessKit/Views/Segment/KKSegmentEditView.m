@@ -131,7 +131,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   NSMutableArray<NSString *> *labels =
       [NSMutableArray arrayWithCapacity:lanes.count];
   for (KKLane *lane in lanes)
-    [labels addObject:lane.label];
+    [labels addObject:lane.key];
   _partLabels = labels; // keeps the existing `participation > 0` gating true
   // Frame height is a placeholder - the presenter pins the real height from
   // -contentHeight once the checklist (and its row count) is built.
@@ -577,7 +577,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
       NSMutableSet<NSString *> *checked = [NSMutableSet set];
       for (NSInteger i = 0; i < (NSInteger)_partLanes.count; i++)
         if (i < (NSInteger)_partStates.count && _partStates[i].boolValue)
-          [checked addObject:_partLanes[i].label];
+          [checked addObject:_partLanes[i].key];
       _partChecklist = [[KKLaneParticipationChecklistView alloc]
           initWithLanes:_partLanes
           checkedLabels:checked
@@ -590,7 +590,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
         __strong typeof(weakSelf) s = weakSelf;
         NSInteger idx = NSNotFound;
         for (NSInteger i = 0; i < (NSInteger)s->_partLanes.count; i++)
-          if ([s->_partLanes[i].label isEqualToString:label]) {
+          if ([s->_partLanes[i].key isEqualToString:label]) {
             idx = i;
             break;
           }
@@ -654,7 +654,7 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
     NSMutableSet<NSString *> *checked = [NSMutableSet set];
     for (NSInteger i = 0; i < (NSInteger)_partLanes.count; i++)
       if (states[i].boolValue)
-        [checked addObject:_partLanes[i].label];
+        [checked addObject:_partLanes[i].key];
     [_partChecklist reloadCheckedLabels:checked];
   }
 }
@@ -666,14 +666,14 @@ static BOOL _curveUsesFrequency(KKSegmentEditKind kind, NSInteger curveType) {
   NSMutableArray<NSString *> *labels =
       [NSMutableArray arrayWithCapacity:lanes.count];
   for (KKLane *lane in lanes)
-    [labels addObject:lane.label];
+    [labels addObject:lane.key];
   _partLabels = labels;
   if (!_partChecklist)
     return;
   NSMutableSet<NSString *> *checked = [NSMutableSet set];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
     if (i < (NSInteger)states.count && states[i].boolValue)
-      [checked addObject:lanes[i].label];
+      [checked addObject:lanes[i].key];
   [_partChecklist reloadLanes:lanes checkedLabels:checked];
 }
 

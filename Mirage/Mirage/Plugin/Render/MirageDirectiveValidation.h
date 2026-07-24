@@ -22,32 +22,6 @@
 #import "MirageScalarOSC.h"
 #import "MirageShaderModel.h"
 
-/// The first control label used by more than one directive (colour or scalar),
-/// or nil when all are unique. The label is the lane identity (values, OSC,
-/// pool fill all key on it), so a duplicate is a compile error - the editor
-/// surfaces this rather than silently merging two controls into one.
-static inline NSString *MirageFirstDuplicateLabel(NSString *source) {
-  if (!source.length)
-    return nil;
-  NSMutableSet<NSString *> *seen = [NSMutableSet set];
-  MirageShaderModel *m = [MirageShaderModel modelForSource:source];
-  const MirageColorProp *cp = m.colorProps;
-  for (int i = 0; i < m.colorCount; i++) {
-    NSString *l = @(cp[i].label);
-    if ([seen containsObject:l])
-      return l;
-    [seen addObject:l];
-  }
-  const MirageScalarProp *sp = m.scalarProps;
-  for (int i = 0; i < m.scalarCount; i++) {
-    NSString *l = @(sp[i].label);
-    if ([seen containsObject:l])
-      return l;
-    [seen addObject:l];
-  }
-  return nil;
-}
-
 /// The first uniform NAME declared by more than one directive, or nil when all
 /// are unique. Two same-named uniforms produce two identically-named block
 /// members (`<name>_kk`) and a cryptic glslang "duplicate member name" - catch

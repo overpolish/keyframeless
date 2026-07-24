@@ -265,7 +265,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 
 - (void)rebindLanes:(NSArray<KKLane *> *)lanes {
   for (KKLane *lane in lanes) {
-    _KKStaticValueRow *row = _rowsByLabel[lane.label];
+    _KKStaticValueRow *row = _rowsByLabel[lane.key];
     if (!row || lane.keyposes.count == 0)
       continue;
     [row applyValues:lane.keyposes.firstObject.values];
@@ -354,7 +354,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // Conditionally-hidden lanes (visibleWhen rule fails) contribute no row
   // height, so the page hugs only what is shown for the current Mode/Type.
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(lanes, valuesByLabel);
+      KKConditionalVisibleLaneKeys(lanes, valuesByLabel);
   // Wrapping pill rows (markers) grow per wrapped line, so the per-row height
   // is width-dependent: feed the popover width + label column to heightForLane.
   CGFloat cw = [self _popoverWidthForDescriptor:descriptorPath];
@@ -370,7 +370,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
         selectedCategory.length ? selectedCategory : cats.firstObject[0];
     CGFloat page = 0;
     for (KKLane *lane in lanes)
-      if ([condVisible containsObject:lane.label] &&
+      if ([condVisible containsObject:lane.key] &&
           (lane.categoryKey.length == 0 ||
            [lane.categoryKey isEqualToString:sel])) {
         page += [_KKStaticValueRow heightForLane:lane
@@ -382,7 +382,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     rows = page + kKKCategoryPillH + KKPaddingMD;
   } else {
     for (KKLane *lane in lanes)
-      if ([condVisible containsObject:lane.label]) {
+      if ([condVisible containsObject:lane.key]) {
         rows += [_KKStaticValueRow heightForLane:lane
                                     contentWidth:cw
                                 labelColumnWidth:labelColumnWidth];
@@ -827,7 +827,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     _KKStaticValueRow *row = [self _makeRowForLane:lane];
     [_stack addArrangedSubview:row];
     [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
-    _rowsByLabel[lane.label] = row;
+    _rowsByLabel[lane.key] = row;
     [self _installExprEditorForLane:lane];
   }
   [self _applyCategoryFilter];
@@ -893,8 +893,8 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
       [NSMutableDictionary dictionaryWithCapacity:_lanes.count];
   _laneGatesVisibility = NO;
   for (KKLane *l in _lanes) {
-    _currentValuesByLabel[l.label] = l.keyposes.firstObject.values ?: @[];
-    if (l.visibleWhenLabel.length)
+    _currentValuesByLabel[l.key] = l.keyposes.firstObject.values ?: @[];
+    if (l.visibleWhenKey.length)
       _laneGatesVisibility = YES;
   }
 }
@@ -905,7 +905,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // NSStackView collapses hidden arranged subviews, so visible rows pack to top.
 - (void)_applyCategoryFilter {
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(_lanes, _currentValuesByLabel);
+      KKConditionalVisibleLaneKeys(_lanes, _currentValuesByLabel);
   NSString * (^catFor)(NSString *) = ^(NSString *label) {
     return self->_rowCategoryByLabel[label];
   };
@@ -930,16 +930,16 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 }
 
 // Rows built once at open keep the slider max they were built with; a lane
-// whose max tracks another lane (maxControllerLabel, e.g. Mesh's colour count
+// whose max tracks another lane (maxControllerKey, e.g. Mesh's colour count
 // vs Type) needs its slider re-bounded whenever the controller changes. Runs on
 // every visibility pass (which re-fires on any gating edit), so the max stays
 // live.
 - (void)_refreshDynamicMaxRows {
   for (KKLane *l in _lanes) {
-    if (l.maxControllerLabel.length == 0 ||
+    if (l.maxControllerKey.length == 0 ||
         l.componentMaxByControllerValue.count == 0)
       continue;
-    _KKStaticValueRow *row = _rowsByLabel[l.label];
+    _KKStaticValueRow *row = _rowsByLabel[l.key];
     if (!row)
       continue;
     KKLane *adjusted = [self _laneWithDynamicMaxApplied:l];
@@ -1064,16 +1064,16 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   return _colorPanelOpen || _exprMenuOpen;
 }
 
-// A lane whose slider max reacts to another lane (maxControllerLabel): returns
+// A lane whose slider max reacts to another lane (maxControllerKey): returns
 // a copy with componentMax[0] swapped for the value looked up from the
 // controller lane's current value, so the range tracks e.g. Mesh's Type.
 // Unchanged lanes are returned as-is. Rebuilt whenever rows rebuild (Type
 // change re-runs the visibility cascade), so the max stays reactive.
 - (KKLane *)_laneWithDynamicMaxApplied:(KKLane *)lane {
-  if (lane.maxControllerLabel.length == 0 ||
+  if (lane.maxControllerKey.length == 0 ||
       lane.componentMaxByControllerValue.count == 0)
     return lane;
-  NSArray<NSNumber *> *cv = _currentValuesByLabel[lane.maxControllerLabel];
+  NSArray<NSNumber *> *cv = _currentValuesByLabel[lane.maxControllerKey];
   if (cv.count == 0)
     return lane;
   NSInteger idx = (NSInteger)llround(cv[0].doubleValue);
@@ -1115,7 +1115,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
             contentWidth:[_KKStaticValuesPopoverView
                              _popoverWidthForDescriptor:_descriptorPath]];
   row.translatesAutoresizingMaskIntoConstraints = NO;
-  NSString *label = lane.label;
+  NSString *label = lane.key;
   __weak typeof(self) weak = self;
   if (showsRemove)
     row.onRemove = ^{
@@ -1324,13 +1324,13 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     [old removeFromSuperview];
     [_rowsByLabel removeObjectForKey:label];
 
-    // The lane carries the user-facing display label (its identity `label` may
-    // be a stable key like a shader uniform name); resolve it so the excluded
-    // row reads the same name as the editable row it replaced.
+    // Resolve the lane's display name (identity `label` here is the KEY, e.g.
+    // a shader uniform name) so the excluded row reads the same name as the
+    // editable row it replaced.
     NSString *displayLabel = nil;
     for (KKLane *l in _lanes)
-      if ([l.label isEqualToString:label]) {
-        displayLabel = l.displayLabel;
+      if ([l.key isEqualToString:label]) {
+        displayLabel = l.label;
         break;
       }
     _KKExcludedRow *row =
@@ -1388,15 +1388,15 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   NSMutableDictionary<NSString *, NSString *> *catByLabel =
       [NSMutableDictionary dictionary];
   for (KKLane *lane in lanes) {
-    _KKStaticValueRow *reused = keepCode[lane.label];
+    _KKStaticValueRow *reused = keepCode[lane.key];
     _KKStaticValueRow *row = reused ?: [self _makeRowForLane:lane];
     [_stack addArrangedSubview:row];
     if (!reused) // a reused row already has its stack-width constraint
       [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
-    _rowsByLabel[lane.label] = row;
+    _rowsByLabel[lane.key] = row;
     [self _installExprEditorForLane:lane];
     if (lane.categoryKey.length)
-      catByLabel[lane.label] = lane.categoryKey;
+      catByLabel[lane.key] = lane.categoryKey;
   }
   // Tear down any PRESERVED code row the new lane set didn't reuse (e.g. the
   // constants "Mirage" code lane when reconfiguring into a keypose popover,
@@ -1573,8 +1573,11 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 }
 
 - (void)updateUnoptedLanes:(NSArray<KKLane *> *)lanes {
+  // Rows are keyed by lane.key - the survivors set MUST be keys too, or every
+  // row whose key differs from its display label (all Mirage directives) is
+  // torn down and remade on each update, stealing focus from an open editor.
   NSSet<NSString *> *newSet =
-      [NSSet setWithArray:[lanes valueForKeyPath:@"label"]];
+      [NSSet setWithArray:[lanes valueForKeyPath:@"key"]];
 
   NSMutableArray<NSString *> *toRemove = [NSMutableArray array];
   for (NSString *label in _rowsByLabel)
@@ -1601,37 +1604,32 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // Make a row for each newly-constant lane (append for now) and refresh the
   // existing ones.
   for (KKLane *lane in lanes) {
-    _KKStaticValueRow *existing = _rowsByLabel[lane.label];
+    _KKStaticValueRow *existing = _rowsByLabel[lane.key];
     // A reused row whose rendering STRUCTURE changed (palette bar <-> value
     // editor, code <-> non-code, seed <-> field, float <-> percent/choice, unit
     // or field-count change) can't be updated in place - drop it so it is
     // remade below. Metadata-only changes (range, values) are handled by
-    // applyLane.
-    //
-    // Also remake when the shared label column moved: a lane added/removed/
-    // relabelled above can change the widest name, and `_labelColumnWidth` was
-    // just recomputed. applyLane can't restretch the row's title-width
-    // constraint, so a reused row would keep its old column and start its value
-    // control at a different x than the rows around it (misaligned sliders).
-    BOOL columnShifted =
-        existing && fabs(existing.labelColumnWidth - _labelColumnWidth) > 0.5;
-    if (existing &&
-        (![existing renderShapeMatchesLane:lane] || columnShifted)) {
+    // applyLane; a shared label-column shift (a relabel changed the widest
+    // name) restretches in place below - remaking for it tore down the CODE
+    // editor mid-typing when its own rename widened the column (focus +
+    // scroll lost on every debounce commit).
+    if (existing && ![existing renderShapeMatchesLane:lane]) {
       [_stack removeArrangedSubview:existing];
       [existing removeFromSuperview];
-      [_rowsByLabel removeObjectForKey:lane.label];
+      [_rowsByLabel removeObjectForKey:lane.key];
       // Drop its inline expression editor too (a remake reinstalls a fresh
       // one).
-      NSView *oldEd = _exprRowsByLabel[lane.label];
+      NSView *oldEd = _exprRowsByLabel[lane.key];
       if (oldEd) {
         [_stack removeArrangedSubview:oldEd];
         [oldEd removeFromSuperview];
-        [_exprRowsByLabel removeObjectForKey:lane.label];
-        [_exprEditorByLabel removeObjectForKey:lane.label];
+        [_exprRowsByLabel removeObjectForKey:lane.key];
+        [_exprEditorByLabel removeObjectForKey:lane.key];
       }
       existing = nil;
     }
     if (existing) {
+      [existing updateLabelColumnWidth:_labelColumnWidth];
       [existing applyLane:lane]; // reflect external edits (values + range)
       // Grow/shrink in place when an expression was added/removed on a reused
       // row.
@@ -1645,7 +1643,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
     _KKStaticValueRow *row = [self _makeRowForLane:lane];
     [_stack addArrangedSubview:row];
     [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
-    _rowsByLabel[lane.label] = row;
+    _rowsByLabel[lane.key] = row;
     [self _installExprEditorForLane:lane];
   }
   // Order the stack by the canonical `lanes` order (the parameter order), not
@@ -1655,13 +1653,13 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
   // in that sequence.
   NSInteger pos = 0;
   for (KKLane *lane in lanes) {
-    _KKStaticValueRow *row = _rowsByLabel[lane.label];
+    _KKStaticValueRow *row = _rowsByLabel[lane.key];
     if (!row)
       continue;
     [_stack removeArrangedSubview:row];
     [_stack insertArrangedSubview:row atIndex:pos++];
     // Keep the inline expression editor directly under its row.
-    NSView *ed = _exprRowsByLabel[lane.label];
+    NSView *ed = _exprRowsByLabel[lane.key];
     if (ed) {
       [_stack removeArrangedSubview:ed];
       [_stack insertArrangedSubview:ed atIndex:pos++];

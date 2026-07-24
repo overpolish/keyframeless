@@ -75,12 +75,12 @@ static void MirageAIApplyShaderSource(MiragePlugin *plugin, NSString *newSrc,
     tl = [KKTimeline timeline];
   KKLane *shaderLane = nil;
   for (KKLane *l in tl.lanes)
-    if ([l.label isEqualToString:kMirageCodeLaneLabel]) {
+    if ([l.key isEqualToString:kMirageCodeLaneLabel]) {
       shaderLane = l;
       break;
     }
   if (!shaderLane) {
-    shaderLane = [KKLane laneWithLabel:kMirageCodeLaneLabel];
+    shaderLane = [KKLane laneWithKey:kMirageCodeLaneLabel label:kMirageCodeLaneLabel];
     shaderLane.valueType = KKLaneValueTypeCode;
     shaderLane.animatable = NO;
     shaderLane.enabled = NO;
@@ -128,12 +128,12 @@ static void MirageAIApplyExpressionOps(MiragePlugin *plugin, NSString *opsJSON,
     NSString *stored = KKLinkStoredExpressionFromDisplay(expr, manifests);
     KKLane *target = nil;
     for (KKLane *l in lanes)
-      if ([l.label isEqualToString:label]) {
+      if ([l.key isEqualToString:label]) {
         target = l;
         break;
       }
     if (!target) {
-      target = [KKLane laneWithLabel:label];
+      target = [KKLane laneWithKey:label label:label];
       [lanes addObject:target];
     }
     target.linkExpression = stored;
@@ -209,7 +209,7 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
 // default when absent/empty), for deriving the source-aware lane set.
 + (NSString *)shaderSourceFromTimeline:(KKTimeline *)timeline {
   for (KKLane *l in timeline.lanes)
-    if ([l.label isEqualToString:kMirageCodeLaneLabel] && l.codeString.length)
+    if ([l.key isEqualToString:kMirageCodeLaneLabel] && l.codeString.length)
       return l.codeString;
   return MirageCustomDefaultShaderSource();
 }
@@ -587,7 +587,7 @@ static void MirageAIApplyMutation(MiragePlugin *plugin, NSString *currentJSON,
         KKTimeline *readTimeline =
             timelineBlob.length ? [KKTimeline timelineFromJSON:timelineBlob] : nil;
         for (KKLane *l in readTimeline.lanes)
-          if ([l.label isEqualToString:kMirageCodeLaneLabel] && l.codeString.length) {
+          if ([l.key isEqualToString:kMirageCodeLaneLabel] && l.codeString.length) {
             rawShaderSrc = l.codeString;
             break;
           }

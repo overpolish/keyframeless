@@ -22,10 +22,10 @@ BOOL CanvasSketchEnabledAtFraction(KKBezierPath *path, double frac,
   KKTimeline *tl =
       CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
-    if (![lane.label isEqualToString:@"Sketch Enabled"])
+    if (![lane.key isEqualToString:@"Sketch Enabled"])
       continue;
-    if (lane.keyposes.count > 0) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+    if (lane.keyposes.count > 0 || lane.linkExpression.length) {
+      NSArray<NSNumber *> *v = CanvasResolvedDiscreteLaneValue(lane, frac);
       if (v.count > 0)
         on = v[0].doubleValue >= 0.5;
     }
@@ -46,27 +46,27 @@ CanvasSketchParams CanvasSketchParamsAtFraction(KKBezierPath *path, double frac,
   KKTimeline *tl =
       CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
-    if (lane.keyposes.count == 0)
+    if (lane.keyposes.count == 0 && lane.linkExpression.length == 0)
       continue;
-    if ([lane.label isEqualToString:@"Sketch Enabled"]) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+    if ([lane.key isEqualToString:@"Sketch Enabled"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedDiscreteLaneValue(lane, frac);
       if (v.count > 0)
         p.enabled = v[0].doubleValue >= 0.5;
-    } else if ([lane.label isEqualToString:@"Sketch Roughness"]) {
+    } else if ([lane.key isEqualToString:@"Sketch Roughness"]) {
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         p.roughness = (float)fmax(0.0, v[0].doubleValue);
-    } else if ([lane.label isEqualToString:@"Sketch Bowing"]) {
+    } else if ([lane.key isEqualToString:@"Sketch Bowing"]) {
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         p.bowing = (float)fmax(0.0, v[0].doubleValue);
-    } else if ([lane.label isEqualToString:@"Sketch Strokes"]) {
+    } else if ([lane.key isEqualToString:@"Sketch Strokes"]) {
       // Pill index: 0 = Single (1 pass), 1 = Double (2 passes).
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedDiscreteLaneValue(lane, frac);
       if (v.count > 0)
         p.strokes = v[0].doubleValue >= 0.5 ? 2 : 1;
-    } else if ([lane.label isEqualToString:@"Sketch Seed"]) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+    } else if ([lane.key isEqualToString:@"Sketch Seed"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedDiscreteLaneValue(lane, frac);
       if (v.count > 0)
         p.seed = (uint32_t)fmax(1.0, llround(v[0].doubleValue));
     }

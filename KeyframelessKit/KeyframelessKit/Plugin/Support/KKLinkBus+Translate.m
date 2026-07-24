@@ -215,7 +215,7 @@ static NSString *KKLinkTimecode(double sec) {
 // expression's <=4 components could carry), or an OSC-edited geometry lane
 // (e.g. Canvas Points, whose keyposes are morph snapshots, not values).
 static BOOL KKLinkLaneIsReferenceable(KKLane *lane) {
-  if (lane.label.length == 0)
+  if (lane.key.length == 0)
     return NO;
   if (lane.valueType == KKLaneValueTypeCode ||
       lane.valueType == KKLaneValueTypeGradient)
@@ -290,7 +290,7 @@ static void KKLinkParamLists(NSArray<KKLane *> *lanes,
   NSMutableArray<NSString *> *displays = [NSMutableArray array];
   for (KKLane *lane in lanes)
     if (KKLinkLaneIsReferenceable(lane)) {
-      [params addObject:lane.label];
+      [params addObject:lane.key];
       [displays addObject:lane.displayName ?: lane.label];
     }
   *outLabels = params;
@@ -368,7 +368,7 @@ void KKLinkPublishReferenceableLanes(id<PROAPIAccessing> api,
       continue;
     // Key MUST match the token `${uuid.label}` a subscriber stores (see the
     // popover's stored form); loadCurve reads the same `<uuid>.<label>` file.
-    NSString *linkID = [NSString stringWithFormat:@"%@.%@", uuid, lane.label];
+    NSString *linkID = [NSString stringWithFormat:@"%@.%@", uuid, lane.key];
     [KKLinkBus publishLane:lane
                     linkID:linkID
              timelineStart:tlStart
@@ -390,7 +390,7 @@ void KKLinkPublishReferenceableLayer(id<PROAPIAccessing> api,
     // stores; loadCurve reads the same `<uuid>.<layerID>.<label>` file, so
     // resolution needs no layer awareness at all.
     NSString *linkID = [NSString
-        stringWithFormat:@"%@.%@.%@", uuid, layer.layerID, lane.label];
+        stringWithFormat:@"%@.%@.%@", uuid, layer.layerID, lane.key];
     [KKLinkBus publishLane:lane
                     linkID:linkID
              timelineStart:tlStart

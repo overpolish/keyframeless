@@ -179,7 +179,7 @@
     NSString *moveLane = (p.isImage || p.isGroup) ? @"Position" : @"Points";
     KKTimeline *tl = [KKTimeline timelineFromJSON:p.animationJSON];
     for (KKLane *l in tl.lanes)
-      if ([l.label isEqualToString:moveLane]) {
+      if ([l.key isEqualToString:moveLane]) {
         if (l.enabled && l.keyposes.count >= 2)
           [out addObject:p.layerID];
         break;

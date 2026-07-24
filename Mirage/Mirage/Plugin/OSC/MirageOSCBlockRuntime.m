@@ -135,7 +135,7 @@ NSCursor *MirageOSCCursorForName(NSString *name) {
       break;
     }
   for (KKLane *l in lanes)
-    if ([l.label isEqualToString:binds]) {
+    if ([l.key isEqualToString:binds]) {
       r->_templateLane = l;
       r->_boundScalesWithMedia = l.componentsScaleWithMedia;
       r->_boundComponentUnits = [l.componentUnits copy];

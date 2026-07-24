@@ -42,7 +42,7 @@ KKLaneCategoryByLabel(NSArray<KKLane *> *lanes) {
       [NSMutableDictionary dictionary];
   for (KKLane *lane in lanes)
     if (lane.categoryKey.length)
-      byLabel[lane.label] = lane.categoryKey;
+      byLabel[lane.key] = lane.categoryKey;
   return byLabel;
 }
 

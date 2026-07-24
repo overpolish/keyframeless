@@ -21,7 +21,7 @@
   NSArray<KKKeyPose *> *k = lane.keyposes;
   if (k.count == 0) {
     for (KKLane *t in _availableLanes)
-      if ([t.label isEqualToString:lane.label] &&
+      if ([t.key isEqualToString:lane.key] &&
           t.keyposes.firstObject.values.count)
         return t.keyposes.firstObject.values;
     return @[ @0.0 ];

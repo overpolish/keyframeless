@@ -19,7 +19,7 @@ static NSString *const kMiragePresetScale = @"uScale";
 // shader look lives here, so every preset includes it (applying a preset
 // installs the plasma shader as well as its Center/Scale values).
 static KKLane *MiragePresetCodeLane(void) {
-  KKLane *lane = [KKLane laneWithLabel:kMirageCodeLaneLabel];
+  KKLane *lane = [KKLane laneWithKey:kMirageCodeLaneLabel label:kMirageCodeLaneLabel];
   lane.valueType = KKLaneValueTypeCode;
   lane.codeString = MirageCustomDefaultShaderSource();
   lane.animatable = NO;
@@ -31,7 +31,7 @@ static KKLane *MiragePresetCodeLane(void) {
 // a scalar (uScale), two for a point (uCenter).
 static KKLane *MiragePresetConstLane(NSString *uniform,
                                      NSArray<NSNumber *> *values) {
-  KKLane *lane = [KKLane laneWithLabel:uniform];
+  KKLane *lane = [KKLane laneWithKey:uniform label:uniform];
   lane.valueType = KKLaneValueTypeFloat;
   lane.enabled = NO; // constant
   lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
@@ -42,7 +42,7 @@ static KKLane *MiragePresetConstLane(NSString *uniform,
 static KKLane *MiragePresetAnimLane(NSString *uniform,
                                     NSArray<NSNumber *> *start,
                                     NSArray<NSNumber *> *end) {
-  KKLane *lane = [KKLane laneWithLabel:uniform];
+  KKLane *lane = [KKLane laneWithKey:uniform label:uniform];
   lane.valueType = KKLaneValueTypeFloat;
   lane.enabled = YES; // animated
   lane.keyposes = @[

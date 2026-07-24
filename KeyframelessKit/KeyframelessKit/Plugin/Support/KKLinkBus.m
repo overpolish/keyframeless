@@ -492,6 +492,56 @@ KKLinkLoadCache(void) {
   [data writeToURL:url atomically:YES];
 }
 
+// Duplicate PARAM display names are respelled by their KEY (the machine
+// label): the first occurrence keeps the friendly name, later twins show the
+// key ("uSizeL", not "Size (2)") - meaningful, and it round-trips because the
+// display->stored translator resolves display names by first match and
+// accepts raw keys. Identity arrays (paramLabels) are never touched.
+static NSArray<NSString *> *
+KKLinkKeySpelledParamNames(NSArray<NSString *> *names,
+                           NSArray<NSString *> *labels) {
+  if (names.count < 2)
+    return names;
+  NSMutableSet<NSString *> *seen = [NSMutableSet setWithCapacity:names.count];
+  NSMutableArray<NSString *> *out =
+      [NSMutableArray arrayWithCapacity:names.count];
+  for (NSUInteger i = 0; i < names.count; i++) {
+    NSString *n = names[i];
+    if ([seen containsObject:n] && i < labels.count && labels[i].length)
+      n = labels[i];
+    [seen addObject:n];
+    [out addObject:n];
+  }
+  return out;
+}
+
+// Duplicate display names get " (2)", " (3)"... in encounter (array) order -
+// deterministic because the underlying order is stable. Used for LAYER and
+// CLIP display names, which have no user-recognizable machine key to respell
+// by (a layerID/uuid would read as noise).
+static NSArray<NSString *> *
+KKLinkDisambiguatedNames(NSArray<NSString *> *names) {
+  if (names.count < 2)
+    return names;
+  NSMutableDictionary<NSString *, NSNumber *> *seen =
+      [NSMutableDictionary dictionaryWithCapacity:names.count];
+  NSMutableArray<NSString *> *outNames =
+      [NSMutableArray arrayWithCapacity:names.count];
+  for (NSString *n in names) {
+    NSNumber *c = seen[n];
+    if (!c) {
+      seen[n] = @1;
+      [outNames addObject:n];
+    } else {
+      NSInteger k = c.integerValue + 1;
+      seen[n] = @(k);
+      [outNames
+          addObject:[NSString stringWithFormat:@"%@ (%ld)", n, (long)k]];
+    }
+  }
+  return outNames;
+}
+
 + (NSArray<KKLinkManifest *> *)allManifests {
   NSURL *dir = [self manifestsDirectory];
   if (!dir)
@@ -530,6 +580,28 @@ KKLinkLoadCache(void) {
                                              : NSOrderedDescending;
     return [a.displayName ?: @"" compare:b.displayName ?: @""];
   }];
+  // READ-side display-name disambiguation, level 2 - PARAMS and LAYERS within
+  // each manifest. Params are identified by machine label (Mirage: the GLSL
+  // uniform; Canvas: the template key) but PICKED and translated by display
+  // name, and duplicate display names are legal (two directives may share
+  // label="Size"). Respell duplicate params by their KEY so the picker rows
+  // read distinctly and the display->stored translation (indexOfObject: on
+  // these arrays) resolves uniquely. Same-named layers inside one clip get
+  // the numeric " (2)" treatment instead (no friendly key to respell by).
+  for (KKLinkManifest *m in out) {
+    m.paramDisplayNames =
+        KKLinkKeySpelledParamNames(m.paramDisplayNames, m.paramLabels);
+    NSMutableArray<NSString *> *layerNames =
+        [NSMutableArray arrayWithCapacity:m.layers.count];
+    for (KKLinkLayerSource *ls in m.layers) {
+      [layerNames addObject:ls.displayName ?: @""];
+      ls.paramDisplayNames =
+          KKLinkKeySpelledParamNames(ls.paramDisplayNames, ls.paramLabels);
+    }
+    NSArray<NSString *> *uniqueLayers = KKLinkDisambiguatedNames(layerNames);
+    for (NSUInteger i = 0; i < m.layers.count; i++)
+      m.layers[i].displayName = uniqueLayers[i];
+  }
   // READ-side display-name disambiguation: refs are STORED uuid-keyed, but the
   // editing surface (picker, expression text, translators) works in display
   // names - two same-named clips ("Canvas @ 0:00" twins) would make the

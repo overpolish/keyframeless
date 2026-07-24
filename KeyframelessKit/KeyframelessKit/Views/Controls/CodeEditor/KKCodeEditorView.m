@@ -463,6 +463,12 @@ NSNotificationName const KKCodeEditorReloadNotification =
   // silently no-op.
   if (!newWindow && self.window)
     [_textView.undoManager removeAllActions];
+  // The autocomplete overlay lives in the WINDOW's content view, so drop it
+  // when the editor leaves that window (popover close / row rebuild) or it
+  // would be orphaned. (Kept here, not in the Autocomplete category - a
+  // category override would REPLACE this method and kill the undo clear.)
+  if (newWindow != self.window)
+    [self _hideCompletion];
 }
 
 - (void)dealloc {

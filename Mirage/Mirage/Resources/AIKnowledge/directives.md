@@ -23,7 +23,7 @@ That one pair adds an animatable **Amount** slider (0-2, default 0.5) to the ins
 
 - The directive comment must be immediately above the `uniform` line (only blank lines between them; the next directive ends the search).
 - The **uniform name is the identity** of the control (its keyframes follow the name). `label=` is display-only - renaming the label keeps the animation; renaming the uniform starts a fresh control.
-- Each control needs a **unique uniform name and a unique label** - duplicates are a compile error surfaced in the editor.
+- Each control needs a **unique uniform name** - a duplicate uniform is a compile error surfaced in the editor. Labels may repeat freely (two controls can both show "Size"); the uniform is the identity, the label is just what the rows display.
 - These directives only apply to the **Custom** type (the whole shader system is Custom-only). See the custom-shader doc for the shader language itself.
 
 ## Control kinds

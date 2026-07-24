@@ -53,11 +53,11 @@
                   fireActivation:(BOOL)fireActivation {
   if (!self.onValuePopover)
     return;
-  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *lanes = [self _rows];
   if (laneIdx < 0 || laneIdx >= (NSInteger)lanes.count)
     return;
-  KKLane *lane = lanes[laneIdx];
-  if (kpIdx < 0 || kpIdx >= (NSInteger)lane.keyposes.count)
+  KKLane *lane = lanes[laneIdx].lane;
+  if (!lane || kpIdx < 0 || kpIdx >= (NSInteger)lane.keyposes.count)
     return;
   KKKeyPose *kp = lane.keyposes[kpIdx];
   double frac = kp.time;
@@ -113,9 +113,10 @@
   NSString *layerKey = lane.layerKey;
   NSMutableArray<KKLane *> *displayLanes = [NSMutableArray array];
   NSMutableArray<NSString *> *excludedLabels = [NSMutableArray array];
-  for (KKLane *l in lanes) {
-    if (l.headerPlaceholder)
-      continue; // layer header rows aren't editable params
+  for (KKAdvancedRow *r in lanes) {
+    KKLane *l = r.lane;
+    if (!l)
+      continue; // layer/category header rows aren't editable params
     // Multi-owner timelines: scope the popover to the clicked lane's LAYER, so
     // a keypose popover shows only that layer's params (not every layer's).
     BOOL sameLayer =
@@ -141,8 +142,10 @@
                                       : (KKTimelineLaneValueAtFraction(l, frac)
                                              ?: l.keyposes.firstObject.values);
     if (!match)
-      [excludedLabels addObject:l.label];
-    KKLane *display = [KKLane laneWithLabel:l.label];
+      [excludedLabels addObject:l.key];
+    // Display lane carries the SOURCE lane's identity so the popover's edit
+    // callbacks route back to the right lane even when names repeat.
+    KKLane *display = [KKLane laneWithKey:l.key label:l.label];
     display.valueType = l.valueType;
     display.componentMin = l.componentMin;
     display.componentMax = l.componentMax;
@@ -152,14 +155,14 @@
     // spatialCurvable is lane metadata, not per-project state, so source it
     // from the template - an older blob (saved before the flag existed) would
     // otherwise leave it off and hide the curve toggle.
-    // Multi-owner lanes are layer-tagged ("Stroke Width\x1f<id>"); match the
-    // template on the PLAIN label or the metadata lookup fails for every tagged
-    // lane (integerValued / autoSizesComponentLabels / scaleWithMedia lost, so
-    // the keypose popover diverged from constants).
-    NSString *plain = KKPlainLaneLabel(l.label);
+    // Multi-owner lanes carry layer-scoped KEYS ("Stroke Width\x1f<id>");
+    // match the template on the PLAIN key or the metadata lookup fails for
+    // every merged lane (integerValued / autoSizesComponentLabels /
+    // scaleWithMedia lost, so the keypose popover diverged from constants).
+    NSString *plain = KKPlainLaneLabel(l.key ?: l.label);
     KKLane *tmpl = nil;
     for (KKLane *t in _availableLanes)
-      if ([t.label isEqualToString:plain]) {
+      if ([t.key isEqualToString:plain]) {
         tmpl = t;
         break;
       }
@@ -180,12 +183,11 @@
     display.oscEditedOnly = tmpl ? tmpl.oscEditedOnly : l.oscEditedOnly;
     display.locked = l.locked; // locked layer -> read-only value row
     [display kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
-    // Display label lives on the TEMPLATE (a dynamic plugin's separate identity
-    // vs label) - it isn't serialized on the timeline lane, so `l.displayLabel`
-    // is nil here and would clobber the good value kkApplyPickerMetadataFrom
-    // just copied from tmpl. Prefer the template; fall back to the source lane
-    // only when no template resolved.
-    display.displayLabel = tmpl.displayLabel ?: l.displayLabel;
+    // The display name is template-canonical: a persisted lane may carry a
+    // stale label (saved before a rename), so the template's current label
+    // wins when one resolved.
+    if (tmpl.label.length)
+      display.label = tmpl.label;
     // Parameter-link expression is a lane-level property (from the serialized
     // timeline lane, not the template); carry it so the keypose popover shows
     // the accent label + inline editor.
@@ -255,13 +257,13 @@
   [self setNeedsDisplay:YES];
 }
 
-// A candidate lane for the keypose popover: a real lane in the active layer
-// (when one is set) - never a header placeholder or another layer's lane.
-- (BOOL)_laneEligibleForValuePopover:(KKLane *)lane {
-  if (lane.headerPlaceholder)
+// A candidate row for the keypose popover: a real lane row in the active
+// layer (when one is set) - never a header row or another layer's lane.
+- (BOOL)_rowEligibleForValuePopover:(KKAdvancedRow *)row {
+  if (row.isHeader)
     return NO;
   if (_activeLayerKey.length)
-    return [lane.layerKey isEqualToString:_activeLayerKey];
+    return [row.lane.layerKey isEqualToString:_activeLayerKey];
   return YES;
 }
 
@@ -271,12 +273,12 @@
 
 - (void)requestValuePopoverAtFraction:(double)fraction
                        fireActivation:(BOOL)fireActivation {
-  NSArray<KKLane *> *lanes = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *lanes = [self _rows];
   NSInteger preferredLane = -1;
   if (_topLaneLabel) {
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-      if ([lanes[i].label isEqualToString:_topLaneLabel] &&
-          [self _laneEligibleForValuePopover:lanes[i]]) {
+      if ([lanes[i].lane.key isEqualToString:_topLaneLabel] &&
+          [self _rowEligibleForValuePopover:lanes[i]]) {
         preferredLane = i;
         break;
       }
@@ -284,7 +286,7 @@
   const double kEps = 1.0e-4;
   NSInteger foundLane = -1, foundKP = -1;
   if (preferredLane >= 0) {
-    KKLane *l = lanes[preferredLane];
+    KKLane *l = lanes[preferredLane].lane;
     for (NSInteger k = 0; k < (NSInteger)l.keyposes.count; k++) {
       if (fabs(l.keyposes[k].time - fraction) < kEps) {
         foundLane = preferredLane;
@@ -295,8 +297,8 @@
   }
   if (foundLane < 0) {
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-      KKLane *l = lanes[i];
-      if (![self _laneEligibleForValuePopover:l])
+      KKLane *l = lanes[i].lane;
+      if (![self _rowEligibleForValuePopover:lanes[i]])
         continue;
       for (NSInteger k = 0; k < (NSInteger)l.keyposes.count; k++) {
         if (fabs(l.keyposes[k].time - fraction) < kEps) {
@@ -317,8 +319,8 @@
     // owner instead of leaving the popover (and the layer-list highlight)
     // stranded.
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-      KKLane *l = lanes[i];
-      if (l.headerPlaceholder)
+      KKLane *l = lanes[i].lane;
+      if (!l)
         continue;
       for (NSInteger k = 0; k < (NSInteger)l.keyposes.count; k++) {
         if (fabs(l.keyposes[k].time - fraction) < kEps) {
@@ -342,8 +344,8 @@
     // still require a real hit.
     double bestDist = INFINITY;
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-      KKLane *l = lanes[i];
-      if (![self _laneEligibleForValuePopover:l])
+      KKLane *l = lanes[i].lane;
+      if (![self _rowEligibleForValuePopover:lanes[i]])
         continue;
       for (NSInteger k = 0; k < (NSInteger)l.keyposes.count; k++) {
         double dist = fabs(l.keyposes[k].time - fraction);
@@ -357,7 +359,7 @@
   }
   if (foundLane < 0)
     return;
-  _topLaneLabel = [lanes[foundLane].label copy];
+  _topLaneLabel = [lanes[foundLane].lane.key copy];
   _topKPIdx = foundKP;
   [self _openValuePopoverForLane:foundLane
                               kp:foundKP
@@ -371,7 +373,7 @@
 - (void)_openGapPopoverForLabel:(NSString *)label kpIdx:(NSInteger)aIdx {
   KKLane *lane = nil;
   for (KKLane *l in _timeline.lanes)
-    if ([l.label isEqualToString:label]) {
+    if ([l.key isEqualToString:label]) {
       lane = l;
       break;
     }
@@ -405,10 +407,10 @@
     return;
   }
 
-  NSArray<KKLane *> *anim = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *anim = [self _rows];
   NSInteger animIdx = -1;
   for (NSInteger i = 0; i < (NSInteger)anim.count; i++)
-    if ([anim[i].label isEqualToString:label]) {
+    if ([anim[i].lane.key isEqualToString:label]) {
       animIdx = i;
       break;
     }
@@ -416,8 +418,10 @@
     return;
   NSRect tracks = [self _tracksRect];
   NSRect row = [self _rowRectForIndex:animIdx count:anim.count];
-  CGFloat xA = [self _xForFrac:a.time inLane:anim[animIdx] inTracks:tracks];
-  CGFloat xB = [self _xForFrac:b.time inLane:anim[animIdx] inTracks:tracks];
+  CGFloat xA = [self _xForFrac:a.time inLane:anim[animIdx].lane
+                      inTracks:tracks];
+  CGFloat xB = [self _xForFrac:b.time inLane:anim[animIdx].lane
+                      inTracks:tracks];
   // When zoomed + scrolled, the gap's mathematical midpoint may sit outside
   // the visible scroll region OR under the label gutter (left of tracks).
   // NSPopover refuses to anchor to an offscreen view, and anchoring under
@@ -582,7 +586,7 @@
         return nil;
       KKLane *l2 = nil;
       for (KKLane *cand in strong->_timeline.lanes)
-        if ([cand.label isEqualToString:capturedLabel] && cand.enabled) {
+        if ([cand.key isEqualToString:capturedLabel] && cand.enabled) {
           l2 = cand;
           break;
         }
@@ -615,7 +619,7 @@
       if (!s)
         return nil;
       for (KKLane *l in s->_timeline.lanes)
-        if ([l.label isEqualToString:capLabelMut] && l.enabled &&
+        if ([l.key isEqualToString:capLabelMut] && l.enabled &&
             capIdxMut >= 0 && capIdxMut < (NSInteger)l.keyposes.count)
           return l.keyposes[capIdxMut].outgoing;
       return nil;
@@ -681,7 +685,7 @@
     if (!s)
       return nil;
     for (KKLane *l in s->_timeline.lanes)
-      if ([l.label isEqualToString:capturedLabel] && l.enabled &&
+      if ([l.key isEqualToString:capturedLabel] && l.enabled &&
           capturedIdx >= 0 && capturedIdx < (NSInteger)l.keyposes.count)
         return l.keyposes[capturedIdx].outgoing;
     return nil;
@@ -714,7 +718,7 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   BOOL changed = NO;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    if (![lanes[i].key isEqualToString:label])
       continue;
     KKLane *src = lanes[i];
     if (aIdx < 0 || aIdx + 1 >= (NSInteger)src.keyposes.count)
@@ -784,7 +788,7 @@
     [arr addObject:@(kIdx)];
   }
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    NSMutableArray<NSNumber *> *indices = byLabel[lanes[i].label];
+    NSMutableArray<NSNumber *> *indices = byLabel[lanes[i].key];
     if (indices.count == 0)
       continue;
     KKLane *nl = [lanes[i] copy];

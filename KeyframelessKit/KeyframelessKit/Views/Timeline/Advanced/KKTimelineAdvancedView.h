@@ -34,8 +34,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// fire onTimelineMutated.
 - (void)applyTimeline:(KKTimeline *)timeline;
 
+/// Refresh the plugin's lane templates (display names, metadata) after they
+/// change at runtime - e.g. a Mirage directive rename regenerates the lane
+/// catalog. The keypose popover resolves the display label and template metadata
+/// from this set, so a stale init-time copy showed old names there while
+/// every other surface had moved on.
+- (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes;
+
 /// Labels of opted-in lanes to hide (lane-filter bar). View state only; the
-/// whole view re-derives from -_animatableLanes so it redraws with those rows
+/// whole view re-derives from -_rows so it redraws with those rows
 /// removed. Pass an empty/nil set to show all.
 - (void)applyHiddenLaneLabels:(nullable NSSet<NSString *> *)labels;
 

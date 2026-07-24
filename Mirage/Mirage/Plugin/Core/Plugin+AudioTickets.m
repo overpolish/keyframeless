@@ -66,7 +66,7 @@ static NSArray<NSNumber *> *MirageBoundAudioKeys(NSString *source,
   for (int i = 0; i < nProps; i++) {
     NSString *uniform = @(props[i].name);
     for (KKLane *lane in timeline.lanes) {
-      if (![lane.label isEqualToString:uniform]) {
+      if (![lane.key isEqualToString:uniform]) {
         continue;
       }
       NSArray<NSNumber *> *values =

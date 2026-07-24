@@ -48,7 +48,7 @@
   *outX = def;
   *outY = def;
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-    if ([l.label isEqualToString:label]) {
+    if ([l.key isEqualToString:label]) {
       if (l.keyposes.count == 0)
         return;
       NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(l, frac);

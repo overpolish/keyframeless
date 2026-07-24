@@ -11,6 +11,24 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// Applicability scope bits carried on Canvas lane TEMPLATES
+/// (KKLane.templateScopeMask, set beside each definition in
+/// Plugin+LaneDefinitions.m). CanvasLaneAppliesToPath is the ONE gate that
+/// interprets them - replacing the old per-label isEqualToString cascade in
+/// the timeline builder.
+typedef NS_OPTIONS(NSUInteger, CanvasLaneScope) {
+  CanvasLaneScopeAll = 0,
+  CanvasLaneScopeVectorOnly = 1 << 0, // not an image, not a group
+  CanvasLaneScopeNotGroup = 1 << 1,   // vector paths + images
+  CanvasLaneScopeImageOnly = 1 << 2,
+  /// Requires an open single-contour path (line caps / end markers): closed or
+  /// multi-contour paths draw no caps.
+  CanvasLaneScopeOpenEndOnly = 1 << 3,
+};
+
+/// YES when the template lane's scope bits admit `path`.
+BOOL CanvasLaneAppliesToPath(KKLane *templateLane, KKBezierPath *path);
+
 /// The layer the inspector edit surfaces currently act on. `selectedLayerID`
 /// picks it (matched by KKBezierPath.layerID); falls back to the first
 /// non-group (topmost) layer when nil/unmatched. nil when there are no editable
@@ -166,5 +184,14 @@ static inline void CanvasLinkScopeCleanup(BOOL *_Nonnull token) {
 /// curves every pluginState tick, so the bus is fresh by encode time).
 NSArray<NSNumber *> *_Nullable CanvasResolvedLaneValue(KKLane *lane,
                                                        double frac);
+
+/// The DISCRETE-lane sibling of CanvasResolvedLaneValue, for index/toggle
+/// lanes (Enabled, Line Cap, Stroke Style, markers, ...): a lane carrying a
+/// link expression resolves through the link scope like any other - the
+/// expression owns the value, nothing to smooth - but WITHOUT one the read
+/// stays on the exact evaluator, because the display evaluator's join
+/// smoothing would produce fractional values between two enum indices.
+NSArray<NSNumber *> *_Nullable CanvasResolvedDiscreteLaneValue(KKLane *lane,
+                                                               double frac);
 
 NS_ASSUME_NONNULL_END

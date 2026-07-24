@@ -250,8 +250,8 @@ static const CGFloat kManageRowIndentStep = 14.0;
 }
 
 - (void)configureRow:(_KKManageRow *)row forLane:(KKLane *)lane {
-  row.checked = [_checkedLabels containsObject:lane.label];
-  NSString *label = lane.label;
+  row.checked = [_checkedLabels containsObject:lane.key];
+  NSString *label = lane.key;
   void (^onToggle)(NSString *) = _onToggle;
   row.onToggle = ^{
     if (onToggle)

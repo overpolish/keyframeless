@@ -5,7 +5,7 @@
 
 // Conditional lane visibility: resolve which lanes are shown given the current
 // values (a lane can gate on another lane via visibleWhen*). The recursive
-// clause evaluator + KKLaneComponentLabels / KKConditionalVisibleLaneLabels.
+// clause evaluator + KKLaneComponentLabels / KKConditionalVisibleLaneKeys.
 
 #import "KKTimeline.h"
 
@@ -60,7 +60,7 @@ NSArray<NSString *> *KKLaneComponentLabels(KKLane *lane) {
 static NSArray<NSNumber *> *_KKLaneCondValues(
     KKLane *lane,
     NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel) {
-  NSArray<NSNumber *> *v = valuesByLabel[lane.label];
+  NSArray<NSNumber *> *v = valuesByLabel[lane.key];
   return v ?: (lane.keyposes.firstObject.values ?: @[]);
 }
 
@@ -101,52 +101,52 @@ static BOOL _KKLaneCondVisible(
     KKLane *lane, NSDictionary<NSString *, KKLane *> *byLabel,
     NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel,
     NSMutableDictionary<NSString *, NSNumber *> *memo) {
-  if (lane.visibleWhenLabel.length == 0 &&
-      lane.visibleWhenOrLabel.length == 0 &&
-      lane.visibleWhenAndLabel.length == 0)
+  if (lane.visibleWhenKey.length == 0 &&
+      lane.visibleWhenOrKey.length == 0 &&
+      lane.visibleWhenAndKey.length == 0)
     return YES;
-  NSNumber *cached = memo[lane.label];
+  NSNumber *cached = memo[lane.key];
   if (cached)
     return cached.boolValue;
-  memo[lane.label] = @NO; // cycle guard
+  memo[lane.key] = @NO; // cycle guard
   BOOL vis;
-  if (lane.visibleWhenOrLabel.length > 0) {
+  if (lane.visibleWhenOrKey.length > 0) {
     // OR mode: visible if either clause holds (absent controller = clause off).
-    vis = _KKLaneCondClause(lane.visibleWhenLabel, lane.visibleWhenValues, lane,
+    vis = _KKLaneCondClause(lane.visibleWhenKey, lane.visibleWhenValues, lane,
                             byLabel, valuesByLabel, memo) ||
-          _KKLaneCondClause(lane.visibleWhenOrLabel, lane.visibleWhenOrValues,
+          _KKLaneCondClause(lane.visibleWhenOrKey, lane.visibleWhenOrValues,
                             lane, byLabel, valuesByLabel, memo);
-  } else if (lane.visibleWhenLabel.length == 0) {
+  } else if (lane.visibleWhenKey.length == 0) {
     // No primary rule (AND-only lane): the primary side is unconstrained.
     vis = YES;
-  } else if (!byLabel[lane.visibleWhenLabel]) {
+  } else if (!byLabel[lane.visibleWhenKey]) {
     // Single rule, controller absent: can't evaluate, so don't filter.
     vis = YES;
   } else {
-    vis = _KKLaneCondClause(lane.visibleWhenLabel, lane.visibleWhenValues, lane,
+    vis = _KKLaneCondClause(lane.visibleWhenKey, lane.visibleWhenValues, lane,
                             byLabel, valuesByLabel, memo);
   }
   // Optional second AND gate: an absent controller counts as false (hide), like
   // the OR clause, so a lane can require both a Type match AND a count >= N.
-  if (vis && lane.visibleWhenAndLabel.length > 0)
-    vis = _KKLaneCondClause(lane.visibleWhenAndLabel, lane.visibleWhenAndValues,
+  if (vis && lane.visibleWhenAndKey.length > 0)
+    vis = _KKLaneCondClause(lane.visibleWhenAndKey, lane.visibleWhenAndValues,
                             lane, byLabel, valuesByLabel, memo);
-  memo[lane.label] = @(vis);
+  memo[lane.key] = @(vis);
   return vis;
 }
 
-NSSet<NSString *> *KKConditionalVisibleLaneLabels(
+NSSet<NSString *> *KKConditionalVisibleLaneKeys(
     NSArray<KKLane *> *lanes,
     NSDictionary<NSString *, NSArray<NSNumber *> *> *valuesByLabel) {
   NSMutableDictionary<NSString *, KKLane *> *byLabel =
       [NSMutableDictionary dictionaryWithCapacity:lanes.count];
   for (KKLane *l in lanes)
-    byLabel[l.label] = l;
+    byLabel[l.key] = l;
   NSMutableSet<NSString *> *out = [NSMutableSet setWithCapacity:lanes.count];
   NSMutableDictionary<NSString *, NSNumber *> *memo =
       [NSMutableDictionary dictionaryWithCapacity:lanes.count];
   for (KKLane *l in lanes)
     if (_KKLaneCondVisible(l, byLabel, valuesByLabel ?: @{}, memo))
-      [out addObject:l.label];
+      [out addObject:l.key];
   return out;
 }

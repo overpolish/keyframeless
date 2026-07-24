@@ -67,7 +67,7 @@
     BOOL applies =
         isOut ? (s.outEnabled && !lane.keyposes[s.holdEnd].outgoing.holdsFlat)
               : (s.inEnabled && !lane.keyposes.firstObject.outgoing.holdsFlat);
-    [partLabels addObject:lane.label];
+    [partLabels addObject:lane.key];
     [partStates addObject:@(applies)];
   }
 
@@ -159,7 +159,7 @@
       continue;
     if (section == KKBasicSectionIn && !s.inEnabled)
       continue;
-    return lane.label;
+    return lane.key;
   }
   return nil;
 }
@@ -205,11 +205,11 @@
 // stay in lock-step (a mismatch silently no-ops the state refresh).
 - (NSArray<KKLane *> *)_gapParticipatingLanes {
   NSSet<NSString *> *visible =
-      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+      KKConditionalVisibleLaneKeys(_timeline.lanes, nil);
   NSMutableArray<KKLane *> *out = [NSMutableArray array];
   for (KKLane *lane in _timeline.lanes)
     if (lane.enabled && lane.keyposes.count >= 2 &&
-        [visible containsObject:lane.label] && [self _laneInActiveLayer:lane])
+        [visible containsObject:lane.key] && [self _laneInActiveLayer:lane])
       [out addObject:lane];
   return out;
 }
@@ -252,7 +252,7 @@
     BOOL othersApply = NO;
     for (KKLane *lane in _timeline.lanes) {
       if (!lane.enabled || lane.keyposes.count < 2 ||
-          [lane.label isEqualToString:label])
+          [lane.key isEqualToString:label])
         continue;
       KKHoldShape s = KKShapeOfLane(lane);
       BOOL applies =
@@ -276,7 +276,7 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
-    if (!lane.enabled || ![lane.label isEqualToString:label] ||
+    if (!lane.enabled || ![lane.key isEqualToString:label] ||
         lane.keyposes.count < 2)
       continue;
     KKHoldShape s = KKShapeOfLane(lane);
@@ -349,7 +349,7 @@
   NSMutableArray<NSNumber *> *driftStates = [NSMutableArray array];
   for (KKLane *lane in [self _gapParticipatingLanes]) {
     KKInterval *liv = lane.keyposes[KKShapeOfLane(lane).holdStart].outgoing;
-    [holdLabels addObject:lane.label];
+    [holdLabels addObject:lane.key];
     [driftStates addObject:@(liv && !liv.endpointsLinked)];
   }
 
@@ -454,7 +454,7 @@
           arrayWithObject:KKLocalizedParamName(lane.displayName)];
       NSMutableArray<NSNumber *> *segStates =
           [NSMutableArray arrayWithObject:@(laneModActive)];
-      [partLaneLabels addObject:lane.label];
+      [partLaneLabels addObject:lane.key];
       [partComponentIdx addObject:@(-1)]; // master segment
       for (NSUInteger c = 0; c < compCount; c++) {
         NSString *cn =
@@ -464,7 +464,7 @@
         [segLabels addObject:cn];
         BOOL on = laneModActive && (!mask || [mask containsIndex:c]);
         [segStates addObject:@(on)];
-        [partLaneLabels addObject:lane.label];
+        [partLaneLabels addObject:lane.key];
         [partComponentIdx addObject:@(c)];
       }
       [partCompoundLabels addObject:segLabels];
@@ -475,7 +475,7 @@
                                   : KKLocalizedParamName(lane.displayName);
       [partCompoundLabels addObject:@[ disp ]];
       [partCompoundStates addObject:@[ @(laneModActive) ]];
-      [partLaneLabels addObject:lane.label];
+      [partLaneLabels addObject:lane.key];
       [partComponentIdx addObject:@(-2)]; // single-segment, lane-level
     }
   }
@@ -596,7 +596,7 @@
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
     KKLane *lane = lanes[i];
-    if (![lane.label isEqualToString:laneLabel])
+    if (![lane.key isEqualToString:laneLabel])
       continue;
     if (!lane.enabled || lane.keyposes.count < 2)
       return;

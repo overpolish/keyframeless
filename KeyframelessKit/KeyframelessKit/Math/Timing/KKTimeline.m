@@ -9,6 +9,7 @@
 #import "KKEasing.h"
 #import "KKLog.h"
 #import "KKPathMorph.h"
+#import <objc/runtime.h> // DEBUG field-descriptor completeness check
 
 BOOL KKLaneKeyposeValuesEqual(KKLane *lane, KKKeyPose *a, KKKeyPose *b) {
   if (lane.oscEditedOnly)
@@ -238,6 +239,12 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   return c;
 }
 
+- (instancetype)keyposeBySettingValues:(NSArray<NSNumber *> *)values {
+  KKKeyPose *c = [self copy];
+  c.values = values;
+  return c;
+}
+
 - (NSDictionary *)toDictionary {
   NSMutableDictionary *d = [NSMutableDictionary dictionary];
   d[@"time"] = @(_time);
@@ -282,6 +289,197 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
 @end
 
 // ---------------------------------------------------------------------------
+// KKLane field descriptors
+// ---------------------------------------------------------------------------
+
+// How a serialized field maps into the timeline-JSON lane dictionary. The
+// policies reproduce the historical hand-written toDictionary /
+// fromDictionary EXACTLY - saved projects depend on the key set and the
+// omit-if-default choices, so a new kind may be added but existing rows must
+// not change meaning.
+typedef NS_ENUM(NSUInteger, KKLaneFieldKind) {
+  KKLaneFieldObject,      // copy-only field (object / block / scalar); kind is
+                          // irrelevant unless the row is Serialized
+  KKLaneFieldString,      // omit-if-nil NSString (read type-checked)
+  KKLaneFieldArray,       // omit-if-nil NSArray (read type-checked)
+  KKLaneFieldPairedArray, // written iff the `paired` gate property is non-nil,
+                          // as (value ?: @[]); read like Array
+  KKLaneFieldBoolOmitNO,  // @YES written only when set; absent = NO
+  KKLaneFieldBoolOmitYES, // @NO written only when cleared; absent = YES
+  KKLaneFieldBoolAlways,  // always written; absent (legacy data) = YES
+  KKLaneFieldIntAlways,   // always written; left at init default when absent
+  KKLaneFieldIntOmitZero, // written only when != 0; only set when present
+  KKLaneFieldDoubleAlways,   // always written; absent = 0
+  KKLaneFieldDoublePositive, // written only when > 0; absent = 0
+};
+
+typedef NS_OPTIONS(NSUInteger, KKLaneFieldRoles) {
+  KKLaneFieldSerialized = 1 << 0, // participates in to/fromDictionary
+  KKLaneFieldPickerMeta = 1 << 1, // carried by kkApplyPickerMetadataFrom
+  // Template-defined build-time / static-config value that a persisted blob
+  // must never override: kkApplyTemplateCanonicalFrom re-asserts these (plus
+  // every PickerMeta row) from the plugin template after a blob load.
+  KKLaneFieldTemplateCanonical = 1 << 2,
+};
+
+typedef struct {
+  __unsafe_unretained NSString *prop;   // KVC property name (every row copies)
+  __unsafe_unretained NSString *key;    // JSON key (Serialized rows only)
+  __unsafe_unretained NSString *paired; // PairedArray rows: the gate property
+  KKLaneFieldKind kind;
+  KKLaneFieldRoles roles;
+} KKLaneField;
+
+_Static_assert(KKLaneHoldShapeAuto == 0,
+               "hold_shape's IntOmitZero policy assumes Auto == 0");
+
+// THE field list. Every KKLane property except laneID / keyposes /
+// displayName (computed) has exactly one row here; -copyWithZone: transfers
+// every row via KVC (the `copy` property setters supply the copy semantics),
+// toDictionary/fromDictionary use the Serialized rows, and
+// kkApplyPickerMetadataFrom applies the PickerMeta rows. The DEBUG
+// completeness check in +initialize flags any property added to the class but
+// missing here, so a new field can't be silently dropped from copies or the
+// param round-trip again.
+//
+// PickerMeta notes carried from the hand-written list: slider-only bounds are
+// display metadata (a rebuilt keypose/boundary lane without them falls back
+// to the wide componentMin/Max range), and componentsScaleWithMedia +
+// componentUnits must ride along or a normalised spatial lane shows raw
+// fractions instead of pixels.
+static const KKLaneField kKKLaneFields[] = {
+    // label: serialized explicitly; template-canonical so a stale persisted
+    // display name is re-asserted from the template on rebuild (renames
+    // propagate; identity is `key`, never this).
+    {@"label", nil, nil, KKLaneFieldObject, KKLaneFieldTemplateCanonical},
+    {@"key", nil, nil, KKLaneFieldObject, 0}, // serialized explicitly
+    {@"groupKey", @"group_key", nil, KKLaneFieldString, KKLaneFieldSerialized},
+    {@"enabled", @"enabled", nil, KKLaneFieldBoolAlways, KKLaneFieldSerialized},
+    {@"valueType", @"value_type", nil, KKLaneFieldIntAlways,
+     KKLaneFieldSerialized | KKLaneFieldTemplateCanonical},
+    {@"codeString", @"code_string", nil, KKLaneFieldString,
+     KKLaneFieldSerialized},
+    {@"codeTabs", @"code_tabs", nil, KKLaneFieldArray, KKLaneFieldSerialized},
+    {@"codeTabCatalog", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical}, // static config
+    {@"codeValidator", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical}, // block
+    {@"codeValidationComposer", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical}, // block
+    {@"codeFormatter", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical}, // block
+    {@"codeCompletionProvider", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical}, // block
+    {@"codeDirectiveKeywords", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical},
+    {@"codeDirectiveKinds", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical},
+    {@"codeSavable", nil, nil, KKLaneFieldObject, KKLaneFieldTemplateCanonical},
+    {@"codeSaveCategories", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical},
+    {@"codeSaveNamePlaceholder", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical},
+    {@"componentMin", @"component_min", nil, KKLaneFieldArray,
+     KKLaneFieldSerialized | KKLaneFieldTemplateCanonical},
+    {@"componentMax", @"component_max", nil, KKLaneFieldArray,
+     KKLaneFieldSerialized | KKLaneFieldTemplateCanonical},
+    {@"sliderMax", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
+    {@"sliderMin", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
+    {@"componentUnits", @"component_units", nil, KKLaneFieldArray,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"componentLabels", @"component_labels", nil, KKLaneFieldArray,
+     KKLaneFieldSerialized | KKLaneFieldTemplateCanonical},
+    {@"componentLabelColors", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical},
+    {@"lastKnownClipDuration", @"last_known_clip_duration", nil,
+     KKLaneFieldDoubleAlways, KKLaneFieldSerialized},
+    {@"holdShape", @"hold_shape", nil, KKLaneFieldIntOmitZero,
+     KKLaneFieldSerialized},
+    {@"spatialCurvable", @"spatial_curvable", nil, KKLaneFieldBoolOmitNO,
+     KKLaneFieldSerialized | KKLaneFieldTemplateCanonical},
+    {@"aspectLinkable", @"aspect_linkable", nil, KKLaneFieldBoolOmitNO,
+     KKLaneFieldSerialized | KKLaneFieldTemplateCanonical},
+    {@"aspectLinked", @"aspect_linked", nil, KKLaneFieldBoolOmitNO,
+     KKLaneFieldSerialized},
+    {@"integerValued", @"integer_valued", nil, KKLaneFieldBoolOmitNO,
+     KKLaneFieldSerialized | KKLaneFieldTemplateCanonical},
+    {@"scrubStep", @"scrub_step", nil, KKLaneFieldDoublePositive,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"componentsScaleWithMedia", @"components_scale_with_media", nil,
+     KKLaneFieldBoolOmitNO, KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"categoryKey", @"category_key", nil, KKLaneFieldString,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"categorySymbol", @"category_symbol", nil, KKLaneFieldString,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"layerKey", @"layer_key", nil, KKLaneFieldString, KKLaneFieldSerialized},
+    {@"layerLabel", @"layer_label", nil, KKLaneFieldString,
+     KKLaneFieldSerialized},
+    {@"layerSymbol", @"layer_symbol", nil, KKLaneFieldString,
+     KKLaneFieldSerialized},
+    {@"locked", nil, nil, KKLaneFieldObject, 0},
+    {@"animatable", @"animatable", nil, KKLaneFieldBoolOmitYES,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"seedField", @"seed_field", nil, KKLaneFieldBoolOmitNO,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"oscEditedOnly", @"osc_edited_only", nil, KKLaneFieldBoolOmitNO,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"positionPathDriven", nil, nil, KKLaneFieldObject,
+     KKLaneFieldPickerMeta},
+    {@"ownerScoped", @"owner_scoped", nil, KKLaneFieldBoolOmitNO,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"choiceLabels", @"choice_labels", nil, KKLaneFieldArray,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"choiceIcons", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
+    {@"choiceValues", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
+    {@"wrapsChoicePills", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
+    {@"choiceUsesDropdown", nil, nil, KKLaneFieldObject,
+     KKLaneFieldPickerMeta},
+    {@"choiceUnknownLabels", nil, nil, KKLaneFieldObject,
+     KKLaneFieldPickerMeta},
+    {@"choiceUnknownBadge", nil, nil, KKLaneFieldObject,
+     KKLaneFieldPickerMeta},
+    {@"isToggle", @"is_toggle", nil, KKLaneFieldBoolOmitNO,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"autoSizesComponentLabels", @"autosize_component_labels", nil,
+     KKLaneFieldBoolOmitNO, KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"visibleWhenKey", @"visible_when_key", nil, KKLaneFieldString,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"visibleWhenValues", @"visible_when_values", @"visibleWhenKey",
+     KKLaneFieldPairedArray, KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"visibleWhenOrKey", @"visible_when_or_key", nil, KKLaneFieldString,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"visibleWhenOrValues", @"visible_when_or_values", @"visibleWhenOrKey",
+     KKLaneFieldPairedArray, KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"visibleWhenAndKey", @"visible_when_and_key", nil, KKLaneFieldString,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"visibleWhenAndValues", @"visible_when_and_values",
+     @"visibleWhenAndKey", KKLaneFieldPairedArray,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"maxControllerKey", @"max_controller_key", nil, KKLaneFieldString,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"componentMaxByControllerValue", @"max_by_controller_value",
+     @"maxControllerKey", KKLaneFieldPairedArray,
+     KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"gradientShowsTypeAngle", @"gradient_type_angle", nil,
+     KKLaneFieldBoolOmitNO, KKLaneFieldSerialized | KKLaneFieldPickerMeta},
+    {@"paletteLockable", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
+    {@"paletteGeneratorBar", nil, nil, KKLaneFieldObject,
+     KKLaneFieldPickerMeta},
+    {@"paletteGroup", nil, nil, KKLaneFieldObject, KKLaneFieldPickerMeta},
+    // Serialized even when EMPTY (present-but-empty passthrough), so a lane
+    // whose editor the user cleared keeps it open across the param
+    // round-trip; nil = truly no expression and is left out.
+    {@"linkExpression", @"link_expr", nil, KKLaneFieldString,
+     KKLaneFieldSerialized},
+    {@"templateScopeMask", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical},
+    {@"templateSeedProvider", nil, nil, KKLaneFieldObject,
+     KKLaneFieldTemplateCanonical}, // block
+};
+static const size_t kKKLaneFieldCount =
+    sizeof(kKKLaneFields) / sizeof(kKKLaneFields[0]);
+
+// ---------------------------------------------------------------------------
 // KKLane
 // ---------------------------------------------------------------------------
 
@@ -298,9 +496,10 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   return self;
 }
 
-+ (instancetype)laneWithLabel:(NSString *)label {
++ (instancetype)laneWithKey:(NSString *)key label:(NSString *)label {
   KKLane *l = [[KKLane alloc] init];
   l.laneID = [NSUUID UUID];
+  l.key = key;
   l.label = label;
   l.enabled = YES;
   l.keyposes = @[];
@@ -308,10 +507,9 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
 }
 
 // The raw name to show (display sites still run it through
-// KKLocalizedParamName, which is a no-op for a custom display label). Identity
-// stays on `label`.
+// KKLocalizedParamName). Identity stays on `key`.
 - (NSString *)displayName {
-  return _displayLabel.length ? _displayLabel : _label;
+  return _label;
 }
 
 + (instancetype)opacityLane {
@@ -319,7 +517,7 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   // overshoot), identity 100 = fully opaque. Shared by every plugin that has an
   // opacity property (the render multiplies premultiplied RGBA by value/100).
   // The owning plugin sets category / enabled etc. after as needed.
-  KKLane *opacity = [self laneWithLabel:@"Opacity"];
+  KKLane *opacity = [self laneWithKey:@"Opacity" label:@"Opacity"];
   opacity.valueType = KKLaneValueTypeFloat;
   opacity.componentMin = @[ @0.0 ];
   opacity.componentMax = @[ @100.0 ];
@@ -332,48 +530,21 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
 - (void)kkApplyPickerMetadataFrom:(KKLane *)tmpl {
   if (!tmpl)
     return;
-  _categoryKey = [tmpl.categoryKey copy];
-  _categorySymbol = [tmpl.categorySymbol copy];
-  _displayLabel = [tmpl.displayLabel copy];
-  _animatable = tmpl.animatable;
-  _seedField = tmpl.seedField;
-  _oscEditedOnly = tmpl.oscEditedOnly;
-  _positionPathDriven = tmpl.positionPathDriven;
-  _ownerScoped = tmpl.ownerScoped;
-  _choiceLabels = [tmpl.choiceLabels copy];
-  _choiceIcons = [tmpl.choiceIcons copy];
-  _choiceValues = [tmpl.choiceValues copy];
-  _wrapsChoicePills = tmpl.wrapsChoicePills;
-  _choiceUsesDropdown = tmpl.choiceUsesDropdown;
-  _choiceUnknownLabels = [tmpl.choiceUnknownLabels copy];
-  _choiceUnknownBadge = [tmpl.choiceUnknownBadge copy];
-  _isToggle = tmpl.isToggle;
-  _autoSizesComponentLabels = tmpl.autoSizesComponentLabels;
-  _visibleWhenLabel = [tmpl.visibleWhenLabel copy];
-  _visibleWhenValues = [tmpl.visibleWhenValues copy];
-  _visibleWhenOrLabel = [tmpl.visibleWhenOrLabel copy];
-  _visibleWhenOrValues = [tmpl.visibleWhenOrValues copy];
-  _visibleWhenAndLabel = [tmpl.visibleWhenAndLabel copy];
-  _visibleWhenAndValues = [tmpl.visibleWhenAndValues copy];
-  _maxControllerLabel = [tmpl.maxControllerLabel copy];
-  _componentMaxByControllerValue = [tmpl.componentMaxByControllerValue copy];
-  _gradientShowsTypeAngle = tmpl.gradientShowsTypeAngle;
-  _paletteLockable = tmpl.paletteLockable;
-  _paletteGeneratorBar = tmpl.paletteGeneratorBar;
-  _paletteGroup = [tmpl.paletteGroup copy];
-  // Slider-only bounds (decoupled from the value clamp) are display metadata
-  // too: a rebuilt keypose / boundary lane must carry them or its slider falls
-  // back to the wide componentMin/Max (e.g. draw-on Offset's unbounded field ->
-  // a slider with a useless million-wide range).
-  _sliderMax = [tmpl.sliderMax copy];
-  _sliderMin = [tmpl.sliderMin copy];
-  // Pixel-display flag is template metadata too: keypose/boundary popovers
-  // rebuild a display lane and must carry it, or a normalised 0..1 spatial lane
-  // (Position / Crop / Anchor) shows raw fractions instead of pixels. The
-  // per-component unit strings ride along for the same reason.
-  _componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
-  _componentUnits = [tmpl.componentUnits copy];
-  _scrubStep = tmpl.scrubStep;
+  for (size_t i = 0; i < kKKLaneFieldCount; i++) {
+    const KKLaneField *f = &kKKLaneFields[i];
+    if (f->roles & KKLaneFieldPickerMeta)
+      [self setValue:[tmpl valueForKey:f->prop] forKey:f->prop];
+  }
+}
+
+- (void)kkApplyTemplateCanonicalFrom:(KKLane *)tmpl {
+  if (!tmpl)
+    return;
+  for (size_t i = 0; i < kKKLaneFieldCount; i++) {
+    const KKLaneField *f = &kKKLaneFields[i];
+    if (f->roles & (KKLaneFieldTemplateCanonical | KKLaneFieldPickerMeta))
+      [self setValue:[tmpl valueForKey:f->prop] forKey:f->prop];
+  }
 }
 
 - (void)insertKeypose:(KKKeyPose *)keypose {
@@ -399,74 +570,13 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
 - (id)copyWithZone:(NSZone *)zone {
   KKLane *c = [[[self class] allocWithZone:zone] init];
   c.laneID = _laneID;
-  c.label = [_label copy];
-  c.displayLabel = [_displayLabel copy];
-  c.groupKey = [_groupKey copy];
-  c.enabled = _enabled;
-  c.valueType = _valueType;
-  c.codeString = [_codeString copy];
-  c.codeTabs = [_codeTabs copy];
-  c.codeTabCatalog = [_codeTabCatalog copy]; // static config, not serialized
-  c.codeValidator = _codeValidator; // block, copied by the property setter
-  c.codeValidationComposer = _codeValidationComposer; // block, copied by setter
-  c.codeFormatter = _codeFormatter; // block, copied by the property setter
-  c.codeCompletionProvider = _codeCompletionProvider; // block, copied by setter
-  c.codeDirectiveKeywords = _codeDirectiveKeywords;   // static config
-  c.codeDirectiveKinds = _codeDirectiveKinds;         // static config
-  c.codeSavable = _codeSavable; // static config, not serialized
-  c.codeSaveCategories = [_codeSaveCategories copy];           // static config
-  c.codeSaveNamePlaceholder = [_codeSaveNamePlaceholder copy]; // static config
-  c.componentMin = [_componentMin copy];
-  c.componentMax = [_componentMax copy];
-  c.sliderMax = [_sliderMax copy];
-  c.sliderMin = [_sliderMin copy];
-  c.componentUnits = [_componentUnits copy];
-  c.componentLabels = [_componentLabels copy];
-  c.componentLabelColors = [_componentLabelColors copy];
+  // Every descriptor row transfers via KVC; the `copy` property setters
+  // supply the copy semantics (blocks included), so this is a faithful
+  // field-for-field copy of everything but the deep-copied keyposes.
+  for (size_t i = 0; i < kKKLaneFieldCount; i++)
+    [c setValue:[self valueForKey:kKKLaneFields[i].prop]
+         forKey:kKKLaneFields[i].prop];
   c.keyposes = [[NSArray alloc] initWithArray:_keyposes copyItems:YES];
-  c.lastKnownClipDuration = _lastKnownClipDuration;
-  c.holdShape = _holdShape;
-  c.spatialCurvable = _spatialCurvable;
-  c.aspectLinkable = _aspectLinkable;
-  c.aspectLinked = _aspectLinked;
-  c.integerValued = _integerValued;
-  c.scrubStep = _scrubStep;
-  c.componentsScaleWithMedia = _componentsScaleWithMedia;
-  c.categoryKey = [_categoryKey copy];
-  c.categorySymbol = [_categorySymbol copy];
-  c.layerKey = [_layerKey copy];
-  c.layerLabel = [_layerLabel copy];
-  c.layerSymbol = [_layerSymbol copy];
-  c.headerPlaceholder = _headerPlaceholder;
-  c.categoryHeader = _categoryHeader;
-  c.locked = _locked;
-  c.animatable = _animatable;
-  c.seedField = _seedField;
-  c.oscEditedOnly = _oscEditedOnly;
-  c.positionPathDriven = _positionPathDriven;
-  c.ownerScoped = _ownerScoped;
-  c.choiceLabels = [_choiceLabels copy];
-  c.choiceIcons = [_choiceIcons copy];
-  c.choiceValues = [_choiceValues copy];
-  c.wrapsChoicePills = _wrapsChoicePills;
-  c.choiceUsesDropdown = _choiceUsesDropdown;
-  c.choiceUnknownLabels = [_choiceUnknownLabels copy];
-  c.choiceUnknownBadge = [_choiceUnknownBadge copy];
-  c.isToggle = _isToggle;
-  c.autoSizesComponentLabels = _autoSizesComponentLabels;
-  c.visibleWhenLabel = [_visibleWhenLabel copy];
-  c.visibleWhenValues = [_visibleWhenValues copy];
-  c.visibleWhenOrLabel = [_visibleWhenOrLabel copy];
-  c.visibleWhenOrValues = [_visibleWhenOrValues copy];
-  c.visibleWhenAndLabel = [_visibleWhenAndLabel copy];
-  c.visibleWhenAndValues = [_visibleWhenAndValues copy];
-  c.maxControllerLabel = [_maxControllerLabel copy];
-  c.componentMaxByControllerValue = [_componentMaxByControllerValue copy];
-  c.gradientShowsTypeAngle = _gradientShowsTypeAngle;
-  c.paletteLockable = _paletteLockable;
-  c.paletteGeneratorBar = _paletteGeneratorBar;
-  c.paletteGroup = [_paletteGroup copy];
-  c.linkExpression = [_linkExpression copy];
   return c;
 }
 
@@ -474,85 +584,54 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   NSMutableDictionary *d = [NSMutableDictionary dictionary];
   d[@"id"] = _laneID.UUIDString;
   d[@"label"] = _label;
-  if (_groupKey)
-    d[@"group_key"] = _groupKey;
-  d[@"enabled"] = @(_enabled);
-  d[@"value_type"] = @(_valueType);
-  if (_codeString)
-    d[@"code_string"] = _codeString;
-  if (_codeTabs)
-    d[@"code_tabs"] = _codeTabs;
-  if (_componentMin)
-    d[@"component_min"] = _componentMin;
-  if (_componentMax)
-    d[@"component_max"] = _componentMax;
-  if (_componentUnits)
-    d[@"component_units"] = _componentUnits;
-  if (_componentLabels)
-    d[@"component_labels"] = _componentLabels;
+  // Identity is first-class: always written. (Reading a legacy blob without
+  // one seeds key = label - the single migration path.)
+  d[@"key"] = _key.length ? _key : _label;
   d[@"keyposes"] = [_keyposes valueForKey:@"toDictionary"];
-  d[@"last_known_clip_duration"] = @(_lastKnownClipDuration);
-  if (_holdShape != KKLaneHoldShapeAuto)
-    d[@"hold_shape"] = @(_holdShape);
-  if (_spatialCurvable)
-    d[@"spatial_curvable"] = @YES;
-  if (_aspectLinkable)
-    d[@"aspect_linkable"] = @YES;
-  if (_aspectLinked)
-    d[@"aspect_linked"] = @YES;
-  if (_integerValued)
-    d[@"integer_valued"] = @YES;
-  if (_scrubStep > 0)
-    d[@"scrub_step"] = @(_scrubStep);
-  if (_componentsScaleWithMedia)
-    d[@"components_scale_with_media"] = @YES;
-  if (_categoryKey)
-    d[@"category_key"] = _categoryKey;
-  if (_categorySymbol)
-    d[@"category_symbol"] = _categorySymbol;
-  if (_layerKey)
-    d[@"layer_key"] = _layerKey;
-  if (_layerLabel)
-    d[@"layer_label"] = _layerLabel;
-  if (_layerSymbol)
-    d[@"layer_symbol"] = _layerSymbol;
-  if (!_animatable)
-    d[@"animatable"] = @NO;
-  if (_seedField)
-    d[@"seed_field"] = @YES;
-  if (_oscEditedOnly)
-    d[@"osc_edited_only"] = @YES;
-  if (_ownerScoped)
-    d[@"owner_scoped"] = @YES;
-  if (_choiceLabels)
-    d[@"choice_labels"] = _choiceLabels;
-  if (_isToggle)
-    d[@"is_toggle"] = @YES;
-  if (_autoSizesComponentLabels)
-    d[@"autosize_component_labels"] = @YES;
-  if (_visibleWhenLabel) {
-    d[@"visible_when_label"] = _visibleWhenLabel;
-    d[@"visible_when_values"] = _visibleWhenValues ?: @[];
+  for (size_t i = 0; i < kKKLaneFieldCount; i++) {
+    const KKLaneField *f = &kKKLaneFields[i];
+    if (!(f->roles & KKLaneFieldSerialized))
+      continue;
+    id v = [self valueForKey:f->prop];
+    switch (f->kind) {
+    case KKLaneFieldString:
+    case KKLaneFieldArray:
+      if (v)
+        d[f->key] = v;
+      break;
+    case KKLaneFieldPairedArray:
+      if ([self valueForKey:f->paired])
+        d[f->key] = v ?: @[];
+      break;
+    case KKLaneFieldBoolOmitNO:
+      if ([v boolValue])
+        d[f->key] = @YES;
+      break;
+    case KKLaneFieldBoolOmitYES:
+      if (![v boolValue])
+        d[f->key] = @NO;
+      break;
+    case KKLaneFieldBoolAlways:
+      d[f->key] = @([v boolValue]);
+      break;
+    case KKLaneFieldIntAlways:
+      d[f->key] = @([v integerValue]);
+      break;
+    case KKLaneFieldIntOmitZero:
+      if ([v integerValue] != 0)
+        d[f->key] = @([v integerValue]);
+      break;
+    case KKLaneFieldDoubleAlways:
+      d[f->key] = @([v doubleValue]);
+      break;
+    case KKLaneFieldDoublePositive:
+      if ([v doubleValue] > 0)
+        d[f->key] = @([v doubleValue]);
+      break;
+    case KKLaneFieldObject:
+      break;
+    }
   }
-  if (_visibleWhenOrLabel) {
-    d[@"visible_when_or_label"] = _visibleWhenOrLabel;
-    d[@"visible_when_or_values"] = _visibleWhenOrValues ?: @[];
-  }
-  if (_visibleWhenAndLabel) {
-    d[@"visible_when_and_label"] = _visibleWhenAndLabel;
-    d[@"visible_when_and_values"] = _visibleWhenAndValues ?: @[];
-  }
-  if (_maxControllerLabel) {
-    d[@"max_controller_label"] = _maxControllerLabel;
-    d[@"max_by_controller_value"] = _componentMaxByControllerValue ?: @[];
-  }
-  if (_gradientShowsTypeAngle)
-    d[@"gradient_type_angle"] = @YES;
-  // Serialize even an EMPTY expression (present-but-empty passthrough), so a
-  // lane whose editor the user cleared keeps it open across the param
-  // round-trip; nil = truly no expression and is left out.
-  if (_linkExpression != nil)
-    d[@"link_expr"] = _linkExpression;
   return d;
 }
 
@@ -563,60 +642,43 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   NSString *uuidStr = d[@"id"];
   l.laneID =
       uuidStr ? [[NSUUID alloc] initWithUUIDString:uuidStr] : [NSUUID UUID];
-  l.label = d[@"label"] ?: @"";
-  l.groupKey = d[@"group_key"];
-  l.enabled = d[@"enabled"] ? [d[@"enabled"] boolValue] : YES;
-  if (d[@"value_type"])
-    l.valueType = (KKLaneValueType)[d[@"value_type"] integerValue];
-  if ([d[@"code_string"] isKindOfClass:[NSString class]])
-    l.codeString = d[@"code_string"];
-  if ([d[@"code_tabs"] isKindOfClass:[NSArray class]])
-    l.codeTabs = d[@"code_tabs"];
-  if ([d[@"component_min"] isKindOfClass:[NSArray class]])
-    l.componentMin = d[@"component_min"];
-  if ([d[@"component_max"] isKindOfClass:[NSArray class]])
-    l.componentMax = d[@"component_max"];
-  if ([d[@"component_units"] isKindOfClass:[NSArray class]])
-    l.componentUnits = d[@"component_units"];
-  if ([d[@"component_labels"] isKindOfClass:[NSArray class]])
-    l.componentLabels = d[@"component_labels"];
-  l.lastKnownClipDuration = [d[@"last_known_clip_duration"] doubleValue];
-  if (d[@"hold_shape"])
-    l.holdShape = (KKLaneHoldShape)[d[@"hold_shape"] integerValue];
-  l.spatialCurvable = [d[@"spatial_curvable"] boolValue];
-  l.aspectLinkable = [d[@"aspect_linkable"] boolValue];
-  l.aspectLinked = [d[@"aspect_linked"] boolValue];
-  l.integerValued = [d[@"integer_valued"] boolValue];
-  l.scrubStep = [d[@"scrub_step"] doubleValue];
-  l.componentsScaleWithMedia = [d[@"components_scale_with_media"] boolValue];
-  l.categoryKey = d[@"category_key"];
-  l.categorySymbol = d[@"category_symbol"];
-  l.layerKey = d[@"layer_key"];
-  l.layerLabel = d[@"layer_label"];
-  l.layerSymbol = d[@"layer_symbol"];
-  l.animatable = d[@"animatable"] ? [d[@"animatable"] boolValue] : YES;
-  l.seedField = [d[@"seed_field"] boolValue];
-  l.oscEditedOnly = [d[@"osc_edited_only"] boolValue];
-  l.ownerScoped = [d[@"owner_scoped"] boolValue];
-  if ([d[@"choice_labels"] isKindOfClass:[NSArray class]])
-    l.choiceLabels = d[@"choice_labels"];
-  l.isToggle = [d[@"is_toggle"] boolValue];
-  l.autoSizesComponentLabels = [d[@"autosize_component_labels"] boolValue];
-  l.visibleWhenLabel = d[@"visible_when_label"];
-  if ([d[@"visible_when_values"] isKindOfClass:[NSArray class]])
-    l.visibleWhenValues = d[@"visible_when_values"];
-  l.visibleWhenOrLabel = d[@"visible_when_or_label"];
-  if ([d[@"visible_when_or_values"] isKindOfClass:[NSArray class]])
-    l.visibleWhenOrValues = d[@"visible_when_or_values"];
-  l.visibleWhenAndLabel = d[@"visible_when_and_label"];
-  if ([d[@"visible_when_and_values"] isKindOfClass:[NSArray class]])
-    l.visibleWhenAndValues = d[@"visible_when_and_values"];
-  l.maxControllerLabel = d[@"max_controller_label"];
-  if ([d[@"max_by_controller_value"] isKindOfClass:[NSArray class]])
-    l.componentMaxByControllerValue = d[@"max_by_controller_value"];
-  l.gradientShowsTypeAngle = [d[@"gradient_type_angle"] boolValue];
-  if ([d[@"link_expr"] isKindOfClass:[NSString class]])
-    l.linkExpression = d[@"link_expr"];
+  l.label = [d[@"label"] isKindOfClass:[NSString class]] ? d[@"label"] : @"";
+  l.key = [d[@"key"] isKindOfClass:[NSString class]] ? d[@"key"] : l.label;
+  for (size_t i = 0; i < kKKLaneFieldCount; i++) {
+    const KKLaneField *f = &kKKLaneFields[i];
+    if (!(f->roles & KKLaneFieldSerialized))
+      continue;
+    id raw = d[f->key];
+    switch (f->kind) {
+    case KKLaneFieldString:
+      if ([raw isKindOfClass:[NSString class]])
+        [l setValue:raw forKey:f->prop];
+      break;
+    case KKLaneFieldArray:
+    case KKLaneFieldPairedArray:
+      if ([raw isKindOfClass:[NSArray class]])
+        [l setValue:raw forKey:f->prop];
+      break;
+    case KKLaneFieldBoolOmitNO:
+      [l setValue:@([raw boolValue]) forKey:f->prop];
+      break;
+    case KKLaneFieldBoolOmitYES:
+    case KKLaneFieldBoolAlways:
+      [l setValue:@(raw ? [raw boolValue] : YES) forKey:f->prop];
+      break;
+    case KKLaneFieldIntAlways:
+    case KKLaneFieldIntOmitZero:
+      if (raw)
+        [l setValue:@([raw integerValue]) forKey:f->prop];
+      break;
+    case KKLaneFieldDoubleAlways:
+    case KKLaneFieldDoublePositive:
+      [l setValue:@([raw doubleValue]) forKey:f->prop];
+      break;
+    case KKLaneFieldObject:
+      break;
+    }
+  }
   NSArray *rawKps = d[@"keyposes"];
   if ([rawKps isKindOfClass:[NSArray class]]) {
     NSMutableArray *kps = [NSMutableArray arrayWithCapacity:rawKps.count];
@@ -631,6 +693,30 @@ NSData *KKLaneGeometrySnapshotAtFraction(KKLane *lane, double frac) {
   }
   return l;
 }
+
+#if DEBUG
+// Completeness net: every property of KKLane must have a descriptor row (or
+// be a listed exception), so a newly added field can't be silently dropped
+// from copies / the param round-trip / picker metadata again.
++ (void)initialize {
+  if (self != [KKLane class])
+    return;
+  NSMutableSet<NSString *> *covered =
+      [NSMutableSet setWithObjects:@"laneID", @"keyposes", @"displayName", nil];
+  for (size_t i = 0; i < kKKLaneFieldCount; i++)
+    [covered addObject:kKKLaneFields[i].prop];
+  unsigned n = 0;
+  objc_property_t *props = class_copyPropertyList(self, &n);
+  for (unsigned i = 0; i < n; i++) {
+    NSString *name = @(property_getName(props[i]));
+    if (![covered containsObject:name])
+      KKLogError(@"KKLane property '%@' has no kKKLaneFields row - it will be "
+                 @"DROPPED by copy/serialize/picker-metadata",
+                 name);
+  }
+  free(props);
+}
+#endif
 
 @end
 

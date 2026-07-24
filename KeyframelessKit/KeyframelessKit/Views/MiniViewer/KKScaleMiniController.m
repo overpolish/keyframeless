@@ -37,7 +37,7 @@ static const CGFloat kHandleHitTolPt = 12.0;
 
 - (nullable KKLane *)_liveLane {
   for (KKLane *lane in self.renderer.timeline.lanes)
-    if ([lane.label isEqualToString:self.laneLabel])
+    if ([lane.key isEqualToString:self.laneLabel])
       return lane;
   return nil;
 }

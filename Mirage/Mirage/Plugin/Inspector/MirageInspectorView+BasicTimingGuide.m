@@ -28,7 +28,7 @@ static NSString *const kMirageGuideScaleLabel = @"uScale";
 // live value the interactive OSC drag applies.
 static KKTimeline *MirageGuideOriginTimeline(double objX, double objY) {
   KKTimeline *tl = [KKTimeline timeline];
-  KKLane *lane = [KKLane laneWithLabel:kMirageGuideCenterLabel];
+  KKLane *lane = [KKLane laneWithKey:kMirageGuideCenterLabel label:kMirageGuideCenterLabel];
   lane.enabled = YES;
   lane.valueType = KKLaneValueTypeGeneric;
   lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0
@@ -39,7 +39,7 @@ static KKTimeline *MirageGuideOriginTimeline(double objX, double objY) {
 
 static NSPoint MirageGuideCurrentOrigin(KKTimelineLanesView *lanes) {
   for (KKLane *lane in lanes.currentTimeline.lanes) {
-    if ([lane.label isEqualToString:kMirageGuideCenterLabel] &&
+    if ([lane.key isEqualToString:kMirageGuideCenterLabel] &&
         lane.keyposes.count > 0) {
       KKKeyPose *kp = lane.keyposes.firstObject;
       if (kp.values.count >= 2)

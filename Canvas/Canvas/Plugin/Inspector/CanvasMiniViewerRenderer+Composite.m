@@ -85,10 +85,10 @@ static MTLPixelFormat CanvasSRGBVariant(MTLPixelFormat f) {
           NSString *label = [tail substringFromIndex:layerPrefix.length];
           if ([p.layerID isEqualToString:selLayerID])
             for (KKLane *l in selTimeline.lanes)
-              if ([l.label isEqualToString:label])
+              if ([l.key isEqualToString:label])
                 return KKLaneDisplayValueAtFraction(l, frac);
           for (KKLane *l in CanvasLayerTimelineForPath(p, templates).lanes)
-            if ([l.label isEqualToString:label])
+            if ([l.key isEqualToString:label])
               return KKLaneDisplayValueAtFraction(l, frac);
           return nil;
         }

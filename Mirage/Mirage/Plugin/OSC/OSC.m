@@ -240,8 +240,8 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
   NSMutableDictionary<NSString *, KKLane *> *availByLabel =
       [NSMutableDictionary dictionary];
   for (KKLane *l in avail)
-    if (l.label.length)
-      availByLabel[l.label] = l;
+    if (l.key.length)
+      availByLabel[l.key] = l;
   _exprAvailLanes = [availByLabel copy];
   NSArray<MirageOSCBlockRuntime *> *runtimes =
       [MirageOSCBlockRuntime runtimesForSource:src lanes:avail];
@@ -398,7 +398,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
 - (nullable NSArray<NSNumber *> *)_exprRawLaneValuesForLabel:(NSString *)label
                                                   atFraction:(double)frac {
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-    if ([l.label isEqualToString:label])
+    if ([l.key isEqualToString:label])
       return KKTimelineLaneValueAtFraction(l, frac);
   KKLane *tpl = _exprAvailLanes[label];
   return tpl ? KKTimelineLaneValueAtFraction(tpl, frac) : nil;
@@ -424,7 +424,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
 - (nullable NSString *)_currentShaderSource {
   BOOL hasShaderLane = NO;
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-    if ([l.label isEqualToString:kMirageCodeLaneLabel]) {
+    if ([l.key isEqualToString:kMirageCodeLaneLabel]) {
       hasShaderLane = YES;
       if (l.codeString.length)
         return l.codeString;
@@ -466,7 +466,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
 // keypose) so the handle is drawable / grabbable before the lane materializes.
 - (nullable KKLane *)_exprLaneForBlock:(MirageOSCBlockRuntime *)b {
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-    if ([l.label isEqualToString:b.binds])
+    if ([l.key isEqualToString:b.binds])
       return l;
   return b.templateLane;
 }
@@ -671,7 +671,7 @@ static BOOL MirageExprBoxHandleControlsX(NSInteger idx) {
                  : nil;
         if (!tl) {
           tl = snap ? [snap copy] : [KKTimeline timeline];
-          KKLane *seed = [b.templateLane copy] ?: [KKLane laneWithLabel:b.binds];
+          KKLane *seed = [b.templateLane copy] ?: [KKLane laneWithKey:b.binds label:b.binds];
           seed.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
           NSMutableArray<KKLane *> *lanes = [NSMutableArray arrayWithArray:tl.lanes];
           [lanes addObject:seed];

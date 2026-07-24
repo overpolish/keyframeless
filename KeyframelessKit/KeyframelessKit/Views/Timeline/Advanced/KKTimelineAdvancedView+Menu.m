@@ -24,18 +24,19 @@
   _menuGapFrac = 0.0;
   NSInteger laneIdx = -1, kpIdx = -1;
   BOOL hitPill = [self _pillAtPoint:pt lane:&laneIdx kp:&kpIdx];
-  NSArray<KKLane *> *anim = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *anim = [self _rows];
   if (hitPill && laneIdx < (NSInteger)anim.count) {
-    _menuPillLabel = [anim[laneIdx].label copy];
+    _menuPillLabel = [anim[laneIdx].lane.key copy];
     _menuPillKPIdx = kpIdx;
   } else {
     NSInteger row = [self _laneRowAtPoint:pt];
     NSRect tracks = [self _tracksRect];
-    if (row >= 0 && row < (NSInteger)anim.count && pt.x >= NSMinX(tracks) &&
-        pt.x <= NSMaxX(tracks)) {
-      double frac = [self _fracForX:pt.x inLane:anim[row] inTracks:tracks];
-      NSInteger aIdx = [self _intervalStartKPIdxInLane:anim[row] atFrac:frac];
-      _menuGapLabel = [anim[row].label copy];
+    if (row >= 0 && row < (NSInteger)anim.count && anim[row].lane &&
+        pt.x >= NSMinX(tracks) && pt.x <= NSMaxX(tracks)) {
+      KKLane *rowLane = anim[row].lane;
+      double frac = [self _fracForX:pt.x inLane:rowLane inTracks:tracks];
+      NSInteger aIdx = [self _intervalStartKPIdxInLane:rowLane atFrac:frac];
+      _menuGapLabel = [rowLane.key copy];
       _menuGapAIdx = aIdx;
       _menuGapLaneRow = row;
       _menuGapFrac = frac;
@@ -81,9 +82,9 @@
         .target = self;
     if (_menuGapAIdx >= 0) {
       KKLane *gapLane = nil;
-      for (KKLane *l in anim)
-        if ([l.label isEqualToString:_menuGapLabel]) {
-          gapLane = l;
+      for (KKAdvancedRow *r in anim)
+        if ([r.lane.key isEqualToString:_menuGapLabel]) {
+          gapLane = r.lane;
           break;
         }
       KKInterval *iv =
@@ -219,7 +220,7 @@
   for (NSString *label in byLane) {
     NSInteger li = -1;
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-      if ([lanes[i].label isEqualToString:label]) {
+      if ([lanes[i].key isEqualToString:label]) {
         li = i;
         break;
       }
@@ -285,10 +286,10 @@
 - (void)_menuRemovePill:(id)sender {
   if (!_menuPillLabel)
     return;
-  NSArray<KKLane *> *anim = [self _animatableLanes];
+  NSArray<KKAdvancedRow *> *anim = [self _rows];
   NSInteger li = -1;
   for (NSInteger i = 0; i < (NSInteger)anim.count; i++)
-    if ([anim[i].label isEqualToString:_menuPillLabel]) {
+    if ([anim[i].lane.key isEqualToString:_menuPillLabel]) {
       li = i;
       break;
     }
@@ -326,7 +327,7 @@
       NSInteger kIdx;
       if (![self _decodeSelectionKey:key label:&kLabel kpIdx:&kIdx])
         continue;
-      if (![kLabel isEqualToString:src.label])
+      if (![kLabel isEqualToString:src.key])
         continue;
       [selIdx addObject:@(kIdx)];
     }
@@ -381,7 +382,7 @@
       NSInteger kIdx;
       if (![self _decodeSelectionKey:key label:&kLabel kpIdx:&kIdx])
         continue;
-      if (![kLabel isEqualToString:src.label])
+      if (![kLabel isEqualToString:src.key])
         continue;
       [selIdx addObject:@(kIdx)];
     }

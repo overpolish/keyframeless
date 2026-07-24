@@ -21,11 +21,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// timer. During a sustained source drag it nudges at most ~4/s so the
 /// subscriber tracks; a settle-fire lands the exact final value.
 ///
-/// `nudgeParamID` MUST be a hidden STRING param (kKKParamRenderNudgeString,
-/// registered by the kit's standard-params helper): string writes are the one
-/// param write FCP keeps off the undo stack, and the watcher fires outside
-/// any user edit - an undoable nudge stacks stray entries and re-arms itself
-/// on every undo of the source edit.
+/// `nudgeParamID` MUST be the hidden STRING scratch param
+/// (kKKParamRenderNudgeString, registered by the kit's standard-params
+/// helper). Every honored write charges one undo entry (no param type or
+/// flag exempts it), so the watcher wraps each nudge burst in an FxUndoAPI
+/// undo group - one source edit costs at most one stray entry.
 @interface KKLinkWatcher : NSObject
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager

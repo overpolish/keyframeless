@@ -95,8 +95,8 @@
     return nil;
   NSMutableSet<NSString *> *labels = [NSMutableSet set];
   for (KKLane *l in _openStaticBoundaryLanes)
-    if (l.label)
-      [labels addObject:l.label];
+    if (l.key)
+      [labels addObject:l.key];
   return labels;
 }
 
@@ -112,7 +112,7 @@
     for (KKLane *lane in [self _graphTimeline].lanes) {
       if (!lane.enabled)
         continue;
-      if (scope && ![scope containsObject:lane.label])
+      if (scope && ![scope containsObject:lane.key])
         continue;
       for (KKKeyPose *kp in lane.keyposes)
         [kpTimes addObject:@(kp.time)];
@@ -174,7 +174,7 @@
   for (KKLane *lane in [self _graphTimeline].lanes) {
     if (!lane.enabled)
       continue;
-    if (scope && ![scope containsObject:lane.label])
+    if (scope && ![scope containsObject:lane.key])
       continue;
     for (KKKeyPose *kp in lane.keyposes)
       [kpTimes addObject:@(kp.time)];
@@ -204,7 +204,7 @@
   for (KKLane *lane in [self _graphTimeline].lanes) {
     if (!lane.enabled)
       continue;
-    if (scope && ![scope containsObject:lane.label])
+    if (scope && ![scope containsObject:lane.key])
       continue;
     NSArray<KKKeyPose *> *kps = lane.keyposes;
     if (kps.count < 2)

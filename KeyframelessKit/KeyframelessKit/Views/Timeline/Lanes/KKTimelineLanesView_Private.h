@@ -225,6 +225,13 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// content width (the size pill resizes without rebuilding rows). No-op
 /// otherwise.
 - (void)updateContentWidth:(CGFloat)contentWidth;
+
+// A relabel elsewhere moved the shared label column (widest name changed):
+// restretch this row's title constraint in place - remaking the row for a
+// pure width change would tear down an actively-focused editor (the code
+// editor loses focus/scroll on its own commit when its rename widens the
+// column). Re-derives a wrapping pill row's height for the new column.
+- (void)updateLabelColumnWidth:(CGFloat)labelColumnWidth;
 /// The KKSliderView (Float rows), for a guide that drives the slider.
 - (nullable NSView *)guideSliderView;
 /// The number field for component `i` (Float: 0; Crop: 0..3 = W,H,X,Y), for
@@ -253,7 +260,7 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// the callback. Used to restore the row's lock state after a rebuild.
 - (void)applyPaletteLock:(BOOL)locked;
 - (void)applyLane:(KKLane *)lane;
-/// Update the slider's upper bound live (e.g. a `maxControllerLabel` lane whose
+/// Update the slider's upper bound live (e.g. a `maxControllerKey` lane whose
 /// max tracks another lane) without rebuilding the row. Re-clamps the slider
 /// thumb; the typed field keeps the stored value.
 - (void)applySliderMax:(double)maxValue;

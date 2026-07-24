@@ -4,6 +4,7 @@
  */
 
 #import "Constants.h"
+#import <KeyframelessKit/KKLog.h>
 #import "MirageAudioPool.h" // MirageFillAudioPool (the Sonar spectrogram)
 #import "MirageDirectives.h"
 #import "MirageInspectorView.h"
@@ -26,8 +27,9 @@ static NSArray<NSNumber *> *
 MirageLaneValuesAtFraction(KKTimeline *timeline, NSString *label, double frac,
                            double timelineSec, double durSec) {
   for (KKLane *lane in timeline.lanes) {
-    if ([lane.label isEqualToString:label])
+    if ([lane.key isEqualToString:label]) {
       return KKLinkResolvedLaneValue(lane, frac, timelineSec, durSec);
+    }
   }
   return nil;
 }
@@ -82,7 +84,7 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   // every directive reads 0, flattening the preview.
   KKLane *shaderLane = nil;
   for (KKLane *l in timeline.lanes)
-    if ([l.label isEqualToString:kMirageCodeLaneLabel]) {
+    if ([l.key isEqualToString:kMirageCodeLaneLabel]) {
       shaderLane = l;
       break;
     }
@@ -127,7 +129,7 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
   KKTimeline *timeline = [self _timelineFromParams:getAPI];
   NSString *shaderSrc = nil;
   for (KKLane *lane in timeline.lanes)
-    if ([lane.label isEqualToString:kMirageCodeLaneLabel] && lane.codeString.length) {
+    if ([lane.key isEqualToString:kMirageCodeLaneLabel] && lane.codeString.length) {
       shaderSrc = lane.codeString;
       break;
     }
@@ -137,19 +139,19 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
       [MiragePlugin availableLanesForShaderSource:shaderSrc];
   // Overlay the user's REAL keyposes / expression onto each template lane so
   // the auto-published curves (KKPlugin -writeLinkManifest) carry the values
-  // the render actually uses, not just defaults - while keeping each template's
-  // displayLabel/metadata (the persisted lane's display name isn't serialized)
-  // so the manifest's friendly param names survive. Unedited params keep the
+  // the render actually uses, not just defaults - while keeping each
+  // template's label/metadata (the template's display name is canonical) so
+  // the manifest's friendly param names survive. Unedited params keep the
   // template default; edited ones (constant or animated) get their real curve.
   NSMutableDictionary<NSString *, KKLane *> *persisted =
       [NSMutableDictionary dictionaryWithCapacity:timeline.lanes.count];
   for (KKLane *l in timeline.lanes)
-    if (l.label)
-      persisted[l.label] = l;
+    if (l.key)
+      persisted[l.key] = l;
   NSMutableArray<KKLane *> *merged =
       [NSMutableArray arrayWithCapacity:templates.count];
   for (KKLane *t in templates) {
-    KKLane *p = persisted[t.label];
+    KKLane *p = persisted[t.key];
     if (p.keyposes.count) {
       KKLane *m = [t copy];
       m.keyposes = p.keyposes;

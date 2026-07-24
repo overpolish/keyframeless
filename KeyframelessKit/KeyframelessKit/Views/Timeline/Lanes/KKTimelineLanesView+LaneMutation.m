@@ -36,7 +36,7 @@
   KKTimeline *updated = [_timeline copy];
   NSMutableArray<KKLane *> *lanes = [updated.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if ([lanes[i].label isEqualToString:label]) {
+    if ([lanes[i].key isEqualToString:label]) {
       lanes[i] = lane;
       break;
     }
@@ -156,9 +156,23 @@
       outEndFrac = inheritedEndFrac;
 
     NSArray<NSNumber *> *v = [self _holdValuesOfLane:lane forLabel:label];
+    // Every rebuilt keypose derives from the constant lane's EXISTING keypose
+    // (the keyposeBySetting* full-copy builders), so spatial-curve state and a
+    // geometry snapshot survive the constant -> animatable flip - the
+    // Lanes-view sibling of Basic's KKBasicCopySpatial carry. Intervals are
+    // still assigned explicitly per keypose, matching the old constructor's
+    // fresh-interval default.
+    KKKeyPose *src = lane.keyposes.firstObject;
+    KKKeyPose *(^seedAt)(double) = ^KKKeyPose *(double t) {
+      if (!src)
+        return [KKKeyPose keyposeAtTime:t values:v];
+      KKKeyPose *kp = [[src keyposeBySettingValues:v] keyposeBySettingTime:t];
+      kp.outgoing = [[KKInterval alloc] init];
+      return kp;
+    };
     NSMutableArray<KKKeyPose *> *kps = [NSMutableArray array];
     if (globalIn) {
-      KKKeyPose *a = [KKKeyPose keyposeAtTime:0.0 values:v];
+      KKKeyPose *a = seedAt(0.0);
       a.outgoing = tmplIn ?: [[KKInterval alloc] init];
       [kps addObject:a];
     }
@@ -166,7 +180,7 @@
     // property's Hold pair starts linked (the two interior keyposes move
     // together) - "fresh = linked, then it's on the user". A second lane
     // joining an existing shape inherits that shape's link state via tmplHold.
-    KKKeyPose *hs = [KKKeyPose keyposeAtTime:(globalIn ? tIn : 0.0) values:v];
+    KKKeyPose *hs = seedAt(globalIn ? tIn : 0.0);
     if (tmplHold) {
       hs.outgoing = tmplHold;
     } else {
@@ -176,17 +190,20 @@
     }
     [kps addObject:hs];
     // Hold-end: at outEndFrac when Out off, at tOut when Out on.
-    KKKeyPose *he =
-        [KKKeyPose keyposeAtTime:(globalOut ? tOut : outEndFrac) values:v];
+    KKKeyPose *he = seedAt(globalOut ? tOut : outEndFrac);
     [kps addObject:he];
     if (globalOut) {
       he.outgoing = tmplOut ?: [[KKInterval alloc] init];
-      [kps addObject:[KKKeyPose keyposeAtTime:outEndFrac values:v]];
+      [kps addObject:seedAt(outEndFrac)];
     }
     lane.keyposes = kps;
   } else {
     NSArray<NSNumber *> *v = [self _holdValuesOfLane:lane forLabel:label];
-    lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:v] ];
+    KKKeyPose *src = lane.keyposes.firstObject;
+    lane.keyposes = @[
+      src ? [[src keyposeBySettingValues:v] keyposeBySettingTime:0.0]
+          : [KKKeyPose keyposeAtTime:0.0 values:v]
+    ];
   }
   [self _replaceLane:lane forLabel:label];
 }
@@ -201,9 +218,15 @@
   // Copy the existing lane so every property survives a constant value edit -
   // aspectLinked in particular. Rebuilding a fresh lane (carrying only a subset
   // of fields) dropped aspectLinked, so editing the Scale constant cleared the
-  // aspect lock. Just replace the single constant keypose.
+  // aspect lock. The keypose likewise derives from the existing one
+  // (keyposeBySettingValues carries spatial state + geometry snapshot), not a
+  // from-scratch rebuild.
   KKLane *lane = [existing copy];
-  lane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:values] ];
+  KKKeyPose *src = lane.keyposes.firstObject;
+  lane.keyposes = @[
+    src ? [src keyposeBySettingValues:values]
+        : [KKKeyPose keyposeAtTime:0.0 values:values]
+  ];
   [self _replaceLane:lane forLabel:label];
 }
 

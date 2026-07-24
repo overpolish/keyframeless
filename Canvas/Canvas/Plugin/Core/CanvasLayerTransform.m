@@ -98,20 +98,20 @@ CanvasLayerTransform CanvasLayerTransformFromTimeline(KKTimeline *tl,
                                                       double frac) {
   CanvasLayerTransform t = CanvasLayerTransformIdentity();
   for (KKLane *lane in tl.lanes) {
-    if ([lane.label isEqualToString:@"Scale"]) {
+    if ([lane.key isEqualToString:@"Scale"]) {
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       // Overshoot/elastic easing can dip scale below 0; clamp rather than flip.
       if (v.count > 0)
         t.scaleX = (float)(fmax(0.0, v[0].doubleValue) / 100.0);
       if (v.count > 1)
         t.scaleY = (float)(fmax(0.0, v[1].doubleValue) / 100.0);
-    } else if ([lane.label isEqualToString:@"Position"]) {
+    } else if ([lane.key isEqualToString:@"Position"]) {
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         t.posX = (float)v[0].doubleValue;
       if (v.count > 1)
         t.posY = (float)v[1].doubleValue;
-    } else if ([lane.label isEqualToString:@"Rotation"]) {
+    } else if ([lane.key isEqualToString:@"Rotation"]) {
       // 3-axis Euler [X,Y,Z]°.
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       const double kDegToRad = M_PI / 180.0;
@@ -121,11 +121,11 @@ CanvasLayerTransform CanvasLayerTransformFromTimeline(KKTimeline *tl,
         t.rotY = (float)(v[1].doubleValue * kDegToRad);
       if (v.count > 2)
         t.rotation = (float)(v[2].doubleValue * kDegToRad);
-    } else if ([lane.label isEqualToString:@"Opacity"]) {
+    } else if ([lane.key isEqualToString:@"Opacity"]) {
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         t.opacity = (float)(fmax(0.0, fmin(100.0, v[0].doubleValue)) / 100.0);
-    } else if ([lane.label isEqualToString:@"Anchor"]) {
+    } else if ([lane.key isEqualToString:@"Anchor"]) {
       // Pivot for Rotation/Scale, normalised (0.5,0.5 = layer centre). Empty
       // lane on a cold-boot snapshot evaluates to [0,0]; keep the centre
       // default.

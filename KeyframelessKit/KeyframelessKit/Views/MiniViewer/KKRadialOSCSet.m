@@ -91,7 +91,7 @@
   // than the directive's lock; there, fall back to the template's aspectLinked
   // so the OSC honours the directive default and matches the main viewer.
   for (KKLane *l in _renderer.timeline.lanes)
-    if ([l.label isEqualToString:label]) {
+    if ([l.key isEqualToString:label]) {
       if (l.aspectLinkable)
         return l.aspectLinked;
       break;

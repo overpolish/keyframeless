@@ -63,8 +63,8 @@ static const CGFloat kChecklistPillH = 24.0;
   // it resizes as the pill/search narrows the list.
   NSInteger initialVisible = 0;
   for (KKLane *lane in lanes)
-    if (!hasPill || catByLabel[lane.label] == nil ||
-        [catByLabel[lane.label] isEqualToString:selected])
+    if (!hasPill || catByLabel[lane.key] == nil ||
+        [catByLabel[lane.key] isEqualToString:selected])
       initialVisible++;
   CGFloat h = MAX([[self class] heightForRowCount:initialVisible
                                           hasPill:hasPill],
@@ -289,8 +289,8 @@ static const CGFloat kChecklistPillH = 24.0;
   NSMutableArray<NSString *> *out =
       [NSMutableArray arrayWithCapacity:_lanes.count];
   for (KKLane *l in _lanes)
-    if (l.label)
-      [out addObject:l.label];
+    if (l.key)
+      [out addObject:l.key];
   return out;
 }
 
@@ -315,8 +315,8 @@ static const CGFloat kChecklistPillH = 24.0;
   _rowCategoryByLabel = KKLaneCategoryByLabel(_lanes);
   [self removeAllRows];
   for (KKLane *lane in _lanes) {
-    _KKManageRow *row = [self appendRowWithLabel:lane.label
-                                     categoryKey:_rowCategoryByLabel[lane.label]
+    _KKManageRow *row = [self appendRowWithLabel:lane.key
+                                     categoryKey:_rowCategoryByLabel[lane.key]
                                      indentLevel:0];
     // rowLabel stays the identity (used for checked-state / search); show the
     // lane's displayName so a dynamic plugin's stable key isn't user-facing.

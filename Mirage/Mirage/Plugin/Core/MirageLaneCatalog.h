@@ -43,8 +43,7 @@ static inline NSArray<NSNumber *> *MirageCountAtLeast(NSInteger n,
 static inline KKLane *MirageMakeColorLane(NSString *idLabel,
                                           NSString *displayLabel,
                                           NSString *group, const float *rgba) {
-  KKLane *color = [KKLane laneWithLabel:idLabel];
-  color.displayLabel = displayLabel;
+  KKLane *color = [KKLane laneWithKey:idLabel label:displayLabel];
   color.valueType = KKLaneValueTypeColor;
   color.componentMin = @[ @0.0, @0.0, @0.0, @0.0 ];
   color.componentMax = @[ @1.0, @1.0, @1.0, @1.0 ];
@@ -80,7 +79,7 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
   if (nProps == 0)
     return;
   // One palette-generator bar for the whole Colours group.
-  KKLane *bar = [KKLane laneWithLabel:@"Palette"];
+  KKLane *bar = [KKLane laneWithKey:@"Palette" label:@"Palette"];
   bar.paletteGeneratorBar = YES;
   bar.animatable = NO;
   bar.enabled = NO;
@@ -104,8 +103,9 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
     }
     // An array: count lane + N swatches (the shared bar above rerolls them).
     NSString *countId = [NSString stringWithFormat:@"%@ Count", name];
-    KKLane *count = [KKLane laneWithLabel:countId];
-    count.displayLabel = [NSString stringWithFormat:@"%@ Count", label];
+    KKLane *count = [KKLane
+        laneWithKey:countId
+              label:[NSString stringWithFormat:@"%@ Count", label]];
     count.animatable = NO;
     count.enabled = NO;
     count.integerValued = YES;
@@ -132,7 +132,7 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
           [NSString stringWithFormat:@"%@ %ld", label, (long)n], name, seed);
       // "count >= n" via the absolute ceiling, so a swatch still reveals when
       // the stored count is transiently above a just-lowered max.
-      color.visibleWhenLabel = countId;
+      color.visibleWhenKey = countId;
       color.visibleWhenValues = MirageCountAtLeast(n, KK_SHADER_MAX_COLORS);
       [lanes addObject:color];
     }
@@ -217,8 +217,7 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
     // Identity = the GLSL uniform name (stable across rename/reorder); the
     // label is display-only. So the value/keyframes follow the uniform, not the
     // label.
-    KKLane *lane = [KKLane laneWithLabel:@(p->name)];
-    lane.displayLabel = @(p->label);
+    KKLane *lane = [KKLane laneWithKey:@(p->name) label:@(p->label)];
     lane.valueType = KKLaneValueTypeFloat;
     lane.enabled = NO;
     // Each scalar/point is independent: its own keypose-popover group, so a
@@ -453,8 +452,7 @@ static inline KKLane *MirageMakeAudioControlLane(NSString *idLabel,
                                                  NSString *units, double min,
                                                  double max, double def,
                                                  NSString *group) {
-  KKLane *lane = [KKLane laneWithLabel:idLabel];
-  lane.displayLabel = displayLabel;
+  KKLane *lane = [KKLane laneWithKey:idLabel label:displayLabel];
   lane.valueType = KKLaneValueTypeFloat;
   lane.componentUnits = @[ units ];
   lane.componentMin = @[ @(min) ];
@@ -552,8 +550,7 @@ MirageAppendAudioLanes(NSMutableArray<KKLane *> *lanes, NSString *source,
 
     // Identity = the uniform name (stable across rename/reorder), like every
     // other directive lane; the label is display-only.
-    KKLane *lane = [KKLane laneWithLabel:uniform];
-    lane.displayLabel = @(p->label);
+    KKLane *lane = [KKLane laneWithKey:uniform label:@(p->label)];
     lane.valueType = KKLaneValueTypeFloat;
     lane.integerValued = YES;
     lane.animatable = NO;
@@ -637,7 +634,7 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   // absent controller can't gate), so they need no change.
 
   // Speed: shared motion-rate multiplier.
-  KKLane *speed = [KKLane laneWithLabel:@"Speed"];
+  KKLane *speed = [KKLane laneWithKey:@"Speed" label:@"Speed"];
   speed.valueType = KKLaneValueTypeFloat;
   speed.componentMin = @[ @0.0 ];
   speed.componentMax = @[ @3.0 ];
@@ -645,7 +642,7 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   speed.enabled = NO;
   speed.categoryKey = @"Core";
   speed.categorySymbol = @"circle.dotted";
-  speed.visibleWhenLabel = @"Type";
+  speed.visibleWhenKey = @"Type";
   speed.visibleWhenValues =
       @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12 ]; // + Custom
   [speed insertKeypose:[KKKeyPose
@@ -655,7 +652,7 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
 
   // Seed: shared start-time offset (a "start frame"), non-animatable integer
   // with a dice field. Any value; the slider range is nominal.
-  KKLane *seed = [KKLane laneWithLabel:@"Seed"];
+  KKLane *seed = [KKLane laneWithKey:@"Seed" label:@"Seed"];
   seed.valueType = KKLaneValueTypeFloat;
   seed.seedField = YES;
   seed.integerValued = YES;
@@ -665,7 +662,7 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   seed.enabled = NO;
   seed.categoryKey = @"Core";
   seed.categorySymbol = @"circle.dotted";
-  seed.visibleWhenLabel = @"Type";
+  seed.visibleWhenKey = @"Type";
   seed.visibleWhenValues =
       @[ @0, @1, @2, @3, @4, @5, @6, @7, @8, @9, @10, @11, @12 ]; // + Custom
   [seed insertKeypose:[KKKeyPose
@@ -690,7 +687,7 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
       {@"Grain Size", KK_CORE_GRAINSIZE_DEFAULT, 1.0, 12.0, @"px", YES},
   };
   for (unsigned s = 0; s < sizeof(coreGrain) / sizeof(coreGrain[0]); s++) {
-    KKLane *lane = [KKLane laneWithLabel:coreGrain[s].label];
+    KKLane *lane = [KKLane laneWithKey:coreGrain[s].label label:coreGrain[s].label];
     lane.valueType = KKLaneValueTypeFloat;
     lane.componentMin = @[ @(coreGrain[s].min) ];
     lane.componentMax = @[ @(coreGrain[s].max) ];
@@ -700,7 +697,7 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
     lane.enabled = NO;
     lane.categoryKey = @"Core";
     lane.categorySymbol = @"circle.dotted";
-    lane.visibleWhenLabel = @"Type";
+    lane.visibleWhenKey = @"Type";
     lane.visibleWhenValues = allTypes;
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                           values:@[ @(coreGrain[s].def) ]]];
@@ -719,12 +716,13 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   // Non-animatable; the text lives in the lane's codeString (not a keypose) and
   // flows through the timeline. Seeded with the baked default so the editor
   // opens on something runnable.
-  KKLane *shader = [KKLane laneWithLabel:kMirageCodeLaneLabel];
-  // The label "Mirage" is the internal identity (matched all over as the code
+  // The KEY "Mirage" is the internal identity (matched all over as the code
   // lane); the code block is a GENERIC GLSL shader, so it SHOWS as "Shader" -
   // the brand name shouldn't leak onto the editor caption / save placeholder.
-  shader.displayLabel = RLoc(@"Shader", @"Generic GLSL code lane display name "
-                                        @"(the code editor's caption).");
+  KKLane *shader =
+      [KKLane laneWithKey:kMirageCodeLaneLabel
+                    label:RLoc(@"Shader", @"Generic GLSL code lane display "
+                                          @"name (the code editor's caption).")];
   shader.valueType = KKLaneValueTypeCode;
   shader.codeString = MirageCustomDefaultShaderSource();
   // Multi-pass: the editor starts on the single Image tab (codeString above)
@@ -805,16 +803,11 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
                          range:NSMakeRange(0, code.length)] != nil;
     if (trimmed.length == 0 || !hasEntry)
       return nil;
-    // Two directives sharing a label would collapse into one lane (the label is
-    // the identity key), so reject it: the user must give each a unique label.
-    NSString *dup = MirageFirstDuplicateLabel(code);
-    if (dup.length)
-      return [NSString
-          stringWithFormat:RLoc(
-                               @"Duplicate control \"%@\": give each directive "
-                               @"a unique label",
-                               @"Mirage duplicate-label validation error."),
-                           dup];
+    // Duplicate directive LABELS are allowed - the lane identity is the
+    // uniform name, so two controls may share a display name (the link-bus
+    // manifests disambiguate them as "Name (2)" where it matters). Only a
+    // duplicate UNIFORM is a real error (identity collision + glslang
+    // block-member clash).
     NSString *dupU = MirageFirstDuplicateUniform(code);
     if (dupU.length)
       return [NSString

@@ -69,7 +69,7 @@ static NSInteger const kKKKeyposePBVersion = 1;
 }
 
 - (BOOL)matchesLane:(KKLane *)lane {
-  if (![lane.label isEqualToString:self.label])
+  if (![lane.key isEqualToString:self.label])
     return NO;
   if (lane.valueType != self.valueType)
     return NO;
@@ -94,7 +94,7 @@ static NSInteger const kKKKeyposePBVersion = 1;
 + (KKKeyposeClipboardEntry *)entryForKeypose:(KKKeyPose *)keypose
                                         lane:(KKLane *)lane {
   KKKeyposeClipboardEntry *e = [[KKKeyposeClipboardEntry alloc] init];
-  e.label = lane.label;
+  e.label = lane.key;
   e.valueType = lane.valueType;
   e.values = keypose.values;
   e.spatialSmooth = keypose.spatialSmooth;

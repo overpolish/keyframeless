@@ -26,7 +26,7 @@
   _visible = [NSMutableSet set];
   _soloLabels = [NSMutableSet set];
   for (KKLane *l in lanes)
-    [_visible addObject:l.label];
+    [_visible addObject:l.key];
   [self _rebuildForLanes:lanes];
   return self;
 }
@@ -66,7 +66,7 @@
 - (NSArray<NSString *> *)_signatureForLanes:(NSArray<KKLane *> *)lanes {
   NSMutableArray<NSString *> *sig = [NSMutableArray array];
   for (KKLane *l in lanes)
-    [sig addObject:[NSString stringWithFormat:@"%@\x1f%@\x1f%@", l.label ?: @"",
+    [sig addObject:[NSString stringWithFormat:@"%@\x1f%@\x1f%@", l.key ?: @"",
                                               l.layerLabel ?: @"",
                                               l.categoryKey ?: @""]];
   return sig;
@@ -114,19 +114,19 @@
       NSMutableArray<NSString *> *grpLabels =
           [NSMutableArray arrayWithCapacity:grp.count];
       for (KKLane *gl in grp)
-        [grpLabels addObject:gl.label];
+        [grpLabels addObject:gl.key];
       [display addObject:KKLocalizedParamName(cat)];
       [targets addObject:[grpLabels copy]];
       [isMaster addObject:@YES];
       for (KKLane *gl in grp) {
         [display addObject:KKLocalizedParamName(gl.displayName)];
-        [targets addObject:@[ gl.label ]];
+        [targets addObject:@[ gl.key ]];
         [isMaster addObject:@NO];
       }
       i = j;
     } else {
       [display addObject:KKLocalizedParamName(l.displayName)];
-      [targets addObject:@[ l.label ]];
+      [targets addObject:@[ l.key ]];
       [isMaster addObject:@NO];
       i++;
     }

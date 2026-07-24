@@ -364,7 +364,7 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *uuid) {
 
 - (KKLane *)templateLaneForLabel:(NSString *)label {
   for (KKLane *l in self.laneTemplates)
-    if ([l.label isEqualToString:label])
+    if ([l.key isEqualToString:label])
       return l;
   return [super templateLaneForLabel:label];
 }

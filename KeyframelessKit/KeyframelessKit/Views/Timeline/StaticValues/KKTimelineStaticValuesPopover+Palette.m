@@ -12,7 +12,7 @@
 #import "KKMiniViewerView.h" // canvasDelegate + KKMiniViewerDelegate
 #import "KKPaletteGenerator.h"
 #import "KKTimelineStaticValuesPopover_Private.h"
-#import "KKTimeline.h" // KKConditionalVisibleLaneLabels
+#import "KKTimeline.h" // KKConditionalVisibleLaneKeys
 #import "NSColor+KKColors.h"
 
 @interface _KKStaticValuesPopoverView (PalettePrivate)
@@ -28,12 +28,12 @@
 
 - (NSArray<NSString *> *)_visiblePaletteLabels {
   NSSet<NSString *> *visible =
-      KKConditionalVisibleLaneLabels(_lanes, _currentValuesByLabel);
+      KKConditionalVisibleLaneKeys(_lanes, _currentValuesByLabel);
   NSMutableArray<NSString *> *labels = [NSMutableArray array];
   for (KKLane *lane in _lanes)
     if (lane.valueType == KKLaneValueTypeColor && lane.paletteLockable &&
-        [visible containsObject:lane.label])
-      [labels addObject:lane.label];
+        [visible containsObject:lane.key])
+      [labels addObject:lane.key];
   return labels;
 }
 
@@ -43,14 +43,14 @@
 // group so they reroll as separate cohesive palettes.
 - (NSArray<NSArray<NSString *> *> *)_visiblePaletteGroups {
   NSSet<NSString *> *visible =
-      KKConditionalVisibleLaneLabels(_lanes, _currentValuesByLabel);
+      KKConditionalVisibleLaneKeys(_lanes, _currentValuesByLabel);
   NSMutableArray<NSMutableArray<NSString *> *> *groups = [NSMutableArray array];
   NSMutableDictionary<NSString *, NSMutableArray<NSString *> *> *byGroup =
       [NSMutableDictionary dictionary];
   NSMutableArray<NSString *> *legacy = nil;
   for (KKLane *lane in _lanes) {
     if (lane.valueType != KKLaneValueTypeColor || !lane.paletteLockable ||
-        ![visible containsObject:lane.label])
+        ![visible containsObject:lane.key])
       continue;
     if (lane.paletteGroup.length) {
       NSMutableArray<NSString *> *g = byGroup[lane.paletteGroup];
@@ -59,13 +59,13 @@
         byGroup[lane.paletteGroup] = g;
         [groups addObject:g];
       }
-      [g addObject:lane.label];
+      [g addObject:lane.key];
     } else {
       if (!legacy) {
         legacy = [NSMutableArray array];
         [groups addObject:legacy];
       }
-      [legacy addObject:lane.label];
+      [legacy addObject:lane.key];
     }
   }
   return groups;

@@ -8,6 +8,7 @@
 // the value-at-index / nearest-fraction setters). Operate on the public
 // KKLane / KKTimeline API; the model classes live in KKTimeline.m.
 
+#import "KKLog.h"
 #import "KKTimeline.h"
 
 #import "KKBezierPath.h"
@@ -20,7 +21,7 @@ KKTimeline *KKTimelineSettingSpatialSmooth(KKTimeline *timeline,
   KKTimeline *t = [timeline copy];
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    if (![lanes[i].key isEqualToString:label])
       continue;
     KKLane *nl = [lanes[i] copy];
     NSArray<KKKeyPose *> *kps = nl.keyposes;
@@ -74,7 +75,7 @@ KKTimeline *KKTimelineSettingAspectLinked(KKTimeline *timeline, NSString *label,
   KKTimeline *t = [timeline copy];
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    if (![lanes[i].key isEqualToString:label])
       continue;
     if (lanes[i].aspectLinked == on)
       return nil; // already in that state - no commit, no undo entry
@@ -96,7 +97,7 @@ KKTimeline *KKTimelineSettingLinkExpression(KKTimeline *timeline,
   // menu) truly clears the binding.
   NSString *e = expr;
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    if (![lanes[i].key isEqualToString:label])
       continue;
     NSString *cur = lanes[i].linkExpression;
     if (cur == e || [cur isEqualToString:e])
@@ -115,7 +116,7 @@ KKTimeline *KKTimelineSettingGradientType(KKTimeline *timeline, NSString *label,
   KKTimeline *t = [timeline copy];
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    if (![lanes[i].key isEqualToString:label])
       continue;
     KKLane *nl = [lanes[i] copy];
     NSMutableArray<KKKeyPose *> *kps = [nl.keyposes mutableCopy];
@@ -210,7 +211,7 @@ KKTimelineSettingValuesNearestFraction(KKTimeline *timeline, NSString *label,
   KKTimeline *t = [timeline copy];
   NSMutableArray<KKLane *> *lanes = [t.lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:label])
+    if (![lanes[i].key isEqualToString:label])
       continue;
     lanes[i] = KKLaneBySettingValuesNearestFraction(lanes[i], frac, values);
     t.lanes = lanes;

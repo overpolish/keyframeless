@@ -30,7 +30,7 @@
     // guide-pushed value (the drawOSC tick can't read the layer blob).
     _position.guideProvider = self;
     for (KKLane *l in [CanvasPlugin availableLanes])
-      if ([l.label isEqualToString:@"Position"])
+      if ([l.key isEqualToString:@"Position"])
         _position.templateLane = l;
     // Route the control's write to the selected layer (it would otherwise write
     // the single kKKParamTimelineData param, which Canvas doesn't use).
@@ -47,7 +47,7 @@
                                           laneLabel:@"Scale"];
     _scale.scaleActivePart = CanvasOSCPartScale;
     for (KKLane *l in [CanvasPlugin availableLanes])
-      if ([l.label isEqualToString:@"Scale"])
+      if ([l.key isEqualToString:@"Scale"])
         _scale.templateLane = l;
     _scale.onTimelinePersist = ^(KKTimeline *tl) {
       [weak _persistSelectedLayerTimeline:tl];
@@ -58,7 +58,7 @@
                                                 laneLabel:@"Rotation"];
     _rotation.rotationActivePart = CanvasOSCPartRotation;
     for (KKLane *l in [CanvasPlugin availableLanes])
-      if ([l.label isEqualToString:@"Rotation"])
+      if ([l.key isEqualToString:@"Rotation"])
         _rotation.templateLane = l;
     _rotation.onTimelinePersist = ^(KKTimeline *tl) {
       [weak _persistSelectedLayerTimeline:tl];
@@ -71,7 +71,7 @@
                                             laneLabel:@"Anchor"];
     _anchor.anchorActivePart = CanvasOSCPartAnchor;
     for (KKLane *l in [CanvasPlugin availableLanes])
-      if ([l.label isEqualToString:@"Anchor"])
+      if ([l.key isEqualToString:@"Anchor"])
         _anchor.templateLane = l;
     _anchor.onTimelinePersist = ^(KKTimeline *tl) {
       [weak _persistSelectedLayerTimeline:tl];

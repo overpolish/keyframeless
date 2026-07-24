@@ -82,7 +82,7 @@
     return NO;
   KKLane *lane = nil;
   for (KKLane *l in _renderer.timeline.lanes)
-    if ([l.label isEqualToString:label]) {
+    if ([l.key isEqualToString:label]) {
       lane = l;
       break;
     }

@@ -1454,7 +1454,7 @@ static NSMutableArray<KKBezierPath *> *_CanvasLayersFromSVG(NSString *svg,
                                [NSMutableArray array];
                            BOOL anyAnimated = NO;
                            for (KKLane *l in mergedTL.lanes) {
-                             if (![touched containsObject:l.label])
+                             if (![touched containsObject:l.key])
                                continue;
                              // The AI gives colours in sRGB; the renderer
                              // stores linear RGB (alpha untouched). Convert

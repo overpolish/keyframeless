@@ -114,12 +114,12 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
 // cascade over the timeline so each controller resolves to its current value.
 - (NSArray<KKLane *> *)_manageVisibleLanes {
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+      KKConditionalVisibleLaneKeys(_timeline.lanes, nil);
   NSMutableArray<KKLane *> *visibleLanes = [NSMutableArray array];
   for (KKLane *l in [self _ownerScopedAvailableLanes])
     // Only animatable lanes are offered (a structural toggle / enum can't be
     // animated), matching the manage view's own init filter.
-    if (l.animatable && [condVisible containsObject:l.label])
+    if (l.animatable && [condVisible containsObject:l.key])
       [visibleLanes addObject:l];
   return visibleLanes;
 }
@@ -180,7 +180,7 @@ KKMiniViewerView *KKFindMiniViewer(NSView *root) {
   if (self.onManagePopoverWillOpen) {
     NSString *targetLabel =
         self.managePopoverSpotlightLabel
-            ?: [self _ownerScopedAvailableLanes].firstObject.label;
+            ?: [self _ownerScopedAvailableLanes].firstObject.key;
     __weak _KKManagePopoverView *weakManage = _openManageView;
     dispatch_after(
         dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),

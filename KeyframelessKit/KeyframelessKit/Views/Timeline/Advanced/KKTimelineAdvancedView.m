@@ -14,6 +14,11 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
 
 @implementation KKTimelineAdvancedView
 
+- (void)updateAvailableLanes:(NSArray<KKLane *> *)availableLanes {
+  _availableLanes = [availableLanes copy];
+  [self setNeedsDisplay:YES];
+}
+
 - (instancetype)initWithAvailableLanes:(NSArray<KKLane *> *)availableLanes
                               timeline:(KKTimeline *)timeline {
   self = [super initWithFrame:NSZeroRect];
@@ -201,26 +206,26 @@ static NSString *const kKKAdvancedDynamicDisplayDefaultsKey =
   NSString *edgeLabel = nil;
   BOOL edgeLeading = NO;
   if (row >= 0) {
-    NSArray<KKLane *> *anim = [self _animatableLanes];
+    NSArray<KKAdvancedRow *> *anim = [self _rows];
     NSRect tracks = [self _tracksRect];
     // Gate on the cursor being inside the tracks rect - left of it is the
     // lane-label gutter (frac would clamp to 0 and falsely register a hit
     // on the first interval).
     if (row < (NSInteger)anim.count && pt.x >= NSMinX(tracks) &&
         pt.x <= NSMaxX(tracks)) {
-      KKLane *lane = anim[row];
+      KKLane *lane = anim[row].lane;
       double frac = [self _fracForX:pt.x inLane:lane inTracks:tracks];
       NSInteger aIdx = [self _intervalStartKPIdxInLane:lane atFrac:frac];
       if (aIdx >= 0) {
-        gapLabel = lane.label;
+        gapLabel = lane.key;
         gapAIdx = aIdx;
       } else if (lane.keyposes.count >= 1) {
         // Before the first / after the last pill: a non-editable hold region.
         if (frac < lane.keyposes.firstObject.time) {
-          edgeLabel = lane.label;
+          edgeLabel = lane.key;
           edgeLeading = YES;
         } else if (frac > lane.keyposes.lastObject.time) {
-          edgeLabel = lane.label;
+          edgeLabel = lane.key;
           edgeLeading = NO;
         }
       }

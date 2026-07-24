@@ -373,7 +373,7 @@ static KKMiniHandleStyle MirageExprMiniStyle(MirageOSCBlockRuntime *b) {
 - (BOOL)_laneLinkedForLabel:(NSString *)label {
   KKMiniViewerRenderer *r = _renderer;
   for (KKLane *l in r.timeline.lanes)
-    if ([l.label isEqualToString:label]) {
+    if ([l.key isEqualToString:label]) {
       if (l.aspectLinkable)
         return l.aspectLinked;
       break;

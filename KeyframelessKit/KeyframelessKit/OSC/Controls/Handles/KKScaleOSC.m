@@ -58,7 +58,7 @@
 
 - (nullable KKLane *)_scaleLane {
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
-    if ([lane.label isEqualToString:self.laneLabel])
+    if ([lane.key isEqualToString:self.laneLabel])
       return lane;
   return nil;
 }
@@ -110,7 +110,7 @@
     return CGPointZero;
   double ax = self.anchorReferenceCenter.x, ay = self.anchorReferenceCenter.y;
   for (KKLane *l in KKProcessTimelineSnapshot().lanes)
-    if ([l.label isEqualToString:self.anchorLaneLabel]) {
+    if ([l.key isEqualToString:self.anchorLaneLabel]) {
       if (l.keyposes.count > 0) {
         NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(l, frac);
         if (v.count >= 2) {
@@ -272,7 +272,7 @@
           tl = snap ? [snap copy] : [KKTimeline timeline];
           NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
           KKLane *scaleLane =
-              [self.templateLane copy] ?: [KKLane laneWithLabel:self.laneLabel];
+              [self.templateLane copy] ?: [KKLane laneWithKey:self.laneLabel label:self.laneLabel];
           scaleLane.enabled = NO;
           scaleLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
           [lanes addObject:scaleLane];

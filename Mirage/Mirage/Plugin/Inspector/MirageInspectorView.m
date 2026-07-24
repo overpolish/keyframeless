@@ -189,7 +189,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
         continue;
       MirageMiniViewerRenderer *r = [[MirageMiniViewerRenderer alloc] init];
       KKTimeline *t = [KKTimeline timeline];
-      KKLane *lane = [KKLane laneWithLabel:kMirageCodeLaneLabel];
+      KKLane *lane = [KKLane laneWithKey:kMirageCodeLaneLabel label:kMirageCodeLaneLabel];
       lane.valueType = KKLaneValueTypeCode;
       lane.codeString = e.sections[@"Image"];
       t.lanes = @[ lane ];
@@ -335,7 +335,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   NSMutableArray<KKLane *> *lanes = [current.lanes mutableCopy];
   BOOL found = NO;
   for (NSUInteger i = 0; i < lanes.count; i++) {
-    if (![lanes[i].label isEqualToString:kMirageCodeLaneLabel])
+    if (![lanes[i].key isEqualToString:kMirageCodeLaneLabel])
       continue;
     KKLane *lane = [lanes[i] copy];
     lane.codeString = image;
@@ -360,7 +360,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     if (lane.valueType == KKLaneValueTypeCode)
       continue;
     NSArray<NSNumber *> *def =
-        MirageDirectiveDefaultValuesForLabel(newSource, lane.label);
+        MirageDirectiveDefaultValuesForLabel(newSource, lane.key);
     if (!def)
       continue; // Core lane, or not declared by the new source
     if (MirageLaneIsAtConstant(lane, def))
@@ -416,7 +416,7 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   // set.
   NSString *effective = MirageCustomDefaultShaderSource();
   for (KKLane *l in timeline.lanes)
-    if ([l.label isEqualToString:kMirageCodeLaneLabel] && l.codeString.length) {
+    if ([l.key isEqualToString:kMirageCodeLaneLabel] && l.codeString.length) {
       effective = l.codeString;
       break;
     }
@@ -439,14 +439,14 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
     // doesn't re-persist on every apply).
     NSMutableSet<NSString *> *pathDriven = [NSMutableSet set];
     for (KKLane *t in [MiragePlugin availableLanesForShaderSource:effective])
-      if (t.positionPathDriven && t.label)
-        [pathDriven addObject:t.label];
+      if (t.positionPathDriven && t.key)
+        [pathDriven addObject:t.key];
     if (pathDriven.count) {
       NSMutableArray<KKLane *> *lanes = [timeline.lanes mutableCopy];
       BOOL changed = NO;
       for (NSUInteger i = 0; i < lanes.count; i++) {
         KKLane *l = lanes[i];
-        if (l.linkExpression != nil && [pathDriven containsObject:l.label]) {
+        if (l.linkExpression != nil && [pathDriven containsObject:l.key]) {
           KKLane *c = [l copy];
           c.linkExpression = nil;
           c.positionPathDriven = YES;

@@ -465,10 +465,10 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   [_advancedGraph applyHiddenLaneLabels:hidden];
   KKTimeline *gt = [self _graphTimeline];
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(gt.lanes, nil);
+      KKConditionalVisibleLaneKeys(gt.lanes, nil);
   NSInteger optedIn = 0;
   for (KKLane *l in gt.lanes)
-    if (l.enabled && [condVisible containsObject:l.label])
+    if (l.enabled && [condVisible containsObject:l.key])
       optedIn++;
   BOOL anyOptedIn = optedIn > 0;
   BOOL allFiltered =
@@ -502,6 +502,12 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   // an aspect-linkable lane reads UNLOCKED until the user first interacts.
   // Present lanes keep their user state (the present branch preserves it).
   _timeline = [self _timelineSeededFrom:_timeline];
+  // The graphs hold their own template copies (taken at init) for popover
+  // metadata / display-name resolution - push the fresh set down or a
+  // directive rename keeps showing the old name in the keypose / boundary
+  // popovers while every other surface has moved on.
+  [_basicGraph updateAvailableLanes:_availableLanes];
+  [_advancedGraph updateAvailableLanes:_availableLanes];
   // Rebuild the visible rows from the new template set (same path the pill
   // visibleWhen toggles use), so source-derived lanes appear/disappear live.
   [self _refresh];
@@ -514,16 +520,16 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   // one. The graph fills the content area whenever >=1 property is animated AND
   // visible.
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+      KKConditionalVisibleLaneKeys(_timeline.lanes, nil);
   // The graphs render/gate off the all-layers graphTimeline (when set), so the
   // graph fills the area whenever ANY layer animates a property - never empties
   // just because the selected layer (which drives the dropdown below) doesn't.
   KKTimeline *gt = [self _graphTimeline];
   NSSet<NSString *> *condVisibleGraph =
-      KKConditionalVisibleLaneLabels(gt.lanes, nil);
+      KKConditionalVisibleLaneKeys(gt.lanes, nil);
   NSMutableArray<KKLane *> *optedIn = [NSMutableArray array];
   for (KKLane *l in gt.lanes)
-    if (l.enabled && [condVisibleGraph containsObject:l.label])
+    if (l.enabled && [condVisibleGraph containsObject:l.key])
       [optedIn addObject:l];
   BOOL anyOptedIn = optedIn.count > 0;
   [_basicGraph applyTimeline:gt];
@@ -597,9 +603,9 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 
   NSMutableArray<NSString *> *opted = [NSMutableArray array];
   for (KKLane *tmpl in [self _ownerScopedAvailableLanes])
-    if ([self _isAnimatableLabel:tmpl.label] &&
-        [condVisible containsObject:tmpl.label])
-      [opted addObject:tmpl.label];
+    if ([self _isAnimatableLabel:tmpl.key] &&
+        [condVisible containsObject:tmpl.key])
+      [opted addObject:tmpl.key];
   _dropdownTrigger.selectedLabels = opted;
   // Hierarchical summary (layer > group > lane | …) from the opted-in KKLanes,
   // which carry the layerKey/categoryKey grouping; "All" only when nothing is
@@ -634,7 +640,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 
 - (nullable KKLane *)_laneForLabel:(NSString *)label {
   for (KKLane *lane in _timeline.lanes)
-    if ([lane.label isEqualToString:label])
+    if ([lane.key isEqualToString:label])
       return lane;
   return nil;
 }
@@ -643,19 +649,19 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   NSMutableSet<NSString *> *present =
       [NSMutableSet setWithCapacity:_timeline.lanes.count];
   for (KKLane *l in _timeline.lanes)
-    if (l.label)
-      [present addObject:l.label];
+    if (l.key)
+      [present addObject:l.key];
   NSMutableArray<KKLane *> *out =
       [NSMutableArray arrayWithCapacity:_availableLanes.count];
   for (KKLane *t in _availableLanes)
-    if ([present containsObject:t.label])
+    if ([present containsObject:t.key])
       [out addObject:t];
   return out;
 }
 
 - (nullable KKLane *)_templateForLabel:(NSString *)label {
   for (KKLane *tmpl in _availableLanes)
-    if ([tmpl.label isEqualToString:label])
+    if ([tmpl.key isEqualToString:label])
       return tmpl;
   return nil;
 }
@@ -672,7 +678,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   for (KKLane *tmpl in _availableLanes) {
     NSInteger presentIdx = NSNotFound;
     for (NSInteger i = 0; i < (NSInteger)lanes.count; i++)
-      if ([lanes[i].label isEqualToString:tmpl.label]) {
+      if ([lanes[i].key isEqualToString:tmpl.key]) {
         presentIdx = i;
         break;
       }
@@ -681,23 +687,11 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       // template, not user-editable). Re-assert them so lanes from older
       // blobs that didn't serialize these still render correctly.
       KKLane *fixed = [lanes[presentIdx] copy];
-      fixed.valueType = tmpl.valueType;
-      fixed.componentMin = tmpl.componentMin;
-      fixed.componentMax = tmpl.componentMax;
-      fixed.componentUnits = tmpl.componentUnits;
-      fixed.componentLabels = tmpl.componentLabels;
-      fixed.componentLabelColors = tmpl.componentLabelColors;
-      fixed.componentsScaleWithMedia = tmpl.componentsScaleWithMedia;
-      // Build-time display metadata (like the bounds above): whether components
-      // can aspect-lock and whether multi-word captions auto-size. NOT the lock
-      // STATE (aspectLinked), which is user data kept below.
-      fixed.aspectLinkable = tmpl.aspectLinkable;
-      fixed.autoSizesComponentLabels = tmpl.autoSizesComponentLabels;
-      // Whole-number display (e.g. #angle, #int) is canonical to the template,
-      // not user data - re-assert it so a lane from a blob that predates the
-      // flag (a #angle serialized while it was still a float) stops showing
-      // decimals.
-      fixed.integerValued = tmpl.integerValued;
+      // One call re-asserts every template-canonical + picker-metadata field
+      // (value type, bounds, labels/colors, aspect linkability, integer
+      // display, code-lane static config...) - the descriptor table's
+      // TemplateCanonical role IS the definition of "not user state".
+      [fixed kkApplyTemplateCanonicalFrom:tmpl];
       // codeString is user data (a code lane's text), so keep the saved value;
       // only fall back to the template default when it's missing (older blob).
       if (!fixed.codeString.length)
@@ -707,20 +701,6 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
       // predates them.
       if (fixed.codeTabs.count == 0)
         fixed.codeTabs = tmpl.codeTabs;
-      fixed.codeTabCatalog =
-          tmpl.codeTabCatalog; // static config, not persisted
-      fixed.codeValidator =
-          tmpl.codeValidator; // static config, never persisted
-      fixed.codeValidationComposer = tmpl.codeValidationComposer;
-      fixed.codeFormatter =
-          tmpl.codeFormatter; // static config, never persisted
-      fixed.codeCompletionProvider = tmpl.codeCompletionProvider;
-      fixed.codeDirectiveKeywords = tmpl.codeDirectiveKeywords;
-      fixed.codeDirectiveKinds = tmpl.codeDirectiveKinds;
-      fixed.codeSavable = tmpl.codeSavable; // static config, never persisted
-      fixed.codeSaveCategories = tmpl.codeSaveCategories;
-      fixed.codeSaveNamePlaceholder = tmpl.codeSaveNamePlaceholder;
-      [fixed kkApplyPickerMetadataFrom:tmpl]; // category / animatable / seed
       lanes[presentIdx] = fixed;
       continue;
     }
@@ -732,7 +712,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     // declare it explicitly with `ownerScoped`.
     if (tmpl.oscEditedOnly || tmpl.ownerScoped)
       continue;
-    KKLane *lane = [KKLane laneWithLabel:tmpl.label];
+    KKLane *lane = [KKLane laneWithKey:tmpl.key label:tmpl.label];
     lane.valueType = tmpl.valueType;
     lane.componentMin = tmpl.componentMin;
     lane.componentMax = tmpl.componentMax;
@@ -765,7 +745,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
     lane.enabled = NO; // constant until the dropdown makes it animatable
     [lane insertKeypose:[KKKeyPose keyposeAtTime:0.0
                                           values:[self _defaultValuesForLabel:
-                                                           tmpl.label]]];
+                                                           tmpl.key]]];
     [lanes addObject:lane];
   }
   // Display order: the user's drag-to-reorder list if set, else the plugin's
@@ -782,19 +762,19 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   NSMutableDictionary<NSString *, NSNumber *> *tmplRank =
       [NSMutableDictionary dictionaryWithCapacity:_availableLanes.count];
   for (NSInteger i = 0; i < (NSInteger)_availableLanes.count; i++)
-    if (!tmplRank[_availableLanes[i].label])
-      tmplRank[_availableLanes[i].label] = @(i);
+    if (!tmplRank[_availableLanes[i].key])
+      tmplRank[_availableLanes[i].key] = @(i);
   [lanes sortUsingComparator:^NSComparisonResult(KKLane *a, KKLane *b) {
-    NSNumber *ra = rank[a.label];
-    NSNumber *rb = rank[b.label];
+    NSNumber *ra = rank[a.key];
+    NSNumber *rb = rank[b.key];
     if (ra && rb)
       return [ra compare:rb];
     if (ra)
       return NSOrderedAscending;
     if (rb)
       return NSOrderedDescending;
-    NSNumber *ta = tmplRank[a.label];
-    NSNumber *tb = tmplRank[b.label];
+    NSNumber *ta = tmplRank[a.key];
+    NSNumber *tb = tmplRank[b.key];
     if (ta && tb)
       return [ta compare:tb];
     if (ta)
@@ -817,7 +797,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   NSMutableSet<NSString *> *set = [NSMutableSet set];
   for (KKLane *lane in _timeline.lanes)
     if (lane.enabled)
-      [set addObject:lane.label];
+      [set addObject:lane.key];
   return [set copy];
 }
 
@@ -828,14 +808,14 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   NSMutableDictionary<NSString *, KKLane *> *tmplByLabel =
       [NSMutableDictionary dictionaryWithCapacity:_availableLanes.count];
   for (KKLane *tmpl in _availableLanes)
-    tmplByLabel[tmpl.label] = tmpl;
+    tmplByLabel[tmpl.key] = tmpl;
   // Iterate _timeline.lanes, NOT _availableLanes: _timeline.lanes is already in
   // display order (sorted by paramOrder in _timelineSeededFrom:) and post-seed
   // contains every available property, so the constants popover inherits the
   // same parameter ordering as the timeline and reorder list.
   NSMutableArray<KKLane *> *result = [NSMutableArray array];
   for (KKLane *tlLane in _timeline.lanes) {
-    KKLane *tmpl = tmplByLabel[tlLane.label];
+    KKLane *tmpl = tmplByLabel[tlLane.key];
     if (!tmpl || tlLane.enabled)
       continue; // only available, non-animatable (constant) properties
     // Display metadata (paletteLockable / paletteGeneratorBar / decoupled
@@ -876,22 +856,22 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
 - (NSArray<NSString *> *)orderedParamLabels {
   NSMutableSet<NSString *> *avail = [NSMutableSet set];
   for (KKLane *l in _availableLanes)
-    [avail addObject:l.label];
+    [avail addObject:l.key];
   // Mode-gated lanes drop out of the reorder list too (e.g. no "Gradient" row
   // while Mode = Solid). Computed over the timeline so the controller resolves.
   NSSet<NSString *> *condVisible =
-      KKConditionalVisibleLaneLabels(_timeline.lanes, nil);
+      KKConditionalVisibleLaneKeys(_timeline.lanes, nil);
   // _timeline.lanes is already in display order (sorted in
   // _timelineSeededFrom:) and - post-seed - contains every available property,
   // so its order is the source of truth for the reorder list.
   NSMutableArray<NSString *> *out = [NSMutableArray array];
   for (KKLane *l in _timeline.lanes)
-    if ([avail containsObject:l.label] && ![out containsObject:l.label] &&
-        [condVisible containsObject:l.label])
-      [out addObject:l.label];
+    if ([avail containsObject:l.key] && ![out containsObject:l.key] &&
+        [condVisible containsObject:l.key])
+      [out addObject:l.key];
   for (KKLane *l in _availableLanes)
-    if (![out containsObject:l.label] && [condVisible containsObject:l.label])
-      [out addObject:l.label];
+    if (![out containsObject:l.key] && [condVisible containsObject:l.key])
+      [out addObject:l.key];
   return out;
 }
 
@@ -913,7 +893,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
   NSMutableArray<NSString *> *labels =
       [NSMutableArray arrayWithCapacity:_availableLanes.count];
   for (NSInteger i = 0; i < (NSInteger)_availableLanes.count; i++) {
-    NSString *label = _availableLanes[i].label;
+    NSString *label = _availableLanes[i].key;
     if (!tmplRank[label])
       tmplRank[label] = @(i);
     if (![labels containsObject:label])
@@ -1002,7 +982,7 @@ static KKHoldForwardBlock KKMakeHoldForwarder(KKTimelineLanesView *owner) {
         [NSSet setWithArray:[_availableLanes valueForKey:@"label"]];
     NSMutableArray<KKLane *> *kept = [NSMutableArray array];
     for (KKLane *l in gt.lanes)
-      if ([declared containsObject:l.label])
+      if ([declared containsObject:l.key])
         [kept addObject:l];
     if (kept.count != gt.lanes.count) {
       KKTimeline *filtered = [gt copy];

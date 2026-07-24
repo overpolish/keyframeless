@@ -17,7 +17,7 @@ static NSArray<KKKeyPose *> *CanvasPointsKeyposes(KKBezierPath *path) {
     return nil;
   KKTimeline *tl = [KKTimeline timelineFromJSON:path.animationJSON];
   for (KKLane *l in tl.lanes)
-    if ([l.label isEqualToString:@"Points"])
+    if ([l.key isEqualToString:@"Points"])
       return (l.enabled && l.keyposes.count >= 2) ? l.keyposes : nil;
   return nil;
 }
@@ -110,7 +110,7 @@ KKBezierPath *CanvasPathBySettingKeyposeGeometry(KKBezierPath *path,
   BOOL changed = NO;
   for (NSUInteger li = 0; li < lanes.count; li++) {
     KKLane *l = lanes[li];
-    if (![l.label isEqualToString:@"Points"])
+    if (![l.key isEqualToString:@"Points"])
       continue;
     if (keyposeIndex < 0 || keyposeIndex >= (NSInteger)l.keyposes.count)
       break;
@@ -187,7 +187,7 @@ KKBezierPath *CanvasPathByRemovingKeypose(KKBezierPath *path,
   NSMutableArray<KKLane *> *lanes = [tl.lanes mutableCopy];
   NSInteger pli = -1;
   for (NSUInteger i = 0; i < lanes.count; i++)
-    if ([lanes[i].label isEqualToString:@"Points"]) {
+    if ([lanes[i].key isEqualToString:@"Points"]) {
       pli = (NSInteger)i;
       break;
     }
@@ -250,7 +250,7 @@ CanvasPathByTranslatingPosition(KKBezierPath *path, simd_float2 objDelta,
   simd_float2 d = simd_make_float2(objDelta.x, -objDelta.y);
   KKTimeline *tl = CanvasLayerTimelineForPath(path, templates);
   for (KKLane *l in tl.lanes) {
-    if (![l.label isEqualToString:@"Position"])
+    if (![l.key isEqualToString:@"Position"])
       continue;
     NSArray<KKKeyPose *> *kps = l.keyposes;
     NSInteger idx = 0;
@@ -369,7 +369,7 @@ KKBezierPath *CanvasPathByReversingGeometry(KKBezierPath *path) {
   KKTimeline *tl = [KKTimeline timelineFromJSON:path.animationJSON];
   NSMutableArray<KKLane *> *lanes = [tl.lanes mutableCopy];
   for (NSUInteger li = 0; li < lanes.count; li++) {
-    if (![lanes[li].label isEqualToString:@"Points"])
+    if (![lanes[li].key isEqualToString:@"Points"])
       continue;
     NSMutableArray<KKKeyPose *> *kps = [lanes[li].keyposes mutableCopy];
     for (NSUInteger ki = 0; ki < kps.count; ki++) {

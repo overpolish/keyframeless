@@ -102,6 +102,7 @@ FOUNDATION_EXPORT const CGFloat kChoiceListMaxBody;
   NSTextField *_gradientAngleField;
   BOOL _gradientAngleKnobDragging;
   CGFloat _labelColumnW; // uniform label-column width (0 = natural)
+  NSLayoutConstraint *_titleWidthConstraint; // the label column, restretchable
   BOOL _locked;          // locked layer: row is read-only (dimmed, no input)
 }
 @end

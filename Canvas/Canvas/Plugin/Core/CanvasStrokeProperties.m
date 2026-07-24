@@ -30,7 +30,7 @@ void CanvasStrokeWidthAtFraction(KKBezierPath *path, double frac,
   KKTimeline *tl =
       CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
-    if (![lane.label isEqualToString:@"Stroke Width"])
+    if (![lane.key isEqualToString:@"Stroke Width"])
       continue;
     if (lane.keyposes.count > 0) {
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
@@ -53,10 +53,10 @@ BOOL CanvasStrokeEnabledAtFraction(KKBezierPath *path, double frac,
   KKTimeline *tl =
       CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
-    if (![lane.label isEqualToString:@"Enabled"])
+    if (![lane.key isEqualToString:@"Enabled"])
       continue;
-    if (lane.keyposes.count > 0) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+    if (lane.keyposes.count > 0 || lane.linkExpression.length) {
+      NSArray<NSNumber *> *v = CanvasResolvedDiscreteLaneValue(lane, frac);
       if (v.count > 0)
         on = v[0].doubleValue >= 0.5;
     }
@@ -74,8 +74,8 @@ KKColorLanesValue CanvasStrokeColorAtFraction(KKBezierPath *path, double frac,
   // back to the flat solid colour so it renders exactly as before.
   BOOL hasColorLanes = NO;
   for (KKLane *lane in tl.lanes)
-    if ([lane.label isEqualToString:KKColorLanesModeLabel(@"Stroke")] ||
-        [lane.label isEqualToString:KKColorLanesSolidLabel(@"Stroke")]) {
+    if ([lane.key isEqualToString:KKColorLanesModeLabel(@"Stroke")] ||
+        [lane.key isEqualToString:KKColorLanesSolidLabel(@"Stroke")]) {
       hasColorLanes = YES;
       break;
     }
@@ -89,7 +89,7 @@ KKColorLanesValue CanvasStrokeColorAtFraction(KKBezierPath *path, double frac,
   return KKColorLanesResolve(@"Stroke", /*includesDynamic=*/NO,
                              ^NSArray<NSNumber *> *(NSString *l) {
                                for (KKLane *lane in tl.lanes)
-                                 if ([lane.label isEqualToString:l])
+                                 if ([lane.key isEqualToString:l])
                                    return CanvasResolvedLaneValue(lane, frac);
                                return nil;
                              });
@@ -103,14 +103,14 @@ void CanvasStrokeCapJoinAtFraction(KKBezierPath *path, double frac,
   KKTimeline *tl =
       CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
-    if (lane.keyposes.count == 0)
+    if (lane.keyposes.count == 0 && lane.linkExpression.length == 0)
       continue;
-    if ([lane.label isEqualToString:@"Line Cap"]) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+    if ([lane.key isEqualToString:@"Line Cap"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedDiscreteLaneValue(lane, frac);
       if (v.count > 0)
         cap = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
-    } else if ([lane.label isEqualToString:@"Line Join"]) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+    } else if ([lane.key isEqualToString:@"Line Join"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedDiscreteLaneValue(lane, frac);
       if (v.count > 0)
         join = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
     }
@@ -131,23 +131,23 @@ void CanvasStrokeMarkersAtFraction(KKBezierPath *path, double frac,
   KKTimeline *tl =
       CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
-    if (lane.keyposes.count == 0)
+    if (lane.keyposes.count == 0 && lane.linkExpression.length == 0)
       continue;
-    if ([lane.label isEqualToString:@"Start Marker"]) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+    if ([lane.key isEqualToString:@"Start Marker"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedDiscreteLaneValue(lane, frac);
       if (v.count > 0)
         startM = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
-    } else if ([lane.label isEqualToString:@"End Marker"]) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+    } else if ([lane.key isEqualToString:@"End Marker"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedDiscreteLaneValue(lane, frac);
       if (v.count > 0)
         endM = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
-    } else if ([lane.label isEqualToString:@"Start Marker Width"]) {
+    } else if ([lane.key isEqualToString:@"Start Marker Width"]) {
       // Percentage of the local stroke width; converted to a multiplier.
       // Continuous - display evaluation like its Stroke Width sibling.
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         startMul = (float)(fmax(0.0, v[0].doubleValue) / 100.0);
-    } else if ([lane.label isEqualToString:@"End Marker Width"]) {
+    } else if ([lane.key isEqualToString:@"End Marker Width"]) {
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         endMul = (float)(fmax(0.0, v[0].doubleValue) / 100.0);
@@ -175,27 +175,28 @@ CanvasStrokeStyle CanvasStrokeStyleAtFraction(KKBezierPath *path, double frac,
   KKTimeline *tl =
       CanvasLayerEffectiveTimeline(path, overrideLayerID, overrideTimeline);
   for (KKLane *lane in tl.lanes) {
-    if (lane.keyposes.count == 0)
+    if (lane.keyposes.count == 0 && lane.linkExpression.length == 0)
       continue;
-    if ([lane.label isEqualToString:@"Stroke Style"]) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+    if ([lane.key isEqualToString:@"Stroke Style"]) {
+      NSArray<NSNumber *> *v = CanvasResolvedDiscreteLaneValue(lane, frac);
       if (v.count > 0)
         s.style = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
-    } else if ([lane.label isEqualToString:@"Dash Length"]) {
+    } else if ([lane.key isEqualToString:@"Dash Length"]) {
       // Continuous lanes: display evaluation, like Stroke Width / Marching
-      // Ants Speed (raw stays only for the discrete index lanes above).
+      // Ants Speed (the discrete index lanes above stay exact via the
+      // discrete resolver unless an expression owns them).
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         s.dashLength = (float)fmax(0.0, v[0].doubleValue);
-    } else if ([lane.label isEqualToString:@"Dash Gap"]) {
+    } else if ([lane.key isEqualToString:@"Dash Gap"]) {
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         s.dashGap = (float)fmax(0.0, v[0].doubleValue);
-    } else if ([lane.label isEqualToString:@"Dot Gap"]) {
+    } else if ([lane.key isEqualToString:@"Dot Gap"]) {
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         s.dotGap = (float)fmax(0.0, v[0].doubleValue);
-    } else if ([lane.label isEqualToString:@"Marching Ants Speed"]) {
+    } else if ([lane.key isEqualToString:@"Marching Ants Speed"]) {
       // Animatable: read the smoothed value so a keyframed speed eases.
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
@@ -221,15 +222,15 @@ CanvasStrokeDrawOn CanvasStrokeDrawOnAtFraction(KKBezierPath *path, double frac,
   for (KKLane *lane in tl.lanes) {
     if (lane.keyposes.count == 0)
       continue;
-    if ([lane.label isEqualToString:@"Draw On Start"]) {
+    if ([lane.key isEqualToString:@"Draw On Start"]) {
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         d.start = (float)fmax(0.0, fmin(1.0, v[0].doubleValue / 100.0));
-    } else if ([lane.label isEqualToString:@"Draw On End"]) {
+    } else if ([lane.key isEqualToString:@"Draw On End"]) {
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         d.end = (float)fmax(0.0, fmin(1.0, v[0].doubleValue / 100.0));
-    } else if ([lane.label isEqualToString:@"Draw On Offset"]) {
+    } else if ([lane.key isEqualToString:@"Draw On Offset"]) {
       NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0) {
         double o = v[0].doubleValue / 100.0; // unbounded; wrap to [0,1)

@@ -369,7 +369,7 @@ static const CGFloat kParamOrderMaxListH = 200.0;
 // label lives there.
 - (NSString *)_paramOrderTitleForLabel:(NSString *)label {
   for (KKLane *l in _availableLanes)
-    if ([l.label isEqualToString:label])
+    if ([l.key isEqualToString:label])
       return KKLocalizedParamName(l.displayName);
   return KKLocalizedParamName(label);
 }
@@ -464,7 +464,7 @@ static const CGFloat kParamOrderMaxListH = 200.0;
                  states:(states.count == compounds.count ? states : @[])
           displayForKey:^NSString *(NSString *key) {
             for (KKLane *l in avail)
-              if ([l.label isEqualToString:key])
+              if ([l.key isEqualToString:key])
                 return KKLocalizedParamName(l.displayName);
             // A Position OSC's motion-path element ("<lane> Path") has no lane
             // of its own; show "<display> Path" from the base lane's display
@@ -472,7 +472,7 @@ static const CGFloat kParamOrderMaxListH = 200.0;
             if ([key hasSuffix:@" Path"]) {
               NSString *base = [key substringToIndex:key.length - 5];
               for (KKLane *l in avail)
-                if ([l.label isEqualToString:base])
+                if ([l.key isEqualToString:base])
                   return [NSString
                       stringWithFormat:@"%@ %@",
                                        KKLocalizedParamName(l.displayName),

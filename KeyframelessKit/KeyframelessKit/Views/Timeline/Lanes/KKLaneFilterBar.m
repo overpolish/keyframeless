@@ -184,8 +184,8 @@ static NSButton *_kkGlyphButton(NSString *symbol, CGFloat pt, id target,
   NSSet<NSString *> *hidden = [_model hiddenLabels];
   NSMutableSet<NSString *> *visible = [NSMutableSet set];
   for (KKLane *l in [self _scopedLanes])
-    if (![hidden containsObject:l.label])
-      [visible addObject:l.label];
+    if (![hidden containsObject:l.key])
+      [visible addObject:l.key];
   return visible;
 }
 

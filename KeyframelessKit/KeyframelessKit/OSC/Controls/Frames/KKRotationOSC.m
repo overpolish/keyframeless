@@ -45,7 +45,7 @@ KKLane *KKRotationLaneWithLabel(NSString *label, KKRotationAxes axes) {
     [colors addObject:cz];
     [zeros addObject:@0.0];
   }
-  KKLane *lane = [KKLane laneWithLabel:label];
+  KKLane *lane = [KKLane laneWithKey:label label:label];
   lane.valueType = KKLaneValueTypeAngle;
   // Knobs cover one revolution visually but values accumulate past 360°
   // (2 turns = 720°). Empty min/max = unconstrained.
@@ -282,7 +282,7 @@ static const float kHitThresholdPixels = 10.0f;
 
 - (nullable KKLane *)_rotationLane {
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
-    if ([lane.label isEqualToString:self.laneLabel])
+    if ([lane.key isEqualToString:self.laneLabel])
       return lane;
   return nil;
 }
@@ -515,7 +515,7 @@ static const float kHitThresholdPixels = 10.0f;
           tl = snap ? [snap copy] : [KKTimeline timeline];
           NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
           KKLane *rotLane =
-              [self.templateLane copy] ?: [KKLane laneWithLabel:self.laneLabel];
+              [self.templateLane copy] ?: [KKLane laneWithKey:self.laneLabel label:self.laneLabel];
           rotLane.enabled = NO;
           rotLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
           [lanes addObject:rotLane];

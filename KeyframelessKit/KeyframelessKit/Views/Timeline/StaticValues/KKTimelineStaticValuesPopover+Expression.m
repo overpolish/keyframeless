@@ -28,6 +28,8 @@
 @interface _KKStaticValuesPopoverView (ExpressionPrivate)
 - (NSView *)_makeExprEditorRowForLabel:(NSString *)label text:(NSString *)text;
 - (void)_refreshLinkManifests;
+- (NSArray<NSDictionary<NSString *, NSString *> *> *)
+    _linkCompletionItemsForPartial:(NSString *)partial;
 - (NSString *)_displayFromStored:(NSString *)stored;
 - (NSString *)_storedFromDisplay:(NSString *)display;
 - (void)_insertReferenceMenu:(NSButton *)sender;
@@ -67,6 +69,19 @@
     if (s->_onSetLinkExpression)
       s->_onSetLinkExpression(label, stored);
   };
+  // Autocomplete inside a `${...` token: typing `${` lists every discovered
+  // source (Clip.Param / Clip.Layer.Param), filtered live as the user types,
+  // so refs never need hand-typing. The manifest cache refreshes when a token
+  // opens (empty partial), not on every keystroke.
+  ed.linkCompletionProvider =
+      ^NSArray<NSDictionary<NSString *, NSString *> *> *(NSString *partial) {
+        __strong typeof(weak) s = weak;
+        if (!s)
+          return nil;
+        if (partial.length == 0)
+          [s _refreshLinkManifests];
+        return [s _linkCompletionItemsForPartial:partial];
+      };
   // Left override: the discovered-clip insert menu (drops a `${Clip.Param}`
   // token). Right override: the expand/collapse chevron. Both carry the label
   // on their identifier for the action, and are sized to the row's gutter
@@ -122,6 +137,64 @@
   // Scope the picker to the editing clip's project (empty documentID = unknown,
   // which returns everything - the legacy library-wide behaviour).
   _linkManifests = [KKLinkBus manifestsForDocumentID:self.documentID];
+}
+
+// Flat candidate list for the `${` autocomplete: every referenceable param of
+// every discovered source as a friendly "Clip.Param" / "Clip.Layer.Param" ref
+// (the same form the insert menu drops; onChange translates it to the stored
+// uuid form). Filtered case-insensitively against the typed partial anywhere
+// in the full ref, so typing a clip, layer, or param fragment all narrow the
+// list. The desc row carries the source's last-seen age - the honest tell
+// between same-named twins.
+- (NSArray<NSDictionary<NSString *, NSString *> *> *)
+    _linkCompletionItemsForPartial:(NSString *)partial {
+  static NSRelativeDateTimeFormatter *relFmt;
+  static dispatch_once_t relOnce;
+  dispatch_once(&relOnce, ^{
+    relFmt = [[NSRelativeDateTimeFormatter alloc] init];
+    relFmt.dateTimeStyle = NSRelativeDateTimeFormatterStyleNamed;
+  });
+  NSMutableArray<NSDictionary<NSString *, NSString *> *> *out =
+      [NSMutableArray array];
+  for (KKLinkManifest *man in _linkManifests) {
+    NSString *seen = [NSString
+        stringWithFormat:KKLoc(@"Last seen %@",
+                               @"Expression insert menu: subtitle under a "
+                               @"source clip; %@ is a relative time like '2 "
+                               @"minutes ago' or 'now'."),
+                         [relFmt localizedStringForDate:
+                                     [NSDate dateWithTimeIntervalSinceNow:
+                                                 -man.lastSeenAgeSec]
+                                         relativeToDate:[NSDate date]]];
+    void (^add)(NSString *, NSString *) = ^(NSString *name, NSString *full) {
+      if (partial.length &&
+          [full rangeOfString:partial options:NSCaseInsensitiveSearch]
+                  .location == NSNotFound)
+        return;
+      [out addObject:@{
+        @"name" : name,
+        @"signature" : full,
+        @"desc" : seen,
+        @"insert" : [full stringByAppendingString:@"}"]
+      }];
+    };
+    for (NSUInteger i = 0; i < man.paramLabels.count; i++) {
+      NSString *disp = (i < man.paramDisplayNames.count)
+                           ? man.paramDisplayNames[i]
+                           : man.paramLabels[i];
+      add(disp, [NSString stringWithFormat:@"%@.%@", man.displayName, disp]);
+    }
+    for (KKLinkLayerSource *layer in man.layers) {
+      for (NSUInteger i = 0; i < layer.paramLabels.count; i++) {
+        NSString *disp = (i < layer.paramDisplayNames.count)
+                             ? layer.paramDisplayNames[i]
+                             : layer.paramLabels[i];
+        add(disp, [NSString stringWithFormat:@"%@.%@.%@", man.displayName,
+                                             layer.displayName, disp]);
+      }
+    }
+  }
+  return out;
 }
 
 // Model (`${uuid.rawLabel}`) <-> editor (`${Clip.Param}`) ref translation. The
@@ -421,11 +494,11 @@
 - (void)_installExprEditorForLane:(KKLane *)lane {
   if (!KKLaneHasExpressionEditor(lane))
     return;
-  NSView *row = [self _makeExprEditorRowForLabel:lane.label
+  NSView *row = [self _makeExprEditorRowForLabel:lane.key
                                             text:lane.linkExpression];
   [_stack addArrangedSubview:row];
   [row.widthAnchor constraintEqualToAnchor:_stack.widthAnchor].active = YES;
-  _exprRowsByLabel[lane.label] = row;
+  _exprRowsByLabel[lane.key] = row;
   [self _updateExprResultForLane:lane]; // seed the strip immediately
   [self _ensureExprResultTimer];
 }
@@ -437,7 +510,7 @@
 // strip shows what actually renders. No-op for a lane without an editor /
 // expression.
 - (void)_updateExprResultForLane:(KKLane *)lane {
-  KKCodeEditorView *ed = _exprEditorByLabel[lane.label];
+  KKCodeEditorView *ed = _exprEditorByLabel[lane.key];
   if (!ed)
     return;
   if (lane.linkExpression.length == 0) {
@@ -449,7 +522,7 @@
   // keypose popover never rebuilds `_lanes` on a value edit, so the cached
   // lane's keypose would otherwise stay stale until the popover is reopened.
   KKLane *evalLane = lane;
-  NSArray<NSNumber *> *live = _currentValuesByLabel[lane.label];
+  NSArray<NSNumber *> *live = _currentValuesByLabel[lane.key];
   if (live.count) {
     evalLane = [lane copy];
     evalLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:live] ];
@@ -513,7 +586,7 @@
         ![comps.firstObject isEqualToString:selfUUID])
       return nil;
     for (KKLane *l in liveTl.lanes) {
-      if (![l.label isEqualToString:tail])
+      if (![l.key isEqualToString:tail])
         continue;
       if (layerID && ![l.layerKey isEqualToString:layerID])
         continue;
@@ -595,7 +668,7 @@
   _playheadMoving = (tl >= 0.0 && fabs(tl - _lastMarkerLinkSec) > 1e-6);
   _lastMarkerLinkSec = tl;
   for (KKLane *lane in _lanes)
-    if (_exprEditorByLabel[lane.label])
+    if (_exprEditorByLabel[lane.key])
       [self _updateExprResultForLane:lane];
 }
 
@@ -655,7 +728,7 @@
 
 - (BOOL)_syncExprEditorForLane:(KKLane *)lane
                       afterRow:(_KKStaticValueRow *)valueRow {
-  return [self _syncExprEditorForLabel:lane.label
+  return [self _syncExprEditorForLabel:lane.key
                             expression:(KKLaneHasExpressionEditor(lane)
                                             ? lane.linkExpression
                                             : nil)afterRow:valueRow];
@@ -675,7 +748,7 @@
 // the cached manifests (a stale friendly name is harmless and refreshes on the
 // next edit).
 - (void)_resyncExprEditorTextForLane:(KKLane *)lane {
-  NSString *label = lane.label;
+  NSString *label = lane.key;
   if (!_exprEditorByLabel[label])
     return;
   NSString *stored = lane.linkExpression ?: @"";
@@ -697,7 +770,7 @@
                            forLabel:(NSString *)label {
   NSMutableArray<KKLane *> *ml = [_lanes mutableCopy];
   for (NSInteger i = 0; i < (NSInteger)ml.count; i++)
-    if ([ml[i].label isEqualToString:label]) {
+    if ([ml[i].key isEqualToString:label]) {
       KKLane *c = [ml[i] copy];
       // An empty expression stays present (passthrough) so the inline editor
       // remains open after the user clears the text; only nil closes it.

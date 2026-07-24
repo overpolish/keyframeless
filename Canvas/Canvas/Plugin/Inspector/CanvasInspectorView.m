@@ -746,7 +746,8 @@ static NSString *const kCanvasIntroSeenKey = @"CanvasIntroSeen";
   NSMutableArray<NSString *> *parts =
       [NSMutableArray arrayWithCapacity:timeline.lanes.count];
   for (KKLane *l in timeline.lanes)
-    [parts addObject:[NSString stringWithFormat:@"%@|%@|%d", l.label ?: @"",
+    [parts addObject:[NSString stringWithFormat:@"%@|%@|%@|%d", l.key ?: @"",
+                                                l.label ?: @"",
                                                 l.layerLabel ?: @"",
                                                 l.locked ? 1 : 0]];
   return [parts componentsJoinedByString:@"\n"];

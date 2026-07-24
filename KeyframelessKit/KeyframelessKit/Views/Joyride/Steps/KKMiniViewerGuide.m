@@ -32,7 +32,7 @@ static NSRect KKMiniViewerCanvasScreenRect(KKMiniViewerView *c) {
 
 + (KKTimeline *)seedTimelineForConfig:(KKTimingGuideConfig *)config {
   KKTimeline *tl = [KKTimeline timeline];
-  KKLane *primary = [KKLane laneWithLabel:config.primaryLabel];
+  KKLane *primary = [KKLane laneWithKey:config.primaryLabel label:config.primaryLabel];
   primary.enabled = YES; // animatable, so the Advanced sequencer shows keyposes
   primary.valueType = (KKLaneValueType)config.primaryValueType;
   // Mirror the real lane's aspect-link so OSC drags during the guide follow the

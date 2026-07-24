@@ -46,7 +46,7 @@
 
 - (nullable KKLane *)_anchorLane {
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
-    if ([lane.label isEqualToString:self.laneLabel])
+    if ([lane.key isEqualToString:self.laneLabel])
       return lane;
   return nil;
 }
@@ -72,7 +72,7 @@
 // the default clip-space pivot geometry.
 - (NSArray<NSNumber *> *)_positionValuesAtFraction:(double)frac {
   for (KKLane *lane in KKProcessTimelineSnapshot().lanes)
-    if ([lane.label isEqualToString:self.positionLaneLabel]) {
+    if ([lane.key isEqualToString:self.positionLaneLabel]) {
       NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
       return v.count >= 2 ? v : @[ @0.5, @0.5 ];
     }
@@ -281,7 +281,7 @@
           tl = snap ? [snap copy] : [KKTimeline timeline];
           NSMutableArray *lanes = [NSMutableArray arrayWithArray:tl.lanes];
           KKLane *anchorLane =
-              [self.templateLane copy] ?: [KKLane laneWithLabel:self.laneLabel];
+              [self.templateLane copy] ?: [KKLane laneWithKey:self.laneLabel label:self.laneLabel];
           anchorLane.enabled = NO;
           anchorLane.keyposes = @[ [KKKeyPose keyposeAtTime:0.0 values:newValues] ];
           [lanes addObject:anchorLane];
