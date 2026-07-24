@@ -94,36 +94,17 @@ typedef NS_ENUM(NSInteger, KKCodeSyntax) {
 /// accent dot on the curve. Negative (the default) hides the dot.
 @property(nonatomic) double sparklineMarker;
 
-/// Replace the whole content with `formatter(currentText)` as one undoable edit
-/// (committing through the normal debounce), or no-op when the block returns
-/// nil / unchanged text. Lets a host drive formatting from its own control
-/// instead of the built-in `codeFormatter` tab-strip button (which needs a
-/// taller editor).
-- (void)formatUsing:(NSString *_Nullable (^)(NSString *code))formatter;
-
 /// Fired ~0.4s after the last keystroke with the current text (single-section
 /// hosts). Tabbed hosts use `onSectionsChange` instead.
 @property(nonatomic, copy, nullable) void (^onChange)(NSString *code);
 
-/// Multi-section (tabbed) editing. Each section is
-/// @{ @"name": display, @"code": source }. Setting 2+ sections shows a tab
-/// strip above the editor; 0 or 1 leaves the plain single editor unchanged. The
-/// active tab's text is what `codeText` reflects and what the validator runs
-/// on.
-- (void)setSections:(NSArray<NSDictionary<NSString *, NSString *> *> *)sections;
-
-/// The current sections, with the active tab's live edits folded in.
-- (NSArray<NSDictionary<NSString *, NSString *> *> *)sections;
-
-/// Re-apply text / sections from an EXTERNAL source (a host timeline change -
-/// an undo/redo of a committed edit, a preset load, an AI merge). Unlike
-/// `setSections:` / `codeText=`, these are SKIPPED while the user has an
-/// uncommitted local typing burst (so a background param echo never clobbers
-/// what they're mid-typing) and clear the local undo once applied (the new text
-/// is a durable, host-undo-owned state). A no-op when the text already matches.
+/// Re-apply text from an EXTERNAL source (a host timeline change - an
+/// undo/redo of a committed edit, a preset load, an AI merge). SKIPPED while
+/// the user has an uncommitted local typing burst (so a background param echo
+/// never clobbers what they're mid-typing) and clears the local undo once
+/// applied. A no-op when the text already matches. (The sections sibling
+/// `applyExternalSections:` lives in the `(Sections)` category below.)
 - (void)applyExternalText:(NSString *)text;
-- (void)applyExternalSections:
-    (NSArray<NSDictionary<NSString *, NSString *> *> *)sections;
 
 /// Fired ~0.4s after an edit with the full current section set. Tabbed hosts
 /// use this to persist every section (the plain `onChange` fires too, with the
@@ -193,6 +174,36 @@ typedef NS_ENUM(NSInteger, KKCodeSyntax) {
 /// that puts its default first gets it for free when the user just hits Save.
 /// Out of range reads back as 0.
 @property(nonatomic) NSInteger saveCategoryIndex;
+
+@end
+
+/// Multi-section (tabbed) editing + formatting. Declared as a category because
+/// these are implemented in KKCodeEditorView+Sections.m / +Validation.m, not
+/// the primary @implementation - keeping them here (vs the main @interface)
+/// silences the -Wincomplete-implementation / -Wobjc-protocol-method
+/// pair while staying public API.
+@interface KKCodeEditorView (Sections)
+
+/// Multi-section (tabbed) editing. Each section is
+/// @{ @"name": display, @"code": source }. Setting 2+ sections shows a tab
+/// strip above the editor; 0 or 1 leaves the plain single editor unchanged. The
+/// active tab's text is what `codeText` reflects and what the validator runs
+/// on.
+- (void)setSections:(NSArray<NSDictionary<NSString *, NSString *> *> *)sections;
+
+/// The current sections, with the active tab's live edits folded in.
+- (NSArray<NSDictionary<NSString *, NSString *> *> *)sections;
+
+/// The sections sibling of `applyExternalText:` - re-apply an external section
+/// set (undo/redo, preset, AI merge), skipped mid-typing.
+- (void)applyExternalSections:
+    (NSArray<NSDictionary<NSString *, NSString *> *> *)sections;
+
+/// Replace the whole content with `formatter(currentText)` as one undoable edit
+/// (committing through the normal debounce), or no-op when the block returns
+/// nil / unchanged text. Lets a host drive formatting from its own control
+/// instead of the built-in `codeFormatter` tab-strip button.
+- (void)formatUsing:(NSString *_Nullable (^)(NSString *code))formatter;
 
 @end
 

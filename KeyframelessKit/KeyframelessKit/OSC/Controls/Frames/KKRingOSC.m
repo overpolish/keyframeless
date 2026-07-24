@@ -11,42 +11,10 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
 
-static NSColor *ringIdleFillColor(void) {
-  return [NSColor colorWithRed:0xCE / 255.0
-                         green:0xCB / 255.0
-                          blue:0xCE / 255.0
-                         alpha:0xB1 / 255.0];
-}
-static NSColor *ringIdleStrokeColor(void) {
-  return [NSColor colorWithRed:0x1B / 255.0
-                         green:0x18 / 255.0
-                          blue:0x1D / 255.0
-                         alpha:0x9F / 255.0];
-}
-static NSColor *ringHoverFillColor(void) {
-  return [NSColor colorWithRed:0xD0 / 255.0
-                         green:0xCA / 255.0
-                          blue:0xCD / 255.0
-                         alpha:0xB2 / 255.0];
-}
-static NSColor *ringHoverStrokeColor(void) {
-  return [NSColor colorWithRed:0x09 / 255.0
-                         green:0x07 / 255.0
-                          blue:0x0A / 255.0
-                         alpha:0xAD / 255.0];
-}
-static NSColor *ringActiveFillColor(void) {
-  return [NSColor colorWithRed:0xFF / 255.0
-                         green:0xFF / 255.0
-                          blue:0xFF / 255.0
-                         alpha:1.0f];
-}
-static NSColor *ringActiveStrokeColor(void) {
-  return [NSColor colorWithRed:0x00 / 255.0
-                         green:0x00 / 255.0
-                          blue:0x00 / 255.0
-                         alpha:1.0f];
-}
+// Ring palette + stroke widths come from the SHARED glyph style
+// (KKOSCGlyphStyle.h) so the mini-viewer's ring encode and this viewer OSC
+// can never drift apart.
+#import "KKOSCGlyphStyle.h"
 
 @implementation KKRingOSC {
   BOOL _cursorSet;
@@ -83,8 +51,12 @@ static NSColor *ringActiveStrokeColor(void) {
 }
 
 - (void)applyRadiusWidgetStyle {
-  _ringRadius = 7.0f;
-  _ringRadiusY = 7.0f;
+  // Radius shared with the mini-viewer's radius-widget encode
+  // (KKOSCGlyphStyle.h). _fillWidth / _ringOutlineWidth here only size the
+  // hit/grab area (oscSize); the VISUAL stroke widths come from the emphasis
+  // style in -drawAtCanvasPosition, the same on every ring.
+  _ringRadius = KKOSCRadiusWidgetRadiusPx;
+  _ringRadiusY = KKOSCRadiusWidgetRadiusPx;
   _fillWidth = 3.0f;
   _ringOutlineWidth = 1.5f;
   self.clearsOnDraw = NO;
@@ -184,38 +156,26 @@ static NSColor *ringActiveStrokeColor(void) {
   // look, but never overrides a ghost's dim idle appearance.
   BOOL active = isActive || (_solidStyle && _ghostAlpha >= 0.999f);
 
-  float fillWidth = (isHovered || active) ? 2.5f : 2.0f;
-  float outlineWidth = (isHovered || active) ? 1.5f : 1.0f;
+  NSInteger emphasis = active ? 2 : (isHovered ? 1 : 0);
+  KKOSCRingStyle style = KKOSCRingStyleForEmphasis(emphasis);
+  float fillWidth = style.fillWidthPx;
+  float outlineWidth = style.outlineWidthPx;
   float outerX = _ringRadius + fillWidth / 2.0f + outlineWidth;
   float outerY = _ringRadiusY + fillWidth / 2.0f + outlineWidth;
   float outerRadiusPixels = fmaxf(outerX, outerY);
 
-  simd_float4 fillColor;
-  simd_float4 strokeColor;
+  simd_float4 fillColor = style.fill;
+  simd_float4 strokeColor = style.stroke;
   if (_tintColor) {
+    // A tinted ring keeps the shared stroke but fills with the tint at the
+    // shared per-emphasis opacity (KKOSCGlyphStyle) so the mini's tinted
+    // corner ring matches this exactly.
     CGFloat r, g, b, a;
     NSColor *rgb =
         [_tintColor colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
     [rgb getRed:&r green:&g blue:&b alpha:&a];
-    if (active) {
-      fillColor = (simd_float4){(float)r, (float)g, (float)b, 1.0f};
-      strokeColor = [ringActiveStrokeColor() simdFloat4];
-    } else if (isHovered) {
-      fillColor = (simd_float4){(float)r, (float)g, (float)b, 0.85f};
-      strokeColor = [ringHoverStrokeColor() simdFloat4];
-    } else {
-      fillColor = (simd_float4){(float)r, (float)g, (float)b, 0.7f};
-      strokeColor = [ringIdleStrokeColor() simdFloat4];
-    }
-  } else if (active) {
-    fillColor = [ringActiveFillColor() simdFloat4];
-    strokeColor = [ringActiveStrokeColor() simdFloat4];
-  } else if (isHovered) {
-    fillColor = [ringHoverFillColor() simdFloat4];
-    strokeColor = [ringHoverStrokeColor() simdFloat4];
-  } else {
-    fillColor = [ringIdleFillColor() simdFloat4];
-    strokeColor = [ringIdleStrokeColor() simdFloat4];
+    fillColor = (simd_float4){(float)r, (float)g, (float)b,
+                              KKOSCRingTintAlphaForEmphasis(emphasis)};
   }
 
   fillColor.w *= _ghostAlpha;

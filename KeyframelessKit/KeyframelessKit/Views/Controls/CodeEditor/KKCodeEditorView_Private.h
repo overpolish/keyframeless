@@ -98,6 +98,13 @@
 - (BOOL)_hasUncommittedTyping;
 // +Validation - re-run on a section swap / external apply.
 - (void)_runValidator;
+// +Validation - button/scroll targets wired from the core-built error strip.
+- (void)_copyError:(id)sender;
+- (void)_copyExprError:(id)sender;
+- (void)_errorScrolled;
+- (void)_formatClicked:(id)sender;
 // +SaveBar - the category dropdown is toggled from the core-built save strip.
 - (void)_toggleSaveCategoryList;
+// +SaveBar - Save button target wired from the core-built save strip.
+- (void)_saveClicked:(id)sender;
 @end

@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
  */
 
+#import "KKMiniElement.h"
 #import "KKMiniViewerRenderer.h"
 #import "KKMiniViewerView_Private.h"
+#import "KKOSCGlyphStyle.h"
 #import "KKOSCShaderTypes.h"
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
@@ -263,497 +265,186 @@
       }
     }
 
-    // Box OSC borders (crop, scale, ...) - drawn here (before the glyphs) so
-    // the handles sit on top of the line, not under it. Every box matches the
-    // in- viewer KKRectBorderOSC default (white 0.6), dimmed by its ghost
-    // alpha.
-    if (_linePipeline && del &&
-        [del respondsToSelector:@selector(miniViewer:boxesForContentRect:)]) {
-      CGRect cr = [self contentRectInViewPoints];
-      for (KKMiniBox *box in [del miniViewer:self boxesForContentRect:cr]) {
-        simd_float4 lineColor = {1.0f, 1.0f, 1.0f,
-                                 0.6f * (float)box.ghostAlpha};
-        [self _encodeRectBorder:box.rect lineColor:lineColor encoder:enc];
-      }
-    }
-
-    // Ring OSC (e.g. a radius ring): the in-viewer KKRingOSC, rendered through
-    // the SAME shader (_ringPipeline / KKRingOSCFragment) - a single-pass
-    // elliptical fill+outline. No tessellation seams, no fill/outline bleed.
-    if (_ringPipeline && del &&
-        [del respondsToSelector:@selector(miniViewer:ringCenter:radiusX:radiusY:
-                                          contentRect:)]) {
-      CGPoint rc = CGPointZero;
-      CGFloat rrx = 0, rry = 0;
-      CGRect ringCR = [self contentRectInViewPoints];
-      if ([del miniViewer:self
-               ringCenter:&rc
-                  radiusX:&rrx
-                  radiusY:&rry
-              contentRect:ringCR] &&
-          rrx > 0.5 && rry > 0.5) {
-        // Viewer KKRingOSC idle / hover / active, VERBATIM: same colors AND the
-        // same fillWidth / outlineWidth (2.0/1.0, 2.5/1.5). The viewer's widths
-        // are canvas pixels; the mini shows the source shrunk by crMin/srcMin
-        // (preview pt over source px), so scaling the viewer widths by that
-        // factor gives the identical stroke-to-ring proportion the viewer
-        // renders (it normalizes fillWidth/outerRadiusPixels - we match that
-        // scale, not a guessed point size).
-        NSInteger emphasis =
-            [del respondsToSelector:@selector(miniViewerRingEmphasis:)]
-                ? [del miniViewerRingEmphasis:self]
-                : 0;
-        simd_float4 fillColor, strokeColor;
-        CGFloat viewerFillPx, viewerOutlinePx;
-        if (emphasis >= 2) { // active
-          fillColor = (simd_float4){1.0f, 1.0f, 1.0f, 1.0f};
-          strokeColor = (simd_float4){0.0f, 0.0f, 0.0f, 1.0f};
-          viewerFillPx = 2.5;
-          viewerOutlinePx = 1.5;
-        } else if (emphasis >= 1) { // hover
-          fillColor = (simd_float4){0xD0 / 255.0f, 0xCA / 255.0f, 0xCD / 255.0f,
-                                    0xB2 / 255.0f};
-          strokeColor = (simd_float4){0x09 / 255.0f, 0x07 / 255.0f,
-                                      0x0A / 255.0f, 0xAD / 255.0f};
-          viewerFillPx = 2.5;
-          viewerOutlinePx = 1.5;
-        } else { // idle
-          fillColor = (simd_float4){0xCE / 255.0f, 0xCB / 255.0f, 0xCE / 255.0f,
-                                    0xB1 / 255.0f};
-          strokeColor = (simd_float4){0x1B / 255.0f, 0x18 / 255.0f,
-                                      0x1D / 255.0f, 0x9F / 255.0f};
-          viewerFillPx = 2.0;
-          viewerOutlinePx = 1.0;
-        }
-        // Dim to a ghost when the ring is only shown because of an Opt-hold
-        // reveal of a hidden ring (matches the point/box/rotation ghost
-        // handles).
-        CGFloat ringGhostAlpha =
-            [del respondsToSelector:@selector(miniViewerRingGhostAlpha:)]
-                ? [del miniViewerRingGhostAlpha:self]
-                : 1.0;
-        fillColor.w *= (float)ringGhostAlpha;
-        strokeColor.w *= (float)ringGhostAlpha;
-
-        CGSize src = [self sourceMediaSize];
-        CGFloat srcMin = MIN(src.width, src.height);
-        CGFloat crMin = MIN(ringCR.size.width, ringCR.size.height);
-        CGFloat srcScale =
-            (srcMin > 0.5) ? crMin / srcMin : [self _canvasScale];
-        // The viewer thickens BOTH fill + outline on hover/active, but at mini
-        // scale its px deltas (x srcScale) are sub-perceptible. Add a flat
-        // point boost so the hover/active outline visibly grows like the
-        // viewer. Fill is also nudged +0.5pt in every state, plus a touch more
-        // (+0.1) at idle.
-        CGFloat outlineBoostPt = (emphasis >= 1) ? 0.35 : 0.0;
-        CGFloat fillBoostPt = (emphasis == 0) ? 0.6 : 0.5;
-        [self _encodeRingOSCAt:rc
-                     radiusXPt:rrx
-                     radiusYPt:rry
-                     fillColor:fillColor
-                   strokeColor:strokeColor
-                   fillWidthPt:viewerFillPx * srcScale + fillBoostPt
-                outlineWidthPt:viewerOutlinePx * srcScale + outlineBoostPt
-                       encoder:enc];
-      }
-    }
-
-    // Extra ring OSCs (multiple, dynamic - e.g. Shader's `osc=ring` lanes): the
-    // same shader + VERBATIM viewer colors as the single ring above, but with
-    // per-bundle emphasis + ghost alpha so each ring hovers/drags
-    // independently.
-    if (_ringPipeline && del &&
-        [del respondsToSelector:@selector(
-                                    miniViewer:extraRingsForContentRect:)]) {
-      CGRect ringCR = [self contentRectInViewPoints];
-      CGSize src = [self sourceMediaSize];
-      CGFloat srcMin = MIN(src.width, src.height);
-      CGFloat crMin = MIN(ringCR.size.width, ringCR.size.height);
-      CGFloat srcScale = (srcMin > 0.5) ? crMin / srcMin : [self _canvasScale];
-      for (NSDictionary<NSString *, id> *b in [del miniViewer:self
-                                     extraRingsForContentRect:ringCR]) {
-        CGPoint rc = [b[@"center"] pointValue];
-        CGFloat rrx = [b[@"radiusX"] doubleValue];
-        CGFloat rry = [b[@"radiusY"] doubleValue];
-        if (rrx <= 0.5 || rry <= 0.5)
-          continue;
-        NSInteger emphasis = [b[@"emphasis"] integerValue];
-        CGFloat alpha = b[@"alpha"] ? [b[@"alpha"] doubleValue] : 1.0;
-        simd_float4 fillColor, strokeColor;
-        CGFloat viewerFillPx, viewerOutlinePx;
-        if (emphasis >= 2) { // active
-          fillColor = (simd_float4){1.0f, 1.0f, 1.0f, 1.0f};
-          strokeColor = (simd_float4){0.0f, 0.0f, 0.0f, 1.0f};
-          viewerFillPx = 2.5;
-          viewerOutlinePx = 1.5;
-        } else if (emphasis >= 1) { // hover
-          fillColor = (simd_float4){0xD0 / 255.0f, 0xCA / 255.0f, 0xCD / 255.0f,
-                                    0xB2 / 255.0f};
-          strokeColor = (simd_float4){0x09 / 255.0f, 0x07 / 255.0f,
-                                      0x0A / 255.0f, 0xAD / 255.0f};
-          viewerFillPx = 2.5;
-          viewerOutlinePx = 1.5;
-        } else { // idle
-          fillColor = (simd_float4){0xCE / 255.0f, 0xCB / 255.0f, 0xCE / 255.0f,
-                                    0xB1 / 255.0f};
-          strokeColor = (simd_float4){0x1B / 255.0f, 0x18 / 255.0f,
-                                      0x1D / 255.0f, 0x9F / 255.0f};
-          viewerFillPx = 2.0;
-          viewerOutlinePx = 1.0;
-        }
-        fillColor.w *= (float)alpha;
-        strokeColor.w *= (float)alpha;
-        CGFloat outlineBoostPt = (emphasis >= 1) ? 0.35 : 0.0;
-        CGFloat fillBoostPt = (emphasis == 0) ? 0.6 : 0.5;
-        [self _encodeRingOSCAt:rc
-                     radiusXPt:rrx
-                     radiusYPt:rry
-                     fillColor:fillColor
-                   strokeColor:strokeColor
-                   fillWidthPt:viewerFillPx * srcScale + fillBoostPt
-                outlineWidthPt:viewerOutlinePx * srcScale + outlineBoostPt
-                       encoder:enc];
-      }
-    }
-
-    // Motion path: red trajectory line + tangent connectors under
-    // the dots, then anchor + handle dots. Drawn beneath the position handle.
+    // === OSC elements: ONE generic dispatch ==============================
+    // The delegate describes every element as a typed KKMiniElement
+    // (KKMiniViewerRenderer assembles them from the legacy hooks; a
+    // descriptor-native delegate returns them directly); the canvas encodes
+    // each by kind. Two passes preserve the viewer layering: box BORDERS
+    // under every glyph/ring/path, then the elements in array order.
     if (del &&
-        [del respondsToSelector:
-                 @selector(miniViewer:motionPathPolylineForContentRect:)]) {
+        [del
+            respondsToSelector:@selector(miniViewer:elementsForContentRect:)]) {
       CGRect cr = [self contentRectInViewPoints];
-      NSArray<NSValue *> *poly = [del miniViewer:self
-                motionPathPolylineForContentRect:cr];
-      NSArray<NSValue *> *segs =
-          [del
-              respondsToSelector:
-                  @selector(miniViewer:motionPathHandleSegmentsForContentRect:)]
-              ? [del miniViewer:self motionPathHandleSegmentsForContentRect:cr]
-              : nil;
-      NSArray<NSValue *> *anchors =
-          [del respondsToSelector:
-                   @selector(miniViewer:motionPathAnchorsForContentRect:)]
-              ? [del miniViewer:self motionPathAnchorsForContentRect:cr]
-              : nil;
-      float pg = [del isKindOfClass:[KKMiniViewerRenderer class]]
-                     ? (float)[(KKMiniViewerRenderer *)del motionPathGhostAlpha]
-                     : 1.0f;
-      if (_linePipeline && poly.count >= 2) {
-        simd_float4 red = {1.0f, 0.25f, 0.25f, 0.9f * pg};
-        [self _encodeMotionLineStrip:poly
-                               color:red
-                         halfWidthPt:1.0
-                             encoder:enc];
-      }
+      NSArray<KKMiniElement *> *els = [del miniViewer:self
+                               elementsForContentRect:cr];
+
       if (_linePipeline) {
-        simd_float4 white = {1.0f, 1.0f, 1.0f, 0.85f * pg};
-        for (NSUInteger i = 0; i + 1 < segs.count; i += 2)
-          [self _encodeMotionLineStrip:@[ segs[i], segs[i + 1] ]
-                                 color:white
-                           halfWidthPt:0.75
-                               encoder:enc];
+        for (KKMiniElement *e in els) {
+          if (e.kind != KKMiniElementKindBox)
+            continue;
+          // Viewer KKRectBorderOSC default (white 0.6), dimmed by ghost.
+          simd_float4 lineColor = {1.0f, 1.0f, 1.0f, 0.6f * (float)e.alpha};
+          [self _encodeRectBorder:e.rect lineColor:lineColor encoder:enc];
+        }
       }
-      if (_pointPipeline) {
-        simd_float4 white = {1.0f, 1.0f, 1.0f, 1.0f * pg};
-        for (NSValue *v in anchors)
-          [self _encodeHandleGlyphAt:v.pointValue
-                           fillColor:white
-                           sizeScale:0.6
-                             encoder:enc];
-        for (NSUInteger i = 1; i < segs.count; i += 2)
-          [self _encodeHandleGlyphAt:segs[i].pointValue
-                           fillColor:white
-                           sizeScale:0.5
-                             encoder:enc];
-      }
-    }
 
-    // Extra motion paths (multi-point plugins, e.g. Shader): each additional
-    // point OSC draws its OWN trajectory, so an animated point lane shows a
-    // path whether or not it happens to be the first one. Same style as the
-    // primary path above, drawn beneath the handles.
-    if ((_linePipeline || _pointPipeline) && del &&
-        [del respondsToSelector:
-                 @selector(miniViewer:extraMotionPathsForContentRect:)]) {
-      CGRect cr = [self contentRectInViewPoints];
-      for (NSDictionary<NSString *, id> *b in [del miniViewer:self
-                               extraMotionPathsForContentRect:cr]) {
-        NSArray<NSValue *> *poly = b[@"poly"];
-        NSArray<NSValue *> *segs = b[@"segs"];
-        NSArray<NSValue *> *anchors = b[@"anchors"];
-        float pg = b[@"alpha"] ? [b[@"alpha"] floatValue] : 1.0f;
-        if (_linePipeline && poly.count >= 2) {
-          simd_float4 red = {1.0f, 0.25f, 0.25f, 0.9f * pg};
-          [self _encodeMotionLineStrip:poly
-                                 color:red
-                           halfWidthPt:1.0
-                               encoder:enc];
-        }
-        if (_linePipeline) {
-          simd_float4 white = {1.0f, 1.0f, 1.0f, 0.85f * pg};
-          for (NSUInteger i = 0; i + 1 < segs.count; i += 2)
-            [self _encodeMotionLineStrip:@[ segs[i], segs[i + 1] ]
-                                   color:white
-                             halfWidthPt:0.75
-                                 encoder:enc];
-        }
-        if (_pointPipeline) {
-          simd_float4 white = {1.0f, 1.0f, 1.0f, 1.0f * pg};
-          for (NSValue *v in anchors)
-            [self _encodeHandleGlyphAt:v.pointValue
-                             fillColor:white
-                             sizeScale:0.6
-                               encoder:enc];
-          for (NSUInteger i = 1; i < segs.count; i += 2)
-            [self _encodeHandleGlyphAt:segs[i].pointValue
-                             fillColor:white
-                             sizeScale:0.5
-                               encoder:enc];
-        }
-      }
-    }
-
-    if (_pointPipeline && del) {
-      CGRect cr = [self contentRectInViewPoints];
-      // Radius handle uses the host accent (same as a Rotate OSC) so
-      // it's distinguishable from the white crop handles.
       NSColor *a =
           [[NSColor accent] colorUsingColorSpace:NSColorSpace.sRGBColorSpace];
       CGFloat ar = 1, ag = 1, ab = 1, aa = 1;
       [a getRed:&ar green:&ag blue:&ab alpha:&aa];
       simd_float4 accentFill = {(float)ar, (float)ag, (float)ab, (float)aa};
       simd_float4 whiteFill = {1.0f, 1.0f, 1.0f, 1.0f};
+      // Ring strokes scale the viewer's canvas-px widths by the mini's
+      // preview-pt-over-source-px factor so the stroke-to-ring proportion
+      // matches the viewer exactly.
+      CGSize src = [self sourceMediaSize];
+      CGFloat srcMin = MIN(src.width, src.height);
+      CGFloat crMin = MIN(cr.size.width, cr.size.height);
+      CGFloat srcScale = (srcMin > 0.5) ? crMin / srcMin : [self _canvasScale];
 
-      // Point-glyph size multiplier (radius handle + crop corners), so a plugin
-      // can match a specific reference dot. Default 1.0.
-      CGFloat pointSizeScale =
-          [del isKindOfClass:[KKMiniViewerRenderer class]]
-              ? [(KKMiniViewerRenderer *)del pointHandleSizeScale]
-              : 1.0;
-
-      // Layering matches the viewer (bottom -> top): boxes/rotation, then the
-      // Position handle on top of the rings, then the anchor square topmost.
-      // Box OSC handles (crop corners/edges, scale corners/edges, ...): white,
-      // dimmed by each box's ghost alpha. One path for every box.
-      if ([del respondsToSelector:@selector(miniViewer:boxesForContentRect:)]) {
-        for (KKMiniBox *box in [del miniViewer:self boxesForContentRect:cr]) {
+      for (KKMiniElement *e in els) {
+        switch (e.kind) {
+        case KKMiniElementKindBox: {
+          if (!_pointPipeline)
+            break;
           simd_float4 fill = whiteFill;
-          fill.w *= (float)box.ghostAlpha;
-          for (NSValue *v in box.handleCenters)
+          fill.w *= (float)e.alpha;
+          for (NSValue *v in e.handleCenters)
             [self _encodeHandleGlyphAt:v.pointValue
                              fillColor:fill
-                             sizeScale:pointSizeScale
+                             sizeScale:e.sizeScale
                                encoder:enc];
+          break;
         }
-      }
-
-      if (_rotationPipeline &&
-          [del respondsToSelector:@selector(miniViewer:rotationOSCCenter:
-                                            radiusPx:params:contentRect:)]) {
-        CGPoint rotCenter = CGPointZero;
-        CGFloat rotRadius = 0;
-        KKRotationOSCParams rotParams = {0};
-        if ([del miniViewer:self
-                rotationOSCCenter:&rotCenter
-                         radiusPx:&rotRadius
-                           params:&rotParams
-                      contentRect:cr]) {
-          [self _encodeRotationOSCAt:rotCenter
-                            radiusPx:rotRadius
-                              params:rotParams
-                             encoder:enc];
-        }
-      }
-
-      // Multi-rotation path: a plugin with several independent rotation OSCs
-      // returns one KKMiniRotation per gizmo (each already carrying its centre,
-      // radius + params), drawn through the same encode as the single path
-      // above.
-      if (_rotationPipeline &&
-          [del
-              respondsToSelector:@selector(
-                                     miniViewer:rotationOSCsForContentRect:)]) {
-        for (KKMiniRotation *r in [del miniViewer:self
-                       rotationOSCsForContentRect:cr])
-          [self _encodeRotationOSCAt:r.center
-                            radiusPx:r.radiusPx
-                              params:r.params
-                             encoder:enc];
-      }
-
-      // Position handle, drawn above the rotation rings + scale box so it stays
-      // on top (matches the viewer's layering).
-      CGPoint handleCenterPts;
-      if ([del respondsToSelector:
-                   @selector(miniViewer:pointHandleCenter:contentRect:)] &&
-          [del miniViewer:self
-              pointHandleCenter:&handleCenterPts
-                    contentRect:cr]) {
-        KKMiniHandleStyle style = KKMiniHandleStylePoint;
-        BOOL isActive = NO;
-        CGFloat ghostAlpha = 1.0;
-        if ([del isKindOfClass:[KKMiniViewerRenderer class]]) {
-          style = [(KKMiniViewerRenderer *)del pointHandleStyle];
-          isActive = [(KKMiniViewerRenderer *)del pointHandleIsActive];
-          ghostAlpha = [(KKMiniViewerRenderer *)del pointHandleGhostAlpha];
-        }
-        if (style == KKMiniHandleStyleNone) {
-          // The renderer exposes a point-handle anchor (for guides / driven
-          // drag) but paints its own control - draw no default glyph here.
-        } else if (style == KKMiniHandleStyleArc) {
-          [self _encodeArcHandleGlyphAt:handleCenterPts
-                               isActive:isActive
-                             ghostAlpha:ghostAlpha
-                                encoder:enc];
-        } else if (style == KKMiniHandleStyleRing) {
-          // Haloed KKRingOSC ring (the shared radius-widget glyph). White fill
-          // + dark outline for legibility on any background (matches the
-          // corner ring), scaled with the OSC sizing ratio like the dot. Sizes
-          // match the corner-radius ring so the two read identically in the
-          // mini-viewer, as they already do in the main viewer.
-          CGFloat cs = [self _canvasScale];
-          simd_float4 f = whiteFill;
-          f.w *= (float)ghostAlpha;
-          simd_float4 outline = {0.0f, 0.0f, 0.0f, 0.75f * (float)ghostAlpha};
-          [self _encodeRingOSCAt:handleCenterPts
-                       radiusXPt:2.3 * cs
-                       radiusYPt:2.3 * cs
-                       fillColor:f
-                     strokeColor:outline
-                     fillWidthPt:1.0 * cs
-                  outlineWidthPt:0.5 * cs
+        case KKMiniElementKindRing: {
+          if (!_ringPipeline || e.radiusX <= 0.5 || e.radiusY <= 0.5)
+            break;
+          // THE shared ring palette (KKOSCGlyphStyle.h) - same table the
+          // viewer's KKRingOSC reads, so the two can't drift.
+          KKOSCRingStyle style = KKOSCRingStyleForEmphasis(e.emphasis);
+          simd_float4 fillColor = style.fill;
+          simd_float4 strokeColor = style.stroke;
+          CGFloat viewerFillPx = style.fillWidthPx;
+          CGFloat viewerOutlinePx = style.outlineWidthPx;
+          fillColor.w *= (float)e.alpha;
+          strokeColor.w *= (float)e.alpha;
+          // Flat point boosts keep the hover/active growth perceptible at
+          // mini scale (the viewer's px deltas x srcScale are sub-pixel).
+          CGFloat outlineBoostPt = (e.emphasis >= 1) ? 0.35 : 0.0;
+          CGFloat fillBoostPt = (e.emphasis == 0) ? 0.6 : 0.5;
+          [self _encodeRingOSCAt:e.center
+                       radiusXPt:e.radiusX
+                       radiusYPt:e.radiusY
+                       fillColor:fillColor
+                     strokeColor:strokeColor
+                     fillWidthPt:viewerFillPx * srcScale + fillBoostPt
+                  outlineWidthPt:viewerOutlinePx * srcScale + outlineBoostPt
                          encoder:enc];
-        } else {
-          // Point-style handles dim via the fill alpha (no ghostAlpha param).
-          simd_float4 f = accentFill;
-          f.w *= (float)ghostAlpha;
-          [self _encodeHandleGlyphAt:handleCenterPts
-                           fillColor:f
-                           sizeScale:pointSizeScale
-                             encoder:enc];
+          break;
         }
-      }
-
-      // Additional point handles (a dynamic plugin with more than one point
-      // OSC, e.g. Shader's multiple `#point osc` lanes). Each drawn with the
-      // same glyph as the primary handle above; the delegate owns hit-test /
-      // drag. Uses pointHandleCenter-style centres (fraction-based), so
-      // animatable point lanes render their handle too, not only constant ones.
-      if ([del respondsToSelector:
-                   @selector(
-                       miniViewer:extraPointHandleGlyphsForContentRect:)]) {
-        KKMiniHandleStyle exStyle =
-            [del isKindOfClass:[KKMiniViewerRenderer class]]
-                ? [(KKMiniViewerRenderer *)del pointHandleStyle]
-                : KKMiniHandleStylePoint;
-        for (NSDictionary<NSString *, id> *g in [del miniViewer:self
-                           extraPointHandleGlyphsForContentRect:cr]) {
-          CGPoint c = [g[@"center"] pointValue];
-          CGFloat ga = g[@"alpha"] ? [g[@"alpha"] doubleValue] : 1.0;
-          if (exStyle == KKMiniHandleStyleNone)
-            continue;
-          if (exStyle == KKMiniHandleStyleArc)
-            [self _encodeArcHandleGlyphAt:c
-                                 isActive:NO
-                               ghostAlpha:ga
-                                  encoder:enc];
-          else {
-            simd_float4 f = accentFill;
-            f.w *= (float)ga;
-            [self _encodeHandleGlyphAt:c
-                             fillColor:f
-                             sizeScale:pointSizeScale
+        case KKMiniElementKindRotation:
+          if (_rotationPipeline)
+            [self _encodeRotationOSCAt:e.center
+                              radiusPx:e.radiusPx
+                                params:e.rotationParams
                                encoder:enc];
+          break;
+        case KKMiniElementKindMotionPath: {
+          float pg = (float)e.alpha;
+          NSArray<NSValue *> *poly = e.polyline;
+          NSArray<NSValue *> *segs = e.handleSegments;
+          NSArray<NSValue *> *anchors = e.anchors;
+          if (_linePipeline && poly.count >= 2) {
+            simd_float4 red = {1.0f, 0.25f, 0.25f, 0.9f * pg};
+            [self _encodeMotionLineStrip:poly
+                                   color:red
+                             halfWidthPt:1.0
+                                 encoder:enc];
           }
+          if (_linePipeline) {
+            simd_float4 white = {1.0f, 1.0f, 1.0f, 0.85f * pg};
+            for (NSUInteger i = 0; i + 1 < segs.count; i += 2)
+              [self _encodeMotionLineStrip:@[ segs[i], segs[i + 1] ]
+                                     color:white
+                               halfWidthPt:0.75
+                                   encoder:enc];
+          }
+          if (_pointPipeline) {
+            simd_float4 white = {1.0f, 1.0f, 1.0f, 1.0f * pg};
+            for (NSValue *v in anchors)
+              [self _encodeHandleGlyphAt:v.pointValue
+                               fillColor:white
+                               sizeScale:KKOSCAnchorDotScale
+                                 encoder:enc];
+            for (NSUInteger i = 1; i < segs.count; i += 2)
+              [self _encodeHandleGlyphAt:segs[i].pointValue
+                               fillColor:white
+                               sizeScale:KKOSCTangentDotScale
+                                 encoder:enc];
+          }
+          break;
         }
-      }
-
-      // Fixed-glyph handles whose GLYPH is chosen per handle (a custom OSC
-      // mapped to an arbitrary glyph, e.g. Shader's `// @osc style=hollow`
-      // radius handle -> the shared radius-widget ring). Same per-style encode
-      // as the primary handle above.
-      if ([del respondsToSelector:
-                   @selector(miniViewer:extraFixedGlyphsForContentRect:)]) {
-        for (NSDictionary<NSString *, id> *g in [del miniViewer:self
-                                 extraFixedGlyphsForContentRect:cr]) {
-          CGPoint c = [g[@"center"] pointValue];
-          CGFloat ga = g[@"alpha"] ? [g[@"alpha"] doubleValue] : 1.0;
-          KKMiniHandleStyle st = (KKMiniHandleStyle)[g[@"style"] integerValue];
-          if (st == KKMiniHandleStyleNone)
-            continue;
-          if (st == KKMiniHandleStyleArc) {
-            [self _encodeArcHandleGlyphAt:c
-                                 isActive:NO
-                               ghostAlpha:ga
+        case KKMiniElementKindGlyph: {
+          switch ((KKMiniHandleStyle)e.style) {
+          case KKMiniHandleStyleNone:
+            // Anchoring-only element (guides / programmatic drag) - no glyph.
+            break;
+          case KKMiniHandleStyleArc:
+            [self _encodeArcHandleGlyphAt:e.center
+                                 isActive:e.active
+                               ghostAlpha:e.alpha
                                   encoder:enc];
-          } else if (st == KKMiniHandleStyleRing) {
-            CGFloat cs = [self _canvasScale];
-            simd_float4 f = whiteFill;
-            f.w *= (float)ga;
-            simd_float4 outline = {0.0f, 0.0f, 0.0f, 0.75f * (float)ga};
-            [self _encodeRingOSCAt:c
-                         radiusXPt:2.3 * cs
-                         radiusYPt:2.3 * cs
+            break;
+          case KKMiniHandleStyleRing: {
+            // Haloed KKRingOSC ring (the shared radius-widget glyph), scaled
+            // with the OSC sizing ratio. SOLID white (active style) to match
+            // the viewer's radius widget, which sets solidStyle=YES (a small
+            // handle reads unclear in the dim idle gray) - the two are
+            // deliberately always-white for parity.
+            // Radius widget = a ring at the shared small radius, drawn SOLID
+            // (active style) to match the viewer's solidStyle radius widget.
+            // Radius + stroke widths derive from the viewer's (KKOSCGlyphStyle)
+            // times the mini ratio AND e.sizeScale (0.6, the point-dot shrink),
+            // so the ring is the same size as the mini dots - matching the main
+            // viewer where ring outer == dot outer.
+            CGFloat cs = [self _canvasScale] * e.sizeScale;
+            KKOSCRingStyle rs = KKOSCRingStyleForEmphasis(2);
+            simd_float4 f = rs.fill;
+            f.w *= (float)e.alpha;
+            simd_float4 outline = rs.stroke;
+            outline.w *= (float)e.alpha;
+            [self _encodeRingOSCAt:e.center
+                         radiusXPt:KKOSCMiniRadiusWidgetRadiusPt * cs
+                         radiusYPt:KKOSCMiniRadiusWidgetRadiusPt * cs
                          fillColor:f
                        strokeColor:outline
-                       fillWidthPt:1.0 * cs
-                    outlineWidthPt:0.5 * cs
+                       fillWidthPt:rs.fillWidthPx * KKOSCMiniGlyphRatio * cs
+                    outlineWidthPt:rs.outlineWidthPx * KKOSCMiniGlyphRatio * cs
                            encoder:enc];
-          } else if (st == KKMiniHandleStyleSquare) {
-            [self _encodeSquareGlyphAt:c
-                            ghostAlpha:ga
-                             sizeScale:pointSizeScale
-                               encoder:enc];
-          } else {
-            // `white` hint = match the viewer's white KKPointOSC dot instead
-            // of the accent position-handle fill.
-            simd_float4 f = [g[@"white"] boolValue] ? whiteFill : accentFill;
-            f.w *= (float)ga;
-            [self _encodeHandleGlyphAt:c
-                             fillColor:f
-                             sizeScale:pointSizeScale
-                               encoder:enc];
+            break;
           }
+          case KKMiniHandleStyleSquare:
+            if (_squarePipeline)
+              [self _encodeSquareGlyphAt:e.center
+                              ghostAlpha:e.alpha
+                               sizeScale:e.sizeScale
+                                 encoder:enc];
+            break;
+          default: { // Point dot: accent (or white on request), alpha-dimmed.
+            if (!_pointPipeline)
+              break;
+            simd_float4 f = e.whiteFill ? whiteFill : accentFill;
+            f.w *= (float)e.alpha;
+            [self _encodeHandleGlyphAt:e.center
+                             fillColor:f
+                             sizeScale:e.sizeScale
+                               encoder:enc];
+            break;
+          }
+          }
+          break;
         }
-      }
-
-      // Anchor pivot square - topmost, mirroring the viewer's layering.
-      CGPoint anchorCenterPts;
-      if (_squarePipeline &&
-          [del respondsToSelector:
-                   @selector(miniViewer:anchorSquareCenter:contentRect:)] &&
-          [del miniViewer:self
-              anchorSquareCenter:&anchorCenterPts
-                     contentRect:cr]) {
-        CGFloat ghostAlpha =
-            [del isKindOfClass:[KKMiniViewerRenderer class]]
-                ? [(KKMiniViewerRenderer *)del anchorSquareGhostAlpha]
-                : 1.0;
-        [self _encodeSquareGlyphAt:anchorCenterPts
-                        ghostAlpha:ghostAlpha
-                         sizeScale:pointSizeScale
-                           encoder:enc];
-      }
-
-      // Secondary Position arc handle (a plugin whose main point handle is
-      // something else - e.g. a radius ring - draws its Position here with
-      // the same arc glyph the viewer uses).
-      CGPoint posCenterPts;
-      if ([del respondsToSelector:
-                   @selector(miniViewer:positionHandleCenter:contentRect:)] &&
-          [del miniViewer:self
-              positionHandleCenter:&posCenterPts
-                       contentRect:cr]) {
-        BOOL posActive = NO;
-        CGFloat posGhost = 1.0;
-        if ([del isKindOfClass:[KKMiniViewerRenderer class]]) {
-          posActive = [(KKMiniViewerRenderer *)del positionHandleIsActive];
-          posGhost = [(KKMiniViewerRenderer *)del positionHandleGhostAlpha];
         }
-        [self _encodeArcHandleGlyphAt:posCenterPts
-                             isActive:posActive
-                           ghostAlpha:posGhost
-                              encoder:enc];
       }
     }
 

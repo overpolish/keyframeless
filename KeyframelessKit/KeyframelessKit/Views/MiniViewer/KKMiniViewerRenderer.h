@@ -121,8 +121,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// hide-toggling are unaffected).
 @property(nonatomic) BOOL revealHidden;
 
+// NOTE (descriptor model, M1): the per-kind GhostAlpha hooks below are now
+// ASSEMBLY-INTERNAL - the view draws OSC elements solely from
+// `miniViewer:elementsForContentRect:` (each KKMiniElement carries its own
+// `alpha`), and the base assembly folds these hooks into that array. They
+// remain overridable for subclasses that still feed the legacy hooks; a
+// descriptor-native renderer overrides the elements method and these die
+// with it (M4).
+
 /// Alpha to draw the point handle at: 1.0 normal, 0.3 when it's a revealed
-/// ghost. Read by the mini-viewer view when encoding the arc glyph.
+/// ghost. Folded into the point element's alpha by the element assembly.
 - (CGFloat)pointHandleGhostAlpha;
 
 /// Alpha to draw the crop OSC at (border + corner handles): 1.0 normal, 0.3

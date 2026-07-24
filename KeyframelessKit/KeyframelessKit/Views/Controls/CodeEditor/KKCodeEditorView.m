@@ -14,8 +14,8 @@
 #import "KKLinkExpr.h" // expression error range for the red squiggle
 #import "KKLocalized.h"
 #import "KKPopoverKeepAlive.h"
-#import "KKTimelineLanesView_Private.h" // _KKDropdownTrigger, _KKLVPopoverContentView
 #import "KKTimeline.h" // KKCodeEditorSave* notification constant declarations
+#import "KKTimelineLanesView_Private.h" // _KKDropdownTrigger, _KKLVPopoverContentView
 #import "KKTokens.h"
 #import "NSColor+KKColors.h"
 #import <QuartzCore/QuartzCore.h>
@@ -32,6 +32,10 @@ NSNotificationName const KKCodeEditorReloadNotification =
 @implementation KKCodeEditorView
 @synthesize codeValidator = _codeValidator;
 @synthesize codeFormatter = _codeFormatter;
+// Accessors live in +SaveBar (backed by the name field's placeholderString,
+// resetting to a default on nil) - @dynamic stops the primary from
+// auto-synthesizing a nil-unaware setter for this null_resettable property.
+@dynamic saveNamePlaceholder;
 
 - (instancetype)initWithFrame:(NSRect)frame {
   self = [super initWithFrame:frame];

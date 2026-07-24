@@ -52,11 +52,24 @@ NS_ASSUME_NONNULL_BEGIN
                             params:(KKRotationOSCParams)params;
 @end
 
+@class KKMiniElement;
+
 /// Plugin-supplied interaction delegate. Hooks are declared now and wired in
 /// later phases (handle drawing, hit-testing, drag deltas reported as value
 /// mutations). Points are clip-normalized: (0,0) top-left, (1,1) bottom-right.
 @protocol KKMiniViewerDelegate <NSObject>
 @optional
+/// THE aggregate OSC surface: every drawable element as ONE typed
+/// `KKMiniElement` array (glyphs, boxes, rings, rotations, motion paths),
+/// each carrying its own ghost `alpha` / emphasis / style. When implemented,
+/// the canvas draws OSC elements ONLY from this array through one generic
+/// loop - the per-kind draw hooks below are never consulted for drawing.
+/// `KKMiniViewerRenderer` implements it by assembling from the legacy hooks,
+/// so subclasses keep working unchanged while new code targets descriptors.
+/// Array order = draw order (bottom to top), except box BORDERS, which are
+/// drawn under every glyph/ring/path first (viewer layering parity).
+- (NSArray<KKMiniElement *> *)miniViewer:(KKMiniViewerView *)canvas
+                  elementsForContentRect:(CGRect)contentRect;
 /// YES if the effect should be rendered into a processed texture sized to the
 /// DISPLAY resolution (downscaled to the content rect, capped at source) rather
 /// than the full source size. Only soft / bounds-expanding effects

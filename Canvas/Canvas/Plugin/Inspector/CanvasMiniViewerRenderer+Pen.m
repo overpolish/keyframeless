@@ -14,6 +14,7 @@
 #import "CanvasToolbar.h"    // CanvasToolbarToolPen
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKBezierPath.h>
+#import <KeyframelessKit/KKOSCGlyphStyle.h> // shared ring tint ramp + stroke
 #import <KeyframelessKit/NSColor+KKColors.h>
 #import <Metal/Metal.h>
 
@@ -362,21 +363,32 @@ static CanvasPenModifiers PenModsFromNS(NSEventModifierFlags m) {
   CGFloat scale = canvas.oscSizingHeight / 230.0;
   if (scale <= 0)
     scale = 1.0;
+  // Match the viewer corner ring (CanvasOSC.m: a solidStyle KKRingOSC = ACTIVE
+  // emphasis, white). Radius + stroke widths come from the shared geometry
+  // (KKOSCGlyphStyle) times the mini ratio, and ALSO times pointHandleSizeScale
+  // (0.6) - the same shrink the point-dot glyph gets - so the ring is the same
+  // size as the mini dots, exactly as in the main viewer where ring outer ==
+  // dot outer. The fill is solid white (error while over-max).
+  KKOSCRingStyle style = KKOSCRingStyleForEmphasis(2);
+  CGFloat ringScale = scale * [self pointHandleSizeScale];
   simd_float4 fill = maxed ? CanvasMiniColorRGBA([NSColor error])
                            : CanvasMiniColorRGBA([NSColor whiteColor]);
-  simd_float4 outline = {0.0f, 0.0f, 0.0f, 0.75f};
-  // Dim to a ghost while "Corners" is individually hidden but Opt-peeked (master
-  // on) - the cue that an Opt-click re-shows it, like the other handles. Full
-  // alpha when visible or in master-off peek-and-use.
+  fill.w = KKOSCRingTintAlphaForEmphasis(2);
+  simd_float4 outline = style.stroke;
+  // Dim to a ghost while "Corners" is individually hidden but Opt-peeked
+  // (master on) - the cue that an Opt-click re-shows it, like the other
+  // handles. Full alpha when visible or in master-off peek-and-use.
   float ghostA = (float)[self ghostAlphaForLabel:@"Corners"];
   fill.w *= ghostA;
   outline.w *= ghostA;
-  [canvas encodeToolRingAtPoint:[self penSurfacePointFromObj:objYUp]
-                       radiusPt:2.3 * scale
-                           fill:fill
-                    strokeColor:outline
-                    fillWidthPt:1.0 * scale
-                 outlineWidthPt:0.5 * scale];
+  [canvas
+      encodeToolRingAtPoint:[self penSurfacePointFromObj:objYUp]
+                   radiusPt:KKOSCMiniRadiusWidgetRadiusPt * ringScale
+                       fill:fill
+                strokeColor:outline
+                fillWidthPt:style.fillWidthPx * KKOSCMiniGlyphRatio * ringScale
+             outlineWidthPt:style.outlineWidthPx * KKOSCMiniGlyphRatio *
+                            ringScale];
 }
 
 // Marquee rubber-band. `r` is in SURFACE points (view points) - drawn directly,

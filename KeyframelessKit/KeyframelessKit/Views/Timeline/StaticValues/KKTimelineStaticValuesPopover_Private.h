@@ -18,6 +18,8 @@
 @class KKPillToggleRowView;
 @class KKPopoverHeaderView;
 
+NS_ASSUME_NONNULL_BEGIN
+
 // Shared with +Expression (defined in the main .m, used from both): whether a
 // lane carries an inline expression editor, and the editor-row heights.
 FOUNDATION_EXPORT BOOL KKLaneHasExpressionEditor(KKLane *lane);
@@ -171,3 +173,5 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
 // Core (main .m) - re-fit the popover after an editor row grows / shrinks.
 - (void)_applyContentSize;
 @end
+
+NS_ASSUME_NONNULL_END

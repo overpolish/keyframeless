@@ -27,6 +27,26 @@
 
 @implementation KKCodeEditorView (Sections)
 
+// Content reformat (declared in the public (Sections) category). Moved here
+// from +Validation so the declaration + implementation share one category.
+- (void)formatUsing:(NSString * (^)(NSString *))formatter {
+  if (!formatter)
+    return;
+  NSString *current = [_textView.string copy];
+  NSString *formatted = formatter(current);
+  if (formatted.length == 0 || [formatted isEqualToString:current])
+    return;
+  NSRange full = NSMakeRange(0, current.length);
+  if (![_textView shouldChangeTextInRange:full replacementString:formatted])
+    return;
+  NSUInteger caret = _textView.selectedRange.location;
+  [_textView replaceCharactersInRange:full withString:formatted];
+  [_textView didChangeText]; // fires textDidChange: -> debounce -> commit
+  NSUInteger newLen = _textView.string.length;
+  _textView.selectedRange = NSMakeRange(MIN(caret, newLen), 0);
+  [self _runValidator]; // snappier than waiting for the debounce
+}
+
 - (void)setSections:
     (NSArray<NSDictionary<NSString *, NSString *> *> *)sections {
   if (sections.count == 0)

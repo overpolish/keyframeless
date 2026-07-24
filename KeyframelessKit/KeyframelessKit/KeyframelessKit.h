@@ -58,6 +58,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMarkup.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
+#import <KeyframelessKit/KKMiniElement.h>
 #import <KeyframelessKit/KKMiniViewerCropEditor.h>
 #import <KeyframelessKit/KKMiniViewerFeed.h>
 #import <KeyframelessKit/KKMiniViewerGuide.h>
@@ -67,6 +68,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKMotionBlur.h>
 #import <KeyframelessKit/KKMotionBlurReconstruct.h>
 #import <KeyframelessKit/KKMotionLean.h>
+#import <KeyframelessKit/KKOSCGlyphStyle.h>
 #import <KeyframelessKit/KKOSCGuide.h>
 #import <KeyframelessKit/KKOSCGuideBridge.h>
 #import <KeyframelessKit/KKOSCGuideStrategy.h>
@@ -123,6 +125,7 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKSpatialCurve.h>
 #import <KeyframelessKit/KKSpectrogram.h>
 #import <KeyframelessKit/KKSquarePointOSC.h>
+#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTimelineAIMerge.h>
 #import <KeyframelessKit/KKTimelineAdvancedView.h>
 #import <KeyframelessKit/KKTimelineBasicView+Guide.h>
@@ -135,7 +138,6 @@ FOUNDATION_EXPORT const unsigned char
 #import <KeyframelessKit/KKTimingCompat.h>
 #import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimingGuide.h>
-#import <KeyframelessKit/KKTimeline.h>
 #import <KeyframelessKit/KKTokens.h>
 #import <KeyframelessKit/KKToolbar.h>
 #import <KeyframelessKit/KKUpdateChecker.h>

@@ -369,3 +369,19 @@ id<MTLTexture> KKMiniViewerFeedLoadPrimarySource(NSString *descriptorPath,
   CFRelease(surf); // the texture retains the surface
   return tex;
 }
+
+NSString *KKMiniViewerFeedDescriptorPath(NSString *productSlug,
+                                         NSString *uuid) {
+  if (!uuid.length)
+    return [NSString stringWithFormat:@"/tmp/%@-miniviewer.json", productSlug];
+  return [NSString
+      stringWithFormat:@"/tmp/%@-miniviewer-%@.json", productSlug, uuid];
+}
+
+NSString *KKMiniViewerFeedRequestPath(NSString *productSlug, NSString *uuid) {
+  if (!uuid.length)
+    return [NSString
+        stringWithFormat:@"/tmp/%@-miniviewer-request.json", productSlug];
+  return [NSString stringWithFormat:@"/tmp/%@-miniviewer-request-%@.json",
+                                    productSlug, uuid];
+}

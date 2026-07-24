@@ -143,10 +143,10 @@ static const BOOL kPointShadingLighterTop = YES;
   if (!_arcPipeline)
     KKLogError(@"KKMiniViewerView: arc pipeline failed: %@", err);
 
-  // Elliptical ring (a radius widget): the in-viewer `KKRingOSCFragment` shader, so
-  // the mini ring is pixel-identical to the viewer (single-pass ellipse SDF -
-  // no tessellation seams or fill/outline bleed). Same premultiplied-over
-  // blend.
+  // Elliptical ring (a radius widget): the in-viewer `KKRingOSCFragment`
+  // shader, so the mini ring is pixel-identical to the viewer (single-pass
+  // ellipse SDF - no tessellation seams or fill/outline bleed). Same
+  // premultiplied-over blend.
   MTLRenderPipelineDescriptor *rgp = [[MTLRenderPipelineDescriptor alloc] init];
   rgp.vertexFunction = [lib newFunctionWithName:@"KKVertexShader"];
   rgp.fragmentFunction = [lib newFunctionWithName:@"KKRingOSCFragment"];
@@ -524,9 +524,9 @@ static const BOOL kPointShadingLighterTop = YES;
   [self _toolDotQuad:quad atCenter:centerPts sizeScale:sizeScale];
   simd_uint2 vp = {(unsigned)d.width, (unsigned)d.height};
   KKPointOSCParams params = {
-      .outlineWidth = (float)(KKBorderWidthXS / kKKMiniHandleOuterPt),
+      .outlineWidth = KKOSCPointOutlineRatio(),
       .fillColor = fillColor,
-      .strokeColor = {0.0f, 0.0f, 0.0f, 0.75f},
+      .strokeColor = KKOSCPointStroke(),
   };
   [enc setRenderPipelineState:_pointPipeline];
   [enc setVertexBytes:quad
@@ -600,13 +600,17 @@ static const BOOL kPointShadingLighterTop = YES;
   // gave a 33%-thick outline on a 67% shape).
   float vOutline = (float)(KKBorderWidthXS + 0.5);
   float outer = 6.0f + vOutline + 3.0f;
+  simd_float4 sqFill = KKOSCPointFill();
+  simd_float4 sqStroke = KKOSCPointStroke();
+  sqFill.w *= g;
+  sqStroke.w *= g;
   KKSquarePointOSCParams params = {
       .cornerRadius = (float)(KKRadiusSM / outer),
       .outlineWidth = vOutline / outer,
       .shadowOffset = 1.5f / outer,
       .shadowRadius = 2.5f / outer,
-      .fillColor = {1.0f, 1.0f, 1.0f, 1.0f * g},
-      .strokeColor = {0.0f, 0.0f, 0.0f, 0.75f * g},
+      .fillColor = sqFill,
+      .strokeColor = sqStroke,
       .shadowColor = {0.0f, 0.0f, 0.0f, 0.5f * g},
   };
   [enc setRenderPipelineState:_squarePipeline];

@@ -6,6 +6,7 @@
 #pragma once
 
 #import "KKMiniViewerView.h"
+#import "KKOSCGlyphStyle.h"
 #import <IOSurface/IOSurface.h>
 #import <KeyframelessKit/KKShaderTypes.h> // KKVertex2D
 #import <MetalKit/MetalKit.h>
@@ -15,7 +16,11 @@
 // the viewer OSC's oscSize - the mini viewer is a compact preview. Must stay
 // in sync with a plugin renderer's mini-OSC size (placement/hit).
 // Shared by the main file's interaction code and the +Rendering encoders.
-static const CGFloat kKKMiniHandleOuterPt = 4.5;
+// The mini's standard handle-glyph outer radius DERIVES from the viewer's
+// (KKOSCGlyphStyle.h): viewer outer x the mini's half-size proportion rule.
+// It was a bare 4.5 that happened to equal 9 x 0.5 - now the relationship is
+// the code.
+#define kKKMiniHandleOuterPt (KKOSCPointOuterPx * KKOSCMiniGlyphRatio)
 
 // Initial / double-click-reset zoom. Slightly < 1 (aspect-fit) so there's a
 // margin around the image and the corner handles are clear of the view edge

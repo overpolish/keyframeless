@@ -27,16 +27,11 @@ NSString *const MirageMiniViewerRequestPath =
     @"/tmp/mesh-miniviewer-request.json";
 
 NSString *MirageMiniViewerDescriptorPathForUUID(NSString *uuid) {
-  if (!uuid.length)
-    return MirageMiniViewerDescriptorPath;
-  return [NSString stringWithFormat:@"/tmp/mesh-miniviewer-%@.json", uuid];
+  return KKMiniViewerFeedDescriptorPath(@"mesh", uuid);
 }
 
 NSString *MirageMiniViewerRequestPathForUUID(NSString *uuid) {
-  if (!uuid.length)
-    return MirageMiniViewerRequestPath;
-  return
-      [NSString stringWithFormat:@"/tmp/mesh-miniviewer-request-%@.json", uuid];
+  return KKMiniViewerFeedRequestPath(@"mesh", uuid);
 }
 
 @implementation MirageMiniViewerRenderer {
@@ -203,11 +198,8 @@ static NSInteger MirageMiniRotationAxesForNames(NSString *axes) {
   return KKMiniHandleStyleArc;
 }
 
-// Match the mini-viewer dot handles (0.6): the `osc=box` handle glyphs read
-// lighter. The #point handles are arc-style, so this doesn't touch them.
-- (CGFloat)pointHandleSizeScale {
-  return 0.6;
-}
+// (pointHandleSizeScale: the base's KKOSCAnchorDotScale default already
+// matches the dot family - no override needed.)
 - (NSArray<NSNumber *> *)defaultValuesForLabel:(NSString *)label {
   // The plugin is Custom-only now; only the shared lanes have defaults here.
   if ([label isEqualToString:@"Speed"])

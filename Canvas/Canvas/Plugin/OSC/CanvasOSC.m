@@ -88,9 +88,13 @@
     _penHandleOSC.oscRadius = 5.0f;
     _penHandleOSC.outlineWidth = 1.5f;
     _penHandleOSC.clearsOnDraw = NO;
-    // Live-corner radius widget: the shared ring control, small + tinted accent.
+    // Live-corner radius widget: the shared ring control. Solid (always-white)
+    // like Mirage's `osc=hollow` handle - the ONE central small-ring-point
+    // style, since the dim idle grey reads unclear on a small handle. Tint
+    // still drives the error (over-max) state.
     _penCornerRingOSC = [[KKRingOSC alloc] initWithAPIManager:apiManager];
     [_penCornerRingOSC applyRadiusWidgetStyle];
+    _penCornerRingOSC.solidStyle = YES;
     _penController = [[CanvasPenController alloc] initWithSurface:self];
     _pathEditController =
         [[CanvasPathEditController alloc] initWithSurface:self];
@@ -110,7 +114,8 @@
   // screen rect fresh and marks the canvas reference alive, so the inspector's
   // timing guides enable (and spotlight the viewer) only while the effect is
   // focused. Unconditional - independent of selection / tool / gizmo state.
-  [self _ingestGuideDrawTickWithPosition:[self.position positionCanvasAtTime:time]];
+  [self _ingestGuideDrawTickWithPosition:[self.position
+                                             positionCanvasAtTime:time]];
   // Reset the draw surface (no-op encode) so only the handle/path are visible.
   [self encodeRenderCommandsForDestinationImage:destinationImage
                                  canvasPosition:CGPointZero
@@ -181,8 +186,8 @@
     // ITS OWN optRevealActive). So just forward our reveal + drag state to it
     // and draw unconditionally - it draws nothing when hidden, the dim ghost
     // when Opt-revealed, full when shown. (Forwarding optRevealActive matters
-    // here because Canvas's primary Position handle can itself be hidden, so the
-    // controller must ghost it rather than always show it.)
+    // here because Canvas's primary Position handle can itself be hidden, so
+    // the controller must ghost it rather than always show it.)
     self.position.optRevealActive = self.optRevealActive;
     self.position.dragging = self.isDragging;
     [self.position drawPathInDestination:destinationImage
@@ -214,11 +219,11 @@
                         activePart:activePart];
   }
   // Exactly one layer selected: its editable point OSC (anchors + curve), gated
-  // by the Points visibility toggle. Two or more: the dimmed, non-editable point
-  // OSC of every selected layer (shown regardless of the toggle) so the
+  // by the Points visibility toggle. Two or more: the dimmed, non-editable
+  // point OSC of every selected layer (shown regardless of the toggle) so the
   // multi-selection reads at a glance. NONE selected: draw nothing (the gizmo
-  // above is already gated off). The transform gizmo is hidden by default via the
-  // OSC visibility system, so the two don't clutter each other.
+  // above is already gated off). The transform gizmo is hidden by default via
+  // the OSC visibility system, so the two don't clutter each other.
   NSUInteger nsel = [self _selectedLayerIDs].count;
   if (nsel >= 2)
     [self _drawMultiSelectHighlightInDestination:destinationImage atTime:time];

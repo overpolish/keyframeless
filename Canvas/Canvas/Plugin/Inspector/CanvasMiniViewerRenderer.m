@@ -23,16 +23,11 @@ NSString *const CanvasMiniViewerRequestPath =
     @"/tmp/canvas-miniviewer-request.json";
 
 NSString *CanvasMiniViewerDescriptorPathForUUID(NSString *uuid) {
-  if (!uuid.length)
-    return CanvasMiniViewerDescriptorPath;
-  return [NSString stringWithFormat:@"/tmp/canvas-miniviewer-%@.json", uuid];
+  return KKMiniViewerFeedDescriptorPath(@"canvas", uuid);
 }
 
 NSString *CanvasMiniViewerRequestPathForUUID(NSString *uuid) {
-  if (!uuid.length)
-    return CanvasMiniViewerRequestPath;
-  return
-      [NSString stringWithFormat:@"/tmp/canvas-miniviewer-request-%@.json", uuid];
+  return KKMiniViewerFeedRequestPath(@"canvas", uuid);
 }
 
 @implementation CanvasMiniViewerRenderer {
@@ -380,10 +375,8 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *uuid) {
 }
 
 // The Position handle is an arc (drawn on its own path), so this only sizes the
-// scale-box corner/edge point handles - shrink them so they aren't oversized.
-- (CGFloat)pointHandleSizeScale {
-  return 0.6;
-}
+// (pointHandleSizeScale: the base's KKOSCAnchorDotScale default already
+// matches the path-anchor dots - no override needed.)
 
 // Canvas has no Crop lane, so suppress the base's default crop handles.
 - (NSString *)cropLabel {

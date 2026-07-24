@@ -7,8 +7,8 @@
 
 #import <AppKit/AppKit.h>
 #import <KeyframelessKit/KKLaneRowView.h>
-#import <KeyframelessKit/KKTimelineLanesView.h>
 #import <KeyframelessKit/KKTimeline.h>
+#import <KeyframelessKit/KKTimelineLanesView.h>
 
 #import "KKLaneChecklistView.h" // _KKLaneChecklistView base
 
@@ -252,13 +252,6 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 - (NSRect)guideAddToAnimatedButtonScreenRect;
 /// Set the displayed values (skips a field currently being edited).
 - (void)applyValues:(NSArray<NSNumber *> *)values;
-/// Refresh the aspect-link glyph state without rebuilding.
-- (void)applyLink:(BOOL)on;
-/// Refresh the smooth-toggle glyph state (e.g. after cmd-Z) without rebuilding.
-- (void)applySmooth:(BOOL)on;
-/// Refresh the palette lock toggle (padlock open/closed + tint) without firing
-/// the callback. Used to restore the row's lock state after a rebuild.
-- (void)applyPaletteLock:(BOOL)locked;
 - (void)applyLane:(KKLane *)lane;
 /// Update the slider's upper bound live (e.g. a `maxControllerKey` lane whose
 /// max tracks another lane) without rebuilding the row. Re-clamps the slider
@@ -268,6 +261,23 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// scale changes when the feed resolves its media size).
 - (void)refreshDisplay;
 + (CGFloat)heightForLane:(KKLane *)lane;
+@end
+
+/// Toggle glyphs (link / smooth / palette-lock) implemented in
+/// KKTimelineStaticValueRow+Toggles.m, declared as a category so the primary
+/// @implementation isn't expected to provide them (silences the
+/// -Wincomplete-implementation / -Wobjc-protocol-method pair).
+@interface _KKStaticValueRow (Toggles)
+/// Refresh the aspect-link glyph state without rebuilding.
+- (void)applyLink:(BOOL)on;
+/// Refresh the smooth-toggle glyph state (e.g. after cmd-Z) without rebuilding.
+- (void)applySmooth:(BOOL)on;
+/// Refresh the palette lock toggle (padlock open/closed + tint) without firing
+/// the callback. Used to restore the row's lock state after a rebuild.
+- (void)applyPaletteLock:(BOOL)locked;
+/// Palette "refine" button target - wired from the core-built row, defined in
+/// +Toggles.m.
+- (void)_paletteRefineTapped:(id)sender;
 @end
 
 @interface _KKStaticValuesPopoverView : NSView
@@ -423,20 +433,20 @@ FOUNDATION_EXPORT NSButton *_KKGutterGlyphButton(NSString *symbol, id target,
 /// header band preserves the working overlay. Handles BOTH directions
 /// (add/remove the keypose nav, swap the header). The bidirectional analogue of
 /// -rebuildRowsWithLanes:.
-- (void)reconfigureForEditsKeypose:(BOOL)editsKeypose
-                         withLanes:(NSArray<KKLane *> *)lanes
-                    excludedLabels:(NSArray<NSString *> *)excludedLabels
-                       headerTitle:(NSString *)headerTitle
-                      headerDetail:(NSString *)headerDetail
-                        headerIcon:(NSImage *)headerIcon
-                        renderMode:(KKMiniViewerRenderMode)renderMode
-                     onModeChanged:
-                         (void (^)(KKMiniViewerRenderMode))onModeChanged
-                     onHandleValue:(void (^)(NSString *, NSArray<NSNumber *> *))
-                                       onHandleValue
-                       onDragBegin:(void (^)(void))onDragBegin
-                         onDragEnd:(void (^)(void))onDragEnd
-                        onNavigate:(void (^)(NSInteger))onNavigate;
+- (void)
+    reconfigureForEditsKeypose:(BOOL)editsKeypose
+                     withLanes:(NSArray<KKLane *> *)lanes
+                excludedLabels:(NSArray<NSString *> *)excludedLabels
+                   headerTitle:(NSString *)headerTitle
+                  headerDetail:(NSString *)headerDetail
+                    headerIcon:(NSImage *)headerIcon
+                    renderMode:(KKMiniViewerRenderMode)renderMode
+                 onModeChanged:(void (^)(KKMiniViewerRenderMode))onModeChanged
+                 onHandleValue:(void (^)(NSString *,
+                                         NSArray<NSNumber *> *))onHandleValue
+                   onDragBegin:(void (^)(void))onDragBegin
+                     onDragEnd:(void (^)(void))onDragEnd
+                    onNavigate:(void (^)(NSInteger))onNavigate;
 /// Set (Advanced only) to give editable rows a leading "−" remove button that
 /// fires `handler(label)`. Must be set before rows are (re)built; the present
 /// path rebuilds once after setting it. nil = no remove gutter.

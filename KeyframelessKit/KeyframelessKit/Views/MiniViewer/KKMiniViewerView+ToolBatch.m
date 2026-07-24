@@ -257,9 +257,9 @@ static void KKToolBucketAppend(KKToolBucket *b, const KKVertex2D *v,
       if (bk->count == 0 || !_pointPipeline)
         continue;
       KKPointOSCParams params = {
-          .outlineWidth = (float)(KKBorderWidthXS / kKKMiniHandleOuterPt),
+          .outlineWidth = KKOSCPointOutlineRatio(),
           .fillColor = bk->color,
-          .strokeColor = {0.0f, 0.0f, 0.0f, 0.75f},
+          .strokeColor = KKOSCPointStroke(),
       };
       [enc setRenderPipelineState:_pointPipeline];
       [self _bindToolVerts:bk->verts count:bk->count];

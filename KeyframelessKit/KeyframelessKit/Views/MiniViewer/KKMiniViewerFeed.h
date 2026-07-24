@@ -104,4 +104,16 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXPORT id<MTLTexture> _Nullable KKMiniViewerFeedLoadPrimarySource(
     NSString *descriptorPath, id<MTLDevice> device);
 
+/// Cross-process rendezvous paths for a product's mini-viewer feed - THE one
+/// path scheme (the per-product path functions in each plugin are one-line
+/// wrappers over these). The render side publishes its IOSurface descriptor
+/// at the DESCRIPTOR path; the inspector's boundary/filmstrip/onion previews
+/// write requested clip fractions at the REQUEST path. Per-instance when
+/// `uuid` is non-empty (two stacked clips must not cross-pollute); empty uuid
+/// = the product's shared legacy path.
+FOUNDATION_EXPORT NSString *
+KKMiniViewerFeedDescriptorPath(NSString *productSlug, NSString *_Nullable uuid);
+FOUNDATION_EXPORT NSString *
+KKMiniViewerFeedRequestPath(NSString *productSlug, NSString *_Nullable uuid);
+
 NS_ASSUME_NONNULL_END

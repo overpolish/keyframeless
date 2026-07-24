@@ -13,17 +13,15 @@
 
 static NSString *kPointOSCPluginID = @"co.overpolish.keyframelesskit.PointOSC";
 
+// Fill/stroke come from the SHARED glyph style (KKOSCGlyphStyle.h) so the
+// mini-viewer's dot encode and this viewer OSC can never drift apart.
+#import "KKOSCGlyphStyle.h"
+
 static NSColor *pointFillColor(void) {
-  return [NSColor colorWithRed:0xFF / 255.0
-                         green:0xFF / 255.0
-                          blue:0xFF / 255.0
-                         alpha:1.0f];
+  return KKOSCColorFromSimd(KKOSCPointFill());
 }
 static NSColor *pointStrokeColor(void) {
-  return [NSColor colorWithRed:0x00 / 255.0
-                         green:0x00 / 255.0
-                          blue:0x00 / 255.0
-                         alpha:0.75f];
+  return KKOSCColorFromSimd(KKOSCPointStroke());
 }
 
 @implementation KKPointOSC

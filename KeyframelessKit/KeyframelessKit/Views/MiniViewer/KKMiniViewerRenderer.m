@@ -5,14 +5,16 @@
 
 #import "KKMiniViewerRenderer.h"
 
+#import "KKMiniElement.h"
 #import "KKMiniViewerCropEditor.h"
+#import "KKOSCGlyphStyle.h"
 #import "KKOSCVisibilityModel.h"
 #import "KKResizeCursor.h"
 #import <KeyframelessKit/KKLinkBus.h>
 #import <KeyframelessKit/KKLocalized.h>
 #import <KeyframelessKit/KKRotationOSCMath.h>
-#import <KeyframelessKit/KKTimingEvaluation.h>
 #import <KeyframelessKit/KKTimeline.h>
+#import <KeyframelessKit/KKTimingEvaluation.h>
 
 // Map a KKMiniViewerCropEditor handle index (0-7: TL, TC, TR, RC, BR, BC, BL,
 // LC) to a resize-cursor kind. Mirrors the crop box's corner/edge layout.
@@ -118,7 +120,10 @@ static const double kKKRotationSnapStep = 15.0 * M_PI / 180.0;
   return KKMiniHandleStylePoint;
 }
 - (CGFloat)pointHandleSizeScale {
-  return 1.0;
+  // Every shipped plugin overrode the old 1.0 default to 0.6 so its handles
+  // match the motion-path anchor dots - so the family scale IS the default
+  // now (shared constant, KKOSCGlyphStyle.h). Override only to deviate.
+  return KKOSCAnchorDotScale;
 }
 - (BOOL)pointHandleIsActive {
   return _pointGrabbed;
@@ -535,8 +540,7 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
       NSString *selfUUID = self.linkSelfUUID;
       KKLinkRefOverride refOverride =
           ^NSArray<NSNumber *> *(NSString *refName) {
-        NSArray<NSString *> *comps =
-            [refName componentsSeparatedByString:@"."];
+        NSArray<NSString *> *comps = [refName componentsSeparatedByString:@"."];
         NSString *layerID = comps.count == 3 ? comps[1] : nil;
         NSString *tail = comps.lastObject ?: refName;
         if (selfUUID.length && comps.count >= 2 &&
@@ -1146,6 +1150,229 @@ static simd_float4 KKMiniRotationColorToFloat4(NSColor *color) {
                forLabel:(NSString *)label {
   if (values.count)
     self.timeline = [self _timelineBySettingValues:values forLabel:label];
+}
+
+// THE aggregate element assembly: translate every legacy per-kind hook into
+// typed KKMiniElement descriptors, in the canvas's historical draw order
+// (rings, motion paths, boxes, rotations, primary point, extra glyphs, fixed
+// glyphs, anchor square, secondary Position arc). Subclasses keep overriding
+// the legacy hooks and inherit the descriptor surface for free; a subclass
+// that has outgrown the hooks overrides THIS instead and returns elements
+// directly. The view consults ONLY this for OSC drawing.
+- (NSArray<KKMiniElement *> *)miniViewer:(KKMiniViewerView *)canvas
+                  elementsForContentRect:(CGRect)cr {
+  NSMutableArray<KKMiniElement *> *els = [NSMutableArray array];
+  self.canvas = canvas;
+
+  // Single ring OSC (radius ring) - emphasis + ghost from the legacy hooks.
+  {
+    CGPoint c = CGPointZero;
+    CGFloat rx = 0, ry = 0;
+    if ([self respondsToSelector:@selector(miniViewer:ringCenter:radiusX:
+                                           radiusY:contentRect:)] &&
+        [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                        ringCenter:&c
+                                           radiusX:&rx
+                                           radiusY:&ry
+                                       contentRect:cr] &&
+        rx > 0.5 && ry > 0.5) {
+      NSInteger emph =
+          [self respondsToSelector:@selector(miniViewerRingEmphasis:)]
+              ? [(id<KKMiniViewerDelegate>)self miniViewerRingEmphasis:canvas]
+              : 0;
+      CGFloat a =
+          [self respondsToSelector:@selector(miniViewerRingGhostAlpha:)]
+              ? [(id<KKMiniViewerDelegate>)self miniViewerRingGhostAlpha:canvas]
+              : 1.0;
+      [els addObject:[KKMiniElement ringAt:c
+                                   radiusX:rx
+                                   radiusY:ry
+                                  emphasis:emph
+                                     alpha:a]];
+    }
+  }
+  // Extra rings (multiple dynamic ring OSCs).
+  if ([self
+          respondsToSelector:@selector(miniViewer:extraRingsForContentRect:)]) {
+    for (NSDictionary<NSString *, id> *b in
+         [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                           extraRingsForContentRect:cr]) {
+      CGFloat rx = [b[@"radiusX"] doubleValue];
+      CGFloat ry = [b[@"radiusY"] doubleValue];
+      if (rx <= 0.5 || ry <= 0.5)
+        continue;
+      [els addObject:[KKMiniElement
+                           ringAt:[b[@"center"] pointValue]
+                          radiusX:rx
+                          radiusY:ry
+                         emphasis:[b[@"emphasis"] integerValue]
+                            alpha:b[@"alpha"] ? [b[@"alpha"] doubleValue]
+                                              : 1.0]];
+    }
+  }
+
+  // Primary motion path (Position trajectory + tangents + anchors).
+  if ([self respondsToSelector:
+                @selector(miniViewer:motionPathPolylineForContentRect:)]) {
+    NSArray<NSValue *> *poly = [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                         motionPathPolylineForContentRect:cr];
+    NSArray<NSValue *> *segs =
+        [self respondsToSelector:
+                  @selector(miniViewer:motionPathHandleSegmentsForContentRect:)]
+            ? [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                  motionPathHandleSegmentsForContentRect:cr]
+            : nil;
+    NSArray<NSValue *> *anchors =
+        [self
+            respondsToSelector:@selector(
+                                   miniViewer:motionPathAnchorsForContentRect:)]
+            ? [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                         motionPathAnchorsForContentRect:cr]
+            : nil;
+    if (poly.count >= 2 || segs.count || anchors.count)
+      [els addObject:[KKMiniElement
+                         motionPathWithPolyline:poly
+                                 handleSegments:segs
+                                        anchors:anchors
+                                          alpha:[self motionPathGhostAlpha]]];
+  }
+  // Extra motion paths (one per additional point OSC).
+  if ([self
+          respondsToSelector:@selector(
+                                 miniViewer:extraMotionPathsForContentRect:)]) {
+    for (NSDictionary<NSString *, id> *b in
+         [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                     extraMotionPathsForContentRect:cr]) {
+      [els addObject:[KKMiniElement
+                         motionPathWithPolyline:b[@"poly"]
+                                 handleSegments:b[@"segs"]
+                                        anchors:b[@"anchors"]
+                                          alpha:b[@"alpha"]
+                                                    ? [b[@"alpha"] doubleValue]
+                                                    : 1.0]];
+    }
+  }
+
+  // Boxes (crop / scale / future box gizmos). Element alpha = the box's own
+  // ghostAlpha - the per-kind cropGhostAlpha hook dissolves into the element.
+  if ([self respondsToSelector:@selector(miniViewer:boxesForContentRect:)]) {
+    for (KKMiniBox *box in [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                                  boxesForContentRect:cr]) {
+      KKMiniElement *e = [KKMiniElement boxWithRect:box.rect
+                                      handleCenters:box.handleCenters
+                                            readout:box.readout
+                                              alpha:box.ghostAlpha];
+      e.sizeScale = [self pointHandleSizeScale]; // box handles match the dots
+      [els addObject:e];
+    }
+  }
+
+  // Rotation gizmos: the single delegate path (which carries the base's
+  // visibility gating) + the multi array.
+  {
+    CGPoint c = CGPointZero;
+    CGFloat r = 0;
+    KKRotationOSCParams p = {0};
+    if ([self respondsToSelector:@selector(miniViewer:rotationOSCCenter:
+                                           radiusPx:params:contentRect:)] &&
+        [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                 rotationOSCCenter:&c
+                                          radiusPx:&r
+                                            params:&p
+                                       contentRect:cr])
+      [els addObject:[KKMiniElement rotationAt:c radiusPx:r params:p]];
+  }
+  if ([self respondsToSelector:@selector(
+                                   miniViewer:rotationOSCsForContentRect:)]) {
+    for (KKMiniRotation *r in [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                              rotationOSCsForContentRect:cr])
+      [els addObject:[KKMiniElement rotationAt:r.center
+                                      radiusPx:r.radiusPx
+                                        params:r.params]];
+  }
+
+  // Primary point handle - style/active/ghost fold onto the element.
+  {
+    CGPoint c = CGPointZero;
+    if ([self respondsToSelector:
+                  @selector(miniViewer:pointHandleCenter:contentRect:)] &&
+        [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                 pointHandleCenter:&c
+                                       contentRect:cr]) {
+      KKMiniElement *e = [KKMiniElement glyphAt:c
+                                          style:[self pointHandleStyle]
+                                          alpha:[self pointHandleGhostAlpha]];
+      e.active = [self pointHandleIsActive];
+      e.sizeScale = [self pointHandleSizeScale];
+      e.label = self.pointLabel;
+      [els addObject:e];
+    }
+  }
+  // Extra point handles (every one drawn with the primary's style).
+  if ([self respondsToSelector:
+                @selector(miniViewer:extraPointHandleGlyphsForContentRect:)]) {
+    for (NSDictionary<NSString *, id> *g in
+         [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+               extraPointHandleGlyphsForContentRect:cr]) {
+      KKMiniElement *e =
+          [KKMiniElement glyphAt:[g[@"center"] pointValue]
+                           style:[self pointHandleStyle]
+                           alpha:g[@"alpha"] ? [g[@"alpha"] doubleValue] : 1.0];
+      e.sizeScale = [self pointHandleSizeScale];
+      [els addObject:e];
+    }
+  }
+  // Fixed-glyph handles (style chosen per handle).
+  if ([self
+          respondsToSelector:@selector(
+                                 miniViewer:extraFixedGlyphsForContentRect:)]) {
+    for (NSDictionary<NSString *, id> *g in
+         [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                     extraFixedGlyphsForContentRect:cr]) {
+      KKMiniElement *e =
+          [KKMiniElement glyphAt:[g[@"center"] pointValue]
+                           style:[g[@"style"] integerValue]
+                           alpha:g[@"alpha"] ? [g[@"alpha"] doubleValue] : 1.0];
+      e.whiteFill = [g[@"white"] boolValue];
+      e.sizeScale = [self pointHandleSizeScale];
+      [els addObject:e];
+    }
+  }
+
+  // Anchor pivot square (topmost-but-one, matching viewer layering).
+  {
+    CGPoint c = CGPointZero;
+    if ([self respondsToSelector:
+                  @selector(miniViewer:anchorSquareCenter:contentRect:)] &&
+        [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                                anchorSquareCenter:&c
+                                       contentRect:cr]) {
+      KKMiniElement *e = [KKMiniElement glyphAt:c
+                                          style:KKMiniHandleStyleSquare
+                                          alpha:[self anchorSquareGhostAlpha]];
+      e.sizeScale = [self pointHandleSizeScale];
+      [els addObject:e];
+    }
+  }
+
+  // Secondary Position arc handle (topmost).
+  {
+    CGPoint c = CGPointZero;
+    if ([self respondsToSelector:
+                  @selector(miniViewer:positionHandleCenter:contentRect:)] &&
+        [(id<KKMiniViewerDelegate>)self miniViewer:canvas
+                              positionHandleCenter:&c
+                                       contentRect:cr]) {
+      KKMiniElement *e =
+          [KKMiniElement glyphAt:c
+                           style:KKMiniHandleStyleArc
+                           alpha:[self positionHandleGhostAlpha]];
+      e.active = [self positionHandleIsActive];
+      [els addObject:e];
+    }
+  }
+
+  return els;
 }
 
 @end
