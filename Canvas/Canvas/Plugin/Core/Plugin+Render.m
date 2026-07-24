@@ -14,7 +14,7 @@
 #import "Constants.h"
 #import "Plugin_Private.h"
 #import <KeyframelessKit/KKBezierPath.h>
-#import <KeyframelessKit/KKTimingEvaluation.h> // LaneValueAtVisualFractionSmoothed
+#import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneDisplayValueAtFraction
 #import <KeyframelessKit/KKTimeline.h>       // KKTimelineRetimedForMediaAnchor
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
@@ -43,6 +43,23 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
   td.usage = MTLTextureUsageRenderTarget | MTLTextureUsageShaderRead;
   td.storageMode = MTLStorageModePrivate;
   return [device newTextureWithDescriptor:td];
+}
+
+// Full-content digest of the layer blob for the link-source rebuild gate.
+// NSData's -hash only covers the FIRST 80 BYTES, and the blob's head is
+// archive header material that never moves when a value deep inside changes -
+// gating on it froze the published curves at their first-tick values (the
+// stale republish deduped to no file write, so the bus stamp never moved and
+// subscribers resolved a dead value forever).
+static NSUInteger CanvasLayerBlobDigest(NSData *blob) {
+  unsigned long long h = 1469598103934665603ull;
+  const unsigned char *b = blob.bytes;
+  NSUInteger n = blob.length;
+  for (NSUInteger i = 0; i < n; i++) {
+    h ^= b[i];
+    h *= 1099511628211ull;
+  }
+  return (NSUInteger)h;
 }
 
 @implementation CanvasPlugin (Render)
@@ -143,10 +160,82 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
       layerBlob = [[NSData alloc] initWithBase64EncodedString:b64 options:0];
   }
 
+  // Advertise this clip as a LAYERED link source (picker: Canvas > Layer >
+  // Param; token: `${uuid.layerID.label}`). Each layer's EFFECTIVE timeline
+  // (template-seeded when untouched) supplies its referenceable lanes.
+  // Sources rebuild only when the layer blob changes; the manifest + curve
+  // writes run every timing tick (idempotent) so the clip's absolute span
+  // stays fresh.
+  NSSet<NSString *> *refSources = nil; // ALL `${refs}` (incl. same-clip)
+  if (hasTiming) {
+    NSUInteger blobHash = CanvasLayerBlobDigest(layerBlob);
+    if (blobHash != self.linkLayerBlobHash || !self.linkLayerSources) {
+      self.linkLayerBlobHash = blobHash;
+      NSArray<KKBezierPath *> *paths = [KKBezierPath pathsFromBlob:layerBlob];
+      NSMutableArray<KKLinkLayerSource *> *sources =
+          [NSMutableArray arrayWithCapacity:paths.count];
+      NSUInteger idx = 0;
+      for (KKBezierPath *p in paths) {
+        idx++;
+        if (p.layerID.length == 0)
+          continue;
+        KKLinkLayerSource *src = [[KKLinkLayerSource alloc] init];
+        src.layerID = p.layerID;
+        // Unnamed layers get an indexed fallback (the layer list shows a bare
+        // "Layer") so two unnamed layers stay distinguishable in the picker.
+        src.displayName =
+            p.name.length
+                ? p.name
+                : [NSString stringWithFormat:@"Layer %lu", (unsigned long)idx];
+        src.lanes =
+            CanvasLayerTimelineForPath(p, [CanvasPlugin availableLanes]).lanes;
+        [sources addObject:src];
+      }
+      self.linkLayerSources = sources;
+    }
+    [self writeLinkManifest];
+
+    // Subscriber side (mirrors Mirage's RenderState wiring): watch the
+    // sources this clip's layer expressions reference so a cross-clip source
+    // edit forces a re-render. SAME-clip refs are dropped - a layer edit
+    // rewrites this clip's own param blob and re-renders it anyway, and this
+    // clip republishes its own curves every tick, so watching them would
+    // nudge-loop forever.
+    NSMutableArray<KKLane *> *allLanes = [NSMutableArray array];
+    for (KKLinkLayerSource *src in self.linkLayerSources)
+      [allLanes addObjectsFromArray:src.lanes ?: @[]];
+    KKTimeline *refScan = [KKTimeline timeline];
+    refScan.lanes = allLanes;
+    NSSet<NSString *> *linkSources = KKLinkTimelineSourceNames(refScan);
+    refSources = [linkSources copy];
+    NSString *selfLinkUUID = KKInstanceUUIDForAPI(self.apiManager);
+    if (selfLinkUUID.length && linkSources.count) {
+      NSString *selfPrefix = [selfLinkUUID stringByAppendingString:@"."];
+      NSMutableSet<NSString *> *crossClip = [NSMutableSet set];
+      for (NSString *name in linkSources)
+        if (![name hasPrefix:selfPrefix])
+          [crossClip addObject:name];
+      linkSources = crossClip;
+    }
+    if (linkSources.count > 0 || self.linkWatcher) {
+      if (!self.linkWatcher)
+        self.linkWatcher =
+            [[KKLinkWatcher alloc] initWithAPIManager:self.apiManager
+                                         actionTarget:self
+                                         nudgeParamID:kKKParamRenderNudgeString];
+      KKLinkWatcher *watcher = self.linkWatcher;
+      dispatch_async(dispatch_get_main_queue(), ^{
+        [watcher setSourceNames:linkSources]; // empty stops it
+      });
+    }
+  }
+
   // Snapshot the motion-blur settings now (the param API is unavailable at
-  // render time). The blob layout is [KKMotionBlurState][layer blob]; render
-  // reads the state prefix, then the per-sample clip fractions are recomputed
-  // there from sampleTimesForState + the render cache (no paramAPI needed).
+  // render time). The blob layout is [CanvasLinkTiming][KKMotionBlurState]
+  // [layer blob] - transient (produced and consumed within one render
+  // request), so the layout can evolve freely. Render reads the prefixes,
+  // then the per-sample clip fractions are recomputed there from
+  // sampleTimesForState + the render cache (no paramAPI needed).
   id<FxTimingAPI_v4> timingAPI =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
   NSString *mbJSON =
@@ -154,12 +243,49 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
   KKMotionBlurState mbState = [KKMotionBlur snapshotStateFromJSON:mbJSON
                                                         timingAPI:timingAPI
                                                            atTime:renderTime];
-  NSMutableData *state = [NSMutableData dataWithBytes:&mbState
-                                               length:sizeof(mbState)];
+  // The clip's absolute span, for link-expression resolution at encode time
+  // (frac -> project seconds; the same linear mapping the bus curves use).
+  // Zero duration = timing unavailable -> render evaluates unresolved.
+  CanvasLinkTiming linkTiming = {0.0, 0.0, 0ull};
+  if (timingAPI) {
+    CMTime effStart = kCMTimeZero, dur = kCMTimeZero, effStartTL = kCMTimeZero;
+    [timingAPI startTimeForEffect:&effStart];
+    [timingAPI durationTimeForEffect:&dur];
+    [timingAPI timelineTime:&effStartTL fromInputTime:effStart];
+    linkTiming.clipStartTLSec = CMTimeGetSeconds(effStartTL);
+    linkTiming.clipDurSec = CMTimeGetSeconds(dur);
+  }
+  // Fold every referenced source's bus change-stamp into the state (see the
+  // CanvasLinkTiming.refFreshness contract). Sorted so the fold is
+  // deterministic across the unordered set. Same-clip refs are included but
+  // settle: this clip republishes its own curves (idempotently) BEFORE this
+  // point in the same call, so their stamps only move when the blob did.
+  if (refSources.count) {
+    unsigned long long fresh = 0;
+    for (NSString *name in [refSources.allObjects
+             sortedArrayUsingSelector:@selector(compare:)])
+      fresh = fresh * 1099511628211ull ^
+              (unsigned long long)[KKLinkBus changeStampForLink:name];
+    linkTiming.refFreshness = fresh;
+  }
+  NSMutableData *state = [NSMutableData dataWithBytes:&linkTiming
+                                               length:sizeof(linkTiming)];
+  [state appendBytes:&mbState length:sizeof(mbState)];
   if (layerBlob.length)
     [state appendData:layerBlob];
   *pluginState = state;
   return YES;
+}
+
+// Link-source opt-in (see KKPlugin -writeLinkManifest): the per-layer sources
+// built in -pluginState: above.
+- (NSArray<KKLinkLayerSource *> *)linkableLayersForManifest {
+  return self.linkLayerSources;
+}
+
+// The XPC bundle's CFBundleName is "Canvas XPC Service" - not a picker name.
+- (NSString *)linkManifestEffectName {
+  return @"Canvas";
 }
 
 - (BOOL)renderDestinationImage:(FxImageTile *)destinationImage
@@ -287,20 +413,34 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
                                 fragmentShader:@"KKStrokeDashFragment"
                                      blendMode:KKBlendModePremultipliedAlpha];
 
-  // The state blob is [KKMotionBlurState][layer blob]; split off the MB prefix
-  // before decoding the layer stack (bottom of the array draws in front, so
-  // composite back-to-front: last index first).
+  // The state blob is [CanvasLinkTiming][KKMotionBlurState][layer blob];
+  // split off the prefixes before decoding the layer stack (bottom of the
+  // array draws in front, so composite back-to-front: last index first).
+  CanvasLinkTiming linkTiming = {0.0, 0.0};
   KKMotionBlurState mbState = {0};
   NSData *layerBlob = nil;
-  if (pluginState.length >= sizeof(KKMotionBlurState)) {
-    [pluginState getBytes:&mbState length:sizeof(mbState)];
-    if (pluginState.length > sizeof(mbState))
+  const NSUInteger kPrefixLen = sizeof(CanvasLinkTiming) + sizeof(KKMotionBlurState);
+  if (pluginState.length >= kPrefixLen) {
+    [pluginState getBytes:&linkTiming length:sizeof(linkTiming)];
+    [pluginState getBytes:&mbState
+                    range:NSMakeRange(sizeof(linkTiming), sizeof(mbState))];
+    if (pluginState.length > kPrefixLen)
       layerBlob = [pluginState
-          subdataWithRange:NSMakeRange(sizeof(mbState),
-                                       pluginState.length - sizeof(mbState))];
+          subdataWithRange:NSMakeRange(kPrefixLen,
+                                       pluginState.length - kPrefixLen)];
   }
   NSArray<KKBezierPath *> *layers =
       layerBlob.length ? [KKBezierPath pathsFromBlob:layerBlob] : nil;
+  // Open the link-expression scope for this encode: every continuous lane
+  // read below (CanvasResolvedLaneValue in the property evaluators) resolves
+  // linkExpressions against the bus at the clip's absolute time. The cleanup
+  // attribute pops the thread-local scope on EVERY exit path of this method
+  // (there are many early returns), so a failed encode can't leak an open
+  // scope onto this render thread.
+  __attribute__((cleanup(CanvasLinkScopeCleanup))) BOOL linkScopeToken = YES;
+  (void)linkScopeToken;
+  if (linkTiming.clipDurSec > 0.0)
+    CanvasLinkScopePush(linkTiming.clipStartTLSec, linkTiming.clipDurSec);
   id<MTLDevice> device = [cache deviceWithRegistryID:regID];
   NSMutableDictionary<NSString *, id<MTLTexture>> *texCache =
       self.imageTextureCache;
@@ -873,7 +1013,7 @@ static id<MTLTexture> CanvasEnsureScratchTex(id<MTLTexture> existing,
     KKTimeline *retimed = KKTimelineRetimedForMediaAnchor(
         tl, fromSrcIn, fromDur, toSrcIn, toDur,
         ^NSArray<NSNumber *> *(KKLane *lane, double frac) {
-          return KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+          return KKLaneDisplayValueAtFraction(lane, frac);
         },
         edgeEps);
     CanvasApplyTimelineToPath(retimed, path);

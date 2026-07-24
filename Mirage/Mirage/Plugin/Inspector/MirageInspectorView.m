@@ -119,6 +119,9 @@ static BOOL MirageLaneIsAtConstant(KKLane *lane, NSArray<NSNumber *> *values) {
   if (self) {
     _thumbAPIManager = apiManager;
     _miniViewerRenderer = [[MirageMiniViewerRenderer alloc] init];
+    // Identity for the live-drag ref override: a `${uuid...}` expression ref
+    // only resolves against the local timeline when it targets THIS clip.
+    _miniViewerRenderer.linkSelfUUID = KKInstanceUUIDForAPI(apiManager);
     // Negative until the render tick says otherwise: unknown must read as
     // silence, not as the clip's first frame.
     _clipTimelineStartSec = -1.0;

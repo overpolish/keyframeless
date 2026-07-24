@@ -242,9 +242,9 @@ static KKMotionBlurState _kkMBState(double shutterFraction, int sampleCount,
   if (mode == KKMotionBlurModeValueChanging) {
     for (KKLane *lane in timeline.lanes) {
       NSArray<NSNumber *> *a =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, lo);
+          KKLaneDisplayValueAtFraction(lane, lo);
       NSArray<NSNumber *> *b =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, hi);
+          KKLaneDisplayValueAtFraction(lane, hi);
       NSUInteger n = MIN(a.count, b.count);
       for (NSUInteger i = 0; i < n; i++)
         if (fabs(a[i].doubleValue - b[i].doubleValue) > kMoveEps)

@@ -49,6 +49,16 @@ static const UInt32 kKKParamMotionBlurExpanded __attribute__((unused)) = 9928;
 static const UInt32 kKKParamMotionBlurTransitionsOnly __attribute__((unused)) =
     9929;
 
+/// Hidden STRING nonce the KKLinkWatcher rewrites to force a re-render when a
+/// watched link-bus source changes. A string param, not a blob, because
+/// string writes are the one param write FCP keeps OFF the undo stack (the
+/// audio-tickets discovery) - the watcher fires autonomously, so a blob nudge
+/// stacked stray undo entries around every source edit AND re-armed itself on
+/// each undo (undoing the edit republishes the curves, the stamp changes, the
+/// watcher nudges again and pushes a fresh entry onto the stack being
+/// unwound).
+static const UInt32 kKKParamRenderNudgeString __attribute__((unused)) = 9933;
+
 /// Custom-UI motion blur state (KKDataBlob, JSON
 /// `{enabled,shutterAngle,samples}`). Replaces the native 9924–9929 group when
 /// motion blur is edited from a custom-UI parameter row instead of native

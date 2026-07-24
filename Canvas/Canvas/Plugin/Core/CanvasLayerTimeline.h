@@ -111,4 +111,60 @@ NSString *_Nullable CanvasUIStateSnapshot(void);
 void CanvasSetOutputSize(float width, float height);
 BOOL CanvasOutputSize(float *_Nonnull outWidth, float *_Nonnull outHeight);
 
+/// The clip's absolute span, carried through the TRANSIENT pluginState blob
+/// (produced and consumed within one render request) so
+/// -renderDestinationImage can open the link scope - the timing API is
+/// unavailable at render time. clipDurSec 0 = timing unavailable.
+typedef struct {
+  double clipStartTLSec; // project seconds at clip fraction 0
+  double clipDurSec;
+  /// Folded change-stamps of every bus source this clip's expressions
+  /// reference. FCP's render cache is keyed on the pluginState BYTES:
+  /// identical bytes = the cached frame is served without rendering. Mirage
+  /// is immune (its state embeds the RESOLVED values); Canvas resolves at
+  /// encode time, so the state must carry a proxy that changes whenever a
+  /// referenced curve republishes - otherwise a source drag nudges a render
+  /// request but FCP sees identical state and keeps the stale frame.
+  unsigned long long refFreshness;
+} CanvasLinkTiming;
+
+/// Link-expression resolution scope for the CURRENT render encode. THREAD-
+/// LOCAL: concurrent frame renders (separate FxPlug render threads) can't
+/// cross-talk, and processes that never open a scope (the ViewBridge
+/// inspector) simply evaluate lanes unresolved. Open around the encode in
+/// -renderDestinationImage - the only place the clip's absolute span is known
+/// via the pluginState blob - and ALWAYS balance with the pop (use @try/
+/// @finally around the encode).
+void CanvasLinkScopePush(double clipStartTLSec, double clipDurSec);
+void CanvasLinkScopePop(void);
+
+/// Live same-clip ref resolution for a scope: given a stored ref name
+/// (`uuid.layerID.label`) and the evaluation fraction, return the CURRENT
+/// value, or nil to fall through to the bus. The mini composite installs one
+/// that reads the in-memory layer stack: mid-drag the inspector only commits
+/// the param blob on mouse-up, so the bus curve is stale until then - the
+/// override is what makes the mini track a drag live (the same trick as the
+/// kit mini's identity-checked refOverride).
+typedef NSArray<NSNumber *> *_Nullable (^CanvasLinkLaneOverride)(
+    NSString *refName, double frac);
+void CanvasLinkScopePushWithOverride(double clipStartTLSec, double clipDurSec,
+                                     CanvasLinkLaneOverride _Nullable live);
+/// __attribute__((cleanup)) shim so a function with many return paths can
+/// bind the pop to scope exit:
+///   __attribute__((cleanup(CanvasLinkScopeCleanup))) BOOL token = YES;
+///   CanvasLinkScopePush(start, dur);
+static inline void CanvasLinkScopeCleanup(BOOL *_Nonnull token) {
+  CanvasLinkScopePop();
+}
+
+/// THE lane read for every continuous property evaluator: inside an open link
+/// scope a lane carrying a linkExpression resolves through the bus
+/// (KKLinkResolvedLaneValue) at the scope's absolute time; otherwise - no
+/// scope, or no expression - the plain display evaluation
+/// (KKLaneDisplayValueAtFraction). Mirrors Mirage's render-state resolution,
+/// including same-clip refs reading the bus (this clip republishes its own
+/// curves every pluginState tick, so the bus is fresh by encode time).
+NSArray<NSNumber *> *_Nullable CanvasResolvedLaneValue(KKLane *lane,
+                                                       double frac);
+
 NS_ASSUME_NONNULL_END

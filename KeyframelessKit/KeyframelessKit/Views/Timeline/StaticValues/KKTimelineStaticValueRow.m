@@ -317,11 +317,16 @@ NSAttributedString *_KKWarningCaption(NSString *text, NSColor *tint) {
 // expression is set.
 - (void)_applyExpressionState {
   // Only numeric value lanes can be expression-driven - not the code editor
-  // (source text), a palette-generator bar, or a position-OSC lane whose value
-  // is authored by its on-screen editable path (an expression would override
-  // the drawn path). Mirrors the manifest's referenceable filter.
+  // (source text), a gradient (variable-length stop array an expression's <=4
+  // components can't produce), an OSC-edited geometry lane (Points: morph
+  // snapshots, not values), a palette-generator bar, or a position-OSC lane
+  // whose value is authored by its on-screen editable path (an expression
+  // would override the drawn path). Mirrors the manifest's referenceable
+  // filter.
   BOOL referenceable = _valueType != KKLaneValueTypeCode &&
-                       !_paletteGeneratorBar && !_positionPathDriven;
+                       _valueType != KKLaneValueTypeGradient &&
+                       !_oscEditedOnly && !_paletteGeneratorBar &&
+                       !_positionPathDriven;
   BOOL driven = referenceable && _linkExpression != nil;
   _titleField.textColor =
       driven ? [NSColor accentMatchingHost] : [NSColor inspectorLabel];

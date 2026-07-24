@@ -18,10 +18,14 @@ NS_ASSUME_NONNULL_BEGIN
 ///
 /// Modelled on KKPlayheadPoller: the plugin owns one, feeds it the current
 /// source names each render, and it polls their change-stamps on a main-queue
-/// timer. A change is DEBOUNCED to a single re-render (fired once the source
-/// settles), so a 60 Hz source drag doesn't spam the subscriber's undo stack.
-/// The re-render is the shared render-nudge scratch param (the same mechanism
-/// OSC visibility and presets use).
+/// timer. During a sustained source drag it nudges at most ~4/s so the
+/// subscriber tracks; a settle-fire lands the exact final value.
+///
+/// `nudgeParamID` MUST be a hidden STRING param (kKKParamRenderNudgeString,
+/// registered by the kit's standard-params helper): string writes are the one
+/// param write FCP keeps off the undo stack, and the watcher fires outside
+/// any user edit - an undoable nudge stacks stray entries and re-arms itself
+/// on every undo of the source edit.
 @interface KKLinkWatcher : NSObject
 
 - (instancetype)initWithAPIManager:(id<PROAPIAccessing>)apiManager

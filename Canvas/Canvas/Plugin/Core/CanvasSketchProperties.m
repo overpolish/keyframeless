@@ -9,6 +9,7 @@
 // sketch* props when a lane is absent.
 
 #import "CanvasSketchProperties.h"
+#import "CanvasLayerTimeline.h"  // CanvasResolvedLaneValue
 #import "CanvasLayerTransform.h" // CanvasLayerEffectiveTimeline (shared)
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKTimeline.h>
@@ -52,13 +53,11 @@ CanvasSketchParams CanvasSketchParamsAtFraction(KKBezierPath *path, double frac,
       if (v.count > 0)
         p.enabled = v[0].doubleValue >= 0.5;
     } else if ([lane.label isEqualToString:@"Sketch Roughness"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         p.roughness = (float)fmax(0.0, v[0].doubleValue);
     } else if ([lane.label isEqualToString:@"Sketch Bowing"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         p.bowing = (float)fmax(0.0, v[0].doubleValue);
     } else if ([lane.label isEqualToString:@"Sketch Strokes"]) {

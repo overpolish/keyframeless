@@ -38,7 +38,7 @@ static NSString *const kKKLinkBusAppGroupID =
   double span = _timelineEnd - _timelineStart;
   double frac = span > 0.0 ? (tlSec - _timelineStart) / span : 0.0;
   frac = MAX(0.0, MIN(1.0, frac));
-  return KKTimelineLaneValueAtVisualFractionSmoothed(_lane, frac);
+  return KKLaneDisplayValueAtFraction(_lane, frac);
 }
 
 @end
@@ -78,6 +78,9 @@ static long long KKLinkStatStamp(const struct stat *st) {
 @implementation _KKLinkLoadEntry
 @end
 
+@implementation KKLinkLayerSource
+@end
+
 @implementation KKLinkManifest
 @end
 
@@ -115,11 +118,16 @@ static double KKLinkMonoSeconds(void) {
 // so its file mtime stays recent; a manifest older than the prune window is
 // treated as an orphan (its clip was deleted) and removed on the next read.
 // Generous, so a clip rendered anytime within the window stays discoverable.
-static const double kKKManifestTouchSeconds = 3600.0;      // 1 hour
+// The touch cadence doubles as a liveness heartbeat: a rendering clip
+// re-touches its manifest this often, so a manifest whose mtime is much older
+// belongs to a clip that is deleted or idle (the picker warns past ~30s and
+// name-collision translation prefers the freshest). Keep well under that
+// warning threshold.
+static const double kKKManifestTouchSeconds = 10.0;
 static const long kKKManifestPruneSeconds = 7 * 24 * 3600; // 7 days
 
 static NSData *KKLinkManifestData(KKLinkManifest *m) {
-  NSDictionary *d = @{
+  NSMutableDictionary *d = [@{
     @"uuid" : m.uuid ?: @"",
     @"name" : m.displayName ?: @"",
     @"effect" : m.effectName ?: @"",
@@ -129,7 +137,19 @@ static NSData *KKLinkManifestData(KKLinkManifest *m) {
     @"params" : m.paramLabels ?: @[],
     @"paramNames" : m.paramDisplayNames ?: m.paramLabels ?: @[],
     @"v" : @1,
-  };
+  } mutableCopy];
+  if (m.layers.count) {
+    NSMutableArray<NSDictionary *> *layers =
+        [NSMutableArray arrayWithCapacity:m.layers.count];
+    for (KKLinkLayerSource *l in m.layers)
+      [layers addObject:@{
+        @"id" : l.layerID ?: @"",
+        @"name" : l.displayName ?: @"",
+        @"params" : l.paramLabels ?: @[],
+        @"paramNames" : l.paramDisplayNames ?: l.paramLabels ?: @[],
+      }];
+    d[@"layers"] = layers;
+  }
   return [NSJSONSerialization dataWithJSONObject:d options:0 error:nil];
 }
 
@@ -160,6 +180,30 @@ static KKLinkManifest *KKLinkManifestFromData(NSData *data) {
                          names.count == m.paramLabels.count)
                             ? names
                             : m.paramLabels;
+  // Layered sources ("layers" absent on flat / older manifests = empty).
+  NSMutableArray<KKLinkLayerSource *> *layers = [NSMutableArray array];
+  NSArray *rawLayers = d[@"layers"];
+  if ([rawLayers isKindOfClass:[NSArray class]])
+    for (NSDictionary *ld in rawLayers) {
+      if (![ld isKindOfClass:[NSDictionary class]])
+        continue;
+      NSString *lid = ld[@"id"];
+      if (![lid isKindOfClass:[NSString class]] || lid.length == 0)
+        continue;
+      KKLinkLayerSource *l = [[KKLinkLayerSource alloc] init];
+      l.layerID = lid;
+      l.displayName =
+          [ld[@"name"] isKindOfClass:[NSString class]] ? ld[@"name"] : lid;
+      l.paramLabels =
+          [ld[@"params"] isKindOfClass:[NSArray class]] ? ld[@"params"] : @[];
+      NSArray *lNames = ld[@"paramNames"];
+      l.paramDisplayNames = ([lNames isKindOfClass:[NSArray class]] &&
+                             lNames.count == l.paramLabels.count)
+                                ? lNames
+                                : l.paramLabels;
+      [layers addObject:l];
+    }
+  m.layers = layers;
   return m;
 }
 
@@ -463,17 +507,21 @@ KKLinkLoadCache(void) {
     if (![url.lastPathComponent hasSuffix:@".manifest.json"])
       continue;
     // GC orphans: a manifest not touched within the prune window belongs to a
-    // clip that stopped rendering (deleted) - a live clip re-touches hourly.
+    // clip that stopped rendering (deleted) - a live clip re-touches every
+    // kKKManifestTouchSeconds.
     struct stat st;
-    if (stat(url.fileSystemRepresentation, &st) == 0 &&
-        (nowWall - st.st_mtimespec.tv_sec) > kKKManifestPruneSeconds) {
+    BOOL statOK = stat(url.fileSystemRepresentation, &st) == 0;
+    if (statOK && (nowWall - st.st_mtimespec.tv_sec) > kKKManifestPruneSeconds) {
       [[NSFileManager defaultManager] removeItemAtURL:url error:nil];
       continue;
     }
     NSData *data = [NSData dataWithContentsOfURL:url];
     KKLinkManifest *m = data ? KKLinkManifestFromData(data) : nil;
-    if (m)
+    if (m) {
+      m.lastSeenAgeSec =
+          statOK ? MAX(0.0, (double)(nowWall - st.st_mtimespec.tv_sec)) : 0.0;
       [out addObject:m];
+    }
   }
   [out sortUsingComparator:^NSComparisonResult(KKLinkManifest *a,
                                                KKLinkManifest *b) {
@@ -482,6 +530,40 @@ KKLinkLoadCache(void) {
                                              : NSOrderedDescending;
     return [a.displayName ?: @"" compare:b.displayName ?: @""];
   }];
+  // READ-side display-name disambiguation: refs are STORED uuid-keyed, but the
+  // editing surface (picker, expression text, translators) works in display
+  // names - two same-named clips ("Canvas @ 0:00" twins) would make the
+  // second one unreachable, since name translation can only bind one. Suffix
+  // the twins " (2)", " (3)"... so every display name in one loaded list is
+  // unique; all consumers (picker, translate, AI sources) share this list, so
+  // the suffixed name round-trips display->stored->display cleanly. Ordering
+  // within a twin group: live (recently-seen) before stale, then by uuid -
+  // stable across menu opens, and a deleted twin's corpse never steals the
+  // clean unsuffixed name from the live clip.
+  NSMutableDictionary<NSString *, NSMutableArray<KKLinkManifest *> *> *byName =
+      [NSMutableDictionary dictionary];
+  for (KKLinkManifest *m in out) {
+    NSString *name = m.displayName ?: @"";
+    NSMutableArray<KKLinkManifest *> *group = byName[name];
+    if (!group)
+      byName[name] = group = [NSMutableArray array];
+    [group addObject:m];
+  }
+  for (NSString *name in byName) {
+    NSMutableArray<KKLinkManifest *> *group = byName[name];
+    if (group.count < 2)
+      continue;
+    [group sortUsingComparator:^NSComparisonResult(KKLinkManifest *a,
+                                                   KKLinkManifest *b) {
+      BOOL aStale = a.lastSeenAgeSec > 30.0, bStale = b.lastSeenAgeSec > 30.0;
+      if (aStale != bStale)
+        return aStale ? NSOrderedDescending : NSOrderedAscending;
+      return [a.uuid ?: @"" compare:b.uuid ?: @""];
+    }];
+    for (NSUInteger i = 1; i < group.count; i++)
+      group[i].displayName =
+          [name stringByAppendingFormat:@" (%lu)", (unsigned long)(i + 1)];
+  }
   // Prune orphan thumbnails (a clip whose manifest was GC'd above) while we
   // have the live uuid set - cheap, and this runs on menu-open, not the render
   // path.
@@ -527,21 +609,31 @@ KKLinkLoadCache(void) {
   return dir;
 }
 
-+ (NSURL *)_thumbnailURLForUUID:(NSString *)uuid {
+// Effect-level file: `<safe(uuid)>.thumb.jpg`. Layer-level:
+// `<safe(uuid)>.<safe(layerID)>.thumb.jpg` - the uuid-dot prefix is what the
+// prune/remove sweeps match on.
++ (NSURL *)_thumbnailURLForUUID:(NSString *)uuid
+                        layerID:(NSString *)layerID {
   if (uuid.length == 0)
     return nil;
   NSURL *dir = [self thumbnailsDirectory];
   if (!dir)
     return nil;
+  NSString *stem = layerID.length
+                       ? [NSString stringWithFormat:@"%@.%@",
+                                                    KKLinkSafeFilename(uuid),
+                                                    KKLinkSafeFilename(layerID)]
+                       : KKLinkSafeFilename(uuid);
   return [dir URLByAppendingPathComponent:
-                  [KKLinkSafeFilename(uuid)
-                      stringByAppendingPathExtension:@"thumb.jpg"]];
+                  [stem stringByAppendingPathExtension:@"thumb.jpg"]];
 }
 
-+ (void)writeThumbnailJPEG:(NSData *)jpeg forUUID:(NSString *)uuid {
++ (void)writeThumbnailJPEG:(NSData *)jpeg
+                   forUUID:(NSString *)uuid
+                   layerID:(NSString *)layerID {
   if (jpeg.length == 0 || uuid.length == 0)
     return;
-  NSURL *url = [self _thumbnailURLForUUID:uuid];
+  NSURL *url = [self _thumbnailURLForUUID:uuid layerID:layerID];
   if (!url)
     return;
   // Skip a byte-identical rewrite (the inspector re-bakes on a debounce and the
@@ -552,12 +644,21 @@ KKLinkLoadCache(void) {
   [jpeg writeToURL:url atomically:YES];
 }
 
-+ (NSString *)thumbnailPathForUUID:(NSString *)uuid {
-  NSURL *url = [self _thumbnailURLForUUID:uuid];
++ (void)writeThumbnailJPEG:(NSData *)jpeg forUUID:(NSString *)uuid {
+  [self writeThumbnailJPEG:jpeg forUUID:uuid layerID:nil];
+}
+
++ (NSString *)thumbnailPathForUUID:(NSString *)uuid
+                           layerID:(NSString *)layerID {
+  NSURL *url = [self _thumbnailURLForUUID:uuid layerID:layerID];
   if (!url)
     return nil;
   return [[NSFileManager defaultManager] fileExistsAtPath:url.path] ? url.path
                                                                     : nil;
+}
+
++ (NSString *)thumbnailPathForUUID:(NSString *)uuid {
+  return [self thumbnailPathForUUID:uuid layerID:nil];
 }
 
 + (void)removeSourceForUUID:(NSString *)uuid {
@@ -573,11 +674,22 @@ KKLinkLoadCache(void) {
                     [safe stringByAppendingPathExtension:@"manifest.json"]]
                   error:nil];
   NSURL *td = [self thumbnailsDirectory];
-  if (td)
+  if (td) {
     [fm removeItemAtURL:
             [td URLByAppendingPathComponent:
                     [safe stringByAppendingPathExtension:@"thumb.jpg"]]
                   error:nil];
+    // Per-layer thumbnails share the uuid-dot prefix.
+    NSString *prefix = [safe stringByAppendingString:@"."];
+    for (NSURL *f in
+         [fm contentsOfDirectoryAtURL:td
+             includingPropertiesForKeys:nil
+                                options:NSDirectoryEnumerationSkipsHiddenFiles
+                                  error:nil])
+      if ([f.lastPathComponent hasPrefix:prefix] &&
+          [f.lastPathComponent hasSuffix:@".thumb.jpg"])
+        [fm removeItemAtURL:f error:nil];
+  }
   // Published curves live in Links/ as "<safe>.<label>.json".
   NSURL *ld = [self linksDirectory];
   if (ld) {
@@ -626,14 +738,26 @@ KKLinkLoadCache(void) {
       includingPropertiesForKeys:nil
                          options:NSDirectoryEnumerationSkipsHiddenFiles
                            error:nil];
+  // Keep the effect-level file (`<safe>.thumb.jpg`) AND any per-layer files
+  // (`<safe>.<layer>.thumb.jpg`) of every live uuid.
   NSMutableSet<NSString *> *keepFiles = [NSMutableSet set];
-  for (NSString *uuid in keepUUIDs)
-    [keepFiles addObject:[KKLinkSafeFilename(uuid)
-                             stringByAppendingPathExtension:@"thumb.jpg"]];
+  NSMutableArray<NSString *> *keepPrefixes = [NSMutableArray array];
+  for (NSString *uuid in keepUUIDs) {
+    NSString *safe = KKLinkSafeFilename(uuid);
+    [keepFiles addObject:[safe stringByAppendingPathExtension:@"thumb.jpg"]];
+    [keepPrefixes addObject:[safe stringByAppendingString:@"."]];
+  }
   for (NSURL *url in files) {
-    if (![url.lastPathComponent hasSuffix:@".thumb.jpg"])
+    NSString *name = url.lastPathComponent;
+    if (![name hasSuffix:@".thumb.jpg"])
       continue;
-    if (![keepFiles containsObject:url.lastPathComponent])
+    BOOL keep = [keepFiles containsObject:name];
+    for (NSString *prefix in keepPrefixes) {
+      if (keep)
+        break;
+      keep = [name hasPrefix:prefix];
+    }
+    if (!keep)
       [[NSFileManager defaultManager] removeItemAtURL:url error:nil];
   }
 }

@@ -13,6 +13,8 @@
 
 #import "KKLinkExpr.h"
 #import "KKTimingEvaluation.h"
+#import <KeyframelessKit/KKLog.h>
+#import <os/lock.h>
 #import "KKTimeline.h"
 
 static KKExprVal KKLinkExprValFromArray(NSArray<NSNumber *> *arr) {
@@ -69,8 +71,23 @@ static KKExprVal KKLinkResolveSource(NSString *name, double T,
   if ([visiting containsObject:name])
     return KKExprScalar(0.0);
   KKLinkedCurve *curve = [KKLinkBus loadCurve:name];
-  if (!curve)
+  if (!curve) {
+    // Once per name per process: resolution runs per lane per frame (and the
+    // inline curve preview samples 48 points), so an unthrottled warn floods
+    // the log at hundreds of lines a second.
+    static NSMutableSet<NSString *> *warned;
+    static os_unfair_lock warnedLock = OS_UNFAIR_LOCK_INIT;
+    os_unfair_lock_lock(&warnedLock);
+    if (!warned)
+      warned = [NSMutableSet set];
+    BOOL first = ![warned containsObject:name];
+    if (first)
+      [warned addObject:name];
+    os_unfair_lock_unlock(&warnedLock);
+    if (first)
+      KKLogWarn(@"KKLink: resolve '%@' -> no published curve on the bus", name);
     return KKExprScalar(0.0);
+  }
   NSArray<NSNumber *> *own =
       [curve valuesAtTimelineSeconds:T outOfRange:KKLinkOutOfRangeHold];
   KKExprVal ownVal = KKLinkExprValFromArray(own);
@@ -123,10 +140,10 @@ KKLinkResolvedLaneValueWithOverride(KKLane *lane, double frac,
           isEqualToString:@"value"];
   if (trivial)
     // No expression (or bare passthrough) -> the lane's own value.
-    return KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+    return KKLaneDisplayValueAtFraction(lane, frac);
   KKLinkExpr *expr = KKLinkCompile(exprStr);
   NSArray<NSNumber *> *own =
-      KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      KKLaneDisplayValueAtFraction(lane, frac);
   if (!expr)
     return own;
   KKExprVal ownVal = KKLinkExprValFromArray(own);

@@ -1061,7 +1061,7 @@ static NSString *const kKKStaticPopoverSizeDefaultsKey =
 // YES, the outside-click / scroll dismissal monitors treat every event as
 // inside the popover, so a colour-panel interaction can't close it.
 - (BOOL)suppressesPopoverDismiss {
-  return _colorPanelOpen;
+  return _colorPanelOpen || _exprMenuOpen;
 }
 
 // A lane whose slider max reacts to another lane (maxControllerLabel): returns

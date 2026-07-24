@@ -47,6 +47,23 @@ typedef NS_ENUM(NSInteger, KKLinkOutOfRange) {
 
 @end
 
+/// One LAYER of a layered source - a "sub-clip" inside a clip (e.g. a Canvas
+/// layer), advertising its own referenceable params. `layerID` is the stable
+/// identity a `${uuid.layerID.label}` token stores (survives rename);
+/// `displayName` is the user-facing layer name the picker/editor show.
+@interface KKLinkLayerSource : NSObject
+@property(nonatomic, copy) NSString *layerID;
+@property(nonatomic, copy) NSString *displayName;
+@property(nonatomic, copy) NSArray<NSString *> *paramLabels;
+/// Friendly names for each `paramLabels` entry (same order/count; falls back
+/// to the labels).
+@property(nonatomic, copy) NSArray<NSString *> *paramDisplayNames;
+/// WRITE-SIDE ONLY carrier (never serialized): the layer's effective lanes,
+/// consumed by KKLinkWriteManifestWithLayers /
+/// KKLinkPublishReferenceableLanesForLayer, which derive the param lists.
+@property(nonatomic, copy, nullable) NSArray<KKLane *> *lanes;
+@end
+
 /// A discovered link SOURCE: one plugin instance (clip) advertising itself and
 /// the parameters other clips can reference. Written by every instance at its
 /// render tick (see KKLinkWriteManifest) and read back by the reference picker
@@ -69,6 +86,13 @@ typedef NS_ENUM(NSInteger, KKLinkOutOfRange) {
 /// Empty when the host can't provide one (older manifests, or FxProjectAPI
 /// unavailable) - treated as matching any document so it never hides a source.
 @property(nonatomic, copy) NSString *documentID;
+/// Seconds since the manifest FILE was last written/touched, captured when the
+/// manifest was loaded (+allManifests). A live rendering clip re-touches its
+/// manifest every ~10s, so a large age means the clip is not rendering - it
+/// may be deleted (FCP gives no deletion signal, so age is the only tell), or
+/// merely idle. Drives the picker's staleness warning and freshest-wins
+/// display-name disambiguation. Not serialized.
+@property(nonatomic) double lastSeenAgeSec;
 @property(nonatomic, copy)
     NSArray<NSString *> *paramLabels; // referenceable lanes
 /// Friendly names to SHOW for each `paramLabels` entry (same order/count). The
@@ -76,6 +100,11 @@ typedef NS_ENUM(NSInteger, KKLinkOutOfRange) {
 /// the picker menu + editor display. Falls back to the label when a plugin has
 /// no nicer name. Older manifests without it read back equal to `paramLabels`.
 @property(nonatomic, copy) NSArray<NSString *> *paramDisplayNames;
+/// Layered sources (e.g. Canvas): the clip's layers, each with its own param
+/// lists - the picker shows Clip > Layer > Param and the token stores
+/// `${uuid.layerID.label}`. Empty for flat sources (Mirage), and on manifests
+/// written before this field existed.
+@property(nonatomic, copy) NSArray<KKLinkLayerSource *> *layers;
 @end
 
 /// Cross-effect parameter "link bus": a directory of published curve files that
@@ -157,6 +186,15 @@ typedef NS_ENUM(NSInteger, KKLinkOutOfRange) {
 /// data / uuid.
 + (void)writeThumbnailJPEG:(NSData *)jpeg forUUID:(NSString *)uuid;
 
+/// Per-layer variant for layered sources (Canvas): keyed `uuid` + `layerID`,
+/// shown on the picker's layer submenu items. nil/empty layerID = the
+/// effect-level thumbnail.
++ (void)writeThumbnailJPEG:(NSData *)jpeg
+                   forUUID:(NSString *)uuid
+                   layerID:(nullable NSString *)layerID;
++ (nullable NSString *)thumbnailPathForUUID:(NSString *)uuid
+                                    layerID:(nullable NSString *)layerID;
+
 /// Filesystem path to a clip's thumbnail, or nil if none has been written. Used
 /// by the reference menu to load the image (on demand, not the render path).
 + (nullable NSString *)thumbnailPathForUUID:(NSString *)uuid;
@@ -197,6 +235,26 @@ FOUNDATION_EXPORT void KKLinkWriteManifest(id<PROAPIAccessing> api,
                                            double clipDurSec,
                                            NSString *effectName);
 
+/// Layered variant of KKLinkWriteManifest for plugins whose referenceable
+/// params live on per-layer timelines (layers are "sub-clips": Canvas). Each
+/// KKLinkLayerSource carries layerID + displayName + its EFFECTIVE `lanes`;
+/// the kit derives the per-layer param lists with the same referenceable
+/// filter. `topLevelLanes` may add clip-wide params alongside (empty = none).
+/// Call from the render tick, like the flat variant.
+FOUNDATION_EXPORT void KKLinkWriteManifestWithLayers(
+    id<PROAPIAccessing> api, NSArray<KKLane *> *topLevelLanes,
+    NSArray<KKLinkLayerSource *> *layers, double clipStartSec,
+    double clipDurSec, NSString *effectName);
+
+/// Per-layer counterpart of KKLinkPublishReferenceableLanes: publishes each
+/// referenceable lane of `layer.lanes` keyed `<uuid>.<layerID>.<label>` - the
+/// token a subscriber's `${Clip.Layer.Param}` stores. Same idempotency and
+/// render-tick contract as the flat variant.
+FOUNDATION_EXPORT void
+KKLinkPublishReferenceableLayer(id<PROAPIAccessing> api,
+                                KKLinkLayerSource *layer, double tlStart,
+                                double tlEnd);
+
 /// Auto-publish every referenceable lane in `lanes` as a link-bus curve keyed
 /// `<uuid>.<label>` (the token another clip stores when it references
 /// `${Clip.Param}`), tagged with the absolute timeline span [tlStart, tlEnd].
@@ -221,7 +279,7 @@ FOUNDATION_EXPORT void KKLinkPublishReferenceableLanes(id<PROAPIAccessing> api,
 /// frac * clipDurSec, seconds since the clip started) resolve. Both computed by
 /// the plugin at its render tick.
 ///
-/// A drop-in for `KKTimelineLaneValueAtVisualFractionSmoothed` in a link-aware
+/// A drop-in for `KKLaneDisplayValueAtFraction` in a link-aware
 /// render path - a lane with no expression behaves identically. This is the ONE
 /// place a plugin routes lane evaluation through to get linking; the kit owns
 /// the behaviour, the plugin just calls it.

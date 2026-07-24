@@ -10,6 +10,7 @@
 #import "CanvasMiniViewerRenderer_Internal.h"
 #import "CanvasPathOps.h" // shared boolean / outline op cores
 #import "CanvasToolbar.h"
+#import <KeyframelessKit/KKLinkBus.h> // own-manifest link timing
 #import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKMetalDeviceCache.h>
 #import <KeyframelessKit/KKRenderPrimitives.h>
@@ -34,7 +35,32 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *uuid) {
       [NSString stringWithFormat:@"/tmp/canvas-miniviewer-request-%@.json", uuid];
 }
 
-@implementation CanvasMiniViewerRenderer
+@implementation CanvasMiniViewerRenderer {
+  double _linkTimingStart;
+  double _linkTimingDur;
+  CFAbsoluteTime _linkTimingFetchedAt;
+}
+
+- (BOOL)linkTimingStart:(double *)outStart duration:(double *)outDur {
+  CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+  if (_linkTimingFetchedAt == 0.0 || now - _linkTimingFetchedAt > 2.0) {
+    _linkTimingFetchedAt = now;
+    NSString *uuid = self.instanceUUID;
+    if (uuid.length) {
+      for (KKLinkManifest *m in [KKLinkBus allManifests])
+        if ([m.uuid isEqualToString:uuid]) {
+          _linkTimingStart = m.clipStartSec;
+          _linkTimingDur = m.clipDurSec;
+          break;
+        }
+    }
+  }
+  if (_linkTimingDur <= 0.0)
+    return NO;
+  *outStart = _linkTimingStart;
+  *outDur = _linkTimingDur;
+  return YES;
+}
 
 // The kit boundary popover owns suppressedHandleLabels (per-phase: lanes with
 // no keypose at this fraction). Canvas ALSO suppresses Rotation under a drawing

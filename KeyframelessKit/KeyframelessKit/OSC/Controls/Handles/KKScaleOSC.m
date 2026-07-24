@@ -84,7 +84,7 @@
   if (!lane)
     return @[ @100.0, @100.0 ];
   NSArray<NSNumber *> *v =
-      KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      KKLaneDisplayValueAtFraction(lane, frac);
   NSMutableArray<NSNumber *> *out = [NSMutableArray arrayWithArray:v ?: @[]];
   while (out.count < 2)
     [out addObject:@100.0];

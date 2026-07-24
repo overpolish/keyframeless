@@ -60,6 +60,8 @@ FOUNDATION_EXPORT const CGFloat kKKExprEditorExpandedH;
   // dismissal, so clicking into the panel (a separate window) doesn't close the
   // popover.
   BOOL _colorPanelOpen;
+  BOOL _exprMenuOpen; // reference-insert menu is tracking (see
+                      // -suppressesPopoverDismiss)
   // Debounced persist for the async colour panel: while it's open, a continuous
   // drag fires a value callback every frame. Persisting each one stacks an undo
   // step per frame, and we can't hold a synchronous drag undo group open across

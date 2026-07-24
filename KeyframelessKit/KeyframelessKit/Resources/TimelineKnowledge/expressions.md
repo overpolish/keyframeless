@@ -73,6 +73,8 @@ For a property with more than one component (a Size's W,H; a Position's X,Y; a c
 
 Pick these from the insert menu (it lists every clip and its referenceable params, with a thumbnail to tell same-named clips apart). The menu shows a friendly `${Clip.Param}` name; it is stored by a stable id so it survives renames. Outside the referenced clip's own span the value holds at its nearest end. References can chain (a referenced param may itself use an expression) and cycles are safe (they resolve to 0, they do not hang).
 
+A layered clip (Canvas) publishes per LAYER: the insert menu nests its layers inside the clip (`Clip > Layer > Param`) and the reference reads `${Clip.Layer.Param}` - e.g. `${Canvas @ 0:04.Ball.Position}`. That works from another clip AND from a different layer of the same Canvas, so one layer can follow another (`${Canvas @ 0:04.Ball.Position} + vec2(0.1, 0)` makes this layer trail the Ball). Layer references store the layer's stable id, so renaming a layer never breaks them.
+
 ## Recipes
 
 - Continuous wobble: `value + sin(t * tau * 0.5) * 20` (0.5 Hz, amplitude 20).
@@ -90,3 +92,4 @@ Pick these from the insert menu (it lists every clip and its referenceable param
 - Easing and `smoothstep` want a 0..1 input. Feed `progress`, `clamp(ct, 0, 1)`, or a `pingpong`/`repeat` phase, not raw `t`.
 - `t` is absolute project seconds, so time-based motion is continuous across the whole timeline, not per-clip. Use `ct`/`progress` for clip-local timing.
 - The result is the property's driven value each frame; on-screen controls still edit the underlying `value` (the root), not the expression output.
+- Not every parameter takes an expression: gradients (a variable-length stop stack, not a numeric value), code editors, and canvas-edited geometry like a path's Points have no "Add Expression" option and cannot be referenced as `${...}` sources either. Position lanes drawn as an on-screen path can be referenced but not driven (an expression would override the drawn path).

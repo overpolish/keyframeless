@@ -45,6 +45,14 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// per-instance /tmp file (two stacked / copy-pasted Canvas clips must not share
 /// one). Set by the inspector view (which holds the apiManager) in -init.
 @property(nonatomic, copy, nullable) NSString *instanceUUID;
+
+/// Clip-absolute span for the mini's link-expression scope, read from this
+/// clip's OWN manifest on the bus (the render tick stamps it; the ViewBridge
+/// has no timing API). Cached ~2s (the manifest read walks the bus
+/// directory). NO when nothing is published yet - the composite then encodes
+/// without a link scope (expressions read unresolved).
+- (BOOL)linkTimingStart:(double *_Nonnull)outStart
+               duration:(double *_Nonnull)outDur;
 /// The layer the open popover edits. Its transform in the composite comes from
 /// the live `timeline` (the kit's in-memory edited copy) so a Position-handle
 /// drag previews immediately; the Position OSC also reads/writes this layer.
@@ -63,6 +71,13 @@ NSString *CanvasMiniViewerRequestPathForUUID(NSString *_Nullable uuid);
 /// metadata (aspectLinked, units) and the scale-box drag reads the aspect-link
 /// default when the timeline has no Scale lane yet.
 @property(nonatomic, copy, nullable) NSArray<KKLane *> *laneTemplates;
+
+/// Thumbnail bake only: multiplies stored (canonical-px) stroke widths during
+/// -encodeEffectFromSource so a small offscreen render keeps proportional
+/// stroke thickness - the same correction the main render derives from the
+/// source's inversePixelTransform for downscaled FCP browser thumbnails
+/// (destPx / canonicalPx). 0 (the default) = live mini behaviour (1.0).
+@property(nonatomic) float strokeScaleOverride;
 /// When YES, a click on the preview body (missing every handle) picks the
 /// topmost image layer under the cursor and fires `onSelectLayer` - the
 /// mini-viewer counterpart of the viewer's auto-select toggle. Off by default;

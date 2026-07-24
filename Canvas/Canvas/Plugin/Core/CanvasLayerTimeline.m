@@ -7,7 +7,10 @@
 #import "CanvasLayerRender.h"
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKColorLanes.h>
+#import <KeyframelessKit/KKLinkBus.h> // KKLinkResolvedLaneValue
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKTimeline.h>
+#import <KeyframelessKit/KKTimingEvaluation.h> // KKLaneDisplayValueAtFraction
 
 // Process-wide layer-blob snapshot for the viewer OSC (see header).
 static NSString *sCanvasLayerBlobSnapshot = nil;
@@ -461,4 +464,60 @@ BOOL CanvasAnyLayerHasConstant(NSArray<KKBezierPath *> *paths,
     if (CanvasLayerHasConstant(p, templates))
       return YES;
   return NO;
+}
+
+// Thread-local so concurrent FxPlug render threads each carry their own scope
+// and non-render processes read "inactive". Plain C thread-local (no ObjC
+// object storage) - the scope holds only the clip's absolute span.
+static _Thread_local struct {
+  BOOL active;
+  double startTLSec;
+  double durSec;
+} gCanvasLinkScope;
+
+// The scope's live override, as a manually-bridged CF ref: ARC forbids ObjC
+// ownership in _Thread_local storage, so push retains and pop releases.
+static _Thread_local void *gCanvasLinkOverrideRef;
+
+void CanvasLinkScopePushWithOverride(double clipStartTLSec, double clipDurSec,
+                                     CanvasLinkLaneOverride live) {
+  gCanvasLinkScope.active = YES;
+  gCanvasLinkScope.startTLSec = clipStartTLSec;
+  gCanvasLinkScope.durSec = clipDurSec;
+  if (gCanvasLinkOverrideRef) {
+    CFRelease(gCanvasLinkOverrideRef);
+    gCanvasLinkOverrideRef = NULL;
+  }
+  if (live)
+    gCanvasLinkOverrideRef = (void *)CFBridgingRetain([live copy]);
+}
+
+void CanvasLinkScopePush(double clipStartTLSec, double clipDurSec) {
+  CanvasLinkScopePushWithOverride(clipStartTLSec, clipDurSec, nil);
+}
+
+void CanvasLinkScopePop(void) {
+  gCanvasLinkScope.active = NO;
+  if (gCanvasLinkOverrideRef) {
+    CFRelease(gCanvasLinkOverrideRef);
+    gCanvasLinkOverrideRef = NULL;
+  }
+}
+
+NSArray<NSNumber *> *CanvasResolvedLaneValue(KKLane *lane, double frac) {
+  if (!gCanvasLinkScope.active || lane.linkExpression.length == 0)
+    return KKLaneDisplayValueAtFraction(lane, frac);
+  // Linear frac -> project seconds, the same mapping the published curves use
+  // (KKLinkedCurve samples by (tlSec - start) / span).
+  double tlSec = gCanvasLinkScope.startTLSec + frac * gCanvasLinkScope.durSec;
+  KKLinkRefOverride refOv = nil;
+  if (gCanvasLinkOverrideRef) {
+    CanvasLinkLaneOverride live =
+        (__bridge CanvasLinkLaneOverride)gCanvasLinkOverrideRef;
+    refOv = ^NSArray<NSNumber *> *(NSString *refName) {
+      return live(refName, frac);
+    };
+  }
+  return KKLinkResolvedLaneValueWithOverride(lane, frac, tlSec,
+                                             gCanvasLinkScope.durSec, refOv);
 }

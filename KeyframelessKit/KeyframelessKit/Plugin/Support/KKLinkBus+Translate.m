@@ -48,33 +48,85 @@ static NSString *KKLinkTransformExprTokens(NSString *src,
   return out;
 }
 
-// Split a ref inner on its LAST dot into head + tail; NO returned (tail nil)
-// for a bare same-clip ref (no dot), which the caller leaves untouched.
-static BOOL KKLinkSplitRefInner(NSString *inner, NSString **outHead,
-                                NSString **outTail) {
-  NSRange dot = [inner rangeOfString:@"." options:NSBackwardsSearch];
-  if (dot.location == NSNotFound)
-    return NO;
-  *outHead = [inner substringToIndex:dot.location];
-  *outTail = [inner substringFromIndex:dot.location + 1];
-  return YES;
+// `prefix` + "." leads `s` -> the remainder after the dot, else nil. The
+// prefix-based matching (instead of dot-splitting) keeps layer refs
+// unambiguous even when user-typed names contain dots.
+static NSString *KKLinkTailAfterPrefix(NSString *s, NSString *prefix) {
+  if (prefix.length == 0 || s.length <= prefix.length + 1)
+    return nil;
+  if (![s hasPrefix:prefix])
+    return nil;
+  if ([s characterAtIndex:prefix.length] != '.')
+    return nil;
+  return [s substringFromIndex:prefix.length + 1];
+}
+
+static NSString *KKLinkParamAtIndex(NSArray<NSString *> *list, NSUInteger i,
+                                    NSString *fallback) {
+  return i != NSNotFound && i < list.count ? list[i] : fallback;
 }
 
 NSString *
 KKLinkStoredExpressionFromDisplay(NSString *display,
                                   NSArray<KKLinkManifest *> *manifests) {
   return KKLinkTransformExprTokens(display, ^NSString *(NSString *inner) {
-    NSString *clip = nil, *param = nil;
-    if (!KKLinkSplitRefInner(inner, &clip, &param))
-      return nil;
-    for (KKLinkManifest *man in manifests)
-      if ([man.displayName isEqualToString:clip]) {
-        NSUInteger i = [man.paramDisplayNames indexOfObject:param];
-        NSString *rawLabel = (i != NSNotFound && i < man.paramLabels.count)
-                                 ? man.paramLabels[i]
-                                 : param;
-        return [NSString stringWithFormat:@"%@.%@", man.uuid, rawLabel];
+    // Pass 1: a manifest that FULLY resolves the token (layer + param, or a
+    // listed flat param). Clip display names are NOT unique ("Canvas @ 0:00"
+    // twice when two clips start together), so the first prefix match may be
+    // the WRONG clip - the one that actually advertises the named layer/param
+    // must win, else the token stores a half-translated ref that never
+    // resolves. When SEVERAL manifests fully resolve (a deleted clip's
+    // manifest + curves linger on the bus beside its same-named replacement,
+    // both resolving cleanly), the FRESHEST-seen one wins - the live clip
+    // heartbeats its manifest, the corpse never does, so binding by age keeps
+    // new expressions off dead sources.
+    NSString *best = nil;
+    double bestAge = 0.0;
+    for (KKLinkManifest *man in manifests) {
+      NSString *rest = KKLinkTailAfterPrefix(inner, man.displayName);
+      if (!rest)
+        continue;
+      NSString *stored = nil;
+      for (KKLinkLayerSource *layer in man.layers) {
+        NSString *param = KKLinkTailAfterPrefix(rest, layer.displayName);
+        if (!param)
+          continue;
+        NSUInteger i = [layer.paramDisplayNames indexOfObject:param];
+        if (i == NSNotFound)
+          continue;
+        stored = [NSString stringWithFormat:@"%@.%@.%@", man.uuid,
+                                            layer.layerID,
+                                            layer.paramLabels[i]];
+        break;
       }
+      if (!stored) {
+        NSUInteger i = [man.paramDisplayNames indexOfObject:rest];
+        if (i != NSNotFound)
+          stored = [NSString stringWithFormat:@"%@.%@", man.uuid,
+                                              man.paramLabels[i]];
+      }
+      if (stored && (!best || man.lastSeenAgeSec < bestAge)) {
+        best = stored;
+        bestAge = man.lastSeenAgeSec;
+      }
+    }
+    if (best)
+      return best;
+    // Pass 2: best-effort fallback for a hand-typed param the source doesn't
+    // (yet) advertise - keep it uuid-keyed on the first name-matching clip so
+    // it starts resolving if the source later publishes that param.
+    for (KKLinkManifest *man in manifests) {
+      NSString *rest = KKLinkTailAfterPrefix(inner, man.displayName);
+      if (!rest)
+        continue;
+      for (KKLinkLayerSource *layer in man.layers) {
+        NSString *param = KKLinkTailAfterPrefix(rest, layer.displayName);
+        if (param)
+          return [NSString
+              stringWithFormat:@"%@.%@.%@", man.uuid, layer.layerID, param];
+      }
+      return [NSString stringWithFormat:@"%@.%@", man.uuid, rest];
+    }
     return nil;
   });
 }
@@ -83,17 +135,26 @@ NSString *
 KKLinkDisplayExpressionFromStored(NSString *stored,
                                   NSArray<KKLinkManifest *> *manifests) {
   return KKLinkTransformExprTokens(stored, ^NSString *(NSString *inner) {
-    NSString *uuid = nil, *param = nil;
-    if (!KKLinkSplitRefInner(inner, &uuid, &param))
-      return nil;
-    for (KKLinkManifest *man in manifests)
-      if ([man.uuid isEqualToString:uuid]) {
-        NSUInteger i = [man.paramLabels indexOfObject:param];
-        NSString *disp = (i != NSNotFound && i < man.paramDisplayNames.count)
-                             ? man.paramDisplayNames[i]
-                             : param;
-        return [NSString stringWithFormat:@"%@.%@", man.displayName, disp];
+    for (KKLinkManifest *man in manifests) {
+      NSString *rest = KKLinkTailAfterPrefix(inner, man.uuid);
+      if (!rest)
+        continue;
+      // Layered ref: `uuid.layerID.label` -> `Clip.Layer.Param`.
+      for (KKLinkLayerSource *layer in man.layers) {
+        NSString *raw = KKLinkTailAfterPrefix(rest, layer.layerID);
+        if (!raw)
+          continue;
+        NSString *disp =
+            KKLinkParamAtIndex(layer.paramDisplayNames,
+                               [layer.paramLabels indexOfObject:raw], raw);
+        return [NSString stringWithFormat:@"%@.%@.%@", man.displayName,
+                                          layer.displayName, disp];
       }
+      // Flat ref: `uuid.label` -> `Clip.Param`.
+      NSString *disp = KKLinkParamAtIndex(
+          man.paramDisplayNames, [man.paramLabels indexOfObject:rest], rest);
+      return [NSString stringWithFormat:@"%@.%@", man.displayName, disp];
+    }
     return nil;
   });
 }
@@ -106,13 +167,26 @@ NSString *KKLinkAvailableSourcesJSON(NSString *excludeUUID,
         (excludeUUID.length && [man.uuid isEqualToString:excludeUUID]))
       continue;
     // Show the friendly param names the AI writes as ${Clip.Param}; empty-param
-    // sources are still listed (a user may ask about them).
+    // sources are still listed (a user may ask about them). Layered sources
+    // also list layers so the AI can write ${Clip.Layer.Param}.
     NSArray<NSString *> *params =
         man.paramDisplayNames.count ? man.paramDisplayNames : man.paramLabels;
-    [out addObject:@{
+    NSMutableDictionary *entry = [@{
       @"clip" : man.displayName ?: @"",
       @"params" : params ?: @[]
-    }];
+    } mutableCopy];
+    if (man.layers.count) {
+      NSMutableArray<NSDictionary *> *layers = [NSMutableArray array];
+      for (KKLinkLayerSource *l in man.layers)
+        [layers addObject:@{
+          @"layer" : l.displayName ?: @"",
+          @"params" : (l.paramDisplayNames.count ? l.paramDisplayNames
+                                                 : l.paramLabels)
+              ?: @[]
+        }];
+      entry[@"layers"] = layers;
+    }
+    [out addObject:entry];
   }
   NSData *data = [NSJSONSerialization dataWithJSONObject:out
                                                  options:0
@@ -136,14 +210,17 @@ static NSString *KKLinkTimecode(double sec) {
 }
 
 // A lane an expression can actually consume: a numeric value lane, not a code
-// editor (source text, no value) or a palette-generator bar (UI-only, no
-// value).
+// editor (source text, no value), a palette-generator bar (UI-only, no
+// value), a gradient (variable-length stop array - no single value an
+// expression's <=4 components could carry), or an OSC-edited geometry lane
+// (e.g. Canvas Points, whose keyposes are morph snapshots, not values).
 static BOOL KKLinkLaneIsReferenceable(KKLane *lane) {
   if (lane.label.length == 0)
     return NO;
-  if (lane.valueType == KKLaneValueTypeCode)
+  if (lane.valueType == KKLaneValueTypeCode ||
+      lane.valueType == KKLaneValueTypeGradient)
     return NO;
-  if (lane.paletteGeneratorBar)
+  if (lane.paletteGeneratorBar || lane.oscEditedOnly)
     return NO;
   return YES;
 }
@@ -202,12 +279,32 @@ NSString *KKLinkDocumentIDForSelfUUID(NSString *uuid) {
   return nil;
 }
 
-void KKLinkWriteManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
-                         double clipStartSec, double clipDurSec,
-                         NSString *effectName) {
+// Referenceable param label + display lists for `lanes`. The lane object
+// still carries its (non-serialized) display name at write time (built from
+// the plugin's templates), so the picker can show a friendly "Center" for a
+// raw "uCenter" uniform key.
+static void KKLinkParamLists(NSArray<KKLane *> *lanes,
+                             NSArray<NSString *> **outLabels,
+                             NSArray<NSString *> **outDisplays) {
+  NSMutableArray<NSString *> *params = [NSMutableArray array];
+  NSMutableArray<NSString *> *displays = [NSMutableArray array];
+  for (KKLane *lane in lanes)
+    if (KKLinkLaneIsReferenceable(lane)) {
+      [params addObject:lane.label];
+      [displays addObject:lane.displayName ?: lane.label];
+    }
+  *outLabels = params;
+  *outDisplays = displays;
+}
+
+static KKLinkManifest *KKLinkBaseManifest(id<PROAPIAccessing> api,
+                                          NSArray<KKLane *> *lanes,
+                                          double clipStartSec,
+                                          double clipDurSec,
+                                          NSString *effectName) {
   NSString *uuid = KKInstanceUUIDForAPI(api);
   if (uuid.length == 0)
-    return; // no identity yet (fresh instance before any UI) - skip this tick
+    return nil; // no identity yet (fresh instance before any UI) - skip
   KKLinkManifest *m = [[KKLinkManifest alloc] init];
   m.uuid = uuid;
   m.effectName = effectName ?: @"";
@@ -217,18 +314,46 @@ void KKLinkWriteManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
                                  KKLinkTimecode(clipStartSec)];
   m.clipStartSec = clipStartSec;
   m.clipDurSec = clipDurSec;
-  NSMutableArray<NSString *> *params = [NSMutableArray array];
-  NSMutableArray<NSString *> *displays = [NSMutableArray array];
-  for (KKLane *lane in lanes)
-    if (KKLinkLaneIsReferenceable(lane)) {
-      [params addObject:lane.label];
-      // The lane object still carries its (non-serialized) display name here at
-      // write time (built from the plugin's templates), so the picker can show
-      // a friendly "Center" for a raw "uCenter" uniform key.
-      [displays addObject:lane.displayName ?: lane.label];
-    }
-  m.paramLabels = params;
+  NSArray<NSString *> *labels, *displays;
+  KKLinkParamLists(lanes, &labels, &displays);
+  m.paramLabels = labels;
   m.paramDisplayNames = displays;
+  return m;
+}
+
+void KKLinkWriteManifest(id<PROAPIAccessing> api, NSArray<KKLane *> *lanes,
+                         double clipStartSec, double clipDurSec,
+                         NSString *effectName) {
+  KKLinkManifest *m =
+      KKLinkBaseManifest(api, lanes, clipStartSec, clipDurSec, effectName);
+  if (m)
+    [KKLinkBus writeManifest:m];
+}
+
+void KKLinkWriteManifestWithLayers(id<PROAPIAccessing> api,
+                                   NSArray<KKLane *> *topLevelLanes,
+                                   NSArray<KKLinkLayerSource *> *layers,
+                                   double clipStartSec, double clipDurSec,
+                                   NSString *effectName) {
+  KKLinkManifest *m = KKLinkBaseManifest(api, topLevelLanes, clipStartSec,
+                                         clipDurSec, effectName);
+  if (!m)
+    return;
+  NSMutableArray<KKLinkLayerSource *> *out =
+      [NSMutableArray arrayWithCapacity:layers.count];
+  for (KKLinkLayerSource *src in layers) {
+    if (src.layerID.length == 0)
+      continue;
+    KKLinkLayerSource *l = [[KKLinkLayerSource alloc] init];
+    l.layerID = src.layerID;
+    l.displayName = src.displayName.length ? src.displayName : src.layerID;
+    NSArray<NSString *> *labels, *displays;
+    KKLinkParamLists(src.lanes ?: @[], &labels, &displays);
+    l.paramLabels = labels;
+    l.paramDisplayNames = displays;
+    [out addObject:l];
+  }
+  m.layers = out;
   [KKLinkBus writeManifest:m];
 }
 
@@ -244,6 +369,28 @@ void KKLinkPublishReferenceableLanes(id<PROAPIAccessing> api,
     // Key MUST match the token `${uuid.label}` a subscriber stores (see the
     // popover's stored form); loadCurve reads the same `<uuid>.<label>` file.
     NSString *linkID = [NSString stringWithFormat:@"%@.%@", uuid, lane.label];
+    [KKLinkBus publishLane:lane
+                    linkID:linkID
+             timelineStart:tlStart
+               timelineEnd:tlEnd
+                      unit:nil];
+  }
+}
+
+void KKLinkPublishReferenceableLayer(id<PROAPIAccessing> api,
+                                     KKLinkLayerSource *layer, double tlStart,
+                                     double tlEnd) {
+  NSString *uuid = KKInstanceUUIDForAPI(api);
+  if (uuid.length == 0 || layer.layerID.length == 0)
+    return;
+  for (KKLane *lane in layer.lanes) {
+    if (!KKLinkLaneIsReferenceable(lane))
+      continue;
+    // Key MUST match the layered token `${uuid.layerID.label}` a subscriber
+    // stores; loadCurve reads the same `<uuid>.<layerID>.<label>` file, so
+    // resolution needs no layer awareness at all.
+    NSString *linkID = [NSString
+        stringWithFormat:@"%@.%@.%@", uuid, layer.layerID, lane.label];
     [KKLinkBus publishLane:lane
                     linkID:linkID
              timelineStart:tlStart

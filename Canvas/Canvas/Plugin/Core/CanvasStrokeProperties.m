@@ -12,6 +12,7 @@
 // live-edit override hook (CanvasLayerEffectiveTimeline, shared in
 // CanvasLayerTransform) lets the selected layer preview before it persists.
 
+#import "CanvasLayerTimeline.h"  // CanvasResolvedLaneValue
 #import "CanvasLayerTransform.h" // CanvasLayerEffectiveTimeline (shared)
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKColorLanes.h>
@@ -32,8 +33,7 @@ void CanvasStrokeWidthAtFraction(KKBezierPath *path, double frac,
     if (![lane.label isEqualToString:@"Stroke Width"])
       continue;
     if (lane.keyposes.count > 0) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         sw = (float)fmax(0.0, v[0].doubleValue);
       ew = (v.count > 1) ? (float)fmax(0.0, v[1].doubleValue) : sw;
@@ -86,13 +86,13 @@ KKColorLanesValue CanvasStrokeColorAtFraction(KKBezierPath *path, double frac,
     v.solidColor = simd_make_float3(path.strokeR, path.strokeG, path.strokeB);
     return v;
   }
-  return KKColorLanesResolve(
-      @"Stroke", /*includesDynamic=*/NO, ^NSArray<NSNumber *> *(NSString *l) {
-        for (KKLane *lane in tl.lanes)
-          if ([lane.label isEqualToString:l])
-            return KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
-        return nil;
-      });
+  return KKColorLanesResolve(@"Stroke", /*includesDynamic=*/NO,
+                             ^NSArray<NSNumber *> *(NSString *l) {
+                               for (KKLane *lane in tl.lanes)
+                                 if ([lane.label isEqualToString:l])
+                                   return CanvasResolvedLaneValue(lane, frac);
+                               return nil;
+                             });
 }
 
 void CanvasStrokeCapJoinAtFraction(KKBezierPath *path, double frac,
@@ -143,11 +143,12 @@ void CanvasStrokeMarkersAtFraction(KKBezierPath *path, double frac,
         endM = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
     } else if ([lane.label isEqualToString:@"Start Marker Width"]) {
       // Percentage of the local stroke width; converted to a multiplier.
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      // Continuous - display evaluation like its Stroke Width sibling.
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         startMul = (float)(fmax(0.0, v[0].doubleValue) / 100.0);
     } else if ([lane.label isEqualToString:@"End Marker Width"]) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         endMul = (float)(fmax(0.0, v[0].doubleValue) / 100.0);
     }
@@ -181,21 +182,22 @@ CanvasStrokeStyle CanvasStrokeStyleAtFraction(KKBezierPath *path, double frac,
       if (v.count > 0)
         s.style = (uint8_t)llround(fmax(0.0, v[0].doubleValue));
     } else if ([lane.label isEqualToString:@"Dash Length"]) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      // Continuous lanes: display evaluation, like Stroke Width / Marching
+      // Ants Speed (raw stays only for the discrete index lanes above).
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         s.dashLength = (float)fmax(0.0, v[0].doubleValue);
     } else if ([lane.label isEqualToString:@"Dash Gap"]) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         s.dashGap = (float)fmax(0.0, v[0].doubleValue);
     } else if ([lane.label isEqualToString:@"Dot Gap"]) {
-      NSArray<NSNumber *> *v = KKTimelineLaneValueAtFraction(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         s.dotGap = (float)fmax(0.0, v[0].doubleValue);
     } else if ([lane.label isEqualToString:@"Marching Ants Speed"]) {
       // Animatable: read the smoothed value so a keyframed speed eases.
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         s.marchSpeed = (float)v[0].doubleValue;
     }
@@ -220,18 +222,15 @@ CanvasStrokeDrawOn CanvasStrokeDrawOnAtFraction(KKBezierPath *path, double frac,
     if (lane.keyposes.count == 0)
       continue;
     if ([lane.label isEqualToString:@"Draw On Start"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         d.start = (float)fmax(0.0, fmin(1.0, v[0].doubleValue / 100.0));
     } else if ([lane.label isEqualToString:@"Draw On End"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         d.end = (float)fmax(0.0, fmin(1.0, v[0].doubleValue / 100.0));
     } else if ([lane.label isEqualToString:@"Draw On Offset"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0) {
         double o = v[0].doubleValue / 100.0; // unbounded; wrap to [0,1)
         d.offset = (float)(o - floor(o));

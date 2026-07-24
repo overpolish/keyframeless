@@ -225,8 +225,11 @@ double KKHermiteJoinBlend(double frac, double boundary, double window,
   return h00 * p0 + h10 * m0 * L + h01 * p1 + h11 * m1 * L;
 }
 
-NSArray<NSNumber *> *KKTimelineLaneValueAtFractionSmoothed(KKLane *lane,
-                                                           double frac) {
+// File-internal: the C1 join-smoothing stage of KKLaneDisplayValueAtFraction
+// (no external callers - display paths always want the visual projection
+// too, authoring paths always want the exact evaluator).
+static NSArray<NSNumber *> *
+KKTimelineLaneValueAtFractionSmoothed(KKLane *lane, double frac) {
   NSArray<KKKeyPose *> *kps = lane.keyposes;
   // Composite gradient values aren't a vector of independent scalars, so the C1
   // per-component join blend would corrupt them - use the raw (gradient-aware)
@@ -335,7 +338,7 @@ static double _kkVisualToDataFrac(KKLane *lane, double visualFrac) {
 }
 
 NSArray<NSNumber *> *
-KKTimelineLaneValueAtVisualFractionSmoothed(KKLane *lane, double visualFrac) {
+KKLaneDisplayValueAtFraction(KKLane *lane, double visualFrac) {
   return KKTimelineLaneValueAtFractionSmoothed(
       lane, _kkVisualToDataFrac(lane, visualFrac));
 }

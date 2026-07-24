@@ -19,6 +19,7 @@
 #import <FxPlug/FxPlugSDK.h>
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKDataBlob.h>
+#import <KeyframelessKit/KKLog.h>
 #import <KeyframelessKit/KKPlugin.h> // KKPerformUndoable
 
 // Cached tessellated stroke geometry for one layer: the vertex strip (+ the

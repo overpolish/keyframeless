@@ -325,7 +325,7 @@ static const float kHitThresholdPixels = 10.0f;
   if (!lane)
     return @[ @0.0, @0.0, @0.0 ];
   NSArray<NSNumber *> *v =
-      KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      KKLaneDisplayValueAtFraction(lane, frac);
   return [self _eulerDegFromLaneValues:v];
 }
 

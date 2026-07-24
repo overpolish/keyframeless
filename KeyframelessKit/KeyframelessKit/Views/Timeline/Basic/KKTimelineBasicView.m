@@ -413,7 +413,7 @@ double KKBasicMotionY(double t, KKBasicProj p) {
 }
 
 // The drawn curve: `KKBasicMotionY` with the same C1 join smoothing the
-// render evaluator applies (`KKTimelineLaneValueAtFractionSmoothed`), so the
+// render evaluator applies (`KKLaneDisplayValueAtFraction`), so the
 // graph shows exactly what plays - transitions glide into/out of the Hold
 // with no detectable stop. Only an *enabled* In/Out is a real join (a
 // disabled phase is already a flat continuation). Diamonds/handles keep the

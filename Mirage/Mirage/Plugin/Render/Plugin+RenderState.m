@@ -270,7 +270,7 @@ static void MirageEvalStateAtFrac(KKTimeline *timeline, double frac,
       self.linkWatcher =
           [[KKLinkWatcher alloc] initWithAPIManager:self.apiManager
                                        actionTarget:self
-                                       nudgeParamID:kParamRenderNudge];
+                                       nudgeParamID:kKKParamRenderNudgeString];
     KKLinkWatcher *watcher = self.linkWatcher;
     dispatch_async(dispatch_get_main_queue(), ^{
       [watcher setSourceNames:linkSources]; // empty stops it

@@ -116,6 +116,10 @@ static NSInteger gKKReconcileGen; // main-thread only
   return nil; // opt-out by default; a plugin opts in by overriding
 }
 
+- (NSArray<KKLinkLayerSource *> *)linkableLayersForManifest {
+  return nil; // flat source by default; layered plugins (Canvas) override
+}
+
 - (NSString *)linkManifestEffectName {
   NSString *n =
       [NSBundle bundleForClass:[self class]].infoDictionary[@"CFBundleName"];
@@ -124,7 +128,8 @@ static NSInteger gKKReconcileGen; // main-thread only
 
 - (void)writeLinkManifest {
   NSArray<KKLane *> *lanes = [self linkableLanesForManifest];
-  if (lanes == nil)
+  NSArray<KKLinkLayerSource *> *layers = [self linkableLayersForManifest];
+  if (lanes == nil && layers == nil)
     return; // not a link source
   id<FxTimingAPI_v4> t =
       [self.apiManager apiForProtocol:@protocol(FxTimingAPI_v4)];
@@ -138,6 +143,20 @@ static NSInteger gKKReconcileGen; // main-thread only
   if (durSec <= 0.0)
     return;
   double tlStart = CMTimeGetSeconds(effStartTL);
+  if (layers != nil) {
+    KKLinkWriteManifestWithLayers(self.apiManager, lanes ?: @[], layers,
+                                  tlStart, durSec,
+                                  [self linkManifestEffectName]);
+    // Publish each layer's actual curves so a `${uuid.layerID.label}`
+    // reference on another clip resolves.
+    for (KKLinkLayerSource *layer in layers)
+      KKLinkPublishReferenceableLayer(self.apiManager, layer, tlStart,
+                                      tlStart + durSec);
+    if (lanes.count)
+      KKLinkPublishReferenceableLanes(self.apiManager, lanes, tlStart,
+                                      tlStart + durSec);
+    return;
+  }
   KKLinkWriteManifest(self.apiManager, lanes, tlStart, durSec,
                       [self linkManifestEffectName]);
   // Publish the same lanes' actual curves so a `${uuid.label}` reference on

@@ -12,8 +12,17 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// Evaluates `lane` at fraction `frac` (0–1 of clip duration) and returns
-/// the per-component interpolated values.
+/// The AUTHORING (exact) evaluator: `lane` at fraction `frac` (0–1 of clip
+/// duration), per-component interpolated from the STORED keyposes - no join
+/// smoothing, no Basic visual projection, no link expression.
+///
+/// Use ONLY where exactness against the stored data is the point: seeding a
+/// new keypose / an OSC handle drag (a handle must sit exactly on the keypose
+/// anchor), popover row values, graph curves that draw the stored shape.
+/// Anything that produces or previews PIXELS reads
+/// `KKLaneDisplayValueAtFraction` (or `KKLinkResolvedLaneValue*` when the
+/// lane may carry a link expression) instead - mixing the two is how a
+/// preview drifts from the render.
 ///
 /// - Adjacent keyposes with equal values evaluate as a hold (same values
 ///   returned across the span between them).
@@ -29,7 +38,7 @@ NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtFraction(KKLane *lane,
                                                              double frac);
 
 /// Fraction of the smaller adjacent span used as the half-window for C1
-/// join smoothing (see `KKTimelineLaneValueAtFractionSmoothed`). Shared so
+/// join smoothing (see `KKLaneDisplayValueAtFraction`). Shared so
 /// the Basic graph preview and the render evaluator round joins identically.
 /// Small on purpose: just a corner fillet at the joins, not a reshape of
 /// the transition/hold.
@@ -53,27 +62,22 @@ FOUNDATION_EXPORT double KKHermiteJoinBlend(double frac, double boundary,
                                             double window,
                                             double (^sample)(double f));
 
-/// Like `KKTimelineLaneValueAtFraction` but with C1 join smoothing applied
-/// at every interior keypose, so transitions glide into/out of holds with
-/// no detectable "stop" while long flats away from the joins are preserved.
-/// The render / OSC / graph paths use this; authoring reads stay on the
-/// exact (raw) `KKTimelineLaneValueAtFraction`.
+/// THE display evaluator - the ONE entry point for every read that produces
+/// or previews pixels (render properties, motion blur, OSC/mini previews,
+/// pool fills). Applies, in order:
+///   1. the Basic-view visual projection (the Basic view stores Hold
+///      keyposes at fixed tIn/tOut even when In/Out is off but visually
+///      projects Hold-start to t=0 / Hold-end to t=1; identity inside an
+///      enabled In/Out transition and for Advanced-shaped lanes), then
+///   2. C1 join smoothing at interior keyposes (transitions glide into/out
+///      of holds with no detectable "stop"; cheap - degrades to the exact
+///      evaluator for <3 keyposes, gradients, and outside join windows).
+/// Lanes that may carry a link expression resolve through
+/// `KKLinkResolvedLaneValue*`, which wraps this. Authoring reads stay on the
+/// exact `KKTimelineLaneValueAtFraction` by explicit choice.
 FOUNDATION_EXPORT
-NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtFractionSmoothed(
-    KKLane *lane, double frac);
-
-/// Same as `KKTimelineLaneValueAtFractionSmoothed` but with a Basic-view-
-/// shape-aware fraction remap applied first. The Basic view stores Hold
-/// keyposes at fixed tIn/tOut even when In/Out is off, but visually projects
-/// the Hold-start to t=0 (In off) and Hold-end to t=1 (Out off). This call
-/// applies that same projection on read, so a Hold-only drift evaluates
-/// across the full clip rather than only between the stored kp times.
-///
-/// Inside an enabled In or Out transition region the remap is identity, so
-/// In/Out easing is preserved unchanged.
-FOUNDATION_EXPORT
-NSArray<NSNumber *> *_Nullable KKTimelineLaneValueAtVisualFractionSmoothed(
-    KKLane *lane, double visualFrac);
+NSArray<NSNumber *> *_Nullable KKLaneDisplayValueAtFraction(KKLane *lane,
+                                                            double visualFrac);
 
 // 2D spatial (curved Position) path helpers live in KKSpatialCurve.h.
 

@@ -67,6 +67,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// links in lockstep with the 60fps feed - fixing linked-clip playback jitter.
 /// Negative = unknown.
 @property(nonatomic) double clipTimelineStartSec;
+/// This clip's instance UUID, so the live-drag ref override can VERIFY a
+/// `${uuid...}` ref actually targets this clip before resolving it against
+/// the local timeline - a cross-clip ref whose param label coincides with a
+/// local lane must read the bus, not the local value. Empty = legacy
+/// bare-label matching (pre-identity plugins).
+@property(nonatomic, copy, nullable) NSString *linkSelfUUID;
 /// Number of slots the canvas is currently iterating. KKMiniViewerView
 /// sets this before its per-slot processSourceTexture loop. Subclasses
 /// can use it to differentiate "single-slot, source is the pre-rendered

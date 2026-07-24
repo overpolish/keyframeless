@@ -85,6 +85,17 @@ static const FxParameterFlags kHiddenNotAnim =
                                         parameterFlags:kHiddenNotAnim],
                   error, @"Unable to add render nudge"))
     return nil;
+  // The link watcher's nudge target: a STRING param because string writes
+  // stay off FCP's undo stack (see kKKParamRenderNudgeString) - the watcher
+  // fires outside any user edit, so an undoable nudge pollutes the stack. The
+  // blob nudge above remains for user-initiated nudges that ride inside real
+  // edit undo groups.
+  if (!KKAddParam([paramAPI addStringParameterWithName:@""
+                                           parameterID:kKKParamRenderNudgeString
+                                          defaultValue:@""
+                                        parameterFlags:kHiddenNotAnim],
+                  error, @"Unable to add watcher render nudge"))
+    return nil;
   // Motion blur state lives in this blob (edited from the inspector MB row,
   // not native controls). Read at render time via
   // +[KKMotionBlur snapshotStateFromJSON:...]. MUST be registered or flipping

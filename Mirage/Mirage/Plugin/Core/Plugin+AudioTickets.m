@@ -70,7 +70,7 @@ static NSArray<NSNumber *> *MirageBoundAudioKeys(NSString *source,
         continue;
       }
       NSArray<NSNumber *> *values =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, 0.0);
+          KKLaneDisplayValueAtFraction(lane, 0.0);
       if (values.count && lround(values[0].doubleValue) != 0) {
         [keys addObject:values[0]];
       }

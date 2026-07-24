@@ -18,6 +18,7 @@
 @class KKHelpShortcut;
 @class KKHelpGuide;
 @class KKDragUndoSession;
+@class KKLinkLayerSource;
 @class KKRenderCache;
 @class KKTimelineInspectorView;
 @class NSBezierPath;
@@ -87,6 +88,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// tick. The kit filters out non-referenceable lanes (code / palette bars), so
 /// return the full set.
 - (nullable NSArray<KKLane *> *)linkableLanesForManifest;
+/// Layered link discovery (layers are "sub-clips": Canvas layers). Default
+/// nil = a flat source. Override to advertise per-layer params: return one
+/// KKLinkLayerSource per layer (stable layerID + display name + that layer's
+/// EFFECTIVE `lanes`); tokens store `${uuid.layerID.label}` and the picker
+/// shows Clip > Layer > Param. Combines with -linkableLanesForManifest for
+/// any clip-wide params (either may be nil, not both).
+- (nullable NSArray<KKLinkLayerSource *> *)linkableLayersForManifest;
 /// Display name for this plugin in the reference picker ("<name> @
 /// <timecode>"). Defaults to the bundle name. Override to force a specific
 /// label.

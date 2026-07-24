@@ -227,7 +227,7 @@ static const double kKKMaintainTimingBakeSettleSecs = 0.3;
   KKTimeline *retimed = KKTimelineRetimedForMediaAnchor(
       tl, fromSrcIn, fromDur, toSrcIn, toDur,
       ^NSArray<NSNumber *> *(KKLane *lane, double frac) {
-        return KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+        return KKLaneDisplayValueAtFraction(lane, frac);
       },
       edgeEps);
   NSString *outJSON = [KKTimeline jsonFromTimeline:retimed];

@@ -159,6 +159,26 @@
     NSMenuItem *clipItem = [[NSMenuItem alloc] initWithTitle:man.displayName
                                                       action:NULL
                                                keyEquivalent:@""];
+    // "Last seen" subtext: a live clip heartbeats its manifest every ~10s, so
+    // the file's age says how long ago the clip last rendered. FCP gives no
+    // deletion signal, so this is the one honest tell for a deleted twin
+    // ("Canvas @ 0:00" whose corpse still lingers on the bus) - shown as a
+    // timestamp on every source rather than a warning color, since an idle
+    // clip (playhead elsewhere) also ages and a color would cry wolf.
+    static NSRelativeDateTimeFormatter *relFmt;
+    static dispatch_once_t relOnce;
+    dispatch_once(&relOnce, ^{
+      relFmt = [[NSRelativeDateTimeFormatter alloc] init];
+      relFmt.dateTimeStyle = NSRelativeDateTimeFormatterStyleNamed;
+    });
+    NSDate *seen = [NSDate dateWithTimeIntervalSinceNow:-man.lastSeenAgeSec];
+    clipItem.subtitle = [NSString
+        stringWithFormat:KKLoc(@"Last seen %@",
+                               @"Expression insert menu: subtitle under a "
+                               @"source clip; %@ is a relative time like '2 "
+                               @"minutes ago' or 'now'."),
+                         [relFmt localizedStringForDate:seen
+                                         relativeToDate:[NSDate date]]];
     // Per-clip thumbnail (baked by the source's inspector, keyed by its uuid)
     // so two same-named clips ("Shader @ 0:02" x2) are told apart visually.
     // Absent thumbnail = text-only item, unchanged.
@@ -175,6 +195,63 @@
       }
     }
     NSMenu *sub = [[NSMenu alloc] init];
+    // A layered source ("sub-clips": Canvas layers) nests one submenu per
+    // layer - choosing Layer > Param inserts `${Clip.Layer.Param}` (stored
+    // as `${uuid.layerID.label}` by the same onChange translation).
+    for (KKLinkLayerSource *layer in man.layers) {
+      NSMenuItem *layerItem = [[NSMenuItem alloc] initWithTitle:layer.displayName
+                                                         action:NULL
+                                                  keyEquivalent:@""];
+      // Per-layer thumbnail (the source bakes each layer isolated over its
+      // footage), same treatment as the clip-level image above.
+      NSString *layerThumbPath = [KKLinkBus thumbnailPathForUUID:man.uuid
+                                                         layerID:layer.layerID];
+      if (layerThumbPath.length) {
+        NSImage *layerThumb =
+            [[NSImage alloc] initWithContentsOfFile:layerThumbPath];
+        if (layerThumb) {
+          CGFloat lh = 24.0;
+          CGFloat lw =
+              MAX(1.0, layerThumb.size.height > 0
+                           ? lh * layerThumb.size.width / layerThumb.size.height
+                           : lh);
+          layerThumb.size = NSMakeSize(round(lw), lh);
+          layerItem.image = layerThumb;
+        }
+      }
+      NSMenu *layerSub = [[NSMenu alloc] init];
+      for (NSUInteger i = 0; i < layer.paramLabels.count; i++) {
+        NSString *paramDisplay = (i < layer.paramDisplayNames.count)
+                                     ? layer.paramDisplayNames[i]
+                                     : layer.paramLabels[i];
+        NSMenuItem *pit =
+            [[NSMenuItem alloc] initWithTitle:paramDisplay
+                                       action:@selector(_insertReferenceChosen:)
+                                keyEquivalent:@""];
+        pit.target = self;
+        pit.representedObject = @{
+          @"label" : label,
+          @"token" : [NSString stringWithFormat:@"${%@.%@.%@}",
+                                                man.displayName,
+                                                layer.displayName, paramDisplay]
+        };
+        [layerSub addItem:pit];
+      }
+      if (layer.paramLabels.count == 0) {
+        NSMenuItem *none = [[NSMenuItem alloc]
+            initWithTitle:KKLoc(@"No parameters",
+                                @"Expression insert menu: a source with no "
+                                @"referenceable params.")
+                   action:NULL
+            keyEquivalent:@""];
+        none.enabled = NO;
+        [layerSub addItem:none];
+      }
+      layerItem.submenu = layerSub;
+      [sub addItem:layerItem];
+    }
+    if (man.layers.count && man.paramLabels.count)
+      [sub addItem:[NSMenuItem separatorItem]];
     for (NSUInteger i = 0; i < man.paramLabels.count; i++) {
       NSString *paramDisplay = (i < man.paramDisplayNames.count)
                                    ? man.paramDisplayNames[i]
@@ -193,7 +270,7 @@
       };
       [sub addItem:pit];
     }
-    if (man.paramLabels.count == 0) {
+    if (man.paramLabels.count == 0 && man.layers.count == 0) {
       NSMenuItem *none = [[NSMenuItem alloc]
           initWithTitle:KKLoc(@"No parameters",
                               @"Expression insert menu: a source with no "
@@ -264,9 +341,16 @@
     [menu addItem:catItem];
   }
 
+  // The menu window is host-proxied in the ViewBridge world, so a scroll
+  // inside a long menu looks to the presenter's dismissal monitors like a
+  // scroll "in FCP" and closed the whole popover mid-pick. Flag the tracking
+  // span so those monitors veto dismissal (the colour-panel treatment;
+  // popUpMenuPositioningItem blocks until the menu closes).
+  _exprMenuOpen = YES;
   [menu popUpMenuPositioningItem:nil
                       atLocation:NSMakePoint(0, NSHeight(sender.bounds))
                           inView:sender];
+  _exprMenuOpen = NO;
 }
 
 // A reference-menu item title: the signature in normal menu text followed by
@@ -415,16 +499,28 @@
   // what the mini renders. A cross-clip ref (no matching lane here) or an
   // expression-driven source falls through to the bus unchanged.
   KKTimeline *liveTl = r.timeline;
+  NSString *selfUUID = r.linkSelfUUID;
   KKLinkRefOverride refOverride =
       liveTl ? ^NSArray<NSNumber *> *(NSString *refName) {
-    NSString *tail =
-        [refName componentsSeparatedByString:@"."].lastObject ?: refName;
+    // Identity-checked like the mini's -valuesForLabel: override: the uuid
+    // must be THIS clip (when known) and a layered ref only resolves against
+    // a lane whose layerKey matches - a cross-clip or other-layer ref with a
+    // coinciding label reads the bus.
+    NSArray<NSString *> *comps = [refName componentsSeparatedByString:@"."];
+    NSString *layerID = comps.count == 3 ? comps[1] : nil;
+    NSString *tail = comps.lastObject ?: refName;
+    if (selfUUID.length && comps.count >= 2 &&
+        ![comps.firstObject isEqualToString:selfUUID])
+      return nil;
     for (KKLane *l in liveTl.lanes) {
       if (![l.label isEqualToString:tail])
         continue;
+      if (layerID && ![l.layerKey isEqualToString:layerID])
+        continue;
+      // Display evaluation, matching the bus's committed-curve sampling.
       return l.linkExpression.length
                  ? nil
-                 : KKTimelineLaneValueAtFraction(l, evalFrac);
+                 : KKLaneDisplayValueAtFraction(l, evalFrac);
     }
     return nil;
   }

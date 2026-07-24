@@ -4,7 +4,8 @@
  */
 
 #import "CanvasLayerTransform.h"
-#import "CanvasLayerRender.h" // CanvasGroupContentCenterObj (public decl)
+#import "CanvasLayerRender.h"   // CanvasGroupContentCenterObj (public decl)
+#import "CanvasLayerTimeline.h" // CanvasResolvedLaneValue
 #import "CanvasLayerTree.h"
 #import <KeyframelessKit/KKBezierPath.h>
 #import <KeyframelessKit/KKShape.h>
@@ -98,24 +99,21 @@ CanvasLayerTransform CanvasLayerTransformFromTimeline(KKTimeline *tl,
   CanvasLayerTransform t = CanvasLayerTransformIdentity();
   for (KKLane *lane in tl.lanes) {
     if ([lane.label isEqualToString:@"Scale"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       // Overshoot/elastic easing can dip scale below 0; clamp rather than flip.
       if (v.count > 0)
         t.scaleX = (float)(fmax(0.0, v[0].doubleValue) / 100.0);
       if (v.count > 1)
         t.scaleY = (float)(fmax(0.0, v[1].doubleValue) / 100.0);
     } else if ([lane.label isEqualToString:@"Position"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         t.posX = (float)v[0].doubleValue;
       if (v.count > 1)
         t.posY = (float)v[1].doubleValue;
     } else if ([lane.label isEqualToString:@"Rotation"]) {
       // 3-axis Euler [X,Y,Z]°.
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       const double kDegToRad = M_PI / 180.0;
       if (v.count > 0)
         t.rotX = (float)(v[0].doubleValue * kDegToRad);
@@ -124,8 +122,7 @@ CanvasLayerTransform CanvasLayerTransformFromTimeline(KKTimeline *tl,
       if (v.count > 2)
         t.rotation = (float)(v[2].doubleValue * kDegToRad);
     } else if ([lane.label isEqualToString:@"Opacity"]) {
-      NSArray<NSNumber *> *v =
-          KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+      NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
       if (v.count > 0)
         t.opacity = (float)(fmax(0.0, fmin(100.0, v[0].doubleValue)) / 100.0);
     } else if ([lane.label isEqualToString:@"Anchor"]) {
@@ -133,8 +130,7 @@ CanvasLayerTransform CanvasLayerTransformFromTimeline(KKTimeline *tl,
       // lane on a cold-boot snapshot evaluates to [0,0]; keep the centre
       // default.
       if (lane.keyposes.count > 0) {
-        NSArray<NSNumber *> *v =
-            KKTimelineLaneValueAtVisualFractionSmoothed(lane, frac);
+        NSArray<NSNumber *> *v = CanvasResolvedLaneValue(lane, frac);
         if (v.count > 0)
           t.anchorX = (float)v[0].doubleValue;
         if (v.count > 1)
