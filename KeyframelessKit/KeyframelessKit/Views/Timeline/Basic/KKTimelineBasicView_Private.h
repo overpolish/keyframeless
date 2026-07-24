@@ -11,6 +11,7 @@
 #import "KKTimelineZoomPan.h"
 #import <KeyframelessKit/KKEasing.h>
 #import <KeyframelessKit/KKTimeline.h>
+#import <KeyframelessKit/KKTimingEvaluation.h> // KKHoldShape / KKShapeOfLane
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -80,16 +81,11 @@ typedef struct {
   double panOffset; // visible start in warped-u space [0, 1-1/zoom]
 } KKBasicProj;
 
-typedef struct {
-  BOOL inEnabled;
-  BOOL outEnabled;
-  NSInteger holdStart;
-  NSInteger holdEnd;
-} KKHoldShape;
+// KKHoldShape + KKShapeOfLane live in KKTimingEvaluation.h (Math layer) -
+// shared with the evaluator and keypose visibility.
 
 // Pure timeline/projection helpers - definitions live in the core .m and are
 // reused across the categories below.
-FOUNDATION_EXPORT KKHoldShape KKShapeOfLane(KKLane *lane);
 FOUNDATION_EXPORT BOOL KKValuesEqual(NSArray<NSNumber *> *a,
                                      NSArray<NSNumber *> *b);
 FOUNDATION_EXPORT KKHoldEffect KKBasicHoldEffect(KKIntervalModulation m);

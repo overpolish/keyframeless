@@ -64,20 +64,33 @@ FOUNDATION_EXPORT double KKHermiteJoinBlend(double frac, double boundary,
 
 /// THE display evaluator - the ONE entry point for every read that produces
 /// or previews pixels (render properties, motion blur, OSC/mini previews,
-/// pool fills). Applies, in order:
-///   1. the Basic-view visual projection (the Basic view stores Hold
-///      keyposes at fixed tIn/tOut even when In/Out is off but visually
-///      projects Hold-start to t=0 / Hold-end to t=1; identity inside an
-///      enabled In/Out transition and for Advanced-shaped lanes), then
-///   2. C1 join smoothing at interior keyposes (transitions glide into/out
-///      of holds with no detectable "stop"; cheap - degrades to the exact
-///      evaluator for <3 keyposes, gradients, and outside join windows).
-/// Lanes that may carry a link expression resolve through
-/// `KKLinkResolvedLaneValue*`, which wraps this. Authoring reads stay on the
-/// exact `KKTimelineLaneValueAtFraction` by explicit choice.
+/// pool fills). Applies C1 join smoothing at interior keyposes (transitions
+/// glide into/out of holds with no detectable "stop"; cheap - degrades to
+/// the exact evaluator for <3 keyposes, gradients, and outside join
+/// windows). Stored keypose times ARE visual times (the Basic rebuild
+/// anchors the hold pair at [0, lastFrameFrac] when a phase is off), so no
+/// visual->data remap exists anymore. Lanes that may carry a link expression
+/// resolve through `KKLinkResolvedLaneValue*`, which wraps this. Authoring
+/// reads stay on the exact `KKTimelineLaneValueAtFraction` by explicit
+/// choice.
 FOUNDATION_EXPORT
 NSArray<NSNumber *> *_Nullable KKLaneDisplayValueAtFraction(KKLane *lane,
                                                             double visualFrac);
+
+/// A Basic-mode lane's hold shape: which In/Out phases exist and which
+/// keypose indices bracket the Hold. THE one shape resolver - `lane.holdShape`
+/// (stamped by every Basic rebuild) is authoritative; the count/middle-time
+/// heuristic survives ONLY for legacy `Auto` blobs that predate the
+/// annotation. Shared by the evaluator, keypose visibility, and the Basic
+/// view so rendering and drawing can never disagree about a lane's shape.
+typedef struct {
+  BOOL inEnabled;
+  BOOL outEnabled;
+  NSInteger holdStart;
+  NSInteger holdEnd;
+} KKHoldShape;
+
+FOUNDATION_EXPORT KKHoldShape KKShapeOfLane(KKLane *lane);
 
 // 2D spatial (curved Position) path helpers live in KKSpatialCurve.h.
 

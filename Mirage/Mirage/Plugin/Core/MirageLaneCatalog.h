@@ -103,9 +103,9 @@ static inline void MirageAppendColorLanes(NSMutableArray<KKLane *> *lanes,
     }
     // An array: count lane + N swatches (the shared bar above rerolls them).
     NSString *countId = [NSString stringWithFormat:@"%@ Count", name];
-    KKLane *count = [KKLane
-        laneWithKey:countId
-              label:[NSString stringWithFormat:@"%@ Count", label]];
+    KKLane *count =
+        [KKLane laneWithKey:countId
+                      label:[NSString stringWithFormat:@"%@ Count", label]];
     count.animatable = NO;
     count.enabled = NO;
     count.integerValued = YES;
@@ -194,8 +194,7 @@ static inline void MirageConfigureRotateLane(KKLane *lane,
       }
     if (slot < 0)
       continue;
-    [labels
-        addObject:[NSString stringWithFormat:@"%c", (char)toupper(axis)]];
+    [labels addObject:[NSString stringWithFormat:@"%c", (char)toupper(axis)]];
     [units addObject:@"°"];
     [colors addObject:MirageRotationAxisColor(axis)];
     [defs addObject:@(p->isMulti ? p->mdef[slot] : p->fdefault)];
@@ -290,8 +289,7 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
     }
     case MirageScalarKindAngle: {
       if (MirageOSCBlockIsRotate([model oscBlockForUniform:p->name])) {
-        MirageConfigureRotateLane(lane, p,
-                                  [model oscBlockForUniform:p->name]);
+        MirageConfigureRotateLane(lane, p, [model oscBlockForUniform:p->name]);
         break;
       }
 
@@ -307,8 +305,7 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
     }
     case MirageScalarKindMulti: {
       if (MirageOSCBlockIsRotate([model oscBlockForUniform:p->name])) {
-        MirageConfigureRotateLane(lane, p,
-                                  [model oscBlockForUniform:p->name]);
+        MirageConfigureRotateLane(lane, p, [model oscBlockForUniform:p->name]);
         break;
       }
       // An N-component numeric field (vec2/vec3): one lane, `fields={}` names
@@ -395,8 +392,7 @@ static inline void MirageAppendScalarLanes(NSMutableArray<KKLane *> *lanes,
     case MirageScalarKindProgress:
     case MirageScalarKindInt: {
       if (MirageOSCBlockIsRotate([model oscBlockForUniform:p->name])) {
-        MirageConfigureRotateLane(lane, p,
-                                  [model oscBlockForUniform:p->name]);
+        MirageConfigureRotateLane(lane, p, [model oscBlockForUniform:p->name]);
         break;
       }
       lane.animatable = YES;
@@ -687,7 +683,8 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
       {@"Grain Size", KK_CORE_GRAINSIZE_DEFAULT, 1.0, 12.0, @"px", YES},
   };
   for (unsigned s = 0; s < sizeof(coreGrain) / sizeof(coreGrain[0]); s++) {
-    KKLane *lane = [KKLane laneWithKey:coreGrain[s].label label:coreGrain[s].label];
+    KKLane *lane = [KKLane laneWithKey:coreGrain[s].label
+                                 label:coreGrain[s].label];
     lane.valueType = KKLaneValueTypeFloat;
     lane.componentMin = @[ @(coreGrain[s].min) ];
     lane.componentMax = @[ @(coreGrain[s].max) ];
@@ -719,10 +716,10 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
   // The KEY "Mirage" is the internal identity (matched all over as the code
   // lane); the code block is a GENERIC GLSL shader, so it SHOWS as "Shader" -
   // the brand name shouldn't leak onto the editor caption / save placeholder.
-  KKLane *shader =
-      [KKLane laneWithKey:kMirageCodeLaneLabel
-                    label:RLoc(@"Shader", @"Generic GLSL code lane display "
-                                          @"name (the code editor's caption).")];
+  KKLane *shader = [KKLane
+      laneWithKey:kMirageCodeLaneLabel
+            label:RLoc(@"Shader", @"Generic GLSL code lane display "
+                                  @"name (the code editor's caption).")];
   shader.valueType = KKLaneValueTypeCode;
   shader.codeString = MirageCustomDefaultShaderSource();
   // Multi-pass: the editor starts on the single Image tab (codeString above)
@@ -795,7 +792,13 @@ MirageBuildAvailableLanesForSource(NSString *shaderSource,
         [code rangeOfString:@"gl_FragColor"].location != NSNotFound ||
         [code rangeOfString:@"gl_FragData"].location != NSNotFound ||
         [[NSRegularExpression
-            regularExpressionWithPattern:@"\\bvoid\\s+main\\s*\\("
+            regularExpressionWithPattern:
+                // void main( / a gl-transitions entry (vec4 transition( -
+                // KKShimGLTransition wraps it into a mainImage, so the
+                // transpiler accepts it and the validator must too, or a
+                // broken transition renders the red error shader with NO
+                // message).
+                @"\\bvoid\\s+main\\s*\\(|\\bvec4\\s+transition\\s*\\("
                                  options:0
                                    error:nil]
             firstMatchInString:code

@@ -68,7 +68,12 @@
   }
   NSInteger line = 0;
   NSString *err = self.codeValidator ? self.codeValidator(code, &line) : nil;
-  if (err.length && prependLines > 0) {
+  // line 0 = "no line info" (e.g. the transpiler's own WRAPPER failed, whose
+  // lines map to nothing in any tab) - such an error must still surface, just
+  // without a highlighted line. Only a REAL line inside the prepended region
+  // belongs to the prepended section and is suppressed (it's flagged on that
+  // section's own tab).
+  if (err.length && prependLines > 0 && line > 0) {
     line -= prependLines;
     if (line < 1) { // error lives in Common; it's flagged on the Common tab
       err = nil;

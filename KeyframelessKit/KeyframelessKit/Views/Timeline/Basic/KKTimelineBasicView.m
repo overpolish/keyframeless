@@ -178,51 +178,9 @@
 //   n==3: [in@0, hold@t_inEnd, hold@outEndFrac]         - In only  (mid<0.5)
 //   n==3: [hold@0, hold@t_outStart, out@outEndFrac]     - Out only (mid≥0.5)
 //   n==4: [in@0, hold@t_inEnd, hold@t_outStart, out@outEndFrac]
-KKHoldShape KKShapeOfLane(KKLane *lane) {
-  KKHoldShape s = {NO, NO, 0, 0};
-  NSArray<KKKeyPose *> *k = lane.keyposes;
-  if (k.count < 2)
-    return s;
-  // Explicit holdShape overrides the count/time heuristic. Set every time
-  // Basic rebuilds, so once a lane has been touched the projection is no
-  // longer guessing - dragging the boundary past 0.5 stays In (or Out).
-  switch (lane.holdShape) {
-  case KKLaneHoldShapeNone:
-    break;
-  case KKLaneHoldShapeInOnly:
-    s.inEnabled = YES;
-    break;
-  case KKLaneHoldShapeOutOnly:
-    s.outEnabled = YES;
-    break;
-  case KKLaneHoldShapeBoth:
-    s.inEnabled = YES;
-    s.outEnabled = YES;
-    break;
-  case KKLaneHoldShapeAuto: {
-    // Legacy blobs without the annotation: infer from KP count + middle
-    // time. Breaks for boundary > 0.5 in single-phase but that's exactly
-    // what the explicit field is for; legacy data hasn't been through a
-    // rebuild yet.
-    NSInteger n = (NSInteger)k.count;
-    if (n == 4) {
-      s.inEnabled = YES;
-      s.outEnabled = YES;
-    } else if (n == 3) {
-      if (k[1].time < 0.5)
-        s.inEnabled = YES;
-      else
-        s.outEnabled = YES;
-    }
-    break;
-  }
-  }
-  s.holdStart = s.inEnabled ? 1 : 0;
-  s.holdEnd = (NSInteger)k.count - (s.outEnabled ? 2 : 1);
-  if (s.holdEnd < s.holdStart)
-    s.holdEnd = s.holdStart;
-  return s;
-}
+// KKShapeOfLane moved to the Math layer (KKTimingEvaluation) - the evaluator
+// and keypose visibility share it, so rendering and this view's drawing can
+// never disagree about a lane's shape.
 
 - (double)_clipDuration {
   if (_clipDurationSeconds > 0.0)

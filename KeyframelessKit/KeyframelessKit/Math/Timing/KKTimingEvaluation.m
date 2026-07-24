@@ -228,8 +228,8 @@ double KKHermiteJoinBlend(double frac, double boundary, double window,
 // File-internal: the C1 join-smoothing stage of KKLaneDisplayValueAtFraction
 // (no external callers - display paths always want the visual projection
 // too, authoring paths always want the exact evaluator).
-static NSArray<NSNumber *> *
-KKTimelineLaneValueAtFractionSmoothed(KKLane *lane, double frac) {
+static NSArray<NSNumber *> *KKTimelineLaneValueAtFractionSmoothed(KKLane *lane,
+                                                                  double frac) {
   NSArray<KKKeyPose *> *kps = lane.keyposes;
   // Composite gradient values aren't a vector of independent scalars, so the C1
   // per-component join blend would corrupt them - use the raw (gradient-aware)
@@ -278,69 +278,57 @@ KKTimelineLaneValueAtFractionSmoothed(KKLane *lane, double frac) {
   return KKLaneRawValueAtFraction(lane, frac);
 }
 
-// Inverse of the Basic-view _projection's visual In/Out remap. Stored kp
-// times sit at tIn/tOut even when In/Out is off - the Basic graph draws the
-// Hold-start at visual t=0 (In off) and Hold-end at visual t=1 (Out off).
-// This function applies the same remap on the read side so the rendered
-// output and OSC reads match the visual graph.
-static double _kkVisualToDataFrac(KKLane *lane, double visualFrac) {
-  NSArray<KKKeyPose *> *kps = lane.keyposes;
-  NSInteger n = (NSInteger)kps.count;
-  if (n < 2)
-    return visualFrac;
-
-  static const double kEps = 1e-4;
-  // The remap exists for the Basic projection (KPs anchored at canonical
-  // positions: first at 0, last at the last-frame). In Advanced the user
-  // can drag KPs anywhere, in which case the stored time IS the visual
-  // time - stretching the [first.time, last.time] range over [0, 1] would
-  // mis-time the lane (e.g. firstKP @ 0.2 then visualFrac=0.1 maps into
-  // the transition instead of clamping to firstKP's value).
-  // Heuristic: skip remap when first/last KPs aren't anchored to the
-  // Basic edges. Conservative - short clips at unknown frame durations
-  // can put `lastFrameFrac` slightly inside 1; allow ~2% slack.
-  if (kps.firstObject.time > 2.0 * kEps)
-    return visualFrac;
-  if (kps.lastObject.time < 0.98)
-    return visualFrac;
-
-  // Shape detection - match KKShapeOfLane (count-based, framerate-agnostic).
-  BOOL inEn = NO, outEn = NO;
-  if (n == 4) {
-    inEn = YES;
-    outEn = YES;
-  } else if (n == 3) {
-    if (kps.firstObject.time < kEps)
-      inEn = YES;
-    else
-      outEn = YES;
-  }
-  NSInteger holdStart = inEn ? 1 : 0;
-  NSInteger holdEnd = n - (outEn ? 2 : 1);
-  if (holdEnd <= holdStart)
-    return visualFrac;
-  double tA = kps[holdStart].time;
-  double tB = kps[holdEnd].time;
-  // Visual extents of the Hold region. In on → starts at tA (after In
-  // transition). Out on → ends at tB (before Out transition).
-  double vL = inEn ? tA : 0.0;
-  double vR = outEn ? tB : 1.0;
-
-  if (visualFrac <= vL)
-    return inEn ? visualFrac : tA;
-  if (visualFrac >= vR)
-    return outEn ? visualFrac : tB;
-  double span = vR - vL;
-  if (span <= kEps)
-    return tA;
-  double t = (visualFrac - vL) / span;
-  return tA + t * (tB - tA);
+NSArray<NSNumber *> *KKLaneDisplayValueAtFraction(KKLane *lane,
+                                                  double visualFrac) {
+  // No visual->data remap: stored keypose times ARE visual times since the
+  // Basic rebuild anchors the hold pair at [0, lastFrameFrac] when a phase
+  // is off. (The old _kkVisualToDataFrac remap was provably ~identity for
+  // everything its own anchoring guard admitted, and skipped the legacy
+  // tIn-anchored blobs it was written for - a vestige, deleted.)
+  return KKTimelineLaneValueAtFractionSmoothed(lane, visualFrac);
 }
 
-NSArray<NSNumber *> *
-KKLaneDisplayValueAtFraction(KKLane *lane, double visualFrac) {
-  return KKTimelineLaneValueAtFractionSmoothed(
-      lane, _kkVisualToDataFrac(lane, visualFrac));
+// THE hold-shape resolver (see header). `lane.holdShape` is authoritative -
+// stamped by every Basic rebuild so dragging a boundary past 0.5 can't flip
+// the interpretation; the count/middle-time heuristic survives only for
+// legacy Auto blobs that predate the annotation.
+KKHoldShape KKShapeOfLane(KKLane *lane) {
+  KKHoldShape s = {NO, NO, 0, 0};
+  NSArray<KKKeyPose *> *k = lane.keyposes;
+  if (k.count < 2)
+    return s;
+  switch (lane.holdShape) {
+  case KKLaneHoldShapeNone:
+    break;
+  case KKLaneHoldShapeInOnly:
+    s.inEnabled = YES;
+    break;
+  case KKLaneHoldShapeOutOnly:
+    s.outEnabled = YES;
+    break;
+  case KKLaneHoldShapeBoth:
+    s.inEnabled = YES;
+    s.outEnabled = YES;
+    break;
+  case KKLaneHoldShapeAuto: {
+    NSInteger n = (NSInteger)k.count;
+    if (n == 4) {
+      s.inEnabled = YES;
+      s.outEnabled = YES;
+    } else if (n == 3) {
+      if (k[1].time < 0.5)
+        s.inEnabled = YES;
+      else
+        s.outEnabled = YES;
+    }
+    break;
+  }
+  }
+  s.holdStart = s.inEnabled ? 1 : 0;
+  s.holdEnd = (NSInteger)k.count - (s.outEnabled ? 2 : 1);
+  if (s.holdEnd < s.holdStart)
+    s.holdEnd = s.holdStart;
+  return s;
 }
 
 // Shared core for KKLaneVisibleAtFraction / KKLaneKeyedAtFraction. When
@@ -359,24 +347,15 @@ static BOOL _kkLaneAtFraction(KKLane *lane, double frac, double frameDurSec,
   if (kps.count == 0)
     return YES;
 
-  // Count-based shape detection - must match KKShapeOfLane /
-  // _kkVisualToDataFrac so visibility lines up with where the kp is
-  // *drawn* (Basic-view projects Hold-start→0 when In off, Hold-end→1
-  // when Out off; stored times stay at tIn/tOut).
-  static const double kShapeEps = 1e-4;
+  // THE shared shape resolver (holdShape-authoritative) so visibility lines
+  // up with where the Basic view draws the keypose - a private count guess
+  // here could disagree with the graph the moment the heuristic mis-read a
+  // shape (e.g. a modern OutOnly lane whose hold-start sits at 0).
   NSInteger n = (NSInteger)kps.count;
-  BOOL inEnabled = NO, outEnabled = NO;
-  if (n == 4) {
-    inEnabled = YES;
-    outEnabled = YES;
-  } else if (n == 3) {
-    if (kps.firstObject.time < kShapeEps)
-      inEnabled = YES;
-    else
-      outEnabled = YES;
-  }
-  NSInteger holdStart = inEnabled ? 1 : 0;
-  NSInteger holdEnd = n - (outEnabled ? 2 : 1);
+  KKHoldShape shape = KKShapeOfLane(lane);
+  BOOL inEnabled = shape.inEnabled, outEnabled = shape.outEnabled;
+  NSInteger holdStart = shape.holdStart;
+  NSInteger holdEnd = shape.holdEnd;
 
   // Frame-aware snap tolerance: HALF a frame, so the kp reads "present" only on
   // its OWN frame, not the two neighbours. The playhead is frame-quantized and
@@ -430,4 +409,3 @@ BOOL KKLaneVisibleAtFraction(KKLane *lane, double frac, double frameDurSec) {
 BOOL KKLaneKeyedAtFraction(KKLane *lane, double frac, double frameDurSec) {
   return _kkLaneAtFraction(lane, frac, frameDurSec, /*includeEdges=*/NO);
 }
-

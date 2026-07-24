@@ -465,7 +465,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.6;
 				MARKETING_VERSION = 3.0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X";
+				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X.debug";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
@@ -568,7 +568,7 @@
 					"-fapplication-extension",
 					"-lProExtension",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X.Keyframeless-X-FCP";
+				PRODUCT_BUNDLE_IDENTIFIER = "co.overpolish.keyframeless.Keyframeless-X.debug.Keyframeless-X-FCP";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
